@@ -104,7 +104,7 @@ export function RegionFlagSvg({ region }: { region: RegionKey }) {
   }
 }
 
-// bandeira do "core" (país via flagcdn, região via SVG) — usada como fundo
+// bandeira do "core" (país via flagcdn, região via SVG) - usada como fundo
 export function CoreFlag({ players, className = '' }: { players: { country: string }[]; className?: string }) {
   const core = coreIdentity(players.map((p) => p.country));
   if (core.kind === 'country') {

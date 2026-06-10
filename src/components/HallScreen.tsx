@@ -52,7 +52,7 @@ export function HallScreen({ onBack }: Props) {
         </div>
         <div className="panel-body">
           {!data && !err && <div className="muted">Carregando o hall…</div>}
-          {err && <div className="muted">Hall indisponível agora — jogue offline que os títulos não fogem.</div>}
+          {err && <div className="muted">Hall indisponível agora - jogue offline que os títulos não fogem.</div>}
           {data && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginBottom: 16 }}>
@@ -63,7 +63,7 @@ export function HallScreen({ onBack }: Props) {
                 {bestRating?.records?.bestRating ? (
                   <div className="hall-record">
                     <span>
-                      📈 Melhor rating de campanha — <b>{bestRating.records.bestRatingPlayer}</b> ({bestRating.team_name})
+                      📈 Melhor rating de campanha - <b>{bestRating.records.bestRatingPlayer}</b> ({bestRating.team_name})
                     </span>
                     <b>{bestRating.records.bestRating?.toFixed(2)}</b>
                   </div>
@@ -71,7 +71,7 @@ export function HallScreen({ onBack }: Props) {
                 {bestFrag?.records?.biggestFrag ? (
                   <div className="hall-record">
                     <span>
-                      🔫 Maior frag em um mapa — <b>{bestFrag.records.biggestFragPlayer}</b> ({bestFrag.team_name})
+                      🔫 Maior frag em um mapa - <b>{bestFrag.records.biggestFragPlayer}</b> ({bestFrag.team_name})
                     </span>
                     <b>{bestFrag.records.biggestFrag} kills</b>
                   </div>
@@ -120,7 +120,7 @@ export function HallScreen({ onBack }: Props) {
                     {champions.length === 0 && data.campaigns.length === 0 && (
                       <tr>
                         <td colSpan={7} className="muted center">
-                          Nenhuma campanha registrada ainda — seja o primeiro do Hall!
+                          Nenhuma campanha registrada ainda - seja o primeiro do Hall!
                         </td>
                       </tr>
                     )}

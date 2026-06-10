@@ -58,7 +58,7 @@ export function DonateModal({ open, onClose }: { open: boolean; onClose: () => v
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal donate-modal fade-in" onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
-          💜 Apoie o MAJOR//CS
+          💜 Apoie o Road to Major
           <span className="spacer" />
           <button className="icon-btn" onClick={onClose} aria-label="fechar">
             ✕
@@ -66,7 +66,7 @@ export function DonateModal({ open, onClose }: { open: boolean; onClose: () => v
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0 }}>
-            O jogo é gratuito e feito com muito amor pelo CS. Se ele te divertiu, considere apoiar —
+            O jogo é gratuito e feito com muito amor pelo CS. Se ele te divertiu, considere apoiar -
             cada doação mantém o projeto vivo e acelera as próximas features (modo carreira, novos
             elencos, melhorias do simulador).
           </p>
@@ -85,7 +85,7 @@ export function DonateModal({ open, onClose }: { open: boolean; onClose: () => v
               {data && data.count > 0 && (
                 <span className="muted small">
                   {' '}
-                  — {data.count} doações · R$ {data.total.toFixed(2).replace('.', ',')}
+                  - {data.count} doações · R$ {data.total.toFixed(2).replace('.', ',')}
                 </span>
               )}
             </div>

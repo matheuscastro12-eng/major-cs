@@ -128,7 +128,7 @@ function applySeries(t: Tournament, pairing: Pairing): void {
 }
 
 export function phaseLabel(t: Tournament): string {
-  if (t.phase === 'swiss') return `Suíça — Rodada ${t.swissRound}`;
+  if (t.phase === 'swiss') return `Suíça - Rodada ${t.swissRound}`;
   if (t.phase === 'quarters') return 'Quartas de final';
   if (t.phase === 'semis') return 'Semifinal';
   if (t.phase === 'final') return 'GRANDE FINAL';

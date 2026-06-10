@@ -86,7 +86,7 @@ export default function App() {
     [brEligible, eligible],
   );
 
-  // Sorteio ponderado por tier: times de elite aparecem bem menos no dado —
+  // Sorteio ponderado por tier: times de elite aparecem bem menos no dado -
   // montar um dream team tem que ser raro. Em dificuldades maiores o campo
   // fica mais forte (elite aparece mais).
   const tierWeight = (t: TeamSeason, difficulty: Difficulty = 'normal') => {
@@ -124,7 +124,7 @@ export default function App() {
     try {
       localStorage.setItem(SESSION_KEY, JSON.stringify({ draft, tournament, pickem, career }));
     } catch {
-      /* storage cheio — campanha segue só em memória */
+      /* storage cheio - campanha segue só em memória */
     }
   }, [draft, tournament, pickem, career]);
 
@@ -407,20 +407,24 @@ export default function App() {
 
   return (
     <>
-      <div className="topbar">
-        <span className="logo" onClick={goHome}>
-          MAJOR<span>//</span>CS
-        </span>
-        <span className="subtitle">simulador do cenário profissional de Counter-Strike — 1.6 ao CS2</span>
-        <DonateButton onClick={() => setDonateOpen(true)} />
-        <button className="nav-btn" onClick={() => setScreen('hall')}>
-          🏛 Hall
-        </button>
-      </div>
+      <header className="app-header">
+        <div className="topbar">
+          <span className="logo" onClick={goHome}>
+            <img className="logo-mark" src="/favicon.png" alt="" />
+            ROAD&nbsp;TO&nbsp;<span>MAJOR</span>
+          </span>
+          <span className="subtitle">simulador do cenário profissional de Counter-Strike · do 1.6 ao CS2</span>
+          <DonateButton onClick={() => setDonateOpen(true)} />
+          <button className="nav-btn" onClick={() => setScreen('hall')}>
+            🏛 Hall
+          </button>
+        </div>
+      </header>
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
+      <main className="page">
       {screen === 'home' && (
         <Home
           onStart={startDraft}
@@ -520,6 +524,7 @@ export default function App() {
           />
         </AdminGate>
       )}
+      </main>
     </>
   );
 }

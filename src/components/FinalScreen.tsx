@@ -26,7 +26,7 @@ function userCampaign(t: Tournament): { label: string; placement: string; placem
 
   const userMatches = t.history.filter((h) => h.pairing.a === 'user' || h.pairing.b === 'user');
   const last = userMatches[userMatches.length - 1];
-  if (!last) return { label: 'ELIMINADO', placement: '—', placementCode: '16' };
+  if (!last) return { label: 'ELIMINADO', placement: '-', placementCode: '16' };
   if (last.phase.includes('FINAL')) return { label: 'VICE-CAMPEÃO', placement: '2º lugar', placementCode: '2' };
   if (last.phase.includes('Semifinal')) return { label: 'ELIMINADO NA SEMI', placement: '3º-4º lugar', placementCode: '3-4' };
   if (last.phase.includes('Quartas')) return { label: 'ELIMINADO NAS QUARTAS', placement: '5º-8º lugar', placementCode: '5-8' };
@@ -120,13 +120,13 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
 
   const share = async () => {
     const lines = [
-      `🏆 MAJOR//CS — ${campaign.label}`,
+      `🏆 ROAD TO MAJOR · ${campaign.label}`,
       `Time: ${user.name} (${campaign.placement})${career.season > 1 ? ` · temporada ${career.season}` : ''}`,
       `Elenco: ${user.players.map((p) => p.nick).join(', ')} · coach ${user.coach.nick}`,
       champion && !isChampion ? `Campeão: ${champion.name}` : '',
       mvp ? `MVP do torneio: ${mvp.nick}` : '',
       pickem.total > 0 ? `Pick'Em: ${pickem.score}/${pickem.total}` : '',
-      'Monte o seu: https://major-cs-pi.vercel.app',
+      'Monte o seu: https://roadtomajor.com.br',
     ].filter(Boolean);
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -147,7 +147,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
             {isChampion ? (
               <>
                 <b>{user.name}</b> venceu o {t.name}. {campaign.placement}
-                {career.titles > 1 ? ` — ${career.titles}º título da carreira!` : '.'}
+                {career.titles > 1 ? ` - ${career.titles}º título da carreira!` : '.'}
               </>
             ) : (
               <>
@@ -177,7 +177,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
                 <TeamBadge tag={champion.tag} colors={champion.colors} size={34} logoUrl={champion.logoUrl} />
                 <Flag cc={champion.country} />
                 <b style={{ fontSize: 16 }}>{champion.name}</b>
-                <span className="gold-text">— campeão</span>
+                <span className="gold-text">- campeão</span>
               </span>
             </div>
           )}
@@ -242,7 +242,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
                 </div>
                 {hallStatus === 'error' && (
                   <div className="neg small" style={{ marginTop: 6 }}>
-                    Hall indisponível agora — tente novamente em instantes.
+                    Hall indisponível agora - tente novamente em instantes.
                   </div>
                 )}
               </>

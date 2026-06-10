@@ -82,7 +82,7 @@ export function TournamentStats({ t, onBack }: Props) {
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
-          Stats do campeonato — {t.name}
+          Stats do campeonato - {t.name}
           <span className="spacer" />
           <div className="seg">
             <button className={!onlyUser ? 'active' : ''} onClick={() => setOnlyUser(false)}>

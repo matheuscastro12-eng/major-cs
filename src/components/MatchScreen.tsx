@@ -90,7 +90,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
           setFinished(true);
         } else {
           const next = maps[mapIdx + 1];
-          setPausedMsg(`Fim do mapa ${mapIdx + 1}${next ? ` — preparando ${MAP_LABELS[next.map]}…` : '…'}`);
+          setPausedMsg(`Fim do mapa ${mapIdx + 1}${next ? ` - preparando ${MAP_LABELS[next.map]}…` : '…'}`);
           window.setTimeout(() => {
             setMapIdx((m) => m + 1);
             setTimeoutsLeft(TIMEOUTS_PER_MAP);
@@ -125,7 +125,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
     if (timeoutsLeft <= 0 || finished || pausedMsg) return;
     setTimeoutsLeft((t) => t - 1);
     setBoostRounds(TIMEOUT_ROUNDS);
-    setPausedMsg(`⏸ TIMEOUT TÁTICO — ${teams[userIdx].coach.nick} ajusta o plano!`);
+    setPausedMsg(`⏸ TIMEOUT TÁTICO - ${teams[userIdx].coach.nick} ajusta o plano!`);
     window.setTimeout(() => setPausedMsg(''), 1400);
   };
 

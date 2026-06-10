@@ -87,7 +87,7 @@ const LOGO_FILES: Record<string, string> = {
   case2023: 'Case_Esports_allmode.png',
 };
 
-// Logos locais (enviadas pelo usuário) — têm prioridade sobre a Liquipedia
+// Logos locais (enviadas pelo usuário) - têm prioridade sobre a Liquipedia
 const LOCAL_LOGOS: Record<string, string> = {
   '00nation2022': '00nation.png',
   '9z2022': '9z.png',

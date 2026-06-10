@@ -159,7 +159,7 @@ export function coachBaseBonus(coach: Coach): number {
 }
 
 // Recalcula derivados (skill/ovr/sinergia/força) após mudanças no elenco do
-// usuário — usado na virada de temporada do modo carreira.
+// usuário - usado na virada de temporada do modo carreira.
 export function refreshUserTeam(user: TTeam): TTeam {
   const players = user.players.map((p) => ({ ...p, skill: playerSkill(p), ovr: playerOvr(p) }));
   const synergy = draftSynergy(players);

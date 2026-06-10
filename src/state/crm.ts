@@ -3,7 +3,7 @@ import type { TeamSeason } from '../types';
 
 const STORAGE_KEY = 'major-cs-dataset-v2';
 
-// dados salvos por versões antigas podem não ter coach — normaliza
+// dados salvos por versões antigas podem não ter coach - normaliza
 export function normalizeTeams(teams: TeamSeason[]): TeamSeason[] {
   return teams.map((t) => ({
     ...t,
@@ -95,7 +95,7 @@ export function fileToDataUrl(file: File, maxDim: number): Promise<string> {
 }
 
 // Fonte primária remota: banco Neon servido por /api/teams (Vercel).
-// Retorna null se indisponível (dev local sem backend, offline, erro) —
+// Retorna null se indisponível (dev local sem backend, offline, erro) -
 // nesse caso o app segue com o dataset embutido/localStorage.
 export async function fetchRemoteDataset(): Promise<TeamSeason[] | null> {
   try {

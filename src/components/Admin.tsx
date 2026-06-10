@@ -120,7 +120,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
-          Base de dados — times &amp; jogadores
+          Base de dados - times &amp; jogadores
           <span className="spacer" />
           <button className="btn ghost" onClick={addTeam}>
             + Novo time
@@ -407,7 +407,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
   );
 }
 
-// Registro manual de doações (PixGG não expõe API pública de histórico —
+// Registro manual de doações (PixGG não expõe API pública de histórico -
 // você registra aqui o que cair na sua conta e o mural exibe para todos).
 function DonorsAdminPanel() {
   const [name, setName] = useState('');
@@ -439,7 +439,7 @@ function DonorsAdminPanel() {
         setAmount('');
         setMessage('');
       } else if (res.status === 401) {
-        setStatus('Senha de admin inválida — saia e entre de novo na área administrativa.');
+        setStatus('Senha de admin inválida - saia e entre de novo na área administrativa.');
       } else {
         setStatus('Erro ao salvar.');
       }
@@ -450,7 +450,7 @@ function DonorsAdminPanel() {
 
   return (
     <div className="panel">
-      <div className="panel-head">💜 Apoiadores — registrar doação</div>
+      <div className="panel-head">💜 Apoiadores - registrar doação</div>
       <div className="panel-body">
         <div className="form-grid">
           <div className="field">

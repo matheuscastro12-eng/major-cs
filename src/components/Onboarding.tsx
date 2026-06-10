@@ -18,7 +18,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
     <div className="modal-backdrop" onClick={close}>
       <div className="modal fade-in" onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
-          👋 Bem-vindo ao MAJOR//CS
+          👋 Bem-vindo ao Road to Major
           <span className="spacer" />
           <button className="icon-btn" onClick={close} aria-label="fechar">
             ✕
@@ -35,7 +35,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
               <div>
                 <h4>🎲 Draft</h4>
                 <p>
-                  O dado sorteia 5 elencos históricos — escolha 1 jogador de cada, e depois um coach.
+                  O dado sorteia 5 elencos históricos - escolha 1 jogador de cada, e depois um coach.
                   <b> Composição importa:</b> sem IGL ou sem AWPer o time desmorona. Monte funções
                   completas (entry, suporte) e fique de olho no OVR e na sinergia.
                 </p>
@@ -57,7 +57,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
                 <h4>🔫 Partida</h4>
                 <p>
                   A simulação roda round a round com killfeed e economia reais. Você tem{' '}
-                  <b>2 timeouts táticos por mapa</b> — use nos momentos de crise para virar rounds.
+                  <b>2 timeouts táticos por mapa</b> - use nos momentos de crise para virar rounds.
                   Vença a fase suíça (3 vitórias) e os playoffs para levantar o troféu.
                 </p>
               </div>

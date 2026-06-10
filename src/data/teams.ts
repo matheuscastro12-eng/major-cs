@@ -1,6 +1,6 @@
 import type { Coach, CoachStyle, Game, Player, Role, TeamSeason } from '../types';
 
-// Atributos: aim / clutch / consistency / awp / igl — escala 50-99.
+// Atributos: aim / clutch / consistency / awp / igl - escala 50-99.
 // Curadoria baseada em Liquipedia (elencos/eras) e historico HLTV (top20, MVPs).
 
 function P(
@@ -53,7 +53,7 @@ function T(
 
 export const BASE_TEAMS: TeamSeason[] = [
   // ------------------------------ CS 1.6 ------------------------------
-  T('nip2001', 'Ninjas in Pyjamas', 'NIP', '2001-02', 'CS 1.6', 'se', 90, 'Campeão da primeira CPL — os ninjas originais', ['#0f1923', '#7ab903'], { dust2: 2, nuke: 1, inferno: 1, train: 1 }, C('Tompa', 'Tommy Ingemarsson Sr.', 'se', 76, 'discipline'), [
+  T('nip2001', 'Ninjas in Pyjamas', 'NIP', '2001-02', 'CS 1.6', 'se', 90, 'Campeão da primeira CPL - os ninjas originais', ['#0f1923', '#7ab903'], { dust2: 2, nuke: 1, inferno: 1, train: 1 }, C('Tompa', 'Tommy Ingemarsson Sr.', 'se', 76, 'discipline'), [
     P('HeatoN', 'Emil Christensen', 'se', 'Entry', 92, 84, 86, 60, 68),
     P('Potti', 'Tommy Ingemarsson', 'se', 'IGL', 90, 86, 87, 78, 88),
     P('ahl', 'Christer Alm', 'se', 'Support', 84, 78, 82, 58, 60),
@@ -74,35 +74,35 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('Volcano', 'Sal Garozzo', 'us', 'Rifler', 84, 79, 82, 60, 58),
     P('Bullseye', 'Josh Sievers', 'us', 'AWP', 81, 77, 80, 84, 55),
   ]),
-  T('col2005', 'compLexity', 'COL', '2005-06', 'CS 1.6', 'us', 89, 'A era de fRoD — rival eterno da Team 3D', ['#1a1a1a', '#0f7c3a'], { train: 2, inferno: 1, dust2: 1, nuke: 1 }, C('Lake', 'Jason Lake', 'us', 80, 'aggressive'), [
+  T('col2005', 'compLexity', 'COL', '2005-06', 'CS 1.6', 'us', 89, 'A era de fRoD - rival eterno da Team 3D', ['#1a1a1a', '#0f7c3a'], { train: 2, inferno: 1, dust2: 1, nuke: 1 }, C('Lake', 'Jason Lake', 'us', 80, 'aggressive'), [
     P('fRoD', 'Danny Montaner', 'us', 'AWP', 93, 88, 87, 94, 56),
     P('Warden', 'Matt Dickens', 'us', 'IGL', 85, 82, 84, 58, 87),
     P('sunman', 'Sal Mendez', 'us', 'Rifler', 85, 80, 82, 60, 56),
     P('Storm', 'Tyler Wood', 'us', 'Rifler', 83, 78, 81, 58, 56),
     P('tr1p', 'Corey Dodd', 'us', 'Support', 82, 78, 82, 56, 60),
   ]),
-  T('mibr2006', 'Made in Brazil', 'MIBR', '2006-07', 'CS 1.6', 'br', 90, 'Campeão mundial ESWC 2006 — o auge do CS brasileiro no 1.6', ['#005c2e', '#f7d117'], { train: 2, inferno: 2, dust2: 1, nuke: -1 }, C('Velloso', 'Paulo Velloso', 'br', 77, 'discipline'), [
+  T('mibr2006', 'Made in Brazil', 'MIBR', '2006-07', 'CS 1.6', 'br', 90, 'Campeão mundial ESWC 2006 - o auge do CS brasileiro no 1.6', ['#005c2e', '#f7d117'], { train: 2, inferno: 2, dust2: 1, nuke: -1 }, C('Velloso', 'Paulo Velloso', 'br', 77, 'discipline'), [
     P('cogu', 'Raphael Camargo', 'br', 'AWP', 92, 90, 86, 94, 56),
     P('fnx', 'Lincoln Lau', 'br', 'Rifler', 87, 84, 80, 60, 58),
     P('nak', 'Bruno Goncalves', 'br', 'Rifler', 86, 80, 84, 62, 62),
     P('kkz', 'Andre Negrao', 'br', 'IGL', 80, 76, 80, 58, 85),
     P('bit', 'Bruno Fukuda', 'br', 'Support', 81, 75, 79, 58, 60),
   ]),
-  T('pentagram2007', 'Pentagram G-Shock', 'PGS', '2006-07', 'CS 1.6', 'pl', 93, 'O Golden Five polonês — campeão mundial WCG/ESWC', ['#7a1f1f', '#d9b243'], { inferno: 2, nuke: 2, train: 1, mirage: 1 }, C('Maniek', 'Marek Kowalski', 'pl', 75, 'discipline'), [
+  T('pentagram2007', 'Pentagram G-Shock', 'PGS', '2006-07', 'CS 1.6', 'pl', 93, 'O Golden Five polonês - campeão mundial WCG/ESWC', ['#7a1f1f', '#d9b243'], { inferno: 2, nuke: 2, train: 1, mirage: 1 }, C('Maniek', 'Marek Kowalski', 'pl', 75, 'discipline'), [
     P('NEO', 'Filip Kubski', 'pl', 'Rifler', 96, 92, 93, 66, 62),
     P('TaZ', 'Wiktor Wojtas', 'pl', 'Entry', 88, 84, 86, 60, 72),
     P('LUq', 'Łukasz Wnęk', 'pl', 'AWP', 87, 82, 84, 86, 56),
     P('kuben', 'Jakub Gurczyński', 'pl', 'IGL', 84, 80, 83, 58, 88),
     P('Loord', 'Mariusz Cybulski', 'pl', 'Support', 83, 78, 82, 56, 64),
   ]),
-  T('mtw2008', 'mTw', 'mTw', '2008-09', 'CS 1.6', 'dk', 91, 'Melhor time do mundo em 2008 — dinamarqueses do mTw', ['#1c1c1c', '#cc2229'], { train: 2, inferno: 1, dust2: 1, nuke: 1 }, C('Zibbe', 'Sebastian Holm', 'dk', 76, 'tactical'), [
+  T('mtw2008', 'mTw', 'mTw', '2008-09', 'CS 1.6', 'dk', 91, 'Melhor time do mundo em 2008 - dinamarqueses do mTw', ['#1c1c1c', '#cc2229'], { train: 2, inferno: 1, dust2: 1, nuke: 1 }, C('Zibbe', 'Sebastian Holm', 'dk', 76, 'tactical'), [
     P('trace', 'Danny Kjær', 'dk', 'Rifler', 91, 88, 87, 64, 60),
     P('zonic', 'Danny Sørensen', 'dk', 'Rifler', 89, 84, 86, 60, 66),
     P('ave', 'Alexander Holdt', 'dk', 'IGL', 86, 82, 85, 58, 89),
     P('Sunde', 'Christian Sunde', 'dk', 'Support', 85, 80, 84, 58, 60),
     P('whimp', 'Jonas Svendsen', 'dk', 'AWP', 81, 76, 80, 83, 55),
   ]),
-  T('fnatic2009', 'fnatic', 'FNC', '2009', 'CS 1.6', 'se', 94, 'Time do ano de 2009 — f0rest e GeT_RiGhT no auge do 1.6', ['#1a1a1a', '#f36f21'], { dust2: 2, inferno: 2, train: 1, nuke: 0 }, C('Stranne', 'Niclas Stranne', 'se', 77, 'discipline'), [
+  T('fnatic2009', 'fnatic', 'FNC', '2009', 'CS 1.6', 'se', 94, 'Time do ano de 2009 - f0rest e GeT_RiGhT no auge do 1.6', ['#1a1a1a', '#f36f21'], { dust2: 2, inferno: 2, train: 1, nuke: 0 }, C('Stranne', 'Niclas Stranne', 'se', 77, 'discipline'), [
     P('f0rest', 'Patrik Lindberg', 'se', 'Rifler', 95, 91, 92, 70, 58),
     P('GeT_RiGhT', 'Christopher Alesund', 'se', 'Lurker', 92, 89, 91, 60, 58),
     P('Gux', 'Rasmus Stahl', 'se', 'Rifler', 87, 82, 85, 60, 56),
@@ -134,21 +134,21 @@ export const BASE_TEAMS: TeamSeason[] = [
   ]),
 
   // ------------------------------ CS:GO ------------------------------
-  T('nip2013', 'Ninjas in Pyjamas', 'NIP', '2012-13', 'CS:GO', 'se', 95, '87-0 em mapas LAN — a era mais dominante do CS:GO', ['#0f1923', '#7ab903'], { nuke: 3, train: 2, dust2: 2, inferno: 1, mirage: 1 }, C('THREAT', 'Björn Pers', 'se', 87, 'tactical'), [
+  T('nip2013', 'Ninjas in Pyjamas', 'NIP', '2012-13', 'CS:GO', 'se', 95, '87-0 em mapas LAN - a era mais dominante do CS:GO', ['#0f1923', '#7ab903'], { nuke: 3, train: 2, dust2: 2, inferno: 1, mirage: 1 }, C('THREAT', 'Björn Pers', 'se', 87, 'tactical'), [
     P('GeT_RiGhT', 'Christopher Alesund', 'se', 'Lurker', 95, 92, 93, 60, 58),
     P('f0rest', 'Patrik Lindberg', 'se', 'Rifler', 94, 90, 91, 72, 58),
     P('friberg', 'Adam Friberg', 'se', 'Entry', 86, 80, 84, 58, 56),
     P('Xizt', 'Richard Landström', 'se', 'IGL', 82, 80, 84, 58, 87),
     P('Fifflaren', 'Robin Johansson', 'se', 'AWP', 78, 74, 76, 80, 60),
   ]),
-  T('vp2014', 'Virtus.pro', 'VP', '2014', 'CS:GO', 'pl', 92, 'Campeão do Major EMS One Katowice 2014 — o plow polonês', ['#ff6b00', '#1a1a1a'], { mirage: 2, inferno: 2, train: 1, nuke: 1 }, C('kuben', 'Jakub Gurczyński', 'pl', 87, 'tactical'), [
+  T('vp2014', 'Virtus.pro', 'VP', '2014', 'CS:GO', 'pl', 92, 'Campeão do Major EMS One Katowice 2014 - o plow polonês', ['#ff6b00', '#1a1a1a'], { mirage: 2, inferno: 2, train: 1, nuke: 1 }, C('kuben', 'Jakub Gurczyński', 'pl', 87, 'tactical'), [
     P('Snax', 'Janusz Pogorzelski', 'pl', 'Lurker', 93, 92, 89, 66, 58),
     P('NEO', 'Filip Kubski', 'pl', 'Rifler', 90, 87, 88, 62, 64),
     P('pashaBiceps', 'Jarosław Jarząbkowski', 'pl', 'Rifler', 89, 85, 84, 84, 56),
     P('byali', 'Paweł Bieliński', 'pl', 'Entry', 87, 82, 83, 60, 54),
     P('TaZ', 'Wiktor Wojtas', 'pl', 'IGL', 82, 81, 84, 56, 86),
   ]),
-  T('fnatic2015', 'fnatic', 'FNC', '2014-15', 'CS:GO', 'se', 95, 'Bicampeão de Major — o melhor time da história sueca', ['#1a1a1a', '#f36f21'], { inferno: 2, mirage: 2, dust2: 1, train: 1 }, C('devilwalk', 'Jonatan Lundberg', 'se', 84, 'discipline'), [
+  T('fnatic2015', 'fnatic', 'FNC', '2014-15', 'CS:GO', 'se', 95, 'Bicampeão de Major - o melhor time da história sueca', ['#1a1a1a', '#f36f21'], { inferno: 2, mirage: 2, dust2: 1, train: 1 }, C('devilwalk', 'Jonatan Lundberg', 'se', 84, 'discipline'), [
     P('olofmeister', 'Olof Kajbjer', 'se', 'Rifler', 95, 90, 92, 74, 56),
     P('flusha', 'Robin Rönnquist', 'se', 'Lurker', 91, 93, 88, 62, 64),
     P('KRIMZ', 'Freddy Johansson', 'se', 'Support', 90, 85, 92, 58, 56),
@@ -162,7 +162,7 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('NBK', 'Nathan Schmitt', 'fr', 'Support', 85, 81, 85, 58, 68),
     P('kioShiMa', 'Fabien Fiey', 'fr', 'Rifler', 84, 79, 82, 58, 56),
   ]),
-  T('sk2016', 'SK Gaming', 'SK', '2016-17', 'CS:GO', 'br', 95, 'Bicampeão de Major — a era brasileira de FalleN e coldzera', ['#1a1a1a', '#c59d5f'], { mirage: 3, train: 2, inferno: 1, dust2: 1 }, C('zews', 'Wilton Prado', 'br', 90, 'tactical'), [
+  T('sk2016', 'SK Gaming', 'SK', '2016-17', 'CS:GO', 'br', 95, 'Bicampeão de Major - a era brasileira de FalleN e coldzera', ['#1a1a1a', '#c59d5f'], { mirage: 3, train: 2, inferno: 1, dust2: 1 }, C('zews', 'Wilton Prado', 'br', 90, 'tactical'), [
     P('coldzera', 'Marcelo David', 'br', 'Rifler', 97, 94, 95, 72, 56),
     P('FalleN', 'Gabriel Toledo', 'br', 'AWP', 92, 88, 88, 94, 94),
     P('fer', 'Fernando Alvarenga', 'br', 'Entry', 91, 86, 85, 60, 56),
@@ -183,14 +183,14 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('NBK', 'Nathan Schmitt', 'fr', 'Support', 86, 82, 85, 58, 70),
     P('bodyy', 'Alexandre Pianaro', 'fr', 'Rifler', 84, 80, 83, 58, 54),
   ]),
-  T('faze2018', 'FaZe Clan', 'FAZE', '2017-18', 'CS:GO', 'eu', 90, 'O primeiro super-time internacional — finalista do Major de Boston', ['#1a1a1a', '#e43d30'], { mirage: 2, inferno: 2, dust2: 1, nuke: 1 }, C('RobbaN', 'Robert Dahlström', 'se', 87, 'discipline'), [
+  T('faze2018', 'FaZe Clan', 'FAZE', '2017-18', 'CS:GO', 'eu', 90, 'O primeiro super-time internacional - finalista do Major de Boston', ['#1a1a1a', '#e43d30'], { mirage: 2, inferno: 2, dust2: 1, nuke: 1 }, C('RobbaN', 'Robert Dahlström', 'se', 87, 'discipline'), [
     P('NiKo', 'Nikola Kovač', 'ba', 'Rifler', 96, 91, 92, 64, 70),
     P('GuardiaN', 'Ladislav Kovács', 'sk', 'AWP', 91, 88, 85, 94, 54),
     P('rain', 'Håvard Nygaard', 'no', 'Entry', 89, 85, 84, 60, 54),
     P('olofmeister', 'Olof Kajbjer', 'se', 'Rifler', 88, 84, 86, 64, 56),
     P('karrigan', 'Finn Andersen', 'dk', 'IGL', 78, 77, 80, 56, 93),
   ]),
-  T('c92018', 'Cloud9', 'C9', '2018', 'CS:GO', 'us', 87, 'Campeão do Major de Boston 2018 — o milagre norte-americano', ['#00aeef', '#ffffff'], { mirage: 2, inferno: 1, train: 0, nuke: 0 }, C('valens', 'Soham Chowdhury', 'us', 85, 'tactical'), [
+  T('c92018', 'Cloud9', 'C9', '2018', 'CS:GO', 'us', 87, 'Campeão do Major de Boston 2018 - o milagre norte-americano', ['#00aeef', '#ffffff'], { mirage: 2, inferno: 1, train: 0, nuke: 0 }, C('valens', 'Soham Chowdhury', 'us', 85, 'tactical'), [
     P('autimatic', 'Timothy Ta', 'us', 'Rifler', 90, 87, 86, 64, 56),
     P('Stewie2K', 'Jake Yip', 'us', 'Entry', 88, 86, 82, 62, 62),
     P('tarik', 'Tarik Celik', 'us', 'IGL', 88, 85, 84, 58, 82),
@@ -204,21 +204,21 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('Attacker', 'Yuanzhang Sheng', 'cn', 'Rifler', 84, 80, 82, 58, 54),
     P('DD', 'Haoyu Wang', 'cn', 'Support', 81, 77, 80, 56, 56),
   ]),
-  T('astralis2018', 'Astralis', 'AST', '2018-19', 'CS:GO', 'dk', 99, 'Tetracampeão de Major — a maior dinastia do CS:GO', ['#d6082e', '#1a1a1a'], { nuke: 3, inferno: 2, dust2: 1, train: 2, mirage: 0 }, C('zonic', 'Danny Sørensen', 'dk', 96, 'tactical'), [
+  T('astralis2018', 'Astralis', 'AST', '2018-19', 'CS:GO', 'dk', 99, 'Tetracampeão de Major - a maior dinastia do CS:GO', ['#d6082e', '#1a1a1a'], { nuke: 3, inferno: 2, dust2: 1, train: 2, mirage: 0 }, C('zonic', 'Danny Sørensen', 'dk', 96, 'tactical'), [
     P('device', 'Nicolai Reedtz', 'dk', 'AWP', 94, 89, 93, 94, 56),
     P('dupreeh', 'Peter Rasmussen', 'dk', 'Entry', 91, 88, 88, 62, 56),
     P('Magisk', 'Emil Reif', 'dk', 'Rifler', 90, 86, 89, 58, 56),
     P('Xyp9x', 'Andreas Højsleth', 'dk', 'Support', 87, 97, 88, 56, 64),
     P('gla1ve', 'Lukas Rossander', 'dk', 'IGL', 83, 84, 85, 58, 98),
   ]),
-  T('liquid2019', 'Team Liquid', 'LIQ', '2019', 'CS:GO', 'us', 93, 'Intel Grand Slam em 63 dias — melhor time de 2019', ['#0a1723', '#4b9fd6'], { mirage: 2, inferno: 2, dust2: 1, nuke: 1 }, C('adreN', 'Eric Hoag', 'us', 86, 'discipline'), [
+  T('liquid2019', 'Team Liquid', 'LIQ', '2019', 'CS:GO', 'us', 93, 'Intel Grand Slam em 63 dias - melhor time de 2019', ['#0a1723', '#4b9fd6'], { mirage: 2, inferno: 2, dust2: 1, nuke: 1 }, C('adreN', 'Eric Hoag', 'us', 86, 'discipline'), [
     P('EliGE', 'Jonathan Jablonowski', 'us', 'Rifler', 94, 88, 91, 60, 56),
     P('NAF', 'Keith Markovic', 'ca', 'Lurker', 92, 93, 90, 66, 58),
     P('Twistzz', 'Russel Van Dulken', 'ca', 'Rifler', 91, 87, 88, 56, 56),
     P('Stewie2K', 'Jake Yip', 'us', 'Entry', 86, 84, 81, 62, 70),
     P('nitr0', 'Nick Cannella', 'us', 'IGL', 82, 80, 82, 68, 86),
   ]),
-  T('ence2019', 'ENCE', 'ENCE', '2019', 'CS:GO', 'fi', 91, 'Finalista do Major de Katowice 2019 — #EZ4ENCE', ['#16213e', '#f3a712'], { train: 2, nuke: 1, inferno: 1, mirage: 0 }, C('Twista', 'Slaava Räsänen', 'fi', 84, 'tactical'), [
+  T('ence2019', 'ENCE', 'ENCE', '2019', 'CS:GO', 'fi', 91, 'Finalista do Major de Katowice 2019 - #EZ4ENCE', ['#16213e', '#f3a712'], { train: 2, nuke: 1, inferno: 1, mirage: 0 }, C('Twista', 'Slaava Räsänen', 'fi', 84, 'tactical'), [
     P('sergej', 'Jere Salo', 'fi', 'Rifler', 90, 85, 87, 58, 54),
     P('allu', 'Aleksi Jalli', 'fi', 'AWP', 88, 84, 84, 91, 56),
     P('Aerial', 'Jani Jussila', 'fi', 'Entry', 84, 80, 82, 56, 54),
@@ -232,7 +232,7 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('ALEX', 'Alex McMeekin', 'gb', 'IGL', 82, 80, 82, 56, 87),
     P('NBK', 'Nathan Schmitt', 'fr', 'Rifler', 83, 80, 83, 58, 66),
   ]),
-  T('renegades2019', 'Renegades', 'RNG', '2019', 'CS:GO', 'au', 90, 'Top 4 do Major de Katowice — o auge australiano', ['#1a1a1a', '#f2c12e'], { train: 2, nuke: 1, inferno: 1, mirage: 1 }, C('kassad', 'Aleksandar Trifunović', 'rs', 86, 'discipline'), [
+  T('renegades2019', 'Renegades', 'RNG', '2019', 'CS:GO', 'au', 90, 'Top 4 do Major de Katowice - o auge australiano', ['#1a1a1a', '#f2c12e'], { train: 2, nuke: 1, inferno: 1, mirage: 1 }, C('kassad', 'Aleksandar Trifunović', 'rs', 86, 'discipline'), [
     P('jks', 'Justin Savage', 'au', 'Rifler', 90, 88, 88, 58, 56),
     P('jkaem', 'Joakim Myrbostad', 'no', 'Entry', 86, 82, 83, 58, 56),
     P('Gratisfaction', 'Sean Kaiwai', 'nz', 'AWP', 86, 83, 82, 88, 54),
@@ -246,7 +246,7 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('tarik', 'Tarik Celik', 'us', 'Entry', 86, 84, 83, 58, 72),
     P('stanislaw', 'Peter Jarguz', 'ca', 'IGL', 80, 81, 82, 56, 88),
   ]),
-  T('tsm2015', 'Team SoloMid', 'TSM', '2015', 'CS:GO', 'dk', 91, 'Os reis das finais de 2015 — embrião da Astralis', ['#1a1a1a', '#a8a8a8'], { dust2: 2, inferno: 1, mirage: 1, nuke: 1 }, C('ruggah', 'Casper Due', 'dk', 80, 'discipline'), [
+  T('tsm2015', 'Team SoloMid', 'TSM', '2015', 'CS:GO', 'dk', 91, 'Os reis das finais de 2015 - embrião da Astralis', ['#1a1a1a', '#a8a8a8'], { dust2: 2, inferno: 1, mirage: 1, nuke: 1 }, C('ruggah', 'Casper Due', 'dk', 80, 'discipline'), [
     P('device', 'Nicolai Reedtz', 'dk', 'AWP', 92, 86, 90, 89, 56),
     P('dupreeh', 'Peter Rasmussen', 'dk', 'Entry', 89, 85, 86, 60, 56),
     P('Xyp9x', 'Andreas Højsleth', 'dk', 'Support', 86, 93, 86, 56, 62),
@@ -267,14 +267,14 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('NBK', 'Nathan Schmitt', 'fr', 'Support', 83, 80, 83, 58, 68),
     P('Aleksib', 'Aleksi Virolainen', 'fi', 'IGL', 76, 78, 80, 54, 91),
   ]),
-  T('big2020', 'BIG', 'BIG', '2020', 'CS:GO', 'de', 91, '#1 do mundo na era online — tabseN e XANTARES', ['#0e0e0e', '#2f6fb8'], { dust2: 2, nuke: 2, inferno: 1, mirage: 1 }, C('gob b', 'Fatih Dayik', 'de', 88, 'tactical'), [
+  T('big2020', 'BIG', 'BIG', '2020', 'CS:GO', 'de', 91, '#1 do mundo na era online - tabseN e XANTARES', ['#0e0e0e', '#2f6fb8'], { dust2: 2, nuke: 2, inferno: 1, mirage: 1 }, C('gob b', 'Fatih Dayik', 'de', 88, 'tactical'), [
     P('XANTARES', 'İsmailcan Dörtkardeş', 'tr', 'Rifler', 92, 87, 86, 58, 54),
     P('syrsoN', 'Florian Rische', 'de', 'AWP', 90, 85, 84, 92, 52),
     P('tabseN', 'Johannes Wodarz', 'de', 'IGL', 88, 85, 85, 58, 87),
     P('k1to', 'Nils Gruhne', 'de', 'Support', 83, 79, 82, 56, 56),
     P('tiziaN', 'Tizian Feldbusch', 'de', 'Support', 80, 77, 81, 56, 60),
   ]),
-  T('navi2021', 'Natus Vincere', 'NAVI', '2021', 'CS:GO', 'ua', 96, 'Campeão invicto do Major de Estocolmo — s1mple no auge absoluto', ['#ffee00', '#1a1a1a'], { nuke: 2, mirage: 2, inferno: 1, dust2: 2, ancient: 0 }, C('B1ad3', 'Andrii Horodenskyi', 'ua', 93, 'tactical'), [
+  T('navi2021', 'Natus Vincere', 'NAVI', '2021', 'CS:GO', 'ua', 96, 'Campeão invicto do Major de Estocolmo - s1mple no auge absoluto', ['#ffee00', '#1a1a1a'], { nuke: 2, mirage: 2, inferno: 1, dust2: 2, ancient: 0 }, C('B1ad3', 'Andrii Horodenskyi', 'ua', 93, 'tactical'), [
     P('s1mple', 'Oleksandr Kostyliev', 'ua', 'AWP', 99, 97, 96, 99, 58),
     P('electroNic', 'Denis Sharipov', 'ru', 'Rifler', 93, 89, 91, 60, 70),
     P('b1t', 'Valerii Vakhovskyi', 'ua', 'Rifler', 90, 84, 90, 56, 54),
@@ -288,14 +288,14 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('nafany', 'Vladislav Gorshkov', 'ru', 'IGL', 80, 78, 79, 56, 87),
     P('interz', 'Timofey Yakushin', 'ru', 'Support', 80, 79, 82, 54, 58),
   ]),
-  T('faze2022', 'FaZe Clan', 'FAZE', '2022', 'CS:GO', 'eu', 95, 'Campeão do Major de Antuérpia — Intel Grand Slam', ['#1a1a1a', '#e43d30'], { inferno: 2, mirage: 2, nuke: 2, ancient: 1 }, C('RobbaN', 'Robert Dahlström', 'se', 88, 'discipline'), [
+  T('faze2022', 'FaZe Clan', 'FAZE', '2022', 'CS:GO', 'eu', 95, 'Campeão do Major de Antuérpia - Intel Grand Slam', ['#1a1a1a', '#e43d30'], { inferno: 2, mirage: 2, nuke: 2, ancient: 1 }, C('RobbaN', 'Robert Dahlström', 'se', 88, 'discipline'), [
     P('ropz', 'Robin Kool', 'ee', 'Lurker', 94, 92, 93, 60, 58),
     P('broky', 'Helvijs Saukants', 'lv', 'AWP', 91, 88, 89, 92, 54),
     P('Twistzz', 'Russel Van Dulken', 'ca', 'Rifler', 90, 87, 89, 56, 58),
     P('rain', 'Håvard Nygaard', 'no', 'Entry', 88, 86, 84, 58, 54),
     P('karrigan', 'Finn Andersen', 'dk', 'IGL', 76, 78, 78, 56, 96),
   ]),
-  T('outsiders2022', 'Outsiders', 'OUT', '2022', 'CS:GO', 'ru', 92, 'Campeão do Major do Rio 2022 — a disciplina de Jame', ['#1a1a1a', '#ff6b00'], { dust2: 2, mirage: 1, ancient: 1, inferno: 1 }, C('dastan', 'Dastan Akbayev', 'kz', 87, 'tactical'), [
+  T('outsiders2022', 'Outsiders', 'OUT', '2022', 'CS:GO', 'ru', 92, 'Campeão do Major do Rio 2022 - a disciplina de Jame', ['#1a1a1a', '#ff6b00'], { dust2: 2, mirage: 1, ancient: 1, inferno: 1 }, C('dastan', 'Dastan Akbayev', 'kz', 87, 'tactical'), [
     P('Jame', 'Dzhami Ali', 'ru', 'AWP', 86, 90, 92, 93, 90),
     P('FL1T', 'Evgeny Lebedev', 'ru', 'Rifler', 89, 85, 87, 58, 56),
     P('Qikert', 'Alexey Golubev', 'ru', 'Support', 85, 82, 85, 60, 62),
@@ -309,14 +309,14 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('jabbi', 'Jakob Nygaard', 'dk', 'Rifler', 88, 84, 85, 58, 54),
     P('sjuush', 'Rasmus Beck', 'dk', 'Support', 85, 81, 84, 56, 56),
   ]),
-  T('gamerlegion2023', 'GamerLegion', 'GL', '2023', 'CS:GO', 'eu', 88, 'A Cinderela do Major de Paris — vice-campeã', ['#101418', '#c5b358'], { mirage: 1, ancient: 1, inferno: 1, anubis: 1 }, C('ash', 'Ashley Battye', 'gb', 82, 'tactical'), [
+  T('gamerlegion2023', 'GamerLegion', 'GL', '2023', 'CS:GO', 'eu', 88, 'A Cinderela do Major de Paris - vice-campeã', ['#101418', '#c5b358'], { mirage: 1, ancient: 1, inferno: 1, anubis: 1 }, C('ash', 'Ashley Battye', 'gb', 82, 'tactical'), [
     P('siuhy', 'Kamil Szkaradek', 'pl', 'IGL', 81, 82, 83, 56, 89),
     P('acoR', 'Frederik Gyldstrand', 'dk', 'AWP', 84, 81, 81, 88, 52),
     P('isak', 'Isak Fahlén', 'se', 'Rifler', 84, 80, 82, 58, 54),
     P('Kursy', 'Oskar Kurowski', 'pl', 'Rifler', 81, 78, 80, 56, 54),
     P('ztr', 'Jacob Gustafsson', 'se', 'Support', 80, 77, 80, 56, 56),
   ]),
-  T('furia2022', 'FURIA', 'FUR', '2022-23', 'CS:GO', 'br', 91, 'Semifinalista do Major do Rio — o estilo agressivo de arT', ['#1a1a1a', '#7c7c7c'], { nuke: 2, mirage: 1, inferno: 1, ancient: 1 }, C('guerri', 'Nicholas Nogueira', 'br', 88, 'aggressive'), [
+  T('furia2022', 'FURIA', 'FUR', '2022-23', 'CS:GO', 'br', 91, 'Semifinalista do Major do Rio - o estilo agressivo de arT', ['#1a1a1a', '#7c7c7c'], { nuke: 2, mirage: 1, inferno: 1, ancient: 1 }, C('guerri', 'Nicholas Nogueira', 'br', 88, 'aggressive'), [
     P('KSCERATO', 'Kaike Cerato', 'br', 'Rifler', 93, 90, 91, 58, 56),
     P('yuurih', 'Yuri Boian', 'br', 'Rifler', 91, 87, 89, 58, 56),
     P('saffee', 'Rafael Costa', 'br', 'AWP', 86, 82, 83, 89, 52),
@@ -346,7 +346,7 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('iM', 'Mihai Ivan', 'ro', 'Entry', 87, 82, 84, 60, 54),
     P('Aleksib', 'Aleksi Virolainen', 'fi', 'IGL', 75, 78, 79, 54, 93),
   ]),
-  T('g22023', 'G2 Esports', 'G2', '2023-24', 'CS2', 'eu', 91, 'Campeão da IEM Cologne — NiKo e m0NESY juntos', ['#1a1a1a', '#e0e0e0'], { nuke: 2, mirage: 1, inferno: 1, ancient: 1, anubis: 0 }, C('XTQZZZ', 'Rémy Quoniam', 'fr', 88, 'tactical'), [
+  T('g22023', 'G2 Esports', 'G2', '2023-24', 'CS2', 'eu', 91, 'Campeão da IEM Cologne - NiKo e m0NESY juntos', ['#1a1a1a', '#e0e0e0'], { nuke: 2, mirage: 1, inferno: 1, ancient: 1, anubis: 0 }, C('XTQZZZ', 'Rémy Quoniam', 'fr', 88, 'tactical'), [
     P('NiKo', 'Nikola Kovač', 'ba', 'Rifler', 95, 90, 91, 62, 64),
     P('m0NESY', 'Ilya Osipov', 'ru', 'AWP', 94, 92, 90, 96, 52),
     P('huNter-', 'Nemanja Kovač', 'rs', 'Rifler', 89, 86, 87, 58, 58),
@@ -374,7 +374,7 @@ export const BASE_TEAMS: TeamSeason[] = [
     P('kyousuke', 'Kyle Mendez', 'gb', 'Entry', 87, 83, 84, 58, 54),
     P('kyxsan', 'Damjan Stoilkovski', 'mk', 'IGL', 79, 80, 81, 56, 89),
   ]),
-  T('mongolz2025', 'The MongolZ', 'TMZ', '2024-25', 'CS2', 'mn', 93, 'Semifinalista de Major — a revolução mongol', ['#c8102e', '#1a3a6b'], { mirage: 2, inferno: 2, anubis: 1, ancient: 1 }, C('maaRaa', 'Maral Bayar', 'mn', 83, 'aggressive'), [
+  T('mongolz2025', 'The MongolZ', 'TMZ', '2024-25', 'CS2', 'mn', 93, 'Semifinalista de Major - a revolução mongol', ['#c8102e', '#1a3a6b'], { mirage: 2, inferno: 2, anubis: 1, ancient: 1 }, C('maaRaa', 'Maral Bayar', 'mn', 83, 'aggressive'), [
     P('910', 'Azbayar Munkhbold', 'mn', 'Rifler', 91, 88, 87, 60, 56),
     P('Senzu', 'Garidmagnai Byambasuren', 'mn', 'AWP', 88, 85, 84, 90, 54),
     P('Techno', 'Sodbayar Munkhbold', 'mn', 'Rifler', 87, 83, 84, 58, 54),

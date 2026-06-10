@@ -89,7 +89,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
-          {t.name} — {phaseLabel(t)}
+          {t.name} - {phaseLabel(t)}
           {career.titles > 0 && <span className="gold-text small">🏆×{career.titles}</span>}
           <span className="spacer" />
           {pickem.total > 0 && (
@@ -126,7 +126,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
 
       {inSwiss && (
         <div className="panel">
-          <div className="panel-head">Classificação — fase suíça</div>
+          <div className="panel-head">Classificação - fase suíça</div>
           <div className="panel-body tight">
             <table className="standings">
               <tbody>
@@ -195,7 +195,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
 
       <div className="panel">
         <div className="panel-head">
-          Seu elenco — {user.name}
+          Seu elenco - {user.name}
           <span className="spacer" />
           <span className="muted small" style={{ textTransform: 'none' }}>
             força {user.strength.toFixed(1)}

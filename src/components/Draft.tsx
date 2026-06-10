@@ -43,7 +43,7 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
       {!coachPhase && source && (
         <div className="panel">
           <div className="panel-head">
-            Draft — escolha {draft.current + 1} de 5
+            Draft - escolha {draft.current + 1} de 5
             <span className="spacer" />
             <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
               O dado sorteou um elenco histórico. Escolha 1 jogador para o seu time.
@@ -83,7 +83,7 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
       {coachPhase && (
         <div className="panel">
           <div className="panel-head">
-            Draft — escolha o COACH
+            Draft - escolha o COACH
             <span className="spacer" />
             <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
               O treinador define o estilo do time dentro do servidor.

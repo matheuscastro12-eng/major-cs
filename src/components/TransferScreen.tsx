@@ -52,7 +52,7 @@ export function TransferScreen({ user, season, titles, evolution, offers, onConf
       <div className="panel">
         <div className="season-banner">
           <h2>
-            🔁 Janela de transferências — rumo à temporada {season}
+            🔁 Janela de transferências - rumo à temporada {season}
           </h2>
           <div className="muted small">
             {titles > 0 ? `🏆 ${titles} título(s) na carreira · ` : ''}
@@ -89,7 +89,7 @@ export function TransferScreen({ user, season, titles, evolution, offers, onConf
           </div>
 
           <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '16px 0 6px' }}>
-            Mercado — ofertas desta janela
+            Mercado - ofertas desta janela
           </div>
           <div className="player-cards" style={{ padding: 0 }}>
             {offers.map((o, i) => {
@@ -124,13 +124,13 @@ export function TransferScreen({ user, season, titles, evolution, offers, onConf
             <div className="muted small" style={{ marginBottom: 10 }}>
               {outId && inIdx !== null ? (
                 <>
-                  Troca selecionada — força do time: {current.strength.toFixed(1)} →{' '}
+                  Troca selecionada - força do time: {current.strength.toFixed(1)} →{' '}
                   <b className={delta >= 0 ? 'pos' : 'neg'}>{preview.strength.toFixed(1)}</b>{' '}
                   ({delta >= 0 ? '+' : ''}
                   {delta.toFixed(1)})
                 </>
               ) : (
-                'Nenhuma troca selecionada — você pode seguir com a mesma base.'
+                'Nenhuma troca selecionada - você pode seguir com a mesma base.'
               )}
             </div>
             <button className="btn gold big" onClick={() => onConfirm(preview)}>

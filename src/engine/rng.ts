@@ -1,4 +1,4 @@
-// mulberry32 — RNG determinístico com seed
+// mulberry32 - RNG determinístico com seed
 export type Rng = () => number;
 
 export function makeRng(seed: number): Rng {

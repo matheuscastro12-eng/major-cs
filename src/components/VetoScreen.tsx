@@ -8,7 +8,7 @@ import { MapThumb } from './ui';
 import { MatchBanner } from './flags';
 
 interface Props {
-  teams: [TTeam, TTeam]; // [a, b] — usuário pode ser 0 ou 1
+  teams: [TTeam, TTeam]; // [a, b] - usuário pode ser 0 ou 1
   userIdx: 0 | 1;
   rng: Rng;
   phaseLabel: string;
@@ -53,7 +53,7 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, onDone }: Props) {
     <div className="fade-in veto-layout">
       <div className="panel">
         <div className="panel-head">
-          Veto de mapas — {phaseLabel}
+          Veto de mapas - {phaseLabel}
           <span className="spacer" />
           <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
             MD3 · ban/pick oficial
@@ -232,7 +232,7 @@ function VetoAnalysis({
         {!synergy.hasIgl && (
           <div className="insight-item bad" style={{ marginTop: 10 }}>
             <span className="ic">📢</span>
-            <span>Sem IGL: priorize mapas onde você tem vantagem clara — em jogos fechados seu time tende a desmoronar no 2º half.</span>
+            <span>Sem IGL: priorize mapas onde você tem vantagem clara - em jogos fechados seu time tende a desmoronar no 2º half.</span>
           </div>
         )}
         {!synergy.hasAwp && (

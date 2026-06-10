@@ -65,7 +65,7 @@ export function drawShareCard(t: Tournament, user: TTeam, placementLabel: string
   // rodapé
   ctx.font = '600 17px Inter, Arial, sans-serif';
   ctx.fillStyle = '#61a8dd';
-  ctx.fillText('major-cs-pi.vercel.app — monte o seu time dos sonhos', W / 2, 510);
+  ctx.fillText('roadtomajor.com.br · monte o seu time dos sonhos', W / 2, 510);
 
   return canvas.toDataURL('image/png');
 }

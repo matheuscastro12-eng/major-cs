@@ -25,18 +25,19 @@ export function Home({ onStart, onDonate, onHall, teamCount, playerCount, savedC
   return (
     <div className="fade-in">
       <div className="hero">
+        <img className="hero-mark" src="/favicon.png" alt="Road to Major" />
         <h1>
-          MAJOR<span>//</span>CS
+          ROAD TO <span>MAJOR</span>
         </h1>
         <p>
-          Monte o time dos sonhos com lendas de todas as eras do Counter-Strike — do 1.6 ao CS2 — e
+          Monte o time dos sonhos com lendas de todas as eras do Counter-Strike (do 1.6 ao CS2) e
           dispute um Major completo em séries MD3 contra os maiores times da história.
         </p>
 
         {savedCampaign && (
           <div style={{ margin: '18px auto 0', maxWidth: 640 }}>
             <button className="btn gold big" style={{ width: '100%' }} onClick={onResume}>
-              ▶ Continuar campanha — {savedCampaign.name}
+              ▶ Continuar campanha - {savedCampaign.name}
               {savedCampaign.phase === 'done' ? ' (encerrada)' : ''}
             </button>
           </div>
@@ -49,7 +50,7 @@ export function Home({ onStart, onDonate, onHall, teamCount, playerCount, savedC
           </button>
           <button className={`pool-card br${pool === 'br' ? ' sel' : ''}`} onClick={() => setPool('br')}>
             <h3>🇧🇷 GC Masters</h3>
-            <p>Só elencos brasileiros — de mibr 2006 e SK 2016 a Legacy e FURIA. O campeonato da pátria de chuteiras (e de headshot).</p>
+            <p>Só elencos brasileiros - de mibr 2006 e SK 2016 a Legacy e FURIA. O campeonato da pátria de chuteiras (e de headshot).</p>
           </button>
         </div>
 

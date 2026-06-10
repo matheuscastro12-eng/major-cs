@@ -71,7 +71,7 @@ function formBoost(team: TTeam): number {
 // ---------------- economia ----------------
 // Dinheiro médio por jogador, decidido pelo IGL/coach a cada round:
 // full buy (>=4500), force (>=2600) ou eco. Eco joga de MAC-10/pistola
-// e sofre penalidade de força — mas o upset existe.
+// e sofre penalidade de força - mas o upset existe.
 
 export type BuyTier = 'pistol' | 'eco' | 'force' | 'full';
 
