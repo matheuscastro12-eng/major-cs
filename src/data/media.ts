@@ -99,6 +99,8 @@ const LOCAL_LOGOS: Record<string, string> = {
   esc2012: 'esc.png',
   eg2019: 'eg.png',
   falcons2025: 'falcons.png',
+  faze2018: 'faze.png',
+  faze2022: 'faze.png',
   fnatic2009: 'fnatic.png',
   fnatic2015: 'fnatic.png',
   furia2022: 'furia.png',
