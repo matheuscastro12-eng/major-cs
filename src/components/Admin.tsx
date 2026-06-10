@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
-import { adminPassword } from './AdminGate';
+import { adminPassword, lockAdmin } from './AdminGate';
 import { invalidateDonors } from './Donate';
 import { fileToDataUrl, loadMapImages, saveMapImage } from '../state/crm';
 import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
@@ -137,6 +137,16 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
             }}
           >
             Restaurar padrão
+          </button>
+          <button
+            className="btn danger"
+            title="Bloqueia a área administrativa neste navegador"
+            onClick={() => {
+              lockAdmin();
+              onBack();
+            }}
+          >
+            🔒 Sair
           </button>
           <button className="btn" onClick={onBack}>
             ← Voltar

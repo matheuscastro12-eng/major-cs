@@ -4,7 +4,6 @@ import { DonorsPanel } from './Donate';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool) => void;
-  onAdmin: () => void;
   onDonate: () => void;
   onHall: () => void;
   teamCount: number;
@@ -13,7 +12,7 @@ interface Props {
   onResume?: () => void;
 }
 
-export function Home({ onStart, onAdmin, onDonate, onHall, teamCount, playerCount, savedCampaign, onResume }: Props) {
+export function Home({ onStart, onDonate, onHall, teamCount, playerCount, savedCampaign, onResume }: Props) {
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [name, setName] = useState('');
@@ -95,16 +94,6 @@ export function Home({ onStart, onAdmin, onDonate, onHall, teamCount, playerCoun
           e{' '}
           <a href="https://www.hltv.org" target="_blank" rel="noreferrer">
             HLTV
-          </a>
-          {' · '}
-          <a
-            href="#admin"
-            onClick={(e) => {
-              e.preventDefault();
-              onAdmin();
-            }}
-          >
-            Gerenciar base de dados
           </a>
         </div>
       </div>

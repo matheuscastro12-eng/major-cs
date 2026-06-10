@@ -85,12 +85,14 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
     return champion.players.find((p) => p.id === t.mvpId);
   }, [t, champion]);
 
-  // registra a campanha no Hall da Fama (uma vez por torneio)
+  // registra a campanha no Hall da Fama (no máximo uma vez por torneio:
+  // a chave é gravada ANTES do fetch para nunca duplicar registro)
   useEffect(() => {
     if (postedRef.current) return;
-    const hallKey = `major-hall-posted-${user.name}-${career.season}-${t.history.length}`;
+    const hallKey = `major-hall-posted-${user.name}-${career.season}-${campaign.placementCode}-${t.history.length}`;
     if (localStorage.getItem(hallKey)) return;
     postedRef.current = true;
+    localStorage.setItem(hallKey, '1');
     setHallStatus('saving');
     fetch('/api/hall', {
       method: 'POST',
@@ -107,14 +109,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
       }),
       signal: AbortSignal.timeout(8000),
     })
-      .then((r) => {
-        if (r.ok) {
-          localStorage.setItem(hallKey, '1');
-          setHallStatus('saved');
-        } else {
-          setHallStatus('error');
-        }
-      })
+      .then((r) => setHallStatus(r.ok ? 'saved' : 'error'))
       .catch(() => setHallStatus('error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

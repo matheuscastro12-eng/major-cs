@@ -137,6 +137,24 @@ export default function App() {
     setScreen(savedSession.tournament.phase === 'done' ? 'final' : 'hub');
   };
 
+  // A base de dados não tem botão no front: só abre acessando a URL com
+  // #admin (ex: https://site/#admin). O hash some da barra ao entrar.
+  useEffect(() => {
+    const checkHash = () => {
+      const h = window.location.hash.toLowerCase();
+      if (h === '#admin') {
+        setScreen('admin');
+        history.replaceState(null, '', window.location.pathname);
+      } else if (h === '#hall') {
+        setScreen('hall');
+        history.replaceState(null, '', window.location.pathname);
+      }
+    };
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, []);
+
   // fonte primária: banco Neon via /api/teams; edições locais do CRM têm prioridade
   useEffect(() => {
     if (isCustomized()) return;
@@ -356,11 +374,6 @@ export default function App() {
         <button className="nav-btn" onClick={() => setScreen('hall')}>
           🏛 Hall
         </button>
-        {screen !== 'admin' && (
-          <button className="nav-btn" onClick={() => setScreen('admin')}>
-            ⚙ Base
-          </button>
-        )}
       </div>
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
@@ -369,7 +382,6 @@ export default function App() {
       {screen === 'home' && (
         <Home
           onStart={startDraft}
-          onAdmin={() => setScreen('admin')}
           onDonate={() => setDonateOpen(true)}
           onHall={() => setScreen('hall')}
           teamCount={dataset.length}

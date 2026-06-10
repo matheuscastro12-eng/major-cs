@@ -58,10 +58,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
   };
 
   const getSim = (idx: number): MapSim => {
-    if (!simsRef.current[idx]) {
-      simsRef.current[idx] = createMapSim(rng, teams[0], teams[1], maps[idx].map, maps[idx].pickedBy);
+    const safe = Math.min(idx, maps.length - 1); // guarda defensiva contra índice além do veto
+    if (!simsRef.current[safe]) {
+      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy);
     }
-    return simsRef.current[idx];
+    return simsRef.current[safe];
   };
 
   // loop da simulação ao vivo
@@ -87,7 +88,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
           setSeries(s);
           setFinished(true);
         } else {
-          setPausedMsg(`Fim do mapa ${mapIdx + 1} — preparando ${MAP_LABELS[maps[mapIdx + 1].map]}…`);
+          const next = maps[mapIdx + 1];
+          setPausedMsg(`Fim do mapa ${mapIdx + 1}${next ? ` — preparando ${MAP_LABELS[next.map]}…` : '…'}`);
           window.setTimeout(() => {
             setMapIdx((m) => m + 1);
             setTimeoutsLeft(TIMEOUTS_PER_MAP);
@@ -102,18 +104,20 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
   }, [finished, mapIdx, boostRounds, pausedMsg]);
 
   const skipAll = () => {
+    setPausedMsg(' '); // congela o interval enquanto resolvemos tudo de forma síncrona
     let idx = mapIdx;
-    while (true) {
+    while (idx < maps.length) {
       const sim = getSim(idx);
       while (!sim.done()) sim.step();
       resultsRef.current[idx] = sim.result();
       if (seriesOver()) break;
       idx++;
     }
-    setMapIdx(idx);
+    setMapIdx(Math.min(idx, maps.length - 1));
     const s = buildSeries();
     setSeries(s);
     setFinished(true);
+    setPausedMsg('');
   };
 
   const callTimeout = () => {
@@ -124,18 +128,15 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
     window.setTimeout(() => setPausedMsg(''), 1400);
   };
 
-  const sim = getSim(Math.min(mapIdx, maps.length - 1));
+  // `tick` força o re-render a cada round simulado; os valores abaixo são
+  // leituras baratas do sim atual, recalculadas a cada render de propósito.
+  void tick;
+  const sim = getSim(mapIdx);
   const [sa, sb] = finished && series ? [0, 0] : sim.score();
   const roundLog = sim.roundLog();
   const buys = sim.buys();
-  void tick;
-
-  const mapsWon = useMemo(() => {
-    const w: [number, number] = [0, 0];
-    for (const r of resultsRef.current) w[r.winner]++;
-    return w;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, finished]);
+  const mapsWon: [number, number] = [0, 0];
+  for (const r of resultsRef.current) if (r) mapsWon[r.winner]++;
 
   const playerById = useMemo(() => {
     const players = new Map<string, TPlayer>();
