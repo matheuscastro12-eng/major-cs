@@ -3,7 +3,7 @@ import { getTeam, phaseLabel, standings, userPairing } from '../engine/swiss';
 import type { Pairing, Tournament } from '../types';
 import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
 import { TournamentBracket } from './Bracket';
-import { Flag, TeamBadge, TeamName } from './ui';
+import { Flag, PlayerAvatar, TeamBadge, TeamName } from './ui';
 
 import type { CareerState, PickemState } from '../App';
 
@@ -220,7 +220,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12, alignItems: 'start' }}>
             <div className="coach-card">
-              <div className="avatar">{user.coach.nick.slice(0, 2).toUpperCase()}</div>
+              <PlayerAvatar nick={user.coach.nick} size={42} coach />
               <div>
                 <div className="label">Coach · {COACH_STYLE_LABELS[user.coach.style]} · {user.coach.rating}</div>
                 <div className="nick">

@@ -1,7 +1,36 @@
-import { useState } from 'react';
-import { MAP_IMAGES } from '../data/media';
+import { useEffect, useState } from 'react';
+import { MAP_IMAGES, photoForNick } from '../data/media';
 import { loadMapImages } from '../state/crm';
 import { MAP_LABELS, type MapId, type TTeam } from '../types';
+
+// Avatar do jogador: foto real da Liquipedia (via proxy) com fallback de iniciais
+export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string; size?: number; coach?: boolean }) {
+  const [err, setErr] = useState(false);
+  const url = photoForNick(nick, Math.max(120, size * 2));
+  useEffect(() => setErr(false), [url]);
+  if (url && !err) {
+    return (
+      <span className="pavatar" style={{ width: size, height: size }}>
+        <img src={url} alt={nick} loading="lazy" onError={() => setErr(true)} />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="pavatar text"
+      style={{
+        width: size,
+        height: size,
+        fontSize: size * 0.36,
+        background: coach
+          ? 'linear-gradient(160deg, #6a4f9e 0%, #3a2c5c 100%)'
+          : 'linear-gradient(160deg, var(--blue) 0%, #25405c 100%)',
+      }}
+    >
+      {nick.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
 
 export function Flag({ cc, title }: { cc: string; title?: string }) {
   const [err, setErr] = useState(false);

@@ -12,7 +12,7 @@ import { track } from '../state/track';
 import type { TournamentPool } from '../types';
 import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
 import { Scoreboard } from './Scoreboard';
-import { AttrBar, Flag, OvrBadge, TeamBadge } from './ui';
+import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 
 interface Props {
   onBack: () => void;
@@ -374,9 +374,7 @@ export function OnlineScreen({ onBack }: Props) {
             <div className="player-cards">
               {setup.coachOptions.map((t) => (
                 <button key={t.id} className="pcard" onClick={() => pickCoach(t.id)}>
-                  <div className="avatar" style={{ background: 'linear-gradient(160deg, #6a4f9e 0%, #3a2c5c 100%)' }}>
-                    {t.coach.nick.slice(0, 2).toUpperCase()}
-                  </div>
+                  <PlayerAvatar nick={t.coach.nick} size={52} coach />
                   <OvrBadge ovr={t.coach.rating} label="COACH" />
                   <div className="nick">{t.coach.nick}</div>
                   <div className="meta">
@@ -415,7 +413,7 @@ export function OnlineScreen({ onBack }: Props) {
                 const taken = pickedNicks.has(p.nick.toLowerCase());
                 return (
                   <button key={p.id} className={`pcard${taken ? ' taken' : ''}`} onClick={() => pickPlayer(p.id)}>
-                    <div className="avatar">{p.nick.slice(0, 2).toUpperCase()}</div>
+                    <PlayerAvatar nick={p.nick} size={56} />
                     <OvrBadge ovr={playerOvr(p)} />
                     <div className="nick">{p.nick}</div>
                     <div className="meta">

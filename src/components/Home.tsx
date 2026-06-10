@@ -140,6 +140,11 @@ export function Home({
           <a href="https://www.hltv.org" target="_blank" rel="noreferrer">
             HLTV
           </a>
+          {' · '}fotos de jogadores:{' '}
+          <a href="https://liquipedia.net" target="_blank" rel="noreferrer">
+            Liquipedia
+          </a>{' '}
+          (CC-BY-SA 3.0)
         </div>
       </div>
     </div>

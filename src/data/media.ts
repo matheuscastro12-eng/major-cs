@@ -166,3 +166,16 @@ export function logoForTeam(team: Pick<TeamSeason, 'id' | 'team'>): string {
 export function liquipediaTeamUrl(team: Pick<TeamSeason, 'team'>): string {
   return `https://liquipedia.net/counterstrike/${team.team.replace(/ /g, '_')}`;
 }
+
+// ---- fotos de jogadores (resolvidas em build-time da Liquipedia) ----
+// Servidas via proxy Photon (i0.wp.com), que aceita hotlink e redimensiona;
+// a Liquipedia bloqueia hotlink direto. Conteúdo CC-BY-SA da Liquipedia.
+import playerPhotos from './player-photos.json';
+
+const PHOTOS = playerPhotos as Record<string, string>;
+
+export function photoForNick(nick: string, size = 120): string | undefined {
+  const path = PHOTOS[nick.toLowerCase()];
+  if (!path) return undefined;
+  return `https://i0.wp.com/liquipedia.net${path}?resize=${size},${size}&ssl=1`;
+}

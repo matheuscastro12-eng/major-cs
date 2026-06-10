@@ -5,7 +5,7 @@ import { getTeam } from '../engine/swiss';
 import { downloadShareCard } from '../state/share';
 import { track } from '../state/track';
 import type { Tournament, TournamentPool } from '../types';
-import { Flag, TeamBadge } from './ui';
+import { Flag, PlayerAvatar, TeamBadge } from './ui';
 
 interface Props {
   t: Tournament;
@@ -185,7 +185,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
 
           {mvp && (
             <div className="mvp-card">
-              <div className="avatar">{mvp.nick.slice(0, 2).toUpperCase()}</div>
+              <PlayerAvatar nick={mvp.nick} size={54} />
               <div>
                 <div className="label">MVP do torneio</div>
                 <div className="nick">

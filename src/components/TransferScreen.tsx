@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { refreshUserTeam, toTPlayer } from '../engine/ratings';
 import type { Player, TeamSeason, TPlayer, TTeam } from '../types';
-import { Flag, OvrBadge, TeamBadge } from './ui';
+import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 
 export interface TransferOffer {
@@ -101,7 +101,7 @@ export function TransferScreen({ user, season, titles, evolution, offers, onConf
                   style={{ borderColor: inIdx === i ? 'var(--green)' : undefined }}
                   onClick={() => setInIdx(inIdx === i ? null : i)}
                 >
-                  <div className="avatar">{o.player.nick.slice(0, 2).toUpperCase()}</div>
+                  <PlayerAvatar nick={o.player.nick} size={56} />
                   <OvrBadge ovr={tp.ovr} />
                   <div className="nick">{o.player.nick}</div>
                   <div className="meta">

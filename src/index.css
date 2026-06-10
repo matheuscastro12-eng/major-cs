@@ -2765,3 +2765,29 @@ table.crm-players input.num {
 }
 
 .mc-hint { font-size: 11px; color: var(--faint); margin-top: 2px; }
+
+/* ---------- avatar de jogador (foto Liquipedia + fallback) ---------- */
+.pavatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin: 0 auto;
+  background: var(--bg-deep);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.pavatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.pavatar.text {
+  font-family: var(--font-cond);
+  font-weight: 700;
+  color: #fff;
+}

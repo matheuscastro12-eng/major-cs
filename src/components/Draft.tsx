@@ -3,7 +3,7 @@ import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import type { DraftState, Player, TeamSeason } from '../types';
 import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
-import { AttrBar, Flag, OvrBadge, TeamBadge } from './ui';
+import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 
 const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 
@@ -96,9 +96,7 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
               const c = t.coach;
               return (
                 <button key={tid} className="pcard" onClick={() => onPickCoach(tid)}>
-                  <div className="avatar" style={{ background: 'linear-gradient(160deg, #6a4f9e 0%, #3a2c5c 100%)' }}>
-                    {c.nick.slice(0, 2).toUpperCase()}
-                  </div>
+                  <PlayerAvatar nick={c.nick} size={52} coach />
                   {classic && <OvrBadge ovr={c.rating} label="COACH" />}
                   <div className="nick">{c.nick}</div>
                   <div className="meta">
@@ -169,7 +167,7 @@ function PlayerCard({
 }) {
   return (
     <button className={`pcard${taken ? ' taken' : ''}`} onClick={onPick}>
-      <div className="avatar">{p.nick.slice(0, 2).toUpperCase()}</div>
+      <PlayerAvatar nick={p.nick} size={56} />
       {classic && <OvrBadge ovr={playerOvr(p)} />}
       <div className="nick">{p.nick}</div>
       <div className="meta">
