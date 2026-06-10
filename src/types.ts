@@ -164,6 +164,7 @@ export interface Pairing {
   a: string;
   b: string;
   label: string;
+  bestOf?: 1 | 3; // formato Major: aberturas BO1, decisivos/playoffs BO3
   result?: SeriesResult;
 }
 

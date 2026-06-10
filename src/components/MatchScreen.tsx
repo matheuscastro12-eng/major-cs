@@ -15,6 +15,7 @@ interface Props {
   userIdx: 0 | 1;
   rng: Rng;
   phaseLabel: string;
+  bestOf?: 1 | 3;
   onFinish: (series: SeriesResult) => void;
 }
 
@@ -40,7 +41,9 @@ const BUY_LABEL: Record<BuyTier, string> = {
   full: 'FULL BUY',
 };
 
-export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }: Props) {
+export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish }: Props) {
+  const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
+  const mdLabel = bestOf === 1 ? 'MD1' : 'MD3';
   const simsRef = useRef<MapSim[]>([]);
   const resultsRef = useRef<MapResult[]>([]);
   const [mapIdx, setMapIdx] = useState(0);
@@ -63,7 +66,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
       },
       [0, 0] as [number, number],
     );
-    return wins[0] === 2 || wins[1] === 2 || resultsRef.current.length >= maps.length;
+    return wins[0] >= need || wins[1] >= need || resultsRef.current.length >= maps.length;
   };
 
   const buildSeries = (): SeriesResult => {
@@ -187,7 +190,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
-          {phaseLabel} - MD3
+          {phaseLabel} - {mdLabel}
           <span className="spacer" />
           {!finished && (
             <>

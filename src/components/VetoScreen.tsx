@@ -12,11 +12,14 @@ interface Props {
   userIdx: 0 | 1;
   rng: Rng;
   phaseLabel: string;
+  bestOf?: 1 | 3;
+  mapRecord?: Record<string, { w: number; l: number }>;
   onDone: (maps: { map: MapId; pickedBy: 0 | 1 | -1 }[]) => void;
 }
 
-export function VetoScreen({ teams, userIdx, rng, phaseLabel, onDone }: Props) {
-  const [veto, setVeto] = useState<VetoState>(() => newVeto());
+export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRecord = {}, onDone }: Props) {
+  const [veto, setVeto] = useState<VetoState>(() => newVeto(bestOf));
+  const mdLabel = bestOf === 1 ? 'MD1' : 'MD3';
   const timer = useRef<number | undefined>(undefined);
 
   const done = vetoDone(veto);
@@ -56,12 +59,12 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, onDone }: Props) {
           Veto de mapas - {phaseLabel}
           <span className="spacer" />
           <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-            MD3 · ban/pick oficial
+            {mdLabel} · ban/pick oficial
           </span>
         </div>
         <div className="panel-body">
           <div style={{ marginBottom: 12 }}>
-            <MatchBanner teamA={teams[0]} teamB={teams[1]} center="MD3" event={phaseLabel} sub="Veto de mapas" />
+            <MatchBanner teamA={teams[0]} teamB={teams[1]} center={mdLabel} event={phaseLabel} sub="Veto de mapas" />
           </div>
 
           <div className="center" style={{ marginBottom: 12 }}>
@@ -124,7 +127,7 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, onDone }: Props) {
         </div>
       </div>
 
-      <VetoAnalysis teams={teams} userIdx={userIdx} dead={mapState} />
+      <VetoAnalysis teams={teams} userIdx={userIdx} dead={mapState} mapRecord={mapRecord} />
     </div>
   );
 }
@@ -134,25 +137,35 @@ function VetoAnalysis({
   teams,
   userIdx,
   dead,
+  mapRecord,
 }: {
   teams: [TTeam, TTeam];
   userIdx: 0 | 1;
   dead: Record<string, { kind: string; by: number } | undefined>;
+  mapRecord: Record<string, { w: number; l: number }>;
 }) {
   const me = teams[userIdx];
   const opp = teams[userIdx === 0 ? 1 : 0];
   const synergy = useMemo(() => draftSynergy(me.players), [me]);
 
+  // retrospecto do usuário no mapa reforça a recomendação: mapa onde você vem
+  // ganhando vira ponto forte (não banir), mapa onde apanha vira candidato a ban
   const edges = useMemo(
     () =>
-      MAP_POOL.map((m) => ({
-        m,
-        edge: (me.mapPrefs[m] ?? 0) - (opp.mapPrefs[m] ?? 0),
-      })).sort((a, b) => b.edge - a.edge),
-    [me, opp],
+      MAP_POOL.map((m) => {
+        const rec = mapRecord[m] ?? { w: 0, l: 0 };
+        const recEdge = (rec.w - rec.l) * 0.6; // cada vitória líquida pesa no veredito
+        return {
+          m,
+          edge: (me.mapPrefs[m] ?? 0) - (opp.mapPrefs[m] ?? 0) + recEdge,
+          rec,
+        };
+      }).sort((a, b) => b.edge - a.edge),
+    [me, opp, mapRecord],
   );
 
-  const verdictFor = (edge: number) => {
+  const verdictFor = (edge: number, rec: { w: number; l: number }) => {
+    if (rec.w >= 2 && rec.w > rec.l) return { label: 'mapa forte · pegue', cls: 'pick' };
     if (edge >= 1) return { label: 'bom pick', cls: 'pick' };
     if (edge <= -1) return { label: 'ban urgente', cls: 'ban' };
     return { label: 'equilibrado', cls: 'even' };
@@ -175,12 +188,16 @@ function VetoAnalysis({
         <div className="muted small" style={{ marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
           Vantagem por mapa (você ⟵⟶ adversário)
         </div>
-        {edges.map(({ m, edge }) => {
-          const v = verdictFor(edge);
+        {edges.map(({ m, edge, rec }) => {
+          const v = verdictFor(edge, rec);
           const width = Math.min(50, Math.abs(edge) * 14);
+          const recTxt = rec.w + rec.l > 0 ? ` · ${rec.w}V-${rec.l}D` : '';
           return (
             <div key={m} className={`map-edge${dead[m] ? ' dead-row' : ''}`}>
-              <span className="mn">{MAP_LABELS[m]}</span>
+              <span className="mn">
+                {MAP_LABELS[m]}
+                {recTxt && <span className="muted small">{recTxt}</span>}
+              </span>
               <span className="bar">
                 <span className="mid" />
                 <i className={edge >= 0 ? 'pos' : 'neg'} style={{ width: `${width}%` }} />

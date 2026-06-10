@@ -441,12 +441,19 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
   return sim.result();
 }
 
-export function simulateSeries(rng: Rng, a: TTeam, b: TTeam, maps: { map: MapId; pickedBy: 0 | 1 | -1 }[]): SeriesResult {
+export function simulateSeries(
+  rng: Rng,
+  a: TTeam,
+  b: TTeam,
+  maps: { map: MapId; pickedBy: 0 | 1 | -1 }[],
+  bestOf: 1 | 3 = 3,
+): SeriesResult {
+  const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
   const results: MapResult[] = [];
   let winsA = 0;
   let winsB = 0;
   for (const m of maps) {
-    if (winsA === 2 || winsB === 2) break;
+    if (winsA === need || winsB === need) break;
     const r = simulateMap(rng, a, b, m.map, m.pickedBy);
     results.push(r);
     if (r.winner === 0) winsA++;

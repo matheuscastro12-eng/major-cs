@@ -44,6 +44,20 @@ function pastOpponents(t: Tournament, id: string): Set<string> {
   return s;
 }
 
+// Formato real do Major: partidas de classificação (vitória vira 3-0/3-1/3-2)
+// ou eliminação (derrota vira 0-3/1-3/2-3) são MD3; as aberturas são MD1.
+function bestOfForRecord(wins: number, losses: number): 1 | 3 {
+  return wins === 2 || losses === 2 ? 3 : 1;
+}
+
+export function pairingBestOf(t: Tournament, p: Pairing): 1 | 3 {
+  if (p.bestOf) return p.bestOf;
+  if (t.phase !== 'swiss') return 3; // playoffs sempre MD3
+  const m = /^(\d)-(\d)$/.exec(p.label);
+  if (m) return bestOfForRecord(Number(m[1]), Number(m[2]));
+  return 3;
+}
+
 function makeSwissPairings(t: Tournament, rng: Rng): Pairing[] {
   const alive = t.teams.filter((x) => x.status === 'alive');
   // agrupa por record
@@ -57,6 +71,8 @@ function makeSwissPairings(t: Tournament, rng: Rng): Pairing[] {
   const sortedKeys = [...groups.keys()].sort((a, b) => Number(b.split('-')[0]) - Number(a.split('-')[0]));
   for (const key of sortedKeys) {
     const g = groups.get(key)!;
+    const [w, l] = key.split('-').map(Number);
+    const bo = bestOfForRecord(w, l);
     // tenta evitar rematch
     let best: TTeam[] = g;
     for (let attempt = 0; attempt < 80; attempt++) {
@@ -75,7 +91,7 @@ function makeSwissPairings(t: Tournament, rng: Rng): Pairing[] {
       best = cand;
     }
     for (let i = 0; i < best.length - 1; i += 2) {
-      pairings.push({ a: best[i].id, b: best[i + 1].id, label: key });
+      pairings.push({ a: best[i].id, b: best[i + 1].id, label: key, bestOf: bo });
     }
   }
   return pairings;
@@ -84,8 +100,41 @@ function makeSwissPairings(t: Tournament, rng: Rng): Pairing[] {
 export function simulateAiSeries(t: Tournament, pairing: Pairing, rng: Rng): SeriesResult {
   const a = getTeam(t, pairing.a);
   const b = getTeam(t, pairing.b);
-  const maps = autoVeto([a, b], rng);
-  return simulateSeries(rng, a, b, maps);
+  const bo = pairingBestOf(t, pairing);
+  const maps = autoVeto([a, b], rng, bo);
+  return simulateSeries(rng, a, b, maps, bo);
+}
+
+// Retrospecto do usuário por mapa ao longo do torneio (vitórias/derrotas)
+export function userMapRecord(t: Tournament): Record<string, { w: number; l: number }> {
+  const rec: Record<string, { w: number; l: number }> = {};
+  for (const h of t.history) {
+    const p = h.pairing;
+    if (p.a !== 'user' && p.b !== 'user') continue;
+    const res = p.result;
+    if (!res) continue;
+    const uidx = p.a === 'user' ? 0 : 1;
+    for (const m of res.maps) {
+      if (!rec[m.map]) rec[m.map] = { w: 0, l: 0 };
+      if (m.winner === uidx) rec[m.map].w++;
+      else rec[m.map].l++;
+    }
+  }
+  return rec;
+}
+
+// O usuário ganha confiança/familiaridade nos mapas que vem vencendo: isso
+// vira buff real (mapPrefs) e faz a análise parar de sugerir banir o mapa forte.
+function updateUserMapConfidence(t: Tournament, pairing: Pairing): void {
+  const uidx = pairing.a === 'user' ? 0 : pairing.b === 'user' ? 1 : -1;
+  if (uidx < 0) return;
+  const user = getTeam(t, 'user');
+  const res = pairing.result!;
+  for (const m of res.maps) {
+    const cur = user.mapPrefs[m.map] ?? 0;
+    const delta = m.winner === uidx ? 0.6 : -0.35;
+    user.mapPrefs[m.map] = Math.max(-3, Math.min(5, cur + delta));
+  }
 }
 
 // fase do jogador evolui conforme o rendimento na série (rating vs neutro)
@@ -110,6 +159,7 @@ function applySeries(t: Tournament, pairing: Pairing): void {
   const a = getTeam(t, pairing.a);
   const b = getTeam(t, pairing.b);
   updateForm(t, pairing);
+  updateUserMapConfidence(t, pairing);
   const winner = res.winner === 0 ? a : b;
   const loser = res.winner === 0 ? b : a;
   winner.wins++;

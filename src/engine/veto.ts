@@ -10,8 +10,8 @@ export interface VetoStep {
   map?: MapId;
 }
 
-// Ordem oficial de veto MD3: A ban, B ban, A pick, B pick, B ban, A ban, decider
-export const VETO_ORDER: { team: 0 | 1 | -1; action: VetoActionType }[] = [
+// Ordem oficial MD3: A ban, B ban, A pick, B pick, B ban, A ban, decider
+export const VETO_ORDER_BO3: { team: 0 | 1 | -1; action: VetoActionType }[] = [
   { team: 0, action: 'ban' },
   { team: 1, action: 'ban' },
   { team: 0, action: 'pick' },
@@ -21,31 +21,51 @@ export const VETO_ORDER: { team: 0 | 1 | -1; action: VetoActionType }[] = [
   { team: -1, action: 'decider' },
 ];
 
+// Ordem MD1: só bans alternados até sobrar 1 (o decider)
+export const VETO_ORDER_BO1: { team: 0 | 1 | -1; action: VetoActionType }[] = [
+  { team: 0, action: 'ban' },
+  { team: 1, action: 'ban' },
+  { team: 0, action: 'ban' },
+  { team: 1, action: 'ban' },
+  { team: 0, action: 'ban' },
+  { team: 1, action: 'ban' },
+  { team: -1, action: 'decider' },
+];
+
+export function vetoOrder(bestOf: 1 | 3): { team: 0 | 1 | -1; action: VetoActionType }[] {
+  return bestOf === 1 ? VETO_ORDER_BO1 : VETO_ORDER_BO3;
+}
+
+// compat: alguns lugares ainda importam VETO_ORDER (= BO3)
+export const VETO_ORDER = VETO_ORDER_BO3;
+
 export interface VetoState {
   steps: VetoStep[]; // passos já realizados
   remaining: MapId[];
+  bestOf: 1 | 3;
 }
 
-export function newVeto(): VetoState {
-  return { steps: [], remaining: [...MAP_POOL] };
+export function newVeto(bestOf: 1 | 3 = 3): VetoState {
+  return { steps: [], remaining: [...MAP_POOL], bestOf };
 }
 
 export function vetoDone(v: VetoState): boolean {
-  return v.steps.length >= VETO_ORDER.length;
+  return v.steps.length >= vetoOrder(v.bestOf).length;
 }
 
 export function currentStep(v: VetoState): { team: 0 | 1 | -1; action: VetoActionType } {
-  return VETO_ORDER[v.steps.length];
+  return vetoOrder(v.bestOf)[v.steps.length];
 }
 
 export function applyVeto(v: VetoState, map: MapId): VetoState {
-  const step = currentStep(v);
+  const order = vetoOrder(v.bestOf);
+  const step = order[v.steps.length];
   const steps = [...v.steps, { ...step, map }];
   const remaining = v.remaining.filter((m) => m !== map);
-  const next = { steps, remaining };
-  // decider automático
-  if (steps.length === VETO_ORDER.length - 1) {
-    return { steps: [...steps, { team: -1, action: 'decider', map: remaining[0] }], remaining: [] };
+  const next = { ...v, steps, remaining };
+  // decider automático (último mapa que sobra)
+  if (steps.length === order.length - 1) {
+    return { ...v, steps: [...steps, { team: -1, action: 'decider', map: remaining[0] }], remaining: [] };
   }
   return next;
 }
@@ -69,8 +89,8 @@ export function vetoMaps(v: VetoState): { map: MapId; pickedBy: 0 | 1 | -1 }[] {
 }
 
 // veto completo automático (partidas IA vs IA)
-export function autoVeto(teams: [TTeam, TTeam], rng: Rng): { map: MapId; pickedBy: 0 | 1 | -1 }[] {
-  let v = newVeto();
+export function autoVeto(teams: [TTeam, TTeam], rng: Rng, bestOf: 1 | 3 = 3): { map: MapId; pickedBy: 0 | 1 | -1 }[] {
+  let v = newVeto(bestOf);
   while (!vetoDone(v)) {
     v = applyVeto(v, aiChoice(v, teams, rng));
   }

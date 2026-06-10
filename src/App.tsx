@@ -18,7 +18,7 @@ import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } fr
 import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
-import { createTournament, getTeam, phaseLabel, resolveRound, userPairing, userTeam } from './engine/swiss';
+import { createTournament, getTeam, pairingBestOf, phaseLabel, resolveRound, userMapRecord, userPairing, userTeam } from './engine/swiss';
 import { fetchRemoteDataset, isCustomized, loadDataset, resetDataset, saveDataset } from './state/crm';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
@@ -44,6 +44,7 @@ interface MatchCtx {
   maps: { map: MapId; pickedBy: 0 | 1 | -1 }[];
   userIdx: 0 | 1;
   phase: string;
+  bestOf: 1 | 3;
 }
 
 export interface PickemState {
@@ -313,7 +314,7 @@ export default function App() {
     const a = getTeam(tournament, p.a);
     const b = getTeam(tournament, p.b);
     // a série roda AO VIVO no MatchScreen (timeouts táticos podem mudar o rumo)
-    setMatchCtx({ teams: [a, b], maps, userIdx: p.a === 'user' ? 0 : 1, phase: phaseLabel(tournament) });
+    setMatchCtx({ teams: [a, b], maps, userIdx: p.a === 'user' ? 0 : 1, phase: phaseLabel(tournament), bestOf: pairingBestOf(tournament, p) });
     setScreen('match');
   };
 
@@ -419,7 +420,12 @@ export default function App() {
     if (!p) return null;
     const a = getTeam(tournament, p.a);
     const b = getTeam(tournament, p.b);
-    return { teams: [a, b] as [TTeam, TTeam], userIdx: (p.a === 'user' ? 0 : 1) as 0 | 1 };
+    return {
+      teams: [a, b] as [TTeam, TTeam],
+      userIdx: (p.a === 'user' ? 0 : 1) as 0 | 1,
+      bestOf: pairingBestOf(tournament, p),
+      mapRecord: userMapRecord(tournament),
+    };
   }, [tournament]);
 
   return (
@@ -512,6 +518,8 @@ export default function App() {
           userIdx={vetoData.userIdx}
           rng={rng}
           phaseLabel={phaseLabel(tournament)}
+          bestOf={vetoData.bestOf}
+          mapRecord={vetoData.mapRecord}
           onDone={onVetoDone}
         />
       )}
@@ -523,6 +531,7 @@ export default function App() {
           userIdx={matchCtx.userIdx}
           rng={rng}
           phaseLabel={matchCtx.phase}
+          bestOf={matchCtx.bestOf}
           onFinish={onMatchFinish}
         />
       )}

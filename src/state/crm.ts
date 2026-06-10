@@ -1,7 +1,15 @@
 import { BASE_TEAMS } from '../data/teams';
 import type { TeamSeason } from '../types';
 
-const STORAGE_KEY = 'major-cs-dataset-v2';
+// v3: invalida snapshots locais antigos (navegadores que guardaram lineups
+// desatualizadas e por isso ignoravam a base corrigida do Neon/teams.json).
+const STORAGE_KEY = 'major-cs-dataset-v3';
+// limpa a chave antiga uma vez, para não deixar lixo no localStorage
+try {
+  localStorage.removeItem('major-cs-dataset-v2');
+} catch {
+  /* ambiente sem localStorage (SSR/testes) */
+}
 
 // dados salvos por versões antigas podem não ter coach - normaliza
 export function normalizeTeams(teams: TeamSeason[]): TeamSeason[] {
