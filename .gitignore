@@ -27,3 +27,5 @@ scripts/*.mjs
 *.njsproj
 *.sln
 *.sw?
+
+.vercel

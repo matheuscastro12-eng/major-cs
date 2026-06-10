@@ -14,7 +14,8 @@ export default async function handler(req: { method?: string }, res: {
     return;
   }
 
-  const url = process.env.DATABASE_URL;
+  // remove BOM/espaços que podem vir do ambiente
+  const url = process.env.DATABASE_URL?.replace(new RegExp('^\\uFEFF'), '').trim();
   if (!url) {
     res.status(500).json({ error: 'DATABASE_URL not configured' });
     return;
