@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { playerOvr } from '../engine/ratings';
-import type { CoachStyle, Game, Player, Role, TeamSeason } from '../types';
+import { fileToDataUrl, loadMapImages, saveMapImage } from '../state/crm';
+import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
 import { COACH_STYLE_LABELS, MAP_LABELS, MAP_POOL } from '../types';
-import { Flag, TeamBadge } from './ui';
+import { Flag, MapThumb, TeamBadge } from './ui';
 
 const GAMES: Game[] = ['CS 1.6', 'CS:Source', 'CS:GO', 'CS2'];
 const ROLES: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
@@ -204,6 +205,38 @@ export function Admin({ dataset, onChange, onReset, onBack }: Props) {
                     <label>História / conquistas</label>
                     <input value={sel.honors} onChange={(e) => updateTeam(sel.id, { honors: e.target.value })} />
                   </div>
+                  <div className="field" style={{ gridColumn: 'span 4' }}>
+                    <label>Logo do time (upload)</label>
+                    <div className="upload-row">
+                      <span className="preview">
+                        <TeamBadge tag={sel.tag} colors={sel.colors} size={40} logoUrl={sel.logoUrl} />
+                      </span>
+                      <span className="btn ghost upload-btn">
+                        📤 Enviar logo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const dataUrl = await fileToDataUrl(file, 160);
+                              updateTeam(sel.id, { logoUrl: dataUrl });
+                            } catch {
+                              alert('Não foi possível ler a imagem.');
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </span>
+                      {sel.logoUrl && (
+                        <button className="btn danger" onClick={() => updateTeam(sel.id, { logoUrl: undefined })}>
+                          Remover logo
+                        </button>
+                      )}
+                      <span className="muted small">PNG/JPG, redimensionada para 160px. Sem upload, usamos a logo da Liquipedia.</span>
+                    </div>
+                  </div>
                   <div className="field">
                     <label>Coach (nick)</label>
                     <input value={sel.coach.nick} onChange={(e) => updateTeam(sel.id, { coach: { ...sel.coach, nick: e.target.value } })} />
@@ -346,6 +379,70 @@ export function Admin({ dataset, onChange, onReset, onBack }: Props) {
               <div className="muted">Selecione um time para editar.</div>
             )}
           </div>
+        </div>
+      </div>
+
+      <MapImagesPanel />
+    </div>
+  );
+}
+
+// Upload das fotos dos mapas (sobrescreve a arte padrão em todo o app)
+function MapImagesPanel() {
+  const [, setVersion] = useState(0);
+  const customs = loadMapImages();
+
+  const upload = async (map: MapId, file: File | undefined) => {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file, 640);
+      saveMapImage(map, dataUrl);
+      setVersion((v) => v + 1);
+    } catch {
+      alert('Não foi possível ler a imagem.');
+    }
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        Fotos dos mapas
+        <span className="spacer" />
+        <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
+          Uploads substituem a arte padrão no veto e nas partidas (salvo no navegador)
+        </span>
+      </div>
+      <div className="panel-body">
+        <div className="map-upload-grid">
+          {MAP_POOL.map((m) => (
+            <div key={m} className="map-upload-card">
+              <div className="img-wrap">
+                <MapThumb map={m} />
+              </div>
+              <div className="mname">
+                {MAP_LABELS[m]}
+                {customs[m] && <span className="muted small"> · custom</span>}
+              </div>
+              <div className="actions">
+                <span className="btn ghost upload-btn" style={{ padding: '4px 10px', fontSize: 11 }}>
+                  📤 Foto
+                  <input type="file" accept="image/*" onChange={(e) => upload(m, e.target.files?.[0])} />
+                </span>
+                {customs[m] && (
+                  <button
+                    className="btn danger"
+                    style={{ padding: '4px 10px', fontSize: 11 }}
+                    onClick={() => {
+                      saveMapImage(m, null);
+                      setVersion((v) => v + 1);
+                    }}
+                  >
+                    Padrão
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

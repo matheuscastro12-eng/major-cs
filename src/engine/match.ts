@@ -62,11 +62,19 @@ function compFlags(team: TTeam): CompFlags {
   };
 }
 
-function weaponFor(p: TPlayer, rng: Rng): string {
-  if (p.role === 'AWP' && rng() < 0.62) return 'AWP';
-  if (p.role === 'IGL' && rng() < 0.12) return 'Galil';
-  if (rng() < 0.08) return 'Desert Eagle';
-  return rng() < 0.5 ? 'AK-47' : 'M4A1-S';
+function weaponFor(p: TPlayer, rng: Rng, isPistol: boolean, side: 'ct' | 't'): string {
+  if (isPistol) {
+    if (rng() < 0.12) return 'deagle';
+    return side === 'ct' ? 'usp' : 'glock';
+  }
+  if (p.role === 'AWP' && rng() < 0.62) return 'awp';
+  if (rng() < 0.02) return 'knife';
+  if (rng() < 0.08) return 'deagle';
+  if (p.role === 'IGL' && rng() < 0.14) return 'galil';
+  // crossover de rifle (CT pega AK no chão e vice-versa) em ~12% dos casos
+  const main = side === 't' ? 'ak47' : 'm4';
+  const off = side === 't' ? 'm4' : 'ak47';
+  return rng() < 0.88 ? main : off;
 }
 
 function effStrength(
@@ -193,6 +201,7 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
     const eventsFor = (killerTeam: 0 | 1, victimTeam: 0 | 1): KillEvent[] => {
       const killers = tally[killerTeam].killers;
       const victims = tally[victimTeam].died.map((died, i) => (died ? i : -1)).filter((i) => i >= 0);
+      const killerSide = killerTeam === 0 ? aSide : bSide;
       return killers.slice(0, victims.length).map((killerIdx, i) => {
         const killer = teamPlayers[killerTeam][killerIdx];
         return {
@@ -201,7 +210,7 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
           victimId: teamPlayers[victimTeam][victims[i]].id,
           killerTeam,
           victimTeam,
-          weapon: weaponFor(killer, rng),
+          weapon: weaponFor(killer, rng, isPistol, killerSide),
           headshot: rng() < (killer.role === 'AWP' ? 0.18 : 0.43),
           opening: false,
           trade: i > 0 && rng() < 0.28,

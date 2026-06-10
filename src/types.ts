@@ -184,8 +184,11 @@ export interface DraftRound {
   pickedPlayerId?: string;
 }
 
+export type TournamentPool = 'world' | 'br';
+
 export interface DraftState {
   mode: 'classic' | 'almanac';
+  pool: TournamentPool;
   teamName: string;
   rounds: DraftRound[];
   current: number;

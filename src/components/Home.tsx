@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import type { TournamentPool } from '../types';
 
 interface Props {
-  onStart: (mode: 'classic' | 'almanac', teamName: string) => void;
+  onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool) => void;
   onAdmin: () => void;
   teamCount: number;
   playerCount: number;
@@ -9,9 +10,10 @@ interface Props {
 
 export function Home({ onStart, onAdmin, teamCount, playerCount }: Props) {
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
+  const [pool, setPool] = useState<TournamentPool>('world');
   const [name, setName] = useState('');
 
-  const start = () => onStart(mode, name.trim() || 'DREAM FIVE');
+  const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool);
 
   return (
     <div className="fade-in">
@@ -23,6 +25,17 @@ export function Home({ onStart, onAdmin, teamCount, playerCount }: Props) {
           Monte o time dos sonhos com lendas de todas as eras do Counter-Strike — do 1.6 ao CS2 — e
           dispute um Major completo em séries MD3 contra os maiores times da história.
         </p>
+
+        <div className="pool-cards">
+          <button className={`pool-card world${pool === 'world' ? ' sel' : ''}`} onClick={() => setPool('world')}>
+            <h3>🏆 Major Mundial</h3>
+            <p>Todas as eras e regiões: do 1.6 ao CS2, monte o dream team global e vença o Major dos Sonhos.</p>
+          </button>
+          <button className={`pool-card br${pool === 'br' ? ' sel' : ''}`} onClick={() => setPool('br')}>
+            <h3>🇧🇷 GC Masters</h3>
+            <p>Só elencos brasileiros — de mibr 2006 e SK 2016 a Legacy e FURIA. O campeonato da pátria de chuteiras (e de headshot).</p>
+          </button>
+        </div>
 
         <div className="mode-cards">
           <button className={`mode-card${mode === 'classic' ? ' sel' : ''}`} onClick={() => setMode('classic')}>

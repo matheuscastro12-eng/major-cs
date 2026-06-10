@@ -9,10 +9,11 @@ import { TournamentStats } from './components/TournamentStats';
 import { VetoScreen } from './components/VetoScreen';
 import { simulateSeries } from './engine/match';
 import { buildUserTeam } from './engine/ratings';
-import { makeRng, randomSeed, shuffle } from './engine/rng';
+import { makeRng, randomSeed } from './engine/rng';
 import { createTournament, getTeam, phaseLabel, resolveRound, userPairing } from './engine/swiss';
+import { playerOvr } from './engine/ratings';
 import { fetchRemoteDataset, isCustomized, loadDataset, resetDataset, saveDataset } from './state/crm';
-import type { DraftState, MapId, SeriesResult, TeamSeason, Tournament, TTeam } from './types';
+import type { DraftState, MapId, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
 type Screen = 'home' | 'draft' | 'hub' | 'veto' | 'match' | 'final' | 'admin' | 'stats';
 
@@ -34,6 +35,39 @@ export default function App() {
 
   const eligible = useMemo(() => dataset.filter((t) => t.players.length >= 5), [dataset]);
   const playerCount = useMemo(() => dataset.reduce((s, t) => s + t.players.length, 0), [dataset]);
+  const brEligible = useMemo(() => eligible.filter((t) => t.country === 'br'), [eligible]);
+
+  const poolTeams = (pool: TournamentPool) => (pool === 'br' ? brEligible : eligible);
+
+  // Sorteio ponderado por tier: times de elite aparecem bem menos no dado —
+  // montar um dream team tem que ser raro.
+  const tierWeight = (t: TeamSeason) => {
+    const avg = t.players.slice(0, 5).reduce((s, p) => s + playerOvr(p), 0) / Math.min(5, t.players.length);
+    if (avg >= 90) return 0.55;
+    if (avg >= 87) return 1.1;
+    if (avg >= 83) return 2.2;
+    return 2.9;
+  };
+
+  const weightedSample = (teams: TeamSeason[], n: number): TeamSeason[] => {
+    const pool = [...teams];
+    const out: TeamSeason[] = [];
+    while (out.length < n && pool.length > 0) {
+      const weights = pool.map(tierWeight);
+      const total = weights.reduce((s, w) => s + w, 0);
+      let r = rngRef.current() * total;
+      let idx = 0;
+      for (let i = 0; i < weights.length; i++) {
+        r -= weights[i];
+        if (r <= 0) {
+          idx = i;
+          break;
+        }
+      }
+      out.push(pool.splice(idx, 1)[0]);
+    }
+    return out;
+  };
 
   // fonte primária: banco Neon via /api/teams; edições locais do CRM têm prioridade
   useEffect(() => {
@@ -48,13 +82,19 @@ export default function App() {
   }, []);
 
   // ---------- fluxo: home → draft ----------
-  const startDraft = (mode: 'classic' | 'almanac', teamName: string) => {
+  const startDraft = (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool) => {
     rngRef.current = makeRng(randomSeed());
-    const shuffled = shuffle(rngRef.current, eligible);
-    const sources = shuffled.slice(0, 5);
-    const coachOptions = shuffled.slice(5, 10).map((t) => t.id);
+    const base = poolTeams(pool);
+    if (base.length < 16) {
+      alert('A base precisa de pelo menos 16 times neste modo. Adicione times no CRM.');
+      return;
+    }
+    const sources = weightedSample(base, 5);
+    const usedIds = new Set(sources.map((t) => t.id));
+    const coachOptions = weightedSample(base.filter((t) => !usedIds.has(t.id)), 5).map((t) => t.id);
     setDraft({
       mode,
+      pool,
       teamName,
       rounds: sources.map((t) => ({ teamSeasonId: t.id })),
       current: 0,
@@ -68,9 +108,9 @@ export default function App() {
   const rerollDraft = () => {
     if (!draft || draft.rerollsLeft <= 0) return;
     const used = new Set(draft.rounds.map((r) => r.teamSeasonId));
-    const options = eligible.filter((t) => !used.has(t.id));
+    const options = poolTeams(draft.pool).filter((t) => !used.has(t.id));
     if (options.length === 0) return;
-    const next = shuffle(rngRef.current, options)[0];
+    const next = weightedSample(options, 1)[0];
     const rounds = draft.rounds.map((r, i) => (i === draft.current ? { teamSeasonId: next.id } : r));
     setDraft({ ...draft, rounds, rerollsLeft: draft.rerollsLeft - 1 });
   };
@@ -92,7 +132,12 @@ export default function App() {
       return { player, from };
     });
     const user = buildUserTeam(draft.teamName, picks, coachTeam.coach);
-    const t = createTournament(eligible, user, rngRef.current);
+    const t = createTournament(
+      poolTeams(draft.pool),
+      user,
+      rngRef.current,
+      draft.pool === 'br' ? 'GC MASTERS' : 'MAJOR DOS SONHOS',
+    );
     setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
     setTournament(t);
     setScreen('hub');

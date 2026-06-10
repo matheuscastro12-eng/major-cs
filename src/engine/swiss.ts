@@ -10,11 +10,11 @@ export function getTeam(t: Tournament, id: string): TTeam {
   return t.teams.find((x) => x.id === id)!;
 }
 
-export function createTournament(dataset: TeamSeason[], user: TTeam, rng: Rng): Tournament {
+export function createTournament(dataset: TeamSeason[], user: TTeam, rng: Rng, name = 'MAJOR DOS SONHOS'): Tournament {
   const pool = shuffle(rng, dataset).slice(0, 15).map(teamSeasonToTTeam);
   const teams = [user, ...pool];
   const t: Tournament = {
-    name: 'MAJOR DOS SONHOS',
+    name,
     teams,
     phase: 'swiss',
     swissRound: 1,

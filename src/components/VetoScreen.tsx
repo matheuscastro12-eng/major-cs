@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { draftSynergy } from '../engine/ratings';
 import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, VETO_ORDER, type VetoState } from '../engine/veto';
 import type { Rng } from '../engine/rng';
 import type { MapId, TTeam } from '../types';
@@ -48,7 +49,7 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, onDone }: Props) {
   };
 
   return (
-    <div className="fade-in">
+    <div className="fade-in veto-layout">
       <div className="panel">
         <div className="panel-head">
           Veto de mapas — {phaseLabel}
@@ -129,6 +130,104 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, onDone }: Props) {
             )}
           </div>
         </div>
+      </div>
+
+      <VetoAnalysis teams={teams} userIdx={userIdx} dead={mapState} />
+    </div>
+  );
+}
+
+// Painel de inteligência pré-partida: força, composição e vantagem por mapa
+function VetoAnalysis({
+  teams,
+  userIdx,
+  dead,
+}: {
+  teams: [TTeam, TTeam];
+  userIdx: 0 | 1;
+  dead: Record<string, { kind: string; by: number } | undefined>;
+}) {
+  const me = teams[userIdx];
+  const opp = teams[userIdx === 0 ? 1 : 0];
+  const synergy = useMemo(() => draftSynergy(me.players), [me]);
+
+  const edges = useMemo(
+    () =>
+      MAP_POOL.map((m) => ({
+        m,
+        edge: (me.mapPrefs[m] ?? 0) - (opp.mapPrefs[m] ?? 0),
+      })).sort((a, b) => b.edge - a.edge),
+    [me, opp],
+  );
+
+  const verdictFor = (edge: number) => {
+    if (edge >= 1) return { label: 'bom pick', cls: 'pick' };
+    if (edge <= -1) return { label: 'ban urgente', cls: 'ban' };
+    return { label: 'equilibrado', cls: 'even' };
+  };
+
+  return (
+    <div className="panel veto-analysis">
+      <div className="panel-head">Análise pré-partida</div>
+      <div className="panel-body">
+        <div className="vs-strength">
+          <span className="me">
+            {me.name} {me.strength.toFixed(1)}
+          </span>
+          <span className="x">FORÇA</span>
+          <span className="opp">
+            {opp.strength.toFixed(1)} {opp.name}
+          </span>
+        </div>
+
+        <div className="muted small" style={{ marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
+          Vantagem por mapa (você ⟵⟶ adversário)
+        </div>
+        {edges.map(({ m, edge }) => {
+          const v = verdictFor(edge);
+          const width = Math.min(50, Math.abs(edge) * 14);
+          return (
+            <div key={m} className={`map-edge${dead[m] ? ' dead-row' : ''}`}>
+              <span className="mn">{MAP_LABELS[m]}</span>
+              <span className="bar">
+                <span className="mid" />
+                <i className={edge >= 0 ? 'pos' : 'neg'} style={{ width: `${width}%` }} />
+              </span>
+              <span className={`verdict-chip ${v.cls}`}>
+                {edge >= 0 ? '+' : ''}
+                {edge.toFixed(1)} {v.label}
+              </span>
+            </div>
+          );
+        })}
+
+        <div className="muted small" style={{ margin: '14px 0 4px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
+          Sua composição ({synergy.total >= 0 ? '+' : ''}
+          {synergy.total.toFixed(1)})
+        </div>
+        <div className="synergy-list">
+          {synergy.items.map((it, i) => (
+            <div key={i} className="item">
+              <span className="muted">{it.label}</span>
+              <span className={it.value >= 0 ? 'pos' : 'neg'}>
+                {it.value >= 0 ? '+' : ''}
+                {it.value.toFixed(1)}
+              </span>
+            </div>
+          ))}
+        </div>
+        {!synergy.hasIgl && (
+          <div className="insight-item bad" style={{ marginTop: 10 }}>
+            <span className="ic">📢</span>
+            <span>Sem IGL: priorize mapas onde você tem vantagem clara — em jogos fechados seu time tende a desmoronar no 2º half.</span>
+          </div>
+        )}
+        {!synergy.hasAwp && (
+          <div className="insight-item bad" style={{ marginTop: 6 }}>
+            <span className="ic">🔭</span>
+            <span>Sem AWPer: evite mapas de linhas longas onde o CT depende da sniper (Dust2, Train).</span>
+          </div>
+        )}
       </div>
     </div>
   );

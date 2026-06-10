@@ -4,6 +4,7 @@ import type { KillEvent, SeriesResult, TPlayer, TTeam } from '../types';
 import { MAP_LABELS } from '../types';
 import { Scoreboard } from './Scoreboard';
 import { MapThumb, TeamBadge } from './ui';
+import { HeadshotIcon, WeaponIcon, WEAPON_LABELS } from './weapons';
 
 interface Props {
   series: SeriesResult;
@@ -184,6 +185,8 @@ export function MatchScreen({ series, teams, userIdx, phaseLabel, onFinish }: Pr
   );
 }
 
+const TEAM_FEED_COLORS: [string, string] = ['#6fb6ec', '#f0b35c'];
+
 function KillFeed({
   events,
   teams,
@@ -194,25 +197,38 @@ function KillFeed({
   playerById: Map<string, TPlayer>;
 }) {
   return (
-    <div className="killfeed">
-      <div className="killfeed-head">Killfeed</div>
-      <div className="killfeed-list">
-        {events.length === 0 && <div className="kill-row empty">Aguardando primeiro contato...</div>}
+    <div className="killfeed2">
+      <div className="kf-head">
+        <span>Killfeed</span>
+        <span>
+          <span style={{ color: TEAM_FEED_COLORS[0] }}>{teams[0].tag}</span>
+          {' · '}
+          <span style={{ color: TEAM_FEED_COLORS[1] }}>{teams[1].tag}</span>
+        </span>
+      </div>
+      <div className="kf2-list">
+        {events.length === 0 && <div className="kf2-row empty">Aguardando primeiro contato…</div>}
         {events.map((e, i) => {
           const killer = playerById.get(e.killerId);
           const victim = playerById.get(e.victimId);
           return (
-            <div key={`${e.round}-${e.killerId}-${e.victimId}-${i}`} className={`kill-row team-${e.killerTeam}`}>
+            <div key={`${e.round}-${e.killerId}-${e.victimId}-${i}`} className="kf2-row">
               <span className="kf-round">R{e.round}</span>
-              <span className="kf-player" style={{ color: teams[e.killerTeam].colors[1] }}>
+              <span className="nick" style={{ color: TEAM_FEED_COLORS[e.killerTeam] }}>
                 {killer?.nick ?? teams[e.killerTeam].tag}
               </span>
-              <span className="kf-weapon">
-                {e.weapon}
-                {e.headshot ? ' HS' : ''}
-                {e.opening ? ' OPEN' : ''}
+              {e.opening && <span className="tag-open">1st</span>}
+              <span className="wpn" title={WEAPON_LABELS[e.weapon] ?? e.weapon}>
+                <WeaponIcon weapon={e.weapon} />
               </span>
-              <span className="kf-player victim">{victim?.nick ?? teams[e.victimTeam].tag}</span>
+              {e.headshot && (
+                <span className="hs" title="Headshot">
+                  <HeadshotIcon />
+                </span>
+              )}
+              <span className="nick victim" style={{ color: TEAM_FEED_COLORS[e.victimTeam] }}>
+                {victim?.nick ?? teams[e.victimTeam].tag}
+              </span>
             </div>
           );
         })}

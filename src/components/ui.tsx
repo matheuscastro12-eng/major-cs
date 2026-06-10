@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MAP_IMAGES } from '../data/media';
+import { loadMapImages } from '../state/crm';
 import { MAP_LABELS, type MapId, type TTeam } from '../types';
 
 export function Flag({ cc, title }: { cc: string; title?: string }) {
@@ -70,14 +71,22 @@ export function TeamName({ team, dim }: { team: TTeam; dim?: boolean }) {
 
 export function MapThumb({ map, className = '' }: { map: MapId; className?: string }) {
   const [err, setErr] = useState(false);
-  if (err) {
+  const custom = loadMapImages()[map];
+  if (err && !custom) {
     return (
       <span className={`map-thumb map-fallback map-${map} ${className}`} aria-label={MAP_LABELS[map]}>
         <span>{MAP_LABELS[map]}</span>
       </span>
     );
   }
-  return <img className={`map-thumb ${className}`} src={MAP_IMAGES[map]} alt={map} onError={() => setErr(true)} />;
+  return (
+    <img
+      className={`map-thumb ${className}`}
+      src={custom ?? MAP_IMAGES[map]}
+      alt={map}
+      onError={() => setErr(true)}
+    />
+  );
 }
 
 export function OvrBadge({ ovr, label = 'OVR' }: { ovr: number; label?: string }) {
