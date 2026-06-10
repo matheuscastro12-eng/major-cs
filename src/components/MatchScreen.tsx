@@ -4,6 +4,7 @@ import { createMapSim, type BuyTier, type MapSim } from '../engine/match';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, SeriesResult, TPlayer, TTeam } from '../types';
 import { MAP_LABELS } from '../types';
+import { CoreFlag } from './flags';
 import { Scoreboard } from './Scoreboard';
 import { MapThumb, TeamBadge } from './ui';
 import { HeadshotIcon, WeaponIcon, WEAPON_LABELS } from './weapons';
@@ -171,6 +172,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
           <MapThumb map={currentMap} className="live-map-art" />
           <div className="live-score">
             <div className="team">
+              <span className="team-flag left">
+                <CoreFlag players={teams[0].players} />
+              </span>
               <TeamBadge tag={teams[0].tag} colors={teams[0].colors} size={48} logoUrl={teams[0].logoUrl} />
               <span className="tn">{teams[0].name}</span>
               <span className="muted small">
@@ -203,6 +207,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
               )}
             </div>
             <div className="team">
+              <span className="team-flag right">
+                <CoreFlag players={teams[1].players} />
+              </span>
               <TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={48} logoUrl={teams[1].logoUrl} />
               <span className="tn">{teams[1].name}</span>
               <span className="muted small">

@@ -4,7 +4,8 @@ import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, VETO_ORD
 import type { Rng } from '../engine/rng';
 import type { MapId, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
-import { MapThumb, TeamBadge } from './ui';
+import { MapThumb } from './ui';
+import { MatchBanner } from './flags';
 
 interface Props {
   teams: [TTeam, TTeam]; // [a, b] — usuário pode ser 0 ou 1
@@ -59,17 +60,8 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, onDone }: Props) {
           </span>
         </div>
         <div className="panel-body">
-          <div className="matchline" style={{ background: 'transparent', borderBottom: 'none', marginBottom: 10 }}>
-            <span className="side">
-              <TeamBadge tag={teams[0].tag} colors={teams[0].colors} logoUrl={teams[0].logoUrl} />
-              <span className="tname">{teams[0].name}</span>
-            </span>
-            <span className="score">vs</span>
-            <span className="side right">
-              <span className="tname">{teams[1].name}</span>
-              <TeamBadge tag={teams[1].tag} colors={teams[1].colors} logoUrl={teams[1].logoUrl} />
-            </span>
-            <span />
+          <div style={{ marginBottom: 12 }}>
+            <MatchBanner teamA={teams[0]} teamB={teams[1]} center="MD3" event={phaseLabel} sub="Veto de mapas" />
           </div>
 
           <div className="center" style={{ marginBottom: 12 }}>

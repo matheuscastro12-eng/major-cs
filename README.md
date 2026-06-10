@@ -17,8 +17,11 @@ npm run build    # build de produção em dist/
    - **Almanaque**: atributos escondidos, só o seu conhecimento de CS.
 2. **Draft** — o dado sorteia 5 elencos históricos; escolha 1 jogador de cada (2 re-rolls disponíveis). Monte um time com funções coerentes: sem IGL ou sem AWPer o time perde força; entry + suporte dão bônus.
 3. **Major** — 16 times (você + 15 elencos históricos): fase suíça (3 vitórias classificam, 3 derrotas eliminam) e playoffs (quartas → semi → final). Todas as partidas são MD3.
-4. **Veto** — ban/pick oficial de MD3 interativo nas suas partidas.
-5. **Partida** — simulação round a round (MR12 com overtime) com scoreboard completo ao final.
+4. **Dificuldade** — Normal / Difícil / Lendário: escala a força do campo e dos adversários. O dream team ainda leva um malus de entrosamento (nunca treinou junto), então o título é conquistado, não dado.
+5. **Veto** — ban/pick oficial de MD3 interativo, com análise pré-partida e o confronto exibido com a bandeira do país/região do core de cada time (3+ do mesmo país → bandeira do país; 4+ da mesma região → bandeira da região: Europa, CIS, América do Sul, etc).
+6. **Partida** — simulação round a round (MR12, economia, timeouts táticos) com scoreboard completo. Toda série do torneio (inclusive entre as IAs) é clicável na bracket/hub para ver mapas e estatísticas.
+7. **Bracket** — fase suíça no formato HLTV (colunas 0:0 → 2:2, caixa verde de classificados e vermelha de eliminados) e mata-mata.
+8. **Hall da Fama** — ao fim da campanha você registra seu **nick** e a campanha entra no Hall (placar, elenco, recordes), persistido no Neon.
 
 ## Base de dados (CRM)
 

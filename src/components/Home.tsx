@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { TournamentPool } from '../types';
+import { DIFFICULTY_DESC, DIFFICULTY_LABELS, type Difficulty, type TournamentPool } from '../types';
 import { DonorsPanel } from './Donate';
 
 interface Props {
-  onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool) => void;
+  onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
   onDonate: () => void;
   onHall: () => void;
   teamCount: number;
@@ -12,12 +12,15 @@ interface Props {
   onResume?: () => void;
 }
 
+const DIFFICULTIES: Difficulty[] = ['normal', 'hard', 'legend'];
+
 export function Home({ onStart, onDonate, onHall, teamCount, playerCount, savedCampaign, onResume }: Props) {
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
+  const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [name, setName] = useState('');
 
-  const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool);
+  const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool, difficulty);
 
   return (
     <div className="fade-in">
@@ -59,6 +62,17 @@ export function Home({ onStart, onDonate, onHall, teamCount, playerCount, savedC
             <h3>📕 Modo Almanaque</h3>
             <p>Atributos escondidos. Só o seu conhecimento da história do CS define as escolhas.</p>
           </button>
+        </div>
+
+        <div className="diff-cards">
+          {DIFFICULTIES.map((d) => (
+            <button key={d} className={`diff-card ${d}${difficulty === d ? ' sel' : ''}`} onClick={() => setDifficulty(d)}>
+              <h4>
+                {d === 'normal' ? '🟢' : d === 'hard' ? '🟠' : '🔴'} {DIFFICULTY_LABELS[d]}
+              </h4>
+              <p>{DIFFICULTY_DESC[d]}</p>
+            </button>
+          ))}
         </div>
 
         <div className="name-input">

@@ -10,8 +10,18 @@ export function getTeam(t: Tournament, id: string): TTeam {
   return t.teams.find((x) => x.id === id)!;
 }
 
-export function createTournament(dataset: TeamSeason[], user: TTeam, rng: Rng, name = 'MAJOR DOS SONHOS'): Tournament {
-  const pool = shuffle(rng, dataset).slice(0, 15).map(teamSeasonToTTeam);
+export function createTournament(
+  dataset: TeamSeason[],
+  user: TTeam,
+  rng: Rng,
+  name = 'MAJOR DOS SONHOS',
+  oppBoost = 0,
+): Tournament {
+  const pool = shuffle(rng, dataset).slice(0, 15).map((ts) => {
+    const tt = teamSeasonToTTeam(ts);
+    tt.strength += oppBoost; // dificuldade: adversários mais fortes
+    return tt;
+  });
   const teams = [user, ...pool];
   const t: Tournament = {
     name,

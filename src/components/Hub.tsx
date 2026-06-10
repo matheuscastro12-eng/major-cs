@@ -15,6 +15,7 @@ interface Props {
   onPlay: () => void;
   onSimRound: () => void;
   onStats: () => void;
+  onOpenSeries: (p: Pairing) => void;
 }
 
 function MatchLine({
@@ -23,12 +24,14 @@ function MatchLine({
   highlight,
   pickem,
   onPick,
+  onOpenSeries,
 }: {
   t: Tournament;
   p: Pairing;
   highlight: boolean;
   pickem?: PickemState;
   onPick?: (key: string, teamId: string) => void;
+  onOpenSeries?: (p: Pairing) => void;
 }) {
   const a = getTeam(t, p.a);
   const b = getTeam(t, p.b);
@@ -36,9 +39,14 @@ function MatchLine({
   const key = `${p.a}|${p.b}`;
   const myPick = pickem?.picks[key];
   const canPick = !highlight && !r && pickem && onPick;
+  const clickable = !!r && !!onOpenSeries;
 
   return (
-    <div className={`matchline${highlight ? ' user-match' : ''}`}>
+    <div
+      className={`matchline${highlight ? ' user-match' : ''}${clickable ? ' clickable' : ''}`}
+      onClick={clickable ? () => onOpenSeries!(p) : undefined}
+      title={clickable ? 'Ver estatísticas da série' : undefined}
+    >
       <TeamName team={a} dim={r ? r.winner === 1 : false} />
       <span className="score">
         {r ? (
@@ -70,7 +78,7 @@ function MatchLine({
   );
 }
 
-export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats }: Props) {
+export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, onOpenSeries }: Props) {
   const up = userPairing(t);
   const user = getTeam(t, 'user');
   const inSwiss = t.phase === 'swiss';
@@ -109,12 +117,12 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats }: 
             </div>
           )}
           {t.pairings.map((p, i) => (
-            <MatchLine key={i} t={t} p={p} highlight={p.a === 'user' || p.b === 'user'} pickem={pickem} onPick={onPick} />
+            <MatchLine key={i} t={t} p={p} highlight={p.a === 'user' || p.b === 'user'} pickem={pickem} onPick={onPick} onOpenSeries={onOpenSeries} />
           ))}
         </div>
       </div>
 
-      <TournamentBracket t={t} />
+      <TournamentBracket t={t} onOpen={onOpenSeries} />
 
       {inSwiss && (
         <div className="panel">
@@ -178,7 +186,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats }: 
                 <div style={{ padding: '5px 12px', background: 'var(--header)', color: 'var(--dim)', fontSize: 11 }}>
                   {h.phase}
                 </div>
-                <MatchLine t={t} p={h.pairing} highlight={h.pairing.a === 'user' || h.pairing.b === 'user'} />
+                <MatchLine t={t} p={h.pairing} highlight={h.pairing.a === 'user' || h.pairing.b === 'user'} onOpenSeries={onOpenSeries} />
               </div>
             ))}
           </div>

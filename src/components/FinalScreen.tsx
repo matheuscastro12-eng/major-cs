@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { CareerState, PickemState } from '../App';
 import { computeDisplay, mergeLines } from '../engine/match';
 import { getTeam } from '../engine/swiss';
@@ -14,6 +14,7 @@ interface Props {
   onRestart: () => void;
   onStats: () => void;
   onHall: () => void;
+  onBracket: () => void;
   onNextSeason: () => void;
   onDonate: () => void;
 }
@@ -71,12 +72,13 @@ function userRecords(t: Tournament, pickem: PickemState) {
   };
 }
 
-export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHall, onNextSeason, onDonate }: Props) {
+export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHall, onBracket, onNextSeason, onDonate }: Props) {
   const champion = t.championId ? getTeam(t, t.championId) : undefined;
   const isChampion = t.championId === 'user';
   const user = getTeam(t, 'user');
   const campaign = useMemo(() => userCampaign(t), [t]);
   const [copied, setCopied] = useState(false);
+  const [nick, setNick] = useState(() => localStorage.getItem('major-nick') ?? '');
   const [hallStatus, setHallStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const postedRef = useRef(false);
 
@@ -85,19 +87,22 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
     return champion.players.find((p) => p.id === t.mvpId);
   }, [t, champion]);
 
-  // registra a campanha no Hall da Fama (no máximo uma vez por torneio:
-  // a chave é gravada ANTES do fetch para nunca duplicar registro)
-  useEffect(() => {
-    if (postedRef.current) return;
-    const hallKey = `major-hall-posted-${user.name}-${career.season}-${campaign.placementCode}-${t.history.length}`;
-    if (localStorage.getItem(hallKey)) return;
+  const hallKey = `major-hall-posted-${user.name}-${career.season}-${campaign.placementCode}-${t.history.length}`;
+  const alreadyPosted = postedRef.current || !!localStorage.getItem(hallKey);
+
+  // registra no Hall com o nick do jogador (manual, no máximo uma vez por torneio)
+  const registerHall = () => {
+    const player = nick.trim();
+    if (!player || alreadyPosted || hallStatus === 'saving') return;
     postedRef.current = true;
     localStorage.setItem(hallKey, '1');
+    localStorage.setItem('major-nick', player);
     setHallStatus('saving');
     fetch('/api/hall', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        player,
         teamName: user.name,
         pool,
         placement: campaign.placementCode,
@@ -111,8 +116,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
     })
       .then((r) => setHallStatus(r.ok ? 'saved' : 'error'))
       .catch(() => setHallStatus('error'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
 
   const share = async () => {
     const lines = [
@@ -197,6 +201,9 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
             <button className="btn" onClick={onStats}>
               📊 Stats
             </button>
+            <button className="btn" onClick={onBracket}>
+              🗺 Chaveamento &amp; partidas
+            </button>
             <button className="btn" onClick={onHall}>
               🏛 Hall da Fama
             </button>
@@ -211,10 +218,35 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
             </button>
           </div>
 
-          <div className="muted small" style={{ marginTop: 14 }}>
-            {hallStatus === 'saved' && '✔ Campanha registrada no Hall da Fama.'}
-            {hallStatus === 'saving' && 'Registrando campanha no Hall da Fama…'}
-            {hallStatus === 'error' && 'Hall da Fama indisponível agora — o resultado segue salvo localmente.'}
+          <div className="hall-register">
+            {hallStatus === 'saved' ? (
+              <div className="pos small">✔ Campanha registrada no Hall da Fama como {nick}.</div>
+            ) : alreadyPosted ? (
+              <div className="muted small">Esta campanha já foi registrada no Hall.</div>
+            ) : (
+              <>
+                <div className="muted small" style={{ marginBottom: 8 }}>
+                  Registre seu nick no <b>Hall da Fama</b> para eternizar esta campanha:
+                </div>
+                <div className="hall-register-row">
+                  <input
+                    placeholder="seu nick"
+                    value={nick}
+                    maxLength={24}
+                    onChange={(e) => setNick(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && registerHall()}
+                  />
+                  <button className="btn gold" onClick={registerHall} disabled={!nick.trim() || hallStatus === 'saving'}>
+                    {hallStatus === 'saving' ? 'Registrando…' : '🏛 Registrar no Hall'}
+                  </button>
+                </div>
+                {hallStatus === 'error' && (
+                  <div className="neg small" style={{ marginTop: 6 }}>
+                    Hall indisponível agora — tente novamente em instantes.
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <div style={{ marginTop: 18 }}>

@@ -23,7 +23,7 @@ export default async function handler(
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     try {
       const rows = await sql`
-        SELECT id, team_name, pool, placement, champion, mvp, season, roster, records, created_at
+        SELECT id, player, team_name, pool, placement, champion, mvp, season, roster, records, created_at
         FROM campaigns ORDER BY created_at DESC LIMIT 50`;
       const titles = await sql`
         SELECT COUNT(*) AS n FROM campaigns WHERE placement = '1'`;
@@ -37,6 +37,7 @@ export default async function handler(
   if (req.method === 'POST') {
     res.setHeader('Cache-Control', 'no-store');
     const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
+      player?: string;
       teamName?: string;
       pool?: string;
       placement?: string;
@@ -46,6 +47,7 @@ export default async function handler(
       roster?: unknown;
       records?: unknown;
     };
+    const player = String(body.player ?? '').slice(0, 24).trim() || 'anônimo';
     const teamName = String(body.teamName ?? '').slice(0, 40).trim();
     const placement = String(body.placement ?? '').slice(0, 20);
     const champion = String(body.champion ?? '').slice(0, 60);
@@ -60,8 +62,8 @@ export default async function handler(
     const records = JSON.stringify(body.records && typeof body.records === 'object' ? body.records : {});
     try {
       await sql`
-        INSERT INTO campaigns (team_name, pool, placement, champion, mvp, season, roster, records)
-        VALUES (${teamName}, ${pool}, ${placement}, ${champion}, ${mvp}, ${season}, ${roster}::jsonb, ${records}::jsonb)`;
+        INSERT INTO campaigns (player, team_name, pool, placement, champion, mvp, season, roster, records)
+        VALUES (${player}, ${teamName}, ${pool}, ${placement}, ${champion}, ${mvp}, ${season}, ${roster}::jsonb, ${records}::jsonb)`;
       res.status(200).json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: String(e) });

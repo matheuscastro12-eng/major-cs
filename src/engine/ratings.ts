@@ -2,6 +2,10 @@ import { liquipediaTeamUrl, logoForTeam } from '../data/media';
 import type { Coach, Game, Player, TeamSeason, TPlayer, TTeam } from '../types';
 import { MAP_POOL } from '../types';
 
+// Dream team montado no draft nunca treinou junto: leva um malus de
+// entrosamento que torna o título mais difícil (egos, falta de rotina).
+export const DREAM_TEAM_MALUS = 3;
+
 export function playerSkill(p: Pick<Player, 'aim' | 'clutch' | 'consistency'>): number {
   return p.aim * 0.6 + p.consistency * 0.25 + p.clutch * 0.15;
 }
@@ -164,7 +168,7 @@ export function refreshUserTeam(user: TTeam): TTeam {
     ...user,
     players,
     teamwork,
-    strength: teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(user.coach),
+    strength: teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(user.coach) - DREAM_TEAM_MALUS,
     wins: 0,
     losses: 0,
     roundDiff: 0,
@@ -186,7 +190,7 @@ export function buildUserTeam(name: string, picks: { player: Player; from: TeamS
   const synergy = draftSynergy(players);
   const teamwork = 78 + Math.max(-14, Math.min(12, synergy.total * 1.2));
   const mapPrefs = fullMapPrefs('MIX', {});
-  const strength = teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(coach);
+  const strength = teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(coach) - DREAM_TEAM_MALUS;
   return {
     id: 'user',
     name,

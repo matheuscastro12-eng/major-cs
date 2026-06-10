@@ -187,9 +187,31 @@ export interface DraftRound {
 
 export type TournamentPool = 'world' | 'br';
 
+export type Difficulty = 'normal' | 'hard' | 'legend';
+
+export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
+  normal: 'Normal',
+  hard: 'Difícil',
+  legend: 'Lendário',
+};
+
+export const DIFFICULTY_DESC: Record<Difficulty, string> = {
+  normal: 'Campo equilibrado. Bom para aprender o jogo.',
+  hard: 'Adversários afiados e campo mais forte. Cada veto conta.',
+  legend: 'As maiores lendas em chamas. Vencer aqui é épico.',
+};
+
+// quanto os adversários ganham de força por dificuldade
+export const DIFFICULTY_OPP_BOOST: Record<Difficulty, number> = {
+  normal: 1.5,
+  hard: 4,
+  legend: 7,
+};
+
 export interface DraftState {
   mode: 'classic' | 'almanac';
   pool: TournamentPool;
+  difficulty: Difficulty;
   teamName: string;
   rounds: DraftRound[];
   current: number;

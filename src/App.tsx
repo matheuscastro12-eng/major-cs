@@ -8,6 +8,7 @@ import { HallScreen } from './components/HallScreen';
 import { Home } from './components/Home';
 import { Hub } from './components/Hub';
 import { LabScreen } from './components/LabScreen';
+import { MatchDetail } from './components/MatchDetail';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
 import { TournamentStats } from './components/TournamentStats';
@@ -17,9 +18,22 @@ import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
 import { createTournament, getTeam, phaseLabel, resolveRound, userPairing, userTeam } from './engine/swiss';
 import { fetchRemoteDataset, isCustomized, loadDataset, resetDataset, saveDataset } from './state/crm';
-import type { DraftState, MapId, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
+import { DIFFICULTY_OPP_BOOST } from './types';
+import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
-type Screen = 'home' | 'draft' | 'hub' | 'veto' | 'match' | 'final' | 'admin' | 'stats' | 'hall' | 'lab' | 'transfer';
+type Screen =
+  | 'home'
+  | 'draft'
+  | 'hub'
+  | 'veto'
+  | 'match'
+  | 'final'
+  | 'admin'
+  | 'stats'
+  | 'hall'
+  | 'lab'
+  | 'transfer'
+  | 'matchdetail';
 
 interface MatchCtx {
   teams: [TTeam, TTeam];
@@ -56,6 +70,8 @@ export default function App() {
   const [pickem, setPickem] = useState<PickemState>({ picks: {}, score: 0, total: 0 });
   const [career, setCareer] = useState<CareerState>({ season: 1, titles: 0 });
   const [transferCtx, setTransferCtx] = useState<TransferCtx | null>(null);
+  const [detail, setDetail] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; event: string } | null>(null);
+  const [detailReturn, setDetailReturn] = useState<Screen>('hub');
   const [donateOpen, setDonateOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => shouldOnboard());
   const rngRef = useRef(makeRng(randomSeed()));
@@ -71,20 +87,22 @@ export default function App() {
   );
 
   // Sorteio ponderado por tier: times de elite aparecem bem menos no dado —
-  // montar um dream team tem que ser raro.
-  const tierWeight = (t: TeamSeason) => {
+  // montar um dream team tem que ser raro. Em dificuldades maiores o campo
+  // fica mais forte (elite aparece mais).
+  const tierWeight = (t: TeamSeason, difficulty: Difficulty = 'normal') => {
     const avg = t.players.slice(0, 5).reduce((s, p) => s + playerOvr(p), 0) / Math.min(5, t.players.length);
-    if (avg >= 90) return 0.55;
-    if (avg >= 87) return 1.1;
+    const eliteBias = difficulty === 'legend' ? 2.4 : difficulty === 'hard' ? 1.5 : 1;
+    if (avg >= 90) return 0.55 * eliteBias;
+    if (avg >= 87) return 1.1 * eliteBias;
     if (avg >= 83) return 2.2;
     return 2.9;
   };
 
-  const weightedSample = (teams: TeamSeason[], n: number): TeamSeason[] => {
+  const weightedSample = (teams: TeamSeason[], n: number, difficulty: Difficulty = 'normal'): TeamSeason[] => {
     const pool = [...teams];
     const out: TeamSeason[] = [];
     while (out.length < n && pool.length > 0) {
-      const weights = pool.map(tierWeight);
+      const weights = pool.map((t) => tierWeight(t, difficulty));
       const total = weights.reduce((s, w) => s + w, 0);
       let r = rngRef.current() * total;
       let idx = 0;
@@ -168,19 +186,20 @@ export default function App() {
   }, []);
 
   // ---------- fluxo: home → draft ----------
-  const startDraft = (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool) => {
+  const startDraft = (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => {
     rngRef.current = makeRng(randomSeed());
     const base = poolTeams(pool);
     if (base.length < 16) {
       alert('A base precisa de pelo menos 16 times neste modo. Adicione times no CRM.');
       return;
     }
-    const sources = weightedSample(base, 5);
+    const sources = weightedSample(base, 5, difficulty);
     const usedIds = new Set(sources.map((t) => t.id));
-    const coachOptions = weightedSample(base.filter((t) => !usedIds.has(t.id)), 5).map((t) => t.id);
+    const coachOptions = weightedSample(base.filter((t) => !usedIds.has(t.id)), 5, difficulty).map((t) => t.id);
     setDraft({
       mode,
       pool,
+      difficulty,
       teamName,
       rounds: sources.map((t) => ({ teamSeasonId: t.id })),
       current: 0,
@@ -198,7 +217,7 @@ export default function App() {
     const used = new Set(draft.rounds.map((r) => r.teamSeasonId));
     const options = poolTeams(draft.pool).filter((t) => !used.has(t.id));
     if (options.length === 0) return;
-    const next = weightedSample(options, 1)[0];
+    const next = weightedSample(options, 1, draft.difficulty)[0];
     const rounds = draft.rounds.map((r, i) => (i === draft.current ? { teamSeasonId: next.id } : r));
     setDraft({ ...draft, rounds, rerollsLeft: draft.rerollsLeft - 1 });
   };
@@ -222,7 +241,13 @@ export default function App() {
       return { player, from };
     });
     const user = buildUserTeam(draft.teamName, picks, coachTeam.coach);
-    const t = createTournament(poolTeams(draft.pool), user, rngRef.current, tournamentName(draft.pool, 1));
+    const t = createTournament(
+      poolTeams(draft.pool),
+      user,
+      rngRef.current,
+      tournamentName(draft.pool, 1),
+      DIFFICULTY_OPP_BOOST[draft.difficulty],
+    );
     setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
     setTournament(t);
     setScreen('hub');
@@ -254,6 +279,16 @@ export default function App() {
       }
       return { picks, score, total };
     });
+  };
+
+  // abre o detalhe de qualquer série já jogada (inclusive AI vs AI)
+  const openSeries = (p: Pairing) => {
+    if (!tournament || !p.result) return;
+    const a = getTeam(tournament, p.a);
+    const b = getTeam(tournament, p.b);
+    setDetail({ series: p.result, teams: [a, b], event: `${tournament.name} · ${phaseLabel(tournament)}` });
+    setDetailReturn(screen === 'final' ? 'final' : 'hub');
+    setScreen('matchdetail');
   };
 
   // ---------- fluxo: hub → veto → partida ----------
@@ -308,6 +343,7 @@ export default function App() {
     const offerTeams = weightedSample(
       poolTeams(draft.pool).filter((t) => t.players.some((p) => !nicksInTeam.has(p.nick.toLowerCase()))),
       5,
+      draft.difficulty ?? 'normal',
     );
     const offers: TransferOffer[] = offerTeams.map((from) => {
       const candidates = from.players.filter((p) => !nicksInTeam.has(p.nick.toLowerCase()));
@@ -323,7 +359,13 @@ export default function App() {
     const nextSeason = career.season + 1;
     setCareer((c) => ({ ...c, season: nextSeason }));
     rngRef.current = makeRng(randomSeed());
-    const t = createTournament(poolTeams(draft.pool), newTeam, rngRef.current, tournamentName(draft.pool, nextSeason));
+    const t = createTournament(
+      poolTeams(draft.pool),
+      newTeam,
+      rngRef.current,
+      tournamentName(draft.pool, nextSeason),
+      DIFFICULTY_OPP_BOOST[draft.difficulty ?? 'normal'],
+    );
     setPickem({ picks: {}, score: 0, total: 0 });
     setTransferCtx(null);
     setTournament(t);
@@ -404,7 +446,12 @@ export default function App() {
           onPlay={playUserMatch}
           onSimRound={simRound}
           onStats={() => setScreen('stats')}
+          onOpenSeries={openSeries}
         />
+      )}
+
+      {screen === 'matchdetail' && detail && (
+        <MatchDetail series={detail.series} teams={detail.teams} event={detail.event} onBack={() => setScreen(detailReturn)} />
       )}
 
       {screen === 'stats' && tournament && (
@@ -456,6 +503,7 @@ export default function App() {
           onRestart={restart}
           onStats={() => setScreen('stats')}
           onHall={() => setScreen('hall')}
+          onBracket={() => setScreen('hub')}
           onNextSeason={openTransferWindow}
           onDonate={() => setDonateOpen(true)}
         />

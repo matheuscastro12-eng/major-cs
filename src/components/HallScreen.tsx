@@ -3,6 +3,7 @@ import { Flag } from './ui';
 
 interface Campaign {
   id: number;
+  player: string;
   team_name: string;
   pool: string;
   placement: string;
@@ -84,10 +85,11 @@ export function HallScreen({ onBack }: Props) {
                 <table className="stats">
                   <thead>
                     <tr>
+                      <th style={{ textAlign: 'left' }}>Jogador</th>
                       <th style={{ textAlign: 'left' }}>Time</th>
                       <th style={{ textAlign: 'left' }}>Elenco</th>
                       <th>Modo</th>
-                      <th>Temporada</th>
+                      <th>Temp.</th>
                       <th>Resultado</th>
                       <th style={{ textAlign: 'left' }}>Campeão</th>
                     </tr>
@@ -95,10 +97,11 @@ export function HallScreen({ onBack }: Props) {
                   <tbody>
                     {data.campaigns.map((c) => (
                       <tr key={c.id}>
-                        <td style={{ fontWeight: 700, color: c.placement === '1' ? 'var(--gold)' : undefined }}>
+                        <td style={{ textAlign: 'left', fontWeight: 700, color: c.placement === '1' ? 'var(--gold)' : 'var(--text-strong)' }}>
                           {c.placement === '1' ? '🏆 ' : ''}
-                          {c.team_name}
+                          {c.player ?? 'anônimo'}
                         </td>
+                        <td style={{ fontWeight: 600 }}>{c.team_name}</td>
                         <td style={{ textAlign: 'left' }} className="muted small">
                           {(c.roster ?? []).map((p, i) => (
                             <span key={i} style={{ marginRight: 8, whiteSpace: 'nowrap' }}>
@@ -116,7 +119,7 @@ export function HallScreen({ onBack }: Props) {
                     ))}
                     {champions.length === 0 && data.campaigns.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="muted center">
+                        <td colSpan={7} className="muted center">
                           Nenhuma campanha registrada ainda — seja o primeiro do Hall!
                         </td>
                       </tr>
