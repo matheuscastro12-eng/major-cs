@@ -5,17 +5,38 @@ import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
 import { TournamentBracket } from './Bracket';
 import { Flag, TeamBadge, TeamName } from './ui';
 
+import type { CareerState, PickemState } from '../App';
+
 interface Props {
   t: Tournament;
+  career: CareerState;
+  pickem: PickemState;
+  onPick: (key: string, teamId: string) => void;
   onPlay: () => void;
   onSimRound: () => void;
   onStats: () => void;
 }
 
-function MatchLine({ t, p, highlight }: { t: Tournament; p: Pairing; highlight: boolean }) {
+function MatchLine({
+  t,
+  p,
+  highlight,
+  pickem,
+  onPick,
+}: {
+  t: Tournament;
+  p: Pairing;
+  highlight: boolean;
+  pickem?: PickemState;
+  onPick?: (key: string, teamId: string) => void;
+}) {
   const a = getTeam(t, p.a);
   const b = getTeam(t, p.b);
   const r = p.result;
+  const key = `${p.a}|${p.b}`;
+  const myPick = pickem?.picks[key];
+  const canPick = !highlight && !r && pickem && onPick;
+
   return (
     <div className={`matchline${highlight ? ' user-match' : ''}`}>
       <TeamName team={a} dim={r ? r.winner === 1 : false} />
@@ -26,6 +47,15 @@ function MatchLine({ t, p, highlight }: { t: Tournament; p: Pairing; highlight: 
             {' : '}
             <span className={r.winner === 1 ? 'w' : 'l'}>{r.mapScore[1]}</span>
           </>
+        ) : canPick ? (
+          <span style={{ display: 'inline-flex', gap: 4 }}>
+            <button className={`pick-btn${myPick === p.a ? ' on' : ''}`} onClick={() => onPick!(key, p.a)} title={`Apostar em ${a.name}`}>
+              {a.tag}
+            </button>
+            <button className={`pick-btn${myPick === p.b ? ' on' : ''}`} onClick={() => onPick!(key, p.b)} title={`Apostar em ${b.name}`}>
+              {b.tag}
+            </button>
+          </span>
         ) : (
           'vs'
         )}
@@ -40,18 +70,25 @@ function MatchLine({ t, p, highlight }: { t: Tournament; p: Pairing; highlight: 
   );
 }
 
-export function Hub({ t, onPlay, onSimRound, onStats }: Props) {
+export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats }: Props) {
   const up = userPairing(t);
   const user = getTeam(t, 'user');
   const inSwiss = t.phase === 'swiss';
   const synergy = draftSynergy(user.players);
+  const hasPickable = t.pairings.some((p) => p.a !== 'user' && p.b !== 'user' && !p.result);
 
   return (
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
           {t.name} — {phaseLabel(t)}
+          {career.titles > 0 && <span className="gold-text small">🏆×{career.titles}</span>}
           <span className="spacer" />
+          {pickem.total > 0 && (
+            <span className="pickem-score" title="Acertos no Pick'Em">
+              🎯 Pick'Em {pickem.score}/{pickem.total}
+            </span>
+          )}
           <button className="btn ghost" onClick={onStats}>
             📊 Stats
           </button>
@@ -66,8 +103,13 @@ export function Hub({ t, onPlay, onSimRound, onStats }: Props) {
           ) : null}
         </div>
         <div className="panel-body tight">
+          {hasPickable && (
+            <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--border-soft)' }}>
+              <span className="pickem-hint">🎯 Pick'Em: aposte nos vencedores das outras séries e some pontos</span>
+            </div>
+          )}
           {t.pairings.map((p, i) => (
-            <MatchLine key={i} t={t} p={p} highlight={p.a === 'user' || p.b === 'user'} />
+            <MatchLine key={i} t={t} p={p} highlight={p.a === 'user' || p.b === 'user'} pickem={pickem} onPick={onPick} />
           ))}
         </div>
       </div>

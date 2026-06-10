@@ -1,29 +1,51 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Admin } from './components/Admin';
 import { AdminGate } from './components/AdminGate';
+import { DonateButton, DonateModal } from './components/Donate';
 import { Draft } from './components/Draft';
 import { FinalScreen } from './components/FinalScreen';
+import { HallScreen } from './components/HallScreen';
 import { Home } from './components/Home';
 import { Hub } from './components/Hub';
+import { LabScreen } from './components/LabScreen';
 import { MatchScreen } from './components/MatchScreen';
+import { Onboarding, shouldOnboard } from './components/Onboarding';
 import { TournamentStats } from './components/TournamentStats';
+import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
 import { VetoScreen } from './components/VetoScreen';
-import { simulateSeries } from './engine/match';
-import { buildUserTeam } from './engine/ratings';
-import { makeRng, randomSeed } from './engine/rng';
-import { createTournament, getTeam, phaseLabel, resolveRound, userPairing } from './engine/swiss';
-import { playerOvr } from './engine/ratings';
+import { buildUserTeam, playerOvr } from './engine/ratings';
+import { makeRng, randomSeed, shuffle } from './engine/rng';
+import { createTournament, getTeam, phaseLabel, resolveRound, userPairing, userTeam } from './engine/swiss';
 import { fetchRemoteDataset, isCustomized, loadDataset, resetDataset, saveDataset } from './state/crm';
 import type { DraftState, MapId, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
-type Screen = 'home' | 'draft' | 'hub' | 'veto' | 'match' | 'final' | 'admin' | 'stats';
+type Screen = 'home' | 'draft' | 'hub' | 'veto' | 'match' | 'final' | 'admin' | 'stats' | 'hall' | 'lab' | 'transfer';
 
 interface MatchCtx {
-  series: SeriesResult;
   teams: [TTeam, TTeam];
+  maps: { map: MapId; pickedBy: 0 | 1 | -1 }[];
   userIdx: 0 | 1;
   phase: string;
 }
+
+export interface PickemState {
+  picks: Record<string, string>; // `${a}|${b}` → teamId apostado
+  score: number;
+  total: number;
+}
+
+export interface CareerState {
+  season: number;
+  titles: number;
+}
+
+interface TransferCtx {
+  evolution: { nick: string; delta: number }[];
+  offers: TransferOffer[];
+  baseTeam: TTeam;
+}
+
+const SESSION_KEY = 'major-session-v2';
 
 export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
@@ -31,6 +53,11 @@ export default function App() {
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [matchCtx, setMatchCtx] = useState<MatchCtx | null>(null);
+  const [pickem, setPickem] = useState<PickemState>({ picks: {}, score: 0, total: 0 });
+  const [career, setCareer] = useState<CareerState>({ season: 1, titles: 0 });
+  const [transferCtx, setTransferCtx] = useState<TransferCtx | null>(null);
+  const [donateOpen, setDonateOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => shouldOnboard());
   const rngRef = useRef(makeRng(randomSeed()));
   const rng = useCallback(() => rngRef.current(), []);
 
@@ -38,7 +65,10 @@ export default function App() {
   const playerCount = useMemo(() => dataset.reduce((s, t) => s + t.players.length, 0), [dataset]);
   const brEligible = useMemo(() => eligible.filter((t) => t.country === 'br'), [eligible]);
 
-  const poolTeams = (pool: TournamentPool) => (pool === 'br' ? brEligible : eligible);
+  const poolTeams = useCallback(
+    (pool: TournamentPool) => (pool === 'br' ? brEligible : eligible),
+    [brEligible, eligible],
+  );
 
   // Sorteio ponderado por tier: times de elite aparecem bem menos no dado —
   // montar um dream team tem que ser raro.
@@ -70,22 +100,26 @@ export default function App() {
     return out;
   };
 
-  // campanha em andamento sobrevive a refresh/fechamento do navegador
-  const SESSION_KEY = 'major-session-v1';
+  // ---------- persistência de campanha ----------
   useEffect(() => {
     if (!tournament) return;
     try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ draft, tournament }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ draft, tournament, pickem, career }));
     } catch {
       /* storage cheio — campanha segue só em memória */
     }
-  }, [draft, tournament]);
+  }, [draft, tournament, pickem, career]);
 
   const savedSession = useMemo(() => {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return null;
-      const s = JSON.parse(raw) as { draft: DraftState | null; tournament: Tournament | null };
+      const s = JSON.parse(raw) as {
+        draft: DraftState | null;
+        tournament: Tournament | null;
+        pickem?: PickemState;
+        career?: CareerState;
+      };
       return s?.tournament ? s : null;
     } catch {
       return null;
@@ -97,6 +131,8 @@ export default function App() {
     if (!savedSession?.tournament) return;
     setDraft(savedSession.draft);
     setTournament(savedSession.tournament);
+    setPickem(savedSession.pickem ?? { picks: {}, score: 0, total: 0 });
+    setCareer(savedSession.career ?? { season: 1, titles: 0 });
     setMatchCtx(null);
     setScreen(savedSession.tournament.phase === 'done' ? 'final' : 'hub');
   };
@@ -134,6 +170,8 @@ export default function App() {
       coachOptions,
     });
     setTournament(null);
+    setPickem({ picks: {}, score: 0, total: 0 });
+    setCareer({ season: 1, titles: 0 });
     setScreen('draft');
   };
 
@@ -150,9 +188,11 @@ export default function App() {
   const pickPlayer = (playerId: string) => {
     if (!draft) return;
     const rounds = draft.rounds.map((r, i) => (i === draft.current ? { ...r, pickedPlayerId: playerId } : r));
-    // após os 5 jogadores vem a escolha do coach (current === 5)
     setDraft({ ...draft, rounds, current: draft.current + 1 });
   };
+
+  const tournamentName = (pool: TournamentPool, season: number) =>
+    `${pool === 'br' ? 'GC MASTERS' : 'MAJOR DOS SONHOS'}${season > 1 ? ` · TEMPORADA ${season}` : ''}`;
 
   const pickCoach = (teamSeasonId: string) => {
     if (!draft) return;
@@ -164,15 +204,38 @@ export default function App() {
       return { player, from };
     });
     const user = buildUserTeam(draft.teamName, picks, coachTeam.coach);
-    const t = createTournament(
-      poolTeams(draft.pool),
-      user,
-      rngRef.current,
-      draft.pool === 'br' ? 'GC MASTERS' : 'MAJOR DOS SONHOS',
-    );
+    const t = createTournament(poolTeams(draft.pool), user, rngRef.current, tournamentName(draft.pool, 1));
     setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
     setTournament(t);
     setScreen('hub');
+  };
+
+  // ---------- pick'em ----------
+  const setPick = (key: string, teamId: string) => {
+    setPickem((prev) => ({
+      ...prev,
+      picks: { ...prev.picks, [key]: prev.picks[key] === teamId ? '' : teamId },
+    }));
+  };
+
+  const scorePickemAfter = (t: Tournament) => {
+    setPickem((prev) => {
+      let score = prev.score;
+      let total = prev.total;
+      const picks = { ...prev.picks };
+      for (const h of t.history) {
+        const key = `${h.pairing.a}|${h.pairing.b}`;
+        const pick = picks[key];
+        if (pick === undefined || !h.pairing.result) continue;
+        if (pick) {
+          total++;
+          const winnerId = h.pairing.result.winner === 0 ? h.pairing.a : h.pairing.b;
+          if (winnerId === pick) score++;
+        }
+        delete picks[key];
+      }
+      return { picks, score, total };
+    });
   };
 
   // ---------- fluxo: hub → veto → partida ----------
@@ -186,28 +249,67 @@ export default function App() {
     if (!p) return;
     const a = getTeam(tournament, p.a);
     const b = getTeam(tournament, p.b);
-    const series = simulateSeries(rngRef.current, a, b, maps);
-    setMatchCtx({ series, teams: [a, b], userIdx: p.a === 'user' ? 0 : 1, phase: phaseLabel(tournament) });
+    // a série roda AO VIVO no MatchScreen (timeouts táticos podem mudar o rumo)
+    setMatchCtx({ teams: [a, b], maps, userIdx: p.a === 'user' ? 0 : 1, phase: phaseLabel(tournament) });
     setScreen('match');
   };
 
-  const onMatchFinish = () => {
+  const afterResolve = (clone: Tournament) => {
+    scorePickemAfter(clone);
+    if (clone.phase === 'done' && clone.championId === 'user') {
+      setCareer((c) => ({ ...c, titles: c.titles + 1 }));
+    }
+    setTournament(clone);
+    setScreen(clone.phase === 'done' ? 'final' : 'hub');
+  };
+
+  const onMatchFinish = (series: SeriesResult) => {
     if (!tournament || !matchCtx) return;
     const clone = structuredClone(tournament) as Tournament;
     const p = clone.pairings.find((x) => x.a === 'user' || x.b === 'user');
-    if (p) p.result = matchCtx.series;
+    if (p) p.result = series;
     resolveRound(clone, rngRef.current);
-    setTournament(clone);
     setMatchCtx(null);
-    setScreen(clone.phase === 'done' ? 'final' : 'hub');
+    afterResolve(clone);
   };
 
   const simRound = () => {
     if (!tournament) return;
     const clone = structuredClone(tournament) as Tournament;
     resolveRound(clone, rngRef.current);
-    setTournament(clone);
-    if (clone.phase === 'done') setScreen('final');
+    afterResolve(clone);
+  };
+
+  // ---------- modo carreira ----------
+  const openTransferWindow = () => {
+    if (!tournament || !draft) return;
+    const user = userTeam(tournament);
+    const evolution = buildEvolution(user);
+    const evolved = applyEvolution(user, evolution);
+    const nicksInTeam = new Set(evolved.players.map((p) => p.nick.toLowerCase()));
+    const offerTeams = weightedSample(
+      poolTeams(draft.pool).filter((t) => t.players.some((p) => !nicksInTeam.has(p.nick.toLowerCase()))),
+      5,
+    );
+    const offers: TransferOffer[] = offerTeams.map((from) => {
+      const candidates = from.players.filter((p) => !nicksInTeam.has(p.nick.toLowerCase()));
+      const player = shuffle(rngRef.current, candidates)[0];
+      return { player, from };
+    });
+    setTransferCtx({ evolution, offers, baseTeam: evolved });
+    setScreen('transfer');
+  };
+
+  const confirmTransfer = (newTeam: TTeam) => {
+    if (!draft) return;
+    const nextSeason = career.season + 1;
+    setCareer((c) => ({ ...c, season: nextSeason }));
+    rngRef.current = makeRng(randomSeed());
+    const t = createTournament(poolTeams(draft.pool), newTeam, rngRef.current, tournamentName(draft.pool, nextSeason));
+    setPickem({ picks: {}, score: 0, total: 0 });
+    setTransferCtx(null);
+    setTournament(t);
+    setScreen('hub');
   };
 
   const restart = () => {
@@ -215,6 +317,9 @@ export default function App() {
     setDraft(null);
     setTournament(null);
     setMatchCtx(null);
+    setTransferCtx(null);
+    setPickem({ picks: {}, score: 0, total: 0 });
+    setCareer({ season: 1, titles: 0 });
     setScreen('home');
   };
 
@@ -247,17 +352,26 @@ export default function App() {
           MAJOR<span>//</span>CS
         </span>
         <span className="subtitle">simulador do cenário profissional de Counter-Strike — 1.6 ao CS2</span>
+        <DonateButton onClick={() => setDonateOpen(true)} />
+        <button className="nav-btn" onClick={() => setScreen('hall')}>
+          🏛 Hall
+        </button>
         {screen !== 'admin' && (
           <button className="nav-btn" onClick={() => setScreen('admin')}>
-            ⚙ Base de dados
+            ⚙ Base
           </button>
         )}
       </div>
+
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
+      {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
       {screen === 'home' && (
         <Home
           onStart={startDraft}
           onAdmin={() => setScreen('admin')}
+          onDonate={() => setDonateOpen(true)}
+          onHall={() => setScreen('hall')}
           teamCount={dataset.length}
           playerCount={playerCount}
           savedCampaign={savedSession?.tournament ? { name: savedSession.tournament.name, phase: savedSession.tournament.phase } : null}
@@ -270,11 +384,34 @@ export default function App() {
       )}
 
       {screen === 'hub' && tournament && (
-        <Hub t={tournament} onPlay={playUserMatch} onSimRound={simRound} onStats={() => setScreen('stats')} />
+        <Hub
+          t={tournament}
+          career={career}
+          pickem={pickem}
+          onPick={setPick}
+          onPlay={playUserMatch}
+          onSimRound={simRound}
+          onStats={() => setScreen('stats')}
+        />
       )}
 
       {screen === 'stats' && tournament && (
         <TournamentStats t={tournament} onBack={() => setScreen(tournament.phase === 'done' ? 'final' : 'hub')} />
+      )}
+
+      {screen === 'hall' && <HallScreen onBack={() => setScreen(tournament ? (tournament.phase === 'done' ? 'final' : 'hub') : 'home')} />}
+
+      {screen === 'lab' && <LabScreen dataset={eligible} onBack={() => setScreen('admin')} />}
+
+      {screen === 'transfer' && transferCtx && (
+        <TransferScreen
+          user={transferCtx.baseTeam}
+          season={career.season + 1}
+          titles={career.titles}
+          evolution={transferCtx.evolution}
+          offers={transferCtx.offers}
+          onConfirm={confirmTransfer}
+        />
       )}
 
       {screen === 'veto' && tournament && vetoData && (
@@ -289,16 +426,27 @@ export default function App() {
 
       {screen === 'match' && matchCtx && (
         <MatchScreen
-          series={matchCtx.series}
           teams={matchCtx.teams}
+          maps={matchCtx.maps}
           userIdx={matchCtx.userIdx}
+          rng={rng}
           phaseLabel={matchCtx.phase}
           onFinish={onMatchFinish}
         />
       )}
 
       {screen === 'final' && tournament && (
-        <FinalScreen t={tournament} onRestart={restart} onStats={() => setScreen('stats')} />
+        <FinalScreen
+          t={tournament}
+          career={career}
+          pickem={pickem}
+          pool={draft?.pool ?? 'world'}
+          onRestart={restart}
+          onStats={() => setScreen('stats')}
+          onHall={() => setScreen('hall')}
+          onNextSeason={openTransferWindow}
+          onDonate={() => setDonateOpen(true)}
+        />
       )}
 
       {screen === 'admin' && (
@@ -307,6 +455,7 @@ export default function App() {
             dataset={dataset}
             onChange={changeDataset}
             onReset={() => setDataset(resetDataset())}
+            onLab={() => setScreen('lab')}
             onBack={() => setScreen(tournament && tournament.phase !== 'done' ? 'hub' : 'home')}
           />
         </AdminGate>

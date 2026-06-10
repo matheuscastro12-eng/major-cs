@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
+import { adminPassword } from './AdminGate';
+import { invalidateDonors } from './Donate';
 import { fileToDataUrl, loadMapImages, saveMapImage } from '../state/crm';
 import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
 import { COACH_STYLE_LABELS, MAP_LABELS, MAP_POOL } from '../types';
@@ -15,9 +17,10 @@ interface Props {
   onChange: (teams: TeamSeason[]) => void;
   onReset: () => void;
   onBack: () => void;
+  onLab?: () => void;
 }
 
-export function Admin({ dataset, onChange, onReset, onBack }: Props) {
+export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
   const [selId, setSelId] = useState<string | null>(dataset[0]?.id ?? null);
   const [filter, setFilter] = useState('');
 
@@ -122,6 +125,11 @@ export function Admin({ dataset, onChange, onReset, onBack }: Props) {
           <button className="btn ghost" onClick={addTeam}>
             + Novo time
           </button>
+          {onLab && (
+            <button className="btn ghost" onClick={onLab}>
+              🧪 Lab
+            </button>
+          )}
           <button
             className="btn danger"
             onClick={() => {
@@ -384,6 +392,85 @@ export function Admin({ dataset, onChange, onReset, onBack }: Props) {
       </div>
 
       <MapImagesPanel />
+      <DonorsAdminPanel />
+    </div>
+  );
+}
+
+// Registro manual de doações (PixGG não expõe API pública de histórico —
+// você registra aqui o que cair na sua conta e o mural exibe para todos).
+function DonorsAdminPanel() {
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [message, setMessage] = useState('');
+  const [source, setSource] = useState('pixgg');
+  const [status, setStatus] = useState('');
+
+  const submit = async () => {
+    if (!name.trim()) return;
+    setStatus('Salvando…');
+    try {
+      const res = await fetch('/api/donors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword(),
+          name: name.trim(),
+          amount: Number(amount.replace(',', '.')) || 0,
+          message: message.trim(),
+          source,
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        invalidateDonors();
+        setStatus(`✔ ${name.trim()} adicionado ao mural!`);
+        setName('');
+        setAmount('');
+        setMessage('');
+      } else if (res.status === 401) {
+        setStatus('Senha de admin inválida — saia e entre de novo na área administrativa.');
+      } else {
+        setStatus('Erro ao salvar.');
+      }
+    } catch {
+      setStatus('API indisponível (em localhost o mural só funciona no deploy).');
+    }
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-head">💜 Apoiadores — registrar doação</div>
+      <div className="panel-body">
+        <div className="form-grid">
+          <div className="field">
+            <label>Nome do doador</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="ex: Gaules" />
+          </div>
+          <div className="field">
+            <label>Valor (R$)</label>
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10,00" />
+          </div>
+          <div className="field">
+            <label>Origem</label>
+            <select value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value="pixgg">PixGG</option>
+              <option value="kofi">Ko-fi</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Mensagem (opcional)</label>
+            <input value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+          <button className="btn gold" onClick={submit} disabled={!name.trim()}>
+            Adicionar ao mural
+          </button>
+          <span className="muted small">{status}</span>
+        </div>
+      </div>
     </div>
   );
 }

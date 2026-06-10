@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import type { TournamentPool } from '../types';
+import { DonorsPanel } from './Donate';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool) => void;
   onAdmin: () => void;
+  onDonate: () => void;
+  onHall: () => void;
   teamCount: number;
   playerCount: number;
   savedCampaign?: { name: string; phase: string } | null;
   onResume?: () => void;
 }
 
-export function Home({ onStart, onAdmin, teamCount, playerCount, savedCampaign, onResume }: Props) {
+export function Home({ onStart, onAdmin, onDonate, onHall, teamCount, playerCount, savedCampaign, onResume }: Props) {
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [name, setName] = useState('');
@@ -72,8 +75,20 @@ export function Home({ onStart, onAdmin, teamCount, playerCount, savedCampaign, 
           </button>
         </div>
 
+        <DonorsPanel onDonate={onDonate} />
+
         <div className="footnote">
-          {teamCount} elencos históricos · {playerCount} jogadores · dados curados com base em{' '}
+          {teamCount} elencos históricos · {playerCount} jogadores ·{' '}
+          <a
+            href="#hall"
+            onClick={(e) => {
+              e.preventDefault();
+              onHall();
+            }}
+          >
+            🏛 Hall da Fama
+          </a>
+          {' · '}dados curados com base em{' '}
           <a href="https://liquipedia.net" target="_blank" rel="noreferrer">
             Liquipedia
           </a>{' '}

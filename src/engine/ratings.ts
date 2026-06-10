@@ -154,6 +154,24 @@ export function coachBaseBonus(coach: Coach): number {
   return Math.max(0, (coach.rating - 75) / 10);
 }
 
+// Recalcula derivados (skill/ovr/sinergia/força) após mudanças no elenco do
+// usuário — usado na virada de temporada do modo carreira.
+export function refreshUserTeam(user: TTeam): TTeam {
+  const players = user.players.map((p) => ({ ...p, skill: playerSkill(p), ovr: playerOvr(p) }));
+  const synergy = draftSynergy(players);
+  const teamwork = 78 + Math.max(-14, Math.min(12, synergy.total * 1.2));
+  return {
+    ...user,
+    players,
+    teamwork,
+    strength: teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(user.coach),
+    wins: 0,
+    losses: 0,
+    roundDiff: 0,
+    status: 'alive',
+  };
+}
+
 export function buildUserTeam(name: string, picks: { player: Player; from: TeamSeason }[], coach: Coach): TTeam {
   const players = picks.map(({ player, from }) =>
     toTPlayer(player, {

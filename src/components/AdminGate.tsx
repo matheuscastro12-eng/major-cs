@@ -1,13 +1,19 @@
 import { useState, type ReactNode } from 'react';
 
 const KEY = 'major-admin-unlocked-v1';
+const PASS_KEY = 'major-admin-key-v1';
 
 export function isAdminUnlocked(): boolean {
   return localStorage.getItem(KEY) === '1';
 }
 
+export function adminPassword(): string {
+  return localStorage.getItem(PASS_KEY) ?? '';
+}
+
 export function lockAdmin(): void {
   localStorage.removeItem(KEY);
+  localStorage.removeItem(PASS_KEY);
 }
 
 // Em produção valida contra /api/admin-login (ADMIN_PASSWORD na Vercel).
@@ -47,6 +53,7 @@ export function AdminGate({ children }: { children: ReactNode }) {
     setBusy(false);
     if (ok) {
       localStorage.setItem(KEY, '1');
+      localStorage.setItem(PASS_KEY, password);
       setUnlocked(true);
     } else {
       setError('Senha incorreta.');

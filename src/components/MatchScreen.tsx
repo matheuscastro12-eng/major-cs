@@ -1,72 +1,141 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyzeSeries } from '../engine/insights';
-import type { KillEvent, SeriesResult, TPlayer, TTeam } from '../types';
+import { createMapSim, type BuyTier, type MapSim } from '../engine/match';
+import type { Rng } from '../engine/rng';
+import type { KillEvent, MapId, MapResult, SeriesResult, TPlayer, TTeam } from '../types';
 import { MAP_LABELS } from '../types';
 import { Scoreboard } from './Scoreboard';
 import { MapThumb, TeamBadge } from './ui';
 import { HeadshotIcon, WeaponIcon, WEAPON_LABELS } from './weapons';
 
 interface Props {
-  series: SeriesResult;
   teams: [TTeam, TTeam];
+  maps: { map: MapId; pickedBy: 0 | 1 | -1 }[];
   userIdx: 0 | 1;
+  rng: Rng;
   phaseLabel: string;
-  onFinish: () => void;
+  onFinish: (series: SeriesResult) => void;
 }
 
-export function MatchScreen({ series, teams, userIdx, phaseLabel, onFinish }: Props) {
+const TICK_MS = 240;
+const TIMEOUTS_PER_MAP = 2;
+const TIMEOUT_ROUNDS = 3;
+
+const BUY_LABEL: Record<BuyTier, string> = {
+  pistol: 'PISTOL',
+  eco: 'ECO',
+  force: 'FORCE BUY',
+  full: 'FULL BUY',
+};
+
+export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }: Props) {
+  const simsRef = useRef<MapSim[]>([]);
+  const resultsRef = useRef<MapResult[]>([]);
   const [mapIdx, setMapIdx] = useState(0);
-  const [roundIdx, setRoundIdx] = useState(0);
+  const [tick, setTick] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [series, setSeries] = useState<SeriesResult | null>(null);
+  const [timeoutsLeft, setTimeoutsLeft] = useState(TIMEOUTS_PER_MAP);
+  const [boostRounds, setBoostRounds] = useState(0);
+  const [pausedMsg, setPausedMsg] = useState('');
 
-  const map = series.maps[Math.min(mapIdx, series.maps.length - 1)];
-  const totalRounds = map.roundLog.length;
+  const seriesOver = () => {
+    const wins = resultsRef.current.reduce(
+      (acc, r) => {
+        acc[r.winner]++;
+        return acc;
+      },
+      [0, 0] as [number, number],
+    );
+    return wins[0] === 2 || wins[1] === 2 || resultsRef.current.length >= maps.length;
+  };
 
+  const buildSeries = (): SeriesResult => {
+    const ms = resultsRef.current;
+    const winsA = ms.filter((m) => m.winner === 0).length;
+    const winsB = ms.filter((m) => m.winner === 1).length;
+    return { teamIds: [teams[0].id, teams[1].id], maps: ms, winner: winsA > winsB ? 0 : 1, mapScore: [winsA, winsB] };
+  };
+
+  const getSim = (idx: number): MapSim => {
+    if (!simsRef.current[idx]) {
+      simsRef.current[idx] = createMapSim(rng, teams[0], teams[1], maps[idx].map, maps[idx].pickedBy);
+    }
+    return simsRef.current[idx];
+  };
+
+  // loop da simulação ao vivo
   useEffect(() => {
     if (finished) return;
     const id = window.setInterval(() => {
-      setRoundIdx((r) => {
-        if (r < totalRounds) return r + 1;
-        return r;
-      });
-    }, 85);
-    return () => window.clearInterval(id);
-  }, [finished, totalRounds, mapIdx]);
-
-  useEffect(() => {
-    if (finished || roundIdx < totalRounds) return;
-    const id = window.setTimeout(() => {
-      if (mapIdx + 1 < series.maps.length) {
-        setMapIdx((m) => m + 1);
-        setRoundIdx(0);
+      if (pausedMsg) return; // pausa de timeout/troca de mapa
+      const sim = getSim(mapIdx);
+      let usedBoost = false;
+      if (boostRounds > 0) {
+        sim.step(userIdx);
+        usedBoost = true;
       } else {
-        setFinished(true);
+        sim.step();
       }
-    }, 1100);
-    return () => window.clearTimeout(id);
-  }, [roundIdx, totalRounds, mapIdx, series.maps.length, finished]);
+      if (usedBoost) setBoostRounds((b) => Math.max(0, b - 1));
+      setTick((t) => t + 1);
 
-  const [sa, sb] = useMemo(() => {
-    let a = 0;
-    let b = 0;
-    for (let i = 0; i < Math.min(roundIdx, totalRounds); i++) {
-      if (map.roundLog[i] === 0) a++;
-      else b++;
+      if (sim.done()) {
+        resultsRef.current[mapIdx] = sim.result();
+        if (seriesOver()) {
+          const s = buildSeries();
+          setSeries(s);
+          setFinished(true);
+        } else {
+          setPausedMsg(`Fim do mapa ${mapIdx + 1} — preparando ${MAP_LABELS[maps[mapIdx + 1].map]}…`);
+          window.setTimeout(() => {
+            setMapIdx((m) => m + 1);
+            setTimeoutsLeft(TIMEOUTS_PER_MAP);
+            setBoostRounds(0);
+            setPausedMsg('');
+          }, 1500);
+        }
+      }
+    }, TICK_MS);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished, mapIdx, boostRounds, pausedMsg]);
+
+  const skipAll = () => {
+    let idx = mapIdx;
+    while (true) {
+      const sim = getSim(idx);
+      while (!sim.done()) sim.step();
+      resultsRef.current[idx] = sim.result();
+      if (seriesOver()) break;
+      idx++;
     }
-    return [a, b];
-  }, [roundIdx, map, totalRounds]);
+    setMapIdx(idx);
+    const s = buildSeries();
+    setSeries(s);
+    setFinished(true);
+  };
+
+  const callTimeout = () => {
+    if (timeoutsLeft <= 0 || finished || pausedMsg) return;
+    setTimeoutsLeft((t) => t - 1);
+    setBoostRounds(TIMEOUT_ROUNDS);
+    setPausedMsg(`⏸ TIMEOUT TÁTICO — ${teams[userIdx].coach.nick} ajusta o plano!`);
+    window.setTimeout(() => setPausedMsg(''), 1400);
+  };
+
+  const sim = getSim(Math.min(mapIdx, maps.length - 1));
+  const [sa, sb] = finished && series ? [0, 0] : sim.score();
+  const roundLog = sim.roundLog();
+  const buys = sim.buys();
+  void tick;
 
   const mapsWon = useMemo(() => {
-    let a = 0;
-    let b = 0;
-    series.maps.forEach((m, i) => {
-      const done = i < mapIdx || finished;
-      if (!done) return;
-      if (m.winner === 0) a++;
-      else b++;
-    });
-    return [a, b];
-  }, [series, mapIdx, finished]);
+    const w: [number, number] = [0, 0];
+    for (const r of resultsRef.current) w[r.winner]++;
+    return w;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, finished]);
 
   const playerById = useMemo(() => {
     const players = new Map<string, TPlayer>();
@@ -76,10 +145,8 @@ export function MatchScreen({ series, teams, userIdx, phaseLabel, onFinish }: Pr
     return players;
   }, [teams]);
 
-  const visibleKills = useMemo(
-    () => map.killFeed.filter((e) => e.round <= roundIdx).slice(-8).reverse(),
-    [map, roundIdx],
-  );
+  const visibleKills = sim.killFeed().slice(-8).reverse();
+  const currentMap = maps[Math.min(mapIdx, maps.length - 1)].map;
 
   return (
     <div className="fade-in">
@@ -88,22 +155,30 @@ export function MatchScreen({ series, teams, userIdx, phaseLabel, onFinish }: Pr
           {phaseLabel} - MD3
           <span className="spacer" />
           {!finished && (
-            <button className="btn ghost" onClick={() => setFinished(true)}>
-              Pular para o resultado
-            </button>
+            <>
+              <button className="timeout-btn" onClick={callTimeout} disabled={timeoutsLeft <= 0 || !!pausedMsg}>
+                ⏸ Timeout ({timeoutsLeft})
+              </button>
+              <button className="btn ghost" onClick={skipAll}>
+                Pular para o resultado
+              </button>
+            </>
           )}
         </div>
 
         <div className="live-stage">
-          <MapThumb map={map.map} className="live-map-art" />
+          <MapThumb map={currentMap} className="live-map-art" />
           <div className="live-score">
             <div className="team">
               <TeamBadge tag={teams[0].tag} colors={teams[0].colors} size={48} logoUrl={teams[0].logoUrl} />
               <span className="tn">{teams[0].name}</span>
-              <span className="muted small">mapas: {finished ? series.mapScore[0] : mapsWon[0]}</span>
+              <span className="muted small">
+                mapas: {mapsWon[0]}
+                {!finished && ` · ${BUY_LABEL[buys[0]]}`}
+              </span>
             </div>
             <div className="mid">
-              {finished ? (
+              {finished && series ? (
                 <>
                   <div className="digits">
                     <span className={series.winner === 0 ? 'winning' : ''}>{series.mapScore[0]}</span>
@@ -120,8 +195,8 @@ export function MatchScreen({ series, teams, userIdx, phaseLabel, onFinish }: Pr
                     <span className={sb > sa ? 'winning' : ''}>{sb}</span>
                   </div>
                   <div className="mapname">
-                    Mapa {mapIdx + 1} - {MAP_LABELS[map.map]}
-                    {map.ot && roundIdx >= 24 ? ' - OT' : ''}
+                    Mapa {mapIdx + 1} - {MAP_LABELS[currentMap]}
+                    {boostRounds > 0 ? ' · 📢 pós-timeout' : ''}
                   </div>
                 </>
               )}
@@ -129,37 +204,44 @@ export function MatchScreen({ series, teams, userIdx, phaseLabel, onFinish }: Pr
             <div className="team">
               <TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={48} logoUrl={teams[1].logoUrl} />
               <span className="tn">{teams[1].name}</span>
-              <span className="muted small">mapas: {finished ? series.mapScore[1] : mapsWon[1]}</span>
+              <span className="muted small">
+                mapas: {mapsWon[1]}
+                {!finished && ` · ${BUY_LABEL[buys[1]]}`}
+              </span>
             </div>
           </div>
+          {pausedMsg && <div className="timeout-flash">{pausedMsg}</div>}
           {!finished && <KillFeed events={visibleKills} teams={teams} playerById={playerById} />}
         </div>
 
         {!finished && (
           <div className="round-dots">
-            {map.roundLog.map((w, i) => (
-              <span key={i} className={`rdot${i < roundIdx ? (w === 0 ? ' a' : ' b') : ''}`} />
+            {roundLog.map((w, i) => (
+              <span key={i} className={`rdot ${w === 0 ? 'a' : 'b'}`} />
             ))}
           </div>
         )}
 
         <div className="map-pills">
-          {series.maps.map((m, i) => {
-            const done = i < mapIdx || finished;
+          {maps.map((m, i) => {
+            const r = resultsRef.current[i];
             const current = i === mapIdx && !finished;
+            const willPlay = i <= mapIdx || r;
             return (
-              <span key={i} className={`map-pill${!done && !current ? ' pending' : ''}`}>
+              <span key={i} className={`map-pill${!r && !current ? ' pending' : ''}`}>
                 {MAP_LABELS[m.map]}
                 {m.pickedBy >= 0 ? ` (pick ${teams[m.pickedBy as 0 | 1].tag})` : ' (decider)'}{' '}
-                {done ? (
+                {r ? (
                   <b>
-                    <span className={m.winner === 0 ? 'mw' : 'ml'}>{m.score[0]}</span>:
-                    <span className={m.winner === 1 ? 'mw' : 'ml'}>{m.score[1]}</span>
+                    <span className={r.winner === 0 ? 'mw' : 'ml'}>{r.score[0]}</span>:
+                    <span className={r.winner === 1 ? 'mw' : 'ml'}>{r.score[1]}</span>
                   </b>
                 ) : current ? (
                   <b>
                     {sa}:{sb}
                   </b>
+                ) : willPlay ? (
+                  '-'
                 ) : (
                   '-'
                 )}
@@ -169,13 +251,13 @@ export function MatchScreen({ series, teams, userIdx, phaseLabel, onFinish }: Pr
         </div>
       </div>
 
-      {finished && <InsightPanel series={series} teams={teams} userIdx={userIdx} />}
+      {finished && series && <InsightPanel series={series} teams={teams} userIdx={userIdx} />}
 
-      {finished && (
+      {finished && series && (
         <>
           <Scoreboard series={series} teams={teams} />
           <div className="center" style={{ margin: '18px 0' }}>
-            <button className="btn big" onClick={onFinish}>
+            <button className="btn big" onClick={() => onFinish(series)}>
               Continuar
             </button>
           </div>

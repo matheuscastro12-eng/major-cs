@@ -204,6 +204,18 @@ export function userTeam(t: Tournament): TTeam {
   return getTeam(t, 'user');
 }
 
+// Torneio 100% IA (lab de balanceamento): 16 times sorteados, roda até o fim
+export function simulateAiTournament(dataset: TeamSeason[], rng: Rng): Tournament {
+  const sample = shuffle(rng, dataset).slice(0, 16);
+  const user = teamSeasonToTTeam(sample[0]);
+  const t = createTournament(sample.slice(1), user, rng, 'LAB');
+  let guard = 0;
+  while (t.phase !== 'done' && guard++ < 20) {
+    resolveRound(t, rng);
+  }
+  return t;
+}
+
 // classificação para exibição da fase suíça
 export function standings(t: Tournament): TTeam[] {
   return [...t.teams].sort((a, b) => {

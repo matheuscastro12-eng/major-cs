@@ -68,24 +68,60 @@ function formBoost(team: TTeam): number {
   return (avg - 1) * 20;
 }
 
-function weaponFor(p: TPlayer, rng: Rng, isPistol: boolean, side: 'ct' | 't', onEco: boolean): string {
-  if (isPistol) {
+// ---------------- economia ----------------
+// Dinheiro médio por jogador, decidido pelo IGL/coach a cada round:
+// full buy (>=4500), force (>=2600) ou eco. Eco joga de MAC-10/pistola
+// e sofre penalidade de força — mas o upset existe.
+
+export type BuyTier = 'pistol' | 'eco' | 'force' | 'full';
+
+const BUY_PENALTY: Record<BuyTier, number> = {
+  pistol: 0,
+  full: 0,
+  force: -2.6,
+  eco: -7,
+};
+
+interface EcoState {
+  money: number;
+  lossStreak: number;
+}
+
+function decideBuy(eco: EcoState, isPistol: boolean, aggressiveCoach: boolean): BuyTier {
+  if (isPistol) return 'pistol';
+  const forceThreshold = aggressiveCoach ? 2300 : 2600; // coach agressivo força mais
+  if (eco.money >= 4500) return 'full';
+  if (eco.money >= forceThreshold) return 'force';
+  return 'eco';
+}
+
+function buyCost(tier: BuyTier): number {
+  if (tier === 'full') return 4100;
+  if (tier === 'force') return 2300;
+  if (tier === 'eco') return 500;
+  return 700;
+}
+
+function weaponFor(p: TPlayer, rng: Rng, tier: BuyTier, side: 'ct' | 't'): string {
+  if (tier === 'pistol') {
     if (rng() < 0.12) return 'deagle';
     return side === 'ct' ? 'usp' : 'glock';
   }
-  // eco/force buy: SMG e pistolas dominam
-  if (onEco) {
+  if (tier === 'eco') {
     const r = rng();
-    if (r < 0.42) return 'mac10';
-    if (r < 0.62) return 'deagle';
-    if (r < 0.78) return side === 'ct' ? 'usp' : 'glock';
-    // alguém sobreviveu com rifle do round anterior
+    if (r < 0.45) return 'mac10';
+    if (r < 0.65) return 'deagle';
+    if (r < 0.85) return side === 'ct' ? 'usp' : 'glock';
+    // rifle salvo do round anterior
   }
-  if (p.role === 'AWP' && rng() < 0.62) return 'awp';
+  if (tier === 'force') {
+    const r = rng();
+    if (r < 0.3) return 'mac10';
+    if (r < 0.45) return 'deagle';
+  }
+  if (p.role === 'AWP' && tier === 'full' && rng() < 0.62) return 'awp';
   if (rng() < 0.015) return 'knife';
-  if (rng() < 0.07) return 'deagle';
-  if (rng() < 0.05) return 'mac10';
-  // crossover de rifle (CT pega AK no chão e vice-versa) em ~12% dos casos
+  if (tier === 'full' && rng() < 0.06) return 'deagle';
   const main = side === 't' ? 'ak47' : 'm4';
   const off = side === 't' ? 'm4' : 'ak47';
   return rng() < 0.88 ? main : off;
@@ -96,7 +132,7 @@ function effStrength(
   flags: CompFlags,
   map: MapId,
   side: 'ct' | 't',
-  wonLast: boolean,
+  tier: BuyTier,
   lostLast: boolean,
   isPistol: boolean,
   secondHalf: boolean,
@@ -104,14 +140,16 @@ function effStrength(
 ): number {
   let s = team.strength + (team.mapPrefs[map] ?? 0) * 1.35;
   if (side === 'ct') s += 1.1;
-  if (wonLast && !isPistol) s += 2.1;
+  s += BUY_PENALTY[tier];
 
+  // composição mal montada sofre DENTRO do jogo, não só na força base
   if (!flags.hasIgl) {
     s -= 1.5;
-    if (secondHalf) s -= 1.8;
+    if (secondHalf) s -= 1.8; // o adversário leu o caos: sem mid-round calls não há ajuste
   }
-  if (!flags.hasAwp && side === 'ct') s -= 1.8;
+  if (!flags.hasAwp && side === 'ct' && tier === 'full') s -= 1.8; // CT sem AWP não segura abertura
 
+  // estilo do coach
   const c = team.coach;
   const cPow = Math.max(0, (c.rating - 75) / 12);
   if (c.style === 'tactical' && pickedOwnMap) s += 1.2 + cPow;
@@ -122,7 +160,19 @@ function effStrength(
   return s;
 }
 
-export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 0 | 1 | -1): MapResult {
+// ---------------- simulação incremental ----------------
+
+export interface MapSim {
+  step: (boostTeam?: 0 | 1 | null) => boolean; // joga 1 round; true quando o mapa terminou
+  done: () => boolean;
+  score: () => [number, number];
+  roundLog: () => (0 | 1)[];
+  killFeed: () => KillEvent[];
+  buys: () => [BuyTier, BuyTier]; // compra do round atual (antes do step)
+  result: () => MapResult; // disponível quando done()
+}
+
+export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 0 | 1 | -1): MapSim {
   const stats: Record<string, PlayerMapStats> = {};
   for (const p of [...a.players, ...b.players]) stats[p.id] = emptyStats();
 
@@ -133,16 +183,36 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
   let lastWinner: 0 | 1 | -1 = -1;
   const roundLog: (0 | 1)[] = [];
   const killFeed: KillEvent[] = [];
+  const buyLog: [BuyTier, BuyTier][] = [];
   const aStartsCt = rng() < 0.5;
   let halfScore = '';
+  let finished = false;
 
   const teamPlayers: [TPlayer[], TPlayer[]] = [a.players, b.players];
-  const flagsA = compFlags(a);
-  const flagsB = compFlags(b);
-  const lossStreak: [number, number] = [0, 0];
+  const teams: [TTeam, TTeam] = [a, b];
+  const flags: [CompFlags, CompFlags] = [compFlags(a), compFlags(b)];
+  const eco: [EcoState, EcoState] = [
+    { money: 800, lossStreak: 0 },
+    { money: 800, lossStreak: 0 },
+  ];
+  const formA = formBoost(a);
+  const formB = formBoost(b);
 
   let round = 0;
-  while (true) {
+  let nextBuys: [BuyTier, BuyTier] = ['pistol', 'pistol'];
+
+  const computeBuys = (): [BuyTier, BuyTier] => {
+    const isPistol = round === 0 || round === 12;
+    return [
+      decideBuy(eco[0], isPistol, teams[0].coach.style === 'aggressive'),
+      decideBuy(eco[1], isPistol, teams[1].coach.style === 'aggressive'),
+    ];
+  };
+  nextBuys = computeBuys();
+
+  const step = (boostTeam?: 0 | 1 | null): boolean => {
+    if (finished) return true;
+
     let aSide: 'ct' | 't';
     if (round < 12) aSide = aStartsCt ? 'ct' : 't';
     else if (round < 24) aSide = aStartsCt ? 't' : 'ct';
@@ -154,8 +224,21 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
     const isPistol = round === 0 || round === 12;
     const secondHalf = round >= 12;
 
-    const effA = effStrength(a, flagsA, map, aSide, lastWinner === 0, lastWinner === 1, isPistol, secondHalf, pickedBy === 0) + formBoost(a);
-    const effB = effStrength(b, flagsB, map, bSide, lastWinner === 1, lastWinner === 0, isPistol, secondHalf, pickedBy === 1) + formBoost(b);
+    // economia: reseta nos pistols
+    if (isPistol) {
+      eco[0] = { money: 800, lossStreak: 0 };
+      eco[1] = { money: 800, lossStreak: 0 };
+    }
+    const buys = computeBuys();
+    buyLog.push(buys);
+    eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]));
+    eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]));
+
+    let effA = effStrength(a, flags[0], map, aSide, buys[0], lastWinner === 1, isPistol, secondHalf, pickedBy === 0) + formA;
+    let effB = effStrength(b, flags[1], map, bSide, buys[1], lastWinner === 0, isPistol, secondHalf, pickedBy === 1) + formB;
+    if (boostTeam === 0) effA += 3.5; // timeout tático
+    if (boostTeam === 1) effB += 3.5;
+
     const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
     const pA = sigmoid(diff / 15);
     const winner: 0 | 1 = rng() < pA ? 0 : 1;
@@ -217,7 +300,7 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
       const killers = tally[killerTeam].killers;
       const victims = tally[victimTeam].died.map((died, i) => (died ? i : -1)).filter((i) => i >= 0);
       const killerSide = killerTeam === 0 ? aSide : bSide;
-      const onEco = !isPistol && lossStreak[killerTeam] >= 2;
+      const tier = buys[killerTeam];
       return killers.slice(0, victims.length).map((killerIdx, i) => {
         const killer = teamPlayers[killerTeam][killerIdx];
         return {
@@ -226,7 +309,7 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
           victimId: teamPlayers[victimTeam][victims[i]].id,
           killerTeam,
           victimTeam,
-          weapon: weaponFor(killer, rng, isPistol, killerSide, onEco),
+          weapon: weaponFor(killer, rng, tier, killerSide),
           headshot: rng() < (killer.role === 'AWP' ? 0.18 : 0.43),
           opening: false,
           trade: i > 0 && rng() < 0.28,
@@ -280,21 +363,23 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
       }
     }
 
+    // pagamento do round
+    const loserIdx2: 0 | 1 = winner === 0 ? 1 : 0;
+    eco[winner].money = Math.min(16000, eco[winner].money + 3250);
+    eco[winner].lossStreak = 0;
+    eco[loserIdx2].lossStreak++;
+    eco[loserIdx2].money = Math.min(16000, eco[loserIdx2].money + 1400 + Math.min(4, eco[loserIdx2].lossStreak) * 500);
+
     if (winner === 0) scoreA++;
     else scoreB++;
     roundLog.push(winner);
     lastWinner = winner;
-    lossStreak[winner] = 0;
-    lossStreak[winner === 0 ? 1 : 0]++;
-    if (isPistol) {
-      lossStreak[0] = winner === 0 ? 0 : 1;
-      lossStreak[1] = winner === 1 ? 0 : 1;
-    }
     round++;
 
     if (round === 12) halfScore = `${scoreA}:${scoreB}`;
-    if (scoreA >= target || scoreB >= target) break;
-    if (scoreA === 12 && scoreB === 12 && target === 13) {
+    if (scoreA >= target || scoreB >= target) {
+      finished = true;
+    } else if (scoreA === 12 && scoreB === 12 && target === 13) {
       target = 16;
       ot = true;
     } else if (ot && round >= 42 && scoreA === scoreB) {
@@ -302,20 +387,39 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
     } else if (ot && scoreA === target - 1 && scoreB === target - 1) {
       target += 3;
     }
-    if (round > 60) break;
-  }
+    if (round > 60) finished = true;
+
+    if (!finished) nextBuys = computeBuys();
+    return finished;
+  };
 
   return {
-    map,
-    pickedBy,
-    score: [scoreA, scoreB],
-    halves: halfScore ? `1o half ${halfScore}` : '',
-    ot,
-    winner: scoreA > scoreB ? 0 : 1,
-    roundLog,
-    killFeed,
-    stats,
+    step,
+    done: () => finished,
+    score: () => [scoreA, scoreB],
+    roundLog: () => roundLog,
+    killFeed: () => killFeed,
+    buys: () => nextBuys,
+    result: (): MapResult => ({
+      map,
+      pickedBy,
+      score: [scoreA, scoreB],
+      halves: halfScore ? `1o half ${halfScore}` : '',
+      ot,
+      winner: scoreA > scoreB ? 0 : 1,
+      roundLog,
+      killFeed,
+      stats,
+    }),
   };
+}
+
+export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 0 | 1 | -1): MapResult {
+  const sim = createMapSim(rng, a, b, map, pickedBy);
+  while (!sim.step()) {
+    /* roda até o fim */
+  }
+  return sim.result();
 }
 
 export function simulateSeries(rng: Rng, a: TTeam, b: TTeam, maps: { map: MapId; pickedBy: 0 | 1 | -1 }[]): SeriesResult {
