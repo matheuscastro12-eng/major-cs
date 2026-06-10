@@ -78,10 +78,28 @@ export function simulateAiSeries(t: Tournament, pairing: Pairing, rng: Rng): Ser
   return simulateSeries(rng, a, b, maps);
 }
 
+// fase do jogador evolui conforme o rendimento na série (rating vs neutro)
+function updateForm(t: Tournament, pairing: Pairing): void {
+  const res = pairing.result!;
+  const teams = [getTeam(t, pairing.a), getTeam(t, pairing.b)];
+  teams.forEach((team, idx) => {
+    const won = res.winner === idx;
+    for (const p of team.players) {
+      const lines = res.maps.map((m) => m.stats[p.id]?.both).filter(Boolean);
+      if (lines.length === 0) continue;
+      const rating = computeDisplay(mergeLines(lines as Parameters<typeof mergeLines>[0])).rating;
+      const target = 1 + (rating - 1) * 0.12 + (won ? 0.012 : -0.012);
+      const next = (p.form ?? 1) * 0.55 + target * 0.45;
+      p.form = Math.max(0.9, Math.min(1.1, next));
+    }
+  });
+}
+
 function applySeries(t: Tournament, pairing: Pairing): void {
   const res = pairing.result!;
   const a = getTeam(t, pairing.a);
   const b = getTeam(t, pairing.b);
+  updateForm(t, pairing);
   const winner = res.winner === 0 ? a : b;
   const loser = res.winner === 0 ? b : a;
   winner.wins++;

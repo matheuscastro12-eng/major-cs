@@ -202,6 +202,27 @@ function VetoAnalysis({
         })}
 
         <div className="muted small" style={{ margin: '14px 0 4px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
+          Forma dos seus jogadores
+        </div>
+        <div className="synergy-list">
+          {me.players.map((p) => {
+            const f = p.form ?? 1;
+            const icon = f >= 1.04 ? '🔥' : f <= 0.96 ? '🥶' : '➖';
+            const label = f >= 1.04 ? 'em chamas' : f <= 0.96 ? 'fase ruim' : 'estável';
+            return (
+              <div key={p.id} className="item">
+                <span className="muted">
+                  {icon} {p.nick}
+                </span>
+                <span className={f >= 1.04 ? 'pos' : f <= 0.96 ? 'neg' : 'neutral'}>
+                  {label} ({((f - 1) * 100).toFixed(0) === '-0' ? '0' : ((f - 1) * 100).toFixed(0)}%)
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="muted small" style={{ margin: '14px 0 4px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
           Sua composição ({synergy.total >= 0 ? '+' : ''}
           {synergy.total.toFixed(1)})
         </div>

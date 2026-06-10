@@ -62,15 +62,29 @@ function compFlags(team: TTeam): CompFlags {
   };
 }
 
-function weaponFor(p: TPlayer, rng: Rng, isPistol: boolean, side: 'ct' | 't'): string {
+// fase dos jogadores afeta a força do time na série (±~2 pontos no extremo)
+function formBoost(team: TTeam): number {
+  const avg = team.players.reduce((s, p) => s + (p.form ?? 1), 0) / team.players.length;
+  return (avg - 1) * 20;
+}
+
+function weaponFor(p: TPlayer, rng: Rng, isPistol: boolean, side: 'ct' | 't', onEco: boolean): string {
   if (isPistol) {
     if (rng() < 0.12) return 'deagle';
     return side === 'ct' ? 'usp' : 'glock';
   }
+  // eco/force buy: SMG e pistolas dominam
+  if (onEco) {
+    const r = rng();
+    if (r < 0.42) return 'mac10';
+    if (r < 0.62) return 'deagle';
+    if (r < 0.78) return side === 'ct' ? 'usp' : 'glock';
+    // alguém sobreviveu com rifle do round anterior
+  }
   if (p.role === 'AWP' && rng() < 0.62) return 'awp';
-  if (rng() < 0.02) return 'knife';
-  if (rng() < 0.08) return 'deagle';
-  if (p.role === 'IGL' && rng() < 0.14) return 'galil';
+  if (rng() < 0.015) return 'knife';
+  if (rng() < 0.07) return 'deagle';
+  if (rng() < 0.05) return 'mac10';
   // crossover de rifle (CT pega AK no chão e vice-versa) em ~12% dos casos
   const main = side === 't' ? 'ak47' : 'm4';
   const off = side === 't' ? 'm4' : 'ak47';
@@ -125,6 +139,7 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
   const teamPlayers: [TPlayer[], TPlayer[]] = [a.players, b.players];
   const flagsA = compFlags(a);
   const flagsB = compFlags(b);
+  const lossStreak: [number, number] = [0, 0];
 
   let round = 0;
   while (true) {
@@ -139,8 +154,8 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
     const isPistol = round === 0 || round === 12;
     const secondHalf = round >= 12;
 
-    const effA = effStrength(a, flagsA, map, aSide, lastWinner === 0, lastWinner === 1, isPistol, secondHalf, pickedBy === 0);
-    const effB = effStrength(b, flagsB, map, bSide, lastWinner === 1, lastWinner === 0, isPistol, secondHalf, pickedBy === 1);
+    const effA = effStrength(a, flagsA, map, aSide, lastWinner === 0, lastWinner === 1, isPistol, secondHalf, pickedBy === 0) + formBoost(a);
+    const effB = effStrength(b, flagsB, map, bSide, lastWinner === 1, lastWinner === 0, isPistol, secondHalf, pickedBy === 1) + formBoost(b);
     const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
     const pA = sigmoid(diff / 15);
     const winner: 0 | 1 = rng() < pA ? 0 : 1;
@@ -163,7 +178,7 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
 
     const assign = (teamIdx: 0 | 1, nKills: number, firstIsOpen: boolean) => {
       const ps = teamPlayers[teamIdx];
-      const weights = ps.map((p) => Math.pow(p.aim / 70, 2.6) * (KILL_ROLE_MULT[p.role] ?? 1));
+      const weights = ps.map((p) => Math.pow(p.aim / 70, 2.6) * (KILL_ROLE_MULT[p.role] ?? 1) * Math.pow(p.form ?? 1, 2.2));
       for (let k = 0; k < nKills; k++) {
         const i = weightedIndex(rng, weights);
         tally[teamIdx].kills[i]++;
@@ -202,6 +217,7 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
       const killers = tally[killerTeam].killers;
       const victims = tally[victimTeam].died.map((died, i) => (died ? i : -1)).filter((i) => i >= 0);
       const killerSide = killerTeam === 0 ? aSide : bSide;
+      const onEco = !isPistol && lossStreak[killerTeam] >= 2;
       return killers.slice(0, victims.length).map((killerIdx, i) => {
         const killer = teamPlayers[killerTeam][killerIdx];
         return {
@@ -210,7 +226,7 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
           victimId: teamPlayers[victimTeam][victims[i]].id,
           killerTeam,
           victimTeam,
-          weapon: weaponFor(killer, rng, isPistol, killerSide),
+          weapon: weaponFor(killer, rng, isPistol, killerSide, onEco),
           headshot: rng() < (killer.role === 'AWP' ? 0.18 : 0.43),
           opening: false,
           trade: i > 0 && rng() < 0.28,
@@ -268,6 +284,12 @@ export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 
     else scoreB++;
     roundLog.push(winner);
     lastWinner = winner;
+    lossStreak[winner] = 0;
+    lossStreak[winner === 0 ? 1 : 0]++;
+    if (isPistol) {
+      lossStreak[0] = winner === 0 ? 0 : 1;
+      lossStreak[1] = winner === 1 ? 0 : 1;
+    }
     round++;
 
     if (round === 12) halfScore = `${scoreA}:${scoreB}`;

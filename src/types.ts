@@ -83,6 +83,7 @@ export interface TPlayer {
   igl: number;
   skill: number; // derived overall
   ovr: number; // overall exibido (50-99)
+  form?: number; // fase no torneio (0.9 frio … 1.1 em chamas), atualizada a cada série
   fromTeam?: string; // era label for drafted players
   originTeam?: string;
   originTeamId?: string;

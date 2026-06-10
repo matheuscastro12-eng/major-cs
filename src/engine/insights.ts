@@ -82,6 +82,16 @@ export function analyzeSeries(series: SeriesResult, teams: [TTeam, TTeam], povId
     bullets.push({ icon: '🔥', text: `${best.p.nick} superou o esperado: ${best.d.rating.toFixed(2)} de rating com OVR ${best.p.ovr}.`, tone: 'good' });
   }
 
+  // 4.5) forma dos jogadores
+  const cold = me.players.filter((p) => (p.form ?? 1) <= 0.96);
+  const hot = me.players.filter((p) => (p.form ?? 1) >= 1.05);
+  if (cold.length > 0) {
+    bullets.push({ icon: '🥶', text: `${cold.map((p) => p.nick).join(', ')} chegou em má fase à série — a forma do torneio pesa na pontaria.`, tone: 'bad' });
+  }
+  if (hot.length > 0 && won) {
+    bullets.push({ icon: '🔥', text: `${hot.map((p) => p.nick).join(', ')} está em chamas no campeonato e carregou o time.`, tone: 'good' });
+  }
+
   // 5) rounds decisivos: clutches e aberturas
   const sum = (team: TTeam, key: 'clutchWins' | 'openKills') =>
     team.players.reduce((s, p) => {

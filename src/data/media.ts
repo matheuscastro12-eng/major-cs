@@ -87,7 +87,64 @@ const LOGO_FILES: Record<string, string> = {
   case2023: 'Case_Esports_allmode.png',
 };
 
+// Logos locais (enviadas pelo usuário) — têm prioridade sobre a Liquipedia
+const LOCAL_LOGOS: Record<string, string> = {
+  '00nation2022': '00nation.png',
+  '9z2022': '9z.png',
+  astralis2018: 'astralis.png',
+  big2020: 'big.jpg',
+  c92018: 'cloud9.png',
+  col2005: 'complexity.png',
+  complexity2024: 'complexity.png',
+  esc2012: 'esc.png',
+  eg2019: 'eg.png',
+  falcons2025: 'falcons.png',
+  fnatic2009: 'fnatic.png',
+  fnatic2015: 'fnatic.png',
+  furia2022: 'furia.png',
+  furia2025: 'furia.png',
+  g22017: 'g2.png',
+  g22023: 'g2.png',
+  gambit2017: 'gambit.jpg',
+  gambit2021: 'gambit.jpg',
+  heroic2023: 'heroic.png',
+  immortals2017: 'immortals.jpg',
+  legacy2026: 'legacy.png',
+  mibr2019: 'mibr.png',
+  mibr2006: 'mibr2006.png',
+  monte2023: 'monte.png',
+  mouz2019: 'mousesports.png',
+  mouz2024: 'mouz.png',
+  mtw2008: 'mtw.png',
+  navi2010: 'navi.png',
+  navi2021: 'navi.png',
+  navi2024: 'navi.png',
+  oddik2024: 'oddik.png',
+  pain2021: 'pain.png',
+  pain2024: 'pain.png',
+  pentagram2007: 'pentagram.jpg',
+  redcanids2022: 'redcanids.png',
+  renegades2019: 'renegades.png',
+  sharks2019: 'sharks.png',
+  sk2003: 'skgaming.jpg',
+  sk2016: 'skgaming.jpg',
+  spirit2025: 'spirit.png',
+  sprout2021: 'sprout.png',
+  '3d2004': 'team3d.png',
+  mongolz2025: 'mongolz.png',
+  tsm2015: 'tsm.png',
+  tyloo2018: 'tyloo.png',
+  tyloo2025: 'tyloo.png',
+  verygames2012: 'verygames.png',
+  vp2014: 'virtuspro.png',
+  vitality2019: 'vitality.png',
+  vitality2025: 'vitality.png',
+  w7m2024: 'w7m.png',
+};
+
 export function logoForTeam(team: Pick<TeamSeason, 'id' | 'team'>): string {
+  const local = LOCAL_LOGOS[team.id];
+  if (local) return `/logos/${local}`;
   const byId = LOGO_FILES[team.id];
   if (byId) return commonsFile(byId);
   return commonsFile(`${team.team.replace(/[^A-Za-z0-9]+/g, '_')}_allmode.png`);

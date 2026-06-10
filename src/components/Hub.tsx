@@ -153,15 +153,20 @@ export function Hub({ t, onPlay, onSimRound, onStats }: Props) {
         </div>
         <div className="panel-body">
           <div className="roster-slots">
-            {user.players.map((p) => (
-              <div key={p.id} className="slot filled">
-                <div className="nick">
-                  <Flag cc={p.country} /> {p.nick} <span className="ovr-inline">{p.ovr}</span>
+            {user.players.map((p) => {
+              const f = p.form ?? 1;
+              const formIcon = f >= 1.04 ? ' 🔥' : f <= 0.96 ? ' 🥶' : '';
+              return (
+                <div key={p.id} className="slot filled">
+                  <div className="nick">
+                    <Flag cc={p.country} /> {p.nick} <span className="ovr-inline">{p.ovr}</span>
+                    {formIcon}
+                  </div>
+                  <span className={`role-pill ${p.role}`}>{p.role}</span>
+                  <div className="from">{p.fromTeam}</div>
                 </div>
-                <span className={`role-pill ${p.role}`}>{p.role}</span>
-                <div className="from">{p.fromTeam}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12, alignItems: 'start' }}>
             <div className="coach-card">
