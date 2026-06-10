@@ -42,17 +42,17 @@ export default async function handler(
             COUNT(*) FILTER (WHERE type = 'donate_click') AS donate_clicks,
             COUNT(*) FILTER (WHERE type = 'share_card') AS share_cards
           FROM events`,
-      sql`SELECT date_trunc('day', created_at)::date AS day,
+      sql`SELECT date_trunc('day', created_at AT TIME ZONE 'America/Sao_Paulo')::date AS day,
                  COUNT(*) AS visits,
                  COUNT(DISTINCT sid) AS visitors
           FROM events WHERE type = 'visit' AND created_at > now() - interval '14 days'
           GROUP BY 1 ORDER BY 1 DESC`,
-      sql`SELECT COUNT(*) FILTER (WHERE (data->>'champion')::boolean) AS titles,
+      sql`SELECT COUNT(*) FILTER (WHERE COALESCE((data->>'champion')::boolean, false)) AS titles,
                  COUNT(*) AS total
           FROM events WHERE type = 'game_end'`,
       sql`SELECT COALESCE(data->>'difficulty', 'normal') AS difficulty,
                  COUNT(*) AS games,
-                 COUNT(*) FILTER (WHERE (data->>'champion')::boolean) AS titles
+                 COUNT(*) FILTER (WHERE COALESCE((data->>'champion')::boolean, false)) AS titles
           FROM events WHERE type = 'game_end'
           GROUP BY 1 ORDER BY 2 DESC`,
       sql`SELECT COALESCE(data->>'pool', 'world') AS pool, COUNT(*) AS games

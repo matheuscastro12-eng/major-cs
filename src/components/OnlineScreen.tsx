@@ -42,24 +42,20 @@ export function OnlineScreen({ onBack }: Props) {
   };
 
   // polling do estado do lobby
-  const hydratedRef = useRef(false);
   const refresh = useCallback(async () => {
     if (!code) return;
     const s = await fetchLobby(code);
-    if (s) {
-      setState(s);
-      const me = s.players.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
-      if (me && me.done && !myDone) setMyDone(true);
-      // reconexão (F5 no meio do draft): restaura os picks salvos no servidor
-      if (me && !hydratedRef.current) {
-        hydratedRef.current = true;
-        const serverPicks = Array.isArray(me.picks) ? me.picks : [];
-        if (serverPicks.length > 0) {
-          setMyPicks(serverPicks);
-          if (me.coach_pick) setCoachPick(me.coach_pick);
-        }
-      }
-    }
+    if (!s) return;
+    setState(s);
+    const me = s.players.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
+    if (!me) return;
+    if (me.done && !myDone) setMyDone(true);
+    // catch-up: adota os picks do servidor apenas quando ele tem MAIS picks que
+    // o local (reconexão após F5), nunca regredindo picks otimistas ainda não
+    // confirmados. Funciona como restauração e como auto-correção de divergência.
+    const serverPicks = Array.isArray(me.picks) ? me.picks : [];
+    setMyPicks((local) => (serverPicks.length > local.length ? serverPicks : local));
+    if (me.coach_pick) setCoachPick((c) => c || me.coach_pick);
   }, [code, nick, myDone]);
 
   useEffect(() => {

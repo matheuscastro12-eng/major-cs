@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { coreIdentity, REGION_LABELS, type CoreId, type RegionKey } from '../data/regions';
 import type { TPlayer } from '../types';
 
@@ -201,6 +201,7 @@ export function MatchBanner({
 
 function LogoChip({ tag, colors, logoUrl }: { tag: string; colors: [string, string]; logoUrl?: string }) {
   const [err, setErr] = useState(false);
+  useEffect(() => setErr(false), [logoUrl]); // tenta de novo se a URL mudar
   if (logoUrl && !err) {
     return (
       <span className="mb-logo">

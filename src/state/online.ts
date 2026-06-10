@@ -75,12 +75,13 @@ export function teamFromPicks(
   coachPick: string,
   setup: OnlineDraftSetup,
 ): TTeam | null {
-  if (picks.length < 5) return null;
   const chosen: { player: Player; from: TeamSeason }[] = [];
   for (let i = 0; i < 5; i++) {
     const from = setup.sources[i];
-    const player = from?.players.find((p) => p.id === picks[i]);
-    if (!from || !player) return null;
+    if (!from) return null;
+    // pick válido, ou fallback determinístico (1º jogador do elenco) para
+    // jogadores que abandonaram o draft: nunca trava os resultados da sala
+    const player = (picks[i] && from.players.find((p) => p.id === picks[i])) || from.players[0];
     chosen.push({ player, from });
   }
   const coachTeam = setup.coachOptions.find((t) => t.id === coachPick) ?? setup.coachOptions[0];

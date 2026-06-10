@@ -82,6 +82,8 @@ export default async function handler(
       const mode = body.mode === 'party' ? 'party' : 'duel';
       const pool = body.pool === 'br' ? 'br' : 'world';
       const seed = Math.floor(Math.random() * 2147483647);
+      // higieniza salas abandonadas (TTL 6h) para não acumular lixo no banco
+      await sql`DELETE FROM lobbies WHERE updated_at < now() - interval '6 hours'`;
       // tenta alguns códigos até achar um livre
       for (let attempt = 0; attempt < 5; attempt++) {
         const newCode = genCode();
@@ -116,11 +118,18 @@ export default async function handler(
         res.status(200).json({ ok: true, code, rejoined: true }); // reconexão
         return;
       }
-      if (players.length >= max) {
+      // INSERT atômico: só insere se ainda houver vaga (fecha a janela de corrida
+      // entre dois JOINs simultâneos). UNIQUE(code,nick) cobre nicks repetidos.
+      const inserted = await sql`
+        INSERT INTO lobby_players (code, nick)
+        SELECT ${code}, ${nick}
+        WHERE (SELECT COUNT(*) FROM lobby_players WHERE code = ${code}) < ${max}
+        ON CONFLICT (code, nick) DO NOTHING
+        RETURNING id`;
+      if (inserted.length === 0) {
         res.status(409).json({ error: 'lobby cheio' });
         return;
       }
-      await sql`INSERT INTO lobby_players (code, nick) VALUES (${code}, ${nick})`;
       res.status(200).json({ ok: true, code });
       return;
     }
@@ -129,6 +138,10 @@ export default async function handler(
       const lobby = await sql`SELECT host, status FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0 || lobby[0].host !== nick) {
         res.status(403).json({ error: 'só o host inicia o draft' });
+        return;
+      }
+      if (lobby[0].status !== 'waiting') {
+        res.status(409).json({ error: 'o draft já começou' });
         return;
       }
       const count = await sql`SELECT COUNT(*) AS n FROM lobby_players WHERE code = ${code}`;
@@ -142,12 +155,28 @@ export default async function handler(
     }
 
     if (action === 'pick') {
-      const picks = JSON.stringify(Array.isArray(body.picks) ? body.picks.slice(0, 5) : []);
+      const lobby = await sql`SELECT status FROM lobbies WHERE code = ${code}`;
+      if (lobby.length === 0) {
+        res.status(404).json({ error: 'lobby não encontrado' });
+        return;
+      }
+      if (lobby[0].status !== 'drafting') {
+        res.status(409).json({ error: 'o draft não está em andamento' });
+        return;
+      }
+      const picks = JSON.stringify(
+        Array.isArray(body.picks) ? body.picks.filter((p) => typeof p === 'string').slice(0, 5) : [],
+      );
       const coachPick = String(body.coachPick ?? '').slice(0, 60);
       const done = body.done === true;
-      await sql`
+      const updated = await sql`
         UPDATE lobby_players SET picks = ${picks}::jsonb, coach_pick = ${coachPick}, done = ${done}
-        WHERE code = ${code} AND nick = ${nick}`;
+        WHERE code = ${code} AND nick = ${nick}
+        RETURNING id`;
+      if (updated.length === 0) {
+        res.status(404).json({ error: 'jogador não está neste lobby' });
+        return;
+      }
       if (done) {
         const pending = await sql`SELECT COUNT(*) AS n FROM lobby_players WHERE code = ${code} AND done = false`;
         if (Number(pending[0].n) === 0) {
