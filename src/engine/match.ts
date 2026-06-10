@@ -162,8 +162,16 @@ function effStrength(
 
 // ---------------- simulação incremental ----------------
 
+// postura tática escolhida ao vivo pelo jogador: muda o perfil de risco do round
+export type Stance = 'aggressive' | 'default' | 'cautious';
+
+export interface StepMods {
+  boostTeam?: 0 | 1 | null; // timeout tático
+  stance?: { team: 0 | 1; mode: Stance };
+}
+
 export interface MapSim {
-  step: (boostTeam?: 0 | 1 | null) => boolean; // joga 1 round; true quando o mapa terminou
+  step: (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }) => boolean; // joga 1 round; true quando o mapa terminou
   done: () => boolean;
   score: () => [number, number];
   roundLog: () => (0 | 1)[];
@@ -210,7 +218,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   };
   nextBuys = computeBuys();
 
-  const step = (boostTeam?: 0 | 1 | null): boolean => {
+  const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }): boolean => {
     if (finished) return true;
 
     let aSide: 'ct' | 't';
@@ -238,6 +246,17 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     let effB = effStrength(b, flags[1], map, bSide, buys[1], lastWinner === 0, isPistol, secondHalf, pickedBy === 1) + formB;
     if (boostTeam === 0) effA += 3.5; // timeout tático
     if (boostTeam === 1) effB += 3.5;
+
+    // postura tática escolhida ao vivo: agressivo aposta no lado T mas se expõe
+    // no CT; cauteloso fecha o CT mas perde ímpeto nas saídas de T
+    if (stance && stance.mode !== 'default') {
+      const sSide = stance.team === 0 ? aSide : bSide;
+      let delta = 0;
+      if (stance.mode === 'aggressive') delta = sSide === 't' ? 2.2 : -1.4;
+      if (stance.mode === 'cautious') delta = sSide === 'ct' ? 1.5 : -1.0;
+      if (stance.team === 0) effA += delta;
+      else effB += delta;
+    }
 
     const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
     const pA = sigmoid(diff / 15);

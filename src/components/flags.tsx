@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { coreIdentity, REGION_LABELS, type CoreId, type RegionKey } from '../data/regions';
 import type { TPlayer } from '../types';
 
@@ -104,14 +105,16 @@ export function RegionFlagSvg({ region }: { region: RegionKey }) {
   }
 }
 
-// bandeira do "core" (país via flagcdn, região via SVG) - usada como fundo
+// bandeira do "core" (país via flagcdn em alta resolução, região via SVG) - usada como fundo
 export function CoreFlag({ players, className = '' }: { players: { country: string }[]; className?: string }) {
   const core = coreIdentity(players.map((p) => p.country));
   if (core.kind === 'country') {
     return (
       <img
         className={`region-svg ${className}`}
-        src={`https://flagcdn.com/h120/${core.cc}.png`}
+        src={`https://flagcdn.com/w640/${core.cc}.png`}
+        srcSet={`https://flagcdn.com/w640/${core.cc}.png 640w, https://flagcdn.com/w1280/${core.cc}.png 1280w`}
+        sizes="640px"
         alt={core.cc}
         loading="lazy"
       />
@@ -119,7 +122,7 @@ export function CoreFlag({ players, className = '' }: { players: { country: stri
   }
   if (core.kind === 'region') {
     return (
-      <span className={className}>
+      <span className={className} style={{ display: 'block', width: '100%', height: '100%' }}>
         <RegionFlagSvg region={core.region} />
       </span>
     );
@@ -197,10 +200,11 @@ export function MatchBanner({
 }
 
 function LogoChip({ tag, colors, logoUrl }: { tag: string; colors: [string, string]; logoUrl?: string }) {
-  if (logoUrl) {
+  const [err, setErr] = useState(false);
+  if (logoUrl && !err) {
     return (
       <span className="mb-logo">
-        <img src={logoUrl} alt={tag} />
+        <img src={logoUrl} alt={tag} onError={() => setErr(true)} />
       </span>
     );
   }

@@ -11,11 +11,23 @@ interface Props {
   playerCount: number;
   savedCampaign?: { name: string; phase: string } | null;
   onResume?: () => void;
+  onDiscardCampaign?: () => void;
+  onOnline?: () => void;
 }
 
 const DIFFICULTIES: Difficulty[] = ['normal', 'hard', 'legend'];
 
-export function Home({ onStart, onDonate, onHall, teamCount, playerCount, savedCampaign, onResume }: Props) {
+export function Home({
+  onStart,
+  onDonate,
+  onHall,
+  teamCount,
+  playerCount,
+  savedCampaign,
+  onResume,
+  onDiscardCampaign,
+  onOnline,
+}: Props) {
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
@@ -36,10 +48,27 @@ export function Home({ onStart, onDonate, onHall, teamCount, playerCount, savedC
         </p>
 
         {savedCampaign && (
-          <div style={{ margin: '18px auto 0', maxWidth: 640 }}>
-            <button className="btn gold big" style={{ width: '100%' }} onClick={onResume}>
+          <div style={{ margin: '18px auto 0', maxWidth: 640, display: 'flex', gap: 10 }}>
+            <button className="btn gold big" style={{ flex: 1 }} onClick={onResume}>
               ▶ Continuar campanha - {savedCampaign.name}
               {savedCampaign.phase === 'done' ? ' (encerrada)' : ''}
+            </button>
+            <button
+              className="btn ghost"
+              title="Apaga a campanha salva para começar do zero"
+              onClick={() => {
+                if (confirm('Apagar a campanha salva e começar um novo jogo?')) onDiscardCampaign?.();
+              }}
+            >
+              🗑 Nova campanha
+            </button>
+          </div>
+        )}
+
+        {onOnline && (
+          <div style={{ margin: '14px auto 0', maxWidth: 640 }}>
+            <button className="btn big online-cta" style={{ width: '100%' }} onClick={onOnline}>
+              🌐 Jogar online com amigos (duelo 1x1 ou grupo)
             </button>
           </div>
         )}

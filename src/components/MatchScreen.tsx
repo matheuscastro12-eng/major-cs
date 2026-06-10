@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyzeSeries } from '../engine/insights';
-import { createMapSim, type BuyTier, type MapSim } from '../engine/match';
+import { createMapSim, type BuyTier, type MapSim, type Stance } from '../engine/match';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, SeriesResult, TPlayer, TTeam } from '../types';
 import { MAP_LABELS } from '../types';
@@ -18,9 +18,20 @@ interface Props {
   onFinish: (series: SeriesResult) => void;
 }
 
-const TICK_MS = 240;
 const TIMEOUTS_PER_MAP = 2;
 const TIMEOUT_ROUNDS = 3;
+
+const SPEEDS: { label: string; ms: number }[] = [
+  { label: '1x', ms: 280 },
+  { label: '2x', ms: 140 },
+  { label: '4x', ms: 60 },
+];
+
+const STANCES: { key: Stance; label: string; hint: string }[] = [
+  { key: 'aggressive', label: '🔥 Agressivo', hint: 'Mais força no T, mas se expõe no CT' },
+  { key: 'default', label: '⚖ Padrão', hint: 'Plano de jogo equilibrado' },
+  { key: 'cautious', label: '🛡 Cauteloso', hint: 'Fecha o CT, perde ímpeto no T' },
+];
 
 const BUY_LABEL: Record<BuyTier, string> = {
   pistol: 'PISTOL',
@@ -39,6 +50,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
   const [timeoutsLeft, setTimeoutsLeft] = useState(TIMEOUTS_PER_MAP);
   const [boostRounds, setBoostRounds] = useState(0);
   const [pausedMsg, setPausedMsg] = useState('');
+  const [speedIdx, setSpeedIdx] = useState(0);
+  const [stance, setStance] = useState<Stance>('default');
+  const stanceRef = useRef<Stance>('default');
+  stanceRef.current = stance;
 
   const seriesOver = () => {
     const wins = resultsRef.current.reduce(
@@ -66,23 +81,41 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
     return simsRef.current[safe];
   };
 
-  // loop da simulação ao vivo
+  // loop da simulação ao vivo com catch-up por tempo real: mesmo com o
+  // navegador limitando timers (aba em segundo plano), o ritmo escolhido vale.
+  const lastStepRef = useRef(0);
   useEffect(() => {
     if (finished) return;
+    lastStepRef.current = performance.now();
     const id = window.setInterval(() => {
-      if (pausedMsg) return; // pausa de timeout/troca de mapa
-      const sim = getSim(mapIdx);
-      let usedBoost = false;
-      if (boostRounds > 0) {
-        sim.step(userIdx);
-        usedBoost = true;
-      } else {
-        sim.step();
+      if (pausedMsg) {
+        lastStepRef.current = performance.now();
+        return; // pausa de timeout/troca de mapa
       }
-      if (usedBoost) setBoostRounds((b) => Math.max(0, b - 1));
+      const ms = SPEEDS[speedIdx].ms;
+      const now = performance.now();
+      const due = Math.min(10, Math.floor((now - lastStepRef.current) / ms));
+      if (due <= 0) return;
+      lastStepRef.current += due * ms;
+
+      const sim = getSim(mapIdx);
+      const stanceMod =
+        stanceRef.current !== 'default' ? { team: userIdx, mode: stanceRef.current } : undefined;
+      let boostsUsed = 0;
+      let mapEnded = false;
+      for (let i = 0; i < due && !mapEnded; i++) {
+        if (boostRounds - boostsUsed > 0) {
+          sim.step(userIdx, stanceMod);
+          boostsUsed++;
+        } else {
+          sim.step(null, stanceMod);
+        }
+        mapEnded = sim.done();
+      }
+      if (boostsUsed > 0) setBoostRounds((b) => Math.max(0, b - boostsUsed));
       setTick((t) => t + 1);
 
-      if (sim.done()) {
+      if (mapEnded) {
         resultsRef.current[mapIdx] = sim.result();
         if (seriesOver()) {
           const s = buildSeries();
@@ -99,10 +132,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
           }, 1500);
         }
       }
-    }, TICK_MS);
+    }, Math.min(SPEEDS[speedIdx].ms, 250));
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finished, mapIdx, boostRounds, pausedMsg]);
+  }, [finished, mapIdx, boostRounds, pausedMsg, speedIdx]);
 
   const skipAll = () => {
     setPausedMsg(' '); // congela o interval enquanto resolvemos tudo de forma síncrona
@@ -158,6 +191,13 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
           <span className="spacer" />
           {!finished && (
             <>
+              <div className="seg" title="Velocidade da simulação">
+                {SPEEDS.map((s, i) => (
+                  <button key={s.label} className={speedIdx === i ? 'active' : ''} onClick={() => setSpeedIdx(i)}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
               <button className="timeout-btn" onClick={callTimeout} disabled={timeoutsLeft <= 0 || !!pausedMsg}>
                 ⏸ Timeout ({timeoutsLeft})
               </button>
@@ -221,6 +261,22 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, onFinish }:
           {pausedMsg && <div className="timeout-flash">{pausedMsg}</div>}
           {!finished && <KillFeed events={visibleKills} teams={teams} playerById={playerById} />}
         </div>
+
+        {!finished && (
+          <div className="stance-bar">
+            <span className="stance-label">Plano do {teams[userIdx].tag}:</span>
+            {STANCES.map((s) => (
+              <button
+                key={s.key}
+                className={`stance-btn${stance === s.key ? ' on' : ''}`}
+                title={s.hint}
+                onClick={() => setStance(s.key)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!finished && (
           <div className="round-dots">

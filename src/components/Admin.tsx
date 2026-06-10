@@ -3,6 +3,7 @@ import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import { adminPassword, lockAdmin } from './AdminGate';
 import { invalidateDonors } from './Donate';
+import { MetricsPanel } from './MetricsPanel';
 import { exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, saveMapImage } from '../state/crm';
 import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
 import { COACH_STYLE_LABELS, MAP_LABELS, MAP_POOL } from '../types';
@@ -426,6 +427,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
         </div>
       </div>
 
+      <MetricsPanel />
       <MapImagesPanel />
       <DonorsAdminPanel />
     </div>

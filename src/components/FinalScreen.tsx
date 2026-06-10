@@ -3,6 +3,7 @@ import type { CareerState, PickemState } from '../App';
 import { computeDisplay, mergeLines } from '../engine/match';
 import { getTeam } from '../engine/swiss';
 import { downloadShareCard } from '../state/share';
+import { track } from '../state/track';
 import type { Tournament, TournamentPool } from '../types';
 import { Flag, TeamBadge } from './ui';
 
@@ -207,7 +208,13 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
             <button className="btn" onClick={onHall}>
               🏛 Hall da Fama
             </button>
-            <button className="btn" onClick={() => downloadShareCard(t, user, campaign.label, mvp?.nick)}>
+            <button
+              className="btn"
+              onClick={() => {
+                track('share_card', { champion: isChampion });
+                downloadShareCard(t, user, campaign.label, mvp?.nick);
+              }}
+            >
               🖼 Baixar card
             </button>
             <button className="btn ghost" onClick={share}>

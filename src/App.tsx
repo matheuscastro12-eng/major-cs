@@ -12,6 +12,7 @@ import { LabScreen } from './components/LabScreen';
 import { MatchDetail } from './components/MatchDetail';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
+import { OnlineScreen } from './components/OnlineScreen';
 import { TournamentStats } from './components/TournamentStats';
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
 import { VetoScreen } from './components/VetoScreen';
@@ -19,6 +20,7 @@ import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
 import { createTournament, getTeam, phaseLabel, resolveRound, userPairing, userTeam } from './engine/swiss';
 import { fetchRemoteDataset, isCustomized, loadDataset, resetDataset, saveDataset } from './state/crm';
+import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -34,7 +36,8 @@ type Screen =
   | 'hall'
   | 'lab'
   | 'transfer'
-  | 'matchdetail';
+  | 'matchdetail'
+  | 'online';
 
 interface MatchCtx {
   teams: [TTeam, TTeam];
@@ -174,6 +177,11 @@ export default function App() {
     return () => window.removeEventListener('hashchange', checkHash);
   }, []);
 
+  // telemetria: registra a visita (1x por sessão)
+  useEffect(() => {
+    trackVisit();
+  }, []);
+
   // fonte primária: banco Neon via /api/teams; edições locais do CRM têm prioridade
   useEffect(() => {
     if (isCustomized()) return;
@@ -249,6 +257,7 @@ export default function App() {
       tournamentName(draft.pool, 1),
       DIFFICULTY_OPP_BOOST[draft.difficulty],
     );
+    track('game_start', { pool: draft.pool, difficulty: draft.difficulty, mode: draft.mode });
     setDraft({ ...draft, pickedCoachTeamId: teamSeasonId });
     setTournament(t);
     setScreen('hub');
@@ -310,8 +319,14 @@ export default function App() {
 
   const afterResolve = (clone: Tournament) => {
     scorePickemAfter(clone);
-    if (clone.phase === 'done' && clone.championId === 'user') {
-      setCareer((c) => ({ ...c, titles: c.titles + 1 }));
+    if (clone.phase === 'done') {
+      if (clone.championId === 'user') setCareer((c) => ({ ...c, titles: c.titles + 1 }));
+      track('game_end', {
+        champion: clone.championId === 'user',
+        difficulty: draft?.difficulty ?? 'normal',
+        pool: draft?.pool ?? 'world',
+        season: career.season,
+      });
     }
     setTournament(clone);
     setScreen(clone.phase === 'done' ? 'final' : 'hub');
@@ -358,7 +373,8 @@ export default function App() {
   const confirmTransfer = (newTeam: TTeam) => {
     if (!draft) return;
     const nextSeason = career.season + 1;
-    setCareer((c) => ({ ...c, season: nextSeason }));
+    track('season_start', { season: nextSeason, pool: draft.pool });
+    setCareer((c) => ({ ...c, titles: c.titles, season: nextSeason }));
     rngRef.current = makeRng(randomSeed());
     const t = createTournament(
       poolTeams(draft.pool),
@@ -429,14 +445,26 @@ export default function App() {
       {screen === 'home' && (
         <Home
           onStart={startDraft}
-          onDonate={() => setDonateOpen(true)}
+          onDonate={() => {
+            track('donate_click', { from: 'home' });
+            setDonateOpen(true);
+          }}
           onHall={() => setScreen('hall')}
+          onOnline={() => setScreen('online')}
           teamCount={dataset.length}
           playerCount={playerCount}
           savedCampaign={savedSession?.tournament ? { name: savedSession.tournament.name, phase: savedSession.tournament.phase } : null}
           onResume={resumeSession}
+          onDiscardCampaign={() => {
+            localStorage.removeItem(SESSION_KEY);
+            setScreen('home');
+            setTournament(null);
+            setDraft(null);
+          }}
         />
       )}
+
+      {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} />}
 
       {screen === 'draft' && draft && (
         <Draft draft={draft} dataset={dataset} onPick={pickPlayer} onPickCoach={pickCoach} onReroll={rerollDraft} />
