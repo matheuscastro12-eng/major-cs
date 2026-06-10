@@ -1,16 +1,16 @@
 import type { MapId, TeamSeason } from '../types';
 
 const commonsFile = (file: string) => `https://liquipedia.net/commons/Special:FilePath/${encodeURIComponent(file)}`;
-const counterstrikeFile = (file: string) => `https://liquipedia.net/counterstrike/Special:FilePath/${encodeURIComponent(file)}`;
 
+// fotos locais enviadas pelo usuário (uploads no CRM ainda têm prioridade)
 export const MAP_IMAGES: Record<MapId, string> = {
-  mirage: counterstrikeFile('Mirage_cs2.png'),
-  inferno: counterstrikeFile('Inferno_cs2.png'),
-  nuke: counterstrikeFile('Nuke_cs2.png'),
-  ancient: counterstrikeFile('Ancient_cs2.png'),
-  anubis: counterstrikeFile('Anubis_cs2.png'),
-  dust2: counterstrikeFile('Dust2_cs2.png'),
-  train: counterstrikeFile('Train_cs2.png'),
+  mirage: '/maps/mirage.jpg',
+  inferno: '/maps/inferno.webp',
+  nuke: '/maps/nuke.jpg',
+  ancient: '/maps/ancient.jpg',
+  anubis: '/maps/anubis.jpg',
+  dust2: '/maps/dust2.jpg',
+  train: '/maps/train.jpg',
 };
 
 const LOGO_FILES: Record<string, string> = {
