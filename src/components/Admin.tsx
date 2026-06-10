@@ -3,7 +3,7 @@ import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import { adminPassword, lockAdmin } from './AdminGate';
 import { invalidateDonors } from './Donate';
-import { fileToDataUrl, loadMapImages, saveMapImage } from '../state/crm';
+import { exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, saveMapImage } from '../state/crm';
 import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
 import { COACH_STYLE_LABELS, MAP_LABELS, MAP_POOL } from '../types';
 import { Flag, MapThumb, TeamBadge } from './ui';
@@ -125,6 +125,31 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
           <button className="btn ghost" onClick={addTeam}>
             + Novo time
           </button>
+          <button className="btn ghost" onClick={() => exportDataset(dataset)} title="Baixa a base atual como JSON (backup / migrar entre domínios)">
+            ⬇ Exportar
+          </button>
+          <span className="btn ghost upload-btn" title="Carrega uma base de um arquivo JSON exportado">
+            ⬆ Importar
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const teams = await importDatasetFromFile(file);
+                  if (confirm(`Importar ${teams.length} times deste arquivo? A base atual será substituída.`)) {
+                    onChange(teams);
+                    setSelId(teams[0]?.id ?? null);
+                    alert('Base importada com sucesso!');
+                  }
+                } catch {
+                  alert('Arquivo inválido. Use um JSON exportado pelo próprio jogo.');
+                }
+                e.target.value = '';
+              }}
+            />
+          </span>
           {onLab && (
             <button className="btn ghost" onClick={onLab}>
               🧪 Lab

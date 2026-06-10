@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DIFFICULTY_DESC, DIFFICULTY_LABELS, type Difficulty, type TournamentPool } from '../types';
+import { BrandMark } from './brand';
 import { DonorsPanel } from './Donate';
 
 interface Props {
@@ -25,7 +26,7 @@ export function Home({ onStart, onDonate, onHall, teamCount, playerCount, savedC
   return (
     <div className="fade-in">
       <div className="hero">
-        <img className="hero-mark" src="/favicon.png" alt="Road to Major" />
+        <BrandMark size={96} className="hero-mark" />
         <h1>
           ROAD TO <span>MAJOR</span>
         </h1>

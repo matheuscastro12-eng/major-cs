@@ -42,6 +42,39 @@ export function isCustomized(): boolean {
   return localStorage.getItem(STORAGE_KEY) !== null;
 }
 
+// ---- exportar / importar a base (backup e migração entre domínios) ----
+// localStorage é por domínio: exportar num domínio e importar em outro
+// recupera edições feitas em outra URL (ex: vercel.app -> roadtomajor.com.br).
+export function exportDataset(teams: TeamSeason[]): void {
+  const blob = new Blob([JSON.stringify(teams, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `road-to-major-base-${teams.length}-times.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function importDatasetFromFile(file: File): Promise<TeamSeason[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('falha ao ler o arquivo'));
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as TeamSeason[];
+        if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('vazio');
+        if (!parsed.every((t) => t && typeof t.id === 'string' && Array.isArray(t.players))) {
+          throw new Error('formato inválido');
+        }
+        resolve(normalizeTeams(parsed));
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error('arquivo inválido'));
+      }
+    };
+    reader.readAsText(file);
+  });
+}
+
 // ---- imagens customizadas de mapas (upload no CRM) ----
 const MAPIMG_KEY = 'major-map-images-v1';
 let mapImgCache: Record<string, string> | null = null;

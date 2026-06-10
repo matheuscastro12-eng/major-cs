@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Admin } from './components/Admin';
 import { AdminGate } from './components/AdminGate';
+import { BrandMark } from './components/brand';
 import { DonateButton, DonateModal } from './components/Donate';
 import { Draft } from './components/Draft';
 import { FinalScreen } from './components/FinalScreen';
@@ -410,7 +411,7 @@ export default function App() {
       <header className="app-header">
         <div className="topbar">
           <span className="logo" onClick={goHome}>
-            <img className="logo-mark" src="/favicon.png" alt="" />
+            <BrandMark size={32} className="logo-mark" />
             ROAD&nbsp;TO&nbsp;<span>MAJOR</span>
           </span>
           <span className="subtitle">simulador do cenário profissional de Counter-Strike · do 1.6 ao CS2</span>
