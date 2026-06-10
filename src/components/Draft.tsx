@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
+import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import type { DraftState, Player, TeamSeason } from '../types';
 import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
 import { AttrBar, Flag, OvrBadge, TeamBadge } from './ui';
+
+const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 
 interface Props {
   draft: DraftState;
@@ -47,8 +50,8 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
             </span>
           </div>
 
-          <div className="draft-source">
-            <TeamBadge tag={source.tag} colors={source.colors} size={44} />
+          <div className="draft-source" style={{ background: `linear-gradient(120deg, ${source.colors[0]}33 0%, var(--header) 70%)` }}>
+            <TeamBadge tag={source.tag} colors={source.colors} size={64} logoUrl={teamLogo(source)} />
             <div style={{ flex: 1 }}>
               <div className="era-game">
                 {source.game} · {source.era}
@@ -109,7 +112,7 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
                     {COACH_STYLE_DESC[c.style]}
                   </div>
                   <div className="meta muted small">
-                    {t.team} {t.era}
+                    <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={teamLogo(t)} /> {t.team} {t.era}
                   </div>
                 </button>
               );

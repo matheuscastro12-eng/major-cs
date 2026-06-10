@@ -17,6 +17,47 @@ export function Flag({ cc, title }: { cc: string; title?: string }) {
   );
 }
 
+// Detecta se a logo é escura ou clara (média de luminância dos pixels opacos)
+// para escolher um fundo com contraste adequado. Cache por URL.
+type LogoTone = 'dark' | 'light' | 'mid';
+const toneCache = new Map<string, LogoTone>();
+
+function detectTone(img: HTMLImageElement, url: string): LogoTone {
+  const cached = toneCache.get(url);
+  if (cached) return cached;
+  try {
+    const dim = 24;
+    const canvas = document.createElement('canvas');
+    canvas.width = dim;
+    canvas.height = dim;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(img, 0, 0, dim, dim);
+    const data = ctx.getImageData(0, 0, dim, dim).data;
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3];
+      if (alpha < 40) continue;
+      const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      sum += lum;
+      n++;
+    }
+    const avg = n > 0 ? sum / n : 128;
+    const tone: LogoTone = avg < 80 ? 'dark' : avg > 175 ? 'light' : 'mid';
+    toneCache.set(url, tone);
+    return tone;
+  } catch {
+    toneCache.set(url, 'mid');
+    return 'mid';
+  }
+}
+
+function toneBackground(tone: LogoTone | undefined, fallback: string): string {
+  if (tone === 'dark') return '#dde3ea'; // logo escura → chip claro
+  if (tone === 'light') return '#1b212a'; // logo clara → chip escuro
+  return fallback; // logo colorida → cor do time
+}
+
 export function TeamBadge({
   tag,
   colors,
@@ -29,17 +70,25 @@ export function TeamBadge({
   logoUrl?: string;
 }) {
   const [err, setErr] = useState(false);
+  const [tone, setTone] = useState<LogoTone | undefined>(logoUrl ? toneCache.get(logoUrl) : undefined);
   if (logoUrl && !err) {
     return (
       <span
         className="tbadge logo"
         style={{
-          background: colors[0],
+          background: toneBackground(tone, colors[0]),
           width: size,
           height: size,
         }}
       >
-        <img src={logoUrl} alt={tag} title={tag} onError={() => setErr(true)} />
+        <img
+          src={logoUrl}
+          alt={tag}
+          title={tag}
+          crossOrigin={logoUrl.startsWith('http') ? 'anonymous' : undefined}
+          onLoad={(e) => setTone(detectTone(e.currentTarget, logoUrl))}
+          onError={() => setErr(true)}
+        />
       </span>
     );
   }

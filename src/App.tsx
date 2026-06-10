@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Admin } from './components/Admin';
+import { AdminGate } from './components/AdminGate';
 import { Draft } from './components/Draft';
 import { FinalScreen } from './components/FinalScreen';
 import { Home } from './components/Home';
@@ -67,6 +68,37 @@ export default function App() {
       out.push(pool.splice(idx, 1)[0]);
     }
     return out;
+  };
+
+  // campanha em andamento sobrevive a refresh/fechamento do navegador
+  const SESSION_KEY = 'major-session-v1';
+  useEffect(() => {
+    if (!tournament) return;
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ draft, tournament }));
+    } catch {
+      /* storage cheio — campanha segue só em memória */
+    }
+  }, [draft, tournament]);
+
+  const savedSession = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw) as { draft: DraftState | null; tournament: Tournament | null };
+      return s?.tournament ? s : null;
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
+
+  const resumeSession = () => {
+    if (!savedSession?.tournament) return;
+    setDraft(savedSession.draft);
+    setTournament(savedSession.tournament);
+    setMatchCtx(null);
+    setScreen(savedSession.tournament.phase === 'done' ? 'final' : 'hub');
   };
 
   // fonte primária: banco Neon via /api/teams; edições locais do CRM têm prioridade
@@ -179,6 +211,7 @@ export default function App() {
   };
 
   const restart = () => {
+    localStorage.removeItem(SESSION_KEY);
     setDraft(null);
     setTournament(null);
     setMatchCtx(null);
@@ -222,7 +255,14 @@ export default function App() {
       </div>
 
       {screen === 'home' && (
-        <Home onStart={startDraft} onAdmin={() => setScreen('admin')} teamCount={dataset.length} playerCount={playerCount} />
+        <Home
+          onStart={startDraft}
+          onAdmin={() => setScreen('admin')}
+          teamCount={dataset.length}
+          playerCount={playerCount}
+          savedCampaign={savedSession?.tournament ? { name: savedSession.tournament.name, phase: savedSession.tournament.phase } : null}
+          onResume={resumeSession}
+        />
       )}
 
       {screen === 'draft' && draft && (
@@ -262,12 +302,14 @@ export default function App() {
       )}
 
       {screen === 'admin' && (
-        <Admin
-          dataset={dataset}
-          onChange={changeDataset}
-          onReset={() => setDataset(resetDataset())}
-          onBack={() => setScreen(tournament && tournament.phase !== 'done' ? 'hub' : 'home')}
-        />
+        <AdminGate>
+          <Admin
+            dataset={dataset}
+            onChange={changeDataset}
+            onReset={() => setDataset(resetDataset())}
+            onBack={() => setScreen(tournament && tournament.phase !== 'done' ? 'hub' : 'home')}
+          />
+        </AdminGate>
       )}
     </>
   );

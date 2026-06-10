@@ -6,9 +6,11 @@ interface Props {
   onAdmin: () => void;
   teamCount: number;
   playerCount: number;
+  savedCampaign?: { name: string; phase: string } | null;
+  onResume?: () => void;
 }
 
-export function Home({ onStart, onAdmin, teamCount, playerCount }: Props) {
+export function Home({ onStart, onAdmin, teamCount, playerCount, savedCampaign, onResume }: Props) {
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [name, setName] = useState('');
@@ -25,6 +27,15 @@ export function Home({ onStart, onAdmin, teamCount, playerCount }: Props) {
           Monte o time dos sonhos com lendas de todas as eras do Counter-Strike — do 1.6 ao CS2 — e
           dispute um Major completo em séries MD3 contra os maiores times da história.
         </p>
+
+        {savedCampaign && (
+          <div style={{ margin: '18px auto 0', maxWidth: 640 }}>
+            <button className="btn gold big" style={{ width: '100%' }} onClick={onResume}>
+              ▶ Continuar campanha — {savedCampaign.name}
+              {savedCampaign.phase === 'done' ? ' (encerrada)' : ''}
+            </button>
+          </div>
+        )}
 
         <div className="pool-cards">
           <button className={`pool-card world${pool === 'world' ? ' sel' : ''}`} onClick={() => setPool('world')}>

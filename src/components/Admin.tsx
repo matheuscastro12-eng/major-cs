@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import { fileToDataUrl, loadMapImages, saveMapImage } from '../state/crm';
 import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
@@ -142,7 +143,7 @@ export function Admin({ dataset, onChange, onReset, onBack }: Props) {
               <div className="panel crm-list" style={{ marginBottom: 0 }}>
                 {filtered.map((t) => (
                   <button key={t.id} className={`crm-item${t.id === selId ? ' sel' : ''}`} onClick={() => setSelId(t.id)}>
-                    <TeamBadge tag={t.tag} colors={t.colors} size={22} />
+                    <TeamBadge tag={t.tag} colors={t.colors} size={22} logoUrl={t.logoUrl ?? logoForTeam(t)} />
                     <span style={{ flex: 1 }}>
                       {t.team} <span className="sub">{t.era}</span>
                       <br />
@@ -209,7 +210,7 @@ export function Admin({ dataset, onChange, onReset, onBack }: Props) {
                     <label>Logo do time (upload)</label>
                     <div className="upload-row">
                       <span className="preview">
-                        <TeamBadge tag={sel.tag} colors={sel.colors} size={40} logoUrl={sel.logoUrl} />
+                        <TeamBadge tag={sel.tag} colors={sel.colors} size={40} logoUrl={sel.logoUrl ?? logoForTeam(sel)} />
                       </span>
                       <span className="btn ghost upload-btn">
                         📤 Enviar logo
