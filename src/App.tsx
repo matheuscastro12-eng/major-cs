@@ -10,12 +10,14 @@ import { Onboarding, shouldOnboard } from './components/Onboarding';
 import { Loader } from './components/ui';
 import { AchievementsModal, AchievementToast } from './components/Achievements';
 import { recordGameEnd, type AchDef } from './state/achievements';
+import { CareerGate } from './components/CareerGate';
 
 // telas pesadas e/ou pouco usadas: carregadas sob demanda (code-splitting) pra
 // deixar o carregamento inicial bem mais leve.
 const Admin = lazy(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
 const CareerScreen = lazy(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
 const CareerCRM = lazy(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
+const BetaAccessCRM = lazy(() => import('./components/BetaAccessCRM').then((m) => ({ default: m.BetaAccessCRM })));
 const FinalScreen = lazy(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
 const HallScreen = lazy(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazy(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
@@ -49,7 +51,8 @@ type Screen =
   | 'matchdetail'
   | 'online'
   | 'career'
-  | 'careerCRM';
+  | 'careerCRM'
+  | 'careerAccess';
 
 interface MatchCtx {
   teams: [TTeam, TTeam];
@@ -221,6 +224,10 @@ export default function App() {
       } else if (h === '#carreira-crm') {
         // CRM dos times/jogadores reais da carreira (oculto)
         setScreen('careerCRM');
+        history.replaceState(null, '', window.location.pathname);
+      } else if (h === '#carreira-acessos') {
+        // CRM de controle de acesso ao beta da carreira (oculto, com senha)
+        setScreen('careerAccess');
         history.replaceState(null, '', window.location.pathname);
       } else if (h === '#banners') {
         // demonstração dos espaços de banner para o patrocinador
@@ -636,8 +643,17 @@ export default function App() {
 
       {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} />}
 
-      {screen === 'career' && <CareerScreen dataset={dataset} onExit={() => setScreen('home')} />}
+      {screen === 'career' && (
+        <CareerGate onExit={() => setScreen('home')}>
+          <CareerScreen dataset={dataset} onExit={() => setScreen('home')} />
+        </CareerGate>
+      )}
       {screen === 'careerCRM' && <CareerCRM onExit={() => setScreen('home')} />}
+      {screen === 'careerAccess' && (
+        <AdminGate>
+          <BetaAccessCRM onExit={() => setScreen('home')} />
+        </AdminGate>
+      )}
 
       {screen === 'draft' && draft && (
         <Draft draft={draft} dataset={dataset} onPick={pickPlayer} onPickCoach={pickCoach} onReroll={rerollDraft} />
