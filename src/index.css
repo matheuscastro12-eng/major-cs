@@ -3977,6 +3977,20 @@ table.crm-players input.num {
   border-radius: 6px; padding: 4px 9px; font-size: 0.78rem; cursor: pointer;
 }
 .ad-close:hover { color: var(--text); border-color: var(--muted); }
+
+/* no mobile: leaderboard vira banner de celular e o premium vira anchor sticky */
+@media (max-width: 640px) {
+  .ad-slot .ad-size { font-size: 0.78rem; }
+  .ad-slot .ad-note { font-size: 0.74rem; }
+  .ad-slot.leaderboard { height: 76px; }
+  .ad-slot.billboard { height: 110px; }
+  .ad-slot.rectangle { height: 250px; } /* 300x250 cabe inteiro no celular */
+  .ad-persistent { padding: 6px 8px; }
+  .ad-persistent-inner { height: 54px; padding: 0 10px; gap: 8px; }
+  .ad-persistent .ad-tag { font-size: 0.82rem; }
+  .ad-persistent .ad-size { font-size: 0.72rem; }
+  .ad-close { padding: 3px 7px; font-size: 0.72rem; }
+}
 .news-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .news-list li { color: var(--muted); line-height: 1.4; }
 

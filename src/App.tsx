@@ -510,7 +510,7 @@ export default function App() {
         <div className="ad-persistent">
           <div className="ad-persistent-inner">
             <span className="ad-tag">ESPAÇO PUBLICITÁRIO PREMIUM</span>
-            <span className="ad-size">sempre visível durante o jogo · 970×90 / 728×90</span>
+            <span className="ad-size">sempre visível durante o jogo · desktop 970×90 · mobile 320×50 (sticky)</span>
             <span className="spacer" />
             <button className="ad-close" onClick={() => setBannerPreview(false)}>fechar preview ✕</button>
           </div>
@@ -539,7 +539,7 @@ export default function App() {
         <>
           <div className="ad-slot leaderboard">
             <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
-            <span className="ad-size">Leaderboard · 970×90 / 728×90 (responsivo)</span>
+            <span className="ad-size">Leaderboard · desktop 970×90 / 728×90 · mobile 320×100 / 320×50</span>
             <span className="ad-note">banner do parceiro aqui, no topo (acima da dobra)</span>
           </div>
           <div className="ad-slot ad-side left">
