@@ -3,10 +3,12 @@ import { playerOvr } from '../engine/ratings';
 import {
   buildDraftForPlayer,
   fetchLobby,
+  listOpenLobbies,
   lobbyApi,
   majorStandings,
   simulateOnlineMajor,
   type LobbyState,
+  type OpenRoom,
 } from '../state/online';
 import { useLang } from '../state/i18n';
 import { track } from '../state/track';
@@ -27,8 +29,16 @@ interface Props {
 const NICK_KEY = 'rtm-nick';
 const POLL_MS = 2200;
 
+// textos das salas abertas, por idioma (sem mexer no i18n global)
+const ONLINE_LOCAL = {
+  pt: { publicRoom: 'Sala aberta (qualquer um pode entrar)', openRooms: 'Salas abertas', noRooms: 'Nenhuma sala aberta agora. Crie a sua!', refresh: 'Atualizar', enter: 'Entrar' },
+  en: { publicRoom: 'Open room (anyone can join)', openRooms: 'Open rooms', noRooms: 'No open rooms right now. Create yours!', refresh: 'Refresh', enter: 'Join' },
+  es: { publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar' },
+};
+
 export function OnlineScreen({ onBack }: Props) {
-  const { t: tr } = useLang();
+  const { t: tr, lang } = useLang();
+  const OL = ONLINE_LOCAL[(lang as 'pt' | 'en' | 'es')] ?? ONLINE_LOCAL.pt;
   const [nick, setNick] = useState(() => {
     try {
       return localStorage.getItem(NICK_KEY) ?? '';
@@ -39,6 +49,8 @@ export function OnlineScreen({ onBack }: Props) {
   const [codeInput, setCodeInput] = useState('');
   const [mode, setMode] = useState<'duel' | 'party'>('duel');
   const [pool, setPool] = useState<TournamentPool>('world');
+  const [isPublic, setIsPublic] = useState(true); // sala aberta a qualquer um por padrão
+  const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
   const [code, setCode] = useState('');
   const [state, setState] = useState<LobbyState | null>(null);
   const [myPicks, setMyPicks] = useState<string[]>([]);
@@ -114,10 +126,10 @@ export function OnlineScreen({ onBack }: Props) {
     setBusy(true);
     setError('');
     try {
-      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool });
+      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, isPublic });
       if (r.ok && r.code) {
         setCode(r.code);
-        track('online_create', { mode, pool });
+        track('online_create', { mode, pool, public: isPublic });
       } else setError(r.error ?? tr('online.errCreate'));
     } catch {
       setError(tr('online.errServer'));
@@ -125,14 +137,29 @@ export function OnlineScreen({ onBack }: Props) {
     setBusy(false);
   };
 
-  const join = async () => {
-    if (!nick.trim() || !codeInput.trim() || busy) return;
+  const join = () => doJoin(codeInput);
+
+  // lista de salas abertas (públicas) enquanto o jogador ainda não entrou numa
+  const loadRooms = useCallback(async () => {
+    if (!nick.trim()) { setOpenRooms([]); return; }
+    setOpenRooms(await listOpenLobbies());
+  }, [nick]);
+  useEffect(() => {
+    if (code) return; // já está numa sala
+    loadRooms();
+    const id = window.setInterval(loadRooms, 6000);
+    return () => window.clearInterval(id);
+  }, [code, loadRooms]);
+
+  const doJoin = async (raw: string) => {
+    const target = raw.trim().toUpperCase();
+    if (!nick.trim() || !target || busy) return;
     setBusy(true);
     setError('');
     try {
-      const r = await lobbyApi({ action: 'join', nick: nick.trim(), code: codeInput.trim().toUpperCase() });
+      const r = await lobbyApi({ action: 'join', nick: nick.trim(), code: target });
       if (r.ok) {
-        setCode(codeInput.trim().toUpperCase());
+        setCode(target);
         track('online_join', {});
       } else setError(r.error ?? tr('online.errJoin'));
     } catch {
@@ -226,6 +253,10 @@ export function OnlineScreen({ onBack }: Props) {
                     {tr('online.poolBr')}
                   </button>
                 </div>
+                <label className="public-toggle">
+                  <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+                  {OL.publicRoom}
+                </label>
                 <button className="btn gold" style={{ width: '100%' }} onClick={create} disabled={!nick.trim() || busy}>
                   {busy ? tr('online.creating') : tr('online.createRoom')}
                 </button>
@@ -247,6 +278,30 @@ export function OnlineScreen({ onBack }: Props) {
                   {busy ? tr('online.joining') : tr('online.joinRoom')}
                 </button>
               </div>
+            </div>
+
+            {/* salas abertas: entra em qualquer uma sem precisar de código */}
+            <div className="open-rooms">
+              <div className="or-head">
+                <h4>{OL.openRooms}</h4>
+                <button className="btn ghost small" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</button>
+              </div>
+              {openRooms.length === 0 ? (
+                <div className="muted small">{OL.noRooms}</div>
+              ) : (
+                <div className="or-list">
+                  {openRooms.map((r) => (
+                    <div key={r.code} className="or-row">
+                      <span className="or-host">{r.host}</span>
+                      <span className="muted small">
+                        {r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'} · {r.players}/{r.max}
+                      </span>
+                      <span className="spacer" />
+                      <button className="btn gold small" disabled={busy} onClick={() => doJoin(r.code)}>{OL.enter}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             {error && (
               <div className="neg small" style={{ marginTop: 10 }}>

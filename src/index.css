@@ -3913,6 +3913,22 @@ table.crm-players input.num {
   background: var(--header); border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 10px; color: var(--text); width: 160px; text-transform: uppercase;
 }
+
+/* ===== salas abertas (online) ===== */
+.public-toggle {
+  display: flex; align-items: center; gap: 7px; font-size: 0.85rem; color: var(--muted);
+  margin-bottom: 10px; cursor: pointer;
+}
+.public-toggle input { width: 16px; height: 16px; }
+.open-rooms { margin-top: 16px; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: rgba(255,255,255,0.02); }
+.or-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.or-head h4 { margin: 0; font-family: var(--font-cond); }
+.or-list { display: flex; flex-direction: column; gap: 5px; }
+.or-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px;
+}
+.or-host { font-weight: 700; }
 .news-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .news-list li { color: var(--muted); line-height: 1.4; }
 

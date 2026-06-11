@@ -222,6 +222,18 @@ export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: bo
   return (await res.json()) as { ok?: boolean; code?: string; error?: string };
 }
 
+export interface OpenRoom { code: string; mode: 'duel' | 'party'; pool: TournamentPool; host: string; players: number; max: number; }
+export async function listOpenLobbies(): Promise<OpenRoom[]> {
+  try {
+    const res = await fetch('/api/lobby?list=1', { signal: AbortSignal.timeout(9000) });
+    if (!res.ok) return [];
+    const j = (await res.json()) as { rooms?: OpenRoom[] };
+    return j.rooms ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchLobby(code: string): Promise<LobbyState | null> {
   try {
     const res = await fetch(`/api/lobby?code=${encodeURIComponent(code)}`, { signal: AbortSignal.timeout(9000) });

@@ -31,6 +31,27 @@ export default async function handler(
   }
   const sql = neon(url);
 
+  // GET ?list=1 -> salas abertas (públicas) esperando jogadores
+  if ((req.method === 'GET' || !req.method) && req.query?.list != null) {
+    try {
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
+      const rows = await sql`
+        SELECT l.code, l.mode, l.pool, l.host, l.created_at,
+               (SELECT COUNT(*) FROM lobby_players p WHERE p.code = l.code) AS players
+        FROM lobbies l
+        WHERE l.is_public = true AND l.status = 'waiting'
+              AND l.updated_at > now() - interval '2 hours'
+        ORDER BY l.created_at DESC LIMIT 30`;
+      const rooms = rows
+        .map((r) => ({ ...r, players: Number(r.players), max: MAX_PLAYERS[r.mode as string] ?? 8 }))
+        .filter((r) => r.players < r.max);
+      res.status(200).json({ rooms });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+    return;
+  }
+
   // GET ?code=XXXXX -> estado do lobby (polling)
   if (req.method === 'GET' || !req.method) {
     const code = String((req.query?.code as string) ?? '').toUpperCase().slice(0, 5);
@@ -68,6 +89,7 @@ export default async function handler(
     picks?: unknown;
     coachPick?: string;
     done?: boolean;
+    isPublic?: boolean;
   };
   const action = String(body.action ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 20);
@@ -81,7 +103,9 @@ export default async function handler(
       }
       const mode = body.mode === 'party' ? 'party' : 'duel';
       const pool = body.pool === 'br' ? 'br' : 'world';
+      const isPublic = body.isPublic === true;
       const seed = Math.floor(Math.random() * 2147483647);
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
       // higieniza salas abandonadas (TTL 6h) para não acumular lixo no banco
       await sql`DELETE FROM lobbies WHERE updated_at < now() - interval '6 hours'`;
       // tenta alguns códigos até achar um livre
@@ -89,7 +113,7 @@ export default async function handler(
         const newCode = genCode();
         const exists = await sql`SELECT 1 FROM lobbies WHERE code = ${newCode}`;
         if (exists.length > 0) continue;
-        await sql`INSERT INTO lobbies (code, mode, host, seed, pool) VALUES (${newCode}, ${mode}, ${nick}, ${seed}, ${pool})`;
+        await sql`INSERT INTO lobbies (code, mode, host, seed, pool, is_public) VALUES (${newCode}, ${mode}, ${nick}, ${seed}, ${pool}, ${isPublic})`;
         await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${nick})`;
         res.status(200).json({ ok: true, code: newCode });
         return;
