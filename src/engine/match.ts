@@ -251,6 +251,7 @@ export interface MapSim {
   buys: () => [BuyTier, BuyTier]; // compra do round atual (antes do step)
   side: () => ['ct' | 't', 'ct' | 't']; // lado de cada time no round atual
   round: () => number; // índice do round atual (0-based)
+  stats: () => Record<string, PlayerMapStats>; // stats acumuladas ao vivo
   result: () => MapResult; // disponível quando done()
 }
 
@@ -545,6 +546,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     buys: () => nextBuys,
     side: () => sideOf(round),
     round: () => round,
+    stats: () => stats,
     result: (): MapResult => ({
       map,
       pickedBy,

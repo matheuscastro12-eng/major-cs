@@ -3893,6 +3893,27 @@ table.crm-players input.num {
 .news-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .news-list li { color: var(--muted); line-height: 1.4; }
 
+/* ===== placar ao vivo (stats subindo round a round) ===== */
+.live-scoreboard {
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch;
+  margin: 12px 0;
+}
+.lsb-team { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: rgba(255,255,255,0.02); }
+.lsb-team.mine { border-color: rgba(97,168,221,0.4); }
+.lsb-head { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.lsb-tname { font-family: var(--font-cond); font-weight: 800; font-size: 0.95rem; }
+.lsb-avg { font-family: var(--font-cond); font-weight: 800; color: var(--muted); }
+.lsb-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.lsb-nick { flex: 1; display: flex; align-items: center; gap: 5px; font-size: 0.86rem; }
+.lsb-rating { font-family: var(--font-cond); font-weight: 800; min-width: 42px; text-align: right; transition: color 0.2s; }
+.lsb-rating.best { color: var(--green); }
+.lsb-kda { font-size: 0.78rem; color: var(--muted); min-width: 58px; text-align: right; font-variant-numeric: tabular-nums; }
+.lsb-vs { display: flex; align-items: center; color: var(--muted); font-family: var(--font-cond); font-weight: 800; font-size: 0.8rem; }
+@media (max-width: 680px) {
+  .live-scoreboard { grid-template-columns: 1fr; }
+  .lsb-vs { justify-content: center; padding: 2px 0; }
+}
+
 /* ===== fundação da org: identidade + construtor de logo ===== */
 .found-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
 .logo-mode-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }

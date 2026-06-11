@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import type { Rng } from '../engine/rng';
-import type { KillEvent, MapId, MapResult, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
+import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
 import { derivePlaystyle, MAP_LABELS, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
 import { CoreFlag } from './flags';
 import { Scoreboard } from './Scoreboard';
-import { MapThumb, TeamBadge } from './ui';
+import { Flag, MapThumb, PlayerAvatar, TeamBadge } from './ui';
 import { HeadshotIcon, WeaponIcon, WEAPON_LABELS } from './weapons';
 import { useLang } from '../state/i18n';
 
@@ -149,13 +149,14 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     } else {
       const next = maps[mapIdx + 1];
       setPausedMsg(`${t('match.mapEnd')} ${mapIdx + 1}${next ? ` - ${t('match.preparing')} ${MAP_LABELS[next.map]}…` : '…'}`);
+      // pausa maior pra dar tempo de ver como ficaram as stats do mapa
       window.setTimeout(() => {
         setMapIdx((m) => m + 1);
         setTimeoutsLeft(TIMEOUTS_PER_MAP);
         setBoostRounds(0);
         setFreeze(0);
         setPausedMsg('');
-      }, 1500);
+      }, 3500);
     }
   };
 
@@ -371,6 +372,15 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         </div>
 
         {!finished && (
+          <LiveScoreboard
+            teams={teams}
+            userIdx={userIdx}
+            stats={sim.stats()}
+            label={`${MAP_LABELS[currentMap]} · ${sa}:${sb}`}
+          />
+        )}
+
+        {!finished && (
           <>
             <div className="stance-bar">
               <span className="stance-label">{t('match.planOf')} {teams[userIdx].tag}:</span>
@@ -495,6 +505,60 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// rating ao vivo (estilo HLTV) a partir da linha acumulada do jogador
+function liveRating(line?: PlayerLine): number {
+  if (!line || line.rounds < 1) return 1.0;
+  const r = line.rounds;
+  const kpr = line.kills / r, dpr = line.deaths / r, apr = line.assists / r;
+  const kast = line.kastRounds / r, adr = line.dmg / r;
+  const impact = Math.max(0, 2.13 * kpr + 0.42 * apr - 0.41);
+  return Math.max(0, 0.0073 * kast * 100 + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adr + 0.1587);
+}
+
+// placar ao vivo com K/D/A e rating subindo round a round (e congela ao fim do mapa)
+function LiveScoreboard({ teams, userIdx, stats, label }: {
+  teams: [TTeam, TTeam];
+  userIdx: 0 | 1;
+  stats: Record<string, PlayerMapStats>;
+  label?: string;
+}) {
+  const Side = ({ team, idx }: { team: TTeam; idx: 0 | 1 }) => {
+    const rows = team.players.map((p) => {
+      const line = stats[p.id]?.both;
+      return { p, line, rating: liveRating(line) };
+    });
+    const avg = rows.reduce((a, x) => a + x.rating, 0) / Math.max(1, rows.length);
+    const sorted = [...rows].sort((a, b) => b.rating - a.rating);
+    const top = sorted[0]?.rating ?? 0;
+    return (
+      <div className={`lsb-team${idx === userIdx ? ' mine' : ''}`}>
+        <div className="lsb-head">
+          <TeamBadge tag={team.tag} colors={team.colors} size={20} logoUrl={team.logoUrl} />
+          <span className="lsb-tname">{team.name}</span>
+          {idx === userIdx && <span className="you-pill">VOCÊ</span>}
+          <span className="spacer" />
+          <span className="lsb-avg">{avg.toFixed(2)}</span>
+        </div>
+        {rows.map(({ p, line, rating }) => (
+          <div key={p.id} className="lsb-row">
+            <PlayerAvatar nick={p.nick} size={26} />
+            <span className="lsb-nick"><Flag cc={p.country} /> {p.nick}</span>
+            <span className={`lsb-rating${rating === top && rating > 0 ? ' best' : ''}`}>{rating.toFixed(2)}</span>
+            <span className="lsb-kda">{line?.kills ?? 0}/{line?.deaths ?? 0}/{line?.assists ?? 0}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  return (
+    <div className="live-scoreboard">
+      <Side team={teams[0]} idx={0} />
+      <div className="lsb-vs">{label ?? 'VS'}</div>
+      <Side team={teams[1]} idx={1} />
     </div>
   );
 }
