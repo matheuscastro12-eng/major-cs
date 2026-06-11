@@ -8,6 +8,8 @@ import { Hub } from './components/Hub';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
 import { Loader } from './components/ui';
+import { AchievementsModal, AchievementToast } from './components/Achievements';
+import { recordGameEnd, type AchDef } from './state/achievements';
 
 // telas pesadas e/ou pouco usadas: carregadas sob demanda (code-splitting) pra
 // deixar o carregamento inicial bem mais leve.
@@ -103,6 +105,8 @@ export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>('home');
   const [bannerPreview, setBannerPreview] = useState(false); // demo de espaços de banner (#banners)
+  const [achToast, setAchToast] = useState<AchDef[]>([]); // conquistas recém-desbloqueadas
+  const [achOpen, setAchOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [matchCtx, setMatchCtx] = useState<MatchCtx | null>(null);
@@ -401,6 +405,18 @@ export default function App() {
         pool: draft?.pool ?? 'world',
         season: career.season,
       });
+      // conquistas: detecta desbloqueios e mostra um toast
+      const champ = clone.championId === 'user';
+      const fresh = recordGameEnd({
+        champion: champ,
+        placement: code,
+        difficulty: draft?.difficulty ?? 'normal',
+        pool: draft?.pool ?? 'world',
+        swissWins: u?.wins ?? 0,
+        swissLosses: u?.losses ?? 0,
+        totalTitles: career.titles + (champ ? 1 : 0),
+      });
+      if (fresh.length) setAchToast(fresh);
     }
     setTournament(clone);
     setScreen(clone.phase === 'done' ? 'final' : 'hub');
@@ -513,6 +529,9 @@ export default function App() {
       {/* barra de progresso: remonta a cada troca de tela e replaya a animação */}
       <div className="route-progress" key={screen} />
 
+      {achToast.length > 0 && <AchievementToast items={achToast} onDone={() => setAchToast([])} />}
+      {achOpen && <AchievementsModal onClose={() => setAchOpen(false)} />}
+
       {/* DEMO: banner premium SEMPRE VISÍVEL (fica em todas as telas, inclusive
           durante a partida). Pré-visualização para o patrocinador via #banners */}
       {bannerPreview && (
@@ -574,6 +593,7 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
           onCareer={() => setScreen('career')}
+          onAchievements={() => setAchOpen(true)}
           teamCount={dataset.length}
           playerCount={playerCount}
           savedCampaign={savedSession?.tournament ? { name: savedSession.tournament.name, phase: savedSession.tournament.phase } : null}

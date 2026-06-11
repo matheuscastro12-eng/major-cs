@@ -9,6 +9,7 @@ interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
   onDonate: () => void;
   onHall: () => void;
+  onAchievements?: () => void;
   teamCount: number;
   playerCount: number;
   savedCampaign?: { name: string; phase: string } | null;
@@ -94,6 +95,7 @@ export function Home({
   onStart,
   onDonate,
   onHall,
+  onAchievements,
   teamCount,
   playerCount,
   savedCampaign,
@@ -284,6 +286,12 @@ export function Home({
           >
             {t('home.hall')}
           </a>
+          {onAchievements && (
+            <>
+              {' · '}
+              <a href="#" onClick={(e) => { e.preventDefault(); onAchievements(); }}>🏅 {lang === 'en' ? 'Achievements' : lang === 'es' ? 'Logros' : 'Conquistas'}</a>
+            </>
+          )}
           {' · '}
           {t('home.curated')}{' '}
           <a href="https://liquipedia.net" target="_blank" rel="noreferrer">
