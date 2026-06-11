@@ -3944,6 +3944,12 @@ table.crm-players input.num {
 }
 .kick-btn:hover { color: #ff6b6b; }
 
+/* replay ao vivo da partida no online */
+.match-replay { margin-top: 14px; }
+.replay-feed { min-height: 92px; display: flex; flex-direction: column; gap: 3px; margin: 10px 0; }
+.rf-row { font-size: 0.88rem; }
+.rf-row .kf-round { color: var(--muted); font-size: 0.72rem; margin-right: 6px; }
+
 /* ===== banner premium "sempre visível" (demo in-game para patrocinador) ===== */
 .ad-persistent {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 300;

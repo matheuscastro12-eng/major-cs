@@ -12,7 +12,8 @@ import {
 } from '../state/online';
 import { useLang } from '../state/i18n';
 import { track } from '../state/track';
-import type { SeriesResult, TournamentPool } from '../types';
+import type { SeriesResult, TournamentPool, TTeam } from '../types';
+import { MAP_LABELS } from '../types';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, Loader, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
@@ -519,9 +520,10 @@ export function OnlineScreen({ onBack }: Props) {
             </div>
           </div>
           {selMatch && (
-            <Scoreboard
+            <MatchReplay
               series={selMatch.series}
               teams={[major.teamsById[selMatch.a], major.teamsById[selMatch.b]]}
+              onClose={() => setSelMatch(null)}
             />
           )}
         </div>
@@ -620,11 +622,12 @@ export function OnlineScreen({ onBack }: Props) {
           </div>
         </div>
         {selMatch && (
-          <Scoreboard
-            series={selMatch.series}
-            teams={[major.teamsById[selMatch.a], major.teamsById[selMatch.b]]}
-          />
-        )}
+            <MatchReplay
+              series={selMatch.series}
+              teams={[major.teamsById[selMatch.a], major.teamsById[selMatch.b]]}
+              onClose={() => setSelMatch(null)}
+            />
+          )}
       </div>
     );
   }
@@ -808,6 +811,108 @@ export function OnlineScreen({ onBack }: Props) {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Replay AO VIVO de uma série já calculada (determinístico): o placar sobe
+// round a round, com killfeed e K/D acumulados a partir do resultado gravado.
+// Assim a partida "acontece" na tela sem quebrar a sincronia entre clientes.
+function MatchReplay({ series, teams, onClose }: { series: SeriesResult; teams: [TTeam, TTeam]; onClose: () => void }) {
+  const [mapIdx, setMapIdx] = useState(0);
+  const [round, setRound] = useState(0);
+  const [done, setDone] = useState(false);
+  const [fast, setFast] = useState(false);
+
+  useEffect(() => {
+    if (done) return;
+    const map = series.maps[mapIdx];
+    if (!map) { setDone(true); return; }
+    if (round >= map.roundLog.length) {
+      if (mapIdx + 1 >= series.maps.length) { setDone(true); return; }
+      const t = setTimeout(() => { setMapIdx(mapIdx + 1); setRound(0); }, 700);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setRound((r) => r + 1), fast ? 22 : 70);
+    return () => clearTimeout(t);
+  }, [mapIdx, round, done, series, fast]);
+
+  const idIndex = useMemo(() => {
+    const m = new Map<string, { nick: string; team: 0 | 1 }>();
+    teams.forEach((tm, ti) => tm.players.forEach((p) => m.set(p.id, { nick: p.nick, team: ti as 0 | 1 })));
+    return m;
+  }, [teams]);
+
+  // K/D acumulado até o ponto atual da reprodução
+  const kd = useMemo(() => {
+    const k: Record<string, { k: number; d: number }> = {};
+    const bump = (id: string, key: 'k' | 'd') => { (k[id] = k[id] || { k: 0, d: 0 })[key]++; };
+    for (let mi = 0; mi <= mapIdx && mi < series.maps.length; mi++) {
+      const lim = mi < mapIdx ? Infinity : round;
+      for (const e of series.maps[mi].killFeed) if (e.round <= lim) { bump(e.killerId, 'k'); bump(e.victimId, 'd'); }
+    }
+    return k;
+  }, [mapIdx, round, series]);
+
+  const map = series.maps[mapIdx];
+  const log = map ? map.roundLog.slice(0, round) : [];
+  const sa = log.filter((w) => w === 0).length;
+  const sb = log.filter((w) => w === 1).length;
+  const mapsA = series.maps.slice(0, mapIdx).filter((m) => m.winner === 0).length + (done && series.maps[mapIdx] ? 0 : 0);
+  const mapsB = series.maps.slice(0, mapIdx).filter((m) => m.winner === 1).length;
+  const feed = map ? map.killFeed.filter((e) => e.round <= round).slice(-7).reverse() : [];
+
+  const Side = ({ idx }: { idx: 0 | 1 }) => (
+    <div className={`lsb-team`}>
+      <div className="lsb-head">
+        <TeamBadge tag={teams[idx].tag} colors={teams[idx].colors} size={20} logoUrl={teams[idx].logoUrl} />
+        <span className="lsb-tname">{teams[idx].name}</span>
+      </div>
+      {teams[idx].players.map((p) => {
+        const s = kd[p.id] ?? { k: 0, d: 0 };
+        return (
+          <div key={p.id} className="lsb-row">
+            <PlayerAvatar nick={p.nick} size={24} />
+            <span className="lsb-nick"><Flag cc={p.country} /> {p.nick}</span>
+            <span className="lsb-kda">{s.k}/{s.d}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className="panel match-replay fade-in">
+      <div className="panel-head">
+        {map ? MAP_LABELS[map.map] : 'FIM'} {!done && `· R${round}`}
+        <span className="spacer" />
+        {!done && <button className="btn ghost small" onClick={() => setFast((f) => !f)}>{fast ? '1x' : '4x'}</button>}
+        {!done && <button className="btn ghost small" onClick={() => setDone(true)}>Pular ⏭</button>}
+        <button className="btn small" onClick={onClose}>Fechar ✕</button>
+      </div>
+      <div className="panel-body">
+        <div className="qs-board" style={{ marginBottom: 10 }}>
+          <div className="qs-side"><TeamBadge tag={teams[0].tag} colors={teams[0].colors} size={40} logoUrl={teams[0].logoUrl} /><div className="qs-name">{teams[0].name}</div><div className="qs-score">{sa}</div></div>
+          <div className="qs-mid"><div className="qs-mapscore">{mapsA} - {mapsB} <span className="muted small">mapas</span></div></div>
+          <div className="qs-side"><TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={40} logoUrl={teams[1].logoUrl} /><div className="qs-name">{teams[1].name}</div><div className="qs-score">{sb}</div></div>
+        </div>
+        {!done && (
+          <>
+            <div className="replay-feed">
+              {feed.length === 0 ? <div className="muted small">…</div> : feed.map((e, i) => (
+                <div key={i} className="rf-row">
+                  <span className="kf-round">R{e.round}</span>
+                  <span style={{ color: e.killerTeam === 0 ? '#6fb6ec' : '#f0b35c' }}>{idIndex.get(e.killerId)?.nick ?? '?'}</span>
+                  {e.headshot ? ' ◉ ' : ' ▸ '}
+                  <span style={{ color: e.victimTeam === 0 ? '#6fb6ec' : '#f0b35c' }}>{idIndex.get(e.victimId)?.nick ?? '?'}</span>
+                </div>
+              ))}
+            </div>
+            <div className="live-scoreboard"><Side idx={0} /><div className="lsb-vs">VS</div><Side idx={1} /></div>
+          </>
+        )}
+      </div>
+      {done && <Scoreboard series={series} teams={teams} />}
     </div>
   );
 }
