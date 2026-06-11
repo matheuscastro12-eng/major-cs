@@ -451,14 +451,15 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     if (scoreA >= target || scoreB >= target) {
       finished = true;
     } else if (scoreA === 12 && scoreB === 12 && target === 13) {
+      // empate na regulamentação: vai para prorrogação MR3 (primeiro a +4)
       target = 16;
       ot = true;
-    } else if (ot && round >= 42 && scoreA === scoreB) {
-      target = scoreA + 1;
     } else if (ot && scoreA === target - 1 && scoreB === target - 1) {
+      // empate no fim de um bloco de OT (15-15, 18-18, 21-21…): mais um MR3
       target += 3;
     }
-    if (round > 60) finished = true;
+    // trava de segurança bem alta (na prática a OT MR3 sempre decide bem antes)
+    if (round > 120) finished = true;
 
     if (!finished) nextBuys = computeBuys();
     return finished;
@@ -498,9 +499,9 @@ export function simulateSeries(
   a: TTeam,
   b: TTeam,
   maps: { map: MapId; pickedBy: 0 | 1 | -1 }[],
-  bestOf: 1 | 3 = 3,
+  bestOf: 1 | 3 | 5 = 3,
 ): SeriesResult {
-  const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
+  const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2, BO5 -> 3
   const results: MapResult[] = [];
   let winsA = 0;
   let winsB = 0;

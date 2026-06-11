@@ -16,7 +16,7 @@ interface Props {
   userIdx: 0 | 1;
   rng: Rng;
   phaseLabel: string;
-  bestOf?: 1 | 3;
+  bestOf?: 1 | 3 | 5;
   onFinish: (series: SeriesResult) => void;
 }
 
@@ -71,7 +71,7 @@ const BUY_LABEL: Record<BuyTier, string> = {
 export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish }: Props) {
   const { t } = useLang();
   const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
-  const mdLabel = bestOf === 1 ? 'MD1' : 'MD3';
+  const mdLabel = bestOf === 1 ? 'MD1' : bestOf === 5 ? 'MD5' : 'MD3';
   const simsRef = useRef<MapSim[]>([]);
   const resultsRef = useRef<MapResult[]>([]);
   const [mapIdx, setMapIdx] = useState(0);

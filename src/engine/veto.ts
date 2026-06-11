@@ -32,8 +32,21 @@ export const VETO_ORDER_BO1: { team: 0 | 1 | -1; action: VetoActionType }[] = [
   { team: -1, action: 'decider' },
 ];
 
-export function vetoOrder(bestOf: 1 | 3): { team: 0 | 1 | -1; action: VetoActionType }[] {
-  return bestOf === 1 ? VETO_ORDER_BO1 : VETO_ORDER_BO3;
+// Ordem MD5: A ban, B ban, depois 4 picks alternados + decider (joga 5 mapas)
+export const VETO_ORDER_BO5: { team: 0 | 1 | -1; action: VetoActionType }[] = [
+  { team: 0, action: 'ban' },
+  { team: 1, action: 'ban' },
+  { team: 0, action: 'pick' },
+  { team: 1, action: 'pick' },
+  { team: 0, action: 'pick' },
+  { team: 1, action: 'pick' },
+  { team: -1, action: 'decider' },
+];
+
+export type BestOf = 1 | 3 | 5;
+
+export function vetoOrder(bestOf: BestOf): { team: 0 | 1 | -1; action: VetoActionType }[] {
+  return bestOf === 1 ? VETO_ORDER_BO1 : bestOf === 5 ? VETO_ORDER_BO5 : VETO_ORDER_BO3;
 }
 
 // compat: alguns lugares ainda importam VETO_ORDER (= BO3)
@@ -42,10 +55,10 @@ export const VETO_ORDER = VETO_ORDER_BO3;
 export interface VetoState {
   steps: VetoStep[]; // passos já realizados
   remaining: MapId[];
-  bestOf: 1 | 3;
+  bestOf: BestOf;
 }
 
-export function newVeto(bestOf: 1 | 3 = 3): VetoState {
+export function newVeto(bestOf: BestOf = 3): VetoState {
   return { steps: [], remaining: [...MAP_POOL], bestOf };
 }
 
@@ -89,7 +102,7 @@ export function vetoMaps(v: VetoState): { map: MapId; pickedBy: 0 | 1 | -1 }[] {
 }
 
 // veto completo automático (partidas IA vs IA)
-export function autoVeto(teams: [TTeam, TTeam], rng: Rng, bestOf: 1 | 3 = 3): { map: MapId; pickedBy: 0 | 1 | -1 }[] {
+export function autoVeto(teams: [TTeam, TTeam], rng: Rng, bestOf: BestOf = 3): { map: MapId; pickedBy: 0 | 1 | -1 }[] {
   let v = newVeto(bestOf);
   while (!vetoDone(v)) {
     v = applyVeto(v, aiChoice(v, teams, rng));

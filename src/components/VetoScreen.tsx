@@ -13,7 +13,7 @@ interface Props {
   userIdx: 0 | 1;
   rng: Rng;
   phaseLabel: string;
-  bestOf?: 1 | 3;
+  bestOf?: 1 | 3 | 5;
   mapRecord?: Record<string, { w: number; l: number }>;
   onDone: (maps: { map: MapId; pickedBy: 0 | 1 | -1 }[]) => void;
 }
@@ -21,7 +21,7 @@ interface Props {
 export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRecord = {}, onDone }: Props) {
   const { t } = useLang();
   const [veto, setVeto] = useState<VetoState>(() => newVeto(bestOf));
-  const mdLabel = bestOf === 1 ? 'MD1' : 'MD3';
+  const mdLabel = bestOf === 1 ? 'MD1' : bestOf === 5 ? 'MD5' : 'MD3';
   const timer = useRef<number | undefined>(undefined);
 
   const done = vetoDone(veto);

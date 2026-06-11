@@ -86,9 +86,10 @@ function bestOfForRecord(wins: number, losses: number): 1 | 3 {
   return wins === 2 || losses === 2 ? 3 : 1;
 }
 
-export function pairingBestOf(t: Tournament, p: Pairing): 1 | 3 {
+export function pairingBestOf(t: Tournament, p: Pairing): 1 | 3 | 5 {
   if (p.bestOf) return p.bestOf;
-  if (t.phase !== 'swiss') return 3; // playoffs sempre MD3
+  if (t.phase === 'final' || p.label === 'FINAL') return 5; // grande final MD5
+  if (t.phase !== 'swiss') return 3; // demais playoffs MD3
   const m = /^(\d)-(\d)$/.exec(p.label);
   if (m) return bestOfForRecord(Number(m[1]), Number(m[2]));
   return 3;
@@ -244,23 +245,23 @@ export function resolveRound(t: Tournament, rng: Rng): Tournament {
       const seeds = seedAdvanced(t);
       for (const s of seeds) s.status = 'alive';
       t.pairings = [
-        { a: seeds[0].id, b: seeds[7].id, label: 'QF1' },
-        { a: seeds[3].id, b: seeds[4].id, label: 'QF2' },
-        { a: seeds[1].id, b: seeds[6].id, label: 'QF3' },
-        { a: seeds[2].id, b: seeds[5].id, label: 'QF4' },
+        { a: seeds[0].id, b: seeds[7].id, label: 'QF1', bestOf: 3 },
+        { a: seeds[3].id, b: seeds[4].id, label: 'QF2', bestOf: 3 },
+        { a: seeds[1].id, b: seeds[6].id, label: 'QF3', bestOf: 3 },
+        { a: seeds[2].id, b: seeds[5].id, label: 'QF4', bestOf: 3 },
       ];
     }
   } else if (t.phase === 'quarters') {
     const w = t.pairings.map((p) => (p.result!.winner === 0 ? p.a : p.b));
     t.phase = 'semis';
     t.pairings = [
-      { a: w[0], b: w[1], label: 'SF1' },
-      { a: w[2], b: w[3], label: 'SF2' },
+      { a: w[0], b: w[1], label: 'SF1', bestOf: 3 },
+      { a: w[2], b: w[3], label: 'SF2', bestOf: 3 },
     ];
   } else if (t.phase === 'semis') {
     const w = t.pairings.map((p) => (p.result!.winner === 0 ? p.a : p.b));
     t.phase = 'final';
-    t.pairings = [{ a: w[0], b: w[1], label: 'FINAL' }];
+    t.pairings = [{ a: w[0], b: w[1], label: 'FINAL', bestOf: 5 }]; // grande final MD5
   } else if (t.phase === 'final') {
     const p = t.pairings[0];
     t.championId = p.result!.winner === 0 ? p.a : p.b;

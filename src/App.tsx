@@ -46,7 +46,7 @@ interface MatchCtx {
   maps: { map: MapId; pickedBy: 0 | 1 | -1 }[];
   userIdx: 0 | 1;
   phase: string;
-  bestOf: 1 | 3;
+  bestOf: 1 | 3 | 5;
 }
 
 export interface PickemState {
@@ -79,7 +79,15 @@ interface TransferCtx {
   baseTeam: TTeam;
 }
 
-const SESSION_KEY = 'major-session-v2';
+// v3: invalida campanhas em andamento salvas por builds antigos (antes do
+// formato MD1/MD3/MD5 e do Major online), que podiam resumir com estado
+// inconsistente - causa de placares/vitórias que pareciam trocados no meio da run.
+const SESSION_KEY = 'major-session-v3';
+try {
+  localStorage.removeItem('major-session-v2');
+} catch {
+  /* sem storage */
+}
 
 export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
