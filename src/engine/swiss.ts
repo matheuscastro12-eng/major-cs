@@ -35,6 +35,42 @@ export function createTournament(
   return t;
 }
 
+// Cria um Major a partir de um conjunto exato de times (sem sortear). Usado no
+// modo online: os times draftados pelos jogadores + times da IA preenchendo até
+// 16 disputam o mesmo torneio (Suíça + playoffs), tudo determinístico pelo seed.
+export function createTournamentFromTeams(teams: TTeam[], rng: Rng, name = 'MAJOR ONLINE'): Tournament {
+  const fresh = teams.map((t) => ({ ...t, wins: 0, losses: 0, roundDiff: 0, status: 'alive' as const }));
+  const t: Tournament = {
+    name,
+    teams: fresh,
+    phase: 'swiss',
+    swissRound: 1,
+    pairings: [],
+    history: [],
+  };
+  t.pairings = makeSwissPairings(t, rng);
+  return t;
+}
+
+// Rótulo de até onde um time chegou no Major (para exibir no resultado online).
+export function placementLabel(t: Tournament, teamId: string): string {
+  if (t.championId === teamId) return 'CAMPEÃO';
+  const team = t.teams.find((x) => x.id === teamId);
+  // procura a fase onde o time perdeu nos playoffs
+  for (const h of t.history) {
+    const p = h.pairing;
+    if (p.a !== teamId && p.b !== teamId) continue;
+    if (!p.result) continue;
+    const lost = (p.result.winner === 0 ? p.b : p.a) === teamId;
+    if (!lost) continue;
+    if (h.phase.includes('GRANDE FINAL')) return 'VICE-CAMPEÃO';
+    if (h.phase.includes('Semi')) return 'SEMIFINAL';
+    if (h.phase.includes('Quartas')) return 'QUARTAS DE FINAL';
+  }
+  if (team?.status === 'advanced') return 'CLASSIFICADO AOS PLAYOFFS';
+  return `SUÍÇA (${team?.wins ?? 0}-${team?.losses ?? 0})`;
+}
+
 function pastOpponents(t: Tournament, id: string): Set<string> {
   const s = new Set<string>();
   for (const h of t.history) {

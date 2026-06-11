@@ -4,15 +4,21 @@ import {
   buildDraftFromSeed,
   fetchLobby,
   lobbyApi,
-  simulateOnlineResults,
+  majorStandings,
+  simulateOnlineMajor,
   type LobbyState,
-  type OnlineMatch,
 } from '../state/online';
 import { track } from '../state/track';
-import type { TournamentPool } from '../types';
+import type { SeriesResult, TournamentPool } from '../types';
 import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+
+interface SelSeries {
+  a: string; // teamId
+  b: string;
+  series: SeriesResult;
+}
 
 interface Props {
   onBack: () => void;
@@ -33,7 +39,7 @@ export function OnlineScreen({ onBack }: Props) {
   const [myDone, setMyDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [selMatch, setSelMatch] = useState<OnlineMatch | null>(null);
+  const [selMatch, setSelMatch] = useState<SelSeries | null>(null);
   const pollRef = useRef<number | undefined>(undefined);
 
   const saveNick = (n: string) => {
@@ -114,15 +120,15 @@ export function OnlineScreen({ onBack }: Props) {
     [state],
   );
 
-  const results = useMemo(
-    () => (state && state.lobby.status === 'done' ? simulateOnlineResults(state) : null),
+  const major = useMemo(
+    () => (state && state.lobby.status === 'done' ? simulateOnlineMajor(state) : null),
     [state],
   );
 
   useEffect(() => {
-    if (results) track('online_done', { players: state?.players.length ?? 0 });
+    if (major) track('online_done', { players: state?.players.length ?? 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!results]);
+  }, [!!major]);
 
   const pickPlayer = (playerId: string) => {
     if (myDone || !setup) return;
@@ -153,8 +159,9 @@ export function OnlineScreen({ onBack }: Props) {
           </div>
           <div className="panel-body">
             <p className="muted small" style={{ marginTop: 0 }}>
-              Todos draftam dos <b>mesmos elencos sorteados</b>, vendo o progresso uns dos outros ao
-              vivo. No fim, os times se enfrentam em séries MD3 e sai um campeão.
+              Todos draftam dos <b>mesmos elencos sorteados</b> (seu ultimate team), vendo o progresso
+              uns dos outros ao vivo. No fim, os times de todos entram juntos num <b>Major completo</b>
+              {' '}(com times da IA preenchendo) e disputam Suíça + playoffs. Vence quem levantar a taça.
             </p>
             <div className="field" style={{ marginBottom: 12 }}>
               <label>Seu nick</label>
@@ -266,13 +273,53 @@ export function OnlineScreen({ onBack }: Props) {
     );
   }
 
-  // resultados
-  if (state.lobby.status === 'done' && results) {
+  // resultados: MAJOR completo (jogadores + IA disputam o mesmo torneio)
+  if (state.lobby.status === 'done' && major) {
+    const champ = major.teamsById[major.championId];
+    const champNick = major.humanByTeamId[major.championId];
+    const fullStandings = majorStandings(major);
+    // partidas dos playoffs + partidas que envolveram algum jogador humano
+    const playoffs = major.tournament.history.filter(
+      (h) => !h.phase.startsWith('Suíça') && h.pairing.result,
+    );
+    const humanGames = major.tournament.history.filter(
+      (h) => h.pairing.result && (major.humanByTeamId[h.pairing.a] || major.humanByTeamId[h.pairing.b]),
+    );
+    const teamLabel = (id: string) => {
+      const t = major.teamsById[id];
+      const nk = major.humanByTeamId[id];
+      return nk ? `${nk} (${t?.tag ?? ''})` : t?.name ?? id;
+    };
+    const SeriesRow = ({ h, key }: { h: (typeof playoffs)[number]; key?: number }) => {
+      const p = h.pairing;
+      const res = p.result!;
+      return (
+        <div
+          key={key}
+          className="matchline clickable"
+          onClick={() => setSelMatch({ a: p.a, b: p.b, series: res })}
+        >
+          <span className={`side${major.humanByTeamId[p.a] ? ' human' : ''}`}>
+            <span className="tname">{teamLabel(p.a)}</span>
+          </span>
+          <span className="score">
+            <span className={res.winner === 0 ? 'w' : 'l'}>{res.mapScore[0]}</span>
+            {' : '}
+            <span className={res.winner === 1 ? 'w' : 'l'}>{res.mapScore[1]}</span>
+          </span>
+          <span className={`side right${major.humanByTeamId[p.b] ? ' human' : ''}`}>
+            <span className="tname">{teamLabel(p.b)}</span>
+          </span>
+          <span className="muted small">{h.phase.replace('Suíça - ', '')}</span>
+        </div>
+      );
+    };
+
     return (
       <div className="fade-in">
         <div className="panel">
           <div className="panel-head">
-            🏆 Resultado da sala {code}
+            🏆 Major da sala {code}
             <span className="spacer" />
             <button className="btn" onClick={onBack}>
               ← Sair do online
@@ -281,63 +328,89 @@ export function OnlineScreen({ onBack }: Props) {
           <div className="panel-body">
             <div className="finale" style={{ padding: '10px 0 18px' }}>
               <div className="trophy">🏆</div>
-              <h1 style={{ fontSize: 26 }}>{results.champion} é o campeão!</h1>
+              <h1 style={{ fontSize: 26 }}>
+                {champNick ? `${champNick} é CAMPEÃO do Major!` : `${champ?.name} levou o Major`}
+              </h1>
+              <div className="muted">
+                {champNick ? `com o elenco: ${champ?.players.map((p) => p.nick).join(', ')}` : 'nenhum jogador chegou à final'}
+              </div>
             </div>
+
+            {/* resultado de cada jogador */}
+            <div className="muted small section-label">Como cada jogador foi</div>
+            <div className="human-results">
+              {major.humans.map((h) => {
+                const t = major.teamsById[h.teamId];
+                return (
+                  <div key={h.nick} className={`human-card${h.placement === 'CAMPEÃO' ? ' champ' : ''}`}>
+                    <div className="hr-head">
+                      <TeamBadge tag={t?.tag ?? ''} colors={t?.colors ?? ['#333', '#555']} size={28} logoUrl={t?.logoUrl} />
+                      <b>{h.nick}</b>
+                      <span className="spacer" />
+                      <span className="hr-place">{h.placement}</span>
+                    </div>
+                    <div className="hr-roster muted small">{t?.players.map((p) => p.nick).join(', ')}</div>
+                    <div className="hr-rec muted small">campanha {h.wins}V - {h.losses}D</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* playoffs */}
+            {playoffs.length > 0 && (
+              <>
+                <div className="muted small section-label">Playoffs (clique para ver o placar)</div>
+                <div className="panel-body tight" style={{ padding: 0 }}>
+                  {playoffs.map((h, i) => (
+                    <SeriesRow key={i} h={h} />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* partidas dos jogadores na Suíça */}
+            <div className="muted small section-label">Partidas dos jogadores</div>
+            <div className="panel-body tight" style={{ padding: 0 }}>
+              {humanGames.map((h, i) => (
+                <SeriesRow key={i} h={h} />
+              ))}
+            </div>
+
+            {/* classificação final do Major */}
+            <div className="muted small section-label">Classificação final do Major</div>
             <table className="stats">
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left' }}>#</th>
-                  <th style={{ textAlign: 'left' }}>Jogador</th>
-                  <th style={{ textAlign: 'left' }}>Elenco draftado</th>
+                  <th style={{ textAlign: 'left' }}>Time</th>
                   <th>V</th>
                   <th>D</th>
                   <th>Saldo</th>
                 </tr>
               </thead>
               <tbody>
-                {results.standings.map((s, i) => (
-                  <tr key={s.nick}>
+                {fullStandings.map((s, i) => (
+                  <tr key={s.team.id} className={s.isHuman ? 'human-row' : undefined}>
                     <td style={{ textAlign: 'left' }}>{i + 1}</td>
-                    <td style={{ textAlign: 'left', fontWeight: 700, color: i === 0 ? 'var(--gold)' : undefined }}>
-                      {i === 0 ? '🏆 ' : ''}
-                      {s.nick}
+                    <td style={{ textAlign: 'left', fontWeight: s.isHuman ? 700 : 400 }}>
+                      {s.team.id === major.championId ? '🏆 ' : ''}
+                      {s.isHuman ? `${s.nick} · ` : ''}
+                      {s.team.name}
                     </td>
-                    <td style={{ textAlign: 'left' }} className="muted small">
-                      {results.teams[s.nick]?.players.map((p) => p.nick).join(', ')} · coach {results.teams[s.nick]?.coach.nick}
-                    </td>
-                    <td className="pos">{s.wins}</td>
-                    <td className="neg">{s.losses}</td>
-                    <td>{s.mapDiff > 0 ? `+${s.mapDiff}` : s.mapDiff}</td>
+                    <td className="pos">{s.team.wins}</td>
+                    <td className="neg">{s.team.losses}</td>
+                    <td>{s.team.roundDiff > 0 ? `+${s.team.roundDiff}` : s.team.roundDiff}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            <div className="muted small" style={{ margin: '16px 0 6px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
-              Séries (clique para ver as estatísticas)
-            </div>
-            <div className="panel-body tight" style={{ padding: 0 }}>
-              {results.matches.map((m, i) => (
-                <div key={i} className="matchline clickable" onClick={() => setSelMatch(selMatch === m ? null : m)}>
-                  <span className="side">
-                    <span className="tname">{m.a}</span>
-                  </span>
-                  <span className="score">
-                    <span className={m.series.winner === 0 ? 'w' : 'l'}>{m.series.mapScore[0]}</span>
-                    {' : '}
-                    <span className={m.series.winner === 1 ? 'w' : 'l'}>{m.series.mapScore[1]}</span>
-                  </span>
-                  <span className="side right">
-                    <span className="tname">{m.b}</span>
-                  </span>
-                  <span className="muted small">MD3</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
         {selMatch && (
-          <Scoreboard series={selMatch.series} teams={[results.teams[selMatch.a], results.teams[selMatch.b]]} />
+          <Scoreboard
+            series={selMatch.series}
+            teams={[major.teamsById[selMatch.a], major.teamsById[selMatch.b]]}
+          />
         )}
       </div>
     );
@@ -472,8 +545,8 @@ export function OnlineScreen({ onBack }: Props) {
             );
           })}
           <p className="muted small" style={{ marginTop: 12 }}>
-            Todos draftam dos mesmos 5 elencos sorteados. Quando todos terminarem, os times se
-            enfrentam em MD3 e o campeão da sala é coroado.
+            Todos draftam dos mesmos 5 elencos sorteados. Quando todos terminarem, os times entram
+            num Major completo (com a IA preenchendo) e disputam Suíça + playoffs juntos.
           </p>
         </div>
       </div>

@@ -679,6 +679,52 @@ tr.team-row td {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* resultado do Major online (ultimate team) */
+.section-label {
+  margin: 18px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.human-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.human-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 10px 12px;
+}
+.human-card.champ {
+  border-color: var(--gold, #e6b34d);
+  box-shadow: 0 0 0 1px var(--gold, #e6b34d), 0 0 18px rgba(230, 179, 77, 0.25);
+}
+.human-card .hr-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.human-card .hr-head .spacer {
+  flex: 1;
+}
+.human-card .hr-place {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--gold, #e6b34d);
+}
+.matchline .side.human .tname {
+  color: var(--blue-bright);
+  font-weight: 800;
+}
+tr.human-row {
+  background: rgba(97, 168, 221, 0.1);
+}
+
 /* sistema de aprovação de times no CRM */
 .pending-tag {
   display: inline-block;
