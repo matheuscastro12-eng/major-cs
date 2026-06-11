@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import type { DraftState, Player, TeamSeason } from '../types';
-import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
+import { useLang } from '../state/i18n';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 
 const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
@@ -11,16 +11,13 @@ const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 type RoleKey = 'IGL' | 'AWP' | 'Entry' | 'Support';
 interface RoleNeed {
   key: RoleKey;
-  label: string;
-  short: string;
-  why: string;
   critical: boolean;
 }
 const NEED_DEFS: Record<RoleKey, RoleNeed> = {
-  IGL: { key: 'IGL', label: 'IGL (capitão)', short: 'IGL', why: 'sem leitura tática seu time desmorona em rounds fechados', critical: true },
-  AWP: { key: 'AWP', label: 'AWPer', short: 'AWP', why: 'sem sniper o lado CT vira sofrimento', critical: true },
-  Entry: { key: 'Entry', label: 'Entry fragger', short: 'Entry', why: 'abre espaço e troca o primeiro duelo', critical: false },
-  Support: { key: 'Support', label: 'Suporte/Lurker', short: 'Suporte', why: 'fecha o mapa e segura informação', critical: false },
+  IGL: { key: 'IGL', critical: true },
+  AWP: { key: 'AWP', critical: true },
+  Entry: { key: 'Entry', critical: false },
+  Support: { key: 'Support', critical: false },
 };
 
 function rosterNeeds(picked: Player[]): RoleNeed[] {
@@ -41,6 +38,7 @@ interface Props {
 }
 
 export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) {
+  const { t: tr } = useLang();
   const coachPhase = draft.current >= 5;
   const round = draft.rounds[draft.current];
   const source = useMemo(
@@ -93,10 +91,10 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
       {!coachPhase && source && (
         <div className="panel">
           <div className="panel-head">
-            Draft - escolha {draft.current + 1} de 5
+            {tr('draft.title')} {draft.current + 1} {tr('common.of')} 5
             <span className="spacer" />
             <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              {spinning ? 'Sorteando um elenco histórico…' : 'O dado sorteou um elenco histórico. Escolha 1 jogador para o seu time.'}
+              {spinning ? tr('draft.spinning') : tr('draft.spinDone')}
             </span>
           </div>
 
@@ -123,23 +121,23 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
                   <div className="honors">{source.honors}</div>
                 </div>
                 <button className="btn ghost" onClick={onReroll} disabled={draft.rerollsLeft <= 0}>
-                  🎲 Rolar de novo ({draft.rerollsLeft})
+                  🎲 {tr('draft.reroll')} ({draft.rerollsLeft})
                 </button>
               </div>
 
           <div className="role-needs">
             {needs.length === 0 ? (
-              <span className="role-needs-ok">✅ Composição equilibrada: todas as funções-chave cobertas. Agora caçe overall.</span>
+              <span className="role-needs-ok">✅ {tr('draft.needsOk')}</span>
             ) : (
               <>
-                <span className="role-needs-title">Ainda falta no seu time:</span>
+                <span className="role-needs-title">{tr('draft.needsTitle')}</span>
                 {needs.map((n) => (
-                  <span key={n.key} className={`need-chip${n.critical ? ' critical' : ''}`} title={n.why}>
+                  <span key={n.key} className={`need-chip${n.critical ? ' critical' : ''}`} title={tr(`draft.need${n.key}Why`)}>
                     {n.critical ? '⚠ ' : ''}
-                    {n.label}
+                    {tr(`draft.need${n.key}`)}
                   </span>
                 ))}
-                <span className="role-needs-hint">funções em vermelho dão penalidade pesada se ficarem vazias.</span>
+                <span className="role-needs-hint">{tr('draft.needsHint')}</span>
               </>
             )}
           </div>
@@ -164,10 +162,10 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
       {coachPhase && (
         <div className="panel">
           <div className="panel-head">
-            Draft - escolha o COACH
+            {tr('draft.coachTitle')}
             <span className="spacer" />
             <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              O treinador define o estilo do time dentro do servidor.
+              {tr('draft.coachSub')}
             </span>
           </div>
           <div className="player-cards">
@@ -185,10 +183,10 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
                     <span>{c.name}</span>
                   </div>
                   <div className="meta">
-                    <span className="role-pill IGL">{COACH_STYLE_LABELS[c.style]}</span>
+                    <span className="role-pill IGL">{tr(`coach.${c.style}`)}</span>
                   </div>
                   <div className="meta muted small" style={{ marginTop: 6, lineHeight: 1.3 }}>
-                    {COACH_STYLE_DESC[c.style]}
+                    {tr(`coach.${c.style}Desc`)}
                   </div>
                   <div className="meta muted small">
                     <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={teamLogo(t)} /> {t.team} {t.era}
@@ -201,7 +199,7 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
       )}
 
       <div className="panel">
-        <div className="panel-head">Seu elenco</div>
+        <div className="panel-head">{tr('draft.yourRoster')}</div>
         <div className="panel-body">
           <div className="roster-slots">
             {[0, 1, 2, 3, 4].map((i) => {
@@ -224,7 +222,7 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
               }
               return (
                 <div key={i} className="slot">
-                  {i === draft.current ? '… escolhendo' : `Escolha ${i + 1}`}
+                  {i === draft.current ? `… ${tr('draft.choosing')}` : `${tr('draft.pickN')} ${i + 1}`}
                 </div>
               );
             })}
@@ -242,6 +240,7 @@ const REEL_LEN = 44; // quantos cards passam até parar
 const REEL_TARGET = REEL_LEN - 5; // posição final do time sorteado
 
 function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: TeamSeason; onDone: () => void }) {
+  const { t: tr } = useLang();
   const reel = useMemo(() => {
     const others = pool.filter((t) => t.id !== target.id);
     const items: TeamSeason[] = [];
@@ -317,7 +316,7 @@ function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: T
           ))}
         </div>
       </div>
-      <div className="roulette-hint">🎲 girando os elencos…</div>
+      <div className="roulette-hint">🎲 {tr('draft.rouletteHint')}</div>
     </div>
   );
 }
@@ -335,12 +334,13 @@ function PlayerCard({
   fills: RoleNeed | null;
   onPick: () => void;
 }) {
+  const { t: tr } = useLang();
   return (
     <button className={`pcard${taken ? ' taken' : ''}${fills ? ' fills-need' : ''}`} onClick={onPick}>
       {fills && (
         <span className={`fills-flag${fills.critical ? ' critical' : ''}`}>
-          {fills.critical ? '⚠ preenche ' : '+ '}
-          {fills.short}
+          {fills.critical ? `⚠ ${tr('draft.fills')} ` : '+ '}
+          {tr(`draft.need${fills.key}Short`)}
         </span>
       )}
       <PlayerAvatar nick={p.nick} size={56} />
@@ -355,14 +355,14 @@ function PlayerCard({
       </div>
       {classic && (
         <div className="attr-bars">
-          <AttrBar label="Mira" value={p.aim} />
-          <AttrBar label="Clutch" value={p.clutch} />
-          <AttrBar label="Const." value={p.consistency} />
+          <AttrBar label={tr('draft.attrAim')} value={p.aim} />
+          <AttrBar label={tr('draft.attrClutch')} value={p.clutch} />
+          <AttrBar label={tr('draft.attrConsistency')} value={p.consistency} />
           <AttrBar label="AWP" value={p.awp} />
           <AttrBar label="IGL" value={p.igl} />
         </div>
       )}
-      {taken && <div className="meta muted small">já está no seu time</div>}
+      {taken && <div className="meta muted small">{tr('draft.alreadyPicked')}</div>}
     </button>
   );
 }

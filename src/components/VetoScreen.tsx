@@ -6,6 +6,7 @@ import type { MapId, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
 import { MapThumb } from './ui';
 import { MatchBanner } from './flags';
+import { useLang } from '../state/i18n';
 
 interface Props {
   teams: [TTeam, TTeam]; // [a, b] - usuário pode ser 0 ou 1
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRecord = {}, onDone }: Props) {
+  const { t } = useLang();
   const [veto, setVeto] = useState<VetoState>(() => newVeto(bestOf));
   const mdLabel = bestOf === 1 ? 'MD1' : 'MD3';
   const timer = useRef<number | undefined>(undefined);
@@ -56,28 +58,28 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
     <div className="fade-in veto-layout">
       <div className="panel">
         <div className="panel-head">
-          Veto de mapas - {phaseLabel}
+          {t('veto.title')} - {phaseLabel}
           <span className="spacer" />
           <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-            {mdLabel} · ban/pick oficial
+            {mdLabel} · {t('veto.official')}
           </span>
         </div>
         <div className="panel-body">
           <div className="veto-banner-wrap" style={{ marginBottom: 12 }}>
-            <MatchBanner teamA={teams[0]} teamB={teams[1]} center={mdLabel} event={phaseLabel} sub="Veto de mapas" />
+            <MatchBanner teamA={teams[0]} teamB={teams[1]} center={mdLabel} event={phaseLabel} sub={t('veto.title')} />
           </div>
 
           <div className="center" style={{ marginBottom: 12 }}>
             {done ? (
               <button className="btn big" onClick={() => onDone(vetoMaps(veto))}>
-                ▶ Começar a série
+                ▶ {t('veto.startSeries')}
               </button>
             ) : isUserTurn ? (
               <span className="gold-text">
-                Sua vez: <b>{step!.action === 'ban' ? 'BANIR um mapa' : 'ESCOLHER um mapa'}</b>
+                {t('veto.yourTurn')} <b>{step!.action === 'ban' ? t('veto.banAMap') : t('veto.pickAMap')}</b>
               </span>
             ) : (
-              <span className="muted">Aguardando {teams[step!.team as 0 | 1].name}…</span>
+              <span className="muted">{t('veto.waitingFor')} {teams[step!.team as 0 | 1].name}…</span>
             )}
           </div>
 
@@ -93,7 +95,7 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
                   <MapThumb map={m} className="mapcard-img" />
                   {st && (
                     <span className="mtag">
-                      {st.kind === 'banned' ? 'BAN' : st.kind === 'picked' ? `PICK ${teams[st.by as 0 | 1].tag}` : 'DECIDER'}
+                      {st.kind === 'banned' ? t('veto.ban') : st.kind === 'picked' ? `${t('veto.pick')} ${teams[st.by as 0 | 1].tag}` : t('veto.decider')}
                     </span>
                   )}
                   <div className="mname">{MAP_LABELS[m]}</div>
@@ -108,11 +110,11 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
                 {i + 1}.{' '}
                 {s.action === 'decider' ? (
                   <>
-                    <b>{MAP_LABELS[s.map!]}</b> sobra como decider
+                    <b>{MAP_LABELS[s.map!]}</b> {t('veto.staysAsDecider')}
                   </>
                 ) : (
                   <>
-                    <b>{teams[s.team as 0 | 1].name}</b> {s.action === 'ban' ? 'baniu' : 'escolheu'}{' '}
+                    <b>{teams[s.team as 0 | 1].name}</b> {s.action === 'ban' ? t('veto.banned') : t('veto.picked')}{' '}
                     <b>{MAP_LABELS[s.map!]}</b>
                   </>
                 )}
@@ -120,7 +122,7 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
             ))}
             {!done && veto.steps.length === 0 && (
               <div className="muted">
-                Ordem: {VETO_ORDER.map((s) => (s.action === 'decider' ? 'decider' : `${s.team === 0 ? teams[0].tag : teams[1].tag} ${s.action}`)).join(' → ')}
+                {t('veto.order')} {VETO_ORDER.map((s) => (s.action === 'decider' ? t('veto.decider').toLowerCase() : `${s.team === 0 ? teams[0].tag : teams[1].tag} ${s.action}`)).join(' → ')}
               </div>
             )}
           </div>
@@ -144,6 +146,7 @@ function VetoAnalysis({
   dead: Record<string, { kind: string; by: number } | undefined>;
   mapRecord: Record<string, { w: number; l: number }>;
 }) {
+  const { t } = useLang();
   const me = teams[userIdx];
   const opp = teams[userIdx === 0 ? 1 : 0];
   const synergy = useMemo(() => draftSynergy(me.players), [me]);
@@ -165,33 +168,33 @@ function VetoAnalysis({
   );
 
   const verdictFor = (edge: number, rec: { w: number; l: number }) => {
-    if (rec.w >= 2 && rec.w > rec.l) return { label: 'mapa forte · pegue', cls: 'pick' };
-    if (edge >= 1) return { label: 'bom pick', cls: 'pick' };
-    if (edge <= -1) return { label: 'ban urgente', cls: 'ban' };
-    return { label: 'equilibrado', cls: 'even' };
+    if (rec.w >= 2 && rec.w > rec.l) return { label: t('veto.verdictStrong'), cls: 'pick' };
+    if (edge >= 1) return { label: t('veto.verdictGoodPick'), cls: 'pick' };
+    if (edge <= -1) return { label: t('veto.verdictBanUrgent'), cls: 'ban' };
+    return { label: t('veto.verdictEven'), cls: 'even' };
   };
 
   return (
     <div className="panel veto-analysis">
-      <div className="panel-head">Análise pré-partida</div>
+      <div className="panel-head">{t('veto.preMatchAnalysis')}</div>
       <div className="panel-body">
         <div className="vs-strength">
           <span className="me">
             {me.name} {me.strength.toFixed(1)}
           </span>
-          <span className="x">FORÇA</span>
+          <span className="x">{t('veto.strength')}</span>
           <span className="opp">
             {opp.strength.toFixed(1)} {opp.name}
           </span>
         </div>
 
         <div className="muted small" style={{ marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
-          Vantagem por mapa (você ⟵⟶ adversário)
+          {t('veto.mapAdvantage')}
         </div>
         {edges.map(({ m, edge, rec }) => {
           const v = verdictFor(edge, rec);
           const width = Math.min(50, Math.abs(edge) * 14);
-          const recTxt = rec.w + rec.l > 0 ? ` · ${rec.w}V-${rec.l}D` : '';
+          const recTxt = rec.w + rec.l > 0 ? ` · ${rec.w}${t('common.wins')}-${rec.l}${t('common.losses')}` : '';
           return (
             <div key={m} className={`map-edge${dead[m] ? ' dead-row' : ''}`}>
               <span className="mn">
@@ -211,13 +214,13 @@ function VetoAnalysis({
         })}
 
         <div className="muted small" style={{ margin: '14px 0 4px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
-          Forma dos seus jogadores
+          {t('veto.playerForm')}
         </div>
         <div className="synergy-list">
           {me.players.map((p) => {
             const f = p.form ?? 1;
             const icon = f >= 1.04 ? '🔥' : f <= 0.96 ? '🥶' : '➖';
-            const label = f >= 1.04 ? 'em chamas' : f <= 0.96 ? 'fase ruim' : 'estável';
+            const label = f >= 1.04 ? t('veto.formHot') : f <= 0.96 ? t('veto.formCold') : t('veto.formStable');
             return (
               <div key={p.id} className="item">
                 <span className="muted">
@@ -232,7 +235,7 @@ function VetoAnalysis({
         </div>
 
         <div className="muted small" style={{ margin: '14px 0 4px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
-          Sua composição ({synergy.total >= 0 ? '+' : ''}
+          {t('veto.yourComposition')} ({synergy.total >= 0 ? '+' : ''}
           {synergy.total.toFixed(1)})
         </div>
         <div className="synergy-list">
@@ -249,13 +252,13 @@ function VetoAnalysis({
         {!synergy.hasIgl && (
           <div className="insight-item bad" style={{ marginTop: 10 }}>
             <span className="ic">📢</span>
-            <span>Sem IGL: priorize mapas onde você tem vantagem clara - em jogos fechados seu time tende a desmoronar no 2º half.</span>
+            <span>{t('veto.noIgl')}</span>
           </div>
         )}
         {!synergy.hasAwp && (
           <div className="insight-item bad" style={{ marginTop: 6 }}>
             <span className="ic">🔭</span>
-            <span>Sem AWPer: evite mapas de linhas longas onde o CT depende da sniper (Dust2, Train).</span>
+            <span>{t('veto.noAwp')}</span>
           </div>
         )}
       </div>

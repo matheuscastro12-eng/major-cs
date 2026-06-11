@@ -22,7 +22,7 @@ import { createTournament, getTeam, pairingBestOf, phaseLabel, placementLabel, r
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, resetDataset, saveDataset } from './state/crm';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
-import { track, trackVisit } from './state/track';
+import { startPresenceHeartbeat, track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -198,6 +198,7 @@ export default function App() {
   // telemetria: registra a visita (1x por sessão)
   useEffect(() => {
     trackVisit();
+    return startPresenceHeartbeat();
   }, []);
 
   // fonte primária: banco Neon via /api/teams (verdade compartilhada).

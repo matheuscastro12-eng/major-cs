@@ -7,6 +7,7 @@ import { downloadShareCard } from '../state/share';
 import { track } from '../state/track';
 import type { Tournament, TournamentPool } from '../types';
 import { Flag, PlayerAvatar, TeamBadge } from './ui';
+import { useLang } from '../state/i18n';
 
 interface Props {
   t: Tournament;
@@ -21,18 +22,20 @@ interface Props {
   onDonate: () => void;
 }
 
-function userCampaign(t: Tournament): { label: string; placement: string; placementCode: string } {
+type Translate = (key: string) => string;
+
+function userCampaign(t: Tournament, tr: Translate): { label: string; placement: string; placementCode: string } {
   const user = getTeam(t, 'user');
   const isChampion = t.championId === 'user';
-  if (isChampion) return { label: 'CAMPEÃO DO MAJOR', placement: '1º lugar', placementCode: '1' };
+  if (isChampion) return { label: tr('final.champion'), placement: tr('final.place1'), placementCode: '1' };
 
   const userMatches = t.history.filter((h) => h.pairing.a === 'user' || h.pairing.b === 'user');
   const last = userMatches[userMatches.length - 1];
-  if (!last) return { label: 'ELIMINADO', placement: '-', placementCode: '16' };
-  if (last.phase.includes('FINAL')) return { label: 'VICE-CAMPEÃO', placement: '2º lugar', placementCode: '2' };
-  if (last.phase.includes('Semifinal')) return { label: 'ELIMINADO NA SEMI', placement: '3º-4º lugar', placementCode: '3-4' };
-  if (last.phase.includes('Quartas')) return { label: 'ELIMINADO NAS QUARTAS', placement: '5º-8º lugar', placementCode: '5-8' };
-  return { label: 'ELIMINADO NA FASE SUÍÇA', placement: `campanha ${user.wins}-${user.losses}`, placementCode: '9-16' };
+  if (!last) return { label: tr('final.eliminated'), placement: '-', placementCode: '16' };
+  if (last.phase.includes('FINAL')) return { label: tr('final.runnerUp'), placement: tr('final.place2'), placementCode: '2' };
+  if (last.phase.includes('Semifinal')) return { label: tr('final.elimSemi'), placement: tr('final.place34'), placementCode: '3-4' };
+  if (last.phase.includes('Quartas')) return { label: tr('final.elimQuarters'), placement: tr('final.place58'), placementCode: '5-8' };
+  return { label: tr('final.elimSwiss'), placement: `${tr('final.campaign')} ${user.wins}-${user.losses}`, placementCode: '9-16' };
 }
 
 // recordes da campanha do usuário (para o Hall da Fama)
@@ -75,10 +78,11 @@ function userRecords(t: Tournament, pickem: PickemState) {
 }
 
 export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHall, onBracket, onNextSeason, onDonate }: Props) {
+  const { t: tr } = useLang();
   const champion = t.championId ? getTeam(t, t.championId) : undefined;
   const isChampion = t.championId === 'user';
   const user = getTeam(t, 'user');
-  const campaign = useMemo(() => userCampaign(t), [t]);
+  const campaign = useMemo(() => userCampaign(t, tr), [t, tr]);
   const [copied, setCopied] = useState(false);
   const [nick, setNick] = useState(() => localStorage.getItem('major-nick') ?? '');
   const [hallStatus, setHallStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -123,12 +127,12 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
   const share = async () => {
     const lines = [
       `🏆 ROAD TO MAJOR · ${campaign.label}`,
-      `Time: ${user.name} (${campaign.placement})${career.season > 1 ? ` · temporada ${career.season}` : ''}`,
-      `Elenco: ${user.players.map((p) => p.nick).join(', ')} · coach ${user.coach.nick}`,
-      champion && !isChampion ? `Campeão: ${champion.name}` : '',
-      mvp ? `MVP do torneio: ${mvp.nick}` : '',
+      `${tr('final.shareTeam')}: ${user.name} (${campaign.placement})${career.season > 1 ? ` · ${tr('final.season')} ${career.season}` : ''}`,
+      `${tr('final.shareRoster')}: ${user.players.map((p) => p.nick).join(', ')} · ${tr('common.coach')} ${user.coach.nick}`,
+      champion && !isChampion ? `${tr('final.championLabel')}: ${champion.name}` : '',
+      mvp ? `${tr('final.tournamentMvp')}: ${mvp.nick}` : '',
       pickem.total > 0 ? `Pick'Em: ${pickem.score}/${pickem.total}` : '',
-      'Monte o seu: https://roadtomajor.com.br',
+      `${tr('final.shareCta')}: https://roadtomajor.com.br`,
     ].filter(Boolean);
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -148,16 +152,16 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
           <p className="sub">
             {isChampion ? (
               <>
-                <b>{user.name}</b> venceu o {t.name}. {campaign.placement}
-                {career.titles > 1 ? ` - ${career.titles}º título da carreira!` : '.'}
+                <b>{user.name}</b> {tr('final.wonThe')} {t.name}. {campaign.placement}
+                {career.titles > 1 ? ` - ${career.titles}${tr('final.careerTitleSuffix')}` : '.'}
               </>
             ) : (
               <>
-                Sua campanha terminou: <b>{campaign.placement}</b>.
+                {tr('final.campaignEnded')}: <b>{campaign.placement}</b>.
                 {champion && (
                   <>
                     {' '}
-                    O título ficou com <b>{champion.name}</b>.
+                    {tr('final.titleWentTo')} <b>{champion.name}</b>.
                   </>
                 )}
               </>
@@ -168,15 +172,15 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
                 🎯 Pick'Em: <b>
                   {pickem.score}/{pickem.total}
                 </b>{' '}
-                palpites certos.
+                {tr('final.correctGuesses')}.
               </>
             )}
           </p>
 
           {typeof career.lastPrize === 'number' && (
             <div className="prize-banner">
-              💰 Premiação da campanha: <b>+{formatMoney(career.lastPrize)}</b>
-              <span className="muted"> · caixa do clube: <b>{formatMoney(career.budget)}</b></span>
+              💰 {tr('final.prize')}: <b>+{formatMoney(career.lastPrize)}</b>
+              <span className="muted"> · {tr('final.clubCash')}: <b>{formatMoney(career.budget)}</b></span>
             </div>
           )}
 
@@ -186,7 +190,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
                 <TeamBadge tag={champion.tag} colors={champion.colors} size={34} logoUrl={champion.logoUrl} />
                 <Flag cc={champion.country} />
                 <b style={{ fontSize: 16 }}>{champion.name}</b>
-                <span className="gold-text">- campeão</span>
+                <span className="gold-text">- {tr('common.champion')}</span>
               </span>
             </div>
           )}
@@ -195,7 +199,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
             <div className="mvp-card">
               <PlayerAvatar nick={mvp.nick} size={54} />
               <div>
-                <div className="label">MVP do torneio</div>
+                <div className="label">{tr('final.tournamentMvp')}</div>
                 <div className="nick">
                   <Flag cc={mvp.country} /> {mvp.nick}
                 </div>
@@ -205,16 +209,16 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
             <button className="btn gold big" onClick={onNextSeason}>
-              🔁 Próxima temporada (transferências)
+              🔁 {tr('final.nextSeason')}
             </button>
             <button className="btn" onClick={onStats}>
-              📊 Stats
+              📊 {tr('final.stats')}
             </button>
             <button className="btn" onClick={onBracket}>
-              🗺 Chaveamento &amp; partidas
+              🗺 {tr('final.bracketMatches')}
             </button>
             <button className="btn" onClick={onHall}>
-              🏛 Hall da Fama
+              🏛 {tr('final.hallOfFame')}
             </button>
             <button
               className="btn"
@@ -223,41 +227,41 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
                 downloadShareCard(t, user, campaign.label, mvp?.nick);
               }}
             >
-              🖼 Baixar card
+              🖼 {tr('final.downloadCard')}
             </button>
             <button className="btn ghost" onClick={share}>
-              {copied ? '✔ Copiado!' : '📋 Copiar texto'}
+              {copied ? `✔ ${tr('final.copied')}` : `📋 ${tr('final.copyText')}`}
             </button>
             <button className="btn ghost" onClick={onRestart}>
-              Novo draft
+              {tr('final.newDraft')}
             </button>
           </div>
 
           <div className="hall-register">
             {hallStatus === 'saved' ? (
-              <div className="pos small">✔ Campanha registrada no Hall da Fama como {nick}.</div>
+              <div className="pos small">✔ {tr('final.hallSaved')} {nick}.</div>
             ) : alreadyPosted ? (
-              <div className="muted small">Esta campanha já foi registrada no Hall.</div>
+              <div className="muted small">{tr('final.hallAlready')}</div>
             ) : (
               <>
                 <div className="muted small" style={{ marginBottom: 8 }}>
-                  Registre seu nick no <b>Hall da Fama</b> para eternizar esta campanha:
+                  {tr('final.hallPrompt1')} <b>{tr('final.hallOfFame')}</b> {tr('final.hallPrompt2')}
                 </div>
                 <div className="hall-register-row">
                   <input
-                    placeholder="seu nick"
+                    placeholder={tr('final.nickPlaceholder')}
                     value={nick}
                     maxLength={24}
                     onChange={(e) => setNick(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && registerHall()}
                   />
                   <button className="btn gold" onClick={registerHall} disabled={!nick.trim() || hallStatus === 'saving'}>
-                    {hallStatus === 'saving' ? 'Registrando…' : '🏛 Registrar no Hall'}
+                    {hallStatus === 'saving' ? tr('final.registering') : `🏛 ${tr('final.registerHall')}`}
                   </button>
                 </div>
                 {hallStatus === 'error' && (
                   <div className="neg small" style={{ marginTop: 6 }}>
-                    Hall indisponível agora - tente novamente em instantes.
+                    {tr('final.hallUnavailable')}
                   </div>
                 )}
               </>
@@ -266,7 +270,7 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
 
           <div style={{ marginTop: 18 }}>
             <button className="donate-cta" onClick={onDonate}>
-              💜 Curtiu? Apoie o projeto
+              💜 {tr('final.supportCta')}
             </button>
           </div>
         </div>

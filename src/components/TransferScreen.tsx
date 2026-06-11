@@ -3,6 +3,7 @@ import { formatMoney, playerValue, refreshUserTeam, toTPlayer } from '../engine/
 import type { Player, TeamSeason, TPlayer, TTeam } from '../types';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
+import { useLang } from '../state/i18n';
 
 export interface TransferOffer {
   player: Player;
@@ -24,6 +25,7 @@ const SELL_FACTOR = 0.85; // vende por 85% do valor de mercado
 // Janela de transferências entre temporadas: troque até 1 jogador do elenco
 // por uma das ofertas do mercado (ou mantenha a base).
 export function TransferScreen({ user, season, titles, budget, evolution, offers, onConfirm }: Props) {
+  const { t } = useLang();
   const [outId, setOutId] = useState<string | null>(null);
   const [inIdx, setInIdx] = useState<number | null>(null);
 
@@ -62,19 +64,19 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
       <div className="panel">
         <div className="season-banner">
           <h2>
-            🔁 Janela de transferências - rumo à temporada {season}
+            🔁 {t('transfer.windowTitle')} {season}
           </h2>
           <div className="muted small">
-            {titles > 0 ? `🏆 ${titles} título(s) na carreira · ` : ''}
-            Seus jogadores evoluíram com base no rendimento. Compre/venda 1 peça ou mantenha a base.
+            {titles > 0 ? `🏆 ${titles} ${t('transfer.careerTitles')} · ` : ''}
+            {t('transfer.evolvedHint')}
           </div>
           <div className="budget-line">
-            💰 Caixa do clube: <b>{formatMoney(budget)}</b>
+            💰 {t('transfer.clubCash')}: <b>{formatMoney(budget)}</b>
           </div>
         </div>
         <div className="panel-body">
           <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
-            Seu elenco (clique para colocar na mesa)
+            {t('transfer.yourRoster')}
           </div>
           <div className="roster-slots">
             {user.players.map((p) => {
@@ -92,18 +94,18 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
                   <span className={`role-pill ${p.role}`}>{p.role}</span>
                   {evo !== 0 && (
                     <span className={`evo ${evo > 0 ? 'up' : 'down'}`}>
-                      {evo > 0 ? `▲ +${evo}` : `▼ ${evo}`} evolução
+                      {evo > 0 ? `▲ +${evo}` : `▼ ${evo}`} {t('transfer.evolution')}
                     </span>
                   )}
-                  <div className="price sell">vende por {formatMoney(Math.round(playerValue(p) * SELL_FACTOR))}</div>
-                  <div className="from">{outId === p.id ? '⚠ na mesa de negociação' : p.fromTeam}</div>
+                  <div className="price sell">{t('transfer.sellsFor')} {formatMoney(Math.round(playerValue(p) * SELL_FACTOR))}</div>
+                  <div className="from">{outId === p.id ? `⚠ ${t('transfer.onTable')}` : p.fromTeam}</div>
                 </button>
               );
             })}
           </div>
 
           <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '16px 0 6px' }}>
-            Mercado - ofertas desta janela
+            {t('transfer.marketOffers')}
           </div>
           <div className="player-cards" style={{ padding: 0 }}>
             {offers.map((o, i) => {
@@ -139,31 +141,31 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
             {tradeReady ? (
               <div className="trade-summary">
                 <div className="muted small">
-                  Força do time: {current.strength.toFixed(1)} →{' '}
+                  {t('transfer.teamStrength')}: {current.strength.toFixed(1)} →{' '}
                   <b className={delta >= 0 ? 'pos' : 'neg'}>{preview.strength.toFixed(1)}</b>{' '}
                   ({delta >= 0 ? '+' : ''}
                   {delta.toFixed(1)})
                 </div>
                 <div className="trade-money">
-                  <span>compra <b>{formatMoney(buyFee)}</b></span>
-                  <span>venda <b className="pos">+{formatMoney(sellValue)}</b></span>
+                  <span>{t('transfer.buy')} <b>{formatMoney(buyFee)}</b></span>
+                  <span>{t('transfer.sell')} <b className="pos">+{formatMoney(sellValue)}</b></span>
                   <span>
-                    saldo da troca{' '}
+                    {t('transfer.tradeBalance')}{' '}
                     <b className={netCost > 0 ? 'neg' : 'pos'}>
                       {netCost > 0 ? '-' : '+'}
                       {formatMoney(Math.abs(netCost))}
                     </b>
                   </span>
                   <span>
-                    caixa após:{' '}
+                    {t('transfer.cashAfter')}{' '}
                     <b className={canAfford ? 'pos' : 'neg'}>{formatMoney(budgetAfter)}</b>
                   </span>
                 </div>
-                {!canAfford && <div className="neg small">Caixa insuficiente — venda uma peça mais cara ou escolha um reforço mais barato.</div>}
+                {!canAfford && <div className="neg small">{t('transfer.insufficientCash')}</div>}
               </div>
             ) : (
               <div className="muted small" style={{ marginBottom: 10 }}>
-                Selecione 1 jogador para vender e 1 reforço para comprar, ou siga com a mesma base.
+                {t('transfer.selectHint')}
               </div>
             )}
             <button
@@ -171,7 +173,7 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
               disabled={tradeReady && !canAfford}
               onClick={() => onConfirm(preview, netCost)}
             >
-              ✔ Confirmar e começar a temporada {season}
+              ✔ {t('transfer.confirmStart')} {season}
             </button>
           </div>
         </div>

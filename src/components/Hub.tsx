@@ -1,7 +1,7 @@
 import { draftSynergy } from '../engine/ratings';
 import { getTeam, phaseLabel, standings, userPairing } from '../engine/swiss';
 import type { Pairing, Tournament } from '../types';
-import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
+import { useLang } from '../state/i18n';
 import { TournamentBracket } from './Bracket';
 import { Flag, PlayerAvatar, TeamBadge, TeamName } from './ui';
 
@@ -33,6 +33,7 @@ function MatchLine({
   onPick?: (key: string, teamId: string) => void;
   onOpenSeries?: (p: Pairing) => void;
 }) {
+  const { t: tr } = useLang();
   const a = getTeam(t, p.a);
   const b = getTeam(t, p.b);
   const r = p.result;
@@ -45,7 +46,7 @@ function MatchLine({
     <div
       className={`matchline${highlight ? ' user-match' : ''}${clickable ? ' clickable' : ''}`}
       onClick={clickable ? () => onOpenSeries!(p) : undefined}
-      title={clickable ? 'Ver estatísticas da série' : undefined}
+      title={clickable ? tr('hub.viewSeriesStats') : undefined}
     >
       <TeamName team={a} dim={r ? r.winner === 1 : false} />
       <span className="score">
@@ -57,10 +58,10 @@ function MatchLine({
           </>
         ) : canPick ? (
           <span style={{ display: 'inline-flex', gap: 4 }}>
-            <button className={`pick-btn${myPick === p.a ? ' on' : ''}`} onClick={() => onPick!(key, p.a)} title={`Apostar em ${a.name}`}>
+            <button className={`pick-btn${myPick === p.a ? ' on' : ''}`} onClick={() => onPick!(key, p.a)} title={`${tr('hub.betOn')} ${a.name}`}>
               {a.tag}
             </button>
-            <button className={`pick-btn${myPick === p.b ? ' on' : ''}`} onClick={() => onPick!(key, p.b)} title={`Apostar em ${b.name}`}>
+            <button className={`pick-btn${myPick === p.b ? ' on' : ''}`} onClick={() => onPick!(key, p.b)} title={`${tr('hub.betOn')} ${b.name}`}>
               {b.tag}
             </button>
           </span>
@@ -79,6 +80,7 @@ function MatchLine({
 }
 
 export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, onOpenSeries }: Props) {
+  const { t: tr } = useLang();
   const up = userPairing(t);
   const user = getTeam(t, 'user');
   const inSwiss = t.phase === 'swiss';
@@ -93,27 +95,27 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
           {career.titles > 0 && <span className="gold-text small">🏆×{career.titles}</span>}
           <span className="spacer" />
           {pickem.total > 0 && (
-            <span className="pickem-score" title="Acertos no Pick'Em">
+            <span className="pickem-score" title={tr('hub.pickemHits')}>
               🎯 Pick'Em {pickem.score}/{pickem.total}
             </span>
           )}
           <button className="btn ghost" onClick={onStats}>
-            📊 Stats
+            📊 {tr('hub.stats')}
           </button>
           {up ? (
             <button className="btn gold" onClick={onPlay}>
-              ▶ Jogar minha partida
+              ▶ {tr('hub.playMyMatch')}
             </button>
           ) : t.phase !== 'done' ? (
             <button className="btn" onClick={onSimRound}>
-              ⏩ Simular rodada
+              ⏩ {tr('hub.simRound')}
             </button>
           ) : null}
         </div>
         <div className="panel-body tight">
           {hasPickable && (
             <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--border-soft)' }}>
-              <span className="pickem-hint">🎯 Pick'Em: aposte nos vencedores das outras séries e some pontos</span>
+              <span className="pickem-hint">🎯 {tr('hub.pickemHint')}</span>
             </div>
           )}
           {t.pairings.map((p, i) => (
@@ -126,7 +128,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
 
       {inSwiss && (
         <div className="panel">
-          <div className="panel-head">Classificação - fase suíça</div>
+          <div className="panel-head">{tr('hub.standings')}</div>
           <div className="panel-body tight">
             <table className="standings">
               <tbody>
@@ -142,7 +144,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
                         <span style={{ color: team.isUser ? 'var(--blue-bright)' : undefined, fontWeight: team.isUser ? 700 : 500 }}>
                           {team.name}
                         </span>
-                        <span className="muted small">{team.game === 'MIX' ? 'Dream Team' : team.game}</span>
+                        <span className="muted small">{team.game === 'MIX' ? tr('hub.dreamTeam') : team.game}</span>
                       </span>
                     </td>
                     <td style={{ width: 70, textAlign: 'center' }}>
@@ -155,7 +157,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
                     </td>
                     <td style={{ width: 110, textAlign: 'right' }}>
                       <span className={`status-tag ${team.status}`}>
-                        {team.status === 'advanced' ? 'Classificado' : team.status === 'eliminated' ? 'Eliminado' : 'Na disputa'}
+                        {team.status === 'advanced' ? tr('hub.statusAdvanced') : team.status === 'eliminated' ? tr('hub.statusEliminated') : tr('hub.statusInPlay')}
                       </span>
                     </td>
                   </tr>
@@ -168,10 +170,10 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
 
       {!inSwiss && (
         <div className="panel">
-          <div className="panel-head">Playoffs</div>
+          <div className="panel-head">{tr('hub.playoffs')}</div>
           <div className="panel-body">
             <div className="muted small">
-              Quartas, semis e final em MD3. Os 8 classificados da fase suíça foram chaveados pela campanha.
+              {tr('hub.playoffsDesc')}
             </div>
           </div>
         </div>
@@ -179,7 +181,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
 
       {t.history.length > 0 && (
         <div className="panel">
-          <div className="panel-head">Resultados anteriores</div>
+          <div className="panel-head">{tr('hub.pastResults')}</div>
           <div className="panel-body tight">
             {[...t.history].reverse().map((h, i) => (
               <div key={i}>
@@ -195,10 +197,10 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
 
       <div className="panel">
         <div className="panel-head">
-          Seu elenco - {user.name}
+          {tr('hub.yourRoster')} - {user.name}
           <span className="spacer" />
           <span className="muted small" style={{ textTransform: 'none' }}>
-            força {user.strength.toFixed(1)}
+            {tr('hub.strength')} {user.strength.toFixed(1)}
           </span>
         </div>
         <div className="panel-body">
@@ -222,16 +224,16 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
             <div className="coach-card">
               <PlayerAvatar nick={user.coach.nick} size={42} coach />
               <div>
-                <div className="label">Coach · {COACH_STYLE_LABELS[user.coach.style]} · {user.coach.rating}</div>
+                <div className="label">{tr('common.coach')} · {tr(`coach.${user.coach.style}`)} · {user.coach.rating}</div>
                 <div className="nick">
                   <Flag cc={user.coach.country} /> {user.coach.nick}
                 </div>
-                <div className="style">{COACH_STYLE_DESC[user.coach.style]}</div>
+                <div className="style">{tr(`coach.${user.coach.style}Desc`)}</div>
               </div>
             </div>
             <div>
               <div className="muted small" style={{ marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
-                Sinergia da composição ({synergy.total >= 0 ? '+' : ''}
+                {tr('hub.synergy')} ({synergy.total >= 0 ? '+' : ''}
                 {synergy.total.toFixed(1)})
               </div>
               <div className="synergy-list">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { adminPassword } from './AdminGate';
 
 interface Metrics {
@@ -18,7 +18,7 @@ interface Metrics {
   games: { titles: string; total: string };
   byDifficulty: { difficulty: string; games: string; titles: string }[];
   byPool: { pool: string; games: string }[];
-  online: { lobbies_total: string; lobbies_7d: string; lobby_players_total: string };
+  online: { lobbies_total: string; lobbies_7d: string; lobby_players_total: string; online_now?: string };
   last24h: { type: string; n: string }[];
   hall: { campaigns: string; titles: string };
 }
@@ -40,8 +40,7 @@ export function MetricsPanel() {
   const [data, setData] = useState<Metrics | null>(null);
   const [err, setErr] = useState('');
 
-  const load = () => {
-    setErr('');
+  const requestMetrics = useCallback(() => {
     fetch('/api/metrics', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -51,9 +50,16 @@ export function MetricsPanel() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(setData)
       .catch((e) => setErr(e?.message === '401' ? 'Senha de admin inválida.' : 'Métricas indisponíveis (só funcionam no site publicado).'));
+  }, []);
+
+  const load = () => {
+    setErr('');
+    requestMetrics();
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    requestMetrics();
+  }, [requestMetrics]);
 
   if (err) {
     return (
@@ -95,6 +101,7 @@ export function MetricsPanel() {
           <Card label="Partidas concluídas" value={t.games_finished} hint={`${conv}% de conclusão`} />
           <Card label="Temporadas extras" value={t.seasons_started} hint="modo carreira" />
           <Card label="Taxa de título" value={`${titleRate}%`} hint="o quão fácil está ganhar" />
+          <Card label="Jogadores online agora" value={data.online.online_now ?? '0'} hint="ativos nos ultimos 2 min" />
           <Card label="Salas online" value={data.online.lobbies_total} hint={`${data.online.lobbies_7d} esta semana`} />
           <Card label="Cliques em doar" value={t.donate_clicks} />
           <Card label="Cards compartilhados" value={t.share_cards} />

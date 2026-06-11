@@ -8,6 +8,7 @@ import {
   simulateOnlineMajor,
   type LobbyState,
 } from '../state/online';
+import { useLang } from '../state/i18n';
 import { track } from '../state/track';
 import type { SeriesResult, TournamentPool } from '../types';
 import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
@@ -28,6 +29,7 @@ const NICK_KEY = 'rtm-nick';
 const POLL_MS = 2200;
 
 export function OnlineScreen({ onBack }: Props) {
+  const { t: tr } = useLang();
   const [nick, setNick] = useState(() => localStorage.getItem(NICK_KEY) ?? '');
   const [codeInput, setCodeInput] = useState('');
   const [mode, setMode] = useState<'duel' | 'party'>('duel');
@@ -80,9 +82,9 @@ export function OnlineScreen({ onBack }: Props) {
       if (r.ok && r.code) {
         setCode(r.code);
         track('online_create', { mode, pool });
-      } else setError(r.error ?? 'erro ao criar lobby');
+      } else setError(r.error ?? tr('online.errCreate'));
     } catch {
-      setError('servidor indisponível (o modo online precisa do site publicado)');
+      setError(tr('online.errServer'));
     }
     setBusy(false);
   };
@@ -96,9 +98,9 @@ export function OnlineScreen({ onBack }: Props) {
       if (r.ok) {
         setCode(codeInput.trim().toUpperCase());
         track('online_join', {});
-      } else setError(r.error ?? 'erro ao entrar');
+      } else setError(r.error ?? tr('online.errJoin'));
     } catch {
-      setError('servidor indisponível (o modo online precisa do site publicado)');
+      setError(tr('online.errServer'));
     }
     setBusy(false);
   };
@@ -151,50 +153,50 @@ export function OnlineScreen({ onBack }: Props) {
       <div className="fade-in">
         <div className="panel" style={{ maxWidth: 560, margin: '30px auto' }}>
           <div className="panel-head">
-            🌐 Jogar online com amigos
+            {tr('online.title')}
             <span className="spacer" />
             <button className="btn" onClick={onBack}>
-              ← Voltar
+              {tr('common.back')}
             </button>
           </div>
           <div className="panel-body">
             <p className="muted small" style={{ marginTop: 0 }}>
-              Todos draftam dos <b>mesmos elencos sorteados</b> (seu ultimate team), vendo o progresso
-              uns dos outros ao vivo. No fim, os times de todos entram juntos num <b>Major completo</b>
-              {' '}(com times da IA preenchendo) e disputam Suíça + playoffs. Vence quem levantar a taça.
+              {tr('online.introA')} <b>{tr('online.introB')}</b> {tr('online.introC')}
+              <b>{tr('online.introD')}</b>
+              {' '}{tr('online.introE')}
             </p>
             <div className="field" style={{ marginBottom: 12 }}>
-              <label>Seu nick</label>
+              <label>{tr('online.yourNick')}</label>
               <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} />
             </div>
 
             <div className="online-split">
               <div className="online-box">
-                <h4>Criar sala</h4>
+                <h4>{tr('online.createRoom')}</h4>
                 <div className="seg" style={{ marginBottom: 8 }}>
                   <button className={mode === 'duel' ? 'active' : ''} onClick={() => setMode('duel')}>
-                    ⚔ Duelo 1x1
+                    {tr('online.modeDuel')}
                   </button>
                   <button className={mode === 'party' ? 'active' : ''} onClick={() => setMode('party')}>
-                    👥 Grupo (até 8)
+                    {tr('online.modeParty')}
                   </button>
                 </div>
                 <div className="seg" style={{ marginBottom: 12 }}>
                   <button className={pool === 'world' ? 'active' : ''} onClick={() => setPool('world')}>
-                    🌍 Mundial
+                    {tr('online.poolWorld')}
                   </button>
                   <button className={pool === 'br' ? 'active' : ''} onClick={() => setPool('br')}>
-                    🇧🇷 GC
+                    {tr('online.poolBr')}
                   </button>
                 </div>
                 <button className="btn gold" style={{ width: '100%' }} onClick={create} disabled={!nick.trim() || busy}>
-                  {busy ? 'Criando…' : 'Criar sala'}
+                  {busy ? tr('online.creating') : tr('online.createRoom')}
                 </button>
               </div>
               <div className="online-box">
-                <h4>Entrar com código</h4>
+                <h4>{tr('online.joinWithCode')}</h4>
                 <div className="field" style={{ marginBottom: 12 }}>
-                  <label>Código da sala</label>
+                  <label>{tr('online.roomCode')}</label>
                   <input
                     value={codeInput}
                     maxLength={5}
@@ -205,7 +207,7 @@ export function OnlineScreen({ onBack }: Props) {
                   />
                 </div>
                 <button className="btn" style={{ width: '100%' }} onClick={join} disabled={!nick.trim() || !codeInput.trim() || busy}>
-                  {busy ? 'Entrando…' : 'Entrar na sala'}
+                  {busy ? tr('online.joining') : tr('online.joinRoom')}
                 </button>
               </div>
             </div>
@@ -223,7 +225,7 @@ export function OnlineScreen({ onBack }: Props) {
   if (!state) {
     return (
       <div className="fade-in center" style={{ padding: 60 }}>
-        <div className="muted">Conectando à sala {code}…</div>
+        <div className="muted">{tr('online.connecting')} {code}…</div>
       </div>
     );
   }
@@ -236,19 +238,19 @@ export function OnlineScreen({ onBack }: Props) {
       <div className="fade-in">
         <div className="panel" style={{ maxWidth: 560, margin: '30px auto' }}>
           <div className="panel-head">
-            🌐 Sala {state.lobby.mode === 'duel' ? '· Duelo 1x1' : '· Grupo'}
+            {tr('online.roomLabel')} {state.lobby.mode === 'duel' ? tr('online.roomDuel') : tr('online.roomParty')}
             <span className="spacer" />
             <button className="btn ghost" onClick={onBack}>
-              Sair
+              {tr('common.exit')}
             </button>
           </div>
           <div className="panel-body center">
-            <div className="muted small">Compartilhe o código com seus amigos:</div>
-            <div className="lobby-code" onClick={() => navigator.clipboard?.writeText(code)} title="Clique para copiar">
+            <div className="muted small">{tr('online.shareCode')}</div>
+            <div className="lobby-code" onClick={() => navigator.clipboard?.writeText(code)} title={tr('online.clickToCopy')}>
               {code}
             </div>
             <div className="muted small" style={{ marginBottom: 16 }}>
-              {state.lobby.pool === 'br' ? '🇧🇷 GC Masters (só elencos BR)' : '🌍 Major Mundial'} · clique no código para copiar
+              {state.lobby.pool === 'br' ? tr('online.poolBrLong') : tr('online.poolWorldLong')} · {tr('online.clickCodeToCopy')}
             </div>
             <div className="lobby-players">
               {state.players.map((p) => (
@@ -260,11 +262,11 @@ export function OnlineScreen({ onBack }: Props) {
             </div>
             {isHost ? (
               <button className="btn gold big" style={{ marginTop: 18 }} onClick={start} disabled={state.players.length < 2 || busy}>
-                {state.players.length < 2 ? 'Aguardando jogadores…' : '▶ Começar o draft'}
+                {state.players.length < 2 ? tr('online.waitingPlayers') : tr('online.startDraft')}
               </button>
             ) : (
               <div className="muted" style={{ marginTop: 18 }}>
-                Aguardando {state.lobby.host} iniciar o draft…
+                {tr('online.waitingHost')} {state.lobby.host} {tr('online.waitingHostTail')}
               </div>
             )}
           </div>
@@ -319,38 +321,38 @@ export function OnlineScreen({ onBack }: Props) {
       <div className="fade-in">
         <div className="panel">
           <div className="panel-head">
-            🏆 Major da sala {code}
+            {tr('online.roomMajor')} {code}
             <span className="spacer" />
             <button className="btn" onClick={onBack}>
-              ← Sair do online
+              {tr('online.exitOnline')}
             </button>
           </div>
           <div className="panel-body">
             <div className="finale" style={{ padding: '10px 0 18px' }}>
               <div className="trophy">🏆</div>
               <h1 style={{ fontSize: 26 }}>
-                {champNick ? `${champNick} é CAMPEÃO do Major!` : `${champ?.name} levou o Major`}
+                {champNick ? `${champNick} ${tr('online.champTitleHuman')}` : `${champ?.name} ${tr('online.champTitleAi')}`}
               </h1>
               <div className="muted">
-                {champNick ? `com o elenco: ${champ?.players.map((p) => p.nick).join(', ')}` : 'nenhum jogador chegou à final'}
+                {champNick ? `${tr('online.champRoster')} ${champ?.players.map((p) => p.nick).join(', ')}` : tr('online.noHumanFinal')}
               </div>
             </div>
 
             {/* resultado de cada jogador */}
-            <div className="muted small section-label">Como cada jogador foi</div>
+            <div className="muted small section-label">{tr('online.howEachPlayer')}</div>
             <div className="human-results">
               {major.humans.map((h) => {
-                const t = major.teamsById[h.teamId];
+                const tm = major.teamsById[h.teamId];
                 return (
                   <div key={h.nick} className={`human-card${h.placement === 'CAMPEÃO' ? ' champ' : ''}`}>
                     <div className="hr-head">
-                      <TeamBadge tag={t?.tag ?? ''} colors={t?.colors ?? ['#333', '#555']} size={28} logoUrl={t?.logoUrl} />
+                      <TeamBadge tag={tm?.tag ?? ''} colors={tm?.colors ?? ['#333', '#555']} size={28} logoUrl={tm?.logoUrl} />
                       <b>{h.nick}</b>
                       <span className="spacer" />
                       <span className="hr-place">{h.placement}</span>
                     </div>
-                    <div className="hr-roster muted small">{t?.players.map((p) => p.nick).join(', ')}</div>
-                    <div className="hr-rec muted small">campanha {h.wins}V - {h.losses}D</div>
+                    <div className="hr-roster muted small">{tm?.players.map((p) => p.nick).join(', ')}</div>
+                    <div className="hr-rec muted small">{tr('online.campaign')} {h.wins}{tr('common.wins')} - {h.losses}{tr('common.losses')}</div>
                   </div>
                 );
               })}
@@ -359,7 +361,7 @@ export function OnlineScreen({ onBack }: Props) {
             {/* playoffs */}
             {playoffs.length > 0 && (
               <>
-                <div className="muted small section-label">Playoffs (clique para ver o placar)</div>
+                <div className="muted small section-label">{tr('online.playoffs')}</div>
                 <div className="panel-body tight" style={{ padding: 0 }}>
                   {playoffs.map((h, i) => (
                     <SeriesRow key={i} h={h} />
@@ -369,7 +371,7 @@ export function OnlineScreen({ onBack }: Props) {
             )}
 
             {/* partidas dos jogadores na Suíça */}
-            <div className="muted small section-label">Partidas dos jogadores</div>
+            <div className="muted small section-label">{tr('online.playerMatches')}</div>
             <div className="panel-body tight" style={{ padding: 0 }}>
               {humanGames.map((h, i) => (
                 <SeriesRow key={i} h={h} />
@@ -377,15 +379,15 @@ export function OnlineScreen({ onBack }: Props) {
             </div>
 
             {/* classificação final do Major */}
-            <div className="muted small section-label">Classificação final do Major</div>
+            <div className="muted small section-label">{tr('online.finalStandings')}</div>
             <table className="stats">
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left' }}>#</th>
-                  <th style={{ textAlign: 'left' }}>Time</th>
-                  <th>V</th>
-                  <th>D</th>
-                  <th>Saldo</th>
+                  <th style={{ textAlign: 'left' }}>{tr('online.team')}</th>
+                  <th>{tr('common.wins')}</th>
+                  <th>{tr('common.losses')}</th>
+                  <th>{tr('online.diff')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -429,9 +431,9 @@ export function OnlineScreen({ onBack }: Props) {
       <div>
         {myDone ? (
           <div className="panel">
-            <div className="panel-head">✔ Draft enviado</div>
+            <div className="panel-head">{tr('online.draftSent')}</div>
             <div className="panel-body center">
-              <p className="muted">Aguardando os outros jogadores terminarem o draft…</p>
+              <p className="muted">{tr('online.waitingOthers')}</p>
               <div className="lobby-players" style={{ justifyContent: 'center' }}>
                 {state.players.map((p) => (
                   <span key={p.nick} className={`lobby-player${p.done ? ' done' : ''}`}>
@@ -443,7 +445,7 @@ export function OnlineScreen({ onBack }: Props) {
           </div>
         ) : coachPhase ? (
           <div className="panel">
-            <div className="panel-head">Escolha o COACH</div>
+            <div className="panel-head">{tr('online.chooseCoach')}</div>
             <div className="player-cards">
               {setup.coachOptions.map((t) => (
                 <button key={t.id} className="pcard" onClick={() => pickCoach(t.id)}>
@@ -463,10 +465,10 @@ export function OnlineScreen({ onBack }: Props) {
         ) : (
           <div className="panel">
             <div className="panel-head">
-              Draft online · escolha {myPicks.length + 1} de 5
+              {tr('online.draftOnline')} {myPicks.length + 1} {tr('online.ofFive')}
               <span className="spacer" />
               <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-                Mesmos elencos para todos · sala {code}
+                {tr('online.sameRosters')} {tr('online.roomLabel')} {code}
               </span>
             </div>
             <div className="draft-source">
@@ -497,7 +499,7 @@ export function OnlineScreen({ onBack }: Props) {
                       <span className={`role-pill ${p.role}`}>{p.role}</span>
                     </div>
                     <div className="attr-bars">
-                      <AttrBar label="Mira" value={p.aim} />
+                      <AttrBar label={tr('online.attrAim')} value={p.aim} />
                       <AttrBar label="AWP" value={p.awp} />
                       <AttrBar label="IGL" value={p.igl} />
                     </div>
@@ -510,10 +512,10 @@ export function OnlineScreen({ onBack }: Props) {
       </div>
 
       <div className="panel online-side">
-        <div className="panel-head">Sala {code}</div>
+        <div className="panel-head">{tr('online.roomLabel')} {code}</div>
         <div className="panel-body">
           <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
-            Progresso ao vivo
+            {tr('online.liveProgress')}
           </div>
           {state.players.map((p) => {
             const mine = p.nick.toLowerCase() === nick.toLowerCase();
@@ -524,10 +526,10 @@ export function OnlineScreen({ onBack }: Props) {
                   <b>
                     {p.nick === state.lobby.host ? '👑 ' : ''}
                     {p.nick}
-                    {mine ? ' (você)' : ''}
+                    {mine ? ` (${tr('common.you')})` : ''}
                   </b>
                   <span className={p.done || (mine && myDone) ? 'pos small' : 'muted small'}>
-                    {p.done || (mine && myDone) ? 'pronto ✔' : `${livePicks.length}/5 picks`}
+                    {p.done || (mine && myDone) ? tr('online.ready') : `${livePicks.length}/5 ${tr('online.picks')}`}
                   </span>
                 </div>
                 <div className="op-picks">
@@ -545,8 +547,7 @@ export function OnlineScreen({ onBack }: Props) {
             );
           })}
           <p className="muted small" style={{ marginTop: 12 }}>
-            Todos draftam dos mesmos 5 elencos sorteados. Quando todos terminarem, os times entram
-            num Major completo (com a IA preenchendo) e disputam Suíça + playoffs juntos.
+            {tr('online.sideExplain')}
           </p>
         </div>
       </div>

@@ -29,6 +29,13 @@ export default async function handler(
 
   try {
     const sql = neon(url);
+    await sql`
+      CREATE TABLE IF NOT EXISTS online_sessions (
+        sid text PRIMARY KEY,
+        last_seen timestamptz NOT NULL DEFAULT now(),
+        path text,
+        user_agent text
+      )`;
     const [totals, visitsByDay, games, byDifficulty, byPool, online, recent, hall] = await Promise.all([
       sql`SELECT
             COUNT(*) FILTER (WHERE type = 'visit') AS visits,
@@ -61,7 +68,8 @@ export default async function handler(
       sql`SELECT
             (SELECT COUNT(*) FROM lobbies) AS lobbies_total,
             (SELECT COUNT(*) FROM lobbies WHERE created_at > now() - interval '7 days') AS lobbies_7d,
-            (SELECT COUNT(*) FROM lobby_players) AS lobby_players_total`,
+            (SELECT COUNT(*) FROM lobby_players) AS lobby_players_total,
+            (SELECT COUNT(*) FROM online_sessions WHERE last_seen > now() - interval '2 minutes') AS online_now`,
       sql`SELECT type, COUNT(*) AS n
           FROM events WHERE created_at > now() - interval '24 hours'
           GROUP BY 1 ORDER BY 2 DESC`,

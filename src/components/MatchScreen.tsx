@@ -8,6 +8,7 @@ import { CoreFlag } from './flags';
 import { Scoreboard } from './Scoreboard';
 import { MapThumb, TeamBadge } from './ui';
 import { HeadshotIcon, WeaponIcon, WEAPON_LABELS } from './weapons';
+import { useLang } from '../state/i18n';
 
 interface Props {
   teams: [TTeam, TTeam];
@@ -30,10 +31,10 @@ const SPEEDS: { label: string; ms: number }[] = [
 ];
 const DEFAULT_SPEED_IDX = 1; // começa em 1x (0.5x é opção mais lenta)
 
-const STANCES: { key: Stance; label: string; hint: string }[] = [
-  { key: 'aggressive', label: '🔥 Agressivo', hint: 'Rende no T e valoriza jogadores agressivos; se expõe no CT' },
-  { key: 'default', label: '⚖ Padrão', hint: 'Plano equilibrado, sem bônus nem penalidade de estilo' },
-  { key: 'cautious', label: '🛡 Cauteloso', hint: 'Fecha o CT e valoriza jogadores passivos; perde ímpeto no T' },
+const STANCES: { key: Stance; icon: string; labelKey: string; hintKey: string }[] = [
+  { key: 'aggressive', icon: '🔥', labelKey: 'match.stanceAggressive', hintKey: 'match.stanceAggressiveHint' },
+  { key: 'default', icon: '⚖', labelKey: 'match.stanceDefault', hintKey: 'match.stanceDefaultHint' },
+  { key: 'cautious', icon: '🛡', labelKey: 'match.stanceCautious', hintKey: 'match.stanceCautiousHint' },
 ];
 
 // estilo favorecido por cada postura
@@ -68,6 +69,7 @@ const BUY_LABEL: Record<BuyTier, string> = {
 };
 
 export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish }: Props) {
+  const { t } = useLang();
   const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
   const mdLabel = bestOf === 1 ? 'MD1' : 'MD3';
   const simsRef = useRef<MapSim[]>([]);
@@ -152,7 +154,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           setFinished(true);
         } else {
           const next = maps[mapIdx + 1];
-          setPausedMsg(`Fim do mapa ${mapIdx + 1}${next ? ` - preparando ${MAP_LABELS[next.map]}…` : '…'}`);
+          setPausedMsg(`${t('match.mapEnd')} ${mapIdx + 1}${next ? ` - ${t('match.preparing')} ${MAP_LABELS[next.map]}…` : '…'}`);
           window.setTimeout(() => {
             setMapIdx((m) => m + 1);
             setTimeoutsLeft(TIMEOUTS_PER_MAP);
@@ -187,7 +189,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     if (timeoutsLeft <= 0 || finished || pausedMsg) return;
     setTimeoutsLeft((t) => t - 1);
     setBoostRounds(TIMEOUT_ROUNDS);
-    setPausedMsg(`⏸ TIMEOUT TÁTICO - ${teams[userIdx].coach.nick} ajusta o plano!`);
+    setPausedMsg(`⏸ ${t('match.tacticalTimeout')} - ${teams[userIdx].coach.nick} ${t('match.adjustsPlan')}`);
     window.setTimeout(() => setPausedMsg(''), 1400);
   };
 
@@ -220,7 +222,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           <span className="spacer" />
           {!finished && (
             <>
-              <div className="seg" title="Velocidade da simulação">
+              <div className="seg" title={t('match.simSpeed')}>
                 {SPEEDS.map((s, i) => (
                   <button key={s.label} className={speedIdx === i ? 'active' : ''} onClick={() => setSpeedIdx(i)}>
                     {s.label}
@@ -228,10 +230,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 ))}
               </div>
               <button className="timeout-btn" onClick={callTimeout} disabled={timeoutsLeft <= 0 || !!pausedMsg}>
-                ⏸ Timeout ({timeoutsLeft})
+                ⏸ {t('match.timeout')} ({timeoutsLeft})
               </button>
               <button className="btn ghost" onClick={skipAll}>
-                Pular para o resultado
+                {t('match.skipToResult')}
               </button>
             </>
           )}
@@ -247,7 +249,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
               <TeamBadge tag={teams[0].tag} colors={teams[0].colors} size={48} logoUrl={teams[0].logoUrl} />
               <span className="tn">{teams[0].name}</span>
               <span className="muted small">
-                mapas: {mapsWon[0]}
+                {t('common.maps')}: {mapsWon[0]}
                 {!finished && ` · ${BUY_LABEL[buys[0]]}`}
               </span>
             </div>
@@ -259,7 +261,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                     <span className="sep"> : </span>
                     <span className={series.winner === 1 ? 'winning' : ''}>{series.mapScore[1]}</span>
                   </div>
-                  <div className="mapname">Serie encerrada</div>
+                  <div className="mapname">{t('match.seriesOver')}</div>
                 </>
               ) : (
                 <>
@@ -269,8 +271,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                     <span className={sb > sa ? 'winning' : ''}>{sb}</span>
                   </div>
                   <div className="mapname">
-                    Mapa {mapIdx + 1} - {MAP_LABELS[currentMap]}
-                    {boostRounds > 0 ? ' · 📢 pós-timeout' : ''}
+                    {t('common.map')} {mapIdx + 1} - {MAP_LABELS[currentMap]}
+                    {boostRounds > 0 ? ` · 📢 ${t('match.postTimeout')}` : ''}
                   </div>
                 </>
               )}
@@ -282,7 +284,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
               <TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={48} logoUrl={teams[1].logoUrl} />
               <span className="tn">{teams[1].name}</span>
               <span className="muted small">
-                mapas: {mapsWon[1]}
+                {t('common.maps')}: {mapsWon[1]}
                 {!finished && ` · ${BUY_LABEL[buys[1]]}`}
               </span>
             </div>
@@ -294,17 +296,17 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         {!finished && (
           <>
             <div className="stance-bar">
-              <span className="stance-label">Plano do {teams[userIdx].tag}:</span>
+              <span className="stance-label">{t('match.planOf')} {teams[userIdx].tag}:</span>
               {STANCES.map((s) => {
                 const fit = stanceFitCount(teams[userIdx].players, s.key);
                 return (
                   <button
                     key={s.key}
                     className={`stance-btn${stance === s.key ? ' on' : ''}`}
-                    title={s.hint}
+                    title={t(s.hintKey)}
                     onClick={() => setStance(s.key)}
                   >
-                    {s.label}
+                    {s.icon} {t(s.labelKey)}
                     {s.key !== 'default' && <span className="stance-fit">{fit > 0 ? `+${fit}` : fit}</span>}
                   </button>
                 );
@@ -317,8 +319,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 return (
                   <span key={p.id} className={`style-chip ${rel}`} title={`${p.nick} — ${PLAYSTYLE_LABELS[ps]}`}>
                     {PLAYSTYLE_ICONS[ps]} {p.nick}
-                    {rel === 'buff' && <span className="sc-tag up">valorizado</span>}
-                    {rel === 'nerf' && <span className="sc-tag down">fora do plano</span>}
+                    {rel === 'buff' && <span className="sc-tag up">{t('match.valued')}</span>}
+                    {rel === 'nerf' && <span className="sc-tag down">{t('match.outOfPlan')}</span>}
                   </span>
                 );
               })}
@@ -342,7 +344,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
             return (
               <span key={i} className={`map-pill${!r && !current ? ' pending' : ''}`}>
                 {MAP_LABELS[m.map]}
-                {m.pickedBy >= 0 ? ` (pick ${teams[m.pickedBy as 0 | 1].tag})` : ' (decider)'}{' '}
+                {m.pickedBy >= 0 ? ` (${t('match.pick')} ${teams[m.pickedBy as 0 | 1].tag})` : ` (${t('match.decider')})`}{' '}
                 {r ? (
                   <b>
                     <span className={r.winner === 0 ? 'mw' : 'ml'}>{r.score[0]}</span>:
@@ -370,7 +372,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           <Scoreboard series={series} teams={teams} />
           <div className="center" style={{ margin: '18px 0' }}>
             <button className="btn big" onClick={() => onFinish(series)}>
-              Continuar
+              {t('common.continue')}
             </button>
           </div>
         </>
@@ -390,10 +392,11 @@ function KillFeed({
   teams: [TTeam, TTeam];
   playerById: Map<string, TPlayer>;
 }) {
+  const { t } = useLang();
   return (
     <div className="killfeed2">
       <div className="kf-head">
-        <span>Killfeed</span>
+        <span>{t('match.killfeed')}</span>
         <span>
           <span style={{ color: TEAM_FEED_COLORS[0] }}>{teams[0].tag}</span>
           {' · '}
@@ -401,7 +404,7 @@ function KillFeed({
         </span>
       </div>
       <div className="kf2-list">
-        {events.length === 0 && <div className="kf2-row empty">Aguardando primeiro contato…</div>}
+        {events.length === 0 && <div className="kf2-row empty">{t('match.waitingFirstContact')}</div>}
         {events.map((e, i) => {
           const killer = playerById.get(e.killerId);
           const victim = playerById.get(e.victimId);
@@ -416,7 +419,7 @@ function KillFeed({
                 <WeaponIcon weapon={e.weapon} />
               </span>
               {e.headshot && (
-                <span className="hs" title="Headshot">
+                <span className="hs" title={t('match.headshot')}>
                   <HeadshotIcon />
                 </span>
               )}
@@ -432,10 +435,11 @@ function KillFeed({
 }
 
 function InsightPanel({ series, teams, userIdx }: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1 }) {
+  const { t } = useLang();
   const insight = useMemo(() => analyzeSeries(series, teams, userIdx), [series, teams, userIdx]);
   return (
     <div className="panel insight-panel fade-in">
-      <div className="panel-head">Analise da serie</div>
+      <div className="panel-head">{t('match.seriesAnalysis')}</div>
       <div className="panel-body">
         <div className="verdict">{insight.verdict}</div>
         <div className="insight-list">
