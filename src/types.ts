@@ -51,6 +51,9 @@ export interface TeamSeason {
   coach: Coach;
   logoUrl?: string;
   liquipediaUrl?: string;
+  // true = aguardando aprovação do admin no CRM; fica oculto para os jogadores
+  // até ser liberado. Times sem o campo já são considerados aprovados.
+  pending?: boolean;
   players: Player[];
 }
 

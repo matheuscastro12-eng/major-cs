@@ -23,7 +23,7 @@ export interface LobbyState {
 // IMPORTANTE: o online usa sempre a base padrão (BASE_TEAMS), nunca o
 // dataset customizado do localStorage, para todos os clientes verem o mesmo.
 export function onlineDataset(pool: TournamentPool): TeamSeason[] {
-  const eligible = BASE_TEAMS.filter((t) => t.players.length >= 5);
+  const eligible = BASE_TEAMS.filter((t) => t.players.length >= 5 && !t.pending);
   return pool === 'br' ? eligible.filter((t) => t.country === 'br') : eligible;
 }
 

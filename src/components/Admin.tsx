@@ -55,6 +55,18 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
   }, [dataset, filter]);
 
   const sel = dataset.find((t) => t.id === selId) ?? null;
+  const pendingTeams = useMemo(() => dataset.filter((t) => t.pending), [dataset]);
+
+  const approveTeam = (id: string) => {
+    onChange(dataset.map((t) => (t.id === id ? { ...t, pending: false } : t)));
+  };
+  const unapproveTeam = (id: string) => {
+    onChange(dataset.map((t) => (t.id === id ? { ...t, pending: true } : t)));
+  };
+  const approveAll = () => {
+    if (!confirm(`Aprovar todos os ${pendingTeams.length} times pendentes?`)) return;
+    onChange(dataset.map((t) => (t.pending ? { ...t, pending: false } : t)));
+  };
 
   const updateTeam = (id: string, patch: Partial<TeamSeason>) => {
     onChange(dataset.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -202,6 +214,20 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
           {saveMsg && (
             <div className={`crm-save-msg${saveMsg.startsWith('✅') ? ' ok' : ' err'}`}>{saveMsg}</div>
           )}
+          {pendingTeams.length > 0 && (
+            <div className="pending-banner">
+              <span>
+                ⏳ <b>{pendingTeams.length}</b> {pendingTeams.length === 1 ? 'time aguardando' : 'times aguardando'} aprovação — ficam ocultos para os jogadores até você liberar e <b>Salvar no banco</b>.
+              </span>
+              <span className="spacer" />
+              <button className="btn ghost" onClick={() => setSelId(pendingTeams[0].id)}>
+                Revisar
+              </button>
+              <button className="btn" onClick={approveAll}>
+                ✅ Aprovar todos
+              </button>
+            </div>
+          )}
           <div className="crm-layout">
             <div>
               <div className="field" style={{ marginBottom: 8 }}>
@@ -213,6 +239,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                     <TeamBadge tag={t.tag} colors={t.colors} size={22} logoUrl={t.logoUrl ?? logoForTeam(t)} />
                     <span style={{ flex: 1 }}>
                       {t.team} <span className="sub">{t.era}</span>
+                      {t.pending && <span className="pending-tag">⏳ pendente</span>}
                       <br />
                       <span className="sub">
                         {t.game} · {t.players.length} jogadores
@@ -227,6 +254,21 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
 
             {sel ? (
               <div>
+                <div className={`approve-bar ${sel.pending ? 'is-pending' : 'is-live'}`}>
+                  {sel.pending ? (
+                    <>
+                      <span>⏳ <b>{sel.team}</b> está pendente — invisível para os jogadores.</span>
+                      <span className="spacer" />
+                      <button className="btn" onClick={() => approveTeam(sel.id)}>✅ Aprovar e liberar</button>
+                    </>
+                  ) : (
+                    <>
+                      <span>✅ <b>{sel.team}</b> está liberado para os jogadores.</span>
+                      <span className="spacer" />
+                      <button className="btn ghost" onClick={() => unapproveTeam(sel.id)}>Tornar pendente</button>
+                    </>
+                  )}
+                </div>
                 <div className="form-grid" style={{ marginBottom: 12 }}>
                   <div className="field" style={{ gridColumn: 'span 2' }}>
                     <label>Time</label>

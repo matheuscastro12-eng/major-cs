@@ -679,6 +679,58 @@ tr.team-row td {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* sistema de aprovação de times no CRM */
+.pending-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(230, 179, 77, 0.18);
+  border: 1px solid rgba(230, 179, 77, 0.55);
+  color: #f0c987;
+  vertical-align: middle;
+}
+.pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: rgba(230, 179, 77, 0.12);
+  border: 1px solid rgba(230, 179, 77, 0.45);
+  color: #f0d29a;
+  font-size: 14px;
+}
+.pending-banner .spacer {
+  flex: 1;
+}
+.approve-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.approve-bar .spacer {
+  flex: 1;
+}
+.approve-bar.is-pending {
+  background: rgba(230, 179, 77, 0.14);
+  border: 1px solid rgba(230, 179, 77, 0.5);
+  color: #f0d29a;
+}
+.approve-bar.is-live {
+  background: rgba(126, 224, 168, 0.12);
+  border: 1px solid rgba(126, 224, 168, 0.4);
+  color: #aef0c8;
+}
+
 /* mensagem de salvar a base no banco (CRM) */
 .crm-save-msg {
   margin-bottom: 12px;

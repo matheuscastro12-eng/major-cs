@@ -82,7 +82,8 @@ export default function App() {
   const rngRef = useRef(makeRng(randomSeed()));
   const rng = useCallback(() => rngRef.current(), []);
 
-  const eligible = useMemo(() => dataset.filter((t) => t.players.length >= 5), [dataset]);
+  // jogadores só veem times aprovados (pending fica oculto até liberar no CRM)
+  const eligible = useMemo(() => dataset.filter((t) => t.players.length >= 5 && !t.pending), [dataset]);
   const playerCount = useMemo(() => dataset.reduce((s, t) => s + t.players.length, 0), [dataset]);
   const brEligible = useMemo(() => eligible.filter((t) => t.country === 'br'), [eligible]);
 
