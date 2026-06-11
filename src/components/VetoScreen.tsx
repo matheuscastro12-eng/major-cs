@@ -63,7 +63,7 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
           </span>
         </div>
         <div className="panel-body">
-          <div style={{ marginBottom: 12 }}>
+          <div className="veto-banner-wrap" style={{ marginBottom: 12 }}>
             <MatchBanner teamA={teams[0]} teamB={teams[1]} center={mdLabel} event={phaseLabel} sub="Veto de mapas" />
           </div>
 

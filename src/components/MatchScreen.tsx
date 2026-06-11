@@ -23,10 +23,12 @@ const TIMEOUTS_PER_MAP = 2;
 const TIMEOUT_ROUNDS = 3;
 
 const SPEEDS: { label: string; ms: number }[] = [
+  { label: '0.5x', ms: 560 },
   { label: '1x', ms: 280 },
   { label: '2x', ms: 140 },
   { label: '4x', ms: 60 },
 ];
+const DEFAULT_SPEED_IDX = 1; // começa em 1x (0.5x é opção mais lenta)
 
 const STANCES: { key: Stance; label: string; hint: string }[] = [
   { key: 'aggressive', label: '🔥 Agressivo', hint: 'Mais força no T, mas se expõe no CT' },
@@ -53,7 +55,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [timeoutsLeft, setTimeoutsLeft] = useState(TIMEOUTS_PER_MAP);
   const [boostRounds, setBoostRounds] = useState(0);
   const [pausedMsg, setPausedMsg] = useState('');
-  const [speedIdx, setSpeedIdx] = useState(0);
+  const [speedIdx, setSpeedIdx] = useState(DEFAULT_SPEED_IDX);
   const [stance, setStance] = useState<Stance>('default');
   const stanceRef = useRef<Stance>('default');
   stanceRef.current = stance;
