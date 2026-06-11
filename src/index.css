@@ -3841,3 +3841,45 @@ table.crm-players input.num {
 @media (max-width: 720px) {
   .found-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== bracket do playoff do circuito ===== */
+.po-bracket { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.po-col { display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+.po-match {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+}
+.po-match.clickable { cursor: pointer; }
+.po-match.clickable:hover { border-color: var(--gold); }
+.po-label {
+  font-size: 0.66rem; letter-spacing: 1px; font-weight: 800; text-transform: uppercase;
+  color: var(--muted); padding: 4px 10px; background: var(--header);
+}
+.po-side {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+}
+.po-side.win { background: rgba(212, 164, 65, 0.12); }
+.po-side.win .po-tname { font-weight: 800; }
+.po-side.mine .po-tname { color: var(--blue-bright); }
+.po-side.tbd { justify-content: center; padding: 12px; }
+.po-seed {
+  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
+  background: var(--header); color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 800;
+}
+.po-tname { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 0.92rem; }
+.po-score {
+  text-align: center; font-family: var(--font-cond); font-weight: 800;
+  padding: 2px 0; color: var(--muted); font-size: 0.9rem;
+}
+.po-champ {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px;
+  border: 1px solid var(--gold); border-radius: 12px; padding: 12px;
+  background: rgba(212, 164, 65, 0.08);
+}
+@media (max-width: 720px) {
+  .po-bracket { grid-template-columns: 1fr; }
+}

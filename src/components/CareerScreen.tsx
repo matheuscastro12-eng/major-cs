@@ -11,7 +11,7 @@ import { simulateSeries } from '../engine/match';
 import { autoVeto } from '../engine/veto';
 import { createTournament, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 import { Hub } from './Hub';
-import { makeRng, randomSeed } from '../engine/rng';
+import { makeRng, randomSeed, type Rng } from '../engine/rng';
 import type { Coach, MapId, Player, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { VetoScreen } from './VetoScreen';
@@ -98,6 +98,20 @@ interface SplitRecord {
   major?: { placement: PlacementCode; champion: boolean };
 }
 
+// Playoff (mata-mata) do circuito: os 4 melhores da fase de pontos corridos
+// disputam um bracket que decide o campeão e as vagas no Major.
+interface PlayoffMatch { a: string; b: string; result?: SeriesResult; }
+interface Playoff {
+  circuit: string;
+  seeds: string[];   // top 4 (ordem de seed) ao entrar nos playoffs
+  sf: [PlayoffMatch, PlayoffMatch];
+  final: PlayoffMatch | null;
+  champion: string | null;
+  runnerUp: string | null;
+}
+const PO_SF_BO: 1 | 3 | 5 = 3;
+const PO_FINAL_BO: 1 | 3 | 5 = 5;
+
 interface CareerSave {
   org: { name: string; tag: string; colors: [string, string]; logo?: string } | null;
   budget: number;
@@ -110,6 +124,7 @@ interface CareerSave {
   circuit: CircuitChoice | null;
   history: SplitRecord[];
   sponsors: string[];
+  playoff: Playoff | null;
 }
 
 const emptySave = (): CareerSave => ({
@@ -124,7 +139,61 @@ const emptySave = (): CareerSave => ({
   circuit: null,
   history: [],
   sponsors: [],
+  playoff: null,
 });
+
+// ----- helpers do playoff (mata-mata do circuito) -----
+function buildPlayoff(table: TTeam[], circuit: string): Playoff {
+  const s = table.slice(0, 4).map((t) => t.id);
+  return {
+    circuit,
+    seeds: s,
+    sf: [
+      { a: s[0], b: s[3] }, // 1 x 4
+      { a: s[1], b: s[2] }, // 2 x 3
+    ],
+    final: null,
+    champion: null,
+    runnerUp: null,
+  };
+}
+const poWinner = (m: PlayoffMatch | null | undefined): string | null =>
+  m?.result ? (m.result.winner === 0 ? m.a : m.b) : null;
+function poAdvance(p: Playoff): void {
+  if (!p.final && p.sf[0].result && p.sf[1].result) {
+    p.final = { a: poWinner(p.sf[0])!, b: poWinner(p.sf[1])! };
+  }
+  if (p.final?.result && !p.champion) {
+    p.champion = poWinner(p.final)!;
+    p.runnerUp = p.final.a === p.champion ? p.final.b : p.final.a;
+  }
+}
+function poUserMatch(p: Playoff): PlayoffMatch | null {
+  const all = [p.sf[0], p.sf[1], p.final].filter(Boolean) as PlayoffMatch[];
+  return all.find((m) => !m.result && (m.a === 'user' || m.b === 'user')) ?? null;
+}
+// resolve em cascata todas as partidas que NÃO envolvem o usuário
+function poRunAI(p: Playoff, team: (id: string) => TTeam, rng: Rng): void {
+  for (let guard = 0; guard < 8; guard++) {
+    poAdvance(p);
+    const all = [p.sf[0], p.sf[1], p.final].filter(Boolean) as PlayoffMatch[];
+    const m = all.find((x) => !x.result && x.a !== 'user' && x.b !== 'user');
+    if (!m) break;
+    const a = team(m.a);
+    const b = team(m.b);
+    const bo = p.final === m ? PO_FINAL_BO : PO_SF_BO;
+    m.result = simulateSeries(rng, a, b, autoVeto([a, b], rng, bo), bo);
+  }
+  poAdvance(p);
+}
+// colocação do usuário no playoff (1 campeão, 2 vice, 3 semifinalista, 99 fora)
+function poUserRank(p: Playoff | null): number {
+  if (!p) return 99;
+  if (p.champion === 'user') return 1;
+  if (p.runnerUp === 'user') return 2;
+  if (p.seeds.includes('user')) return 3;
+  return 99;
+}
 
 function loadSave(): CareerSave {
   try {
@@ -151,7 +220,7 @@ const coachFee = (c: Coach): number => Math.max(100_000, (c.rating - 60) * 30_00
 const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', country: 'br', rating: 66, style: 'tactical' };
 const ROOKIE_ID = '__rookie__';
 
-type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'seasonEnd' | 'majorHub' | 'major';
+type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
 type HubTab = 'overview' | 'results' | 'standings' | 'squad' | 'history';
 
 interface MajorResult {
@@ -176,14 +245,19 @@ export function CareerScreen({ dataset, onExit }: Props) {
     if (s.squad.length < 5 || !s.coachFromId) return 'market';
     // elenco pronto mas sem liga = escolha do campeonato (qual convite aceitar)
     if (!s.league) return 'circuit';
-    if (leagueDone(s.league)) return 'seasonEnd';
+    if (leagueDone(s.league)) {
+      // fase de pontos corridos encerrada: vai pro mata-mata; só depois do
+      // campeão decidido cai no resumo da temporada
+      if (s.playoff) return s.playoff.champion ? 'seasonEnd' : 'playoffHub';
+      return 'seasonEnd'; // save antigo sem playoff
+    }
     return 'hub';
   });
   const [matchCtx, setMatchCtx] = useState<{
     teams: [TTeam, TTeam];
     userIdx: 0 | 1;
     maps?: { map: MapId; pickedBy: 0 | 1 | -1 }[];
-    mode: 'league' | 'major';
+    mode: 'league' | 'major' | 'playoff';
     bestOf: 1 | 3 | 5;
     phaseLabel: string;
   } | null>(null);
@@ -311,11 +385,78 @@ export function CareerScreen({ dataset, onExit }: Props) {
       if (m) m.result = series;
     }
     resolveLeagueRound(l, rngRef.current, LEAGUE_BO);
+    setMatchCtx(null);
+    if (leagueDone(l)) {
+      enterPlayoffs(l);
+      return;
+    }
     const next = { ...save, league: { ...l } };
     persist(next);
     setSave(next);
+    setStage('hub');
+  };
+
+  // entra no mata-mata do circuito: top 4 jogam SF + final pelo título e vagas
+  const enterPlayoffs = (l: League) => {
+    const p = buildPlayoff(leagueTable(l), save.circuit?.name ?? l.name);
+    poRunAI(p, (id) => leagueTeam(l, id), rngRef.current); // sima o que não envolve o usuário
+    const next = { ...save, league: { ...l }, playoff: p };
+    persist(next);
+    setSave(next);
+    setStage('playoffHub');
+  };
+
+  // abre o veto/partida da rodada do usuário no playoff
+  const playPlayoffMine = () => {
+    const p = save.playoff;
+    if (!p || !save.league) return;
+    const m = poUserMatch(p);
+    if (!m) return;
+    rngRef.current = makeRng(randomSeed());
+    const a = leagueTeam(save.league, m.a);
+    const b = leagueTeam(save.league, m.b);
+    const isFinal = p.final === m;
+    setMatchCtx({
+      teams: [a, b],
+      userIdx: m.a === 'user' ? 0 : 1,
+      mode: 'playoff',
+      bestOf: isFinal ? PO_FINAL_BO : PO_SF_BO,
+      phaseLabel: `${p.circuit} · ${isFinal ? 'GRANDE FINAL' : 'Semifinal'}`,
+    });
+    setStage('veto');
+  };
+
+  const finishPlayoffRound = (series?: SeriesResult) => {
+    const p = save.playoff;
+    if (!p || !save.league) return;
+    const clone: Playoff = structuredClone(p);
+    const m = poUserMatch(clone);
+    if (series && m) m.result = series;
+    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
+    const next = { ...save, playoff: clone };
+    persist(next);
+    setSave(next);
     setMatchCtx(null);
-    setStage(leagueDone(l) ? 'seasonEnd' : 'hub');
+    setStage(clone.champion ? 'seasonEnd' : 'playoffHub');
+  };
+
+  const simPlayoffMine = () => {
+    const p = save.playoff;
+    if (!p || !save.league) return;
+    const clone: Playoff = structuredClone(p);
+    const m = poUserMatch(clone);
+    if (m) {
+      rngRef.current = makeRng(randomSeed());
+      const a = leagueTeam(save.league, m.a);
+      const b = leagueTeam(save.league, m.b);
+      const bo = clone.final === m ? PO_FINAL_BO : PO_SF_BO;
+      m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+    }
+    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
+    const next = { ...save, playoff: clone };
+    persist(next);
+    setSave(next);
+    setStage(clone.champion ? 'seasonEnd' : 'playoffHub');
   };
 
   // SIM MATCH: simula a partida do usuário na hora (sem veto/partida ao vivo)
@@ -485,6 +626,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
                   split: save.split + 1,
                   league: null,
                   circuit: null,
+                  playoff: null,
                   history: [...save.history, finished],
                 };
                 persist(next);
@@ -507,19 +649,24 @@ export function CareerScreen({ dataset, onExit }: Props) {
     const pos = table.findIndex((t) => t.id === 'user') + 1;
     const me = leagueTeam(league, 'user');
     const spots = save.circuit?.spots ?? MAJOR_SPOTS;
-    const prize = Math.round((PRIZE_BY_POS[pos - 1] ?? 50_000) * (save.circuit?.prizeMult ?? 1));
-    const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsMult ?? 1));
-    const qualified = pos <= spots;
+    // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
+    const poRank = poUserRank(save.playoff);
+    const isChampion = save.playoff?.champion === 'user';
+    // bônus de mata-mata: campeão +60%, vice +25%
+    const poMult = isChampion ? 1.6 : poRank === 2 ? 1.25 : 1;
+    const prize = Math.round((PRIZE_BY_POS[pos - 1] ?? 50_000) * (save.circuit?.prizeMult ?? 1) * poMult);
+    const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsMult ?? 1) * poMult);
+    const qualified = save.playoff ? poRank <= spots : pos <= spots;
     const baseRecord = (): SplitRecord => ({
       split: save.split,
       circuit: save.circuit?.name ?? league.name,
-      position: pos,
+      position: save.playoff ? Math.min(pos, poRank) : pos,
       wins: me.wins,
       losses: me.losses,
       roundDiff: me.roundDiff,
       prize,
       vrs: vrsGain,
-      champion: pos === 1,
+      champion: isChampion,
     });
     return (
       <div className="fade-in">
@@ -530,23 +677,32 @@ export function CareerScreen({ dataset, onExit }: Props) {
             <button className="btn" onClick={onExit}>← Sair</button>
           </div>
           <div className="panel-body center">
-            <div className="trophy">{pos === 1 ? '🏆' : pos <= 3 ? '🥉' : '★'}</div>
-            <h2>{save.org?.name} terminou em {pos}º lugar</h2>
+            <div className="trophy">{isChampion ? '🏆' : poRank === 2 ? '🥈' : poRank === 3 ? '🥉' : pos <= 3 ? '🥉' : '★'}</div>
+            <h2>
+              {isChampion
+                ? `${save.org?.name} é CAMPEÃO do ${save.circuit?.name ?? 'circuito'}!`
+                : poRank === 2
+                  ? `${save.org?.name}: vice-campeão (perdeu a final)`
+                  : poRank === 3
+                    ? `${save.org?.name} caiu na semifinal`
+                    : `${save.org?.name} terminou em ${pos}º na fase de pontos`}
+            </h2>
             <div className="prize-banner">
               Premiação: <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · Folha:{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
             {qualified ? (
               <div className="qualify-banner">
-                <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Terminar no top {spots} do {save.circuit?.name ?? 'circuito'}
+                <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Chegar ao top {spots} do mata-mata do {save.circuit?.name ?? 'circuito'}
                 {' '}garantiu a vaga. Hora de enfrentar os melhores do mundo.
               </div>
             ) : (
               <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
-                Termine no <b>top {spots}</b> do {save.circuit?.name ?? 'circuito'} para garantir vaga no Major Mundial.
-                Faltou pouco: continue acumulando VRS e reforçando o elenco.
+                Chegue ao <b>top {spots}</b> do mata-mata do {save.circuit?.name ?? 'circuito'} para garantir vaga no Major Mundial.
+                Continue acumulando VRS e reforçando o elenco.
               </p>
             )}
+            {save.playoff && <PlayoffBracket p={save.playoff} teamOf={(id) => leagueTeam(league, id)} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />}
             <CareerTable table={table} />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 14 }}>
               {qualified && (
@@ -560,7 +716,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
                       ...save,
                       budget: save.budget + prize,
                       vrs: save.vrs + vrsGain,
-                      titles: save.titles + (pos === 1 ? 1 : 0),
+                      titles: save.titles + (isChampion ? 1 : 0),
                     };
                     persist(next);
                     setSave(next);
@@ -577,10 +733,11 @@ export function CareerScreen({ dataset, onExit }: Props) {
                     ...save,
                     budget: save.budget + prize - payroll + sponsorIncome(save.sponsors),
                     vrs: save.vrs + vrsGain,
-                    titles: save.titles + (pos === 1 ? 1 : 0),
+                    titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
                     league: null,
                     circuit: null,
+                    playoff: null,
                     history: [...save.history, baseRecord()],
                   };
                   persist(next);
@@ -600,7 +757,11 @@ export function CareerScreen({ dataset, onExit }: Props) {
   // ---------- veto / partida (liga OU Major, ao vivo) ----------
   if ((stage === 'veto' || stage === 'match') && matchCtx) {
     const finish = (series: SeriesResult) =>
-      matchCtx.mode === 'major' ? finishMajorRound(series) : league && finishUserRound(league, series);
+      matchCtx.mode === 'major'
+        ? finishMajorRound(series)
+        : matchCtx.mode === 'playoff'
+          ? finishPlayoffRound(series)
+          : league && finishUserRound(league, series);
     if (stage === 'veto') {
       return (
         <VetoScreen
@@ -648,6 +809,32 @@ export function CareerScreen({ dataset, onExit }: Props) {
           onStats={() => {}}
           onOpenSeries={(p) => p.result && setSelSeries({ series: p.result, teams: [getTeam(majorT, p.a), getTeam(majorT, p.b)] })}
         />
+        {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
+      </div>
+    );
+  }
+
+  // ---------- playoffs do circuito (mata-mata com bracket) ----------
+  if (stage === 'playoffHub' && save.playoff && league) {
+    const p = save.playoff;
+    const teamOf = (id: string) => leagueTeam(league, id);
+    const userMatch = poUserMatch(p);
+    const isFinalNext = !!userMatch && p.final === userMatch;
+    return (
+      <div className="career-major-live">
+        <div className="major-live-bar">
+          <b>PLAYOFFS</b> · {p.circuit} · Split {save.split}
+          <span className="spacer" />
+          {userMatch ? (
+            <>
+              <button className="btn ghost" onClick={simPlayoffMine}>⏩ Simular</button>
+              <button className="btn gold" onClick={playPlayoffMine}>▶ {isFinalNext ? 'Jogar a final' : 'Jogar minha semi'}</button>
+            </>
+          ) : p.champion ? (
+            <button className="btn gold" onClick={() => setStage('seasonEnd')}>Ver resultado do split →</button>
+          ) : null}
+        </div>
+        <PlayoffBracket p={p} teamOf={teamOf} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
         {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
       </div>
     );
@@ -1061,6 +1248,64 @@ function CareerTable({ table, highlightTop = 0, onPick, detailed }: {
         ))}
       </tbody>
     </table>
+  );
+}
+
+// ---------- bracket do playoff do circuito ----------
+function PlayoffBracket({ p, teamOf, onOpen }: {
+  p: Playoff;
+  teamOf: (id: string) => TTeam;
+  onOpen: (s: SeriesResult, ts: [TTeam, TTeam]) => void;
+}) {
+  const Side = ({ id, win, seed }: { id?: string; win?: boolean; seed?: number }) => {
+    if (!id) return <div className="po-side tbd"><span className="muted small">a definir</span></div>;
+    const t = teamOf(id);
+    return (
+      <div className={`po-side${win ? ' win' : ''}${id === 'user' ? ' mine' : ''}`}>
+        {seed && <span className="po-seed">{seed}</span>}
+        <TeamBadge tag={t.tag} colors={t.colors} size={24} logoUrl={t.logoUrl} />
+        <span className="po-tname"><Flag cc={t.country} /> {t.name}</span>
+      </div>
+    );
+  };
+  const Match = ({ m, label, seeds }: { m: PlayoffMatch | null; label: string; seeds?: [number, number] }) => {
+    const w = poWinner(m);
+    const r = m?.result;
+    return (
+      <div className={`po-match${r ? ' clickable' : ''}`}
+        onClick={() => r && m && onOpen(r, [teamOf(m.a), teamOf(m.b)])}>
+        <div className="po-label">{label}</div>
+        <Side id={m?.a} win={!!w && w === m?.a} seed={seeds?.[0]} />
+        <div className="po-score">{r ? `${r.mapScore[0]} : ${r.mapScore[1]}` : 'vs'}</div>
+        <Side id={m?.b} win={!!w && w === m?.b} seed={seeds?.[1]} />
+      </div>
+    );
+  };
+  const champ = p.champion ? teamOf(p.champion) : null;
+  return (
+    <div className="panel">
+      <div className="panel-head">{p.circuit} · Playoffs (mata-mata)</div>
+      <div className="panel-body">
+        <div className="po-bracket">
+          <div className="po-col">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Semifinais (MD3)</div>
+            <Match m={p.sf[0]} label="SF1" seeds={[1, 4]} />
+            <Match m={p.sf[1]} label="SF2" seeds={[2, 3]} />
+          </div>
+          <div className="po-col">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Grande final (MD5)</div>
+            <Match m={p.final} label="FINAL" />
+            {champ && (
+              <div className="po-champ">
+                <div className="trophy" style={{ fontSize: 30 }}>🏆</div>
+                <TeamBadge tag={champ.tag} colors={champ.colors} size={34} logoUrl={champ.logoUrl} />
+                <div><b>{champ.name}</b><div className="muted small">campeão do {p.circuit}</div></div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
