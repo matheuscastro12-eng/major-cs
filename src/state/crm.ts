@@ -4,11 +4,36 @@ import type { TeamSeason } from '../types';
 // v3: invalida snapshots locais antigos (navegadores que guardaram lineups
 // desatualizadas e por isso ignoravam a base corrigida do Neon/teams.json).
 const STORAGE_KEY = 'major-cs-dataset-v3';
+// marca quando há edições LOCAIS ainda não enviadas ao banco. Só nesse caso o
+// app mantém a cópia local; senão sempre adota a base do servidor (verdade
+// compartilhada), garantindo que o "Salvar no banco" do admin chegue a todos.
+const DIRTY_KEY = 'major-cs-dataset-dirty-v1';
 // limpa a chave antiga uma vez, para não deixar lixo no localStorage
 try {
   localStorage.removeItem('major-cs-dataset-v2');
 } catch {
   /* ambiente sem localStorage (SSR/testes) */
+}
+
+export function markDirty(): void {
+  try {
+    localStorage.setItem(DIRTY_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearDirty(): void {
+  try {
+    localStorage.removeItem(DIRTY_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+// true quando o usuário tem edições locais ainda não salvas no banco
+export function hasUnsavedEdits(): boolean {
+  return localStorage.getItem(DIRTY_KEY) === '1';
 }
 
 // dados salvos por versões antigas podem não ter coach - normaliza
@@ -43,6 +68,7 @@ export function saveDataset(teams: TeamSeason[]): void {
 
 export function resetDataset(): TeamSeason[] {
   localStorage.removeItem(STORAGE_KEY);
+  clearDirty();
   return structuredClone(BASE_TEAMS);
 }
 

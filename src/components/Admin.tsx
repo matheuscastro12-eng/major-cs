@@ -4,7 +4,7 @@ import { playerOvr } from '../engine/ratings';
 import { adminPassword, lockAdmin } from './AdminGate';
 import { invalidateDonors } from './Donate';
 import { MetricsPanel } from './MetricsPanel';
-import { exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, saveDatasetToServer, saveMapImage } from '../state/crm';
+import { clearDirty, exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, saveDatasetToServer, saveMapImage } from '../state/crm';
 import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
 import { COACH_STYLE_LABELS, MAP_LABELS, MAP_POOL } from '../types';
 import { Flag, MapThumb, TeamBadge } from './ui';
@@ -35,6 +35,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
     const r = await saveDatasetToServer(dataset, adminPassword());
     setSaving(false);
     if (r.ok) {
+      clearDirty(); // a cópia local agora é igual à do servidor
       setSaveMsg('✅ Base salva no banco! Já vale para todos os jogadores.');
     } else {
       setSaveMsg(`❌ Falha ao salvar: ${r.error ?? 'erro desconhecido'}`);

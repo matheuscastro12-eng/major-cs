@@ -78,7 +78,8 @@ export default async function handler(
 
   // ---- leitura pública ----
   if (req.method === 'GET' || !req.method) {
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
+    // cache curto: edições salvas pelo admin propagam a todos em ~30s
+    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
     try {
       const rows = (await sql`SELECT data FROM teams ORDER BY id`) as { data: unknown }[];
       res.status(200).json(rows.map((r) => r.data));

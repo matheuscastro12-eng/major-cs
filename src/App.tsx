@@ -19,7 +19,7 @@ import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
 import { createTournament, getTeam, pairingBestOf, phaseLabel, resolveRound, userMapRecord, userPairing, userTeam } from './engine/swiss';
-import { fetchRemoteDataset, isCustomized, loadDataset, resetDataset, saveDataset } from './state/crm';
+import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, resetDataset, saveDataset } from './state/crm';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
@@ -183,12 +183,17 @@ export default function App() {
     trackVisit();
   }, []);
 
-  // fonte primária: banco Neon via /api/teams; edições locais do CRM têm prioridade
+  // fonte primária: banco Neon via /api/teams (verdade compartilhada).
+  // Só NÃO adota o servidor se o usuário tem edições locais ainda não salvas;
+  // assim o "Salvar no banco" do admin chega a todos os jogadores.
   useEffect(() => {
-    if (isCustomized()) return;
+    if (hasUnsavedEdits()) return;
     let cancelled = false;
     fetchRemoteDataset().then((remote) => {
-      if (remote && !cancelled) setDataset(remote);
+      if (remote && !cancelled) {
+        setDataset(remote);
+        saveDataset(remote); // atualiza o cache local com a base do servidor
+      }
     });
     return () => {
       cancelled = true;
@@ -405,6 +410,7 @@ export default function App() {
   const changeDataset = (teams: TeamSeason[]) => {
     setDataset(teams);
     saveDataset(teams);
+    markDirty(); // edições locais: só valem aqui até o admin "Salvar no banco"
   };
 
   const goHome = () => {
