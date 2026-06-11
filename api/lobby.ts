@@ -60,7 +60,7 @@ export default async function handler(
       return;
     }
     try {
-      const lobby = await sql`SELECT code, mode, host, status, seed, pool, created_at FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT code, mode, host, status, seed, pool, created_at, COALESCE(locked, false) AS locked FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -90,6 +90,8 @@ export default async function handler(
     coachPick?: string;
     done?: boolean;
     isPublic?: boolean;
+    locked?: boolean;
+    target?: string;
   };
   const action = String(body.action ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 20);
@@ -106,6 +108,7 @@ export default async function handler(
       const isPublic = body.isPublic === true;
       const seed = Math.floor(Math.random() * 2147483647);
       await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
       // higieniza salas abandonadas (TTL 6h) para não acumular lixo no banco
       await sql`DELETE FROM lobbies WHERE updated_at < now() - interval '6 hours'`;
       // tenta alguns códigos até achar um livre
@@ -127,7 +130,7 @@ export default async function handler(
         res.status(400).json({ error: 'nick e código obrigatórios' });
         return;
       }
-      const lobby = await sql`SELECT mode, status FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT mode, status, COALESCE(locked, false) AS locked FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -135,6 +138,14 @@ export default async function handler(
       if (lobby[0].status !== 'waiting') {
         res.status(409).json({ error: 'o draft já começou' });
         return;
+      }
+      if (lobby[0].locked) {
+        // host trancou: só quem já estava na sala pode reconectar
+        const already = await sql`SELECT 1 FROM lobby_players WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`;
+        if (already.length === 0) {
+          res.status(403).json({ error: 'sala trancada' });
+          return;
+        }
       }
       const players = await sql`SELECT nick FROM lobby_players WHERE code = ${code}`;
       const max = MAX_PLAYERS[lobby[0].mode as string] ?? 8;
@@ -174,6 +185,39 @@ export default async function handler(
         return;
       }
       await sql`UPDATE lobbies SET status = 'drafting', updated_at = now() WHERE code = ${code}`;
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (action === 'lock') {
+      const lobby = await sql`SELECT host FROM lobbies WHERE code = ${code}`;
+      if (lobby.length === 0 || lobby[0].host !== nick) {
+        res.status(403).json({ error: 'só o host tranca a sala' });
+        return;
+      }
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
+      const locked = body.locked === true;
+      await sql`UPDATE lobbies SET locked = ${locked}, updated_at = now() WHERE code = ${code}`;
+      res.status(200).json({ ok: true, locked });
+      return;
+    }
+
+    if (action === 'kick') {
+      const target = String(body.target ?? '').trim().slice(0, 20);
+      const lobby = await sql`SELECT host, status FROM lobbies WHERE code = ${code}`;
+      if (lobby.length === 0 || lobby[0].host !== nick) {
+        res.status(403).json({ error: 'só o host expulsa' });
+        return;
+      }
+      if (lobby[0].status !== 'waiting') {
+        res.status(409).json({ error: 'o draft já começou' });
+        return;
+      }
+      if (!target || target.toLowerCase() === String(lobby[0].host).toLowerCase()) {
+        res.status(400).json({ error: 'alvo inválido' });
+        return;
+      }
+      await sql`DELETE FROM lobby_players WHERE code = ${code} AND lower(nick) = ${target.toLowerCase()}`;
       res.status(200).json({ ok: true });
       return;
     }

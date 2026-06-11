@@ -15,6 +15,7 @@ export interface LobbyState {
     status: 'waiting' | 'drafting' | 'done';
     seed: number;
     pool: TournamentPool;
+    locked?: boolean;
   };
   players: { nick: string; picks: string[]; coach_pick: string; done: boolean }[];
 }

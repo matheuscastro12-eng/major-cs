@@ -15,6 +15,7 @@ import { track } from '../state/track';
 import type { SeriesResult, TournamentPool } from '../types';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, Loader, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { logoForTeam } from '../data/media';
 
 interface SelSeries {
   a: string; // teamId
@@ -31,9 +32,9 @@ const POLL_MS = 2200;
 
 // textos das salas abertas, por idioma (sem mexer no i18n global)
 const ONLINE_LOCAL = {
-  pt: { publicRoom: 'Sala aberta (qualquer um pode entrar)', openRooms: 'Salas abertas', noRooms: 'Nenhuma sala aberta agora. Crie a sua!', refresh: 'Atualizar', enter: 'Entrar' },
-  en: { publicRoom: 'Open room (anyone can join)', openRooms: 'Open rooms', noRooms: 'No open rooms right now. Create yours!', refresh: 'Refresh', enter: 'Join' },
-  es: { publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar' },
+  pt: { publicRoom: 'Sala aberta (qualquer um pode entrar)', openRooms: 'Salas abertas', noRooms: 'Nenhuma sala aberta agora. Crie a sua!', refresh: 'Atualizar', enter: 'Entrar', yourTeam: 'Seu time', emptySlot: 'vazio', rolesLabel: 'Funções', roleEntry: 'Entry', lock: '🔒 Trancar sala', unlock: '🔓 Destrancar sala', locked: 'Sala trancada', kick: 'Expulsar', kicked: 'Você foi removido da sala pelo host.' },
+  en: { publicRoom: 'Open room (anyone can join)', openRooms: 'Open rooms', noRooms: 'No open rooms right now. Create yours!', refresh: 'Refresh', enter: 'Join', yourTeam: 'Your team', emptySlot: 'empty', rolesLabel: 'Roles', roleEntry: 'Entry', lock: '🔒 Lock room', unlock: '🔓 Unlock room', locked: 'Room locked', kick: 'Kick', kicked: 'You were removed from the room by the host.' },
+  es: { publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu equipo', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.' },
 };
 
 export function OnlineScreen({ onBack }: Props) {
@@ -100,7 +101,17 @@ export function OnlineScreen({ onBack }: Props) {
     if (!s) return;
     setState(s);
     const me = s.players.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
-    if (!me) return;
+    if (!me) {
+      // não estou mais na lista durante a espera = fui expulso pelo host
+      if (s.lobby.status === 'waiting') {
+        setCode('');
+        setState(null);
+        setMyPicks([]);
+        setMyDone(false);
+        setError(OL.kicked);
+      }
+      return;
+    }
     if (me.done && !myDone) setMyDone(true);
     // catch-up: adota os picks do servidor apenas quando ele tem MAIS picks que
     // o local (reconexão após F5), nunca regredindo picks otimistas ainda não
@@ -178,6 +189,22 @@ export function OnlineScreen({ onBack }: Props) {
 
   const sendPicks = async (picks: string[], coach: string, done: boolean) => {
     await lobbyApi({ action: 'pick', nick: nick.trim(), code, picks, coachPick: coach, done }).catch(() => {});
+  };
+
+  const toggleLock = async () => {
+    if (busy || !state) return;
+    setBusy(true);
+    await lobbyApi({ action: 'lock', nick: nick.trim(), code, locked: !state.lobby.locked }).catch(() => {});
+    setBusy(false);
+    refresh();
+  };
+
+  const kick = async (target: string) => {
+    if (busy) return;
+    setBusy(true);
+    await lobbyApi({ action: 'kick', nick: nick.trim(), code, target }).catch(() => {});
+    setBusy(false);
+    refresh();
   };
 
   // o MEU sorteio (cada jogador recebe elencos diferentes, por seed + nick)
@@ -345,9 +372,20 @@ export function OnlineScreen({ onBack }: Props) {
                 <span key={p.nick} className="lobby-player">
                   {p.nick === state.lobby.host ? '★ ' : '• '}
                   {p.nick}
+                  {isHost && p.nick !== state.lobby.host && (
+                    <button className="kick-btn" title={OL.kick} disabled={busy} onClick={() => kick(p.nick)}>✕</button>
+                  )}
                 </span>
               ))}
             </div>
+            {isHost && (
+              <div style={{ marginTop: 12 }}>
+                <button className={`btn ${state.lobby.locked ? 'gold' : 'ghost'} small`} onClick={toggleLock} disabled={busy}>
+                  {state.lobby.locked ? OL.unlock : OL.lock}
+                </button>
+                {state.lobby.locked && <div className="muted small" style={{ marginTop: 4 }}>{OL.locked}</div>}
+              </div>
+            )}
             {isHost ? (
               <button className="btn gold big" style={{ marginTop: 18 }} onClick={start} disabled={state.players.length < 2 || busy}>
                 {state.players.length < 2 ? tr('online.waitingPlayers') : tr('online.startDraft')}
@@ -645,7 +683,7 @@ export function OnlineScreen({ onBack }: Props) {
               </span>
             </div>
             <div className="draft-source">
-              <TeamBadge tag={source.tag} colors={source.colors} size={56} logoUrl={source.logoUrl} />
+              <TeamBadge tag={source.tag} colors={source.colors} size={56} logoUrl={source.logoUrl ?? logoForTeam(source)} />
               <div style={{ flex: 1 }}>
                 <div className="era-game">
                   {source.game} · {source.era}
@@ -680,6 +718,50 @@ export function OnlineScreen({ onBack }: Props) {
                 );
               })}
             </div>
+
+            {/* time sendo montado: jogadores, funções e o que falta (igual ao draft SP) */}
+            {(() => {
+              const roster = [0, 1, 2, 3, 4].map((i) => {
+                const pid = myPicks[i];
+                return pid ? setup.sources[i]?.players.find((x) => x.id === pid) ?? null : null;
+              });
+              const present = new Set<string>(roster.filter(Boolean).map((p) => p!.role));
+              const KEY: { role: string; label: string }[] = [
+                { role: 'AWP', label: 'AWP' },
+                { role: 'IGL', label: 'IGL' },
+                { role: 'Entry', label: OL.roleEntry },
+              ];
+              return (
+                <div className="online-roster">
+                  <div className="muted small section-label" style={{ marginTop: 4 }}>
+                    {OL.yourTeam} ({myPicks.length}/5)
+                  </div>
+                  <div className="roster-slots">
+                    {roster.map((p, i) => (
+                      <div key={i} className={`slot${p ? ' filled' : ''}`}>
+                        {p ? (
+                          <>
+                            <PlayerAvatar nick={p.nick} size={34} />
+                            <div className="nick"><Flag cc={p.country} /> {p.nick} <span className="ovr-inline">{playerOvr(p)}</span></div>
+                            <span className={`role-pill ${p.role}`}>{p.role}</span>
+                          </>
+                        ) : (
+                          <span className="muted small">{OL.emptySlot}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="roster-roles">
+                    <span className="muted small">{OL.rolesLabel}:</span>
+                    {KEY.map((k) => (
+                      <span key={k.role} className={`role-need ${present.has(k.role) ? 'ok' : 'miss'}`}>
+                        {present.has(k.role) ? '✓' : '✗'} {k.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
