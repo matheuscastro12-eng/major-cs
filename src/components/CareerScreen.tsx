@@ -228,8 +228,34 @@ const REGION_ORDER: RegionKey[] = ['samerica', 'namerica', 'europe', 'cis', 'oce
 // rating "do ano" de um jogador (estilo HLTV), determinístico por temporada
 function playerSeasonRating(p: Player, split: number): number {
   const ovr = playerOvr(p);
-  const form = ((hashStr(`${p.id}:r${split}`) % 220) - 90) / 1000; // -0.09..+0.13
-  return Math.max(0.7, (ovr - 62) / 28 + 0.92 + form);
+  const form = ((hashStr(`${p.id}:r${split}`) % 160) - 60) / 1000; // -0.06..+0.10
+  // escala estilo HLTV: ~0.95 (mediano) até ~1.40 (melhor do mundo)
+  return Math.max(0.85, 0.95 + (ovr - 70) / 55 + form);
+}
+// melhores N jogadores da temporada (entre todos os elencos da era)
+function seasonTopPlayers(pool: TeamSeason[], split: number, n: number) {
+  return pool
+    .flatMap((t) => t.players.map((p) => ({ p, team: t, rating: playerSeasonRating(p, split) })))
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, n);
+}
+
+// janela de transferências: feed determinístico de movimentações por split
+interface TransferItem { nick: string; cc: string; from: string; to: string; fee: number; }
+function transferFeed(split: number, teams: TeamSeason[], fa: TeamSeason): TransferItem[] {
+  const players = [...teams, fa].flatMap((t) => t.players.map((p) => ({ p, tag: t.tag, id: t.id })));
+  const dests = teams.filter((t) => t.id !== 'user');
+  const out: TransferItem[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; out.length < 12 && i < 60; i++) {
+    const h = hashStr(`tf${split}:${i}`);
+    const pl = players[h % players.length];
+    const dest = dests[(h >>> 5) % dests.length];
+    if (!pl || !dest || dest.tag === pl.tag || seen.has(pl.p.nick)) continue;
+    seen.add(pl.p.nick);
+    out.push({ nick: pl.p.nick, cc: pl.p.country, from: pl.tag, to: dest.tag, fee: playerValue(pl.p) });
+  }
+  return out;
 }
 
 function loadSave(): CareerSave {
@@ -746,6 +772,13 @@ export function CareerScreen({ dataset, onExit }: Props) {
     const table = leagueTable(league);
     const pos = table.findIndex((t) => t.id === 'user') + 1;
     const me = leagueTeam(league, 'user');
+    // premiações e destaques da temporada
+    const seStats = seasonPlayerStats(league);
+    const circuitMvp = seStats[0];
+    const mySquadIdsSE = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
+    const myStar = seStats.find((s) => mySquadIdsSE.has(s.id));
+    const seasonTop3 = seasonTopPlayers(currentEra, save.split, 3);
+    const nextFeed = transferFeed(save.split, currentEra, faTeam);
     const spots = save.circuit?.spots ?? MAJOR_SPOTS;
     // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
     const poRank = poUserRank(save.playoff);
@@ -801,6 +834,43 @@ export function CareerScreen({ dataset, onExit }: Props) {
               </p>
             )}
             {save.playoff && <PlayoffBracket p={save.playoff} teamOf={(id) => leagueTeam(league, id)} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />}
+
+            {/* premiações e destaques da temporada */}
+            <div className="se-awards">
+              {circuitMvp && (
+                <div className="se-award">
+                  <div className="se-award-title">MVP do circuito</div>
+                  <PlayerAvatar nick={circuitMvp.nick} size={40} />
+                  <div className="se-award-name"><Flag cc={circuitMvp.country} /> {circuitMvp.nick}</div>
+                  <div className="muted small">{circuitMvp.teamTag} · rating {circuitMvp.rating.toFixed(2)}</div>
+                </div>
+              )}
+              {myStar && (
+                <div className="se-award">
+                  <div className="se-award-title">Destaque do seu time</div>
+                  <PlayerAvatar nick={myStar.nick} size={40} />
+                  <div className="se-award-name"><Flag cc={myStar.country} /> {myStar.nick}</div>
+                  <div className="muted small">rating {myStar.rating.toFixed(2)} · {myStar.kd.toFixed(2)} K/D</div>
+                </div>
+              )}
+              <div className="se-award">
+                <div className="se-award-title">Top 3 HLTV da temporada</div>
+                <div className="se-top3">
+                  {seasonTop3.map((e, i) => (
+                    <div key={e.p.id} className="se-top3-row">
+                      <span className="t20-rank">{i + 1}</span>
+                      <span className="bp-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{e.team.tag}</span></span>
+                      <span className="t20-rating">{e.rating.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* prévia da próxima janela de transferências */}
+            <div className="muted small section-label">Rumores para a próxima janela</div>
+            <TransferFeed items={nextFeed} compact />
+
             <CareerTable table={table} />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 14 }}>
               {qualified && (
@@ -1515,6 +1585,24 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
   );
 }
 
+// ---------- feed da janela de transferências ----------
+function TransferFeed({ items, compact }: { items: TransferItem[]; compact?: boolean }) {
+  const list = compact ? items.slice(0, 6) : items;
+  if (list.length === 0) return <p className="muted small">Mercado parado por enquanto.</p>;
+  return (
+    <div className="transfer-feed">
+      {list.map((tr, i) => (
+        <div key={i} className="tf-row">
+          <Flag cc={tr.cc} />
+          <span className="tf-nick">{tr.nick}</span>
+          <span className="tf-move"><b>{tr.from}</b> <span className="muted">→</span> <b className="pos">{tr.to}</b></span>
+          <span className="tf-fee muted small">{formatMoney(tr.fee)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---------- bracket do playoff do circuito ----------
 function PlayoffBracket({ p, teamOf, onOpen }: {
   p: Playoff;
@@ -1965,6 +2053,10 @@ function MarketScreen({
               );
             })}
           </div>
+
+          {/* janela de transferências: o que os outros times andam fazendo */}
+          <div className="muted small section-label">Janela de transferências · o que rolou no mercado</div>
+          <TransferFeed items={transferFeed(save.split, coaches, freeAgentTeam())} />
 
           <div className="center" style={{ marginTop: 16 }}>
             <button className="btn gold big" disabled={!ready}

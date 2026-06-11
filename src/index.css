@@ -3936,3 +3936,32 @@ table.crm-players input.num {
 .qs-mapscore { font-family: var(--font-cond); font-weight: 700; }
 .qs-foot { margin-top: 20px; min-height: 28px; }
 .qs-final { font-family: var(--font-cond); font-weight: 800; font-size: 1.1rem; }
+
+/* ===== feed de transferências ===== */
+.transfer-feed { display: flex; flex-direction: column; gap: 3px; }
+.tf-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border-radius: 8px; background: rgba(255, 255, 255, 0.03); font-size: 0.9rem;
+}
+.tf-nick { font-weight: 700; min-width: 90px; }
+.tf-move { flex: 1; }
+.tf-fee { white-space: nowrap; }
+
+/* ===== fim de temporada: premiações ===== */
+.se-awards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin: 16px 0; text-align: center;
+}
+.se-award {
+  border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.se-award-title {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--gold); font-weight: 800; margin-bottom: 4px;
+}
+.se-award-name { font-family: var(--font-cond); font-weight: 800; }
+.se-top3 { width: 100%; display: flex; flex-direction: column; gap: 3px; }
+.se-top3-row { display: flex; align-items: center; gap: 8px; text-align: left; }
+.se-top3-row .bp-nick { flex: 1; }
