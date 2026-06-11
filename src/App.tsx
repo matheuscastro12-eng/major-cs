@@ -98,6 +98,7 @@ try {
 export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>('home');
+  const [bannerPreview, setBannerPreview] = useState(false); // demo de espaços de banner (#banners)
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [matchCtx, setMatchCtx] = useState<MatchCtx | null>(null);
@@ -212,6 +213,11 @@ export default function App() {
       } else if (h === '#carreira-crm') {
         // CRM dos times/jogadores reais da carreira (oculto)
         setScreen('careerCRM');
+        history.replaceState(null, '', window.location.pathname);
+      } else if (h === '#banners') {
+        // demonstração dos espaços de banner para o patrocinador
+        setScreen('home');
+        setBannerPreview(true);
         history.replaceState(null, '', window.location.pathname);
       }
     };
@@ -516,6 +522,13 @@ export default function App() {
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
       <main className="page">
+      {bannerPreview && screen === 'home' && (
+        <div className="ad-slot leaderboard">
+          <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
+          <span className="ad-size">Leaderboard · 970×90 / 728×90 (responsivo)</span>
+          <span className="ad-note">banner do parceiro aqui, no topo (acima da dobra)</span>
+        </div>
+      )}
       {screen === 'home' && (
         <Home
           onStart={startDraft}
@@ -537,6 +550,32 @@ export default function App() {
             setDraft(null);
           }}
         />
+      )}
+
+      {bannerPreview && screen === 'home' && (
+        <>
+          <div className="ad-grid">
+            <div className="ad-slot rectangle">
+              <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
+              <span className="ad-size">Retângulo · 300×250</span>
+              <span className="ad-note">no meio do conteúdo / lateral</span>
+            </div>
+            <div className="ad-slot rectangle">
+              <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
+              <span className="ad-size">Retângulo · 300×250</span>
+              <span className="ad-note">segundo bloco lateral</span>
+            </div>
+          </div>
+          <div className="ad-slot billboard">
+            <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
+            <span className="ad-size">Billboard / rodapé · 970×250 ou 728×90</span>
+            <span className="ad-note">banner fixo no rodapé do site</span>
+          </div>
+          <div className="ad-info">
+            Pré-visualização dos espaços de banner para o patrocinador. Acesse por
+            <b> roadtomajor.com.br/#banners</b>. Formatos IAB padrão; dá pra ajustar tamanhos e posições.
+          </div>
+        </>
       )}
 
       {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} />}

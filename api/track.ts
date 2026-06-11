@@ -44,7 +44,11 @@ export default async function handler(
     return;
   }
   const sid = String(body.sid ?? '').slice(0, 40);
-  const data = JSON.stringify(body.data && typeof body.data === 'object' ? body.data : {}).slice(0, 2000);
+  // país do visitante via header de geo da Vercel (anônimo, só o código ISO)
+  const ccHeader = req.headers?.['x-vercel-ip-country'];
+  const country = String(Array.isArray(ccHeader) ? ccHeader[0] : (ccHeader ?? '')).slice(0, 2).toLowerCase();
+  const rawData = body.data && typeof body.data === 'object' ? body.data : {};
+  const data = JSON.stringify(country ? { ...rawData, country } : rawData).slice(0, 2000);
   try {
     const sql = neon(url);
     if (type === 'presence') {

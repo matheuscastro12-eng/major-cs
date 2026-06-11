@@ -15,28 +15,33 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
   const [edits, setEdits] = useState<Bo3Edits>(() => loadBo3Edits());
   const [filter, setFilter] = useState('');
   const [selId, setSelId] = useState<string>(CS2_REAL_2026[0]?.id ?? '');
+  const [dirty, setDirty] = useState(false); // tem alteração não salva?
+  const [savedFlash, setSavedFlash] = useState(false);
 
   // times com as edições já aplicadas (pra mostrar o estado atual)
   const teams = useMemo(() => applyBo3Edits(CS2_REAL_2026, edits), [edits]);
   const visible = teams.filter((t) => !filter || t.team.toLowerCase().includes(filter.toLowerCase()) || t.tag.toLowerCase().includes(filter.toLowerCase()));
   const sel = teams.find((t) => t.id === selId) ?? teams[0];
 
-  const persist = (next: Bo3Edits) => { setEdits(next); saveBo3Edits(next); };
+  // só altera o estado local; o salvamento no localStorage é manual (botão Salvar)
+  const update = (next: Bo3Edits) => { setEdits(next); setDirty(true); setSavedFlash(false); };
+
+  const save = () => { saveBo3Edits(edits); setDirty(false); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 2500); };
 
   const setPlayer = (pid: string, patch: { ovr?: number; role?: Role }) => {
     const cur = edits.players[pid] ?? {};
-    persist({ ...edits, players: { ...edits.players, [pid]: { ...cur, ...patch } } });
+    update({ ...edits, players: { ...edits.players, [pid]: { ...cur, ...patch } } });
   };
   const setTeam = (tid: string, patch: { teamwork?: number; tag?: string; name?: string }) => {
     const cur = edits.teams[tid] ?? {};
-    persist({ ...edits, teams: { ...edits.teams, [tid]: { ...cur, ...patch } } });
+    update({ ...edits, teams: { ...edits.teams, [tid]: { ...cur, ...patch } } });
   };
   const resetTeam = (tid: string) => {
     const players = { ...edits.players };
     const base = CS2_REAL_2026.find((t) => t.id === tid);
     base?.players.forEach((p) => delete players[p.id]);
     const t2 = { ...edits.teams }; delete t2[tid];
-    persist({ players, teams: t2 });
+    update({ players, teams: t2 });
   };
 
   const exportJson = () => {
@@ -53,8 +58,11 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
         <div className="panel-head">
           CRM da carreira · times e OVRs reais (bo3.gg)
           <span className="spacer" />
+          {savedFlash && <span className="pos small" style={{ marginRight: 6 }}>✔ salvo</span>}
+          {dirty && <span className="neg small" style={{ marginRight: 6 }}>alterações não salvas</span>}
           <button className="btn ghost" onClick={exportJson}>Exportar JSON</button>
-          <button className="btn" onClick={onExit}>← Sair</button>
+          <button className={`btn gold${dirty ? '' : ' ghost'}`} disabled={!dirty} onClick={save}>💾 Salvar</button>
+          <button className="btn" onClick={() => { if (!dirty || confirm('Há alterações não salvas. Sair mesmo assim?')) onExit(); }}>← Sair</button>
         </div>
         <div className="panel-body">
           <p className="muted small" style={{ marginTop: 0 }}>

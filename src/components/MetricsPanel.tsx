@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminPassword } from './AdminGate';
+import { Flag } from './ui';
 
 interface Metrics {
   totals: {
@@ -21,7 +22,16 @@ interface Metrics {
   online: { lobbies_total: string; lobbies_7d: string; lobby_players_total: string; online_now?: string };
   last24h: { type: string; n: string }[];
   hall: { campaigns: string; titles: string };
+  byCountry?: { country: string; visits: string; visitors: string }[];
 }
+
+const COUNTRY_NAME: Record<string, string> = {
+  br: 'Brasil', us: 'Estados Unidos', pt: 'Portugal', ar: 'Argentina', de: 'Alemanha',
+  fr: 'França', gb: 'Reino Unido', es: 'Espanha', pl: 'Polônia', ru: 'Rússia', ua: 'Ucrânia',
+  se: 'Suécia', dk: 'Dinamarca', fi: 'Finlândia', no: 'Noruega', nl: 'Holanda', tr: 'Turquia',
+  ca: 'Canadá', mx: 'México', cl: 'Chile', co: 'Colômbia', pe: 'Peru', uy: 'Uruguai',
+  it: 'Itália', cz: 'Tchéquia', au: 'Austrália', cn: 'China', kz: 'Cazaquistão', in: 'Índia',
+};
 
 const DIFF_LABEL: Record<string, string> = { normal: 'Normal', hard: 'Difícil', legend: 'Lendário' };
 
@@ -158,6 +168,24 @@ export function MetricsPanel() {
                 </div>
               </div>
             ))}
+            <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '14px 0 6px' }}>
+              Países dos visitantes
+            </div>
+            {(() => {
+              const list = data.byCountry ?? [];
+              if (list.length === 0) {
+                return <div className="muted small">Sem dados de país ainda (começa a contar a partir de agora, no site publicado).</div>;
+              }
+              const max = Math.max(1, ...list.map((c) => Number(c.visitors)));
+              return list.map((c) => (
+                <div key={c.country} className="country-row">
+                  <Flag cc={c.country} />
+                  <span className="country-name">{COUNTRY_NAME[c.country] ?? c.country.toUpperCase()}</span>
+                  <span className="country-bar"><i style={{ width: `${(Number(c.visitors) / max) * 100}%` }} /></span>
+                  <span className="country-n">{c.visitors}</span>
+                </div>
+              ));
+            })()}
             <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '14px 0 6px' }}>
               Eventos nas últimas 24h
             </div>
