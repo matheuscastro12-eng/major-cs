@@ -3834,6 +3834,14 @@ table.crm-players input.num {
   background: rgba(212,164,65,0.08); border: 1px solid var(--gold); font-size: 0.86rem;
 }
 @media (max-width: 640px) { .ad-grid { grid-template-columns: 1fr; } }
+/* skyscrapers fixos nas laterais */
+.ad-side {
+  position: fixed; top: 50%; transform: translateY(-50%);
+  width: 160px; height: 600px; z-index: 60;
+}
+.ad-side.left { left: 12px; }
+.ad-side.right { right: 12px; }
+@media (max-width: 1480px) { .ad-side { display: none; } }
 
 /* ===== fundação da org: identidade + construtor de logo ===== */
 .found-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }

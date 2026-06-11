@@ -523,11 +523,23 @@ export default function App() {
 
       <main className="page">
       {bannerPreview && screen === 'home' && (
-        <div className="ad-slot leaderboard">
-          <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
-          <span className="ad-size">Leaderboard · 970×90 / 728×90 (responsivo)</span>
-          <span className="ad-note">banner do parceiro aqui, no topo (acima da dobra)</span>
-        </div>
+        <>
+          <div className="ad-slot leaderboard">
+            <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
+            <span className="ad-size">Leaderboard · 970×90 / 728×90 (responsivo)</span>
+            <span className="ad-note">banner do parceiro aqui, no topo (acima da dobra)</span>
+          </div>
+          <div className="ad-slot ad-side left">
+            <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
+            <span className="ad-size">Skyscraper · 160×600 / 300×600</span>
+            <span className="ad-note">lateral esquerda</span>
+          </div>
+          <div className="ad-slot ad-side right">
+            <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
+            <span className="ad-size">Skyscraper · 160×600 / 300×600</span>
+            <span className="ad-note">lateral direita</span>
+          </div>
+        </>
       )}
       {screen === 'home' && (
         <Home
