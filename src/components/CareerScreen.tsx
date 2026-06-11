@@ -21,6 +21,7 @@ import { logoForTeam } from '../data/media';
 import { fileToDataUrl } from '../state/crm';
 import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/teams';
+import { applyBo3Edits } from '../state/bo3-edits';
 
 const SAVE_KEY = 'rtm-career-v1';
 const STARTING_BUDGET = 6_000_000;
@@ -361,7 +362,7 @@ export function CareerScreen({ onExit }: Props) {
   // times CS2 antigos feitos à mão não entram aqui (evita duplicatas e OVRs
   // desatualizados).
   const currentEra = useMemo(
-    () => CS2_REAL_2026.filter((t) => t.players.length >= 5),
+    () => applyBo3Edits(CS2_REAL_2026).filter((t) => t.players.length >= 5),
     [],
   );
   const brTeams = useMemo(
@@ -2031,8 +2032,8 @@ function MarketScreen({
           <div className="field" style={{ marginBottom: 8 }}>
             <input placeholder="Buscar jogador ou time…" value={filter} onChange={(e) => setFilter(e.target.value)} />
           </div>
-          <div className="career-market">
-            {visible.slice(0, 40).map((m) => {
+          <div className="career-market scroll">
+            {visible.slice(0, 200).map((m) => {
               const dup = signedNicks.has(m.player.nick.toLowerCase());
               const affordable = m.price <= budgetLeft && squad.length < 5 && !dup;
               return (
