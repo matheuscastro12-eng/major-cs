@@ -3890,6 +3890,29 @@ table.crm-players input.num {
   background: rgba(255,255,255,0.03);
 }
 .news-card h3 { font-family: var(--font-cond); font-weight: 800; font-size: 1.15rem; margin: 0 0 10px; }
+
+/* destaque do modo carreira (beta) no topo da home */
+.career-feature {
+  position: relative; max-width: 640px; margin: 18px auto 0; text-align: center;
+  border: 2px solid var(--gold); border-radius: 16px; padding: 22px 20px 18px;
+  background:
+    radial-gradient(120% 100% at 50% 0%, rgba(212,164,65,0.18), transparent 70%),
+    linear-gradient(160deg, rgba(212,164,65,0.1), rgba(18,22,28,0.4));
+  box-shadow: 0 10px 40px rgba(212,164,65,0.12);
+}
+.career-feature .cf-badge {
+  position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+  background: var(--gold); color: #1a1408; font-family: var(--font-cond); font-weight: 800;
+  font-size: 0.7rem; letter-spacing: 1.5px; padding: 3px 12px; border-radius: 7px;
+}
+.career-feature h3 { font-family: var(--font-cond); font-weight: 800; font-size: 1.7rem; margin: 4px 0 8px; }
+.career-feature p { color: var(--dim); line-height: 1.5; max-width: 540px; margin: 0 auto 14px; }
+.cf-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
+.cf-code { display: inline-flex; gap: 6px; }
+.cf-code input {
+  background: var(--header); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; color: var(--text); width: 160px; text-transform: uppercase;
+}
 .news-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .news-list li { color: var(--muted); line-height: 1.4; }
 

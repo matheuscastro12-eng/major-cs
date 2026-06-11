@@ -15,6 +15,7 @@ interface Props {
   onResume?: () => void;
   onDiscardCampaign?: () => void;
   onOnline?: () => void;
+  onCareer?: () => void;
 }
 
 const DIFFICULTIES: Difficulty[] = ['normal', 'hard', 'legend'];
@@ -34,6 +35,11 @@ const NEWS = {
     careerText: 'Estamos construindo um Modo Carreira completo: fundar sua organização, contratar jogadores reais, fechar patrocínios e disputar circuitos rumo ao Major. Apoie o projeto para entrar no beta fechado e testar antes de todo mundo.',
     careerCta: '💜 Apoiar e testar o beta',
     badge: 'BETA FECHADO',
+    haveCode: 'Já é apoiador? Entrar com código',
+    codePh: 'código do beta',
+    codeBtn: 'Entrar',
+    codeWrong: 'Código inválido. Apoie o projeto para receber o seu.',
+    enterCareer: '▶ Entrar no Modo Carreira (beta)',
   },
   en: {
     newsTitle: '🆕 What\'s new',
@@ -48,6 +54,11 @@ const NEWS = {
     careerText: 'We are building a full Career Mode: found your org, sign real players, land sponsors and run circuits on the road to the Major. Support the project to join the closed beta and test it before everyone else.',
     careerCta: '💜 Support and test the beta',
     badge: 'CLOSED BETA',
+    haveCode: 'Already a supporter? Enter with code',
+    codePh: 'beta code',
+    codeBtn: 'Enter',
+    codeWrong: 'Invalid code. Support the project to get yours.',
+    enterCareer: '▶ Enter Career Mode (beta)',
   },
   es: {
     newsTitle: '🆕 Novedades',
@@ -62,8 +73,15 @@ const NEWS = {
     careerText: 'Estamos construyendo un Modo Carrera completo: funda tu organización, ficha jugadores reales, consigue patrocinios y compite en circuitos rumbo al Major. Apoya el proyecto para entrar en la beta cerrada y probarlo antes que nadie.',
     careerCta: '💜 Apoyar y probar la beta',
     badge: 'BETA CERRADA',
+    haveCode: '¿Ya eres apoyador? Entrar con código',
+    codePh: 'código de la beta',
+    codeBtn: 'Entrar',
+    codeWrong: 'Código inválido. Apoya el proyecto para recibir el tuyo.',
+    enterCareer: '▶ Entrar al Modo Carrera (beta)',
   },
 };
+
+const BETA_KEY = 'rtm-beta-v1';
 
 export function Home({
   onStart,
@@ -75,9 +93,38 @@ export function Home({
   onResume,
   onDiscardCampaign,
   onOnline,
+  onCareer,
 }: Props) {
   const { t, lang } = useLang();
   const N = NEWS[(lang as 'pt' | 'en' | 'es')] ?? NEWS.pt;
+  const [showCode, setShowCode] = useState(false);
+  const [code, setCode] = useState('');
+  const [codeErr, setCodeErr] = useState('');
+  const [hasBeta, setHasBeta] = useState(() => {
+    try { return localStorage.getItem(BETA_KEY) === '1'; } catch { return false; }
+  });
+
+  const submitCode = async () => {
+    setCodeErr('');
+    try {
+      const r = await fetch('/api/beta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim() }),
+        signal: AbortSignal.timeout(9000),
+      });
+      const j = await r.json();
+      if (j?.ok) {
+        try { localStorage.setItem(BETA_KEY, '1'); } catch { /* sem storage */ }
+        setHasBeta(true);
+        onCareer?.();
+      } else {
+        setCodeErr(N.codeWrong);
+      }
+    } catch {
+      setCodeErr(N.codeWrong);
+    }
+  };
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
@@ -119,6 +166,37 @@ export function Home({
             </button>
           </div>
         )}
+
+        {/* MODO CARREIRA (beta fechado): destaque logo no topo da home */}
+        <div className="career-feature">
+          <span className="cf-badge">{N.badge}</span>
+          <h3>🏆 {N.careerTitle}</h3>
+          <p>{N.careerText}</p>
+          <div className="cf-actions">
+            {hasBeta ? (
+              <button className="btn gold big" onClick={onCareer}>{N.enterCareer}</button>
+            ) : (
+              <>
+                <button className="btn gold big" onClick={onDonate}>{N.careerCta}</button>
+                {!showCode ? (
+                  <button className="btn ghost" onClick={() => setShowCode(true)}>{N.haveCode}</button>
+                ) : (
+                  <span className="cf-code">
+                    <input
+                      value={code}
+                      maxLength={24}
+                      placeholder={N.codePh}
+                      onChange={(e) => setCode(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && submitCode()}
+                    />
+                    <button className="btn" onClick={submitCode}>{N.codeBtn}</button>
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+          {codeErr && <div className="neg small" style={{ marginTop: 8 }}>{codeErr}</div>}
+        </div>
 
         <div className="pool-cards">
           <button className={`pool-card world${pool === 'world' ? ' sel' : ''}`} onClick={() => setPool('world')}>
@@ -170,14 +248,6 @@ export function Home({
           <TwitterLink />
         </div>
         <AnnouncementTweet />
-
-        {/* teaser do modo carreira (beta fechado) + novidades */}
-        <div className="career-teaser">
-          <span className="ct-badge">{N.badge}</span>
-          <h3>{N.careerTitle}</h3>
-          <p>{N.careerText}</p>
-          <button className="btn gold" onClick={onDonate}>{N.careerCta}</button>
-        </div>
 
         <div className="news-card">
           <h3>{N.newsTitle}</h3>

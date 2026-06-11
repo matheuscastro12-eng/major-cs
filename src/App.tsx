@@ -550,6 +550,7 @@ export default function App() {
           }}
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
+          onCareer={() => setScreen('career')}
           teamCount={dataset.length}
           playerCount={playerCount}
           savedCampaign={savedSession?.tournament ? { name: savedSession.tournament.name, phase: savedSession.tournament.phase } : null}
