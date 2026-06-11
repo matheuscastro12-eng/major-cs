@@ -6,6 +6,7 @@ import type { MapId, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
 import { MapThumb } from './ui';
 import { MatchBanner } from './flags';
+import { TeamLineups } from './lineups';
 import { useLang } from '../state/i18n';
 
 interface Props {
@@ -130,6 +131,10 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
       </div>
 
       <VetoAnalysis teams={teams} userIdx={userIdx} dead={mapState} mapRecord={mapRecord} />
+
+      <div className="veto-lineups-wrap">
+        <TeamLineups teams={teams} />
+      </div>
     </div>
   );
 }

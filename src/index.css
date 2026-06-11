@@ -792,6 +792,91 @@ tr.team-row td {
   white-space: nowrap;
 }
 
+/* lineups com fotos e características no veto */
+.veto-lineups-wrap {
+  grid-column: 1 / -1;
+}
+.lineups-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 760px) {
+  .lineups-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.lineup-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 10px 12px;
+}
+.lineup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.lineup-head .lh-name {
+  font-family: var(--font-cond);
+  font-weight: 800;
+  font-size: 16px;
+}
+.lineup-head .lh-igl {
+  font-size: 12px;
+  color: var(--gold, #e6b34d);
+  font-weight: 700;
+}
+.lineup-players {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lp-info {
+  flex: 1;
+  min-width: 0;
+}
+.lp-nick {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+.lp-nick .lp-ovr {
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--gold, #e6b34d);
+}
+.lp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+}
+.lp-ps,
+.lp-trait {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+}
+.lp-ps {
+  color: var(--text);
+}
+
 /* camada tática: estilo de jogo dos jogadores na partida */
 .stance-fit {
   margin-left: 6px;

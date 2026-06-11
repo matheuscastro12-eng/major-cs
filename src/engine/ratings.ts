@@ -1,5 +1,5 @@
 import { liquipediaTeamUrl, logoForTeam } from '../data/media';
-import type { Coach, Game, Player, TeamSeason, TPlayer, TTeam } from '../types';
+import type { Coach, Game, Player, Playstyle, Role, TeamSeason, TPlayer, TTeam } from '../types';
 import { derivePlaystyle, MAP_POOL } from '../types';
 
 // Dream team montado no draft nunca treinou junto: leva um malus de
@@ -25,6 +25,42 @@ export function playerValue(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | '
   if (p.igl >= 85) v *= 1.1;
   if (p.form) v *= p.form; // 0.9..1.1
   return Math.max(50000, Math.round(v / 10000) * 10000);
+}
+
+// ---- características derivadas do jogador (para o veto e a tática) ----
+export type Trait = 'sniper' | 'caller' | 'aim' | 'clutch' | 'consistency' | 'entry' | 'anchor' | 'lurker';
+
+export function playerTraits(p: {
+  role: Role;
+  playstyle?: Playstyle;
+  aim: number;
+  clutch: number;
+  consistency: number;
+  awp: number;
+  igl: number;
+}): Trait[] {
+  const ps = p.playstyle ?? derivePlaystyle(p.role);
+  const out: Trait[] = [];
+  if (p.awp >= 88) out.push('sniper');
+  if (p.igl >= 85) out.push('caller');
+  if (p.aim >= 90) out.push('aim');
+  if (p.clutch >= 88) out.push('clutch');
+  if (p.consistency >= 88) out.push('consistency');
+  if (ps === 'aggressive' || p.role === 'Entry') out.push('entry');
+  if (p.role === 'Lurker') out.push('lurker');
+  if (ps === 'passive' && p.consistency >= 84) out.push('anchor');
+  return out.slice(0, 3);
+}
+
+// perfil do IGL do time: define a tendência tática natural do time
+export function iglProfile(players: { nick: string; role: Role; playstyle?: Playstyle; igl: number }[]): {
+  nick: string;
+  style: Playstyle;
+  rating: number;
+} | null {
+  if (!players.length) return null;
+  const igl = [...players].sort((a, b) => b.igl - a.igl)[0];
+  return { nick: igl.nick, style: igl.playstyle ?? derivePlaystyle(igl.role), rating: igl.igl };
 }
 
 // formata valores monetários de forma curta (R$ 2.4M, R$ 750k)

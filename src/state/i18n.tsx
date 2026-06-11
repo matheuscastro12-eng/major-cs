@@ -328,6 +328,16 @@ const PT: Dict = {
   "draft.needAWPShort": "AWP",
   "draft.needEntryShort": "Entry",
   "draft.needSupportShort": "Suporte",
+  "veto.lineups": "Lineups e características",
+  "veto.iglStyleHint": "O estilo do IGL define a tendência tática do time (T agressivo / CT passivo)",
+  "trait.sniper": "Sniper",
+  "trait.caller": "Cérebro",
+  "trait.aim": "Pontaria",
+  "trait.clutch": "Clutcher",
+  "trait.consistency": "Constante",
+  "trait.entry": "Entry",
+  "trait.anchor": "Âncora",
+  "trait.lurker": "Lurker",
 };
 
 const EN: Dict = {
@@ -617,6 +627,16 @@ const EN: Dict = {
   "draft.needAWPShort": "AWP",
   "draft.needEntryShort": "Entry",
   "draft.needSupportShort": "Support",
+  "veto.lineups": "Lineups & traits",
+  "veto.iglStyleHint": "The IGL style sets the team tactical lean (aggressive T / passive CT)",
+  "trait.sniper": "Sniper",
+  "trait.caller": "Caller",
+  "trait.aim": "Aim",
+  "trait.clutch": "Clutcher",
+  "trait.consistency": "Consistent",
+  "trait.entry": "Entry",
+  "trait.anchor": "Anchor",
+  "trait.lurker": "Lurker",
 };
 
 const ES: Dict = {
@@ -906,6 +926,16 @@ const ES: Dict = {
   "draft.needAWPShort": "AWP",
   "draft.needEntryShort": "Entry",
   "draft.needSupportShort": "Soporte",
+  "veto.lineups": "Alineaciones y rasgos",
+  "veto.iglStyleHint": "El estilo del IGL define la tendencia táctica del equipo (T agresivo / CT pasivo)",
+  "trait.sniper": "Francotirador",
+  "trait.caller": "Cerebro",
+  "trait.aim": "Puntería",
+  "trait.clutch": "Clutcher",
+  "trait.consistency": "Constante",
+  "trait.entry": "Entry",
+  "trait.anchor": "Ancla",
+  "trait.lurker": "Lurker",
 };
 
 const DICT: Record<Lang, Dict> = { pt: PT, en: EN, es: ES };

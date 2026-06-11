@@ -22,6 +22,8 @@ function stanceFitDelta(team: TTeam, side: 'ct' | 't', mode: Stance): number {
     if (ps === favored) d += 0.55;
     else if (ps === against) d -= 0.45;
   }
+  // postura alinhada ao estilo do IGL rende mais (o time já treina assim)
+  if (iglStyleOf(team).style === favored) d += 0.8;
   return d;
 }
 
@@ -42,6 +44,21 @@ function deathStyleMult(p: TPlayer): number {
   if (ps === 'aggressive') return 1.12;
   if (ps === 'passive') return 0.9;
   return 1;
+}
+
+// estilo do IGL (jogador de maior igl) dá ao time uma tendência natural de lado:
+// IGL agressivo puxa o T, IGL passivo segura o CT. Quanto melhor o IGL, mais forte.
+function iglStyleOf(team: TTeam): { style: Playstyle; rating: number } {
+  let igl = team.players[0];
+  for (const p of team.players) if (p.igl > igl.igl) igl = p;
+  return { style: playstyleOf(igl), rating: igl.igl };
+}
+function iglLean(team: TTeam, side: 'ct' | 't'): number {
+  const { style, rating } = iglStyleOf(team);
+  const pow = Math.max(0, (rating - 78) / 22); // 0..~1
+  if (style === 'aggressive') return side === 't' ? 0.5 + pow * 0.9 : -0.3;
+  if (style === 'passive') return side === 'ct' ? 0.5 + pow * 0.9 : -0.3;
+  return 0;
 }
 
 function emptyLine(): PlayerLine {
@@ -198,6 +215,9 @@ function effStrength(
   if (c.style === 'tactical' && !flags.hasIgl) s += 1.2;
   if (c.style === 'aggressive' && side === 't') s += 0.9 + cPow * 0.6;
   if (c.style === 'discipline' && lostLast && !isPistol) s += 1.4 + cPow * 0.5;
+
+  // tendência natural do time pelo estilo do IGL
+  s += iglLean(team, side);
 
   return s;
 }
