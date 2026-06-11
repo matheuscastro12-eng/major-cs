@@ -4,7 +4,7 @@ import { playerOvr } from '../engine/ratings';
 import { adminPassword, lockAdmin } from './AdminGate';
 import { invalidateDonors } from './Donate';
 import { MetricsPanel } from './MetricsPanel';
-import { exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, saveMapImage } from '../state/crm';
+import { exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, saveDatasetToServer, saveMapImage } from '../state/crm';
 import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
 import { COACH_STYLE_LABELS, MAP_LABELS, MAP_POOL } from '../types';
 import { Flag, MapThumb, TeamBadge } from './ui';
@@ -24,6 +24,22 @@ interface Props {
 export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
   const [selId, setSelId] = useState<string | null>(dataset[0]?.id ?? null);
   const [filter, setFilter] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
+
+  const saveToServer = async () => {
+    if (saving) return;
+    if (!confirm(`Salvar estes ${dataset.length} times no banco? Vai valer para TODOS os usuários e para qualquer campanha nova.`)) return;
+    setSaving(true);
+    setSaveMsg('');
+    const r = await saveDatasetToServer(dataset, adminPassword());
+    setSaving(false);
+    if (r.ok) {
+      setSaveMsg('✅ Base salva no banco! Já vale para todos os jogadores.');
+    } else {
+      setSaveMsg(`❌ Falha ao salvar: ${r.error ?? 'erro desconhecido'}`);
+    }
+  };
 
   const filtered = useMemo(() => {
     const f = filter.trim().toLowerCase();
@@ -123,6 +139,9 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
         <div className="panel-head">
           Base de dados - times &amp; jogadores
           <span className="spacer" />
+          <button className="btn" onClick={saveToServer} disabled={saving} title="Grava a base no banco Neon: passa a valer para todos os usuários e campanhas novas">
+            {saving ? '💾 Salvando…' : '💾 Salvar no banco (todos veem)'}
+          </button>
           <button className="btn ghost" onClick={addTeam}>
             + Novo time
           </button>
@@ -179,6 +198,9 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
           </button>
         </div>
         <div className="panel-body">
+          {saveMsg && (
+            <div className={`crm-save-msg${saveMsg.startsWith('✅') ? ' ok' : ' err'}`}>{saveMsg}</div>
+          )}
           <div className="crm-layout">
             <div>
               <div className="field" style={{ marginBottom: 8 }}>

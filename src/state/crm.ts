@@ -138,6 +138,27 @@ export function fileToDataUrl(file: File, maxDim: number): Promise<string> {
 // Fonte primária remota: banco Neon servido por /api/teams (Vercel).
 // Retorna null se indisponível (dev local sem backend, offline, erro) -
 // nesse caso o app segue com o dataset embutido/localStorage.
+// Salva a base inteira no banco Neon (admin). Passa a valer para TODOS os
+// usuários e para qualquer build/campanha nova (o app lê /api/teams na carga).
+export async function saveDatasetToServer(
+  teams: TeamSeason[],
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/teams', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password, teams }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (res.ok && data.ok) return { ok: true };
+    return { ok: false, error: data.error ?? `HTTP ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 export async function fetchRemoteDataset(): Promise<TeamSeason[] | null> {
   try {
     const res = await fetch('/api/teams', { signal: AbortSignal.timeout(6000) });

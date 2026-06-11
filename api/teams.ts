@@ -1,31 +1,140 @@
-// Função serverless (Vercel) que serve o dataset a partir do banco Neon.
-// O app usa este endpoint como fonte primária e cai para o dataset embutido se indisponível.
+// Função serverless (Vercel) que serve e grava o dataset no banco Neon.
+// GET  -> lista pública de times (fonte primária do app).
+// POST -> admin autenticado salva a base inteira (vale pra todos os usuários
+//         e para qualquer build/campanha nova). Protegido por ADMIN_PASSWORD.
 import { neon } from '@neondatabase/serverless';
 
-export default async function handler(req: { method?: string }, res: {
+interface Res {
   status: (code: number) => { json: (body: unknown) => void };
   setHeader: (k: string, v: string) => void;
-}) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
+}
 
-  if (req.method && req.method !== 'GET') {
-    res.status(405).json({ error: 'method not allowed' });
-    return;
+const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
+
+// validação mínima de um time vindo do cliente antes de gravar
+interface IncomingPlayer {
+  id: string;
+  nick: string;
+  name: string;
+  country: string;
+  role: string;
+  aim: number;
+  clutch: number;
+  consistency: number;
+  awp: number;
+  igl: number;
+}
+interface IncomingTeam {
+  id: string;
+  team: string;
+  tag: string;
+  era: string;
+  game: string;
+  country: string;
+  teamwork: number;
+  honors: string;
+  colors: [string, string];
+  mapPrefs: Record<string, number>;
+  coach: { nick: string; name: string; country: string; rating: number; style: string };
+  players: IncomingPlayer[];
+}
+
+function validTeams(input: unknown): input is IncomingTeam[] {
+  if (!Array.isArray(input) || input.length < 16 || input.length > 400) return false;
+  const ids = new Set<string>();
+  for (const t of input) {
+    if (!t || typeof t !== 'object') return false;
+    const tt = t as Record<string, unknown>;
+    if (typeof tt.id !== 'string' || !tt.id || ids.has(tt.id as string)) return false;
+    ids.add(tt.id as string);
+    if (typeof tt.team !== 'string' || typeof tt.tag !== 'string') return false;
+    if (!tt.coach || typeof tt.coach !== 'object') return false;
+    if (!Array.isArray(tt.players) || tt.players.length < 5 || tt.players.length > 7) return false;
+    for (const p of tt.players as unknown[]) {
+      const pp = p as Record<string, unknown>;
+      if (!pp || typeof pp.id !== 'string' || typeof pp.nick !== 'string') return false;
+    }
   }
+  return true;
+}
 
-  // remove BOM/espaços que podem vir do ambiente
-  const url = process.env.DATABASE_URL?.replace(new RegExp('^\\uFEFF'), '').trim();
+const num = (v: unknown, def = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+};
+
+export default async function handler(
+  req: { method?: string; body?: Record<string, unknown> | string },
+  res: Res,
+) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const url = clean(process.env.DATABASE_URL);
   if (!url) {
     res.status(500).json({ error: 'DATABASE_URL not configured' });
     return;
   }
+  const sql = neon(url);
 
-  try {
-    const sql = neon(url);
-    const rows = (await sql`SELECT data FROM teams ORDER BY id`) as { data: unknown }[];
-    res.status(200).json(rows.map((r) => r.data));
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
+  // ---- leitura pública ----
+  if (req.method === 'GET' || !req.method) {
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
+    try {
+      const rows = (await sql`SELECT data FROM teams ORDER BY id`) as { data: unknown }[];
+      res.status(200).json(rows.map((r) => r.data));
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+    return;
   }
+
+  // ---- gravação pelo admin ----
+  if (req.method === 'POST') {
+    res.setHeader('Cache-Control', 'no-store');
+    const expected = clean(process.env.ADMIN_PASSWORD);
+    const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
+      password?: string;
+      teams?: unknown;
+    };
+    if (!expected || (body?.password ?? '').toString().trim() !== expected) {
+      res.status(401).json({ ok: false, error: 'senha inválida' });
+      return;
+    }
+    if (!validTeams(body?.teams)) {
+      res.status(400).json({ ok: false, error: 'base inválida (mín. 16 times, 5+ jogadores cada)' });
+      return;
+    }
+    const teams = body.teams;
+    try {
+      // reseed idempotente numa transação: limpa tudo e regrava
+      const queries = [sql`DELETE FROM teams`];
+      for (const t of teams) {
+        queries.push(
+          sql`INSERT INTO teams (id, team, tag, era, game, country, teamwork, honors, data)
+              VALUES (${t.id}, ${t.team}, ${t.tag}, ${t.era}, ${t.game}, ${t.country},
+                      ${num(t.teamwork, 80)}, ${String(t.honors ?? '')}, ${JSON.stringify(t)})`,
+        );
+        queries.push(
+          sql`INSERT INTO coaches (team_id, nick, name, country, rating, style)
+              VALUES (${t.id}, ${t.coach.nick}, ${t.coach.name}, ${t.coach.country},
+                      ${num(t.coach.rating, 78)}, ${t.coach.style})`,
+        );
+        let ord = 0;
+        for (const p of t.players) {
+          queries.push(
+            sql`INSERT INTO players (id, team_id, ord, nick, name, country, role, aim, clutch, consistency, awp, igl)
+                VALUES (${p.id}, ${t.id}, ${ord++}, ${p.nick}, ${p.name}, ${p.country}, ${p.role},
+                        ${num(p.aim)}, ${num(p.clutch)}, ${num(p.consistency)}, ${num(p.awp)}, ${num(p.igl)})`,
+          );
+        }
+      }
+      await sql.transaction(queries);
+      res.status(200).json({ ok: true, teams: teams.length });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: String(e) });
+    }
+    return;
+  }
+
+  res.status(405).json({ error: 'method not allowed' });
 }

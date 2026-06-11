@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import type { DraftState, Player, TeamSeason } from '../types';
@@ -63,6 +63,10 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
 
   const classic = draft.mode === 'classic';
 
+  // animação de roleta: gira ao sortear um novo elenco (e em cada reroll)
+  const [revealedTeam, setRevealedTeam] = useState<string | null>(null);
+  const spinning = !coachPhase && !!source && revealedTeam !== source.id;
+
   // jogadores já escolhidos (objetos completos) para diagnosticar lacunas de função
   const pickedPlayers = draft.rounds
     .slice(0, draft.current)
@@ -92,25 +96,36 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
             Draft - escolha {draft.current + 1} de 5
             <span className="spacer" />
             <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              O dado sorteou um elenco histórico. Escolha 1 jogador para o seu time.
+              {spinning ? 'Sorteando um elenco histórico…' : 'O dado sorteou um elenco histórico. Escolha 1 jogador para o seu time.'}
             </span>
           </div>
 
-          <div className="draft-source" style={{ background: `linear-gradient(120deg, ${source.colors[0]}33 0%, var(--header) 70%)` }}>
-            <TeamBadge tag={source.tag} colors={source.colors} size={64} logoUrl={teamLogo(source)} />
-            <div style={{ flex: 1 }}>
-              <div className="era-game">
-                {source.game} · {source.era}
+          {spinning && (
+            <DraftRoulette
+              key={source.id}
+              pool={dataset}
+              target={source}
+              onDone={() => setRevealedTeam(source.id)}
+            />
+          )}
+
+          {!spinning && (
+            <>
+              <div className="draft-source draft-reveal" style={{ background: `linear-gradient(120deg, ${source.colors[0]}33 0%, var(--header) 70%)` }}>
+                <TeamBadge tag={source.tag} colors={source.colors} size={64} logoUrl={teamLogo(source)} />
+                <div style={{ flex: 1 }}>
+                  <div className="era-game">
+                    {source.game} · {source.era}
+                  </div>
+                  <h2>
+                    {source.team} <Flag cc={source.country} />
+                  </h2>
+                  <div className="honors">{source.honors}</div>
+                </div>
+                <button className="btn ghost" onClick={onReroll} disabled={draft.rerollsLeft <= 0}>
+                  🎲 Rolar de novo ({draft.rerollsLeft})
+                </button>
               </div>
-              <h2>
-                {source.team} <Flag cc={source.country} />
-              </h2>
-              <div className="honors">{source.honors}</div>
-            </div>
-            <button className="btn ghost" onClick={onReroll} disabled={draft.rerollsLeft <= 0}>
-              🎲 Rolar de novo ({draft.rerollsLeft})
-            </button>
-          </div>
 
           <div className="role-needs">
             {needs.length === 0 ? (
@@ -129,18 +144,20 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
             )}
           </div>
 
-          <div className="player-cards">
-            {source.players.map((p) => (
-              <PlayerCard
-                key={p.id}
-                p={p}
-                classic={classic}
-                taken={pickedIds.has(p.id) || pickedNicks.has(p.nick.toLowerCase())}
-                fills={fillsFor(p)}
-                onPick={() => onPick(p.id)}
-              />
-            ))}
-          </div>
+              <div className="player-cards">
+                {source.players.map((p) => (
+                  <PlayerCard
+                    key={p.id}
+                    p={p}
+                    classic={classic}
+                    taken={pickedIds.has(p.id) || pickedNicks.has(p.nick.toLowerCase())}
+                    fills={fillsFor(p)}
+                    onPick={() => onPick(p.id)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -214,6 +231,93 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Roleta horizontal (estilo abertura de caixa): gira passando por vários
+// elencos e desacelera parando no time sorteado, dando aquela tensão gostosa.
+const REEL_ITEM_W = 168; // largura do card + gap (precisa casar com o CSS)
+const REEL_LEN = 44; // quantos cards passam até parar
+const REEL_TARGET = REEL_LEN - 5; // posição final do time sorteado
+
+function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: TeamSeason; onDone: () => void }) {
+  const reel = useMemo(() => {
+    const others = pool.filter((t) => t.id !== target.id);
+    const items: TeamSeason[] = [];
+    for (let i = 0; i < REEL_LEN; i++) {
+      if (i === REEL_TARGET) items.push(target);
+      else items.push(others[Math.floor(Math.random() * others.length)] ?? target);
+    }
+    return items;
+  }, [pool, target]);
+
+  const windowRef = useRef<HTMLDivElement>(null);
+  const [winW, setWinW] = useState(0);
+  const [rolling, setRolling] = useState(false);
+  const doneRef = useRef(false);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  // mede a largura da janela da roleta para centralizar o card alvo
+  useEffect(() => {
+    if (windowRef.current) setWinW(windowRef.current.offsetWidth);
+  }, []);
+
+  // dispara a animação uma única vez (não depende de onDone, que muda a cada render)
+  useEffect(() => {
+    if (!winW) return;
+    const raf = requestAnimationFrame(() => setRolling(true));
+    const t = window.setTimeout(() => {
+      if (!doneRef.current) {
+        doneRef.current = true;
+        onDoneRef.current();
+      }
+    }, 4400);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+  }, [winW]);
+
+  // centro do card alvo (a partir da borda esquerda da tira) e centro da janela
+  const center = winW / 2;
+  const startX = center - (REEL_ITEM_W * 2 + REEL_ITEM_W / 2); // 3º card centralizado no início
+  const endX = center - (REEL_TARGET * REEL_ITEM_W + REEL_ITEM_W / 2);
+
+  return (
+    <div className="roulette">
+      <div className="roulette-window" ref={windowRef}>
+        <div className="roulette-marker" />
+        <div className="roulette-fade left" />
+        <div className="roulette-fade right" />
+        <div
+          className="roulette-strip"
+          style={{
+            transform: `translateX(${rolling ? endX : startX}px)`,
+            transition: rolling ? 'transform 3.8s cubic-bezier(0.12, 0.7, 0.12, 1)' : 'none',
+          }}
+          onTransitionEnd={() => {
+            if (!doneRef.current) {
+              doneRef.current = true;
+              onDoneRef.current();
+            }
+          }}
+        >
+          {reel.map((t, i) => (
+            <div
+              key={i}
+              className={`roulette-card${i === REEL_TARGET ? ' is-target' : ''}`}
+              style={{ background: `linear-gradient(150deg, ${t.colors[0]}55 0%, var(--header) 75%)` }}
+            >
+              <TeamBadge tag={t.tag} colors={t.colors} size={44} logoUrl={teamLogo(t)} />
+              <div className="rc-name">{t.team}</div>
+              <div className="rc-era">{t.era}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="roulette-hint">🎲 girando os elencos…</div>
     </div>
   );
 }

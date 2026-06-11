@@ -567,6 +567,137 @@ tr.team-row td {
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(97, 168, 221, 0.25);
 }
 
+/* roleta de sorteio do elenco no draft */
+.roulette {
+  padding: 18px 0 6px;
+}
+.roulette-window {
+  position: relative;
+  height: 132px;
+  overflow: hidden;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+  background: radial-gradient(120% 100% at 50% 0%, rgba(97, 168, 221, 0.08), transparent 70%);
+}
+.roulette-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  width: max-content;
+  will-change: transform;
+}
+.roulette-card {
+  flex: 0 0 160px;
+  height: 104px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  padding: 6px;
+}
+.roulette-card .rc-name {
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-strong);
+  line-height: 1.05;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roulette-card .rc-era {
+  font-size: 11px;
+  color: var(--muted);
+}
+.roulette-card.is-target {
+  border-color: var(--gold, #e6b34d);
+  box-shadow: 0 0 0 1px var(--gold, #e6b34d), 0 0 22px rgba(230, 179, 77, 0.35);
+}
+.roulette-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, transparent, var(--gold, #e6b34d), transparent);
+  z-index: 3;
+  box-shadow: 0 0 12px rgba(230, 179, 77, 0.7);
+}
+.roulette-marker::before,
+.roulette-marker::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+}
+.roulette-marker::before {
+  top: -1px;
+  border-top: 9px solid var(--gold, #e6b34d);
+}
+.roulette-marker::after {
+  bottom: -1px;
+  border-bottom: 9px solid var(--gold, #e6b34d);
+}
+.roulette-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22%;
+  z-index: 2;
+  pointer-events: none;
+}
+.roulette-fade.left {
+  left: 0;
+  background: linear-gradient(90deg, var(--panel) 0%, transparent 100%);
+}
+.roulette-fade.right {
+  right: 0;
+  background: linear-gradient(270deg, var(--panel) 0%, transparent 100%);
+}
+.roulette-hint {
+  text-align: center;
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.draft-reveal {
+  animation: draftReveal 0.4s ease;
+}
+@keyframes draftReveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* mensagem de salvar a base no banco (CRM) */
+.crm-save-msg {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-weight: 700;
+  font-size: 14px;
+}
+.crm-save-msg.ok {
+  background: rgba(126, 224, 168, 0.14);
+  border: 1px solid rgba(126, 224, 168, 0.5);
+  color: #aef0c8;
+}
+.crm-save-msg.err {
+  background: rgba(214, 69, 69, 0.14);
+  border: 1px solid rgba(214, 69, 69, 0.5);
+  color: #ffb0b0;
+}
+
 /* ênfase nas funções-chave durante o draft */
 .role-needs {
   display: flex;
