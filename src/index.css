@@ -792,6 +792,54 @@ tr.team-row td {
   white-space: nowrap;
 }
 
+/* chamadas táticas de round na partida */
+.call-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+}
+.call-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.call-money {
+  color: #7ee0a8;
+  font-weight: 800;
+}
+.call-btn {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  border: 1px solid var(--border-soft);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.call-btn:hover:not(:disabled) {
+  border-color: var(--blue-bright);
+}
+.call-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.call-btn.armed {
+  background: var(--gold, #e6b34d);
+  border-color: var(--gold, #e6b34d);
+  color: #1a1205;
+}
+.call-armed-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold, #e6b34d);
+}
+
 /* lineups com fotos e características no veto */
 .veto-lineups-wrap {
   grid-column: 1 / -1;

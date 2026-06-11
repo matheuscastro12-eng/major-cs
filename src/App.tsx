@@ -19,7 +19,7 @@ import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
 import { createTournament, getTeam, pairingBestOf, phaseLabel, placementLabel, resolveRound, userMapRecord, userPairing, userTeam } from './engine/swiss';
-import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, resetDataset, saveDataset } from './state/crm';
+import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
 import { startPresenceHeartbeat, track, trackVisit } from './state/track';
@@ -217,8 +217,9 @@ export default function App() {
     let cancelled = false;
     fetchRemoteDataset().then((remote) => {
       if (remote && !cancelled) {
-        setDataset(remote);
-        saveDataset(remote); // atualiza o cache local com a base do servidor
+        const merged = mergePendingBaseTeams(remote); // times pendentes novos do build sempre aparecem
+        setDataset(merged);
+        saveDataset(merged); // atualiza o cache local com a base do servidor
       }
     });
     return () => {

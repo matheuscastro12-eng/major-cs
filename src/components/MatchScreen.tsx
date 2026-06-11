@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyzeSeries } from '../engine/insights';
-import { createMapSim, type BuyTier, type MapSim, type Stance } from '../engine/match';
+import { createMapSim, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
 import { derivePlaystyle, MAP_LABELS, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
@@ -35,6 +35,14 @@ const STANCES: { key: Stance; icon: string; labelKey: string; hintKey: string }[
   { key: 'aggressive', icon: '🔥', labelKey: 'match.stanceAggressive', hintKey: 'match.stanceAggressiveHint' },
   { key: 'default', icon: '⚖', labelKey: 'match.stanceDefault', hintKey: 'match.stanceDefaultHint' },
   { key: 'cautious', icon: '🛡', labelKey: 'match.stanceCautious', hintKey: 'match.stanceCautiousHint' },
+];
+
+// chamadas táticas de UM round (one-shot), com impacto em força e economia
+const CALLS: { key: RoundCall; icon: string; labelKey: string; hintKey: string }[] = [
+  { key: 'rush', icon: '🏃', labelKey: 'call.rush', hintKey: 'call.rushHint' },
+  { key: 'retake', icon: '🛡', labelKey: 'call.retake', hintKey: 'call.retakeHint' },
+  { key: 'force', icon: '💰', labelKey: 'call.force', hintKey: 'call.forceHint' },
+  { key: 'save', icon: '🪙', labelKey: 'call.save', hintKey: 'call.saveHint' },
 ];
 
 // estilo favorecido por cada postura
@@ -85,6 +93,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [stance, setStance] = useState<Stance>('default');
   const stanceRef = useRef<Stance>('default');
   stanceRef.current = stance;
+  const [pendingCall, setPendingCall] = useState<RoundCall | null>(null);
+  const callRef = useRef<RoundCall | null>(null);
+  callRef.current = pendingCall;
 
   const seriesOver = () => {
     const wins = resultsRef.current.reduce(
@@ -135,11 +146,17 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       let boostsUsed = 0;
       let mapEnded = false;
       for (let i = 0; i < due && !mapEnded; i++) {
+        // chamada de round (rush/retake/force/save) vale para 1 round e some
+        const c = callRef.current ? ({ team: userIdx, kind: callRef.current } as const) : undefined;
         if (boostRounds - boostsUsed > 0) {
-          sim.step(userIdx, stanceMod);
+          sim.step(userIdx, stanceMod, c);
           boostsUsed++;
         } else {
-          sim.step(null, stanceMod);
+          sim.step(null, stanceMod, c);
+        }
+        if (c) {
+          callRef.current = null;
+          setPendingCall(null);
         }
         mapEnded = sim.done();
       }
@@ -200,6 +217,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [sa, sb] = finished && series ? [0, 0] : sim.score();
   const roundLog = sim.roundLog();
   const buys = sim.buys();
+  const myMoney = sim.money()[userIdx];
   const mapsWon: [number, number] = [0, 0];
   for (const r of resultsRef.current) if (r) mapsWon[r.winner]++;
 
@@ -324,6 +342,23 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                   </span>
                 );
               })}
+            </div>
+            <div className="call-bar">
+              <span className="call-label">
+                {t('match.roundCall')} <span className="call-money">💵 ${myMoney.toLocaleString()}</span>
+              </span>
+              {CALLS.map((c) => (
+                <button
+                  key={c.key}
+                  className={`call-btn${pendingCall === c.key ? ' armed' : ''}`}
+                  title={t(c.hintKey)}
+                  disabled={!!pausedMsg}
+                  onClick={() => setPendingCall(pendingCall === c.key ? null : c.key)}
+                >
+                  {c.icon} {t(c.labelKey)}
+                </button>
+              ))}
+              {pendingCall && <span className="call-armed-tag">{t('match.callArmed')}</span>}
             </div>
           </>
         )}

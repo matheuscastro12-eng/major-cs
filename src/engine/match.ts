@@ -227,15 +227,25 @@ function effStrength(
 // postura tática escolhida ao vivo pelo jogador: muda o perfil de risco do round
 export type Stance = 'aggressive' | 'default' | 'cautious';
 
+// chamada tática de UM round: rush (all-in no T), retake (segura o CT),
+// force buy (compra mesmo sem grana) e save (economiza). Impacta força e economia.
+export type RoundCall = 'rush' | 'retake' | 'force' | 'save';
+export interface Call {
+  team: 0 | 1;
+  kind: RoundCall;
+}
+
 export interface StepMods {
   boostTeam?: 0 | 1 | null; // timeout tático
   stance?: { team: 0 | 1; mode: Stance };
+  call?: Call; // chamada de round (one-shot)
 }
 
 export interface MapSim {
-  step: (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }) => boolean; // joga 1 round; true quando o mapa terminou
+  step: (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call) => boolean; // joga 1 round; true quando o mapa terminou
   done: () => boolean;
   score: () => [number, number];
+  money: () => [number, number]; // dinheiro de cada time (para decidir force/save)
   roundLog: () => (0 | 1)[];
   killFeed: () => KillEvent[];
   buys: () => [BuyTier, BuyTier]; // compra do round atual (antes do step)
@@ -280,7 +290,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   };
   nextBuys = computeBuys();
 
-  const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }): boolean => {
+  const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call): boolean => {
     if (finished) return true;
 
     let aSide: 'ct' | 't';
@@ -300,6 +310,11 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       eco[1] = { money: 800, lossStreak: 0 };
     }
     const buys = computeBuys();
+    // chamada de economia (force/save) sobrescreve a compra do time que chamou
+    if (call && !isPistol) {
+      if (call.kind === 'force') buys[call.team] = eco[call.team].money >= 4100 ? 'full' : 'force';
+      if (call.kind === 'save') buys[call.team] = 'eco';
+    }
     buyLog.push(buys);
     eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]));
     eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]));
@@ -317,9 +332,24 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       if (stance.team === 0) effA += delta;
       else effB += delta;
     }
-    // estilo de frag por jogador conforme o lado e a postura ativa de cada time
+    // chamada de round rush/retake: aposta forte de UM round (alto risco/retorno)
+    if (call && (call.kind === 'rush' || call.kind === 'retake')) {
+      const cSide = call.team === 0 ? aSide : bSide;
+      let cd = 0;
+      if (call.kind === 'rush') cd = cSide === 't' ? 2.8 : -1.6;
+      if (call.kind === 'retake') cd = cSide === 'ct' ? 2.8 : -1.6;
+      if (call.team === 0) effA += cd;
+      else effB += cd;
+    }
+    // estilo de frag por jogador conforme o lado, a postura E a chamada do round
+    const callMode = (teamIdx: 0 | 1): Stance | undefined => {
+      if (!call || call.team !== teamIdx) return undefined;
+      if (call.kind === 'rush') return 'aggressive';
+      if (call.kind === 'retake') return 'cautious';
+      return undefined;
+    };
     const stanceModeFor = (teamIdx: 0 | 1): Stance | undefined =>
-      stance && stance.team === teamIdx ? stance.mode : undefined;
+      callMode(teamIdx) ?? (stance && stance.team === teamIdx ? stance.mode : undefined);
     const sideFor = (teamIdx: 0 | 1): 'ct' | 't' => (teamIdx === 0 ? aSide : bSide);
 
     const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
@@ -489,6 +519,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     step,
     done: () => finished,
     score: () => [scoreA, scoreB],
+    money: () => [eco[0].money, eco[1].money],
     roundLog: () => roundLog,
     killFeed: () => killFeed,
     buys: () => nextBuys,

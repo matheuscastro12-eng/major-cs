@@ -185,6 +185,15 @@ export async function saveDatasetToServer(
   }
 }
 
+// Garante que times PENDENTES novos do build (teams.json) apareçam sempre no
+// CRM para aprovação, mesmo que o banco ainda não os tenha (evita "time some").
+// Para os jogadores não muda nada: pendentes são filtrados do draft.
+export function mergePendingBaseTeams(teams: TeamSeason[]): TeamSeason[] {
+  const have = new Set(teams.map((t) => t.id));
+  const extras = BASE_TEAMS.filter((t) => t.pending && !have.has(t.id));
+  return extras.length ? [...teams, ...extras] : teams;
+}
+
 export async function fetchRemoteDataset(): Promise<TeamSeason[] | null> {
   try {
     const res = await fetch('/api/teams', { signal: AbortSignal.timeout(6000) });

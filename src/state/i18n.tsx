@@ -338,6 +338,16 @@ const PT: Dict = {
   "trait.entry": "Entry",
   "trait.anchor": "Âncora",
   "trait.lurker": "Lurker",
+  "match.roundCall": "Chamada do round:",
+  "match.callArmed": "✓ chamada armada para o próximo round",
+  "call.rush": "Rush",
+  "call.rushHint": "All-in no T deste round: muito forte se T, exposto se CT",
+  "call.retake": "Retake",
+  "call.retakeHint": "Segura/retoma no CT deste round: forte no CT, fraco no T",
+  "call.force": "Force buy",
+  "call.forceHint": "Compra cheia mesmo sem grana: ganha o round mas esvazia o caixa",
+  "call.save": "Economizar",
+  "call.saveHint": "Não compra: provavelmente perde o round, mas guarda dinheiro",
 };
 
 const EN: Dict = {
@@ -637,6 +647,16 @@ const EN: Dict = {
   "trait.entry": "Entry",
   "trait.anchor": "Anchor",
   "trait.lurker": "Lurker",
+  "match.roundCall": "Round call:",
+  "match.callArmed": "✓ call armed for next round",
+  "call.rush": "Rush",
+  "call.rushHint": "All-in T-side this round: strong on T, exposed on CT",
+  "call.retake": "Retake",
+  "call.retakeHint": "Hold/retake on CT this round: strong on CT, weak on T",
+  "call.force": "Force buy",
+  "call.forceHint": "Full buy even when broke: wins the round but drains the economy",
+  "call.save": "Save",
+  "call.saveHint": "No buy: likely lose the round, but bank the cash",
 };
 
 const ES: Dict = {
@@ -936,6 +956,16 @@ const ES: Dict = {
   "trait.entry": "Entry",
   "trait.anchor": "Ancla",
   "trait.lurker": "Lurker",
+  "match.roundCall": "Jugada de ronda:",
+  "match.callArmed": "✓ jugada lista para la próxima ronda",
+  "call.rush": "Rush",
+  "call.rushHint": "Todo al T esta ronda: fuerte en T, expuesto en CT",
+  "call.retake": "Retake",
+  "call.retakeHint": "Aguanta/retoma en CT esta ronda: fuerte en CT, débil en T",
+  "call.force": "Force buy",
+  "call.forceHint": "Compra completa aun sin dinero: gana la ronda pero vacía la economía",
+  "call.save": "Ahorrar",
+  "call.saveHint": "No compra: probablemente pierdes la ronda, pero guardas dinero",
 };
 
 const DICT: Record<Lang, Dict> = { pt: PT, en: EN, es: ES };
