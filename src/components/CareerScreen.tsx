@@ -19,6 +19,8 @@ import { Scoreboard } from './Scoreboard';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 import { fileToDataUrl } from '../state/crm';
+import { freeAgentTeam } from '../data/free-agents';
+import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
 
 const SAVE_KEY = 'rtm-career-v1';
 const STARTING_BUDGET = 6_000_000;
@@ -195,6 +197,41 @@ function poUserRank(p: Playoff | null): number {
   return 99;
 }
 
+// ---------- cenário competitivo: VRS por região e Top 20 HLTV ----------
+function hashStr(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+// VRS determinístico de um time da IA (o time do usuário usa o VRS real do save)
+function aiTeamVrs(t: TeamSeason): number {
+  const base = Math.max(0, t.teamwork - 38);
+  return Math.round(base * 24 + (hashStr(t.id) % 90));
+}
+// região do time: país do time, senão maioria dos jogadores, senão Europa
+function teamRegion(t: TeamSeason): RegionKey {
+  const direct = regionOf(t.country);
+  if (direct) return direct;
+  const tally = new Map<RegionKey, number>();
+  for (const p of t.players) {
+    const r = regionOf(p.country);
+    if (r) tally.set(r, (tally.get(r) ?? 0) + 1);
+  }
+  let best: RegionKey = 'europe';
+  let bestN = -1;
+  for (const [r, n] of tally) if (n > bestN) { best = r; bestN = n; }
+  return best;
+}
+// ordem das regiões no ranking (as 5 pedidas + Ásia/África se houver times)
+const REGION_ORDER: RegionKey[] = ['samerica', 'namerica', 'europe', 'cis', 'oceania', 'asia', 'africa'];
+
+// rating "do ano" de um jogador (estilo HLTV), determinístico por temporada
+function playerSeasonRating(p: Player, split: number): number {
+  const ovr = playerOvr(p);
+  const form = ((hashStr(`${p.id}:r${split}`) % 220) - 90) / 1000; // -0.09..+0.13
+  return Math.max(0.7, (ovr - 62) / 28 + 0.92 + form);
+}
+
 function loadSave(): CareerSave {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -221,7 +258,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', countr
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'results' | 'standings' | 'squad' | 'history';
+type HubTab = 'overview' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history';
 
 interface MajorResult {
   tournament: Tournament;
@@ -312,16 +349,23 @@ export function CareerScreen({ dataset, onExit }: Props) {
     ].filter((c) => c.teams.length >= 5);
   }, [currentEra, brTeams]);
 
-  // mercado: todos os jogadores da era atual, com preço de mercado
+  // agentes livres: amplia bastante o mercado (jogadores sem time atual)
+  const faTeam = useMemo(() => freeAgentTeam(), []);
+
+  // mercado: jogadores da era atual + agentes livres, com preço de mercado
   const market = useMemo(
     () =>
-      currentEra
+      [...currentEra, faTeam]
         .flatMap((t) => t.players.map((p) => ({ player: p, from: t, price: playerValue(p) })))
         .sort((a, b) => a.price - b.price),
-    [currentEra],
+    [currentEra, faTeam],
   );
 
   const findSigning = (s: Signing): { player: Player; from: TeamSeason } | null => {
+    if (s.fromId === faTeam.id) {
+      const player = faTeam.players.find((p) => p.id === s.playerId);
+      return player ? { player, from: faTeam } : null;
+    }
     const from = dataset.find((t) => t.id === s.fromId);
     const player = from?.players.find((p) => p.id === s.playerId);
     return from && player ? { player, from } : null;
@@ -876,8 +920,43 @@ export function CareerScreen({ dataset, onExit }: Props) {
     { id: 'results', label: 'Resultados' },
     { id: 'standings', label: 'Classificação' },
     { id: 'squad', label: 'Elenco' },
+    { id: 'vrs', label: 'Ranking VRS' },
+    { id: 'top20', label: 'Top 20 HLTV' },
     { id: 'history', label: 'História da org' },
   ];
+
+  // ranking mundial de VRS por região (todos os times da era + o usuário)
+  const userTeamForRank = buildTeam(save);
+  const vrsByRegion = (() => {
+    type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; country: string; vrs: number; isUser: boolean };
+    const rows: Row[] = currentEra.map((t) => ({
+      id: t.id, name: `${t.team}`, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t),
+      country: t.country, vrs: aiTeamVrs(t), isUser: false,
+    }));
+    if (userTeamForRank && save.org) {
+      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, country: 'br', vrs: save.vrs, isUser: true });
+    }
+    const groups = new Map<RegionKey, Row[]>();
+    for (const r of rows) {
+      const t = currentEra.find((x) => x.id === r.id);
+      const reg: RegionKey = r.isUser ? 'samerica' : t ? teamRegion(t) : 'europe';
+      if (!groups.has(reg)) groups.set(reg, []);
+      groups.get(reg)!.push(r);
+    }
+    return REGION_ORDER.filter((k) => groups.has(k)).map((k) => ({
+      key: k,
+      label: REGION_LABELS[k],
+      teams: groups.get(k)!.sort((a, b) => b.vrs - a.vrs),
+    }));
+  })();
+
+  // Top 20 HLTV da temporada (melhores jogadores do ano por rating)
+  const top20 = (() => {
+    const all = currentEra.flatMap((t) =>
+      t.players.map((p) => ({ p, team: t, rating: playerSeasonRating(p, save.split) })),
+    );
+    return all.sort((a, b) => b.rating - a.rating).slice(0, 20);
+  })();
 
   return (
     <div className="fade-in career-hub">
@@ -1038,6 +1117,62 @@ export function CareerScreen({ dataset, onExit }: Props) {
             <div className="side-card">
               <div className="muted small section-label" style={{ marginTop: 0 }}>Melhores jogadores do {save.circuit?.name ?? 'circuito'}</div>
               <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== RANKING VRS POR REGIÃO ===== */}
+      {hubTab === 'vrs' && (
+        <div className="panel">
+          <div className="panel-body">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Ranking mundial de VRS por região</div>
+            <div className="vrs-regions">
+              {vrsByRegion.map((g) => (
+                <div key={g.key} className="vrs-region">
+                  <div className="vrs-region-head">{g.label} <span className="muted small">({g.teams.length})</span></div>
+                  <table className="stats">
+                    <tbody>
+                      {g.teams.map((t, i) => (
+                        <tr key={t.id} className={t.isUser ? 'human-row' : ''}>
+                          <td style={{ width: 24, textAlign: 'left' }}>{i + 1}</td>
+                          <td style={{ textAlign: 'left' }}>
+                            <span className="pcell">
+                              <TeamBadge tag={t.tag} colors={t.colors} size={20} logoUrl={t.logoUrl} />
+                              <Flag cc={t.country} />
+                              <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--blue-bright)' : undefined }}>{t.name}</span>
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right', fontWeight: 700 }}>{t.vrs}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== TOP 20 HLTV DA TEMPORADA ===== */}
+      {hubTab === 'top20' && (
+        <div className="panel">
+          <div className="panel-body">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Top 20 HLTV · melhores jogadores da temporada {save.split}</div>
+            <div className="top20-list">
+              {top20.map((e, i) => (
+                <div key={e.p.id} className={`t20-row${i === 0 ? ' first' : ''}`}>
+                  <span className="t20-rank">{i + 1}</span>
+                  <PlayerAvatar nick={e.p.nick} size={32} />
+                  <span className="t20-nick"><Flag cc={e.p.country} /> {e.p.nick}</span>
+                  <span className="muted small t20-team">
+                    <TeamBadge tag={e.team.tag} colors={e.team.colors} size={16} logoUrl={e.team.logoUrl ?? logoForTeam(e.team)} /> {e.team.tag}
+                  </span>
+                  <span className={`role-pill ${e.p.role}`}>{e.p.role}</span>
+                  <span className="t20-rating">{e.rating.toFixed(2)}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

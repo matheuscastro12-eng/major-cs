@@ -3883,3 +3883,26 @@ table.crm-players input.num {
 @media (max-width: 720px) {
   .po-bracket { grid-template-columns: 1fr; }
 }
+
+/* ===== ranking VRS por região ===== */
+.vrs-regions { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.vrs-region-head {
+  font-family: var(--font-cond); font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 6px; color: var(--gold);
+}
+
+/* ===== top 20 HLTV ===== */
+.top20-list { display: flex; flex-direction: column; gap: 3px; }
+.t20-row {
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+  border-radius: 8px; background: rgba(255, 255, 255, 0.03);
+}
+.t20-row.first { background: linear-gradient(90deg, rgba(212, 164, 65, 0.18), transparent); }
+.t20-rank { width: 24px; text-align: center; font-family: var(--font-cond); font-weight: 800; color: var(--muted); }
+.t20-row.first .t20-rank { color: var(--gold); font-size: 1.15rem; }
+.t20-nick { flex: 1; display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.t20-team { display: flex; align-items: center; gap: 5px; min-width: 64px; }
+.t20-rating { font-family: var(--font-cond); font-weight: 800; color: var(--gold); min-width: 44px; text-align: right; }
+@media (max-width: 600px) {
+  .t20-team { display: none; }
+}
