@@ -4,11 +4,14 @@
 // rendem dinheiro e pontos de VRS - o caminho até o Major virá nas próximas
 // fases. Textos em PT por enquanto (modo em refino, não lançado).
 import { useMemo, useRef, useState } from 'react';
-import { formatMoney, playerValue, buildUserTeam, playerOvr } from '../engine/ratings';
+import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr } from '../engine/ratings';
 import { createLeague, leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League } from '../engine/league';
 import { teamSeasonToTTeam } from '../engine/ratings';
+import { simulateSeries } from '../engine/match';
+import { autoVeto } from '../engine/veto';
+import { createTournament, placementCode, resolveRound, type PlacementCode } from '../engine/swiss';
 import { makeRng, randomSeed } from '../engine/rng';
-import type { Coach, MapId, Player, SeriesResult, TeamSeason, TTeam } from '../types';
+import type { Coach, MapId, Player, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
@@ -20,6 +23,24 @@ const STARTING_BUDGET = 6_000_000;
 const PRIZE_BY_POS = [2_000_000, 1_200_000, 700_000, 400_000, 250_000, 150_000, 100_000, 50_000];
 const VRS_BY_POS = [200, 140, 100, 70, 50, 35, 25, 15];
 const LEAGUE_BO: 1 | 3 = 3;
+const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
+// premiação e VRS do Major por colocação (bem maior que o circuito)
+const MAJOR_PRIZE: Record<PlacementCode, number> = {
+  champion: 8_000_000,
+  runnerup: 4_000_000,
+  semi: 2_400_000,
+  quarters: 1_400_000,
+  playoffs: 800_000,
+  swiss: 400_000,
+};
+const MAJOR_VRS: Record<PlacementCode, number> = {
+  champion: 600,
+  runnerup: 400,
+  semi: 280,
+  quarters: 180,
+  playoffs: 120,
+  swiss: 70,
+};
 
 interface Signing {
   playerId: string;
@@ -73,7 +94,15 @@ const coachFee = (c: Coach): number => Math.max(100_000, (c.rating - 60) * 30_00
 const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', country: 'br', rating: 66, style: 'tactical' };
 const ROOKIE_ID = '__rookie__';
 
-type Stage = 'found' | 'market' | 'hub' | 'veto' | 'match' | 'seasonEnd';
+type Stage = 'found' | 'market' | 'hub' | 'veto' | 'match' | 'seasonEnd' | 'major';
+
+interface MajorResult {
+  tournament: Tournament;
+  placement: PlacementCode;
+  prize: number;
+  vrs: number;
+  champion: boolean;
+}
 
 interface Props {
   dataset: TeamSeason[];
@@ -85,8 +114,9 @@ export function CareerScreen({ dataset, onExit }: Props) {
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
     if (!s.org) return 'found';
-    if (s.squad.length < 5 || !s.coachFromId) return 'market';
-    if (s.league && leagueDone(s.league)) return 'seasonEnd';
+    // sem liga ativa (org nova ou entre splits) = janela de mercado/transferências
+    if (s.squad.length < 5 || !s.coachFromId || !s.league) return 'market';
+    if (leagueDone(s.league)) return 'seasonEnd';
     return 'hub';
   });
   const [matchCtx, setMatchCtx] = useState<{
@@ -95,6 +125,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
     maps?: { map: MapId; pickedBy: 0 | 1 | -1 }[];
   } | null>(null);
   const [selSeries, setSelSeries] = useState<{ series: SeriesResult; teams: [TTeam, TTeam] } | null>(null);
+  const [majorResult, setMajorResult] = useState<MajorResult | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
 
   const update = (patch: Partial<CareerSave>) => {
@@ -149,6 +180,74 @@ export function CareerScreen({ dataset, onExit }: Props) {
     setStage('hub');
   };
 
+  // folha salarial do split (soma dos salários do elenco contratado)
+  const payroll = useMemo(() => {
+    const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player }[];
+    return picks.reduce((acc, p) => acc + playerWage(p.player), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.squad]);
+
+  // forma do clube no split (resultados das partidas do usuário já jogadas)
+  const clubForm = (l: League): ('W' | 'L')[] => {
+    const out: ('W' | 'L')[] = [];
+    for (let r = 0; r < l.current; r++) {
+      const m = l.rounds[r]?.find((x) => x.a === 'user' || x.b === 'user');
+      if (m?.result) {
+        const userWon = (m.result.winner === 0 ? m.a : m.b) === 'user';
+        out.push(userWon ? 'W' : 'L');
+      }
+    }
+    return out;
+  };
+
+  const userPosition = (l: League): number => leagueTable(l).findIndex((t) => t.id === 'user') + 1;
+
+  // resolve a rodada atual após a partida do usuário (jogada ou simulada)
+  const finishUserRound = (l: League, series?: SeriesResult) => {
+    if (series) {
+      const m = userLeagueMatch(l);
+      if (m) m.result = series;
+    }
+    resolveLeagueRound(l, rngRef.current, LEAGUE_BO);
+    const next = { ...save, league: { ...l } };
+    persist(next);
+    setSave(next);
+    setMatchCtx(null);
+    setStage(leagueDone(l) ? 'seasonEnd' : 'hub');
+  };
+
+  // SIM MATCH: simula a partida do usuário na hora (sem veto/partida ao vivo)
+  const simMine = (l: League) => {
+    const m = userLeagueMatch(l);
+    if (!m) return;
+    rngRef.current = makeRng(randomSeed());
+    const a = leagueTeam(l, m.a);
+    const b = leagueTeam(l, m.b);
+    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
+    finishUserRound(l, series);
+  };
+
+  // Major: o time vai pro Major mundial (16 times) e disputa Suíça + playoffs.
+  // v0: simulado de ponta a ponta para mostrar a jornada (jogar ao vivo vem a seguir).
+  const playMajor = (s: CareerSave) => {
+    const user = buildTeam(s);
+    if (!user) return;
+    rngRef.current = makeRng(randomSeed());
+    const pool = currentEra.filter((t) => t.id !== 'user');
+    const major = createTournament(pool, user, rngRef.current, `MAJOR ${s.split}`, 4);
+    let guard = 0;
+    while (major.phase !== 'done' && guard++ < 40) resolveRound(major, rngRef.current);
+    const placement = placementCode(major, 'user');
+    setMajorResult({
+      tournament: major,
+      placement,
+      prize: MAJOR_PRIZE[placement],
+      vrs: MAJOR_VRS[placement],
+      champion: placement === 'champion',
+    });
+    setStage('major');
+  };
+
   // ---------- fundação ----------
   if (stage === 'found') {
     return <FoundOrg onExit={onExit} onFound={(org) => {
@@ -178,17 +277,70 @@ export function CareerScreen({ dataset, onExit }: Props) {
 
   const league = save.league;
 
-  // ---------- fim de temporada ----------
+  // ---------- resultado do Major ----------
+  if (stage === 'major' && majorResult) {
+    const mr = majorResult;
+    const PLACE_PT: Record<PlacementCode, string> = {
+      champion: 'CAMPEÃO DO MAJOR',
+      runnerup: 'VICE-CAMPEÃO',
+      semi: 'SEMIFINAL',
+      quarters: 'QUARTAS DE FINAL',
+      playoffs: 'FASE DE PLAYOFFS',
+      swiss: 'FASE SUÍÇA',
+    };
+    return (
+      <div className="fade-in">
+        <div className="panel" style={{ maxWidth: 720, margin: '24px auto' }}>
+          <div className="panel-head">🌍 Major Mundial - resultado</div>
+          <div className="panel-body center">
+            <div className="trophy">{mr.champion ? '🏆' : mr.placement === 'runnerup' ? '🥈' : '🎯'}</div>
+            <h2>{save.org?.name}: {PLACE_PT[mr.placement]}</h2>
+            <div className="prize-banner">
+              💰 Premiação: <b>+{formatMoney(mr.prize)}</b> · 📈 VRS: <b>+{mr.vrs} pts</b>
+              {mr.champion ? ' · 🏆 +1 título!' : ''}
+            </div>
+            <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
+              {mr.champion
+                ? 'Sua organização é CAMPEÃ MUNDIAL! O nome entrou para a história do CS.'
+                : 'Sua org representou o Brasil no Major mundial. Volte mais forte no próximo split.'}
+            </p>
+            <button
+              className="btn gold big"
+              onClick={() => {
+                const next = {
+                  ...save,
+                  budget: save.budget + mr.prize - payroll,
+                  vrs: save.vrs + mr.vrs,
+                  titles: save.titles + (mr.champion ? 1 : 0),
+                  split: save.split + 1,
+                  league: null,
+                };
+                persist(next);
+                setSave(next);
+                setMajorResult(null);
+                setStage('market');
+              }}
+            >
+              🔁 Pagar folha ({formatMoney(payroll)}) e ir pro Split {save.split + 1}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- fim de temporada (split) ----------
   if (stage === 'seasonEnd' && league) {
     const table = leagueTable(league);
     const pos = table.findIndex((t) => t.id === 'user') + 1;
     const prize = PRIZE_BY_POS[pos - 1] ?? 50_000;
     const vrsGain = VRS_BY_POS[pos - 1] ?? 10;
+    const qualified = pos <= MAJOR_SPOTS;
     return (
       <div className="fade-in">
         <div className="panel" style={{ maxWidth: 760, margin: '24px auto' }}>
           <div className="panel-head">
-            🏁 {league.name} - temporada encerrada
+            🏁 {league.name} - split encerrado
             <span className="spacer" />
             <button className="btn" onClick={onExit}>← Sair</button>
           </div>
@@ -196,31 +348,60 @@ export function CareerScreen({ dataset, onExit }: Props) {
             <div className="trophy">{pos === 1 ? '🏆' : pos <= 3 ? '🥉' : '📊'}</div>
             <h2>{save.org?.name} terminou em {pos}º lugar</h2>
             <div className="prize-banner">
-              💰 Premiação: <b>+{formatMoney(prize)}</b> · 📈 VRS: <b>+{vrsGain} pts</b>
+              💰 Premiação: <b>+{formatMoney(prize)}</b> · 📈 VRS: <b>+{vrsGain} pts</b> · 💸 Folha:{' '}
+              <b className="neg">-{formatMoney(payroll)}</b>
             </div>
+            {qualified ? (
+              <div className="qualify-banner">
+                🎟️ <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Terminar no top {MAJOR_SPOTS} do Circuit X
+                garantiu a vaga. Hora de enfrentar os melhores do mundo.
+              </div>
+            ) : (
+              <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
+                Termine no <b>top {MAJOR_SPOTS}</b> do Circuit X para garantir vaga no Major Mundial.
+                Faltou pouco: continue acumulando VRS e reforçando o elenco.
+              </p>
+            )}
             <CareerTable table={table} />
-            <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
-              Junte pontos de VRS nos splits do Circuit X para garantir vaga nos
-              qualifiers do Major (em breve no modo carreira).
-            </p>
-            <button
-              className="btn gold big"
-              onClick={() => {
-                const next = {
-                  ...save,
-                  budget: save.budget + prize,
-                  vrs: save.vrs + vrsGain,
-                  titles: save.titles + (pos === 1 ? 1 : 0),
-                  split: save.split + 1,
-                  league: null,
-                };
-                persist(next);
-                setSave(next);
-                setStage('market');
-              }}
-            >
-              🔁 Janela de transferências → Split {save.split + 1}
-            </button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 14 }}>
+              {qualified && (
+                <button
+                  className="btn gold big"
+                  onClick={() => {
+                    // aplica prêmio+VRS do split antes de ir pro Major
+                    const next = {
+                      ...save,
+                      budget: save.budget + prize,
+                      vrs: save.vrs + vrsGain,
+                      titles: save.titles + (pos === 1 ? 1 : 0),
+                    };
+                    persist(next);
+                    setSave(next);
+                    playMajor(next);
+                  }}
+                >
+                  🌍 Disputar o Major Mundial
+                </button>
+              )}
+              <button
+                className={qualified ? 'btn ghost big' : 'btn gold big'}
+                onClick={() => {
+                  const next = {
+                    ...save,
+                    budget: save.budget + prize - payroll,
+                    vrs: save.vrs + vrsGain,
+                    titles: save.titles + (pos === 1 ? 1 : 0),
+                    split: save.split + 1,
+                    league: null,
+                  };
+                  persist(next);
+                  setSave(next);
+                  setStage('market');
+                }}
+              >
+                🔁 Pagar folha e ir pro Split {save.split + 1}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -252,26 +433,15 @@ export function CareerScreen({ dataset, onExit }: Props) {
         rng={() => rngRef.current()}
         phaseLabel={`${league.name} · Rodada ${league.current + 1}`}
         bestOf={LEAGUE_BO}
-        onFinish={(series) => {
-          const m = userLeagueMatch(league);
-          if (m) m.result = series;
-          resolveLeagueRound(league, rngRef.current, LEAGUE_BO);
-          const next = { ...save, league: { ...league } };
-          persist(next);
-          setSave(next);
-          setMatchCtx(null);
-          setStage(leagueDone(league) ? 'seasonEnd' : 'hub');
-        }}
+        onFinish={(series) => finishUserRound(league, series)}
       />
     );
   }
 
   // ---------- hub da liga ----------
-  if (!league) {
-    // squad pronto mas liga ainda não criada (ex.: F5 no momento errado)
-    startSplit(save);
-    return null;
-  }
+  // sem liga ativa o stage inicial já cai em 'market' (janela de
+  // transferências entre splits); esta guarda evita render sem liga
+  if (!league) return null;
   const table = leagueTable(league);
   const myMatch = userLeagueMatch(league);
   const playMine = () => {
@@ -283,30 +453,69 @@ export function CareerScreen({ dataset, onExit }: Props) {
     setStage('veto');
   };
 
-  return (
-    <div className="fade-in">
-      <div className="panel">
-        <div className="panel-head">
-          🇧🇷 {league.name} · Rodada {league.current + 1}/{league.rounds.length}
-          <span className="spacer" />
-          <span className="muted small" style={{ textTransform: 'none' }}>
-            💰 {formatMoney(save.budget)} · 📈 VRS {save.vrs} pts · 🏆 {save.titles} título(s)
-          </span>
-          <button className="btn" onClick={onExit}>← Sair</button>
-        </div>
-        <div className="panel-body">
-          <div className="career-banner muted small">
-            🔒 MODO CARREIRA (beta fechado) - sua org nos tempos atuais. Vença o
-            Circuit X, acumule VRS e prepare o caminho até o Major.
-          </div>
+  const myPos = userPosition(league);
+  const form = clubForm(league);
+  const opp = myMatch ? leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a) : null;
+  const oppPos = opp ? table.findIndex((t) => t.id === opp.id) + 1 : 0;
 
-          {myMatch && (
-            <div className="center" style={{ margin: '12px 0' }}>
-              <button className="btn gold big" onClick={playMine}>
-                ▶ Jogar minha partida (MD3) - vs{' '}
-                {leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a).name}
-              </button>
+  return (
+    <div className="fade-in career-hub">
+      {/* barra do clube (estilo hub do FIFA) */}
+      <div className="career-topbar">
+        <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={46} />
+        <div className="ct-id">
+          <div className="ct-name">{save.org?.name}</div>
+          <div className="ct-sub">CIRCUIT X · Split {save.split}</div>
+        </div>
+        <div className="ct-standing">
+          <span className="muted small">POSIÇÃO</span>
+          <b className={myPos <= MAJOR_SPOTS ? 'pos' : ''}>{myPos}º</b>
+        </div>
+        <div className="ct-form">
+          <span className="muted small">FORMA</span>
+          <span className="form-chips">
+            {form.length ? form.slice(-5).map((f, i) => <i key={i} className={`fchip ${f === 'W' ? 'w' : 'l'}`}>{f}</i>) : <i className="muted small">-</i>}
+          </span>
+        </div>
+        <span className="spacer" />
+        <div className="ct-stats">
+          <span title="Caixa do clube">💰 {formatMoney(save.budget)}</span>
+          <span title="Folha salarial por split">💸 {formatMoney(payroll)}</span>
+          <span title="Pontos de ranking (VRS)">📈 {save.vrs} VRS</span>
+          <span title="Títulos">🏆 {save.titles}</span>
+        </div>
+        <button className="btn" onClick={onExit}>← Sair</button>
+      </div>
+
+      <div className="career-grid">
+        <div className="career-main">
+          {/* card grande de PRÓXIMA PARTIDA */}
+          {opp && myMatch ? (
+            <div className="play-match-card" style={{ background: `linear-gradient(110deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--header) 70%)` }}>
+              <div className="pm-info">
+                <div className="pm-label">PRÓXIMA PARTIDA · MD3 · Rodada {league.current + 1}/{league.rounds.length}</div>
+                <div className="pm-teams">
+                  <span className="pm-side">
+                    <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={40} />
+                    <b>{save.org?.tag}</b>
+                  </span>
+                  <span className="pm-vs">VS</span>
+                  <span className="pm-side">
+                    <TeamBadge tag={opp.tag} colors={opp.colors} size={40} logoUrl={opp.logoUrl} />
+                    <b>{opp.name}</b>
+                  </span>
+                </div>
+                <div className="pm-opp muted small">
+                  <Flag cc={opp.country} /> {oppPos}º na tabela · força {opp.strength.toFixed(1)}
+                </div>
+              </div>
+              <div className="pm-actions">
+                <button className="btn gold big" onClick={playMine}>▶ JOGAR</button>
+                <button className="btn ghost" onClick={() => simMine(league)}>⏩ Simular</button>
+              </div>
             </div>
+          ) : (
+            <div className="career-banner">Rodada concluída. Avançando…</div>
           )}
 
           <div className="muted small section-label">Rodada {league.current + 1} - confrontos</div>
@@ -337,9 +546,26 @@ export function CareerScreen({ dataset, onExit }: Props) {
               );
             })}
           </div>
+        </div>
 
-          <div className="muted small section-label">Classificação</div>
-          <CareerTable table={table} />
+        <div className="career-side">
+          <div className="side-card">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Classificação · top {MAJOR_SPOTS} vai ao Major</div>
+            <CareerTable table={table} highlightTop={MAJOR_SPOTS} />
+          </div>
+          <div className="side-card">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Seu elenco</div>
+            <div className="career-squad">
+              {(buildTeam(save)?.players ?? []).map((p) => (
+                <div key={p.id} className="cs-row">
+                  <PlayerAvatar nick={p.nick} size={28} />
+                  <span className="cs-nick"><Flag cc={p.country} /> {p.nick}</span>
+                  <span className={`role-pill ${p.role}`}>{p.role}</span>
+                  <span className="cs-ovr">{p.ovr}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
       {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
@@ -347,7 +573,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
   );
 }
 
-function CareerTable({ table }: { table: TTeam[] }) {
+function CareerTable({ table, highlightTop = 0 }: { table: TTeam[]; highlightTop?: number }) {
   return (
     <table className="stats">
       <thead>
@@ -361,7 +587,7 @@ function CareerTable({ table }: { table: TTeam[] }) {
       </thead>
       <tbody>
         {table.map((t, i) => (
-          <tr key={t.id} className={t.id === 'user' ? 'human-row' : undefined}>
+          <tr key={t.id} className={`${t.id === 'user' ? 'human-row' : ''}${highlightTop && i < highlightTop ? ' qualify-row' : ''}`}>
             <td style={{ textAlign: 'left' }}>{i + 1}</td>
             <td style={{ textAlign: 'left', fontWeight: t.id === 'user' ? 700 : 400 }}>{t.name}</td>
             <td className="pos">{t.wins}</td>

@@ -792,6 +792,126 @@ tr.team-row td {
   white-space: nowrap;
 }
 
+/* modo carreira - hub estilo FIFA */
+.career-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(120deg, var(--panel-2), var(--header));
+  border: 1px solid var(--border-soft);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.career-topbar .ct-name {
+  font-family: var(--font-cond);
+  font-weight: 800;
+  font-size: 20px;
+}
+.career-topbar .ct-sub {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.ct-standing,
+.ct-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ct-standing b {
+  font-size: 20px;
+  font-family: var(--font-cond);
+}
+.form-chips {
+  display: flex;
+  gap: 3px;
+}
+.fchip {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  font-style: normal;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #06121d;
+}
+.fchip.w { background: #5fd08a; }
+.fchip.l { background: #e06464; color: #fff; }
+.ct-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.career-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 920px) {
+  .career-grid { grid-template-columns: 1fr; }
+}
+.play-match-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.pm-info { flex: 1; min-width: 240px; }
+.pm-label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.pm-teams {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-cond);
+  font-size: 18px;
+}
+.pm-side { display: inline-flex; align-items: center; gap: 8px; }
+.pm-vs { color: var(--gold, #e6b34d); font-weight: 800; }
+.pm-opp { margin-top: 8px; }
+.pm-actions { display: flex; flex-direction: column; gap: 8px; }
+.career-side { display: flex; flex-direction: column; gap: 14px; }
+.side-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.career-squad { display: flex; flex-direction: column; gap: 6px; }
+.cs-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.cs-row .cs-nick { flex: 1; display: flex; align-items: center; gap: 4px; }
+.cs-row .cs-ovr { font-weight: 800; color: var(--gold, #e6b34d); }
+tr.qualify-row { background: rgba(95, 208, 138, 0.08); }
+.qualify-banner {
+  margin: 10px auto;
+  max-width: 560px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: rgba(95, 208, 138, 0.14);
+  border: 1px solid rgba(95, 208, 138, 0.5);
+  color: #aef0c8;
+  font-size: 14px;
+}
+
 /* modo carreira (beta fechado) */
 .career-banner {
   padding: 8px 12px;

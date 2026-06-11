@@ -63,6 +63,12 @@ export function iglProfile(players: { nick: string; role: Role; playstyle?: Play
   return { nick: igl.nick, style: igl.playstyle ?? derivePlaystyle(igl.role), rating: igl.igl };
 }
 
+// salário do jogador por split (folha do modo carreira). ~6% do valor de
+// mercado: um craque de R$2,5M custa ~R$150k por split de salário.
+export function playerWage(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'> & { ovr?: number }): number {
+  return Math.max(20000, Math.round((playerValue(p) * 0.06) / 5000) * 5000);
+}
+
 // formata valores monetários de forma curta (R$ 2.4M, R$ 750k)
 export function formatMoney(n: number): string {
   const neg = n < 0 ? '-' : '';
