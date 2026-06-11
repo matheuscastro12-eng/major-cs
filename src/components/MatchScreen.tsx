@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, type BuyTier, type MapSim, type Stance } from '../engine/match';
 import type { Rng } from '../engine/rng';
-import type { KillEvent, MapId, MapResult, SeriesResult, TPlayer, TTeam } from '../types';
-import { MAP_LABELS } from '../types';
+import type { KillEvent, MapId, MapResult, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
+import { derivePlaystyle, MAP_LABELS, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
 import { CoreFlag } from './flags';
 import { Scoreboard } from './Scoreboard';
 import { MapThumb, TeamBadge } from './ui';
@@ -31,10 +31,34 @@ const SPEEDS: { label: string; ms: number }[] = [
 const DEFAULT_SPEED_IDX = 1; // começa em 1x (0.5x é opção mais lenta)
 
 const STANCES: { key: Stance; label: string; hint: string }[] = [
-  { key: 'aggressive', label: '🔥 Agressivo', hint: 'Mais força no T, mas se expõe no CT' },
-  { key: 'default', label: '⚖ Padrão', hint: 'Plano de jogo equilibrado' },
-  { key: 'cautious', label: '🛡 Cauteloso', hint: 'Fecha o CT, perde ímpeto no T' },
+  { key: 'aggressive', label: '🔥 Agressivo', hint: 'Rende no T e valoriza jogadores agressivos; se expõe no CT' },
+  { key: 'default', label: '⚖ Padrão', hint: 'Plano equilibrado, sem bônus nem penalidade de estilo' },
+  { key: 'cautious', label: '🛡 Cauteloso', hint: 'Fecha o CT e valoriza jogadores passivos; perde ímpeto no T' },
 ];
+
+// estilo favorecido por cada postura
+const favoredStyle = (mode: Stance): Playstyle | null =>
+  mode === 'aggressive' ? 'aggressive' : mode === 'cautious' ? 'passive' : null;
+
+// relação de um jogador com a postura ativa: buff (combina), nerf (oposto) ou neutro
+function stanceRelation(ps: Playstyle, mode: Stance): 'buff' | 'nerf' | 'neutral' {
+  const fav = favoredStyle(mode);
+  if (!fav) return 'neutral';
+  if (ps === fav) return 'buff';
+  if ((mode === 'aggressive' && ps === 'passive') || (mode === 'cautious' && ps === 'aggressive')) return 'nerf';
+  return 'neutral';
+}
+
+// quantos jogadores ganham (saldo) com uma postura
+function stanceFitCount(players: TPlayer[], mode: Stance): number {
+  let n = 0;
+  for (const p of players) {
+    const r = stanceRelation(p.playstyle ?? derivePlaystyle(p.role), mode);
+    if (r === 'buff') n++;
+    else if (r === 'nerf') n--;
+  }
+  return n;
+}
 
 const BUY_LABEL: Record<BuyTier, string> = {
   pistol: 'PISTOL',
@@ -268,19 +292,38 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         </div>
 
         {!finished && (
-          <div className="stance-bar">
-            <span className="stance-label">Plano do {teams[userIdx].tag}:</span>
-            {STANCES.map((s) => (
-              <button
-                key={s.key}
-                className={`stance-btn${stance === s.key ? ' on' : ''}`}
-                title={s.hint}
-                onClick={() => setStance(s.key)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="stance-bar">
+              <span className="stance-label">Plano do {teams[userIdx].tag}:</span>
+              {STANCES.map((s) => {
+                const fit = stanceFitCount(teams[userIdx].players, s.key);
+                return (
+                  <button
+                    key={s.key}
+                    className={`stance-btn${stance === s.key ? ' on' : ''}`}
+                    title={s.hint}
+                    onClick={() => setStance(s.key)}
+                  >
+                    {s.label}
+                    {s.key !== 'default' && <span className="stance-fit">{fit > 0 ? `+${fit}` : fit}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="style-roster">
+              {teams[userIdx].players.map((p) => {
+                const ps = p.playstyle ?? derivePlaystyle(p.role);
+                const rel = stanceRelation(ps, stance);
+                return (
+                  <span key={p.id} className={`style-chip ${rel}`} title={`${p.nick} — ${PLAYSTYLE_LABELS[ps]}`}>
+                    {PLAYSTYLE_ICONS[ps]} {p.nick}
+                    {rel === 'buff' && <span className="sc-tag up">valorizado</span>}
+                    {rel === 'nerf' && <span className="sc-tag down">fora do plano</span>}
+                  </span>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {!finished && (

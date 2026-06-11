@@ -1,6 +1,6 @@
 import { liquipediaTeamUrl, logoForTeam } from '../data/media';
 import type { Coach, Game, Player, TeamSeason, TPlayer, TTeam } from '../types';
-import { MAP_POOL } from '../types';
+import { derivePlaystyle, MAP_POOL } from '../types';
 
 // Dream team montado no draft nunca treinou junto: leva um malus de
 // entrosamento que torna o título mais difícil (egos, falta de rotina).
@@ -13,6 +13,27 @@ export function playerSkill(p: Pick<Player, 'aim' | 'clutch' | 'consistency'>): 
 export function playerOvr(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'>): number {
   const spec = Math.max(p.awp, p.igl, p.aim);
   return Math.round(p.aim * 0.45 + p.consistency * 0.18 + p.clutch * 0.12 + spec * 0.25);
+}
+
+// valor de mercado do jogador (R$), estilo Brasfoot: cresce rápido com o
+// overall e tem prêmio para AWPer/IGL de elite; forma quente valoriza um pouco.
+export function playerValue(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'> & { ovr?: number; form?: number }): number {
+  const ovr = typeof p.ovr === 'number' ? p.ovr : playerOvr(p);
+  const base = Math.max(0, ovr - 45);
+  let v = base * base * 1100; // ovr 90 ~ R$2,2M; ovr 99 ~ R$3,2M
+  if (p.awp >= 85) v *= 1.2;
+  if (p.igl >= 85) v *= 1.1;
+  if (p.form) v *= p.form; // 0.9..1.1
+  return Math.max(50000, Math.round(v / 10000) * 10000);
+}
+
+// formata valores monetários de forma curta (R$ 2.4M, R$ 750k)
+export function formatMoney(n: number): string {
+  const neg = n < 0 ? '-' : '';
+  const a = Math.abs(n);
+  if (a >= 1_000_000) return `${neg}R$ ${(a / 1_000_000).toFixed(a % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (a >= 1_000) return `${neg}R$ ${Math.round(a / 1000)}k`;
+  return `${neg}R$ ${a}`;
 }
 
 export function toTPlayer(
@@ -30,6 +51,7 @@ export function toTPlayer(
     ...p,
     id: meta.runtimeId ?? p.id,
     sourcePlayerId: p.id,
+    playstyle: p.playstyle ?? derivePlaystyle(p.role),
     skill: playerSkill(p),
     ovr: playerOvr(p),
     fromTeam: meta.fromTeam,

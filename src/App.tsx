@@ -18,7 +18,7 @@ import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } fr
 import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
-import { createTournament, getTeam, pairingBestOf, phaseLabel, resolveRound, userMapRecord, userPairing, userTeam } from './engine/swiss';
+import { createTournament, getTeam, pairingBestOf, phaseLabel, placementLabel, resolveRound, userMapRecord, userPairing, userTeam } from './engine/swiss';
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, resetDataset, saveDataset } from './state/crm';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
@@ -56,7 +56,20 @@ export interface PickemState {
 export interface CareerState {
   season: number;
   titles: number;
+  budget: number; // caixa do clube (R$) para transferências
+  lastPrize?: number; // premiação da última campanha (para exibir)
 }
+
+// caixa inicial e premiação por desempenho no Major
+const STARTING_BUDGET = 2_000_000;
+const PRIZE_BY_PLACEMENT: Record<string, number> = {
+  CAMPEÃO: 5_000_000,
+  'VICE-CAMPEÃO': 2_200_000,
+  SEMIFINAL: 1_200_000,
+  'QUARTAS DE FINAL': 600_000,
+  'CLASSIFICADO AOS PLAYOFFS': 350_000,
+};
+const newCareer = (): CareerState => ({ season: 1, titles: 0, budget: STARTING_BUDGET });
 
 interface TransferCtx {
   evolution: { nick: string; delta: number }[];
@@ -73,7 +86,7 @@ export default function App() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [matchCtx, setMatchCtx] = useState<MatchCtx | null>(null);
   const [pickem, setPickem] = useState<PickemState>({ picks: {}, score: 0, total: 0 });
-  const [career, setCareer] = useState<CareerState>({ season: 1, titles: 0 });
+  const [career, setCareer] = useState<CareerState>(newCareer());
   const [transferCtx, setTransferCtx] = useState<TransferCtx | null>(null);
   const [detail, setDetail] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; event: string } | null>(null);
   const [detailReturn, setDetailReturn] = useState<Screen>('hub');
@@ -156,7 +169,7 @@ export default function App() {
     setDraft(savedSession.draft);
     setTournament(savedSession.tournament);
     setPickem(savedSession.pickem ?? { picks: {}, score: 0, total: 0 });
-    setCareer(savedSession.career ?? { season: 1, titles: 0 });
+    setCareer(savedSession.career ? { ...newCareer(), ...savedSession.career } : newCareer());
     setMatchCtx(null);
     setScreen(savedSession.tournament.phase === 'done' ? 'final' : 'hub');
   };
@@ -224,7 +237,7 @@ export default function App() {
     });
     setTournament(null);
     setPickem({ picks: {}, score: 0, total: 0 });
-    setCareer({ season: 1, titles: 0 });
+    setCareer(newCareer());
     setScreen('draft');
   };
 
@@ -327,7 +340,16 @@ export default function App() {
   const afterResolve = (clone: Tournament) => {
     scorePickemAfter(clone);
     if (clone.phase === 'done') {
-      if (clone.championId === 'user') setCareer((c) => ({ ...c, titles: c.titles + 1 }));
+      // premiação em dinheiro pelo desempenho no Major (entra no caixa do clube)
+      const label = placementLabel(clone, 'user');
+      const u = getTeam(clone, 'user');
+      const prize = 200_000 + (u?.wins ?? 0) * 150_000 + (PRIZE_BY_PLACEMENT[label] ?? 0);
+      setCareer((c) => ({
+        ...c,
+        titles: c.titles + (clone.championId === 'user' ? 1 : 0),
+        budget: c.budget + prize,
+        lastPrize: prize,
+      }));
       track('game_end', {
         champion: clone.championId === 'user',
         difficulty: draft?.difficulty ?? 'normal',
@@ -377,11 +399,11 @@ export default function App() {
     setScreen('transfer');
   };
 
-  const confirmTransfer = (newTeam: TTeam) => {
+  const confirmTransfer = (newTeam: TTeam, cost = 0) => {
     if (!draft) return;
     const nextSeason = career.season + 1;
     track('season_start', { season: nextSeason, pool: draft.pool });
-    setCareer((c) => ({ ...c, titles: c.titles, season: nextSeason }));
+    setCareer((c) => ({ ...c, season: nextSeason, budget: c.budget - cost, lastPrize: undefined }));
     rngRef.current = makeRng(randomSeed());
     const t = createTournament(
       poolTeams(draft.pool),
@@ -403,7 +425,7 @@ export default function App() {
     setMatchCtx(null);
     setTransferCtx(null);
     setPickem({ picks: {}, score: 0, total: 0 });
-    setCareer({ season: 1, titles: 0 });
+    setCareer(newCareer());
     setScreen('home');
   };
 
@@ -513,6 +535,7 @@ export default function App() {
           user={transferCtx.baseTeam}
           season={career.season + 1}
           titles={career.titles}
+          budget={career.budget}
           evolution={transferCtx.evolution}
           offers={transferCtx.offers}
           onConfirm={confirmTransfer}

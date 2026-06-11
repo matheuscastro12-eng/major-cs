@@ -1,6 +1,48 @@
-import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, SeriesResult, TPlayer, TTeam } from '../types';
+import type { KillEvent, MapId, MapResult, Playstyle, PlayerLine, PlayerMapStats, SeriesResult, TPlayer, TTeam } from '../types';
+import { derivePlaystyle } from '../types';
 import type { Rng } from './rng';
 import { weightedIndex } from './rng';
+
+const playstyleOf = (p: TPlayer): Playstyle => p.playstyle ?? derivePlaystyle(p.role);
+
+// ---------------- camada tática: estilo de jogo x postura ----------------
+// A postura escolhida ao vivo VALORIZA os jogadores cujo estilo combina e
+// penaliza quem não combina. Agressivo rende no T com jogadores agressivos;
+// cauteloso rende no CT com jogadores passivos. "default" é o meio-termo seguro.
+
+// quanto a postura soma/subtrai na força efetiva do time, considerando o lado
+// e quantos jogadores combinam com a tática
+function stanceFitDelta(team: TTeam, side: 'ct' | 't', mode: Stance): number {
+  if (mode === 'default') return 0;
+  let d = mode === 'aggressive' ? (side === 't' ? 1.4 : -1.2) : side === 'ct' ? 1.4 : -1.0;
+  const favored: Playstyle = mode === 'aggressive' ? 'aggressive' : 'passive';
+  const against: Playstyle = mode === 'aggressive' ? 'passive' : 'aggressive';
+  for (const p of team.players) {
+    const ps = playstyleOf(p);
+    if (ps === favored) d += 0.55;
+    else if (ps === against) d -= 0.45;
+  }
+  return d;
+}
+
+// multiplicador no peso de FRAGS do jogador conforme estilo, lado e postura
+function killStyleMult(p: TPlayer, side: 'ct' | 't', mode: Stance | undefined): number {
+  const ps = playstyleOf(p);
+  let m = 1;
+  if (ps === 'aggressive') m *= side === 't' ? 1.15 : 0.95;
+  if (ps === 'passive') m *= side === 'ct' ? 1.08 : 0.96;
+  if (mode === 'aggressive' && ps === 'aggressive') m *= 1.12;
+  if (mode === 'cautious' && ps === 'passive') m *= 1.1;
+  return m;
+}
+
+// agressivos morrem um pouco mais (correm risco); passivos morrem menos
+function deathStyleMult(p: TPlayer): number {
+  const ps = playstyleOf(p);
+  if (ps === 'aggressive') return 1.12;
+  if (ps === 'passive') return 0.9;
+  return 1;
+}
 
 function emptyLine(): PlayerLine {
   return { kills: 0, deaths: 0, assists: 0, dmg: 0, kastRounds: 0, rounds: 0, openKills: 0, clutchWins: 0 };
@@ -247,16 +289,18 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     if (boostTeam === 0) effA += 3.5; // timeout tático
     if (boostTeam === 1) effB += 3.5;
 
-    // postura tática escolhida ao vivo: agressivo aposta no lado T mas se expõe
-    // no CT; cauteloso fecha o CT mas perde ímpeto nas saídas de T
+    // postura tática escolhida ao vivo: valoriza quem combina com a tática.
+    // O delta depende do lado E de quantos jogadores têm o estilo certo.
     if (stance && stance.mode !== 'default') {
       const sSide = stance.team === 0 ? aSide : bSide;
-      let delta = 0;
-      if (stance.mode === 'aggressive') delta = sSide === 't' ? 2.2 : -1.4;
-      if (stance.mode === 'cautious') delta = sSide === 'ct' ? 1.5 : -1.0;
+      const delta = stanceFitDelta(teams[stance.team], sSide, stance.mode);
       if (stance.team === 0) effA += delta;
       else effB += delta;
     }
+    // estilo de frag por jogador conforme o lado e a postura ativa de cada time
+    const stanceModeFor = (teamIdx: 0 | 1): Stance | undefined =>
+      stance && stance.team === teamIdx ? stance.mode : undefined;
+    const sideFor = (teamIdx: 0 | 1): 'ct' | 't' => (teamIdx === 0 ? aSide : bSide);
 
     const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
     const pA = sigmoid(diff / 15);
@@ -280,7 +324,15 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
 
     const assign = (teamIdx: 0 | 1, nKills: number, firstIsOpen: boolean) => {
       const ps = teamPlayers[teamIdx];
-      const weights = ps.map((p) => Math.pow(p.aim / 70, 2.6) * (KILL_ROLE_MULT[p.role] ?? 1) * Math.pow(p.form ?? 1, 2.2));
+      const sd = sideFor(teamIdx);
+      const sm = stanceModeFor(teamIdx);
+      const weights = ps.map(
+        (p) =>
+          Math.pow(p.aim / 70, 2.6) *
+          (KILL_ROLE_MULT[p.role] ?? 1) *
+          Math.pow(p.form ?? 1, 2.2) *
+          killStyleMult(p, sd, sm),
+      );
       for (let k = 0; k < nKills; k++) {
         const i = weightedIndex(rng, weights);
         tally[teamIdx].kills[i]++;
@@ -302,7 +354,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     const pickVictims = (teamIdx: 0 | 1, deaths: number) => {
       const ps = teamPlayers[teamIdx];
       const idxs = [0, 1, 2, 3, 4];
-      const weights = ps.map((p) => (DEATH_ROLE_MULT[p.role] ?? 1) * (110 - p.consistency));
+      const weights = ps.map((p) => (DEATH_ROLE_MULT[p.role] ?? 1) * (110 - p.consistency) * deathStyleMult(p));
       const chosen: number[] = [];
       for (let d = 0; d < deaths; d++) {
         const avail = idxs.filter((i) => !chosen.includes(i));

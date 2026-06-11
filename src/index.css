@@ -679,6 +679,101 @@ tr.team-row td {
   to { opacity: 1; transform: translateY(0); }
 }
 
+.prize-banner {
+  margin: 4px 0 12px;
+  padding: 8px 14px;
+  display: inline-block;
+  border-radius: var(--radius);
+  background: rgba(230, 179, 77, 0.12);
+  border: 1px solid rgba(230, 179, 77, 0.4);
+  color: #f0d29a;
+  font-size: 14px;
+}
+
+/* dinheiro nas transferências (Brasfoot) */
+.budget-line {
+  margin-top: 8px;
+  font-size: 15px;
+  color: var(--gold, #e6b34d);
+}
+.price {
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.price.sell {
+  color: #7ec9a0;
+}
+.price.buy {
+  color: var(--gold, #e6b34d);
+}
+.trade-summary {
+  margin-bottom: 12px;
+}
+.trade-money {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.trade-money > span {
+  white-space: nowrap;
+}
+
+/* camada tática: estilo de jogo dos jogadores na partida */
+.stance-fit {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.85;
+}
+.style-roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+.style-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  border: 1px solid var(--border-soft);
+  color: var(--text);
+  transition: all 0.15s;
+}
+.style-chip.buff {
+  background: rgba(126, 224, 168, 0.16);
+  border-color: rgba(126, 224, 168, 0.55);
+  color: #aef0c8;
+}
+.style-chip.nerf {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.sc-tag {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+.sc-tag.up {
+  background: #1d6b3f;
+  color: #d8ffe8;
+}
+.sc-tag.down {
+  background: #5a2330;
+  color: #ffd2d8;
+}
+
 /* resultado do Major online (ultimate team) */
 .section-label {
   margin: 18px 0 6px;

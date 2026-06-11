@@ -5,12 +5,13 @@ import { adminPassword, lockAdmin } from './AdminGate';
 import { invalidateDonors } from './Donate';
 import { MetricsPanel } from './MetricsPanel';
 import { clearDirty, exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, saveDatasetToServer, saveMapImage } from '../state/crm';
-import type { CoachStyle, Game, MapId, Player, Role, TeamSeason } from '../types';
-import { COACH_STYLE_LABELS, MAP_LABELS, MAP_POOL } from '../types';
+import type { CoachStyle, Game, MapId, Player, Playstyle, Role, TeamSeason } from '../types';
+import { COACH_STYLE_LABELS, derivePlaystyle, MAP_LABELS, MAP_POOL, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
 import { Flag, MapThumb, TeamBadge } from './ui';
 
 const GAMES: Game[] = ['CS 1.6', 'CS:Source', 'CS:GO', 'CS2'];
 const ROLES: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
+const PLAYSTYLES: Playstyle[] = ['aggressive', 'balanced', 'passive'];
 const STYLES: CoachStyle[] = ['tactical', 'aggressive', 'discipline'];
 
 interface Props {
@@ -414,6 +415,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                       <th>Nome</th>
                       <th>País</th>
                       <th>Função</th>
+                      <th>Estilo</th>
                       <th>Mira</th>
                       <th>Clutch</th>
                       <th>Const.</th>
@@ -439,6 +441,18 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                           <select value={p.role} onChange={(e) => updatePlayer(sel.id, p.id, { role: e.target.value as Role })}>
                             {ROLES.map((r) => (
                               <option key={r}>{r}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={p.playstyle ?? derivePlaystyle(p.role)}
+                            onChange={(e) => updatePlayer(sel.id, p.id, { playstyle: e.target.value as Playstyle })}
+                          >
+                            {PLAYSTYLES.map((s) => (
+                              <option key={s} value={s}>
+                                {PLAYSTYLE_ICONS[s]} {PLAYSTYLE_LABELS[s]}
+                              </option>
                             ))}
                           </select>
                         </td>

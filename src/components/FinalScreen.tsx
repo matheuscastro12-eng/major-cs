@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { CareerState, PickemState } from '../App';
 import { computeDisplay, mergeLines } from '../engine/match';
+import { formatMoney } from '../engine/ratings';
 import { getTeam } from '../engine/swiss';
 import { downloadShareCard } from '../state/share';
 import { track } from '../state/track';
@@ -171,6 +172,13 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
               </>
             )}
           </p>
+
+          {typeof career.lastPrize === 'number' && (
+            <div className="prize-banner">
+              💰 Premiação da campanha: <b>+{formatMoney(career.lastPrize)}</b>
+              <span className="muted"> · caixa do clube: <b>{formatMoney(career.budget)}</b></span>
+            </div>
+          )}
 
           {champion && (
             <div style={{ marginBottom: 10 }}>

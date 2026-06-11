@@ -2,12 +2,35 @@ export type Game = 'CS 1.6' | 'CS:Source' | 'CS:GO' | 'CS2';
 
 export type Role = 'AWP' | 'IGL' | 'Rifler' | 'Entry' | 'Support' | 'Lurker';
 
+// estilo de jogo: define com qual tática o jogador rende mais (e o risco que corre)
+export type Playstyle = 'aggressive' | 'balanced' | 'passive';
+
+export const PLAYSTYLE_LABELS: Record<Playstyle, string> = {
+  aggressive: 'Agressivo',
+  balanced: 'Equilibrado',
+  passive: 'Passivo',
+};
+
+export const PLAYSTYLE_ICONS: Record<Playstyle, string> = {
+  aggressive: '🔥',
+  balanced: '⚖️',
+  passive: '🛡️',
+};
+
+// estilo padrão derivado da função quando o jogador não tem um definido
+export function derivePlaystyle(role: Role): Playstyle {
+  if (role === 'Entry') return 'aggressive';
+  if (role === 'Support' || role === 'Lurker') return 'passive';
+  return 'balanced'; // AWP, IGL, Rifler
+}
+
 export interface Player {
   id: string;
   nick: string;
   name: string;
   country: string; // ISO-3166 alpha-2, lowercase
   role: Role;
+  playstyle?: Playstyle; // estilo de jogo (default derivado da role)
   aim: number;
   clutch: number;
   consistency: number;
@@ -79,6 +102,7 @@ export interface TPlayer {
   name: string;
   country: string;
   role: Role;
+  playstyle: Playstyle; // estilo de jogo (sempre definido no runtime)
   aim: number;
   clutch: number;
   consistency: number;
