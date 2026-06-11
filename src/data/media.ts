@@ -180,11 +180,17 @@ export function liquipediaTeamUrl(team: Pick<TeamSeason, 'team'>): string {
 // Servidas via proxy Photon (i0.wp.com), que aceita hotlink e redimensiona;
 // a Liquipedia bloqueia hotlink direto. Conteúdo CC-BY-SA da Liquipedia.
 import playerPhotos from './player-photos.json';
+import bo3Photos from './bo3-photos.json';
 
 const PHOTOS = playerPhotos as Record<string, string>;
+const BO3_PHOTOS = bo3Photos as Record<string, string>;
 
 export function photoForNick(nick: string, size = 120): string | undefined {
-  const path = PHOTOS[nick.toLowerCase()];
+  const key = nick.toLowerCase();
+  // fotos reais do bo3.gg (URLs diretas) têm prioridade
+  const bo3 = BO3_PHOTOS[key];
+  if (bo3) return bo3;
+  const path = PHOTOS[key];
   if (!path) return undefined;
   return `https://i0.wp.com/liquipedia.net${path}?resize=${size},${size}&ssl=1`;
 }

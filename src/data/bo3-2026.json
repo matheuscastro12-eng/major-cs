@@ -1,0 +1,4082 @@
+[
+ {
+  "id": "bo3_team_667",
+  "team": "Vitality",
+  "tag": "VIT",
+  "era": "2026",
+  "game": "CS2",
+  "country": "fr",
+  "teamwork": 80,
+  "honors": "#1 no ranking mundial",
+  "colors": [
+   "#1f5135",
+   "#5ae2d9"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "XTQZZZ",
+   "name": "Rémy Quoniam",
+   "country": "fr",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/667/image/webp-292c1f6c6dcfca35c7a52da7e02cef0a.webp",
+  "players": [
+   {
+    "id": "bo3_18452",
+    "nick": "ZywOo",
+    "name": "Mathieu Herbaut",
+    "country": "fr",
+    "role": "AWP",
+    "aim": 92,
+    "consistency": 92,
+    "clutch": 90,
+    "awp": 92,
+    "igl": 62
+   },
+   {
+    "id": "bo3_24881",
+    "nick": "flameZ",
+    "name": "Shahar Shushan",
+    "country": "il",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_17663",
+    "nick": "ropz",
+    "name": "Robin Kool",
+    "country": "ee",
+    "role": "Entry",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
+   },
+   {
+    "id": "bo3_30095",
+    "nick": "mezii",
+    "name": "William Merriman",
+    "country": "gb",
+    "role": "Rifler",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_17515",
+    "nick": "apEX",
+    "name": "Dan Madesclaire",
+    "country": "fr",
+    "role": "Support",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_654",
+  "team": "Spirit",
+  "tag": "TS",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 79,
+  "honors": "#2 no ranking mundial",
+  "colors": [
+   "#4d511f",
+   "#93e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "hally",
+   "name": "Sergey Shavayev",
+   "country": "ru",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/654/image/webp-41b22d18a871d982f8ff87652bbb0fe6.webp",
+  "players": [
+   {
+    "id": "bo3_31349",
+    "nick": "donk",
+    "name": "Danil Kryshkovets",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 93,
+    "consistency": 93,
+    "clutch": 91,
+    "awp": 93,
+    "igl": 63
+   },
+   {
+    "id": "bo3_23237",
+    "nick": "sh1ro",
+    "name": "Dmitriy Sokolov",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
+   },
+   {
+    "id": "bo3_29221",
+    "nick": "tN1R",
+    "name": "Andrey Tatarinovich",
+    "country": "by",
+    "role": "Entry",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_29219",
+    "nick": "zont1x",
+    "name": "Myroslav Plakhotja",
+    "country": "ua",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_23701",
+    "nick": "magixx",
+    "name": "Boris Vorobiev",
+    "country": "ru",
+    "role": "Support",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_2713",
+  "team": "Falcons",
+  "tag": "FLC",
+  "era": "2026",
+  "game": "CS2",
+  "country": "sa",
+  "teamwork": 76,
+  "honors": "#3 no ranking mundial",
+  "colors": [
+   "#51491f",
+   "#b5e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "zonic",
+   "name": "Danny Sørensen",
+   "country": "dk",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/2713/image/webp-86fd5a0653183a19cf750d195963ea10.webp",
+  "players": [
+   {
+    "id": "bo3_25998",
+    "nick": "m0NESY",
+    "name": "Ilya Osipov",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 86,
+    "igl": 56
+   },
+   {
+    "id": "bo3_51876",
+    "nick": "kyousuke",
+    "name": "Maxim Lukin",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
+   },
+   {
+    "id": "bo3_17522",
+    "nick": "NiKo",
+    "name": "Nikola Kovač",
+    "country": "ba",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_23037",
+    "nick": "TeSeS",
+    "name": "Rene Madsen",
+    "country": "dk",
+    "role": "Rifler",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_17524",
+    "nick": "karrigan",
+    "name": "Finn Andersen",
+    "country": "dk",
+    "role": "Support",
+    "aim": 63,
+    "consistency": 63,
+    "clutch": 61,
+    "awp": 40,
+    "igl": 35
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_787",
+  "team": "Natus Vincere",
+  "tag": "NAVI",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ua",
+  "teamwork": 77,
+  "honors": "#4 no ranking mundial",
+  "colors": [
+   "#2d511f",
+   "#5ae278"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "B1ad3",
+   "name": "Andrii Horodenskyi",
+   "country": "ua",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/787/image/webp-ea9885f81f1572c7a6c9fb6cbf747c99.webp",
+  "players": [
+   {
+    "id": "bo3_37543",
+    "nick": "makazze",
+    "name": "Drin Shaqiri",
+    "country": "xk",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_29734",
+    "nick": "w0nderful",
+    "name": "Ihor Zhdanov",
+    "country": "ua",
+    "role": "IGL",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
+   },
+   {
+    "id": "bo3_25384",
+    "nick": "iM",
+    "name": "Ivan Mihai",
+    "country": "ro",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_24656",
+    "nick": "b1t",
+    "name": "Valeriy Vakhovskiy",
+    "country": "ua",
+    "role": "Rifler",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_17688",
+    "nick": "Aleksib",
+    "name": "Aleksi Virolainen",
+    "country": "fi",
+    "role": "Support",
+    "aim": 67,
+    "consistency": 67,
+    "clutch": 65,
+    "awp": 41,
+    "igl": 37
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_765",
+  "team": "MOUZ",
+  "tag": "MOUZ",
+  "era": "2026",
+  "game": "CS2",
+  "country": "de",
+  "teamwork": 78,
+  "honors": "#5 no ranking mundial",
+  "colors": [
+   "#1f5139",
+   "#5ae0e2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "sycrone",
+   "name": "Dennis Nielsen",
+   "country": "dk",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/765/image/bcbdcf50fb2c79b6ab45b0014300b9e0.png",
+  "players": [
+   {
+    "id": "bo3_59472",
+    "nick": "xelex",
+    "name": "Adrian Vincze",
+    "country": "hu",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_29530",
+    "nick": "xertioN",
+    "name": "Dorian Berman",
+    "country": "il",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_25519",
+    "nick": "Spinx",
+    "name": "Lotan Giladi",
+    "country": "il",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_26391",
+    "nick": "torzsi",
+    "name": "Ádám Torzsás",
+    "country": "hu",
+    "role": "Rifler",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_17853",
+    "nick": "Brollan",
+    "name": "Ludvig Brolin",
+    "country": "se",
+    "role": "Support",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_8118",
+  "team": "Legacy",
+  "tag": "LGC",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 76,
+  "honors": "#6 no ranking mundial",
+  "colors": [
+   "#514f1f",
+   "#a5e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "RiVAS",
+   "name": "Bruno Rivetti",
+   "country": "br",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/8118/image/webp-e4a3b023443f1f3ba4ef588164e73111.webp",
+  "players": [
+   {
+    "id": "bo3_24105",
+    "nick": "dumau",
+    "name": "Eduardo Wolkmer",
+    "country": "br",
+    "role": "AWP",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
+   },
+   {
+    "id": "bo3_23685",
+    "nick": "latto",
+    "name": "Bruno Rebelatto",
+    "country": "br",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_36217",
+    "nick": "saadzin",
+    "name": "Guilherme Pacheco",
+    "country": "br",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_29163",
+    "nick": "n1ssim",
+    "name": "Vinicius Pereira",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   },
+   {
+    "id": "bo3_19665",
+    "nick": "arT",
+    "name": "Andrei Piovezan",
+    "country": "br",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_736",
+  "team": "The MongolZ",
+  "tag": "MGLZ",
+  "era": "2026",
+  "game": "CS2",
+  "country": "mn",
+  "teamwork": 74,
+  "honors": "#7 no ranking mundial",
+  "colors": [
+   "#1f5151",
+   "#5aa0e2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "maaRaa",
+   "name": "Erdenedalai Bayanbat",
+   "country": "mn",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/736/image/webp-499cad826b4cd83ce22f8bd2b13261d6.webp",
+  "players": [
+   {
+    "id": "bo3_34130",
+    "nick": "910",
+    "name": "Usukhbayar Banzragch",
+    "country": "mn",
+    "role": "AWP",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 79,
+    "igl": 49
+   },
+   {
+    "id": "bo3_45550",
+    "nick": "cobrazera",
+    "name": "Anarbileg Uuganbayar",
+    "country": "mn",
+    "role": "IGL",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 75
+   },
+   {
+    "id": "bo3_32321",
+    "nick": "mzinho",
+    "name": "Ayush Batbold",
+    "country": "mn",
+    "role": "Entry",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_29638",
+    "nick": "bLitz",
+    "name": "Garidmagnai Byambasuren",
+    "country": "mn",
+    "role": "Rifler",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_29449",
+    "nick": "Techno4K",
+    "name": "Sodbayar Munkhbold",
+    "country": "mn",
+    "role": "Support",
+    "aim": 69,
+    "consistency": 69,
+    "clutch": 67,
+    "awp": 43,
+    "igl": 39
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_3598",
+  "team": "Aurora",
+  "tag": "AUR",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 75,
+  "honors": "#8 no ranking mundial",
+  "colors": [
+   "#471f51",
+   "#e25ab9"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "Fabre",
+   "name": "Sezgin Kalayci",
+   "country": "tr",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/3598/image/webp-49b8df76b0d121cc89c760c1ec16ebea.webp",
+  "players": [
+   {
+    "id": "bo3_17674",
+    "nick": "XANTARES",
+    "name": "Ismailcan Dörtkardeş",
+    "country": "tr",
+    "role": "AWP",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 80,
+    "igl": 50
+   },
+   {
+    "id": "bo3_32185",
+    "nick": "Wicadia",
+    "name": "Ali Haydar Yalçın",
+    "country": "tr",
+    "role": "IGL",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
+   },
+   {
+    "id": "bo3_17720",
+    "nick": "woxic",
+    "name": "Özgür Eker",
+    "country": "tr",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_31567",
+    "nick": "Soulfly",
+    "name": "Caner Kesici",
+    "country": "tr",
+    "role": "Rifler",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_17675",
+    "nick": "MAJ3R",
+    "name": "Engin Küpeli",
+    "country": "tr",
+    "role": "Support",
+    "aim": 68,
+    "consistency": 68,
+    "clutch": 66,
+    "awp": 42,
+    "igl": 38
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_594",
+  "team": "GamerLegion",
+  "tag": "GL",
+  "era": "2026",
+  "game": "CS2",
+  "country": "de",
+  "teamwork": 75,
+  "honors": "#9 no ranking mundial",
+  "colors": [
+   "#513b1f",
+   "#d9e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "imd",
+   "name": "Adrian Pieper",
+   "country": "pl",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/594/image/webp-bcc947826ef96f444af02ed0ee79c537.webp",
+  "players": [
+   {
+    "id": "bo3_17659",
+    "nick": "REZ",
+    "name": "Fredrik Sterner",
+    "country": "se",
+    "role": "AWP",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 80,
+    "igl": 50
+   },
+   {
+    "id": "bo3_34951",
+    "nick": "PR",
+    "name": "Oldřich Nový",
+    "country": "cz",
+    "role": "IGL",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 77
+   },
+   {
+    "id": "bo3_39358",
+    "nick": "hypex",
+    "name": "Milan Polowiec",
+    "country": "pl",
+    "role": "Entry",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_29393",
+    "nick": "Tauson",
+    "name": "Sebastian Tauson Lindelof",
+    "country": "dk",
+    "role": "Rifler",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_17502",
+    "nick": "Snax",
+    "name": "Janusz Pogorzelski",
+    "country": "pl",
+    "role": "Support",
+    "aim": 68,
+    "consistency": 68,
+    "clutch": 66,
+    "awp": 42,
+    "igl": 38
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_794",
+  "team": "Astralis",
+  "tag": "AST",
+  "era": "2026",
+  "game": "CS2",
+  "country": "dk",
+  "teamwork": 75,
+  "honors": "#10 no ranking mundial",
+  "colors": [
+   "#231f51",
+   "#a95ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "ruggah",
+   "name": "Casper Due",
+   "country": "dk",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/794/image/webp-3c221c1ccd05db6a010e09d9f9f0e367.webp",
+  "players": [
+   {
+    "id": "bo3_29391",
+    "nick": "Staehr",
+    "name": "Victor Staehr",
+    "country": "dk",
+    "role": "AWP",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 80,
+    "igl": 50
+   },
+   {
+    "id": "bo3_30118",
+    "nick": "phzy",
+    "name": "Love Smidebrant",
+    "country": "se",
+    "role": "IGL",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 78
+   },
+   {
+    "id": "bo3_25249",
+    "nick": "jabbi",
+    "name": "Jakob Nygaard",
+    "country": "dk",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_29072",
+    "nick": "ryu",
+    "name": "Gytis Glušauskas",
+    "country": "lt",
+    "role": "Rifler",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_20513",
+    "nick": "HooXi",
+    "name": "Rasmus Nielsen",
+    "country": "dk",
+    "role": "Support",
+    "aim": 66,
+    "consistency": 66,
+    "clutch": 64,
+    "awp": 40,
+    "igl": 36
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_648",
+  "team": "FURIA",
+  "tag": "FURIA",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 75,
+  "honors": "#11 no ranking mundial",
+  "colors": [
+   "#511f45",
+   "#e25a7c"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "sidde",
+   "name": "Sidnei Macedo",
+   "country": "br",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/648/image/webp-e1c203706e78b4167ad6fd6f70eb55bb.webp",
+  "players": [
+   {
+    "id": "bo3_53465",
+    "nick": "molodoy",
+    "name": "Danil Golubenko",
+    "country": "kz",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_19667",
+    "nick": "KSCERATO",
+    "name": "Kaike Cerato",
+    "country": "br",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_18732",
+    "nick": "YEKINDAR",
+    "name": "Mareks Gaļinskis",
+    "country": "lv",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_19664",
+    "nick": "yuurih",
+    "name": "Yuri Boian",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 70,
+    "consistency": 70,
+    "clutch": 68,
+    "awp": 44,
+    "igl": 40
+   },
+   {
+    "id": "bo3_17497",
+    "nick": "FalleN",
+    "name": "Gabriel Toledo",
+    "country": "br",
+    "role": "Support",
+    "aim": 67,
+    "consistency": 67,
+    "clutch": 65,
+    "awp": 41,
+    "igl": 37
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_20832",
+  "team": "FUT",
+  "tag": "FUT",
+  "era": "2026",
+  "game": "CS2",
+  "country": "tr",
+  "teamwork": 76,
+  "honors": "#12 no ranking mundial",
+  "colors": [
+   "#1f5137",
+   "#5ae2e0"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "coolio",
+   "name": "András Fercsák",
+   "country": "hu",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/20832/image/webp-3c31da5dd03e58f5041420c56c14ed52.webp",
+  "players": [
+   {
+    "id": "bo3_35205",
+    "nick": "Krabeni",
+    "name": "Aulon Fazlija",
+    "country": "xk",
+    "role": "AWP",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 78,
+    "igl": 48
+   },
+   {
+    "id": "bo3_47939",
+    "nick": "dziugss",
+    "name": "Dziugas Steponavicius",
+    "country": "lt",
+    "role": "IGL",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 77
+   },
+   {
+    "id": "bo3_30902",
+    "nick": "lauNX",
+    "name": "Laurentiu Tarlea",
+    "country": "ro",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_34940",
+    "nick": "dem0n",
+    "name": "Dmytro Myroshnychenko",
+    "country": "ua",
+    "role": "Rifler",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_37544",
+    "nick": "cmtry",
+    "name": "Nikita Samolyotov",
+    "country": "ua",
+    "role": "Support",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_793",
+  "team": "G2",
+  "tag": "G2",
+  "era": "2026",
+  "game": "CS2",
+  "country": "de",
+  "teamwork": 78,
+  "honors": "#13 no ranking mundial",
+  "colors": [
+   "#37511f",
+   "#5ae25d"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "sAw",
+   "name": "Eetu Saha",
+   "country": "fi",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/793/image/webp-8f844f6a25c797dfe74b411d147983ff.webp",
+  "players": [
+   {
+    "id": "bo3_24880",
+    "nick": "Nertz",
+    "name": "Guy Iluz",
+    "country": "il",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_29150",
+    "nick": "HeavyGod",
+    "name": "Nikita Martynenko",
+    "country": "il",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_25096",
+    "nick": "SunPayus",
+    "name": "Alvaro Garcia",
+    "country": "es",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_31187",
+    "nick": "MATYS",
+    "name": "Matúš Šimko",
+    "country": "sk",
+    "role": "Rifler",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_17958",
+    "nick": "huNter-",
+    "name": "Nemanja Kovač",
+    "country": "ba",
+    "role": "Support",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_8171",
+  "team": "PARIVISION",
+  "tag": "PRV",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 73,
+  "honors": "#14 no ranking mundial",
+  "colors": [
+   "#471f51",
+   "#e25ab9"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "dastan",
+   "name": "Dastan Akbayev",
+   "country": "kz",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/8171/image/webp-735594256ca5670882480debe25ffb69.webp",
+  "players": [
+   {
+    "id": "bo3_17799",
+    "nick": "Jame",
+    "name": "Ali Djami",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 79,
+    "igl": 49
+   },
+   {
+    "id": "bo3_49420",
+    "nick": "zweih",
+    "name": "Ivan Gogin",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 76
+   },
+   {
+    "id": "bo3_38327",
+    "nick": "nota",
+    "name": "Emil Moskvitin",
+    "country": "ru",
+    "role": "Entry",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   },
+   {
+    "id": "bo3_36877",
+    "nick": "xiELO",
+    "name": "Vlad Lysov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   },
+   {
+    "id": "bo3_29674",
+    "nick": "BELCHONOKK",
+    "name": "Andrey Yasinskiy",
+    "country": "ru",
+    "role": "Support",
+    "aim": 70,
+    "consistency": 70,
+    "clutch": 68,
+    "awp": 44,
+    "igl": 40
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_324",
+  "team": "9z",
+  "tag": "9Z",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ar",
+  "teamwork": 78,
+  "honors": "#15 no ranking mundial",
+  "colors": [
+   "#39511f",
+   "#5de25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "BIT",
+   "name": "Bruno Lima",
+   "country": "br",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/324/image/webp-847d6324439266b5de80bcb2e23fa38e.webp",
+  "players": [
+   {
+    "id": "bo3_29259",
+    "nick": "luchov",
+    "name": "Luciano Herrera",
+    "country": "ar",
+    "role": "AWP",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
+   },
+   {
+    "id": "bo3_29831",
+    "nick": "dgt",
+    "name": "Franco Manuel Garcia Cabrera",
+    "country": "uy",
+    "role": "IGL",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
+   },
+   {
+    "id": "bo3_32597",
+    "nick": "HUASOPEEK",
+    "name": "Matías Ibañez",
+    "country": "cl",
+    "role": "Entry",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
+   },
+   {
+    "id": "bo3_21430",
+    "nick": "meyern",
+    "name": "Ignacio Meyer",
+    "country": "ar",
+    "role": "Rifler",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_21431",
+    "nick": "max",
+    "name": "Maximiliano Gonzalez",
+    "country": "uy",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_1539",
+  "team": "B8",
+  "tag": "B8",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ua",
+  "teamwork": 75,
+  "honors": "#16 no ranking mundial",
+  "colors": [
+   "#511f50",
+   "#e25a9a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "maddened",
+   "name": "Ivan Iordanidi",
+   "country": "ua",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/1539/image/webp-7f1f7b4413ceab164269700c71c0a186.webp",
+  "players": [
+   {
+    "id": "bo3_32658",
+    "nick": "npl",
+    "name": "Andrii Kukharskyi",
+    "country": "ua",
+    "role": "AWP",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 78,
+    "igl": 48
+   },
+   {
+    "id": "bo3_76009",
+    "nick": "s1zzi",
+    "name": "Daniil Vinnyk",
+    "country": "ua",
+    "role": "IGL",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 76
+   },
+   {
+    "id": "bo3_37946",
+    "nick": "kensizor",
+    "name": "Artem Kapran",
+    "country": "ua",
+    "role": "Entry",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_50469",
+    "nick": "esenthial",
+    "name": "Dmytro Tsvir",
+    "country": "ua",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_29116",
+    "nick": "alex666",
+    "name": "Alexey Yarmoshchuk",
+    "country": "ua",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_7498",
+  "team": "BetBoom",
+  "tag": "BB",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 77,
+  "honors": "#17 no ranking mundial",
+  "colors": [
+   "#1f513d",
+   "#5ad4e2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "Fierce",
+   "name": "Artem Ivanov",
+   "country": "ru",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/7498/image/webp-0ea46f32f16140a97fa47ed839e5bb69.webp",
+  "players": [
+   {
+    "id": "bo3_33349",
+    "nick": "Magnojez",
+    "name": "Kirill Rodnov",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
+   },
+   {
+    "id": "bo3_23853",
+    "nick": "zorte",
+    "name": "Alexandr Zagodyrenko",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_31171",
+    "nick": "FL4MUS",
+    "name": "Timur Marev",
+    "country": "ru",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_29336",
+    "nick": "d1Ledez",
+    "name": "Daniil Kustov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_18002",
+    "nick": "Boombl4",
+    "name": "Kirill Mikhailov",
+    "country": "ru",
+    "role": "Support",
+    "aim": 70,
+    "consistency": 70,
+    "clutch": 68,
+    "awp": 44,
+    "igl": 40
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_22218",
+  "team": "magic",
+  "tag": "MGC",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 78,
+  "honors": "#18 no ranking mundial",
+  "colors": [
+   "#511f36",
+   "#e2615a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "eksiver",
+   "name": "Danila Yurkov",
+   "country": "ru",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/22218/image/webp-239b86baa849b6da4911c1df5e5a3220.webp",
+  "players": [
+   {
+    "id": "bo3_52226",
+    "nick": "tENZY",
+    "name": "Nikita Kochenyuk",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
+   },
+   {
+    "id": "bo3_51081",
+    "nick": "mo0n",
+    "name": "Abdurakhim Issa",
+    "country": "kz",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_31812",
+    "nick": "MaSvAl",
+    "name": "Svyatoslav Masko",
+    "country": "by",
+    "role": "Entry",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
+   },
+   {
+    "id": "bo3_32165",
+    "nick": "AW",
+    "name": "Andrey Anisimov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_46419",
+    "nick": "sFade8",
+    "name": "Vitaliy Marushka",
+    "country": "ua",
+    "role": "Support",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_637",
+  "team": "paiN",
+  "tag": "PAIN",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 74,
+  "honors": "#19 no ranking mundial",
+  "colors": [
+   "#1f5051",
+   "#5a9ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "rikz",
+   "name": "Henrique Waku",
+   "country": "br",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/637/image/bbca8149e4329579128f8ace16cc729c.png",
+  "players": [
+   {
+    "id": "bo3_24830",
+    "nick": "piriajr",
+    "name": "Guilherme Barbosa",
+    "country": "br",
+    "role": "AWP",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 76,
+    "igl": 46
+   },
+   {
+    "id": "bo3_33759",
+    "nick": "snow",
+    "name": "João Vinicius",
+    "country": "br",
+    "role": "IGL",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 75
+   },
+   {
+    "id": "bo3_28000",
+    "nick": "saffee",
+    "name": "Rafael Costa",
+    "country": "br",
+    "role": "Entry",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_21439",
+    "nick": "vsm",
+    "name": "Vinicius Moreira",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_20370",
+    "nick": "biguzera",
+    "name": "Rodrigo Bittencourt",
+    "country": "br",
+    "role": "Support",
+    "aim": 70,
+    "consistency": 70,
+    "clutch": 68,
+    "awp": 44,
+    "igl": 40
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_755",
+  "team": "MIBR",
+  "tag": "MIBR",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 78,
+  "honors": "#20 no ranking mundial",
+  "colors": [
+   "#361f51",
+   "#dd5ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "LETN1",
+   "name": "Nestor Tanić",
+   "country": "rs",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/755/image/webp-84e170577e1c963891b1c54b21fceb83.webp",
+  "players": [
+   {
+    "id": "bo3_31758",
+    "nick": "insani",
+    "name": "Felipe Yuji",
+    "country": "br",
+    "role": "AWP",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 86,
+    "igl": 56
+   },
+   {
+    "id": "bo3_38336",
+    "nick": "kl1m",
+    "name": "Klimentiy Krivosheev",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 58,
+    "igl": 84
+   },
+   {
+    "id": "bo3_31537",
+    "nick": "venomzera",
+    "name": "Carlos Eduardo",
+    "country": "br",
+    "role": "Entry",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_30092",
+    "nick": "LNZ",
+    "name": "Linus Holtäng",
+    "country": "se",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_30732",
+    "nick": "brnz4n",
+    "name": "Breno Poletto",
+    "country": "br",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_3581",
+  "team": "Monte",
+  "tag": "MNTE",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ua",
+  "teamwork": 74,
+  "honors": "#21 no ranking mundial",
+  "colors": [
+   "#1f5123",
+   "#5ae2a9"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "kakafu",
+   "name": "Alexander Szymanczyk",
+   "country": "at",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/3581/image/webp-b166e2cbbc071eafb274a57d53b55353.webp",
+  "players": [
+   {
+    "id": "bo3_26097",
+    "nick": "afro",
+    "name": "Aurélien Drapier",
+    "country": "fr",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_23859",
+    "nick": "Rainwaker",
+    "name": "Alex Petrov",
+    "country": "bg",
+    "role": "IGL",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 78
+   },
+   {
+    "id": "bo3_26144",
+    "nick": "Bymas",
+    "name": "Aurimas Pipiras",
+    "country": "lt",
+    "role": "Entry",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_33841",
+    "nick": "AZUWU",
+    "name": "Oscar Bell",
+    "country": "gb",
+    "role": "Rifler",
+    "aim": 70,
+    "consistency": 70,
+    "clutch": 68,
+    "awp": 44,
+    "igl": 40
+   },
+   {
+    "id": "bo3_29007",
+    "nick": "Gizmy",
+    "name": "Jack von Spreckelsen",
+    "country": "gb",
+    "role": "Support",
+    "aim": 69,
+    "consistency": 69,
+    "clutch": 67,
+    "awp": 43,
+    "igl": 39
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_791",
+  "team": "FaZe",
+  "tag": "FAZE",
+  "era": "2026",
+  "game": "CS2",
+  "country": "us",
+  "teamwork": 76,
+  "honors": "#22 no ranking mundial",
+  "colors": [
+   "#1f2151",
+   "#9a5ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "enkay J",
+   "name": "Niclas Krumhorn",
+   "country": "de",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/791/image/webp-cdbadd061dbbc67c745592dcac6c71eb.webp",
+  "players": [
+   {
+    "id": "bo3_20397",
+    "nick": "frozen",
+    "name": "David Čerňanský",
+    "country": "sk",
+    "role": "AWP",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 80,
+    "igl": 50
+   },
+   {
+    "id": "bo3_17531",
+    "nick": "Twistzz",
+    "name": "Russel Van Dulken",
+    "country": "ca",
+    "role": "IGL",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 77
+   },
+   {
+    "id": "bo3_20372",
+    "nick": "broky",
+    "name": "Helvijs Saukants",
+    "country": "lv",
+    "role": "Entry",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_31227",
+    "nick": "Neityu",
+    "name": "Ryan Aubry",
+    "country": "fr",
+    "role": "Rifler",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_36197",
+    "nick": "jcobbb",
+    "name": "Jakub Pietruszewski",
+    "country": "pl",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_785",
+  "team": "Ninjas in Pyjamas",
+  "tag": "NIP",
+  "era": "2026",
+  "game": "CS2",
+  "country": "se",
+  "teamwork": 76,
+  "honors": "#23 no ranking mundial",
+  "colors": [
+   "#511f31",
+   "#e26f5a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "Xizt",
+   "name": "Richard Landström",
+   "country": "se",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/785/image/webp-d03dcb2f765afe8ad74a619984e5adcd.webp",
+  "players": [
+   {
+    "id": "bo3_18190",
+    "nick": "stavn",
+    "name": "Martin Lund",
+    "country": "dk",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_45252",
+    "nick": "xKacpersky",
+    "name": "Kacper Gabara",
+    "country": "pl",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_45766",
+    "nick": "cairne",
+    "name": "Artem Mushynskyi",
+    "country": "ua",
+    "role": "Entry",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_20483",
+    "nick": "sjuush",
+    "name": "Rasmus Beck",
+    "country": "dk",
+    "role": "Rifler",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_17667",
+    "nick": "Snappi",
+    "name": "Marco Pfeiffer",
+    "country": "dk",
+    "role": "Support",
+    "aim": 68,
+    "consistency": 68,
+    "clutch": 66,
+    "awp": 42,
+    "igl": 38
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_476",
+  "team": "Lynn Vision",
+  "tag": "LVG",
+  "era": "2026",
+  "game": "CS2",
+  "country": "cn",
+  "teamwork": 79,
+  "honors": "#24 no ranking mundial",
+  "colors": [
+   "#511f2a",
+   "#e2815a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "GUM",
+   "name": "Dai Yifei",
+   "country": "cn",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/476/image/webp-dc07b6696fe9fa7c009eea7649fe1985.webp",
+  "players": [
+   {
+    "id": "bo3_31681",
+    "nick": "z4kr",
+    "name": "Sike Zhang",
+    "country": "cn",
+    "role": "AWP",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 86,
+    "igl": 56
+   },
+   {
+    "id": "bo3_26541",
+    "nick": "Starry",
+    "name": "Lizhi Ye",
+    "country": "cn",
+    "role": "IGL",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
+   },
+   {
+    "id": "bo3_24435",
+    "nick": "Westmelon",
+    "name": "Niu Zhe",
+    "country": "cn",
+    "role": "Entry",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
+   },
+   {
+    "id": "bo3_38537",
+    "nick": "EmiliaQAQ",
+    "name": "Tang Junjie",
+    "country": "cn",
+    "role": "Rifler",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_38464",
+    "nick": "C4LLM3SU3",
+    "name": "Qihao Su",
+    "country": "cn",
+    "role": "Support",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_6062",
+  "team": "Wildcard",
+  "tag": "WC",
+  "era": "2026",
+  "game": "CS2",
+  "country": "us",
+  "teamwork": 79,
+  "honors": "#25 no ranking mundial",
+  "colors": [
+   "#1f4c51",
+   "#5a91e2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "splawik",
+   "name": "Łukasz Jahns",
+   "country": "pl",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/6062/image/webp-e27c53242a4d463cf7dc9f32fc597462.webp",
+  "players": [
+   {
+    "id": "bo3_23118",
+    "nick": "mhL",
+    "name": "Miłosz Knasiak",
+    "country": "pl",
+    "role": "AWP",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
+   },
+   {
+    "id": "bo3_25059",
+    "nick": "nEMANHA",
+    "name": "Nemanja Đukić",
+    "country": "rs",
+    "role": "IGL",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
+   },
+   {
+    "id": "bo3_25316",
+    "nick": "HexT",
+    "name": "Jadan Postma",
+    "country": "ca",
+    "role": "Entry",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
+   },
+   {
+    "id": "bo3_25202",
+    "nick": "cxzi",
+    "name": "Danny Strzelczyk",
+    "country": "us",
+    "role": "Rifler",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_25333",
+    "nick": "reck",
+    "name": "Ethan Serrano",
+    "country": "us",
+    "role": "Support",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_696",
+  "team": "3DMAX",
+  "tag": "3DMAX",
+  "era": "2026",
+  "game": "CS2",
+  "country": "fr",
+  "teamwork": 74,
+  "honors": "#26 no ranking mundial",
+  "colors": [
+   "#2f1f51",
+   "#c95ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "wasiNk",
+   "name": "Damien Dufour",
+   "country": "fr",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/696/image/webp-4a4503319e0f5ad215490147afddaf50.webp",
+  "players": [
+   {
+    "id": "bo3_24779",
+    "nick": "misutaaa",
+    "name": "Kévin Rabier",
+    "country": "fr",
+    "role": "AWP",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 78,
+    "igl": 48
+   },
+   {
+    "id": "bo3_20212",
+    "nick": "Lucky",
+    "name": "Lucas Chastang",
+    "country": "fr",
+    "role": "IGL",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 77
+   },
+   {
+    "id": "bo3_18297",
+    "nick": "Maka",
+    "name": "Bryan Canda",
+    "country": "fr",
+    "role": "Entry",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_29580",
+    "nick": "Ex3rcice",
+    "name": "Pierre Bulinge",
+    "country": "fr",
+    "role": "Rifler",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   },
+   {
+    "id": "bo3_31226",
+    "nick": "Graviti",
+    "name": "Filip Brankovic",
+    "country": "fr",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_759",
+  "team": "HEROIC",
+  "tag": "HERO",
+  "era": "2026",
+  "game": "CS2",
+  "country": "dk",
+  "teamwork": 74,
+  "honors": "#27 no ranking mundial",
+  "colors": [
+   "#1f514b",
+   "#5ab0e2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "TOBIZ",
+   "name": "Tobias Theo",
+   "country": "dk",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/759/image/webp-1bfbd1b3d4fd35e75a874b7d032a0353.webp",
+  "players": [
+   {
+    "id": "bo3_29248",
+    "nick": "nilo",
+    "name": "Linus Bergman",
+    "country": "se",
+    "role": "AWP",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 80,
+    "igl": 50
+   },
+   {
+    "id": "bo3_28291",
+    "nick": "xfl0ud",
+    "name": "Yasin Koç",
+    "country": "tr",
+    "role": "IGL",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 76
+   },
+   {
+    "id": "bo3_32578",
+    "nick": "yxngstxr",
+    "name": "Simon Boije",
+    "country": "se",
+    "role": "Entry",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_31194",
+    "nick": "susp",
+    "name": "Tim Ångström",
+    "country": "se",
+    "role": "Rifler",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_35543",
+    "nick": "Chr1zN",
+    "name": "Christoffer Storgaard",
+    "country": "dk",
+    "role": "Support",
+    "aim": 70,
+    "consistency": 70,
+    "clutch": 68,
+    "awp": 44,
+    "igl": 40
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_756",
+  "team": "BIG",
+  "tag": "BIG",
+  "era": "2026",
+  "game": "CS2",
+  "country": "de",
+  "teamwork": 78,
+  "honors": "#28 no ranking mundial",
+  "colors": [
+   "#1f1f51",
+   "#9e5ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "xenn",
+   "name": "Sebastian Hoch",
+   "country": "de",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/756/image/webp-4ced024b49ca43268e30797f61272016.webp",
+  "players": [
+   {
+    "id": "bo3_18290",
+    "nick": "blameF",
+    "name": "Benjamin Bremer",
+    "country": "dk",
+    "role": "AWP",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 86,
+    "igl": 56
+   },
+   {
+    "id": "bo3_35431",
+    "nick": "gr1ks",
+    "name": "Gleb Gazin",
+    "country": "by",
+    "role": "IGL",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
+   },
+   {
+    "id": "bo3_25135",
+    "nick": "JDC",
+    "name": "Jon de Castro",
+    "country": "de",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_18189",
+    "nick": "faveN",
+    "name": "Josef Baumann",
+    "country": "de",
+    "role": "Rifler",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_17683",
+    "nick": "tabseN",
+    "name": "Johannes Wodarz",
+    "country": "de",
+    "role": "Support",
+    "aim": 69,
+    "consistency": 69,
+    "clutch": 67,
+    "awp": 43,
+    "igl": 39
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_8221",
+  "team": "Alliance",
+  "tag": "ALL",
+  "era": "2026",
+  "game": "CS2",
+  "country": "se",
+  "teamwork": 77,
+  "honors": "#29 no ranking mundial",
+  "colors": [
+   "#401f51",
+   "#e25ace"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "Hawk",
+   "name": "Simon Vävinggren",
+   "country": "se",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/8221/image/webp-8680a863eafafe6b38906048aedc0145.webp",
+  "players": [
+   {
+    "id": "bo3_30143",
+    "nick": "eraa",
+    "name": "Sean Knutsson",
+    "country": "se",
+    "role": "AWP",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
+   },
+   {
+    "id": "bo3_40459",
+    "nick": "MaiL09",
+    "name": "Liam Tügel",
+    "country": "se",
+    "role": "IGL",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
+   },
+   {
+    "id": "bo3_38205",
+    "nick": "Avid",
+    "name": "Arvid Åberg",
+    "country": "se",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_17546",
+    "nick": "twist",
+    "name": "Simon Eliasson",
+    "country": "se",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_38025",
+    "nick": "upE",
+    "name": "Markus Johansson",
+    "country": "se",
+    "role": "Support",
+    "aim": 70,
+    "consistency": 70,
+    "clutch": 68,
+    "awp": 44,
+    "igl": 40
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_21396",
+  "team": "Gentle Mates",
+  "tag": "M8",
+  "era": "2026",
+  "game": "CS2",
+  "country": "es",
+  "teamwork": 78,
+  "honors": "#30 no ranking mundial",
+  "colors": [
+   "#514a1f",
+   "#b2e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "deLonge",
+   "name": "Eloy Suárez",
+   "country": "es",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/21396/image/webp-d9424ab9c7ee3b7c0a98b90867182af1.webp",
+  "players": [
+   {
+    "id": "bo3_32551",
+    "nick": "MartinezSa",
+    "name": "Antonio Martinez Sánchez",
+    "country": "es",
+    "role": "AWP",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
+   },
+   {
+    "id": "bo3_25097",
+    "nick": "sausol",
+    "name": "Pere Solsona Saumell",
+    "country": "es",
+    "role": "IGL",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 78
+   },
+   {
+    "id": "bo3_20595",
+    "nick": "mopoz",
+    "name": "Alejandro Fernández-Quejo Cano",
+    "country": "es",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_20596",
+    "nick": "alex",
+    "name": "Alejandro Masanet",
+    "country": "es",
+    "role": "Rifler",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_24619",
+    "nick": "dav1g",
+    "name": "David Granado Bermudo",
+    "country": "es",
+    "role": "Support",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_2720",
+  "team": "HOTU",
+  "tag": "HOTU",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 78,
+  "honors": "#31 no ranking mundial",
+  "colors": [
+   "#1f4151",
+   "#5a71e2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "mou",
+   "name": "Rustem Telepov",
+   "country": "kz",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/2720/image/f958862f2e46f042058744c797bd9b8c.png",
+  "players": [
+   {
+    "id": "bo3_35773",
+    "nick": "dwushka",
+    "name": "Aleksandr Pakhnevich",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_31632",
+    "nick": "mizu",
+    "name": "Dmitry Kondratev",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
+   },
+   {
+    "id": "bo3_18287",
+    "nick": "n0rb3r7",
+    "name": "David Danielyan",
+    "country": "ru",
+    "role": "Entry",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
+   },
+   {
+    "id": "bo3_51158",
+    "nick": "frontales",
+    "name": "Kim Argunov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_28415",
+    "nick": "kade0",
+    "name": "Aydos Khairzhan",
+    "country": "kz",
+    "role": "Support",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_757",
+  "team": "TYLOO",
+  "tag": "TYLOO",
+  "era": "2026",
+  "game": "CS2",
+  "country": "cn",
+  "teamwork": 78,
+  "honors": "#32 no ranking mundial",
+  "colors": [
+   "#51461f",
+   "#bbe25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "zhokiNg",
+   "name": "Weijie Zhong",
+   "country": "cn",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/757/image/17873415da0f03df35299283b43408d7.png",
+  "players": [
+   {
+    "id": "bo3_29592",
+    "nick": "Jee",
+    "name": "Dongkai Ji",
+    "country": "cn",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_24084",
+    "nick": "JamYoung",
+    "name": "Yang Yi",
+    "country": "cn",
+    "role": "IGL",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
+   },
+   {
+    "id": "bo3_34808",
+    "nick": "Moseyuh",
+    "name": "QianHao Chen",
+    "country": "cn",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_38270",
+    "nick": "Zero",
+    "name": "Jingshen Su",
+    "country": "cn",
+    "role": "Rifler",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_32656",
+    "nick": "Mercury",
+    "name": "Jingxiang Wang",
+    "country": "cn",
+    "role": "Support",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_7430",
+  "team": "M80",
+  "tag": "M80",
+  "era": "2026",
+  "game": "CS2",
+  "country": "us",
+  "teamwork": 76,
+  "honors": "#33 no ranking mundial",
+  "colors": [
+   "#1f5151",
+   "#5a9ce2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "dephh",
+   "name": "Rory Jackson",
+   "country": "gb",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/7430/image/webp-962834dcfa8bef22f2c4cbdbf777bfbf.webp",
+  "players": [
+   {
+    "id": "bo3_26372",
+    "nick": "lake",
+    "name": "Mason Sanderson",
+    "country": "us",
+    "role": "AWP",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 79,
+    "igl": 49
+   },
+   {
+    "id": "bo3_25137",
+    "nick": "slaxz",
+    "name": "Fritz Dietrich",
+    "country": "de",
+    "role": "IGL",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
+   },
+   {
+    "id": "bo3_30268",
+    "nick": "Swisher",
+    "name": "Michael Schmid",
+    "country": "us",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_35616",
+    "nick": "JBa",
+    "name": "Josh Barutt",
+    "country": "us",
+    "role": "Rifler",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_28461",
+    "nick": "s1n",
+    "name": "Elias Stein",
+    "country": "de",
+    "role": "Support",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_200",
+  "team": "SINNERS",
+  "tag": "SIN",
+  "era": "2026",
+  "game": "CS2",
+  "country": "cz",
+  "teamwork": 76,
+  "honors": "#34 no ranking mundial",
+  "colors": [
+   "#4e511f",
+   "#95e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "bfull",
+   "name": "Jakub Kokoška",
+   "country": "cz",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/200/image/webp-c0636f3fb514c6b3c7dd6a0ddf63be63.webp",
+  "players": [
+   {
+    "id": "bo3_31492",
+    "nick": "MoDo",
+    "name": "Mădălin-Andre Mirea",
+    "country": "ro",
+    "role": "AWP",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 80,
+    "igl": 50
+   },
+   {
+    "id": "bo3_40036",
+    "nick": "stressarN",
+    "name": "Jordan Manevski",
+    "country": "mk",
+    "role": "IGL",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 78
+   },
+   {
+    "id": "bo3_39820",
+    "nick": "kisserek",
+    "name": "Kamil Banak",
+    "country": "pl",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_25109",
+    "nick": "SHOCK",
+    "name": "Max Kvapil",
+    "country": "cz",
+    "role": "Rifler",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_25111",
+    "nick": "beastik",
+    "name": "Sebastian Dano",
+    "country": "cz",
+    "role": "Support",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_21388",
+  "team": "Nemesis",
+  "tag": "NEME",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 77,
+  "honors": "#35 no ranking mundial",
+  "colors": [
+   "#42511f",
+   "#75e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "NMV",
+   "name": "Maksim Naumov",
+   "country": "ru",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/21388/image/webp-160641ad1ee216616765928a5ebc6a76.webp",
+  "players": [
+   {
+    "id": "bo3_31325",
+    "nick": "r3salt",
+    "name": "Evgeny Frolov",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_51865",
+    "nick": "mag1k3Y",
+    "name": "Alemkhan Moldakamalov",
+    "country": "kz",
+    "role": "IGL",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 77
+   },
+   {
+    "id": "bo3_31779",
+    "nick": "Sdaim",
+    "name": "Daniil Tupov",
+    "country": "ru",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_38328",
+    "nick": "tex1y",
+    "name": "Philipp Moskvitin",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_25467",
+    "nick": "SELLTER",
+    "name": "Ivan Miroshnikov",
+    "country": "ru",
+    "role": "Support",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_3254",
+  "team": "EYEBALLERS",
+  "tag": "EYE",
+  "era": "2026",
+  "game": "CS2",
+  "country": "se",
+  "teamwork": 74,
+  "honors": "#36 no ranking mundial",
+  "colors": [
+   "#514c1f",
+   "#ace25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "pita",
+   "name": "Faruk Pita",
+   "country": "ba",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/3254/image/webp-0cb971f64329d464365ebe3bdeaacea9.webp",
+  "players": [
+   {
+    "id": "bo3_31156",
+    "nick": "maxster",
+    "name": "Max Jansson",
+    "country": "se",
+    "role": "AWP",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 77,
+    "igl": 47
+   },
+   {
+    "id": "bo3_31147",
+    "nick": "bobeksde",
+    "name": "Jonatan Persson",
+    "country": "se",
+    "role": "IGL",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 76
+   },
+   {
+    "id": "bo3_32517",
+    "nick": "Ro1f",
+    "name": "Kalle Johansson",
+    "country": "se",
+    "role": "Entry",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_51492",
+    "nick": "dex",
+    "name": "Sebastian Samuelsson",
+    "country": "se",
+    "role": "Rifler",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_17561",
+    "nick": "JW",
+    "name": "Jesper Wecksell",
+    "country": "se",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_22184",
+  "team": "FOKUS",
+  "tag": "FOKU",
+  "era": "2026",
+  "game": "CS2",
+  "country": "se",
+  "teamwork": 76,
+  "honors": "#37 no ranking mundial",
+  "colors": [
+   "#3a1f51",
+   "#e25add"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "kuben",
+   "name": "Jakub Gurczyński",
+   "country": "pl",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/22184/image/webp-15e337fe91fd38030504ade10468c088.webp",
+  "players": [
+   {
+    "id": "bo3_50678",
+    "nick": "Jorko",
+    "name": "Georgi Mitev",
+    "country": "bg",
+    "role": "AWP",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 79,
+    "igl": 49
+   },
+   {
+    "id": "bo3_40044",
+    "nick": "Matheos",
+    "name": "Mateo Prišlin",
+    "country": "hr",
+    "role": "IGL",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
+   },
+   {
+    "id": "bo3_28964",
+    "nick": "Banjo",
+    "name": "Matias Kivistö",
+    "country": "fi",
+    "role": "Entry",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_28437",
+    "nick": "volt",
+    "name": "Sebastian Malos",
+    "country": "ro",
+    "role": "Rifler",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_30144",
+    "nick": "ztr",
+    "name": "Erik Gustafsson",
+    "country": "se",
+    "role": "Support",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_747",
+  "team": "Sharks",
+  "tag": "SHK",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 76,
+  "honors": "#38 no ranking mundial",
+  "colors": [
+   "#1f2751",
+   "#875ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "coachi",
+   "name": "Helder Sancho",
+   "country": "pt",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/747/image/webp-a258062d7c80b98f691526a3c6c11ad2.webp",
+  "players": [
+   {
+    "id": "bo3_30971",
+    "nick": "Koala",
+    "name": "Fahad Khaled Alkadyan",
+    "country": "br",
+    "role": "AWP",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 79,
+    "igl": 49
+   },
+   {
+    "id": "bo3_40378",
+    "nick": "doc",
+    "name": "Danilo Barros",
+    "country": "br",
+    "role": "IGL",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 78
+   },
+   {
+    "id": "bo3_31510",
+    "nick": "maxxkor",
+    "name": "Maximo Cortina",
+    "country": "ar",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_34369",
+    "nick": "rdnzao",
+    "name": "Daniel Monteiro",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_28821",
+    "nick": "Gafolo",
+    "name": "Victor Andrade",
+    "country": "br",
+    "role": "Support",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_18539",
+  "team": "Nuclear TigeRES",
+  "tag": "NUCL",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 77,
+  "honors": "#39 no ranking mundial",
+  "colors": [
+   "#1f3751",
+   "#5d5ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "Polt",
+   "name": "Vadim Tsyrov",
+   "country": "ru",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/18539/image/webp-cff3a03de825c20f6acac6cbea304e36.webp",
+  "players": [
+   {
+    "id": "bo3_68292",
+    "nick": "flouzer",
+    "name": "Ilya Selifonov",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
+   },
+   {
+    "id": "bo3_39388",
+    "nick": "z1k4",
+    "name": "Timur Askhadulin",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 78
+   },
+   {
+    "id": "bo3_40008",
+    "nick": "m1QUSE",
+    "name": "Denis Karpovich",
+    "country": "by",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_76716",
+    "nick": "ayuki",
+    "name": "Egor Ershov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_73097",
+    "nick": "senka",
+    "name": "Arseniy Kozlovsky",
+    "country": "by",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_655",
+  "team": "Nemiga",
+  "tag": "NEMI",
+  "era": "2026",
+  "game": "CS2",
+  "country": "by",
+  "teamwork": 77,
+  "honors": "#40 no ranking mundial",
+  "colors": [
+   "#514b1f",
+   "#aee25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "boX",
+   "name": "Anton Burko",
+   "country": "by",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/655/image/webp-998a59d1bbae3fd5e32b1e46a3f6204e.webp",
+  "players": [
+   {
+    "id": "bo3_39890",
+    "nick": "SYPH0",
+    "name": "Daniel Ageyev",
+    "country": "kz",
+    "role": "AWP",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
+   },
+   {
+    "id": "bo3_34801",
+    "nick": "khaN",
+    "name": "Beksultan Ospan",
+    "country": "kz",
+    "role": "IGL",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
+   },
+   {
+    "id": "bo3_26545",
+    "nick": "KaiR0N-",
+    "name": "Aleksandr Anashkin",
+    "country": "ru",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_35463",
+    "nick": "sowalio",
+    "name": "Maxim Beketov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_29067",
+    "nick": "1eeR",
+    "name": "Aleksandr Nahornyj",
+    "country": "by",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_720",
+  "team": "Virtus.pro",
+  "tag": "VP",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 77,
+  "honors": "#41 no ranking mundial",
+  "colors": [
+   "#24511f",
+   "#5ae291"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "ProbLeM",
+   "name": "Dmitriy Martinov",
+   "country": "ru",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/720/image/webp-7525554b927e72c3a4a5bea3ced72310.webp",
+  "players": [
+   {
+    "id": "bo3_17699",
+    "nick": "mir",
+    "name": "Nikolay Bityukov",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
+   },
+   {
+    "id": "bo3_49050",
+    "nick": "b1st",
+    "name": "Vladimir Krasikov",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 78
+   },
+   {
+    "id": "bo3_68534",
+    "nick": "AquaRS",
+    "name": "Alexander Kovalev",
+    "country": "ru",
+    "role": "Entry",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_74510",
+    "nick": "F0R3VER",
+    "name": "Dias Kutubay",
+    "country": "kz",
+    "role": "Rifler",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_68537",
+    "nick": "tO0RO",
+    "name": "Vadim Arkov",
+    "country": "ru",
+    "role": "Support",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_10718",
+  "team": "K27",
+  "tag": "K27",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ru",
+  "teamwork": 75,
+  "honors": "#42 no ranking mundial",
+  "colors": [
+   "#1f1f51",
+   "#9e5ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "balblna",
+   "name": "Gregory Oleinick",
+   "country": "ru",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/10718/image/webp-826c6ac76b1a275d3ee7294304fa3ad2.webp",
+  "players": [
+   {
+    "id": "bo3_35943",
+    "nick": "XeeDo",
+    "name": "Aleksey Mikulich",
+    "country": "by",
+    "role": "AWP",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 80,
+    "igl": 50
+   },
+   {
+    "id": "bo3_50733",
+    "nick": "qw1nk1",
+    "name": "Daniil Kabilov",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 76
+   },
+   {
+    "id": "bo3_49421",
+    "nick": "kashl1d",
+    "name": "Danila Dronov",
+    "country": "ru",
+    "role": "Entry",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_29283",
+    "nick": "X5G7V",
+    "name": "Daniil Maryshev",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_28376",
+    "nick": "fame",
+    "name": "Petr Bolyshev",
+    "country": "ru",
+    "role": "Support",
+    "aim": 70,
+    "consistency": 70,
+    "clutch": 68,
+    "awp": 44,
+    "igl": 40
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_19186",
+  "team": "Inner Circle",
+  "tag": "ICE",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ua",
+  "teamwork": 74,
+  "honors": "#43 no ranking mundial",
+  "colors": [
+   "#46511f",
+   "#7ee25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "jR",
+   "name": "Dmitriy Chervak",
+   "country": "ua",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/19186/image/webp-6aedbd6f8fdc86d26052f90540031e1e.webp",
+  "players": [
+   {
+    "id": "bo3_40536",
+    "nick": "Dawy",
+    "name": "David Bibik",
+    "country": "ua",
+    "role": "AWP",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 79,
+    "igl": 49
+   },
+   {
+    "id": "bo3_28431",
+    "nick": "headtr1ck",
+    "name": "Daniil Valitov",
+    "country": "ua",
+    "role": "IGL",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 77
+   },
+   {
+    "id": "bo3_37979",
+    "nick": "zeRRoFIX",
+    "name": "Eduard Petrovskyi",
+    "country": "ua",
+    "role": "Entry",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_29943",
+    "nick": "cptkurtka023",
+    "name": "Arsenly Derevinskly",
+    "country": "ua",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_35117",
+    "nick": "onic",
+    "name": "Viktor Babii",
+    "country": "ua",
+    "role": "Support",
+    "aim": 69,
+    "consistency": 69,
+    "clutch": 67,
+    "awp": 43,
+    "igl": 39
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_3869",
+  "team": "JiJieHao",
+  "tag": "JIJI",
+  "era": "2026",
+  "game": "CS2",
+  "country": "cn",
+  "teamwork": 79,
+  "honors": "#44 no ranking mundial",
+  "colors": [
+   "#4f511f",
+   "#97e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "mithR",
+   "name": "Torbjørn Nyborg",
+   "country": "dk",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/3869/image/webp-812abeff13fafa120347d9d5de3770dd.webp",
+  "players": [
+   {
+    "id": "bo3_31204",
+    "nick": "m1N1",
+    "name": "Hussein Hijazi",
+    "country": "lb",
+    "role": "AWP",
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 84,
+    "igl": 54
+   },
+   {
+    "id": "bo3_29989",
+    "nick": "CacaNito",
+    "name": "Aleksandar Kjulukoski",
+    "country": "mk",
+    "role": "IGL",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
+   },
+   {
+    "id": "bo3_36613",
+    "nick": "0SAMAS",
+    "name": "Osama Orabi",
+    "country": "ps",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_23229",
+    "nick": "sinnopsyy",
+    "name": "Dionis Budeci",
+    "country": "xk",
+    "role": "Rifler",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_24761",
+    "nick": "Bibu",
+    "name": "Bebu Aadil",
+    "country": "iq",
+    "role": "Support",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_790",
+  "team": "Liquid",
+  "tag": "TL",
+  "era": "2026",
+  "game": "CS2",
+  "country": "us",
+  "teamwork": 73,
+  "honors": "#45 no ranking mundial",
+  "colors": [
+   "#511f44",
+   "#e25a7a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "flashie",
+   "name": "Viktor Tamás Bea",
+   "country": "hu",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/790/image/webp-01cca8d35079cb4b21bc25268ac75bae.webp",
+  "players": [
+   {
+    "id": "bo3_17585",
+    "nick": "NAF",
+    "name": "Keith Markovic",
+    "country": "ca",
+    "role": "AWP",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 76,
+    "igl": 46
+   },
+   {
+    "id": "bo3_21433",
+    "nick": "malbsMd",
+    "name": "Mario Samayoa",
+    "country": "gt",
+    "role": "IGL",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 75
+   },
+   {
+    "id": "bo3_17528",
+    "nick": "EliGE",
+    "name": "Jonathan Jablonowski",
+    "country": "us",
+    "role": "Entry",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   },
+   {
+    "id": "bo3_33654",
+    "nick": "ultimate",
+    "name": "Roland Tomkowiak",
+    "country": "pl",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_28060",
+    "nick": "siuhy",
+    "name": "Kamil Szkaradek",
+    "country": "pl",
+    "role": "Support",
+    "aim": 66,
+    "consistency": 66,
+    "clutch": 64,
+    "awp": 40,
+    "igl": 36
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_23286",
+  "team": "Walczaki",
+  "tag": "WAL",
+  "era": "2026",
+  "game": "CS2",
+  "country": "pl",
+  "teamwork": 76,
+  "honors": "#46 no ranking mundial",
+  "colors": [
+   "#1f3551",
+   "#635ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "coach",
+   "name": "Coach",
+   "country": "pl",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/23286/image/webp-30a2dfa3f15fb8c3bdb9d6ba09a2e390.webp",
+  "players": [
+   {
+    "id": "bo3_25658",
+    "nick": "reiko",
+    "name": "Kamil Cegiełko",
+    "country": "pl",
+    "role": "AWP",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 79,
+    "igl": 49
+   },
+   {
+    "id": "bo3_29514",
+    "nick": "SaMey",
+    "name": "Dawid Stańczak",
+    "country": "pl",
+    "role": "IGL",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 77
+   },
+   {
+    "id": "bo3_29407",
+    "nick": "olimp",
+    "name": "Patryk Woźniak",
+    "country": "pl",
+    "role": "Entry",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_33346",
+    "nick": "bajmi",
+    "name": "Wojciech Strzelczyk",
+    "country": "pl",
+    "role": "Rifler",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_36211",
+    "nick": "moonwalk",
+    "name": "Bartek Mikołajczyk",
+    "country": "pl",
+    "role": "Support",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_464",
+  "team": "100 Thieves",
+  "tag": "100T",
+  "era": "2026",
+  "game": "CS2",
+  "country": "us",
+  "teamwork": 79,
+  "honors": "#47 no ranking mundial",
+  "colors": [
+   "#451f51",
+   "#e25ac0"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "gla1ve",
+   "name": "Lukas Rossander",
+   "country": "dk",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/464/image/webp-bd818cfc7eab50ef00569e5874b817fe.webp",
+  "players": [
+   {
+    "id": "bo3_17507",
+    "nick": "dev1ce",
+    "name": "Nicolai Reedtz",
+    "country": "dk",
+    "role": "AWP",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
+   },
+   {
+    "id": "bo3_45474",
+    "nick": "poiii",
+    "name": "Alex Nyholm Sundgren",
+    "country": "se",
+    "role": "IGL",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
+   },
+   {
+    "id": "bo3_29093",
+    "nick": "Ag1l",
+    "name": "André Gil",
+    "country": "pt",
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
+   },
+   {
+    "id": "bo3_35926",
+    "nick": "sirah",
+    "name": "William Kjærsgaard",
+    "country": "dk",
+    "role": "Rifler",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
+   },
+   {
+    "id": "bo3_17523",
+    "nick": "rain",
+    "name": "Håvard Nygaard",
+    "country": "no",
+    "role": "Support",
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_1024",
+  "team": "INFINITE",
+  "tag": "INFI",
+  "era": "2026",
+  "game": "CS2",
+  "country": "ro",
+  "teamwork": 77,
+  "honors": "#48 no ranking mundial",
+  "colors": [
+   "#3d511f",
+   "#68e25a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "Tionix",
+   "name": "Samy von Gehlen",
+   "country": "de",
+   "rating": 72,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/1024/image/webp-59520b504d28179a76fbe8e7e99310bf.webp",
+  "players": [
+   {
+    "id": "bo3_30810",
+    "nick": "sl3nd",
+    "name": "Henrich Hevesi",
+    "country": "hu",
+    "role": "AWP",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 86,
+    "igl": 56
+   },
+   {
+    "id": "bo3_29838",
+    "nick": "Dytor",
+    "name": "Martin Handl",
+    "country": "cz",
+    "role": "IGL",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 77
+   },
+   {
+    "id": "bo3_20389",
+    "nick": "kreaz",
+    "name": "Rasmus Johansson",
+    "country": "se",
+    "role": "Entry",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
+   },
+   {
+    "id": "bo3_29584",
+    "nick": "Blytz",
+    "name": "Raul Gligor",
+    "country": "ro",
+    "role": "Rifler",
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
+   },
+   {
+    "id": "bo3_29775",
+    "nick": "mhN1",
+    "name": "Mihnea Gheață",
+    "country": "ro",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ }
+]

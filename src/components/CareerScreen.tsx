@@ -19,7 +19,6 @@ import { Scoreboard } from './Scoreboard';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 import { fileToDataUrl } from '../state/crm';
-import { freeAgentTeam } from '../data/free-agents';
 import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
 
 const SAVE_KEY = 'rtm-career-v1';
@@ -242,8 +241,8 @@ function seasonTopPlayers(pool: TeamSeason[], split: number, n: number) {
 
 // janela de transferências: feed determinístico de movimentações por split
 interface TransferItem { nick: string; cc: string; from: string; to: string; fee: number; }
-function transferFeed(split: number, teams: TeamSeason[], fa: TeamSeason): TransferItem[] {
-  const players = [...teams, fa].flatMap((t) => t.players.map((p) => ({ p, tag: t.tag, id: t.id })));
+function transferFeed(split: number, teams: TeamSeason[]): TransferItem[] {
+  const players = teams.flatMap((t) => t.players.map((p) => ({ p, tag: t.tag, id: t.id })));
   const dests = teams.filter((t) => t.id !== 'user');
   const out: TransferItem[] = [];
   const seen = new Set<string>();
@@ -376,23 +375,16 @@ export function CareerScreen({ dataset, onExit }: Props) {
     ].filter((c) => c.teams.length >= 5);
   }, [currentEra, brTeams]);
 
-  // agentes livres: amplia bastante o mercado (jogadores sem time atual)
-  const faTeam = useMemo(() => freeAgentTeam(), []);
-
-  // mercado: jogadores da era atual + agentes livres, com preço de mercado
+  // mercado: jogadores reais dos elencos atuais (CS2), com preço de mercado
   const market = useMemo(
     () =>
-      [...currentEra, faTeam]
+      currentEra
         .flatMap((t) => t.players.map((p) => ({ player: p, from: t, price: playerValue(p) })))
         .sort((a, b) => a.price - b.price),
-    [currentEra, faTeam],
+    [currentEra],
   );
 
   const findSigning = (s: Signing): { player: Player; from: TeamSeason } | null => {
-    if (s.fromId === faTeam.id) {
-      const player = faTeam.players.find((p) => p.id === s.playerId);
-      return player ? { player, from: faTeam } : null;
-    }
     const from = dataset.find((t) => t.id === s.fromId);
     const player = from?.players.find((p) => p.id === s.playerId);
     return from && player ? { player, from } : null;
@@ -778,7 +770,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
     const mySquadIdsSE = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
     const myStar = seStats.find((s) => mySquadIdsSE.has(s.id));
     const seasonTop3 = seasonTopPlayers(currentEra, save.split, 3);
-    const nextFeed = transferFeed(save.split, currentEra, faTeam);
+    const nextFeed = transferFeed(save.split, currentEra);
     const spots = save.circuit?.spots ?? MAJOR_SPOTS;
     // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
     const poRank = poUserRank(save.playoff);
@@ -2056,7 +2048,7 @@ function MarketScreen({
 
           {/* janela de transferências: o que os outros times andam fazendo */}
           <div className="muted small section-label">Janela de transferências · o que rolou no mercado</div>
-          <TransferFeed items={transferFeed(save.split, coaches, freeAgentTeam())} />
+          <TransferFeed items={transferFeed(save.split, coaches)} />
 
           <div className="center" style={{ marginTop: 16 }}>
             <button className="btn gold big" disabled={!ready}
