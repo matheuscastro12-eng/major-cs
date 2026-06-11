@@ -60,7 +60,7 @@ export default async function handler(
       return;
     }
     try {
-      const lobby = await sql`SELECT code, mode, host, status, seed, pool, created_at, COALESCE(locked, false) AS locked FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT code, mode, host, status, seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -109,6 +109,7 @@ export default async function handler(
       const seed = Math.floor(Math.random() * 2147483647);
       await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
       await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
       // higieniza salas abandonadas (TTL 6h) para não acumular lixo no banco
       await sql`DELETE FROM lobbies WHERE updated_at < now() - interval '6 hours'`;
       // tenta alguns códigos até achar um livre
@@ -219,6 +220,26 @@ export default async function handler(
       }
       await sql`DELETE FROM lobby_players WHERE code = ${code} AND lower(nick) = ${target.toLowerCase()}`;
       res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (action === 'nextSeason') {
+      // host reinicia a sala numa nova temporada: novo sorteio (transferências),
+      // todos draftam de novo e disputam outro Major. Mantém os mesmos jogadores.
+      const lobby = await sql`SELECT host, status FROM lobbies WHERE code = ${code}`;
+      if (lobby.length === 0 || lobby[0].host !== nick) {
+        res.status(403).json({ error: 'só o host inicia a próxima temporada' });
+        return;
+      }
+      if (lobby[0].status !== 'done') {
+        res.status(409).json({ error: 'a temporada ainda não acabou' });
+        return;
+      }
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
+      const newSeed = Math.floor(Math.random() * 2147483647);
+      await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, season = COALESCE(season, 1) + 1, updated_at = now() WHERE code = ${code}`;
+      await sql`UPDATE lobby_players SET picks = '[]'::jsonb, coach_pick = '', done = false WHERE code = ${code}`;
+      res.status(200).json({ ok: true, seed: newSeed });
       return;
     }
 

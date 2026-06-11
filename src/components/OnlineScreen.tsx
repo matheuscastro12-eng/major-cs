@@ -33,9 +33,9 @@ const POLL_MS = 2200;
 
 // textos das salas abertas, por idioma (sem mexer no i18n global)
 const ONLINE_LOCAL = {
-  pt: { publicRoom: 'Sala aberta (qualquer um pode entrar)', openRooms: 'Salas abertas', noRooms: 'Nenhuma sala aberta agora. Crie a sua!', refresh: 'Atualizar', enter: 'Entrar', yourTeam: 'Seu time', emptySlot: 'vazio', rolesLabel: 'Funções', roleEntry: 'Entry', lock: '🔒 Trancar sala', unlock: '🔓 Destrancar sala', locked: 'Sala trancada', kick: 'Expulsar', kicked: 'Você foi removido da sala pelo host.' },
-  en: { publicRoom: 'Open room (anyone can join)', openRooms: 'Open rooms', noRooms: 'No open rooms right now. Create yours!', refresh: 'Refresh', enter: 'Join', yourTeam: 'Your team', emptySlot: 'empty', rolesLabel: 'Roles', roleEntry: 'Entry', lock: '🔒 Lock room', unlock: '🔓 Unlock room', locked: 'Room locked', kick: 'Kick', kicked: 'You were removed from the room by the host.' },
-  es: { publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu equipo', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.' },
+  pt: { publicRoom: 'Sala aberta (qualquer um pode entrar)', openRooms: 'Salas abertas', noRooms: 'Nenhuma sala aberta agora. Crie a sua!', refresh: 'Atualizar', enter: 'Entrar', yourTeam: 'Seu time', emptySlot: 'vazio', rolesLabel: 'Funções', roleEntry: 'Entry', lock: '🔒 Trancar sala', unlock: '🔓 Destrancar sala', locked: 'Sala trancada', kick: 'Expulsar', kicked: 'Você foi removido da sala pelo host.', nextSeason: '🔁 Próxima temporada (novo draft)', season: 'Temporada', seasonWait: 'Esperando o host iniciar a próxima temporada…' },
+  en: { publicRoom: 'Open room (anyone can join)', openRooms: 'Open rooms', noRooms: 'No open rooms right now. Create yours!', refresh: 'Refresh', enter: 'Join', yourTeam: 'Your team', emptySlot: 'empty', rolesLabel: 'Roles', roleEntry: 'Entry', lock: '🔒 Lock room', unlock: '🔓 Unlock room', locked: 'Room locked', kick: 'Kick', kicked: 'You were removed from the room by the host.', nextSeason: '🔁 Next season (new draft)', season: 'Season', seasonWait: 'Waiting for the host to start the next season…' },
+  es: { publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu equipo', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.', nextSeason: '🔁 Próxima temporada (nuevo draft)', season: 'Temporada', seasonWait: 'Esperando que el host inicie la próxima temporada…' },
 };
 
 export function OnlineScreen({ onBack }: Props) {
@@ -65,8 +65,12 @@ export function OnlineScreen({ onBack }: Props) {
   // sem spoiler do campeão); persiste por sala para sobreviver a F5
   const [revealed, setRevealed] = useState(0);
   const pollRef = useRef<number | undefined>(undefined);
+  const seedRef = useRef<number | null>(null); // detecta nova temporada (seed muda)
+  const statusRef = useRef<string | null>(null);
 
-  const revealKey = `rtm-online-reveal-${code}`;
+  // reveal por temporada: a chave inclui o seed, então cada Major tem o seu
+  const seasonSeed = state?.lobby.seed ?? 0;
+  const revealKey = `rtm-online-reveal-${code}-${seasonSeed}`;
   useEffect(() => {
     if (!code) return;
     try {
@@ -75,7 +79,7 @@ export function OnlineScreen({ onBack }: Props) {
       /* sem storage */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  }, [code, seasonSeed]);
   const advanceReveal = (n: number) => {
     setRevealed(n);
     setSelMatch(null);
@@ -100,6 +104,22 @@ export function OnlineScreen({ onBack }: Props) {
     if (!code) return;
     const s = await fetchLobby(code);
     if (!s) return;
+    const prevSeed = seedRef.current;
+    const prevStatus = statusRef.current;
+    // nova temporada: o host gerou um novo seed -> zera o draft local e recomeça
+    if (prevSeed !== null && prevSeed !== s.lobby.seed) {
+      setMyPicks([]);
+      setMyDone(false);
+      setCoachPick('');
+      setRevealed(0);
+      setSelMatch(null);
+    }
+    seedRef.current = s.lobby.seed;
+    statusRef.current = s.lobby.status;
+    // com o Major encerrado o estado é imutável: se nada mudou, NÃO re-seta o
+    // state (evita re-simular o Major inteiro a cada poll). Mas segue detectando
+    // a transição pra próxima temporada (seed/status diferentes).
+    if (s.lobby.status === 'done' && prevSeed === s.lobby.seed && prevStatus === 'done') return;
     setState(s);
     const me = s.players.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
     if (!me) {
@@ -126,10 +146,10 @@ export function OnlineScreen({ onBack }: Props) {
   useEffect(() => {
     if (!code) return;
     refresh();
-    // resultado é imutável depois de 'done': parar o polling evita re-simular
-    // o Major inteiro (~40 séries) a cada 2.2s com a tela de resultado aberta
-    if (lobbyDone) return;
-    pollRef.current = window.setInterval(refresh, POLL_MS);
+    // depois de 'done' o resultado é imutável (refresh não re-seta o state, então
+    // não re-simula), mas seguimos com um poll lento pra detectar quando o host
+    // inicia a próxima temporada.
+    pollRef.current = window.setInterval(refresh, lobbyDone ? 4000 : POLL_MS);
     return () => window.clearInterval(pollRef.current);
   }, [code, refresh, lobbyDone]);
 
@@ -204,6 +224,15 @@ export function OnlineScreen({ onBack }: Props) {
     if (busy) return;
     setBusy(true);
     await lobbyApi({ action: 'kick', nick: nick.trim(), code, target }).catch(() => {});
+    setBusy(false);
+    refresh();
+  };
+
+  // host inicia a próxima temporada: novo sorteio (transferências) e novo Major
+  const nextSeason = async () => {
+    if (busy) return;
+    setBusy(true);
+    await lobbyApi({ action: 'nextSeason', nick: nick.trim(), code }).catch(() => {});
     setBusy(false);
     refresh();
   };
@@ -534,7 +563,7 @@ export function OnlineScreen({ onBack }: Props) {
       <div className="fade-in">
         <div className="panel">
           <div className="panel-head">
-            {tr('online.roomMajor')} {code}
+            {tr('online.roomMajor')} {code} · {OL.season} {state.lobby.season ?? 1}
             <span className="spacer" />
             <button className="btn" onClick={onBack}>
               {tr('online.exitOnline')}
@@ -548,6 +577,14 @@ export function OnlineScreen({ onBack }: Props) {
               </h1>
               <div className="muted">
                 {champNick ? `${tr('online.champRoster')} ${champ?.players.map((p) => p.nick).join(', ')}` : tr('online.noHumanFinal')}
+              </div>
+              {/* continuar a sala: nova temporada com novo draft (transferências) */}
+              <div style={{ marginTop: 16 }}>
+                {isHost ? (
+                  <button className="btn gold big" onClick={nextSeason} disabled={busy}>{OL.nextSeason}</button>
+                ) : (
+                  <div className="muted small">{OL.seasonWait}</div>
+                )}
               </div>
             </div>
 

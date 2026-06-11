@@ -16,6 +16,7 @@ export interface LobbyState {
     seed: number;
     pool: TournamentPool;
     locked?: boolean;
+    season?: number;
   };
   players: { nick: string; picks: string[]; coach_pick: string; done: boolean }[];
 }
