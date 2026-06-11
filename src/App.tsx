@@ -211,35 +211,32 @@ export default function App() {
   useEffect(() => {
     const checkHash = () => {
       const h = window.location.hash.toLowerCase();
-      if (h === '#admin') {
-        setScreen('admin');
-        history.replaceState(null, '', window.location.pathname);
-      } else if (h === '#hall') {
-        setScreen('hall');
-        history.replaceState(null, '', window.location.pathname);
-      } else if (h === '#carreira') {
-        // modo carreira em beta fechado: sem botão no front, só pela URL
-        setScreen('career');
-        history.replaceState(null, '', window.location.pathname);
-      } else if (h === '#carreira-crm') {
-        // CRM dos times/jogadores reais da carreira (oculto)
-        setScreen('careerCRM');
-        history.replaceState(null, '', window.location.pathname);
-      } else if (h === '#carreira-acessos') {
-        // CRM de controle de acesso ao beta da carreira (oculto, com senha)
-        setScreen('careerAccess');
-        history.replaceState(null, '', window.location.pathname);
-      } else if (h === '#banners') {
-        // demonstração dos espaços de banner para o patrocinador
-        setScreen('home');
-        setBannerPreview(true);
-        history.replaceState(null, '', window.location.pathname);
-      }
+      // o hash é mantido em sincronia com a tela (ver efeito abaixo), então
+      // sobrevive ao F5 nas telas ocultas (#admin, #carreira, etc.)
+      if (h === '#admin') setScreen('admin');
+      else if (h === '#hall') setScreen('hall');
+      else if (h === '#carreira') setScreen('career');
+      else if (h === '#carreira-crm') setScreen('careerCRM');
+      else if (h === '#carreira-acessos') setScreen('careerAccess');
+      else if (h === '#banners') { setScreen('home'); setBannerPreview(true); }
     };
     checkHash();
     window.addEventListener('hashchange', checkHash);
     return () => window.removeEventListener('hashchange', checkHash);
   }, []);
+
+  // mantém o hash da URL refletindo a tela atual: as telas ocultas guardam o
+  // hash (sobrevivem ao F5) e ele some quando o usuário volta pro fluxo normal.
+  useEffect(() => {
+    const SCREEN_HASH: Partial<Record<Screen, string>> = {
+      admin: '#admin', hall: '#hall', career: '#carreira',
+      careerCRM: '#carreira-crm', careerAccess: '#carreira-acessos',
+    };
+    const target = SCREEN_HASH[screen] ?? '';
+    if (window.location.hash !== target) {
+      history.replaceState(null, '', window.location.pathname + window.location.search + target);
+    }
+  }, [screen]);
 
   // telemetria: registra a visita (1x por sessão)
   useEffect(() => {
