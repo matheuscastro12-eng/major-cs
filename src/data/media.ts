@@ -1,6 +1,13 @@
 import type { MapId, TeamSeason } from '../types';
+import teamLogos from './team-logos.json';
 
 const commonsFile = (file: string) => `https://liquipedia.net/commons/Special:FilePath/${encodeURIComponent(file)}`;
+
+// logos resolvidos da Liquipedia (build-time), servidos via proxy Photon que
+// aceita hotlink e redimensiona preservando o aspecto (a Liquipedia bloqueia
+// hotlink direto, por isso algumas logos não carregavam).
+const RESOLVED_LOGOS = teamLogos as Record<string, string>;
+const photon = (path: string, w = 220) => `https://i0.wp.com/liquipedia.net${path}?w=${w}&ssl=1`;
 
 // fotos locais enviadas pelo usuário (uploads no CRM ainda têm prioridade)
 export const MAP_IMAGES: Record<MapId, string> = {
@@ -158,6 +165,8 @@ const LOCAL_LOGOS: Record<string, string> = {
 export function logoForTeam(team: Pick<TeamSeason, 'id' | 'team'>): string {
   const local = LOCAL_LOGOS[team.id];
   if (local) return `/logos/${local}`;
+  const resolved = RESOLVED_LOGOS[team.id];
+  if (resolved) return photon(resolved);
   const byId = LOGO_FILES[team.id];
   if (byId) return commonsFile(byId);
   return commonsFile(`${team.team.replace(/[^A-Za-z0-9]+/g, '_')}_allmode.png`);
