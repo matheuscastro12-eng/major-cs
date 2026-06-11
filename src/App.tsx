@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Admin } from './components/Admin';
 import { AdminGate } from './components/AdminGate';
+import { CareerScreen } from './components/CareerScreen';
 import { BrandMark } from './components/brand';
 import { DonateButton, DonateModal } from './components/Donate';
 import { Draft } from './components/Draft';
@@ -39,7 +40,8 @@ type Screen =
   | 'lab'
   | 'transfer'
   | 'matchdetail'
-  | 'online';
+  | 'online'
+  | 'career';
 
 interface MatchCtx {
   teams: [TTeam, TTeam];
@@ -200,6 +202,10 @@ export default function App() {
         history.replaceState(null, '', window.location.pathname);
       } else if (h === '#hall') {
         setScreen('hall');
+        history.replaceState(null, '', window.location.pathname);
+      } else if (h === '#carreira') {
+        // modo carreira em beta fechado: sem botão no front, só pela URL
+        setScreen('career');
         history.replaceState(null, '', window.location.pathname);
       }
     };
@@ -526,6 +532,8 @@ export default function App() {
       )}
 
       {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} />}
+
+      {screen === 'career' && <CareerScreen dataset={dataset} onExit={() => setScreen('home')} />}
 
       {screen === 'draft' && draft && (
         <Draft draft={draft} dataset={dataset} onPick={pickPlayer} onPickCoach={pickCoach} onReroll={rerollDraft} />

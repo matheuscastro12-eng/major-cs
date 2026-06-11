@@ -360,6 +360,9 @@ const PT: Dict = {
   "phase.final": "GRANDE FINAL",
   "phase.semi": "Semifinal",
   "phase.quarters": "Quartas de final",
+  "online.skipToFinal": "⏭ Pular para o resultado final",
+  "online.matchups": "Confrontos",
+  "online.reveal": "Revelar resultados",
 };
 
 const EN: Dict = {
@@ -681,6 +684,9 @@ const EN: Dict = {
   "phase.final": "GRAND FINAL",
   "phase.semi": "Semifinal",
   "phase.quarters": "Quarterfinals",
+  "online.skipToFinal": "⏭ Skip to final results",
+  "online.matchups": "Matchups",
+  "online.reveal": "Reveal results",
 };
 
 const ES: Dict = {
@@ -1002,6 +1008,9 @@ const ES: Dict = {
   "phase.final": "GRAN FINAL",
   "phase.semi": "Semifinal",
   "phase.quarters": "Cuartos de final",
+  "online.skipToFinal": "⏭ Saltar al resultado final",
+  "online.matchups": "Enfrentamientos",
+  "online.reveal": "Revelar resultados",
 };
 
 const DICT: Record<Lang, Dict> = { pt: PT, en: EN, es: ES };

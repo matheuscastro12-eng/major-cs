@@ -96,6 +96,7 @@ export default async function handler(
     const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
       password?: string;
       teams?: unknown;
+      deleteIds?: unknown;
     };
     if (!expected || (body?.password ?? '').toString().trim() !== expected) {
       res.status(401).json({ ok: false, error: 'senha inválida' });
@@ -106,10 +107,17 @@ export default async function handler(
       return;
     }
     const teams = body.teams;
+    const deleteIds = (Array.isArray(body.deleteIds) ? body.deleteIds : [])
+      .filter((x): x is string => typeof x === 'string' && x.length > 0)
+      .slice(0, 400);
     try {
-      // reseed idempotente numa transação: limpa tudo e regrava
-      const queries = [sql`DELETE FROM teams`];
+      // MERGE, nunca full-replace: faz upsert dos times enviados e só apaga os
+      // explicitamente deletados no CRM. Um cliente com base desatualizada não
+      // consegue mais apagar times que ele nem conhece (causa do sumiço da LG).
+      const queries = [] as ReturnType<typeof sql>[];
+      if (deleteIds.length) queries.push(sql`DELETE FROM teams WHERE id = ANY(${deleteIds})`);
       for (const t of teams) {
+        queries.push(sql`DELETE FROM teams WHERE id = ${t.id}`); // upsert: limpa só este id (cascade)
         queries.push(
           sql`INSERT INTO teams (id, team, tag, era, game, country, teamwork, honors, data)
               VALUES (${t.id}, ${t.team}, ${t.tag}, ${t.era}, ${t.game}, ${t.country},

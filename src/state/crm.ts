@@ -174,7 +174,7 @@ export async function saveDatasetToServer(
     const res = await fetch('/api/teams', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, teams }),
+      body: JSON.stringify({ password, teams, deleteIds: getDeletedTeamIds() }),
       signal: AbortSignal.timeout(30000),
     });
     const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -185,12 +185,40 @@ export async function saveDatasetToServer(
   }
 }
 
+// ---- deleções explícitas (tombstones) ----
+// O POST /api/teams agora é MERGE: só apaga ids enviados em deleteIds. O CRM
+// registra aqui cada exclusão feita pelo admin; a lista persiste (não é limpa
+// após salvar) para o merge de pendentes do build não ressuscitar o time.
+const DELETED_KEY = 'major-cs-deleted-v1';
+
+export function recordDeletedTeam(id: string): void {
+  try {
+    const a = JSON.parse(localStorage.getItem(DELETED_KEY) ?? '[]') as string[];
+    if (!a.includes(id)) {
+      a.push(id);
+      localStorage.setItem(DELETED_KEY, JSON.stringify(a));
+    }
+  } catch {
+    /* sem storage */
+  }
+}
+
+export function getDeletedTeamIds(): string[] {
+  try {
+    const a = JSON.parse(localStorage.getItem(DELETED_KEY) ?? '[]');
+    return Array.isArray(a) ? a.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 // Garante que times PENDENTES novos do build (teams.json) apareçam sempre no
 // CRM para aprovação, mesmo que o banco ainda não os tenha (evita "time some").
 // Para os jogadores não muda nada: pendentes são filtrados do draft.
 export function mergePendingBaseTeams(teams: TeamSeason[]): TeamSeason[] {
   const have = new Set(teams.map((t) => t.id));
-  const extras = BASE_TEAMS.filter((t) => t.pending && !have.has(t.id));
+  const deleted = new Set(getDeletedTeamIds());
+  const extras = BASE_TEAMS.filter((t) => t.pending && !have.has(t.id) && !deleted.has(t.id));
   return extras.length ? [...teams, ...extras] : teams;
 }
 

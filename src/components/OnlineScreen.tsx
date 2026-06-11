@@ -47,7 +47,30 @@ export function OnlineScreen({ onBack }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [selMatch, setSelMatch] = useState<SelSeries | null>(null);
+  // quantas fases do Major já foram reveladas (experiência rodada a rodada,
+  // sem spoiler do campeão); persiste por sala para sobreviver a F5
+  const [revealed, setRevealed] = useState(0);
   const pollRef = useRef<number | undefined>(undefined);
+
+  const revealKey = `rtm-online-reveal-${code}`;
+  useEffect(() => {
+    if (!code) return;
+    try {
+      setRevealed(Number(localStorage.getItem(revealKey) ?? '0') || 0);
+    } catch {
+      /* sem storage */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+  const advanceReveal = (n: number) => {
+    setRevealed(n);
+    setSelMatch(null);
+    try {
+      localStorage.setItem(revealKey, String(n));
+    } catch {
+      /* sem storage */
+    }
+  };
 
   const saveNick = (n: string) => {
     setNick(n);
@@ -314,22 +337,26 @@ export function OnlineScreen({ onBack }: Props) {
       if (ph.startsWith('Quartas')) return tr('phase.quarters');
       return ph;
     };
-    const SeriesRow = ({ h }: { h: (typeof playoffs)[number] }) => {
+    const SeriesRow = ({ h, hiddenScore }: { h: (typeof playoffs)[number]; hiddenScore?: boolean }) => {
       const p = h.pairing;
       const res = p.result!;
       return (
         <div
-          className="matchline clickable"
-          onClick={() => setSelMatch({ a: p.a, b: p.b, series: res })}
+          className={`matchline${hiddenScore ? '' : ' clickable'}`}
+          onClick={() => !hiddenScore && setSelMatch({ a: p.a, b: p.b, series: res })}
         >
           <span className={`side${major.humanByTeamId[p.a] ? ' human' : ''}`}>
             <span className="tname">{teamLabel(p.a)}</span>
           </span>
-          <span className="score">
-            <span className={res.winner === 0 ? 'w' : 'l'}>{res.mapScore[0]}</span>
-            {' : '}
-            <span className={res.winner === 1 ? 'w' : 'l'}>{res.mapScore[1]}</span>
-          </span>
+          {hiddenScore ? (
+            <span className="score muted">vs</span>
+          ) : (
+            <span className="score">
+              <span className={res.winner === 0 ? 'w' : 'l'}>{res.mapScore[0]}</span>
+              {' : '}
+              <span className={res.winner === 1 ? 'w' : 'l'}>{res.mapScore[1]}</span>
+            </span>
+          )}
           <span className={`side right${major.humanByTeamId[p.b] ? ' human' : ''}`}>
             <span className="tname">{teamLabel(p.b)}</span>
           </span>
@@ -337,6 +364,79 @@ export function OnlineScreen({ onBack }: Props) {
         </div>
       );
     };
+
+    // fases na ordem em que aconteceram, para revelar rodada a rodada
+    const stages: { phase: string; items: typeof playoffs }[] = [];
+    for (const h of major.tournament.history) {
+      const last = stages[stages.length - 1];
+      if (last && last.phase === h.phase) last.items.push(h);
+      else stages.push({ phase: h.phase, items: [h] });
+    }
+    const allRevealed = revealed >= stages.length;
+
+    // ----- modo rodada a rodada (sem spoiler do campeão) -----
+    if (!allRevealed) {
+      const stage = stages[revealed];
+      return (
+        <div className="fade-in">
+          <div className="panel">
+            <div className="panel-head">
+              {tr('online.roomMajor')} {code}
+              <span className="spacer" />
+              <button className="btn ghost" onClick={() => advanceReveal(stages.length)}>
+                {tr('online.skipToFinal')}
+              </button>
+              <button className="btn" onClick={onBack}>
+                {tr('online.exitOnline')}
+              </button>
+            </div>
+            <div className="panel-body">
+              <div className="reveal-progress">
+                {stages.map((s, i) => (
+                  <span key={i} className={`reveal-chip${i < revealed ? ' done' : i === revealed ? ' now' : ''}`}>
+                    {i < revealed ? '✓ ' : ''}
+                    {phaseDisplay(s.phase)}
+                  </span>
+                ))}
+              </div>
+
+              {/* fases já reveladas (placares clicáveis) */}
+              {stages.slice(0, revealed).map((s, si) => (
+                <div key={si}>
+                  <div className="muted small section-label">{phaseDisplay(s.phase)}</div>
+                  <div className="panel-body tight" style={{ padding: 0 }}>
+                    {s.items.map((h, i) => (
+                      <SeriesRow key={i} h={h} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* fase atual: confrontos sem placar + botão de revelar */}
+              <div className="muted small section-label">
+                {tr('online.matchups')} - {phaseDisplay(stage.phase)}
+              </div>
+              <div className="panel-body tight" style={{ padding: 0 }}>
+                {stage.items.map((h, i) => (
+                  <SeriesRow key={i} h={h} hiddenScore />
+                ))}
+              </div>
+              <div className="center" style={{ marginTop: 14 }}>
+                <button className="btn gold big" onClick={() => advanceReveal(revealed + 1)}>
+                  ▶ {tr('online.reveal')} - {phaseDisplay(stage.phase)}
+                </button>
+              </div>
+            </div>
+          </div>
+          {selMatch && (
+            <Scoreboard
+              series={selMatch.series}
+              teams={[major.teamsById[selMatch.a], major.teamsById[selMatch.b]]}
+            />
+          )}
+        </div>
+      );
+    }
 
     return (
       <div className="fade-in">

@@ -4,7 +4,7 @@ import { playerOvr } from '../engine/ratings';
 import { adminPassword, lockAdmin } from './AdminGate';
 import { invalidateDonors } from './Donate';
 import { MetricsPanel } from './MetricsPanel';
-import { clearDirty, exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, saveDatasetToServer, saveMapImage } from '../state/crm';
+import { clearDirty, exportDataset, fileToDataUrl, importDatasetFromFile, loadMapImages, recordDeletedTeam, saveDatasetToServer, saveMapImage } from '../state/crm';
 import type { CoachStyle, Game, MapId, Player, Playstyle, Role, TeamSeason } from '../types';
 import { COACH_STYLE_LABELS, derivePlaystyle, MAP_LABELS, MAP_POOL, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
 import { Flag, MapThumb, TeamBadge } from './ui';
@@ -142,6 +142,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
       return;
     }
     if (!confirm('Excluir este time da base?')) return;
+    recordDeletedTeam(id); // tombstone: o "Salvar no banco" apaga só este id
     const next = dataset.filter((t) => t.id !== id);
     onChange(next);
     setSelId(next[0]?.id ?? null);
