@@ -20,6 +20,7 @@ import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 import { fileToDataUrl } from '../state/crm';
 import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
+import { CS2_REAL_2026 } from '../data/teams';
 
 const SAVE_KEY = 'rtm-career-v1';
 const STARTING_BUDGET = 6_000_000;
@@ -243,18 +244,23 @@ function seasonTopPlayers(pool: TeamSeason[], split: number, n: number) {
 
 // janela de transferências: feed determinístico de movimentações por split
 interface TransferItem { nick: string; cc: string; from: string; to: string; fee: number; }
+// Feed determinístico de transferências REALISTAS: um jogador só troca por um
+// time de tier parecido (teamwork +-8), evitando movimentos absurdos como um
+// jogador de time fraco indo direto pra um top mundial.
 function transferFeed(split: number, teams: TeamSeason[]): TransferItem[] {
-  const players = teams.flatMap((t) => t.players.map((p) => ({ p, tag: t.tag, id: t.id })));
-  const dests = teams.filter((t) => t.id !== 'user');
+  const pool = teams.filter((t) => t.id !== 'user' && t.players.length > 0);
   const out: TransferItem[] = [];
   const seen = new Set<string>();
-  for (let i = 0; out.length < 12 && i < 60; i++) {
+  for (let i = 0; out.length < 12 && i < 160; i++) {
     const h = hashStr(`tf${split}:${i}`);
-    const pl = players[h % players.length];
-    const dest = dests[(h >>> 5) % dests.length];
-    if (!pl || !dest || dest.tag === pl.tag || seen.has(pl.p.nick)) continue;
-    seen.add(pl.p.nick);
-    out.push({ nick: pl.p.nick, cc: pl.p.country, from: pl.tag, to: dest.tag, fee: playerValue(pl.p) });
+    const src = pool[h % pool.length];
+    const pl = src.players[(h >>> 3) % src.players.length];
+    if (!pl || seen.has(pl.nick)) continue;
+    const cands = pool.filter((t) => t.id !== src.id && Math.abs(t.teamwork - src.teamwork) <= 8);
+    if (cands.length === 0) continue;
+    const dest = cands[(h >>> 7) % cands.length];
+    seen.add(pl.nick);
+    out.push({ nick: pl.nick, cc: pl.country, from: src.tag, to: dest.tag, fee: playerValue(pl) });
   }
   return out;
 }
@@ -300,7 +306,7 @@ interface Props {
   onExit: () => void;
 }
 
-export function CareerScreen({ dataset, onExit }: Props) {
+export function CareerScreen({ onExit }: Props) {
   const [save, setSave] = useState<CareerSave>(() => loadSave());
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
@@ -350,10 +356,13 @@ export function CareerScreen({ dataset, onExit }: Props) {
     });
   };
 
-  // SÓ tempos atuais: elencos CS2 (2023+). Nada de lendas de outras eras aqui.
+  // SÓ tempos atuais: usa EXCLUSIVAMENTE os elencos REAIS de CS2 (2026) do
+  // bo3.gg, exclusivos do modo carreira (não aparecem no draft/online). Os
+  // times CS2 antigos feitos à mão não entram aqui (evita duplicatas e OVRs
+  // desatualizados).
   const currentEra = useMemo(
-    () => dataset.filter((t) => !t.pending && t.game === 'CS2' && t.players.length >= 5),
-    [dataset],
+    () => CS2_REAL_2026.filter((t) => t.players.length >= 5),
+    [],
   );
   const brTeams = useMemo(
     () => currentEra.filter((t) => t.country === 'br').sort((a, b) => b.teamwork - a.teamwork),
@@ -394,7 +403,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
   );
 
   const findSigning = (s: Signing): { player: Player; from: TeamSeason } | null => {
-    const from = dataset.find((t) => t.id === s.fromId);
+    const from = currentEra.find((t) => t.id === s.fromId);
     const player = from?.players.find((p) => p.id === s.playerId);
     return from && player ? { player, from } : null;
   };
@@ -404,7 +413,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
     const picks = s.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
     if (picks.length < 5) return null;
     // '__rookie__' = técnico iniciante barato (opção de entrada da carreira)
-    const coach = dataset.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
+    const coach = currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
     const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach);
     return { ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo };
   };

@@ -6,7 +6,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "fr",
-  "teamwork": 80,
+  "teamwork": 88,
   "honors": "#1 no ranking mundial",
   "colors": [
    "#1f5135",
@@ -28,59 +28,59 @@
     "name": "Mathieu Herbaut",
     "country": "fr",
     "role": "AWP",
-    "aim": 92,
-    "consistency": 92,
-    "clutch": 90,
-    "awp": 92,
-    "igl": 62
+    "aim": 97,
+    "consistency": 97,
+    "clutch": 95,
+    "awp": 97,
+    "igl": 67
    },
    {
     "id": "bo3_24881",
     "nick": "flameZ",
     "name": "Shahar Shushan",
     "country": "il",
-    "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "role": "Entry",
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 61,
+    "igl": 57
    },
    {
     "id": "bo3_17663",
     "nick": "ropz",
     "name": "Robin Kool",
     "country": "ee",
-    "role": "Entry",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 50
+    "role": "Rifler",
+    "aim": 92,
+    "consistency": 92,
+    "clutch": 90,
+    "awp": 66,
+    "igl": 62
    },
    {
     "id": "bo3_30095",
     "nick": "mezii",
     "name": "William Merriman",
     "country": "gb",
-    "role": "Rifler",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "role": "Support",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_17515",
     "nick": "apEX",
     "name": "Dan Madesclaire",
     "country": "fr",
-    "role": "Support",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    }
   ]
  },
@@ -91,7 +91,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 79,
+  "teamwork": 88,
   "honors": "#2 no ranking mundial",
   "colors": [
    "#4d511f",
@@ -112,60 +112,60 @@
     "nick": "donk",
     "name": "Danil Kryshkovets",
     "country": "ru",
-    "role": "AWP",
-    "aim": 93,
-    "consistency": 93,
-    "clutch": 91,
-    "awp": 93,
-    "igl": 63
+    "role": "Entry",
+    "aim": 96,
+    "consistency": 96,
+    "clutch": 94,
+    "awp": 70,
+    "igl": 66
    },
    {
     "id": "bo3_23237",
     "nick": "sh1ro",
     "name": "Dmitriy Sokolov",
     "country": "ru",
-    "role": "IGL",
-    "aim": 83,
-    "consistency": 83,
-    "clutch": 81,
-    "awp": 57,
-    "igl": 83
+    "role": "AWP",
+    "aim": 91,
+    "consistency": 91,
+    "clutch": 89,
+    "awp": 91,
+    "igl": 61
    },
    {
     "id": "bo3_29221",
     "nick": "tN1R",
     "name": "Andrey Tatarinovich",
     "country": "by",
-    "role": "Entry",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_29219",
     "nick": "zont1x",
     "name": "Myroslav Plakhotja",
     "country": "ua",
-    "role": "Rifler",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "role": "AWP",
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 87,
+    "igl": 57
    },
    {
     "id": "bo3_23701",
     "nick": "magixx",
     "name": "Boris Vorobiev",
     "country": "ru",
-    "role": "Support",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "role": "Rifler",
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 61,
+    "igl": 57
    }
   ]
  },
@@ -176,7 +176,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "sa",
-  "teamwork": 76,
+  "teamwork": 85,
   "honors": "#3 no ranking mundial",
   "colors": [
    "#51491f",
@@ -198,59 +198,59 @@
     "name": "Ilya Osipov",
     "country": "ru",
     "role": "AWP",
-    "aim": 86,
-    "consistency": 86,
-    "clutch": 84,
-    "awp": 86,
-    "igl": 56
+    "aim": 94,
+    "consistency": 94,
+    "clutch": 92,
+    "awp": 94,
+    "igl": 64
    },
    {
     "id": "bo3_51876",
     "nick": "kyousuke",
     "name": "Maxim Lukin",
     "country": "ru",
-    "role": "IGL",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 55,
-    "igl": 81
+    "role": "Entry",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 53
    },
    {
     "id": "bo3_17522",
     "nick": "NiKo",
     "name": "Nikola Kovač",
     "country": "ba",
-    "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "role": "Rifler",
+    "aim": 92,
+    "consistency": 92,
+    "clutch": 90,
+    "awp": 66,
+    "igl": 62
    },
    {
     "id": "bo3_23037",
     "nick": "TeSeS",
     "name": "Rene Madsen",
     "country": "dk",
-    "role": "Rifler",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "role": "Support",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    },
    {
     "id": "bo3_17524",
     "nick": "karrigan",
     "name": "Finn Andersen",
     "country": "dk",
-    "role": "Support",
-    "aim": 63,
-    "consistency": 63,
-    "clutch": 61,
-    "awp": 40,
-    "igl": 35
+    "role": "IGL",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    }
   ]
  },
@@ -261,7 +261,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ua",
-  "teamwork": 77,
+  "teamwork": 85,
   "honors": "#4 no ranking mundial",
   "colors": [
    "#2d511f",
@@ -282,60 +282,60 @@
     "nick": "makazze",
     "name": "Drin Shaqiri",
     "country": "xk",
-    "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "role": "Entry",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 53
    },
    {
     "id": "bo3_29734",
     "nick": "w0nderful",
     "name": "Ihor Zhdanov",
     "country": "ua",
-    "role": "IGL",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 55,
-    "igl": 81
+    "role": "AWP",
+    "aim": 88,
+    "consistency": 88,
+    "clutch": 86,
+    "awp": 88,
+    "igl": 58
    },
    {
     "id": "bo3_25384",
     "nick": "iM",
     "name": "Ivan Mihai",
     "country": "ro",
-    "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "role": "Rifler",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 60,
+    "igl": 56
    },
    {
     "id": "bo3_24656",
     "nick": "b1t",
     "name": "Valeriy Vakhovskiy",
     "country": "ua",
-    "role": "Rifler",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "role": "Support",
+    "aim": 85,
+    "consistency": 85,
+    "clutch": 83,
+    "awp": 59,
+    "igl": 55
    },
    {
     "id": "bo3_17688",
     "nick": "Aleksib",
     "name": "Aleksi Virolainen",
     "country": "fi",
-    "role": "Support",
-    "aim": 67,
-    "consistency": 67,
-    "clutch": 65,
-    "awp": 41,
-    "igl": 37
+    "role": "IGL",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    }
   ]
  },
@@ -346,7 +346,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "de",
-  "teamwork": 78,
+  "teamwork": 86,
   "honors": "#5 no ranking mundial",
   "colors": [
    "#1f5139",
@@ -367,48 +367,48 @@
     "nick": "xelex",
     "name": "Adrian Vincze",
     "country": "hu",
-    "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "role": "IGL",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
    },
    {
     "id": "bo3_29530",
     "nick": "xertioN",
     "name": "Dorian Berman",
     "country": "il",
-    "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "role": "Entry",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 60,
+    "igl": 56
    },
    {
     "id": "bo3_25519",
     "nick": "Spinx",
     "name": "Lotan Giladi",
     "country": "il",
-    "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "role": "Rifler",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 60,
+    "igl": 56
    },
    {
     "id": "bo3_26391",
     "nick": "torzsi",
     "name": "Ádám Torzsás",
     "country": "hu",
-    "role": "Rifler",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "role": "AWP",
+    "aim": 88,
+    "consistency": 88,
+    "clutch": 86,
+    "awp": 88,
+    "igl": 58
    },
    {
     "id": "bo3_17853",
@@ -416,11 +416,11 @@
     "name": "Ludvig Brolin",
     "country": "se",
     "role": "Support",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 61,
+    "igl": 57
    }
   ]
  },
@@ -431,7 +431,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "br",
-  "teamwork": 76,
+  "teamwork": 83,
   "honors": "#6 no ranking mundial",
   "colors": [
    "#514f1f",
@@ -453,59 +453,59 @@
     "name": "Eduardo Wolkmer",
     "country": "br",
     "role": "AWP",
-    "aim": 83,
-    "consistency": 83,
-    "clutch": 81,
-    "awp": 83,
-    "igl": 53
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 84,
+    "igl": 54
    },
    {
     "id": "bo3_23685",
     "nick": "latto",
     "name": "Bruno Rebelatto",
     "country": "br",
-    "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "role": "Entry",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_36217",
     "nick": "saadzin",
     "name": "Guilherme Pacheco",
     "country": "br",
-    "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "role": "Rifler",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_29163",
     "nick": "n1ssim",
     "name": "Vinicius Pereira",
     "country": "br",
-    "role": "Rifler",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "role": "Support",
+    "aim": 85,
+    "consistency": 85,
+    "clutch": 83,
+    "awp": 59,
+    "igl": 55
    },
    {
     "id": "bo3_19665",
     "nick": "arT",
     "name": "Andrei Piovezan",
     "country": "br",
-    "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "role": "IGL",
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 58,
+    "igl": 84
    }
   ]
  },
@@ -516,7 +516,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "mn",
-  "teamwork": 74,
+  "teamwork": 85,
   "honors": "#7 no ranking mundial",
   "colors": [
    "#1f5151",
@@ -537,36 +537,36 @@
     "nick": "910",
     "name": "Usukhbayar Banzragch",
     "country": "mn",
-    "role": "AWP",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 79,
-    "igl": 49
+    "role": "IGL",
+    "aim": 88,
+    "consistency": 88,
+    "clutch": 86,
+    "awp": 62,
+    "igl": 88
    },
    {
     "id": "bo3_45550",
     "nick": "cobrazera",
     "name": "Anarbileg Uuganbayar",
     "country": "mn",
-    "role": "IGL",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 75
+    "role": "Entry",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_32321",
     "nick": "mzinho",
     "name": "Ayush Batbold",
     "country": "mn",
-    "role": "Entry",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "role": "AWP",
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 87,
+    "igl": 57
    },
    {
     "id": "bo3_29638",
@@ -574,11 +574,11 @@
     "name": "Garidmagnai Byambasuren",
     "country": "mn",
     "role": "Rifler",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 58,
+    "igl": 54
    },
    {
     "id": "bo3_29449",
@@ -586,11 +586,11 @@
     "name": "Sodbayar Munkhbold",
     "country": "mn",
     "role": "Support",
-    "aim": 69,
-    "consistency": 69,
-    "clutch": 67,
-    "awp": 43,
-    "igl": 39
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 60,
+    "igl": 56
    }
   ]
  },
@@ -601,7 +601,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 75,
+  "teamwork": 80,
   "honors": "#8 no ranking mundial",
   "colors": [
    "#471f51",
@@ -622,36 +622,36 @@
     "nick": "XANTARES",
     "name": "Ismailcan Dörtkardeş",
     "country": "tr",
-    "role": "AWP",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 80,
-    "igl": 50
+    "role": "IGL",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    },
    {
     "id": "bo3_32185",
     "nick": "Wicadia",
     "name": "Ali Haydar Yalçın",
     "country": "tr",
-    "role": "IGL",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 79
+    "role": "Entry",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_17720",
     "nick": "woxic",
     "name": "Özgür Eker",
     "country": "tr",
-    "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "role": "AWP",
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 84,
+    "igl": 54
    },
    {
     "id": "bo3_31567",
@@ -659,11 +659,11 @@
     "name": "Caner Kesici",
     "country": "tr",
     "role": "Rifler",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    },
    {
     "id": "bo3_17675",
@@ -671,11 +671,11 @@
     "name": "Engin Küpeli",
     "country": "tr",
     "role": "Support",
-    "aim": 68,
-    "consistency": 68,
-    "clutch": 66,
-    "awp": 42,
-    "igl": 38
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
    }
   ]
  },
@@ -686,7 +686,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "de",
-  "teamwork": 75,
+  "teamwork": 79,
   "honors": "#9 no ranking mundial",
   "colors": [
    "#513b1f",
@@ -708,11 +708,11 @@
     "name": "Fredrik Sterner",
     "country": "se",
     "role": "AWP",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 80,
-    "igl": 50
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_34951",
@@ -720,11 +720,11 @@
     "name": "Oldřich Nový",
     "country": "cz",
     "role": "IGL",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 77
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_39358",
@@ -732,11 +732,11 @@
     "name": "Milan Polowiec",
     "country": "pl",
     "role": "Entry",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_29393",
@@ -744,11 +744,11 @@
     "name": "Sebastian Tauson Lindelof",
     "country": "dk",
     "role": "Rifler",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_17502",
@@ -756,11 +756,11 @@
     "name": "Janusz Pogorzelski",
     "country": "pl",
     "role": "Support",
-    "aim": 68,
-    "consistency": 68,
-    "clutch": 66,
-    "awp": 42,
-    "igl": 38
+    "aim": 74,
+    "consistency": 74,
+    "clutch": 72,
+    "awp": 48,
+    "igl": 44
    }
   ]
  },
@@ -771,7 +771,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "dk",
-  "teamwork": 75,
+  "teamwork": 82,
   "honors": "#10 no ranking mundial",
   "colors": [
    "#231f51",
@@ -793,59 +793,59 @@
     "name": "Victor Staehr",
     "country": "dk",
     "role": "AWP",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 80,
-    "igl": 50
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 84,
+    "igl": 54
    },
    {
     "id": "bo3_30118",
     "nick": "phzy",
     "name": "Love Smidebrant",
     "country": "se",
-    "role": "IGL",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 78
+    "role": "Entry",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    },
    {
     "id": "bo3_25249",
     "nick": "jabbi",
     "name": "Jakob Nygaard",
     "country": "dk",
-    "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "role": "Rifler",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 60,
+    "igl": 56
    },
    {
     "id": "bo3_29072",
     "nick": "ryu",
     "name": "Gytis Glušauskas",
     "country": "lt",
-    "role": "Rifler",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "role": "Support",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_20513",
     "nick": "HooXi",
     "name": "Rasmus Nielsen",
     "country": "dk",
-    "role": "Support",
-    "aim": 66,
-    "consistency": 66,
-    "clutch": 64,
-    "awp": 40,
-    "igl": 36
+    "role": "IGL",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
    }
   ]
  },
@@ -856,7 +856,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "br",
-  "teamwork": 75,
+  "teamwork": 85,
   "honors": "#11 no ranking mundial",
   "colors": [
    "#511f45",
@@ -878,59 +878,59 @@
     "name": "Danil Golubenko",
     "country": "kz",
     "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 87,
+    "igl": 57
    },
    {
     "id": "bo3_19667",
     "nick": "KSCERATO",
     "name": "Kaike Cerato",
     "country": "br",
-    "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "role": "Entry",
+    "aim": 89,
+    "consistency": 89,
+    "clutch": 87,
+    "awp": 63,
+    "igl": 59
    },
    {
     "id": "bo3_18732",
     "nick": "YEKINDAR",
     "name": "Mareks Gaļinskis",
     "country": "lv",
-    "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "role": "Rifler",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_19664",
     "nick": "yuurih",
     "name": "Yuri Boian",
     "country": "br",
-    "role": "Rifler",
-    "aim": 70,
-    "consistency": 70,
-    "clutch": 68,
-    "awp": 44,
-    "igl": 40
+    "role": "Support",
+    "aim": 88,
+    "consistency": 88,
+    "clutch": 86,
+    "awp": 62,
+    "igl": 58
    },
    {
     "id": "bo3_17497",
     "nick": "FalleN",
     "name": "Gabriel Toledo",
     "country": "br",
-    "role": "Support",
-    "aim": 67,
-    "consistency": 67,
-    "clutch": 65,
-    "awp": 41,
-    "igl": 37
+    "role": "IGL",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
    }
   ]
  },
@@ -941,7 +941,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "tr",
-  "teamwork": 76,
+  "teamwork": 80,
   "honors": "#12 no ranking mundial",
   "colors": [
    "#1f5137",
@@ -963,11 +963,11 @@
     "name": "Aulon Fazlija",
     "country": "xk",
     "role": "AWP",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 78,
-    "igl": 48
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
    },
    {
     "id": "bo3_47939",
@@ -975,11 +975,11 @@
     "name": "Dziugas Steponavicius",
     "country": "lt",
     "role": "IGL",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 77
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_30902",
@@ -987,11 +987,11 @@
     "name": "Laurentiu Tarlea",
     "country": "ro",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_34940",
@@ -999,11 +999,11 @@
     "name": "Dmytro Myroshnychenko",
     "country": "ua",
     "role": "Rifler",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_37544",
@@ -1011,11 +1011,11 @@
     "name": "Nikita Samolyotov",
     "country": "ua",
     "role": "Support",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    }
   ]
  },
@@ -1026,7 +1026,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "de",
-  "teamwork": 78,
+  "teamwork": 81,
   "honors": "#13 no ranking mundial",
   "colors": [
    "#37511f",
@@ -1047,24 +1047,24 @@
     "nick": "Nertz",
     "name": "Guy Iluz",
     "country": "il",
-    "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "role": "IGL",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    },
    {
     "id": "bo3_29150",
     "nick": "HeavyGod",
     "name": "Nikita Martynenko",
     "country": "il",
-    "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "role": "AWP",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_25096",
@@ -1072,11 +1072,11 @@
     "name": "Alvaro Garcia",
     "country": "es",
     "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    },
    {
     "id": "bo3_31187",
@@ -1084,11 +1084,11 @@
     "name": "Matúš Šimko",
     "country": "sk",
     "role": "Rifler",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_17958",
@@ -1096,11 +1096,11 @@
     "name": "Nemanja Kovač",
     "country": "ba",
     "role": "Support",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    }
   ]
  },
@@ -1111,7 +1111,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 73,
+  "teamwork": 77,
   "honors": "#14 no ranking mundial",
   "colors": [
    "#471f51",
@@ -1133,11 +1133,11 @@
     "name": "Ali Djami",
     "country": "ru",
     "role": "AWP",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 79,
-    "igl": 49
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
    },
    {
     "id": "bo3_49420",
@@ -1145,11 +1145,11 @@
     "name": "Ivan Gogin",
     "country": "ru",
     "role": "IGL",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 76
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
    },
    {
     "id": "bo3_38327",
@@ -1157,11 +1157,11 @@
     "name": "Emil Moskvitin",
     "country": "ru",
     "role": "Entry",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    },
    {
     "id": "bo3_36877",
@@ -1169,11 +1169,11 @@
     "name": "Vlad Lysov",
     "country": "ru",
     "role": "Rifler",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    },
    {
     "id": "bo3_29674",
@@ -1181,11 +1181,11 @@
     "name": "Andrey Yasinskiy",
     "country": "ru",
     "role": "Support",
-    "aim": 70,
-    "consistency": 70,
-    "clutch": 68,
-    "awp": 44,
-    "igl": 40
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
    }
   ]
  },
@@ -1196,7 +1196,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ar",
-  "teamwork": 78,
+  "teamwork": 81,
   "honors": "#15 no ranking mundial",
   "colors": [
    "#39511f",
@@ -1218,11 +1218,11 @@
     "name": "Luciano Herrera",
     "country": "ar",
     "role": "AWP",
-    "aim": 82,
-    "consistency": 82,
-    "clutch": 80,
-    "awp": 82,
-    "igl": 52
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 84,
+    "igl": 54
    },
    {
     "id": "bo3_29831",
@@ -1230,11 +1230,11 @@
     "name": "Franco Manuel Garcia Cabrera",
     "country": "uy",
     "role": "IGL",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 55,
-    "igl": 81
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    },
    {
     "id": "bo3_32597",
@@ -1242,11 +1242,11 @@
     "name": "Matías Ibañez",
     "country": "cl",
     "role": "Entry",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 49
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_21430",
@@ -1254,11 +1254,11 @@
     "name": "Ignacio Meyer",
     "country": "ar",
     "role": "Rifler",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_21431",
@@ -1266,11 +1266,11 @@
     "name": "Maximiliano Gonzalez",
     "country": "uy",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  },
@@ -1281,7 +1281,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ua",
-  "teamwork": 75,
+  "teamwork": 79,
   "honors": "#16 no ranking mundial",
   "colors": [
    "#511f50",
@@ -1303,11 +1303,11 @@
     "name": "Andrii Kukharskyi",
     "country": "ua",
     "role": "AWP",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 78,
-    "igl": 48
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
    },
    {
     "id": "bo3_76009",
@@ -1315,11 +1315,11 @@
     "name": "Daniil Vinnyk",
     "country": "ua",
     "role": "IGL",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 76
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_37946",
@@ -1327,11 +1327,11 @@
     "name": "Artem Kapran",
     "country": "ua",
     "role": "Entry",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_50469",
@@ -1339,11 +1339,11 @@
     "name": "Dmytro Tsvir",
     "country": "ua",
     "role": "Rifler",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    },
    {
     "id": "bo3_29116",
@@ -1351,11 +1351,11 @@
     "name": "Alexey Yarmoshchuk",
     "country": "ua",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  },
@@ -1366,7 +1366,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 77,
+  "teamwork": 82,
   "honors": "#17 no ranking mundial",
   "colors": [
    "#1f513d",
@@ -1388,59 +1388,59 @@
     "name": "Kirill Rodnov",
     "country": "ru",
     "role": "AWP",
-    "aim": 83,
-    "consistency": 83,
-    "clutch": 81,
-    "awp": 83,
-    "igl": 53
+    "aim": 85,
+    "consistency": 85,
+    "clutch": 83,
+    "awp": 85,
+    "igl": 55
    },
    {
     "id": "bo3_23853",
     "nick": "zorte",
     "name": "Alexandr Zagodyrenko",
     "country": "ru",
-    "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "role": "Entry",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_31171",
     "nick": "FL4MUS",
     "name": "Timur Marev",
     "country": "ru",
-    "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "role": "Rifler",
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    },
    {
     "id": "bo3_29336",
     "nick": "d1Ledez",
     "name": "Daniil Kustov",
     "country": "ru",
-    "role": "Rifler",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "role": "Support",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_18002",
     "nick": "Boombl4",
     "name": "Kirill Mikhailov",
     "country": "ru",
-    "role": "Support",
-    "aim": 70,
-    "consistency": 70,
-    "clutch": 68,
-    "awp": 44,
-    "igl": 40
+    "role": "IGL",
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 58,
+    "igl": 84
    }
   ]
  },
@@ -1451,7 +1451,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 78,
+  "teamwork": 81,
   "honors": "#18 no ranking mundial",
   "colors": [
    "#511f36",
@@ -1473,11 +1473,11 @@
     "name": "Nikita Kochenyuk",
     "country": "ru",
     "role": "AWP",
-    "aim": 83,
-    "consistency": 83,
-    "clutch": 81,
-    "awp": 83,
-    "igl": 53
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 84,
+    "igl": 54
    },
    {
     "id": "bo3_51081",
@@ -1485,11 +1485,11 @@
     "name": "Abdurakhim Issa",
     "country": "kz",
     "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    },
    {
     "id": "bo3_31812",
@@ -1497,11 +1497,11 @@
     "name": "Svyatoslav Masko",
     "country": "by",
     "role": "Entry",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 49
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_32165",
@@ -1509,11 +1509,11 @@
     "name": "Andrey Anisimov",
     "country": "ru",
     "role": "Rifler",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_46419",
@@ -1521,11 +1521,11 @@
     "name": "Vitaliy Marushka",
     "country": "ua",
     "role": "Support",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    }
   ]
  },
@@ -1536,7 +1536,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "br",
-  "teamwork": 74,
+  "teamwork": 80,
   "honors": "#19 no ranking mundial",
   "colors": [
    "#1f5051",
@@ -1557,36 +1557,36 @@
     "nick": "piriajr",
     "name": "Guilherme Barbosa",
     "country": "br",
-    "role": "AWP",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 76,
-    "igl": 46
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_33759",
     "nick": "snow",
     "name": "João Vinicius",
     "country": "br",
-    "role": "IGL",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 75
+    "role": "Entry",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_28000",
     "nick": "saffee",
     "name": "Rafael Costa",
     "country": "br",
-    "role": "Entry",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "role": "AWP",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_21439",
@@ -1594,11 +1594,11 @@
     "name": "Vinicius Moreira",
     "country": "br",
     "role": "Rifler",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    },
    {
     "id": "bo3_20370",
@@ -1606,11 +1606,11 @@
     "name": "Rodrigo Bittencourt",
     "country": "br",
     "role": "Support",
-    "aim": 70,
-    "consistency": 70,
-    "clutch": 68,
-    "awp": 44,
-    "igl": 40
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    }
   ]
  },
@@ -1621,7 +1621,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "br",
-  "teamwork": 78,
+  "teamwork": 80,
   "honors": "#20 no ranking mundial",
   "colors": [
    "#361f51",
@@ -1643,11 +1643,11 @@
     "name": "Felipe Yuji",
     "country": "br",
     "role": "AWP",
-    "aim": 86,
-    "consistency": 86,
-    "clutch": 84,
-    "awp": 86,
-    "igl": 56
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
    },
    {
     "id": "bo3_38336",
@@ -1655,11 +1655,11 @@
     "name": "Klimentiy Krivosheev",
     "country": "ru",
     "role": "IGL",
-    "aim": 84,
-    "consistency": 84,
-    "clutch": 82,
-    "awp": 58,
-    "igl": 84
+    "aim": 85,
+    "consistency": 85,
+    "clutch": 83,
+    "awp": 59,
+    "igl": 85
    },
    {
     "id": "bo3_31537",
@@ -1667,11 +1667,11 @@
     "name": "Carlos Eduardo",
     "country": "br",
     "role": "Entry",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_30092",
@@ -1679,11 +1679,11 @@
     "name": "Linus Holtäng",
     "country": "se",
     "role": "Rifler",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    },
    {
     "id": "bo3_30732",
@@ -1691,11 +1691,11 @@
     "name": "Breno Poletto",
     "country": "br",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  },
@@ -1706,7 +1706,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ua",
-  "teamwork": 74,
+  "teamwork": 79,
   "honors": "#21 no ranking mundial",
   "colors": [
    "#1f5123",
@@ -1728,11 +1728,11 @@
     "name": "Aurélien Drapier",
     "country": "fr",
     "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
    },
    {
     "id": "bo3_23859",
@@ -1740,11 +1740,11 @@
     "name": "Alex Petrov",
     "country": "bg",
     "role": "IGL",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 78
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
    },
    {
     "id": "bo3_26144",
@@ -1752,11 +1752,11 @@
     "name": "Aurimas Pipiras",
     "country": "lt",
     "role": "Entry",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_33841",
@@ -1764,11 +1764,11 @@
     "name": "Oscar Bell",
     "country": "gb",
     "role": "Rifler",
-    "aim": 70,
-    "consistency": 70,
-    "clutch": 68,
-    "awp": 44,
-    "igl": 40
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
    },
    {
     "id": "bo3_29007",
@@ -1776,11 +1776,11 @@
     "name": "Jack von Spreckelsen",
     "country": "gb",
     "role": "Support",
-    "aim": 69,
-    "consistency": 69,
-    "clutch": 67,
-    "awp": 43,
-    "igl": 39
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
    }
   ]
  },
@@ -1791,7 +1791,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "us",
-  "teamwork": 76,
+  "teamwork": 82,
   "honors": "#22 no ranking mundial",
   "colors": [
    "#1f2151",
@@ -1812,36 +1812,36 @@
     "nick": "frozen",
     "name": "David Čerňanský",
     "country": "sk",
-    "role": "AWP",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 80,
-    "igl": 50
+    "role": "IGL",
+    "aim": 88,
+    "consistency": 88,
+    "clutch": 86,
+    "awp": 62,
+    "igl": 88
    },
    {
     "id": "bo3_17531",
     "nick": "Twistzz",
     "name": "Russel Van Dulken",
     "country": "ca",
-    "role": "IGL",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 77
+    "role": "Entry",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_20372",
     "nick": "broky",
     "name": "Helvijs Saukants",
     "country": "lv",
-    "role": "Entry",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "role": "AWP",
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 87,
+    "igl": 57
    },
    {
     "id": "bo3_31227",
@@ -1849,11 +1849,11 @@
     "name": "Ryan Aubry",
     "country": "fr",
     "role": "Rifler",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_36197",
@@ -1861,11 +1861,11 @@
     "name": "Jakub Pietruszewski",
     "country": "pl",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  },
@@ -1876,7 +1876,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "se",
-  "teamwork": 76,
+  "teamwork": 82,
   "honors": "#23 no ranking mundial",
   "colors": [
    "#511f31",
@@ -1898,59 +1898,59 @@
     "name": "Martin Lund",
     "country": "dk",
     "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "aim": 88,
+    "consistency": 88,
+    "clutch": 86,
+    "awp": 88,
+    "igl": 58
    },
    {
     "id": "bo3_45252",
     "nick": "xKacpersky",
     "name": "Kacper Gabara",
     "country": "pl",
-    "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "role": "Entry",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 53
    },
    {
     "id": "bo3_45766",
     "nick": "cairne",
     "name": "Artem Mushynskyi",
     "country": "ua",
-    "role": "Entry",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "role": "Rifler",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_20483",
     "nick": "sjuush",
     "name": "Rasmus Beck",
     "country": "dk",
-    "role": "Rifler",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "role": "Support",
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_17667",
     "nick": "Snappi",
     "name": "Marco Pfeiffer",
     "country": "dk",
-    "role": "Support",
-    "aim": 68,
-    "consistency": 68,
-    "clutch": 66,
-    "awp": 42,
-    "igl": 38
+    "role": "IGL",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    }
   ]
  },
@@ -1961,7 +1961,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "cn",
-  "teamwork": 79,
+  "teamwork": 82,
   "honors": "#24 no ranking mundial",
   "colors": [
    "#511f2a",
@@ -1983,11 +1983,11 @@
     "name": "Sike Zhang",
     "country": "cn",
     "role": "AWP",
-    "aim": 86,
-    "consistency": 86,
-    "clutch": 84,
-    "awp": 86,
-    "igl": 56
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 87,
+    "igl": 57
    },
    {
     "id": "bo3_26541",
@@ -1995,11 +1995,11 @@
     "name": "Lizhi Ye",
     "country": "cn",
     "role": "IGL",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 55,
-    "igl": 81
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
    },
    {
     "id": "bo3_24435",
@@ -2007,11 +2007,11 @@
     "name": "Niu Zhe",
     "country": "cn",
     "role": "Entry",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 49
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    },
    {
     "id": "bo3_38537",
@@ -2019,11 +2019,11 @@
     "name": "Tang Junjie",
     "country": "cn",
     "role": "Rifler",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_38464",
@@ -2031,11 +2031,11 @@
     "name": "Qihao Su",
     "country": "cn",
     "role": "Support",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    }
   ]
  },
@@ -2046,7 +2046,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "us",
-  "teamwork": 79,
+  "teamwork": 82,
   "honors": "#25 no ranking mundial",
   "colors": [
    "#1f4c51",
@@ -2068,11 +2068,11 @@
     "name": "Miłosz Knasiak",
     "country": "pl",
     "role": "AWP",
-    "aim": 83,
-    "consistency": 83,
-    "clutch": 81,
-    "awp": 83,
-    "igl": 53
+    "aim": 85,
+    "consistency": 85,
+    "clutch": 83,
+    "awp": 85,
+    "igl": 55
    },
    {
     "id": "bo3_25059",
@@ -2080,11 +2080,11 @@
     "name": "Nemanja Đukić",
     "country": "rs",
     "role": "IGL",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 79
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    },
    {
     "id": "bo3_25316",
@@ -2092,11 +2092,11 @@
     "name": "Jadan Postma",
     "country": "ca",
     "role": "Entry",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 49
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_25202",
@@ -2104,11 +2104,11 @@
     "name": "Danny Strzelczyk",
     "country": "us",
     "role": "Rifler",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    },
    {
     "id": "bo3_25333",
@@ -2116,11 +2116,11 @@
     "name": "Ethan Serrano",
     "country": "us",
     "role": "Support",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    }
   ]
  },
@@ -2131,7 +2131,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "fr",
-  "teamwork": 74,
+  "teamwork": 78,
   "honors": "#26 no ranking mundial",
   "colors": [
    "#2f1f51",
@@ -2153,11 +2153,11 @@
     "name": "Kévin Rabier",
     "country": "fr",
     "role": "AWP",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 78,
-    "igl": 48
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
    },
    {
     "id": "bo3_20212",
@@ -2165,11 +2165,11 @@
     "name": "Lucas Chastang",
     "country": "fr",
     "role": "IGL",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 77
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_18297",
@@ -2177,11 +2177,11 @@
     "name": "Bryan Canda",
     "country": "fr",
     "role": "Entry",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_29580",
@@ -2189,11 +2189,11 @@
     "name": "Pierre Bulinge",
     "country": "fr",
     "role": "Rifler",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    },
    {
     "id": "bo3_31226",
@@ -2201,11 +2201,11 @@
     "name": "Filip Brankovic",
     "country": "fr",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  },
@@ -2216,7 +2216,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "dk",
-  "teamwork": 74,
+  "teamwork": 78,
   "honors": "#27 no ranking mundial",
   "colors": [
    "#1f514b",
@@ -2238,11 +2238,11 @@
     "name": "Linus Bergman",
     "country": "se",
     "role": "AWP",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 80,
-    "igl": 50
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_28291",
@@ -2250,11 +2250,11 @@
     "name": "Yasin Koç",
     "country": "tr",
     "role": "IGL",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 76
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_32578",
@@ -2262,11 +2262,11 @@
     "name": "Simon Boije",
     "country": "se",
     "role": "Entry",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_31194",
@@ -2274,11 +2274,11 @@
     "name": "Tim Ångström",
     "country": "se",
     "role": "Rifler",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    },
    {
     "id": "bo3_35543",
@@ -2286,11 +2286,11 @@
     "name": "Christoffer Storgaard",
     "country": "dk",
     "role": "Support",
-    "aim": 70,
-    "consistency": 70,
-    "clutch": 68,
-    "awp": 44,
-    "igl": 40
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
    }
   ]
  },
@@ -2301,7 +2301,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "de",
-  "teamwork": 78,
+  "teamwork": 83,
   "honors": "#28 no ranking mundial",
   "colors": [
    "#1f1f51",
@@ -2335,11 +2335,11 @@
     "name": "Gleb Gazin",
     "country": "by",
     "role": "IGL",
-    "aim": 82,
-    "consistency": 82,
-    "clutch": 80,
-    "awp": 56,
-    "igl": 82
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 58,
+    "igl": 84
    },
    {
     "id": "bo3_25135",
@@ -2347,11 +2347,11 @@
     "name": "Jon de Castro",
     "country": "de",
     "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 53
    },
    {
     "id": "bo3_18189",
@@ -2359,11 +2359,11 @@
     "name": "Josef Baumann",
     "country": "de",
     "role": "Rifler",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_17683",
@@ -2371,11 +2371,11 @@
     "name": "Johannes Wodarz",
     "country": "de",
     "role": "Support",
-    "aim": 69,
-    "consistency": 69,
-    "clutch": 67,
-    "awp": 43,
-    "igl": 39
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    }
   ]
  },
@@ -2386,7 +2386,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "se",
-  "teamwork": 77,
+  "teamwork": 80,
   "honors": "#29 no ranking mundial",
   "colors": [
    "#401f51",
@@ -2408,11 +2408,11 @@
     "name": "Sean Knutsson",
     "country": "se",
     "role": "AWP",
-    "aim": 83,
-    "consistency": 83,
-    "clutch": 81,
-    "awp": 83,
-    "igl": 53
+    "aim": 85,
+    "consistency": 85,
+    "clutch": 83,
+    "awp": 85,
+    "igl": 55
    },
    {
     "id": "bo3_40459",
@@ -2420,11 +2420,11 @@
     "name": "Liam Tügel",
     "country": "se",
     "role": "IGL",
-    "aim": 82,
-    "consistency": 82,
-    "clutch": 80,
-    "awp": 56,
-    "igl": 82
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 58,
+    "igl": 84
    },
    {
     "id": "bo3_38205",
@@ -2432,11 +2432,11 @@
     "name": "Arvid Åberg",
     "country": "se",
     "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    },
    {
     "id": "bo3_17546",
@@ -2444,11 +2444,11 @@
     "name": "Simon Eliasson",
     "country": "se",
     "role": "Rifler",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    },
    {
     "id": "bo3_38025",
@@ -2456,11 +2456,11 @@
     "name": "Markus Johansson",
     "country": "se",
     "role": "Support",
-    "aim": 70,
-    "consistency": 70,
-    "clutch": 68,
-    "awp": 44,
-    "igl": 40
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
    }
   ]
  },
@@ -2471,7 +2471,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "es",
-  "teamwork": 78,
+  "teamwork": 81,
   "honors": "#30 no ranking mundial",
   "colors": [
    "#514a1f",
@@ -2493,11 +2493,11 @@
     "name": "Antonio Martinez Sánchez",
     "country": "es",
     "role": "AWP",
-    "aim": 83,
-    "consistency": 83,
-    "clutch": 81,
-    "awp": 83,
-    "igl": 53
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 84,
+    "igl": 54
    },
    {
     "id": "bo3_25097",
@@ -2505,11 +2505,11 @@
     "name": "Pere Solsona Saumell",
     "country": "es",
     "role": "IGL",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 78
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
    },
    {
     "id": "bo3_20595",
@@ -2517,11 +2517,11 @@
     "name": "Alejandro Fernández-Quejo Cano",
     "country": "es",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_20596",
@@ -2529,11 +2529,11 @@
     "name": "Alejandro Masanet",
     "country": "es",
     "role": "Rifler",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_24619",
@@ -2541,11 +2541,11 @@
     "name": "David Granado Bermudo",
     "country": "es",
     "role": "Support",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    }
   ]
  },
@@ -2556,7 +2556,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 78,
+  "teamwork": 81,
   "honors": "#31 no ranking mundial",
   "colors": [
    "#1f4151",
@@ -2578,11 +2578,11 @@
     "name": "Aleksandr Pakhnevich",
     "country": "ru",
     "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
    },
    {
     "id": "bo3_31632",
@@ -2590,11 +2590,11 @@
     "name": "Dmitry Kondratev",
     "country": "ru",
     "role": "IGL",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
    },
    {
     "id": "bo3_18287",
@@ -2602,11 +2602,11 @@
     "name": "David Danielyan",
     "country": "ru",
     "role": "Entry",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 54,
-    "igl": 50
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 52
    },
    {
     "id": "bo3_51158",
@@ -2614,11 +2614,11 @@
     "name": "Kim Argunov",
     "country": "ru",
     "role": "Rifler",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_28415",
@@ -2626,11 +2626,11 @@
     "name": "Aydos Khairzhan",
     "country": "kz",
     "role": "Support",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    }
   ]
  },
@@ -2641,7 +2641,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "cn",
-  "teamwork": 78,
+  "teamwork": 81,
   "honors": "#32 no ranking mundial",
   "colors": [
    "#51461f",
@@ -2663,11 +2663,11 @@
     "name": "Dongkai Ji",
     "country": "cn",
     "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
    },
    {
     "id": "bo3_24084",
@@ -2675,11 +2675,11 @@
     "name": "Yang Yi",
     "country": "cn",
     "role": "IGL",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 55,
-    "igl": 81
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
    },
    {
     "id": "bo3_34808",
@@ -2687,11 +2687,11 @@
     "name": "QianHao Chen",
     "country": "cn",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_38270",
@@ -2699,11 +2699,11 @@
     "name": "Jingshen Su",
     "country": "cn",
     "role": "Rifler",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_32656",
@@ -2711,11 +2711,11 @@
     "name": "Jingxiang Wang",
     "country": "cn",
     "role": "Support",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    }
   ]
  },
@@ -2726,7 +2726,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "us",
-  "teamwork": 76,
+  "teamwork": 80,
   "honors": "#33 no ranking mundial",
   "colors": [
    "#1f5151",
@@ -2748,11 +2748,11 @@
     "name": "Mason Sanderson",
     "country": "us",
     "role": "AWP",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 79,
-    "igl": 49
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 81,
+    "igl": 51
    },
    {
     "id": "bo3_25137",
@@ -2760,11 +2760,11 @@
     "name": "Fritz Dietrich",
     "country": "de",
     "role": "IGL",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 79
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
    },
    {
     "id": "bo3_30268",
@@ -2772,11 +2772,11 @@
     "name": "Michael Schmid",
     "country": "us",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_35616",
@@ -2784,11 +2784,11 @@
     "name": "Josh Barutt",
     "country": "us",
     "role": "Rifler",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_28461",
@@ -2796,11 +2796,11 @@
     "name": "Elias Stein",
     "country": "de",
     "role": "Support",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    }
   ]
  },
@@ -2811,7 +2811,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "cz",
-  "teamwork": 76,
+  "teamwork": 80,
   "honors": "#34 no ranking mundial",
   "colors": [
    "#4e511f",
@@ -2833,11 +2833,11 @@
     "name": "Mădălin-Andre Mirea",
     "country": "ro",
     "role": "AWP",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 80,
-    "igl": 50
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_40036",
@@ -2845,11 +2845,11 @@
     "name": "Jordan Manevski",
     "country": "mk",
     "role": "IGL",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 78
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
    },
    {
     "id": "bo3_39820",
@@ -2857,11 +2857,11 @@
     "name": "Kamil Banak",
     "country": "pl",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_25109",
@@ -2869,11 +2869,11 @@
     "name": "Max Kvapil",
     "country": "cz",
     "role": "Rifler",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_25111",
@@ -2881,11 +2881,11 @@
     "name": "Sebastian Dano",
     "country": "cz",
     "role": "Support",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    }
   ]
  },
@@ -2896,7 +2896,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 77,
+  "teamwork": 80,
   "honors": "#35 no ranking mundial",
   "colors": [
    "#42511f",
@@ -2918,11 +2918,11 @@
     "name": "Evgeny Frolov",
     "country": "ru",
     "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
    },
    {
     "id": "bo3_51865",
@@ -2930,11 +2930,11 @@
     "name": "Alemkhan Moldakamalov",
     "country": "kz",
     "role": "IGL",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 77
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_31779",
@@ -2942,11 +2942,11 @@
     "name": "Daniil Tupov",
     "country": "ru",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_38328",
@@ -2954,11 +2954,11 @@
     "name": "Philipp Moskvitin",
     "country": "ru",
     "role": "Rifler",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_25467",
@@ -2966,11 +2966,11 @@
     "name": "Ivan Miroshnikov",
     "country": "ru",
     "role": "Support",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    }
   ]
  },
@@ -2981,7 +2981,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "se",
-  "teamwork": 74,
+  "teamwork": 78,
   "honors": "#36 no ranking mundial",
   "colors": [
    "#514c1f",
@@ -3003,11 +3003,11 @@
     "name": "Max Jansson",
     "country": "se",
     "role": "AWP",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 77,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 80,
+    "igl": 50
    },
    {
     "id": "bo3_31147",
@@ -3015,11 +3015,11 @@
     "name": "Jonatan Persson",
     "country": "se",
     "role": "IGL",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 76
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
    },
    {
     "id": "bo3_32517",
@@ -3027,11 +3027,11 @@
     "name": "Kalle Johansson",
     "country": "se",
     "role": "Entry",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_51492",
@@ -3039,11 +3039,11 @@
     "name": "Sebastian Samuelsson",
     "country": "se",
     "role": "Rifler",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    },
    {
     "id": "bo3_17561",
@@ -3051,11 +3051,11 @@
     "name": "Jesper Wecksell",
     "country": "se",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  },
@@ -3066,7 +3066,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "se",
-  "teamwork": 76,
+  "teamwork": 80,
   "honors": "#37 no ranking mundial",
   "colors": [
    "#3a1f51",
@@ -3088,11 +3088,11 @@
     "name": "Georgi Mitev",
     "country": "bg",
     "role": "AWP",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 79,
-    "igl": 49
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_40044",
@@ -3100,11 +3100,11 @@
     "name": "Mateo Prišlin",
     "country": "hr",
     "role": "IGL",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 79
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
    },
    {
     "id": "bo3_28964",
@@ -3112,11 +3112,11 @@
     "name": "Matias Kivistö",
     "country": "fi",
     "role": "Entry",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_28437",
@@ -3124,11 +3124,11 @@
     "name": "Sebastian Malos",
     "country": "ro",
     "role": "Rifler",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_30144",
@@ -3136,11 +3136,11 @@
     "name": "Erik Gustafsson",
     "country": "se",
     "role": "Support",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    }
   ]
  },
@@ -3151,7 +3151,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "br",
-  "teamwork": 76,
+  "teamwork": 80,
   "honors": "#38 no ranking mundial",
   "colors": [
    "#1f2751",
@@ -3173,11 +3173,11 @@
     "name": "Fahad Khaled Alkadyan",
     "country": "br",
     "role": "AWP",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 79,
-    "igl": 49
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_40378",
@@ -3185,11 +3185,11 @@
     "name": "Danilo Barros",
     "country": "br",
     "role": "IGL",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 78
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
    },
    {
     "id": "bo3_31510",
@@ -3197,11 +3197,11 @@
     "name": "Maximo Cortina",
     "country": "ar",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_34369",
@@ -3209,11 +3209,11 @@
     "name": "Daniel Monteiro",
     "country": "br",
     "role": "Rifler",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_28821",
@@ -3221,11 +3221,11 @@
     "name": "Victor Andrade",
     "country": "br",
     "role": "Support",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    }
   ]
  },
@@ -3236,7 +3236,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 77,
+  "teamwork": 80,
   "honors": "#39 no ranking mundial",
   "colors": [
    "#1f3751",
@@ -3258,11 +3258,11 @@
     "name": "Ilya Selifonov",
     "country": "ru",
     "role": "AWP",
-    "aim": 82,
-    "consistency": 82,
-    "clutch": 80,
-    "awp": 82,
-    "igl": 52
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
    },
    {
     "id": "bo3_39388",
@@ -3270,11 +3270,11 @@
     "name": "Timur Askhadulin",
     "country": "ru",
     "role": "IGL",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 78
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
    },
    {
     "id": "bo3_40008",
@@ -3282,11 +3282,11 @@
     "name": "Denis Karpovich",
     "country": "by",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_76716",
@@ -3294,11 +3294,11 @@
     "name": "Egor Ershov",
     "country": "ru",
     "role": "Rifler",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_73097",
@@ -3306,11 +3306,11 @@
     "name": "Arseniy Kozlovsky",
     "country": "by",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  },
@@ -3321,7 +3321,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "by",
-  "teamwork": 77,
+  "teamwork": 80,
   "honors": "#40 no ranking mundial",
   "colors": [
    "#514b1f",
@@ -3343,11 +3343,11 @@
     "name": "Daniel Ageyev",
     "country": "kz",
     "role": "AWP",
-    "aim": 82,
-    "consistency": 82,
-    "clutch": 80,
-    "awp": 82,
-    "igl": 52
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
    },
    {
     "id": "bo3_34801",
@@ -3355,11 +3355,11 @@
     "name": "Beksultan Ospan",
     "country": "kz",
     "role": "IGL",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 53,
-    "igl": 79
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    },
    {
     "id": "bo3_26545",
@@ -3367,11 +3367,11 @@
     "name": "Aleksandr Anashkin",
     "country": "ru",
     "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    },
    {
     "id": "bo3_35463",
@@ -3379,11 +3379,11 @@
     "name": "Maxim Beketov",
     "country": "ru",
     "role": "Rifler",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_29067",
@@ -3391,11 +3391,11 @@
     "name": "Aleksandr Nahornyj",
     "country": "by",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  },
@@ -3406,7 +3406,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 77,
+  "teamwork": 80,
   "honors": "#41 no ranking mundial",
   "colors": [
    "#24511f",
@@ -3428,11 +3428,11 @@
     "name": "Nikolay Bityukov",
     "country": "ru",
     "role": "AWP",
-    "aim": 81,
-    "consistency": 81,
-    "clutch": 79,
-    "awp": 81,
-    "igl": 51
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 83,
+    "igl": 53
    },
    {
     "id": "bo3_49050",
@@ -3440,11 +3440,11 @@
     "name": "Vladimir Krasikov",
     "country": "ru",
     "role": "IGL",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 78
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 81
    },
    {
     "id": "bo3_68534",
@@ -3452,11 +3452,11 @@
     "name": "Alexander Kovalev",
     "country": "ru",
     "role": "Entry",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_74510",
@@ -3464,11 +3464,11 @@
     "name": "Dias Kutubay",
     "country": "kz",
     "role": "Rifler",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_68537",
@@ -3476,11 +3476,11 @@
     "name": "Vadim Arkov",
     "country": "ru",
     "role": "Support",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    }
   ]
  },
@@ -3491,7 +3491,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ru",
-  "teamwork": 75,
+  "teamwork": 80,
   "honors": "#42 no ranking mundial",
   "colors": [
    "#1f1f51",
@@ -3513,11 +3513,11 @@
     "name": "Aleksey Mikulich",
     "country": "by",
     "role": "AWP",
-    "aim": 80,
-    "consistency": 80,
-    "clutch": 78,
-    "awp": 80,
-    "igl": 50
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_50733",
@@ -3525,11 +3525,11 @@
     "name": "Daniil Kabilov",
     "country": "ru",
     "role": "IGL",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 76
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 79
    },
    {
     "id": "bo3_49421",
@@ -3537,11 +3537,11 @@
     "name": "Danila Dronov",
     "country": "ru",
     "role": "Entry",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_29283",
@@ -3549,11 +3549,11 @@
     "name": "Daniil Maryshev",
     "country": "ru",
     "role": "Rifler",
-    "aim": 72,
-    "consistency": 72,
-    "clutch": 70,
-    "awp": 46,
-    "igl": 42
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    },
    {
     "id": "bo3_28376",
@@ -3561,11 +3561,11 @@
     "name": "Petr Bolyshev",
     "country": "ru",
     "role": "Support",
-    "aim": 70,
-    "consistency": 70,
-    "clutch": 68,
-    "awp": 44,
-    "igl": 40
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 53
    }
   ]
  },
@@ -3576,7 +3576,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ua",
-  "teamwork": 74,
+  "teamwork": 79,
   "honors": "#43 no ranking mundial",
   "colors": [
    "#46511f",
@@ -3598,11 +3598,11 @@
     "name": "David Bibik",
     "country": "ua",
     "role": "AWP",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 79,
-    "igl": 49
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_28431",
@@ -3610,11 +3610,11 @@
     "name": "Daniil Valitov",
     "country": "ua",
     "role": "IGL",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 77
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 56,
+    "igl": 82
    },
    {
     "id": "bo3_37979",
@@ -3622,11 +3622,11 @@
     "name": "Eduard Petrovskyi",
     "country": "ua",
     "role": "Entry",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_29943",
@@ -3634,11 +3634,11 @@
     "name": "Arsenly Derevinskly",
     "country": "ua",
     "role": "Rifler",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    },
    {
     "id": "bo3_35117",
@@ -3646,11 +3646,11 @@
     "name": "Viktor Babii",
     "country": "ua",
     "role": "Support",
-    "aim": 69,
-    "consistency": 69,
-    "clutch": 67,
-    "awp": 43,
-    "igl": 39
+    "aim": 75,
+    "consistency": 75,
+    "clutch": 73,
+    "awp": 49,
+    "igl": 45
    }
   ]
  },
@@ -3661,7 +3661,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "cn",
-  "teamwork": 79,
+  "teamwork": 81,
   "honors": "#44 no ranking mundial",
   "colors": [
    "#4f511f",
@@ -3683,11 +3683,11 @@
     "name": "Hussein Hijazi",
     "country": "lb",
     "role": "AWP",
-    "aim": 84,
-    "consistency": 84,
-    "clutch": 82,
-    "awp": 84,
-    "igl": 54
+    "aim": 85,
+    "consistency": 85,
+    "clutch": 83,
+    "awp": 85,
+    "igl": 55
    },
    {
     "id": "bo3_29989",
@@ -3695,11 +3695,11 @@
     "name": "Aleksandar Kjulukoski",
     "country": "mk",
     "role": "IGL",
-    "aim": 83,
-    "consistency": 83,
-    "clutch": 81,
-    "awp": 57,
-    "igl": 83
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 58,
+    "igl": 84
    },
    {
     "id": "bo3_36613",
@@ -3707,11 +3707,11 @@
     "name": "Osama Orabi",
     "country": "ps",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_23229",
@@ -3719,11 +3719,11 @@
     "name": "Dionis Budeci",
     "country": "xk",
     "role": "Rifler",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_24761",
@@ -3731,11 +3731,11 @@
     "name": "Bebu Aadil",
     "country": "iq",
     "role": "Support",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    }
   ]
  },
@@ -3746,7 +3746,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "us",
-  "teamwork": 73,
+  "teamwork": 81,
   "honors": "#45 no ranking mundial",
   "colors": [
    "#511f44",
@@ -3768,59 +3768,59 @@
     "name": "Keith Markovic",
     "country": "ca",
     "role": "AWP",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 76,
-    "igl": 46
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 79,
+    "igl": 49
    },
    {
     "id": "bo3_21433",
     "nick": "malbsMd",
     "name": "Mario Samayoa",
     "country": "gt",
-    "role": "IGL",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 75
+    "role": "Entry",
+    "aim": 86,
+    "consistency": 86,
+    "clutch": 84,
+    "awp": 60,
+    "igl": 56
    },
    {
     "id": "bo3_17528",
     "nick": "EliGE",
     "name": "Jonathan Jablonowski",
     "country": "us",
-    "role": "Entry",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "role": "Rifler",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_33654",
     "nick": "ultimate",
     "name": "Roland Tomkowiak",
     "country": "pl",
-    "role": "Rifler",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "role": "Support",
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    },
    {
     "id": "bo3_28060",
     "nick": "siuhy",
     "name": "Kamil Szkaradek",
     "country": "pl",
-    "role": "Support",
-    "aim": 66,
-    "consistency": 66,
-    "clutch": 64,
-    "awp": 40,
-    "igl": 36
+    "role": "IGL",
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
    }
   ]
  },
@@ -3831,7 +3831,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "pl",
-  "teamwork": 76,
+  "teamwork": 79,
   "honors": "#46 no ranking mundial",
   "colors": [
    "#1f3551",
@@ -3853,11 +3853,11 @@
     "name": "Kamil Cegiełko",
     "country": "pl",
     "role": "AWP",
-    "aim": 79,
-    "consistency": 79,
-    "clutch": 77,
-    "awp": 79,
-    "igl": 49
+    "aim": 82,
+    "consistency": 82,
+    "clutch": 80,
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_29514",
@@ -3865,11 +3865,11 @@
     "name": "Dawid Stańczak",
     "country": "pl",
     "role": "IGL",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 77
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_29407",
@@ -3877,11 +3877,11 @@
     "name": "Patryk Woźniak",
     "country": "pl",
     "role": "Entry",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_33346",
@@ -3889,11 +3889,11 @@
     "name": "Wojciech Strzelczyk",
     "country": "pl",
     "role": "Rifler",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_36211",
@@ -3901,11 +3901,11 @@
     "name": "Bartek Mikołajczyk",
     "country": "pl",
     "role": "Support",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 47,
-    "igl": 43
+    "aim": 77,
+    "consistency": 77,
+    "clutch": 75,
+    "awp": 51,
+    "igl": 47
    }
   ]
  },
@@ -3916,7 +3916,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "us",
-  "teamwork": 79,
+  "teamwork": 82,
   "honors": "#47 no ranking mundial",
   "colors": [
    "#451f51",
@@ -3938,11 +3938,11 @@
     "name": "Nicolai Reedtz",
     "country": "dk",
     "role": "AWP",
-    "aim": 82,
-    "consistency": 82,
-    "clutch": 80,
-    "awp": 82,
-    "igl": 52
+    "aim": 84,
+    "consistency": 84,
+    "clutch": 82,
+    "awp": 84,
+    "igl": 54
    },
    {
     "id": "bo3_45474",
@@ -3950,11 +3950,11 @@
     "name": "Alex Nyholm Sundgren",
     "country": "se",
     "role": "IGL",
-    "aim": 82,
-    "consistency": 82,
-    "clutch": 80,
-    "awp": 56,
-    "igl": 82
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 83
    },
    {
     "id": "bo3_29093",
@@ -3962,11 +3962,11 @@
     "name": "André Gil",
     "country": "pt",
     "role": "Entry",
-    "aim": 78,
-    "consistency": 78,
-    "clutch": 76,
-    "awp": 52,
-    "igl": 48
+    "aim": 81,
+    "consistency": 81,
+    "clutch": 79,
+    "awp": 55,
+    "igl": 51
    },
    {
     "id": "bo3_35926",
@@ -3974,11 +3974,11 @@
     "name": "William Kjærsgaard",
     "country": "dk",
     "role": "Rifler",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 47
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
    },
    {
     "id": "bo3_17523",
@@ -3986,11 +3986,11 @@
     "name": "Håvard Nygaard",
     "country": "no",
     "role": "Support",
-    "aim": 75,
-    "consistency": 75,
-    "clutch": 73,
-    "awp": 49,
-    "igl": 45
+    "aim": 83,
+    "consistency": 83,
+    "clutch": 81,
+    "awp": 57,
+    "igl": 53
    }
   ]
  },
@@ -4001,7 +4001,7 @@
   "era": "2026",
   "game": "CS2",
   "country": "ro",
-  "teamwork": 77,
+  "teamwork": 80,
   "honors": "#48 no ranking mundial",
   "colors": [
    "#3d511f",
@@ -4023,11 +4023,11 @@
     "name": "Henrich Hevesi",
     "country": "hu",
     "role": "AWP",
-    "aim": 86,
-    "consistency": 86,
-    "clutch": 84,
-    "awp": 86,
-    "igl": 56
+    "aim": 87,
+    "consistency": 87,
+    "clutch": 85,
+    "awp": 87,
+    "igl": 57
    },
    {
     "id": "bo3_29838",
@@ -4035,11 +4035,11 @@
     "name": "Martin Handl",
     "country": "cz",
     "role": "IGL",
-    "aim": 77,
-    "consistency": 77,
-    "clutch": 75,
-    "awp": 51,
-    "igl": 77
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_20389",
@@ -4047,11 +4047,11 @@
     "name": "Rasmus Johansson",
     "country": "se",
     "role": "Entry",
-    "aim": 76,
-    "consistency": 76,
-    "clutch": 74,
-    "awp": 50,
-    "igl": 46
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
    },
    {
     "id": "bo3_29584",
@@ -4059,11 +4059,11 @@
     "name": "Raul Gligor",
     "country": "ro",
     "role": "Rifler",
-    "aim": 74,
-    "consistency": 74,
-    "clutch": 72,
-    "awp": 48,
-    "igl": 44
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 52,
+    "igl": 48
    },
    {
     "id": "bo3_29775",
@@ -4071,11 +4071,11 @@
     "name": "Mihnea Gheață",
     "country": "ro",
     "role": "Support",
-    "aim": 71,
-    "consistency": 71,
-    "clutch": 69,
-    "awp": 45,
-    "igl": 41
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 46
    }
   ]
  }
