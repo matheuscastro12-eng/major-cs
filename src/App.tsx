@@ -20,6 +20,8 @@ import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
 import { createTournament, getTeam, pairingBestOf, phaseLabel, placementLabel, resolveRound, userMapRecord, userPairing, userTeam } from './engine/swiss';
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, resetDataset, saveDataset } from './state/crm';
+import { useLang } from './state/i18n';
+import { LangSwitcher } from './components/social';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
@@ -94,6 +96,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(() => shouldOnboard());
   const rngRef = useRef(makeRng(randomSeed()));
   const rng = useCallback(() => rngRef.current(), []);
+  const { t } = useLang();
 
   // jogadores só veem times aprovados (pending fica oculto até liberar no CRM)
   const eligible = useMemo(() => dataset.filter((t) => t.players.length >= 5 && !t.pending), [dataset]);
@@ -465,10 +468,11 @@ export default function App() {
             <BrandMark size={32} className="logo-mark" />
             ROAD&nbsp;TO&nbsp;<span>MAJOR</span>
           </span>
-          <span className="subtitle">simulador do cenário profissional de Counter-Strike · do 1.6 ao CS2</span>
+          <span className="subtitle">{t('nav.subtitle')}</span>
+          <LangSwitcher />
           <DonateButton onClick={() => setDonateOpen(true)} />
           <button className="nav-btn" onClick={() => setScreen('hall')}>
-            🏛 Hall
+            {t('nav.hall')}
           </button>
         </div>
       </header>

@@ -679,6 +679,76 @@ tr.team-row td {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* seletor de idioma no header */
+.lang-switch {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--panel-3);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 2px;
+}
+.lang-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.lang-btn .lf {
+  font-size: 13px;
+}
+.lang-btn.on {
+  background: var(--blue-bright, #61a8dd);
+  color: #06121d;
+}
+@media (max-width: 720px) {
+  .lang-btn .lf {
+    display: none;
+  }
+}
+
+/* social: X/Twitter + tweet de anúncio */
+.social-row {
+  margin: 18px 0 10px;
+  text-align: center;
+}
+.x-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: #15191f;
+  border: 1px solid var(--border-soft);
+  color: var(--text-strong);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  transition: border-color 0.15s, transform 0.08s;
+}
+.x-link:hover {
+  border-color: var(--blue-bright);
+  transform: translateY(-1px);
+}
+.announce-tweet {
+  max-width: 520px;
+  margin: 0 auto 8px;
+}
+.announce-label {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
 .prize-banner {
   margin: 4px 0 12px;
   padding: 8px 14px;

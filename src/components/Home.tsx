@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { DIFFICULTY_DESC, DIFFICULTY_LABELS, type Difficulty, type TournamentPool } from '../types';
+import { type Difficulty, type TournamentPool } from '../types';
+import { useLang } from '../state/i18n';
 import { BrandMark } from './brand';
 import { DonorsPanel } from './Donate';
+import { AnnouncementTweet, TwitterLink } from './social';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
@@ -28,12 +30,14 @@ export function Home({
   onDiscardCampaign,
   onOnline,
 }: Props) {
+  const { t } = useLang();
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [name, setName] = useState('');
 
   const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool, difficulty);
+  const DIFF_ICON: Record<Difficulty, string> = { normal: '🟢', hard: '🟠', legend: '🔴' };
 
   return (
     <div className="fade-in">
@@ -42,25 +46,21 @@ export function Home({
         <h1>
           ROAD TO <span>MAJOR</span>
         </h1>
-        <p>
-          Monte o time dos sonhos com lendas de todas as eras do Counter-Strike (do 1.6 ao CS2) e
-          dispute um Major completo em séries MD3 contra os maiores times da história.
-        </p>
+        <p>{t('hero.tagline')}</p>
 
         {savedCampaign && (
           <div style={{ margin: '18px auto 0', maxWidth: 640, display: 'flex', gap: 10 }}>
             <button className="btn gold big" style={{ flex: 1 }} onClick={onResume}>
-              ▶ Continuar campanha - {savedCampaign.name}
-              {savedCampaign.phase === 'done' ? ' (encerrada)' : ''}
+              {t('home.resume')} - {savedCampaign.name}
+              {savedCampaign.phase === 'done' ? ` ${t('home.ended')}` : ''}
             </button>
             <button
               className="btn ghost"
-              title="Apaga a campanha salva para começar do zero"
               onClick={() => {
-                if (confirm('Apagar a campanha salva e começar um novo jogo?')) onDiscardCampaign?.();
+                if (confirm(t('home.confirmDiscard'))) onDiscardCampaign?.();
               }}
             >
-              🗑 Nova campanha
+              {t('home.newCampaign')}
             </button>
           </div>
         )}
@@ -68,30 +68,30 @@ export function Home({
         {onOnline && (
           <div style={{ margin: '14px auto 0', maxWidth: 640 }}>
             <button className="btn big online-cta" style={{ width: '100%' }} onClick={onOnline}>
-              🌐 Jogar online com amigos (duelo 1x1 ou grupo)
+              {t('home.online')}
             </button>
           </div>
         )}
 
         <div className="pool-cards">
           <button className={`pool-card world${pool === 'world' ? ' sel' : ''}`} onClick={() => setPool('world')}>
-            <h3>🏆 Major Mundial</h3>
-            <p>Todas as eras e regiões: do 1.6 ao CS2, monte o dream team global e vença o Major dos Sonhos.</p>
+            <h3>{t('home.poolWorld')}</h3>
+            <p>{t('home.poolWorldDesc')}</p>
           </button>
           <button className={`pool-card br${pool === 'br' ? ' sel' : ''}`} onClick={() => setPool('br')}>
-            <h3>🇧🇷 GC Masters</h3>
-            <p>Só elencos brasileiros - de mibr 2006 e SK 2016 a Legacy e FURIA. O campeonato da pátria de chuteiras (e de headshot).</p>
+            <h3>{t('home.poolBr')}</h3>
+            <p>{t('home.poolBrDesc')}</p>
           </button>
         </div>
 
         <div className="mode-cards">
           <button className={`mode-card${mode === 'classic' ? ' sel' : ''}`} onClick={() => setMode('classic')}>
-            <h3>🎯 Modo Clássico</h3>
-            <p>Os atributos de cada jogador ficam visíveis no draft. Monte o time com base nos dados.</p>
+            <h3>{t('home.modeClassic')}</h3>
+            <p>{t('home.modeClassicDesc')}</p>
           </button>
           <button className={`mode-card${mode === 'almanac' ? ' sel' : ''}`} onClick={() => setMode('almanac')}>
-            <h3>📕 Modo Almanaque</h3>
-            <p>Atributos escondidos. Só o seu conhecimento da história do CS define as escolhas.</p>
+            <h3>{t('home.modeAlmanac')}</h3>
+            <p>{t('home.modeAlmanacDesc')}</p>
           </button>
         </div>
 
@@ -99,30 +99,35 @@ export function Home({
           {DIFFICULTIES.map((d) => (
             <button key={d} className={`diff-card ${d}${difficulty === d ? ' sel' : ''}`} onClick={() => setDifficulty(d)}>
               <h4>
-                {d === 'normal' ? '🟢' : d === 'hard' ? '🟠' : '🔴'} {DIFFICULTY_LABELS[d]}
+                {DIFF_ICON[d]} {t(`diff.${d}`)}
               </h4>
-              <p>{DIFFICULTY_DESC[d]}</p>
+              <p>{t(`diff.${d}Desc`)}</p>
             </button>
           ))}
         </div>
 
         <div className="name-input">
           <input
-            placeholder="Nome do seu time…"
+            placeholder={t('home.namePlaceholder')}
             value={name}
             maxLength={24}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && start()}
           />
           <button className="btn big" onClick={start}>
-            Começar draft
+            {t('home.start')}
           </button>
         </div>
+
+        <div className="social-row">
+          <TwitterLink />
+        </div>
+        <AnnouncementTweet />
 
         <DonorsPanel onDonate={onDonate} />
 
         <div className="footnote">
-          {teamCount} elencos históricos · {playerCount} jogadores ·{' '}
+          {teamCount} {t('home.teams')} · {playerCount} {t('home.players')} ·{' '}
           <a
             href="#hall"
             onClick={(e) => {
@@ -130,17 +135,19 @@ export function Home({
               onHall();
             }}
           >
-            🏛 Hall da Fama
+            {t('home.hall')}
           </a>
-          {' · '}dados curados com base em{' '}
+          {' · '}
+          {t('home.curated')}{' '}
           <a href="https://liquipedia.net" target="_blank" rel="noreferrer">
             Liquipedia
           </a>{' '}
-          e{' '}
+          &amp;{' '}
           <a href="https://www.hltv.org" target="_blank" rel="noreferrer">
             HLTV
           </a>
-          {' · '}fotos de jogadores:{' '}
+          {' · '}
+          {t('home.photos')}{' '}
           <a href="https://liquipedia.net" target="_blank" rel="noreferrer">
             Liquipedia
           </a>{' '}
