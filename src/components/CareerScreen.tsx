@@ -9,7 +9,8 @@ import { createLeague, leagueDone, leagueTable, leagueTeam, resolveLeagueRound, 
 import { teamSeasonToTTeam } from '../engine/ratings';
 import { simulateSeries } from '../engine/match';
 import { autoVeto } from '../engine/veto';
-import { createTournament, placementCode, resolveRound, type PlacementCode } from '../engine/swiss';
+import { createTournament, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
+import { Hub } from './Hub';
 import { makeRng, randomSeed } from '../engine/rng';
 import type { Coach, MapId, Player, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
 import { MatchScreen } from './MatchScreen';
@@ -17,6 +18,7 @@ import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
+import { fileToDataUrl } from '../state/crm';
 
 const SAVE_KEY = 'rtm-career-v1';
 const STARTING_BUDGET = 6_000_000;
@@ -41,11 +43,37 @@ const MAJOR_VRS: Record<PlacementCode, number> = {
   playoffs: 120,
   swiss: 70,
 };
+// nomes reais de Majors (fonte: Liquipedia), rotacionando por split
+const MAJOR_NAMES = ['PGL Major Copenhagen', 'BLAST.tv Austin Major', 'IEM Major Rio', 'PGL Major Budapest', 'ESL One Major Cologne'];
+const MAJOR_NAME = (split: number) => MAJOR_NAMES[(split - 1) % MAJOR_NAMES.length];
 
 interface Signing {
   playerId: string;
   fromId: string;
 }
+
+// Patrocinadores: marcas reais que pagam por split. Os de maior tier exigem
+// prestígio (VRS acumulado) pra liberar o contrato. Até 3 slots ativos.
+interface Sponsor {
+  id: string;
+  name: string;
+  perSplit: number;
+  minVrs: number;
+  color: string;
+}
+const SPONSORS: Sponsor[] = [
+  { id: 'logitech', name: 'Logitech G', perSplit: 200_000, minVrs: 0, color: '#00b8fc' },
+  { id: 'hyperx', name: 'HyperX', perSplit: 280_000, minVrs: 0, color: '#e21b22' },
+  { id: 'razer', name: 'Razer', perSplit: 320_000, minVrs: 150, color: '#44d62c' },
+  { id: 'monster', name: 'Monster Energy', perSplit: 400_000, minVrs: 250, color: '#7ed957' },
+  { id: 'secretlab', name: 'Secretlab', perSplit: 360_000, minVrs: 200, color: '#d9a441' },
+  { id: 'intel', name: 'Intel', perSplit: 520_000, minVrs: 400, color: '#0071c5' },
+  { id: 'redbull', name: 'Red Bull', perSplit: 650_000, minVrs: 550, color: '#cc0033' },
+  { id: 'samsung', name: 'Samsung', perSplit: 800_000, minVrs: 750, color: '#1428a0' },
+];
+const SPONSOR_SLOTS = 3;
+const sponsorById = (id: string) => SPONSORS.find((s) => s.id === id);
+const sponsorIncome = (ids: string[]) => ids.reduce((a, id) => a + (sponsorById(id)?.perSplit ?? 0), 0);
 
 // campeonato escolhido para o split (define o chaveamento e a premiação)
 interface CircuitChoice {
@@ -71,7 +99,7 @@ interface SplitRecord {
 }
 
 interface CareerSave {
-  org: { name: string; tag: string; colors: [string, string] } | null;
+  org: { name: string; tag: string; colors: [string, string]; logo?: string } | null;
   budget: number;
   vrs: number;
   split: number;
@@ -81,6 +109,7 @@ interface CareerSave {
   league: League | null;
   circuit: CircuitChoice | null;
   history: SplitRecord[];
+  sponsors: string[];
 }
 
 const emptySave = (): CareerSave => ({
@@ -94,6 +123,7 @@ const emptySave = (): CareerSave => ({
   league: null,
   circuit: null,
   history: [],
+  sponsors: [],
 });
 
 function loadSave(): CareerSave {
@@ -121,7 +151,7 @@ const coachFee = (c: Coach): number => Math.max(100_000, (c.rating - 60) * 30_00
 const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', country: 'br', rating: 66, style: 'tactical' };
 const ROOKIE_ID = '__rookie__';
 
-type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'seasonEnd' | 'major';
+type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'seasonEnd' | 'majorHub' | 'major';
 type HubTab = 'overview' | 'results' | 'standings' | 'squad' | 'history';
 
 interface MajorResult {
@@ -153,9 +183,13 @@ export function CareerScreen({ dataset, onExit }: Props) {
     teams: [TTeam, TTeam];
     userIdx: 0 | 1;
     maps?: { map: MapId; pickedBy: 0 | 1 | -1 }[];
+    mode: 'league' | 'major';
+    bestOf: 1 | 3 | 5;
+    phaseLabel: string;
   } | null>(null);
   const [selSeries, setSelSeries] = useState<{ series: SeriesResult; teams: [TTeam, TTeam] } | null>(null);
   const [majorResult, setMajorResult] = useState<MajorResult | null>(null);
+  const [majorT, setMajorT] = useState<Tournament | null>(null);
   const [hubTab, setHubTab] = useState<HubTab>('overview');
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
@@ -198,9 +232,9 @@ export function CareerScreen({ dataset, onExit }: Props) {
       vrsMult: number,
     ) => ({ id, name, desc, teams: teams.slice(0, 7), spots, prizeMult, vrsMult });
     return [
-      mk('circuitx', 'CIRCUIT X (BR)', 'Liga nacional brasileira. Campo equilibrado, porta de entrada pro Major.', br, 2, 1, 1),
-      mk('elite', 'ELITE LEAGUE (Mundial)', 'Os gigantes internacionais. Mais difícil, porém paga muito mais e dá mais VRS.', byStrength, 2, 1.6, 1.5),
-      mk('challengers', 'CHALLENGERS CIRCUIT', 'Liga de acesso com times medianos. Mais fácil, mas só 1 vaga e prêmios menores.', mid, 1, 0.6, 0.6),
+      mk('gcmasters', 'Gamers Club Masters (BR)', 'Liga nacional brasileira. Campo equilibrado, porta de entrada pro Major.', br, 2, 1, 1),
+      mk('blast', 'BLAST Premier (Mundial)', 'Os gigantes internacionais. Mais difícil, porém paga muito mais e dá mais VRS.', byStrength, 2, 1.6, 1.5),
+      mk('eslchallenger', 'ESL Challenger', 'Liga de acesso com times medianos. Mais fácil, mas só 1 vaga e prêmios menores.', mid, 1, 0.6, 0.6),
     ].filter((c) => c.teams.length >= 5);
   }, [currentEra, brTeams]);
 
@@ -226,7 +260,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
     // '__rookie__' = técnico iniciante barato (opção de entrada da carreira)
     const coach = dataset.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
     const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach);
-    return { ...team, tag: s.org.tag, colors: s.org.colors };
+    return { ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo };
   };
 
   const startSplit = (s: CareerSave, circuit: (typeof circuits)[number]) => {
@@ -295,25 +329,71 @@ export function CareerScreen({ dataset, onExit }: Props) {
     finishUserRound(l, series);
   };
 
-  // Major: o time vai pro Major mundial (16 times) e disputa Suíça + playoffs.
-  // v0: simulado de ponta a ponta para mostrar a jornada (jogar ao vivo vem a seguir).
+  // Major: o time vai pro Major mundial (16 times) e disputa Suíça + playoffs
+  // AO VIVO, com bracket de verdade (mesmo motor/UI do modo draft).
   const playMajor = (s: CareerSave) => {
     const user = buildTeam(s);
     if (!user) return;
     rngRef.current = makeRng(randomSeed());
     const pool = currentEra.filter((t) => t.id !== 'user');
-    const major = createTournament(pool, user, rngRef.current, `MAJOR ${s.split}`, 4);
-    let guard = 0;
-    while (major.phase !== 'done' && guard++ < 40) resolveRound(major, rngRef.current);
-    const placement = placementCode(major, 'user');
+    const major = createTournament(pool, user, rngRef.current, MAJOR_NAME(s.split), 4);
+    setMajorT(major);
+    setStage('majorHub');
+  };
+
+  // encerra o Major: calcula colocação, prêmio e VRS
+  const concludeMajor = (t: Tournament) => {
+    const placement = placementCode(t, 'user');
     setMajorResult({
-      tournament: major,
+      tournament: t,
       placement,
       prize: MAJOR_PRIZE[placement],
       vrs: MAJOR_VRS[placement],
       champion: placement === 'champion',
     });
     setStage('major');
+  };
+
+  // abre o veto/partida da rodada do usuário no Major
+  const playMajorMine = () => {
+    if (!majorT) return;
+    const up = tournamentUserPairing(majorT);
+    if (!up) return;
+    const a = getTeam(majorT, up.a);
+    const b = getTeam(majorT, up.b);
+    setMatchCtx({
+      teams: [a, b],
+      userIdx: up.a === 'user' ? 0 : 1,
+      mode: 'major',
+      bestOf: up.bestOf ?? 3,
+      phaseLabel: `${majorT.name} · ${up.label}`,
+    });
+    setStage('veto');
+  };
+
+  // resolve a rodada do Major após a partida do usuário
+  const finishMajorRound = (series?: SeriesResult) => {
+    if (!majorT) return;
+    const clone: Tournament = structuredClone(majorT);
+    if (series) {
+      const p = clone.pairings.find((x) => x.a === 'user' || x.b === 'user');
+      if (p) p.result = series;
+    }
+    resolveRound(clone, rngRef.current);
+    setMatchCtx(null);
+    setMajorT(clone);
+    if (clone.phase === 'done') concludeMajor(clone);
+    else setStage('majorHub');
+  };
+
+  // simula a rodada inteira do Major (incluindo a partida do usuário)
+  const simMajorRound = () => {
+    if (!majorT) return;
+    const clone: Tournament = structuredClone(majorT);
+    resolveRound(clone, rngRef.current);
+    setMajorT(clone);
+    if (clone.phase === 'done') concludeMajor(clone);
+    else setStage('majorHub');
   };
 
   // ---------- fundação ----------
@@ -333,8 +413,8 @@ export function CareerScreen({ dataset, onExit }: Props) {
         coaches={currentEra}
         findSigning={findSigning}
         onExit={onExit}
-        onConfirm={(squad, coachFromId, budget) => {
-          const next = { ...save, squad, coachFromId, budget };
+        onConfirm={(squad, coachFromId, budget, sponsors) => {
+          const next = { ...save, squad, coachFromId, budget, sponsors };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -396,9 +476,10 @@ export function CareerScreen({ dataset, onExit }: Props) {
                       major: { placement: mr.placement, champion: mr.champion },
                     };
                 pendingSplit.current = null;
+                setMajorT(null);
                 const next = {
                   ...save,
-                  budget: save.budget + mr.prize - payroll,
+                  budget: save.budget + mr.prize - payroll + sponsorIncome(save.sponsors),
                   vrs: save.vrs + mr.vrs,
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
@@ -494,7 +575,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
                 onClick={() => {
                   const next = {
                     ...save,
-                    budget: save.budget + prize - payroll,
+                    budget: save.budget + prize - payroll + sponsorIncome(save.sponsors),
                     vrs: save.vrs + vrsGain,
                     titles: save.titles + (pos === 1 ? 1 : 0),
                     split: save.split + 1,
@@ -516,16 +597,18 @@ export function CareerScreen({ dataset, onExit }: Props) {
     );
   }
 
-  // ---------- veto / partida ----------
-  if ((stage === 'veto' || stage === 'match') && matchCtx && league) {
+  // ---------- veto / partida (liga OU Major, ao vivo) ----------
+  if ((stage === 'veto' || stage === 'match') && matchCtx) {
+    const finish = (series: SeriesResult) =>
+      matchCtx.mode === 'major' ? finishMajorRound(series) : league && finishUserRound(league, series);
     if (stage === 'veto') {
       return (
         <VetoScreen
           teams={matchCtx.teams}
           userIdx={matchCtx.userIdx}
           rng={() => rngRef.current()}
-          phaseLabel={`${league.name} · Rodada ${league.current + 1}`}
-          bestOf={LEAGUE_BO}
+          phaseLabel={matchCtx.phaseLabel}
+          bestOf={matchCtx.bestOf}
           onDone={(maps) => {
             setMatchCtx({ ...matchCtx, maps });
             setStage('match');
@@ -539,10 +622,34 @@ export function CareerScreen({ dataset, onExit }: Props) {
         maps={matchCtx.maps!}
         userIdx={matchCtx.userIdx}
         rng={() => rngRef.current()}
-        phaseLabel={`${league.name} · Rodada ${league.current + 1}`}
-        bestOf={LEAGUE_BO}
-        onFinish={(series) => finishUserRound(league, series)}
+        phaseLabel={matchCtx.phaseLabel}
+        bestOf={matchCtx.bestOf}
+        onFinish={finish}
       />
+    );
+  }
+
+  // ---------- hub do Major (ao vivo, com bracket) ----------
+  if (stage === 'majorHub' && majorT) {
+    return (
+      <div className="career-major-live">
+        <div className="major-live-bar">
+          <b>MODO CARREIRA</b> · {save.org?.name} no {majorT.name}
+          <span className="spacer" />
+          <button className="btn" onClick={() => setStage('majorHub')} disabled>Major ao vivo</button>
+        </div>
+        <Hub
+          t={majorT}
+          career={{ season: save.split, titles: save.titles, budget: save.budget }}
+          pickem={{ picks: {}, score: 0, total: 0 }}
+          onPick={() => {}}
+          onPlay={playMajorMine}
+          onSimRound={simMajorRound}
+          onStats={() => {}}
+          onOpenSeries={(p) => p.result && setSelSeries({ series: p.result, teams: [getTeam(majorT, p.a), getTeam(majorT, p.b)] })}
+        />
+        {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
+      </div>
     );
   }
 
@@ -557,7 +664,13 @@ export function CareerScreen({ dataset, onExit }: Props) {
     rngRef.current = makeRng(randomSeed());
     const a = leagueTeam(league, myMatch.a);
     const b = leagueTeam(league, myMatch.b);
-    setMatchCtx({ teams: [a, b], userIdx: myMatch.a === 'user' ? 0 : 1 });
+    setMatchCtx({
+      teams: [a, b],
+      userIdx: myMatch.a === 'user' ? 0 : 1,
+      mode: 'league',
+      bestOf: LEAGUE_BO,
+      phaseLabel: `${league.name} · Rodada ${league.current + 1}`,
+    });
     setStage('veto');
   };
 
@@ -587,6 +700,14 @@ export function CareerScreen({ dataset, onExit }: Props) {
         <div className="ct-id">
           <div className="ct-name">{save.org?.name}</div>
           <div className="ct-sub">{save.circuit?.name ?? 'CIRCUIT X'} · Split {save.split}</div>
+          {save.sponsors.length > 0 && (
+            <div className="ct-sponsors">
+              {save.sponsors.map((id) => {
+                const sp = sponsorById(id);
+                return sp ? <span key={id} className="ct-sp" style={{ background: sp.color }} title={`${sp.name} · +${formatMoney(sp.perSplit)}/split`}>{sp.name}</span> : null;
+              })}
+            </div>
+          )}
         </div>
         <div className="ct-standing">
           <span className="muted small">POSIÇÃO</span>
@@ -1007,15 +1128,67 @@ function CircuitPicker({ circuits, split, onPick, onBack }: {
   );
 }
 
+// emblemas do construtor de logo (SVG inline gerado a partir das cores + tag)
+type EmblemId = 'shield' | 'circle' | 'hexagon' | 'bolt' | 'star' | 'diamond';
+const EMBLEMS: { id: EmblemId; label: string }[] = [
+  { id: 'shield', label: 'Escudo' },
+  { id: 'circle', label: 'Círculo' },
+  { id: 'hexagon', label: 'Hexágono' },
+  { id: 'bolt', label: 'Raio' },
+  { id: 'star', label: 'Estrela' },
+  { id: 'diamond', label: 'Losango' },
+];
+
+function emblemShape(id: EmblemId, fill: string): string {
+  switch (id) {
+    case 'shield': return `<path d="M50 6 L90 20 V52 C90 76 72 90 50 96 C28 90 10 76 10 52 V20 Z" fill="${fill}"/>`;
+    case 'circle': return `<circle cx="50" cy="50" r="44" fill="${fill}"/>`;
+    case 'hexagon': return `<path d="M50 6 L88 28 V72 L50 94 L12 72 V28 Z" fill="${fill}"/>`;
+    case 'bolt': return `<path d="M50 4 L18 54 H44 L38 96 L84 40 H56 Z" fill="${fill}"/>`;
+    case 'star': return `<path d="M50 6 L61 38 H95 L67 58 L78 92 L50 71 L22 92 L33 58 L5 38 H39 Z" fill="${fill}"/>`;
+    case 'diamond': return `<path d="M50 4 L92 50 L50 96 L8 50 Z" fill="${fill}"/>`;
+  }
+}
+
+// constrói um data URL SVG com emblema + iniciais (até 3 letras)
+function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string): string {
+  const initials = (text || 'ORG').slice(0, 3).toUpperCase();
+  const fontSize = initials.length >= 3 ? 30 : initials.length === 2 ? 38 : 50;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
+    emblemShape(emblem, c1) +
+    `<text x="50" y="50" dy="0.36em" text-anchor="middle" font-family="Arial Narrow, Arial, sans-serif" font-weight="800" font-size="${fontSize}" fill="${c2}">${initials}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 // ---------- fundação da organização ----------
 function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['org']>) => void; onExit: () => void }) {
   const [name, setName] = useState('');
   const [tag, setTag] = useState('');
   const [c1, setC1] = useState('#101820');
   const [c2, setC2] = useState('#61a8dd');
+  const [emblem, setEmblem] = useState<EmblemId>('shield');
+  const [uploaded, setUploaded] = useState<string | null>(null); // logo enviada (data URL)
+  const [mode, setMode] = useState<'build' | 'upload'>('build');
+
+  // logo final: upload tem prioridade; senão o emblema construído
+  const builtLogo = useMemo(() => buildLogoDataUrl(emblem, c1, c2, tag || name), [emblem, c1, c2, tag, name]);
+  const logo = mode === 'upload' && uploaded ? uploaded : builtLogo;
+
+  const onUpload = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file, 200);
+      setUploaded(dataUrl);
+      setMode('upload');
+    } catch {
+      alert('Não foi possível ler a imagem.');
+    }
+  };
+
   return (
     <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 560, margin: '30px auto' }}>
+      <div className="panel" style={{ maxWidth: 760, margin: '24px auto' }}>
         <div className="panel-head">
           Fundar organização (modo carreira)
           <span className="spacer" />
@@ -1024,30 +1197,82 @@ function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['
         <div className="panel-body">
           <p className="muted small" style={{ marginTop: 0 }}>
             Crie sua org nos <b>tempos atuais</b> (só elencos CS2). Você começa com{' '}
-            <b>{formatMoney(STARTING_BUDGET)}</b> para montar 5 jogadores + coach e
-            disputar o <b>Circuit X</b>. Sem lendas do passado aqui: o desafio é
-            construir do zero.
+            <b>{formatMoney(STARTING_BUDGET)}</b> para montar 5 jogadores + coach,
+            fechar patrocínios e disputar os circuitos rumo ao Major. Sem lendas do
+            passado: o desafio é construir do zero.
           </p>
-          <div className="field" style={{ marginBottom: 10 }}>
-            <label>Nome da organização</label>
-            <input value={name} maxLength={24} placeholder="ex: Astro Esports" onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="field" style={{ marginBottom: 10 }}>
-            <label>Tag (até 4 letras)</label>
-            <input value={tag} maxLength={4} placeholder="ex: ASTR" style={{ textTransform: 'uppercase' }} onChange={(e) => setTag(e.target.value.toUpperCase())} />
-          </div>
-          <div className="field" style={{ marginBottom: 14 }}>
-            <label>Cores</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input type="color" value={c1} onChange={(e) => setC1(e.target.value)} />
-              <input type="color" value={c2} onChange={(e) => setC2(e.target.value)} />
+
+          <div className="found-grid">
+            {/* coluna esquerda: identidade */}
+            <div className="found-form">
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label>Nome da organização</label>
+                <input value={name} maxLength={24} placeholder="ex: Astro Esports" onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label>Tag (até 4 letras)</label>
+                <input value={tag} maxLength={4} placeholder="ex: ASTR" style={{ textTransform: 'uppercase' }} onChange={(e) => setTag(e.target.value.toUpperCase())} />
+              </div>
+              <div className="field" style={{ marginBottom: 14 }}>
+                <label>Cores (primária / secundária)</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="color" value={c1} onChange={(e) => setC1(e.target.value)} />
+                  <input type="color" value={c2} onChange={(e) => setC2(e.target.value)} />
+                  <span className="muted small">a secundária colore o texto/emblema</span>
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Logo</label>
+                <div className="logo-mode-tabs">
+                  <button type="button" className={`call-btn${mode === 'build' ? ' armed' : ''}`} onClick={() => setMode('build')}>Construir</button>
+                  <button type="button" className={`call-btn${mode === 'upload' ? ' armed' : ''}`} onClick={() => uploaded ? setMode('upload') : null}>
+                    <label style={{ cursor: 'pointer', display: 'inline-flex', gap: 6 }}>
+                      Enviar imagem
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { onUpload(e.target.files?.[0]); e.currentTarget.value = ''; }} />
+                    </label>
+                  </button>
+                  {uploaded && <button type="button" className="btn danger small" onClick={() => { setUploaded(null); setMode('build'); }}>Remover</button>}
+                </div>
+              </div>
+
+              {mode === 'build' && (
+                <div className="emblem-grid">
+                  {EMBLEMS.map((em) => (
+                    <button
+                      key={em.id}
+                      type="button"
+                      className={`emblem-opt${emblem === em.id ? ' on' : ''}`}
+                      title={em.label}
+                      onClick={() => setEmblem(em.id)}
+                    >
+                      <img src={buildLogoDataUrl(em.id, c1, c2, tag || name)} alt={em.label} width={40} height={40} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* coluna direita: preview do clube */}
+            <div className="found-preview">
+              <div className="fp-card" style={{ background: `linear-gradient(150deg, ${c1} 0%, #0c0f14 80%)` }}>
+                <img className="fp-logo" src={logo} alt="logo" />
+                <div className="fp-name" style={{ color: '#fff' }}>{name || 'Sua Organização'}</div>
+                <div className="fp-tag" style={{ color: c2 }}>{(tag || 'ORG').toUpperCase()}</div>
+              </div>
+              <div className="fp-badges">
+                <TeamBadge tag={tag || 'ORG'} colors={[c1, c2]} size={40} logoUrl={logo} />
+                <TeamBadge tag={tag || 'ORG'} colors={[c1, c2]} size={28} logoUrl={logo} />
+                <span className="muted small">como aparece nos campeonatos</span>
+              </div>
             </div>
           </div>
+
           <button
             className="btn gold big"
-            style={{ width: '100%' }}
+            style={{ width: '100%', marginTop: 16 }}
             disabled={!name.trim() || !tag.trim()}
-            onClick={() => onFound({ name: name.trim(), tag: tag.trim() || 'ORG', colors: [c1, c2] })}
+            onClick={() => onFound({ name: name.trim(), tag: tag.trim() || 'ORG', colors: [c1, c2], logo })}
           >
             ✔ Fundar e abrir o mercado
           </button>
@@ -1070,12 +1295,21 @@ function MarketScreen({
   market: { player: Player; from: TeamSeason; price: number }[];
   coaches: TeamSeason[];
   findSigning: (s: Signing) => { player: Player; from: TeamSeason } | null;
-  onConfirm: (squad: Signing[], coachFromId: string, budget: number) => void;
+  onConfirm: (squad: Signing[], coachFromId: string, budget: number, sponsors: string[]) => void;
   onExit: () => void;
 }) {
   const [squad, setSquad] = useState<Signing[]>(save.squad);
   const [coachId, setCoachId] = useState<string | null>(save.coachFromId);
   const [filter, setFilter] = useState('');
+  const [sponsors, setSponsors] = useState<string[]>(save.sponsors);
+
+  const toggleSponsor = (id: string) => {
+    setSponsors((cur) => {
+      if (cur.includes(id)) return cur.filter((x) => x !== id);
+      if (cur.length >= SPONSOR_SLOTS) return cur;
+      return [...cur, id];
+    });
+  };
 
   const signedNicks = new Set(
     squad.map((s) => findSigning(s)?.player.nick.toLowerCase()).filter(Boolean) as string[],
@@ -1195,10 +1429,38 @@ function MarketScreen({
             })}
           </div>
 
+          {/* patrocinadores: receita fixa por split, marcas reais */}
+          <div className="muted small section-label">
+            Patrocinadores ({sponsors.length}/{SPONSOR_SLOTS}) · receita por split: <b className="pos">+{formatMoney(sponsorIncome(sponsors))}</b>
+          </div>
+          <div className="sponsor-grid">
+            {SPONSORS.map((sp) => {
+              const active = sponsors.includes(sp.id);
+              const locked = !active && sp.minVrs > save.vrs;
+              const full = !active && sponsors.length >= SPONSOR_SLOTS;
+              return (
+                <button
+                  key={sp.id}
+                  type="button"
+                  className={`sponsor-card${active ? ' on' : ''}${locked || full ? ' locked' : ''}`}
+                  disabled={locked || full}
+                  onClick={() => !locked && !full && toggleSponsor(sp.id)}
+                  title={locked ? `Requer ${sp.minVrs} VRS` : full ? 'Slots cheios' : ''}
+                >
+                  <span className="sp-logo" style={{ background: sp.color }}>{sp.name.slice(0, 1)}</span>
+                  <span className="sp-name">{sp.name}</span>
+                  <span className="sp-pay pos">+{formatMoney(sp.perSplit)}</span>
+                  {locked && <span className="sp-lock muted small">{sp.minVrs} VRS</span>}
+                  {active && <span className="sp-check">✔</span>}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="center" style={{ marginTop: 16 }}>
             <button className="btn gold big" disabled={!ready}
-              onClick={() => coachId && onConfirm(squad, coachId, budgetLeft)}>
-              ✔ Fechar elenco e começar o Circuit X
+              onClick={() => coachId && onConfirm(squad, coachId, budgetLeft, sponsors)}>
+              ✔ Fechar elenco e escolher o campeonato
             </button>
             {!ready && (
               <div className="muted small" style={{ marginTop: 8 }}>
