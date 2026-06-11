@@ -19,12 +19,14 @@ export function playerOvr(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'aw
 // overall e tem prêmio para AWPer/IGL de elite; forma quente valoriza um pouco.
 export function playerValue(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'> & { ovr?: number; form?: number }): number {
   const ovr = typeof p.ovr === 'number' ? p.ovr : playerOvr(p);
-  const base = Math.max(0, ovr - 45);
-  let v = base * base * 1100; // ovr 90 ~ R$2,2M; ovr 99 ~ R$3,2M
-  if (p.awp >= 85) v *= 1.2;
-  if (p.igl >= 85) v *= 1.1;
+  // curva íngreme: medianos custam pouco e só craques disparam de preço.
+  // ovr 73 ~ R$240k · 80 ~ R$820k · 85 ~ R$1,5M · 90 ~ R$2,5M · 96 ~ R$4M
+  const base = Math.max(0, ovr - 62);
+  let v = Math.pow(base, 2.5) * 600;
+  if (p.awp >= 88) v *= 1.18; // sniper de elite valoriza
+  if (p.igl >= 88) v *= 1.1; // IGL de elite valoriza
   if (p.form) v *= p.form; // 0.9..1.1
-  return Math.max(50000, Math.round(v / 10000) * 10000);
+  return Math.max(30000, Math.round(v / 10000) * 10000);
 }
 
 // ---- características derivadas do jogador (para o veto e a tática) ----

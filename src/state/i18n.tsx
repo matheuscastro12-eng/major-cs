@@ -96,8 +96,8 @@ const PT: Dict = {
   'playstyle.passive': 'Passivo',
   // ----- Online -----
   'online.title': '🌐 Jogar online com amigos',
-  'online.introA': 'Todos draftam dos',
-  'online.introB': 'mesmos elencos sorteados',
+  'online.introA': 'Cada jogador drafta do',
+  'online.introB': 'seu próprio sorteio de elencos',
   'online.introC': '(seu ultimate team), vendo o progresso uns dos outros ao vivo. No fim, os times de todos entram juntos num',
   'online.introD': 'Major completo',
   'online.introE': '(com times da IA preenchendo) e disputam Suíça + playoffs. Vence quem levantar a taça.',
@@ -146,13 +146,13 @@ const PT: Dict = {
   'online.chooseCoach': 'Escolha o COACH',
   'online.draftOnline': 'Draft online · escolha',
   'online.ofFive': 'de 5',
-  'online.sameRosters': 'Mesmos elencos para todos ·',
+  'online.sameRosters': 'Seu sorteio (único) ·',
   'online.attrAim': 'Mira',
   'online.liveProgress': 'Progresso ao vivo',
   'online.ready': 'pronto ✔',
   'online.picks': 'picks',
   'online.sideExplain':
-    'Todos draftam dos mesmos 5 elencos sorteados. Quando todos terminarem, os times entram num Major completo (com a IA preenchendo) e disputam Suíça + playoffs juntos.',
+    'Cada jogador drafta do PRÓPRIO sorteio de 5 elencos (times diferentes para cada um). Quando todos terminarem, os times entram num Major completo (com a IA preenchendo) e disputam Suíça + playoffs juntos.',
   // ----- Onboarding -----
   'onboard.welcome': '👋 Bem-vindo ao Road to Major',
   'onboard.closeAria': 'fechar',
@@ -363,6 +363,7 @@ const PT: Dict = {
   "online.skipToFinal": "⏭ Pular para o resultado final",
   "online.matchups": "Confrontos",
   "online.reveal": "Revelar resultados",
+  "transfer.coachTitle": "Trocar coach (opcional)",
 };
 
 const EN: Dict = {
@@ -420,8 +421,8 @@ const EN: Dict = {
   'playstyle.passive': 'Passive',
   // ----- Online -----
   'online.title': '🌐 Play online with friends',
-  'online.introA': 'Everyone drafts from the',
-  'online.introB': 'same randomized rosters',
+  'online.introA': 'Each player drafts from',
+  'online.introB': 'your own roster draw',
   'online.introC': '(your ultimate team), watching each other’s progress live. At the end, everyone’s teams join a',
   'online.introD': 'full Major',
   'online.introE': '(with AI teams filling the field) and battle through Swiss + playoffs. Whoever lifts the trophy wins.',
@@ -470,13 +471,13 @@ const EN: Dict = {
   'online.chooseCoach': 'Choose the COACH',
   'online.draftOnline': 'Online draft · pick',
   'online.ofFive': 'of 5',
-  'online.sameRosters': 'Same rosters for everyone ·',
+  'online.sameRosters': 'Your own draw ·',
   'online.attrAim': 'Aim',
   'online.liveProgress': 'Live progress',
   'online.ready': 'ready ✔',
   'online.picks': 'picks',
   'online.sideExplain':
-    'Everyone drafts from the same 5 randomized rosters. Once everyone finishes, the teams join a full Major (with AI filling the field) and battle through Swiss + playoffs together.',
+    'Each player drafts from their OWN set of 5 randomized rosters (different teams for everyone). Once everyone finishes, the teams join a full Major (with AI filling the field) and battle through Swiss + playoffs together.',
   // ----- Onboarding -----
   'onboard.welcome': '👋 Welcome to Road to Major',
   'onboard.closeAria': 'close',
@@ -687,6 +688,7 @@ const EN: Dict = {
   "online.skipToFinal": "⏭ Skip to final results",
   "online.matchups": "Matchups",
   "online.reveal": "Reveal results",
+  "transfer.coachTitle": "Change coach (optional)",
 };
 
 const ES: Dict = {
@@ -744,8 +746,8 @@ const ES: Dict = {
   'playstyle.passive': 'Pasivo',
   // ----- Online -----
   'online.title': '🌐 Juega online con amigos',
-  'online.introA': 'Todos draftean de las',
-  'online.introB': 'mismas plantillas sorteadas',
+  'online.introA': 'Cada jugador draftea de su',
+  'online.introB': 'tu propio sorteo de plantillas',
   'online.introC': '(tu ultimate team), viendo el progreso de los demás en vivo. Al final, los equipos de todos entran juntos en un',
   'online.introD': 'Major completo',
   'online.introE': '(con equipos de la IA completando) y disputan Suizo + playoffs. Gana quien levante la copa.',
@@ -794,13 +796,13 @@ const ES: Dict = {
   'online.chooseCoach': 'Elige el COACH',
   'online.draftOnline': 'Draft online · elige',
   'online.ofFive': 'de 5',
-  'online.sameRosters': 'Mismas plantillas para todos ·',
+  'online.sameRosters': 'Tu propio sorteo ·',
   'online.attrAim': 'Puntería',
   'online.liveProgress': 'Progreso en vivo',
   'online.ready': 'listo ✔',
   'online.picks': 'picks',
   'online.sideExplain':
-    'Todos draftean de las mismas 5 plantillas sorteadas. Cuando todos terminen, los equipos entran en un Major completo (con la IA completando) y disputan Suizo + playoffs juntos.',
+    'Cada jugador draftea de su PROPIO sorteo de 5 plantillas (equipos distintos para cada uno). Cuando todos terminen, los equipos entran en un Major completo (con la IA completando) y disputan Suizo + playoffs juntos.',
   // ----- Onboarding -----
   'onboard.welcome': '👋 Bienvenido a Road to Major',
   'onboard.closeAria': 'cerrar',
@@ -1011,6 +1013,7 @@ const ES: Dict = {
   "online.skipToFinal": "⏭ Saltar al resultado final",
   "online.matchups": "Enfrentamientos",
   "online.reveal": "Revelar resultados",
+  "transfer.coachTitle": "Cambiar coach (opcional)",
 };
 
 const DICT: Record<Lang, Dict> = { pt: PT, en: EN, es: ES };

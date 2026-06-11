@@ -28,15 +28,36 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
   const { t } = useLang();
   const [outId, setOutId] = useState<string | null>(null);
   const [inIdx, setInIdx] = useState<number | null>(null);
+  const [coachIdx, setCoachIdx] = useState(0); // 0 = mantém o coach atual
 
   const evoOf = (nick: string) => evolution.find((e) => e.nick === nick)?.delta ?? 0;
   const outPlayer = outId ? user.players.find((p) => p.id === outId) ?? null : null;
   const sellValue = outPlayer ? Math.round(playerValue(outPlayer) * SELL_FACTOR) : 0;
   const buyFee = inIdx !== null ? playerValue(toTPlayer(offers[inIdx].player)) : 0;
   const tradeReady = outId !== null && inIdx !== null;
-  const netCost = tradeReady ? buyFee - sellValue : 0; // pode ser negativo (lucro)
+
+  // coaches disponíveis para trocar: o atual + os coaches dos times das ofertas
+  const coachOptions = useMemo(() => {
+    const seen = new Set([user.coach.nick.toLowerCase()]);
+    const opts = [user.coach];
+    for (const o of offers) {
+      const c = o.from.coach;
+      if (c && !seen.has(c.nick.toLowerCase())) {
+        seen.add(c.nick.toLowerCase());
+        opts.push(c);
+      }
+    }
+    return opts;
+  }, [user.coach, offers]);
+  const newCoach = coachOptions[coachIdx] ?? user.coach;
+  const coachChanged = newCoach.nick !== user.coach.nick;
+  const coachFee = coachChanged ? Math.max(0, (newCoach.rating - 65) * 30000) : 0;
+
+  const playerNet = tradeReady ? buyFee - sellValue : 0;
+  const netCost = playerNet + coachFee; // pode ser negativo (lucro na venda)
   const budgetAfter = budget - netCost;
   const canAfford = budgetAfter >= 0;
+  const hasChange = tradeReady || coachChanged;
 
   const preview = useMemo(() => {
     if (outId === null || inIdx === null) return refreshUserTeam(user);
@@ -55,6 +76,8 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
     );
     return refreshUserTeam({ ...user, players });
   }, [user, outId, inIdx, offers, season]);
+
+  const previewTeam = useMemo(() => ({ ...preview, coach: newCoach }), [preview, newCoach]);
 
   const current = useMemo(() => refreshUserTeam(user), [user]);
   const delta = preview.strength - current.strength;
@@ -137,18 +160,40 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
             })}
           </div>
 
+          <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '16px 0 6px' }}>
+            {t('transfer.coachTitle')}
+          </div>
+          <div className="career-coaches">
+            {coachOptions.map((c, i) => {
+              const fee = i === 0 ? 0 : Math.max(0, (c.rating - 65) * 30000);
+              return (
+                <button
+                  key={c.nick + i}
+                  className={`call-btn${coachIdx === i ? ' armed' : ''}`}
+                  title={t(`coach.${c.style}Desc`)}
+                  onClick={() => setCoachIdx(i)}
+                >
+                  {i === 0 ? '✓ ' : ''}{c.nick} · {c.rating} · {t(`coach.${c.style}`)}
+                  {i > 0 && ` · ${formatMoney(fee)}`}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="center" style={{ marginTop: 18 }}>
-            {tradeReady ? (
+            {hasChange ? (
               <div className="trade-summary">
                 <div className="muted small">
                   {t('transfer.teamStrength')}: {current.strength.toFixed(1)} →{' '}
-                  <b className={delta >= 0 ? 'pos' : 'neg'}>{preview.strength.toFixed(1)}</b>{' '}
+                  <b className={delta >= 0 ? 'pos' : 'neg'}>{previewTeam.strength.toFixed(1)}</b>{' '}
                   ({delta >= 0 ? '+' : ''}
                   {delta.toFixed(1)})
+                  {coachChanged && <> · coach → <b>{newCoach.nick}</b></>}
                 </div>
                 <div className="trade-money">
-                  <span>{t('transfer.buy')} <b>{formatMoney(buyFee)}</b></span>
-                  <span>{t('transfer.sell')} <b className="pos">+{formatMoney(sellValue)}</b></span>
+                  {tradeReady && <span>{t('transfer.buy')} <b>{formatMoney(buyFee)}</b></span>}
+                  {tradeReady && <span>{t('transfer.sell')} <b className="pos">+{formatMoney(sellValue)}</b></span>}
+                  {coachChanged && <span>coach <b>{formatMoney(coachFee)}</b></span>}
                   <span>
                     {t('transfer.tradeBalance')}{' '}
                     <b className={netCost > 0 ? 'neg' : 'pos'}>
@@ -170,8 +215,8 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
             )}
             <button
               className="btn gold big"
-              disabled={tradeReady && !canAfford}
-              onClick={() => onConfirm(preview, netCost)}
+              disabled={!canAfford}
+              onClick={() => onConfirm(previewTeam, netCost)}
             >
               ✔ {t('transfer.confirmStart')} {season}
             </button>

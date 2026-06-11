@@ -55,7 +55,7 @@ function weightedSample(rng: Rng, teams: TeamSeason[], n: number): TeamSeason[] 
 }
 
 export interface OnlineDraftSetup {
-  sources: TeamSeason[]; // 5 elencos sorteados (iguais para todos)
+  sources: TeamSeason[]; // 5 elencos sorteados
   coachOptions: TeamSeason[]; // 5 opções de coach
 }
 
@@ -66,6 +66,23 @@ export function buildDraftFromSeed(seed: number, pool: TournamentPool): OnlineDr
   const used = new Set(sources.map((t) => t.id));
   const coachOptions = weightedSample(rng, base.filter((t) => !used.has(t.id)), 5);
   return { sources, coachOptions };
+}
+
+// hash estável de string (FNV-1a) para derivar seed por jogador
+function hashStr(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// CADA jogador recebe um sorteio DIFERENTE (mas determinístico por seed+nick,
+// então todos os clientes reconstroem o mesmo elenco de cada jogador). Antes
+// todos draftavam dos mesmos 5 elencos, o que deixava os times sempre iguais.
+export function buildDraftForPlayer(seed: number, pool: TournamentPool, nick: string): OnlineDraftSetup {
+  return buildDraftFromSeed((seed ^ hashStr(nick.toLowerCase())) >>> 0, pool);
 }
 
 export function teamFromPicks(
@@ -113,20 +130,22 @@ export interface OnlineMajor {
 }
 
 export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
-  const setup = buildDraftFromSeed(state.lobby.seed, state.lobby.pool);
   const ordered = [...state.players].sort(byNickCodepoint);
 
   const humanByTeamId: Record<string, string> = {};
   const humanTeams: TTeam[] = [];
+  const usedSources = new Set<string>();
   for (const p of ordered) {
+    // cada jogador draftou do PRÓPRIO sorteio (seed + nick)
+    const setup = buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick);
     const t = teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup);
     if (!t) return null; // alguém ainda não terminou o draft
     humanByTeamId[t.id] = p.nick;
     humanTeams.push(t);
+    for (const s of setup.sources) usedSources.add(s.id);
   }
 
   // preenche com times da IA (determinístico), evitando repetir os elencos-fonte
-  const usedSources = new Set(setup.sources.map((s) => s.id));
   let aiPool = onlineDataset(state.lobby.pool).filter((s) => !usedSources.has(s.id));
   const need = Math.max(0, MAJOR_SIZE - humanTeams.length);
   // pool regional pequeno demais (ex.: BR após edições no CRM): completa com o

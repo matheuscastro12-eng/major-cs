@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { playerOvr } from '../engine/ratings';
 import {
-  buildDraftFromSeed,
+  buildDraftForPlayer,
   fetchLobby,
   lobbyApi,
   majorStandings,
@@ -153,9 +153,10 @@ export function OnlineScreen({ onBack }: Props) {
     await lobbyApi({ action: 'pick', nick: nick.trim(), code, picks, coachPick: coach, done }).catch(() => {});
   };
 
+  // o MEU sorteio (cada jogador recebe elencos diferentes, por seed + nick)
   const setup = useMemo(
-    () => (state && state.lobby.status !== 'waiting' ? buildDraftFromSeed(state.lobby.seed, state.lobby.pool) : null),
-    [state],
+    () => (state && state.lobby.status !== 'waiting' ? buildDraftForPlayer(state.lobby.seed, state.lobby.pool, nick) : null),
+    [state, nick],
   );
 
   const major = useMemo(
@@ -641,11 +642,13 @@ export function OnlineScreen({ onBack }: Props) {
           {state.players.map((p) => {
             const mine = p.nick.toLowerCase() === nick.toLowerCase();
             const livePicks = mine ? myPicks : (p.picks ?? []);
+            // cada jogador tem o próprio sorteio: resolve os nicks pelo setup dele
+            const pSetup = mine ? setup : buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick);
             return (
               <div key={p.nick} className="online-progress">
                 <div className="op-head">
                   <b>
-                    {p.nick === state.lobby.host ? '👑 ' : ''}
+                    {p.nick === state.lobby.host ? '★ ' : ''}
                     {p.nick}
                     {mine ? ` (${tr('common.you')})` : ''}
                   </b>
@@ -656,7 +659,7 @@ export function OnlineScreen({ onBack }: Props) {
                 <div className="op-picks">
                   {[0, 1, 2, 3, 4].map((i) => {
                     const pid = livePicks[i];
-                    const player = pid ? setup.sources[i]?.players.find((x) => x.id === pid) : undefined;
+                    const player = pid ? pSetup.sources[i]?.players.find((x) => x.id === pid) : undefined;
                     return (
                       <span key={i} className={`op-slot${player ? ' filled' : ''}`}>
                         {player ? player.nick : '·'}
