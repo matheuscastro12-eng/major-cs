@@ -249,6 +249,8 @@ export interface MapSim {
   roundLog: () => (0 | 1)[];
   killFeed: () => KillEvent[];
   buys: () => [BuyTier, BuyTier]; // compra do round atual (antes do step)
+  side: () => ['ct' | 't', 'ct' | 't']; // lado de cada time no round atual
+  round: () => number; // índice do round atual (0-based)
   result: () => MapResult; // disponível quando done()
 }
 
@@ -280,6 +282,18 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
 
   let round = 0;
   let nextBuys: [BuyTier, BuyTier] = ['pistol', 'pistol'];
+
+  // lado (CT/T) de cada time num dado round, considerando halves e OT
+  const sideOf = (r: number): ['ct' | 't', 'ct' | 't'] => {
+    let aSide: 'ct' | 't';
+    if (r < 12) aSide = aStartsCt ? 'ct' : 't';
+    else if (r < 24) aSide = aStartsCt ? 't' : 'ct';
+    else {
+      const block = Math.floor((r - 24) / 3);
+      aSide = block % 2 === 0 ? (aStartsCt ? 'ct' : 't') : aStartsCt ? 't' : 'ct';
+    }
+    return [aSide, aSide === 'ct' ? 't' : 'ct'];
+  };
 
   const computeBuys = (): [BuyTier, BuyTier] => {
     const isPistol = round === 0 || round === 12;
@@ -529,6 +543,8 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     roundLog: () => roundLog,
     killFeed: () => killFeed,
     buys: () => nextBuys,
+    side: () => sideOf(round),
+    round: () => round,
     result: (): MapResult => ({
       map,
       pickedBy,

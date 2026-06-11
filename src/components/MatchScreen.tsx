@@ -24,12 +24,20 @@ const TIMEOUTS_PER_MAP = 2;
 const TIMEOUT_ROUNDS = 3;
 
 const SPEEDS: { label: string; ms: number }[] = [
-  { label: '0.5x', ms: 560 },
-  { label: '1x', ms: 280 },
-  { label: '2x', ms: 140 },
-  { label: '4x', ms: 60 },
+  { label: '0.5x', ms: 850 },
+  { label: '1x', ms: 460 },
+  { label: '2x', ms: 220 },
+  { label: '4x', ms: 90 },
 ];
 const DEFAULT_SPEED_IDX = 1; // começa em 1x (0.5x é opção mais lenta)
+const FREEZE_SECONDS = 5; // modo Tático: freezetime antes de cada round
+
+// textos do modo tático/lado, por idioma (sem precisar mexer no i18n global)
+const LOCAL = {
+  pt: { tactical: '🎯 Tático', tacticalHint: 'Freezetime de 5s antes de cada round para escolher sua chamada', freezetime: 'FREEZETIME', chooseCall: 'escolha sua chamada e postura', playRound: '▶ Jogar round', youPlay: 'VOCÊ JOGA', worked: 'deu certo', failed: 'não rolou', lastCall: 'Última chamada' },
+  en: { tactical: '🎯 Tactical', tacticalHint: '5s freezetime before each round to pick your call', freezetime: 'FREEZETIME', chooseCall: 'pick your call and stance', playRound: '▶ Play round', youPlay: 'YOU PLAY', worked: 'worked', failed: "didn't work", lastCall: 'Last call' },
+  es: { tactical: '🎯 Táctico', tacticalHint: 'Freezetime de 5s antes de cada ronda para elegir tu jugada', freezetime: 'FREEZETIME', chooseCall: 'elige tu jugada y postura', playRound: '▶ Jugar ronda', youPlay: 'JUEGAS', worked: 'funcionó', failed: 'no funcionó', lastCall: 'Última jugada' },
+};
 
 const STANCES: { key: Stance; icon: string; labelKey: string; hintKey: string }[] = [
   { key: 'aggressive', icon: '🔥', labelKey: 'match.stanceAggressive', hintKey: 'match.stanceAggressiveHint' },
@@ -77,7 +85,8 @@ const BUY_LABEL: Record<BuyTier, string> = {
 };
 
 export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish }: Props) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const L = LOCAL[(lang as 'pt' | 'en' | 'es')] ?? LOCAL.pt;
   const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
   const mdLabel = bestOf === 1 ? 'MD1' : bestOf === 5 ? 'MD5' : 'MD3';
   const simsRef = useRef<MapSim[]>([]);
@@ -96,6 +105,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [pendingCall, setPendingCall] = useState<RoundCall | null>(null);
   const callRef = useRef<RoundCall | null>(null);
   callRef.current = pendingCall;
+  // modo Tático: freezetime de 5s antes de cada round pra escolher a chamada
+  const [tactical, setTactical] = useState(false);
+  const [freeze, setFreeze] = useState(0);
+  const [lastCall, setLastCall] = useState<{ call: RoundCall; won: boolean; round: number } | null>(null);
 
   const seriesOver = () => {
     const wins = resultsRef.current.reduce(
@@ -126,8 +139,29 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   // loop da simulação ao vivo com catch-up por tempo real: mesmo com o
   // navegador limitando timers (aba em segundo plano), o ritmo escolhido vale.
   const lastStepRef = useRef(0);
+  // fim de mapa: registra o resultado e prepara o próximo (ou encerra a série)
+  const onMapEnded = (sim: MapSim) => {
+    resultsRef.current[mapIdx] = sim.result();
+    if (seriesOver()) {
+      const s = buildSeries();
+      setSeries(s);
+      setFinished(true);
+    } else {
+      const next = maps[mapIdx + 1];
+      setPausedMsg(`${t('match.mapEnd')} ${mapIdx + 1}${next ? ` - ${t('match.preparing')} ${MAP_LABELS[next.map]}…` : '…'}`);
+      window.setTimeout(() => {
+        setMapIdx((m) => m + 1);
+        setTimeoutsLeft(TIMEOUTS_PER_MAP);
+        setBoostRounds(0);
+        setFreeze(0);
+        setPausedMsg('');
+      }, 1500);
+    }
+  };
+
+  // loop automático (0.5x..4x). Desligado no modo Tático.
   useEffect(() => {
-    if (finished) return;
+    if (finished || tactical) return;
     lastStepRef.current = performance.now();
     const id = window.setInterval(() => {
       if (pausedMsg) {
@@ -155,6 +189,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           sim.step(null, stanceMod, c);
         }
         if (c) {
+          const log = sim.roundLog();
+          setLastCall({ call: callRef.current!, won: log[log.length - 1] === userIdx, round: sim.round() });
           callRef.current = null;
           setPendingCall(null);
         }
@@ -162,28 +198,37 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       }
       if (boostsUsed > 0) setBoostRounds((b) => Math.max(0, b - boostsUsed));
       setTick((t) => t + 1);
-
-      if (mapEnded) {
-        resultsRef.current[mapIdx] = sim.result();
-        if (seriesOver()) {
-          const s = buildSeries();
-          setSeries(s);
-          setFinished(true);
-        } else {
-          const next = maps[mapIdx + 1];
-          setPausedMsg(`${t('match.mapEnd')} ${mapIdx + 1}${next ? ` - ${t('match.preparing')} ${MAP_LABELS[next.map]}…` : '…'}`);
-          window.setTimeout(() => {
-            setMapIdx((m) => m + 1);
-            setTimeoutsLeft(TIMEOUTS_PER_MAP);
-            setBoostRounds(0);
-            setPausedMsg('');
-          }, 1500);
-        }
-      }
+      if (mapEnded) onMapEnded(sim);
     }, Math.min(SPEEDS[speedIdx].ms, 250));
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finished, mapIdx, boostRounds, pausedMsg, speedIdx]);
+  }, [finished, mapIdx, boostRounds, pausedMsg, speedIdx, tactical]);
+
+  // modo Tático: freezetime de 5s, depois joga UM round e repete
+  useEffect(() => {
+    if (!tactical || finished || pausedMsg) return;
+    if (freeze > 0) {
+      const id = window.setTimeout(() => setFreeze((f) => f - 1), 1000);
+      return () => window.clearTimeout(id);
+    }
+    // freezetime acabou: joga exatamente um round
+    const sim = getSim(mapIdx);
+    const stanceMod = stanceRef.current !== 'default' ? { team: userIdx, mode: stanceRef.current } : undefined;
+    const c = callRef.current ? ({ team: userIdx, kind: callRef.current } as const) : undefined;
+    const boost = boostRounds > 0;
+    sim.step(boost ? userIdx : null, stanceMod, c);
+    if (boost) setBoostRounds((b) => Math.max(0, b - 1));
+    if (c) {
+      const log = sim.roundLog();
+      setLastCall({ call: callRef.current!, won: log[log.length - 1] === userIdx, round: sim.round() });
+      callRef.current = null;
+      setPendingCall(null);
+    }
+    setTick((t) => t + 1);
+    if (sim.done()) onMapEnded(sim);
+    else setFreeze(FREEZE_SECONDS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tactical, freeze, finished, pausedMsg, mapIdx, boostRounds]);
 
   const skipAll = () => {
     setPausedMsg(' '); // congela o interval enquanto resolvemos tudo de forma síncrona
@@ -218,6 +263,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const roundLog = sim.roundLog();
   const buys = sim.buys();
   const myMoney = sim.money()[userIdx];
+  const sides = sim.side(); // ['ct'|'t', 'ct'|'t'] do round atual
+  const mySide = sides[userIdx];
   const mapsWon: [number, number] = [0, 0];
   for (const r of resultsRef.current) if (r) mapsWon[r.winner]++;
 
@@ -242,10 +289,14 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
             <>
               <div className="seg" title={t('match.simSpeed')}>
                 {SPEEDS.map((s, i) => (
-                  <button key={s.label} className={speedIdx === i ? 'active' : ''} onClick={() => setSpeedIdx(i)}>
+                  <button key={s.label} className={!tactical && speedIdx === i ? 'active' : ''} onClick={() => { setTactical(false); setSpeedIdx(i); }}>
                     {s.label}
                   </button>
                 ))}
+                <button className={tactical ? 'active tactical-on' : ''} title={L.tacticalHint}
+                  onClick={() => { setTactical((v) => !v); setFreeze(FREEZE_SECONDS); }}>
+                  {L.tactical}
+                </button>
               </div>
               <button className="timeout-btn" onClick={callTimeout} disabled={timeoutsLeft <= 0 || !!pausedMsg}>
                 ⏸ {t('match.timeout')} ({timeoutsLeft})
@@ -265,7 +316,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 <CoreFlag players={teams[0].players} />
               </span>
               <TeamBadge tag={teams[0].tag} colors={teams[0].colors} size={48} logoUrl={teams[0].logoUrl} />
-              <span className="tn">{teams[0].name}</span>
+              <span className="tn">
+                {teams[0].name}
+                {!finished && <span className={`side-pill ${sides[0]}`}>{sides[0].toUpperCase()}</span>}
+                {!finished && userIdx === 0 && <span className="you-pill">{L.youPlay}</span>}
+              </span>
               <span className="muted small">
                 {t('common.maps')}: {mapsWon[0]}
                 {!finished && ` · ${BUY_LABEL[buys[0]]}`}
@@ -300,7 +355,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 <CoreFlag players={teams[1].players} />
               </span>
               <TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={48} logoUrl={teams[1].logoUrl} />
-              <span className="tn">{teams[1].name}</span>
+              <span className="tn">
+                {teams[1].name}
+                {!finished && <span className={`side-pill ${sides[1]}`}>{sides[1].toUpperCase()}</span>}
+                {!finished && userIdx === 1 && <span className="you-pill">{L.youPlay}</span>}
+              </span>
               <span className="muted small">
                 {t('common.maps')}: {mapsWon[1]}
                 {!finished && ` · ${BUY_LABEL[buys[1]]}`}
@@ -343,8 +402,32 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 );
               })}
             </div>
+            {tactical && (
+              <div className={`freeze-bar${freeze > 0 ? ' active' : ''}`}>
+                {freeze > 0 ? (
+                  <>
+                    <span className="freeze-count">{L.freezetime} {freeze}s</span>
+                    <span className="muted small">{L.chooseCall}</span>
+                    <span className="spacer" />
+                    <span className={`side-pill big ${mySide}`}>{mySide.toUpperCase()}</span>
+                    <button className="btn gold small" onClick={() => setFreeze(0)}>{L.playRound}</button>
+                  </>
+                ) : (
+                  <span className="muted small">simulando round…</span>
+                )}
+              </div>
+            )}
+            {lastCall && (() => {
+              const cc = CALLS.find((c) => c.key === lastCall.call)!;
+              return (
+                <div className={`last-call ${lastCall.won ? 'won' : 'lost'}`}>
+                  {L.lastCall}: {cc.icon} {t(cc.labelKey)} (R{lastCall.round}) → {lastCall.won ? `✓ ${L.worked}` : `✗ ${L.failed}`}
+                </div>
+              );
+            })()}
             <div className="call-bar">
               <span className="call-label">
+                <span className={`side-pill ${mySide}`}>{mySide.toUpperCase()}</span>{' '}
                 {t('match.roundCall')} <span className="call-money">💵 ${myMoney.toLocaleString()}</span>
               </span>
               {CALLS.map((c) => (

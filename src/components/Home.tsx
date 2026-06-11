@@ -19,6 +19,52 @@ interface Props {
 
 const DIFFICULTIES: Difficulty[] = ['normal', 'hard', 'legend'];
 
+// Novidades (changelog público) + teaser do modo carreira, por idioma.
+const NEWS = {
+  pt: {
+    newsTitle: '🆕 Novidades',
+    items: [
+      'Modo Tático na partida: freezetime de 5s antes de cada round pra escolher sua chamada com calma.',
+      'Agora dá pra ver de qual lado (CT/T) você joga e o resultado de cada chamada tática.',
+      'Velocidade dos rounds reajustada (o 0.5x ficou bem mais lento e legível).',
+      'No online, o sorteio agora vem diferente pra cada jogador.',
+      'Visual mais limpo e animações de carregamento mais suaves.',
+    ],
+    careerTitle: 'Em breve: Modo Carreira',
+    careerText: 'Estamos construindo um Modo Carreira completo: fundar sua organização, contratar jogadores reais, fechar patrocínios e disputar circuitos rumo ao Major. Apoie o projeto para entrar no beta fechado e testar antes de todo mundo.',
+    careerCta: '💜 Apoiar e testar o beta',
+    badge: 'BETA FECHADO',
+  },
+  en: {
+    newsTitle: '🆕 What\'s new',
+    items: [
+      'Tactical match mode: a 5s freezetime before each round to pick your call calmly.',
+      'You can now see which side (CT/T) you are on and the outcome of each tactical call.',
+      'Round speed retuned (0.5x is now much slower and easier to read).',
+      'In online mode, the draw now comes out different for each player.',
+      'Cleaner visuals and smoother loading animations.',
+    ],
+    careerTitle: 'Coming soon: Career Mode',
+    careerText: 'We are building a full Career Mode: found your org, sign real players, land sponsors and run circuits on the road to the Major. Support the project to join the closed beta and test it before everyone else.',
+    careerCta: '💜 Support and test the beta',
+    badge: 'CLOSED BETA',
+  },
+  es: {
+    newsTitle: '🆕 Novedades',
+    items: [
+      'Modo Táctico en la partida: freezetime de 5s antes de cada ronda para elegir tu jugada con calma.',
+      'Ahora puedes ver de qué lado (CT/T) juegas y el resultado de cada jugada táctica.',
+      'Velocidad de rondas reajustada (el 0.5x quedó mucho más lento y legible).',
+      'En el online, el sorteo ahora sale diferente para cada jugador.',
+      'Visual más limpio y animaciones de carga más suaves.',
+    ],
+    careerTitle: 'Pronto: Modo Carrera',
+    careerText: 'Estamos construyendo un Modo Carrera completo: funda tu organización, ficha jugadores reales, consigue patrocinios y compite en circuitos rumbo al Major. Apoya el proyecto para entrar en la beta cerrada y probarlo antes que nadie.',
+    careerCta: '💜 Apoyar y probar la beta',
+    badge: 'BETA CERRADA',
+  },
+};
+
 export function Home({
   onStart,
   onDonate,
@@ -30,7 +76,8 @@ export function Home({
   onDiscardCampaign,
   onOnline,
 }: Props) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const N = NEWS[(lang as 'pt' | 'en' | 'es')] ?? NEWS.pt;
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
@@ -123,6 +170,23 @@ export function Home({
           <TwitterLink />
         </div>
         <AnnouncementTweet />
+
+        {/* teaser do modo carreira (beta fechado) + novidades */}
+        <div className="career-teaser">
+          <span className="ct-badge">{N.badge}</span>
+          <h3>{N.careerTitle}</h3>
+          <p>{N.careerText}</p>
+          <button className="btn gold" onClick={onDonate}>{N.careerCta}</button>
+        </div>
+
+        <div className="news-card">
+          <h3>{N.newsTitle}</h3>
+          <ul className="news-list">
+            {N.items.map((it, i) => (
+              <li key={i}>{it}</li>
+            ))}
+          </ul>
+        </div>
 
         <DonorsPanel onDonate={onDonate} />
 
