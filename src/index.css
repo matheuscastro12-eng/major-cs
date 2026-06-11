@@ -3913,6 +3913,11 @@ table.crm-players input.num {
   background: var(--header); border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 10px; color: var(--text); width: 160px; text-transform: uppercase;
 }
+.cf-contact {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.cf-contact a { text-decoration: none; white-space: nowrap; }
 
 /* ===== salas abertas (online) ===== */
 .public-toggle {

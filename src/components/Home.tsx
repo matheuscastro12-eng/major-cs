@@ -40,6 +40,8 @@ const NEWS = {
     codeBtn: 'Entrar',
     codeWrong: 'Código inválido. Apoie o projeto para receber o seu.',
     enterCareer: '▶ Entrar no Modo Carreira (beta)',
+    contact: 'Depois de apoiar, me chame no Twitter que eu te envio o link do beta fechado:',
+    contactBtn: '𝕏 Falar com @castroomath',
   },
   en: {
     newsTitle: '🆕 What\'s new',
@@ -59,6 +61,8 @@ const NEWS = {
     codeBtn: 'Enter',
     codeWrong: 'Invalid code. Support the project to get yours.',
     enterCareer: '▶ Enter Career Mode (beta)',
+    contact: 'After supporting, message me on Twitter and I will send your closed-beta link:',
+    contactBtn: '𝕏 Message @castroomath',
   },
   es: {
     newsTitle: '🆕 Novedades',
@@ -78,10 +82,13 @@ const NEWS = {
     codeBtn: 'Entrar',
     codeWrong: 'Código inválido. Apoya el proyecto para recibir el tuyo.',
     enterCareer: '▶ Entrar al Modo Carrera (beta)',
+    contact: 'Tras apoyar, escríbeme en Twitter y te envío tu enlace de la beta cerrada:',
+    contactBtn: '𝕏 Escribir a @castroomath',
   },
 };
 
 const BETA_KEY = 'rtm-beta-v1';
+const TWITTER_URL = 'https://x.com/castroomath';
 
 export function Home({
   onStart,
@@ -196,6 +203,12 @@ export function Home({
             )}
           </div>
           {codeErr && <div className="neg small" style={{ marginTop: 8 }}>{codeErr}</div>}
+          {!hasBeta && (
+            <div className="cf-contact">
+              <span className="muted small">{N.contact}</span>
+              <a className="btn ghost small" href={TWITTER_URL} target="_blank" rel="noopener noreferrer">{N.contactBtn}</a>
+            </div>
+          )}
         </div>
 
         <div className="pool-cards">
