@@ -3906,3 +3906,33 @@ table.crm-players input.num {
 @media (max-width: 600px) {
   .t20-team { display: none; }
 }
+
+/* ===== overlay de simulação rápida ===== */
+.qs-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 26px 28px;
+  width: min(560px, 94%);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+.qs-label {
+  font-size: 0.74rem; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); font-weight: 700; margin-bottom: 18px;
+}
+.qs-board { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; }
+.qs-side { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.qs-side.mine .qs-name { color: var(--blue-bright); }
+.qs-name { font-family: var(--font-cond); font-weight: 800; font-size: 0.98rem; line-height: 1.1; }
+.qs-score {
+  font-family: var(--font-cond); font-weight: 800; font-size: 2.6rem; line-height: 1;
+  transition: transform 0.1s; min-width: 48px;
+}
+.qs-side.mine .qs-score { color: var(--gold); }
+.qs-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.qs-map { font-family: var(--font-cond); font-weight: 800; letter-spacing: 1px; color: var(--gold); }
+.qs-vs { color: var(--muted); font-size: 0.8rem; }
+.qs-mapscore { font-family: var(--font-cond); font-weight: 700; }
+.qs-foot { margin-top: 20px; min-height: 28px; }
+.qs-final { font-family: var(--font-cond); font-weight: 800; font-size: 1.1rem; }

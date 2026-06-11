@@ -3,7 +3,7 @@
 // do orçamento e disputar o CIRCUIT X (liga BR de pontos corridos). Vitórias
 // rendem dinheiro e pontos de VRS - o caminho até o Major virá nas próximas
 // fases. Textos em PT por enquanto (modo em refino, não lançado).
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr } from '../engine/ratings';
 import { createLeague, leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League } from '../engine/league';
 import { teamSeasonToTTeam } from '../engine/ratings';
@@ -303,6 +303,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
   const [majorT, setMajorT] = useState<Tournament | null>(null);
   const [hubTab, setHubTab] = useState<HubTab>('overview');
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
+  const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   // registro parcial do split, finalizado após o Major (se houver)
   const pendingSplit = useRef<SplitRecord | null>(null);
@@ -484,26 +485,38 @@ export function CareerScreen({ dataset, onExit }: Props) {
     setStage(clone.champion ? 'seasonEnd' : 'playoffHub');
   };
 
-  const simPlayoffMine = () => {
-    const p = save.playoff;
-    if (!p || !save.league) return;
-    const clone: Playoff = structuredClone(p);
-    const m = poUserMatch(clone);
-    if (m) {
-      rngRef.current = makeRng(randomSeed());
-      const a = leagueTeam(save.league, m.a);
-      const b = leagueTeam(save.league, m.b);
-      const bo = clone.final === m ? PO_FINAL_BO : PO_SF_BO;
-      m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
-    }
+  const applyPlayoff = (clone: Playoff) => {
     poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
     const next = { ...save, playoff: clone };
     persist(next);
     setSave(next);
     setStage(clone.champion ? 'seasonEnd' : 'playoffHub');
   };
+  const simPlayoffMine = () => {
+    const p = save.playoff;
+    if (!p || !save.league) return;
+    const live = poUserMatch(p);
+    if (!live) { applyPlayoff(structuredClone(p)); return; }
+    rngRef.current = makeRng(randomSeed());
+    const a = leagueTeam(save.league, live.a);
+    const b = leagueTeam(save.league, live.b);
+    const isFinal = p.final === live;
+    const bo = isFinal ? PO_FINAL_BO : PO_SF_BO;
+    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+    setQuickSim({
+      series, teams: [a, b], userIdx: live.a === 'user' ? 0 : 1,
+      label: `${p.circuit} · ${isFinal ? 'Final' : 'Semifinal'}`,
+      onDone: () => {
+        setQuickSim(null);
+        const clone: Playoff = structuredClone(p);
+        const m = poUserMatch(clone);
+        if (m) m.result = series;
+        applyPlayoff(clone);
+      },
+    });
+  };
 
-  // SIM MATCH: simula a partida do usuário na hora (sem veto/partida ao vivo)
+  // SIM MATCH: simula a partida do usuário com animação rápida (mini partida)
   const simMine = (l: League) => {
     const m = userLeagueMatch(l);
     if (!m) return;
@@ -511,7 +524,11 @@ export function CareerScreen({ dataset, onExit }: Props) {
     const a = leagueTeam(l, m.a);
     const b = leagueTeam(l, m.b);
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
-    finishUserRound(l, series);
+    setQuickSim({
+      series, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1,
+      label: `${l.name} · Rodada ${l.current + 1}`,
+      onDone: () => { setQuickSim(null); finishUserRound(l, series); },
+    });
   };
 
   // Major: o time vai pro Major mundial (16 times) e disputa Suíça + playoffs
@@ -571,15 +588,52 @@ export function CareerScreen({ dataset, onExit }: Props) {
     else setStage('majorHub');
   };
 
-  // simula a rodada inteira do Major (incluindo a partida do usuário)
-  const simMajorRound = () => {
-    if (!majorT) return;
-    const clone: Tournament = structuredClone(majorT);
-    resolveRound(clone, rngRef.current);
+  const advanceMajor = (clone: Tournament) => {
     setMajorT(clone);
     if (clone.phase === 'done') concludeMajor(clone);
     else setStage('majorHub');
   };
+  // simula a rodada do Major; anima a partida do usuário quando ele tem jogo
+  const simMajorRound = () => {
+    if (!majorT) return;
+    const up = tournamentUserPairing(majorT);
+    if (!up) {
+      const clone: Tournament = structuredClone(majorT);
+      resolveRound(clone, rngRef.current);
+      advanceMajor(clone);
+      return;
+    }
+    const a = getTeam(majorT, up.a);
+    const b = getTeam(majorT, up.b);
+    const bo = up.bestOf ?? 3;
+    rngRef.current = makeRng(randomSeed());
+    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+    setQuickSim({
+      series, teams: [a, b], userIdx: up.a === 'user' ? 0 : 1,
+      label: `${majorT.name} · ${up.label}`,
+      onDone: () => {
+        setQuickSim(null);
+        const clone: Tournament = structuredClone(majorT);
+        const p = clone.pairings.find((x) => x.a === 'user' || x.b === 'user');
+        if (p) p.result = series;
+        resolveRound(clone, rngRef.current);
+        advanceMajor(clone);
+      },
+    });
+  };
+
+  // overlay de simulação rápida (mini partida acelerada), sobrepõe qualquer tela
+  if (quickSim) {
+    return (
+      <QuickSimOverlay
+        series={quickSim.series}
+        teams={quickSim.teams}
+        userIdx={quickSim.userIdx}
+        label={quickSim.label}
+        onDone={quickSim.onDone}
+      />
+    );
+  }
 
   // ---------- fundação ----------
   if (stage === 'found') {
@@ -1383,6 +1437,81 @@ function CareerTable({ table, highlightTop = 0, onPick, detailed }: {
         ))}
       </tbody>
     </table>
+  );
+}
+
+// ---------- overlay de simulação rápida (mini partida acelerada) ----------
+function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
+  series: SeriesResult;
+  teams: [TTeam, TTeam];
+  userIdx: 0 | 1;
+  label: string;
+  onDone: () => void;
+}) {
+  const [mapIdx, setMapIdx] = useState(0);
+  const [round, setRound] = useState(0);
+  const [done, setDone] = useState(false);
+
+  // avança 1 round por vez, bem rápido (muito mais que o normal, mas visível)
+  useEffect(() => {
+    if (done) return;
+    const map = series.maps[mapIdx];
+    if (!map) { setDone(true); return; }
+    if (round >= map.roundLog.length) {
+      if (mapIdx + 1 >= series.maps.length) { setDone(true); return; }
+      const t = setTimeout(() => { setMapIdx(mapIdx + 1); setRound(0); }, 380);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setRound((r) => r + 1), 28);
+    return () => clearTimeout(t);
+  }, [mapIdx, round, done, series]);
+
+  useEffect(() => {
+    if (!done) return;
+    const t = setTimeout(onDone, 700);
+    return () => clearTimeout(t);
+  }, [done, onDone]);
+
+  const map = series.maps[mapIdx];
+  const log = map ? map.roundLog.slice(0, round) : [];
+  const sa = log.filter((w) => w === 0).length;
+  const sb = log.filter((w) => w === 1).length;
+  // mapas já decididos (placar de mapas)
+  const mapsWonA = series.maps.slice(0, mapIdx).filter((m) => m.winner === 0).length;
+  const mapsWonB = series.maps.slice(0, mapIdx).filter((m) => m.winner === 1).length;
+
+  const Side = ({ t, sc, idx }: { t: TTeam; sc: number; idx: 0 | 1 }) => (
+    <div className={`qs-side${idx === userIdx ? ' mine' : ''}`}>
+      <TeamBadge tag={t.tag} colors={t.colors} size={48} logoUrl={t.logoUrl} />
+      <div className="qs-name">{t.name}</div>
+      <div className="qs-score">{sc}</div>
+    </div>
+  );
+
+  return (
+    <div className="modal-backdrop" style={{ alignItems: 'center' }}>
+      <div className="qs-card">
+        <div className="qs-label">{label} · simulação rápida</div>
+        <div className="qs-board">
+          <Side t={teams[0]} sc={sa} idx={0} />
+          <div className="qs-mid">
+            <div className="qs-map">{map ? map.map.toUpperCase() : 'FIM'}</div>
+            <div className="qs-vs">vs</div>
+            <div className="qs-mapscore">{mapsWonA} - {mapsWonB} <span className="muted small">mapas</span></div>
+          </div>
+          <Side t={teams[1]} sc={sb} idx={1} />
+        </div>
+        <div className="qs-foot">
+          {done ? (
+            <span className="qs-final">
+              {series.winner === userIdx ? 'Vitória!' : 'Derrota'} · {series.mapScore[0]}-{series.mapScore[1]}
+            </span>
+          ) : (
+            <button className="btn ghost small" onClick={() => setDone(true)}>Pular ⏭</button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
