@@ -47,6 +47,29 @@ interface Signing {
   fromId: string;
 }
 
+// campeonato escolhido para o split (define o chaveamento e a premiação)
+interface CircuitChoice {
+  id: string;
+  name: string;
+  spots: number;     // vagas que vão ao Major
+  prizeMult: number; // multiplicador de premiação
+  vrsMult: number;   // multiplicador de VRS
+}
+
+// registro de um split encerrado (história da organização)
+interface SplitRecord {
+  split: number;
+  circuit: string;
+  position: number;
+  wins: number;
+  losses: number;
+  roundDiff: number;
+  prize: number;
+  vrs: number;
+  champion: boolean; // venceu o circuito
+  major?: { placement: PlacementCode; champion: boolean };
+}
+
 interface CareerSave {
   org: { name: string; tag: string; colors: [string, string] } | null;
   budget: number;
@@ -56,6 +79,8 @@ interface CareerSave {
   squad: Signing[];
   coachFromId: string | null;
   league: League | null;
+  circuit: CircuitChoice | null;
+  history: SplitRecord[];
 }
 
 const emptySave = (): CareerSave => ({
@@ -67,6 +92,8 @@ const emptySave = (): CareerSave => ({
   squad: [],
   coachFromId: null,
   league: null,
+  circuit: null,
+  history: [],
 });
 
 function loadSave(): CareerSave {
@@ -94,7 +121,8 @@ const coachFee = (c: Coach): number => Math.max(100_000, (c.rating - 60) * 30_00
 const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', country: 'br', rating: 66, style: 'tactical' };
 const ROOKIE_ID = '__rookie__';
 
-type Stage = 'found' | 'market' | 'hub' | 'veto' | 'match' | 'seasonEnd' | 'major';
+type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'seasonEnd' | 'major';
+type HubTab = 'overview' | 'results' | 'standings' | 'squad' | 'history';
 
 interface MajorResult {
   tournament: Tournament;
@@ -114,8 +142,10 @@ export function CareerScreen({ dataset, onExit }: Props) {
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
     if (!s.org) return 'found';
-    // sem liga ativa (org nova ou entre splits) = janela de mercado/transferências
-    if (s.squad.length < 5 || !s.coachFromId || !s.league) return 'market';
+    // sem elenco fechado = janela de mercado/transferências
+    if (s.squad.length < 5 || !s.coachFromId) return 'market';
+    // elenco pronto mas sem liga = escolha do campeonato (qual convite aceitar)
+    if (!s.league) return 'circuit';
     if (leagueDone(s.league)) return 'seasonEnd';
     return 'hub';
   });
@@ -126,7 +156,11 @@ export function CareerScreen({ dataset, onExit }: Props) {
   } | null>(null);
   const [selSeries, setSelSeries] = useState<{ series: SeriesResult; teams: [TTeam, TTeam] } | null>(null);
   const [majorResult, setMajorResult] = useState<MajorResult | null>(null);
+  const [hubTab, setHubTab] = useState<HubTab>('overview');
+  const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
+  // registro parcial do split, finalizado após o Major (se houver)
+  const pendingSplit = useRef<SplitRecord | null>(null);
 
   const update = (patch: Partial<CareerSave>) => {
     setSave((s) => {
@@ -145,6 +179,30 @@ export function CareerScreen({ dataset, onExit }: Props) {
     () => currentEra.filter((t) => t.country === 'br').sort((a, b) => b.teamwork - a.teamwork),
     [currentEra],
   );
+
+  // Campeonatos disponíveis a cada split: o jogador escolhe qual convite aceitar,
+  // já sabendo quais times vai enfrentar em cada um. Cada circuito tem força,
+  // premiação e número de vagas pro Major diferentes.
+  const circuits = useMemo(() => {
+    const pool = currentEra.filter((t) => t.id !== 'user');
+    const byStrength = [...pool].sort((a, b) => b.teamwork - a.teamwork);
+    const br = brTeams.filter((t) => t.id !== 'user');
+    const mid = byStrength.slice(8, 16); // times medianos (fora do top 8)
+    const mk = (
+      id: string,
+      name: string,
+      desc: string,
+      teams: TeamSeason[],
+      spots: number,
+      prizeMult: number,
+      vrsMult: number,
+    ) => ({ id, name, desc, teams: teams.slice(0, 7), spots, prizeMult, vrsMult });
+    return [
+      mk('circuitx', 'CIRCUIT X (BR)', 'Liga nacional brasileira. Campo equilibrado, porta de entrada pro Major.', br, 2, 1, 1),
+      mk('elite', 'ELITE LEAGUE (Mundial)', 'Os gigantes internacionais. Mais difícil, porém paga muito mais e dá mais VRS.', byStrength, 2, 1.6, 1.5),
+      mk('challengers', 'CHALLENGERS CIRCUIT', 'Liga de acesso com times medianos. Mais fácil, mas só 1 vaga e prêmios menores.', mid, 1, 0.6, 0.6),
+    ].filter((c) => c.teams.length >= 5);
+  }, [currentEra, brTeams]);
 
   // mercado: todos os jogadores da era atual, com preço de mercado
   const market = useMemo(
@@ -171,12 +229,22 @@ export function CareerScreen({ dataset, onExit }: Props) {
     return { ...team, tag: s.org.tag, colors: s.org.colors };
   };
 
-  const startSplit = (s: CareerSave) => {
+  const startSplit = (s: CareerSave, circuit: (typeof circuits)[number]) => {
     const user = buildTeam(s);
     if (!user) return;
-    const ai = brTeams.filter((t) => t.id !== 'user').slice(0, 7).map(teamSeasonToTTeam);
-    const league = createLeague(`CIRCUIT X - Split ${s.split}`, [user, ...ai]);
-    update({ league });
+    const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 7).map(teamSeasonToTTeam);
+    const league = createLeague(`${circuit.name} - Split ${s.split}`, [user, ...ai]);
+    const choice: CircuitChoice = {
+      id: circuit.id,
+      name: circuit.name,
+      spots: circuit.spots,
+      prizeMult: circuit.prizeMult,
+      vrsMult: circuit.vrsMult,
+    };
+    const next = { ...s, league, circuit: choice };
+    persist(next);
+    setSave(next);
+    setHubTab('overview');
     setStage('hub');
   };
 
@@ -269,8 +337,20 @@ export function CareerScreen({ dataset, onExit }: Props) {
           const next = { ...save, squad, coachFromId, budget };
           persist(next);
           setSave(next);
-          startSplit(next);
+          setStage('circuit');
         }}
+      />
+    );
+  }
+
+  // ---------- escolha do campeonato (qual convite aceitar) ----------
+  if (stage === 'circuit') {
+    return (
+      <CircuitPicker
+        circuits={circuits}
+        split={save.split}
+        onBack={() => setStage('market')}
+        onPick={(c) => startSplit(save, c)}
       />
     );
   }
@@ -302,11 +382,20 @@ export function CareerScreen({ dataset, onExit }: Props) {
             <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
               {mr.champion
                 ? 'Sua organização é CAMPEÃ MUNDIAL! O nome entrou para a história do CS.'
-                : 'Sua org representou o Brasil no Major mundial. Volte mais forte no próximo split.'}
+                : 'Sua org representou o circuito no Major mundial. Volte mais forte no próximo split.'}
             </p>
             <button
               className="btn gold big"
               onClick={() => {
+                const rec = pendingSplit.current;
+                const finished: SplitRecord = rec
+                  ? { ...rec, major: { placement: mr.placement, champion: mr.champion } }
+                  : {
+                      split: save.split, circuit: save.circuit?.name ?? 'Major', position: 0,
+                      wins: 0, losses: 0, roundDiff: 0, prize: 0, vrs: 0, champion: false,
+                      major: { placement: mr.placement, champion: mr.champion },
+                    };
+                pendingSplit.current = null;
                 const next = {
                   ...save,
                   budget: save.budget + mr.prize - payroll,
@@ -314,6 +403,8 @@ export function CareerScreen({ dataset, onExit }: Props) {
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
                   league: null,
+                  circuit: null,
+                  history: [...save.history, finished],
                 };
                 persist(next);
                 setSave(next);
@@ -333,9 +424,22 @@ export function CareerScreen({ dataset, onExit }: Props) {
   if (stage === 'seasonEnd' && league) {
     const table = leagueTable(league);
     const pos = table.findIndex((t) => t.id === 'user') + 1;
-    const prize = PRIZE_BY_POS[pos - 1] ?? 50_000;
-    const vrsGain = VRS_BY_POS[pos - 1] ?? 10;
-    const qualified = pos <= MAJOR_SPOTS;
+    const me = leagueTeam(league, 'user');
+    const spots = save.circuit?.spots ?? MAJOR_SPOTS;
+    const prize = Math.round((PRIZE_BY_POS[pos - 1] ?? 50_000) * (save.circuit?.prizeMult ?? 1));
+    const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsMult ?? 1));
+    const qualified = pos <= spots;
+    const baseRecord = (): SplitRecord => ({
+      split: save.split,
+      circuit: save.circuit?.name ?? league.name,
+      position: pos,
+      wins: me.wins,
+      losses: me.losses,
+      roundDiff: me.roundDiff,
+      prize,
+      vrs: vrsGain,
+      champion: pos === 1,
+    });
     return (
       <div className="fade-in">
         <div className="panel" style={{ maxWidth: 760, margin: '24px auto' }}>
@@ -353,12 +457,12 @@ export function CareerScreen({ dataset, onExit }: Props) {
             </div>
             {qualified ? (
               <div className="qualify-banner">
-                <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Terminar no top {MAJOR_SPOTS} do Circuit X
-                garantiu a vaga. Hora de enfrentar os melhores do mundo.
+                <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Terminar no top {spots} do {save.circuit?.name ?? 'circuito'}
+                {' '}garantiu a vaga. Hora de enfrentar os melhores do mundo.
               </div>
             ) : (
               <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
-                Termine no <b>top {MAJOR_SPOTS}</b> do Circuit X para garantir vaga no Major Mundial.
+                Termine no <b>top {spots}</b> do {save.circuit?.name ?? 'circuito'} para garantir vaga no Major Mundial.
                 Faltou pouco: continue acumulando VRS e reforçando o elenco.
               </p>
             )}
@@ -368,7 +472,9 @@ export function CareerScreen({ dataset, onExit }: Props) {
                 <button
                   className="btn gold big"
                   onClick={() => {
-                    // aplica prêmio+VRS do split antes de ir pro Major
+                    // aplica prêmio+VRS do split antes de ir pro Major;
+                    // o registro do split é finalizado após o resultado do Major
+                    pendingSplit.current = baseRecord();
                     const next = {
                       ...save,
                       budget: save.budget + prize,
@@ -393,6 +499,8 @@ export function CareerScreen({ dataset, onExit }: Props) {
                     titles: save.titles + (pos === 1 ? 1 : 0),
                     split: save.split + 1,
                     league: null,
+                    circuit: null,
+                    history: [...save.history, baseRecord()],
                   };
                   persist(next);
                   setSave(next);
@@ -454,9 +562,22 @@ export function CareerScreen({ dataset, onExit }: Props) {
   };
 
   const myPos = userPosition(league);
+  const spots = save.circuit?.spots ?? MAJOR_SPOTS;
   const form = clubForm(league);
   const opp = myMatch ? leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a) : null;
   const oppPos = opp ? table.findIndex((t) => t.id === opp.id) + 1 : 0;
+  const me = leagueTeam(league, 'user');
+  const seasonStats = seasonPlayerStats(league);
+  const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
+  const org = aggregateHistory(save.history);
+
+  const TABS: { id: HubTab; label: string }[] = [
+    { id: 'overview', label: 'Visão geral' },
+    { id: 'results', label: 'Resultados' },
+    { id: 'standings', label: 'Classificação' },
+    { id: 'squad', label: 'Elenco' },
+    { id: 'history', label: 'História da org' },
+  ];
 
   return (
     <div className="fade-in career-hub">
@@ -465,11 +586,11 @@ export function CareerScreen({ dataset, onExit }: Props) {
         <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={46} />
         <div className="ct-id">
           <div className="ct-name">{save.org?.name}</div>
-          <div className="ct-sub">CIRCUIT X · Split {save.split}</div>
+          <div className="ct-sub">{save.circuit?.name ?? 'CIRCUIT X'} · Split {save.split}</div>
         </div>
         <div className="ct-standing">
           <span className="muted small">POSIÇÃO</span>
-          <b className={myPos <= MAJOR_SPOTS ? 'pos' : ''}>{myPos}º</b>
+          <b className={myPos <= spots ? 'pos' : ''}>{myPos}º</b>
         </div>
         <div className="ct-form">
           <span className="muted small">FORMA</span>
@@ -479,101 +600,317 @@ export function CareerScreen({ dataset, onExit }: Props) {
         </div>
         <span className="spacer" />
         <div className="ct-stats">
-          <span title="Caixa do clube">💰 {formatMoney(save.budget)}</span>
-          <span title="Folha salarial por split">💸 {formatMoney(payroll)}</span>
-          <span title="Pontos de ranking (VRS)">📈 {save.vrs} VRS</span>
-          <span title="Títulos">🏆 {save.titles}</span>
+          <span title="Caixa do clube"><i className="muted small">CAIXA</i> {formatMoney(save.budget)}</span>
+          <span title="Folha salarial por split"><i className="muted small">FOLHA</i> {formatMoney(payroll)}</span>
+          <span title="Pontos de ranking (VRS)"><i className="muted small">VRS</i> {save.vrs}</span>
+          <span title="Títulos"><i className="muted small">TÍTULOS</i> {save.titles}</span>
         </div>
         <button className="btn" onClick={onExit}>← Sair</button>
       </div>
 
-      <div className="career-grid">
-        <div className="career-main">
-          {/* card grande de PRÓXIMA PARTIDA */}
-          {opp && myMatch ? (
-            <div className="play-match-card" style={{ background: `linear-gradient(110deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--header) 70%)` }}>
-              <div className="pm-info">
-                <div className="pm-label">PRÓXIMA PARTIDA · MD3 · Rodada {league.current + 1}/{league.rounds.length}</div>
-                <div className="pm-teams">
-                  <span className="pm-side">
-                    <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={40} />
-                    <b>{save.org?.tag}</b>
-                  </span>
-                  <span className="pm-vs">VS</span>
-                  <span className="pm-side">
-                    <TeamBadge tag={opp.tag} colors={opp.colors} size={40} logoUrl={opp.logoUrl} />
-                    <b>{opp.name}</b>
-                  </span>
-                </div>
-                <div className="pm-opp muted small">
-                  <Flag cc={opp.country} /> {oppPos}º na tabela · força {opp.strength.toFixed(1)}
-                </div>
-              </div>
-              <div className="pm-actions">
-                <button className="btn gold big" onClick={playMine}>▶ JOGAR</button>
-                <button className="btn ghost" onClick={() => simMine(league)}>⏩ Simular</button>
-              </div>
-            </div>
-          ) : (
-            <div className="career-banner">Rodada concluída. Avançando…</div>
-          )}
+      <div className="career-tabs">
+        {TABS.map((tab) => (
+          <button key={tab.id} className={`career-tab${hubTab === tab.id ? ' on' : ''}`} onClick={() => setHubTab(tab.id)}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-          <div className="muted small section-label">Rodada {league.current + 1} - confrontos</div>
-          <div className="panel-body tight" style={{ padding: 0 }}>
-            {league.rounds[league.current]?.map((m, i) => {
-              const a = leagueTeam(league, m.a);
-              const b = leagueTeam(league, m.b);
-              const mine = m.a === 'user' || m.b === 'user';
-              return (
-                <div key={i} className={`matchline${m.result ? ' clickable' : ''}`}
-                  onClick={() => m.result && setSelSeries({ series: m.result, teams: [a, b] })}>
-                  <span className={`side${mine && m.a === 'user' ? ' human' : ''}`}>
-                    <span className="tname">{a.name}</span>
-                  </span>
-                  {m.result ? (
-                    <span className="score">
-                      <span className={m.result.winner === 0 ? 'w' : 'l'}>{m.result.mapScore[0]}</span>
-                      {' : '}
-                      <span className={m.result.winner === 1 ? 'w' : 'l'}>{m.result.mapScore[1]}</span>
+      {/* ===== VISÃO GERAL ===== */}
+      {hubTab === 'overview' && (
+        <div className="career-grid">
+          <div className="career-main">
+            {opp && myMatch ? (
+              <div className="play-match-card" style={{ background: `linear-gradient(110deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--header) 70%)` }}>
+                <div className="pm-info">
+                  <div className="pm-label">PRÓXIMA PARTIDA · MD3 · Rodada {league.current + 1}/{league.rounds.length}</div>
+                  <div className="pm-teams">
+                    <span className="pm-side">
+                      <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={40} />
+                      <b>{save.org?.tag}</b>
                     </span>
-                  ) : (
-                    <span className="score muted">vs</span>
-                  )}
-                  <span className={`side right${mine && m.b === 'user' ? ' human' : ''}`}>
-                    <span className="tname">{b.name}</span>
-                  </span>
+                    <span className="pm-vs">VS</span>
+                    <span className="pm-side">
+                      <TeamBadge tag={opp.tag} colors={opp.colors} size={40} logoUrl={opp.logoUrl} />
+                      <b>{opp.name}</b>
+                    </span>
+                  </div>
+                  <div className="pm-opp muted small">
+                    <Flag cc={opp.country} /> {oppPos}º na tabela · força {opp.strength.toFixed(1)}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <div className="pm-actions">
+                  <button className="btn gold big" onClick={playMine}>▶ JOGAR</button>
+                  <button className="btn ghost" onClick={() => simMine(league)}>⏩ Simular</button>
+                </div>
+              </div>
+            ) : (
+              <div className="career-banner">Rodada concluída. Avançando…</div>
+            )}
 
-        <div className="career-side">
-          <div className="side-card">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>Classificação · top {MAJOR_SPOTS} vai ao Major</div>
-            <CareerTable table={table} highlightTop={MAJOR_SPOTS} />
-          </div>
-          <div className="side-card">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>Seu elenco</div>
-            <div className="career-squad">
-              {(buildTeam(save)?.players ?? []).map((p) => (
-                <div key={p.id} className="cs-row">
-                  <PlayerAvatar nick={p.nick} size={28} />
-                  <span className="cs-nick"><Flag cc={p.country} /> {p.nick}</span>
-                  <span className={`role-pill ${p.role}`}>{p.role}</span>
-                  <span className="cs-ovr">{p.ovr}</span>
-                </div>
+            {/* resumo da temporada atual */}
+            <div className="career-statgrid">
+              <div className="cstat"><b>{me.wins}-{me.losses}</b><span>Campanha</span></div>
+              <div className="cstat"><b className={me.roundDiff >= 0 ? 'pos' : 'neg'}>{me.roundDiff >= 0 ? '+' : ''}{me.roundDiff}</b><span>Saldo de rounds</span></div>
+              <div className="cstat"><b>{myPos}º / {league.teams.length}</b><span>Posição</span></div>
+              <div className="cstat"><b>{league.current}/{league.rounds.length}</b><span>Rodadas jogadas</span></div>
+            </div>
+
+            <div className="muted small section-label">Rodada {league.current + 1} - confrontos</div>
+            <div className="panel-body tight" style={{ padding: 0 }}>
+              {league.rounds[league.current]?.map((m, i) => (
+                <MatchLine key={i} league={league} m={m} onOpen={setSelSeries} />
               ))}
             </div>
           </div>
+
+          <div className="career-side">
+            <div className="side-card">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>Classificação · top {spots} vai ao Major</div>
+              <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} />
+            </div>
+            <div className="side-card">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>Destaques da temporada</div>
+              <BestPlayers stats={seasonStats.slice(0, 5)} mine={mySquadIds} />
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ===== RESULTADOS (todas as rodadas) ===== */}
+      {hubTab === 'results' && (
+        <div className="panel">
+          <div className="panel-body">
+            {league.rounds.map((round, r) => (
+              <div key={r} className="results-round">
+                <div className="muted small section-label" style={{ marginTop: r === 0 ? 0 : 14 }}>
+                  Rodada {r + 1}{r === league.current && ' (atual)'}
+                </div>
+                {round.map((m, i) => <MatchLine key={i} league={league} m={m} onOpen={setSelSeries} />)}
+              </div>
+            ))}
+            <p className="muted small" style={{ marginTop: 12 }}>Clique em qualquer partida finalizada para ver o placar mapa a mapa.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CLASSIFICAÇÃO (detalhada) ===== */}
+      {hubTab === 'standings' && (
+        <div className="panel">
+          <div className="panel-body">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>{save.circuit?.name ?? 'Circuito'} · top {spots} vai ao Major Mundial</div>
+            <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} detailed />
+            <p className="muted small" style={{ marginTop: 10 }}>Clique em um time para ver elenco, técnico e força.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ELENCO + RANKING DE JOGADORES ===== */}
+      {hubTab === 'squad' && (
+        <div className="career-grid">
+          <div className="career-main">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Seu elenco</div>
+            <div className="career-squad big">
+              {(buildTeam(save)?.players ?? []).map((p) => {
+                const st = seasonStats.find((s) => s.id === p.id);
+                return (
+                  <div key={p.id} className="cs-row">
+                    <PlayerAvatar nick={p.nick} size={32} />
+                    <span className="cs-nick"><Flag cc={p.country} /> {p.nick}</span>
+                    <span className={`role-pill ${p.role}`}>{p.role}</span>
+                    <span className="cs-stat">{st ? `rat ${st.rating.toFixed(2)}` : '-'}</span>
+                    <span className="cs-stat">{st ? `${st.kd.toFixed(2)} K/D` : ''}</span>
+                    <span className="cs-ovr">{p.ovr}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="career-side">
+            <div className="side-card">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>Melhores jogadores do {save.circuit?.name ?? 'circuito'}</div>
+              <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== HISTÓRIA DA ORGANIZAÇÃO ===== */}
+      {hubTab === 'history' && (
+        <div className="panel">
+          <div className="panel-body">
+            <div className="career-statgrid">
+              <div className="cstat"><b>{save.split - 1}</b><span>Splits disputados</span></div>
+              <div className="cstat"><b className="pos">{org.circuitTitles}</b><span>Títulos de circuito</span></div>
+              <div className="cstat"><b className="gold-text">{save.titles}</b><span>Majors vencidos</span></div>
+              <div className="cstat"><b>{org.majorApps}</b><span>Majors disputados</span></div>
+              <div className="cstat"><b>{formatMoney(org.totalPrize)}</b><span>Prêmios na história</span></div>
+              <div className="cstat"><b>{org.bestPlacement}</b><span>Melhor campanha</span></div>
+            </div>
+            <div className="muted small section-label">Linha do tempo</div>
+            {save.history.length === 0 ? (
+              <p className="muted small">Sua organização ainda não encerrou nenhum split. A história começa agora.</p>
+            ) : (
+              <table className="stats">
+                <thead>
+                  <tr><th style={{ textAlign: 'left' }}>Split</th><th style={{ textAlign: 'left' }}>Campeonato</th><th>Pos</th><th>V-D</th><th>Major</th><th>Prêmio</th></tr>
+                </thead>
+                <tbody>
+                  {[...save.history].reverse().map((h, i) => (
+                    <tr key={i}>
+                      <td style={{ textAlign: 'left' }}>{h.split}</td>
+                      <td style={{ textAlign: 'left' }}>{h.circuit}{h.champion && ' 🏆'}</td>
+                      <td>{h.position || '-'}º</td>
+                      <td>{h.wins}-{h.losses}</td>
+                      <td>{h.major ? PLACE_SHORT[h.major.placement] : '-'}</td>
+                      <td>{formatMoney(h.prize)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
+      {selTeam && <TeamDetail team={selTeam} onClose={() => setSelTeam(null)} />}
     </div>
   );
 }
 
-function CareerTable({ table, highlightTop = 0 }: { table: TTeam[]; highlightTop?: number }) {
+// linha de confronto reaproveitada (overview e resultados)
+function MatchLine({ league, m, onOpen }: {
+  league: League;
+  m: { a: string; b: string; result?: SeriesResult };
+  onOpen: (s: { series: SeriesResult; teams: [TTeam, TTeam] }) => void;
+}) {
+  const a = leagueTeam(league, m.a);
+  const b = leagueTeam(league, m.b);
+  const mine = m.a === 'user' || m.b === 'user';
+  return (
+    <div className={`matchline${m.result ? ' clickable' : ''}`}
+      onClick={() => m.result && onOpen({ series: m.result, teams: [a, b] })}>
+      <span className={`side${mine && m.a === 'user' ? ' human' : ''}`}><span className="tname">{a.name}</span></span>
+      {m.result ? (
+        <span className="score">
+          <span className={m.result.winner === 0 ? 'w' : 'l'}>{m.result.mapScore[0]}</span>
+          {' : '}
+          <span className={m.result.winner === 1 ? 'w' : 'l'}>{m.result.mapScore[1]}</span>
+        </span>
+      ) : (
+        <span className="score muted">vs</span>
+      )}
+      <span className={`side right${mine && m.b === 'user' ? ' human' : ''}`}><span className="tname">{b.name}</span></span>
+    </div>
+  );
+}
+
+const PLACE_SHORT: Record<PlacementCode, string> = {
+  champion: 'Campeão', runnerup: 'Vice', semi: 'Semi', quarters: 'Quartas', playoffs: 'Playoffs', swiss: 'Suíça',
+};
+
+// ranking de jogadores (destaques da temporada)
+function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<string>; ranked?: boolean }) {
+  if (stats.length === 0) return <p className="muted small">Os destaques aparecem após as primeiras partidas.</p>;
+  return (
+    <div className="best-players">
+      {stats.map((s, i) => (
+        <div key={s.id} className={`bp-row${mine.has(s.id) ? ' mine' : ''}`}>
+          {ranked && <span className="bp-rank">{i + 1}</span>}
+          <PlayerAvatar nick={s.nick} size={26} />
+          <span className="bp-nick"><Flag cc={s.country} /> {s.nick} <span className="muted small">{s.teamTag}</span></span>
+          <span className="bp-rating">{s.rating.toFixed(2)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// painel de detalhe de um time da tabela (elenco, técnico, força)
+function TeamDetail({ team, onClose }: { team: TTeam; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card team-detail" onClick={(e) => e.stopPropagation()}>
+        <div className="td-head">
+          <TeamBadge tag={team.tag} colors={team.colors} size={42} logoUrl={team.logoUrl} />
+          <div>
+            <div className="td-name"><Flag cc={team.country} /> {team.name}</div>
+            <div className="muted small">{team.wins}-{team.losses} · saldo {team.roundDiff >= 0 ? '+' : ''}{team.roundDiff} · força {team.strength.toFixed(1)}</div>
+          </div>
+          <span className="spacer" />
+          <button className="btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="td-body">
+          {team.players.map((p) => (
+            <div key={p.id} className="cs-row">
+              <PlayerAvatar nick={p.nick} size={28} />
+              <span className="cs-nick"><Flag cc={p.country} /> {p.nick}</span>
+              <span className={`role-pill ${p.role}`}>{p.role}</span>
+              <span className="cs-ovr">{p.ovr}</span>
+            </div>
+          ))}
+          {team.coach && <div className="td-coach muted small">Técnico: <b>{team.coach.nick}</b> ({team.coach.rating})</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----- agregações para a aba de história / destaques -----
+interface SeasonStat { id: string; nick: string; teamTag: string; country: string; role: string; rating: number; kd: number; adr: number; maps: number; }
+
+function seasonPlayerStats(l: League): SeasonStat[] {
+  const meta = new Map<string, { nick: string; teamTag: string; country: string; role: string }>();
+  for (const t of l.teams) for (const p of t.players) meta.set(p.id, { nick: p.nick, teamTag: t.tag, country: p.country, role: p.role });
+  const agg = new Map<string, { k: number; d: number; a: number; dmg: number; kast: number; r: number }>();
+  for (const round of l.rounds) {
+    for (const m of round) {
+      if (!m.result) continue;
+      for (const map of m.result.maps) {
+        for (const [id, st] of Object.entries(map.stats)) {
+          const cur = agg.get(id) ?? { k: 0, d: 0, a: 0, dmg: 0, kast: 0, r: 0 };
+          cur.k += st.both.kills; cur.d += st.both.deaths; cur.a += st.both.assists;
+          cur.dmg += st.both.dmg; cur.kast += st.both.kastRounds; cur.r += st.both.rounds;
+          agg.set(id, cur);
+        }
+      }
+    }
+  }
+  const out: SeasonStat[] = [];
+  for (const [id, s] of agg) {
+    if (s.r < 1) continue;
+    const kpr = s.k / s.r, dpr = s.d / s.r, apr = s.a / s.r, kast = s.kast / s.r, adr = s.dmg / s.r;
+    const impact = Math.max(0, 2.13 * kpr + 0.42 * apr - 0.41);
+    // rating estilo HLTV 2.0 (média ~1.0)
+    const rating = Math.max(0, 0.0073 * kast * 100 + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adr + 0.1587);
+    const md = meta.get(id);
+    if (!md) continue;
+    out.push({ id, nick: md.nick, teamTag: md.teamTag, country: md.country, role: md.role, rating, kd: s.d ? s.k / s.d : s.k, adr, maps: 0 });
+  }
+  return out.sort((a, b) => b.rating - a.rating);
+}
+
+function aggregateHistory(h: SplitRecord[]) {
+  let circuitTitles = 0, majorApps = 0, totalPrize = 0, bestPos = 99;
+  for (const r of h) {
+    if (r.champion) circuitTitles++;
+    if (r.major) majorApps++;
+    totalPrize += r.prize;
+    if (r.position && r.position < bestPos) bestPos = r.position;
+  }
+  return {
+    circuitTitles, majorApps, totalPrize,
+    bestPlacement: bestPos === 99 ? '-' : `${bestPos}º`,
+  };
+}
+
+function CareerTable({ table, highlightTop = 0, onPick, detailed }: {
+  table: TTeam[];
+  highlightTop?: number;
+  onPick?: (t: TTeam) => void;
+  detailed?: boolean;
+}) {
   return (
     <table className="stats">
       <thead>
@@ -583,20 +920,90 @@ function CareerTable({ table, highlightTop = 0 }: { table: TTeam[]; highlightTop
           <th>V</th>
           <th>D</th>
           <th>Saldo</th>
+          {detailed && <th>Força</th>}
         </tr>
       </thead>
       <tbody>
         {table.map((t, i) => (
-          <tr key={t.id} className={`${t.id === 'user' ? 'human-row' : ''}${highlightTop && i < highlightTop ? ' qualify-row' : ''}`}>
+          <tr
+            key={t.id}
+            className={`${t.id === 'user' ? 'human-row' : ''}${highlightTop && i < highlightTop ? ' qualify-row' : ''}${onPick ? ' clickable' : ''}`}
+            onClick={() => onPick?.(t)}
+          >
             <td style={{ textAlign: 'left' }}>{i + 1}</td>
             <td style={{ textAlign: 'left', fontWeight: t.id === 'user' ? 700 : 400 }}>{t.name}</td>
             <td className="pos">{t.wins}</td>
             <td className="neg">{t.losses}</td>
             <td>{t.roundDiff > 0 ? `+${t.roundDiff}` : t.roundDiff}</td>
+            {detailed && <td>{t.strength.toFixed(1)}</td>}
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+// ---------- escolha do campeonato ----------
+interface CircuitOption {
+  id: string;
+  name: string;
+  desc: string;
+  teams: TeamSeason[];
+  spots: number;
+  prizeMult: number;
+  vrsMult: number;
+}
+function CircuitPicker({ circuits, split, onPick, onBack }: {
+  circuits: CircuitOption[];
+  split: number;
+  onPick: (c: CircuitOption) => void;
+  onBack: () => void;
+}) {
+  const [sel, setSel] = useState(0);
+  const c = circuits[sel];
+  return (
+    <div className="fade-in">
+      <div className="panel" style={{ maxWidth: 900, margin: '24px auto' }}>
+        <div className="panel-head">
+          Escolha o campeonato - Split {split}
+          <span className="spacer" />
+          <button className="btn" onClick={onBack}>← Mercado</button>
+        </div>
+        <div className="panel-body">
+          <p className="muted small">Você recebeu convites de mais de um circuito. Veja quem disputa cada um e decida onde quer competir neste split.</p>
+          <div className="circuit-cards">
+            {circuits.map((opt, i) => (
+              <button key={opt.id} className={`circuit-card${sel === i ? ' on' : ''}`} onClick={() => setSel(i)}>
+                <div className="cc-name">{opt.name}</div>
+                <div className="cc-desc muted small">{opt.desc}</div>
+                <div className="cc-meta">
+                  <span>{opt.spots} {opt.spots === 1 ? 'vaga' : 'vagas'} ao Major</span>
+                  <span>prêmio ×{opt.prizeMult}</span>
+                  <span>VRS ×{opt.vrsMult}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+          {c && (
+            <>
+              <div className="muted small section-label">Times confirmados no {c.name}</div>
+              <div className="circuit-teams">
+                {c.teams.map((t) => (
+                  <div key={t.id} className="cteam">
+                    <TeamBadge tag={t.tag} colors={t.colors} size={28} logoUrl={t.logoUrl ?? logoForTeam(t)} />
+                    <span className="ct-tname"><Flag cc={t.country} /> {t.team}</span>
+                    <span className="muted small">forma {t.teamwork}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="center" style={{ marginTop: 16 }}>
+                <button className="btn gold big" onClick={() => onPick(c)}>Aceitar convite do {c.name}</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
