@@ -12,7 +12,7 @@ import { useLang } from '../state/i18n';
 import { track } from '../state/track';
 import type { SeriesResult, TournamentPool } from '../types';
 import { Scoreboard } from './Scoreboard';
-import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { AttrBar, Flag, Loader, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 
 interface SelSeries {
   a: string; // teamId
@@ -260,11 +260,7 @@ export function OnlineScreen({ onBack }: Props) {
   }
 
   if (!state) {
-    return (
-      <div className="fade-in center" style={{ padding: 60 }}>
-        <div className="muted">{tr('online.connecting')} {code}…</div>
-      </div>
-    );
+    return <Loader text={`${tr('online.connecting')} ${code}`} />;
   }
 
   const isHost = state.lobby.host.toLowerCase() === nick.toLowerCase();
@@ -292,7 +288,7 @@ export function OnlineScreen({ onBack }: Props) {
             <div className="lobby-players">
               {state.players.map((p) => (
                 <span key={p.nick} className="lobby-player">
-                  {p.nick === state.lobby.host ? '👑 ' : '🎮 '}
+                  {p.nick === state.lobby.host ? '★ ' : '• '}
                   {p.nick}
                 </span>
               ))}
@@ -559,7 +555,7 @@ export function OnlineScreen({ onBack }: Props) {
               <div className="lobby-players" style={{ justifyContent: 'center' }}>
                 {state.players.map((p) => (
                   <span key={p.nick} className={`lobby-player${p.done ? ' done' : ''}`}>
-                    {p.done ? '✔' : '⏳'} {p.nick}
+                    {p.done ? '✔' : '·'} {p.nick}
                   </span>
                 ))}
               </div>

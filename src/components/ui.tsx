@@ -189,3 +189,13 @@ export function AttrBar({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
+// spinner de carregamento reutilizável para estados assíncronos
+export function Loader({ text, gold }: { text?: string; gold?: boolean }) {
+  return (
+    <div className="loader fade-in">
+      <div className={`spinner${gold ? ' gold' : ''}`} />
+      {text && <div className="loader-text">{text}<span className="loader-dots" /></div>}
+    </div>
+  );
+}

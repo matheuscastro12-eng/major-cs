@@ -291,13 +291,13 @@ export function CareerScreen({ dataset, onExit }: Props) {
     return (
       <div className="fade-in">
         <div className="panel" style={{ maxWidth: 720, margin: '24px auto' }}>
-          <div className="panel-head">🌍 Major Mundial - resultado</div>
+          <div className="panel-head">Major Mundial - resultado</div>
           <div className="panel-body center">
-            <div className="trophy">{mr.champion ? '🏆' : mr.placement === 'runnerup' ? '🥈' : '🎯'}</div>
+            <div className="trophy">{mr.champion ? '🏆' : mr.placement === 'runnerup' ? '🥈' : '★'}</div>
             <h2>{save.org?.name}: {PLACE_PT[mr.placement]}</h2>
             <div className="prize-banner">
-              💰 Premiação: <b>+{formatMoney(mr.prize)}</b> · 📈 VRS: <b>+{mr.vrs} pts</b>
-              {mr.champion ? ' · 🏆 +1 título!' : ''}
+              Premiação: <b>+{formatMoney(mr.prize)}</b> · VRS: <b>+{mr.vrs} pts</b>
+              {mr.champion ? ' · +1 título!' : ''}
             </div>
             <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
               {mr.champion
@@ -321,7 +321,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
                 setStage('market');
               }}
             >
-              🔁 Pagar folha ({formatMoney(payroll)}) e ir pro Split {save.split + 1}
+              Pagar folha ({formatMoney(payroll)}) e ir pro Split {save.split + 1}
             </button>
           </div>
         </div>
@@ -340,20 +340,20 @@ export function CareerScreen({ dataset, onExit }: Props) {
       <div className="fade-in">
         <div className="panel" style={{ maxWidth: 760, margin: '24px auto' }}>
           <div className="panel-head">
-            🏁 {league.name} - split encerrado
+            {league.name} - split encerrado
             <span className="spacer" />
             <button className="btn" onClick={onExit}>← Sair</button>
           </div>
           <div className="panel-body center">
-            <div className="trophy">{pos === 1 ? '🏆' : pos <= 3 ? '🥉' : '📊'}</div>
+            <div className="trophy">{pos === 1 ? '🏆' : pos <= 3 ? '🥉' : '★'}</div>
             <h2>{save.org?.name} terminou em {pos}º lugar</h2>
             <div className="prize-banner">
-              💰 Premiação: <b>+{formatMoney(prize)}</b> · 📈 VRS: <b>+{vrsGain} pts</b> · 💸 Folha:{' '}
+              Premiação: <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · Folha:{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
             {qualified ? (
               <div className="qualify-banner">
-                🎟️ <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Terminar no top {MAJOR_SPOTS} do Circuit X
+                <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Terminar no top {MAJOR_SPOTS} do Circuit X
                 garantiu a vaga. Hora de enfrentar os melhores do mundo.
               </div>
             ) : (
@@ -380,7 +380,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
                     playMajor(next);
                   }}
                 >
-                  🌍 Disputar o Major Mundial
+                  Disputar o Major Mundial
                 </button>
               )}
               <button
@@ -399,7 +399,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
                   setStage('market');
                 }}
               >
-                🔁 Pagar folha e ir pro Split {save.split + 1}
+                Pagar folha e ir pro Split {save.split + 1}
               </button>
             </div>
           </div>
@@ -610,7 +610,7 @@ function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['
     <div className="fade-in">
       <div className="panel" style={{ maxWidth: 560, margin: '30px auto' }}>
         <div className="panel-head">
-          🏗️ Fundar organização (modo carreira)
+          Fundar organização (modo carreira)
           <span className="spacer" />
           <button className="btn" onClick={onExit}>← Sair</button>
         </div>
@@ -706,7 +706,7 @@ function MarketScreen({
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
-          💼 Mercado - Split {save.split} ({save.org?.name})
+          Mercado - Split {save.split} ({save.org?.name})
           <span className="spacer" />
           <span className={budgetLeft >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 800 }}>
             💰 {formatMoney(budgetLeft)}

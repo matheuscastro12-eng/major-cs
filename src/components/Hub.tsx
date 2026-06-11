@@ -100,7 +100,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
             </span>
           )}
           <button className="btn ghost" onClick={onStats}>
-            📊 {tr('hub.stats')}
+            {tr('hub.stats')}
           </button>
           {up ? (
             <button className="btn gold" onClick={onPlay}>

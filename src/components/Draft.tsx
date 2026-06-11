@@ -121,13 +121,13 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
                   <div className="honors">{source.honors}</div>
                 </div>
                 <button className="btn ghost" onClick={onReroll} disabled={draft.rerollsLeft <= 0}>
-                  🎲 {tr('draft.reroll')} ({draft.rerollsLeft})
+                  {tr('draft.reroll')} ({draft.rerollsLeft})
                 </button>
               </div>
 
           <div className="role-needs">
             {needs.length === 0 ? (
-              <span className="role-needs-ok">✅ {tr('draft.needsOk')}</span>
+              <span className="role-needs-ok">{tr('draft.needsOk')}</span>
             ) : (
               <>
                 <span className="role-needs-title">{tr('draft.needsTitle')}</span>
@@ -316,7 +316,7 @@ function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: T
           ))}
         </div>
       </div>
-      <div className="roulette-hint">🎲 {tr('draft.rouletteHint')}</div>
+      <div className="roulette-hint">{tr('draft.rouletteHint')}</div>
     </div>
   );
 }

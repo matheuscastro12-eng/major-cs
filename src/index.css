@@ -2553,12 +2553,69 @@ table.crm-players input.num {
 .center { text-align: center; }
 
 .fade-in {
-  animation: fadeIn 0.25s ease;
+  animation: fadeIn 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(10px) scale(0.995); }
   to { opacity: 1; transform: none; }
+}
+
+/* spinner de carregamento (estados assíncronos: lobby, fetch, etc.) */
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 20px;
+  color: var(--muted);
+}
+.spinner {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 3px solid var(--border-soft);
+  border-top-color: var(--blue-bright, #61a8dd);
+  animation: spin 0.8s linear infinite;
+}
+.spinner.gold {
+  border-top-color: var(--gold, #e6b34d);
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.loader-text {
+  font-size: 14px;
+  letter-spacing: 0.3px;
+}
+.loader-dots::after {
+  content: '';
+  animation: loaderDots 1.4s steps(4, end) infinite;
+}
+@keyframes loaderDots {
+  0% { content: ''; }
+  25% { content: '·'; }
+  50% { content: '· ·'; }
+  75% { content: '· · ·'; }
+}
+/* barra de progresso no topo durante transições/carregamento */
+.route-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  z-index: 9999;
+  background: linear-gradient(90deg, var(--blue-bright, #61a8dd), var(--gold, #e6b34d));
+  transform-origin: left;
+  animation: routeBar 0.9s ease-out;
+  pointer-events: none;
+}
+@keyframes routeBar {
+  0% { transform: scaleX(0); opacity: 1; }
+  70% { transform: scaleX(0.9); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
 }
 
 .synergy-list {

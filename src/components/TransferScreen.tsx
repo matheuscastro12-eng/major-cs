@@ -87,7 +87,7 @@ export function TransferScreen({ user, season, titles, budget, evolution, offers
       <div className="panel">
         <div className="season-banner">
           <h2>
-            🔁 {t('transfer.windowTitle')} {season}
+            {t('transfer.windowTitle')} {season}
           </h2>
           <div className="muted small">
             {titles > 0 ? `🏆 ${titles} ${t('transfer.careerTitles')} · ` : ''}

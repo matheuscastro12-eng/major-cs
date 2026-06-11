@@ -489,6 +489,8 @@ export default function App() {
 
   return (
     <>
+      {/* barra de progresso: remonta a cada troca de tela e replaya a animação */}
+      <div className="route-progress" key={screen} />
       <header className="app-header">
         <div className="topbar">
           <span className="logo" onClick={goHome}>
