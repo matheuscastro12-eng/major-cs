@@ -236,6 +236,11 @@ export default function App() {
     return startPresenceHeartbeat();
   }, []);
 
+  // rola pro topo ao trocar de tela (evita abrir uma tela já no meio dela)
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [screen]);
+
   // fonte primária: banco Neon via /api/teams (verdade compartilhada).
   // Só NÃO adota o servidor se o usuário tem edições locais ainda não salvas;
   // assim o "Salvar no banco" do admin chega a todos os jogadores.
