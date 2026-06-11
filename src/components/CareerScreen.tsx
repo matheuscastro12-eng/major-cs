@@ -20,7 +20,7 @@ import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 import { fileToDataUrl } from '../state/crm';
 import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
-import { CS2_REAL_2026 } from '../data/teams';
+import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits } from '../state/bo3-edits';
 
 const SAVE_KEY = 'rtm-career-v1';

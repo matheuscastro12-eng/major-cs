@@ -1,21 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Admin } from './components/Admin';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AdminGate } from './components/AdminGate';
-import { CareerScreen } from './components/CareerScreen';
-import { CareerCRM } from './components/CareerCRM';
 import { BrandMark } from './components/brand';
 import { DonateButton, DonateModal } from './components/Donate';
 import { Draft } from './components/Draft';
-import { FinalScreen } from './components/FinalScreen';
-import { HallScreen } from './components/HallScreen';
 import { Home } from './components/Home';
 import { Hub } from './components/Hub';
-import { LabScreen } from './components/LabScreen';
-import { MatchDetail } from './components/MatchDetail';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
-import { OnlineScreen } from './components/OnlineScreen';
-import { TournamentStats } from './components/TournamentStats';
+import { Loader } from './components/ui';
+
+// telas pesadas e/ou pouco usadas: carregadas sob demanda (code-splitting) pra
+// deixar o carregamento inicial bem mais leve.
+const Admin = lazy(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
+const CareerScreen = lazy(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
+const CareerCRM = lazy(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
+const FinalScreen = lazy(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
+const HallScreen = lazy(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
+const LabScreen = lazy(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
+const MatchDetail = lazy(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
+const OnlineScreen = lazy(() => import('./components/OnlineScreen').then((m) => ({ default: m.OnlineScreen })));
+const TournamentStats = lazy(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
 import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
@@ -535,6 +539,7 @@ export default function App() {
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
       <main className="page">
+      <Suspense fallback={<Loader text="…" />}>
       {bannerPreview && screen === 'home' && (
         <>
           <div className="ad-slot leaderboard">
@@ -700,6 +705,7 @@ export default function App() {
           />
         </AdminGate>
       )}
+      </Suspense>
       </main>
     </>
   );

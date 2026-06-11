@@ -3,7 +3,7 @@
 // aplicadas em runtime sobre CS2_REAL_2026 (sem reimportar a API).
 import { useMemo, useState } from 'react';
 import type { Role } from '../types';
-import { CS2_REAL_2026 } from '../data/teams';
+import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits, loadBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
 import { playerOvr } from '../engine/ratings';
 import { logoForTeam } from '../data/media';
