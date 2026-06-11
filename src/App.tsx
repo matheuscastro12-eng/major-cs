@@ -503,6 +503,19 @@ export default function App() {
     <>
       {/* barra de progresso: remonta a cada troca de tela e replaya a animação */}
       <div className="route-progress" key={screen} />
+
+      {/* DEMO: banner premium SEMPRE VISÍVEL (fica em todas as telas, inclusive
+          durante a partida). Pré-visualização para o patrocinador via #banners */}
+      {bannerPreview && (
+        <div className="ad-persistent">
+          <div className="ad-persistent-inner">
+            <span className="ad-tag">ESPAÇO PUBLICITÁRIO PREMIUM</span>
+            <span className="ad-size">sempre visível durante o jogo · 970×90 / 728×90</span>
+            <span className="spacer" />
+            <button className="ad-close" onClick={() => setBannerPreview(false)}>fechar preview ✕</button>
+          </div>
+        </div>
+      )}
       <header className="app-header">
         <div className="topbar">
           <span className="logo" onClick={goHome}>
