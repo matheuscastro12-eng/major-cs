@@ -18,7 +18,7 @@ import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } fr
 import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
-import { createTournament, getTeam, pairingBestOf, phaseLabel, placementLabel, resolveRound, userMapRecord, userPairing, userTeam } from './engine/swiss';
+import { createTournament, getTeam, pairingBestOf, phaseLabel, placementCode, resolveRound, userMapRecord, userPairing, userTeam, type PlacementCode } from './engine/swiss';
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
@@ -62,14 +62,16 @@ export interface CareerState {
   lastPrize?: number; // premiação da última campanha (para exibir)
 }
 
-// caixa inicial e premiação por desempenho no Major
+// caixa inicial e premiação por desempenho no Major (chaveada por código
+// estável de colocação, nunca por texto exibido/traduzível)
 const STARTING_BUDGET = 2_000_000;
-const PRIZE_BY_PLACEMENT: Record<string, number> = {
-  CAMPEÃO: 5_000_000,
-  'VICE-CAMPEÃO': 2_200_000,
-  SEMIFINAL: 1_200_000,
-  'QUARTAS DE FINAL': 600_000,
-  'CLASSIFICADO AOS PLAYOFFS': 350_000,
+const PRIZE_BY_PLACEMENT: Record<PlacementCode, number> = {
+  champion: 5_000_000,
+  runnerup: 2_200_000,
+  semi: 1_200_000,
+  quarters: 600_000,
+  playoffs: 350_000,
+  swiss: 0,
 };
 const newCareer = (): CareerState => ({ season: 1, titles: 0, budget: STARTING_BUDGET });
 
@@ -158,6 +160,9 @@ export default function App() {
     }
   }, [draft, tournament, pickem, career]);
 
+  // sessionStamp invalida o memo quando o save é apagado sem mudar de tela
+  // (ex.: "Nova campanha" clicada já na home)
+  const [sessionStamp, setSessionStamp] = useState(0);
   const savedSession = useMemo(() => {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
@@ -173,7 +178,7 @@ export default function App() {
       return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen]);
+  }, [screen, sessionStamp]);
 
   const resumeSession = () => {
     if (!savedSession?.tournament) return;
@@ -354,9 +359,9 @@ export default function App() {
     scorePickemAfter(clone);
     if (clone.phase === 'done') {
       // premiação em dinheiro pelo desempenho no Major (entra no caixa do clube)
-      const label = placementLabel(clone, 'user');
+      const code = placementCode(clone, 'user');
       const u = getTeam(clone, 'user');
-      const prize = 200_000 + (u?.wins ?? 0) * 150_000 + (PRIZE_BY_PLACEMENT[label] ?? 0);
+      const prize = 200_000 + (u?.wins ?? 0) * 150_000 + PRIZE_BY_PLACEMENT[code];
       setCareer((c) => ({
         ...c,
         titles: c.titles + (clone.championId === 'user' ? 1 : 0),
@@ -450,7 +455,13 @@ export default function App() {
   };
 
   const goHome = () => {
-    if (tournament && tournament.phase !== 'done' && screen !== 'final') {
+    // sem campanha carregada nesta sessão: só navega. NUNCA apagar um save em
+    // disco por um clique no logo (vindo do online/hall, tournament é null).
+    if (!tournament) {
+      setScreen('home');
+      return;
+    }
+    if (tournament.phase !== 'done' && screen !== 'final') {
       if (!confirm('Abandonar o Major em andamento e voltar para o início?')) return;
     }
     restart();
@@ -506,6 +517,7 @@ export default function App() {
           onResume={resumeSession}
           onDiscardCampaign={() => {
             localStorage.removeItem(SESSION_KEY);
+            setSessionStamp((s) => s + 1); // o banner some na hora, mesmo já na home
             setScreen('home');
             setTournament(null);
             setDraft(null);

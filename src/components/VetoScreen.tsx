@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { draftSynergy } from '../engine/ratings';
-import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, VETO_ORDER, type VetoState } from '../engine/veto';
+import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, vetoOrder, type VetoState } from '../engine/veto';
 import type { Rng } from '../engine/rng';
 import type { MapId, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
@@ -123,7 +123,7 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
             ))}
             {!done && veto.steps.length === 0 && (
               <div className="muted">
-                {t('veto.order')} {VETO_ORDER.map((s) => (s.action === 'decider' ? t('veto.decider').toLowerCase() : `${s.team === 0 ? teams[0].tag : teams[1].tag} ${s.action}`)).join(' → ')}
+                {t('veto.order')} {vetoOrder(bestOf).map((s) => (s.action === 'decider' ? t('veto.decider').toLowerCase() : `${s.team === 0 ? teams[0].tag : teams[1].tag} ${s.action}`)).join(' → ')}
               </div>
             )}
           </div>

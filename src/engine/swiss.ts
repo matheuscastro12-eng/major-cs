@@ -52,9 +52,13 @@ export function createTournamentFromTeams(teams: TTeam[], rng: Rng, name = 'MAJO
   return t;
 }
 
-// Rótulo de até onde um time chegou no Major (para exibir no resultado online).
-export function placementLabel(t: Tournament, teamId: string): string {
-  if (t.championId === teamId) return 'CAMPEÃO';
+// Até onde um time chegou no Major, como código estável (identificador de
+// lógica: premiação, ranking, estilo). O texto exibido vem do i18n
+// ('placement.<code>'), nunca deste código.
+export type PlacementCode = 'champion' | 'runnerup' | 'semi' | 'quarters' | 'playoffs' | 'swiss';
+
+export function placementCode(t: Tournament, teamId: string): PlacementCode {
+  if (t.championId === teamId) return 'champion';
   const team = t.teams.find((x) => x.id === teamId);
   // procura a fase onde o time perdeu nos playoffs
   for (const h of t.history) {
@@ -63,12 +67,12 @@ export function placementLabel(t: Tournament, teamId: string): string {
     if (!p.result) continue;
     const lost = (p.result.winner === 0 ? p.b : p.a) === teamId;
     if (!lost) continue;
-    if (h.phase.includes('GRANDE FINAL')) return 'VICE-CAMPEÃO';
-    if (h.phase.includes('Semi')) return 'SEMIFINAL';
-    if (h.phase.includes('Quartas')) return 'QUARTAS DE FINAL';
+    if (h.phase.includes('GRANDE FINAL')) return 'runnerup';
+    if (h.phase.includes('Semi')) return 'semi';
+    if (h.phase.includes('Quartas')) return 'quarters';
   }
-  if (team?.status === 'advanced') return 'CLASSIFICADO AOS PLAYOFFS';
-  return `SUÍÇA (${team?.wins ?? 0}-${team?.losses ?? 0})`;
+  if (team?.status === 'advanced') return 'playoffs';
+  return 'swiss';
 }
 
 function pastOpponents(t: Tournament, id: string): Set<string> {

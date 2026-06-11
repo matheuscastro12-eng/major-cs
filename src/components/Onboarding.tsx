@@ -4,14 +4,24 @@ import { useLang } from '../state/i18n';
 const KEY = 'major-onboarded-v1';
 
 export function shouldOnboard(): boolean {
-  return localStorage.getItem(KEY) !== '1';
+  // roda dentro de um useState initializer no primeiro render: storage
+  // bloqueado (cookies off / iframe) não pode derrubar o app inteiro
+  try {
+    return localStorage.getItem(KEY) !== '1';
+  } catch {
+    return true;
+  }
 }
 
 export function Onboarding({ onClose }: { onClose: () => void }) {
   const { t } = useLang();
   const [, setSeen] = useState(false);
   const close = () => {
-    localStorage.setItem(KEY, '1');
+    try {
+      localStorage.setItem(KEY, '1');
+    } catch {
+      /* sem storage: o modal volta na próxima visita, nada quebra */
+    }
     setSeen(true);
     onClose();
   };

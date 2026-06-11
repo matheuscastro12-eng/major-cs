@@ -310,9 +310,15 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       eco[1] = { money: 800, lossStreak: 0 };
     }
     const buys = computeBuys();
-    // chamada de economia (force/save) sobrescreve a compra do time que chamou
+    // chamada de economia (force/save) sobrescreve a compra do time que chamou.
+    // Force exige dinheiro de verdade: sem caixa para um force real, a chamada
+    // não inventa armas (senão seria upgrade grátis de eco -7 para force -2.6).
     if (call && !isPistol) {
-      if (call.kind === 'force') buys[call.team] = eco[call.team].money >= 4100 ? 'full' : 'force';
+      if (call.kind === 'force') {
+        const m = eco[call.team].money;
+        if (m >= 4100) buys[call.team] = 'full';
+        else if (m >= buyCost('force')) buys[call.team] = 'force';
+      }
       if (call.kind === 'save') buys[call.team] = 'eco';
     }
     buyLog.push(buys);

@@ -11,7 +11,6 @@ import {
 import { useLang } from '../state/i18n';
 import { track } from '../state/track';
 import type { SeriesResult, TournamentPool } from '../types';
-import { COACH_STYLE_DESC, COACH_STYLE_LABELS } from '../types';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 
@@ -30,7 +29,13 @@ const POLL_MS = 2200;
 
 export function OnlineScreen({ onBack }: Props) {
   const { t: tr } = useLang();
-  const [nick, setNick] = useState(() => localStorage.getItem(NICK_KEY) ?? '');
+  const [nick, setNick] = useState(() => {
+    try {
+      return localStorage.getItem(NICK_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [codeInput, setCodeInput] = useState('');
   const [mode, setMode] = useState<'duel' | 'party'>('duel');
   const [pool, setPool] = useState<TournamentPool>('world');
@@ -46,7 +51,11 @@ export function OnlineScreen({ onBack }: Props) {
 
   const saveNick = (n: string) => {
     setNick(n);
-    localStorage.setItem(NICK_KEY, n);
+    try {
+      localStorage.setItem(NICK_KEY, n);
+    } catch {
+      /* sem storage: o nick vale só nesta sessão */
+    }
   };
 
   // polling do estado do lobby
@@ -66,12 +75,16 @@ export function OnlineScreen({ onBack }: Props) {
     if (me.coach_pick) setCoachPick((c) => c || me.coach_pick);
   }, [code, nick, myDone]);
 
+  const lobbyDone = state?.lobby.status === 'done';
   useEffect(() => {
     if (!code) return;
     refresh();
+    // resultado é imutável depois de 'done': parar o polling evita re-simular
+    // o Major inteiro (~40 séries) a cada 2.2s com a tela de resultado aberta
+    if (lobbyDone) return;
     pollRef.current = window.setInterval(refresh, POLL_MS);
     return () => window.clearInterval(pollRef.current);
-  }, [code, refresh]);
+  }, [code, refresh, lobbyDone]);
 
   const create = async () => {
     if (!nick.trim() || busy) return;
@@ -292,12 +305,20 @@ export function OnlineScreen({ onBack }: Props) {
       const nk = major.humanByTeamId[id];
       return nk ? `${nk} (${t?.tag ?? ''})` : t?.name ?? id;
     };
-    const SeriesRow = ({ h, key }: { h: (typeof playoffs)[number]; key?: number }) => {
+    // fase do histórico vem em PT do engine; traduz só na exibição
+    const phaseDisplay = (ph: string) => {
+      const round = /Rodada (\d+)/.exec(ph);
+      if (round) return `${tr('common.round')} ${round[1]}`;
+      if (ph === 'GRANDE FINAL') return tr('phase.final');
+      if (ph === 'Semifinal') return tr('phase.semi');
+      if (ph.startsWith('Quartas')) return tr('phase.quarters');
+      return ph;
+    };
+    const SeriesRow = ({ h }: { h: (typeof playoffs)[number] }) => {
       const p = h.pairing;
       const res = p.result!;
       return (
         <div
-          key={key}
           className="matchline clickable"
           onClick={() => setSelMatch({ a: p.a, b: p.b, series: res })}
         >
@@ -312,7 +333,7 @@ export function OnlineScreen({ onBack }: Props) {
           <span className={`side right${major.humanByTeamId[p.b] ? ' human' : ''}`}>
             <span className="tname">{teamLabel(p.b)}</span>
           </span>
-          <span className="muted small">{h.phase.replace('Suíça - ', '')}</span>
+          <span className="muted small">{phaseDisplay(h.phase)}</span>
         </div>
       );
     };
@@ -344,12 +365,12 @@ export function OnlineScreen({ onBack }: Props) {
               {major.humans.map((h) => {
                 const tm = major.teamsById[h.teamId];
                 return (
-                  <div key={h.nick} className={`human-card${h.placement === 'CAMPEÃO' ? ' champ' : ''}`}>
+                  <div key={h.nick} className={`human-card${h.placement === 'champion' ? ' champ' : ''}`}>
                     <div className="hr-head">
                       <TeamBadge tag={tm?.tag ?? ''} colors={tm?.colors ?? ['#333', '#555']} size={28} logoUrl={tm?.logoUrl} />
                       <b>{h.nick}</b>
                       <span className="spacer" />
-                      <span className="hr-place">{h.placement}</span>
+                      <span className="hr-place">{tr(`placement.${h.placement}`)}</span>
                     </div>
                     <div className="hr-roster muted small">{tm?.players.map((p) => p.nick).join(', ')}</div>
                     <div className="hr-rec muted small">{tr('online.campaign')} {h.wins}{tr('common.wins')} - {h.losses}{tr('common.losses')}</div>
@@ -453,10 +474,10 @@ export function OnlineScreen({ onBack }: Props) {
                   <OvrBadge ovr={t.coach.rating} label="COACH" />
                   <div className="nick">{t.coach.nick}</div>
                   <div className="meta">
-                    <span className="role-pill IGL">{COACH_STYLE_LABELS[t.coach.style]}</span>
+                    <span className="role-pill IGL">{tr(`coach.${t.coach.style}`)}</span>
                   </div>
                   <div className="meta muted small" style={{ marginTop: 6, lineHeight: 1.3 }}>
-                    {COACH_STYLE_DESC[t.coach.style]}
+                    {tr(`coach.${t.coach.style}Desc`)}
                   </div>
                 </button>
               ))}

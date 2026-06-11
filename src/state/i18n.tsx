@@ -348,6 +348,18 @@ const PT: Dict = {
   "call.forceHint": "Compra cheia mesmo sem grana: ganha o round mas esvazia o caixa",
   "call.save": "Economizar",
   "call.saveHint": "Não compra: provavelmente perde o round, mas guarda dinheiro",
+  "match.stanceAggressive": "Agressivo",
+  "match.stanceDefault": "Padrão",
+  "match.stanceCautious": "Cauteloso",
+  "placement.champion": "CAMPEÃO",
+  "placement.runnerup": "VICE-CAMPEÃO",
+  "placement.semi": "SEMIFINAL",
+  "placement.quarters": "QUARTAS DE FINAL",
+  "placement.playoffs": "CLASSIFICADO AOS PLAYOFFS",
+  "placement.swiss": "FASE SUÍÇA",
+  "phase.final": "GRANDE FINAL",
+  "phase.semi": "Semifinal",
+  "phase.quarters": "Quartas de final",
 };
 
 const EN: Dict = {
@@ -657,6 +669,18 @@ const EN: Dict = {
   "call.forceHint": "Full buy even when broke: wins the round but drains the economy",
   "call.save": "Save",
   "call.saveHint": "No buy: likely lose the round, but bank the cash",
+  "match.stanceAggressive": "Aggressive",
+  "match.stanceDefault": "Default",
+  "match.stanceCautious": "Cautious",
+  "placement.champion": "CHAMPION",
+  "placement.runnerup": "RUNNER-UP",
+  "placement.semi": "SEMIFINAL",
+  "placement.quarters": "QUARTERFINALS",
+  "placement.playoffs": "QUALIFIED FOR PLAYOFFS",
+  "placement.swiss": "SWISS STAGE",
+  "phase.final": "GRAND FINAL",
+  "phase.semi": "Semifinal",
+  "phase.quarters": "Quarterfinals",
 };
 
 const ES: Dict = {
@@ -966,6 +990,18 @@ const ES: Dict = {
   "call.forceHint": "Compra completa aun sin dinero: gana la ronda pero vacía la economía",
   "call.save": "Ahorrar",
   "call.saveHint": "No compra: probablemente pierdes la ronda, pero guardas dinero",
+  "match.stanceAggressive": "Agresivo",
+  "match.stanceDefault": "Estándar",
+  "match.stanceCautious": "Cauteloso",
+  "placement.champion": "CAMPEÓN",
+  "placement.runnerup": "SUBCAMPEÓN",
+  "placement.semi": "SEMIFINAL",
+  "placement.quarters": "CUARTOS DE FINAL",
+  "placement.playoffs": "CLASIFICADO A PLAYOFFS",
+  "placement.swiss": "FASE SUIZA",
+  "phase.final": "GRAN FINAL",
+  "phase.semi": "Semifinal",
+  "phase.quarters": "Cuartos de final",
 };
 
 const DICT: Record<Lang, Dict> = { pt: PT, en: EN, es: ES };

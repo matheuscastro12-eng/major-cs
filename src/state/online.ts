@@ -2,12 +2,10 @@
 // determinísticos a partir do seed do lobby: todos os clientes computam
 // exatamente as mesmas opções e o mesmo resultado, sem servidor de jogo.
 import { BASE_TEAMS } from '../data/teams';
-import { simulateSeries } from '../engine/match';
 import { buildUserTeam, playerOvr, teamSeasonToTTeam } from '../engine/ratings';
 import { makeRng, type Rng } from '../engine/rng';
-import { autoVeto } from '../engine/veto';
-import { createTournamentFromTeams, placementLabel, resolveRound, standings } from '../engine/swiss';
-import type { Player, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
+import { createTournamentFromTeams, placementCode, resolveRound, standings, type PlacementCode } from '../engine/swiss';
+import type { Player, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
 
 export interface LobbyState {
   lobby: {
@@ -87,63 +85,16 @@ export function teamFromPicks(
   }
   const coachTeam = setup.coachOptions.find((t) => t.id === coachPick) ?? setup.coachOptions[0];
   const team = buildUserTeam(nick, chosen, coachTeam.coach);
-  return { ...team, id: `online_${nick}`, name: nick, isUser: false };
+  // ids de jogador PRECISAM ser únicos no torneio: dois jogadores podem draftar
+  // a mesma lenda, e stats/killfeed/MVP são indexados por id
+  const players = team.players.map((p) => ({ ...p, id: `online_${nick}__${p.sourcePlayerId}` }));
+  return { ...team, id: `online_${nick}`, name: nick, isUser: false, players };
 }
 
-export interface OnlineMatch {
-  a: string;
-  b: string;
-  series: SeriesResult;
-}
-
-export interface OnlineResults {
-  matches: OnlineMatch[];
-  standings: { nick: string; wins: number; losses: number; mapDiff: number }[];
-  champion: string;
-  teams: Record<string, TTeam>;
-}
-
-// Resultados determinísticos: round-robin MD3 entre todos os jogadores.
-// Ordem fixa (nicks ordenados) garante o mesmo resultado em todos os clientes.
-export function simulateOnlineResults(state: LobbyState): OnlineResults | null {
-  const setup = buildDraftFromSeed(state.lobby.seed, state.lobby.pool);
-  const ordered = [...state.players].sort((x, y) => x.nick.localeCompare(y.nick));
-  const teams: Record<string, TTeam> = {};
-  for (const p of ordered) {
-    const t = teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup);
-    if (!t) return null; // alguém ainda não terminou
-    teams[p.nick] = t;
-  }
-
-  const rng = makeRng(state.lobby.seed + 7777);
-  const matches: OnlineMatch[] = [];
-  const score = new Map<string, { wins: number; losses: number; mapDiff: number }>();
-  for (const p of ordered) score.set(p.nick, { wins: 0, losses: 0, mapDiff: 0 });
-
-  for (let i = 0; i < ordered.length; i++) {
-    for (let j = i + 1; j < ordered.length; j++) {
-      const a = teams[ordered[i].nick];
-      const b = teams[ordered[j].nick];
-      const maps = autoVeto([a, b], rng);
-      const series = simulateSeries(rng, a, b, maps);
-      matches.push({ a: ordered[i].nick, b: ordered[j].nick, series });
-      const winNick = series.winner === 0 ? ordered[i].nick : ordered[j].nick;
-      const loseNick = series.winner === 0 ? ordered[j].nick : ordered[i].nick;
-      score.get(winNick)!.wins++;
-      score.get(loseNick)!.losses++;
-      for (const m of series.maps) {
-        score.get(ordered[i].nick)!.mapDiff += m.score[0] - m.score[1];
-        score.get(ordered[j].nick)!.mapDiff += m.score[1] - m.score[0];
-      }
-    }
-  }
-
-  const standings = ordered
-    .map((p) => ({ nick: p.nick, ...score.get(p.nick)! }))
-    .sort((x, y) => y.wins - x.wins || y.mapDiff - x.mapDiff || x.nick.localeCompare(y.nick));
-
-  return { matches, standings, champion: standings[0]?.nick ?? '', teams };
-}
+// ordenação ESTÁVEL entre clientes: comparação por code point (localeCompare
+// depende do locale do navegador e quebraria o determinismo do Major online)
+const byNickCodepoint = (x: { nick: string }, y: { nick: string }): number =>
+  x.nick < y.nick ? -1 : x.nick > y.nick ? 1 : 0;
 
 // ===================== MAJOR ONLINE (ultimate team) =====================
 // Em vez de só os jogadores se enfrentarem, os times draftados entram num Major
@@ -158,12 +109,12 @@ export interface OnlineMajor {
   humanByTeamId: Record<string, string>; // teamId -> nick
   championId: string;
   championIsHuman: boolean;
-  humans: { nick: string; teamId: string; placement: string; wins: number; losses: number }[];
+  humans: { nick: string; teamId: string; placement: PlacementCode; wins: number; losses: number }[];
 }
 
 export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
   const setup = buildDraftFromSeed(state.lobby.seed, state.lobby.pool);
-  const ordered = [...state.players].sort((x, y) => x.nick.localeCompare(y.nick));
+  const ordered = [...state.players].sort(byNickCodepoint);
 
   const humanByTeamId: Record<string, string> = {};
   const humanTeams: TTeam[] = [];
@@ -176,9 +127,15 @@ export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
 
   // preenche com times da IA (determinístico), evitando repetir os elencos-fonte
   const usedSources = new Set(setup.sources.map((s) => s.id));
-  const aiPool = onlineDataset(state.lobby.pool).filter((s) => !usedSources.has(s.id));
-  const aiRng = makeRng(state.lobby.seed + 4242);
+  let aiPool = onlineDataset(state.lobby.pool).filter((s) => !usedSources.has(s.id));
   const need = Math.max(0, MAJOR_SIZE - humanTeams.length);
+  // pool regional pequeno demais (ex.: BR após edições no CRM): completa com o
+  // mundo para o bracket de 16 nunca quebrar (seeds[7] exige 8 classificados)
+  if (aiPool.length < need && state.lobby.pool !== 'world') {
+    const haveIds = new Set([...usedSources, ...aiPool.map((s) => s.id)]);
+    aiPool = [...aiPool, ...onlineDataset('world').filter((s) => !haveIds.has(s.id))];
+  }
+  const aiRng = makeRng(state.lobby.seed + 4242);
   const aiTeams = weightedSample(aiRng, aiPool, need).map((s) => teamSeasonToTTeam(s));
 
   const tRng = makeRng(state.lobby.seed + 9999);
@@ -197,12 +154,12 @@ export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
       return {
         nick: p.nick,
         teamId,
-        placement: placementLabel(tournament, teamId),
+        placement: placementCode(tournament, teamId),
         wins: team?.wins ?? 0,
         losses: team?.losses ?? 0,
       };
     })
-    .sort((a, b) => rankOfPlacement(a.placement) - rankOfPlacement(b.placement) || b.wins - a.wins);
+    .sort((a, b) => rankOfPlacement(a.placement) - rankOfPlacement(b.placement) || b.wins - a.wins || byNickCodepoint(a, b));
 
   return {
     tournament,
@@ -215,14 +172,15 @@ export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
 }
 
 // ordem de exibição (menor = melhor colocação)
-function rankOfPlacement(label: string): number {
-  if (label === 'CAMPEÃO') return 0;
-  if (label === 'VICE-CAMPEÃO') return 1;
-  if (label === 'SEMIFINAL') return 2;
-  if (label === 'QUARTAS DE FINAL') return 3;
-  if (label === 'CLASSIFICADO AOS PLAYOFFS') return 4;
-  return 5;
-}
+const PLACEMENT_RANK: Record<PlacementCode, number> = {
+  champion: 0,
+  runnerup: 1,
+  semi: 2,
+  quarters: 3,
+  playoffs: 4,
+  swiss: 5,
+};
+const rankOfPlacement = (code: PlacementCode): number => PLACEMENT_RANK[code];
 
 // classificação final completa do Major (16 times) para exibição
 export function majorStandings(major: OnlineMajor) {

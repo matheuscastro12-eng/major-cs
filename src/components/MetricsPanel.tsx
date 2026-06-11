@@ -114,7 +114,9 @@ export function MetricsPanel() {
         {data.visitsByDay.length === 0 && <div className="muted small">Sem visitas registradas ainda.</div>}
         {data.visitsByDay.map((d) => (
           <div key={d.day} className="lab-bar">
-            <span>{new Date(d.day).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+            {/* d.day é 'YYYY-MM-DD' do servidor (fuso SP); formatar direto da
+                string evita o shift de -1 dia do parse UTC de new Date() */}
+            <span>{String(d.day).slice(8, 10)}/{String(d.day).slice(5, 7)}</span>
             <span className="bar">
               <i style={{ width: `${(Number(d.visits) / maxV) * 100}%` }} />
             </span>
