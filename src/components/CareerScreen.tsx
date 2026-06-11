@@ -447,14 +447,25 @@ function MarketScreen({
   const signedNicks = new Set(
     squad.map((s) => findSigning(s)?.player.nick.toLowerCase()).filter(Boolean) as string[],
   );
+  // jogadores que JÁ eram seus (pagos no split anterior) não custam de novo;
+  // dispensar um deles é venda a 85% do valor de mercado
+  const owned = new Set(save.squad.map((s) => s.playerId));
   const spentPlayers = squad.reduce((acc, s) => {
+    if (owned.has(s.playerId)) return acc;
     const f = findSigning(s);
     return acc + (f ? playerValue(f.player) : 0);
   }, 0);
+  const soldPlayers = save.squad
+    .filter((s) => !squad.some((x) => x.playerId === s.playerId))
+    .reduce((acc, s) => {
+      const f = findSigning(s);
+      return acc + (f ? Math.round(playerValue(f.player) * 0.85) : 0);
+    }, 0);
   const coachTeam = coachId && coachId !== ROOKIE_ID ? coaches.find((t) => t.id === coachId) : null;
-  const spentCoach = coachId === ROOKIE_ID ? coachFee(ROOKIE_COACH) : coachTeam ? coachFee(coachTeam.coach) : 0;
+  const coachChanged = coachId !== save.coachFromId;
+  const spentCoach = !coachChanged ? 0 : coachId === ROOKIE_ID ? coachFee(ROOKIE_COACH) : coachTeam ? coachFee(coachTeam.coach) : 0;
   const coachOptions = [...coaches].sort((a, b) => coachFee(a.coach) - coachFee(b.coach));
-  const budgetLeft = save.budget - spentPlayers - spentCoach;
+  const budgetLeft = save.budget - spentPlayers - spentCoach + soldPlayers;
   const ready = squad.length === 5 && !!coachId && budgetLeft >= 0;
 
   const visible = market.filter(
@@ -479,8 +490,9 @@ function MarketScreen({
         <div className="panel-body">
           <div className="career-banner muted small">
             Contrate <b>5 jogadores</b> e <b>1 coach</b> dentro do orçamento. Só
-            jogadores dos elencos atuais (CS2). Clique num contratado para dispensar
-            (reembolso integral nesta janela).
+            jogadores dos elencos atuais (CS2). Clique num contratado para dispensar:
+            contratação desta janela tem reembolso integral; jogador do seu elenco é
+            vendido por 85% do valor.
           </div>
 
           <div className="muted small section-label">Seu elenco ({squad.length}/5)</div>
