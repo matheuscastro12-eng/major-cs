@@ -7471,5 +7471,897 @@
    }
   ],
   "pending": true
+ },
+ {
+  "id": "luminosity2016",
+  "team": "Luminosity Gaming",
+  "tag": "LG",
+  "era": "2016",
+  "game": "CS:GO",
+  "country": "br",
+  "colors": [
+   "#0e2a1e",
+   "#39b54a"
+  ],
+  "teamwork": 92,
+  "honors": "Os pioneiros do título mundial brasileiro (MLG Columbus 2016)",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "br",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "mirage": 2,
+   "train": 1,
+   "cache": 1
+  },
+  "players": [
+   {
+    "id": "luminosity2016__fallen",
+    "nick": "FalleN",
+    "name": "Gabriel Toledo",
+    "country": "br",
+    "role": "AWP",
+    "aim": 92,
+    "clutch": 90,
+    "consistency": 90,
+    "awp": 95,
+    "igl": 82
+   },
+   {
+    "id": "luminosity2016__coldzera",
+    "nick": "coldzera",
+    "name": "Marcelo David",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 95,
+    "clutch": 93,
+    "consistency": 93,
+    "awp": 60,
+    "igl": 55
+   },
+   {
+    "id": "luminosity2016__fer",
+    "nick": "fer",
+    "name": "Fernando Alvarenga",
+    "country": "br",
+    "role": "Entry",
+    "aim": 92,
+    "clutch": 86,
+    "consistency": 86,
+    "awp": 55,
+    "igl": 50
+   },
+   {
+    "id": "luminosity2016__fnx",
+    "nick": "fnx",
+    "name": "Lincoln Lau",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 85,
+    "clutch": 84,
+    "consistency": 83,
+    "awp": 55,
+    "igl": 55
+   },
+   {
+    "id": "luminosity2016__taco",
+    "nick": "TACO",
+    "name": "Epitácio de Melo",
+    "country": "br",
+    "role": "Support",
+    "aim": 80,
+    "clutch": 82,
+    "consistency": 84,
+    "awp": 45,
+    "igl": 55
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "navi2018",
+  "team": "Natus Vincere",
+  "tag": "NAVI",
+  "era": "2018",
+  "game": "CS:GO",
+  "country": "ua",
+  "colors": [
+   "#f5d014",
+   "#101010"
+  ],
+  "teamwork": 86,
+  "honors": "s1mple no auge absoluto carregando a NaVi (2018)",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "ua",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "mirage": 1,
+   "inferno": 1,
+   "train": 1,
+   "overpass": 1
+  },
+  "players": [
+   {
+    "id": "navi2018__s1mple",
+    "nick": "s1mple",
+    "name": "Oleksandr Kostyliev",
+    "country": "ua",
+    "role": "AWP",
+    "aim": 98,
+    "clutch": 95,
+    "consistency": 93,
+    "awp": 96,
+    "igl": 55
+   },
+   {
+    "id": "navi2018__electronic",
+    "nick": "electronic",
+    "name": "Denis Sharipov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 92,
+    "clutch": 89,
+    "consistency": 88,
+    "awp": 55,
+    "igl": 55
+   },
+   {
+    "id": "navi2018__flamie",
+    "nick": "flamie",
+    "name": "Egor Vasilyev",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 88,
+    "clutch": 85,
+    "consistency": 85,
+    "awp": 60,
+    "igl": 50
+   },
+   {
+    "id": "navi2018__edward",
+    "nick": "Edward",
+    "name": "Ioann Sukhariev",
+    "country": "ua",
+    "role": "Support",
+    "aim": 82,
+    "clutch": 84,
+    "consistency": 84,
+    "awp": 45,
+    "igl": 55
+   },
+   {
+    "id": "navi2018__zeus",
+    "nick": "Zeus",
+    "name": "Danylo Teslenko",
+    "country": "ua",
+    "role": "IGL",
+    "aim": 76,
+    "clutch": 82,
+    "consistency": 82,
+    "awp": 40,
+    "igl": 90
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "vitality2022",
+  "team": "Team Vitality",
+  "tag": "VIT",
+  "era": "2022",
+  "game": "CS:GO",
+  "country": "fr",
+  "colors": [
+   "#1a1d2e",
+   "#ffd700"
+  ],
+  "teamwork": 90,
+  "honors": "O super time francês montado em torno de ZywOo (2022)",
+  "coach": {
+   "nick": "zonic",
+   "name": "Danny Sørensen",
+   "country": "dk",
+   "rating": 94,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "inferno": 2,
+   "nuke": 1,
+   "mirage": 1
+  },
+  "players": [
+   {
+    "id": "vitality2022__zywoo",
+    "nick": "ZywOo",
+    "name": "Mathieu Herbaut",
+    "country": "fr",
+    "role": "AWP",
+    "aim": 97,
+    "clutch": 94,
+    "consistency": 94,
+    "awp": 98,
+    "igl": 55
+   },
+   {
+    "id": "vitality2022__magisk",
+    "nick": "Magisk",
+    "name": "Emil Reif",
+    "country": "dk",
+    "role": "Rifler",
+    "aim": 90,
+    "clutch": 88,
+    "consistency": 88,
+    "awp": 55,
+    "igl": 55
+   },
+   {
+    "id": "vitality2022__dupreeh",
+    "nick": "dupreeh",
+    "name": "Peter Rasmussen",
+    "country": "dk",
+    "role": "Entry",
+    "aim": 88,
+    "clutch": 86,
+    "consistency": 86,
+    "awp": 52,
+    "igl": 52
+   },
+   {
+    "id": "vitality2022__misutaaa",
+    "nick": "misutaaa",
+    "name": "Rémi Pelletier",
+    "country": "fr",
+    "role": "Rifler",
+    "aim": 84,
+    "clutch": 82,
+    "consistency": 83,
+    "awp": 55,
+    "igl": 50
+   },
+   {
+    "id": "vitality2022__apex",
+    "nick": "apEX",
+    "name": "Dan Madesclaire",
+    "country": "fr",
+    "role": "IGL",
+    "aim": 80,
+    "clutch": 84,
+    "consistency": 82,
+    "awp": 50,
+    "igl": 90
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "liquid2021",
+  "team": "Team Liquid",
+  "tag": "TL",
+  "era": "2021",
+  "game": "CS:GO",
+  "country": "us",
+  "colors": [
+   "#0a1a3f",
+   "#1d6fdc"
+  ],
+  "teamwork": 85,
+  "honors": "A Liquid com FalleN e dois AWPers (2021)",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "us",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "mirage": 1,
+   "nuke": 1,
+   "dust2": 1
+  },
+  "players": [
+   {
+    "id": "liquid2021__elige",
+    "nick": "EliGE",
+    "name": "Jonathan Jablonowski",
+    "country": "us",
+    "role": "Rifler",
+    "aim": 91,
+    "clutch": 88,
+    "consistency": 88,
+    "awp": 52,
+    "igl": 55
+   },
+   {
+    "id": "liquid2021__naf",
+    "nick": "NAF",
+    "name": "Keith Markovic",
+    "country": "ca",
+    "role": "Rifler",
+    "aim": 88,
+    "clutch": 87,
+    "consistency": 88,
+    "awp": 55,
+    "igl": 58
+   },
+   {
+    "id": "liquid2021__stewie2k",
+    "nick": "Stewie2K",
+    "name": "Jake Yip",
+    "country": "us",
+    "role": "Entry",
+    "aim": 86,
+    "clutch": 84,
+    "consistency": 83,
+    "awp": 50,
+    "igl": 70
+   },
+   {
+    "id": "liquid2021__fallen",
+    "nick": "FalleN",
+    "name": "Gabriel Toledo",
+    "country": "br",
+    "role": "AWP",
+    "aim": 85,
+    "clutch": 86,
+    "consistency": 86,
+    "awp": 90,
+    "igl": 80
+   },
+   {
+    "id": "liquid2021__osee",
+    "nick": "oSee",
+    "name": "Josh Ohm",
+    "country": "us",
+    "role": "AWP",
+    "aim": 85,
+    "clutch": 83,
+    "consistency": 83,
+    "awp": 89,
+    "igl": 45
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "cloud92017",
+  "team": "Cloud9",
+  "tag": "C9",
+  "era": "2017",
+  "game": "CS:GO",
+  "country": "us",
+  "colors": [
+   "#0a1a3f",
+   "#1f8fff"
+  ],
+  "teamwork": 85,
+  "honors": "A base NA que venceria o Major de Boston (2017)",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "us",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "mirage": 1,
+   "inferno": 1,
+   "train": 1
+  },
+  "players": [
+   {
+    "id": "cloud92017__shroud",
+    "nick": "shroud",
+    "name": "Michael Grzesiek",
+    "country": "ca",
+    "role": "Rifler",
+    "aim": 88,
+    "clutch": 85,
+    "consistency": 84,
+    "awp": 60,
+    "igl": 50
+   },
+   {
+    "id": "cloud92017__n0thing",
+    "nick": "n0thing",
+    "name": "Jordan Gilbert",
+    "country": "us",
+    "role": "Rifler",
+    "aim": 85,
+    "clutch": 84,
+    "consistency": 84,
+    "awp": 55,
+    "igl": 55
+   },
+   {
+    "id": "cloud92017__stewie2k",
+    "nick": "Stewie2K",
+    "name": "Jake Yip",
+    "country": "us",
+    "role": "Entry",
+    "aim": 86,
+    "clutch": 84,
+    "consistency": 83,
+    "awp": 50,
+    "igl": 65
+   },
+   {
+    "id": "cloud92017__autimatic",
+    "nick": "autimatic",
+    "name": "Timothy Ta",
+    "country": "us",
+    "role": "Rifler",
+    "aim": 86,
+    "clutch": 84,
+    "consistency": 84,
+    "awp": 55,
+    "igl": 52
+   },
+   {
+    "id": "cloud92017__tarik",
+    "nick": "tarik",
+    "name": "Tarik Celik",
+    "country": "us",
+    "role": "IGL",
+    "aim": 84,
+    "clutch": 84,
+    "consistency": 84,
+    "awp": 45,
+    "igl": 82
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "ence2022",
+  "team": "ENCE",
+  "tag": "ENCE",
+  "era": "2022",
+  "game": "CS:GO",
+  "country": "eu",
+  "colors": [
+   "#1b6ec2",
+   "#101820"
+  ],
+  "teamwork": 87,
+  "honors": "A ENCE surpresa de 2022 com Spinx e SunPayus",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "eu",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "mirage": 1,
+   "nuke": 1,
+   "ancient": 1
+  },
+  "players": [
+   {
+    "id": "ence2022__spinx",
+    "nick": "Spinx",
+    "name": "Lotan Giladi",
+    "country": "il",
+    "role": "Rifler",
+    "aim": 88,
+    "clutch": 85,
+    "consistency": 86,
+    "awp": 55,
+    "igl": 60
+   },
+   {
+    "id": "ence2022__dycha",
+    "nick": "dycha",
+    "name": "Paweł Dycha",
+    "country": "pl",
+    "role": "Rifler",
+    "aim": 87,
+    "clutch": 84,
+    "consistency": 84,
+    "awp": 55,
+    "igl": 50
+   },
+   {
+    "id": "ence2022__sunpayus",
+    "nick": "SunPayus",
+    "name": "Guy Iluz",
+    "country": "es",
+    "role": "AWP",
+    "aim": 86,
+    "clutch": 84,
+    "consistency": 83,
+    "awp": 90,
+    "igl": 45
+   },
+   {
+    "id": "ence2022__maden",
+    "nick": "maden",
+    "name": "Marc Höfler",
+    "country": "fi",
+    "role": "Rifler",
+    "aim": 84,
+    "clutch": 82,
+    "consistency": 82,
+    "awp": 50,
+    "igl": 52
+   },
+   {
+    "id": "ence2022__snappi",
+    "nick": "Snappi",
+    "name": "Marco Pfeiffer",
+    "country": "dk",
+    "role": "IGL",
+    "aim": 78,
+    "clutch": 82,
+    "consistency": 82,
+    "awp": 45,
+    "igl": 89
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "spirit2021",
+  "team": "Team Spirit",
+  "tag": "SPR",
+  "era": "2021",
+  "game": "CS:GO",
+  "country": "ru",
+  "colors": [
+   "#1a1a1a",
+   "#c0392b"
+  ],
+  "teamwork": 85,
+  "honors": "A nova geração russa liderada por sh1ro (2021)",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "ru",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "mirage": 1,
+   "inferno": 1,
+   "nuke": 1
+  },
+  "players": [
+   {
+    "id": "spirit2021__sh1ro",
+    "nick": "sh1ro",
+    "name": "Dmitry Sokolov",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 90,
+    "clutch": 88,
+    "consistency": 87,
+    "awp": 94,
+    "igl": 45
+   },
+   {
+    "id": "spirit2021__magixx",
+    "nick": "magixx",
+    "name": "Boris Vorobiev",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 86,
+    "clutch": 84,
+    "consistency": 84,
+    "awp": 52,
+    "igl": 50
+   },
+   {
+    "id": "spirit2021__patsi",
+    "nick": "Patsi",
+    "name": "Robert Isyanov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 85,
+    "clutch": 83,
+    "consistency": 83,
+    "awp": 52,
+    "igl": 50
+   },
+   {
+    "id": "spirit2021__degster",
+    "nick": "degster",
+    "name": "Abdul Gasanov",
+    "country": "ru",
+    "role": "Rifler",
+    "aim": 86,
+    "clutch": 83,
+    "consistency": 82,
+    "awp": 80,
+    "igl": 45
+   },
+   {
+    "id": "spirit2021__chopper",
+    "nick": "chopper",
+    "name": "Leonid Vishnyakov",
+    "country": "ru",
+    "role": "IGL",
+    "aim": 80,
+    "clutch": 82,
+    "consistency": 83,
+    "awp": 45,
+    "igl": 88
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "vp2017",
+  "team": "Virtus.pro",
+  "tag": "VP",
+  "era": "2017",
+  "game": "CS:GO",
+  "country": "pl",
+  "colors": [
+   "#e67e22",
+   "#101010"
+  ],
+  "teamwork": 88,
+  "honors": "Os lendários polacos da Virtus Plow (2017)",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "pl",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "train": 2,
+   "overpass": 1,
+   "inferno": 1,
+   "mirage": 1
+  },
+  "players": [
+   {
+    "id": "vp2017__snax",
+    "nick": "Snax",
+    "name": "Janusz Pogorzelski",
+    "country": "pl",
+    "role": "Rifler",
+    "aim": 87,
+    "clutch": 85,
+    "consistency": 84,
+    "awp": 60,
+    "igl": 58
+   },
+   {
+    "id": "vp2017__neo",
+    "nick": "NEO",
+    "name": "Filip Kubski",
+    "country": "pl",
+    "role": "Rifler",
+    "aim": 86,
+    "clutch": 86,
+    "consistency": 85,
+    "awp": 55,
+    "igl": 60
+   },
+   {
+    "id": "vp2017__byali",
+    "nick": "byali",
+    "name": "Paweł Bieliński",
+    "country": "pl",
+    "role": "Rifler",
+    "aim": 86,
+    "clutch": 84,
+    "consistency": 83,
+    "awp": 58,
+    "igl": 50
+   },
+   {
+    "id": "vp2017__pashabiceps",
+    "nick": "pashaBiceps",
+    "name": "Jarosław Jarząbkowski",
+    "country": "pl",
+    "role": "Entry",
+    "aim": 85,
+    "clutch": 84,
+    "consistency": 84,
+    "awp": 55,
+    "igl": 50
+   },
+   {
+    "id": "vp2017__taz",
+    "nick": "TaZ",
+    "name": "Wiktor Wojtas",
+    "country": "pl",
+    "role": "IGL",
+    "aim": 80,
+    "clutch": 82,
+    "consistency": 82,
+    "awp": 45,
+    "igl": 86
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "heroic2021",
+  "team": "Heroic",
+  "tag": "HER",
+  "era": "2021",
+  "game": "CS:GO",
+  "country": "dk",
+  "colors": [
+   "#101820",
+   "#e74c3c"
+  ],
+  "teamwork": 88,
+  "honors": "A Heroic dinamarquesa que brigou pelo topo (2021)",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "dk",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "nuke": 2,
+   "mirage": 1,
+   "inferno": 1
+  },
+  "players": [
+   {
+    "id": "heroic2021__stavn",
+    "nick": "stavn",
+    "name": "Martin Lund",
+    "country": "dk",
+    "role": "Rifler",
+    "aim": 88,
+    "clutch": 85,
+    "consistency": 86,
+    "awp": 55,
+    "igl": 52
+   },
+   {
+    "id": "heroic2021__teses",
+    "nick": "TeSeS",
+    "name": "René Madsen",
+    "country": "dk",
+    "role": "Rifler",
+    "aim": 86,
+    "clutch": 84,
+    "consistency": 85,
+    "awp": 55,
+    "igl": 52
+   },
+   {
+    "id": "heroic2021__cadian",
+    "nick": "cadiaN",
+    "name": "Casper Møller",
+    "country": "dk",
+    "role": "AWP",
+    "aim": 86,
+    "clutch": 86,
+    "consistency": 85,
+    "awp": 90,
+    "igl": 82
+   },
+   {
+    "id": "heroic2021__sjuush",
+    "nick": "sjuush",
+    "name": "Rasmus Beck",
+    "country": "dk",
+    "role": "Support",
+    "aim": 83,
+    "clutch": 82,
+    "consistency": 83,
+    "awp": 48,
+    "igl": 52
+   },
+   {
+    "id": "heroic2021__refrezh",
+    "nick": "refrezh",
+    "name": "Lukas Bøgballe",
+    "country": "dk",
+    "role": "Entry",
+    "aim": 82,
+    "clutch": 81,
+    "consistency": 82,
+    "awp": 48,
+    "igl": 55
+   }
+  ],
+  "pending": true
+ },
+ {
+  "id": "g22022",
+  "team": "G2 Esports",
+  "tag": "G2",
+  "era": "2022",
+  "game": "CS:GO",
+  "country": "eu",
+  "colors": [
+   "#101820",
+   "#e2122b"
+  ],
+  "teamwork": 86,
+  "honors": "O ano de estreia do prodígio m0NESY na G2 (2022)",
+  "coach": {
+   "nick": "coach",
+   "name": "Comissão Técnica",
+   "country": "eu",
+   "rating": 80,
+   "style": "tactical"
+  },
+  "mapPrefs": {
+   "mirage": 1,
+   "nuke": 1,
+   "inferno": 1
+  },
+  "players": [
+   {
+    "id": "g22022__niko",
+    "nick": "NiKo",
+    "name": "Nikola Kovač",
+    "country": "ba",
+    "role": "Rifler",
+    "aim": 94,
+    "clutch": 90,
+    "consistency": 91,
+    "awp": 55,
+    "igl": 60
+   },
+   {
+    "id": "g22022__m0nesy",
+    "nick": "m0NESY",
+    "name": "Ilya Osipov",
+    "country": "ru",
+    "role": "AWP",
+    "aim": 90,
+    "clutch": 86,
+    "consistency": 85,
+    "awp": 95,
+    "igl": 45
+   },
+   {
+    "id": "g22022__hunter",
+    "nick": "huNter-",
+    "name": "Nemanja Kovač",
+    "country": "ba",
+    "role": "Rifler",
+    "aim": 89,
+    "clutch": 86,
+    "consistency": 87,
+    "awp": 55,
+    "igl": 58
+   },
+   {
+    "id": "g22022__aleksib",
+    "nick": "Aleksib",
+    "name": "Aleksi Virolainen",
+    "country": "fi",
+    "role": "IGL",
+    "aim": 82,
+    "clutch": 83,
+    "consistency": 84,
+    "awp": 45,
+    "igl": 91
+   },
+   {
+    "id": "g22022__jackz",
+    "nick": "JACKZ",
+    "name": "Audric Jug",
+    "country": "fr",
+    "role": "Rifler",
+    "aim": 82,
+    "clutch": 81,
+    "consistency": 82,
+    "awp": 50,
+    "igl": 52
+   }
+  ],
+  "pending": true
  }
 ]
