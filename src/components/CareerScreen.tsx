@@ -126,6 +126,7 @@ interface CareerSave {
   history: SplitRecord[];
   sponsors: string[];
   playoff: Playoff | null;
+  majorT: Tournament | null;
 }
 
 const emptySave = (): CareerSave => ({
@@ -141,6 +142,7 @@ const emptySave = (): CareerSave => ({
   history: [],
   sponsors: [],
   playoff: null,
+  majorT: null,
 });
 
 // ----- helpers do playoff (mata-mata do circuito) -----
@@ -283,7 +285,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', countr
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history';
+type HubTab = 'overview' | 'major' | 'market' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history';
 
 interface MajorResult {
   tournament: Tournament;
@@ -307,6 +309,7 @@ export function CareerScreen({ dataset, onExit }: Props) {
     if (s.squad.length < 5 || !s.coachFromId) return 'market';
     // elenco pronto mas sem liga = escolha do campeonato (qual convite aceitar)
     if (!s.league) return 'circuit';
+    if (s.majorT && s.majorT.phase !== 'done') return 'hub'; // Major ao vivo, dentro do hub
     if (leagueDone(s.league)) {
       // fase de pontos corridos encerrada: vai pro mata-mata; só depois do
       // campeão decidido cai no resumo da temporada
@@ -325,8 +328,14 @@ export function CareerScreen({ dataset, onExit }: Props) {
   } | null>(null);
   const [selSeries, setSelSeries] = useState<{ series: SeriesResult; teams: [TTeam, TTeam] } | null>(null);
   const [majorResult, setMajorResult] = useState<MajorResult | null>(null);
-  const [majorT, setMajorT] = useState<Tournament | null>(null);
-  const [hubTab, setHubTab] = useState<HubTab>('overview');
+  const [majorTState, setMajorTState] = useState<Tournament | null>(() => loadSave().majorT);
+  const majorT = majorTState;
+  // persiste o Major junto do save (sobrevive a reload no meio do torneio)
+  const setMajorT = (t: Tournament | null) => {
+    setMajorTState(t);
+    setSave((s) => { const n = { ...s, majorT: t }; persist(n); return n; });
+  };
+  const [hubTab, setHubTab] = useState<HubTab>(() => (loadSave().majorT ? 'major' : 'overview'));
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
@@ -558,7 +567,8 @@ export function CareerScreen({ dataset, onExit }: Props) {
     const pool = currentEra.filter((t) => t.id !== 'user');
     const major = createTournament(pool, user, rngRef.current, MAJOR_NAME(s.split), 4);
     setMajorT(major);
-    setStage('majorHub');
+    setHubTab('major');
+    setStage('hub');
   };
 
   // encerra o Major: calcula colocação, prêmio e VRS
@@ -603,13 +613,13 @@ export function CareerScreen({ dataset, onExit }: Props) {
     setMatchCtx(null);
     setMajorT(clone);
     if (clone.phase === 'done') concludeMajor(clone);
-    else setStage('majorHub');
+    else { setHubTab('major'); setStage('hub'); }
   };
 
   const advanceMajor = (clone: Tournament) => {
     setMajorT(clone);
     if (clone.phase === 'done') concludeMajor(clone);
-    else setStage('majorHub');
+    else { setHubTab('major'); setStage('hub'); }
   };
   // simula a rodada do Major; anima a partida do usuário quando ele tem jogo
   const simMajorRound = () => {
@@ -950,30 +960,6 @@ export function CareerScreen({ dataset, onExit }: Props) {
     );
   }
 
-  // ---------- hub do Major (ao vivo, com bracket) ----------
-  if (stage === 'majorHub' && majorT) {
-    return (
-      <div className="career-major-live">
-        <div className="major-live-bar">
-          <b>MODO CARREIRA</b> · {save.org?.name} no {majorT.name}
-          <span className="spacer" />
-          <button className="btn" onClick={() => setStage('majorHub')} disabled>Major ao vivo</button>
-        </div>
-        <Hub
-          t={majorT}
-          career={{ season: save.split, titles: save.titles, budget: save.budget }}
-          pickem={{ picks: {}, score: 0, total: 0 }}
-          onPick={() => {}}
-          onPlay={playMajorMine}
-          onSimRound={simMajorRound}
-          onStats={() => {}}
-          onOpenSeries={(p) => p.result && setSelSeries({ series: p.result, teams: [getTeam(majorT, p.a), getTeam(majorT, p.b)] })}
-        />
-        {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
-      </div>
-    );
-  }
-
   // ---------- playoffs do circuito (mata-mata com bracket) ----------
   if (stage === 'playoffHub' && save.playoff && league) {
     const p = save.playoff;
@@ -1031,11 +1017,14 @@ export function CareerScreen({ dataset, onExit }: Props) {
   const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
   const org = aggregateHistory(save.history);
 
+  const majorActive = !!majorT && majorT.phase !== 'done';
   const TABS: { id: HubTab; label: string }[] = [
     { id: 'overview', label: 'Visão geral' },
+    ...(majorActive ? [{ id: 'major' as HubTab, label: '★ Major' }] : []),
     { id: 'results', label: 'Resultados' },
     { id: 'standings', label: 'Classificação' },
     { id: 'squad', label: 'Elenco' },
+    { id: 'market', label: 'Mercado' },
     { id: 'vrs', label: 'Ranking VRS' },
     { id: 'top20', label: 'Top 20 HLTV' },
     { id: 'history', label: 'História da org' },
@@ -1178,6 +1167,44 @@ export function CareerScreen({ dataset, onExit }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===== MAJOR AO VIVO (dentro do hub) ===== */}
+      {hubTab === 'major' && majorT && (
+        <Hub
+          t={majorT}
+          career={{ season: save.split, titles: save.titles, budget: save.budget }}
+          pickem={{ picks: {}, score: 0, total: 0 }}
+          onPick={() => {}}
+          onPlay={playMajorMine}
+          onSimRound={simMajorRound}
+          onStats={() => {}}
+          onOpenSeries={(p) => p.result && setSelSeries({ series: p.result, teams: [getTeam(majorT, p.a), getTeam(majorT, p.b)] })}
+        />
+      )}
+
+      {/* ===== MERCADO / CONTRATAÇÕES (acessível a qualquer momento) ===== */}
+      {hubTab === 'market' && (
+        <MarketScreen
+          save={save}
+          market={market}
+          coaches={currentEra}
+          findSigning={findSigning}
+          embedded
+          onExit={() => setHubTab('overview')}
+          onConfirm={(squad, coachFromId, budget, sponsors) => {
+            const next: CareerSave = { ...save, squad, coachFromId, budget, sponsors };
+            const rebuilt = buildTeam(next);
+            const mergeUser = (teams: TTeam[]) =>
+              teams.map((t) => (t.id === 'user' && rebuilt ? { ...rebuilt, wins: t.wins, losses: t.losses, roundDiff: t.roundDiff, status: t.status } : t));
+            if (rebuilt && next.league) next.league = { ...next.league, teams: mergeUser(next.league.teams) };
+            if (rebuilt && next.majorT) next.majorT = { ...next.majorT, teams: mergeUser(next.majorT.teams) };
+            persist(next);
+            setSave(next);
+            if (next.majorT) setMajorTState(next.majorT);
+            setHubTab('overview');
+          }}
+        />
       )}
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
@@ -1879,6 +1906,7 @@ function MarketScreen({
   findSigning,
   onConfirm,
   onExit,
+  embedded,
 }: {
   save: CareerSave;
   market: { player: Player; from: TeamSeason; price: number }[];
@@ -1886,6 +1914,7 @@ function MarketScreen({
   findSigning: (s: Signing) => { player: Player; from: TeamSeason } | null;
   onConfirm: (squad: Signing[], coachFromId: string, budget: number, sponsors: string[]) => void;
   onExit: () => void;
+  embedded?: boolean;
 }) {
   const [squad, setSquad] = useState<Signing[]>(save.squad);
   const [coachId, setCoachId] = useState<string | null>(save.coachFromId);
@@ -1941,7 +1970,7 @@ function MarketScreen({
           <span className={budgetLeft >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 800 }}>
             💰 {formatMoney(budgetLeft)}
           </span>
-          <button className="btn" onClick={onExit}>← Sair</button>
+          <button className="btn" onClick={onExit}>{embedded ? '← Voltar ao hub' : '← Sair'}</button>
         </div>
         <div className="panel-body">
           <div className="career-banner muted small">
@@ -2053,7 +2082,7 @@ function MarketScreen({
           <div className="center" style={{ marginTop: 16 }}>
             <button className="btn gold big" disabled={!ready}
               onClick={() => coachId && onConfirm(squad, coachId, budgetLeft, sponsors)}>
-              ✔ Fechar elenco e escolher o campeonato
+              ✔ {embedded ? 'Salvar elenco' : 'Fechar elenco e escolher o campeonato'}
             </button>
             {!ready && (
               <div className="muted small" style={{ marginTop: 8 }}>
