@@ -93,6 +93,14 @@ interface CircuitChoice {
   spots: number;     // vagas que vão ao Major
   prizeMult: number; // multiplicador de premiação
   vrsMult: number;   // multiplicador de VRS
+  tier: number;      // 1 = elite (caminho do Major), 3 = liga de acesso
+}
+
+// tiers do cenário (como na vida real do CS): 1 = elite mundial, 3 = acesso.
+// o jogador começa no Tier 3 e precisa SUBIR vencendo no seu nível.
+const TIER_NAMES: Record<number, string> = { 1: 'Tier 1 · Elite', 2: 'Tier 2 · Challenger', 3: 'Tier 3 · Acesso' };
+function teamTier(t: TeamSeason): number {
+  return t.teamwork >= 84 ? 1 : t.teamwork >= 80 ? 2 : 3;
 }
 
 // registro de um split encerrado (história da organização)
@@ -142,6 +150,8 @@ interface CareerSave {
   sponsorUntil: Record<string, number>; // patrocinador id -> split até onde o contrato vale
   moves: Record<string, string>; // transferências aplicadas: playerId -> teamId atual
   lastMoves: { nick: string; from: string; to: string }[]; // transferências do último split
+  tier: number; // tier atual da organização (1 = elite). Começa em 3.
+  tierChange?: 'up' | 'down' | null; // resultado da última temporada (promoção/rebaixamento)
 }
 
 const emptySave = (): CareerSave => ({
@@ -163,6 +173,8 @@ const emptySave = (): CareerSave => ({
   sponsorUntil: {},
   moves: {},
   lastMoves: [],
+  tier: 3,
+  tierChange: null,
 });
 
 // ----- evolução de elenco entre temporadas -----
@@ -478,11 +490,12 @@ export function CareerScreen({ onExit }: Props) {
       spots: number,
       prizeMult: number,
       vrsMult: number,
-    ) => ({ id, name, desc, teams: teams.slice(0, 7), spots, prizeMult, vrsMult });
+      tier: number,
+    ) => ({ id, name, desc, teams: teams.slice(0, 7), spots, prizeMult, vrsMult, tier });
     return [
-      mk('gcmasters', 'Gamers Club Masters (BR)', 'Liga nacional brasileira. Campo equilibrado, porta de entrada pro Major.', br, 2, 1, 1),
-      mk('blast', 'BLAST Premier (Mundial)', 'Os gigantes internacionais. Mais difícil, porém paga muito mais e dá mais VRS.', byStrength, 2, 1.6, 1.5),
-      mk('eslchallenger', 'ESL Challenger', 'Liga de acesso com times medianos. Mais fácil, mas só 1 vaga e prêmios menores.', mid, 1, 0.6, 0.6),
+      mk('blast', 'BLAST Premier (Mundial)', 'Tier 1 mundial: os gigantes. É AQUI que se chega ao Major. Paga muito mais.', byStrength, 2, 1.7, 1.6, 1),
+      mk('gcmasters', 'Gamers Club Masters (BR)', 'Tier 2: liga nacional equilibrada. Vença para subir ao Tier 1 e brigar pelo Major.', br, 2, 1, 1, 2),
+      mk('eslchallenger', 'ESL Challenger', 'Tier 3: liga de acesso com times medianos. Onde toda org começa.', mid, 1, 0.6, 0.6, 3),
     ].filter((c) => c.teams.length >= 5);
   }, [currentEra, brTeams]);
 
@@ -546,8 +559,9 @@ export function CareerScreen({ onExit }: Props) {
       spots: circuit.spots,
       prizeMult: circuit.prizeMult,
       vrsMult: circuit.vrsMult,
+      tier: circuit.tier,
     };
-    const next = { ...s, league, circuit: choice };
+    const next = { ...s, league, circuit: choice, tierChange: null };
     persist(next);
     setSave(next);
     setHubTab('overview');
@@ -894,6 +908,7 @@ export function CareerScreen({ onExit }: Props) {
       <CircuitPicker
         circuits={circuits}
         split={save.split}
+        playerTier={save.tier}
         onBack={() => setStage('market')}
         onPick={(c) => startSplit(save, c)}
       />
@@ -991,10 +1006,24 @@ export function CareerScreen({ onExit }: Props) {
     const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsMult ?? 1) * poMult);
     // vaga pelo mata-mata, mas o Major só acontece a cada MAJOR_EVERY splits:
     // a jornada até ele é mais longa (rank garante, mas tem que ser split de Major)
+    // o Major só é alcançável pelo Tier 1 (circuito BLAST): a meta é SUBIR de tier
     const rankQualified = save.playoff ? poRank <= spots : pos <= spots;
     const majorNow = isMajorSplit(save.split);
-    const qualified = rankQualified && majorNow;
+    const isTier1 = (save.circuit?.tier ?? 3) === 1;
+    const qualified = rankQualified && majorNow && isTier1;
     const nextMajorSplit = save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
+
+    // promoção/rebaixamento: só conta se você jogou no SEU tier (não farmando abaixo).
+    // campeão sobe; fundo da tabela (penúltimo/último) cai.
+    const finalPos = save.playoff ? Math.min(pos, poRank) : pos;
+    const circuitTier = save.circuit?.tier ?? save.tier;
+    const fieldSize = league.teams.length;
+    const tierResult: { tier: number; tierChange: 'up' | 'down' | null } = (() => {
+      if (circuitTier !== save.tier) return { tier: save.tier, tierChange: null };
+      if (isChampion) return { tier: Math.max(1, save.tier - 1), tierChange: save.tier > 1 ? 'up' : null };
+      if (finalPos >= fieldSize - 1) return { tier: Math.min(3, save.tier + 1), tierChange: save.tier < 3 ? 'down' : null };
+      return { tier: save.tier, tierChange: null };
+    })();
     const baseRecord = (): SplitRecord => ({
       split: save.split,
       circuit: save.circuit?.name ?? league.name,
@@ -1029,6 +1058,12 @@ export function CareerScreen({ onExit }: Props) {
               Premiação: <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · Folha:{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
+            {tierResult.tierChange === 'up' && (
+              <div className="tier-banner up">⬆ PROMOVIDO ao {TIER_NAMES[tierResult.tier]}! Você venceu no seu nível e subiu de tier.</div>
+            )}
+            {tierResult.tierChange === 'down' && (
+              <div className="tier-banner down">⬇ Rebaixado ao {TIER_NAMES[tierResult.tier]}. Terminou no fundo da tabela; recupere o nível no próximo split.</div>
+            )}
             {qualified ? (
               <div className="qualify-banner">
                 <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Chegar ao top {spots} do mata-mata do {save.circuit?.name ?? 'circuito'}
@@ -1122,6 +1157,8 @@ export function CareerScreen({ onExit }: Props) {
                     history: [...save.history, baseRecord()],
                     ...evolveSquad(save),
                     ...applyTransferWindow(save),
+                    tier: tierResult.tier,
+                    tierChange: tierResult.tierChange,
                   };
                   persist(next);
                   setSave(next);
@@ -1253,7 +1290,10 @@ export function CareerScreen({ onExit }: Props) {
       <div className="career-topbar">
         <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={46} />
         <div className="ct-id">
-          <div className="ct-name">{save.org?.name}</div>
+          <div className="ct-name">
+            {save.org?.name}
+            <span className={`tier-badge t${save.tier}`}>TIER {save.tier}</span>
+          </div>
           <div className="ct-sub">{save.circuit?.name ?? 'CIRCUIT X'} · Split {save.split}</div>
           {save.sponsors.length > 0 && (
             <div className="ct-sponsors">
@@ -1885,37 +1925,50 @@ interface CircuitOption {
   spots: number;
   prizeMult: number;
   vrsMult: number;
+  tier: number;
 }
-function CircuitPicker({ circuits, split, onPick, onBack }: {
+function CircuitPicker({ circuits, split, playerTier, onPick, onBack }: {
   circuits: CircuitOption[];
   split: number;
+  playerTier: number;
   onPick: (c: CircuitOption) => void;
   onBack: () => void;
 }) {
-  const [sel, setSel] = useState(0);
+  // você só entra em circuitos do SEU tier ou mais fáceis (tier maior). Subir de
+  // tier libera os circuitos de cima (o Tier 1 / BLAST é o caminho do Major).
+  const canEnter = (opt: CircuitOption) => opt.tier >= playerTier;
+  const firstOk = Math.max(0, circuits.findIndex((o) => canEnter(o)));
+  const [sel, setSel] = useState(firstOk);
   const c = circuits[sel];
+  const cOk = c && canEnter(c);
   return (
     <div className="fade-in">
       <div className="panel" style={{ maxWidth: 900, margin: '24px auto' }}>
         <div className="panel-head">
-          Escolha o campeonato - Split {split}
+          Divisões · Split {split} · você está no {TIER_NAMES[playerTier]}
           <span className="spacer" />
           <button className="btn" onClick={onBack}>← Mercado</button>
         </div>
         <div className="panel-body">
-          <p className="muted small">Você recebeu convites de mais de um circuito. Veja quem disputa cada um e decida onde quer competir neste split.</p>
+          <p className="muted small">Cada circuito é um <b>tier</b>. Você joga no seu tier ou abaixo; vencer o seu circuito te <b>promove</b>, terminar no fundo te <b>rebaixa</b>. Só o <b>Tier 1</b> dá vaga no Major.</p>
           <div className="circuit-cards">
-            {circuits.map((opt, i) => (
-              <button key={opt.id} className={`circuit-card${sel === i ? ' on' : ''}`} onClick={() => setSel(i)}>
-                <div className="cc-name">{opt.name}</div>
-                <div className="cc-desc muted small">{opt.desc}</div>
-                <div className="cc-meta">
-                  <span>{opt.spots} {opt.spots === 1 ? 'vaga' : 'vagas'} ao Major</span>
-                  <span>prêmio ×{opt.prizeMult}</span>
-                  <span>VRS ×{opt.vrsMult}</span>
-                </div>
-              </button>
-            ))}
+            {circuits.map((opt, i) => {
+              const locked = !canEnter(opt);
+              return (
+                <button key={opt.id} className={`circuit-card${sel === i ? ' on' : ''}${locked ? ' locked' : ''}`} onClick={() => setSel(i)}>
+                  <div className="cc-name">
+                    <span className={`tier-badge t${opt.tier}`}>TIER {opt.tier}</span> {opt.name}
+                  </div>
+                  <div className="cc-desc muted small">{opt.desc}</div>
+                  <div className="cc-meta">
+                    <span>{opt.spots} {opt.spots === 1 ? 'vaga' : 'vagas'} ao Major</span>
+                    <span>prêmio ×{opt.prizeMult}</span>
+                    <span>VRS ×{opt.vrsMult}</span>
+                  </div>
+                  {locked && <div className="cc-lock muted small">🔒 Suba ao {TIER_NAMES[opt.tier]} para disputar</div>}
+                </button>
+              );
+            })}
           </div>
           {c && (
             <>
@@ -1925,12 +1978,16 @@ function CircuitPicker({ circuits, split, onPick, onBack }: {
                   <div key={t.id} className="cteam">
                     <TeamBadge tag={t.tag} colors={t.colors} size={28} logoUrl={t.logoUrl ?? logoForTeam(t)} />
                     <span className="ct-tname"><Flag cc={t.country} /> {t.team}</span>
-                    <span className="muted small">forma {t.teamwork}</span>
+                    <span className={`tier-badge t${teamTier(t)}`}>T{teamTier(t)}</span>
                   </div>
                 ))}
               </div>
               <div className="center" style={{ marginTop: 16 }}>
-                <button className="btn gold big" onClick={() => onPick(c)}>Aceitar convite do {c.name}</button>
+                {cOk ? (
+                  <button className="btn gold big" onClick={() => onPick(c)}>Disputar o {c.name}</button>
+                ) : (
+                  <div className="muted">🔒 Você precisa estar no {TIER_NAMES[c.tier]} para disputar este circuito. Suba vencendo o seu tier atual.</div>
+                )}
               </div>
             </>
           )}
