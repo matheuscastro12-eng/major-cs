@@ -3991,6 +3991,57 @@ table.crm-players input.num {
 .access-tag.approved { background: rgba(90,200,120,0.16); color: #7fd99a; }
 .access-tag.rejected { background: rgba(220,90,90,0.16); color: #e58a8a; }
 
+/* ===== veto: deixar claro quando é BAN e quando é PICK ===== */
+.veto-action {
+  display: flex; align-items: center; gap: 12px; justify-content: center;
+  margin: 0 0 14px; padding: 12px 18px; border-radius: 12px;
+  border: 2px solid var(--border);
+}
+.veto-action .va-icon { font-size: 1.6rem; }
+.veto-action .va-text { display: flex; flex-direction: column; line-height: 1.15; }
+.veto-action .va-text b { font-family: var(--font-cond); font-weight: 800; font-size: 1.15rem; letter-spacing: 0.5px; text-transform: uppercase; }
+.veto-action.ban {
+  border-color: #e0564f; color: #ffb4b0;
+  background: linear-gradient(90deg, rgba(224,86,79,0.18), rgba(224,86,79,0.04));
+  animation: vetoPulse 1.6s ease-in-out infinite;
+}
+.veto-action.pick {
+  border-color: #5ac878; color: #aef0c2;
+  background: linear-gradient(90deg, rgba(90,200,120,0.18), rgba(90,200,120,0.04));
+  animation: vetoPulse 1.6s ease-in-out infinite;
+}
+.veto-action.waiting { border-color: var(--border); color: var(--muted); }
+@keyframes vetoPulse { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 3px rgba(255,255,255,0.04); } }
+
+/* dica de ação ao passar o mouse no mapa (combina com o turno atual) */
+.mapcard.selectable { cursor: pointer; }
+.map-hover-action {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-cond); font-weight: 800; font-size: 1rem; letter-spacing: 0.5px;
+  text-align: center; opacity: 0; transition: opacity 0.12s; z-index: 3; color: #fff;
+}
+.veto-maps.mode-ban .mapcard.selectable:hover { outline: 3px solid #e0564f; outline-offset: -3px; }
+.veto-maps.mode-pick .mapcard.selectable:hover { outline: 3px solid #5ac878; outline-offset: -3px; }
+.veto-maps.mode-ban .mapcard.selectable:hover .map-hover-action { opacity: 1; background: rgba(140,30,26,0.55); }
+.veto-maps.mode-pick .mapcard.selectable:hover .map-hover-action { opacity: 1; background: rgba(20,90,45,0.55); }
+.mtag.banned { background: rgba(180,40,35,0.92); color: #fff; }
+.mtag.picked { background: rgba(40,140,70,0.92); color: #fff; }
+
+/* botão flutuante "jogar minha partida" no hub (sempre alcançável) */
+.hub-fab {
+  position: fixed; right: 18px; bottom: 18px; z-index: 120;
+  background: linear-gradient(135deg, var(--gold), #e8c170); color: #1a1408;
+  border: none; border-radius: 999px; padding: 13px 22px;
+  font-family: var(--font-cond); font-weight: 800; font-size: 1.05rem; letter-spacing: 0.5px;
+  cursor: pointer; box-shadow: 0 8px 26px rgba(212,164,65,0.45);
+  animation: fabIn 0.3s cubic-bezier(0.22,0.61,0.36,1);
+}
+.hub-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(212,164,65,0.55); }
+@keyframes fabIn { from { transform: translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 600px) {
+  .hub-fab { left: 14px; right: 14px; bottom: 14px; text-align: center; }
+}
+
 /* ===== banner premium "sempre visível" (demo in-game para patrocinador) ===== */
 .ad-persistent {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 300;

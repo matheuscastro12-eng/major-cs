@@ -24,7 +24,8 @@ import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits } from '../state/bo3-edits';
 
 const SAVE_KEY = 'rtm-career-v1';
-const STARTING_BUDGET = 6_000_000;
+const STARTING_BUDGET = 3_800_000; // começo mais magro: forca um elenco humilde no inicio
+const CIRCUIT_AI_BOOST = 3.5; // adversarios do circuito mais fortes (balanceamento)
 const PRIZE_BY_POS = [2_000_000, 1_200_000, 700_000, 400_000, 250_000, 150_000, 100_000, 50_000];
 const VRS_BY_POS = [200, 140, 100, 70, 50, 35, 25, 15];
 const LEAGUE_BO: 1 | 3 = 3;
@@ -422,7 +423,11 @@ export function CareerScreen({ onExit }: Props) {
   const startSplit = (s: CareerSave, circuit: (typeof circuits)[number]) => {
     const user = buildTeam(s);
     if (!user) return;
-    const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 7).map(teamSeasonToTTeam);
+    const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 7).map((t) => {
+      const tt = teamSeasonToTTeam(t);
+      tt.strength += CIRCUIT_AI_BOOST; // adversarios mais duros (jogo estava facil)
+      return tt;
+    });
     const league = createLeague(`${circuit.name} - Split ${s.split}`, [user, ...ai]);
     const choice: CircuitChoice = {
       id: circuit.id,
@@ -575,7 +580,7 @@ export function CareerScreen({ onExit }: Props) {
     if (!user) return;
     rngRef.current = makeRng(randomSeed());
     const pool = currentEra.filter((t) => t.id !== 'user');
-    const major = createTournament(pool, user, rngRef.current, MAJOR_NAME(s.split), 4);
+    const major = createTournament(pool, user, rngRef.current, MAJOR_NAME(s.split), 6);
     setMajorT(major);
     setHubTab('major');
     setStage('hub');

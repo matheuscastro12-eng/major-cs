@@ -4,7 +4,7 @@ import { derivePlaystyle, MAP_POOL } from '../types';
 
 // Dream team montado no draft nunca treinou junto: leva um malus de
 // entrosamento que torna o título mais difícil (egos, falta de rotina).
-export const DREAM_TEAM_MALUS = 3;
+export const DREAM_TEAM_MALUS = 4.5;
 
 export function playerSkill(p: Pick<Player, 'aim' | 'clutch' | 'consistency'>): number {
   return p.aim * 0.6 + p.consistency * 0.25 + p.clutch * 0.15;

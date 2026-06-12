@@ -110,6 +110,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [freeze, setFreeze] = useState(0);
   const [lastCall, setLastCall] = useState<{ call: RoundCall; won: boolean; round: number } | null>(null);
 
+  // ao terminar a série, sobe pro topo pra mostrar o resultado e o botão Continuar
+  useEffect(() => {
+    if (finished) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [finished]);
+
   const seriesOver = () => {
     const wins = resultsRef.current.reduce(
       (acc, r) => {
@@ -306,6 +311,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 {t('match.skipToResult')}
               </button>
             </>
+          )}
+          {finished && series && (
+            <button className="btn gold" onClick={() => onFinish(series)}>
+              ▶ {t('common.continue')}
+            </button>
           )}
         </div>
 

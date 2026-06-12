@@ -89,6 +89,12 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
 
   return (
     <div className="fade-in">
+      {/* botão flutuante: ir pra sua partida sem precisar rolar a tela toda */}
+      {up && (
+        <button className="hub-fab" onClick={onPlay}>
+          ▶ {tr('hub.playMyMatch')}
+        </button>
+      )}
       <div className="panel">
         <div className="panel-head">
           {t.name} - {phaseLabel(t)}

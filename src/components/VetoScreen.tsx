@@ -70,33 +70,46 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
             <MatchBanner teamA={teams[0]} teamB={teams[1]} center={mdLabel} event={phaseLabel} sub={t('veto.title')} />
           </div>
 
-          <div className="center" style={{ marginBottom: 12 }}>
-            {done ? (
+          {done ? (
+            <div className="center" style={{ marginBottom: 12 }}>
               <button className="btn big" onClick={() => onDone(vetoMaps(veto))}>
                 ▶ {t('veto.startSeries')}
               </button>
-            ) : isUserTurn ? (
-              <span className="gold-text">
-                {t('veto.yourTurn')} <b>{step!.action === 'ban' ? t('veto.banAMap') : t('veto.pickAMap')}</b>
+            </div>
+          ) : isUserTurn ? (
+            <div className={`veto-action ${step!.action === 'ban' ? 'ban' : 'pick'}`}>
+              <span className="va-icon">{step!.action === 'ban' ? '🚫' : '✅'}</span>
+              <span className="va-text">
+                <b>{t('veto.yourTurn')}</b>
+                <span>{step!.action === 'ban' ? t('veto.banAMap') : t('veto.pickAMap')}</span>
               </span>
-            ) : (
-              <span className="muted">{t('veto.waitingFor')} {teams[step!.team as 0 | 1].name}…</span>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="veto-action waiting">
+              <span className="va-icon">⏳</span>
+              <span className="va-text">{t('veto.waitingFor')} {teams[step!.team as 0 | 1].name}…</span>
+            </div>
+          )}
 
-          <div className="veto-maps">
+          <div className={`veto-maps${isUserTurn ? (step!.action === 'ban' ? ' mode-ban' : ' mode-pick') : ''}`}>
             {MAP_POOL.map((m) => {
               const st = mapState[m];
+              const selectable = isUserTurn && !st;
               return (
                 <div
                   key={m}
-                  className={`mapcard${st ? ` dead ${st.kind}` : ''}`}
+                  className={`mapcard${st ? ` dead ${st.kind}` : ''}${selectable ? ' selectable' : ''}`}
                   onClick={() => click(m)}
                 >
                   <MapThumb map={m} className="mapcard-img" />
                   {st && (
-                    <span className="mtag">
-                      {st.kind === 'banned' ? t('veto.ban') : st.kind === 'picked' ? `${t('veto.pick')} ${teams[st.by as 0 | 1].tag}` : t('veto.decider')}
+                    <span className={`mtag ${st.kind}`}>
+                      {st.kind === 'banned' ? `🚫 ${t('veto.ban')}` : st.kind === 'picked' ? `✅ ${t('veto.pick')} ${teams[st.by as 0 | 1].tag}` : t('veto.decider')}
+                    </span>
+                  )}
+                  {selectable && (
+                    <span className="map-hover-action">
+                      {step!.action === 'ban' ? `🚫 ${t('veto.banAMap')}` : `✅ ${t('veto.pickAMap')}`}
                     </span>
                   )}
                   <div className="mname">{MAP_LABELS[m]}</div>

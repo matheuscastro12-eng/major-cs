@@ -231,9 +231,9 @@ export const DIFFICULTY_DESC: Record<Difficulty, string> = {
 
 // quanto os adversários ganham de força por dificuldade
 export const DIFFICULTY_OPP_BOOST: Record<Difficulty, number> = {
-  normal: 1.5,
-  hard: 4,
-  legend: 7,
+  normal: 3.5,
+  hard: 7,
+  legend: 11,
 };
 
 export interface DraftState {
