@@ -113,6 +113,27 @@ const EMPTY_ORGS: EmptyOrg[] = [
   { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], logoUrl: PHOTON('/commons/images/5/56/Dignitas_2021_allmode.png'), blurb: 'Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.', budget: 2_900_000 },
 ];
 
+// reposição da base: quando você TIRA um jogador de um time (contratação), ele
+// não pode ficar nos dois lugares. O time perde o titular e promove um jovem da
+// base (OVR baixo, determinístico) pra manter 5 — o time fica realmente mais fraco.
+const FILL_ROLES = ['Rifler', 'Entry', 'Support', 'AWP', 'IGL'] as const;
+function backfillPlayers(team: TeamSeason, n: number): Player[] {
+  const out: Player[] = [];
+  for (let i = 0; i < n; i++) {
+    const h = hashStr(`fill:${team.id}:${i}`);
+    const base = 64 + (h % 9); // 64-72
+    out.push({
+      id: `${team.id}__aca${i}`,
+      nick: `${team.tag}.jr${i + 1}`,
+      name: 'Jovem da base',
+      country: team.country,
+      role: FILL_ROLES[h % FILL_ROLES.length],
+      aim: base + (h % 4), consistency: base - 2, clutch: base - 3, awp: base - 7, igl: base - 5,
+    });
+  }
+  return out;
+}
+
 // o que a escolha de org devolve pra carreira (assumir existente OU do zero)
 interface OrgStart {
   org: NonNullable<CareerSave['org']>;
@@ -494,8 +515,21 @@ export function CareerScreen({ onExit }: Props) {
     () => applyMoves(applyBo3Edits(CS2_REAL_2026), save.moves).filter((t) => t.players.length >= 5),
     [save.moves],
   );
-  // o time que o jogador ASSUMIU não aparece como adversário (ele é você agora)
-  const oppEra = useMemo(() => currentEra.filter((t) => t.id !== save.takeoverId), [currentEra, save.takeoverId]);
+  // pool de ADVERSÁRIOS: tira o time que você assumiu E remove qualquer jogador
+  // que está no SEU elenco do time de origem (sem duplicar ninguém), repondo com
+  // jovens da base. Assim contratar alguém enfraquece de verdade o outro time.
+  const oppEra = useMemo(() => {
+    const squadIds = new Set(save.squad.map((s) => s.playerId));
+    return currentEra
+      .filter((t) => t.id !== save.takeoverId)
+      .map((t) => {
+        if (squadIds.size === 0) return t;
+        const kept = t.players.filter((p) => !squadIds.has(p.id));
+        if (kept.length === t.players.length) return t;
+        const fill = backfillPlayers(t, t.players.length - kept.length);
+        return { ...t, players: [...kept, ...fill] };
+      });
+  }, [currentEra, save.takeoverId, save.squad]);
   const brTeams = useMemo(
     () => oppEra.filter((t) => t.country === 'br').sort((a, b) => b.teamwork - a.teamwork),
     [oppEra],
