@@ -217,7 +217,7 @@
     "nick": "dgt",
     "role": "Rifler",
     "clutch": 80,
-    "country": "ar",
+    "country": "uy",
     "consistency": 80
    },
    {
@@ -229,7 +229,7 @@
     "nick": "max",
     "role": "IGL",
     "clutch": 78,
-    "country": "ar",
+    "country": "uy",
     "consistency": 79
    },
    {
@@ -1478,11 +1478,11 @@
     "aim": 87,
     "awp": 58,
     "igl": 54,
-    "name": "Kyle Mendez",
+    "name": "Maxim Lukin",
     "nick": "kyousuke",
     "role": "Entry",
     "clutch": 83,
-    "country": "gb",
+    "country": "ru",
     "consistency": 84
    },
    {
@@ -3481,27 +3481,27 @@
   "players": [
    {
     "id": "mongolz2025__910",
-    "aim": 91,
-    "awp": 60,
-    "igl": 56,
-    "name": "Azbayar Munkhbold",
-    "nick": "910",
-    "role": "Rifler",
-    "clutch": 88,
-    "country": "mn",
-    "consistency": 87
-   },
-   {
-    "id": "mongolz2025__senzu",
     "aim": 88,
     "awp": 90,
     "igl": 54,
     "name": "Garidmagnai Byambasuren",
-    "nick": "Senzu",
+    "nick": "910",
     "role": "AWP",
     "clutch": 85,
     "country": "mn",
     "consistency": 84
+   },
+   {
+    "id": "mongolz2025__senzu",
+    "aim": 91,
+    "awp": 60,
+    "igl": 56,
+    "name": "Azbayar Munkhbold",
+    "nick": "Senzu",
+    "role": "Rifler",
+    "clutch": 88,
+    "country": "mn",
+    "consistency": 87
    },
    {
     "id": "mongolz2025__techno",
@@ -8450,6 +8450,7 @@
     "clutch": 76,
     "consistency": 78
    }
-  ]
+  ],
+  "pending": true
  }
 ]
