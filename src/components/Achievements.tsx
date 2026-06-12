@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLang } from '../state/i18n';
 import { ACHIEVEMENTS, unlockedIds, type AchDef, type Lang } from '../state/achievements';
 
@@ -48,10 +48,14 @@ export function AchievementsModal({ onClose }: { onClose: () => void }) {
 export function AchievementToast({ items, onDone }: { items: AchDef[]; onDone: () => void }) {
   const { lang } = useLang();
   const L = lg(lang);
+  // onDone vem inline do App (identidade nova a cada render): guardamos num
+  // ref pra que re-renders do App NÃO resetem o timer de auto-dismiss
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
   useEffect(() => {
-    const t = setTimeout(onDone, 4200 + items.length * 600);
+    const t = setTimeout(() => onDoneRef.current(), 4200 + items.length * 600);
     return () => clearTimeout(t);
-  }, [items, onDone]);
+  }, [items]);
   if (items.length === 0) return null;
   return (
     <div className="ach-toasts">

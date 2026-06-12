@@ -19,6 +19,7 @@ import { Scoreboard } from './Scoreboard';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 import { fileToDataUrl } from '../state/crm';
+import { hashStr } from '../state/hash';
 import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits } from '../state/bo3-edits';
@@ -230,11 +231,6 @@ function poUserRank(p: Playoff | null): number {
 }
 
 // ---------- cenário competitivo: VRS por região e Top 20 HLTV ----------
-function hashStr(s: string): number {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return h >>> 0;
-}
 // VRS determinístico de um time da IA (o time do usuário usa o VRS real do save)
 function aiTeamVrs(t: TeamSeason): number {
   const base = Math.max(0, t.teamwork - 38);
@@ -525,13 +521,17 @@ export function CareerScreen({ onExit }: Props) {
   // evolução da janela: cada jogador do elenco sobe/cai conforme a fase da
   // carreira (em ascensão / no auge / em declínio). Roda ao fechar o split.
   const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo'> => {
-    const evo = { ...(s.evo ?? {}) };
+    // só jogadores do elenco ATUAL carregam evolução: quem foi vendido volta
+    // aos atributos base (evita recomprar barato um jogador ainda evoluído)
+    const evo: Record<string, number> = {};
     const lastEvo: CareerSave['lastEvo'] = [];
     for (const sig of s.squad) {
       const f = findSigning(sig);
       if (!f) continue;
+      const prev = s.evo?.[sig.playerId] ?? 0;
       const d = evoDelta(sig.playerId, s.split);
-      if (d !== 0) evo[sig.playerId] = (evo[sig.playerId] ?? 0) + d;
+      const total = prev + d;
+      if (total !== 0) evo[sig.playerId] = total;
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId) });
     }
     return { evo, lastEvo };
@@ -752,6 +752,43 @@ export function CareerScreen({ onExit }: Props) {
     });
   };
 
+  // ---------- caches dos painéis (hooks precisam vir antes dos early-returns) ----------
+  // stats da temporada, rankings e feed de transferências são caros de calcular;
+  // memoizados aqui pra não recomputar a cada render do hub
+  const seasonStatsMemo = useMemo(() => (save.league ? seasonPlayerStats(save.league) : []), [save.league]);
+  const top20Memo = useMemo(
+    () =>
+      currentEra
+        .flatMap((t) => t.players.map((p) => ({ p, team: t, rating: playerSeasonRating(p, save.split) })))
+        .sort((a, b) => b.rating - a.rating)
+        .slice(0, 20),
+    [currentEra, save.split],
+  );
+  const feedMemo = useMemo(() => transferFeed(save.split, currentEra), [save.split, currentEra]);
+  const vrsByRegionMemo = useMemo(() => {
+    type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; country: string; vrs: number; isUser: boolean };
+    const rows: Row[] = currentEra.map((t) => ({
+      id: t.id, name: `${t.team}`, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t),
+      country: t.country, vrs: aiTeamVrs(t), isUser: false,
+    }));
+    if (buildTeam(save) && save.org) {
+      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, country: 'br', vrs: save.vrs, isUser: true });
+    }
+    const groups = new Map<RegionKey, Row[]>();
+    for (const r of rows) {
+      const t = currentEra.find((x) => x.id === r.id);
+      const reg: RegionKey = r.isUser ? 'samerica' : t ? teamRegion(t) : 'europe';
+      if (!groups.has(reg)) groups.set(reg, []);
+      groups.get(reg)!.push(r);
+    }
+    return REGION_ORDER.filter((k) => groups.has(k)).map((k) => ({
+      key: k,
+      label: REGION_LABELS[k],
+      teams: groups.get(k)!.sort((a, b) => b.vrs - a.vrs),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save, currentEra]);
+
   // overlay de simulação rápida (mini partida acelerada), sobrepõe qualquer tela
   if (quickSim) {
     return (
@@ -883,7 +920,7 @@ export function CareerScreen({ onExit }: Props) {
     const mySquadIdsSE = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
     const myStar = seStats.find((s) => mySquadIdsSE.has(s.id));
     const seasonTop3 = seasonTopPlayers(currentEra, save.split, 3);
-    const nextFeed = transferFeed(save.split, currentEra);
+    const nextFeed = feedMemo;
     const spots = save.circuit?.spots ?? MAJOR_SPOTS;
     // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
     const poRank = poUserRank(save.playoff);
@@ -1128,7 +1165,7 @@ export function CareerScreen({ onExit }: Props) {
   const opp = myMatch ? leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a) : null;
   const oppPos = opp ? table.findIndex((t) => t.id === opp.id) + 1 : 0;
   const me = leagueTeam(league, 'user');
-  const seasonStats = seasonPlayerStats(league);
+  const seasonStats = seasonStatsMemo;
   const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
   const org = aggregateHistory(save.history);
 
@@ -1145,38 +1182,9 @@ export function CareerScreen({ onExit }: Props) {
     { id: 'history', label: 'História da org' },
   ];
 
-  // ranking mundial de VRS por região (todos os times da era + o usuário)
-  const userTeamForRank = buildTeam(save);
-  const vrsByRegion = (() => {
-    type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; country: string; vrs: number; isUser: boolean };
-    const rows: Row[] = currentEra.map((t) => ({
-      id: t.id, name: `${t.team}`, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t),
-      country: t.country, vrs: aiTeamVrs(t), isUser: false,
-    }));
-    if (userTeamForRank && save.org) {
-      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, country: 'br', vrs: save.vrs, isUser: true });
-    }
-    const groups = new Map<RegionKey, Row[]>();
-    for (const r of rows) {
-      const t = currentEra.find((x) => x.id === r.id);
-      const reg: RegionKey = r.isUser ? 'samerica' : t ? teamRegion(t) : 'europe';
-      if (!groups.has(reg)) groups.set(reg, []);
-      groups.get(reg)!.push(r);
-    }
-    return REGION_ORDER.filter((k) => groups.has(k)).map((k) => ({
-      key: k,
-      label: REGION_LABELS[k],
-      teams: groups.get(k)!.sort((a, b) => b.vrs - a.vrs),
-    }));
-  })();
+  const vrsByRegion = vrsByRegionMemo;
 
-  // Top 20 HLTV da temporada (melhores jogadores do ano por rating)
-  const top20 = (() => {
-    const all = currentEra.flatMap((t) =>
-      t.players.map((p) => ({ p, team: t, rating: playerSeasonRating(p, save.split) })),
-    );
-    return all.sort((a, b) => b.rating - a.rating).slice(0, 20);
-  })();
+  const top20 = top20Memo;
 
   return (
     <div className="fade-in career-hub">
@@ -1329,7 +1337,7 @@ export function CareerScreen({ onExit }: Props) {
             <p className="muted small">Rodada {league.current + 1} de {league.rounds.length} · a janela abre ao fim do split</p>
             {/* prévia do mercado: dá pra olhar os rumores, mas não contratar */}
             <div className="muted small section-label" style={{ textAlign: 'left' }}>Rumores da próxima janela</div>
-            <TransferFeed items={transferFeed(save.split, currentEra)} compact />
+            <TransferFeed items={feedMemo} compact />
           </div>
         </div>
       )}
@@ -2047,6 +2055,7 @@ function MarketScreen({
   const [coachId, setCoachId] = useState<string | null>(save.coachFromId);
   const [filter, setFilter] = useState('');
   const [sponsors, setSponsors] = useState<string[]>(save.sponsors);
+  const marketFeed = useMemo(() => transferFeed(save.split, coaches), [save.split, coaches]);
 
   const toggleSponsor = (id: string) => {
     setSponsors((cur) => {
@@ -2228,7 +2237,7 @@ function MarketScreen({
 
           {/* janela de transferências: o que os outros times andam fazendo */}
           <div className="muted small section-label">Janela de transferências · o que rolou no mercado</div>
-          <TransferFeed items={transferFeed(save.split, coaches)} />
+          <TransferFeed items={marketFeed} />
 
           <div className="center" style={{ marginTop: 16 }}>
             <button className="btn gold big" disabled={!ready}

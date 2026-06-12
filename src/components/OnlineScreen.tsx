@@ -33,9 +33,9 @@ const POLL_MS = 2200;
 
 // textos das salas abertas, por idioma (sem mexer no i18n global)
 const ONLINE_LOCAL = {
-  pt: { publicRoom: 'Sala aberta (qualquer um pode entrar)', openRooms: 'Salas abertas', noRooms: 'Nenhuma sala aberta agora. Crie a sua!', refresh: 'Atualizar', enter: 'Entrar', yourTeam: 'Seu time', emptySlot: 'vazio', rolesLabel: 'Funções', roleEntry: 'Entry', lock: '🔒 Trancar sala', unlock: '🔓 Destrancar sala', locked: 'Sala trancada', kick: 'Expulsar', kicked: 'Você foi removido da sala pelo host.', nextSeason: '🔁 Próxima temporada (novo draft)', season: 'Temporada', seasonWait: 'Esperando o host iniciar a próxima temporada…' },
-  en: { publicRoom: 'Open room (anyone can join)', openRooms: 'Open rooms', noRooms: 'No open rooms right now. Create yours!', refresh: 'Refresh', enter: 'Join', yourTeam: 'Your team', emptySlot: 'empty', rolesLabel: 'Roles', roleEntry: 'Entry', lock: '🔒 Lock room', unlock: '🔓 Unlock room', locked: 'Room locked', kick: 'Kick', kicked: 'You were removed from the room by the host.', nextSeason: '🔁 Next season (new draft)', season: 'Season', seasonWait: 'Waiting for the host to start the next season…' },
-  es: { publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu equipo', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.', nextSeason: '🔁 Próxima temporada (nuevo draft)', season: 'Temporada', seasonWait: 'Esperando que el host inicie la próxima temporada…' },
+  pt: { publicRoom: 'Sala aberta (qualquer um pode entrar)', openRooms: 'Salas abertas', noRooms: 'Nenhuma sala aberta agora. Crie a sua!', refresh: 'Atualizar', enter: 'Entrar', yourTeam: 'Seu time', emptySlot: 'vazio', rolesLabel: 'Funções', roleEntry: 'Entry', lock: '🔒 Trancar sala', unlock: '🔓 Destrancar sala', locked: 'Sala trancada', kick: 'Expulsar', kicked: 'Você foi removido da sala pelo host.', roomGone: 'A sala expirou ou foi encerrada. Crie ou entre em outra.', nextSeason: '🔁 Próxima temporada (novo draft)', season: 'Temporada', seasonWait: 'Esperando o host iniciar a próxima temporada…' },
+  en: { publicRoom: 'Open room (anyone can join)', openRooms: 'Open rooms', noRooms: 'No open rooms right now. Create yours!', refresh: 'Refresh', enter: 'Join', yourTeam: 'Your team', emptySlot: 'empty', rolesLabel: 'Roles', roleEntry: 'Entry', lock: '🔒 Lock room', unlock: '🔓 Unlock room', locked: 'Room locked', kick: 'Kick', kicked: 'You were removed from the room by the host.', roomGone: 'The room expired or was closed. Create or join another one.', nextSeason: '🔁 Next season (new draft)', season: 'Season', seasonWait: 'Waiting for the host to start the next season…' },
+  es: { publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu equipo', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.', roomGone: 'La sala expiró o fue cerrada. Crea o entra en otra.', nextSeason: '🔁 Próxima temporada (nuevo draft)', season: 'Temporada', seasonWait: 'Esperando que el host inicie la próxima temporada…' },
 };
 
 export function OnlineScreen({ onBack }: Props) {
@@ -103,6 +103,16 @@ export function OnlineScreen({ onBack }: Props) {
   const refresh = useCallback(async () => {
     if (!code) return;
     const s = await fetchLobby(code);
+    if (s === 'gone') {
+      // a sala expirou/foi encerrada no servidor: volta pra entrada com aviso
+      // (antes o jogador ficava pendurado numa tela que nunca atualizava)
+      setCode('');
+      setState(null);
+      setMyPicks([]);
+      setMyDone(false);
+      setError(OL.roomGone);
+      return;
+    }
     if (!s) return;
     const prevSeed = seedRef.current;
     const prevStatus = statusRef.current;
@@ -181,9 +191,10 @@ export function OnlineScreen({ onBack }: Props) {
 
   const join = () => doJoin(codeInput);
 
-  // lista de salas abertas (públicas) enquanto o jogador ainda não entrou numa
+  // lista de salas abertas (públicas) enquanto o jogador ainda não entrou numa.
+  // Aba em segundo plano não consome API à toa (document.hidden).
   const loadRooms = useCallback(async () => {
-    if (!nick.trim()) { setOpenRooms([]); return; }
+    if (!nick.trim() || document.hidden) { return; }
     setOpenRooms(await listOpenLobbies());
   }, [nick]);
   useEffect(() => {
@@ -902,11 +913,14 @@ function MatchReplay({ series, teams, onClose }: { series: SeriesResult; teams: 
   }, [mapIdx, round, series]);
 
   const map = series.maps[mapIdx];
+  // ao terminar, congela no placar FINAL do mapa e inclui o último mapa no
+  // placar de mapas (antes o header ficava defasado em relação ao Scoreboard)
   const log = map ? map.roundLog.slice(0, round) : [];
-  const sa = log.filter((w) => w === 0).length;
-  const sb = log.filter((w) => w === 1).length;
-  const mapsA = series.maps.slice(0, mapIdx).filter((m) => m.winner === 0).length + (done && series.maps[mapIdx] ? 0 : 0);
-  const mapsB = series.maps.slice(0, mapIdx).filter((m) => m.winner === 1).length;
+  const sa = done && map ? map.score[0] : log.filter((w) => w === 0).length;
+  const sb = done && map ? map.score[1] : log.filter((w) => w === 1).length;
+  const playedMaps = done ? series.maps : series.maps.slice(0, mapIdx);
+  const mapsA = playedMaps.filter((m) => m.winner === 0).length;
+  const mapsB = playedMaps.filter((m) => m.winner === 1).length;
   const feed = map ? map.killFeed.filter((e) => e.round <= round).slice(-7).reverse() : [];
 
   const Side = ({ idx }: { idx: 0 | 1 }) => (

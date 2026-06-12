@@ -7,6 +7,8 @@ import { neon } from '@neondatabase/serverless';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
+let betaTableReady = false;
+
 interface Res {
   status: (code: number) => { json: (body: unknown) => void };
   setHeader: (k: string, v: string) => void;
@@ -46,14 +48,19 @@ export default async function handler(
     return;
   }
   const sql = neon(url);
-  const ensure = () => sql`
-    CREATE TABLE IF NOT EXISTS beta_requests (
-      nick_key text PRIMARY KEY,
-      nick text NOT NULL,
-      status text NOT NULL DEFAULT 'pending',
-      created_at timestamptz NOT NULL DEFAULT now(),
-      updated_at timestamptz NOT NULL DEFAULT now()
-    )`;
+  // cria a tabela UMA vez por instância (não a cada request)
+  const ensure = async () => {
+    if (betaTableReady) return;
+    await sql`
+      CREATE TABLE IF NOT EXISTS beta_requests (
+        nick_key text PRIMARY KEY,
+        nick text NOT NULL,
+        status text NOT NULL DEFAULT 'pending',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`;
+    betaTableReady = true;
+  };
 
   const adminOk = () => (String(body.password ?? '').trim() === clean(process.env.ADMIN_PASSWORD));
 

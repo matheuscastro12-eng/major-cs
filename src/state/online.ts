@@ -4,6 +4,7 @@
 import { BASE_TEAMS } from '../data/teams';
 import { buildUserTeam, playerOvr, teamSeasonToTTeam } from '../engine/ratings';
 import { makeRng, type Rng } from '../engine/rng';
+import { hashStr } from './hash';
 import { createTournamentFromTeams, placementCode, resolveRound, standings, type PlacementCode } from '../engine/swiss';
 import type { Player, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
 
@@ -70,15 +71,6 @@ export function buildDraftFromSeed(seed: number, pool: TournamentPool): OnlineDr
   return { sources, coachOptions };
 }
 
-// hash estável de string (FNV-1a) para derivar seed por jogador
-function hashStr(s: string): number {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
 
 // CADA jogador recebe um sorteio DIFERENTE (mas determinístico por seed+nick,
 // então todos os clientes reconstroem o mesmo elenco de cada jogador). Antes
@@ -236,9 +228,11 @@ export async function listOpenLobbies(): Promise<OpenRoom[]> {
   }
 }
 
-export async function fetchLobby(code: string): Promise<LobbyState | null> {
+// 'gone' = a sala não existe mais (expirou/foi encerrada); null = erro transitório
+export async function fetchLobby(code: string): Promise<LobbyState | null | 'gone'> {
   try {
     const res = await fetch(`/api/lobby?code=${encodeURIComponent(code)}`, { signal: AbortSignal.timeout(9000) });
+    if (res.status === 404) return 'gone';
     if (!res.ok) return null;
     return (await res.json()) as LobbyState;
   } catch {

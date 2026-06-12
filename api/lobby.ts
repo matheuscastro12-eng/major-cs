@@ -14,6 +14,17 @@ function genCode(): string {
   return c;
 }
 
+// garante as colunas novas UMA vez por instância da função (não a cada request)
+let schemaReady = false;
+async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
+  if (schemaReady) return;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
+  schemaReady = true;
+}
+
 interface Res {
   status: (code: number) => { json: (body: unknown) => void };
   setHeader: (k: string, v: string) => void;
@@ -30,12 +41,15 @@ export default async function handler(
     return;
   }
   const sql = neon(url);
+  try {
+    await ensureSchema(sql);
+  } catch {
+    /* tabela pode não existir ainda no primeiro deploy; ações seguem */
+  }
 
   // GET ?list=1 -> salas abertas (públicas) esperando jogadores
   if ((req.method === 'GET' || !req.method) && req.query?.list != null) {
     try {
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
       // aproveita pra fechar salas inativas (sem heartbeat há mais de 2min)
       await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '2 minutes'`;
       // só lista salas com alguém ativo (ping nos últimos 60s)
@@ -111,10 +125,6 @@ export default async function handler(
       const pool = body.pool === 'br' ? 'br' : 'world';
       const isPublic = body.isPublic === true;
       const seed = Math.floor(Math.random() * 2147483647);
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
       // fecha salas inativas: ninguém com a aba aberta há mais de 2min (sem
       // heartbeat). Backstop de 6h pra qualquer resíduo.
       await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '2 minutes'`;
@@ -203,7 +213,6 @@ export default async function handler(
         res.status(403).json({ error: 'só o host tranca a sala' });
         return;
       }
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
       const locked = body.locked === true;
       await sql`UPDATE lobbies SET locked = ${locked}, updated_at = now() WHERE code = ${code}`;
       res.status(200).json({ ok: true, locked });
@@ -233,7 +242,6 @@ export default async function handler(
     if (action === 'ping') {
       // heartbeat: mantém a sala viva enquanto alguém tem a aba aberta
       if (!code) { res.status(200).json({ ok: false }); return; }
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
       await sql`UPDATE lobbies SET last_ping = now() WHERE code = ${code}`;
       res.status(200).json({ ok: true });
       return;
@@ -251,7 +259,6 @@ export default async function handler(
         res.status(409).json({ error: 'a temporada ainda não acabou' });
         return;
       }
-      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
       const newSeed = Math.floor(Math.random() * 2147483647);
       await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, season = COALESCE(season, 1) + 1, updated_at = now() WHERE code = ${code}`;
       await sql`UPDATE lobby_players SET picks = '[]'::jsonb, coach_pick = '', done = false WHERE code = ${code}`;

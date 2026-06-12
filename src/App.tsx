@@ -232,10 +232,22 @@ export default function App() {
       admin: '#admin', hall: '#hall', career: '#carreira',
       careerCRM: '#carreira-crm', careerAccess: '#carreira-acessos',
     };
-    const target = SCREEN_HASH[screen] ?? '';
+    // o preview de banners também sobrevive ao F5 (demo pro patrocinador)
+    const target = screen === 'home' && bannerPreview ? '#banners' : SCREEN_HASH[screen] ?? '';
     if (window.location.hash !== target) {
       history.replaceState(null, '', window.location.pathname + window.location.search + target);
     }
+  }, [screen, bannerPreview]);
+
+  // título da aba acompanha a tela (cara mais profissional, abas distinguíveis)
+  useEffect(() => {
+    const TITLES: Partial<Record<Screen, string>> = {
+      draft: 'Draft', hub: 'Campeonato', veto: 'Veto de mapas', match: 'Partida ao vivo',
+      final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama',
+      stats: 'Estatísticas', admin: 'Admin',
+    };
+    const sub = TITLES[screen];
+    document.title = sub ? `${sub} · Road to Major` : 'Road to Major · simulador de CS de todas as eras';
   }, [screen]);
 
   // telemetria: registra a visita (1x por sessão)
@@ -645,7 +657,11 @@ export default function App() {
           <CareerScreen dataset={dataset} onExit={() => setScreen('home')} />
         </CareerGate>
       )}
-      {screen === 'careerCRM' && <CareerCRM onExit={() => setScreen('home')} />}
+      {screen === 'careerCRM' && (
+        <AdminGate>
+          <CareerCRM onExit={() => setScreen('home')} />
+        </AdminGate>
+      )}
       {screen === 'careerAccess' && (
         <AdminGate>
           <BetaAccessCRM onExit={() => setScreen('home')} />
