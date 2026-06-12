@@ -18,8 +18,9 @@ export interface League {
   current: number; // índice da rodada atual (0-based)
 }
 
-// tabela round-robin pelo método do círculo (sem rng: a ordem dos times define)
-export function createLeague(name: string, teams: TTeam[]): League {
+// tabela round-robin pelo método do círculo (sem rng: a ordem dos times define).
+// legs=2 gera turno e returno (cada confronto duas vezes, mandos invertidos).
+export function createLeague(name: string, teams: TTeam[], legs: 1 | 2 = 1): League {
   const ids = teams.map((t) => t.id);
   if (ids.length % 2 === 1) ids.push('__bye__');
   const n = ids.length;
@@ -34,6 +35,10 @@ export function createLeague(name: string, teams: TTeam[]): League {
     }
     rounds.push(ms);
     rot.unshift(rot.pop()!);
+  }
+  if (legs === 2) {
+    const returno = rounds.map((round) => round.map((m) => ({ a: m.b, b: m.a })));
+    rounds.push(...returno);
   }
   return {
     name,

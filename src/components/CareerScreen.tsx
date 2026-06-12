@@ -30,6 +30,9 @@ const PRIZE_BY_POS = [2_000_000, 1_200_000, 700_000, 400_000, 250_000, 150_000, 
 const VRS_BY_POS = [200, 140, 100, 70, 50, 35, 25, 15];
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
+// o Major Mundial só acontece a cada N splits: a jornada até ele é mais longa
+const MAJOR_EVERY = 2;
+const isMajorSplit = (split: number) => split % MAJOR_EVERY === 0;
 // premiação e VRS do Major por colocação (bem maior que o circuito)
 const MAJOR_PRIZE: Record<PlacementCode, number> = {
   champion: 8_000_000,
@@ -428,7 +431,8 @@ export function CareerScreen({ onExit }: Props) {
       tt.strength += CIRCUIT_AI_BOOST; // adversarios mais duros (jogo estava facil)
       return tt;
     });
-    const league = createLeague(`${circuit.name} - Split ${s.split}`, [user, ...ai]);
+    // turno e returno: temporada mais longa (14 rodadas com 8 times)
+    const league = createLeague(`${circuit.name} - Split ${s.split}`, [user, ...ai], 2);
     const choice: CircuitChoice = {
       id: circuit.id,
       name: circuit.name,
@@ -804,7 +808,12 @@ export function CareerScreen({ onExit }: Props) {
     const poMult = isChampion ? 1.6 : poRank === 2 ? 1.25 : 1;
     const prize = Math.round((PRIZE_BY_POS[pos - 1] ?? 50_000) * (save.circuit?.prizeMult ?? 1) * poMult);
     const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsMult ?? 1) * poMult);
-    const qualified = save.playoff ? poRank <= spots : pos <= spots;
+    // vaga pelo mata-mata, mas o Major só acontece a cada MAJOR_EVERY splits:
+    // a jornada até ele é mais longa (rank garante, mas tem que ser split de Major)
+    const rankQualified = save.playoff ? poRank <= spots : pos <= spots;
+    const majorNow = isMajorSplit(save.split);
+    const qualified = rankQualified && majorNow;
+    const nextMajorSplit = save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
     const baseRecord = (): SplitRecord => ({
       split: save.split,
       circuit: save.circuit?.name ?? league.name,
@@ -844,9 +853,15 @@ export function CareerScreen({ onExit }: Props) {
                 <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Chegar ao top {spots} do mata-mata do {save.circuit?.name ?? 'circuito'}
                 {' '}garantiu a vaga. Hora de enfrentar os melhores do mundo.
               </div>
+            ) : rankQualified && !majorNow ? (
+              <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
+                Campanha de Major, mas calma: o <b>Major Mundial acontece a cada {MAJOR_EVERY} splits</b>.
+                O próximo é no fim do <b>Split {nextMajorSplit}</b>. Mantenha o nível até lá.
+              </p>
             ) : (
               <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
-                Chegue ao <b>top {spots}</b> do mata-mata do {save.circuit?.name ?? 'circuito'} para garantir vaga no Major Mundial.
+                Chegue ao <b>top {spots}</b> do mata-mata do {save.circuit?.name ?? 'circuito'} no split de Major
+                (a cada {MAJOR_EVERY} splits; o próximo é no <b>Split {majorNow ? save.split : nextMajorSplit}</b>) para garantir a vaga.
                 Continue acumulando VRS e reforçando o elenco.
               </p>
             )}
@@ -1198,28 +1213,23 @@ export function CareerScreen({ onExit }: Props) {
         />
       )}
 
-      {/* ===== MERCADO / CONTRATAÇÕES (acessível a qualquer momento) ===== */}
+      {/* ===== MERCADO: janela FECHADA durante a temporada ===== */}
       {hubTab === 'market' && (
-        <MarketScreen
-          save={save}
-          market={market}
-          coaches={currentEra}
-          findSigning={findSigning}
-          embedded
-          onExit={() => setHubTab('overview')}
-          onConfirm={(squad, coachFromId, budget, sponsors) => {
-            const next: CareerSave = { ...save, squad, coachFromId, budget, sponsors };
-            const rebuilt = buildTeam(next);
-            const mergeUser = (teams: TTeam[]) =>
-              teams.map((t) => (t.id === 'user' && rebuilt ? { ...rebuilt, wins: t.wins, losses: t.losses, roundDiff: t.roundDiff, status: t.status } : t));
-            if (rebuilt && next.league) next.league = { ...next.league, teams: mergeUser(next.league.teams) };
-            if (rebuilt && next.majorT) next.majorT = { ...next.majorT, teams: mergeUser(next.majorT.teams) };
-            persist(next);
-            setSave(next);
-            if (next.majorT) setMajorTState(next.majorT);
-            setHubTab('overview');
-          }}
-        />
+        <div className="panel">
+          <div className="panel-body center">
+            <div className="trophy" style={{ fontSize: 40 }}>🔒</div>
+            <h2>Janela de transferências fechada</h2>
+            <p className="muted" style={{ maxWidth: 520, margin: '10px auto 4px' }}>
+              Contratações só entre temporadas: a janela abre quando o split termina
+              (depois dos playoffs{majorT ? ' e do Major' : ''}). Enquanto isso, é com
+              o elenco que você tem.
+            </p>
+            <p className="muted small">Rodada {league.current + 1} de {league.rounds.length} · a janela abre ao fim do split</p>
+            {/* prévia do mercado: dá pra olhar os rumores, mas não contratar */}
+            <div className="muted small section-label" style={{ textAlign: 'left' }}>Rumores da próxima janela</div>
+            <TransferFeed items={transferFeed(save.split, currentEra)} compact />
+          </div>
+        </div>
       )}
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
