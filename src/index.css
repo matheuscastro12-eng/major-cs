@@ -863,7 +863,10 @@ tr.team-row td {
   align-items: start;
 }
 @media (max-width: 920px) {
-  .career-grid { grid-template-columns: 1fr; }
+  /* minmax(0,1fr) (e não 1fr) deixa a coluna ENCOLHER abaixo do min-content do
+     filho mais largo (ex: card da próxima partida), evitando estourar a tela */
+  .career-grid { grid-template-columns: minmax(0, 1fr); }
+  .career-main, .career-side { min-width: 0; }
 }
 .play-match-card {
   display: flex;
@@ -3696,10 +3699,29 @@ table.crm-players input.num {
   .ct-stats { gap: 8px; font-size: 12px; }
   .ct-sponsors { flex-wrap: wrap; }
 
-  /* card da próxima partida e blocos largos: ocupam a largura toda */
-  .pm-info { min-width: 0; }
-  .next-match, .pm-card { flex-direction: column; align-items: stretch; }
+  /* card da próxima partida: empilha e ocupa a largura toda (sem cortar o JOGAR) */
+  .play-match-card { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; }
+  .pm-info { min-width: 0; flex: none; }
   .pm-actions { flex-direction: row; flex-wrap: wrap; }
+  .pm-actions .btn { flex: 1 1 auto; }
+  .pm-teams { flex-wrap: wrap; min-width: 0; }
+  .pm-side { min-width: 0; }
+  .pm-side .tname, .pm-teams .tname { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+  /* cards de estatística: 2 colunas em vez de estourar em 4 */
+  .career-statgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* confrontos da rodada: nomes longos cortam com reticências em vez de alargar */
+  .matchline { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .matchline .tname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* guia/links/linhas largas respeitam a largura da tela */
+  .career-guide li { overflow-wrap: anywhere; }
+  .qualify-row, .human-row { min-width: 0; }
+
+  /* tabelas densas (classificação parcial no card lateral, stats) rolam dentro
+     do próprio card em vez de cortar/alargar a tela */
+  .side-card, .career-main .panel-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   /* tabelas densas (ranking VRS, top 20, resultados) podem rolar na horizontal
      sem espremer/cortar conteúdo */
