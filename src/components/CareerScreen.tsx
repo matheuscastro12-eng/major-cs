@@ -27,8 +27,10 @@ import { applyBo3Edits } from '../state/bo3-edits';
 const SAVE_KEY = 'rtm-career-v1';
 const STARTING_BUDGET = 3_800_000; // começo mais magro: forca um elenco humilde no inicio
 const CIRCUIT_AI_BOOST = 3.5; // adversarios do circuito mais fortes (balanceamento)
-const PRIZE_BY_POS = [2_000_000, 1_200_000, 700_000, 400_000, 250_000, 150_000, 100_000, 50_000];
-const VRS_BY_POS = [200, 140, 100, 70, 50, 35, 25, 15];
+// premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
+// dava pra ter o melhor elenco com grana sobrando já no split 3)
+const PRIZE_BY_POS = [1_250_000, 750_000, 450_000, 280_000, 170_000, 110_000, 70_000, 40_000];
+const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
 // o Major Mundial só acontece a cada N splits: a jornada até ele é mais longa
@@ -72,12 +74,12 @@ interface Sponsor {
 const SPONSORS: Sponsor[] = [
   { id: 'logitech', name: 'Logitech G', perSplit: 200_000, minVrs: 0, color: '#00b8fc' },
   { id: 'hyperx', name: 'HyperX', perSplit: 280_000, minVrs: 0, color: '#e21b22' },
-  { id: 'razer', name: 'Razer', perSplit: 320_000, minVrs: 150, color: '#44d62c' },
-  { id: 'monster', name: 'Monster Energy', perSplit: 400_000, minVrs: 250, color: '#7ed957' },
-  { id: 'secretlab', name: 'Secretlab', perSplit: 360_000, minVrs: 200, color: '#d9a441' },
-  { id: 'intel', name: 'Intel', perSplit: 520_000, minVrs: 400, color: '#0071c5' },
-  { id: 'redbull', name: 'Red Bull', perSplit: 650_000, minVrs: 550, color: '#cc0033' },
-  { id: 'samsung', name: 'Samsung', perSplit: 800_000, minVrs: 750, color: '#1428a0' },
+  { id: 'razer', name: 'Razer', perSplit: 320_000, minVrs: 220, color: '#44d62c' },
+  { id: 'secretlab', name: 'Secretlab', perSplit: 360_000, minVrs: 320, color: '#d9a441' },
+  { id: 'monster', name: 'Monster Energy', perSplit: 400_000, minVrs: 460, color: '#7ed957' },
+  { id: 'intel', name: 'Intel', perSplit: 520_000, minVrs: 700, color: '#0071c5' },
+  { id: 'redbull', name: 'Red Bull', perSplit: 650_000, minVrs: 1000, color: '#cc0033' },
+  { id: 'samsung', name: 'Samsung', perSplit: 800_000, minVrs: 1400, color: '#1428a0' },
 ];
 const SPONSOR_SLOTS = 3;
 const sponsorById = (id: string) => SPONSORS.find((s) => s.id === id);
@@ -164,13 +166,20 @@ export type PlayerPhase = 'rising' | 'prime' | 'declining';
 export const PHASE_LABEL: Record<PlayerPhase, string> = {
   rising: 'em ascensão', prime: 'no auge', declining: 'veterano em declínio',
 };
-export function playerPhase(pid: string): PlayerPhase {
+// Sem idade real no dataset, derivamos a fase do OVR: estrelas estão no AUGE
+// (nunca rotuladas de "veterano"); só tiers mais baixos tendem a declinar e os
+// medianos podem estar em ascensão. Evita chamar craque/jovem de veterano.
+export function playerPhase(pid: string, ovr: number): PlayerPhase {
+  if (ovr >= 82) return 'prime';
   const h = hashStr(`phase:${pid}`) % 100;
-  return h < 40 ? 'rising' : h < 75 ? 'prime' : 'declining';
+  if (ovr <= 75) return h < 50 ? 'declining' : 'prime';
+  if (h < 28) return 'rising';
+  if (h < 42) return 'declining';
+  return 'prime';
 }
 // delta da janela: determinístico por jogador+split (mesmo save = mesma evolução)
-function evoDelta(pid: string, split: number): number {
-  const phase = playerPhase(pid);
+function evoDelta(pid: string, split: number, ovr: number): number {
+  const phase = playerPhase(pid, ovr);
   const r = hashStr(`evo:${pid}:${split}`) % 100;
   if (phase === 'rising') return r < 35 ? 3 : r < 75 ? 2 : 1; // +1..+3
   if (phase === 'prime') return r < 25 ? 1 : r < 75 ? 0 : -1; // -1..+1
@@ -490,9 +499,12 @@ export function CareerScreen({ onExit }: Props) {
   const startSplit = (s: CareerSave, circuit: (typeof circuits)[number]) => {
     const user = buildTeam(s);
     if (!user) return;
+    // a IA fica mais forte a cada split: impede passar a carreira inteira
+    // invicto depois de montar um time bom (o cenario "evolui" junto com você)
+    const aiBoost = CIRCUIT_AI_BOOST + Math.min(13, (s.split - 1) * 1.7);
     const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 7).map((t) => {
       const tt = teamSeasonToTTeam(t);
-      tt.strength += CIRCUIT_AI_BOOST; // adversarios mais duros (jogo estava facil)
+      tt.strength += aiBoost;
       return tt;
     });
     // turno e returno: temporada mais longa (14 rodadas com 8 times)
@@ -529,10 +541,11 @@ export function CareerScreen({ onExit }: Props) {
       const f = findSigning(sig);
       if (!f) continue;
       const prev = s.evo?.[sig.playerId] ?? 0;
-      const d = evoDelta(sig.playerId, s.split);
+      const ovr = playerOvr(f.player);
+      const d = evoDelta(sig.playerId, s.split, ovr);
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
-      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId) });
+      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, ovr) });
     }
     return { evo, lastEvo };
   };
@@ -667,7 +680,7 @@ export function CareerScreen({ onExit }: Props) {
     if (!user) return;
     rngRef.current = makeRng(randomSeed());
     const pool = currentEra.filter((t) => t.id !== 'user');
-    const major = createTournament(pool, user, rngRef.current, MAJOR_NAME(s.split), 6);
+    const major = createTournament(pool, user, rngRef.current, MAJOR_NAME(s.split), 6 + Math.min(8, (s.split - 1)));
     setMajorT(major);
     setHubTab('major');
     setStage('hub');
@@ -2197,9 +2210,14 @@ function MarketScreen({
                     <TeamBadge tag={m.from.tag} colors={m.from.colors} size={16} logoUrl={m.from.logoUrl ?? logoForTeam(m.from)} />{' '}
                     {m.from.team}
                   </div>
-                  <div className={`meta small phase-tag ${playerPhase(m.player.id)}`} title="Fase da carreira: em ascensão melhora entre temporadas; em declínio cai">
-                    {playerPhase(m.player.id) === 'rising' ? '📈' : playerPhase(m.player.id) === 'declining' ? '📉' : '▬'} {PHASE_LABEL[playerPhase(m.player.id)]}
-                  </div>
+                  {(() => {
+                    const ph = playerPhase(m.player.id, playerOvr(m.player));
+                    return (
+                      <div className={`meta small phase-tag ${ph}`} title="Fase da carreira: em ascensão melhora entre temporadas; em declínio cai">
+                        {ph === 'rising' ? '📈' : ph === 'declining' ? '📉' : '▬'} {PHASE_LABEL[ph]}
+                      </div>
+                    );
+                  })()}
                   <div className="price buy">💰 {formatMoney(m.price)}</div>
                   {dup && <div className="meta muted small">já contratado</div>}
                 </button>

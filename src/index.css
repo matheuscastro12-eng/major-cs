@@ -3662,6 +3662,39 @@ table.crm-players input.num {
 .career-tab:hover { color: var(--text); }
 .career-tab.on { color: var(--gold); border-bottom-color: var(--gold); }
 
+/* ===== carreira no mobile: evita layout quebrado em telas estreitas ===== */
+@media (max-width: 640px) {
+  /* abas: rolam na horizontal em vez de empilhar em 4 linhas */
+  .career-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 10px 0 12px;
+  }
+  .career-tabs::-webkit-scrollbar { display: none; }
+  .career-tab { flex: 0 0 auto; padding: 8px 11px; font-size: 0.8rem; }
+
+  /* topbar do clube: empilha e encolhe os números pra não estourar */
+  .career-topbar { padding: 10px 12px; gap: 10px; }
+  .career-topbar .ct-name { font-size: 17px; }
+  .ct-standing b { font-size: 17px; }
+  .ct-stats { gap: 8px; font-size: 12px; }
+  .ct-sponsors { flex-wrap: wrap; }
+
+  /* card da próxima partida e blocos largos: ocupam a largura toda */
+  .pm-info { min-width: 0; }
+  .next-match, .pm-card { flex-direction: column; align-items: stretch; }
+  .pm-actions { flex-direction: row; flex-wrap: wrap; }
+
+  /* tabelas densas (ranking VRS, top 20, resultados) podem rolar na horizontal
+     sem espremer/cortar conteúdo */
+  .vrs-region, .top20-list, .results-list, .standings-table { overflow-x: auto; }
+
+  /* botão flutuante não cobre o conteúdo todo */
+  .hub-fab { padding: 11px 16px; font-size: 0.95rem; }
+}
+
 .career-topbar .ct-stats span {
   display: inline-flex;
   align-items: baseline;
