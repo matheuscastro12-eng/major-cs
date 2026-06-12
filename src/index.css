@@ -46,6 +46,11 @@ html,
 body {
   margin: 0;
   padding: 0;
+  /* trava a largura na tela: nenhum elemento pode deixar a página mais larga que
+     o viewport, então o navegador mobile NÃO dá zoom-out automático a cada tela.
+     'clip' não cria scroll container, então o header sticky continua funcionando. */
+  overflow-x: clip;
+  max-width: 100%;
 }
 
 body {
@@ -65,6 +70,7 @@ body {
   width: 100%;
   margin: 0;
   padding: 0;
+  overflow-x: clip;
 }
 
 /* container central das telas */
@@ -3433,6 +3439,14 @@ table.crm-players input.num {
 }
 
 .swiss-bracket .br-scroll, .playoff-bracket { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* celulares estreitos: o header pode quebrar em 2 linhas em vez de cortar botão */
+@media (max-width: 460px) {
+  .topbar { flex-wrap: wrap; row-gap: 6px; padding: 9px 12px; }
+  .topbar .logo { font-size: 16px; letter-spacing: 1px; }
+  /* qualquer mídia/figura nunca passa da largura da tela */
+  img, svg, video, canvas { max-width: 100%; }
+}
 
 /* ---------- postura tática ao vivo ---------- */
 .stance-bar {
