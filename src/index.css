@@ -4094,6 +4094,18 @@ table.crm-players input.num {
 .phase-tag.declining { color: #e58a8a; }
 .phase-tag.prime { color: var(--muted); }
 
+/* transferências confirmadas (já aplicadas aos elencos) */
+.moves-done { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.move-chip {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 0.82rem;
+  padding: 4px 9px; border-radius: 8px; background: rgba(90,200,120,0.12);
+  border: 1px solid rgba(90,200,120,0.3); color: #aef0c2;
+}
+.move-chip b { color: #fff; }
+
+/* patrocinador sob contrato (não rescindível) */
+.sponsor-card.committed { outline: 1px solid rgba(212,164,65,0.4); }
+
 /* botão flutuante "jogar minha partida" no hub (sempre alcançável) */
 .hub-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 120;

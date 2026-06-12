@@ -70,16 +70,17 @@ interface Sponsor {
   perSplit: number;
   minVrs: number;
   color: string;
+  term: number; // splits de compromisso ao assinar (não dá pra sair antes)
 }
 const SPONSORS: Sponsor[] = [
-  { id: 'logitech', name: 'Logitech G', perSplit: 200_000, minVrs: 0, color: '#00b8fc' },
-  { id: 'hyperx', name: 'HyperX', perSplit: 280_000, minVrs: 0, color: '#e21b22' },
-  { id: 'razer', name: 'Razer', perSplit: 320_000, minVrs: 220, color: '#44d62c' },
-  { id: 'secretlab', name: 'Secretlab', perSplit: 360_000, minVrs: 320, color: '#d9a441' },
-  { id: 'monster', name: 'Monster Energy', perSplit: 400_000, minVrs: 460, color: '#7ed957' },
-  { id: 'intel', name: 'Intel', perSplit: 520_000, minVrs: 700, color: '#0071c5' },
-  { id: 'redbull', name: 'Red Bull', perSplit: 650_000, minVrs: 1000, color: '#cc0033' },
-  { id: 'samsung', name: 'Samsung', perSplit: 800_000, minVrs: 1400, color: '#1428a0' },
+  { id: 'logitech', name: 'Logitech G', perSplit: 200_000, minVrs: 0, color: '#00b8fc', term: 2 },
+  { id: 'hyperx', name: 'HyperX', perSplit: 280_000, minVrs: 0, color: '#e21b22', term: 2 },
+  { id: 'razer', name: 'Razer', perSplit: 320_000, minVrs: 220, color: '#44d62c', term: 2 },
+  { id: 'secretlab', name: 'Secretlab', perSplit: 360_000, minVrs: 320, color: '#d9a441', term: 3 },
+  { id: 'monster', name: 'Monster Energy', perSplit: 400_000, minVrs: 460, color: '#7ed957', term: 3 },
+  { id: 'intel', name: 'Intel', perSplit: 520_000, minVrs: 700, color: '#0071c5', term: 3 },
+  { id: 'redbull', name: 'Red Bull', perSplit: 650_000, minVrs: 1000, color: '#cc0033', term: 4 },
+  { id: 'samsung', name: 'Samsung', perSplit: 800_000, minVrs: 1400, color: '#1428a0', term: 4 },
 ];
 const SPONSOR_SLOTS = 3;
 const sponsorById = (id: string) => SPONSORS.find((s) => s.id === id);
@@ -138,6 +139,9 @@ interface CareerSave {
   majorT: Tournament | null;
   evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
   lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
+  sponsorUntil: Record<string, number>; // patrocinador id -> split até onde o contrato vale
+  moves: Record<string, string>; // transferências aplicadas: playerId -> teamId atual
+  lastMoves: { nick: string; from: string; to: string }[]; // transferências do último split
 }
 
 const emptySave = (): CareerSave => ({
@@ -156,6 +160,9 @@ const emptySave = (): CareerSave => ({
   majorT: null,
   evo: {},
   lastEvo: [],
+  sponsorUntil: {},
+  moves: {},
+  lastMoves: [],
 });
 
 // ----- evolução de elenco entre temporadas -----
@@ -288,35 +295,57 @@ const worldRank = (t: TeamSeason): number => {
   return m ? Number(m[1]) : 999;
 };
 
-function transferFeed(split: number, teams: TeamSeason[]): TransferItem[] {
-  const pool = teams.filter((t) => t.id !== 'user' && t.players.length > 0);
-  const out: TransferItem[] = [];
-  const seen = new Set<string>();
-  for (let i = 0; out.length < 12 && i < 300; i++) {
+// Transferências da janela: cada movimento é um SWAP (o jogador vai pro novo
+// time e o reserva mais fraco do destino volta), pra os times manterem 5. É
+// determinístico por split, então o mercado mostrado é o que de fato se aplica.
+function computeTransfers(split: number, teams: TeamSeason[]): { feed: TransferItem[]; swaps: { pid: string; toId: string }[] } {
+  const pool = teams.filter((t) => t.id !== 'user' && t.players.length >= 5);
+  const feed: TransferItem[] = [];
+  const swaps: { pid: string; toId: string }[] = [];
+  const seen = new Set<string>(); // playerIds já envolvidos nesta janela
+  for (let i = 0; feed.length < 9 && i < 400; i++) {
     const h = hashStr(`tf${split}:${i}`);
     const src = pool[h % pool.length];
     const pl = src.players[(h >>> 3) % src.players.length];
-    if (!pl || seen.has(pl.nick)) continue;
+    if (!pl || seen.has(pl.id)) continue;
     const ovr = playerOvr(pl);
-    // estrelas (88+) quase não se movem: só 1 em cada ~8 tentativas passa
-    if (ovr >= 88 && h % 8 !== 0) continue;
+    if (ovr >= 88 && h % 8 !== 0) continue; // estrelas quase não se movem
     const sr = worldRank(src);
     const cands = pool.filter((t) => {
       if (t.id === src.id) return false;
       const dr = worldRank(t);
-      // estrela só se move dentro da elite: sem ZywOo indo pra FOKUS
-      if (ovr >= 88) return dr <= 8;
-      // jogador bom não desce de patamar; ninguém pula do fundo direto pro topo
-      const maxFall = ovr >= 82 ? 6 : 15; // descer = rank maior
-      const maxRise = 12;
-      return dr <= sr + maxFall && dr >= sr - maxRise && t.teamwork >= ovr - 12;
+      if (ovr >= 88) return dr <= 8; // estrela só vai pra elite (sem ZywOo na FOKUS)
+      const maxFall = ovr >= 82 ? 6 : 15;
+      return dr <= sr + maxFall && dr >= sr - 12 && t.teamwork >= ovr - 12;
     });
     if (cands.length === 0) continue;
     const dest = cands[(h >>> 7) % cands.length];
-    seen.add(pl.nick);
-    out.push({ nick: pl.nick, cc: pl.country, from: src.tag, to: dest.tag, fee: playerValue(pl) });
+    // contrapartida: o reserva mais fraco do destino (ainda não movido) vai pro src
+    const back = [...dest.players].filter((p) => !seen.has(p.id)).sort((a, b) => playerOvr(a) - playerOvr(b))[0];
+    if (!back || back.id === pl.id) continue;
+    seen.add(pl.id);
+    seen.add(back.id);
+    swaps.push({ pid: pl.id, toId: dest.id }, { pid: back.id, toId: src.id });
+    feed.push({ nick: pl.nick, cc: pl.country, from: src.tag, to: dest.tag, fee: playerValue(pl) });
   }
-  return out;
+  return { feed, swaps };
+}
+function transferFeed(split: number, teams: TeamSeason[]): TransferItem[] {
+  return computeTransfers(split, teams).feed;
+}
+
+// reconstrói os elencos aplicando as transferências acumuladas (playerId -> teamId).
+// Como cada transferência é um swap balanceado, todo time se mantém com 5.
+function applyMoves(teams: TeamSeason[], moves: Record<string, string> | undefined): TeamSeason[] {
+  if (!moves || Object.keys(moves).length === 0) return teams;
+  const all: { p: Player; orig: string }[] = [];
+  for (const t of teams) for (const p of t.players) all.push({ p, orig: t.id });
+  const valid = new Set(teams.map((t) => t.id));
+  const teamOf = (pid: string, orig: string) => {
+    const m = moves[pid];
+    return m && valid.has(m) ? m : orig;
+  };
+  return teams.map((t) => ({ ...t, players: all.filter((ap) => teamOf(ap.p.id, ap.orig) === t.id).map((ap) => ap.p) }));
 }
 
 function loadSave(): CareerSave {
@@ -423,8 +452,10 @@ export function CareerScreen({ onExit }: Props) {
   // times CS2 antigos feitos à mão não entram aqui (evita duplicatas e OVRs
   // desatualizados).
   const currentEra = useMemo(
-    () => applyBo3Edits(CS2_REAL_2026).filter((t) => t.players.length >= 5),
-    [],
+    // aplica as transferências já realizadas (save.moves) por cima da base:
+    // assim os jogadores transferidos aparecem MESMO nos elencos novos
+    () => applyMoves(applyBo3Edits(CS2_REAL_2026), save.moves).filter((t) => t.players.length >= 5),
+    [save.moves],
   );
   const brTeams = useMemo(
     () => currentEra.filter((t) => t.country === 'br').sort((a, b) => b.teamwork - a.teamwork),
@@ -548,6 +579,21 @@ export function CareerScreen({ onExit }: Props) {
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, ovr) });
     }
     return { evo, lastEvo };
+  };
+
+  // aplica a janela de transferências do split que está fechando: os swaps viram
+  // movimentos persistentes (save.moves) e o resumo vai pra lastMoves (exibido
+  // no próximo split). Não move jogadores do elenco do usuário.
+  const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves'> => {
+    const tr = computeTransfers(s.split, currentEra);
+    const squadIds = new Set(s.squad.map((x) => x.playerId));
+    const moves = { ...(s.moves ?? {}) };
+    for (const sw of tr.swaps) {
+      if (squadIds.has(sw.pid)) continue; // não mexe em quem é seu
+      moves[sw.pid] = sw.toId;
+    }
+    const lastMoves = tr.feed.slice(0, 8).map((f) => ({ nick: f.nick, from: f.from, to: f.to }));
+    return { moves, lastMoves };
   };
 
   // forma do clube no split (resultados das partidas do usuário já jogadas)
@@ -832,8 +878,8 @@ export function CareerScreen({ onExit }: Props) {
         coaches={currentEra}
         findSigning={findSigning}
         onExit={onExit}
-        onConfirm={(squad, coachFromId, budget, sponsors) => {
-          const next = { ...save, squad, coachFromId, budget, sponsors };
+        onConfirm={(squad, coachFromId, budget, sponsors, sponsorUntil) => {
+          const next = { ...save, squad, coachFromId, budget, sponsors, sponsorUntil };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -907,6 +953,7 @@ export function CareerScreen({ onExit }: Props) {
                   playoff: null,
                   history: [...save.history, finished],
                   ...evolveSquad(save),
+                  ...applyTransferWindow(save),
                 };
                 persist(next);
                 setSave(next);
@@ -1074,6 +1121,7 @@ export function CareerScreen({ onExit }: Props) {
                     playoff: null,
                     history: [...save.history, baseRecord()],
                     ...evolveSquad(save),
+                    ...applyTransferWindow(save),
                   };
                   persist(next);
                   setSave(next);
@@ -2060,7 +2108,7 @@ function MarketScreen({
   market: { player: Player; from: TeamSeason; price: number }[];
   coaches: TeamSeason[];
   findSigning: (s: Signing) => { player: Player; from: TeamSeason } | null;
-  onConfirm: (squad: Signing[], coachFromId: string, budget: number, sponsors: string[]) => void;
+  onConfirm: (squad: Signing[], coachFromId: string, budget: number, sponsors: string[], sponsorUntil: Record<string, number>) => void;
   onExit: () => void;
   embedded?: boolean;
 }) {
@@ -2068,14 +2116,25 @@ function MarketScreen({
   const [coachId, setCoachId] = useState<string | null>(save.coachFromId);
   const [filter, setFilter] = useState('');
   const [sponsors, setSponsors] = useState<string[]>(save.sponsors);
+  const [sponsorUntil, setSponsorUntil] = useState<Record<string, number>>(save.sponsorUntil ?? {});
   const marketFeed = useMemo(() => transferFeed(save.split, coaches), [save.split, coaches]);
 
+  // contrato ativo = ainda dentro do prazo (não pode rescindir antes do fim)
+  const underContract = (id: string) => (sponsorUntil[id] ?? 0) >= save.split;
+
   const toggleSponsor = (id: string) => {
-    setSponsors((cur) => {
-      if (cur.includes(id)) return cur.filter((x) => x !== id);
-      if (cur.length >= SPONSOR_SLOTS) return cur;
-      return [...cur, id];
-    });
+    const sp = sponsorById(id);
+    if (!sp) return;
+    if (sponsors.includes(id)) {
+      // só sai se o contrato já venceu
+      if (underContract(id)) return;
+      setSponsors((cur) => cur.filter((x) => x !== id));
+      return;
+    }
+    if (sponsors.length >= SPONSOR_SLOTS) return;
+    // assina: compromisso de `term` splits a partir do split atual
+    setSponsors((cur) => [...cur, id]);
+    setSponsorUntil((cur) => ({ ...cur, [id]: save.split + sp.term - 1 }));
   };
 
   const signedNicks = new Set(
@@ -2229,37 +2288,59 @@ function MarketScreen({
           <div className="muted small section-label">
             Patrocinadores ({sponsors.length}/{SPONSOR_SLOTS}) · receita por split: <b className="pos">+{formatMoney(sponsorIncome(sponsors))}</b>
           </div>
+          <div className="muted small" style={{ margin: '-4px 0 8px' }}>
+            Ao assinar você se compromete por X splits (não dá pra rescindir antes). Marcas maiores pedem mais VRS e contratos mais longos.
+          </div>
           <div className="sponsor-grid">
             {SPONSORS.map((sp) => {
               const active = sponsors.includes(sp.id);
-              const locked = !active && sp.minVrs > save.vrs;
+              const committed = active && underContract(sp.id);
+              const reqVrs = !active && sp.minVrs > save.vrs;
               const full = !active && sponsors.length >= SPONSOR_SLOTS;
+              const blocked = reqVrs || full;
               return (
                 <button
                   key={sp.id}
                   type="button"
-                  className={`sponsor-card${active ? ' on' : ''}${locked || full ? ' locked' : ''}`}
-                  disabled={locked || full}
-                  onClick={() => !locked && !full && toggleSponsor(sp.id)}
-                  title={locked ? `Requer ${sp.minVrs} VRS` : full ? 'Slots cheios' : ''}
+                  className={`sponsor-card${active ? ' on' : ''}${blocked ? ' locked' : ''}${committed ? ' committed' : ''}`}
+                  disabled={blocked}
+                  onClick={() => !blocked && toggleSponsor(sp.id)}
+                  title={reqVrs ? `Requer ${sp.minVrs} VRS` : full ? 'Slots cheios' : committed ? `Contrato até o Split ${sponsorUntil[sp.id]}` : active ? 'Contrato encerrado: clique para sair' : `Compromisso de ${sp.term} splits`}
                 >
                   <span className="sp-logo" style={{ background: sp.color }}>{sp.name.slice(0, 1)}</span>
                   <span className="sp-name">{sp.name}</span>
                   <span className="sp-pay pos">+{formatMoney(sp.perSplit)}</span>
-                  {locked && <span className="sp-lock muted small">{sp.minVrs} VRS</span>}
+                  {reqVrs && <span className="sp-lock muted small">{sp.minVrs} VRS</span>}
+                  {!active && !reqVrs && <span className="sp-lock muted small">{sp.term} splits</span>}
+                  {committed && <span className="sp-lock muted small">🔒 até Split {sponsorUntil[sp.id]}</span>}
+                  {active && !committed && <span className="sp-lock muted small">renovável</span>}
                   {active && <span className="sp-check">✔</span>}
                 </button>
               );
             })}
           </div>
 
+          {/* transferências que já se concretizaram (jogadores agora nos novos times) */}
+          {(save.lastMoves?.length ?? 0) > 0 && (
+            <>
+              <div className="muted small section-label">✅ Transferências confirmadas (já valem nos elencos)</div>
+              <div className="moves-done">
+                {save.lastMoves.map((mv, i) => (
+                  <span key={i} className="move-chip">
+                    <b>{mv.nick}</b> {mv.from} → <b>{mv.to}</b>
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+
           {/* janela de transferências: o que os outros times andam fazendo */}
-          <div className="muted small section-label">Janela de transferências · o que rolou no mercado</div>
+          <div className="muted small section-label">Rumores da próxima janela</div>
           <TransferFeed items={marketFeed} />
 
           <div className="center" style={{ marginTop: 16 }}>
             <button className="btn gold big" disabled={!ready}
-              onClick={() => coachId && onConfirm(squad, coachId, budgetLeft, sponsors)}>
+              onClick={() => coachId && onConfirm(squad, coachId, budgetLeft, sponsors, sponsorUntil)}>
               ✔ {embedded ? 'Salvar elenco' : 'Fechar elenco e escolher o campeonato'}
             </button>
             {!ready && (
