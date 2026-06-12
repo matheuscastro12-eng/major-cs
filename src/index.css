@@ -4027,6 +4027,40 @@ table.crm-players input.num {
 .mtag.banned { background: rgba(180,40,35,0.92); color: #fff; }
 .mtag.picked { background: rgba(40,140,70,0.92); color: #fff; }
 
+/* ===== carreira: guia da jornada + evolução de elenco ===== */
+.career-guide {
+  border: 1px solid rgba(97,168,221,0.4); border-radius: 12px;
+  background: linear-gradient(135deg, rgba(97,168,221,0.1), rgba(97,168,221,0.02));
+  padding: 12px 16px; margin-bottom: 14px;
+}
+.career-guide .cg-head {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-cond); font-weight: 800; letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+.career-guide ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.career-guide li { color: var(--muted); font-size: 0.88rem; line-height: 1.4; }
+.career-guide li b { color: var(--text); }
+
+.evo-panel {
+  border: 1px solid var(--border); border-radius: 12px;
+  background: rgba(255,255,255,0.02); padding: 12px 14px; margin: 12px 0;
+}
+.evo-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.evo-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 8px; font-weight: 700; font-size: 0.88rem;
+  background: rgba(255,255,255,0.05);
+}
+.evo-chip i { font-style: normal; font-weight: 600; font-size: 0.74rem; color: var(--muted); }
+.evo-chip.up { background: rgba(90,200,120,0.14); color: #7fd99a; }
+.evo-chip.down { background: rgba(220,90,90,0.14); color: #e58a8a; }
+
+.phase-tag { font-size: 0.72rem; font-weight: 700; }
+.phase-tag.rising { color: #7fd99a; }
+.phase-tag.declining { color: #e58a8a; }
+.phase-tag.prime { color: var(--muted); }
+
 /* botão flutuante "jogar minha partida" no hub (sempre alcançável) */
 .hub-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 120;

@@ -133,6 +133,8 @@ interface CareerSave {
   sponsors: string[];
   playoff: Playoff | null;
   majorT: Tournament | null;
+  evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
+  lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
 }
 
 const emptySave = (): CareerSave => ({
@@ -149,7 +151,30 @@ const emptySave = (): CareerSave => ({
   sponsors: [],
   playoff: null,
   majorT: null,
+  evo: {},
+  lastEvo: [],
 });
+
+// ----- evolução de elenco entre temporadas -----
+// cada jogador tem uma fase de carreira (estável, derivada do id): em ascensão
+// melhora, no auge oscila, em declínio cai. Valor e salário acompanham os
+// atributos, então segurar um veterano caro vira decisão estratégica.
+export type PlayerPhase = 'rising' | 'prime' | 'declining';
+export const PHASE_LABEL: Record<PlayerPhase, string> = {
+  rising: 'em ascensão', prime: 'no auge', declining: 'veterano em declínio',
+};
+export function playerPhase(pid: string): PlayerPhase {
+  const h = hashStr(`phase:${pid}`) % 100;
+  return h < 40 ? 'rising' : h < 75 ? 'prime' : 'declining';
+}
+// delta da janela: determinístico por jogador+split (mesmo save = mesma evolução)
+function evoDelta(pid: string, split: number): number {
+  const phase = playerPhase(pid);
+  const r = hashStr(`evo:${pid}:${split}`) % 100;
+  if (phase === 'rising') return r < 35 ? 3 : r < 75 ? 2 : 1; // +1..+3
+  if (phase === 'prime') return r < 25 ? 1 : r < 75 ? 0 : -1; // -1..+1
+  return r < 50 ? -2 : r < 85 ? -1 : 0; // declínio: -2..0
+}
 
 // ----- helpers do playoff (mata-mata do circuito) -----
 function buildPlayoff(table: TTeam[], circuit: string): Playoff {
@@ -252,16 +277,35 @@ interface TransferItem { nick: string; cc: string; from: string; to: string; fee
 // Feed determinístico de transferências REALISTAS: um jogador só troca por um
 // time de tier parecido (teamwork +-8), evitando movimentos absurdos como um
 // jogador de time fraco indo direto pra um top mundial.
+// ranking mundial real do time (vem no honors dos times importados do bo3)
+const worldRank = (t: TeamSeason): number => {
+  const m = /#(\d+)/.exec(t.honors ?? '');
+  return m ? Number(m[1]) : 999;
+};
+
 function transferFeed(split: number, teams: TeamSeason[]): TransferItem[] {
   const pool = teams.filter((t) => t.id !== 'user' && t.players.length > 0);
   const out: TransferItem[] = [];
   const seen = new Set<string>();
-  for (let i = 0; out.length < 12 && i < 160; i++) {
+  for (let i = 0; out.length < 12 && i < 300; i++) {
     const h = hashStr(`tf${split}:${i}`);
     const src = pool[h % pool.length];
     const pl = src.players[(h >>> 3) % src.players.length];
     if (!pl || seen.has(pl.nick)) continue;
-    const cands = pool.filter((t) => t.id !== src.id && Math.abs(t.teamwork - src.teamwork) <= 8);
+    const ovr = playerOvr(pl);
+    // estrelas (88+) quase não se movem: só 1 em cada ~8 tentativas passa
+    if (ovr >= 88 && h % 8 !== 0) continue;
+    const sr = worldRank(src);
+    const cands = pool.filter((t) => {
+      if (t.id === src.id) return false;
+      const dr = worldRank(t);
+      // estrela só se move dentro da elite: sem ZywOo indo pra FOKUS
+      if (ovr >= 88) return dr <= 8;
+      // jogador bom não desce de patamar; ninguém pula do fundo direto pro topo
+      const maxFall = ovr >= 82 ? 6 : 15; // descer = rank maior
+      const maxRise = 12;
+      return dr <= sr + maxFall && dr >= sr - maxRise && t.teamwork >= ovr - 12;
+    });
     if (cands.length === 0) continue;
     const dest = cands[(h >>> 7) % cands.length];
     seen.add(pl.nick);
@@ -347,6 +391,14 @@ export function CareerScreen({ onExit }: Props) {
     setSave((s) => { const n = { ...s, majorT: t }; persist(n); return n; });
   };
   const [hubTab, setHubTab] = useState<HubTab>(() => (loadSave().majorT ? 'major' : 'overview'));
+  // guia "como funciona a temporada" (explica a jornada; some ao dispensar)
+  const [guideOpen, setGuideOpen] = useState(() => {
+    try { return localStorage.getItem('rtm-career-guide-v1') !== '1'; } catch { return true; }
+  });
+  const dismissGuide = () => {
+    setGuideOpen(false);
+    try { localStorage.setItem('rtm-career-guide-v1', '1'); } catch { /* sem storage */ }
+  };
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
@@ -410,7 +462,23 @@ export function CareerScreen({ onExit }: Props) {
   const findSigning = (s: Signing): { player: Player; from: TeamSeason } | null => {
     const from = currentEra.find((t) => t.id === s.fromId);
     const player = from?.players.find((p) => p.id === s.playerId);
-    return from && player ? { player, from } : null;
+    if (!from || !player) return null;
+    // aplica a evolução acumulada do SEU elenco (atributos sobem/caem entre
+    // temporadas; valor e salário acompanham automaticamente)
+    const d = save.evo?.[player.id] ?? 0;
+    if (!d) return { player, from };
+    const clamp = (v: number) => Math.max(40, Math.min(99, v));
+    return {
+      player: {
+        ...player,
+        aim: clamp(player.aim + d),
+        consistency: clamp(player.consistency + d),
+        clutch: clamp(player.clutch + d),
+        awp: clamp(player.awp + d),
+        igl: clamp(player.igl + d),
+      },
+      from,
+    };
   };
 
   const buildTeam = (s: CareerSave): TTeam | null => {
@@ -452,7 +520,22 @@ export function CareerScreen({ onExit }: Props) {
     const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player }[];
     return picks.reduce((acc, p) => acc + playerWage(p.player), 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [save.squad]);
+  }, [save.squad, save.evo]);
+
+  // evolução da janela: cada jogador do elenco sobe/cai conforme a fase da
+  // carreira (em ascensão / no auge / em declínio). Roda ao fechar o split.
+  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo'> => {
+    const evo = { ...(s.evo ?? {}) };
+    const lastEvo: CareerSave['lastEvo'] = [];
+    for (const sig of s.squad) {
+      const f = findSigning(sig);
+      if (!f) continue;
+      const d = evoDelta(sig.playerId, s.split);
+      if (d !== 0) evo[sig.playerId] = (evo[sig.playerId] ?? 0) + d;
+      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId) });
+    }
+    return { evo, lastEvo };
+  };
 
   // forma do clube no split (resultados das partidas do usuário já jogadas)
   const clubForm = (l: League): ('W' | 'L')[] => {
@@ -773,6 +856,7 @@ export function CareerScreen({ onExit }: Props) {
                   circuit: null,
                   playoff: null,
                   history: [...save.history, finished],
+                  ...evolveSquad(save),
                 };
                 persist(next);
                 setSave(next);
@@ -939,6 +1023,7 @@ export function CareerScreen({ onExit }: Props) {
                     circuit: null,
                     playoff: null,
                     history: [...save.history, baseRecord()],
+                    ...evolveSquad(save),
                   };
                   persist(next);
                   setSave(next);
@@ -1142,6 +1227,23 @@ export function CareerScreen({ onExit }: Props) {
       {hubTab === 'overview' && (
         <div className="career-grid">
           <div className="career-main">
+            {/* guia da jornada: explica as regras da temporada (dispensável) */}
+            {guideOpen && (
+              <div className="career-guide">
+                <div className="cg-head">
+                  📖 Como funciona a temporada
+                  <span className="spacer" />
+                  <button className="btn ghost small" onClick={dismissGuide}>Entendi ✕</button>
+                </div>
+                <ul>
+                  <li><b>Temporada em turno e returno</b>: {league.rounds.length} rodadas; os <b>4 melhores</b> vão pro mata-mata (semis MD3 + final MD5) que decide o campeão.</li>
+                  <li><b>Major Mundial a cada {MAJOR_EVERY} splits</b>: chegue ao top {spots} do mata-mata num split de Major (o próximo é no Split {isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY))}) pra garantir a vaga.</li>
+                  <li><b>Janela de transferências só entre temporadas</b>: durante o split é com o elenco que você tem.</li>
+                  <li><b>Seu elenco evolui entre temporadas</b>: jogador em ascensão melhora, veterano em declínio cai; valor e salário acompanham. Olhe a fase de carreira antes de contratar.</li>
+                  <li><b>Patrocinadores</b> pagam por split, e marcas maiores exigem mais VRS (seu ranking).</li>
+                </ul>
+              </div>
+            )}
             {opp && myMatch ? (
               <div className="play-match-card" style={{ background: `linear-gradient(110deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--header) 70%)` }}>
                 <div className="pm-info">
@@ -2005,6 +2107,27 @@ function MarketScreen({
             vendido por 85% do valor.
           </div>
 
+          {/* evolução do elenco na última janela (explica a mecânica na jornada) */}
+          {(save.lastEvo?.length ?? 0) > 0 && (
+            <div className="evo-panel">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>Evolução do elenco na janela</div>
+              <div className="evo-list">
+                {save.lastEvo.map((e) => (
+                  <span key={e.nick} className={`evo-chip ${e.delta > 0 ? 'up' : e.delta < 0 ? 'down' : 'flat'}`}>
+                    {e.delta > 0 ? '▲' : e.delta < 0 ? '▼' : '▬'} {e.nick}
+                    <i>{e.delta > 0 ? `+${e.delta}` : e.delta} · {PHASE_LABEL[e.phase]}</i>
+                  </span>
+                ))}
+              </div>
+              <p className="muted small" style={{ margin: '8px 0 0' }}>
+                Entre temporadas o elenco evolui: jogador <b>em ascensão</b> melhora,
+                <b> no auge</b> oscila e <b>veterano em declínio</b> cai. O valor e o
+                salário acompanham os atributos: segurar um veterano caro (ou vender
+                no pico) é decisão sua.
+              </p>
+            </div>
+          )}
+
           <div className="muted small section-label">Seu elenco ({squad.length}/5)</div>
           <div className="roster-slots">
             {[0, 1, 2, 3, 4].map((i) => {
@@ -2064,6 +2187,9 @@ function MarketScreen({
                   <div className="meta muted small">
                     <TeamBadge tag={m.from.tag} colors={m.from.colors} size={16} logoUrl={m.from.logoUrl ?? logoForTeam(m.from)} />{' '}
                     {m.from.team}
+                  </div>
+                  <div className={`meta small phase-tag ${playerPhase(m.player.id)}`} title="Fase da carreira: em ascensão melhora entre temporadas; em declínio cai">
+                    {playerPhase(m.player.id) === 'rising' ? '📈' : playerPhase(m.player.id) === 'declining' ? '📉' : '▬'} {PHASE_LABEL[playerPhase(m.player.id)]}
                   </div>
                   <div className="price buy">💰 {formatMoney(m.price)}</div>
                   {dup && <div className="meta muted small">já contratado</div>}
