@@ -197,7 +197,11 @@ interface CareerSave {
   tier: number; // tier atual da organização (1 = elite). Começa em 3.
   tierChange?: 'up' | 'down' | null; // resultado da última temporada (promoção/rebaixamento)
   takeoverId?: string | null; // id do time real que o jogador assumiu (excluído dos adversários)
+  pendingOffer?: PoachOffer | null; // proposta de uma org maior por um jogador seu
 }
+
+// proposta de uma org de elite (tier 1) por um jogador do seu elenco
+interface PoachOffer { orgId: string; orgName: string; orgTag: string; playerId: string; nick: string; ovr: number; fee: number }
 
 const emptySave = (): CareerSave => ({
   org: null,
@@ -671,6 +675,23 @@ export function CareerScreen({ onExit }: Props) {
     return { moves, lastMoves };
   };
 
+  // assédio do topo: uma org de ELITE (tier 1) pode fazer proposta pelo seu
+  // melhor jogador entre temporadas. Só acontece se você ainda não é tier 1
+  // (do contrário você JÁ é o topo). Determinístico por split+jogador.
+  const makeOffer = (s: CareerSave, newTier: number): PoachOffer | null => {
+    if (newTier <= 1) return null;
+    const picks = s.squad.map(findSigning).filter(Boolean) as { player: Player }[];
+    const best = picks.map((p) => p.player).sort((a, b) => playerOvr(b) - playerOvr(a))[0];
+    if (!best || playerOvr(best) < 78) return null; // ninguém assedia jogador mediano
+    const h = hashStr(`offer:${s.split}:${best.id}`);
+    if (h % 100 >= 50) return null; // ~50% de chance por split
+    const elite = oppEra.filter((t) => teamTier(t) === 1 && t.id !== s.takeoverId);
+    if (elite.length === 0) return null;
+    const org = elite[h % elite.length];
+    const fee = Math.round(playerValue(best) * (1.4 + (h % 35) / 100)); // 1.4x a 1.75x
+    return { orgId: org.id, orgName: org.team, orgTag: org.tag, playerId: best.id, nick: best.nick, ovr: playerOvr(best), fee };
+  };
+
   // forma do clube no split (resultados das partidas do usuário já jogadas)
   const clubForm = (l: League): ('W' | 'L')[] => {
     const out: ('W' | 'L')[] = [];
@@ -959,6 +980,35 @@ export function CareerScreen({ onExit }: Props) {
 
   // ---------- mercado ----------
   if (stage === 'market') {
+    // proposta de uma org grande pendente: resolve ANTES do mercado (assim o
+    // mercado já abre com o elenco certo e você repõe quem saiu)
+    if (save.pendingOffer) {
+      const off = save.pendingOffer;
+      return (
+        <OfferScreen
+          offer={off}
+          orgName={save.org?.name ?? 'sua org'}
+          onAccept={() => {
+            // vende: sai do elenco e entra a grana. Você fica com 4 e repõe no
+            // mercado (a org compradora leva o jogador "de cena"; não forçamos
+            // ele num 6º slot do roster dela pra não quebrar o time).
+            const next: CareerSave = {
+              ...save,
+              squad: save.squad.filter((s) => s.playerId !== off.playerId),
+              budget: save.budget + off.fee,
+              pendingOffer: null,
+            };
+            persist(next);
+            setSave(next);
+          }}
+          onRefuse={() => {
+            const next = { ...save, pendingOffer: null };
+            persist(next);
+            setSave(next);
+          }}
+        />
+      );
+    }
     return (
       <MarketScreen
         save={save}
@@ -1043,6 +1093,7 @@ export function CareerScreen({ onExit }: Props) {
                   history: [...save.history, finished],
                   ...evolveSquad(save),
                   ...applyTransferWindow(save),
+                  pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
                 };
                 persist(next);
                 setSave(next);
@@ -1233,6 +1284,7 @@ export function CareerScreen({ onExit }: Props) {
                     ...applyTransferWindow(save),
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
+                    pendingOffer: makeOffer(save, tierResult.tier),
                   };
                   persist(next);
                   setSave(next);
@@ -2105,6 +2157,38 @@ function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string
 }
 
 // ---------- fundação da organização ----------
+// proposta de uma org de elite por um jogador seu (assédio do topo). Vender dá
+// um caixa gordo mas abre um buraco no elenco; recusar mantém a base.
+function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
+  offer: PoachOffer;
+  orgName: string;
+  onAccept: () => void;
+  onRefuse: () => void;
+}) {
+  return (
+    <div className="fade-in">
+      <div className="panel" style={{ maxWidth: 540, margin: '40px auto' }}>
+        <div className="panel-head">📨 Proposta recebida</div>
+        <div className="panel-body center">
+          <div className="trophy" style={{ fontSize: 40 }}>💸</div>
+          <h2 style={{ marginBottom: 4 }}>
+            <span className="tier-badge t1">TIER 1</span> {offer.orgName} quer o seu {offer.nick}
+          </h2>
+          <p className="muted" style={{ maxWidth: 440, margin: '8px auto 14px' }}>
+            A {offer.orgName} (org de elite) ofereceu <b className="pos">{formatMoney(offer.fee)}</b> pelo
+            seu <b>{offer.nick}</b> (OVR {offer.ovr}). Vender enche o caixa, mas você fica com 4 e
+            precisa repor no mercado. Segurar mantém a {orgName} forte.
+          </p>
+          <div className="offer-actions">
+            <button className="btn gold big" onClick={onAccept}>✔ Vender por {formatMoney(offer.fee)}</button>
+            <button className="btn ghost big" onClick={onRefuse}>✕ Recusar e segurar o jogador</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // escolha da org: assumir um time real (com elenco e contexto) ou uma org sem
 // line pra montar do zero. Substitui o "inventar do nada" como entrada padrão.
 function OrgSelect({ teams, onStart, onFictional, onExit }: {

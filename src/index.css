@@ -4187,6 +4187,10 @@ table.crm-players input.num {
 .org-card .org-budget { color: #7fd99a; font-weight: 700; font-size: 0.9rem; }
 @media (max-width: 640px) { .org-grid { grid-template-columns: 1fr 1fr; } }
 
+/* proposta de org grande pelo seu jogador */
+.offer-actions { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 0 auto; }
+.offer-actions .btn { width: 100%; }
+
 /* botão flutuante "jogar minha partida" no hub (sempre alcançável) */
 .hub-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 120;
