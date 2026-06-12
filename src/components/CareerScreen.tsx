@@ -103,6 +103,29 @@ function teamTier(t: TeamSeason): number {
   return t.teamwork >= 84 ? 1 : t.teamwork >= 80 ? 2 : 3;
 }
 
+// orgs reais SEM line de CS2 (saíram do jogo): o jogador assume a marca e monta
+// o elenco do zero, com verba alta. Logos via Liquipedia (proxy Photon).
+const PHOTON = (p: string) => `https://i0.wp.com/liquipedia.net${p}?w=240&ssl=1`;
+interface EmptyOrg { id: string; name: string; tag: string; colors: [string, string]; logoUrl: string; blurb: string; budget: number }
+const EMPTY_ORGS: EmptyOrg[] = [
+  { id: 'org_cloud9', name: 'Cloud9', tag: 'C9', colors: ['#0a1a2f', '#00aeef'], logoUrl: PHOTON('/commons/images/b/bb/Cloud9_2023_allmode.png'), blurb: 'Gigante norte-americana fora do CS2. Marca enorme e caixa cheio pra reconstruir do zero.', budget: 4_200_000 },
+  { id: 'org_eg', name: 'Evil Geniuses', tag: 'EG', colors: ['#101014', '#5b2be0'], logoUrl: PHOTON('/commons/images/1/14/Evil_Geniuses_2023_lightmode.png'), blurb: 'Org lendária sem elenco ativo. Verba boa pra recolocar o nome no topo.', budget: 3_600_000 },
+  { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], logoUrl: PHOTON('/commons/images/5/56/Dignitas_2021_allmode.png'), blurb: 'Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.', budget: 2_900_000 },
+];
+
+// o que a escolha de org devolve pra carreira (assumir existente OU do zero)
+interface OrgStart {
+  org: NonNullable<CareerSave['org']>;
+  squad: Signing[];
+  coachFromId: string | null;
+  budget: number;
+  tier: number;
+  takeoverId: string | null;
+}
+// verba de quem ASSUME uma org com elenco: tier mais alto (time melhor) = menos
+// caixa; tier baixo = mais caixa. É a troca "elenco bom x dinheiro" que o user pediu.
+const takeoverBudget = (tier: number) => (tier === 1 ? 600_000 : tier === 2 ? 1_300_000 : 2_300_000);
+
 // registro de um split encerrado (história da organização)
 interface SplitRecord {
   split: number;
@@ -152,6 +175,7 @@ interface CareerSave {
   lastMoves: { nick: string; from: string; to: string }[]; // transferências do último split
   tier: number; // tier atual da organização (1 = elite). Começa em 3.
   tierChange?: 'up' | 'down' | null; // resultado da última temporada (promoção/rebaixamento)
+  takeoverId?: string | null; // id do time real que o jogador assumiu (excluído dos adversários)
 }
 
 const emptySave = (): CareerSave => ({
@@ -403,6 +427,7 @@ interface Props {
 
 export function CareerScreen({ onExit }: Props) {
   const [save, setSave] = useState<CareerSave>(() => loadSave());
+  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional'>('select'); // sub-tela da fundação
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
     if (!s.org) return 'found';
@@ -469,16 +494,18 @@ export function CareerScreen({ onExit }: Props) {
     () => applyMoves(applyBo3Edits(CS2_REAL_2026), save.moves).filter((t) => t.players.length >= 5),
     [save.moves],
   );
+  // o time que o jogador ASSUMIU não aparece como adversário (ele é você agora)
+  const oppEra = useMemo(() => currentEra.filter((t) => t.id !== save.takeoverId), [currentEra, save.takeoverId]);
   const brTeams = useMemo(
-    () => currentEra.filter((t) => t.country === 'br').sort((a, b) => b.teamwork - a.teamwork),
-    [currentEra],
+    () => oppEra.filter((t) => t.country === 'br').sort((a, b) => b.teamwork - a.teamwork),
+    [oppEra],
   );
 
   // Campeonatos disponíveis a cada split: o jogador escolhe qual convite aceitar,
   // já sabendo quais times vai enfrentar em cada um. Cada circuito tem força,
   // premiação e número de vagas pro Major diferentes.
   const circuits = useMemo(() => {
-    const pool = currentEra.filter((t) => t.id !== 'user');
+    const pool = oppEra.filter((t) => t.id !== 'user');
     const byStrength = [...pool].sort((a, b) => b.teamwork - a.teamwork);
     const br = brTeams.filter((t) => t.id !== 'user');
     const mid = byStrength.slice(8, 16); // times medianos (fora do top 8)
@@ -497,7 +524,7 @@ export function CareerScreen({ onExit }: Props) {
       mk('gcmasters', 'Gamers Club Masters (BR)', 'Tier 2: liga nacional equilibrada. Vença para subir ao Tier 1 e brigar pelo Major.', br, 2, 1, 1, 2),
       mk('eslchallenger', 'ESL Challenger', 'Tier 3: liga de acesso com times medianos. Onde toda org começa.', mid, 1, 0.6, 0.6, 3),
     ].filter((c) => c.teams.length >= 5);
-  }, [currentEra, brTeams]);
+  }, [oppEra, brTeams]);
 
   // mercado: jogadores reais dos elencos atuais (CS2), com preço de mercado
   const market = useMemo(
@@ -840,7 +867,7 @@ export function CareerScreen({ onExit }: Props) {
   const feedMemo = useMemo(() => transferFeed(save.split, currentEra), [save.split, currentEra]);
   const vrsByRegionMemo = useMemo(() => {
     type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; country: string; vrs: number; isUser: boolean };
-    const rows: Row[] = currentEra.map((t) => ({
+    const rows: Row[] = oppEra.map((t) => ({
       id: t.id, name: `${t.team}`, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t),
       country: t.country, vrs: aiTeamVrs(t), isUser: false,
     }));
@@ -877,10 +904,23 @@ export function CareerScreen({ onExit }: Props) {
 
   // ---------- fundação ----------
   if (stage === 'found') {
-    return <FoundOrg onExit={onExit} onFound={(org) => {
-      update({ org });
-      setStage('market');
-    }} />;
+    if (orgChoice === 'fictional') {
+      return <FoundOrg onExit={() => setOrgChoice('select')} onFound={(org) => {
+        update({ org, takeoverId: null });
+        setStage('market');
+      }} />;
+    }
+    return (
+      <OrgSelect
+        teams={currentEra}
+        onExit={onExit}
+        onFictional={() => setOrgChoice('fictional')}
+        onStart={(s) => {
+          update({ org: s.org, squad: s.squad, coachFromId: s.coachFromId, budget: s.budget, tier: s.tier, takeoverId: s.takeoverId });
+          setStage('market');
+        }}
+      />
+    );
   }
 
   // ---------- mercado ----------
@@ -2031,6 +2071,100 @@ function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string
 }
 
 // ---------- fundação da organização ----------
+// escolha da org: assumir um time real (com elenco e contexto) ou uma org sem
+// line pra montar do zero. Substitui o "inventar do nada" como entrada padrão.
+function OrgSelect({ teams, onStart, onFictional, onExit }: {
+  teams: TeamSeason[];
+  onStart: (s: OrgStart) => void;
+  onFictional: () => void;
+  onExit: () => void;
+}) {
+  // candidatos a ASSUMIR: times reais de tier 2/3 (ninguém começa na elite).
+  const takeovers = useMemo(
+    () =>
+      teams
+        .filter((t) => t.players.length >= 5 && teamTier(t) >= 2)
+        .map((t) => ({ t, tier: teamTier(t), ovr: Math.round(t.players.reduce((a, p) => a + playerOvr(p), 0) / t.players.length) }))
+        .sort((a, b) => a.tier - b.tier || b.ovr - a.ovr)
+        .slice(0, 9),
+    [teams],
+  );
+
+  const takeOver = (t: TeamSeason) => {
+    const tier = teamTier(t);
+    onStart({
+      org: { name: t.team, tag: t.tag, colors: t.colors, logo: t.logoUrl ?? logoForTeam(t) },
+      squad: t.players.slice(0, 5).map((p) => ({ playerId: p.id, fromId: t.id })),
+      coachFromId: t.id, // herda o coach da org
+      budget: takeoverBudget(tier),
+      tier,
+      takeoverId: t.id,
+    });
+  };
+  const startEmpty = (e: EmptyOrg) => {
+    onStart({
+      org: { name: e.name, tag: e.tag, colors: e.colors, logo: e.logoUrl },
+      squad: [],
+      coachFromId: null,
+      budget: e.budget,
+      tier: 3,
+      takeoverId: null,
+    });
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="panel" style={{ maxWidth: 980, margin: '24px auto' }}>
+        <div className="panel-head">
+          Assuma uma organização (modo carreira)
+          <span className="spacer" />
+          <button className="btn" onClick={onExit}>← Sair</button>
+        </div>
+        <div className="panel-body">
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Escolha uma <b>org real</b> para comandar. Cada uma tem um contexto:
+            times melhores costumam ter <b>menos caixa</b> (folha pesada); orgs sem
+            elenco te dão <b>mais verba</b> pra montar do zero. Suba de tier até o Major.
+          </p>
+
+          <div className="muted small section-label">Assumir org com elenco (tier baixo/médio)</div>
+          <div className="org-grid">
+            {takeovers.map(({ t, tier, ovr }) => (
+              <button key={t.id} className="org-card" onClick={() => takeOver(t)}>
+                <TeamBadge tag={t.tag} colors={t.colors} size={40} logoUrl={t.logoUrl ?? logoForTeam(t)} />
+                <div className="org-name"><Flag cc={t.country} /> {t.team}</div>
+                <div className="org-meta">
+                  <span className={`tier-badge t${tier}`}>TIER {tier}</span>
+                  <span className="muted small">elenco OVR {ovr}</span>
+                </div>
+                <div className="org-budget">💰 {formatMoney(takeoverBudget(tier))} de caixa</div>
+                <div className="muted small">{tier === 2 ? 'Elenco forte, caixa curto' : 'Elenco mediano, caixa folgado'}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="muted small section-label">Começar do zero (org sem line ativa)</div>
+          <div className="org-grid">
+            {EMPTY_ORGS.map((e) => (
+              <button key={e.id} className="org-card empty" onClick={() => startEmpty(e)}>
+                <TeamBadge tag={e.tag} colors={e.colors} size={40} logoUrl={e.logoUrl} />
+                <div className="org-name">{e.name}</div>
+                <div className="org-meta"><span className="tier-badge t3">TIER 3</span><span className="muted small">sem elenco</span></div>
+                <div className="org-budget">💰 {formatMoney(e.budget)} de caixa</div>
+                <div className="muted small">{e.blurb}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="center" style={{ marginTop: 18 }}>
+            <button className="btn ghost" onClick={onFictional}>ou criar uma org fictícia do zero →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['org']>) => void; onExit: () => void }) {
   const [name, setName] = useState('');
   const [tag, setTag] = useState('');

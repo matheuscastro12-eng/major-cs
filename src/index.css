@@ -4147,6 +4147,24 @@ table.crm-players input.num {
 .circuit-card.locked { opacity: 0.55; }
 .cc-lock { margin-top: 6px; color: #e58a8a; }
 
+/* seleção de org (assumir time real / montar do zero) */
+.org-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px; margin-bottom: 14px;
+}
+.org-card {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  text-align: left; padding: 14px; border-radius: 12px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--border-soft);
+  transition: border-color 0.15s, transform 0.1s;
+}
+.org-card:hover { border-color: var(--gold); transform: translateY(-2px); }
+.org-card.empty { border-style: dashed; }
+.org-card .org-name { font-family: var(--font-cond); font-weight: 800; font-size: 1.05rem; }
+.org-card .org-meta { display: flex; align-items: center; gap: 8px; }
+.org-card .org-budget { color: #7fd99a; font-weight: 700; font-size: 0.9rem; }
+@media (max-width: 640px) { .org-grid { grid-template-columns: 1fr 1fr; } }
+
 /* botão flutuante "jogar minha partida" no hub (sempre alcançável) */
 .hub-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 120;
