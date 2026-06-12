@@ -35,12 +35,16 @@ export default async function handler(
   if ((req.method === 'GET' || !req.method) && req.query?.list != null) {
     try {
       await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
+      // aproveita pra fechar salas inativas (sem heartbeat há mais de 2min)
+      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '2 minutes'`;
+      // só lista salas com alguém ativo (ping nos últimos 60s)
       const rows = await sql`
         SELECT l.code, l.mode, l.pool, l.host, l.created_at,
                (SELECT COUNT(*) FROM lobby_players p WHERE p.code = l.code) AS players
         FROM lobbies l
         WHERE l.is_public = true AND l.status = 'waiting'
-              AND l.updated_at > now() - interval '2 hours'
+              AND COALESCE(l.last_ping, l.created_at) > now() - interval '60 seconds'
         ORDER BY l.created_at DESC LIMIT 30`;
       const rooms = rows
         .map((r) => ({ ...r, players: Number(r.players), max: MAX_PLAYERS[r.mode as string] ?? 8 }))
@@ -110,8 +114,11 @@ export default async function handler(
       await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
       await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
       await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
-      // higieniza salas abandonadas (TTL 6h) para não acumular lixo no banco
-      await sql`DELETE FROM lobbies WHERE updated_at < now() - interval '6 hours'`;
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
+      // fecha salas inativas: ninguém com a aba aberta há mais de 2min (sem
+      // heartbeat). Backstop de 6h pra qualquer resíduo.
+      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '2 minutes'`;
+      await sql`DELETE FROM lobbies WHERE created_at < now() - interval '6 hours'`;
       // tenta alguns códigos até achar um livre
       for (let attempt = 0; attempt < 5; attempt++) {
         const newCode = genCode();
@@ -219,6 +226,15 @@ export default async function handler(
         return;
       }
       await sql`DELETE FROM lobby_players WHERE code = ${code} AND lower(nick) = ${target.toLowerCase()}`;
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (action === 'ping') {
+      // heartbeat: mantém a sala viva enquanto alguém tem a aba aberta
+      if (!code) { res.status(200).json({ ok: false }); return; }
+      await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
+      await sql`UPDATE lobbies SET last_ping = now() WHERE code = ${code}`;
       res.status(200).json({ ok: true });
       return;
     }

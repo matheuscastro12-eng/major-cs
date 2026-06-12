@@ -153,6 +153,16 @@ export function OnlineScreen({ onBack }: Props) {
     return () => window.clearInterval(pollRef.current);
   }, [code, refresh, lobbyDone]);
 
+  // heartbeat: mantém a sala viva enquanto a aba está aberta. Ao fechar a aba
+  // (cleanup), os pings param e o servidor fecha a sala por inatividade.
+  useEffect(() => {
+    if (!code) return;
+    const ping = () => { lobbyApi({ action: 'ping', code }).catch(() => {}); };
+    ping();
+    const id = window.setInterval(ping, 20000);
+    return () => window.clearInterval(id);
+  }, [code]);
+
   const create = async () => {
     if (!nick.trim() || busy) return;
     setBusy(true);
