@@ -8363,5 +8363,93 @@
    }
   ],
   "pending": true
+ },
+ {
+  "id": "isurus2019",
+  "era": "2019",
+  "tag": "ISG",
+  "game": "CS:GO",
+  "team": "Isurus",
+  "coach": {
+   "name": "Pino",
+   "nick": "Pino",
+   "style": "tactical",
+   "rating": 72,
+   "country": "ar"
+  },
+  "colors": [
+   "#0d0d12",
+   "#f5821f"
+  ],
+  "honors": "O tubarão argentino: dominou a América do Sul em 2019",
+  "country": "ar",
+  "teamwork": 80,
+  "mapPrefs": {
+   "mirage": 1,
+   "inferno": 1,
+   "train": 0
+  },
+  "players": [
+   {
+    "id": "isurus2019__meyern",
+    "nick": "meyern",
+    "name": "Ignacio Meyer",
+    "country": "ar",
+    "role": "AWP",
+    "aim": 83,
+    "awp": 85,
+    "igl": 50,
+    "clutch": 80,
+    "consistency": 78
+   },
+   {
+    "id": "isurus2019__1962",
+    "nick": "1962",
+    "name": "Gabriel Hernan Sinópoli",
+    "country": "ar",
+    "role": "Entry",
+    "aim": 80,
+    "awp": 54,
+    "igl": 52,
+    "clutch": 75,
+    "consistency": 76
+   },
+   {
+    "id": "isurus2019__reversive",
+    "nick": "reversive",
+    "name": "Roberto Themtham",
+    "country": "ar",
+    "role": "Rifler",
+    "aim": 79,
+    "awp": 56,
+    "igl": 52,
+    "clutch": 76,
+    "consistency": 77
+   },
+   {
+    "id": "isurus2019__noktse",
+    "nick": "noktse",
+    "name": "Nicolás Mariano Dávila",
+    "country": "ar",
+    "role": "IGL",
+    "aim": 78,
+    "awp": 55,
+    "igl": 84,
+    "clutch": 76,
+    "consistency": 78
+   },
+   {
+    "id": "isurus2019__max",
+    "nick": "max",
+    "name": "Maximiliano González",
+    "country": "uy",
+    "role": "Support",
+    "aim": 78,
+    "awp": 55,
+    "igl": 70,
+    "clutch": 76,
+    "consistency": 78
+   }
+  ]
  }
 ]

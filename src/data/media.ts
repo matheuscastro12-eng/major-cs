@@ -40,6 +40,7 @@ const LOGO_FILES: Record<string, string> = {
   g22017: 'G2_Esports_allmode.png',
   g22023: 'G2_Esports_allmode.png',
   gambit2017: 'Gambit_Esports_allmode.png',
+  isurus2019: 'Isurus_2020_allmode.png',
   gambit2021: 'Gambit_Esports_allmode.png',
   gamerlegion2023: 'GamerLegion_allmode.png',
   heroic2023: 'Heroic_allmode.png',
