@@ -30,6 +30,7 @@ import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
 import { createTournament, getTeam, pairingBestOf, phaseLabel, placementCode, resolveRound, userMapRecord, userPairing, userTeam, type PlacementCode } from './engine/swiss';
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
+import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
 import { startPresenceHeartbeat, track, trackVisit } from './state/track';
@@ -268,10 +269,21 @@ export default function App() {
     if (hasUnsavedEdits()) return;
     let cancelled = false;
     fetchRemoteDataset().then((remote) => {
-      if (remote && !cancelled) {
-        const merged = mergePendingBaseTeams(remote); // times pendentes novos do build sempre aparecem
+      if (!remote || cancelled) return;
+      if (remote.rev && remote.rev === BASE_REV) {
+        // banco salvo CONTRA este build: tem as edições mais novas do admin
+        const merged = mergePendingBaseTeams(remote.teams);
         setDataset(merged);
-        saveDataset(merged); // atualiza o cache local com a base do servidor
+        saveDataset(merged);
+      } else {
+        // banco salvo num build ANTIGO (ou sem rev): o deploy novo manda. Usa a
+        // base fresca do build e preserva só os times que existem SÓ no banco
+        // (criados pelo admin e ainda não trazidos pro teams.json).
+        const buildIds = new Set(BASE_TEAMS.map((t) => t.id));
+        const dbOnly = remote.teams.filter((t) => !buildIds.has(t.id));
+        const fresh = [...structuredClone(BASE_TEAMS), ...dbOnly];
+        setDataset(fresh);
+        saveDataset(fresh);
       }
     });
     return () => {

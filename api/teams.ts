@@ -80,7 +80,18 @@ export default async function handler(
   if (req.method === 'GET' || !req.method) {
     // cache curto: edições salvas pelo admin propagam a todos em ~30s
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Dataset-Rev');
     try {
+      // rev do build com que esta base foi salva (vazio se nunca foi gravado).
+      // O cliente compara com o rev do seu build pra saber se o banco está atrás.
+      let rev = '';
+      try {
+        const meta = (await sql`SELECT value FROM meta WHERE key = 'dataset_rev'`) as { value: string }[];
+        rev = meta[0]?.value ?? '';
+      } catch {
+        /* tabela meta ainda não existe: rev vazio = banco mais antigo que o build */
+      }
+      res.setHeader('X-Dataset-Rev', rev);
       const rows = (await sql`SELECT data FROM teams ORDER BY id`) as { data: unknown }[];
       res.status(200).json(rows.map((r) => r.data));
     } catch (e) {
@@ -97,6 +108,7 @@ export default async function handler(
       password?: string;
       teams?: unknown;
       deleteIds?: unknown;
+      rev?: unknown;
     };
     if (!expected || (body?.password ?? '').toString().trim() !== expected) {
       res.status(401).json({ ok: false, error: 'senha inválida' });
@@ -138,6 +150,16 @@ export default async function handler(
         }
       }
       await sql.transaction(queries);
+      // carimba o rev do build em que o admin salvou: clientes nesse mesmo build
+      // adotam o banco; builds mais novos (deploy de att) vencem o banco.
+      const rev = String(body.rev ?? '').slice(0, 64);
+      try {
+        await sql`CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text)`;
+        await sql`INSERT INTO meta (key, value) VALUES ('dataset_rev', ${rev})
+                  ON CONFLICT (key) DO UPDATE SET value = ${rev}`;
+      } catch {
+        /* não bloqueia o save se o meta falhar */
+      }
       res.status(200).json({ ok: true, teams: teams.length });
     } catch (e) {
       res.status(500).json({ ok: false, error: String(e) });

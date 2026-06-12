@@ -1,9 +1,12 @@
-import { BASE_TEAMS } from '../data/teams';
+import { BASE_TEAMS, BASE_REV } from '../data/teams';
 import type { TeamSeason } from '../types';
 
 // v3: invalida snapshots locais antigos (navegadores que guardaram lineups
 // desatualizadas e por isso ignoravam a base corrigida do Neon/teams.json).
 const STORAGE_KEY = 'major-cs-dataset-v3';
+// rev do build com que o cache local foi gravado. Se o build novo tem um rev
+// diferente (qualquer att de elenco), o cache antigo é descartado sozinho.
+const REV_KEY = 'major-cs-dataset-rev';
 // marca quando há edições LOCAIS ainda não enviadas ao banco. Só nesse caso o
 // app mantém a cópia local; senão sempre adota a base do servidor (verdade
 // compartilhada), garantindo que o "Salvar no banco" do admin chegue a todos.
@@ -54,6 +57,14 @@ export function loadDataset(): TeamSeason[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(BASE_TEAMS);
+    // deploy novo (rev do build mudou) e sem edições locais pendentes: descarta
+    // o cache antigo e adota a base fresca. É isto que faz a att chegar ao
+    // jogador SEM ele precisar limpar o localStorage.
+    if (localStorage.getItem(REV_KEY) !== BASE_REV && !hasUnsavedEdits()) {
+      const fresh = structuredClone(BASE_TEAMS);
+      saveDataset(fresh);
+      return fresh;
+    }
     const parsed = JSON.parse(raw) as TeamSeason[];
     if (!Array.isArray(parsed) || parsed.length === 0) return structuredClone(BASE_TEAMS);
     return normalizeTeams(parsed);
@@ -64,6 +75,12 @@ export function loadDataset(): TeamSeason[] {
 
 export function saveDataset(teams: TeamSeason[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(teams));
+  // carimba o cache com o rev do build atual (controle de "está atualizado?")
+  try {
+    localStorage.setItem(REV_KEY, BASE_REV);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function resetDataset(): TeamSeason[] {
@@ -174,7 +191,7 @@ export async function saveDatasetToServer(
     const res = await fetch('/api/teams', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, teams, deleteIds: getDeletedTeamIds() }),
+      body: JSON.stringify({ password, teams, deleteIds: getDeletedTeamIds(), rev: BASE_REV }),
       signal: AbortSignal.timeout(30000),
     });
     const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -222,14 +239,16 @@ export function mergePendingBaseTeams(teams: TeamSeason[]): TeamSeason[] {
   return extras.length ? [...teams, ...extras] : teams;
 }
 
-export async function fetchRemoteDataset(): Promise<TeamSeason[] | null> {
+// Retorna a base do banco + o rev do build com que ela foi salva (header
+// X-Dataset-Rev). O rev permite saber se o banco está atrás do build atual.
+export async function fetchRemoteDataset(): Promise<{ teams: TeamSeason[]; rev: string } | null> {
   try {
     const res = await fetch('/api/teams', { signal: AbortSignal.timeout(6000) });
     if (!res.ok) return null;
     const data = (await res.json()) as TeamSeason[];
     if (!Array.isArray(data) || data.length < 16) return null;
     if (!data.every((t) => t && Array.isArray(t.players) && t.players.length >= 5)) return null;
-    return normalizeTeams(data);
+    return { teams: normalizeTeams(data), rev: res.headers.get('X-Dataset-Rev') ?? '' };
   } catch {
     return null;
   }
