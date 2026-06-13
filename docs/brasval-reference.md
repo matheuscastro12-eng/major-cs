@@ -53,6 +53,25 @@ para o modo Carreira do Road to Major. Capturado em 2026-06 via navegador.
 | Cartão estilo FUT | ✅ | ❌ |
 | Diretoria / objetivos | parcial | ✅ (recém) |
 
+## Modo "JOGAR" (partida) — o alvo de responsividade
+Fluxo em tela cheia imersiva (/match/live):
+1. **Pré-partida (VS)**: LOUD (VOCÊ) OVR 85 vs G2 (FAVORITO) OVR 89, barra "Força do elenco",
+   rosters dos dois lados com OVR por jogador. Botão "Iniciar veto".
+2. **Veto** (BO3): placar no topo, **ordem do veto explícita** (1 BAN VOCÊ · 2 BAN G2 · 3 PICK VOCÊ
+   · 4 PICK G2 · 5 BAN VOCÊ · 6 BAN G2 · D DEC AUTO), grid de mapas com **arte real** e estado
+   visual (X de ban, ✓ de pick, labels LOUD-BAN/G2-PICK). "Mapas a jogar: Haven · Breeze".
+3. **Seleção de agentes** (comp): pra cada jogador, agentes elegíveis com **% de adequação** ao
+   perfil/role; adversário vai "REVELANDO" a comp; botão Auto-pick comp.
+4. **Decisão tática por round**: escolha a estratégia (Executar A/B/C, Rush A/B/C, Split A/B/C,
+   Default controle de mapa, Lurk pesado…) com descrição; ou "Auto-tática (IA decide)".
+5. **TRANSMISSÃO ao vivo (o pulo do gato)**: **minimapa 2D do mapa com as posições dos jogadores
+   se movendo**, timer do round, bomba plantada (PLANTADA · 00:42), economia/armas/K-D-A/ACS por
+   jogador atualizando ao vivo, timeline de 24 rounds (com pistol/eco). Controles: **Pausar · 1x
+   · 2x · 4x · 8x · Timeout · Scoreboard · Pular**. Scoreboard da série por mapa/round.
+
+> O minimapa 2D posicional ao vivo é a maior diferença vs o nosso (hoje temos killfeed + placar
+> subindo, sem posições no mapa). É um motor posicional novo — esforço grande, faseável.
+
 ## Roadmap sugerido (ordem de impacto pra chegar no nível)
 1. **Jogadores vivos**: idade real (fetch bo3) + potencial (S/A/B) + curva de evolução por idade; moral/forma; personalidade.
 2. **Perfil de jogador rico**: aba de perfil com radar de atributos, carreira, pico OVR, cartão estilo FUT.
