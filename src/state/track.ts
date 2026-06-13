@@ -1,7 +1,9 @@
 // Telemetria leve do client: fire-and-forget, nunca atrapalha o jogo.
 
 const SID_KEY = 'rtm-sid';
-const PRESENCE_INTERVAL_MS = 30_000;
+// presença a cada 90s (era 30s): corta ~3x as invocações de /api/track sem
+// perder a métrica de "online agora". Só dispara com a aba visível.
+const PRESENCE_INTERVAL_MS = 90_000;
 
 let stopPresence: (() => void) | null = null;
 
@@ -40,16 +42,9 @@ export function startPresenceHeartbeat(): () => void {
 
   send();
   const timer = window.setInterval(send, PRESENCE_INTERVAL_MS);
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') send();
-  };
-  document.addEventListener('visibilitychange', onVisible);
-  window.addEventListener('focus', send);
 
   stopPresence = () => {
     window.clearInterval(timer);
-    document.removeEventListener('visibilitychange', onVisible);
-    window.removeEventListener('focus', send);
     stopPresence = null;
   };
   return stopPresence;

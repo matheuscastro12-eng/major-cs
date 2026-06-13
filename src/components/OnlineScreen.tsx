@@ -29,7 +29,7 @@ interface Props {
 }
 
 const NICK_KEY = 'rtm-nick';
-const POLL_MS = 2200;
+const POLL_MS = 3500; // era 2200: mais lento = menos invocações de função (custo)
 
 // textos das salas abertas, por idioma (sem mexer no i18n global)
 const ONLINE_LOCAL = {
@@ -101,7 +101,7 @@ export function OnlineScreen({ onBack }: Props) {
 
   // polling do estado do lobby
   const refresh = useCallback(async () => {
-    if (!code) return;
+    if (!code || document.hidden) return; // aba em 2º plano não gasta função
     const s = await fetchLobby(code);
     if (s === 'gone') {
       // a sala expirou/foi encerrada no servidor: volta pra entrada com aviso
@@ -159,7 +159,7 @@ export function OnlineScreen({ onBack }: Props) {
     // depois de 'done' o resultado é imutável (refresh não re-seta o state, então
     // não re-simula), mas seguimos com um poll lento pra detectar quando o host
     // inicia a próxima temporada.
-    pollRef.current = window.setInterval(refresh, lobbyDone ? 4000 : POLL_MS);
+    pollRef.current = window.setInterval(refresh, lobbyDone ? 6000 : POLL_MS);
     return () => window.clearInterval(pollRef.current);
   }, [code, refresh, lobbyDone]);
 
@@ -167,9 +167,9 @@ export function OnlineScreen({ onBack }: Props) {
   // (cleanup), os pings param e o servidor fecha a sala por inatividade.
   useEffect(() => {
     if (!code) return;
-    const ping = () => { lobbyApi({ action: 'ping', code }).catch(() => {}); };
+    const ping = () => { if (!document.hidden) lobbyApi({ action: 'ping', code }).catch(() => {}); };
     ping();
-    const id = window.setInterval(ping, 20000);
+    const id = window.setInterval(ping, 30000); // era 20s
     return () => window.clearInterval(id);
   }, [code]);
 
@@ -200,7 +200,7 @@ export function OnlineScreen({ onBack }: Props) {
   useEffect(() => {
     if (code) return; // já está numa sala
     loadRooms();
-    const id = window.setInterval(loadRooms, 6000);
+    const id = window.setInterval(loadRooms, 12000); // era 6s
     return () => window.clearInterval(id);
   }, [code, loadRooms]);
 

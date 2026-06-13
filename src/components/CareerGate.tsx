@@ -42,18 +42,23 @@ export function CareerGate({ children, onExit }: { children: React.ReactNode; on
   const [err, setErr] = useState('');
   const pollRef = useRef<number | undefined>(undefined);
 
-  // checa o status inicial e fica de olho enquanto pendente
+  // checa o status inicial e, SÓ enquanto está pendente, fica de olho na
+  // aprovação. Para o poll assim que resolve (aprovado/recusado/sem pedido) e
+  // quando a aba está em 2º plano — evita gastar função à toa.
   useEffect(() => {
     if (codeOk) return;
     let alive = true;
     const run = async () => {
+      if (document.hidden) return;
       const n = savedCareerNick();
       if (!n) { setStatus('none'); return; }
       const s = await checkAccess(n);
-      if (alive) setStatus(s);
+      if (!alive) return;
+      setStatus(s);
+      if (s !== 'pending') window.clearInterval(pollRef.current); // resolvido: para o poll
     };
     run();
-    pollRef.current = window.setInterval(run, 8000);
+    pollRef.current = window.setInterval(run, 15000); // era 8s
     return () => { alive = false; window.clearInterval(pollRef.current); };
   }, [codeOk]);
 
