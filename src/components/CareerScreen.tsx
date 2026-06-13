@@ -1577,7 +1577,17 @@ export function CareerScreen({ onExit }: Props) {
           <span title="Pontos de ranking (VRS)"><i className="muted small">VRS</i> {save.vrs}</span>
           <span title="Títulos"><i className="muted small">TÍTULOS</i> {save.titles}</span>
         </div>
-        <button className="btn" onClick={onExit}>← Sair</button>
+        <div className="ct-actions">
+          <button className="btn ghost" title="Apagar tudo e recomeçar do zero" onClick={() => {
+            if (!confirm('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.')) return;
+            const fresh = emptySave();
+            persist(fresh);
+            setSave(fresh);
+            setOrgChoice('select');
+            setStage('found');
+          }}>↺ Resetar</button>
+          <button className="btn" onClick={onExit}>← Sair</button>
+        </div>
       </div>
 
       <div className="career-tabs">
