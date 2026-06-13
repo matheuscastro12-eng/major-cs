@@ -564,6 +564,7 @@ export function CareerScreen({ onExit }: Props) {
   };
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [profilePlayer, setProfilePlayer] = useState<Player | null>(null); // perfil detalhado do jogador (modal)
+  const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   // registro parcial do split, finalizado após o Major (se houver)
@@ -1040,6 +1041,32 @@ export function CareerScreen({ onExit }: Props) {
         .slice(0, 20),
     [currentEra, save.split],
   );
+  // ranking de CARREIRA: maiores ratings acumulados (estatísticas que sobem com
+  // a evolução). Inclui você e quem você enfrentou pelos circuitos.
+  const careerTop20Memo = useMemo(() => {
+    const cs = save.careerStats ?? {};
+    const byId = new Map<string, Player>();
+    for (const t of CS2_REAL_2026) for (const p of t.players) byId.set(p.id, p);
+    const teamById = new Map<string, TeamSeason>();
+    for (const t of currentEra) for (const p of t.players) teamById.set(p.id, t);
+    const rows: { rid: string; nick: string; country: string; role: Role; isMine: boolean; teamTag: string; rating: number; kd: number; adr: number; maps: number }[] = [];
+    for (const [rid, line] of Object.entries(cs)) {
+      const c = deriveCareer(line);
+      if (!c || c.maps < 6) continue; // mínimo de mapas pra entrar no ranking
+      const oid = rid.replace(/^user__/, '');
+      const isMine = rid.startsWith('user__');
+      const pl = byId.get(oid);
+      if (!pl) continue;
+      const team = teamById.get(oid);
+      rows.push({
+        rid, nick: pl.nick, country: pl.country, role: (save.roles?.[oid] ?? pl.role) as Role, isMine,
+        teamTag: isMine ? (save.org?.tag ?? 'VC') : (team?.tag ?? '?'),
+        rating: c.rating, kd: c.kd, adr: c.adr, maps: c.maps,
+      });
+    }
+    return rows.sort((a, b) => b.rating - a.rating).slice(0, 20);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.careerStats, save.roles, save.org, currentEra]);
   const feedMemo = useMemo(() => transferFeed(save.split, currentEra), [save.split, currentEra]);
   const vrsByRegionMemo = useMemo(() => {
     type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; country: string; vrs: number; isUser: boolean };
@@ -1612,6 +1639,7 @@ export function CareerScreen({ onExit }: Props) {
   const vrsByRegion = vrsByRegionMemo;
 
   const top20 = top20Memo;
+  const careerTop20 = careerTop20Memo;
 
   return (
     <div className="fade-in career-hub">
@@ -1985,21 +2013,49 @@ export function CareerScreen({ onExit }: Props) {
       {hubTab === 'top20' && (
         <div className="panel">
           <div className="panel-body">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>Top 20 HLTV · melhores jogadores da temporada {save.split}</div>
-            <div className="top20-list">
-              {top20.map((e, i) => (
-                <div key={e.p.id} className={`t20-row${i === 0 ? ' first' : ''}`}>
-                  <span className="t20-rank">{i + 1}</span>
-                  <PlayerAvatar nick={e.p.nick} size={32} />
-                  <span className="t20-nick"><Flag cc={e.p.country} /> {e.p.nick}</span>
-                  <span className="muted small t20-team">
-                    <TeamBadge tag={e.team.tag} colors={e.team.colors} size={16} logoUrl={e.team.logoUrl ?? logoForTeam(e.team)} /> {e.team.tag}
-                  </span>
-                  <span className={`role-pill ${e.p.role}`}>{e.p.role}</span>
-                  <span className="t20-rating">{e.rating.toFixed(2)}</span>
-                </div>
-              ))}
+            <div className="t20-head">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>
+                {t20Mode === 'season'
+                  ? `Top 20 HLTV · melhores da temporada ${save.split}`
+                  : 'Ranking de carreira · maiores ratings acumulados'}
+              </div>
+              <div className="t20-toggle">
+                <button className={`btn small${t20Mode === 'season' ? ' gold' : ' ghost'}`} onClick={() => setT20Mode('season')}>Temporada</button>
+                <button className={`btn small${t20Mode === 'career' ? ' gold' : ' ghost'}`} onClick={() => setT20Mode('career')}>Carreira</button>
+              </div>
             </div>
+            {t20Mode === 'season' ? (
+              <div className="top20-list">
+                {top20.map((e, i) => (
+                  <div key={e.p.id} className={`t20-row${i === 0 ? ' first' : ''}`}>
+                    <span className="t20-rank">{i + 1}</span>
+                    <PlayerAvatar nick={e.p.nick} size={32} />
+                    <span className="t20-nick"><Flag cc={e.p.country} /> {e.p.nick}</span>
+                    <span className="muted small t20-team">
+                      <TeamBadge tag={e.team.tag} colors={e.team.colors} size={16} logoUrl={e.team.logoUrl ?? logoForTeam(e.team)} /> {e.team.tag}
+                    </span>
+                    <span className={`role-pill ${e.p.role}`}>{e.p.role}</span>
+                    <span className="t20-rating">{e.rating.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : careerTop20.length === 0 ? (
+              <p className="muted small">As estatísticas de carreira aparecem aqui depois de jogar o primeiro split. Elas sobem conforme os jogadores evoluem.</p>
+            ) : (
+              <div className="top20-list">
+                {careerTop20.map((e, i) => (
+                  <div key={e.rid} className={`t20-row${i === 0 ? ' first' : ''}${e.isMine ? ' human-row' : ''}`}>
+                    <span className="t20-rank">{i + 1}</span>
+                    <PlayerAvatar nick={e.nick} size={32} />
+                    <span className="t20-nick"><Flag cc={e.country} /> {e.nick}{e.isMine ? ' ★' : ''}</span>
+                    <span className="muted small t20-team">{e.teamTag}</span>
+                    <span className={`role-pill ${e.role}`}>{e.role}</span>
+                    <span className="muted small t20-extra">{e.kd.toFixed(2)} K/D · {e.adr.toFixed(0)} ADR · {e.maps}m</span>
+                    <span className="t20-rating">{e.rating.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

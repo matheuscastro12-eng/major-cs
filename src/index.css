@@ -1490,6 +1490,14 @@ tr.human-row {
   .pp-grid { grid-template-columns: 1fr; gap: 16px; }
 }
 
+/* Top 20: cabeçalho com toggle temporada/carreira */
+.t20-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.t20-toggle { display: flex; gap: 6px; }
+.t20-extra { margin-left: auto; white-space: nowrap; font-size: 11px; }
+@media (max-width: 560px) {
+  .t20-extra { display: none; }
+}
+
 .attr-bars {
   margin-top: 9px;
   display: grid;
