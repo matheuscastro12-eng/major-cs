@@ -1510,7 +1510,7 @@ export function CareerScreen({ onExit }: Props) {
     <div className="fade-in career-hub">
       {/* barra do clube (estilo hub do FIFA) */}
       <div className="career-topbar">
-        <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={46} />
+        <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={46} logoUrl={save.org?.logo} />
         <div className="ct-id">
           <div className="ct-name">
             {save.org?.name}
@@ -1602,7 +1602,7 @@ export function CareerScreen({ onExit }: Props) {
                   <div className="pm-label">PRÓXIMA PARTIDA · MD3 · Rodada {league.current + 1}/{league.rounds.length}</div>
                   <div className="pm-teams">
                     <span className="pm-side">
-                      <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={40} />
+                      <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={40} logoUrl={save.org?.logo} />
                       <b>{save.org?.tag}</b>
                     </span>
                     <span className="pm-vs">VS</span>
@@ -1856,7 +1856,10 @@ function MatchLine({ league, m, onOpen }: {
   return (
     <div className={`matchline${m.result ? ' clickable' : ''}`}
       onClick={() => m.result && onOpen({ series: m.result, teams: [a, b] })}>
-      <span className={`side${mine && m.a === 'user' ? ' human' : ''}`}><span className="tname">{a.name}</span></span>
+      <span className={`side${mine && m.a === 'user' ? ' human' : ''}`}>
+        <TeamBadge tag={a.tag} colors={a.colors} size={18} logoUrl={a.logoUrl} />
+        <span className="tname">{a.name}</span>
+      </span>
       {m.result ? (
         <span className="score">
           <span className={m.result.winner === 0 ? 'w' : 'l'}>{m.result.mapScore[0]}</span>
@@ -1866,7 +1869,10 @@ function MatchLine({ league, m, onOpen }: {
       ) : (
         <span className="score muted">vs</span>
       )}
-      <span className={`side right${mine && m.b === 'user' ? ' human' : ''}`}><span className="tname">{b.name}</span></span>
+      <span className={`side right${mine && m.b === 'user' ? ' human' : ''}`}>
+        <span className="tname">{b.name}</span>
+        <TeamBadge tag={b.tag} colors={b.colors} size={18} logoUrl={b.logoUrl} />
+      </span>
     </div>
   );
 }
@@ -1996,7 +2002,12 @@ function CareerTable({ table, highlightTop = 0, onPick, detailed }: {
             onClick={() => onPick?.(t)}
           >
             <td style={{ textAlign: 'left' }}>{i + 1}</td>
-            <td style={{ textAlign: 'left', fontWeight: t.id === 'user' ? 700 : 400 }}>{t.name}</td>
+            <td style={{ textAlign: 'left', fontWeight: t.id === 'user' ? 700 : 400 }}>
+              <span className="ct-team">
+                <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={t.logoUrl} />
+                {t.name}
+              </span>
+            </td>
             <td className="pos">{t.wins}</td>
             <td className="neg">{t.losses}</td>
             <td>{t.roundDiff > 0 ? `+${t.roundDiff}` : t.roundDiff}</td>

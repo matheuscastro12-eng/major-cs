@@ -4214,6 +4214,10 @@ table.crm-players input.num {
 .board-last.miss { color: #e58a8a; }
 .board-warn-msg { margin-top: 8px; font-size: 0.82rem; color: #ffb4b0; font-weight: 600; }
 
+/* nome do time com logo na tabela de classificação */
+.ct-team { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.ct-team > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+
 /* botão flutuante "jogar minha partida" no hub (sempre alcançável) */
 .hub-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 120;
