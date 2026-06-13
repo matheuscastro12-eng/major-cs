@@ -23,6 +23,7 @@ import { hashStr } from '../state/hash';
 import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits } from '../state/bo3-edits';
+import bo3Ages from '../data/bo3-ages.json';
 
 const SAVE_KEY = 'rtm-career-v1';
 const STARTING_BUDGET = 3_800_000; // começo mais magro: forca um elenco humilde no inicio
@@ -263,26 +264,51 @@ const emptySave = (): CareerSave => ({
 // atributos, então segurar um veterano caro vira decisão estratégica.
 export type PlayerPhase = 'rising' | 'prime' | 'declining';
 export const PHASE_LABEL: Record<PlayerPhase, string> = {
-  rising: 'em ascensão', prime: 'no auge', declining: 'veterano em declínio',
+  rising: 'jovem em ascensão', prime: 'no auge', declining: 'veterano em declínio',
 };
-// Sem idade real no dataset, derivamos a fase do OVR: estrelas estão no AUGE
-// (nunca rotuladas de "veterano"); só tiers mais baixos tendem a declinar e os
-// medianos podem estar em ascensão. Evita chamar craque/jovem de veterano.
-export function playerPhase(pid: string, ovr: number): PlayerPhase {
-  if (ovr >= 82) return 'prime';
-  const h = hashStr(`phase:${pid}`) % 100;
-  if (ovr <= 75) return h < 50 ? 'declining' : 'prime';
-  if (h < 28) return 'rising';
-  if (h < 42) return 'declining';
-  return 'prime';
+
+// ----- idade e potencial (jogadores vivos, estilo Brasval) -----
+// idades REAIS do bo3 (196/240) por nick; quem falta recebe uma idade plausível
+// determinística. A idade efetiva sobe ~1 ano a cada 3 splits de carreira.
+const REAL_AGES = bo3Ages as Record<string, { age: number; born: string }>;
+function baseAge(p: Pick<Player, 'id' | 'nick'>): number {
+  const real = REAL_AGES[p.nick]?.age;
+  if (real && real >= 15 && real <= 45) return real;
+  return 20 + (hashStr(`age:${p.id}`) % 6); // 20-25 pros sem dado
 }
-// delta da janela: determinístico por jogador+split (mesmo save = mesma evolução)
-function evoDelta(pid: string, split: number, ovr: number): number {
-  const phase = playerPhase(pid, ovr);
+function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number): number {
+  return baseAge(p) + Math.floor((split - 1) / 3);
+}
+// potencial = teto de OVR. Jovem bom tem espaço pra crescer (S/A); veterano já
+// está no teto (sem crescimento). Determinístico por jogador.
+function playerPotentialOvr(p: Player, age: number): number {
+  const base = playerOvr(p);
+  const room = age <= 18 ? 9 : age <= 20 ? 7 : age <= 22 ? 4 : age <= 24 ? 2 : age <= 26 ? 1 : 0;
+  const talent = room > 0 ? hashStr(`pot:${p.id}`) % 4 : 0; // 0-3 de variação de talento
+  return Math.min(99, base + room + talent);
+}
+export type PotTier = 'S' | 'A' | 'B' | 'C';
+function potentialTier(potOvr: number): PotTier {
+  return potOvr >= 90 ? 'S' : potOvr >= 86 ? 'A' : potOvr >= 82 ? 'B' : 'C';
+}
+
+// fase de carreira pela IDADE: jovem sobe, auge oscila, veterano cai.
+export function playerPhase(_pid: string, age: number): PlayerPhase {
+  if (age <= 21) return 'rising';
+  if (age <= 27) return 'prime';
+  return 'declining';
+}
+// delta da janela: por idade. Rising sobe rumo ao potencial e estabiliza ao
+// atingir o teto; declínio cai mais forte com a idade. Determinístico por split.
+function evoDelta(pid: string, split: number, age: number, atCeiling: boolean): number {
+  const phase = playerPhase(pid, age);
   const r = hashStr(`evo:${pid}:${split}`) % 100;
-  if (phase === 'rising') return r < 35 ? 3 : r < 75 ? 2 : 1; // +1..+3
-  if (phase === 'prime') return r < 25 ? 1 : r < 75 ? 0 : -1; // -1..+1
-  return r < 50 ? -2 : r < 85 ? -1 : 0; // declínio: -2..0
+  if (phase === 'rising') {
+    if (atCeiling) return r < 70 ? 0 : 1; // já chegou no potencial: quase parado
+    return r < 40 ? 3 : r < 80 ? 2 : 1; // +1..+3
+  }
+  if (phase === 'prime') return r < 22 ? 1 : r < 82 ? 0 : -1; // -1..+1
+  return age >= 31 ? (r < 55 ? -3 : -1) : r < 50 ? -2 : -1; // veterano cai
 }
 
 // ----- helpers do playoff (mata-mata do circuito) -----
@@ -686,10 +712,12 @@ export function CareerScreen({ onExit }: Props) {
       if (!f) continue;
       const prev = s.evo?.[sig.playerId] ?? 0;
       const ovr = playerOvr(f.player);
-      const d = evoDelta(sig.playerId, s.split, ovr);
+      const age = effectiveAge(f.player, s.split);
+      const pot = playerPotentialOvr(f.player, age);
+      const d = evoDelta(sig.playerId, s.split, age, ovr >= pot);
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
-      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, ovr) });
+      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age) });
     }
     return { evo, lastEvo };
   };
@@ -1778,15 +1806,19 @@ export function CareerScreen({ onExit }: Props) {
               <p className="muted small">A premiação entra conforme sua colocação. O "saldo fixo" é patrocínio − folha (antes do prêmio); se ficar negativo, você queima caixa todo split.</p>
               <div className="muted small section-label">Contratos do elenco</div>
               <table className="stats">
-                <thead><tr><th style={{ textAlign: 'left' }}>Jogador</th><th>OVR</th><th>Salário/split</th><th>Contrato</th><th></th></tr></thead>
+                <thead><tr><th style={{ textAlign: 'left' }}>Jogador</th><th>Idade</th><th>OVR</th><th>POT</th><th>Salário/split</th><th>Contrato</th><th></th></tr></thead>
                 <tbody>
                   {wages.map((w) => {
                     const left = w.until != null ? w.until - save.split + 1 : 0;
                     const expiring = left <= 1;
+                    const age = effectiveAge(w.f.player, save.split);
+                    const pot = potentialTier(playerPotentialOvr(w.f.player, age));
                     return (
                       <tr key={w.sig.playerId} className={expiring ? 'fin-expiring' : ''}>
                         <td style={{ textAlign: 'left' }}><Flag cc={w.f.player.country} /> {w.f.player.nick}</td>
+                        <td>{age}</td>
                         <td>{playerOvr(w.f.player)}</td>
+                        <td><span className={`pot-badge pot-${pot}`}>{pot}</span></td>
                         <td className="neg">{formatMoney(w.wage)}</td>
                         <td>{left <= 0 ? 'vencido' : `${left} split${left > 1 ? 's' : ''}`}{expiring && left > 0 ? ' ⚠️' : ''}</td>
                         <td>{expiring && (
@@ -2803,11 +2835,19 @@ function MarketScreen({
                     {m.from.team}
                   </div>
                   {(() => {
-                    const ph = playerPhase(m.player.id, playerOvr(m.player));
+                    const age = effectiveAge(m.player, save.split);
+                    const ph = playerPhase(m.player.id, age);
+                    const pot = potentialTier(playerPotentialOvr(m.player, age));
                     return (
-                      <div className={`meta small phase-tag ${ph}`} title="Fase da carreira: em ascensão melhora entre temporadas; em declínio cai">
-                        {ph === 'rising' ? '📈' : ph === 'declining' ? '📉' : '▬'} {PHASE_LABEL[ph]}
-                      </div>
+                      <>
+                        <div className="meta small player-bio">
+                          <span title="Idade">🎂 {age}a</span>
+                          <span className={`pot-badge pot-${pot}`} title="Potencial (teto de OVR)">POT {pot}</span>
+                        </div>
+                        <div className={`meta small phase-tag ${ph}`} title="Jovem em ascensão melhora entre temporadas; veterano cai">
+                          {ph === 'rising' ? '📈' : ph === 'declining' ? '📉' : '▬'} {PHASE_LABEL[ph]}
+                        </div>
+                      </>
                     );
                   })()}
                   <div className="price buy">💰 {formatMoney(m.price)}</div>

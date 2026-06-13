@@ -4130,6 +4130,18 @@ table.crm-players input.num {
 .phase-tag.declining { color: #e58a8a; }
 .phase-tag.prime { color: var(--muted); }
 
+/* idade + potencial (jogadores vivos) */
+.player-bio { display: flex; align-items: center; gap: 8px; }
+.pot-badge {
+  display: inline-flex; align-items: center; font-family: var(--font-cond);
+  font-weight: 800; font-size: 0.7rem; letter-spacing: 0.4px; padding: 1px 6px;
+  border-radius: 5px; line-height: 1.5;
+}
+.pot-badge.pot-S { background: linear-gradient(135deg, var(--gold), #e8c170); color: #1a1408; }
+.pot-badge.pot-A { background: rgba(90,200,120,0.2); color: #7fd99a; }
+.pot-badge.pot-B { background: rgba(160,170,185,0.2); color: #cdd6e3; }
+.pot-badge.pot-C { background: rgba(255,255,255,0.06); color: var(--muted); }
+
 /* transferências confirmadas (já aplicadas aos elencos) */
 .moves-done { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .move-chip {
