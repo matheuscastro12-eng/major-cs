@@ -4218,6 +4218,15 @@ table.crm-players input.num {
 .ct-team { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
 .ct-team > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 
+/* ===== painel de finanças (carreira) ===== */
+.fin-cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-bottom: 10px; }
+.fin-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.fin-card .fin-k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; }
+.fin-card b { font-family: var(--font-cond); font-size: 1.15rem; }
+tr.fin-expiring { background: rgba(212,164,65,0.1); }
+.release-banner { margin: 0 0 12px; padding: 9px 12px; border-radius: 9px; font-size: 0.86rem; background: rgba(224,86,79,0.14); border: 1px solid rgba(224,86,79,0.35); color: #ffc2bf; }
+@media (max-width: 640px) { .fin-cards { grid-template-columns: 1fr 1fr; } }
+
 /* botão flutuante "jogar minha partida" no hub (sempre alcançável) */
 .hub-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 120;

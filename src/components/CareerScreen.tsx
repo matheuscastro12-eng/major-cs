@@ -202,7 +202,11 @@ interface CareerSave {
   objective?: BoardObjective | null; // meta da diretoria pro split atual
   lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
   fired?: boolean; // demitido pela diretoria (confiança no chão)
+  contracts?: Record<string, number>; // playerId -> split em que o contrato termina (inclusive)
+  lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
 }
+
+const CONTRACT_TERM = 3; // splits de contrato ao assinar/renovar
 
 // proposta de uma org de elite (tier 1) por um jogador do seu elenco
 interface PoachOffer { orgId: string; orgName: string; orgTag: string; playerId: string; nick: string; ovr: number; fee: number }
@@ -462,7 +466,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', countr
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history';
+type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history';
 
 interface MajorResult {
   tournament: Tournament;
@@ -703,6 +707,24 @@ export function CareerScreen({ onExit }: Props) {
     }
     const lastMoves = tr.feed.slice(0, 8).map((f) => ({ nick: f.nick, from: f.from, to: f.to }));
     return { moves, lastMoves };
+  };
+
+  // contratos vencidos: o jogador cujo contrato acaba SAI de graça no próximo
+  // split (a não ser que tenha sido renovado nas Finanças). Devolve o elenco
+  // sem eles + os nicks que saíram (pra avisar no resumo do split).
+  const expireContracts = (s: CareerSave, newSplit: number): Pick<CareerSave, 'squad' | 'contracts' | 'lastReleases'> => {
+    const c = { ...(s.contracts ?? {}) };
+    const released: string[] = [];
+    const squad = s.squad.filter((sig) => {
+      const until = c[sig.playerId];
+      if (until !== undefined && until < newSplit) {
+        released.push(findSigning(sig)?.player.nick ?? sig.playerId);
+        delete c[sig.playerId];
+        return false;
+      }
+      return true;
+    });
+    return { squad, contracts: c, lastReleases: released };
   };
 
   // assédio do topo: uma org de ELITE (tier 1) pode fazer proposta pelo seu
@@ -1076,7 +1098,16 @@ export function CareerScreen({ onExit }: Props) {
         findSigning={findSigning}
         onExit={onExit}
         onConfirm={(squad, coachFromId, budget, sponsors, sponsorUntil) => {
-          const next = { ...save, squad, coachFromId, budget, sponsors, sponsorUntil };
+          // todo jogador do elenco fechado tem contrato; novos ganham CONTRACT_TERM
+          const contracts = { ...(save.contracts ?? {}) };
+          const ids = new Set(squad.map((x) => x.playerId));
+          for (const sig of squad) {
+            if (!(sig.playerId in contracts) || contracts[sig.playerId] < save.split) {
+              contracts[sig.playerId] = save.split + CONTRACT_TERM - 1;
+            }
+          }
+          for (const k of Object.keys(contracts)) if (!ids.has(k)) delete contracts[k];
+          const next = { ...save, squad, coachFromId, budget, sponsors, sponsorUntil, contracts };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -1161,6 +1192,7 @@ export function CareerScreen({ onExit }: Props) {
                   board: majBoard,
                   lastObjective: majObj ? { text: majObj.text, met: true, delta: majBoard - save.board } : null,
                   objective: null,
+                  ...expireContracts(save, save.split + 1),
                 };
                 persist(next);
                 setSave(next);
@@ -1381,6 +1413,7 @@ export function CareerScreen({ onExit }: Props) {
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
                     pendingOffer: makeOffer(save, tierResult.tier),
+                    ...expireContracts(save, save.split + 1),
                   };
                   persist(next);
                   setSave(next);
@@ -1496,6 +1529,7 @@ export function CareerScreen({ onExit }: Props) {
     { id: 'results', label: 'Resultados' },
     { id: 'standings', label: 'Classificação' },
     { id: 'squad', label: 'Elenco' },
+    { id: 'finance', label: '💰 Finanças' },
     { id: 'market', label: 'Mercado' },
     { id: 'vrs', label: 'Ranking VRS' },
     { id: 'top20', label: 'Top 20 HLTV' },
@@ -1715,6 +1749,53 @@ export function CareerScreen({ onExit }: Props) {
       )}
 
       {/* ===== ELENCO + RANKING DE JOGADORES ===== */}
+      {hubTab === 'finance' && (() => {
+        const picks = save.squad.map((s) => ({ sig: s, f: findSigning(s) })).filter((x) => x.f) as { sig: Signing; f: { player: Player } }[];
+        const wages = picks.map((x) => ({ ...x, wage: playerWage(x.f.player), until: save.contracts?.[x.sig.playerId] }));
+        const folha = wages.reduce((a, w) => a + w.wage, 0);
+        const sponsorInc = sponsorIncome(save.sponsors);
+        const net = sponsorInc - folha;
+        return (
+          <div className="career-grid">
+            <div className="career-main">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>Finanças da {save.org?.name}</div>
+              <div className="fin-cards">
+                <div className="fin-card"><span className="fin-k">Caixa</span><b>{formatMoney(save.budget)}</b></div>
+                <div className="fin-card"><span className="fin-k">Patrocínio / split</span><b className="pos">+{formatMoney(sponsorInc)}</b></div>
+                <div className="fin-card"><span className="fin-k">Folha / split</span><b className="neg">-{formatMoney(folha)}</b></div>
+                <div className="fin-card"><span className="fin-k">Saldo fixo / split</span><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b></div>
+              </div>
+              <p className="muted small">A premiação entra conforme sua colocação. O "saldo fixo" é patrocínio − folha (antes do prêmio); se ficar negativo, você queima caixa todo split.</p>
+              <div className="muted small section-label">Contratos do elenco</div>
+              <table className="stats">
+                <thead><tr><th style={{ textAlign: 'left' }}>Jogador</th><th>OVR</th><th>Salário/split</th><th>Contrato</th><th></th></tr></thead>
+                <tbody>
+                  {wages.map((w) => {
+                    const left = w.until != null ? w.until - save.split + 1 : 0;
+                    const expiring = left <= 1;
+                    return (
+                      <tr key={w.sig.playerId} className={expiring ? 'fin-expiring' : ''}>
+                        <td style={{ textAlign: 'left' }}><Flag cc={w.f.player.country} /> {w.f.player.nick}</td>
+                        <td>{playerOvr(w.f.player)}</td>
+                        <td className="neg">{formatMoney(w.wage)}</td>
+                        <td>{left <= 0 ? 'vencido' : `${left} split${left > 1 ? 's' : ''}`}{expiring && left > 0 ? ' ⚠️' : ''}</td>
+                        <td>{expiring && (
+                          <button className="btn small" disabled={save.budget < w.wage}
+                            onClick={() => update({ budget: save.budget - w.wage, contracts: { ...(save.contracts ?? {}), [w.sig.playerId]: save.split + CONTRACT_TERM - 1 } })}>
+                            🔁 Renovar
+                          </button>
+                        )}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="muted small">Contratos vencem no fim do prazo: <b>renove (custa 1 salário)</b> ou o jogador sai <b>de graça</b> no próximo split.</p>
+            </div>
+          </div>
+        );
+      })()}
+
       {hubTab === 'squad' && (
         <div className="career-grid">
           <div className="career-main">
@@ -2624,6 +2705,11 @@ function MarketScreen({
             contratação desta janela tem reembolso integral; jogador do seu elenco é
             vendido por 85% do valor.
           </div>
+          {(save.lastReleases?.length ?? 0) > 0 && (
+            <div className="release-banner">
+              📄 Contrato vencido: <b>{save.lastReleases!.join(', ')}</b> saiu de graça. Reforce o elenco no mercado.
+            </div>
+          )}
 
           {/* evolução do elenco na última janela (explica a mecânica na jornada) */}
           {(save.lastEvo?.length ?? 0) > 0 && (
