@@ -33,7 +33,7 @@ import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendi
 import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
-import { startPresenceHeartbeat, track, trackVisit } from './state/track';
+import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -251,10 +251,11 @@ export default function App() {
     document.title = sub ? `${sub} · Road to Major` : 'Road to Major · simulador de CS de todas as eras';
   }, [screen]);
 
-  // telemetria: registra a visita (1x por sessão)
+  // telemetria: SÓ 1 evento de visita por sessão (barato). Removido o heartbeat
+  // de presença ("online agora"), que batia /api/track a cada 90s em TODO
+  // visitante — gasto recorrente que não compensa.
   useEffect(() => {
     trackVisit();
-    return startPresenceHeartbeat();
   }, []);
 
   // rola pro topo ao trocar de tela (evita abrir uma tela já no meio dela)
