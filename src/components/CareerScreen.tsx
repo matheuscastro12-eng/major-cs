@@ -206,6 +206,7 @@ interface CareerSave {
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
+  careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   trainingFocus?: string | null; // id do jogador em foco de treino no split atual (acelera a evolução)
 }
 
@@ -760,6 +761,16 @@ export function CareerScreen({ onExit }: Props) {
     return { evo, lastEvo };
   };
 
+  // contabiliza as stats do split na carreira UMA vez só. Idempotente: se o
+  // split já foi contado (careerStatsThru >= split), não conta de novo — protege
+  // contra F5 na tela de fim de temporada / resultado do Major (evita dobrar).
+  const bankStats = (s: CareerSave): Pick<CareerSave, 'careerStats' | 'careerStatsThru'> => {
+    if (!s.league || (s.careerStatsThru ?? 0) >= s.split) {
+      return { careerStats: s.careerStats ?? {}, careerStatsThru: s.careerStatsThru ?? 0 };
+    }
+    return { careerStats: accumulateCareerStats(s.careerStats, s.league), careerStatsThru: s.split };
+  };
+
   // aplica a janela de transferências do split que está fechando: os swaps viram
   // movimentos persistentes (save.moves) e o resumo vai pra lastMoves (exibido
   // no próximo split). Não move jogadores do elenco do usuário.
@@ -1065,6 +1076,7 @@ export function CareerScreen({ onExit }: Props) {
     const cs = save.careerStats ?? {};
     const byId = new Map<string, Player>();
     for (const t of CS2_REAL_2026) for (const p of t.players) byId.set(p.id, p);
+    for (const t of currentEra) for (const p of t.players) byId.set(p.id, p); // inclui transferidos/custom
     const teamById = new Map<string, TeamSeason>();
     for (const t of currentEra) for (const p of t.players) teamById.set(p.id, t);
     const rows: { rid: string; nick: string; country: string; role: Role; isMine: boolean; teamTag: string; rating: number; kd: number; adr: number; maps: number }[] = [];
@@ -1501,7 +1513,7 @@ export function CareerScreen({ onExit }: Props) {
                       titles: save.titles + (isChampion ? 1 : 0),
                       // acumula as stats da liga já aqui (o split do Major fecha
                       // depois, mas a liga regular terminou); evita perder o split
-                      careerStats: accumulateCareerStats(save.careerStats, league),
+                      ...bankStats(save),
                     };
                     persist(next);
                     setSave(next);
@@ -1524,7 +1536,7 @@ export function CareerScreen({ onExit }: Props) {
                     circuit: null,
                     playoff: null,
                     history: [...save.history, baseRecord()],
-                    careerStats: accumulateCareerStats(save.careerStats, league),
+                    ...bankStats(save),
                     ...evolveSquad(save),
                     ...applyTransferWindow(save),
                     ...boardPatch,
