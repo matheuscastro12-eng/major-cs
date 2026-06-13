@@ -937,6 +937,24 @@ export function CareerScreen({ onExit }: Props) {
     });
   };
 
+  // SIM SPLIT: resolve TODAS as rodadas restantes do turno de uma vez (sem
+  // animação) e para no mata-mata — corta a repetição de clicar rodada a rodada
+  // (pedido de quem joga no celular) sem pular a parte decisiva (playoffs).
+  const simWholeSplit = (l: League) => {
+    rngRef.current = makeRng(randomSeed());
+    let guard = 0;
+    while (!leagueDone(l) && guard++ < 80) {
+      const m = userLeagueMatch(l);
+      if (m && !m.result) {
+        const a = leagueTeam(l, m.a);
+        const b = leagueTeam(l, m.b);
+        m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
+      }
+      resolveLeagueRound(l, rngRef.current, LEAGUE_BO);
+    }
+    enterPlayoffs(l);
+  };
+
   // Major: o time vai pro Major mundial (16 times) e disputa Suíça + playoffs
   // AO VIVO, com bracket de verdade (mesmo motor/UI do modo draft).
   const playMajor = (s: CareerSave) => {
@@ -1763,6 +1781,7 @@ export function CareerScreen({ onExit }: Props) {
                 <div className="pm-actions">
                   <button className="btn gold big" onClick={playMine}>▶ JOGAR</button>
                   <button className="btn ghost" onClick={() => simMine(league)}>⏩ Simular</button>
+                  <button className="btn ghost" onClick={() => simWholeSplit(league)} title="Resolve todas as rodadas restantes de uma vez e vai pro mata-mata">⏩⏩ Split inteiro</button>
                 </div>
               </div>
             ) : (
