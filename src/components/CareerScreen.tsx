@@ -16,7 +16,7 @@ import type { Coach, MapId, Player, Role, SeriesResult, TeamSeason, Tournament, 
 import { MatchScreen } from './MatchScreen';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
-import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
 import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
@@ -205,7 +205,14 @@ interface CareerSave {
   contracts?: Record<string, number>; // playerId -> split em que o contrato termina (inclusive)
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
+  careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
+  trainingFocus?: string | null; // id do jogador em foco de treino no split atual (acelera a evolução)
 }
+
+// stats acumuladas de um jogador ao longo de TODA a carreira (somatório bruto;
+// rating/ADR/KAST são derivados na hora). É só leitura pro jogador (sobe sozinho
+// conforme o jogador evolui e joga); quem edita atributo é o admin no CRM.
+interface CareerStatLine { k: number; d: number; a: number; dmg: number; kast: number; rounds: number; maps: number; splits: number; }
 
 const CONTRACT_TERM = 3; // splits de contrato ao assinar/renovar
 
@@ -556,6 +563,7 @@ export function CareerScreen({ onExit }: Props) {
     try { localStorage.setItem('rtm-career-guide-v1', '1'); } catch { /* sem storage */ }
   };
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
+  const [profilePlayer, setProfilePlayer] = useState<Player | null>(null); // perfil detalhado do jogador (modal)
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   // registro parcial do split, finalizado após o Major (se houver)
@@ -735,7 +743,15 @@ export function CareerScreen({ onExit }: Props) {
       const ovr = playerOvr(f.player);
       const age = effectiveAge(f.player, s.split);
       const pot = playerPotentialOvr(f.player, age);
-      const d = evoDelta(sig.playerId, s.split, age, ovr >= pot);
+      const atCeiling = ovr >= pot;
+      let d = evoDelta(sig.playerId, s.split, age, atCeiling);
+      // foco de treino: o jogador escolhido desenvolve mais rápido. Jovem/auge
+      // ganha +1 (não ultrapassa o potencial); veterano treina pra perder menos.
+      const focused = s.trainingFocus === sig.playerId;
+      if (focused) {
+        if (!atCeiling) d += 1;
+        else if (d < 0) d += 1; // mitiga o declínio do veterano
+      }
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age) });
@@ -1438,6 +1454,9 @@ export function CareerScreen({ onExit }: Props) {
                       budget: save.budget + prize,
                       vrs: save.vrs + vrsGain,
                       titles: save.titles + (isChampion ? 1 : 0),
+                      // acumula as stats da liga já aqui (o split do Major fecha
+                      // depois, mas a liga regular terminou); evita perder o split
+                      careerStats: accumulateCareerStats(save.careerStats, league),
                     };
                     persist(next);
                     setSave(next);
@@ -1460,6 +1479,7 @@ export function CareerScreen({ onExit }: Props) {
                     circuit: null,
                     playoff: null,
                     history: [...save.history, baseRecord()],
+                    careerStats: accumulateCareerStats(save.careerStats, league),
                     ...evolveSquad(save),
                     ...applyTransferWindow(save),
                     ...boardPatch,
@@ -1864,14 +1884,15 @@ export function CareerScreen({ onExit }: Props) {
       })()}
 
       {hubTab === 'squad' && (() => {
-        const sqPlayers = buildTeam(save)?.players ?? [];
-        const hasAwp = sqPlayers.some((p) => p.role === 'AWP');
-        const hasIgl = sqPlayers.some((p) => p.role === 'IGL');
-        // o time montado usa runtimeId "user__<id>"; o override em findSigning é
-        // keyed pelo id ORIGINAL do jogador, então removemos o prefixo.
-        const origId = (pid: string) => pid.replace(/^user__/, '');
+        // itera as contratações (findSigning resolve o jogador pelo id ORIGINAL,
+        // já com evolução e função aplicadas). rid = id de runtime nas partidas.
+        const rows = save.squad.map((sig) => findSigning(sig)?.player).filter(Boolean) as Player[];
+        const hasAwp = rows.some((p) => p.role === 'AWP');
+        const hasIgl = rows.some((p) => p.role === 'IGL');
         const setRole = (pid: string, role: Role) =>
-          update({ roles: { ...(save.roles ?? {}), [origId(pid)]: role } });
+          update({ roles: { ...(save.roles ?? {}), [pid]: role } });
+        const setFocus = (pid: string) =>
+          update({ trainingFocus: save.trainingFocus === pid ? null : pid });
         return (
         <div className="career-grid">
           <div className="career-main">
@@ -1883,27 +1904,38 @@ export function CareerScreen({ onExit }: Props) {
               </div>
             )}
             <div className="career-squad big">
-              {sqPlayers.map((p) => {
-                const st = seasonStats.find((s) => s.id === p.id);
+              {rows.map((p) => {
+                const rid = `user__${p.id}`;
+                const st = seasonStats.find((s) => s.id === rid);
+                const focused = save.trainingFocus === p.id;
+                const grew = save.evo?.[p.id] ?? 0;
                 return (
-                  <div key={p.id} className="cs-row">
-                    <PlayerAvatar nick={p.nick} size={32} />
-                    <span className="cs-nick"><Flag cc={p.country} /> {p.nick}</span>
+                  <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
+                    <button className="cs-open" onClick={() => setProfilePlayer(p)} title="Ver perfil do jogador">
+                      <PlayerAvatar nick={p.nick} size={32} />
+                      <span className="cs-nick"><Flag cc={p.country} /> {p.nick}
+                        {grew > 0 && <span className="cs-grew" title={`+${grew} de evolução na carreira`}> ▲{grew}</span>}
+                      </span>
+                    </button>
                     <select className={`role-select ${p.role}`} value={p.role}
                       onChange={(e) => setRole(p.id, e.target.value as Role)}
                       title="Definir a função deste jogador">
                       {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
+                    <button className={`cs-train${focused ? ' on' : ''}`} onClick={() => setFocus(p.id)}
+                      title={focused ? 'Em foco de treino neste split' : 'Pôr em foco de treino (desenvolve mais rápido)'}>
+                      🎯
+                    </button>
                     <span className="cs-stat">{st ? `rat ${st.rating.toFixed(2)}` : '-'}</span>
-                    <span className="cs-stat">{st ? `${st.kd.toFixed(2)} K/D` : ''}</span>
-                    <span className="cs-ovr">{p.ovr}</span>
+                    <span className="cs-ovr">{playerOvr(p)}</span>
                   </div>
                 );
               })}
             </div>
             <p className="muted small" style={{ marginTop: 8 }}>
-              Você define a função de cada um. No CS as funções são flexíveis: garanta pelo menos
-              <b> 1 AWP</b> e <b>1 IGL</b> pra não perder sinergia no veto e na partida.
+              Clique no jogador pra ver o <b>perfil completo</b>. Defina a <b>função</b> (no CS são flexíveis: tenha 1 AWP e 1 IGL) e o
+              <b> 🎯 foco de treino</b> do split (esse jogador evolui mais rápido). Você não edita os atributos: eles
+              <b> sobem sozinhos</b> conforme o jogador se desenvolve e joga.
             </p>
           </div>
           <div className="career-side">
@@ -2012,6 +2044,120 @@ export function CareerScreen({ onExit }: Props) {
 
       {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
       {selTeam && <TeamDetail team={selTeam} onClose={() => setSelTeam(null)} />}
+      {profilePlayer && (() => {
+        const p = profilePlayer;
+        const rid = `user__${p.id}`;
+        return (
+          <PlayerProfile
+            player={p}
+            split={save.split}
+            career={deriveCareer(save.careerStats?.[rid])}
+            cur={seasonStatsMemo.find((s) => s.id === rid)}
+            contractUntil={save.contracts?.[p.id]}
+            evoTotal={save.evo?.[p.id] ?? 0}
+            focused={save.trainingFocus === p.id}
+            onToggleFocus={() => update({ trainingFocus: save.trainingFocus === p.id ? null : p.id })}
+            onClose={() => setProfilePlayer(null)}
+          />
+        );
+      })()}
+    </div>
+  );
+}
+
+// perfil completo do jogador (modal, só leitura). Atributos em barras + idade,
+// potencial, fase, valor/salário/contrato e as STATS DE CARREIRA acumuladas
+// (rating/K-D/ADR/KAST/mapas). O jogador da carreira não edita nada aqui — os
+// atributos sobem sozinhos com a evolução; quem edita é o admin no CRM.
+function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, focused, onToggleFocus, onClose }: {
+  player: Player;
+  split: number;
+  career: ReturnType<typeof deriveCareer>;
+  cur?: SeasonStat;
+  contractUntil?: number;
+  evoTotal: number;
+  focused: boolean;
+  onToggleFocus: () => void;
+  onClose: () => void;
+}) {
+  const age = effectiveAge(player, split);
+  const pot = playerPotentialOvr(player, age);
+  const tier = potentialTier(pot);
+  const phase = playerPhase(player.id, age);
+  const ovr = playerOvr(player);
+  const left = contractUntil != null ? contractUntil - split + 1 : null;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal player-profile" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-x" onClick={onClose}>✕</button>
+        <div className="pp-head">
+          <PlayerAvatar nick={player.nick} size={64} />
+          <div className="pp-id">
+            <div className="pp-nick"><Flag cc={player.country} /> {player.nick}
+              <span className={`role-pill ${player.role}`} style={{ marginLeft: 8 }}>{player.role}</span>
+            </div>
+            <div className="muted small">{player.name}</div>
+            <div className="pp-tags">
+              <span className="pp-tag">{age} anos</span>
+              <span className={`pp-tag pot-${tier}`}>POT {tier} ({pot})</span>
+              <span className="pp-tag">{PHASE_LABEL[phase]}</span>
+              {focused && <span className="pp-tag focus">🎯 em treino</span>}
+            </div>
+          </div>
+          <OvrBadge ovr={ovr} />
+        </div>
+
+        <div className="pp-grid">
+          <div className="pp-col">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Atributos
+              {evoTotal > 0 && <span className="cs-grew"> ▲{evoTotal} na carreira</span>}
+            </div>
+            <div className="attr-bars">
+              <AttrBar label="Mira" value={player.aim} />
+              <AttrBar label="Consist." value={player.consistency} />
+              <AttrBar label="Clutch" value={player.clutch} />
+              <AttrBar label="AWP" value={player.awp} />
+              <AttrBar label="IGL" value={player.igl} />
+            </div>
+            <div className="pp-fin">
+              <div><span className="muted small">Valor</span><b>{formatMoney(playerValue({ ...player, ovr }))}</b></div>
+              <div><span className="muted small">Salário/split</span><b className="neg">{formatMoney(playerWage(player))}</b></div>
+              <div><span className="muted small">Contrato</span><b>{left == null ? '-' : left <= 0 ? 'vencido' : `${left} split${left > 1 ? 's' : ''}`}</b></div>
+            </div>
+          </div>
+          <div className="pp-col">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Estatísticas de carreira</div>
+            {career ? (
+              <div className="pp-stats">
+                <div className="pp-stat"><b>{career.rating.toFixed(2)}</b><span>Rating 2.0</span></div>
+                <div className="pp-stat"><b>{career.kd.toFixed(2)}</b><span>K/D</span></div>
+                <div className="pp-stat"><b>{career.adr.toFixed(0)}</b><span>ADR</span></div>
+                <div className="pp-stat"><b>{career.kastPct.toFixed(0)}%</b><span>KAST</span></div>
+                <div className="pp-stat"><b>{career.kills}</b><span>Abates</span></div>
+                <div className="pp-stat"><b>{career.maps}</b><span>Mapas</span></div>
+              </div>
+            ) : (
+              <p className="muted small">Sem partidas registradas ainda. As stats aparecem (e sobem) conforme ele joga e evolui.</p>
+            )}
+            {cur && (
+              <>
+                <div className="muted small section-label">Neste split</div>
+                <div className="pp-cur">
+                  <span>rating <b>{cur.rating.toFixed(2)}</b></span>
+                  <span>K/D <b>{cur.kd.toFixed(2)}</b></span>
+                  <span>ADR <b>{cur.adr.toFixed(0)}</b></span>
+                </div>
+              </>
+            )}
+            <button className={`btn small${focused ? ' gold' : ''}`} style={{ marginTop: 12 }} onClick={onToggleFocus}>
+              {focused ? '🎯 Tirar do foco de treino' : '🎯 Pôr em foco de treino'}
+            </button>
+            <p className="muted small" style={{ marginTop: 8 }}>
+              Os atributos não são editáveis aqui: sobem sozinhos com a evolução. O foco de treino acelera o desenvolvimento neste split.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2132,6 +2278,40 @@ function seasonPlayerStats(l: League): SeasonStat[] {
     out.push({ id, nick: md.nick, teamTag: md.teamTag, country: md.country, role: md.role, rating, kd: s.d ? s.k / s.d : s.k, adr, maps: 0 });
   }
   return out.sort((a, b) => b.rating - a.rating);
+}
+
+// soma as stats brutas do split (todas as partidas da liga) na carreira de cada
+// jogador. Roda ao fechar o split. As stats sobem sozinhas conforme o jogador
+// evolui (atributos melhores => melhor desempenho nas partidas => rating maior).
+function accumulateCareerStats(prev: Record<string, CareerStatLine> | undefined, l: League): Record<string, CareerStatLine> {
+  const out: Record<string, CareerStatLine> = { ...(prev ?? {}) };
+  const seenThisSplit = new Set<string>();
+  for (const round of l.rounds) {
+    for (const m of round) {
+      if (!m.result) continue;
+      for (const map of m.result.maps) {
+        for (const [id, st] of Object.entries(map.stats)) {
+          const cur = out[id] ?? { k: 0, d: 0, a: 0, dmg: 0, kast: 0, rounds: 0, maps: 0, splits: 0 };
+          cur.k += st.both.kills; cur.d += st.both.deaths; cur.a += st.both.assists;
+          cur.dmg += st.both.dmg; cur.kast += st.both.kastRounds; cur.rounds += st.both.rounds;
+          cur.maps += 1;
+          if (!seenThisSplit.has(id)) { cur.splits += 1; seenThisSplit.add(id); }
+          out[id] = cur;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// deriva rating (HLTV 2.0), K/D, ADR e KAST% de uma linha de carreira acumulada
+function deriveCareer(s: CareerStatLine | undefined) {
+  if (!s || s.rounds < 1) return null;
+  const kpr = s.k / s.rounds, dpr = s.d / s.rounds, apr = s.a / s.rounds;
+  const kast = s.kast / s.rounds, adr = s.dmg / s.rounds;
+  const impact = Math.max(0, 2.13 * kpr + 0.42 * apr - 0.41);
+  const rating = Math.max(0, 0.0073 * kast * 100 + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adr + 0.1587);
+  return { rating, kd: s.d ? s.k / s.d : s.k, adr, kastPct: kast * 100, maps: s.maps, kills: s.k, splits: s.splits };
 }
 
 function aggregateHistory(h: SplitRecord[]) {
