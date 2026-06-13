@@ -20,7 +20,7 @@ export default async function handler(
   const sql = neon(url);
 
   if (req.method === 'GET' || !req.method) {
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
     try {
       const rows = await sql`
         SELECT id, player, team_name, pool, placement, champion, mvp, season, roster, records, created_at

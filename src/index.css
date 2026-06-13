@@ -4191,6 +4191,29 @@ table.crm-players input.num {
 .offer-actions { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 0 auto; }
 .offer-actions .btn { width: 100%; }
 
+/* ===== diretoria: objetivo + confiança (estilo manager) ===== */
+.board-card {
+  border: 1px solid rgba(212,164,65,0.35); border-radius: 12px;
+  background: linear-gradient(135deg, rgba(212,164,65,0.08), rgba(212,164,65,0.02));
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.board-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.board-label { font-family: var(--font-cond); font-weight: 800; letter-spacing: 0.4px; }
+.board-conf { font-weight: 800; font-size: 0.85rem; }
+.board-conf.ok { color: #7fd99a; }
+.board-conf.warn { color: var(--gold); }
+.board-conf.bad { color: #e58a8a; }
+.board-bar { height: 7px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; margin-bottom: 9px; }
+.board-bar i { display: block; height: 100%; border-radius: 4px; transition: width 0.4s; }
+.board-bar i.ok { background: linear-gradient(90deg,#5ac878,#7fd99a); }
+.board-bar i.warn { background: linear-gradient(90deg,var(--gold),#e8c170); }
+.board-bar i.bad { background: linear-gradient(90deg,#e0564f,#e58a8a); }
+.board-obj { font-size: 0.92rem; }
+.board-last { font-size: 0.82rem; margin-top: 6px; font-weight: 700; }
+.board-last.met { color: #7fd99a; }
+.board-last.miss { color: #e58a8a; }
+.board-warn-msg { margin-top: 8px; font-size: 0.82rem; color: #ffb4b0; font-weight: 600; }
+
 /* botão flutuante "jogar minha partida" no hub (sempre alcançável) */
 .hub-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 120;

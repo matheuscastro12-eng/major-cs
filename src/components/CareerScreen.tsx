@@ -198,10 +198,33 @@ interface CareerSave {
   tierChange?: 'up' | 'down' | null; // resultado da última temporada (promoção/rebaixamento)
   takeoverId?: string | null; // id do time real que o jogador assumiu (excluído dos adversários)
   pendingOffer?: PoachOffer | null; // proposta de uma org maior por um jogador seu
+  board: number; // confiança da diretoria (0-100). Cai se você falha os objetivos.
+  objective?: BoardObjective | null; // meta da diretoria pro split atual
+  lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
+  fired?: boolean; // demitido pela diretoria (confiança no chão)
 }
 
 // proposta de uma org de elite (tier 1) por um jogador do seu elenco
 interface PoachOffer { orgId: string; orgName: string; orgTag: string; playerId: string; nick: string; ovr: number; fee: number }
+
+// meta da diretoria por split (FM/Brasval): cumprir sobe a confiança e dá bônus;
+// falhar derruba a confiança — no fundo do poço você é demitido.
+type ObjectiveType = 'major' | 'win' | 'top4' | 'promote' | 'noRelegation';
+interface BoardObjective { type: ObjectiveType; text: string; bonus: number }
+function objectiveFor(tier: number, split: number, majorNow: boolean): BoardObjective {
+  if (tier === 1) {
+    return majorNow
+      ? { type: 'major', text: 'Classificar para o Major Mundial', bonus: 700_000 }
+      : { type: 'top4', text: 'Terminar no top 4 do circuito de elite', bonus: 300_000 };
+  }
+  if (tier === 2) {
+    // de vez em quando a diretoria cobra acesso direto
+    return hashStr(`obj:${split}`) % 3 === 0
+      ? { type: 'promote', text: 'Subir para o Tier 1 nesta temporada', bonus: 500_000 }
+      : { type: 'top4', text: 'Terminar no top 4 e brigar pelo acesso', bonus: 250_000 };
+  }
+  return { type: 'noRelegation', text: 'Não ser rebaixado (longe da zona)', bonus: 150_000 };
+}
 
 const emptySave = (): CareerSave => ({
   org: null,
@@ -224,6 +247,10 @@ const emptySave = (): CareerSave => ({
   lastMoves: [],
   tier: 3,
   tierChange: null,
+  board: 60,
+  objective: null,
+  lastObjective: null,
+  fired: false,
 });
 
 // ----- evolução de elenco entre temporadas -----
@@ -626,7 +653,10 @@ export function CareerScreen({ onExit }: Props) {
       vrsMult: circuit.vrsMult,
       tier: circuit.tier,
     };
-    const next = { ...s, league, circuit: choice, tierChange: null };
+    const next = {
+      ...s, league, circuit: choice, tierChange: null,
+      objective: objectiveFor(circuit.tier, s.split, isMajorSplit(s.split)),
+    };
     persist(next);
     setSave(next);
     setHubTab('overview');
@@ -957,6 +987,35 @@ export function CareerScreen({ onExit }: Props) {
     );
   }
 
+  // ---------- demitido pela diretoria ----------
+  if (save.fired) {
+    return (
+      <div className="fade-in">
+        <div className="panel" style={{ maxWidth: 520, margin: '40px auto' }}>
+          <div className="panel-head">Fim de ciclo</div>
+          <div className="panel-body center">
+            <div className="trophy" style={{ fontSize: 44 }}>📉</div>
+            <h2>A diretoria da {save.org?.name} te demitiu</h2>
+            <p className="muted" style={{ maxWidth: 420, margin: '10px auto 16px' }}>
+              Os resultados ficaram abaixo do esperado e a confiança da diretoria
+              chegou ao fundo. Sua passagem termina aqui — mas toda lenda recomeça.
+            </p>
+            <button className="btn gold big" onClick={() => {
+              const fresh = emptySave();
+              persist(fresh);
+              setSave(fresh);
+              setOrgChoice('select');
+              setStage('found');
+            }}>Começar uma nova carreira</button>
+            <div style={{ marginTop: 10 }}>
+              <button className="btn ghost" onClick={onExit}>← Voltar ao início</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ---------- fundação ----------
   if (stage === 'found') {
     if (orgChoice === 'fictional') {
@@ -1081,9 +1140,14 @@ export function CareerScreen({ onExit }: Props) {
                     };
                 pendingSplit.current = null;
                 setMajorT(null);
+                // chegar ao Major já cumpriu o objetivo da diretoria do split;
+                // ganhar o Major dá um respeito extra
+                const majObj = save.objective;
+                const majBonus = majObj ? majObj.bonus + (mr.champion ? 400_000 : 0) : 0;
+                const majBoard = Math.min(100, save.board + (mr.champion ? 18 : 12));
                 const next = {
                   ...save,
-                  budget: save.budget + mr.prize - payroll + sponsorIncome(save.sponsors),
+                  budget: save.budget + mr.prize - payroll + sponsorIncome(save.sponsors) + majBonus,
                   vrs: save.vrs + mr.vrs,
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
@@ -1094,6 +1158,9 @@ export function CareerScreen({ onExit }: Props) {
                   ...evolveSquad(save),
                   ...applyTransferWindow(save),
                   pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
+                  board: majBoard,
+                  lastObjective: majObj ? { text: majObj.text, met: true, delta: majBoard - save.board } : null,
+                  objective: null,
                 };
                 persist(next);
                 setSave(next);
@@ -1149,6 +1216,26 @@ export function CareerScreen({ onExit }: Props) {
       if (finalPos >= fieldSize - 1) return { tier: Math.min(3, save.tier + 1), tierChange: save.tier < 3 ? 'down' : null };
       return { tier: save.tier, tierChange: null };
     })();
+
+    // avaliação do objetivo da diretoria deste split
+    const obj = save.objective ?? null;
+    const objMet = !obj ? true
+      : obj.type === 'major' ? qualified
+      : obj.type === 'win' ? isChampion
+      : obj.type === 'top4' ? finalPos <= 4
+      : obj.type === 'promote' ? tierResult.tierChange === 'up'
+      : tierResult.tierChange !== 'down'; // noRelegation
+    const boardDelta = obj ? (objMet ? 12 : -18) : 0;
+    const newBoard = Math.max(0, Math.min(100, save.board + boardDelta));
+    const objBonus = obj && objMet ? obj.bonus : 0;
+    const fired = !!obj && newBoard <= 12; // confiança no chão -> demitido
+    const boardPatch = {
+      board: newBoard,
+      lastObjective: obj ? { text: obj.text, met: objMet, delta: boardDelta } : null,
+      objective: null,
+      fired,
+    };
+
     const baseRecord = (): SplitRecord => ({
       split: save.split,
       circuit: save.circuit?.name ?? league.name,
@@ -1183,6 +1270,14 @@ export function CareerScreen({ onExit }: Props) {
               Premiação: <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · Folha:{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
+            {obj && (
+              <div className={`tier-banner ${objMet ? 'up' : 'down'}`}>
+                {objMet ? '✅' : '❌'} Objetivo da diretoria ({obj.text}): <b>{objMet ? 'CUMPRIDO' : 'falhou'}</b>
+                {' · '}confiança {boardDelta >= 0 ? '+' : ''}{boardDelta}% → {Math.round(newBoard)}%
+                {objMet && objBonus > 0 ? ` · bônus +${formatMoney(objBonus)}` : ''}
+                {fired ? ' · VOCÊ FOI DEMITIDO' : ''}
+              </div>
+            )}
             {tierResult.tierChange === 'up' && (
               <div className="tier-banner up">⬆ PROMOVIDO ao {TIER_NAMES[tierResult.tier]}! Você venceu no seu nível e subiu de tier.</div>
             )}
@@ -1272,7 +1367,7 @@ export function CareerScreen({ onExit }: Props) {
                 onClick={() => {
                   const next = {
                     ...save,
-                    budget: save.budget + prize - payroll + sponsorIncome(save.sponsors),
+                    budget: save.budget + prize - payroll + sponsorIncome(save.sponsors) + objBonus,
                     vrs: save.vrs + vrsGain,
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
@@ -1282,13 +1377,14 @@ export function CareerScreen({ onExit }: Props) {
                     history: [...save.history, baseRecord()],
                     ...evolveSquad(save),
                     ...applyTransferWindow(save),
+                    ...boardPatch,
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
                     pendingOffer: makeOffer(save, tierResult.tier),
                   };
                   persist(next);
                   setSave(next);
-                  setStage('market');
+                  setStage('market'); // se foi demitido, o render mostra a tela de demissão
                 }}
               >
                 Pagar folha e ir pro Split {save.split + 1}
@@ -1462,6 +1558,27 @@ export function CareerScreen({ onExit }: Props) {
       {hubTab === 'overview' && (
         <div className="career-grid">
           <div className="career-main">
+            {/* diretoria: objetivo do split + confiança (estilo manager) */}
+            <div className="board-card">
+              <div className="board-top">
+                <span className="board-label">🏛️ Diretoria</span>
+                <span className={`board-conf ${save.board >= 55 ? 'ok' : save.board >= 30 ? 'warn' : 'bad'}`}>
+                  Confiança {Math.round(save.board)}%
+                </span>
+              </div>
+              <div className="board-bar"><i style={{ width: `${Math.max(3, save.board)}%` }} className={save.board >= 55 ? 'ok' : save.board >= 30 ? 'warn' : 'bad'} /></div>
+              {save.objective ? (
+                <div className="board-obj">🎯 Objetivo do split: <b>{save.objective.text}</b> <span className="muted small">(bônus {formatMoney(save.objective.bonus)})</span></div>
+              ) : (
+                <div className="muted small">Defina o elenco e o circuito para receber o objetivo da diretoria.</div>
+              )}
+              {save.lastObjective && (
+                <div className={`board-last ${save.lastObjective.met ? 'met' : 'miss'}`}>
+                  {save.lastObjective.met ? '✅ Objetivo anterior cumprido' : '❌ Objetivo anterior falhou'} ({save.lastObjective.delta >= 0 ? '+' : ''}{save.lastObjective.delta}% confiança)
+                </div>
+              )}
+              {save.board < 30 && <div className="board-warn-msg">⚠️ A diretoria está perdendo a paciência. Falhar de novo pode custar seu emprego.</div>}
+            </div>
             {/* guia da jornada: explica as regras da temporada (dispensável) */}
             {guideOpen && (
               <div className="career-guide">

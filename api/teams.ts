@@ -79,7 +79,7 @@ export default async function handler(
   // ---- leitura pública ----
   if (req.method === 'GET' || !req.method) {
     // cache curto: edições salvas pelo admin propagam a todos em ~30s
-    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=600');
     res.setHeader('Access-Control-Expose-Headers', 'X-Dataset-Rev');
     try {
       // rev do build com que esta base foi salva (vazio se nunca foi gravado).
