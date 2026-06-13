@@ -1399,6 +1399,42 @@ tr.human-row {
 .role-pill.Support { color: var(--green-bright); }
 .role-pill.Lurker { color: #6fc3df; }
 
+/* seletor de função no gerenciamento do elenco (carreira) */
+.role-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 3px 20px 3px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  background: var(--bg-deep)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M1 3l4 4 4-4' fill='none' stroke='%238a93a6' stroke-width='1.5'/></svg>")
+    no-repeat right 6px center;
+  color: var(--link);
+  border: 1px solid var(--border-soft);
+  cursor: pointer;
+  min-height: 28px; /* alvo de toque confortável no mobile */
+}
+.role-select:hover { border-color: var(--link); }
+.role-select.AWP { color: var(--gold); }
+.role-select.IGL { color: #c792ea; }
+.role-select.Entry { color: var(--red-bright); }
+.role-select.Support { color: var(--green-bright); }
+.role-select.Lurker { color: #6fc3df; }
+.role-select option { color: var(--text); background: var(--bg-deep); }
+
+.role-warn {
+  margin: 0 0 10px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  background: rgba(255, 196, 0, 0.1);
+  border: 1px solid rgba(255, 196, 0, 0.35);
+  color: var(--gold);
+}
+
 .attr-bars {
   margin-top: 9px;
   display: grid;

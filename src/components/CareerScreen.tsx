@@ -12,7 +12,7 @@ import { autoVeto } from '../engine/veto';
 import { createTournament, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 import { Hub } from './Hub';
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
-import type { Coach, MapId, Player, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
+import type { Coach, MapId, Player, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
@@ -204,9 +204,13 @@ interface CareerSave {
   fired?: boolean; // demitido pela diretoria (confiança no chão)
   contracts?: Record<string, number>; // playerId -> split em que o contrato termina (inclusive)
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
+  roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
 }
 
 const CONTRACT_TERM = 3; // splits de contrato ao assinar/renovar
+
+// funções que o técnico pode atribuir a um jogador (gerenciamento estilo Brasval)
+const ROLE_OPTS: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
 
 // proposta de uma org de elite (tier 1) por um jogador do seu elenco
 interface PoachOffer { orgId: string; orgName: string; orgTag: string; playerId: string; nick: string; ovr: number; fee: number }
@@ -647,6 +651,10 @@ export function CareerScreen({ onExit }: Props) {
       }
     }
     if (!from || !player) return null;
+    // função definida pelo técnico (override do dado da base; corrige dados
+    // errados e dá controle de tática igual ao gerenciamento do Brasval)
+    const ovrRole = save.roles?.[player.id];
+    if (ovrRole && ovrRole !== player.role) player = { ...player, role: ovrRole };
     // aplica a evolução acumulada do SEU elenco (atributos sobem/caem entre
     // temporadas; valor e salário acompanham automaticamente)
     const d = save.evo?.[player.id] ?? 0;
@@ -1855,18 +1863,37 @@ export function CareerScreen({ onExit }: Props) {
         );
       })()}
 
-      {hubTab === 'squad' && (
+      {hubTab === 'squad' && (() => {
+        const sqPlayers = buildTeam(save)?.players ?? [];
+        const hasAwp = sqPlayers.some((p) => p.role === 'AWP');
+        const hasIgl = sqPlayers.some((p) => p.role === 'IGL');
+        // o time montado usa runtimeId "user__<id>"; o override em findSigning é
+        // keyed pelo id ORIGINAL do jogador, então removemos o prefixo.
+        const origId = (pid: string) => pid.replace(/^user__/, '');
+        const setRole = (pid: string, role: Role) =>
+          update({ roles: { ...(save.roles ?? {}), [origId(pid)]: role } });
+        return (
         <div className="career-grid">
           <div className="career-main">
             <div className="muted small section-label" style={{ marginTop: 0 }}>Seu elenco</div>
+            {(!hasAwp || !hasIgl) && (
+              <div className="role-warn">
+                ⚠️ Seu time está sem {!hasAwp && !hasIgl ? 'AWP e IGL' : !hasAwp ? 'AWPer' : 'IGL'}.
+                Ajuste a função de um jogador abaixo para cobrir.
+              </div>
+            )}
             <div className="career-squad big">
-              {(buildTeam(save)?.players ?? []).map((p) => {
+              {sqPlayers.map((p) => {
                 const st = seasonStats.find((s) => s.id === p.id);
                 return (
                   <div key={p.id} className="cs-row">
                     <PlayerAvatar nick={p.nick} size={32} />
                     <span className="cs-nick"><Flag cc={p.country} /> {p.nick}</span>
-                    <span className={`role-pill ${p.role}`}>{p.role}</span>
+                    <select className={`role-select ${p.role}`} value={p.role}
+                      onChange={(e) => setRole(p.id, e.target.value as Role)}
+                      title="Definir a função deste jogador">
+                      {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
                     <span className="cs-stat">{st ? `rat ${st.rating.toFixed(2)}` : '-'}</span>
                     <span className="cs-stat">{st ? `${st.kd.toFixed(2)} K/D` : ''}</span>
                     <span className="cs-ovr">{p.ovr}</span>
@@ -1874,6 +1901,10 @@ export function CareerScreen({ onExit }: Props) {
                 );
               })}
             </div>
+            <p className="muted small" style={{ marginTop: 8 }}>
+              Você define a função de cada um. No CS as funções são flexíveis: garanta pelo menos
+              <b> 1 AWP</b> e <b>1 IGL</b> pra não perder sinergia no veto e na partida.
+            </p>
           </div>
           <div className="career-side">
             <div className="side-card">
@@ -1882,7 +1913,8 @@ export function CareerScreen({ onExit }: Props) {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ===== RANKING VRS POR REGIÃO ===== */}
       {hubTab === 'vrs' && (
