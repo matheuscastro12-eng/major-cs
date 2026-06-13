@@ -29,7 +29,7 @@ interface Props {
 }
 
 const NICK_KEY = 'rtm-nick';
-const POLL_MS = 3500; // era 2200: mais lento = menos invocações de função (custo)
+const POLL_MS = 5000; // corte de custo: mais lento = menos invocações de função
 
 // textos das salas abertas, por idioma (sem mexer no i18n global)
 const ONLINE_LOCAL = {
@@ -159,7 +159,7 @@ export function OnlineScreen({ onBack }: Props) {
     // depois de 'done' o resultado é imutável (refresh não re-seta o state, então
     // não re-simula), mas seguimos com um poll lento pra detectar quando o host
     // inicia a próxima temporada.
-    pollRef.current = window.setInterval(refresh, lobbyDone ? 6000 : POLL_MS);
+    pollRef.current = window.setInterval(refresh, lobbyDone ? 12000 : POLL_MS);
     return () => window.clearInterval(pollRef.current);
   }, [code, refresh, lobbyDone]);
 
@@ -169,7 +169,7 @@ export function OnlineScreen({ onBack }: Props) {
     if (!code) return;
     const ping = () => { if (!document.hidden) lobbyApi({ action: 'ping', code }).catch(() => {}); };
     ping();
-    const id = window.setInterval(ping, 30000); // era 20s
+    const id = window.setInterval(ping, 45000); // corte de custo
     return () => window.clearInterval(id);
   }, [code]);
 
@@ -200,7 +200,7 @@ export function OnlineScreen({ onBack }: Props) {
   useEffect(() => {
     if (code) return; // já está numa sala
     loadRooms();
-    const id = window.setInterval(loadRooms, 12000); // era 6s
+    const id = window.setInterval(loadRooms, 20000); // corte de custo
     return () => window.clearInterval(id);
   }, [code, loadRooms]);
 

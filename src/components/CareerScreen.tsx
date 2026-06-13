@@ -18,7 +18,6 @@ import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
-import { fileToDataUrl } from '../state/crm';
 import { hashStr } from '../state/hash';
 import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
@@ -2540,23 +2539,9 @@ function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['
   const [c1, setC1] = useState('#101820');
   const [c2, setC2] = useState('#61a8dd');
   const [emblem, setEmblem] = useState<EmblemId>('shield');
-  const [uploaded, setUploaded] = useState<string | null>(null); // logo enviada (data URL)
-  const [mode, setMode] = useState<'build' | 'upload'>('build');
 
-  // logo final: upload tem prioridade; senão o emblema construído
-  const builtLogo = useMemo(() => buildLogoDataUrl(emblem, c1, c2, tag || name), [emblem, c1, c2, tag, name]);
-  const logo = mode === 'upload' && uploaded ? uploaded : builtLogo;
-
-  const onUpload = async (file: File | undefined) => {
-    if (!file) return;
-    try {
-      const dataUrl = await fileToDataUrl(file, 200);
-      setUploaded(dataUrl);
-      setMode('upload');
-    } catch {
-      alert('Não foi possível ler a imagem.');
-    }
-  };
+  // logo = emblema construído (upload de imagem removido por custo/transferência)
+  const logo = useMemo(() => buildLogoDataUrl(emblem, c1, c2, tag || name), [emblem, c1, c2, tag, name]);
 
   return (
     <div className="fade-in">
@@ -2595,20 +2580,7 @@ function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['
               </div>
 
               <div className="field">
-                <label>Logo</label>
-                <div className="logo-mode-tabs">
-                  <button type="button" className={`call-btn${mode === 'build' ? ' armed' : ''}`} onClick={() => setMode('build')}>Construir</button>
-                  <button type="button" className={`call-btn${mode === 'upload' ? ' armed' : ''}`} onClick={() => uploaded ? setMode('upload') : null}>
-                    <label style={{ cursor: 'pointer', display: 'inline-flex', gap: 6 }}>
-                      Enviar imagem
-                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { onUpload(e.target.files?.[0]); e.currentTarget.value = ''; }} />
-                    </label>
-                  </button>
-                  {uploaded && <button type="button" className="btn danger small" onClick={() => { setUploaded(null); setMode('build'); }}>Remover</button>}
-                </div>
-              </div>
-
-              {mode === 'build' && (
+                <label>Emblema</label>
                 <div className="emblem-grid">
                   {EMBLEMS.map((em) => (
                     <button
@@ -2622,7 +2594,7 @@ function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['
                     </button>
                   ))}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* coluna direita: preview do clube */}

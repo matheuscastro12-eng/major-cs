@@ -16,7 +16,11 @@ export function sessionId(): string {
   return sid;
 }
 
+// CORTE DE CUSTO: só o evento de 'visit' (1x/sessão) vai pro servidor — é o que
+// dá contagem de acessos/países pro patrocinador. Eventos de jogo (game_start,
+// online_*, etc.) viram no-op pra não gerar invocação de função nem observability.
 export function track(type: string, data: Record<string, unknown> = {}): void {
+  if (type !== 'visit') return;
   try {
     fetch('/api/track', {
       method: 'POST',
