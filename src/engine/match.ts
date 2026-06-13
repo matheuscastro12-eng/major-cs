@@ -116,8 +116,8 @@ function newRoundTally(): RoundTally {
 
 function compFlags(team: TTeam): CompFlags {
   return {
-    hasAwp: team.players.some((p) => p.awp >= 80),
-    hasIgl: team.players.some((p) => p.igl >= 80),
+    hasAwp: team.players.some((p) => p.role === 'AWP' || p.awp >= 80),
+    hasIgl: team.players.some((p) => p.role === 'IGL' || p.igl >= 80),
   };
 }
 

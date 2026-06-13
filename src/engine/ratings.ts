@@ -140,10 +140,13 @@ export interface SynergyReport {
 export function draftSynergy(players: TPlayer[]): SynergyReport {
   const items: { label: string; value: number }[] = [];
 
-  const hasAwp = players.some((p) => p.awp >= 80);
-  const hasIgl = players.some((p) => p.igl >= 80);
+  // ter a FUNÇÃO já conta (um AWPer de OVR menor ainda é o AWPer do time);
+  // o stat alto é um caminho alternativo. Antes só olhava awp>=80 e dizia
+  // "sem AWP" mesmo com um AWPer no time.
   const awpMains = players.filter((p) => p.role === 'AWP').length;
   const iglMains = players.filter((p) => p.role === 'IGL').length;
+  const hasAwp = awpMains > 0 || players.some((p) => p.awp >= 80);
+  const hasIgl = iglMains > 0 || players.some((p) => p.igl >= 80);
   const hasEntry = players.some((p) => p.role === 'Entry');
   const hasSupport = players.some((p) => p.role === 'Support' || p.role === 'Lurker');
   const distinctRoles = new Set(players.map((p) => p.role)).size;

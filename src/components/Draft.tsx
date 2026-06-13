@@ -22,8 +22,8 @@ const NEED_DEFS: Record<RoleKey, RoleNeed> = {
 
 function rosterNeeds(picked: Player[]): RoleNeed[] {
   const out: RoleNeed[] = [];
-  if (!picked.some((p) => p.igl >= 80)) out.push(NEED_DEFS.IGL);
-  if (!picked.some((p) => p.awp >= 80)) out.push(NEED_DEFS.AWP);
+  if (!picked.some((p) => p.role === 'IGL' || p.igl >= 80)) out.push(NEED_DEFS.IGL);
+  if (!picked.some((p) => p.role === 'AWP' || p.awp >= 80)) out.push(NEED_DEFS.AWP);
   if (!picked.some((p) => p.role === 'Entry')) out.push(NEED_DEFS.Entry);
   if (!picked.some((p) => p.role === 'Support' || p.role === 'Lurker')) out.push(NEED_DEFS.Support);
   return out;

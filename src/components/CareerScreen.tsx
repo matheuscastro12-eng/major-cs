@@ -630,8 +630,22 @@ export function CareerScreen({ onExit }: Props) {
   );
 
   const findSigning = (s: Signing): { player: Player; from: TeamSeason } | null => {
-    const from = currentEra.find((t) => t.id === s.fromId);
-    const player = from?.players.find((p) => p.id === s.playerId);
+    // 1) time de origem. 2) se uma transferência mudou o time dele, procura em
+    // QUALQUER time. 3) por fim na base. Um jogador do SEU elenco nunca "some".
+    let from = currentEra.find((t) => t.id === s.fromId);
+    let player = from?.players.find((p) => p.id === s.playerId);
+    if (!player) {
+      for (const t of currentEra) {
+        const p = t.players.find((pp) => pp.id === s.playerId);
+        if (p) { from = t; player = p; break; }
+      }
+    }
+    if (!player) {
+      for (const t of CS2_REAL_2026) {
+        const p = t.players.find((pp) => pp.id === s.playerId);
+        if (p) { from = t; player = p; break; }
+      }
+    }
     if (!from || !player) return null;
     // aplica a evolução acumulada do SEU elenco (atributos sobem/caem entre
     // temporadas; valor e salário acompanham automaticamente)
@@ -725,11 +739,15 @@ export function CareerScreen({ onExit }: Props) {
   // movimentos persistentes (save.moves) e o resumo vai pra lastMoves (exibido
   // no próximo split). Não move jogadores do elenco do usuário.
   const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves'> => {
-    const tr = computeTransfers(s.split, currentEra);
+    // o SEU org não participa do mercado da IA (não perde nem ganha jogador
+    // por transferência) — evita seu elenco ser bagunçado entre splits.
+    const pool = currentEra.filter((t) => t.id !== s.takeoverId);
+    const tr = computeTransfers(s.split, pool);
     const squadIds = new Set(s.squad.map((x) => x.playerId));
     const moves = { ...(s.moves ?? {}) };
     for (const sw of tr.swaps) {
-      if (squadIds.has(sw.pid)) continue; // não mexe em quem é seu
+      if (squadIds.has(sw.pid)) continue; // nunca move um jogador SEU
+      if (s.takeoverId && sw.toId === s.takeoverId) continue; // nunca empurra ninguém pro seu org
       moves[sw.pid] = sw.toId;
     }
     const lastMoves = tr.feed.slice(0, 8).map((f) => ({ nick: f.nick, from: f.from, to: f.to }));
