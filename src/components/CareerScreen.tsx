@@ -2964,6 +2964,8 @@ function MarketScreen({
   const [squad, setSquad] = useState<Signing[]>(save.squad);
   const [coachId, setCoachId] = useState<string | null>(save.coachFromId);
   const [filter, setFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState<Role | ''>(''); // filtro por função
+  const [ccFilter, setCcFilter] = useState(''); // filtro por nacionalidade (código ISO)
   const [sponsors, setSponsors] = useState<string[]>(save.sponsors);
   const [sponsorUntil, setSponsorUntil] = useState<Record<string, number>>(save.sponsorUntil ?? {});
   const marketFeed = useMemo(() => transferFeed(save.split, coaches), [save.split, coaches]);
@@ -3010,9 +3012,19 @@ function MarketScreen({
   const budgetLeft = save.budget - spentPlayers - spentCoach + soldPlayers;
   const ready = squad.length === 5 && !!coachId && budgetLeft >= 0;
 
+  // países presentes no mercado (com contagem) pro filtro de nacionalidade
+  const countryCounts = market.reduce<Record<string, number>>((acc, m) => {
+    const cc = m.player.country || '??';
+    acc[cc] = (acc[cc] ?? 0) + 1;
+    return acc;
+  }, {});
+  const countries = Object.keys(countryCounts).sort();
+
   const visible = market.filter(
     (m) =>
       !squad.some((s) => s.playerId === m.player.id) &&
+      (!roleFilter || m.player.role === roleFilter) &&
+      (!ccFilter || m.player.country === ccFilter) &&
       (!filter ||
         m.player.nick.toLowerCase().includes(filter.toLowerCase()) ||
         m.from.team.toLowerCase().includes(filter.toLowerCase())),
@@ -3101,12 +3113,28 @@ function MarketScreen({
             ))}
           </div>
 
-          <div className="muted small section-label">Mercado ({visible.length} disponíveis)</div>
-          <div className="field" style={{ marginBottom: 8 }}>
-            <input placeholder="Buscar jogador ou time…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <div className="muted small section-label">Mercado ({visible.length} de {market.length} jogadores)</div>
+          <div className="market-filters">
+            <input className="mf-search" placeholder="Buscar jogador ou time…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <select className="mf-select" value={ccFilter} onChange={(e) => setCcFilter(e.target.value)} title="Filtrar por nacionalidade">
+              <option value="">🌐 País (todos)</option>
+              {countries.map((c) => (
+                <option key={c} value={c}>{c.toUpperCase()} ({countryCounts[c]})</option>
+              ))}
+            </select>
+            {(roleFilter || ccFilter || filter) && (
+              <button className="mf-clear" onClick={() => { setRoleFilter(''); setCcFilter(''); setFilter(''); }} title="Limpar filtros">✕ Limpar</button>
+            )}
+          </div>
+          <div className="market-roles">
+            <button className={`mr-chip${!roleFilter ? ' on' : ''}`} onClick={() => setRoleFilter('')}>Todas</button>
+            {ROLE_OPTS.map((r) => (
+              <button key={r} className={`mr-chip role-${r}${roleFilter === r ? ' on' : ''}`} onClick={() => setRoleFilter(roleFilter === r ? '' : r)}>{r}</button>
+            ))}
           </div>
           <div className="career-market scroll">
-            {visible.slice(0, 200).map((m) => {
+            {visible.length === 0 && <div className="muted small" style={{ padding: 12 }}>Nenhum jogador com esses filtros.</div>}
+            {visible.map((m) => {
               const dup = signedNicks.has(m.player.nick.toLowerCase());
               const affordable = m.price <= budgetLeft && squad.length < 5 && !dup;
               return (

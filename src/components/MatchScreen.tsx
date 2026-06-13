@@ -7,6 +7,7 @@ import { derivePlaystyle, MAP_LABELS, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '
 import { CoreFlag } from './flags';
 import { Scoreboard } from './Scoreboard';
 import { Flag, MapThumb, PlayerAvatar, TeamBadge } from './ui';
+import { Minimap } from './Minimap';
 import { HeadshotIcon, WeaponIcon, WEAPON_LABELS } from './weapons';
 import { useLang } from '../state/i18n';
 
@@ -109,6 +110,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [tactical, setTactical] = useState(false);
   const [freeze, setFreeze] = useState(0);
   const [lastCall, setLastCall] = useState<{ call: RoundCall; won: boolean; round: number } | null>(null);
+  const [showMap, setShowMap] = useState(true); // minimapa tático ao vivo
 
   // ao terminar a série, sobe pro topo pra mostrar o resultado e o botão Continuar
   useEffect(() => {
@@ -304,6 +306,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                   {L.tactical}
                 </button>
               </div>
+              <button className={`btn ghost mm-toggle${showMap ? ' on' : ''}`} onClick={() => setShowMap((v) => !v)} title="Minimapa tático ao vivo">
+                🗺
+              </button>
               <button className="timeout-btn" onClick={callTimeout} disabled={timeoutsLeft <= 0 || !!pausedMsg}>
                 ⏸ {t('match.timeout')} ({timeoutsLeft})
               </button>
@@ -378,6 +383,17 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
             </div>
           </div>
           {pausedMsg && <div className="timeout-flash">{pausedMsg}</div>}
+          {!finished && showMap && (
+            <Minimap
+              map={currentMap}
+              roundNo={Math.max(1, sim.round())}
+              killFeed={sim.killFeed()}
+              sides={sides}
+              teams={teams}
+              durationMs={tactical ? 900 : SPEEDS[speedIdx].ms}
+              paused={!!pausedMsg || freeze > 0}
+            />
+          )}
           {!finished && <KillFeed events={visibleKills} teams={teams} playerById={playerById} />}
         </div>
 
