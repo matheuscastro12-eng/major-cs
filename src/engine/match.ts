@@ -1,4 +1,4 @@
-import type { KillEvent, MapId, MapResult, Playstyle, PlayerLine, PlayerMapStats, SeriesResult, TPlayer, TTeam } from '../types';
+import type { KillEvent, MapId, MapResult, Playbook, Playstyle, PlayerLine, PlayerMapStats, SeriesResult, TPlayer, TTeam } from '../types';
 import { derivePlaystyle } from '../types';
 import type { Rng } from './rng';
 import { weightedIndex } from './rng';
@@ -186,6 +186,35 @@ function weaponFor(p: TPlayer, rng: Rng, tier: BuyTier, side: 'ct' | 't'): strin
   return rng() < 0.88 ? main : off;
 }
 
+// Efeito do PLAYBOOK por round: cada esquema é forte em certos contextos e fraco
+// em outros (estratégia: escolher e treinar o certo, e ler o adversário/mapa).
+// Retorna o delta de força ANTES de escalar pelo entrosamento, e o rótulo do
+// fator dominante do round — reusado na UI pra "demonstrar" o efeito ao vivo.
+export interface PlaybookCtx { side: 'ct' | 't'; isPistol: boolean; secondHalf: boolean; lostLast: boolean; pickedOwnMap: boolean; eco: boolean; }
+export function playbookLean(pb: Playbook, ctx: PlaybookCtx): { delta: number; label: string } {
+  let net = 0, best = 0, label = '';
+  const add = (v: number, l: string) => { net += v; if (Math.abs(v) > Math.abs(best)) { best = v; label = l; } };
+  if (pb === 'aggressive') {
+    if (ctx.side === 't') add(1.4, 'pressão no ataque'); else add(-1.1, 'pressão exposta no CT');
+    if (ctx.isPistol) add(1.3, 'pistol agressivo');
+    if (ctx.eco && !ctx.isPistol) add(0.9, 'force agressivo');
+    if (ctx.lostLast && !ctx.isPistol) add(-0.8, 'atrás no placar');
+  } else if (pb === 'tactical') {
+    if (ctx.secondHalf) add(1.3, 'ajuste de 2º half');
+    if (ctx.pickedOwnMap) add(1.0, 'domínio do mapa');
+    if (ctx.side === 'ct') add(0.6, 'defesa estruturada');
+    if (ctx.isPistol) add(-1.1, 'pistol sem ritmo');
+  } else if (pb === 'fast') {
+    if (ctx.side === 't') add(1.7, 'execução rápida'); else add(-1.4, 'CT vulnerável');
+    if (ctx.eco) add(0.8, 'rush de eco');
+  } else {
+    if (ctx.side === 'ct') add(1.5, 'controle no CT'); else add(-1.0, 'ataque lento');
+    if (ctx.secondHalf) add(0.7, 'round longo dominado');
+    if (ctx.isPistol) add(-1.0, 'pistol arriscado');
+  }
+  return { delta: net, label: label || 'neutro' };
+}
+
 function effStrength(
   team: TTeam,
   flags: CompFlags,
@@ -218,6 +247,12 @@ function effStrength(
 
   // tendência natural do time pelo estilo do IGL
   s += iglLean(team, side);
+
+  // PLAYBOOK treinado: efeito escalado pelo entrosamento (0..1). Bem treinado e
+  // no contexto certo dá vantagem; no contexto errado, vira desvantagem.
+  if (team.playbook && team.playbookFam) {
+    s += playbookLean(team.playbook, { side, isPistol, secondHalf, lostLast, pickedOwnMap, eco: tier !== 'full' }).delta * team.playbookFam;
+  }
 
   return s;
 }

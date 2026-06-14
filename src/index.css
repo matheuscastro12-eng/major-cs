@@ -4065,6 +4065,91 @@ table.crm-players input.num {
 .pp-tag.mood-warn { color: var(--gold-2); }
 .pp-tag.mood-bad { color: var(--red-bright); }
 
+/* playbook tático (lateral do Elenco) */
+.pb-fam { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.pb-bar { flex: 1; height: 7px; background: var(--bg-deep); border-radius: 4px; overflow: hidden; }
+.pb-bar i { display: block; height: 100%; border-radius: 4px; }
+.pb-bar i.good { background: linear-gradient(90deg, #3f8f4f, var(--green-bright)); }
+.pb-bar i.warn { background: linear-gradient(90deg, var(--gold-soft), var(--gold-2)); }
+.pb-bar i.bad { background: linear-gradient(90deg, #8a4a4a, var(--red-bright)); }
+.pb-list { display: flex; flex-direction: column; gap: 6px; }
+.pb-opt {
+  text-align: left; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 9px; padding: 9px 11px; cursor: pointer; transition: border-color 0.12s, background 0.12s;
+}
+.pb-opt:hover { border-color: var(--blue-bright); }
+.pb-opt.on { border-color: var(--gold); background: linear-gradient(160deg, var(--panel-2), var(--gold-glow)); }
+.pb-opt .pb-name { display: block; font-weight: 700; font-size: 0.9rem; }
+.pb-opt .pb-desc { display: block; margin-top: 2px; line-height: 1.35; }
+
+/* treino de mapa (lateral do Elenco) */
+.map-train { display: flex; flex-direction: column; gap: 4px; }
+.mt-row {
+  display: flex; align-items: center; gap: 8px; background: none; border: 1px solid transparent;
+  border-radius: 7px; padding: 5px 7px; cursor: pointer; color: var(--text); text-align: left;
+}
+.mt-row:hover { background: rgba(255, 255, 255, 0.04); }
+.mt-row.on { border-color: var(--gold); background: var(--gold-glow); }
+.mt-row .mt-name { flex: 0 0 88px; font-size: 0.84rem; white-space: nowrap; }
+.mt-row .mt-bar { flex: 1; height: 6px; background: var(--bg-deep); border-radius: 4px; overflow: hidden; }
+.mt-row .mt-bar i { display: block; height: 100%; border-radius: 4px; }
+.mt-row .mt-bar i.good { background: linear-gradient(90deg, #3f8f4f, var(--green-bright)); }
+.mt-row .mt-bar i.warn { background: linear-gradient(90deg, var(--gold-soft), var(--gold-2)); }
+.mt-row .mt-bar i.bad { background: linear-gradient(90deg, #8a4a4a, var(--red-bright)); }
+.mt-row .mt-lvl { flex: 0 0 34px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.78rem; }
+.mt-row .mt-lvl.good { color: var(--green-bright); }
+.mt-row .mt-lvl.warn { color: var(--muted); }
+.mt-row .mt-lvl.bad { color: var(--red-bright); }
+
+/* playbook na análise pré-jogo + nota ao vivo na partida */
+.pb-analysis { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.9rem; }
+.pb-analysis .pb-chip { font-weight: 800; color: var(--gold-2); }
+.mm-playbook {
+  display: inline-flex; align-items: center; gap: 6px; margin: 2px auto 0; padding: 3px 10px;
+  border-radius: 8px; font-size: 0.82rem; font-weight: 700; border: 1px solid var(--border); background: var(--panel-2);
+}
+.pb-note { font-weight: 700; }
+.pb-note.good { color: var(--green-bright); }
+.pb-note.bad { color: var(--red-bright); }
+
+/* botão da cerimônia no fim de temporada */
+.ceremony-cta { margin: 14px auto 4px; display: block; }
+
+/* cerimônia Top 20 HLTV (fim de temporada) */
+.ceremony-backdrop { align-items: flex-start; }
+.ceremony {
+  width: min(560px, 96vw); max-height: 92vh; overflow: auto; margin: 3vh auto;
+  background: radial-gradient(120% 80% at 50% -10%, rgba(216,169,67,0.18), transparent 60%), linear-gradient(180deg, var(--panel) 0%, var(--bg-deep) 100%);
+  border: 1px solid var(--gold-soft); border-radius: var(--r-lg); box-shadow: var(--elev-2);
+  padding: 22px 20px; position: relative;
+}
+.cer-head { text-align: center; margin-bottom: 14px; }
+.cer-kicker { font-size: 0.72rem; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--gold-2); }
+.cer-head h2 { font-family: var(--font-cond); font-weight: 800; margin: 4px 0 0; font-size: 1.5rem; }
+.cer-one {
+  display: flex; align-items: center; gap: 12px; position: relative;
+  background: linear-gradient(120deg, var(--gold-glow), rgba(255,255,255,0.02)); border: 1px solid var(--gold);
+  border-radius: var(--r); padding: 14px 14px 14px 16px; margin-bottom: 12px;
+  animation: cer-in 0.45s ease both;
+}
+.cer-1-badge { position: absolute; top: -10px; left: 14px; background: var(--gold); color: #1a1408; font-family: var(--font-cond); font-weight: 800; font-size: 0.66rem; letter-spacing: 1px; padding: 2px 9px; border-radius: 6px; }
+.cer-1-id { flex: 1; min-width: 0; }
+.cer-1-nick { font-family: var(--font-cond); font-weight: 800; font-size: 1.3rem; display: flex; align-items: center; gap: 7px; }
+.cer-1-rating { font-family: var(--font-cond); font-weight: 800; font-size: 1.8rem; color: var(--gold-2); line-height: 1; text-align: right; }
+.cer-1-rating span { display: block; font-size: 0.6rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+.cer-list { display: flex; flex-direction: column; gap: 3px; }
+.cer-row {
+  display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-radius: 7px;
+  background: rgba(255,255,255,0.02); animation: cer-in 0.4s ease both;
+}
+.cer-row.mine, .cer-one.mine { box-shadow: 0 0 0 1px var(--blue-bright) inset; }
+.cer-row.mine .cer-nick b, .cer-row.mine { color: var(--text-strong); }
+.cer-rank { flex: 0 0 22px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--muted); }
+.cer-nick { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cer-rating { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--gold-2); }
+@keyframes cer-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .cer-one, .cer-row { animation: none; } }
+
 .contract-alert {
   display: block;
   width: 100%;

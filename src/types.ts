@@ -137,7 +137,25 @@ export interface TTeam {
   losses: number;
   roundDiff: number;
   status: 'alive' | 'advanced' | 'eliminated';
+  playbook?: Playbook; // esquema tático treinado (modo carreira)
+  playbookFam?: number; // entrosamento no esquema, 0..1 (quão bem treinado)
 }
+
+// Esquema tático do time (playbook). Cada um é forte em certas situações e fraco
+// em outras — escolher e treinar o certo (e contra o adversário) é estratégia.
+export type Playbook = 'aggressive' | 'tactical' | 'fast' | 'controlled';
+export const PLAYBOOK_LABELS: Record<Playbook, string> = {
+  aggressive: 'Pressão total',
+  tactical: 'Tático / Default',
+  fast: 'Execuções rápidas',
+  controlled: 'Controle de mapa',
+};
+export const PLAYBOOK_DESC: Record<Playbook, string> = {
+  aggressive: 'Duelos e agressão. Forte em pistol/force e no ataque; sofre quando atrás e no CT.',
+  tactical: 'Rounds estudados. Forte no 2º half, no clutch e no seu mapa; lento em pistols.',
+  fast: 'Velocidade no T. Forte no ataque e em viradas; frágil segurando como CT.',
+  controlled: 'Paciência e espaço. Forte no CT e em rounds longos; fraco em pistols e ritmo alto.',
+};
 
 export interface PlayerLine {
   kills: number;

@@ -12,8 +12,8 @@ import { autoVeto } from '../engine/veto';
 import { createTournament, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 import { Hub } from './Hub';
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
-import type { Coach, MapId, Player, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
-import { MAP_LABELS } from '../types';
+import type { Coach, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
+import { MAP_LABELS, MAP_POOL, PLAYBOOK_DESC, PLAYBOOK_LABELS } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
@@ -216,6 +216,10 @@ interface CareerSave {
   unread?: number; // manchetes não lidas (badge da aba Inbox)
   peakOvr?: Record<string, number>; // maior OVR já alcançado por jogador (perfil)
   region?: MacroRegion; // região de circuito onde a org compete (do core do elenco)
+  mapTraining?: Partial<Record<MapId, number>>; // domínio por mapa (treinado), ~ -2.5..+2.5
+  mapFocus?: MapId | null; // mapa em treino neste split (sobe; os outros decaem)
+  playbook?: Playbook; // esquema tático escolhido
+  playbookXp?: number; // entrosamento no esquema (0-100); cai ao trocar de esquema
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -282,7 +286,31 @@ const emptySave = (): CareerSave => ({
   news: [],
   unread: 0,
   peakOvr: {},
+  mapTraining: {},
+  mapFocus: null,
+  playbook: 'tactical',
+  playbookXp: 40,
 });
+
+// ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
+const MAP_TRAIN_MAX = 2.6; // teto de domínio de um mapa
+const MAP_TRAIN_MIN = -2.6; // piso (mapa abandonado vira fraqueza)
+const MAP_TRAIN_GAIN = 1.3; // ganho no mapa em foco por split
+const MAP_TRAIN_DECAY = 0.45; // todo mapa decai por split (o não-treinado escorrega)
+// nível de domínio de um mapa (0 = neutro se nunca treinado)
+const mapLevel = (s: CareerSave, m: MapId) => s.mapTraining?.[m] ?? 0;
+function applyMapTraining(s: CareerSave): Partial<Record<MapId, number>> {
+  const out: Partial<Record<MapId, number>> = {};
+  for (const m of MAP_POOL) {
+    let v = (s.mapTraining?.[m] ?? 0) - MAP_TRAIN_DECAY; // decai todo split
+    if (s.mapFocus === m) v += MAP_TRAIN_GAIN + MAP_TRAIN_DECAY; // foco: sobe (anula a decaída + ganha)
+    out[m] = Math.max(MAP_TRAIN_MIN, Math.min(MAP_TRAIN_MAX, Math.round(v * 10) / 10));
+  }
+  return out;
+}
+// entrosamento do playbook: treinar/manter sobe; trocar de esquema derruba
+const PLAYBOOK_FAM_GAIN = 14; // por split mantendo o mesmo esquema
+const PLAYBOOK_SWITCH_TO = 25; // entrosamento ao adotar um esquema novo
 
 // ----- moral / satisfação do jogador -----
 const MORALE_DEFAULT = 70;
@@ -687,6 +715,7 @@ export function CareerScreen({ onExit }: Props) {
     try { localStorage.setItem('rtm-career-guide-v1', '1'); } catch { /* sem storage */ }
   };
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
+  const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
   const [profilePlayer, setProfilePlayer] = useState<Player | null>(null); // perfil detalhado do jogador (modal)
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
@@ -706,7 +735,18 @@ export function CareerScreen({ onExit }: Props) {
   // partida (o snapshot da liga/major não sabe das trocas feitas no meio do
   // split). Times da IA passam direto.
   const roleOf = (oid: string): Role | undefined => save.roles?.[oid];
-  const syncUser = (team: TTeam): TTeam => (team.isUser ? resyncUserRoles(team, roleOf) : team);
+  const syncUser = (team: TTeam): TTeam => {
+    if (!team.isUser) return team;
+    const t = resyncUserRoles(team, roleOf);
+    // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
+    // meio do split — o snapshot da liga não saberia sozinho)
+    return {
+      ...t,
+      mapPrefs: { ...t.mapPrefs, ...(save.mapTraining ?? {}) },
+      playbook: save.playbook,
+      playbookFam: Math.max(0, Math.min(1, (save.playbookXp ?? 0) / 100)),
+    };
+  };
 
   // SÓ tempos atuais: usa EXCLUSIVAMENTE os elencos REAIS de CS2 (2026) do
   // bo3.gg, exclusivos do modo carreira (não aparecem no draft/online). Os
@@ -833,7 +873,11 @@ export function CareerScreen({ onExit }: Props) {
     // '__rookie__' = técnico iniciante barato (opção de entrada da carreira)
     const coach = currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
     const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach);
-    return { ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo };
+    return {
+      ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo,
+      mapPrefs: { ...team.mapPrefs, ...(s.mapTraining ?? {}) }, // domínio treinado por mapa
+      playbook: s.playbook, playbookFam: Math.max(0, Math.min(1, (s.playbookXp ?? 0) / 100)),
+    };
   };
 
   const startSplit = (s: CareerSave, circuit: (typeof circuits)[number]) => {
@@ -1540,6 +1584,8 @@ export function CareerScreen({ onExit }: Props) {
                   ...expired,
                   morale,
                   peakOvr,
+                  mapTraining: applyMapTraining(save),
+                  playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
                   ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas')]),
                 };
                 persist(next);
@@ -1567,6 +1613,7 @@ export function CareerScreen({ onExit }: Props) {
     const mySquadIdsSE = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
     const myStar = seStats.find((s) => mySquadIdsSE.has(s.id));
     const seasonTop3 = seasonTopPlayers(currentEra, save.split, 3);
+    const seasonTop20 = seasonTopPlayers(currentEra, save.split, 20);
     const nextFeed = feedMemo;
     const spots = save.circuit?.spots ?? MAJOR_SPOTS;
     // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
@@ -1719,6 +1766,11 @@ export function CareerScreen({ onExit }: Props) {
               </div>
             </div>
 
+            {/* cerimônia do ranking HLTV (premiação do fim de temporada) */}
+            <button className="btn gold big ceremony-cta" onClick={() => setShowCeremony(true)}>
+              🏆 Cerimônia do Top 20 HLTV
+            </button>
+
             {/* prévia da próxima janela de transferências */}
             <div className="muted small section-label">Rumores para a próxima janela</div>
             <TransferFeed items={nextFeed} compact />
@@ -1799,6 +1851,8 @@ export function CareerScreen({ onExit }: Props) {
                     ...expired,
                     morale,
                     peakOvr,
+                    mapTraining: applyMapTraining(save),
+                    playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
                     ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas')]),
                   };
                   persist(next);
@@ -1818,6 +1872,9 @@ export function CareerScreen({ onExit }: Props) {
               <Scoreboard series={selSeries.series} teams={selSeries.teams} />
             </div>
           </div>
+        )}
+        {showCeremony && (
+          <Top20Ceremony entries={seasonTop20} mine={new Set(save.squad.map((s) => s.playerId))} split={save.split} circuit={save.circuit?.name ?? 'temporada'} onClose={() => setShowCeremony(false)} />
         )}
       </div>
     );
@@ -2276,6 +2333,13 @@ export function CareerScreen({ onExit }: Props) {
           update({ roles: { ...(save.roles ?? {}), [pid]: role } });
         const setFocus = (pid: string) =>
           update({ trainingFocus: save.trainingFocus === pid ? null : pid });
+        const setMapFocus = (m: MapId) =>
+          update({ mapFocus: save.mapFocus === m ? null : m });
+        const setPlaybook = (pb: Playbook) => {
+          if (pb === save.playbook) return;
+          update({ playbook: pb, playbookXp: PLAYBOOK_SWITCH_TO }); // trocar reseta o entrosamento
+        };
+        const fam = save.playbookXp ?? 0;
         return (
         <div className="career-grid">
           <div className="career-main">
@@ -2325,6 +2389,46 @@ export function CareerScreen({ onExit }: Props) {
             </p>
           </div>
           <div className="career-side">
+            {/* PLAYBOOK: esquema tático treinado. Trocar derruba o entrosamento. */}
+            <div className="side-card">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>📋 Playbook tático</div>
+              <div className="pb-fam">
+                <span className="muted small">Entrosamento</span>
+                <span className="pb-bar"><i className={fam >= 70 ? 'good' : fam >= 40 ? 'warn' : 'bad'} style={{ width: `${fam}%` }} /></span>
+                <b className="small">{fam}%</b>
+              </div>
+              <div className="pb-list">
+                {(Object.keys(PLAYBOOK_LABELS) as Playbook[]).map((pb) => (
+                  <button key={pb} className={`pb-opt${save.playbook === pb ? ' on' : ''}`} onClick={() => setPlaybook(pb)}>
+                    <span className="pb-name">{PLAYBOOK_LABELS[pb]}{save.playbook === pb ? ' ✓' : ''}</span>
+                    <span className="pb-desc muted small">{PLAYBOOK_DESC[pb]}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="muted small" style={{ margin: '8px 0 0' }}>O entrosamento sobe a cada split mantendo o esquema; <b>trocar volta pra {PLAYBOOK_SWITCH_TO}%</b>. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.</p>
+            </div>
+
+            {/* TREINO DE MAPA: foca 1 mapa por split; os outros decaem (não dá pra ser bom em todos) */}
+            <div className="side-card">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>🗺️ Treino de mapa</div>
+              <div className="map-train">
+                {MAP_POOL.map((m) => {
+                  const lvl = mapLevel(save, m);
+                  const pct = Math.round(((lvl - MAP_TRAIN_MIN) / (MAP_TRAIN_MAX - MAP_TRAIN_MIN)) * 100);
+                  const foc = save.mapFocus === m;
+                  const cls = lvl >= 1 ? 'good' : lvl <= -1 ? 'bad' : 'warn';
+                  return (
+                    <button key={m} className={`mt-row${foc ? ' on' : ''}`} onClick={() => setMapFocus(m)} title={foc ? 'Em treino neste split' : 'Treinar este mapa neste split'}>
+                      <span className="mt-name">{foc ? '🎯 ' : ''}{MAP_LABELS[m]}</span>
+                      <span className="mt-bar"><i className={cls} style={{ width: `${pct}%` }} /></span>
+                      <span className={`mt-lvl ${cls}`}>{lvl > 0 ? '+' : ''}{lvl.toFixed(1)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="muted small" style={{ margin: '8px 0 0' }}>Treinar sobe o mapa em foco; <b>todos os outros decaem</b> um pouco por split. É de propósito: ninguém é forte em todos — escolha seus 2-3 mapas.</p>
+            </div>
+
             <div className="side-card">
               <div className="muted small section-label" style={{ marginTop: 0 }}>Melhores jogadores do {save.circuit?.name ?? 'circuito'}</div>
               <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
@@ -2724,6 +2828,54 @@ function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<s
 }
 
 // painel de detalhe de um time da tabela (elenco, técnico, força)
+// Cerimônia do Top 20 HLTV ao fim de cada temporada — revelação dos 20 melhores
+// jogadores do ano, com o #1 em destaque e os seus jogadores realçados.
+function Top20Ceremony({ entries, mine, split, circuit, onClose }: {
+  entries: { p: Player; team: TeamSeason; rating: number }[];
+  mine: Set<string>;
+  split: number;
+  circuit: string;
+  onClose: () => void;
+}) {
+  const top1 = entries[0];
+  const rest = entries.slice(1, 20);
+  return (
+    <div className="modal-backdrop ceremony-backdrop" onClick={onClose}>
+      <div className="ceremony" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-x" onClick={onClose}>✕</button>
+        <div className="cer-head">
+          <div className="cer-kicker">Premiação · {circuit} · Split {split}</div>
+          <h2>🏆 Ranking HLTV — Top 20 do ano</h2>
+        </div>
+        {top1 && (
+          <div className={`cer-one${mine.has(top1.p.id) ? ' mine' : ''}`}>
+            <span className="cer-1-badge">HLTV #1</span>
+            <PlayerAvatar nick={top1.p.nick} size={62} />
+            <div className="cer-1-id">
+              <div className="cer-1-nick"><Flag cc={top1.p.country} /> {top1.p.nick}</div>
+              <div className="muted small">{top1.team.tag} · {top1.p.name}</div>
+            </div>
+            <div className="cer-1-rating">{top1.rating.toFixed(2)}<span>rating</span></div>
+          </div>
+        )}
+        <div className="cer-list">
+          {rest.map((e, i) => (
+            <div key={e.p.id} className={`cer-row${mine.has(e.p.id) ? ' mine' : ''}`} style={{ animationDelay: `${0.1 + i * 0.045}s` }}>
+              <span className="cer-rank">{i + 2}</span>
+              <PlayerAvatar nick={e.p.nick} size={24} />
+              <span className="cer-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{e.team.tag}</span></span>
+              <span className="cer-rating">{e.rating.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="center" style={{ marginTop: 14 }}>
+          <button className="btn" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | null; onClose: () => void }) {
   // histórico por mapa do time nesta temporada (séries já jogadas na liga)
   const mapStats = useMemo(() => {

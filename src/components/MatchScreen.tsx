@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyzeSeries } from '../engine/insights';
-import { createMapSim, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
+import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
-import { derivePlaystyle, MAP_LABELS, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
+import { derivePlaystyle, MAP_LABELS, PLAYBOOK_LABELS, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
 import { CoreFlag } from './flags';
 import { Scoreboard } from './Scoreboard';
 import { Flag, MapThumb, PlayerAvatar, TeamBadge } from './ui';
@@ -285,6 +285,24 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const visibleKills = sim.killFeed().slice(-8).reverse();
   const currentMap = maps[Math.min(mapIdx, maps.length - 1)].map;
 
+  // PLAYBOOK ao vivo: mostra, no round atual, se o esquema do seu time está
+  // favorável ou arriscado naquele contexto (lado/pistol/half) — o mesmo fator
+  // que pesa de verdade na simulação (effStrength), exposto pro jogador ver.
+  const me = teams[userIdx];
+  const pbLive = (() => {
+    if (finished || !me.playbook || !me.playbookFam) return null;
+    const r = sim.round();
+    const lean = playbookLean(me.playbook, {
+      side: mySide,
+      isPistol: r === 0 || r === 12,
+      secondHalf: r >= 12,
+      lostLast: false,
+      pickedOwnMap: maps[Math.min(mapIdx, maps.length - 1)].pickedBy === userIdx,
+      eco: buys[userIdx] !== 'full',
+    });
+    return { label: lean.label, good: lean.delta >= 0 };
+  })();
+
   return (
     <div className="fade-in">
       <div className="panel">
@@ -377,6 +395,13 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
               </span>
             </div>
           </div>
+          {pbLive && (
+            <div className="center" style={{ marginTop: 4 }}>
+              <span className="mm-playbook">
+                📋 {PLAYBOOK_LABELS[me.playbook!]} · <span className={`pb-note ${pbLive.good ? 'good' : 'bad'}`}>{pbLive.label} {pbLive.good ? '▲ favorável' : '▼ arriscado'}</span>
+              </span>
+            </div>
+          )}
           {pausedMsg && <div className="timeout-flash">{pausedMsg}</div>}
           {!finished && <KillFeed events={visibleKills} teams={teams} playerById={playerById} />}
         </div>

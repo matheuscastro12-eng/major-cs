@@ -3,7 +3,7 @@ import { draftSynergy } from '../engine/ratings';
 import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, vetoOrder, type VetoState } from '../engine/veto';
 import type { Rng } from '../engine/rng';
 import type { MapId, TTeam } from '../types';
-import { MAP_LABELS, MAP_POOL } from '../types';
+import { MAP_LABELS, MAP_POOL, PLAYBOOK_LABELS } from '../types';
 import { MapThumb } from './ui';
 import { MatchBanner } from './flags';
 import { TeamLineups } from './lineups';
@@ -228,6 +228,13 @@ function VetoAnalysis({
             {opp.strength.toFixed(1)} {opp.name}
           </span>
         </div>
+
+        {me.playbook && (
+          <div className="pb-analysis" style={{ margin: '4px 0 10px' }}>
+            <span>📋 Playbook: <span className="pb-chip">{PLAYBOOK_LABELS[me.playbook]}</span></span>
+            <span className="muted small">· entrosamento {Math.round((me.playbookFam ?? 0) * 100)}%</span>
+          </div>
+        )}
 
         <div className="muted small" style={{ marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
           {t('veto.mapAdvantage')}
