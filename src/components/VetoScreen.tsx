@@ -38,6 +38,24 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
     return () => window.clearTimeout(timer.current);
   }, [veto, done, isUserTurn, step, teams, rng, userIdx]);
 
+  // tendência de pick/ban por mapa: mapas em que OS DOIS times jogam bem tendem
+  // a ser pickados; onde os dois jogam mal tendem a ser banidos. É o mesmo
+  // raciocínio que a IA do veto usa, exposto pro usuário ler antes de agir.
+  const tendency = useMemo(() => {
+    const combo = MAP_POOL.map((m) => ({ m, v: (teams[0].mapPrefs[m] ?? 0) + (teams[1].mapPrefs[m] ?? 0) }));
+    const vals = combo.map((c) => c.v);
+    const max = Math.max(...vals), min = Math.min(...vals);
+    const span = max - min;
+    const out: Record<string, { kind: 'pick' | 'ban' | 'even'; pct: number }> = {};
+    for (const { m, v } of combo) {
+      // sem diferença entre mapas (ex.: prefs ainda zeradas) → tudo neutro, em vez
+      // de marcar todo mapa como "tende a ban"
+      const norm = span === 0 ? 0.5 : (v - min) / span; // 0..1
+      out[m] = { kind: norm >= 0.62 ? 'pick' : norm <= 0.38 ? 'ban' : 'even', pct: Math.round(norm * 100) };
+    }
+    return out;
+  }, [teams]);
+
   const mapState = useMemo(() => {
     const state: Record<string, { kind: 'banned' | 'picked' | 'decider'; by: 0 | 1 | -1 } | undefined> = {};
     for (const s of veto.steps) {
@@ -102,6 +120,11 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
                   onClick={() => click(m)}
                 >
                   <MapThumb map={m} className="mapcard-img" />
+                  {!st && tendency[m] && (
+                    <span className={`mtend ${tendency[m].kind}`} title={`${t('veto.tendency')}: ${tendency[m].pct}%`}>
+                      {tendency[m].kind === 'pick' ? `🔥 ${t('veto.tendPick')}` : tendency[m].kind === 'ban' ? `🚫 ${t('veto.tendBan')}` : `➖ ${t('veto.tendEven')}`}
+                    </span>
+                  )}
                   {st && (
                     <span className={`mtag ${st.kind}`}>
                       {st.kind === 'banned' ? `🚫 ${t('veto.ban')}` : st.kind === 'picked' ? `✅ ${t('veto.pick')} ${teams[st.by as 0 | 1].tag}` : t('veto.decider')}

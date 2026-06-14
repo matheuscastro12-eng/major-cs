@@ -4,7 +4,7 @@
 // rendem dinheiro e pontos de VRS - o caminho até o Major virá nas próximas
 // fases. Textos em PT por enquanto (modo em refino, não lançado).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr } from '../engine/ratings';
+import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
 import { createLeague, leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League } from '../engine/league';
 import { teamSeasonToTTeam } from '../engine/ratings';
 import { simulateSeries } from '../engine/match';
@@ -19,7 +19,7 @@ import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
-import { regionOf, REGION_LABELS, type RegionKey } from '../data/regions';
+import { regionOf, type RegionKey } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits } from '../state/bo3-edits';
 import bo3Ages from '../data/bo3-ages.json';
@@ -208,7 +208,14 @@ interface CareerSave {
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   trainingFocus?: string | null; // id do jogador em foco de treino no split atual (acelera a evolução)
+  morale?: Record<string, number>; // moral/satisfação por jogador (id original) 0-100
+  news?: NewsItem[]; // caixa de entrada (manchetes), mais recente primeiro
+  unread?: number; // manchetes não lidas (badge da aba Inbox)
+  peakOvr?: Record<string, number>; // maior OVR já alcançado por jogador (perfil)
 }
+
+// manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
+interface NewsItem { id: string; split: number; icon: string; tone: 'good' | 'bad' | 'info'; title: string; body: string; }
 
 // stats acumuladas de um jogador ao longo de TODA a carreira (somatório bruto;
 // rating/ADR/KAST são derivados na hora). É só leitura pro jogador (sobe sozinho
@@ -267,7 +274,81 @@ const emptySave = (): CareerSave => ({
   objective: null,
   lastObjective: null,
   fired: false,
+  morale: {},
+  news: [],
+  unread: 0,
+  peakOvr: {},
 });
+
+// ----- moral / satisfação do jogador -----
+const MORALE_DEFAULT = 70;
+const clampMorale = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
+function moraleInfo(v: number): { label: string; cls: 'good' | 'warn' | 'bad'; icon: string } {
+  if (v >= 78) return { label: 'Motivado', cls: 'good', icon: '😄' };
+  if (v >= 55) return { label: 'Contente', cls: 'good', icon: '🙂' };
+  if (v >= 38) return { label: 'Indiferente', cls: 'warn', icon: '😐' };
+  if (v >= 22) return { label: 'Insatisfeito', cls: 'bad', icon: '😟' };
+  return { label: 'Revoltado', cls: 'bad', icon: '😡' };
+}
+// forma inicial do split derivada da moral (sutil): 100→+0.07, 40→-0.07
+const moraleForm = (m: number) => Math.max(0.93, Math.min(1.07, 1 + (m - MORALE_DEFAULT) / 430));
+// nova moral no fim do split: reversão à média + rendimento (forma) + resultado
+// coletivo (título/objetivo) + insegurança de contrato vencendo.
+function nextMorale(
+  prev: Record<string, number>,
+  squad: { oid: string; form: number; expiring: boolean }[],
+  ctx: { champion: boolean; objMet: boolean },
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const s of squad) {
+    let m = prev[s.oid] ?? MORALE_DEFAULT;
+    m += (MORALE_DEFAULT - m) * 0.12;
+    m += ((s.form ?? 1) - 1) * 55;
+    if (ctx.champion) m += 12; else if (ctx.objMet) m += 4; else m -= 7;
+    if (s.expiring) m -= 6;
+    out[s.oid] = clampMorale(m);
+  }
+  return out;
+}
+// acrescenta manchetes (mais recentes primeiro, teto de 40) e conta as não lidas
+function pushNews(save: CareerSave, items: NewsItem[]): Pick<CareerSave, 'news' | 'unread'> {
+  if (items.length === 0) return { news: save.news ?? [], unread: save.unread ?? 0 };
+  const news = [...items, ...(save.news ?? [])].slice(0, 40);
+  return { news, unread: (save.unread ?? 0) + items.length };
+}
+
+// manchetes geradas na virada de split (imprensa + diretoria)
+function splitNews(ctx: {
+  split: number; org: string; champion: boolean; circuit: string;
+  objMet: boolean; objText?: string;
+  tierChange: 'up' | 'down' | null; tierName?: string;
+  releases: string[]; offer: PoachOffer | null;
+  risers: string[]; sliders: string[]; unhappy: string[];
+  major?: { placement: number | string; champion: boolean } | null;
+}): NewsItem[] {
+  const s = ctx.split;
+  const out: NewsItem[] = [];
+  const add = (key: string, icon: string, tone: NewsItem['tone'], title: string, body: string) =>
+    out.push({ id: `${s}:${key}`, split: s, icon, tone, title, body });
+
+  if (ctx.major) {
+    if (ctx.major.champion) add('major', '🏆', 'good', `${ctx.org} é CAMPEÃO MUNDIAL!`, `A ${ctx.org} levantou o troféu do Major. O nome entrou para a história do CS.`);
+    else add('major', '🌍', 'info', `${ctx.org} no Major: ${ctx.major.placement}º`, `A campanha mundial terminou em ${ctx.major.placement}º. Aprendizado pra voltar mais forte.`);
+  } else if (ctx.champion) {
+    add('title', '🏆', 'good', `${ctx.org} campeã do ${ctx.circuit}`, `Título conquistado! A torcida foi à loucura e a diretoria respira aliviada.`);
+  }
+  if (ctx.tierChange === 'up') add('tier', '⬆️', 'good', `${ctx.org} promovida ao ${ctx.tierName}`, `Subir de divisão coloca a org mais perto do Major. Patrocinadores de olho.`);
+  else if (ctx.tierChange === 'down') add('tier', '⬇️', 'bad', `${ctx.org} rebaixada ao ${ctx.tierName}`, `Temporada para esquecer: a queda de divisão pressiona o elenco e o caixa.`);
+  if (ctx.objText) add('board', ctx.objMet ? '🏛️' : '⚠️', ctx.objMet ? 'good' : 'bad',
+    ctx.objMet ? 'Diretoria satisfeita' : 'Diretoria cobra resultados',
+    `${ctx.objMet ? 'Objetivo cumprido' : 'Objetivo não cumprido'}: "${ctx.objText}". ${ctx.objMet ? 'A confiança subiu.' : 'A confiança caiu — atenção redobrada no próximo split.'}`);
+  if (ctx.offer) add('offer', '📞', 'info', `${ctx.offer.orgName} sonda ${ctx.offer.nick}`, `Proposta de ${formatMoney(ctx.offer.fee)} pelo seu ${ctx.offer.nick} (OVR ${ctx.offer.ovr}). Decida na janela de transferências.`);
+  if (ctx.releases.length) add('release', '📄', 'bad', `Contrato vencido: ${ctx.releases.join(', ')}`, `${ctx.releases.length === 1 ? 'O jogador saiu' : 'Os jogadores saíram'} de graça por fim de contrato. Reforce o elenco no mercado.`);
+  if (ctx.risers.length) add('rise', '📈', 'good', `Em ascensão: ${ctx.risers.join(', ')}`, `A comissão técnica destaca a evolução de ${ctx.risers.join(', ')} no último split.`);
+  if (ctx.sliders.length) add('slide', '📉', 'info', `Em queda: ${ctx.sliders.join(', ')}`, `${ctx.sliders.join(', ')} ${ctx.sliders.length === 1 ? 'perdeu' : 'perderam'} rendimento. Veteranos cobram mais minutos de treino.`);
+  if (ctx.unhappy.length) add('mood', '😟', 'bad', `Vestiário: ${ctx.unhappy.join(', ')} insatisfeito${ctx.unhappy.length > 1 ? 's' : ''}`, `Moral baixa no elenco. Vitórias, renovação de contrato e títulos levantam o astral.`);
+  return out;
+}
 
 // ----- evolução de elenco entre temporadas -----
 // cada jogador tem uma fase de carreira (estável, derivada do id): em ascensão
@@ -381,22 +462,36 @@ function aiTeamVrs(t: TeamSeason): number {
   const base = Math.max(0, t.teamwork - 38);
   return Math.round(base * 24 + (hashStr(t.id) % 90));
 }
-// região do time: país do time, senão maioria dos jogadores, senão Europa
-function teamRegion(t: TeamSeason): RegionKey {
-  const direct = regionOf(t.country);
-  if (direct) return direct;
-  const tally = new Map<RegionKey, number>();
+// Região de circuito no modo carreira. Diferente do "core" do escudo: aqui as
+// Américas (Norte/Sul/Central) contam como UMA região só ("Américas").
+type CareerRegion = 'americas' | 'europe' | 'cis' | 'asia' | 'oceania' | 'africa';
+const CAREER_REGION_LABELS: Record<CareerRegion, string> = {
+  americas: 'Américas', europe: 'Europa', cis: 'CIS', asia: 'Ásia', oceania: 'Oceania', africa: 'África',
+};
+const CAREER_REGION_ORDER: CareerRegion[] = ['americas', 'europe', 'cis', 'asia', 'oceania', 'africa'];
+// colapsa as sub-regiões do continente americano numa só
+function macroRegion(r: RegionKey): CareerRegion {
+  return r === 'samerica' || r === 'namerica' ? 'americas' : (r as CareerRegion);
+}
+// região do time = onde está a MAIORIA dos jogadores (não o país do header da
+// base, que vinha errado — ex.: Falcons marcado como 'sa'/Ásia sendo um time EU).
+// Empate é desempatado pela ordem de CAREER_REGION_ORDER.
+function teamRegion(t: TeamSeason): CareerRegion {
+  const tally = new Map<CareerRegion, number>();
   for (const p of t.players) {
     const r = regionOf(p.country);
-    if (r) tally.set(r, (tally.get(r) ?? 0) + 1);
+    if (r) { const m = macroRegion(r); tally.set(m, (tally.get(m) ?? 0) + 1); }
   }
-  let best: RegionKey = 'europe';
+  let best: CareerRegion | null = null;
   let bestN = -1;
-  for (const [r, n] of tally) if (n > bestN) { best = r; bestN = n; }
+  for (const r of CAREER_REGION_ORDER) {
+    const n = tally.get(r) ?? 0;
+    if (n > bestN) { best = r; bestN = n; }
+  }
+  // fallback: país do header, senão Europa
+  if (!best || bestN <= 0) { const d = regionOf(t.country); return d ? macroRegion(d) : 'europe'; }
   return best;
 }
-// ordem das regiões no ranking (as 5 pedidas + Ásia/África se houver times)
-const REGION_ORDER: RegionKey[] = ['samerica', 'namerica', 'europe', 'cis', 'oceania', 'asia', 'africa'];
 
 // rating "do ano" de um jogador (estilo HLTV), determinístico por temporada
 function playerSeasonRating(p: Player, split: number): number {
@@ -503,7 +598,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', countr
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history';
+type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history' | 'inbox';
 
 interface MajorResult {
   tournament: Tournament;
@@ -578,6 +673,12 @@ export function CareerScreen({ onExit }: Props) {
       return next;
     });
   };
+
+  // aplica a função escolhida no Elenco ao time do usuário na hora de montar a
+  // partida (o snapshot da liga/major não sabe das trocas feitas no meio do
+  // split). Times da IA passam direto.
+  const roleOf = (oid: string): Role | undefined => save.roles?.[oid];
+  const syncUser = (team: TTeam): TTeam => (team.isUser ? resyncUserRoles(team, roleOf) : team);
 
   // SÓ tempos atuais: usa EXCLUSIVAMENTE os elencos REAIS de CS2 (2026) do
   // bo3.gg, exclusivos do modo carreira (não aparecem no draft/online). Os
@@ -696,9 +797,19 @@ export function CareerScreen({ onExit }: Props) {
   const startSplit = (s: CareerSave, circuit: (typeof circuits)[number]) => {
     const user = buildTeam(s);
     if (!user) return;
+    // jogador entra no split com a forma "puxada" pela moral (motivado começa
+    // quente, insatisfeito começa frio); a forma depois oscila durante o torneio
+    user.players = user.players.map((p) => {
+      const oid = p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id;
+      return { ...p, form: moraleForm(s.morale?.[oid] ?? MORALE_DEFAULT) };
+    });
     // a IA fica mais forte a cada split: impede passar a carreira inteira
     // invicto depois de montar um time bom (o cenario "evolui" junto com você)
-    const aiBoost = CIRCUIT_AI_BOOST + Math.min(13, (s.split - 1) * 1.7);
+    // rampa de dificuldade por split, suavizada nos tiers de acesso (tier 3/2 são
+    // ligas de aprendizado; o elite mantém a curva cheia). Evita que um elenco
+    // inicial humilde apanhe demais nos primeiros splits.
+    const tierScale = s.tier === 3 ? 0.6 : s.tier === 2 ? 0.85 : 1;
+    const aiBoost = CIRCUIT_AI_BOOST + Math.min(13, (s.split - 1) * 1.7 * tierScale);
     const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 7).map((t) => {
       const tt = teamSeasonToTTeam(t);
       tt.strength += aiBoost;
@@ -714,9 +825,15 @@ export function CareerScreen({ onExit }: Props) {
       vrsMult: circuit.vrsMult,
       tier: circuit.tier,
     };
+    const objective = objectiveFor(circuit.tier, s.split, isMajorSplit(s.split));
+    const startItem: NewsItem = {
+      id: `${s.split}:start`, split: s.split, icon: '🗓️', tone: 'info',
+      title: `Split ${s.split} começa: ${circuit.name}`,
+      body: `Meta da diretoria: "${objective.text}" (bônus ${formatMoney(objective.bonus)}).`,
+    };
     const next = {
-      ...s, league, circuit: choice, tierChange: null,
-      objective: objectiveFor(circuit.tier, s.split, isMajorSplit(s.split)),
+      ...s, league, circuit: choice, tierChange: null, objective,
+      ...pushNews(s, [startItem]),
     };
     persist(next);
     setSave(next);
@@ -875,8 +992,8 @@ export function CareerScreen({ onExit }: Props) {
     const m = poUserMatch(p);
     if (!m) return;
     rngRef.current = makeRng(randomSeed());
-    const a = leagueTeam(save.league, m.a);
-    const b = leagueTeam(save.league, m.b);
+    const a = syncUser(leagueTeam(save.league, m.a));
+    const b = syncUser(leagueTeam(save.league, m.b));
     const isFinal = p.final === m;
     setMatchCtx({
       teams: [a, b],
@@ -915,8 +1032,8 @@ export function CareerScreen({ onExit }: Props) {
     const live = poUserMatch(p);
     if (!live) { applyPlayoff(structuredClone(p)); return; }
     rngRef.current = makeRng(randomSeed());
-    const a = leagueTeam(save.league, live.a);
-    const b = leagueTeam(save.league, live.b);
+    const a = syncUser(leagueTeam(save.league, live.a));
+    const b = syncUser(leagueTeam(save.league, live.b));
     const isFinal = p.final === live;
     const bo = isFinal ? PO_FINAL_BO : PO_SF_BO;
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
@@ -938,8 +1055,8 @@ export function CareerScreen({ onExit }: Props) {
     const m = userLeagueMatch(l);
     if (!m) return;
     rngRef.current = makeRng(randomSeed());
-    const a = leagueTeam(l, m.a);
-    const b = leagueTeam(l, m.b);
+    const a = syncUser(leagueTeam(l, m.a));
+    const b = syncUser(leagueTeam(l, m.b));
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
     setQuickSim({
       series, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1,
@@ -957,8 +1074,8 @@ export function CareerScreen({ onExit }: Props) {
     while (!leagueDone(l) && guard++ < 80) {
       const m = userLeagueMatch(l);
       if (m && !m.result) {
-        const a = leagueTeam(l, m.a);
-        const b = leagueTeam(l, m.b);
+        const a = syncUser(leagueTeam(l, m.a));
+        const b = syncUser(leagueTeam(l, m.b));
         m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
       }
       resolveLeagueRound(l, rngRef.current, LEAGUE_BO);
@@ -997,8 +1114,8 @@ export function CareerScreen({ onExit }: Props) {
     if (!majorT) return;
     const up = tournamentUserPairing(majorT);
     if (!up) return;
-    const a = getTeam(majorT, up.a);
-    const b = getTeam(majorT, up.b);
+    const a = syncUser(getTeam(majorT, up.a));
+    const b = syncUser(getTeam(majorT, up.b));
     setMatchCtx({
       teams: [a, b],
       userIdx: up.a === 'user' ? 0 : 1,
@@ -1039,8 +1156,8 @@ export function CareerScreen({ onExit }: Props) {
       advanceMajor(clone);
       return;
     }
-    const a = getTeam(majorT, up.a);
-    const b = getTeam(majorT, up.b);
+    const a = syncUser(getTeam(majorT, up.a));
+    const b = syncUser(getTeam(majorT, up.b));
     const bo = up.bestOf ?? 3;
     rngRef.current = makeRng(randomSeed());
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
@@ -1107,16 +1224,16 @@ export function CareerScreen({ onExit }: Props) {
     if (buildTeam(save) && save.org) {
       rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, country: 'br', vrs: save.vrs, isUser: true });
     }
-    const groups = new Map<RegionKey, Row[]>();
+    const groups = new Map<CareerRegion, Row[]>();
     for (const r of rows) {
       const t = currentEra.find((x) => x.id === r.id);
-      const reg: RegionKey = r.isUser ? 'samerica' : t ? teamRegion(t) : 'europe';
+      const reg: CareerRegion = r.isUser ? 'americas' : t ? teamRegion(t) : 'europe';
       if (!groups.has(reg)) groups.set(reg, []);
       groups.get(reg)!.push(r);
     }
-    return REGION_ORDER.filter((k) => groups.has(k)).map((k) => ({
+    return CAREER_REGION_ORDER.filter((k) => groups.has(k)).map((k) => ({
       key: k,
-      label: REGION_LABELS[k],
+      label: CAREER_REGION_LABELS[k],
       teams: groups.get(k)!.sort((a, b) => b.vrs - a.vrs),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1199,11 +1316,17 @@ export function CareerScreen({ onExit }: Props) {
             // vende: sai do elenco e entra a grana. Você fica com 4 e repõe no
             // mercado (a org compradora leva o jogador "de cena"; não forçamos
             // ele num 6º slot do roster dela pra não quebrar o time).
+            const morale = { ...(save.morale ?? {}) };
+            delete morale[off.playerId];
+            const peakOvr = { ...(save.peakOvr ?? {}) };
+            delete peakOvr[off.playerId];
             const next: CareerSave = {
               ...save,
               squad: save.squad.filter((s) => s.playerId !== off.playerId),
               budget: save.budget + off.fee,
               pendingOffer: null,
+              morale,
+              peakOvr,
             };
             persist(next);
             setSave(next);
@@ -1233,7 +1356,13 @@ export function CareerScreen({ onExit }: Props) {
             }
           }
           for (const k of Object.keys(contracts)) if (!ids.has(k)) delete contracts[k];
-          const next = { ...save, squad, coachFromId, budget, sponsors, sponsorUntil, contracts };
+          // poda chaves de quem saiu do elenco (não crescem pra sempre no save;
+          // se voltar a contratar, começa com moral padrão de novo)
+          const morale = { ...(save.morale ?? {}) };
+          for (const k of Object.keys(morale)) if (!ids.has(k)) delete morale[k];
+          const peakOvr = { ...(save.peakOvr ?? {}) };
+          for (const k of Object.keys(peakOvr)) if (!ids.has(k)) delete peakOvr[k];
+          const next = { ...save, squad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -1302,6 +1431,29 @@ export function CareerScreen({ onExit }: Props) {
                 const majObj = save.objective;
                 const majBonus = majObj ? majObj.bonus + (mr.champion ? 400_000 : 0) : 0;
                 const majBoard = Math.min(100, save.board + (mr.champion ? 18 : 12));
+                const evo = evolveSquad(save);
+                const expired = expireContracts(save, save.split + 1);
+                // moral: usa a forma do time no Major (atualizada série a série)
+                const uTeam = save.majorT ? getTeam(save.majorT, 'user') : null;
+                const nickByOid: Record<string, string> = {};
+                for (const p of uTeam?.players ?? []) nickByOid[p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id] = p.nick;
+                const squadInfo = save.squad.map((sg) => {
+                  const rp = uTeam?.players.find((p) => p.id === `user__${sg.playerId}`);
+                  const until = save.contracts?.[sg.playerId];
+                  return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
+                });
+                const morale = nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true });
+                const peakOvr = { ...(save.peakOvr ?? {}) };
+                for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
+                const items = splitNews({
+                  split: save.split, org: save.org?.name ?? 'Sua org', champion: false,
+                  circuit: save.circuit?.name ?? 'circuito', objMet: true, objText: majObj?.text,
+                  tierChange: null, releases: expired.lastReleases ?? [], offer: null,
+                  risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
+                  sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
+                  unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
+                  major: { placement: mr.placement, champion: mr.champion },
+                });
                 const next = {
                   ...save,
                   budget: save.budget + mr.prize - payroll + sponsorIncome(save.sponsors) + majBonus,
@@ -1312,13 +1464,16 @@ export function CareerScreen({ onExit }: Props) {
                   circuit: null,
                   playoff: null,
                   history: [...save.history, finished],
-                  ...evolveSquad(save),
+                  ...evo,
                   ...applyTransferWindow(save),
                   pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
                   board: majBoard,
                   lastObjective: majObj ? { text: majObj.text, met: true, delta: majBoard - save.board } : null,
                   objective: null,
-                  ...expireContracts(save, save.split + 1),
+                  ...expired,
+                  morale,
+                  peakOvr,
+                  ...pushNews(save, items),
                 };
                 persist(next);
                 setSave(next);
@@ -1384,7 +1539,11 @@ export function CareerScreen({ onExit }: Props) {
       : obj.type === 'promote' ? tierResult.tierChange === 'up'
       : tierResult.tierChange !== 'down'; // noRelegation
     const boardDelta = obj ? (objMet ? 12 : -18) : 0;
-    const newBoard = Math.max(0, Math.min(100, save.board + boardDelta));
+    // deriva leve rumo ao neutro (só quando há objetivo avaliado), espelhando a
+    // reversão à média da moral: falhar ainda dói (-18), mas um técnico em apuros
+    // consegue subir de volta com um acerto em vez de ficar grudado na demissão.
+    const drifted = obj ? save.board + (50 - save.board) * 0.1 : save.board;
+    const newBoard = Math.max(0, Math.min(100, drifted + boardDelta));
     const objBonus = obj && objMet ? obj.bonus : 0;
     const fired = !!obj && newBoard <= 12; // confiança no chão -> demitido
     const boardPatch = {
@@ -1526,6 +1685,29 @@ export function CareerScreen({ onExit }: Props) {
               <button
                 className={qualified ? 'btn ghost big' : 'btn gold big'}
                 onClick={() => {
+                  const evo = evolveSquad(save);
+                  const expired = expireContracts(save, save.split + 1);
+                  const offer = makeOffer(save, tierResult.tier);
+                  // moral por jogador (forma no fim do split + resultado coletivo)
+                  const nickByOid: Record<string, string> = {};
+                  for (const p of me.players) nickByOid[p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id] = p.nick;
+                  const squadInfo = save.squad.map((sg) => {
+                    const rp = me.players.find((p) => p.id === `user__${sg.playerId}`);
+                    const until = save.contracts?.[sg.playerId];
+                    return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
+                  });
+                  const morale = nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet });
+                  const peakOvr = { ...(save.peakOvr ?? {}) };
+                  for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
+                  const items = splitNews({
+                    split: save.split, org: save.org?.name ?? 'Sua org', champion: isChampion,
+                    circuit: save.circuit?.name ?? 'circuito', objMet, objText: obj?.text,
+                    tierChange: tierResult.tierChange, tierName: TIER_NAMES[tierResult.tier],
+                    releases: expired.lastReleases ?? [], offer,
+                    risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
+                    sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
+                    unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
+                  });
                   const next = {
                     ...save,
                     budget: save.budget + prize - payroll + sponsorIncome(save.sponsors) + objBonus,
@@ -1537,13 +1719,16 @@ export function CareerScreen({ onExit }: Props) {
                     playoff: null,
                     history: [...save.history, baseRecord()],
                     ...bankStats(save),
-                    ...evolveSquad(save),
+                    ...evo,
                     ...applyTransferWindow(save),
                     ...boardPatch,
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
-                    pendingOffer: makeOffer(save, tierResult.tier),
-                    ...expireContracts(save, save.split + 1),
+                    pendingOffer: offer,
+                    ...expired,
+                    morale,
+                    peakOvr,
+                    ...pushNews(save, items),
                   };
                   persist(next);
                   setSave(next);
@@ -1630,8 +1815,8 @@ export function CareerScreen({ onExit }: Props) {
   const playMine = () => {
     if (!myMatch) return;
     rngRef.current = makeRng(randomSeed());
-    const a = leagueTeam(league, myMatch.a);
-    const b = leagueTeam(league, myMatch.b);
+    const a = syncUser(leagueTeam(league, myMatch.a));
+    const b = syncUser(leagueTeam(league, myMatch.b));
     setMatchCtx({
       teams: [a, b],
       userIdx: myMatch.a === 'user' ? 0 : 1,
@@ -1647,19 +1832,34 @@ export function CareerScreen({ onExit }: Props) {
   const form = clubForm(league);
   const opp = myMatch ? leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a) : null;
   const oppPos = opp ? table.findIndex((t) => t.id === opp.id) + 1 : 0;
-  const me = leagueTeam(league, 'user');
+  const me = syncUser(leagueTeam(league, 'user'));
   const seasonStats = seasonStatsMemo;
   const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
   const org = aggregateHistory(save.history);
 
   const majorActive = !!majorT && majorT.phase !== 'done';
+  // contratos vencendo (≤1 split p/ acabar): no mobile a aba Finanças some no
+  // overflow horizontal e o usuário perdia jogadores de graça sem ver. Calculado
+  // aqui pra chamar atenção no overview (aba inicial) e badge na aba Finanças.
+  const expiringContracts = save.squad
+    .map((s) => ({ sig: s, f: findSigning(s) }))
+    .filter((x) => x.f)
+    .map((x) => ({
+      nick: (x.f as { player: Player }).player.nick,
+      left: save.contracts?.[x.sig.playerId] != null ? save.contracts![x.sig.playerId] - save.split + 1 : 0,
+    }))
+    .filter((w) => w.left <= 1);
+  const expiringCount = expiringContracts.length;
+
+  const unread = save.unread ?? 0;
   const TABS: { id: HubTab; label: string }[] = [
     { id: 'overview', label: 'Visão geral' },
     ...(majorActive ? [{ id: 'major' as HubTab, label: '★ Major' }] : []),
+    { id: 'inbox', label: unread > 0 ? `📨 Inbox (${unread})` : '📨 Inbox' },
     { id: 'results', label: 'Resultados' },
     { id: 'standings', label: 'Classificação' },
     { id: 'squad', label: 'Elenco' },
-    { id: 'finance', label: '💰 Finanças' },
+    { id: 'finance', label: expiringCount > 0 ? `💰 Finanças ⚠️${expiringCount}` : '💰 Finanças' },
     { id: 'market', label: 'Mercado' },
     { id: 'vrs', label: 'Ranking VRS' },
     { id: 'top20', label: 'Top 20 HLTV' },
@@ -1723,16 +1923,48 @@ export function CareerScreen({ onExit }: Props) {
 
       <div className="career-tabs">
         {TABS.map((tab) => (
-          <button key={tab.id} className={`career-tab${hubTab === tab.id ? ' on' : ''}`} onClick={() => setHubTab(tab.id)}>
+          <button key={tab.id} className={`career-tab${hubTab === tab.id ? ' on' : ''}${tab.id === 'finance' && expiringCount > 0 ? ' finance-alert' : ''}${tab.id === 'inbox' && unread > 0 ? ' finance-alert' : ''}`}
+            onClick={() => { setHubTab(tab.id); if (tab.id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 }); }}>
             {tab.label}
           </button>
         ))}
       </div>
 
+      {/* ===== INBOX (manchetes da imprensa + diretoria) ===== */}
+      {hubTab === 'inbox' && (
+        <div className="career-grid">
+          <div className="career-main">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Caixa de entrada</div>
+            {(save.news?.length ?? 0) === 0 ? (
+              <p className="muted small">Sem novidades por enquanto. As manchetes aparecem ao longo da carreira (resultados, diretoria, mercado, vestiário).</p>
+            ) : (
+              <div className="news-list">
+                {save.news!.map((n) => (
+                  <div key={n.id} className={`news-item ${n.tone}`}>
+                    <span className="news-ic">{n.icon}</span>
+                    <div className="news-body">
+                      <div className="news-title">{n.title} <span className="news-split">Split {n.split}</span></div>
+                      <div className="news-text muted small">{n.body}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ===== VISÃO GERAL ===== */}
       {hubTab === 'overview' && (
         <div className="career-grid">
           <div className="career-main">
+            {expiringCount > 0 && (
+              <button className="contract-alert" onClick={() => setHubTab('finance')}>
+                📄 <b>{expiringCount === 1 ? '1 contrato vence' : `${expiringCount} contratos vencem`}</b> neste split
+                {' '}({expiringContracts.map((w) => w.nick).join(', ')}).
+                {' '}Renove em <b>Finanças</b> ou o jogador sai <b>de graça</b> no próximo split. <span className="ca-go">Abrir Finanças →</span>
+              </button>
+            )}
             {/* diretoria: objetivo do split + confiança (estilo manager) */}
             <div className="board-card">
               <div className="board-top">
@@ -1968,6 +2200,8 @@ export function CareerScreen({ onExit }: Props) {
                 const st = seasonStats.find((s) => s.id === rid);
                 const focused = save.trainingFocus === p.id;
                 const grew = save.evo?.[p.id] ?? 0;
+                const mor = save.morale?.[p.id] ?? MORALE_DEFAULT;
+                const mi = moraleInfo(mor);
                 return (
                   <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
                     <button className="cs-open" onClick={() => setProfilePlayer(p)} title="Ver perfil do jogador">
@@ -1976,6 +2210,7 @@ export function CareerScreen({ onExit }: Props) {
                         {grew > 0 && <span className="cs-grew" title={`+${grew} de evolução na carreira`}> ▲{grew}</span>}
                       </span>
                     </button>
+                    <span className={`cs-morale ${mi.cls}`} title={`Moral: ${mi.label} (${mor}/100)`}>{mi.icon} {mor}</span>
                     <select className={`role-select ${p.role}`} value={p.role}
                       onChange={(e) => setRole(p.id, e.target.value as Role)}
                       title="Definir a função deste jogador">
@@ -2142,6 +2377,8 @@ export function CareerScreen({ onExit }: Props) {
             cur={seasonStatsMemo.find((s) => s.id === rid)}
             contractUntil={save.contracts?.[p.id]}
             evoTotal={save.evo?.[p.id] ?? 0}
+            morale={save.morale?.[p.id] ?? MORALE_DEFAULT}
+            peakOvr={Math.max(save.peakOvr?.[p.id] ?? 0, playerOvr(p))}
             focused={save.trainingFocus === p.id}
             onToggleFocus={() => update({ trainingFocus: save.trainingFocus === p.id ? null : p.id })}
             onClose={() => setProfilePlayer(null)}
@@ -2152,21 +2389,55 @@ export function CareerScreen({ onExit }: Props) {
   );
 }
 
+// radar de atributos (pentágono, escala 40-99) — leitura de "shape" do jogador
+function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
+  const n = attrs.length;
+  const cx = 100, cy = 96, R = 66;
+  const norm = (v: number) => Math.max(0.05, Math.min(1, (v - 40) / 59));
+  const pt = (i: number, r: number): [number, number] => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n; // começa no topo
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+  };
+  const grid = [0.25, 0.5, 0.75, 1].map((f) => attrs.map((_, i) => pt(i, R * f).join(',')).join(' '));
+  const shape = attrs.map((d, i) => pt(i, R * norm(d.value)).join(',')).join(' ');
+  return (
+    <svg viewBox="0 0 200 188" className="attr-radar" role="img" aria-label="radar de atributos">
+      <g stroke="rgba(255,255,255,0.1)" fill="none" strokeWidth="0.8">
+        {grid.map((g, i) => <polygon key={i} points={g} />)}
+        {attrs.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} />; })}
+      </g>
+      <polygon points={shape} fill="rgba(91,160,208,0.28)" stroke="var(--blue-bright)" strokeWidth="1.6" />
+      {attrs.map((d, i) => { const [x, y] = pt(i, R * norm(d.value)); return <circle key={i} cx={x} cy={y} r="2.2" fill="var(--blue-bright)" />; })}
+      {attrs.map((d, i) => {
+        const [lx, ly] = pt(i, R + 13);
+        return (
+          <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" className="ar-label">
+            {d.label} <tspan className="ar-val">{d.value}</tspan>
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
 // perfil completo do jogador (modal, só leitura). Atributos em barras + idade,
 // potencial, fase, valor/salário/contrato e as STATS DE CARREIRA acumuladas
 // (rating/K-D/ADR/KAST/mapas). O jogador da carreira não edita nada aqui — os
 // atributos sobem sozinhos com a evolução; quem edita é o admin no CRM.
-function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, focused, onToggleFocus, onClose }: {
+function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, peakOvr, focused, onToggleFocus, onClose }: {
   player: Player;
   split: number;
   career: ReturnType<typeof deriveCareer>;
   cur?: SeasonStat;
   contractUntil?: number;
   evoTotal: number;
+  morale: number;
+  peakOvr: number;
   focused: boolean;
   onToggleFocus: () => void;
   onClose: () => void;
 }) {
+  const mi = moraleInfo(morale);
   const age = effectiveAge(player, split);
   const pot = playerPotentialOvr(player, age);
   const tier = potentialTier(pot);
@@ -2187,7 +2458,9 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, fo
             <div className="pp-tags">
               <span className="pp-tag">{age} anos</span>
               <span className={`pp-tag pot-${tier}`}>POT {tier} ({pot})</span>
+              <span className="pp-tag" title="Maior OVR já alcançado">★ Pico {peakOvr}</span>
               <span className="pp-tag">{PHASE_LABEL[phase]}</span>
+              <span className={`pp-tag mood-${mi.cls}`} title={`Moral: ${mi.label} (${morale}/100)`}>{mi.icon} {mi.label}</span>
               {focused && <span className="pp-tag focus">🎯 em treino</span>}
             </div>
           </div>
@@ -2199,6 +2472,13 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, fo
             <div className="muted small section-label" style={{ marginTop: 0 }}>Atributos
               {evoTotal > 0 && <span className="cs-grew"> ▲{evoTotal} na carreira</span>}
             </div>
+            <AttrRadar attrs={[
+              { label: 'Mira', value: player.aim },
+              { label: 'AWP', value: player.awp },
+              { label: 'IGL', value: player.igl },
+              { label: 'Clutch', value: player.clutch },
+              { label: 'Consist.', value: player.consistency },
+            ]} />
             <div className="attr-bars">
               <AttrBar label="Mira" value={player.aim} />
               <AttrBar label="Consist." value={player.consistency} />

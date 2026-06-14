@@ -227,6 +227,27 @@ export function coachBaseBonus(coach: Coach): number {
   return Math.max(0, (coach.rating - 75) / 10);
 }
 
+// Aplica as funções escolhidas pelo técnico (save.roles) no time JÁ montado da
+// liga/major. O time do usuário é um snapshot tirado no começo do split, então
+// trocar a função no Elenco no meio da temporada não chegava à partida/análise
+// pré-jogo. Isto reescreve a função de cada jogador e recalcula sinergia/força
+// preservando o estado da temporada (vitórias, saldo, forma). O id de runtime é
+// "user__<idOriginal>", então a busca de função usa o id original.
+export function resyncUserRoles(user: TTeam, roleOf: (originalId: string) => Role | undefined): TTeam {
+  let changed = false;
+  const players = user.players.map((p) => {
+    const oid = p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id;
+    const r = roleOf(oid);
+    if (r && r !== p.role) { changed = true; return { ...p, role: r }; }
+    return p;
+  });
+  if (!changed) return user;
+  const synergy = draftSynergy(players);
+  const teamwork = 78 + Math.max(-14, Math.min(12, synergy.total * 1.2));
+  const strength = teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(user.coach) - DREAM_TEAM_MALUS;
+  return { ...user, players, teamwork, strength };
+}
+
 // Recalcula derivados (skill/ovr/sinergia/força) após mudanças no elenco do
 // usuário - usado na virada de temporada do modo carreira.
 export function refreshUserTeam(user: TTeam): TTeam {

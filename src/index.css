@@ -1572,6 +1572,16 @@ tr.human-row {
   color: var(--dim);
 }
 
+/* atributos estratificados na escalação pré-jogo (mesma leitura do draft),
+   em duas colunas pra caber ao lado da foto */
+.lp-attrs {
+  margin-top: 7px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 12px;
+}
+@media (max-width: 560px) { .lp-attrs { grid-template-columns: 1fr; } }
+
 .attr .bar {
   height: 5px;
   background: var(--bg-deep);
@@ -2137,6 +2147,26 @@ table.standings tr.is-user td {
   text-transform: uppercase;
 }
 
+/* badge de tendência (pick/ban) no topo do card antes do veto */
+.mapcard .mtend {
+  z-index: 3;
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: var(--font-cond);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  backdrop-filter: blur(2px);
+  border: 1px solid transparent;
+}
+.mapcard .mtend.pick { background: rgba(8, 20, 10, 0.82); color: var(--green-bright); border-color: rgba(70, 200, 110, 0.4); }
+.mapcard .mtend.ban { background: rgba(20, 8, 8, 0.82); color: var(--red-bright); border-color: rgba(220, 90, 90, 0.4); }
+.mapcard .mtend.even { background: rgba(10, 14, 20, 0.78); color: var(--muted); }
+
 .mapcard.banned .mtag { background: rgba(20, 8, 8, 0.78); color: var(--red-bright); }
 .mapcard.banned .mname { opacity: 0.3; }
 .mapcard.picked .mtag { background: rgba(8, 20, 10, 0.72); color: var(--green-bright); }
@@ -2183,18 +2213,6 @@ table.standings tr.is-user td {
   gap: 18px;
   padding: 22px 18px;
 }
-
-/* minimapa tático ao vivo */
-.minimap { position: relative; z-index: 1; margin: 2px auto 8px; width: min(340px, 84%); }
-.mm-svg {
-  width: 100%; aspect-ratio: 1 / 1; display: block;
-  border-radius: var(--r); border: 1px solid var(--border); box-shadow: var(--elev-1);
-  background: #0c1117;
-}
-.mm-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 5px; }
-.mm-foot .mm-round { color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; font-size: 10.5px; font-weight: 700; }
-.mm-side { font-family: var(--font-cond); font-weight: 800; font-size: 14px; }
-.mm-toggle.on { color: var(--gold); border-color: var(--gold-soft); background: var(--gold-glow); }
 
 .live-score .team {
   position: relative;
@@ -3854,18 +3872,83 @@ table.crm-players input.num {
   box-shadow: 0 2px 0 var(--gold);
 }
 
+/* alerta de contrato vencendo (overview): chama atenção pra renovação, já que
+   no mobile a aba Finanças some no overflow das abas */
+/* radar de atributos no perfil do jogador */
+.attr-radar { width: 100%; max-width: 240px; display: block; margin: 2px auto 8px; }
+.attr-radar .ar-label { fill: var(--muted); font-size: 9px; font-weight: 700; font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.3px; }
+.attr-radar .ar-val { fill: var(--text); font-weight: 800; }
+
+/* inbox de manchetes */
+.news-list { display: flex; flex-direction: column; gap: 8px; }
+.news-item {
+  display: flex; gap: 11px; align-items: flex-start;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-left: 3px solid var(--border); border-radius: 9px; padding: 10px 13px;
+}
+.news-item.good { border-left-color: var(--green-bright); }
+.news-item.bad { border-left-color: var(--red-bright); }
+.news-item.info { border-left-color: var(--blue-bright); }
+.news-ic { font-size: 1.25rem; line-height: 1.2; flex: 0 0 auto; }
+.news-body { min-width: 0; }
+.news-title { font-weight: 700; font-size: 0.94rem; }
+.news-split { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px; margin-left: 6px; }
+.news-text { margin-top: 2px; line-height: 1.4; }
+
+/* chip de moral no elenco */
+.cs-morale {
+  flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 700;
+  font-size: 0.78rem; padding: 2px 6px; border-radius: 6px; white-space: nowrap;
+}
+.cs-morale.good { color: var(--green-bright); background: rgba(70, 200, 110, 0.1); }
+.cs-morale.warn { color: var(--gold-2); background: rgba(224, 168, 0, 0.1); }
+.cs-morale.bad { color: var(--red-bright); background: rgba(220, 90, 90, 0.1); }
+.pp-tag.mood-good { color: var(--green-bright); }
+.pp-tag.mood-warn { color: var(--gold-2); }
+.pp-tag.mood-bad { color: var(--red-bright); }
+
+.contract-alert {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(224, 168, 0, 0.16), rgba(224, 168, 0, 0.07));
+  border: 1px solid var(--gold);
+  border-left: 4px solid var(--gold);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 11px 14px;
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+  animation: contract-pulse 1.8s ease-in-out 2;
+}
+.contract-alert:hover { background: linear-gradient(180deg, rgba(224, 168, 0, 0.24), rgba(224, 168, 0, 0.12)); }
+.contract-alert:active { transform: scale(0.995); }
+.contract-alert .ca-go { color: var(--gold-2); font-weight: 700; white-space: nowrap; }
+@keyframes contract-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 168, 0, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(224, 168, 0, 0.22); }
+}
+
 /* ===== carreira no mobile: evita layout quebrado em telas estreitas ===== */
 @media (max-width: 640px) {
-  /* abas: rolam na horizontal em vez de empilhar em 4 linhas */
+  /* abas: rolam na horizontal em vez de empilhar em 4 linhas.
+     o fade à direita sinaliza que há mais abas (Finanças/Mercado…) pra rolar */
   .career-tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     margin: 10px 0 12px;
+    -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent 100%);
+    mask-image: linear-gradient(90deg, #000 88%, transparent 100%);
   }
   .career-tabs::-webkit-scrollbar { display: none; }
   .career-tab { flex: 0 0 auto; padding: 8px 11px; font-size: 0.8rem; }
+  /* aba Finanças com contrato vencendo: pisca pra puxar a rolagem até ela */
+  .career-tab.finance-alert { color: var(--gold-2); animation: contract-pulse 1.8s ease-in-out infinite; }
 
   /* topbar do clube: empilha e encolhe os números pra não estourar */
   .career-topbar { padding: 10px 12px; gap: 10px; }

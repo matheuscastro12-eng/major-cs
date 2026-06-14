@@ -1,7 +1,7 @@
 import { iglProfile, playerTraits, type Trait } from '../engine/ratings';
 import { useLang } from '../state/i18n';
 import { PLAYSTYLE_ICONS, type TTeam } from '../types';
-import { Flag, PlayerAvatar } from './ui';
+import { AttrBar, Flag, PlayerAvatar } from './ui';
 
 const TRAIT_ICON: Record<Trait, string> = {
   sniper: '🔭',
@@ -50,6 +50,14 @@ function LineupCard({ team }: { team: TTeam }) {
                       {TRAIT_ICON[tr]} {t(`trait.${tr}`)}
                     </span>
                   ))}
+                </div>
+                {/* atributos estratificados (mesma leitura do draft) */}
+                <div className="lp-attrs">
+                  <AttrBar label={t('draft.attrAim')} value={p.aim} />
+                  <AttrBar label="AWP" value={p.awp} />
+                  <AttrBar label="IGL" value={p.igl} />
+                  <AttrBar label={t('draft.attrClutch')} value={p.clutch} />
+                  <AttrBar label={t('draft.attrConsistency')} value={p.consistency} />
                 </div>
               </div>
             </div>
