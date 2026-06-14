@@ -1,34 +1,62 @@
 // CRM do modo carreira: editar os times e OVRs dos jogadores REAIS (bo3.gg).
 // Acesso oculto via #carreira-crm. As edições ficam em localStorage e são
 // aplicadas em runtime sobre CS2_REAL_2026 (sem reimportar a API).
-import { useMemo, useState } from 'react';
-import type { Role } from '../types';
+import { useEffect, useMemo, useState } from 'react';
+import type { Player, Role } from '../types';
 import { CS2_REAL_2026 } from '../data/bo3';
-import { applyBo3Edits, loadBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
+import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, pushBo3Edits, saveBo3Edits, type Bo3Edits, type PlayerEdit } from '../state/bo3-edits';
+import { adminPassword } from './AdminGate';
 import { playerOvr } from '../engine/ratings';
 import { logoForTeam } from '../data/media';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 
 const ROLES: Role[] = ['AWP', 'IGL', 'Entry', 'Rifler', 'Support', 'Lurker'];
+// stats individuais editáveis (rótulo curto + chave no Player)
+const STATS: { key: keyof Pick<Player, 'aim' | 'awp' | 'igl' | 'clutch' | 'consistency'>; label: string }[] = [
+  { key: 'aim', label: 'Mira' },
+  { key: 'awp', label: 'AWP' },
+  { key: 'igl', label: 'IGL' },
+  { key: 'clutch', label: 'Clutch' },
+  { key: 'consistency', label: 'Consist.' },
+];
 
 export function CareerCRM({ onExit }: { onExit: () => void }) {
   const [edits, setEdits] = useState<Bo3Edits>(() => loadBo3Edits());
   const [filter, setFilter] = useState('');
   const [selId, setSelId] = useState<string>(CS2_REAL_2026[0]?.id ?? '');
   const [dirty, setDirty] = useState(false); // tem alteração não salva?
-  const [savedFlash, setSavedFlash] = useState(false);
+  const [savedFlash, setSavedFlash] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // ao abrir, busca as edições GLOBAIS do servidor (fonte da verdade pra todos);
+  // o cache local não sobrepõe o que está salvo no servidor.
+  useEffect(() => {
+    let alive = true;
+    fetchBo3Edits().then((srv) => { if (alive && srv) { setEdits(srv); saveBo3Edits(srv); } });
+    return () => { alive = false; };
+  }, []);
 
   // times com as edições já aplicadas (pra mostrar o estado atual)
   const teams = useMemo(() => applyBo3Edits(CS2_REAL_2026, edits), [edits]);
   const visible = teams.filter((t) => !filter || t.team.toLowerCase().includes(filter.toLowerCase()) || t.tag.toLowerCase().includes(filter.toLowerCase()));
   const sel = teams.find((t) => t.id === selId) ?? teams[0];
 
-  // só altera o estado local; o salvamento no localStorage é manual (botão Salvar)
-  const update = (next: Bo3Edits) => { setEdits(next); setDirty(true); setSavedFlash(false); };
+  const update = (next: Bo3Edits) => { setEdits(next); setDirty(true); setSavedFlash(''); };
 
-  const save = () => { saveBo3Edits(edits); setDirty(false); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 2500); };
+  // salva GLOBAL (servidor, vale pra todos) + cache local. Precisa da senha admin
+  // (já validada no AdminGate). Se o servidor falhar, avisa e mantém o cache local.
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    saveBo3Edits(edits); // cache local imediato
+    const ok = await pushBo3Edits(edits, adminPassword());
+    setSaving(false);
+    setDirty(!ok);
+    setSavedFlash(ok ? '✔ salvo pra todos' : '⚠ salvo só local (servidor falhou)');
+    setTimeout(() => setSavedFlash(''), 4000);
+  };
 
-  const setPlayer = (pid: string, patch: { ovr?: number; role?: Role }) => {
+  const setPlayer = (pid: string, patch: Partial<PlayerEdit>) => {
     const cur = edits.players[pid] ?? {};
     update({ ...edits, players: { ...edits.players, [pid]: { ...cur, ...patch } } });
   };
@@ -58,17 +86,17 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
         <div className="panel-head">
           CRM da carreira · times e OVRs reais (bo3.gg)
           <span className="spacer" />
-          {savedFlash && <span className="pos small" style={{ marginRight: 6 }}>✔ salvo</span>}
-          {dirty && <span className="neg small" style={{ marginRight: 6 }}>alterações não salvas</span>}
+          {savedFlash && <span className={`small ${savedFlash.startsWith('✔') ? 'pos' : 'neg'}`} style={{ marginRight: 6 }}>{savedFlash}</span>}
+          {dirty && !savedFlash && <span className="neg small" style={{ marginRight: 6 }}>alterações não salvas</span>}
           <button className="btn ghost" onClick={exportJson}>Exportar JSON</button>
-          <button className={`btn gold${dirty ? '' : ' ghost'}`} disabled={!dirty} onClick={save}>💾 Salvar</button>
+          <button className={`btn gold${dirty && !saving ? '' : ' ghost'}`} disabled={!dirty || saving} onClick={save}>{saving ? 'Salvando…' : '💾 Salvar pra todos'}</button>
           <button className="btn" onClick={() => { if (!dirty || confirm('Há alterações não salvas. Sair mesmo assim?')) onExit(); }}>← Sair</button>
         </div>
         <div className="panel-body">
           <p className="muted small" style={{ marginTop: 0 }}>
-            Edite o OVR e a função de cada jogador, e o nome/tag/entrosamento dos times.
-            As mudanças valem na hora no modo carreira (salvas neste navegador).
-            Use <b>Exportar JSON</b> pra tornar permanente no código.
+            Edite <b>OVR, função e cada stat</b> (mira/AWP/IGL/clutch/consist.) dos jogadores, e o nome/tag/entrosamento dos times.
+            Ao <b>Salvar</b>, as mudanças vão pro servidor e valem <b>pra todos os usuários</b> do modo carreira (sem cache local sobrepondo).
+            Ajustar uma stat sobrescreve o valor derivado do OVR.
           </p>
           <div className="crm-grid">
             {/* lista de times */}
@@ -125,6 +153,14 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
                             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
                         </label>
+                        <div className="crm-stats">
+                          {STATS.map((s) => (
+                            <label key={s.key} className="crm-ctrl">{s.label}
+                              <input type="number" min={40} max={99} value={p[s.key]}
+                                onChange={(e) => setPlayer(p.id, { [s.key]: Math.max(40, Math.min(99, +e.target.value || 40)) })} />
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     );
                   })}

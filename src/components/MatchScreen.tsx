@@ -24,12 +24,13 @@ const TIMEOUTS_PER_MAP = 2;
 const TIMEOUT_ROUNDS = 3;
 
 const SPEEDS: { label: string; ms: number }[] = [
-  { label: '0.5x', ms: 850 },
+  { label: '0.25x', ms: 1500 }, // bem lento: dá tempo de ler o round e fazer a call
+  { label: '0.5x', ms: 950 },
   { label: '1x', ms: 460 },
   { label: '2x', ms: 220 },
   { label: '4x', ms: 90 },
 ];
-const DEFAULT_SPEED_IDX = 1; // começa em 1x (0.5x é opção mais lenta)
+const DEFAULT_SPEED_IDX = 2; // começa em 1x (0.25x/0.5x são as opções mais lentas)
 const FREEZE_SECONDS = 5; // modo Tático: freezetime antes de cada round
 
 // textos do modo tático/lado, por idioma (sem precisar mexer no i18n global)

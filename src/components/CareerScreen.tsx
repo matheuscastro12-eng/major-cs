@@ -23,7 +23,7 @@ import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
-import { applyBo3Edits } from '../state/bo3-edits';
+import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
 import bo3Ages from '../data/bo3-ages.json';
 
 const SAVE_KEY = 'rtm-career-v1';
@@ -752,11 +752,22 @@ export function CareerScreen({ onExit }: Props) {
   // bo3.gg, exclusivos do modo carreira (não aparecem no draft/online). Os
   // times CS2 antigos feitos à mão não entram aqui (evita duplicatas e OVRs
   // desatualizados).
+  // edições do dataset: o SERVIDOR é a fonte da verdade (valem pra todos). Começa
+  // do cache local pra render instantâneo, mas a busca global sobrescreve o cache
+  // (nada de cache local sobrepondo o que o admin editou pra todo mundo).
+  const [bo3Edits, setBo3Edits] = useState<Bo3Edits>(() => loadBo3Edits());
+  useEffect(() => {
+    let alive = true;
+    fetchBo3Edits().then((srv) => {
+      if (alive && srv) { setBo3Edits(srv); saveBo3Edits(srv); }
+    });
+    return () => { alive = false; };
+  }, []);
   const currentEra = useMemo(
     // aplica as transferências já realizadas (save.moves) por cima da base:
     // assim os jogadores transferidos aparecem MESMO nos elencos novos
-    () => applyMoves(applyBo3Edits(CS2_REAL_2026), save.moves).filter((t) => t.players.length >= 5),
-    [save.moves],
+    () => applyMoves(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves).filter((t) => t.players.length >= 5),
+    [save.moves, bo3Edits],
   );
   // pool de ADVERSÁRIOS: tira o time que você assumiu E remove qualquer jogador
   // que está no SEU elenco do time de origem (sem duplicar ninguém), repondo com
