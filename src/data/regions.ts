@@ -1,6 +1,6 @@
 // Detecção do "core" de nacionalidade de um elenco:
 // 1) 3+ jogadores do mesmo país → bandeira do país
-// 2) senão, 4+ jogadores da mesma região → bandeira da região
+// 2) senão, 3+ jogadores da mesma região → bandeira da região
 // 3) senão → internacional (sem bandeira específica)
 
 export type RegionKey = 'europe' | 'cis' | 'samerica' | 'namerica' | 'asia' | 'oceania' | 'africa';
@@ -78,7 +78,47 @@ export function coreIdentity(countries: string[]): CoreId {
       topR = r;
     }
   }
-  if (topR && topRn >= 4) return { kind: 'region', region: topR, count: topRn };
+  if (topR && topRn >= 3) return { kind: 'region', region: topR, count: topRn };
 
   return { kind: 'intl' };
+}
+
+// ----- macro-região: Américas (Norte/Sul/Central) contam como UMA região -----
+export type MacroRegion = 'americas' | 'europe' | 'cis' | 'asia' | 'oceania' | 'africa';
+export const MACRO_REGION_LABELS: Record<MacroRegion, string> = {
+  americas: 'Américas', europe: 'Europa', cis: 'CIS', asia: 'Ásia', oceania: 'Oceania', africa: 'África',
+};
+export const MACRO_REGION_ORDER: MacroRegion[] = ['americas', 'europe', 'cis', 'asia', 'oceania', 'africa'];
+export function macroRegionOf(cc: string): MacroRegion | undefined {
+  const r = regionOf(cc);
+  if (!r) return undefined;
+  return r === 'samerica' || r === 'namerica' ? 'americas' : r;
+}
+
+// core de uma ORG no modo carreira: 3+ do mesmo país → país; senão 3+ da mesma
+// macro-região → região; senão internacional.
+export type OrgCore =
+  | { kind: 'country'; cc: string; count: number }
+  | { kind: 'region'; region: MacroRegion; count: number }
+  | { kind: 'intl' };
+export function orgCore(countries: string[]): OrgCore {
+  const byC = new Map<string, number>();
+  for (const c of countries) { const cc = (c || '').toLowerCase(); if (cc) byC.set(cc, (byC.get(cc) ?? 0) + 1); }
+  let topC = '', topCn = 0;
+  for (const [c, n] of byC) if (n > topCn) { topCn = n; topC = c; }
+  if (topCn >= 3) return { kind: 'country', cc: topC, count: topCn };
+  const byR = new Map<MacroRegion, number>();
+  for (const c of countries) { const r = macroRegionOf(c); if (r) byR.set(r, (byR.get(r) ?? 0) + 1); }
+  let topR: MacroRegion | undefined, topRn = 0;
+  for (const r of MACRO_REGION_ORDER) { const n = byR.get(r) ?? 0; if (n > topRn) { topRn = n; topR = r; } }
+  if (topR && topRn >= 3) return { kind: 'region', region: topR, count: topRn };
+  return { kind: 'intl' };
+}
+// macro-região predominante (plurality) — aloca a org/time num circuito regional
+export function macroRegionPlurality(countries: string[]): MacroRegion {
+  const byR = new Map<MacroRegion, number>();
+  for (const c of countries) { const r = macroRegionOf(c); if (r) byR.set(r, (byR.get(r) ?? 0) + 1); }
+  let best: MacroRegion = 'europe', bestN = -1;
+  for (const r of MACRO_REGION_ORDER) { const n = byR.get(r) ?? 0; if (n > bestN) { best = r; bestN = n; } }
+  return best;
 }

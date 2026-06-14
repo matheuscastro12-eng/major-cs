@@ -13,13 +13,15 @@ import { createTournament, placementCode, resolveRound, userPairing as tournamen
 import { Hub } from './Hub';
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
 import type { Coach, MapId, Player, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
+import { MAP_LABELS } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { OrgFlag } from './flags';
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
-import { regionOf, type RegionKey } from '../data/regions';
+import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits } from '../state/bo3-edits';
 import bo3Ages from '../data/bo3-ages.json';
@@ -142,6 +144,7 @@ interface OrgStart {
   budget: number;
   tier: number;
   takeoverId: string | null;
+  region?: MacroRegion;
 }
 // verba de quem ASSUME uma org com elenco: tier mais alto (time melhor) = menos
 // caixa; tier baixo = mais caixa. É a troca "elenco bom x dinheiro" que o user pediu.
@@ -212,6 +215,7 @@ interface CareerSave {
   news?: NewsItem[]; // caixa de entrada (manchetes), mais recente primeiro
   unread?: number; // manchetes não lidas (badge da aba Inbox)
   peakOvr?: Record<string, number>; // maior OVR já alcançado por jogador (perfil)
+  region?: MacroRegion; // região de circuito onde a org compete (do core do elenco)
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -350,6 +354,18 @@ function splitNews(ctx: {
   return out;
 }
 
+// manchetes do que rolou nas OUTRAS regiões (cena viva enquanto você joga a sua)
+function worldNews(teams: TeamSeason[], split: number, userRegion: CareerRegion): NewsItem[] {
+  return worldScene(teams, split)
+    .filter((s) => s.reg !== userRegion)
+    .slice(0, 2)
+    .map((s) => ({
+      id: `${split}:world:${s.reg}`, split, icon: '🌐', tone: 'info' as const,
+      title: `${s.champ.team} campeão na ${CAREER_REGION_LABELS[s.reg]}`,
+      body: `${s.champ.team} venceu o ${s.league}${s.runnerUp ? ` sobre ${s.runnerUp.team}` : ''}. A cena segue fervendo enquanto você disputa a sua região.`,
+    }));
+}
+
 // ----- evolução de elenco entre temporadas -----
 // cada jogador tem uma fase de carreira (estável, derivada do id): em ascensão
 // melhora, no auge oscila, em declínio cai. Valor e salário acompanham os
@@ -462,35 +478,47 @@ function aiTeamVrs(t: TeamSeason): number {
   const base = Math.max(0, t.teamwork - 38);
   return Math.round(base * 24 + (hashStr(t.id) % 90));
 }
-// Região de circuito no modo carreira. Diferente do "core" do escudo: aqui as
-// Américas (Norte/Sul/Central) contam como UMA região só ("Américas").
-type CareerRegion = 'americas' | 'europe' | 'cis' | 'asia' | 'oceania' | 'africa';
-const CAREER_REGION_LABELS: Record<CareerRegion, string> = {
-  americas: 'Américas', europe: 'Europa', cis: 'CIS', asia: 'Ásia', oceania: 'Oceania', africa: 'África',
-};
-const CAREER_REGION_ORDER: CareerRegion[] = ['americas', 'europe', 'cis', 'asia', 'oceania', 'africa'];
-// colapsa as sub-regiões do continente americano numa só
-function macroRegion(r: RegionKey): CareerRegion {
-  return r === 'samerica' || r === 'namerica' ? 'americas' : (r as CareerRegion);
-}
+// Região de circuito no modo carreira (Américas N/S/Central = uma só). Tipos e
+// helpers ficam em data/regions.ts (compartilhados com as bandeiras).
+type CareerRegion = MacroRegion;
+const CAREER_REGION_LABELS = MACRO_REGION_LABELS;
+const CAREER_REGION_ORDER = MACRO_REGION_ORDER;
 // região do time = onde está a MAIORIA dos jogadores (não o país do header da
 // base, que vinha errado — ex.: Falcons marcado como 'sa'/Ásia sendo um time EU).
-// Empate é desempatado pela ordem de CAREER_REGION_ORDER.
 function teamRegion(t: TeamSeason): CareerRegion {
-  const tally = new Map<CareerRegion, number>();
-  for (const p of t.players) {
-    const r = regionOf(p.country);
-    if (r) { const m = macroRegion(r); tally.set(m, (tally.get(m) ?? 0) + 1); }
+  const countries = t.players.map((p) => p.country);
+  if (countries.some((c) => macroRegionOf(c))) return macroRegionPlurality(countries);
+  const d = macroRegionOf(t.country); // fallback: país do header, senão Europa
+  return d ?? 'europe';
+}
+// nome da liga regional de cada macro-região (mesma da escolha de circuito)
+const REGION_LEAGUE: Record<CareerRegion, string> = {
+  americas: 'Gamers Club Masters', europe: 'ESL Challenger League EU', cis: 'CCT Europe Series',
+  asia: 'ESL Challenger League Asia', oceania: 'ESL Challenger League Oceania', africa: 'CCT Africa',
+};
+// "cena mundial": o que rola nas OUTRAS regiões enquanto você joga a sua. Campeão
+// determinístico por split (estável no F5) sorteado entre os 4 melhores da região.
+interface RegionScene { reg: CareerRegion; league: string; champ: TeamSeason; runnerUp: TeamSeason | null; top: TeamSeason[]; }
+function worldScene(teams: TeamSeason[], split: number): RegionScene[] {
+  const byRegion = new Map<CareerRegion, TeamSeason[]>();
+  for (const t of teams) {
+    const r = teamRegion(t);
+    const arr = byRegion.get(r) ?? [];
+    arr.push(t);
+    byRegion.set(r, arr);
   }
-  let best: CareerRegion | null = null;
-  let bestN = -1;
-  for (const r of CAREER_REGION_ORDER) {
-    const n = tally.get(r) ?? 0;
-    if (n > bestN) { best = r; bestN = n; }
+  const out: RegionScene[] = [];
+  for (const reg of CAREER_REGION_ORDER) {
+    const pool = (byRegion.get(reg) ?? []).slice().sort((a, b) => b.teamwork - a.teamwork);
+    if (pool.length < 2) continue;
+    // campeão sorteado entre os 4 melhores, com seed por ID (estável por split
+    // mesmo que a ordem/contenders mudem após transferências)
+    const contenders = pool.slice(0, 4);
+    const champ = contenders.slice().sort((a, b) => (hashStr(`world:${split}:${reg}:${b.id}`) % 1000) - (hashStr(`world:${split}:${reg}:${a.id}`) % 1000))[0];
+    const runnerUp = contenders.find((t) => t.id !== champ.id) ?? null;
+    out.push({ reg, league: REGION_LEAGUE[reg], champ, runnerUp, top: pool.slice(0, 6) });
   }
-  // fallback: país do header, senão Europa
-  if (!best || bestN <= 0) { const d = regionOf(t.country); return d ? macroRegion(d) : 'europe'; }
-  return best;
+  return out;
 }
 
 // rating "do ano" de um jogador (estilo HLTV), determinístico por temporada
@@ -598,7 +626,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', countr
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history' | 'inbox';
+type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world';
 
 interface MajorResult {
   tournament: Tournament;
@@ -705,19 +733,30 @@ export function CareerScreen({ onExit }: Props) {
         return { ...t, players: [...kept, ...fill] };
       });
   }, [currentEra, save.takeoverId, save.squad]);
-  const brTeams = useMemo(
-    () => oppEra.filter((t) => t.country === 'br').sort((a, b) => b.teamwork - a.teamwork),
-    [oppEra],
-  );
 
   // Campeonatos disponíveis a cada split: o jogador escolhe qual convite aceitar,
   // já sabendo quais times vai enfrentar em cada um. Cada circuito tem força,
   // premiação e número de vagas pro Major diferentes.
   const circuits = useMemo(() => {
+    const reg: MacroRegion = save.region ?? 'americas';
     const pool = oppEra.filter((t) => t.id !== 'user');
     const byStrength = [...pool].sort((a, b) => b.teamwork - a.teamwork);
-    const br = brTeams.filter((t) => t.id !== 'user');
-    const mid = byStrength.slice(8, 16); // times medianos (fora do top 8)
+    // campo regional do tier 2/3 (se a região tiver poucos times, completa com o global)
+    const regAll = pool.filter((t) => teamRegion(t) === reg).sort((a, b) => b.teamwork - a.teamwork);
+    const regional = regAll.length >= 5 ? regAll : byStrength;
+    // tier 3 = times mais fracos (tira os top 5); se sobrar pouco, usa o miolo global
+    const regMidPool = regional.slice(5);
+    const regMid = regMidPool.length >= 5 ? regMidPool : byStrength.slice(8, 16);
+    // nomes reais (Liquipedia) dos circuitos regionais por macro-região
+    const T2: Record<MacroRegion, string> = {
+      americas: 'Gamers Club Masters', europe: 'ESL Challenger League EU', cis: 'CCT Europe Series',
+      asia: 'ESL Challenger League Asia', oceania: 'ESL Challenger League Oceania', africa: 'CCT Africa',
+    };
+    const T3: Record<MacroRegion, string> = {
+      americas: 'CCT Americas Series', europe: 'ESEA Elite Europe', cis: 'ESEA Elite Europe',
+      asia: 'CCT Asia Series', oceania: 'ESEA Advanced AP', africa: 'CCT Africa Series',
+    };
+    const regLbl = MACRO_REGION_LABELS[reg];
     const mk = (
       id: string,
       name: string,
@@ -728,12 +767,15 @@ export function CareerScreen({ onExit }: Props) {
       vrsMult: number,
       tier: number,
     ) => ({ id, name, desc, teams: teams.slice(0, 7), spots, prizeMult, vrsMult, tier });
+    // Tier 1 = eventos mundiais (grupos + playoffs) que dão vaga no Major; dois
+    // convites pra dar escolha. Tier 2/3 = circuitos da SUA região.
     return [
-      mk('blast', 'BLAST Premier (Mundial)', 'Tier 1 mundial: os gigantes. É AQUI que se chega ao Major. Paga muito mais.', byStrength, 2, 1.7, 1.6, 1),
-      mk('gcmasters', 'Gamers Club Masters (BR)', 'Tier 2: liga nacional equilibrada. Vença para subir ao Tier 1 e brigar pelo Major.', br, 2, 1, 1, 2),
-      mk('eslchallenger', 'ESL Challenger', 'Tier 3: liga de acesso com times medianos. Onde toda org começa.', mid, 1, 0.6, 0.6, 3),
+      mk('eslpl', 'ESL Pro League', 'Tier 1 mundial: fase de grupos + playoffs (mata-mata). O principal caminho de pontos pro Major. Paga muito.', byStrength, 2, 1.8, 1.7, 1),
+      mk('blast', 'BLAST Premier', 'Tier 1 mundial: os gigantes em grupos + playoffs. Prêmio e VRS altíssimos; vaga direta na briga pelo Major.', byStrength, 2, 1.7, 1.6, 1),
+      mk('t2', T2[reg], `Tier 2 (${regLbl}): liga regional forte, fase de grupos + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.`, regional, 2, 1, 1, 2),
+      mk('t3', T3[reg], `Tier 3 (${regLbl}): circuito de acesso da região, grupos + playoffs. Onde toda org começa.`, regMid, 1, 0.6, 0.6, 3),
     ].filter((c) => c.teams.length >= 5);
-  }, [oppEra, brTeams]);
+  }, [oppEra, save.region]);
 
   // mercado: jogadores reais dos elencos atuais (CS2), com preço de mercado
   const market = useMemo(
@@ -815,8 +857,9 @@ export function CareerScreen({ onExit }: Props) {
       tt.strength += aiBoost;
       return tt;
     });
-    // turno e returno: temporada mais longa (14 rodadas com 8 times)
-    const league = createLeague(`${circuit.name} - Split ${s.split}`, [user, ...ai], 2);
+    // fase de grupos (todos contra todos uma vez, estilo CS) → playoffs.
+    // CS não usa liga ida-e-volta (futebol); é grupo + mata-mata.
+    const league = createLeague(`${circuit.name} - Split ${s.split}`, [user, ...ai], 1);
     const choice: CircuitChoice = {
       id: circuit.id,
       name: circuit.name,
@@ -1216,20 +1259,22 @@ export function CareerScreen({ onExit }: Props) {
   }, [save.careerStats, save.roles, save.org, currentEra]);
   const feedMemo = useMemo(() => transferFeed(save.split, currentEra), [save.split, currentEra]);
   const vrsByRegionMemo = useMemo(() => {
-    type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; country: string; vrs: number; isUser: boolean };
+    // bandeira E região de cada time saem do CORE do elenco (o país do header da
+    // base é furado). A org usa a região que escolheu competir (save.region).
+    type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; players: { country: string }[]; region: CareerRegion; vrs: number; isUser: boolean };
     const rows: Row[] = oppEra.map((t) => ({
       id: t.id, name: `${t.team}`, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t),
-      country: t.country, vrs: aiTeamVrs(t), isUser: false,
+      players: t.players, region: teamRegion(t), vrs: aiTeamVrs(t), isUser: false,
     }));
-    if (buildTeam(save) && save.org) {
-      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, country: 'br', vrs: save.vrs, isUser: true });
+    const orgPlayers = buildTeam(save)?.players ?? [];
+    if (orgPlayers.length && save.org) {
+      const reg = save.region ?? macroRegionPlurality(orgPlayers.map((p) => p.country));
+      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: save.vrs, isUser: true });
     }
     const groups = new Map<CareerRegion, Row[]>();
     for (const r of rows) {
-      const t = currentEra.find((x) => x.id === r.id);
-      const reg: CareerRegion = r.isUser ? 'americas' : t ? teamRegion(t) : 'europe';
-      if (!groups.has(reg)) groups.set(reg, []);
-      groups.get(reg)!.push(r);
+      if (!groups.has(r.region)) groups.set(r.region, []);
+      groups.get(r.region)!.push(r);
     }
     return CAREER_REGION_ORDER.filter((k) => groups.has(k)).map((k) => ({
       key: k,
@@ -1295,7 +1340,7 @@ export function CareerScreen({ onExit }: Props) {
         onExit={onExit}
         onFictional={() => setOrgChoice('fictional')}
         onStart={(s) => {
-          update({ org: s.org, squad: s.squad, coachFromId: s.coachFromId, budget: s.budget, tier: s.tier, takeoverId: s.takeoverId });
+          update({ org: s.org, squad: s.squad, coachFromId: s.coachFromId, budget: s.budget, tier: s.tier, takeoverId: s.takeoverId, region: s.region });
           setStage('market');
         }}
       />
@@ -1320,6 +1365,10 @@ export function CareerScreen({ onExit }: Props) {
             delete morale[off.playerId];
             const peakOvr = { ...(save.peakOvr ?? {}) };
             delete peakOvr[off.playerId];
+            // zera a evolução acumulada: se voltar a contratá-lo, ele entra no OVR
+            // de mercado (base), não com o declínio antigo grudado
+            const evo = { ...(save.evo ?? {}) };
+            delete evo[off.playerId];
             const next: CareerSave = {
               ...save,
               squad: save.squad.filter((s) => s.playerId !== off.playerId),
@@ -1327,6 +1376,7 @@ export function CareerScreen({ onExit }: Props) {
               pendingOffer: null,
               morale,
               peakOvr,
+              evo,
             };
             persist(next);
             setSave(next);
@@ -1362,7 +1412,15 @@ export function CareerScreen({ onExit }: Props) {
           for (const k of Object.keys(morale)) if (!ids.has(k)) delete morale[k];
           const peakOvr = { ...(save.peakOvr ?? {}) };
           for (const k of Object.keys(peakOvr)) if (!ids.has(k)) delete peakOvr[k];
-          const next = { ...save, squad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr };
+          // zera a evolução de quem saiu do elenco: ao recontratar, ele volta no
+          // OVR de mercado (base), sem o declínio/ganho antigo grudado (KSCERATO).
+          // Quem é dispensado e recontratado na MESMA janela (sem transação) é
+          // mantido — continua sendo seu, então preserva a evolução.
+          const evo = { ...(save.evo ?? {}) };
+          for (const k of Object.keys(evo)) if (!ids.has(k)) delete evo[k];
+          // org do zero (sem região ainda): define a região pelo core do 1º elenco
+          const region = save.region ?? macroRegionPlurality(squad.map((s) => findSigning(s)?.player.country ?? '').filter(Boolean));
+          const next = { ...save, squad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -1373,11 +1431,17 @@ export function CareerScreen({ onExit }: Props) {
 
   // ---------- escolha do campeonato (qual convite aceitar) ----------
   if (stage === 'circuit') {
+    // core do elenco mudou de região? oferece realocar a org (muda bandeira/região)
+    const orgPlayers = buildTeam(save)?.players ?? [];
+    const coreReg = orgPlayers.length ? macroRegionPlurality(orgPlayers.map((p) => p.country)) : undefined;
+    const relocate = save.region && coreReg && coreReg !== save.region ? { from: save.region, to: coreReg } : null;
     return (
       <CircuitPicker
         circuits={circuits}
         split={save.split}
         playerTier={save.tier}
+        relocate={relocate}
+        onRelocate={() => coreReg && update({ region: coreReg })}
         onBack={() => setStage('market')}
         onPick={(c) => startSplit(save, c)}
       />
@@ -1431,8 +1495,10 @@ export function CareerScreen({ onExit }: Props) {
                 const majObj = save.objective;
                 const majBonus = majObj ? majObj.bonus + (mr.champion ? 400_000 : 0) : 0;
                 const majBoard = Math.min(100, save.board + (mr.champion ? 18 : 12));
-                const evo = evolveSquad(save);
                 const expired = expireContracts(save, save.split + 1);
+                // evolui só quem FICOU (pós-fim de contrato): quem saiu não carrega
+                // a evolução/declínio acumulado pra uma futura recontratação
+                const evo = evolveSquad({ ...save, squad: expired.squad });
                 // moral: usa a forma do time no Major (atualizada série a série)
                 const uTeam = save.majorT ? getTeam(save.majorT, 'user') : null;
                 const nickByOid: Record<string, string> = {};
@@ -1456,10 +1522,11 @@ export function CareerScreen({ onExit }: Props) {
                 });
                 const next = {
                   ...save,
-                  budget: save.budget + mr.prize - payroll + sponsorIncome(save.sponsors) + majBonus,
+                  budget: Math.max(0, save.budget + mr.prize - payroll + sponsorIncome(save.sponsors) + majBonus),
                   vrs: save.vrs + mr.vrs,
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
+                  majorT: null, // o Major acabou: não persiste o bracket finalizado
                   league: null,
                   circuit: null,
                   playoff: null,
@@ -1473,7 +1540,7 @@ export function CareerScreen({ onExit }: Props) {
                   ...expired,
                   morale,
                   peakOvr,
-                  ...pushNews(save, items),
+                  ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas')]),
                 };
                 persist(next);
                 setSave(next);
@@ -1685,8 +1752,10 @@ export function CareerScreen({ onExit }: Props) {
               <button
                 className={qualified ? 'btn ghost big' : 'btn gold big'}
                 onClick={() => {
-                  const evo = evolveSquad(save);
                   const expired = expireContracts(save, save.split + 1);
+                  // evolui só quem FICOU (pós-fim de contrato): quem saiu não carrega
+                  // a evolução/declínio acumulado pra uma futura recontratação
+                  const evo = evolveSquad({ ...save, squad: expired.squad });
                   const offer = makeOffer(save, tierResult.tier);
                   // moral por jogador (forma no fim do split + resultado coletivo)
                   const nickByOid: Record<string, string> = {};
@@ -1710,7 +1779,9 @@ export function CareerScreen({ onExit }: Props) {
                   });
                   const next = {
                     ...save,
-                    budget: save.budget + prize - payroll + sponsorIncome(save.sponsors) + objBonus,
+                    // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
+                    // a carreira com saldo negativo (impossível montar 5)
+                    budget: Math.max(0, save.budget + prize - payroll + sponsorIncome(save.sponsors) + objBonus),
                     vrs: save.vrs + vrsGain,
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
@@ -1728,7 +1799,7 @@ export function CareerScreen({ onExit }: Props) {
                     ...expired,
                     morale,
                     peakOvr,
-                    ...pushNews(save, items),
+                    ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas')]),
                   };
                   persist(next);
                   setSave(next);
@@ -1740,6 +1811,14 @@ export function CareerScreen({ onExit }: Props) {
             </div>
           </div>
         </div>
+        {selSeries && (
+          <div className="modal-backdrop" onClick={() => setSelSeries(null)}>
+            <div className="modal scoreboard-modal" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-x" onClick={() => setSelSeries(null)}>✕</button>
+              <Scoreboard series={selSeries.series} teams={selSeries.teams} />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1801,7 +1880,14 @@ export function CareerScreen({ onExit }: Props) {
           ) : null}
         </div>
         <PlayoffBracket p={p} teamOf={teamOf} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
-        {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
+        {selSeries && (
+          <div className="modal-backdrop" onClick={() => setSelSeries(null)}>
+            <div className="modal scoreboard-modal" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-x" onClick={() => setSelSeries(null)}>✕</button>
+              <Scoreboard series={selSeries.series} teams={selSeries.teams} />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1861,6 +1947,7 @@ export function CareerScreen({ onExit }: Props) {
     { id: 'squad', label: 'Elenco' },
     { id: 'finance', label: expiringCount > 0 ? `💰 Finanças ⚠️${expiringCount}` : '💰 Finanças' },
     { id: 'market', label: 'Mercado' },
+    { id: 'world', label: '🌐 Cena mundial' },
     { id: 'vrs', label: 'Ranking VRS' },
     { id: 'top20', label: 'Top 20 HLTV' },
     { id: 'history', label: 'História da org' },
@@ -1878,10 +1965,11 @@ export function CareerScreen({ onExit }: Props) {
         <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={46} logoUrl={save.org?.logo} />
         <div className="ct-id">
           <div className="ct-name">
+            {(buildTeam(save)?.players?.length ?? 0) > 0 && <OrgFlag players={buildTeam(save)!.players} title="Nacionalidade do core" />}
             {save.org?.name}
             <span className={`tier-badge t${save.tier}`}>TIER {save.tier}</span>
           </div>
-          <div className="ct-sub">{save.circuit?.name ?? 'CIRCUIT X'} · Split {save.split}</div>
+          <div className="ct-sub">{save.circuit?.name ?? 'CIRCUIT X'} · Split {save.split}{save.region ? ` · ${MACRO_REGION_LABELS[save.region]}` : ''}</div>
           {save.sponsors.length > 0 && (
             <div className="ct-sponsors">
               {save.sponsors.map((id) => {
@@ -1924,12 +2012,14 @@ export function CareerScreen({ onExit }: Props) {
       <div className="career-tabs">
         {TABS.map((tab) => (
           <button key={tab.id} className={`career-tab${hubTab === tab.id ? ' on' : ''}${tab.id === 'finance' && expiringCount > 0 ? ' finance-alert' : ''}${tab.id === 'inbox' && unread > 0 ? ' finance-alert' : ''}`}
-            onClick={() => { setHubTab(tab.id); if (tab.id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 }); }}>
+            onClick={(e) => { setHubTab(tab.id); setSelSeries(null); e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); if (tab.id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 }); }}>
             {tab.label}
           </button>
         ))}
       </div>
 
+      {/* conteúdo da aba com transição (key força remount → reanima na troca) */}
+      <div className="tab-fade" key={hubTab}>
       {/* ===== INBOX (manchetes da imprensa + diretoria) ===== */}
       {hubTab === 'inbox' && (
         <div className="career-grid">
@@ -1995,7 +2085,7 @@ export function CareerScreen({ onExit }: Props) {
                   <button className="btn ghost small" onClick={dismissGuide}>Entendi ✕</button>
                 </div>
                 <ul>
-                  <li><b>Temporada em turno e returno</b>: {league.rounds.length} rodadas; os <b>4 melhores</b> vão pro mata-mata (semis MD3 + final MD5) que decide o campeão.</li>
+                  <li><b>Fase de grupos</b> (todos contra todos, {league.rounds.length} rodadas) → os <b>4 melhores</b> vão pro <b>mata-mata</b> (semis MD3 + final MD5) que decide o campeão. É o formato real do CS — grupo + playoffs, não liga ida-e-volta.</li>
                   <li><b>Major Mundial a cada {MAJOR_EVERY} splits</b>: chegue ao top {spots} do mata-mata num split de Major (o próximo é no Split {isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY))}) pra garantir a vaga.</li>
                   <li><b>Janela de transferências só entre temporadas</b>: durante o split é com o elenco que você tem.</li>
                   <li><b>Seu elenco evolui entre temporadas</b>: jogador em ascensão melhora, veterano em declínio cai; valor e salário acompanham. Olhe a fase de carreira antes de contratar.</li>
@@ -2141,7 +2231,8 @@ export function CareerScreen({ onExit }: Props) {
               </div>
               <p className="muted small">A premiação entra conforme sua colocação. O "saldo fixo" é patrocínio − folha (antes do prêmio); se ficar negativo, você queima caixa todo split.</p>
               <div className="muted small section-label">Contratos do elenco</div>
-              <table className="stats">
+              <div className="fin-table-wrap">
+              <table className="stats fin-contracts">
                 <thead><tr><th style={{ textAlign: 'left' }}>Jogador</th><th>Idade</th><th>OVR</th><th>POT</th><th>Salário/split</th><th>Contrato</th><th></th></tr></thead>
                 <tbody>
                   {wages.map((w) => {
@@ -2168,6 +2259,7 @@ export function CareerScreen({ onExit }: Props) {
                   })}
                 </tbody>
               </table>
+              </div>
               <p className="muted small">Contratos vencem no fim do prazo: <b>renove (custa 1 salário)</b> ou o jogador sai <b>de graça</b> no próximo split.</p>
             </div>
           </div>
@@ -2242,6 +2334,46 @@ export function CareerScreen({ onExit }: Props) {
         );
       })()}
 
+      {/* ===== CENA MUNDIAL: o que rola nas outras regiões ===== */}
+      {hubTab === 'world' && (() => {
+        const scene = worldScene(oppEra, save.split);
+        return (
+          <div className="panel">
+            <div className="panel-body">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>Cena mundial · Split {save.split} — campeonatos regionais acontecendo em paralelo</div>
+              <div className="world-grid">
+                {scene.map((s) => (
+                  <div key={s.reg} className={`world-card${s.reg === save.region ? ' mine' : ''}`}>
+                    <div className="world-head">
+                      <OrgFlag players={s.champ.players} />
+                      <span className="world-region">{CAREER_REGION_LABELS[s.reg]}</span>
+                      {s.reg === save.region && <span className="world-you">você joga aqui</span>}
+                    </div>
+                    <div className="world-league muted small">{s.league}</div>
+                    <div className="world-champ">
+                      <span className="wc-tag">🏆 Campeão</span>
+                      <TeamBadge tag={s.champ.tag} colors={s.champ.colors} size={22} logoUrl={s.champ.logoUrl ?? logoForTeam(s.champ)} />
+                      <span className="wc-name">{s.champ.team}</span>
+                    </div>
+                    {s.runnerUp && <div className="world-runner muted small">vice: {s.runnerUp.team}</div>}
+                    <div className="world-top">
+                      {s.top.map((t, i) => (
+                        <button key={t.id} className="world-row" onClick={() => setSelTeam(teamSeasonToTTeam(t))}>
+                          <span className="wr-rank">{i + 1}</span>
+                          <TeamBadge tag={t.tag} colors={t.colors} size={16} logoUrl={t.logoUrl ?? logoForTeam(t)} />
+                          <span className="wr-name">{t.team}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="muted small" style={{ marginTop: 10 }}>O cenário evolui a cada split — os campeões e a ordem mudam. Clique num time pra ver elenco e mapas. Você sobe de região mudando o core do elenco (nas Finanças/Mercado).</p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ===== RANKING VRS POR REGIÃO ===== */}
       {hubTab === 'vrs' && (
         <div className="panel">
@@ -2259,7 +2391,7 @@ export function CareerScreen({ onExit }: Props) {
                           <td style={{ textAlign: 'left' }}>
                             <span className="pcell">
                               <TeamBadge tag={t.tag} colors={t.colors} size={20} logoUrl={t.logoUrl} />
-                              <Flag cc={t.country} />
+                              <OrgFlag players={t.players} />
                               <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--blue-bright)' : undefined }}>{t.name}</span>
                             </span>
                           </td>
@@ -2363,9 +2495,17 @@ export function CareerScreen({ onExit }: Props) {
           </div>
         </div>
       )}
+      </div>
 
-      {selSeries && <Scoreboard series={selSeries.series} teams={selSeries.teams} />}
-      {selTeam && <TeamDetail team={selTeam} onClose={() => setSelTeam(null)} />}
+      {selSeries && (
+        <div className="modal-backdrop" onClick={() => setSelSeries(null)}>
+          <div className="modal scoreboard-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-x" onClick={() => setSelSeries(null)}>✕</button>
+            <Scoreboard series={selSeries.series} teams={selSeries.teams} />
+          </div>
+        </div>
+      )}
+      {selTeam && <TeamDetail team={selTeam} league={league} onClose={() => setSelTeam(null)} />}
       {profilePlayer && (() => {
         const p = profilePlayer;
         const rid = `user__${p.id}`;
@@ -2392,7 +2532,7 @@ export function CareerScreen({ onExit }: Props) {
 // radar de atributos (pentágono, escala 40-99) — leitura de "shape" do jogador
 function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
   const n = attrs.length;
-  const cx = 100, cy = 96, R = 66;
+  const cx = 110, cy = 96, R = 66;
   const norm = (v: number) => Math.max(0.05, Math.min(1, (v - 40) / 59));
   const pt = (i: number, r: number): [number, number] => {
     const a = -Math.PI / 2 + (i * 2 * Math.PI) / n; // começa no topo
@@ -2401,7 +2541,7 @@ function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
   const grid = [0.25, 0.5, 0.75, 1].map((f) => attrs.map((_, i) => pt(i, R * f).join(',')).join(' '));
   const shape = attrs.map((d, i) => pt(i, R * norm(d.value)).join(',')).join(' ');
   return (
-    <svg viewBox="0 0 200 188" className="attr-radar" role="img" aria-label="radar de atributos">
+    <svg viewBox="0 0 220 188" className="attr-radar" role="img" aria-label="radar de atributos">
       <g stroke="rgba(255,255,255,0.1)" fill="none" strokeWidth="0.8">
         {grid.map((g, i) => <polygon key={i} points={g} />)}
         {attrs.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} />; })}
@@ -2584,7 +2724,23 @@ function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<s
 }
 
 // painel de detalhe de um time da tabela (elenco, técnico, força)
-function TeamDetail({ team, onClose }: { team: TTeam; onClose: () => void }) {
+function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | null; onClose: () => void }) {
+  // histórico por mapa do time nesta temporada (séries já jogadas na liga)
+  const mapStats = useMemo(() => {
+    const rec: Record<string, { w: number; l: number; rf: number; ra: number }> = {};
+    if (league) {
+      for (const round of league.rounds) for (const m of round) {
+        if (!m.result || (m.a !== team.id && m.b !== team.id)) continue;
+        const side = m.a === team.id ? 0 : 1;
+        for (const mp of m.result.maps) {
+          const r = (rec[mp.map] ??= { w: 0, l: 0, rf: 0, ra: 0 });
+          if (mp.winner === side) r.w++; else r.l++;
+          r.rf += mp.score[side]; r.ra += mp.score[side === 0 ? 1 : 0];
+        }
+      }
+    }
+    return Object.entries(rec).sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l) || b[1].w - a[1].w);
+  }, [league, team.id]);
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card team-detail" onClick={(e) => e.stopPropagation()}>
@@ -2607,6 +2763,28 @@ function TeamDetail({ team, onClose }: { team: TTeam; onClose: () => void }) {
             </div>
           ))}
           {team.coach && <div className="td-coach muted small">Técnico: <b>{team.coach.nick}</b> ({team.coach.rating})</div>}
+          <div className="muted small section-label">Mapas na temporada</div>
+          {mapStats.length === 0 ? (
+            <p className="muted small" style={{ margin: 0 }}>Sem partidas jogadas ainda nesta temporada.</p>
+          ) : (
+            <table className="stats td-maps">
+              <thead><tr><th style={{ textAlign: 'left' }}>Mapa</th><th>V-D</th><th>Rounds</th><th>Aprov.</th></tr></thead>
+              <tbody>
+                {mapStats.map(([mp, r]) => {
+                  const tot = r.w + r.l;
+                  const pct = Math.round((r.w / tot) * 100);
+                  return (
+                    <tr key={mp}>
+                      <td style={{ textAlign: 'left' }}>{MAP_LABELS[mp as MapId] ?? mp}</td>
+                      <td><b className={r.w >= r.l ? 'pos' : 'neg'}>{r.w}-{r.l}</b></td>
+                      <td className="muted">{r.rf}:{r.ra}</td>
+                      <td className={pct >= 50 ? 'pos' : 'neg'}>{pct}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
@@ -2749,6 +2927,7 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
   const [mapIdx, setMapIdx] = useState(0);
   const [round, setRound] = useState(0);
   const [done, setDone] = useState(false);
+  const [showStats, setShowStats] = useState(false); // scoreboard completo da série
 
   // avança 1 round por vez, bem rápido (muito mais que o normal, mas visível)
   useEffect(() => {
@@ -2763,12 +2942,6 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
     const t = setTimeout(() => setRound((r) => r + 1), 28);
     return () => clearTimeout(t);
   }, [mapIdx, round, done, series]);
-
-  useEffect(() => {
-    if (!done) return;
-    const t = setTimeout(onDone, 700);
-    return () => clearTimeout(t);
-  }, [done, onDone]);
 
   const map = series.maps[mapIdx];
   const log = map ? map.roundLog.slice(0, round) : [];
@@ -2801,14 +2974,26 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
         </div>
         <div className="qs-foot">
           {done ? (
-            <span className="qs-final">
-              {series.winner === userIdx ? 'Vitória!' : 'Derrota'} · {series.mapScore[0]}-{series.mapScore[1]}
-            </span>
+            <>
+              <span className="qs-final">
+                {series.winner === userIdx ? 'Vitória!' : 'Derrota'} · {series.mapScore[0]}-{series.mapScore[1]}
+              </span>
+              <button className="btn ghost small" onClick={() => setShowStats(true)}>📊 Ver stats</button>
+              <button className="btn small" onClick={onDone}>Continuar →</button>
+            </>
           ) : (
             <button className="btn ghost small" onClick={() => setDone(true)}>Pular ⏭</button>
           )}
         </div>
       </div>
+      {showStats && (
+        <div className="modal-backdrop" onClick={() => setShowStats(false)}>
+          <div className="modal scoreboard-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-x" onClick={() => setShowStats(false)}>✕</button>
+            <Scoreboard series={series} teams={teams} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2900,10 +3085,12 @@ interface CircuitOption {
   vrsMult: number;
   tier: number;
 }
-function CircuitPicker({ circuits, split, playerTier, onPick, onBack }: {
+function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPick, onBack }: {
   circuits: CircuitOption[];
   split: number;
   playerTier: number;
+  relocate: { from: MacroRegion; to: MacroRegion } | null;
+  onRelocate: () => void;
   onPick: (c: CircuitOption) => void;
   onBack: () => void;
 }) {
@@ -2912,6 +3099,8 @@ function CircuitPicker({ circuits, split, playerTier, onPick, onBack }: {
   const canEnter = (opt: CircuitOption) => opt.tier >= playerTier;
   const firstOk = Math.max(0, circuits.findIndex((o) => canEnter(o)));
   const [sel, setSel] = useState(firstOk);
+  // os circuitos mudam ao realocar de região: reposiciona a seleção num válido
+  useEffect(() => { setSel(Math.max(0, circuits.findIndex((o) => canEnter(o)))); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [circuits]);
   const c = circuits[sel];
   const cOk = c && canEnter(c);
   return (
@@ -2923,6 +3112,13 @@ function CircuitPicker({ circuits, split, playerTier, onPick, onBack }: {
           <button className="btn" onClick={onBack}>← Mercado</button>
         </div>
         <div className="panel-body">
+          {relocate && (
+            <div className="relocate-banner">
+              🌍 Seu <b>core</b> mudou: agora é da <b>{MACRO_REGION_LABELS[relocate.to]}</b>, mas você compete na <b>{MACRO_REGION_LABELS[relocate.from]}</b>.
+              {' '}Quer <b>realocar a org para a {MACRO_REGION_LABELS[relocate.to]}</b>? A bandeira do time passa a ser a dessa região.
+              <button className="btn small" onClick={onRelocate}>Mudar para {MACRO_REGION_LABELS[relocate.to]}</button>
+            </div>
+          )}
           <p className="muted small">Cada circuito é um <b>tier</b>. Você joga no seu tier ou abaixo; vencer o seu circuito te <b>promove</b>, terminar no fundo te <b>rebaixa</b>. Só o <b>Tier 1</b> dá vaga no Major.</p>
           <div className="circuit-cards">
             {circuits.map((opt, i) => {
@@ -3064,6 +3260,8 @@ function OrgSelect({ teams, onStart, onFictional, onExit }: {
       budget: takeoverBudget(tier),
       tier,
       takeoverId: t.id,
+      // região de competição = core do elenco assumido (Astralis → Europa, etc.)
+      region: macroRegionPlurality(t.players.slice(0, 5).map((p) => p.country)),
     });
   };
   const startEmpty = (e: EmptyOrg) => {

@@ -281,6 +281,12 @@ export function buildUserTeam(name: string, picks: { player: Player; from: TeamS
   const teamwork = 78 + Math.max(-14, Math.min(12, synergy.total * 1.2));
   const mapPrefs = fullMapPrefs('MIX', {});
   const strength = teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(coach) - DREAM_TEAM_MALUS;
+  // país do time = nacionalidade predominante do elenco (não fixo 'br'), pra a
+  // bandeira do usuário bater com o core em qualquer lugar que use team.country
+  const tally = new Map<string, number>();
+  for (const p of players) { const c = (p.country || '').toLowerCase(); if (c) tally.set(c, (tally.get(c) ?? 0) + 1); }
+  let country = 'br', best = 0;
+  for (const [c, n] of tally) if (n > best) { best = n; country = c; }
   return {
     id: 'user',
     name,
@@ -292,7 +298,7 @@ export function buildUserTeam(name: string, picks: { player: Player; from: TeamS
         .join('')
         .toUpperCase()
         .slice(0, 4) || 'MEU',
-    country: 'br',
+    country,
     isUser: true,
     game: 'MIX',
     colors: ['#1a1d2e', '#5ba0d0'],

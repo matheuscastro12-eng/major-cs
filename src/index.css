@@ -419,6 +419,36 @@ tr.team-row td {
   flex-shrink: 0;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
 }
+/* bandeira de região inline (mesmo tamanho do flag de país) */
+.flag.region-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  background: var(--panel-3);
+  font-size: 10px;
+  line-height: 1;
+}
+.flag.region-mini .region-svg { width: 100%; height: 100%; display: block; }
+.flag.region-mini.intl { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
+
+/* banner de realocação de região (core mudou) */
+.relocate-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(91, 160, 208, 0.16), rgba(91, 160, 208, 0.07));
+  border: 1px solid var(--blue-bright);
+  border-left: 4px solid var(--blue-bright);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.relocate-banner .btn.small { margin-left: auto; white-space: nowrap; }
 
 .flag-chip {
   display: inline-flex;
@@ -3878,6 +3908,92 @@ table.crm-players input.num {
 .attr-radar { width: 100%; max-width: 240px; display: block; margin: 2px auto 8px; }
 .attr-radar .ar-label { fill: var(--muted); font-size: 9px; font-weight: 700; font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.3px; }
 .attr-radar .ar-val { fill: var(--text); font-weight: 800; }
+
+/* scoreboard (Match stats) como modal — não fica mais solto no fim da página */
+/* cena mundial (outras regiões) */
+.world-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.world-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; }
+.world-card.mine { border-color: var(--blue-bright); box-shadow: 0 0 0 1px var(--blue-bright) inset; }
+.world-head { display: flex; align-items: center; gap: 7px; }
+.world-region { font-weight: 800; font-family: var(--font-cond); letter-spacing: 0.4px; text-transform: uppercase; }
+.world-you { margin-left: auto; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; color: var(--blue-bright); }
+.world-league { margin: 1px 0 8px; }
+.world-champ { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.world-champ .wc-tag { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; color: var(--gold-2); }
+.world-champ .wc-name { font-size: 0.9rem; }
+.world-runner { margin-top: 2px; }
+.world-top { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.world-row { display: flex; align-items: center; gap: 6px; background: none; border: none; color: var(--text); padding: 3px 4px; border-radius: 6px; cursor: pointer; text-align: left; font-size: 0.82rem; }
+.world-row:hover { background: rgba(255, 255, 255, 0.04); }
+.world-row .wr-rank { width: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.world-row .wr-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* transição ao trocar de aba no hub da carreira (remount via key) */
+.tab-fade { animation: tab-fade-in 0.26s cubic-bezier(0.22, 0.7, 0.25, 1); }
+@keyframes tab-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .tab-fade { animation: none; } }
+
+/* scoreboard detalhado: rola na horizontal em telas estreitas (10 colunas) */
+.sb-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.sb-table { min-width: 560px; }
+.sb-table th, .sb-table td { white-space: nowrap; }
+.sb-table .sb-player { text-align: left; }
+.sb-kad b { color: var(--text); }
+.sb-sub { font-variant-numeric: tabular-nums; }
+
+/* destaque da partida (player of the match) */
+.potm {
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  padding: 12px 14px; border-bottom: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, rgba(216, 169, 67, 0.08), transparent);
+}
+.potm-id { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 120px; }
+.potm-tag { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--gold-2); }
+.potm-name { font-size: 0.96rem; display: flex; align-items: center; gap: 5px; }
+.potm-bars { display: flex; gap: 10px; flex: 1; min-width: 0; justify-content: space-around; }
+.potm-bar { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pb-val { font-size: 0.82rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pb-track { width: 12px; height: 52px; background: var(--bg-deep); border-radius: 3px; display: flex; align-items: flex-end; overflow: hidden; }
+.pb-track i { display: block; width: 100%; border-radius: 3px; }
+.pb-track i.good { background: linear-gradient(180deg, var(--gold-soft), #f3cf6b); }
+.pb-track i.bad { background: linear-gradient(180deg, #6b7686, #495161); }
+.pb-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--muted); }
+@media (max-width: 560px) { .potm-bars { gap: 6px; } .pb-track { width: 10px; height: 42px; } .pb-label { font-size: 0.55rem; } }
+
+.scoreboard-modal {
+  width: min(940px, 96vw);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 0;
+}
+.scoreboard-modal .panel { border: none; box-shadow: none; margin: 0; }
+/* cabeçalho fixo no topo enquanto rola, com espaço reservado pro ✕ */
+.scoreboard-modal .panel-head {
+  position: sticky; top: 0; z-index: 4;
+  background: var(--panel-2);
+  flex-wrap: wrap;
+  padding-right: 38px;
+}
+/* ✕ sempre visível (acompanha a rolagem) e acima do cabeçalho fixo */
+.scoreboard-modal .modal-x { position: sticky; z-index: 5; }
+@media (max-width: 560px) {
+  /* labels de lado curtos pra não estourar a largura do modal no celular */
+  .scoreboard-modal .seg button { padding: 5px 7px; font-size: 11px; }
+  .potm-bar .pb-label { white-space: nowrap; }
+}
+
+/* tabela de contratos: rola na horizontal se faltar espaço (botão Renovar
+   nunca fica inacessível) e no mobile esconde colunas secundárias pra caber */
+.fin-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 640px) {
+  .fin-contracts th:nth-child(2), .fin-contracts td:nth-child(2),
+  .fin-contracts th:nth-child(3), .fin-contracts td:nth-child(3),
+  .fin-contracts th:nth-child(4), .fin-contracts td:nth-child(4) { display: none; }
+  .fin-contracts .btn.small { padding: 5px 8px; font-size: 0.78rem; white-space: nowrap; }
+}
 
 /* inbox de manchetes */
 .news-list { display: flex; flex-direction: column; gap: 8px; }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { coreIdentity, REGION_LABELS, type CoreId, type RegionKey } from '../data/regions';
+import { coreIdentity, orgCore, MACRO_REGION_LABELS, REGION_LABELS, type CoreId, type MacroRegion, type RegionKey } from '../data/regions';
 import type { TPlayer } from '../types';
+import { Flag } from './ui';
 
 // estrela de 5 pontas centrada em (cx,cy)
 function starPoints(cx: number, cy: number, r: number): string {
@@ -103,6 +104,43 @@ export function RegionFlagSvg({ region }: { region: RegionKey }) {
         </svg>
       );
   }
+}
+
+// bandeira das Américas (emblema próprio: azul com estrela — não é bandeira oficial)
+function AmericasFlagSvg() {
+  return (
+    <svg viewBox="0 0 60 40" preserveAspectRatio="xMidYMid slice" className="region-svg">
+      <rect width="60" height="40" fill="#1f6fb2" />
+      <rect y="20" width="60" height="20" fill="#1f9e5a" />
+      <polygon points={starPoints(30, 20, 11)} fill="#ffd84d" />
+    </svg>
+  );
+}
+// bandeira de uma MACRO-região (inclui Américas unificada)
+export function MacroRegionFlagSvg({ region }: { region: MacroRegion }) {
+  if (region === 'americas') return <AmericasFlagSvg />;
+  return <RegionFlagSvg region={region as RegionKey} />;
+}
+
+// bandeira "oficial" da ORG no modo carreira, derivada do core do elenco:
+// país (3+ do mesmo país), região (3+ da mesma macro-região) ou internacional.
+export function OrgFlag({ players, title }: { players: { country: string }[]; title?: string }) {
+  const core = orgCore(players.map((p) => p.country));
+  if (core.kind === 'country') return <Flag cc={core.cc} title={title} />;
+  if (core.kind === 'region') {
+    return (
+      <span className="flag region-mini" title={title ?? MACRO_REGION_LABELS[core.region]}>
+        <MacroRegionFlagSvg region={core.region} />
+      </span>
+    );
+  }
+  return <span className="flag region-mini intl" title={title ?? 'Internacional'}>🌐</span>;
+}
+export function orgFlagLabel(players: { country: string }[]): string {
+  const core = orgCore(players.map((p) => p.country));
+  if (core.kind === 'country') return core.cc.toUpperCase();
+  if (core.kind === 'region') return MACRO_REGION_LABELS[core.region];
+  return 'Internacional';
 }
 
 // bandeira do "core" (país via flagcdn em alta resolução, região via SVG) - usada como fundo

@@ -62,7 +62,7 @@ function iglLean(team: TTeam, side: 'ct' | 't'): number {
 }
 
 function emptyLine(): PlayerLine {
-  return { kills: 0, deaths: 0, assists: 0, dmg: 0, kastRounds: 0, rounds: 0, openKills: 0, clutchWins: 0 };
+  return { kills: 0, deaths: 0, assists: 0, dmg: 0, kastRounds: 0, rounds: 0, openKills: 0, clutchWins: 0, hsKills: 0, mkRounds: 0, tradedDeaths: 0 };
 }
 
 function emptyStats(): PlayerMapStats {
@@ -463,6 +463,9 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     const roundEvents = winnerOpens ? [...winEvents, ...loseEvents] : [...loseEvents, ...winEvents];
     if (roundEvents[0]) roundEvents[0].opening = true;
     killFeed.push(...roundEvents);
+    // abates de headshot por jogador neste round (coluna K(hs))
+    const hsByKiller = new Map<string, number>();
+    for (const e of roundEvents) if (e.headshot) hsByKiller.set(e.killerId, (hsByKiller.get(e.killerId) ?? 0) + 1);
 
     if (loserKills >= 3 && rng() < 0.45) {
       const ps = teamPlayers[winIdx];
@@ -492,6 +495,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
         const traded = died && rng() < 0.25;
         const kast = kills > 0 || assists > 0 || survived || traded;
 
+        const hs = hsByKiller.get(ps[i].id) ?? 0;
         for (const line of [st.both, side === 'ct' ? st.ct : st.t]) {
           line.rounds++;
           line.kills += kills;
@@ -501,6 +505,9 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
           if (kast) line.kastRounds++;
           if (tally[ti].open === i) line.openKills++;
           if (tally[ti].clutch === i) line.clutchWins++;
+          line.hsKills += hs;
+          if (kills >= 2) line.mkRounds++;
+          if (died && traded) line.tradedDeaths++;
         }
       }
     }
@@ -636,6 +643,9 @@ export function mergeLines(lines: PlayerLine[]): PlayerLine {
     out.rounds += l.rounds;
     out.openKills += l.openKills;
     out.clutchWins += l.clutchWins;
+    out.hsKills += l.hsKills;
+    out.mkRounds += l.mkRounds;
+    out.tradedDeaths += l.tradedDeaths;
   }
   return out;
 }

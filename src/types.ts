@@ -148,6 +148,9 @@ export interface PlayerLine {
   rounds: number;
   openKills: number;
   clutchWins: number;
+  hsKills: number; // abates de headshot (coluna K(hs))
+  mkRounds: number; // rounds com 2+ abates (multi-kills)
+  tradedDeaths: number; // mortes que foram trocadas (coluna D(t))
 }
 
 export interface PlayerMapStats {
