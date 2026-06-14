@@ -1,6 +1,7 @@
 import { liquipediaTeamUrl, logoForTeam } from '../data/media';
 import type { Coach, Game, Player, Playstyle, Role, TeamSeason, TPlayer, TTeam } from '../types';
 import { derivePlaystyle, MAP_POOL } from '../types';
+import { hashStr } from '../state/hash';
 
 // Dream team montado no draft nunca treinou junto: leva um malus de
 // entrosamento que torna o título mais difícil (egos, falta de rotina).
@@ -113,10 +114,25 @@ function defaultPref(game: Game, map: string): number {
   return 0;
 }
 
-export function fullMapPrefs(game: Game | 'MIX', prefs: Record<string, number>): Record<string, number> {
+// perfil de mapa determinístico para times SEM prefs explícitas (os times reais
+// de CS2 do bo3 vêm com mapPrefs vazio). Cada time fica forte em alguns mapas e
+// fraco em outros, estável por id — assim a análise pré-jogo e o veto mostram de
+// fato quem é melhor em cada mapa (igual ao draft, onde os times têm força/mapa).
+function genMapPrefs(seed: string): Record<string, number> {
   const out: Record<string, number> = {};
   for (const m of MAP_POOL) {
-    out[m] = prefs[m] ?? (game === 'MIX' ? 0 : defaultPref(game, m));
+    const h = hashStr(`${seed}:mappref:${m}`);
+    out[m] = Math.round((((h % 1000) / 1000) * 5 - 2.5) * 10) / 10; // -2.5..+2.5
+  }
+  return out;
+}
+
+export function fullMapPrefs(game: Game | 'MIX', prefs: Record<string, number>, seed?: string): Record<string, number> {
+  // gera um perfil só quando o time é CS2 e não trouxe nenhuma pref própria
+  const gen = seed && game === 'CS2' && Object.keys(prefs).length === 0 ? genMapPrefs(seed) : null;
+  const out: Record<string, number> = {};
+  for (const m of MAP_POOL) {
+    out[m] = prefs[m] ?? (gen ? gen[m] : game === 'MIX' ? 0 : defaultPref(game, m));
   }
   return out;
 }
@@ -213,7 +229,7 @@ export function teamSeasonToTTeam(ts: TeamSeason): TTeam {
     liquipediaUrl: ts.liquipediaUrl ?? liquipediaTeamUrl(ts),
     strength: teamStrengthFromPlayers(players, ts.teamwork) + coachBaseBonus(ts.coach),
     teamwork: ts.teamwork,
-    mapPrefs: fullMapPrefs(ts.game, ts.mapPrefs),
+    mapPrefs: fullMapPrefs(ts.game, ts.mapPrefs, ts.id),
     coach: ts.coach,
     players,
     wins: 0,
