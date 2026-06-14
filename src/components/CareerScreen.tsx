@@ -1625,6 +1625,7 @@ export function CareerScreen({ onExit }: Props) {
     const myStar = seStats.find((s) => mySquadIdsSE.has(s.id));
     const seasonTop3 = seasonTopPlayers(currentEra, save.split, 3);
     const seasonTop20 = seasonTopPlayers(currentEra, save.split, 20);
+    const mySquadOids = new Set(save.squad.map((s) => s.playerId)); // ids do seu elenco (relabel HLTV)
     const nextFeed = feedMemo;
     const spots = save.circuit?.spots ?? MAJOR_SPOTS;
     // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
@@ -1766,13 +1767,16 @@ export function CareerScreen({ onExit }: Props) {
               <div className="se-award">
                 <div className="se-award-title">Top 3 HLTV da temporada</div>
                 <div className="se-top3">
-                  {seasonTop3.map((e, i) => (
-                    <div key={e.p.id} className="se-top3-row">
-                      <span className="t20-rank">{i + 1}</span>
-                      <span className="bp-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{e.team.tag}</span></span>
-                      <span className="t20-rating">{e.rating.toFixed(2)}</span>
-                    </div>
-                  ))}
+                  {seasonTop3.map((e, i) => {
+                    const tag = mySquadOids.has(e.p.id) ? (save.org?.tag ?? 'VOCÊ') : e.team.tag;
+                    return (
+                      <div key={e.p.id} className="se-top3-row">
+                        <span className="t20-rank">{i + 1}</span>
+                        <span className="bp-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tag}</span></span>
+                        <span className="t20-rating">{e.rating.toFixed(2)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1885,7 +1889,7 @@ export function CareerScreen({ onExit }: Props) {
           </div>
         )}
         {showCeremony && (
-          <Top20Ceremony entries={seasonTop20} mine={new Set(save.squad.map((s) => s.playerId))} split={save.split} circuit={save.circuit?.name ?? 'temporada'} onClose={() => setShowCeremony(false)} />
+          <Top20Ceremony entries={seasonTop20} mine={new Set(save.squad.map((s) => s.playerId))} orgTag={save.org?.tag ?? 'VOCÊ'} split={save.split} circuit={save.circuit?.name ?? 'temporada'} onClose={() => setShowCeremony(false)} />
         )}
       </div>
     );
@@ -1989,6 +1993,7 @@ export function CareerScreen({ onExit }: Props) {
   const me = syncUser(leagueTeam(league, 'user'));
   const seasonStats = seasonStatsMemo;
   const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
+  const mySquadOids = new Set(save.squad.map((s) => s.playerId)); // ids ORIGINAIS (relabel HLTV pra sua org)
   const org = aggregateHistory(save.history);
 
   const majorActive = !!majorT && majorT.phase !== 'done';
@@ -2539,18 +2544,25 @@ export function CareerScreen({ onExit }: Props) {
             </div>
             {t20Mode === 'season' ? (
               <div className="top20-list">
-                {top20.map((e, i) => (
+                {top20.map((e, i) => {
+                  // jogador do SEU elenco aparece pela SUA org, não pelo clube de origem
+                  const isMine = mySquadOids.has(e.p.id);
+                  const tag = isMine ? (save.org?.tag ?? 'VOCÊ') : e.team.tag;
+                  const colors = isMine ? (save.org?.colors ?? e.team.colors) : e.team.colors;
+                  const logo = isMine ? save.org?.logo : (e.team.logoUrl ?? logoForTeam(e.team));
+                  return (
                   <div key={e.p.id} className={`t20-row${i === 0 ? ' first' : ''}`}>
                     <span className="t20-rank">{i + 1}</span>
                     <PlayerAvatar nick={e.p.nick} size={32} />
                     <span className="t20-nick"><Flag cc={e.p.country} /> {e.p.nick}</span>
                     <span className="muted small t20-team">
-                      <TeamBadge tag={e.team.tag} colors={e.team.colors} size={16} logoUrl={e.team.logoUrl ?? logoForTeam(e.team)} /> {e.team.tag}
+                      <TeamBadge tag={tag} colors={colors} size={16} logoUrl={logo} /> {tag}
                     </span>
                     <span className={`role-pill ${e.p.role}`}>{e.p.role}</span>
                     <span className="t20-rating">{e.rating.toFixed(2)}</span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : careerTop20.length === 0 ? (
               <p className="muted small">As estatísticas de carreira aparecem aqui depois de jogar o primeiro split. Elas sobem conforme os jogadores evoluem.</p>
@@ -2841,15 +2853,18 @@ function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<s
 // painel de detalhe de um time da tabela (elenco, técnico, força)
 // Cerimônia do Top 20 HLTV ao fim de cada temporada — revelação dos 20 melhores
 // jogadores do ano, com o #1 em destaque e os seus jogadores realçados.
-function Top20Ceremony({ entries, mine, split, circuit, onClose }: {
+function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
   entries: { p: Player; team: TeamSeason; rating: number }[];
   mine: Set<string>;
+  orgTag: string;
   split: number;
   circuit: string;
   onClose: () => void;
 }) {
   const top1 = entries[0];
   const rest = entries.slice(1, 20);
+  // jogador do SEU elenco mostra a SUA org, não o clube de origem (bug do m0NESY)
+  const tagOf = (e: { p: Player; team: TeamSeason }) => (mine.has(e.p.id) ? orgTag : e.team.tag);
   return (
     <div className="modal-backdrop ceremony-backdrop" onClick={onClose}>
       <div className="ceremony" onClick={(e) => e.stopPropagation()}>
@@ -2864,7 +2879,7 @@ function Top20Ceremony({ entries, mine, split, circuit, onClose }: {
             <PlayerAvatar nick={top1.p.nick} size={62} />
             <div className="cer-1-id">
               <div className="cer-1-nick"><Flag cc={top1.p.country} /> {top1.p.nick}</div>
-              <div className="muted small">{top1.team.tag} · {top1.p.name}</div>
+              <div className="muted small">{tagOf(top1)} · {top1.p.name}</div>
             </div>
             <div className="cer-1-rating">{top1.rating.toFixed(2)}<span>rating</span></div>
           </div>
@@ -2874,7 +2889,7 @@ function Top20Ceremony({ entries, mine, split, circuit, onClose }: {
             <div key={e.p.id} className={`cer-row${mine.has(e.p.id) ? ' mine' : ''}`} style={{ animationDelay: `${0.1 + i * 0.045}s` }}>
               <span className="cer-rank">{i + 2}</span>
               <PlayerAvatar nick={e.p.nick} size={24} />
-              <span className="cer-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{e.team.tag}</span></span>
+              <span className="cer-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tagOf(e)}</span></span>
               <span className="cer-rating">{e.rating.toFixed(2)}</span>
             </div>
           ))}
