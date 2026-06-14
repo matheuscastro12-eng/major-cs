@@ -2661,6 +2661,48 @@ table.crm-players input.num {
   font-size: 15px;
 }
 
+/* ===== landing (home) — layout profissional ===== */
+.landing { max-width: 880px; margin: 0 auto; }
+
+/* faixa de credibilidade abaixo do título: nº de times/jogadores + fonte */
+.hero-stats {
+  display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
+  margin: 14px auto 0; color: var(--muted); font-size: 13px;
+}
+.hero-stats b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.hero-stats .hs-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+.hero-stats .hs-src { color: var(--faint); }
+@media (max-width: 560px) { .hero-stats .hs-src, .hero-stats .hs-dot:last-of-type { display: none; } }
+
+/* painel "Partida rápida": agrupa cenário/modo/dificuldade/nome num bloco coeso */
+.setup-panel {
+  max-width: 680px; margin: 24px auto 0; text-align: left;
+  background: linear-gradient(180deg, var(--panel) 0%, rgba(36, 43, 52, 0.55) 100%);
+  border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+  padding: 20px 20px 22px;
+}
+.sp-head { text-align: center; margin-bottom: 18px; }
+.sp-title {
+  display: block; font-family: var(--font-cond); font-weight: 800; font-size: 1.55rem;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--text-strong);
+}
+.sp-sub { display: block; color: var(--dim); font-size: 13px; max-width: 520px; margin: 5px auto 0; line-height: 1.45; }
+.sp-section { margin-top: 16px; }
+.sp-label {
+  display: block; font-family: var(--font-cond); font-weight: 700; font-size: 0.72rem;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 2px;
+}
+/* dentro do painel os grids ocupam a largura toda e os cards ficam mais discretos */
+.setup-panel .pool-cards,
+.setup-panel .mode-cards,
+.setup-panel .diff-cards,
+.setup-panel .name-input { max-width: none; margin: 0; }
+.setup-panel .name-input { margin-top: 20px; }
+.setup-panel .pool-card,
+.setup-panel .mode-card,
+.setup-panel .diff-card { border-width: 1px; border-radius: var(--r-sm); background: var(--panel-2); }
+
 .mode-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;

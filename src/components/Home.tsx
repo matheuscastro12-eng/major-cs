@@ -91,6 +91,13 @@ const NEWS = {
 const BETA_KEY = 'rtm-beta-v1';
 const TWITTER_URL = 'https://x.com/castroomath';
 
+// rótulos de seção da landing (mantém o conteúdo de hoje, só organiza melhor)
+const UI = {
+  pt: { quickMatch: 'Partida rápida', quickMatchSub: 'Monte o time dos sonhos e dispute um Major completo — fase suíça, playoffs, veto e scoreboard estilo HLTV.', region: 'Cenário', gameMode: 'Modo de jogo', difficulty: 'Dificuldade', play: 'Começar', achievements: 'Conquistas' },
+  en: { quickMatch: 'Quick match', quickMatchSub: 'Build a dream team and play a full Major — Swiss stage, playoffs, map veto and an HLTV-style scoreboard.', region: 'Scene', gameMode: 'Game mode', difficulty: 'Difficulty', play: 'Start', achievements: 'Achievements' },
+  es: { quickMatch: 'Partida rápida', quickMatchSub: 'Arma el equipo de tus sueños y disputa un Major completo — fase suiza, playoffs, veto y scoreboard estilo HLTV.', region: 'Escenario', gameMode: 'Modo de juego', difficulty: 'Dificultad', play: 'Empezar', achievements: 'Logros' },
+};
+
 export function Home({
   onStart,
   onDonate,
@@ -106,6 +113,7 @@ export function Home({
 }: Props) {
   const { t, lang } = useLang();
   const N = NEWS[(lang as 'pt' | 'en' | 'es')] ?? NEWS.pt;
+  const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState('');
   const [codeErr, setCodeErr] = useState('');
@@ -144,12 +152,19 @@ export function Home({
 
   return (
     <div className="fade-in">
-      <div className="hero">
-        <BrandMark size={96} className="hero-mark" />
+      <div className="hero landing">
+        <BrandMark size={88} className="hero-mark" />
         <h1>
           ROAD TO <span>MAJOR</span>
         </h1>
         <p>{t('hero.tagline')}</p>
+        <div className="hero-stats">
+          <span><b>{teamCount}</b> {t('home.teams')}</span>
+          <i className="hs-dot" />
+          <span><b>{playerCount}</b> {t('home.players')}</span>
+          <i className="hs-dot" />
+          <span className="hs-src">{t('home.curated')} HLTV · Liquipedia</span>
+        </div>
 
         {savedCampaign && (
           <div style={{ margin: '18px auto 0', maxWidth: 640, display: 'flex', gap: 10 }}>
@@ -213,51 +228,67 @@ export function Home({
           )}
         </div>
 
-        <div className="pool-cards">
-          <button className={`pool-card world${pool === 'world' ? ' sel' : ''}`} onClick={() => setPool('world')}>
-            <h3>{t('home.poolWorld')}</h3>
-            <p>{t('home.poolWorldDesc')}</p>
-          </button>
-          <button className={`pool-card br${pool === 'br' ? ' sel' : ''}`} onClick={() => setPool('br')}>
-            <h3>{t('home.poolBr')}</h3>
-            <p>{t('home.poolBrDesc')}</p>
-          </button>
-        </div>
+        <section className="setup-panel">
+          <div className="sp-head">
+            <span className="sp-title">{L.quickMatch}</span>
+            <span className="sp-sub">{L.quickMatchSub}</span>
+          </div>
 
-        <div className="mode-cards">
-          <button className={`mode-card${mode === 'classic' ? ' sel' : ''}`} onClick={() => setMode('classic')}>
-            <h3>{t('home.modeClassic')}</h3>
-            <p>{t('home.modeClassicDesc')}</p>
-          </button>
-          <button className={`mode-card${mode === 'almanac' ? ' sel' : ''}`} onClick={() => setMode('almanac')}>
-            <h3>{t('home.modeAlmanac')}</h3>
-            <p>{t('home.modeAlmanacDesc')}</p>
-          </button>
-        </div>
+          <div className="sp-section">
+            <span className="sp-label">{L.region}</span>
+            <div className="pool-cards">
+              <button className={`pool-card world${pool === 'world' ? ' sel' : ''}`} onClick={() => setPool('world')}>
+                <h3>{t('home.poolWorld')}</h3>
+                <p>{t('home.poolWorldDesc')}</p>
+              </button>
+              <button className={`pool-card br${pool === 'br' ? ' sel' : ''}`} onClick={() => setPool('br')}>
+                <h3>{t('home.poolBr')}</h3>
+                <p>{t('home.poolBrDesc')}</p>
+              </button>
+            </div>
+          </div>
 
-        <div className="diff-cards">
-          {DIFFICULTIES.map((d) => (
-            <button key={d} className={`diff-card ${d}${difficulty === d ? ' sel' : ''}`} onClick={() => setDifficulty(d)}>
-              <h4>
-                {DIFF_ICON[d]} {t(`diff.${d}`)}
-              </h4>
-              <p>{t(`diff.${d}Desc`)}</p>
+          <div className="sp-section">
+            <span className="sp-label">{L.gameMode}</span>
+            <div className="mode-cards">
+              <button className={`mode-card${mode === 'classic' ? ' sel' : ''}`} onClick={() => setMode('classic')}>
+                <h3>{t('home.modeClassic')}</h3>
+                <p>{t('home.modeClassicDesc')}</p>
+              </button>
+              <button className={`mode-card${mode === 'almanac' ? ' sel' : ''}`} onClick={() => setMode('almanac')}>
+                <h3>{t('home.modeAlmanac')}</h3>
+                <p>{t('home.modeAlmanacDesc')}</p>
+              </button>
+            </div>
+          </div>
+
+          <div className="sp-section">
+            <span className="sp-label">{L.difficulty}</span>
+            <div className="diff-cards">
+              {DIFFICULTIES.map((d) => (
+                <button key={d} className={`diff-card ${d}${difficulty === d ? ' sel' : ''}`} onClick={() => setDifficulty(d)}>
+                  <h4>
+                    {DIFF_ICON[d]} {t(`diff.${d}`)}
+                  </h4>
+                  <p>{t(`diff.${d}Desc`)}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="name-input">
+            <input
+              placeholder={t('home.namePlaceholder')}
+              value={name}
+              maxLength={24}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && start()}
+            />
+            <button className="btn big gold" onClick={start}>
+              ▶ {t('home.start')}
             </button>
-          ))}
-        </div>
-
-        <div className="name-input">
-          <input
-            placeholder={t('home.namePlaceholder')}
-            value={name}
-            maxLength={24}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && start()}
-          />
-          <button className="btn big" onClick={start}>
-            {t('home.start')}
-          </button>
-        </div>
+          </div>
+        </section>
 
         <div className="social-row">
           <TwitterLink />
