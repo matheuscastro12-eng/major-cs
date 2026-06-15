@@ -2118,9 +2118,41 @@ export function CareerScreen({ onExit }: Props) {
       )}
 
       {/* ===== VISÃO GERAL ===== */}
-      {hubTab === 'overview' && (
+      {hubTab === 'overview' && (() => {
+        const prizeNow = Math.round((PRIZE_BY_POS[Math.max(0, myPos - 1)] ?? 0) * (save.circuit?.prizeMult ?? 1));
+        const qualifying = myPos > 0 && myPos <= spots;
+        const nextMajor = isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
+        const net = sponsorIncome(save.sponsors) - payroll;
+        const myStars = seasonStats.filter((s) => mySquadIds.has(s.id)).slice(0, 5);
+        return (
         <div className="career-grid">
           <div className="career-main">
+            {/* HERO: central de comando do split */}
+            <div className="dash-hero" style={{ background: `linear-gradient(120deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--panel-3) 65%)` }}>
+              <div className="dh-id">
+                <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={44} logoUrl={save.org?.logo} />
+                <div>
+                  <div className="dh-circuit">{save.circuit?.name ?? 'Circuito'}</div>
+                  <div className="dh-sub">
+                    <span className="dh-tier">TIER {save.tier}</span>
+                    <span>Split {save.split}</span>
+                    {save.region && <span>{MACRO_REGION_LABELS[save.region]}</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="dh-chips">
+                <div className="dh-chip"><b>{myPos}º<span className="dh-of"> / {league.teams.length}</span></b><span>Posição</span></div>
+                <div className="dh-chip">
+                  <b className="dh-form">{form.length ? form.slice(-5).map((r, i) => <i key={i} className={`fchip ${r === 'W' ? 'w' : 'l'}`}>{r}</i>) : <span className="muted">-</span>}</b>
+                  <span>Forma</span>
+                </div>
+                <div className={`dh-chip ${qualifying ? 'q-ok' : 'q-no'}`}>
+                  <b>{qualifying ? '✓ na zona' : `top ${spots}`}</b>
+                  <span>{isMajorSplit(save.split) ? 'vale vaga no Major' : `Major no Split ${nextMajor}`}</span>
+                </div>
+                <div className="dh-chip"><b>{formatMoney(prizeNow)}</b><span>prêmio na {myPos}ª</span></div>
+              </div>
+            </div>
             {expiringCount > 0 && (
               <button className="contract-alert" onClick={() => setHubTab('finance')}>
                 📄 <b>{expiringCount === 1 ? '1 contrato vence' : `${expiringCount} contratos vencem`}</b> neste split
@@ -2195,12 +2227,14 @@ export function CareerScreen({ onExit }: Props) {
               <div className="career-banner">Rodada concluída. Avançando…</div>
             )}
 
-            {/* resumo da temporada atual */}
+            {/* resumo da temporada atual + pulso financeiro */}
             <div className="career-statgrid">
               <div className="cstat"><b>{me.wins}-{me.losses}</b><span>Campanha</span></div>
               <div className="cstat"><b className={me.roundDiff >= 0 ? 'pos' : 'neg'}>{me.roundDiff >= 0 ? '+' : ''}{me.roundDiff}</b><span>Saldo de rounds</span></div>
-              <div className="cstat"><b>{myPos}º / {league.teams.length}</b><span>Posição</span></div>
               <div className="cstat"><b>{league.current}/{league.rounds.length}</b><span>Rodadas jogadas</span></div>
+              <div className="cstat"><b>{formatMoney(save.budget)}</b><span>Caixa</span></div>
+              <div className="cstat"><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b><span>Saldo / split</span></div>
+              <div className="cstat"><b>{save.vrs}</b><span>VRS</span></div>
             </div>
 
             <div className="muted small section-label">Rodada {league.current + 1} - confrontos</div>
@@ -2216,13 +2250,20 @@ export function CareerScreen({ onExit }: Props) {
               <div className="muted small section-label" style={{ marginTop: 0 }}>Classificação · top {spots} vai ao Major</div>
               <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} />
             </div>
+            {myStars.length > 0 && (
+              <div className="side-card">
+                <div className="muted small section-label" style={{ marginTop: 0 }}>⭐ Seus destaques no split</div>
+                <BestPlayers stats={myStars} mine={mySquadIds} ranked />
+              </div>
+            )}
             <div className="side-card">
               <div className="muted small section-label" style={{ marginTop: 0 }}>Destaques da temporada</div>
-              <BestPlayers stats={seasonStats.slice(0, 5)} mine={mySquadIds} />
+              <BestPlayers stats={seasonStats.slice(0, 5)} mine={mySquadIds} ranked />
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ===== MAJOR AO VIVO (dentro do hub) ===== */}
       {hubTab === 'major' && majorT && (
