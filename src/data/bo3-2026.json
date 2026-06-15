@@ -6967,5 +6967,345 @@
     "igl": 43
    }
   ]
+ },
+ {
+  "id": "bo3_team_6282",
+  "team": "Bounty Hunters",
+  "tag": "BHE",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 73,
+  "honors": "#91 no ranking mundial",
+  "colors": [
+   "#1f512b",
+   "#5ae2be"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "gusihx",
+   "name": "Nicolas Rovira",
+   "country": "ar",
+   "rating": 68,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/6282/image/webp-d4ec7142d13d6270207e9537156a368b.webp",
+  "players": [
+   {
+    "id": "bo3_35994",
+    "nick": "pepe",
+    "name": "Pedro Almeida",
+    "country": "br",
+    "role": "AWP",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 73,
+    "igl": 43
+   },
+   {
+    "id": "bo3_28857",
+    "nick": "KAISER",
+    "name": "Gianfranco Pantano",
+    "country": "ar",
+    "role": "IGL",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 73
+   },
+   {
+    "id": "bo3_32473",
+    "nick": "zock",
+    "name": "Mauro Da Silva",
+    "country": "uy",
+    "role": "Entry",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_26665",
+    "nick": "ponter",
+    "name": "Gabriel Amaral",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_31217",
+    "nick": "fREQ",
+    "name": "Leonardo Kurussu",
+    "country": "br",
+    "role": "Support",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_778",
+  "team": "Keyd Stars",
+  "tag": "KEYD",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 72,
+  "honors": "#119 no ranking mundial",
+  "colors": [
+   "#1f4951",
+   "#5a87e2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "Kaos",
+   "name": "Matheus Nicolau",
+   "country": "br",
+   "rating": 68,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/778/image/webp-dbd5bdf3de75f28643229cce0a8fe454.webp",
+  "players": [
+   {
+    "id": "bo3_38031",
+    "nick": "lash",
+    "name": "Gabriel Sampaio",
+    "country": "br",
+    "role": "AWP",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 73,
+    "igl": 43
+   },
+   {
+    "id": "bo3_31424",
+    "nick": "zede",
+    "name": "Vinicius Reis Cruz Batista",
+    "country": "br",
+    "role": "IGL",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 73
+   },
+   {
+    "id": "bo3_30790",
+    "nick": "matios",
+    "name": "João Guedes",
+    "country": "br",
+    "role": "Entry",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_36473",
+    "nick": "xureba",
+    "name": "Bruno Sigwalt",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_27361",
+    "nick": "CutzMeretz",
+    "name": "Lucas Freitas",
+    "country": "br",
+    "role": "Support",
+    "aim": 68,
+    "consistency": 68,
+    "clutch": 66,
+    "awp": 42,
+    "igl": 38
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_3625",
+  "team": "Yawara",
+  "tag": "YAWA",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 73,
+  "honors": "#110 no ranking mundial",
+  "colors": [
+   "#1f4651",
+   "#5a81e2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "bnk3",
+   "name": "Leonardo Arruda",
+   "country": "br",
+   "rating": 68,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/3625/image/webp-f656724896cc9eb73b5a888d8086e29e.webp",
+  "players": [
+   {
+    "id": "bo3_37483",
+    "nick": "r3kt",
+    "name": "Caso de Mello Santos",
+    "country": "br",
+    "role": "AWP",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 73,
+    "igl": 43
+   },
+   {
+    "id": "bo3_68585",
+    "nick": "tele",
+    "name": "Vinicius Morozini",
+    "country": "br",
+    "role": "IGL",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 73
+   },
+   {
+    "id": "bo3_39764",
+    "nick": "edv",
+    "name": "Eduardo Vieira",
+    "country": "br",
+    "role": "Entry",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_37691",
+    "nick": "deemO",
+    "name": "Iago Henrique",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   },
+   {
+    "id": "bo3_36002",
+    "nick": "j0w",
+    "name": "Jonatan Sperotto",
+    "country": "br",
+    "role": "Support",
+    "aim": 71,
+    "consistency": 71,
+    "clutch": 69,
+    "awp": 45,
+    "igl": 41
+   }
+  ]
+ },
+ {
+  "id": "bo3_team_21412",
+  "team": "Vasco",
+  "tag": "VSC",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 70,
+  "honors": "#212 no ranking mundial",
+  "colors": [
+   "#361f51",
+   "#dd5ae2"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "coach",
+   "name": "Coach",
+   "country": "br",
+   "rating": 68,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/21412/image/webp-423710543cf1296bba0b954e6398264c.webp",
+  "players": [
+   {
+    "id": "bo3_31534",
+    "nick": "perez",
+    "name": "Henrique Perez",
+    "country": "br",
+    "role": "AWP",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 73,
+    "igl": 43
+   },
+   {
+    "id": "bo3_24734",
+    "nick": "mawth",
+    "name": "Matheus Gonçalves",
+    "country": "br",
+    "role": "IGL",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 72
+   },
+   {
+    "id": "bo3_20368",
+    "nick": "tatazin",
+    "name": "Alef Pereira",
+    "country": "br",
+    "role": "Entry",
+    "aim": 72,
+    "consistency": 72,
+    "clutch": 70,
+    "awp": 46,
+    "igl": 42
+   },
+   {
+    "id": "bo3_83133",
+    "nick": "phc",
+    "name": "Phelippe Cousseau",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 67,
+    "consistency": 67,
+    "clutch": 65,
+    "awp": 41,
+    "igl": 37
+   },
+   {
+    "id": "bo3_49752",
+    "nick": "n1cks",
+    "name": "Nicolas Paixão",
+    "country": "br",
+    "role": "Support",
+    "aim": 65,
+    "consistency": 65,
+    "clutch": 63,
+    "awp": 40,
+    "igl": 35
+   }
+  ]
  }
 ]
