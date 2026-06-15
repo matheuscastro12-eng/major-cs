@@ -6882,5 +6882,90 @@
     "igl": 45
    }
   ]
+ },
+ {
+  "id": "bo3_team_312",
+  "team": "SAW",
+  "tag": "SAW",
+  "era": "2026",
+  "game": "CS2",
+  "country": "pt",
+  "teamwork": 77,
+  "honors": "#208 no ranking mundial",
+  "colors": [
+   "#1f5134",
+   "#5ae2d7"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "Golden",
+   "name": "Maikil Selim",
+   "country": "se",
+   "rating": 70,
+   "style": "tactical"
+  },
+  "logoUrl": "https://files.bo3.gg/uploads/team/312/image/f106fa20c91423d0391f87d277ee3e8d.webp",
+  "players": [
+   {
+    "id": "bo3_32607",
+    "nick": "tuxa",
+    "name": "Daniel Esteves",
+    "country": "pt",
+    "role": "Entry",
+    "aim": 80,
+    "consistency": 80,
+    "clutch": 78,
+    "awp": 54,
+    "igl": 50
+   },
+   {
+    "id": "bo3_51283",
+    "nick": "Jayy2s",
+    "name": "Gonçalo Machado",
+    "country": "pt",
+    "role": "Rifler",
+    "aim": 79,
+    "consistency": 79,
+    "clutch": 77,
+    "awp": 53,
+    "igl": 49
+   },
+   {
+    "id": "bo3_52584",
+    "nick": "m0retz",
+    "name": "Dinis Jalles",
+    "country": "pt",
+    "role": "AWP",
+    "aim": 78,
+    "consistency": 78,
+    "clutch": 76,
+    "awp": 78,
+    "igl": 48
+   },
+   {
+    "id": "bo3_76779",
+    "nick": "jerk0z",
+    "name": "Rodrigo Costa",
+    "country": "pt",
+    "role": "IGL",
+    "aim": 76,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 50,
+    "igl": 76
+   },
+   {
+    "id": "bo3_29092",
+    "nick": "SYDOX",
+    "name": "Tiago Fonseca",
+    "country": "pt",
+    "role": "Support",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 47,
+    "igl": 43
+   }
+  ]
  }
 ]

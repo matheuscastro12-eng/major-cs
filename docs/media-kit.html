@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Road to Major — Media Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #14202e;        /* texto principal (slate escuro) */
+    --ink-2: #36475a;      /* texto secundário */
+    --muted: #6b7a8d;      /* rótulos */
+    --line: #e2e8ف0;       /* bordas */
+    --line: #e3e9f1;
+    --card: #ffffff;
+    --page: #eef2f7;
+    --blue: #2f6fb0; --blue-bright: #3b86d4;
+    --gold: #b9892e; --gold-deep: #9a7321; --gold-fill: #e0b13c;
+    --pos: #2f9e63;
+    --cond: 'Oswald', 'Bahnschrift', sans-serif; --font: 'Inter', 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: var(--font); line-height: 1.5; padding: 28px 18px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .sheet {
+    max-width: 900px; margin: 0 auto; background: var(--card);
+    border: 1px solid var(--line); border-radius: 16px; padding: 30px 32px;
+    box-shadow: 0 12px 40px rgba(20,32,46,0.10);
+  }
+
+  .kit-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 2px solid var(--line); flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand .mark {
+    width: 54px; height: 54px; border-radius: 12px; display: grid; place-items: center;
+    background: linear-gradient(150deg, var(--gold-fill), #a9801f); color: #1a1408;
+    font-family: var(--cond); font-weight: 700; font-size: 13px; text-align: center; line-height: 1;
+    box-shadow: 0 6px 16px rgba(185,137,46,0.3);
+  }
+  .brand h1 { font-family: var(--cond); font-weight: 700; font-size: 30px; margin: 0; letter-spacing: 0.5px; color: var(--ink); }
+  .brand .sub { color: var(--gold-deep); font-size: 12px; text-transform: uppercase; letter-spacing: 1.8px; font-weight: 700; }
+  .kit-head .meta { text-align: right; font-size: 12px; color: var(--muted); }
+  .kit-head .meta a { color: var(--blue); text-decoration: none; font-weight: 700; }
+
+  .lead { font-size: 15px; color: var(--ink-2); margin: 20px 0 6px; }
+  .lead b { color: var(--ink); }
+  .lead .hl { color: var(--gold-deep); font-weight: 700; }
+
+  h2 { font-family: var(--cond); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gold-deep); margin: 26px 0 12px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { background: #f7f9fc; border: 1px solid var(--line); border-top: 3px solid var(--blue); border-radius: 11px; padding: 14px; }
+  .stat.pos { border-top-color: var(--pos); }
+  .stat .n { font-family: var(--cond); font-weight: 700; font-size: 30px; line-height: 1; color: var(--ink); }
+  .stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 6px; font-weight: 700; }
+  .stat .h { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  .two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start; }
+
+  .chart { background: #f7f9fc; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .bar-row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 10px; margin: 8px 0; font-size: 12px; }
+  .bar-row .d { color: var(--muted); font-weight: 700; }
+  .bar-track { background: #e6ecf4; border-radius: 5px; }
+  .bar { height: 16px; border-radius: 5px; background: linear-gradient(90deg, var(--blue), var(--blue-bright)); }
+  .bar-row .v { color: var(--ink); font-weight: 700; white-space: nowrap; }
+  .bar-row .v span { color: var(--muted); font-weight: 400; }
+
+  .audience { padding-left: 18px; margin: 0; }
+  .audience li { margin: 8px 0; font-size: 13.5px; color: var(--ink-2); }
+  .audience b { color: var(--ink); }
+  .flags { font-size: 13px; color: var(--muted); margin-top: 10px; font-weight: 600; }
+
+  table.rate { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.rate th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--line); }
+  table.rate td { padding: 11px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.rate tr.hero td { background: #fbf4e2; }
+  table.rate .fmt { font-weight: 700; color: var(--ink); }
+  table.rate .desc { color: var(--muted); font-size: 11.5px; }
+  table.rate .price { font-family: var(--cond); font-weight: 700; font-size: 18px; color: var(--gold-deep); white-space: nowrap; text-align: right; }
+  .tag { display: inline-block; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; background: var(--gold-fill); color: #1a1408; border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+  .terms { font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+  .terms b { color: var(--ink); }
+
+  .why { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .why .c { background: #f7f9fc; border: 1px solid var(--line); border-radius: 11px; padding: 14px; }
+  .why .c h3 { font-family: var(--cond); font-weight: 600; font-size: 14px; margin: 0 0 5px; color: var(--blue); }
+  .why .c p { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+
+  .foot { margin-top: 26px; padding-top: 16px; border-top: 2px solid var(--line); display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px; font-size: 12.5px; color: var(--ink-2); }
+  .foot a { color: var(--blue); text-decoration: none; font-weight: 700; }
+  .foot b { color: var(--ink); }
+  .note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } .two, .why { grid-template-columns: 1fr; } }
+  @media print { body { background: #fff; padding: 0; } .sheet { box-shadow: none; border: none; border-radius: 0; max-width: 100%; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="kit-head">
+    <div class="brand">
+      <div class="mark">ROAD<br>TO<br>MAJOR</div>
+      <div>
+        <h1>ROAD TO MAJOR</h1>
+        <div class="sub">Counter-Strike Manager &middot; Media Kit</div>
+      </div>
+    </div>
+    <div class="meta">Updated June 2026<br><a href="https://roadtomajor.com.br">roadtomajor.com.br</a></div>
+  </header>
+
+  <p class="lead">
+    Road to Major is a free, browser-based <b>Counter-Strike pro-scene simulator</b>: players draft real CS teams,
+    run a career mode, and play out the road to the Major. The audience is exactly who you want to reach:
+    <span class="hl">active CS players who follow the competitive scene</span>. The numbers below are from the
+    <b>first 5 days since launch (June 11, 2026)</b>, and the platform is still ramping.
+  </p>
+
+  <h2>Reach &middot; first 5 days since launch</h2>
+  <div class="stats">
+    <div class="stat"><div class="n">12,712</div><div class="l">Unique visitors</div><div class="h">since launch (Jun 11)</div></div>
+    <div class="stat"><div class="n">~29,000</div><div class="l">Total visits</div><div class="h">in 5 days</div></div>
+    <div class="stat"><div class="n">9,032</div><div class="l">Peak day visits</div><div class="h">4,964 unique &middot; launch day</div></div>
+    <div class="stat"><div class="n">~6,900</div><div class="l">Avg visits / day</div><div class="h">~3,700 unique / day</div></div>
+  </div>
+
+  <div class="two">
+    <div>
+      <h2>Daily visits</h2>
+      <div class="chart">
+        <div class="bar-row"><span class="d">Jun 11</span><span class="bar-track"><span class="bar" style="display:block;width:100%"></span></span><span class="v">9,032 <span>&middot; 4,964 uniq</span></span></div>
+        <div class="bar-row"><span class="d">Jun 12</span><span class="bar-track"><span class="bar" style="display:block;width:76%"></span></span><span class="v">6,894 <span>&middot; 4,002 uniq</span></span></div>
+        <div class="bar-row"><span class="d">Jun 13</span><span class="bar-track"><span class="bar" style="display:block;width:64%"></span></span><span class="v">5,739 <span>&middot; 2,825 uniq</span></span></div>
+        <div class="bar-row"><span class="d">Jun 14</span><span class="bar-track"><span class="bar" style="display:block;width:65%"></span></span><span class="v">5,885 <span>&middot; 3,024 uniq</span></span></div>
+        <div class="bar-row"><span class="d">Jun 15</span><span class="bar-track"><span class="bar" style="display:block;width:16%"></span></span><span class="v">1,402 <span>&middot; partial day</span></span></div>
+      </div>
+      <p class="note">Source: site analytics. Launch-day spike is expected to settle into a steady daily base as the title matures.</p>
+    </div>
+    <div>
+      <h2>Audience</h2>
+      <ul class="audience">
+        <li><b>Endemic CS players</b> who follow teams, rosters and the Major circuit.</li>
+        <li>Highly engaged: they return to draft lineups and run full careers.</li>
+        <li>Perfect fit for <b>CS skins, betting, gaming gear and energy brands</b>.</li>
+      </ul>
+      <div class="flags">🌐 Trilingual: Portuguese / English / Spanish (Brazil-led, global reach).</div>
+    </div>
+  </div>
+
+  <h2>Engagement</h2>
+  <div class="stats">
+    <div class="stat pos"><div class="n">60,241</div><div class="l">Matches completed</div><div class="h">multiple per visit</div></div>
+    <div class="stat pos"><div class="n">51,256</div><div class="l">Career seasons played</div><div class="h">deep sessions</div></div>
+    <div class="stat pos"><div class="n">1,192</div><div class="l">Player cards shared</div><div class="h">organic social reach</div></div>
+    <div class="stat pos"><div class="n">9,751</div><div class="l">Hall-of-fame campaigns</div><div class="h">8,968 titles won</div></div>
+  </div>
+
+  <div class="foot">
+    <div><b>All figures verifiable via live analytics on request.</b></div>
+    <div style="text-align:right"><a href="https://roadtomajor.com.br">roadtomajor.com.br</a></div>
+  </div>
+
+</div>
+</body>
+</html>
