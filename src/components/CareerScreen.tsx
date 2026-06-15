@@ -223,7 +223,16 @@ interface CareerSave {
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
-interface NewsItem { id: string; split: number; icon: string; tone: 'good' | 'bad' | 'info'; title: string; body: string; }
+type NewsCat = 'result' | 'transfer' | 'board' | 'scene' | 'social';
+interface NewsItem { id: string; split: number; icon: string; tone: 'good' | 'bad' | 'info'; title: string; body: string; cat?: NewsCat; handle?: string; }
+const NEWS_CATS: { key: NewsCat | 'all'; label: string }[] = [
+  { key: 'all', label: 'Todas' },
+  { key: 'result', label: 'Resultados' },
+  { key: 'transfer', label: 'Mercado' },
+  { key: 'board', label: 'Diretoria' },
+  { key: 'scene', label: 'Cenário' },
+  { key: 'social', label: 'Social' },
+];
 
 // stats acumuladas de um jogador ao longo de TODA a carreira (somatório bruto;
 // rating/ADR/KAST são derivados na hora). É só leitura pro jogador (sobe sozinho
@@ -360,25 +369,52 @@ function splitNews(ctx: {
 }): NewsItem[] {
   const s = ctx.split;
   const out: NewsItem[] = [];
-  const add = (key: string, icon: string, tone: NewsItem['tone'], title: string, body: string) =>
-    out.push({ id: `${s}:${key}`, split: s, icon, tone, title, body });
+  const add = (key: string, icon: string, tone: NewsItem['tone'], cat: NewsCat, title: string, body: string) =>
+    out.push({ id: `${s}:${key}`, split: s, icon, tone, cat, title, body });
 
   if (ctx.major) {
-    if (ctx.major.champion) add('major', '🏆', 'good', `${ctx.org} é CAMPEÃO MUNDIAL!`, `A ${ctx.org} levantou o troféu do Major. O nome entrou para a história do CS.`);
-    else add('major', '🌍', 'info', `${ctx.org} no Major: ${ctx.major.placement}º`, `A campanha mundial terminou em ${ctx.major.placement}º. Aprendizado pra voltar mais forte.`);
+    if (ctx.major.champion) add('major', '🏆', 'good', 'result', `${ctx.org} é CAMPEÃO MUNDIAL!`, `A ${ctx.org} levantou o troféu do Major. O nome entrou para a história do CS.`);
+    else add('major', '🌍', 'info', 'result', `${ctx.org} no Major: ${ctx.major.placement}º`, `A campanha mundial terminou em ${ctx.major.placement}º. Aprendizado pra voltar mais forte.`);
   } else if (ctx.champion) {
-    add('title', '🏆', 'good', `${ctx.org} campeã do ${ctx.circuit}`, `Título conquistado! A torcida foi à loucura e a diretoria respira aliviada.`);
+    add('title', '🏆', 'good', 'result', `${ctx.org} campeã do ${ctx.circuit}`, `Título conquistado! A torcida foi à loucura e a diretoria respira aliviada.`);
   }
-  if (ctx.tierChange === 'up') add('tier', '⬆️', 'good', `${ctx.org} promovida ao ${ctx.tierName}`, `Subir de divisão coloca a org mais perto do Major. Patrocinadores de olho.`);
-  else if (ctx.tierChange === 'down') add('tier', '⬇️', 'bad', `${ctx.org} rebaixada ao ${ctx.tierName}`, `Temporada para esquecer: a queda de divisão pressiona o elenco e o caixa.`);
-  if (ctx.objText) add('board', ctx.objMet ? '🏛️' : '⚠️', ctx.objMet ? 'good' : 'bad',
+  if (ctx.tierChange === 'up') add('tier', '⬆️', 'good', 'result', `${ctx.org} promovida ao ${ctx.tierName}`, `Subir de divisão coloca a org mais perto do Major. Patrocinadores de olho.`);
+  else if (ctx.tierChange === 'down') add('tier', '⬇️', 'bad', 'result', `${ctx.org} rebaixada ao ${ctx.tierName}`, `Temporada para esquecer: a queda de divisão pressiona o elenco e o caixa.`);
+  if (ctx.objText) add('board', ctx.objMet ? '🏛️' : '⚠️', ctx.objMet ? 'good' : 'bad', 'board',
     ctx.objMet ? 'Diretoria satisfeita' : 'Diretoria cobra resultados',
     `${ctx.objMet ? 'Objetivo cumprido' : 'Objetivo não cumprido'}: "${ctx.objText}". ${ctx.objMet ? 'A confiança subiu.' : 'A confiança caiu — atenção redobrada no próximo split.'}`);
-  if (ctx.offer) add('offer', '📞', 'info', `${ctx.offer.orgName} sonda ${ctx.offer.nick}`, `Proposta de ${formatMoney(ctx.offer.fee)} pelo seu ${ctx.offer.nick} (OVR ${ctx.offer.ovr}). Decida na janela de transferências.`);
-  if (ctx.releases.length) add('release', '📄', 'bad', `Contrato vencido: ${ctx.releases.join(', ')}`, `${ctx.releases.length === 1 ? 'O jogador saiu' : 'Os jogadores saíram'} de graça por fim de contrato. Reforce o elenco no mercado.`);
-  if (ctx.risers.length) add('rise', '📈', 'good', `Em ascensão: ${ctx.risers.join(', ')}`, `A comissão técnica destaca a evolução de ${ctx.risers.join(', ')} no último split.`);
-  if (ctx.sliders.length) add('slide', '📉', 'info', `Em queda: ${ctx.sliders.join(', ')}`, `${ctx.sliders.join(', ')} ${ctx.sliders.length === 1 ? 'perdeu' : 'perderam'} rendimento. Veteranos cobram mais minutos de treino.`);
-  if (ctx.unhappy.length) add('mood', '😟', 'bad', `Vestiário: ${ctx.unhappy.join(', ')} insatisfeito${ctx.unhappy.length > 1 ? 's' : ''}`, `Moral baixa no elenco. Vitórias, renovação de contrato e títulos levantam o astral.`);
+  if (ctx.offer) add('offer', '📞', 'info', 'transfer', `${ctx.offer.orgName} sonda ${ctx.offer.nick}`, `Proposta de ${formatMoney(ctx.offer.fee)} pelo seu ${ctx.offer.nick} (OVR ${ctx.offer.ovr}). Decida na janela de transferências.`);
+  if (ctx.releases.length) add('release', '📄', 'bad', 'transfer', `Contrato vencido: ${ctx.releases.join(', ')}`, `${ctx.releases.length === 1 ? 'O jogador saiu' : 'Os jogadores saíram'} de graça por fim de contrato. Reforce o elenco no mercado.`);
+  if (ctx.risers.length) add('rise', '📈', 'good', 'board', `Em ascensão: ${ctx.risers.join(', ')}`, `A comissão técnica destaca a evolução de ${ctx.risers.join(', ')} no último split.`);
+  if (ctx.sliders.length) add('slide', '📉', 'info', 'board', `Em queda: ${ctx.sliders.join(', ')}`, `${ctx.sliders.join(', ')} ${ctx.sliders.length === 1 ? 'perdeu' : 'perderam'} rendimento. Veteranos cobram mais minutos de treino.`);
+  if (ctx.unhappy.length) add('mood', '😟', 'bad', 'board', `Vestiário: ${ctx.unhappy.join(', ')} insatisfeito${ctx.unhappy.length > 1 ? 's' : ''}`, `Moral baixa no elenco. Vitórias, renovação de contrato e títulos levantam o astral.`);
+  return out;
+}
+
+// posts estilo rede social (cena viva): contas fictícias comentam o split.
+// determinístico por split + cena, pra dar o "mundo vivo" sem flood.
+function socialNews(teams: TeamSeason[], split: number, org: string, champion: boolean): NewsItem[] {
+  const out: NewsItem[] = [];
+  const add = (key: string, handle: string, tone: NewsItem['tone'], title: string, body: string) =>
+    out.push({ id: `${split}:social:${key}`, split, icon: '💬', tone, cat: 'social', handle, title, body });
+  // jogador do split: maior OVR da era (variando levemente por split)
+  const pool = teams.flatMap((t) => t.players.map((p) => ({ p, t })));
+  if (pool.length) {
+    const ranked = pool.slice().sort((a, b) => playerOvr(b.p) - playerOvr(a.p));
+    const pick = ranked[hashStr(`star:${split}`) % Math.min(5, ranked.length)];
+    add('star', '@cs_headlines', 'info', `${pick.p.nick} dominando o cenário`,
+      `${pick.p.nick} (${pick.t.team}) está em outro nível nesse split. Provavelmente o melhor do mundo agora. 🔥`);
+  }
+  // meme reagindo ao seu time
+  add('meme', '@clutchozao', champion ? 'good' : 'info',
+    champion ? `${org} CAMPEÃO e a TL surtou` : `e a ${org}...?`,
+    champion ? `${org} levantou a taça e o povo foi à loucura. MERECIDO. 🐐🏆` : `mais um split da ${org} sem troféu. calma que ano que vem é nosso 😅🙏`);
+  // time em alta no cenário
+  if (teams.length) {
+    const hot = teams[hashStr(`hot:${split}`) % teams.length];
+    add('hot', '@vrs_radar', 'info', `Fica de olho na ${hot.team}`,
+      `A ${hot.team} vem subindo no ranking e promete brigar lá em cima. Time pra acompanhar. 📈`);
+  }
   return out;
 }
 
@@ -388,7 +424,7 @@ function worldNews(teams: TeamSeason[], split: number, userRegion: CareerRegion)
     .filter((s) => s.reg !== userRegion)
     .slice(0, 2)
     .map((s) => ({
-      id: `${split}:world:${s.reg}`, split, icon: '🌐', tone: 'info' as const,
+      id: `${split}:world:${s.reg}`, split, icon: '🌐', tone: 'info' as const, cat: 'scene' as const,
       title: `${s.champ.team} campeão na ${CAREER_REGION_LABELS[s.reg]}`,
       body: `${s.champ.team} venceu o ${s.league}${s.runnerUp ? ` sobre ${s.runnerUp.team}` : ''}. A cena segue fervendo enquanto você disputa a sua região.`,
     }));
@@ -718,6 +754,7 @@ export function CareerScreen({ onExit }: Props) {
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
   const [profilePlayer, setProfilePlayer] = useState<Player | null>(null); // perfil detalhado do jogador (modal)
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
+  const [newsCat, setNewsCat] = useState<NewsCat | 'all'>('all'); // filtro da Inbox
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   // registro parcial do split, finalizado após o Major (se houver)
@@ -925,7 +962,7 @@ export function CareerScreen({ onExit }: Props) {
     };
     const objective = objectiveFor(circuit.tier, s.split, isMajorSplit(s.split));
     const startItem: NewsItem = {
-      id: `${s.split}:start`, split: s.split, icon: '🗓️', tone: 'info',
+      id: `${s.split}:start`, split: s.split, icon: '🗓️', tone: 'info', cat: 'board',
       title: `Split ${s.split} começa: ${circuit.name}`,
       body: `Meta da diretoria: "${objective.text}" (bônus ${formatMoney(objective.bonus)}).`,
     };
@@ -1597,7 +1634,7 @@ export function CareerScreen({ onExit }: Props) {
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                  ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas')]),
+                  ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
                 persist(next);
                 setSave(next);
@@ -1868,7 +1905,7 @@ export function CareerScreen({ onExit }: Props) {
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas')]),
+                    ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
                   };
                   persist(next);
                   setSave(next);
@@ -2094,28 +2131,56 @@ export function CareerScreen({ onExit }: Props) {
       {/* conteúdo da aba com transição (key força remount → reanima na troca) */}
       <div className="tab-fade" key={hubTab}>
       {/* ===== INBOX (manchetes da imprensa + diretoria) ===== */}
-      {hubTab === 'inbox' && (
+      {hubTab === 'inbox' && (() => {
+        const all = save.news ?? [];
+        const shown = newsCat === 'all' ? all : all.filter((n) => (n.cat ?? 'scene') === newsCat);
+        return (
         <div className="career-grid">
           <div className="career-main">
             <div className="muted small section-label" style={{ marginTop: 0 }}>Caixa de entrada</div>
-            {(save.news?.length ?? 0) === 0 ? (
-              <p className="muted small">Sem novidades por enquanto. As manchetes aparecem ao longo da carreira (resultados, diretoria, mercado, vestiário).</p>
+            {all.length === 0 ? (
+              <p className="muted small">Sem novidades por enquanto. As manchetes aparecem ao longo da carreira (resultados, diretoria, mercado, cenário e social).</p>
             ) : (
-              <div className="news-list">
-                {save.news!.map((n) => (
-                  <div key={n.id} className={`news-item ${n.tone}`}>
-                    <span className="news-ic">{n.icon}</span>
-                    <div className="news-body">
-                      <div className="news-title">{n.title} <span className="news-split">Split {n.split}</span></div>
-                      <div className="news-text muted small">{n.body}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="news-cats">
+                  {NEWS_CATS.map((c) => {
+                    const n = c.key === 'all' ? all.length : all.filter((x) => (x.cat ?? 'scene') === c.key).length;
+                    if (c.key !== 'all' && n === 0) return null;
+                    return (
+                      <button key={c.key} className={`nc-chip${newsCat === c.key ? ' on' : ''}`} onClick={() => setNewsCat(c.key)}>
+                        {c.label} <span className="nc-n">{n}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="news-list">
+                  {shown.map((n) => (
+                    n.cat === 'social' ? (
+                      <div key={n.id} className="news-item social">
+                        <span className="news-ic">💬</span>
+                        <div className="news-body">
+                          <div className="news-title"><span className="news-handle">{n.handle}</span> <span className="news-split">Split {n.split}</span></div>
+                          <div className="news-text">{n.body}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={n.id} className={`news-item ${n.tone}`}>
+                        <span className="news-ic">{n.icon}</span>
+                        <div className="news-body">
+                          <div className="news-title">{n.title} <span className="news-split">Split {n.split}</span></div>
+                          <div className="news-text muted small">{n.body}</div>
+                        </div>
+                      </div>
+                    )
+                  ))}
+                  {shown.length === 0 && <p className="muted small">Nada nessa categoria ainda.</p>}
+                </div>
+              </>
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ===== VISÃO GERAL ===== */}
       {hubTab === 'overview' && (() => {
