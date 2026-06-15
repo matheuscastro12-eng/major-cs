@@ -1551,7 +1551,37 @@ tr.human-row {
 
 /* perfil do jogador */
 .modal.player-profile { width: min(680px, 100%); position: relative; padding: 20px; }
-.pp-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.pp-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+
+/* cartão estilo FUT */
+.fut-card {
+  width: 150px; flex-shrink: 0; border-radius: 14px; padding: 12px 12px 10px;
+  position: relative; overflow: hidden; box-shadow: var(--elev-2);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.fut-card::after { /* brilho diagonal */
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent 45%);
+  pointer-events: none;
+}
+.fut-card.fut-icon { background: linear-gradient(160deg, #f7ecc2, #e0b13c 52%, #a9801f); color: #2a1e05; }
+.fut-card.fut-gold { background: linear-gradient(160deg, #ecca7e, #b8892e); color: #2a1e05; }
+.fut-card.fut-silver { background: linear-gradient(160deg, #dde3ec, #9aa6b5); color: #18222e; }
+.fut-card.fut-bronze { background: linear-gradient(160deg, #dcae82, #9c6b3f); color: #2a1505; }
+.fut-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; position: relative; z-index: 1; }
+.fut-rating { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
+.fut-ovr { font-family: var(--font-cond); font-weight: 800; font-size: 32px; }
+.fut-role { font-weight: 800; font-size: 10px; letter-spacing: 0.6px; margin: 3px 0 4px; }
+.fut-name {
+  font-family: var(--font-cond); font-weight: 700; font-size: 16px; text-align: center;
+  text-transform: uppercase; letter-spacing: 0.5px; margin: 8px 0;
+  padding: 4px 0; border-top: 1px solid rgba(0, 0, 0, 0.22); border-bottom: 1px solid rgba(0, 0, 0, 0.22);
+  position: relative; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fut-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; position: relative; z-index: 1; }
+.fut-stat { display: flex; gap: 5px; justify-content: center; font-size: 12px; font-weight: 800; }
+.fut-stat b { font-variant-numeric: tabular-nums; }
+.fut-stat span { opacity: 0.7; font-weight: 700; }
 .pp-id { flex: 1; min-width: 0; }
 .pp-nick { font-family: var(--font-cond, inherit); font-weight: 700; font-size: 1.25rem; display: flex; align-items: center; gap: 6px; }
 .pp-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

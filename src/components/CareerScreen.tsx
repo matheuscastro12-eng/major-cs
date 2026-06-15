@@ -2691,6 +2691,39 @@ function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
 // potencial, fase, valor/salário/contrato e as STATS DE CARREIRA acumuladas
 // (rating/K-D/ADR/KAST/mapas). O jogador da carreira não edita nada aqui — os
 // atributos sobem sozinhos com a evolução; quem edita é o admin no CRM.
+// abreviação curta da função pro cartão
+const ROLE_ABBR: Record<Role, string> = { AWP: 'AWP', IGL: 'IGL', Rifler: 'RIF', Entry: 'ENT', Support: 'SUP', Lurker: 'LUR' };
+// raridade do cartão pelo OVR (estilo FUT): ícone > ouro > prata > bronze
+function cardTier(ovr: number): 'icon' | 'gold' | 'silver' | 'bronze' {
+  return ovr >= 90 ? 'icon' : ovr >= 86 ? 'gold' : ovr >= 80 ? 'silver' : 'bronze';
+}
+
+// cartão de jogador estilo FIFA Ultimate Team (o "rosto" do jogador)
+function PlayerCard({ player, ovr }: { player: Player; ovr: number }) {
+  const tier = cardTier(ovr);
+  const stats: [string, number][] = [
+    ['MIR', player.aim], ['AWP', player.awp], ['IGL', player.igl], ['CLT', player.clutch],
+  ];
+  return (
+    <div className={`fut-card fut-${tier}`}>
+      <div className="fut-top">
+        <div className="fut-rating">
+          <span className="fut-ovr">{ovr}</span>
+          <span className="fut-role">{ROLE_ABBR[player.role]}</span>
+          <Flag cc={player.country} />
+        </div>
+        <PlayerAvatar nick={player.nick} size={62} />
+      </div>
+      <div className="fut-name">{player.nick}</div>
+      <div className="fut-stats">
+        {stats.map(([k, v]) => (
+          <div key={k} className="fut-stat"><b>{v}</b><span>{k}</span></div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, peakOvr, focused, onToggleFocus, onClose }: {
   player: Player;
   split: number;
@@ -2716,7 +2749,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
       <div className="modal player-profile" onClick={(e) => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}>✕</button>
         <div className="pp-head">
-          <PlayerAvatar nick={player.nick} size={64} />
+          <PlayerCard player={player} ovr={ovr} />
           <div className="pp-id">
             <div className="pp-nick"><Flag cc={player.country} /> {player.nick}
               <span className={`role-pill ${player.role}`} style={{ marginLeft: 8 }}>{player.role}</span>
@@ -2731,7 +2764,6 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
               {focused && <span className="pp-tag focus">🎯 em treino</span>}
             </div>
           </div>
-          <OvrBadge ovr={ovr} />
         </div>
 
         <div className="pp-grid">
