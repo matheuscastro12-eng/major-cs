@@ -101,6 +101,14 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [pausedMsg, setPausedMsg] = useState('');
   const [speedIdx, setSpeedIdx] = useState(DEFAULT_SPEED_IDX);
   const [stance, setStance] = useState<Stance>('default');
+  // hint de descoberta das calls ao vivo (some ao dispensar; 1ª vez forte)
+  const [callsHint, setCallsHint] = useState(() => {
+    try { return localStorage.getItem('rtm-match-calls-hint-v1') !== '1'; } catch { return true; }
+  });
+  const dismissCallsHint = () => {
+    setCallsHint(false);
+    try { localStorage.setItem('rtm-match-calls-hint-v1', '1'); } catch { /* sem storage */ }
+  };
   const stanceRef = useRef<Stance>('default');
   stanceRef.current = stance;
   const [pendingCall, setPendingCall] = useState<RoundCall | null>(null);
@@ -418,7 +426,13 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
 
         {!finished && (
           <>
-            <div className="stance-bar">
+            {callsHint && (
+              <div className="calls-hint">
+                <span>🎮 <b>Você comanda a partida, não só assiste:</b> mude a <b>postura</b> aqui embaixo (agressivo/cauteloso) quando quiser, chame <b>timeouts</b> e ligue o <b>🎯 Tático</b> (no topo) pra dar as calls round a round — tudo muda o resultado de verdade.</span>
+                <button className="calls-hint-x" onClick={dismissCallsHint}>entendi ✕</button>
+              </div>
+            )}
+            <div className={`stance-bar${callsHint ? ' pulse' : ''}`}>
               <span className="stance-label">{t('match.planOf')} {teams[userIdx].tag}:</span>
               {STANCES.map((s) => {
                 const fit = stanceFitCount(teams[userIdx].players, s.key);
