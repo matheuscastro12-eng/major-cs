@@ -162,20 +162,101 @@ const EMPTY_ORGS: EmptyOrg[] = [
   { id: 'org_dignitas', name: 'Dignitas', tag: 'DIG', colors: ['#0b0b0b', '#e7b53b'], logoUrl: PHOTON('/commons/images/5/56/Dignitas_2021_allmode.png'), blurb: 'Tradicional, sem line desde 2022. Orçamento mediano: monte com inteligência.', budget: 2_900_000 },
 ];
 
+const FILL_ROLES = ['Rifler', 'Entry', 'Support', 'AWP', 'IGL'] as const;
+
+// ----- geração de jovens (prospectos): nicks/nomes/países por região -----
+// handles genéricos de jogador (estilo cena), pra reposição e academia
+const PROSPECT_NICKS = [
+  'zen', 'kyro', 'naxz', 'volt', 'riku', 'jaxx', 'pyro', 'nova', 'frost', 'dashy',
+  'exo', 'blaze', 'swiftz', 'aze', 'kibo', 'luca', 'vexx', 'm1ko', 'sond', 'ture',
+  'kez', 'byte', 'sied', 'raze', 'quad', 'lynx', 'orbz', 'myth', 'zeno', 'kova',
+  'tenz', 'flick', 'spark', 'nyx', 'rvn', 'clo', 'dize', 'wisp', 'koa', 'snax',
+  'arix', 'bld', 'ghoul', 'jin', 'maru', 'penny', 'qz', 'sero', 'twix', 'yel',
+];
+const PROSPECT_NAMES: Record<MacroRegion, string[]> = {
+  americas: ['Lucas Almeida', 'Gabriel Souza', 'Mateo Pérez', 'Thiago Lima', 'Diego Castro', 'Bryan Mendoza', 'Caio Rocha', 'Nicolás Díaz', 'Pedro Vieira', 'Joaquín Ramírez'],
+  europe: ['Lukas Novák', 'Mateusz Kowalski', 'Emil Johansson', 'Théo Laurent', 'Niklas Müller', 'Joonas Virtanen', 'Marco Rossi', 'Pedro Santos', 'Lars Andersen', 'Tomáš Horák'],
+  cis: ['Artem Volkov', 'Danil Sokolov', 'Nikita Orlov', 'Timur Aliyev', 'Ruslan Petrov', 'Yegor Smirnov', 'Bohdan Kovalenko', 'Maksim Ivanov', 'Vlad Romanov', 'Alikhan Bekov'],
+  asia: ['Wei Chen', 'Haoran Li', 'Jihoon Park', 'Kenta Sato', 'Arif Rahman', 'Minjun Kim', 'Zhang Yong', 'Rizki Putra', 'Hiroshi Tanaka', 'Faisal Noor'],
+  oceania: ['Jack Wilson', 'Liam Taylor', 'Ethan Brown', 'Noah Smith', 'Cooper Jones', 'Jayden Lee', 'Mason Clark', 'Riley Evans', 'Lachlan Hall', 'Hayden Ross'],
+  africa: ['Thabo Nkosi', 'Youssef Haddad', 'Karim Saidi', 'Sipho Dlamini', 'Omar Farouk', 'Tunde Adeyemi', 'Ayoub Benali', 'Liam van der Merwe', 'Kwame Mensah', 'Hassan Toure'],
+};
+const REGION_CC: Record<MacroRegion, string[]> = {
+  americas: ['br', 'us', 'ar', 'cl', 'mx', 'ca', 'pe', 'uy'],
+  europe: ['se', 'dk', 'fr', 'de', 'pl', 'fi', 'pt', 'es', 'nl', 'cz'],
+  cis: ['ru', 'ua', 'kz', 'by'],
+  asia: ['cn', 'kr', 'jp', 'id', 'sa', 'mn'],
+  oceania: ['au', 'nz'],
+  africa: ['za', 'ma', 'eg', 'ng'],
+};
+// identidade determinística de um jovem (nick/nome/país) a partir de um seed
+function prospectIdentity(seed: string, region: MacroRegion): { nick: string; name: string; country: string } {
+  const h = hashStr(seed);
+  const names = PROSPECT_NAMES[region] ?? PROSPECT_NAMES.europe;
+  const ccs = REGION_CC[region] ?? REGION_CC.europe;
+  return {
+    nick: PROSPECT_NICKS[(h >> 4) % PROSPECT_NICKS.length],
+    name: names[(h >> 7) % names.length],
+    country: ccs[h % ccs.length],
+  };
+}
+
+// ----- ACADEMIA: prospectos que você forma e promove quando quiser -----
+const ACADEMY_MAX = 6;       // teto de prospectos na academia
+const ACADEMY_SCOUT_COST = 250_000; // custo de revelar um prospecto
+interface AcademyEntry {
+  id: string;
+  nick: string;
+  name: string;
+  country: string;
+  role: Role;
+  aim: number; consistency: number; clutch: number; awp: number; igl: number;
+  age: number;        // idade do prospecto (cresce ~1 a cada 3 splits)
+  joinedSplit: number;
+  potential: number;  // OVR teto que pode atingir treinando
+}
+// gera um prospecto jovem (determinístico pelo seed) com potencial de evolução
+function makeProspect(seed: string, region: MacroRegion, split: number): AcademyEntry {
+  const h = hashStr(seed);
+  const ident = prospectIdentity(seed, region);
+  const role: Role = FILL_ROLES[(h >> 2) % FILL_ROLES.length];
+  const base = 58 + (h % 9); // 58-66 (jovem cru)
+  const e: AcademyEntry = {
+    id: `prospect__${seed.replace(/[^a-z0-9]/gi, '')}`,
+    nick: ident.nick, name: ident.name, country: ident.country, role,
+    aim: base + (h % 4),
+    consistency: base - 1,
+    clutch: base - 2,
+    awp: role === 'AWP' ? base + 2 : base - 6,
+    igl: role === 'IGL' ? base + 2 : base - 5,
+    age: 16 + (h % 4), // 16-19
+    joinedSplit: split,
+    potential: 0,
+  };
+  const ovr = playerOvr(e);
+  // gema rara: a maioria vira bom (+11..+16); poucos viram craques (+26)
+  const gem = hashStr(`gem:${seed}`) % 100;
+  const room = gem < 10 ? 26 : gem < 45 ? 16 : 11;
+  e.potential = Math.min(93, ovr + room);
+  return e;
+}
+
 // reposição da base: quando você TIRA um jogador de um time (contratação), ele
 // não pode ficar nos dois lugares. O time perde o titular e promove um jovem da
 // base (OVR baixo, determinístico) pra manter 5 — o time fica realmente mais fraco.
-const FILL_ROLES = ['Rifler', 'Entry', 'Support', 'AWP', 'IGL'] as const;
+// O jovem tem nick/nome reais (não mais "TAG.jr1") pra parecer um prospecto de fato.
 function backfillPlayers(team: TeamSeason, n: number): Player[] {
+  const region = macroRegionOf(team.country) ?? 'europe';
   const out: Player[] = [];
   for (let i = 0; i < n; i++) {
     const h = hashStr(`fill:${team.id}:${i}`);
     const base = 64 + (h % 9); // 64-72
+    const ident = prospectIdentity(`fill:${team.id}:${i}`, region);
     out.push({
       id: `${team.id}__aca${i}`,
-      nick: `${team.tag}.jr${i + 1}`,
-      name: 'Jovem da base',
-      country: team.country,
+      nick: ident.nick,
+      name: ident.name,
+      country: team.country, // herda o país do time (jovem da base local)
       role: FILL_ROLES[h % FILL_ROLES.length],
       aim: base + (h % 4), consistency: base - 2, clutch: base - 3, awp: base - 7, igl: base - 5,
     });
@@ -267,6 +348,10 @@ interface CareerSave {
   mapFocus?: MapId | null; // mapa em treino neste split (sobe; os outros decaem)
   playbook?: Playbook; // esquema tático escolhido
   playbookXp?: number; // entrosamento no esquema (0-100); cai ao trocar de esquema
+  academy?: AcademyEntry[]; // prospectos em formação na academia
+  academyFocus?: string | null; // id do prospecto em foco de treino (cresce mais rápido)
+  youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
+  youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -347,6 +432,10 @@ const emptySave = (): CareerSave => ({
   mapFocus: null,
   playbook: 'tactical',
   playbookXp: 40,
+  academy: [],
+  academyFocus: null,
+  youth: {},
+  youthAge: {},
 });
 
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
@@ -491,13 +580,17 @@ export const PHASE_LABEL: Record<PlayerPhase, string> = {
 // idades REAIS do bo3 (196/240) por nick; quem falta recebe uma idade plausível
 // determinística. A idade efetiva sobe ~1 ano a cada 3 splits de carreira.
 const REAL_AGES = bo3Ages as Record<string, { age: number; born: string }>;
-function baseAge(p: Pick<Player, 'id' | 'nick'>): number {
+function baseAge(p: Pick<Player, 'id' | 'nick'>, youthAge?: Record<string, number>): number {
+  // prospecto promovido da academia: idade-base guardada na promoção. Vem ANTES do
+  // lookup por nick (um prospecto pode ter um nick que colide com um pro real).
+  const y = youthAge?.[p.id];
+  if (y != null) return y;
   const real = REAL_AGES[p.nick]?.age;
   if (real && real >= 15 && real <= 45) return real;
   return 20 + (hashStr(`age:${p.id}`) % 6); // 20-25 pros sem dado
 }
-function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number): number {
-  return baseAge(p) + Math.floor((split - 1) / 3);
+function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number, youthAge?: Record<string, number>): number {
+  return baseAge(p, youthAge) + Math.floor((split - 1) / 3);
 }
 // potencial = teto de OVR. Jovem bom tem espaço pra crescer (S/A); veterano já
 // está no teto (sem crescimento). Determinístico por jogador.
@@ -528,7 +621,16 @@ function evoDelta(pid: string, split: number, age: number, atCeiling: boolean): 
     return r < 40 ? 3 : r < 80 ? 2 : 1; // +1..+3
   }
   if (phase === 'prime') return r < 22 ? 1 : r < 82 ? 0 : -1; // -1..+1
-  return age >= 31 ? (r < 55 ? -3 : -1) : r < 50 ? -2 : -1; // veterano cai
+  // DECLÍNIO (28+): NÃO é universal. A longevidade (determinística por jogador)
+  // define quem segura o nível na casa dos 30 (lendas tipo s1mple/karrigan) e
+  // quem cai cedo. O declínio também é mais suave que antes (acabou o -3 fixo).
+  const longevity = hashStr(`long:${pid}`) % 100;        // 0-99 (maior = envelhece melhor)
+  const declineFrom = 31 + Math.floor(longevity / 20);   // 31..35: idade em que o declínio realmente começa
+  if (age < declineFrom) return r < 82 ? 0 : -1;         // "prime estendido": quase sempre estável, raríssimo -1
+  const over = age - declineFrom;                        // anos desde o início do declínio
+  if (over === 0) return r < 50 ? 0 : -1;               // 1º ano de declínio: metade segura
+  if (over <= 2) return r < 55 ? -1 : 0;               // declínio brando
+  return r < 55 ? -2 : -1;                              // declínio tardio, mais firme (mas nunca -3)
 }
 
 // ----- helpers do playoff (mata-mata do circuito) -----
@@ -753,7 +855,14 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', countr
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar';
+type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar';
+
+// time sintético "Academia" usado como origem de um prospecto promovido ao elenco
+const ACADEMY_FROM: TeamSeason = {
+  id: '__youth__', team: 'Academia', tag: 'ACA', era: 'Base', game: 'CS2',
+  country: 'br', teamwork: 70, honors: '', colors: ['#2a2f45', '#5ba0d0'],
+  mapPrefs: {}, coach: ROOKIE_COACH, players: [],
+};
 
 interface MajorResult {
   tournament: Tournament;
@@ -815,6 +924,7 @@ export function CareerScreen({ onExit }: Props) {
   };
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
+  const [promoting, setPromoting] = useState<string | null>(null); // prospecto escolhendo quem sai do elenco
   const [profilePlayer, setProfilePlayer] = useState<Player | null>(null); // perfil detalhado do jogador (modal)
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [newsCat, setNewsCat] = useState<NewsCat | 'all'>('all'); // filtro da Inbox
@@ -900,13 +1010,15 @@ export function CareerScreen({ onExit }: Props) {
     const regMidPool = regional.slice(5);
     const regMid = regMidPool.length >= 5 ? regMidPool : byStrength.slice(8, 16);
     // nomes reais (Liquipedia) dos circuitos regionais por macro-região
+    // Tier 2 = grandes campeonatos regionais (nomes críveis: time grande joga isso).
     const T2: Record<MacroRegion, string> = {
-      americas: 'Gamers Club Masters', europe: 'ESL Challenger League EU', cis: 'CCT Europe Series',
-      asia: 'ESL Challenger League Asia', oceania: 'ESL Challenger League Oceania', africa: 'CCT Africa',
+      americas: 'CS Americas Championship', europe: 'Elisa Masters Espoo', cis: 'CIS Masters',
+      asia: 'CS Asia Championship', oceania: 'Thunderpick Oceania', africa: 'CCT Africa Championship',
     };
+    // Tier 3 = circuitos de acesso da região (de onde toda org começa).
     const T3: Record<MacroRegion, string> = {
-      americas: 'CCT Americas Series', europe: 'ESEA Elite Europe', cis: 'ESEA Elite Europe',
-      asia: 'CCT Asia Series', oceania: 'ESEA Advanced AP', africa: 'CCT Africa Series',
+      americas: 'Gamers Club Liga Pro', europe: 'ESEA Premier EU', cis: 'Winline Insight',
+      asia: 'Asia Champions League', oceania: 'ESEA APAC Advanced', africa: 'VS Gaming Masters',
     };
     const regLbl = MACRO_REGION_LABELS[reg];
     const mk = (
@@ -969,6 +1081,11 @@ export function CareerScreen({ onExit }: Props) {
         const p = t.players.find((pp) => pp.id === s.playerId);
         if (p) { from = t; player = p; break; }
       }
+    }
+    // 4) prospecto promovido da academia (não está na base): resolve do save.youth
+    if (!player && save.youth?.[s.playerId]) {
+      player = save.youth[s.playerId];
+      from = ACADEMY_FROM;
     }
     if (!from || !player) return null;
     // função definida pelo técnico (override do dado da base; corrige dados
@@ -1058,7 +1175,7 @@ export function CareerScreen({ onExit }: Props) {
     };
     persist(next);
     setSave(next);
-    setHubTab('overview');
+    setHubTab('overview'); // a Visão geral já mostra a chave inline + os botões JOGAR/Simular
     setStage('hub');
   };
 
@@ -1081,7 +1198,7 @@ export function CareerScreen({ onExit }: Props) {
       if (!f) continue;
       const prev = s.evo?.[sig.playerId] ?? 0;
       const ovr = playerOvr(f.player);
-      const age = effectiveAge(f.player, s.split);
+      const age = effectiveAge(f.player, s.split, s.youthAge);
       const pot = playerPotentialOvr(f.player, age);
       const atCeiling = ovr >= pot;
       let d = evoDelta(sig.playerId, s.split, age, atCeiling);
@@ -1097,6 +1214,53 @@ export function CareerScreen({ onExit }: Props) {
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age) });
     }
     return { evo, lastEvo };
+  };
+
+  // evolui os prospectos da academia ao virar o split: jovens sobem rumo ao
+  // potencial; o que está em foco 🎯 desenvolve mais rápido. Cresce nos atributos
+  // base guardados (eles não vêm do dataset, então a evolução fica neles mesmos).
+  const evolveAcademy = (s: CareerSave): AcademyEntry[] =>
+    (s.academy ?? []).map((a) => {
+      const aged = a.age + ((s.split + 1) % 3 === 0 ? 1 : 0); // envelhece ~1 a cada 3 splits
+      const ovr = playerOvr(a);
+      if (ovr >= a.potential) return { ...a, age: aged }; // teto atingido: só envelhece
+      const r = hashStr(`acaevo:${a.id}:${s.split}`) % 100;
+      let d = r < 35 ? 3 : r < 75 ? 2 : 1;
+      if (s.academyFocus === a.id) d += 1; // treino focado acelera
+      d = Math.min(d, a.potential - ovr); // não ultrapassa o potencial
+      const clamp = (v: number) => Math.max(40, Math.min(99, v));
+      return {
+        ...a, age: aged,
+        aim: clamp(a.aim + d), consistency: clamp(a.consistency + d), clutch: clamp(a.clutch + d),
+        awp: clamp(a.awp + d), igl: clamp(a.igl + d),
+      };
+    });
+
+  // promove um prospecto da academia ao elenco principal. Se o elenco estiver
+  // cheio (5), troca pelo jogador escolhido (replaceOid). O prospecto vira um
+  // Signing resolvido pelo save.youth e passa a evoluir/envelhecer como qualquer um.
+  const promoteProspect = (prospectId: string, replaceOid?: string) => {
+    const a = (save.academy ?? []).find((x) => x.id === prospectId);
+    if (!a) return;
+    if (save.squad.length >= 5 && !replaceOid) { setPromoting(prospectId); return; }
+    const player: Player = {
+      id: a.id, nick: a.nick, name: a.name, country: a.country, role: a.role,
+      aim: a.aim, consistency: a.consistency, clutch: a.clutch, awp: a.awp, igl: a.igl,
+    };
+    const youth = { ...(save.youth ?? {}), [a.id]: player };
+    // guarda a idade-base (equivalente ao split 1) pra ele continuar JOVEM e evoluindo
+    // após a promoção, em vez de o findSigning re-derivar 20-25 (ou colidir por nick)
+    const youthAge = { ...(save.youthAge ?? {}), [a.id]: a.age - Math.floor((save.split - 1) / 3) };
+    const academy = (save.academy ?? []).filter((x) => x.id !== prospectId);
+    let squad = save.squad;
+    if (squad.length >= 5 && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
+    squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
+    const contracts = { ...(save.contracts ?? {}), [a.id]: save.split + CONTRACT_TERM - 1 };
+    const academyFocus = save.academyFocus === prospectId ? null : save.academyFocus;
+    const next = { ...save, academy, youth, youthAge, squad, contracts, academyFocus };
+    persist(next);
+    setSave(next);
+    setPromoting(null);
   };
 
   // contabiliza as stats do split na carreira UMA vez só. Idempotente: se o
@@ -1199,7 +1363,7 @@ export function CareerScreen({ onExit }: Props) {
     const next = { ...save, league: { ...l } };
     persist(next);
     setSave(next);
-    setStage('hub');
+    setStage('hub'); // fica na Visão geral (onde estão os botões de jogar) — a chave aparece inline
   };
 
   // entra no mata-mata: GSL = 4 classificados com cross-seed (1A x 2B, 1B x 2A);
@@ -1773,6 +1937,7 @@ export function CareerScreen({ onExit }: Props) {
                   circuit: null,
                   playoff: null,
                   history: [...save.history, finished],
+                  academy: evolveAcademy(save),
                   ...evo,
                   ...applyTransferWindow(save),
                   pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
@@ -2067,6 +2232,7 @@ export function CareerScreen({ onExit }: Props) {
                     circuit: null,
                     playoff: null,
                     history: [...save.history, baseRecord()],
+                    academy: evolveAcademy(save),
                     ...bankStats(save),
                     ...evo,
                     ...applyTransferWindow(save),
@@ -2231,6 +2397,7 @@ export function CareerScreen({ onExit }: Props) {
     { id: 'standings', label: 'Classificação' },
     { id: 'bracket', label: '🗺️ Chave' },
     { id: 'squad', label: 'Elenco' },
+    { id: 'academy', label: '🎓 Academia' },
     { id: 'finance', label: expiringCount > 0 ? `💰 Finanças ⚠️${expiringCount}` : '💰 Finanças' },
     { id: 'market', label: 'Mercado' },
     { id: 'world', label: '🌐 Cena mundial' },
@@ -2514,9 +2681,12 @@ export function CareerScreen({ onExit }: Props) {
 
           <div className="career-side">
             <div className="side-card">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>Fase de grupos · top 2 de cada grupo avança</div>
+              <div className="side-card-head">
+                <span className="muted small section-label" style={{ margin: 0 }}>Chave da fase de grupos (GSL)</span>
+                {league.gsl && <button className="btn ghost small" onClick={() => setHubTab('bracket')}>Abrir →</button>}
+              </div>
               {league.gsl
-                ? <GSLGroups league={league} onOpen={setSelSeries} compact />
+                ? <GSLBracket league={league} onOpen={setSelSeries} />
                 : <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} />}
             </div>
             <div className="side-card">
@@ -2639,6 +2809,96 @@ export function CareerScreen({ onExit }: Props) {
         </div>
       )}
 
+      {/* ===== ACADEMIA (prospectos: revelar, treinar, promover) ===== */}
+      {hubTab === 'academy' && (() => {
+        const aca = save.academy ?? [];
+        const full = aca.length >= ACADEMY_MAX;
+        const squadFull = save.squad.length >= 5;
+        return (
+          <div className="panel">
+            <div className="panel-body">
+              <div className="aca-head">
+                <div>
+                  <div className="muted small section-label" style={{ marginTop: 0 }}>Academia · {aca.length}/{ACADEMY_MAX} prospectos</div>
+                  <p className="muted small" style={{ maxWidth: 600 }}>
+                    Revele jovens talentos, deixe um em <b>foco 🎯</b> (cresce mais rápido a cada split rumo ao seu <b>potencial</b>) e <b>promova ao elenco</b> quando quiser. É a próxima geração da sua org.
+                  </p>
+                </div>
+                <button className="btn gold" disabled={full || save.budget < ACADEMY_SCOUT_COST}
+                  title={full ? 'Academia cheia' : save.budget < ACADEMY_SCOUT_COST ? 'Caixa insuficiente' : ''}
+                  onClick={() => {
+                    const region = save.region ?? 'europe';
+                    const seed = `aca:${save.org?.tag ?? 'org'}:${save.split}:${aca.length}:${save.budget}`;
+                    const p = makeProspect(seed, region, save.split);
+                    update({ academy: [...aca, p], budget: save.budget - ACADEMY_SCOUT_COST });
+                  }}>
+                  🔍 Revelar prospecto ({formatMoney(ACADEMY_SCOUT_COST)})
+                </button>
+              </div>
+              {aca.length === 0 ? (
+                <p className="muted small" style={{ padding: '14px 0' }}>
+                  Sua academia está vazia. Revele um prospecto pra começar a formar a próxima geração — eles começam crus (OVR baixo) mas evoluem treinando.
+                </p>
+              ) : (
+                <div className="aca-grid">
+                  {aca.map((p) => {
+                    const ovr = playerOvr(p);
+                    const focused = save.academyFocus === p.id;
+                    const potPct = Math.max(6, Math.min(100, ((p.potential - 60) / 33) * 100));
+                    return (
+                      <div key={p.id} className={`aca-card${focused ? ' focused' : ''}`}>
+                        <div className="aca-top">
+                          <PlayerAvatar nick={p.nick} size={46} />
+                          <OvrBadge ovr={ovr} />
+                        </div>
+                        <div className="aca-nick"><Flag cc={p.country} /> {p.nick}</div>
+                        <div className="muted small aca-name">{p.name}</div>
+                        <div className="aca-meta">
+                          <span className={`role-pill ${p.role}`}>{p.role}</span>
+                          <span className="muted small">{p.age} anos</span>
+                        </div>
+                        <div className="aca-pot">
+                          <span className="muted small">Potencial</span>
+                          <div className="aca-potbar"><div style={{ width: `${potPct}%` }} /></div>
+                          <span className="aca-potval">{p.potential}</span>
+                        </div>
+                        <div className="aca-actions">
+                          <button className={`btn small${focused ? ' gold' : ' ghost'}`}
+                            onClick={() => update({ academyFocus: focused ? null : p.id })}>
+                            {focused ? '🎯 Em foco' : 'Treinar'}
+                          </button>
+                          <button className="btn small gold"
+                            onClick={() => (squadFull ? setPromoting(promoting === p.id ? null : p.id) : promoteProspect(p.id))}>
+                            ⬆ Promover
+                          </button>
+                        </div>
+                        {promoting === p.id && squadFull && (
+                          <div className="aca-replace">
+                            <div className="muted small">Elenco cheio — sai do time:</div>
+                            <div className="aca-replace-list">
+                              {save.squad.map((sg) => {
+                                const f = findSigning(sg);
+                                return (
+                                  <button key={sg.playerId} className="btn small ghost"
+                                    onClick={() => promoteProspect(p.id, sg.playerId)}>
+                                    {f?.player.nick ?? sg.playerId}
+                                  </button>
+                                );
+                              })}
+                              <button className="btn small" onClick={() => setPromoting(null)}>cancelar</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ===== ELENCO + RANKING DE JOGADORES ===== */}
       {hubTab === 'finance' && (() => {
         const picks = save.squad.map((s) => ({ sig: s, f: findSigning(s) })).filter((x) => x.f) as { sig: Signing; f: { player: Player } }[];
@@ -2665,7 +2925,7 @@ export function CareerScreen({ onExit }: Props) {
                   {wages.map((w) => {
                     const left = w.until != null ? w.until - save.split + 1 : 0;
                     const expiring = left <= 1;
-                    const age = effectiveAge(w.f.player, save.split);
+                    const age = effectiveAge(w.f.player, save.split, save.youthAge);
                     const pot = potentialTier(playerPotentialOvr(w.f.player, age));
                     return (
                       <tr key={w.sig.playerId} className={expiring ? 'fin-expiring' : ''}>
@@ -3086,6 +3346,7 @@ export function CareerScreen({ onExit }: Props) {
             focused={save.trainingFocus === p.id}
             onToggleFocus={() => update({ trainingFocus: save.trainingFocus === p.id ? null : p.id })}
             onClose={() => setProfilePlayer(null)}
+            youthAge={save.youthAge}
           />
         );
       })()}
@@ -3161,7 +3422,7 @@ function PlayerCard({ player, ovr }: { player: Player; ovr: number }) {
   );
 }
 
-function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, peakOvr, focused, onToggleFocus, onClose }: {
+function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, peakOvr, focused, onToggleFocus, onClose, youthAge }: {
   player: Player;
   split: number;
   career: ReturnType<typeof deriveCareer>;
@@ -3173,9 +3434,10 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
   focused: boolean;
   onToggleFocus: () => void;
   onClose: () => void;
+  youthAge?: Record<string, number>;
 }) {
   const mi = moraleInfo(morale);
-  const age = effectiveAge(player, split);
+  const age = effectiveAge(player, split, youthAge);
   const pot = playerPotentialOvr(player, age);
   const tier = potentialTier(pot);
   const phase = playerPhase(player.id, age);
@@ -4426,7 +4688,7 @@ function MarketScreen({
                     {m.from.team}
                   </div>
                   {(() => {
-                    const age = effectiveAge(m.player, save.split);
+                    const age = effectiveAge(m.player, save.split, save.youthAge);
                     const ph = playerPhase(m.player.id, age);
                     const pot = potentialTier(playerPotentialOvr(m.player, age));
                     return (
