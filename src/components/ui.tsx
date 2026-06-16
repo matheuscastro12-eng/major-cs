@@ -6,7 +6,8 @@ import { MAP_LABELS, type MapId, type TTeam } from '../types';
 // Avatar do jogador: foto real da Liquipedia (via proxy) com fallback de iniciais
 export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string; size?: number; coach?: boolean }) {
   const [err, setErr] = useState(false);
-  const url = photoForNick(nick, Math.max(120, size * 2));
+  const safeNick = nick || '?'; // protege contra nick indefinido (não quebra o render)
+  const url = photoForNick(safeNick, Math.max(120, size * 2));
   useEffect(() => setErr(false), [url]);
   if (url && !err) {
     return (
@@ -27,7 +28,7 @@ export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string;
           : 'linear-gradient(160deg, var(--blue) 0%, #25405c 100%)',
       }}
     >
-      {nick.slice(0, 2).toUpperCase()}
+      {safeNick.slice(0, 2).toUpperCase()}
     </span>
   );
 }

@@ -195,9 +195,11 @@ function prospectIdentity(seed: string, region: MacroRegion): { nick: string; na
   const h = hashStr(seed);
   const names = PROSPECT_NAMES[region] ?? PROSPECT_NAMES.europe;
   const ccs = REGION_CC[region] ?? REGION_CC.europe;
+  // IMPORTANTE: usar shift SEM sinal (>>>). hashStr retorna 0..2^32-1, e `h >> k`
+  // (com sinal) vira NEGATIVO p/ h >= 2^31, gerando índice negativo => undefined.
   return {
-    nick: PROSPECT_NICKS[(h >> 4) % PROSPECT_NICKS.length],
-    name: names[(h >> 7) % names.length],
+    nick: PROSPECT_NICKS[(h >>> 4) % PROSPECT_NICKS.length],
+    name: names[(h >>> 7) % names.length],
     country: ccs[h % ccs.length],
   };
 }
@@ -220,7 +222,7 @@ interface AcademyEntry {
 function makeProspect(seed: string, region: MacroRegion, split: number): AcademyEntry {
   const h = hashStr(seed);
   const ident = prospectIdentity(seed, region);
-  const role: Role = FILL_ROLES[(h >> 2) % FILL_ROLES.length];
+  const role: Role = FILL_ROLES[(h >>> 2) % FILL_ROLES.length]; // >>> (sem sinal): evita índice negativo
   const base = 58 + (h % 9); // 58-66 (jovem cru)
   const e: AcademyEntry = {
     id: `prospect__${seed.replace(/[^a-z0-9]/gi, '')}`,
