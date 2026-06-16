@@ -4157,6 +4157,7 @@ table.crm-players input.num {
 .gsl-br-sub.adv { color: var(--green-bright); }
 .gsl-br-sub.elim { color: var(--red-bright); }
 .gsl-br-seed { margin-left: auto; font-family: var(--font-cond); font-weight: 800; color: var(--muted); font-size: 11px; }
+.bracket-play { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 12px; border-radius: var(--r-sm); background: linear-gradient(160deg, var(--panel-3), var(--panel-2)); border: 1px solid var(--gold-soft); }
 
 /* academia (prospectos: revelar, treinar, promover) */
 .aca-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }

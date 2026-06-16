@@ -34,6 +34,10 @@ const CIRCUIT_AI_BOOST = 3.5; // adversarios do circuito mais fortes (balanceame
 // dava pra ter o melhor elenco com grana sobrando já no split 3)
 const PRIZE_BY_POS = [1_250_000, 750_000, 450_000, 280_000, 170_000, 110_000, 70_000, 40_000];
 const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
+// VRS é ROLANTE (como o Valve ranking real): a cada split os pontos antigos
+// decaem, então não acumulam pra sempre (acabou o usuário com 3000 e a IA com
+// 1200). No equilíbrio o VRS ganho ~ ganho/(1-decay), comparável ao field.
+const VRS_DECAY = 0.6;
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
 const MAJOR_VRS_CUT = 32; // os 32 melhores do ranking VRS vão ao Major (3 stages)
@@ -328,6 +332,29 @@ const CAREER_SCENARIOS: CareerScenario[] = [
   { id: 'saw_portugal', cat: 'pt', teamName: 'SAW', title: 'SAW: o orgulho de Portugal',
     context: 'A SAW é a esperança lusa, mas começa lá embaixo no ranking. Leve Portugal, do zero, até o Major mundial.',
     goals: [{ type: 'reachTier1', text: 'Levar a SAW ao Tier 1' }, { type: 'winCircuit', text: 'Vencer um campeonato' }, { type: 'qualifyMajor', text: 'Classificar pro Major' }] },
+  // MAIS ATUAIS
+  { id: 'astralis_dynasty', cat: 'atual', teamName: 'Astralis', title: 'Astralis: reviver a dinastia',
+    context: 'A Astralis foi a maior dinastia do CS, mas hoje briga no meio do pelotão. Reconstrua o império dinamarquês.',
+    goals: [{ type: 'reachTier1', text: 'Voltar ao Tier 1' }, { type: 'qualifyMajor', text: 'Classificar pro Major' }] },
+  { id: 'mouz_nextgen', cat: 'atual', teamName: 'MOUZ', title: 'MOUZ: a nova geração',
+    context: 'A MOUZ aposta numa base jovem e promissora. Lapide os talentos e brigue pelo topo mundial.',
+    goals: [{ type: 'top4', text: 'Top 4 num circuito de elite' }, { type: 'winCircuit', text: 'Vencer um campeonato' }] },
+  { id: 'navi_revival', cat: 'atual', teamName: 'Natus Vincere', title: 'NAVI: o renascimento',
+    context: 'A NAVI vive de glórias passadas. Coloque a lenda da CIS de volta na elite mundial.',
+    goals: [{ type: 'reachTier1', text: 'Chegar ao Tier 1' }, { type: 'winCircuit', text: 'Vencer um campeonato' }] },
+  { id: 'big_hope', cat: 'atual', teamName: 'BIG', title: 'BIG: a esperança alemã',
+    context: 'A BIG carrega o CS alemão nas costas, mas precisa voltar à elite. Reerga o projeto.',
+    goals: [{ type: 'reachTier1', text: 'Subir ao Tier 1' }, { type: 'top4', text: 'Top 4 num circuito' }] },
+  { id: 'flyquest_na', cat: 'atual', teamName: 'FlyQuest', title: 'FlyQuest: o sonho norte-americano',
+    context: 'A NA quer voltar a brigar lá em cima. Construa o projeto e dispute o Major mundial.',
+    goals: [{ type: 'reachTier1', text: 'Chegar ao Tier 1' }, { type: 'qualifyMajor', text: 'Classificar pro Major' }] },
+  // MAIS BRASIL (entram se o time existir no dataset)
+  { id: 'imperial_br', cat: 'br', teamName: 'Imperial', title: 'Imperial: a última dança',
+    context: 'O projeto brasileiro de veteranos quer um último grande Major. Honre a camisa verde-amarela.',
+    goals: [{ type: 'winCircuit', text: 'Vencer um campeonato' }, { type: 'qualifyMajor', text: 'Classificar pro Major' }] },
+  { id: 'oddik_br', cat: 'br', teamName: 'ODDIK', title: 'ODDIK: do acesso à elite',
+    context: 'Saída da base do CS brasileiro, a ODDIK quer provar que o acesso vira elite. Suba os tiers.',
+    goals: [{ type: 'reachTier1', text: 'Chegar ao Tier 1' }, { type: 'winCircuit', text: 'Vencer um campeonato' }] },
 ];
 // resolve o TeamSeason de um cenário (times reais do elenco vigente)
 function scenarioTeam(sc: CareerScenario, current: TeamSeason[]): TeamSeason | null {
@@ -383,7 +410,8 @@ interface SplitRecord {
 interface PlayoffMatch { a: string; b: string; result?: SeriesResult; }
 interface Playoff {
   circuit: string;
-  seeds: string[];   // top 4 (ordem de seed) ao entrar nos playoffs
+  seeds: string[];   // classificados (ordem de seed) ao entrar nos playoffs
+  qf: [PlayoffMatch, PlayoffMatch, PlayoffMatch, PlayoffMatch] | null; // quartas (8 times) ou null (4 times)
   sf: [PlayoffMatch, PlayoffMatch];
   final: PlayoffMatch | null;
   champion: string | null;
@@ -729,23 +757,34 @@ function evoDelta(pid: string, split: number, age: number, atCeiling: boolean): 
 
 // ----- helpers do playoff (mata-mata do circuito) -----
 function buildPlayoff(table: TTeam[], circuit: string): Playoff {
-  const s = table.slice(0, 4).map((t) => t.id);
-  return {
-    circuit,
-    seeds: s,
-    sf: [
-      { a: s[0], b: s[3] }, // 1 x 4
-      { a: s[1], b: s[2] }, // 2 x 3
-    ],
-    final: null,
-    champion: null,
-    runnerUp: null,
-  };
+  const ids = table.map((t) => t.id);
+  if (ids.length >= 8) {
+    const s = ids.slice(0, 8);
+    return {
+      circuit, seeds: s,
+      // quartas cross-seed (1x8, 4x5, 2x7, 3x6): campeões de grupo só se cruzam tarde
+      qf: [
+        { a: s[0], b: s[7] }, { a: s[3], b: s[4] },
+        { a: s[1], b: s[6] }, { a: s[2], b: s[5] },
+      ],
+      sf: [{ a: '', b: '' }, { a: '', b: '' }], // preenchidas após as quartas
+      final: null, champion: null, runnerUp: null,
+    };
+  }
+  const s = ids.slice(0, 4);
+  return { circuit, seeds: s, qf: null, sf: [{ a: s[0], b: s[3] }, { a: s[1], b: s[2] }], final: null, champion: null, runnerUp: null };
 }
 const poWinner = (m: PlayoffMatch | null | undefined): string | null =>
   m?.result ? (m.result.winner === 0 ? m.a : m.b) : null;
 function poAdvance(p: Playoff): void {
-  if (!p.final && p.sf[0].result && p.sf[1].result) {
+  // quartas completas -> monta as semis
+  if (p.qf && p.qf.every((m) => m.result) && !p.sf[0].a) {
+    p.sf = [
+      { a: poWinner(p.qf[0])!, b: poWinner(p.qf[1])! },
+      { a: poWinner(p.qf[2])!, b: poWinner(p.qf[3])! },
+    ];
+  }
+  if (!p.final && p.sf[0].a && p.sf[1].a && p.sf[0].result && p.sf[1].result) {
     p.final = { a: poWinner(p.sf[0])!, b: poWinner(p.sf[1])! };
   }
   if (p.final?.result && !p.champion) {
@@ -753,16 +792,16 @@ function poAdvance(p: Playoff): void {
     p.runnerUp = p.final.a === p.champion ? p.final.b : p.final.a;
   }
 }
+const poMatches = (p: Playoff): PlayoffMatch[] =>
+  [...(p.qf ?? []), p.sf[0], p.sf[1], p.final].filter((m): m is PlayoffMatch => !!m && !!m.a && !!m.b);
 function poUserMatch(p: Playoff): PlayoffMatch | null {
-  const all = [p.sf[0], p.sf[1], p.final].filter(Boolean) as PlayoffMatch[];
-  return all.find((m) => !m.result && (m.a === 'user' || m.b === 'user')) ?? null;
+  return poMatches(p).find((m) => !m.result && (m.a === 'user' || m.b === 'user')) ?? null;
 }
 // resolve em cascata todas as partidas que NÃO envolvem o usuário
 function poRunAI(p: Playoff, team: (id: string) => TTeam, rng: Rng): void {
-  for (let guard = 0; guard < 8; guard++) {
+  for (let guard = 0; guard < 16; guard++) {
     poAdvance(p);
-    const all = [p.sf[0], p.sf[1], p.final].filter(Boolean) as PlayoffMatch[];
-    const m = all.find((x) => !x.result && x.a !== 'user' && x.b !== 'user');
+    const m = poMatches(p).find((x) => !x.result && x.a !== 'user' && x.b !== 'user');
     if (!m) break;
     const a = team(m.a);
     const b = team(m.b);
@@ -771,12 +810,15 @@ function poRunAI(p: Playoff, team: (id: string) => TTeam, rng: Rng): void {
   }
   poAdvance(p);
 }
-// colocação do usuário no playoff (1 campeão, 2 vice, 3 semifinalista, 99 fora)
+// colocação do usuário no playoff (1 campeão, 2 vice, 3 semi, 5 quartas, 99 fora)
 function poUserRank(p: Playoff | null): number {
   if (!p) return 99;
   if (p.champion === 'user') return 1;
   if (p.runnerUp === 'user') return 2;
-  if (p.seeds.includes('user')) return 3;
+  const lostIn = (m?: PlayoffMatch | null) => !!m?.result && (m.a === 'user' || m.b === 'user') && poWinner(m) !== 'user';
+  if (p.sf.some(lostIn)) return 3;
+  if (p.qf?.some(lostIn)) return 5;
+  if (p.seeds.includes('user')) return p.qf ? 5 : 3; // ainda em jogo: assume entrada
   return 99;
 }
 
@@ -1035,7 +1077,7 @@ interface Props {
 
 export function CareerScreen({ onExit }: Props) {
   const [save, setSave] = useState<CareerSave>(() => loadSave());
-  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario'>('select'); // sub-tela da fundação
+  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
     if (!s.org) return 'found';
@@ -1191,7 +1233,7 @@ export function CareerScreen({ onExit }: Props) {
       prizeMult: number,
       vrsMult: number,
       tier: number,
-    ) => ({ id, name, desc, teams: teams.slice(0, 7), spots, prizeMult, vrsMult, tier });
+    ) => ({ id, name, desc, teams: teams.slice(0, 15), spots, prizeMult, vrsMult, tier });
     // REPARTE os melhores times entre os campeonatos para NENHUM time aparecer em
     // dois ao mesmo tempo. Na vida real a Vitality não joga BLAST e ESL no mesmo
     // dia: cada evento tem o melhor field possível, mas sem repetir time.
@@ -1204,9 +1246,9 @@ export function CareerScreen({ onExit }: Props) {
       }
       return out;
     };
-    const t1Teams = take(byStrength, 7);                                  // a elite mundial vai pro Tier 1
-    const t2Teams = take(regional, 7);                                    // melhores da região que sobraram
-    const t3Teams = take(regMid.length >= 5 ? regMid : byStrength, 7);    // acesso (o que restou)
+    const t1Teams = take(byStrength, 15);                                  // a elite mundial vai pro Tier 1 (16 com você)
+    const t2Teams = take(regional, 15);                                    // melhores da região que sobraram
+    const t3Teams = take(regMid.length >= 5 ? regMid : byStrength, 15);    // acesso (o que restou)
     const t1Name = t1EventName(save.split);
     // Tier 1 = UM evento mundial por split (calendário sequencial, nome real).
     // Tier 2/3 = circuitos da SUA região. Fields disjuntos: sem time repetido.
@@ -1311,7 +1353,7 @@ export function CareerScreen({ onExit }: Props) {
     // inicial humilde apanhe demais nos primeiros splits.
     const tierScale = s.tier === 3 ? 0.6 : s.tier === 2 ? 0.85 : 1;
     const aiBoost = CIRCUIT_AI_BOOST + Math.min(13, (s.split - 1) * 1.7 * tierScale);
-    const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 7).map((t) => {
+    const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 15).map((t) => {
       const tt = teamSeasonToTTeam(t);
       tt.strength += aiBoost;
       return tt;
@@ -1534,7 +1576,8 @@ export function CareerScreen({ onExit }: Props) {
     const next = { ...save, league: { ...l } };
     persist(next);
     setSave(next);
-    setStage('hub'); // fica na Visão geral (onde estão os botões de jogar) — a chave aparece inline
+    if (l.gsl) setHubTab('bracket'); // mostra a chave após cada partida (com o botão de jogar a próxima ali mesmo)
+    setStage('hub');
   };
 
   // entra no mata-mata: GSL = 4 classificados com cross-seed (1A x 2B, 1B x 2A);
@@ -1542,8 +1585,7 @@ export function CareerScreen({ onExit }: Props) {
   const enterPlayoffs = (l: League) => {
     let seedTable: TTeam[];
     if (l.gsl) {
-      const q = gslQualifiers(l);
-      seedTable = [q.firstA, q.firstB, q.secondA, q.secondB].map((id) => leagueTeam(l, id));
+      seedTable = gslQualifiers(l).map((id) => leagueTeam(l, id)); // 8 classificados (4 grupos)
     } else {
       seedTable = leagueTable(l);
     }
@@ -2176,7 +2218,7 @@ export function CareerScreen({ onExit }: Props) {
                 const next = {
                   ...save,
                   budget: Math.max(0, save.budget + mr.prize - payroll + effSponsorIncome(save) + majBonus),
-                  vrs: save.vrs + mr.vrs,
+                  vrs: Math.round(save.vrs * VRS_DECAY) + mr.vrs, // VRS rolante (decai e soma o do Major)
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
@@ -2483,7 +2525,7 @@ export function CareerScreen({ onExit }: Props) {
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
                     budget: Math.max(0, save.budget + prize - payroll + effSponsorIncome(save) + objBonus),
-                    vrs: save.vrs + vrsGain,
+                    vrs: Math.round(save.vrs * VRS_DECAY) + vrsGain, // VRS rolante (decai e soma o ganho do split)
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
                     league: null,
@@ -2574,7 +2616,7 @@ export function CareerScreen({ onExit }: Props) {
     const p = save.playoff;
     const teamOf = (id: string) => leagueTeam(league, id);
     const userMatch = poUserMatch(p);
-    const isFinalNext = !!userMatch && p.final === userMatch;
+    const userRoundLabel = !userMatch ? '' : p.final === userMatch ? 'a final' : (p.qf?.includes(userMatch) ? 'minha quarta' : 'minha semi');
     return (
       <div className="career-major-live">
         <div className="major-live-bar">
@@ -2583,7 +2625,7 @@ export function CareerScreen({ onExit }: Props) {
           {userMatch ? (
             <>
               <button className="btn ghost" onClick={simPlayoffMine}>⏩ Simular</button>
-              <button className="btn gold" onClick={playPlayoffMine}>▶ {isFinalNext ? 'Jogar a final' : 'Jogar minha semi'}</button>
+              <button className="btn gold" onClick={playPlayoffMine}>▶ Jogar {userRoundLabel}</button>
             </>
           ) : p.champion ? (
             <button className="btn gold" onClick={() => setStage('seasonEnd')}>Ver resultado do split →</button>
@@ -3095,6 +3137,14 @@ export function CareerScreen({ onExit }: Props) {
             <div className="muted small section-label" style={{ marginTop: 0 }}>
               {save.circuit?.name ?? 'Circuito'} · chave da fase de grupos (GSL · dupla eliminação) — top 2 de cada grupo vão ao mata-mata
             </div>
+            {opp && myMatch && (
+              <div className="bracket-play">
+                <span className="muted small">Sua próxima partida: <b>{opp.name}</b> · {(myMatch.bo ?? 3) === 1 ? 'MD1' : (myMatch.bo ?? 3) === 5 ? 'MD5' : 'MD3'}</span>
+                <span className="spacer" />
+                <button className="btn gold" onClick={playMine}>▶ JOGAR</button>
+                <button className="btn ghost small" onClick={() => simMine(league)}>⏩ Simular</button>
+              </div>
+            )}
             {league.gsl
               ? <GSLBracket league={league} onOpen={setSelSeries} />
               : <p className="muted small">Este circuito não usa fase de grupos GSL.</p>}
@@ -4379,7 +4429,7 @@ function PlayoffBracket({ p, teamOf, onOpen }: {
   teamOf: (id: string) => TTeam;
   onOpen: (s: SeriesResult, ts: [TTeam, TTeam]) => void;
 }) {
-  const Side = ({ id, win, seed }: { id?: string; win?: boolean; seed?: number }) => {
+  const side = (id?: string, win?: boolean, seed?: number) => {
     if (!id) return <div className="po-side tbd"><span className="muted small">a definir</span></div>;
     const t = teamOf(id);
     return (
@@ -4390,16 +4440,16 @@ function PlayoffBracket({ p, teamOf, onOpen }: {
       </div>
     );
   };
-  const Match = ({ m, label, seeds }: { m: PlayoffMatch | null; label: string; seeds?: [number, number] }) => {
+  const matchRow = (m: PlayoffMatch | null, label: string, seeds?: [number, number]) => {
     const w = poWinner(m);
     const r = m?.result;
     return (
       <div className={`po-match${r ? ' clickable' : ''}`}
         onClick={() => r && m && onOpen(r, [teamOf(m.a), teamOf(m.b)])}>
         <div className="po-label">{label}</div>
-        <Side id={m?.a} win={!!w && w === m?.a} seed={seeds?.[0]} />
+        {side(m?.a, !!w && w === m?.a, seeds?.[0])}
         <div className="po-score">{r ? `${r.mapScore[0]} : ${r.mapScore[1]}` : 'vs'}</div>
-        <Side id={m?.b} win={!!w && w === m?.b} seed={seeds?.[1]} />
+        {side(m?.b, !!w && w === m?.b, seeds?.[1])}
       </div>
     );
   };
@@ -4409,14 +4459,23 @@ function PlayoffBracket({ p, teamOf, onOpen }: {
       <div className="panel-head">{p.circuit} · Playoffs (mata-mata)</div>
       <div className="panel-body">
         <div className="po-bracket">
+          {p.qf && (
+            <div className="po-col">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>Quartas (MD3)</div>
+              {matchRow(p.qf[0], 'QF1', [1, 8])}
+              {matchRow(p.qf[1], 'QF2', [4, 5])}
+              {matchRow(p.qf[2], 'QF3', [2, 7])}
+              {matchRow(p.qf[3], 'QF4', [3, 6])}
+            </div>
+          )}
           <div className="po-col">
             <div className="muted small section-label" style={{ marginTop: 0 }}>Semifinais (MD3)</div>
-            <Match m={p.sf[0]} label="SF1" seeds={[1, 4]} />
-            <Match m={p.sf[1]} label="SF2" seeds={[2, 3]} />
+            {matchRow(p.sf[0].a ? p.sf[0] : null, 'SF1', p.qf ? undefined : [1, 4])}
+            {matchRow(p.sf[1].a ? p.sf[1] : null, 'SF2', p.qf ? undefined : [2, 3])}
           </div>
           <div className="po-col">
             <div className="muted small section-label" style={{ marginTop: 0 }}>Grande final (MD5)</div>
-            <Match m={p.final} label="FINAL" />
+            {matchRow(p.final, 'FINAL')}
             {champ && (
               <div className="po-champ">
                 <div className="trophy" style={{ fontSize: 30 }}>🏆</div>

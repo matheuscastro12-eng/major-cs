@@ -12,19 +12,22 @@ import { leagueTeam } from './league';
 // rótulo de cada "rodada" do GSL (3 no total)
 export const GSL_ROUND_LABELS = ['Rodada de abertura', 'Vencedores + Eliminação', 'Decisão'];
 
-const GROUP_KEYS = ['A', 'B'] as const;
+const GROUP_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
+// chaves de grupo ativas (pelo nº de grupos do torneio)
+const activeKeys = (n: number) => GROUP_KEYS.slice(0, n);
 
-// distribui 8 times em 2 grupos de 4 (snake por força: grupos equilibrados).
+// distribui os times em N grupos de 4 (snake por força: grupos equilibrados).
 // ordem dentro do grupo = força desc (seed 1..4), pra Opening = S1vS4 / S2vS3.
-function seedGroups(teams: TTeam[]): [TTeam[], TTeam[]] {
+function seedGroups(teams: TTeam[], nGroups: number): TTeam[][] {
   const sorted = [...teams].sort((a, b) => b.strength - a.strength);
-  const A: TTeam[] = [];
-  const B: TTeam[] = [];
+  const groups: TTeam[][] = Array.from({ length: nGroups }, () => []);
   sorted.forEach((t, i) => {
-    // snake: 0->A,1->B,2->B,3->A,4->A,5->B,6->B,7->A
-    (i % 4 === 0 || i % 4 === 3 ? A : B).push(t);
+    const cycle = Math.floor(i / nGroups);
+    const pos = i % nGroups;
+    const gi = cycle % 2 === 0 ? pos : nGroups - 1 - pos; // serpentina entre os grupos
+    groups[gi].push(t);
   });
-  return [A.slice(0, 4), B.slice(0, 4)];
+  return groups.map((g) => g.slice(0, 4));
 }
 
 const mWinner = (m: LeagueMatch): string => (m.result!.winner === 0 ? m.a : m.b);
@@ -32,19 +35,21 @@ const mLoser = (m: LeagueMatch): string => (m.result!.winner === 0 ? m.b : m.a);
 const findTag = (l: League, tag: string): LeagueMatch | undefined =>
   l.rounds.flat().find((m) => m.tag === tag);
 
-// monta a fase de grupos GSL a partir de 8 times.
+// monta a fase de grupos GSL a partir de N*4 times (16 = 4 grupos). Top 2 avançam.
 export function createGSLStage(name: string, teams: TTeam[]): League {
-  const [A, B] = seedGroups(teams);
-  const groups: [string[], string[]] = [A.map((t) => t.id), B.map((t) => t.id)];
+  const nGroups = Math.max(2, Math.floor(teams.length / 4));
+  const grouped = seedGroups(teams, nGroups);
+  const inGroups = grouped.flat();
+  const groups: string[][] = grouped.map((g) => g.map((t) => t.id));
   const opening: LeagueMatch[] = [];
-  GROUP_KEYS.forEach((g, gi) => {
+  activeKeys(nGroups).forEach((g, gi) => {
     const s = groups[gi]; // seeds 0..3
     opening.push({ a: s[0], b: s[3], tag: `${g}-O1`, bo: 1 });
     opening.push({ a: s[1], b: s[2], tag: `${g}-O2`, bo: 1 });
   });
   return {
     name,
-    teams: teams.map((t) => ({ ...t, wins: 0, losses: 0, roundDiff: 0, status: 'alive' as const })),
+    teams: inGroups.map((t) => ({ ...t, wins: 0, losses: 0, roundDiff: 0, status: 'alive' as const })),
     rounds: [opening],
     current: 0,
     gsl: { groups, place: {} },
@@ -73,10 +78,11 @@ export function resolveGSLRound(l: League, rng: Rng): void {
     }
   }
   l.current++;
+  const keys = activeKeys(l.gsl.groups.length);
   if (l.current === 1) {
     // gera Vencedores (winners x winners) e Eliminação (losers x losers) por grupo
     const next: LeagueMatch[] = [];
-    GROUP_KEYS.forEach((g) => {
+    keys.forEach((g) => {
       const o1 = findTag(l, `${g}-O1`)!;
       const o2 = findTag(l, `${g}-O2`)!;
       next.push({ a: mWinner(o1), b: mWinner(o2), tag: `${g}-WIN`, bo: 3 });
@@ -86,7 +92,7 @@ export function resolveGSLRound(l: League, rng: Rng): void {
   } else if (l.current === 2) {
     // 1º (vence Vencedores) e 4º (perde Eliminação) já definidos; gera Decisão
     const next: LeagueMatch[] = [];
-    GROUP_KEYS.forEach((g) => {
+    keys.forEach((g) => {
       const win = findTag(l, `${g}-WIN`)!;
       const elim = findTag(l, `${g}-ELIM`)!;
       l.gsl!.place[mWinner(win)] = 1;
@@ -96,7 +102,7 @@ export function resolveGSLRound(l: League, rng: Rng): void {
     l.rounds.push(next);
   } else if (l.current === 3) {
     // Decisão resolvida: 2º (vence) e 3º (perde)
-    GROUP_KEYS.forEach((g) => {
+    keys.forEach((g) => {
       const dec = findTag(l, `${g}-DEC`)!;
       l.gsl!.place[mWinner(dec)] = 2;
       l.gsl!.place[mLoser(dec)] = 3;
@@ -104,14 +110,13 @@ export function resolveGSLRound(l: League, rng: Rng): void {
   }
 }
 
-// os 4 classificados, em ordem de seed do playoff (cross-group: 1A,1B,2A,2B).
-// retorna ids; quem não jogou (placement só sai no fim) usa o place preenchido.
-export function gslQualifiers(l: League): { firstA: string; firstB: string; secondA: string; secondB: string } {
+// os classificados (top 2 de cada grupo) em ordem de seed do playoff:
+// [1A,1B,1C,1D, 2A,2B,2C,2D] — campeões de grupo são seeds 1..N, vices N+1..2N.
+export function gslQualifiers(l: League): string[] {
   const byPlace = (gi: number, pl: number) => l.gsl!.groups[gi].find((id) => l.gsl!.place[id] === pl)!;
-  return {
-    firstA: byPlace(0, 1), firstB: byPlace(1, 1),
-    secondA: byPlace(0, 2), secondB: byPlace(1, 2),
-  };
+  const firsts = l.gsl!.groups.map((_, gi) => byPlace(gi, 1));
+  const seconds = l.gsl!.groups.map((_, gi) => byPlace(gi, 2));
+  return [...firsts, ...seconds];
 }
 
 // colocação do usuário no GSL: 1-2 = classificou; 3-4 = caiu no grupo.
@@ -122,7 +127,7 @@ export function gslUserPlace(l: League): number {
 // dados de render por grupo: nome do grupo + jogos por estágio + colocações.
 export function gslGroupView(l: League) {
   if (!l.gsl) return [];
-  return GROUP_KEYS.map((g, gi) => ({
+  return activeKeys(l.gsl.groups.length).map((g, gi) => ({
     key: g,
     teams: l.gsl!.groups[gi],
     place: l.gsl!.place,

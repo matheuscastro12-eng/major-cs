@@ -18,10 +18,10 @@ export interface League {
   teams: TTeam[];
   rounds: LeagueMatch[][];
   current: number; // índice da rodada atual (0-based)
-  // metadados do formato GSL (2 grupos de 4, dupla eliminação). Ausente = liga
-  // de pontos corridos (formato antigo, mantido como fallback).
+  // metadados do formato GSL (N grupos de 4, dupla eliminação; 4 grupos = 16
+  // times). Ausente = liga de pontos corridos (formato antigo, fallback).
   gsl?: {
-    groups: [string[], string[]]; // ids em ordem de seed por grupo (A, B)
+    groups: string[][]; // ids em ordem de seed por grupo (A, B, C, D…)
     place: Record<string, number>; // id -> colocação no grupo (1 a 4), preenchido ao resolver
   };
 }
