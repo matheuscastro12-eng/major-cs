@@ -925,12 +925,37 @@ function applyMoves(teams: TeamSeason[], moves: Record<string, string> | undefin
   return teams.map((t) => ({ ...t, players: all.filter((ap) => teamOf(ap.p.id, ap.orig) === t.id).map((ap) => ap.p) }));
 }
 
+// MIGRAÇÃO: prospectos/jovens gerados antes do fix do shift (>>) podiam ser
+// salvos SEM nick/name/role (só o country sobrevivia). Regenera de forma
+// determinística pelo id, mantendo o que já existe.
+function healProspect(a: AcademyEntry): AcademyEntry {
+  if (a.nick && a.name && a.role) return a;
+  const region = macroRegionOf(a.country ?? '') ?? 'europe';
+  const ident = prospectIdentity(a.id, region);
+  const role = a.role ?? FILL_ROLES[(hashStr(a.id) >>> 2) % FILL_ROLES.length];
+  return { ...a, nick: a.nick || ident.nick, name: a.name || ident.name, role };
+}
+function healYouthPlayer(p: Player): Player {
+  if (p.nick && p.name && p.role) return p;
+  const region = macroRegionOf(p.country ?? '') ?? 'europe';
+  const ident = prospectIdentity(p.id, region);
+  const role = p.role ?? FILL_ROLES[(hashStr(p.id) >>> 2) % FILL_ROLES.length];
+  return { ...p, nick: p.nick || ident.nick, name: p.name || ident.name, role };
+}
+
 function loadSave(): CareerSave {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return emptySave();
     const s = JSON.parse(raw) as CareerSave;
-    return { ...emptySave(), ...s };
+    const merged = { ...emptySave(), ...s };
+    merged.academy = (merged.academy ?? []).map(healProspect);
+    if (merged.youth) {
+      const y: Record<string, Player> = {};
+      for (const [k, v] of Object.entries(merged.youth)) y[k] = healYouthPlayer(v);
+      merged.youth = y;
+    }
+    return merged;
   } catch {
     return emptySave();
   }
