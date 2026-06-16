@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Road to Major · Media Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-deep: #12161b; --panel: #242b34; --panel-2: #2a323d; --panel-3: #323b48;
+    --border: #3a4452; --border-soft: #303945;
+    --text: #dfe5ec; --text-strong: #ffffff; --muted: #97a3b2; --faint: #5e6975;
+    --blue: #4382b6; --blue-bright: #61a8dd;
+    --gold: #d8a943; --gold-2: #e8c170; --gold-soft: #b08a3e; --gold-glow: rgba(216,169,67,0.16);
+    --pos: #5fd08a; --green-bright: #6fd06f;
+    --cond: 'Oswald','Bahnschrift',sans-serif; --font: 'Inter','Segoe UI',sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg-deep); color: var(--text); font-family: var(--font);
+    line-height: 1.5; padding: 24px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sheet { max-width: 940px; margin: 0 auto; background: linear-gradient(180deg, #20262e, var(--panel));
+    border: 1px solid var(--border); border-radius: 16px; padding: 30px 34px; box-shadow: 0 16px 48px rgba(0,0,0,0.45); }
+
+  .kit-head { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding-bottom: 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .mark { width: 56px; height: 56px; border-radius: 12px; display: grid; place-items: center;
+    background: linear-gradient(150deg, var(--gold-2), var(--gold-soft)); color: #1a1408;
+    font-family: var(--cond); font-weight: 700; font-size: 12px; text-align: center; line-height: 1.05;
+    box-shadow: 0 6px 18px rgba(216,169,67,0.30); }
+  .brand h1 { font-family: var(--cond); font-weight: 700; font-size: 31px; margin: 0; letter-spacing: 0.5px; color: var(--text-strong); }
+  .brand .sub { color: var(--gold-2); font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.8px; font-weight: 700; }
+  .kit-head .meta { text-align: right; font-size: 12px; color: var(--muted); }
+  .kit-head .meta a { color: var(--blue-bright); text-decoration: none; font-weight: 700; }
+
+  .lead { font-size: 14.5px; color: var(--text); margin: 20px 0 4px; }
+  .lead b { color: var(--text-strong); }
+  .lead .hl { color: var(--gold-2); font-weight: 700; }
+
+  h2 { font-family: var(--cond); font-weight: 600; font-size: 13px; text-transform: uppercase;
+    letter-spacing: 1.6px; color: var(--gold-2); margin: 26px 0 12px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border-soft); border-top: 3px solid var(--blue);
+    border-radius: 11px; padding: 14px; }
+  .stat.pos { border-top-color: var(--pos); }
+  .stat .n { font-family: var(--cond); font-weight: 700; font-size: 31px; line-height: 1; color: var(--text-strong); }
+  .stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 6px; font-weight: 700; }
+  .stat .h { font-size: 11px; color: var(--faint); margin-top: 3px; }
+
+  .two { display: grid; grid-template-columns: 1.12fr 1fr; gap: 24px; align-items: start; }
+  .chart { background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 12px; padding: 16px; }
+  .bar-row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 10px; margin: 7px 0; font-size: 12px; }
+  .bar-row .d { color: var(--muted); font-weight: 700; }
+  .bar-track { background: var(--panel-3); border-radius: 5px; overflow: hidden; }
+  .bar { height: 15px; border-radius: 5px; background: linear-gradient(90deg, var(--blue), var(--blue-bright)); }
+  .bar-row .v { color: var(--text-strong); font-weight: 700; white-space: nowrap; font-size: 11.5px; }
+  .bar-row .v span { color: var(--muted); font-weight: 400; }
+  .note { font-size: 10.5px; color: var(--faint); margin-top: 8px; }
+
+  .audience { padding-left: 18px; margin: 0; }
+  .audience li { margin: 9px 0; font-size: 13px; color: var(--text); }
+  .audience b { color: var(--text-strong); }
+  .flags { font-size: 12.5px; color: var(--gold-2); margin-top: 12px; font-weight: 600; }
+
+  .geo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+  .geo-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; }
+  .geo-row .c { color: var(--text); font-weight: 600; }
+  .geo-row .v { color: var(--gold-2); font-weight: 700; font-family: var(--cond); }
+
+  .why { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .why .c { background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 11px; padding: 14px; }
+  .why .c h3 { font-family: var(--cond); font-weight: 600; font-size: 14px; margin: 0 0 5px; color: var(--blue-bright); }
+  .why .c p { margin: 0; font-size: 12px; color: var(--text); }
+
+  .foot { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px; font-size: 12.5px; color: var(--text); }
+  .foot a { color: var(--blue-bright); text-decoration: none; font-weight: 700; }
+  .foot b { color: var(--text-strong); }
+
+  @page { size: A4; margin: 12mm; }
+  @media print { body { background: #fff; padding: 0; } .sheet { box-shadow: none; max-width: 100%; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="kit-head">
+    <div class="brand">
+      <div class="mark">ROAD<br>TO<br>MAJOR</div>
+      <div>
+        <h1>ROAD TO MAJOR</h1>
+        <div class="sub">Simulador de Counter-Strike · Media Kit</div>
+      </div>
+    </div>
+    <div class="meta">Junho de 2026<br><a href="https://roadtomajor.com.br">roadtomajor.com.br</a></div>
+  </header>
+
+  <p class="lead">
+    Road to Major é um <b>simulador gratuito do cenário profissional de Counter-Strike</b>, jogado direto no navegador.
+    O jogador monta times com lendas de todas as eras do CS, comanda uma carreira completa e disputa o Major.
+    O público é exatamente quem uma marca de games quer alcançar:
+    <span class="hl">jogadores ativos de CS que acompanham o cenário competitivo</span>.
+    Os números abaixo são dos <b>7 primeiros dias desde o lançamento (10 de junho de 2026)</b>, e a plataforma segue crescendo.
+  </p>
+
+  <h2>Alcance · primeiros 7 dias</h2>
+  <div class="stats">
+    <div class="stat"><div class="n">15.079</div><div class="l">Visitantes únicos</div><div class="h">desde o lançamento</div></div>
+    <div class="stat"><div class="n">40.250</div><div class="l">Visitas totais</div><div class="h">em 7 dias</div></div>
+    <div class="stat"><div class="n">9.032</div><div class="l">Pico em um dia</div><div class="h">4.964 únicos</div></div>
+    <div class="stat"><div class="n">~2.850</div><div class="l">Visitantes por dia</div><div class="h">~5.750 visitas/dia</div></div>
+  </div>
+
+  <div class="two">
+    <div>
+      <h2>Visitas por dia</h2>
+      <div class="chart">
+        <div class="bar-row"><span class="d">10 jun</span><span class="bar-track"><span class="bar" style="width:25%"></span></span><span class="v">2.288 <span>· 1.699 únicos</span></span></div>
+        <div class="bar-row"><span class="d">11 jun</span><span class="bar-track"><span class="bar" style="width:100%"></span></span><span class="v">9.032 <span>· 4.964 únicos</span></span></div>
+        <div class="bar-row"><span class="d">12 jun</span><span class="bar-track"><span class="bar" style="width:76%"></span></span><span class="v">6.894 <span>· 4.002 únicos</span></span></div>
+        <div class="bar-row"><span class="d">13 jun</span><span class="bar-track"><span class="bar" style="width:64%"></span></span><span class="v">5.739 <span>· 2.825 únicos</span></span></div>
+        <div class="bar-row"><span class="d">14 jun</span><span class="bar-track"><span class="bar" style="width:65%"></span></span><span class="v">5.885 <span>· 3.024 únicos</span></span></div>
+        <div class="bar-row"><span class="d">15 jun</span><span class="bar-track"><span class="bar" style="width:63%"></span></span><span class="v">5.646 <span>· 2.829 únicos</span></span></div>
+        <div class="bar-row"><span class="d">16 jun</span><span class="bar-track"><span class="bar" style="width:53%"></span></span><span class="v">4.769 <span>· 2.647 únicos</span></span></div>
+      </div>
+      <p class="note">Fonte: analytics do site. O pico de lançamento se acomoda numa base diária firme à medida que o jogo amadurece.</p>
+    </div>
+    <div>
+      <h2>Público</h2>
+      <ul class="audience">
+        <li><b>Endêmico de CS</b>: acompanha times, lineups e o circuito de Majors.</li>
+        <li>Altamente engajado: volta pra montar times e jogar carreiras inteiras, com <b>média de 4 partidas por visitante</b>.</li>
+        <li>Encaixe natural para <b>skins de CS, casas de apostas, periféricos gamer e energéticos</b>.</li>
+      </ul>
+      <div class="flags">Trilíngue: português, inglês e espanhol. Liderado pelo Brasil, com alcance global.</div>
+    </div>
+  </div>
+
+  <h2>Engajamento</h2>
+  <div class="stats">
+    <div class="stat pos"><div class="n">60.264</div><div class="l">Partidas jogadas</div><div class="h">várias por visita</div></div>
+    <div class="stat pos"><div class="n">51.272</div><div class="l">Temporadas disputadas</div><div class="h">sessões longas</div></div>
+    <div class="stat pos"><div class="n">11.881</div><div class="l">Campanhas no Hall da Fama</div><div class="h">carreiras concluídas</div></div>
+    <div class="stat pos"><div class="n">1.193</div><div class="l">Cards compartilhados</div><div class="h">alcance social orgânico</div></div>
+  </div>
+
+  <h2>De onde vem o público</h2>
+  <div class="geo">
+    <div class="geo-row"><span class="c">Brasil</span><span class="v">9.185</span></div>
+    <div class="geo-row"><span class="c">Argentina</span><span class="v">339</span></div>
+    <div class="geo-row"><span class="c">Portugal</span><span class="v">970</span></div>
+    <div class="geo-row"><span class="c">Polônia</span><span class="v">161</span></div>
+    <div class="geo-row"><span class="c">Estados Unidos</span><span class="v">407</span></div>
+    <div class="geo-row"><span class="c">França</span><span class="v">103</span></div>
+    <div class="geo-row"><span class="c">Reino Unido</span><span class="v">103</span></div>
+    <div class="geo-row"><span class="c">Alemanha</span><span class="v">87</span></div>
+  </div>
+
+  <h2>Por que patrocinar</h2>
+  <div class="why">
+    <div class="c"><h3>Público certo</h3><p>100% endêmico de Counter-Strike. Sua marca fala com quem já vive o jogo, sem desperdício de impressão.</p></div>
+    <div class="c"><h3>Engajamento real</h3><p>Dezenas de milhares de partidas e temporadas jogadas, não só cliques de passagem. As pessoas ficam.</p></div>
+    <div class="c"><h3>Crescimento e viral</h3><p>15 mil visitantes únicos na primeira semana e 1.193 cards compartilhados de forma orgânica.</p></div>
+  </div>
+
+  <div class="foot">
+    <div><b>Todos os números são verificáveis no analytics ao vivo, sob solicitação.</b><br>Contato: castroomath7@gmail.com</div>
+    <div style="text-align:right"><a href="https://roadtomajor.com.br">roadtomajor.com.br</a></div>
+  </div>
+
+</div>
+</body>
+</html>
