@@ -4158,6 +4158,13 @@ table.crm-players input.num {
 .gsl-br-sub.elim { color: var(--red-bright); }
 .gsl-br-seed { margin-left: auto; font-family: var(--font-cond); font-weight: 800; color: var(--muted); font-size: 11px; }
 .bracket-play { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 12px; border-radius: var(--r-sm); background: linear-gradient(160deg, var(--panel-3), var(--panel-2)); border: 1px solid var(--gold-soft); }
+/* plano de jogo (decisão pré-partida) */
+.gameplan-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.gp-title { font-weight: 700; }
+.gp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.gp-chip { cursor: pointer; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border-soft); color: var(--muted); }
+.gp-chip:hover { border-color: var(--gold-soft); color: var(--text); }
+.gp-chip.on { background: var(--gold-glow); border-color: var(--gold); color: var(--gold-2); }
 
 /* academia (prospectos: revelar, treinar, promover) */
 .aca-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }

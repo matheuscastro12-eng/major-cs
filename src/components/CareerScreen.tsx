@@ -38,6 +38,27 @@ const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
 // decaem, então não acumulam pra sempre (acabou o usuário com 3000 e a IA com
 // 1200). No equilíbrio o VRS ganho ~ ganho/(1-decay), comparável ao field.
 const VRS_DECAY = 0.6;
+// PLANO DE JOGO: a decisão pré-partida do usuário. Cada plano dá um buff REAL na
+// simulação (some você do "modo espectador": sua escolha muda a partida).
+type GamePlan = 'disciplined' | 'antistrat' | 'mapfocus' | 'aggressive';
+const GAME_PLANS: { id: GamePlan; icon: string; label: string; desc: string }[] = [
+  { id: 'disciplined', icon: '🧠', label: 'Disciplinado', desc: 'Jogo seguro e constante. Baixa variância, base sólida.' },
+  { id: 'antistrat', icon: '🔍', label: 'Anti-strat', desc: 'Estuda o adversário: defesa mais sólida. Bom contra times melhores.' },
+  { id: 'mapfocus', icon: '🗺️', label: 'Foco no mapa forte', desc: 'Puxa o veto pro seu melhor mapa e joga mais forte nele.' },
+  { id: 'aggressive', icon: '⚔️', label: 'Agressivo', desc: 'Pressão nas aberturas: teto alto, mais arriscado.' },
+];
+// aplica o buff do plano no time do usuário antes da partida
+function applyGamePlanBuff(t: TTeam, plan: GamePlan): TTeam {
+  if (plan === 'aggressive') return { ...t, strength: t.strength + 2.5 };
+  if (plan === 'antistrat') return { ...t, strength: t.strength + 2 };
+  if (plan === 'mapfocus') {
+    const prefs: Record<string, number> = { ...t.mapPrefs };
+    const best = Object.entries(prefs).sort((a, b) => b[1] - a[1])[0];
+    if (best) prefs[best[0]] = Math.min(5, best[1] + 2); // reforça o melhor mapa (veto + força)
+    return { ...t, mapPrefs: prefs, strength: t.strength + 1 };
+  }
+  return { ...t, strength: t.strength + 1.5 }; // disciplined
+}
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
 const MAJOR_VRS_CUT = 32; // os 32 melhores do ranking VRS vão ao Major (3 stages)
@@ -468,6 +489,7 @@ interface CareerSave {
   mapFocus?: MapId | null; // mapa em treino neste split (sobe; os outros decaem)
   playbook?: Playbook; // esquema tático escolhido
   playbookXp?: number; // entrosamento no esquema (0-100); cai ao trocar de esquema
+  gamePlan?: GamePlan; // plano de jogo pré-partida (buff real na simulação)
   academy?: AcademyEntry[]; // prospectos em formação na academia
   academyFocus?: string | null; // id do prospecto em foco de treino (cresce mais rápido)
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
@@ -553,6 +575,7 @@ const emptySave = (): CareerSave => ({
   mapFocus: null,
   playbook: 'tactical',
   playbookXp: 40,
+  gamePlan: 'disciplined',
   academy: [],
   academyFocus: null,
   youth: {},
@@ -1154,12 +1177,14 @@ export function CareerScreen({ onExit }: Props) {
     const t = resyncUserRoles(team, roleOf);
     // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
     // meio do split — o snapshot da liga não saberia sozinho)
-    return {
+    const synced: TTeam = {
       ...t,
       mapPrefs: { ...t.mapPrefs, ...(save.mapTraining ?? {}) },
       playbook: save.playbook,
       playbookFam: Math.max(0, Math.min(1, (save.playbookXp ?? 0) / 100)),
     };
+    // PLANO DE JOGO da partida: buff real escolhido pelo usuário antes de jogar
+    return applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined');
   };
 
   // SÓ tempos atuais: usa EXCLUSIVAMENTE os elencos REAIS de CS2 (2026) do
@@ -2956,6 +2981,7 @@ export function CareerScreen({ onExit }: Props) {
                     <Flag cc={opp.country} /> {league.gsl ? `Grupo ${league.gsl.groups[0].includes(opp.id) ? 'A' : 'B'}` : `${oppPos}º na tabela`} · força {opp.strength.toFixed(1)}
                   </div>
                 </div>
+                <GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} />
                 <div className="pm-actions">
                   <button className="btn gold big" onClick={playMine}>▶ JOGAR</button>
                   <button className="btn ghost" onClick={() => simMine(league)}>⏩ Simular</button>
@@ -3140,6 +3166,7 @@ export function CareerScreen({ onExit }: Props) {
             {opp && myMatch && (
               <div className="bracket-play">
                 <span className="muted small">Sua próxima partida: <b>{opp.name}</b> · {(myMatch.bo ?? 3) === 1 ? 'MD1' : (myMatch.bo ?? 3) === 5 ? 'MD5' : 'MD3'}</span>
+                <GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} />
                 <span className="spacer" />
                 <button className="btn gold" onClick={playMine}>▶ JOGAR</button>
                 <button className="btn ghost small" onClick={() => simMine(league)}>⏩ Simular</button>
@@ -3871,6 +3898,22 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
             </p>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// seletor do plano de jogo pré-partida (decisão do usuário, com buff real)
+function GamePlanPicker({ plan, onPick }: { plan: GamePlan; onPick: (p: GamePlan) => void }) {
+  return (
+    <div className="gameplan-picker">
+      <span className="muted small gp-title">🎯 Plano de jogo</span>
+      <div className="gp-chips">
+        {GAME_PLANS.map((g) => (
+          <button key={g.id} className={`gp-chip${plan === g.id ? ' on' : ''}`} title={g.desc} onClick={() => onPick(g.id)}>
+            {g.icon} {g.label}
+          </button>
+        ))}
       </div>
     </div>
   );
