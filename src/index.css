@@ -4133,6 +4133,41 @@ table.crm-players input.num {
 .news-handle { color: #4bb3f0; font-weight: 800; }
 .news-item.social .news-text { color: var(--text); font-size: 0.92rem; }
 
+/* calendário multi-torneio */
+.cal-major-banner {
+  padding: 12px 15px; border-radius: var(--r); margin-bottom: 16px; font-size: 13.5px;
+  background: linear-gradient(135deg, var(--gold-glow), rgba(216,169,67,0.02)), linear-gradient(160deg, var(--panel-3), var(--panel-2));
+  border: 1px solid var(--gold-soft);
+}
+.cal-major-banner.now { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.cal-major-banner b { color: var(--gold-2); }
+.cal-stages { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+.cal-stage {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-sm);
+  background: var(--panel-2); border: 1px solid var(--border-soft); border-left: 3px solid var(--border);
+}
+.cal-stage.done { border-left-color: var(--pos); }
+.cal-stage.live { border-left-color: var(--blue-bright); background: linear-gradient(160deg, var(--panel-3), var(--panel-2)); }
+.cal-stage.locked { opacity: 0.72; }
+.cal-stage.na { opacity: 0.5; }
+.cal-ic { font-size: 1.5rem; flex: 0 0 auto; }
+.cal-st-name { font-family: var(--font-cond); font-weight: 700; font-size: 1.02rem; }
+.cal-st-pill { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+.cal-st-pill.done { background: var(--pos-soft); color: var(--pos); }
+.cal-st-pill.live { background: rgba(97,168,221,0.16); color: var(--blue-bright); }
+.cal-st-pill.locked { background: rgba(255,255,255,0.06); color: var(--muted); }
+.cal-st-pill.na { background: rgba(255,255,255,0.04); color: var(--faint); }
+.cal-upcoming { display: flex; gap: 8px; flex-wrap: wrap; }
+.cal-up {
+  flex: 1 1 90px; min-width: 84px; text-align: center; padding: 10px 8px; border-radius: var(--r-sm);
+  background: var(--panel-2); border: 1px solid var(--border-soft);
+}
+.cal-up.current { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue) inset; }
+.cal-up.major { background: linear-gradient(160deg, var(--gold-glow), var(--panel-2)); border-color: var(--gold-soft); }
+.cal-up-n { font-family: var(--font-cond); font-weight: 800; font-size: 0.92rem; }
+.cal-up-t { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.cal-up.major .cal-up-t { color: var(--gold-2); font-weight: 700; }
+
 /* relatório do olheiro (pré-jogo) */
 .scout-card {
   margin-bottom: 14px; padding: 12px 14px; border-radius: var(--r);

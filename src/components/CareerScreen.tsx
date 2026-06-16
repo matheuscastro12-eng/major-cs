@@ -726,7 +726,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', countr
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world';
+type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar';
 
 interface MajorResult {
   tournament: Tournament;
@@ -2101,6 +2101,7 @@ export function CareerScreen({ onExit }: Props) {
   const TABS: { id: HubTab; label: string }[] = [
     { id: 'overview', label: 'Visão geral' },
     ...(majorActive ? [{ id: 'major' as HubTab, label: '★ Major' }] : []),
+    { id: 'calendar', label: '📅 Calendário' },
     { id: 'inbox', label: unread > 0 ? `📨 Inbox (${unread})` : '📨 Inbox' },
     { id: 'results', label: 'Resultados' },
     { id: 'standings', label: 'Classificação' },
@@ -2820,6 +2821,59 @@ export function CareerScreen({ onExit }: Props) {
       )}
 
       {/* ===== HISTÓRIA DA ORGANIZAÇÃO ===== */}
+      {hubTab === 'calendar' && (() => {
+        const groupDone = league.current >= league.rounds.length;
+        const nextMajor = isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
+        const splitsToMajor = nextMajor - save.split;
+        const majorSplitNow = isMajorSplit(save.split);
+        type StStatus = 'done' | 'live' | 'locked' | 'na';
+        const stages: { ic: string; name: string; status: StStatus; detail: string }[] = [
+          { ic: '🎯', name: `Fase de grupos · ${save.circuit?.name ?? 'Circuito'}`, status: groupDone ? 'done' : 'live', detail: groupDone ? 'Concluída' : `Rodada ${league.current + 1} de ${league.rounds.length} · você em ${myPos}º` },
+          { ic: '🏆', name: 'Mata-mata do circuito', status: save.playoff ? (save.playoff.champion ? 'done' : 'live') : 'locked', detail: save.playoff ? (save.playoff.champion ? 'Encerrado' : 'Semis (MD3) + final (MD5)') : 'Os 4 melhores do grupo avançam' },
+          { ic: '🌍', name: 'Major Mundial', status: majorSplitNow ? (save.majorT ? 'live' : 'locked') : 'na', detail: majorSplitNow ? `Top ${spots} do mata-mata garantem a vaga` : `Só em split de Major · próximo no Split ${nextMajor}` },
+        ];
+        const STLABEL: Record<StStatus, string> = { done: 'concluído', live: 'em andamento', locked: 'a seguir', na: 'fora deste split' };
+        // próximos splits (mini-calendário do cadenciamento dos Majors)
+        const upcoming = Array.from({ length: 6 }, (_, i) => save.split + i).map((sp) => ({ sp, major: isMajorSplit(sp) }));
+        return (
+        <div className="panel">
+          <div className="panel-body">
+            <div className={`cal-major-banner ${splitsToMajor === 0 ? 'now' : ''}`}>
+              {splitsToMajor === 0
+                ? <>🌍 <b>É split de Major!</b> Chegue ao top {spots} do mata-mata pra garantir a vaga mundial.</>
+                : <>🌍 <b>Major Mundial no Split {nextMajor}</b> · {splitsToMajor === 1 ? 'falta 1 split' : `faltam ${splitsToMajor} splits`}. Acumule VRS e mantenha o nível {save.tier === 1 ? '(você já está no Tier 1, a elite que disputa o Major).' : `(é preciso chegar ao Tier 1 — você está no Tier ${save.tier}).`}</>}
+            </div>
+
+            <div className="muted small section-label">Temporada atual · Split {save.split}</div>
+            <div className="cal-stages">
+              {stages.map((st, i) => (
+                <div key={i} className={`cal-stage ${st.status}`}>
+                  <span className="cal-ic">{st.ic}</span>
+                  <div className="cal-st-body">
+                    <div className="cal-st-name">{st.name} <span className={`cal-st-pill ${st.status}`}>{STLABEL[st.status]}</span></div>
+                    <div className="cal-st-detail muted small">{st.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="muted small section-label">Próximos splits</div>
+            <div className="cal-upcoming">
+              {upcoming.map(({ sp, major }) => (
+                <div key={sp} className={`cal-up${sp === save.split ? ' current' : ''}${major ? ' major' : ''}`}>
+                  <div className="cal-up-n">Split {sp}</div>
+                  <div className="cal-up-t">{major ? '🌍 Major' : '🎯 Circuito'}</div>
+                </div>
+              ))}
+            </div>
+            <p className="muted small" style={{ marginTop: 10 }}>
+              Cada split tem um <b>circuito</b> (fase de grupos + mata-mata) que vale prêmio e <b>VRS</b>. A cada {MAJOR_EVERY} splits acontece o <b>Major Mundial</b>: o clímax da temporada, com a maior premiação. Seu VRS e seu tier definem se você chega lá.
+            </p>
+          </div>
+        </div>
+        );
+      })()}
+
       {hubTab === 'history' && (
         <div className="panel">
           <div className="panel-body">
