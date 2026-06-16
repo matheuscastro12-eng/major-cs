@@ -29,7 +29,7 @@ import bo3Ages from '../data/bo3-ages.json';
 
 const SAVE_KEY = 'rtm-career-v1';
 const STARTING_BUDGET = 3_800_000; // começo mais magro: forca um elenco humilde no inicio
-const CIRCUIT_AI_BOOST = 3.5; // adversarios do circuito mais fortes (balanceamento)
+const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
 // dava pra ter o melhor elenco com grana sobrando já no split 3)
 const PRIZE_BY_POS = [1_250_000, 750_000, 450_000, 280_000, 170_000, 110_000, 70_000, 40_000];
@@ -486,9 +486,10 @@ interface CareerSave {
   peakOvr?: Record<string, number>; // maior OVR já alcançado por jogador (perfil)
   region?: MacroRegion; // região de circuito onde a org compete (do core do elenco)
   mapTraining?: Partial<Record<MapId, number>>; // domínio por mapa (treinado), ~ -2.5..+2.5
-  mapFocus?: MapId | null; // mapa em treino neste split (sobe; os outros decaem)
+  mapFocus?: MapId[] | null; // mapas em treino neste split (até 3 sobem; os outros decaem)
   playbook?: Playbook; // esquema tático escolhido
   playbookXp?: number; // entrosamento no esquema (0-100); cai ao trocar de esquema
+  playbookMem?: Partial<Record<Playbook, number>>; // entrosamento guardado por esquema (restaura ao voltar)
   gamePlan?: GamePlan; // plano de jogo pré-partida (buff real na simulação)
   academy?: AcademyEntry[]; // prospectos em formação na academia
   academyFocus?: string | null; // id do prospecto em foco de treino (cresce mais rápido)
@@ -585,16 +586,21 @@ const emptySave = (): CareerSave => ({
 
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
 const MAP_TRAIN_MAX = 2.6; // teto de domínio de um mapa
-const MAP_TRAIN_MIN = -2.6; // piso (mapa abandonado vira fraqueza)
+const MAP_TRAIN_MIN = -1.6; // piso (mapa abandonado vira fraqueza leve, não catástrofe)
 const MAP_TRAIN_GAIN = 1.3; // ganho no mapa em foco por split
-const MAP_TRAIN_DECAY = 0.45; // todo mapa decai por split (o não-treinado escorrega)
+const MAP_TRAIN_DECAY = 0.3; // todo mapa decai por split (o não-treinado escorrega devagar)
+const MAP_FOCUS_MAX = 3; // até 3 mapas em treino por split
 // nível de domínio de um mapa (0 = neutro se nunca treinado)
 const mapLevel = (s: CareerSave, m: MapId) => s.mapTraining?.[m] ?? 0;
+// lista de mapas em foco (compat: aceita formato antigo de mapa único)
+const mapFocusList = (s: CareerSave): MapId[] =>
+  Array.isArray(s.mapFocus) ? s.mapFocus : s.mapFocus ? [s.mapFocus as unknown as MapId] : [];
 function applyMapTraining(s: CareerSave): Partial<Record<MapId, number>> {
   const out: Partial<Record<MapId, number>> = {};
+  const focus = mapFocusList(s);
   for (const m of MAP_POOL) {
     let v = (s.mapTraining?.[m] ?? 0) - MAP_TRAIN_DECAY; // decai todo split
-    if (s.mapFocus === m) v += MAP_TRAIN_GAIN + MAP_TRAIN_DECAY; // foco: sobe (anula a decaída + ganha)
+    if (focus.includes(m)) v += MAP_TRAIN_GAIN + MAP_TRAIN_DECAY; // foco: sobe (anula a decaída + ganha)
     out[m] = Math.max(MAP_TRAIN_MIN, Math.min(MAP_TRAIN_MAX, Math.round(v * 10) / 10));
   }
   return out;
@@ -1371,13 +1377,11 @@ export function CareerScreen({ onExit }: Props) {
       const oid = p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id;
       return { ...p, form: moraleForm(s.morale?.[oid] ?? MORALE_DEFAULT) };
     });
-    // a IA fica mais forte a cada split: impede passar a carreira inteira
-    // invicto depois de montar um time bom (o cenario "evolui" junto com você)
-    // rampa de dificuldade por split, suavizada nos tiers de acesso (tier 3/2 são
-    // ligas de aprendizado; o elite mantém a curva cheia). Evita que um elenco
-    // inicial humilde apanhe demais nos primeiros splits.
+    // a IA ganha uma vantagem MUITO leve por split (so pra nao virar carreira
+    // invicta), com teto baixo pra força do circuito ficar igual à do Major, que
+    // é a referência correta. Tiers de acesso (3/2) sobem ainda mais devagar.
     const tierScale = s.tier === 3 ? 0.6 : s.tier === 2 ? 0.85 : 1;
-    const aiBoost = CIRCUIT_AI_BOOST + Math.min(13, (s.split - 1) * 1.7 * tierScale);
+    const aiBoost = CIRCUIT_AI_BOOST + Math.min(2.5, (s.split - 1) * 0.35 * tierScale);
     const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 15).map((t) => {
       const tt = teamSeasonToTTeam(t);
       tt.strength += aiBoost;
@@ -3339,11 +3343,22 @@ export function CareerScreen({ onExit }: Props) {
           update({ roles: { ...(save.roles ?? {}), [pid]: role } });
         const setFocus = (pid: string) =>
           update({ trainingFocus: save.trainingFocus === pid ? null : pid });
-        const setMapFocus = (m: MapId) =>
-          update({ mapFocus: save.mapFocus === m ? null : m });
+        const setMapFocus = (m: MapId) => {
+          const cur = mapFocusList(save);
+          if (cur.includes(m)) {
+            update({ mapFocus: cur.filter((x) => x !== m) });
+          } else if (cur.length < MAP_FOCUS_MAX) {
+            update({ mapFocus: [...cur, m] });
+          }
+        };
         const setPlaybook = (pb: Playbook) => {
           if (pb === save.playbook) return;
-          update({ playbook: pb, playbookXp: PLAYBOOK_SWITCH_TO }); // trocar reseta o entrosamento
+          // guarda o entrosamento do esquema atual e restaura o do esquema alvo
+          // (voltar a um esquema já treinado não zera tudo de novo)
+          const mem = { ...(save.playbookMem ?? {}) };
+          if (save.playbook) mem[save.playbook] = save.playbookXp ?? 0;
+          const restored = mem[pb] ?? PLAYBOOK_SWITCH_TO;
+          update({ playbook: pb, playbookXp: restored, playbookMem: mem });
         };
         const fam = save.playbookXp ?? 0;
         return (
@@ -3414,17 +3429,18 @@ export function CareerScreen({ onExit }: Props) {
               <p className="muted small" style={{ margin: '8px 0 0' }}>O entrosamento sobe a cada split mantendo o esquema; <b>trocar volta pra {PLAYBOOK_SWITCH_TO}%</b>. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.</p>
             </div>
 
-            {/* TREINO DE MAPA: foca 1 mapa por split; os outros decaem (não dá pra ser bom em todos) */}
+            {/* TREINO DE MAPA: foca até 3 mapas por split; os outros decaem (não dá pra ser bom em todos) */}
             <div className="side-card">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>🗺️ Treino de mapa</div>
+              <div className="muted small section-label" style={{ marginTop: 0 }}>🗺️ Treino de mapa <span className="muted small" style={{ fontWeight: 400 }}>({mapFocusList(save).length}/{MAP_FOCUS_MAX} em foco)</span></div>
               <div className="map-train">
                 {MAP_POOL.map((m) => {
                   const lvl = mapLevel(save, m);
                   const pct = Math.round(((lvl - MAP_TRAIN_MIN) / (MAP_TRAIN_MAX - MAP_TRAIN_MIN)) * 100);
-                  const foc = save.mapFocus === m;
+                  const foc = mapFocusList(save).includes(m);
+                  const full = !foc && mapFocusList(save).length >= MAP_FOCUS_MAX;
                   const cls = lvl >= 1 ? 'good' : lvl <= -1 ? 'bad' : 'warn';
                   return (
-                    <button key={m} className={`mt-row${foc ? ' on' : ''}`} onClick={() => setMapFocus(m)} title={foc ? 'Em treino neste split' : 'Treinar este mapa neste split'}>
+                    <button key={m} className={`mt-row${foc ? ' on' : ''}`} onClick={() => setMapFocus(m)} disabled={full} title={foc ? 'Em treino neste split (clique pra tirar)' : full ? `Máximo de ${MAP_FOCUS_MAX} mapas em treino` : 'Treinar este mapa neste split'}>
                       <span className="mt-name">{foc ? '🎯 ' : ''}{MAP_LABELS[m]}</span>
                       <span className="mt-bar"><i className={cls} style={{ width: `${pct}%` }} /></span>
                       <span className={`mt-lvl ${cls}`}>{lvl > 0 ? '+' : ''}{lvl.toFixed(1)}</span>
@@ -3432,7 +3448,7 @@ export function CareerScreen({ onExit }: Props) {
                   );
                 })}
               </div>
-              <p className="muted small" style={{ margin: '8px 0 0' }}>Treinar sobe o mapa em foco; <b>todos os outros decaem</b> um pouco por split. É de propósito: ninguém é forte em todos — escolha seus 2-3 mapas.</p>
+              <p className="muted small" style={{ margin: '8px 0 0' }}>Treine até <b>{MAP_FOCUS_MAX} mapas</b> por split; os outros decaem um pouco. É de propósito: ninguém é forte em todos, mas dá pra montar um pool sólido.</p>
             </div>
 
             <div className="side-card">
@@ -5034,7 +5050,16 @@ function MarketScreen({
   const coachTeam = coachId && coachId !== ROOKIE_ID ? coaches.find((t) => t.id === coachId) : null;
   const coachChanged = coachId !== save.coachFromId;
   const spentCoach = !coachChanged ? 0 : coachId === ROOKIE_ID ? coachFee(ROOKIE_COACH) : coachTeam ? coachFee(coachTeam.coach) : 0;
-  const coachOptions = [...coaches].sort((a, b) => coachFee(a.coach) - coachFee(b.coach));
+  // melhores técnicos primeiro (rating desc) e sem repetir o mesmo nome — assim
+  // dá pra contratar coach de OVR alto, não só os baratos.
+  const coachSeen = new Set<string>();
+  const coachOptions = [...coaches]
+    .sort((a, b) => b.coach.rating - a.coach.rating)
+    .filter((t) => {
+      if (coachSeen.has(t.coach.nick)) return false;
+      coachSeen.add(t.coach.nick);
+      return true;
+    });
   const budgetLeft = save.budget - spentPlayers - spentCoach + soldPlayers;
   const ready = squad.length === 5 && !!coachId && budgetLeft >= 0;
 
@@ -5130,7 +5155,7 @@ function MarketScreen({
               onClick={() => setCoachId(coachId === ROOKIE_ID ? null : ROOKIE_ID)}>
               {ROOKIE_COACH.nick} · {ROOKIE_COACH.rating} · {formatMoney(coachFee(ROOKIE_COACH))}
             </button>
-            {coachOptions.slice(0, 12).map((t) => (
+            {coachOptions.slice(0, 24).map((t) => (
               <button key={t.id} className={`call-btn${coachId === t.id ? ' armed' : ''}`}
                 title={`${t.coach.name} (${t.team})`}
                 onClick={() => setCoachId(coachId === t.id ? null : t.id)}>
