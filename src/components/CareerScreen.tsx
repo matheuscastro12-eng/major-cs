@@ -36,6 +36,7 @@ const PRIZE_BY_POS = [1_250_000, 750_000, 450_000, 280_000, 170_000, 110_000, 70
 const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
+const MAJOR_VRS_CUT = 16; // os 16 melhores do ranking VRS mundial vão ao Major
 // o Major Mundial fecha a TEMPORADA: a cada N campeonatos/splits acontece um Major.
 // 4 = a temporada tem 3 campeonatos tier-1 + o Major encerrando o ano.
 const MAJOR_EVERY = 4;
@@ -273,10 +274,93 @@ interface OrgStart {
   tier: number;
   takeoverId: string | null;
   region?: MacroRegion;
+  board?: number;
+  scenario?: NonNullable<CareerSave['scenario']>;
 }
 // verba de quem ASSUME uma org com elenco: tier mais alto (time melhor) = menos
 // caixa; tier baixo = mais caixa. É a troca "elenco bom x dinheiro" que o user pediu.
 const takeoverBudget = (tier: number) => (tier === 1 ? 600_000 : tier === 2 ? 1_300_000 : 2_300_000);
+
+// ----- CENÁRIOS DE DESAFIO: assuma uma org real (atual / BR / PT / lenda) com
+// contexto e metas, no espírito do modo Draft (cada time tem seu "porquê"). -----
+type ScenarioCat = 'atual' | 'br' | 'pt';
+type ScenarioGoalType = 'winCircuit' | 'winTier2' | 'reachTier1' | 'stayTier1' | 'top4' | 'qualifyMajor' | 'winMajor';
+interface ScenarioGoalDef { type: ScenarioGoalType; text: string }
+interface CareerScenario {
+  id: string;
+  cat: ScenarioCat;
+  teamId?: string;   // id em CS2_REAL_2026/BASE_TEAMS (lendas usam o id do teams.json)
+  teamName?: string; // alternativa estável p/ times atuais (casado pelo nome)
+  title: string;
+  context: string;   // blurb de contexto (estilo Draft)
+  budget?: number;   // override do caixa inicial
+  board?: number;    // confiança inicial da diretoria (default 60)
+  goals: ScenarioGoalDef[];
+}
+const SCENARIO_CAT_LABELS: Record<ScenarioCat, string> = {
+  atual: '🌍 Cenário atual (2026)', br: '🇧🇷 Brasil', pt: '🇵🇹 Portugal',
+};
+const SCENARIO_CAT_ORDER: ScenarioCat[] = ['atual', 'br', 'pt'];
+const CAREER_SCENARIOS: CareerScenario[] = [
+  // ATUAIS
+  { id: 'faze_rebuild', cat: 'atual', teamName: 'FaZe', title: 'FaZe: a reconstrução', board: 55,
+    context: 'A FaZe despencou pro #22 do mundo no pós-karrigan. Pegue o projeto americano em obras e devolva a org à elite mundial.',
+    goals: [{ type: 'reachTier1', text: 'Subir ao Tier 1' }, { type: 'winCircuit', text: 'Vencer um campeonato' }] },
+  { id: 'nip_revival', cat: 'atual', teamName: 'Ninjas in Pyjamas', title: 'NiP: o gigante adormecido', board: 55,
+    context: 'Um dos nomes mais tradicionais da Suécia vive longe do topo. Reacenda a lenda dos ninjas.',
+    goals: [{ type: 'reachTier1', text: 'Subir ao Tier 1' }, { type: 'top4', text: 'Top 4 num circuito' }] },
+  // BRASIL
+  { id: 'furia_topo', cat: 'br', teamName: 'FURIA', title: 'FURIA: manter o Brasil no topo',
+    context: 'A FURIA é a bandeira do CS brasileiro no mundo. A cobrança é alta: top 4 mundial e presença no Major.',
+    goals: [{ type: 'top4', text: 'Terminar top 4 num circuito de elite' }, { type: 'qualifyMajor', text: 'Classificar pro Major' }] },
+  { id: 'mibr_orgulho', cat: 'br', teamName: 'MIBR', title: 'MIBR: reerguer a marca',
+    context: 'A sigla mais histórica do Brasil quer voltar a brigar lá em cima. Construa do circuito até o Major.',
+    goals: [{ type: 'winCircuit', text: 'Vencer um campeonato' }, { type: 'reachTier1', text: 'Chegar ao Tier 1' }] },
+  { id: 'legacy_geracao', cat: 'br', teamName: 'Legacy', title: 'Legacy: a nova geração',
+    context: 'arT lidera a nova safra do Brasil. Transforme a Legacy numa potência mundial de verdade.',
+    goals: [{ type: 'reachTier1', text: 'Chegar ao Tier 1' }, { type: 'qualifyMajor', text: 'Classificar pro Major' }] },
+  { id: 'pain_tradicao', cat: 'br', teamName: 'paiN', title: 'paiN Gaming: a tradição',
+    context: 'A paiN carrega mais de uma década de torcida brasileira. Devolva os títulos pra casa.',
+    goals: [{ type: 'winCircuit', text: 'Vencer um campeonato' }, { type: 'reachTier1', text: 'Chegar ao Tier 1' }] },
+  // PORTUGAL
+  { id: 'saw_portugal', cat: 'pt', teamName: 'SAW', title: 'SAW: o orgulho de Portugal',
+    context: 'A SAW é a esperança lusa, mas começa lá embaixo no ranking. Leve Portugal, do zero, até o Major mundial.',
+    goals: [{ type: 'reachTier1', text: 'Levar a SAW ao Tier 1' }, { type: 'winCircuit', text: 'Vencer um campeonato' }, { type: 'qualifyMajor', text: 'Classificar pro Major' }] },
+];
+// resolve o TeamSeason de um cenário (times reais do elenco vigente)
+function scenarioTeam(sc: CareerScenario, current: TeamSeason[]): TeamSeason | null {
+  if (sc.teamId) return current.find((t) => t.id === sc.teamId) ?? null;
+  if (sc.teamName) {
+    const n = sc.teamName.toLowerCase();
+    return current.find((t) => t.team.toLowerCase() === n) ?? null;
+  }
+  return null;
+}
+// avalia uma meta de cenário no fim do split, com os resultados já calculados
+type ScenarioCtx = { isChampion: boolean; circuitTier: number; finalPos: number; qualified: boolean; endTier: number; wonMajor: boolean };
+function evalScenarioGoal(type: ScenarioGoalType, ctx: ScenarioCtx): boolean {
+  switch (type) {
+    case 'winCircuit': return ctx.isChampion;
+    case 'winTier2': return ctx.isChampion && ctx.circuitTier === 2;
+    case 'reachTier1': return ctx.endTier === 1;
+    case 'stayTier1': return ctx.circuitTier === 1 && ctx.endTier === 1;
+    case 'top4': return ctx.finalPos <= 4;
+    case 'qualifyMajor': return ctx.qualified;
+    case 'winMajor': return ctx.wonMajor;
+    default: return false;
+  }
+}
+// marca como cumpridas as metas do desafio atingidas neste split
+function applyScenarioProgress(scenario: CareerSave['scenario'], ctx: ScenarioCtx): CareerSave['scenario'] {
+  if (!scenario) return scenario ?? null;
+  let changed = false;
+  const goals = scenario.goals.map((g) => {
+    if (g.done) return g;
+    if (evalScenarioGoal(g.type, ctx)) { changed = true; return { ...g, done: true }; }
+    return g;
+  });
+  return changed ? { ...scenario, goals } : scenario;
+}
 
 // registro de um split encerrado (história da organização)
 interface SplitRecord {
@@ -352,6 +436,7 @@ interface CareerSave {
   academyFocus?: string | null; // id do prospecto em foco de treino (cresce mais rápido)
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
+  scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -436,6 +521,7 @@ const emptySave = (): CareerSave => ({
   academyFocus: null,
   youth: {},
   youthAge: {},
+  scenario: null,
 });
 
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
@@ -692,6 +778,14 @@ function aiTeamVrs(t: TeamSeason): number {
   const base = Math.max(0, t.teamwork - 38);
   return Math.round(base * 24 + (hashStr(t.id) % 90));
 }
+// VRS-BASE do usuário: na MESMA escala da IA (pelo entrosamento do elenco), pra
+// um time forte já entrar bem ranqueado e SUBIR com resultados, em vez de começar
+// do zero atrás de todo mundo. O VRS de ranking = base + pontos ganhos (save.vrs).
+function userBaseVrsFor(teamwork: number): number {
+  // +45 ≈ jitter médio que a IA recebe em aiTeamVrs (0-89); sem isso o usuário
+  // ficaria sistematicamente ~45 VRS atrás de uma IA de mesmo entrosamento.
+  return Math.round(Math.max(0, teamwork - 38) * 24) + 45;
+}
 // Região de circuito no modo carreira (Américas N/S/Central = uma só). Tipos e
 // helpers ficam em data/regions.ts (compartilhados com as bandeiras).
 type CareerRegion = MacroRegion;
@@ -864,6 +958,35 @@ const ACADEMY_FROM: TeamSeason = {
   mapPrefs: {}, coach: ROOKIE_COACH, players: [],
 };
 
+// ----- FREE AGENTS: profissionais reais e conhecidos atualmente sem time, à
+// disposição no mercado por um preço camarada (não estão em nenhum elenco) -----
+const FREE_AGENT_PLAYERS: Player[] = [
+  { id: 'fa__coldzera', nick: 'coldzera', name: 'Marcelo David', country: 'br', role: 'Rifler', aim: 85, consistency: 82, clutch: 81, awp: 60, igl: 58 },
+  { id: 'fa__chelo', nick: 'chelo', name: 'Marcelo Cespedes', country: 'br', role: 'Rifler', aim: 82, consistency: 79, clutch: 77, awp: 60, igl: 56 },
+  { id: 'fa__felps', nick: 'felps', name: 'João Vasconcellos', country: 'br', role: 'Entry', aim: 80, consistency: 77, clutch: 76, awp: 58, igl: 55 },
+  { id: 'fa__exit', nick: 'exit', name: 'Lucas Nogueira', country: 'br', role: 'Entry', aim: 78, consistency: 74, clutch: 72, awp: 55, igl: 52 },
+  { id: 'fa__taco', nick: 'TACO', name: 'Epitácio de Melo', country: 'br', role: 'Support', aim: 72, consistency: 77, clutch: 71, awp: 50, igl: 71 },
+  { id: 'fa__junior', nick: 'JOTA', name: 'João Pedro', country: 'br', role: 'AWP', aim: 77, consistency: 75, clutch: 73, awp: 81, igl: 47 },
+  { id: 'fa__shox', nick: 'shox', name: 'Richard Papillon', country: 'fr', role: 'Rifler', aim: 81, consistency: 76, clutch: 80, awp: 70, igl: 62 },
+  { id: 'fa__amanek', nick: 'AmaNEk', name: 'Ali Saouli', country: 'fr', role: 'Rifler', aim: 77, consistency: 77, clutch: 74, awp: 60, igl: 74 },
+  { id: 'fa__kioshima', nick: 'kioShiMa', name: 'Fabien Fiey', country: 'fr', role: 'Support', aim: 75, consistency: 76, clutch: 74, awp: 58, igl: 58 },
+  { id: 'fa__bodyy', nick: 'bodyy', name: 'Alexandre Pianaro', country: 'fr', role: 'Support', aim: 74, consistency: 75, clutch: 70, awp: 55, igl: 60 },
+  { id: 'fa__smooya', nick: 'smooya', name: 'Owen Butterfield', country: 'gb', role: 'AWP', aim: 80, consistency: 74, clutch: 77, awp: 85, igl: 45 },
+  { id: 'fa__nawwk', nick: 'nawwk', name: 'Tim Jonasson', country: 'se', role: 'AWP', aim: 78, consistency: 77, clutch: 75, awp: 82, igl: 48 },
+  { id: 'fa__maden', nick: 'Maden', name: 'Mathias Madsen', country: 'se', role: 'Rifler', aim: 79, consistency: 76, clutch: 74, awp: 58, igl: 52 },
+  { id: 'fa__hobbit', nick: 'HObbit', name: 'Abay Khassenov', country: 'kz', role: 'Rifler', aim: 80, consistency: 79, clutch: 78, awp: 60, igl: 62 },
+  { id: 'fa__osee', nick: 'oSee', name: 'Josh Ohm', country: 'us', role: 'AWP', aim: 79, consistency: 78, clutch: 76, awp: 83, igl: 46 },
+  { id: 'fa__grim', nick: 'Grim', name: 'Michael Wince', country: 'us', role: 'Rifler', aim: 80, consistency: 77, clutch: 75, awp: 58, igl: 55 },
+  { id: 'fa__daps', nick: 'daps', name: 'Damian Steele', country: 'ca', role: 'IGL', aim: 68, consistency: 74, clutch: 66, awp: 48, igl: 80 },
+  { id: 'fa__mou', nick: 'mou', name: 'Dexter Mou', country: 'au', role: 'AWP', aim: 76, consistency: 74, clutch: 72, awp: 80, igl: 46 },
+];
+// pseudo-time "sem time" usado como origem de um free agent contratado
+const FREE_AGENTS_FROM: TeamSeason = {
+  id: '__free__', team: 'Free Agent', tag: 'FA', era: 'sem time', game: 'CS2',
+  country: 'xx', teamwork: 50, honors: '', colors: ['#3a3a3a', '#8a8a8a'],
+  mapPrefs: {}, coach: ROOKIE_COACH, players: [],
+};
+
 interface MajorResult {
   tournament: Tournament;
   placement: PlacementCode;
@@ -879,7 +1002,7 @@ interface Props {
 
 export function CareerScreen({ onExit }: Props) {
   const [save, setSave] = useState<CareerSave>(() => loadSave());
-  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional'>('select'); // sub-tela da fundação
+  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario'>('select'); // sub-tela da fundação
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
     if (!s.org) return 'found';
@@ -1056,13 +1179,18 @@ export function CareerScreen({ onExit }: Props) {
     ].filter((c) => c.teams.length >= 5);
   }, [oppEra, save.region, save.split]);
 
-  // mercado: jogadores reais dos elencos atuais (CS2), com preço de mercado
+  // mercado: jogadores reais dos elencos atuais (CS2) + FREE AGENTS (pros sem
+  // time), com preço de mercado. Free agents saem 25% mais barato (sem multa).
   const market = useMemo(
-    () =>
-      currentEra
-        .flatMap((t) => t.players.map((p) => ({ player: p, from: t, price: playerValue(p) })))
-        .sort((a, b) => a.price - b.price),
-    [currentEra],
+    () => {
+      const squadIds = new Set(save.squad.map((s) => s.playerId));
+      const fromTeams = currentEra.flatMap((t) => t.players.map((p) => ({ player: p, from: t, price: playerValue(p) })));
+      const freeAgents = FREE_AGENT_PLAYERS
+        .filter((p) => !squadIds.has(p.id)) // some do mercado quando já contratado
+        .map((p) => ({ player: p, from: FREE_AGENTS_FROM, price: Math.round(playerValue(p) * 0.75) }));
+      return [...fromTeams, ...freeAgents].sort((a, b) => a.price - b.price);
+    },
+    [currentEra, save.squad],
   );
 
   const findSigning = (s: Signing): { player: Player; from: TeamSeason } | null => {
@@ -1082,7 +1210,12 @@ export function CareerScreen({ onExit }: Props) {
         if (p) { from = t; player = p; break; }
       }
     }
-    // 4) prospecto promovido da academia (não está na base): resolve do save.youth
+    // 4) free agent (pro sem time): resolve da lista de free agents
+    if (!player) {
+      const fa = FREE_AGENT_PLAYERS.find((p) => p.id === s.playerId);
+      if (fa) { from = FREE_AGENTS_FROM; player = fa; }
+    }
+    // 5) prospecto promovido da academia (não está na base): resolve do save.youth
     if (!player && save.youth?.[s.playerId]) {
       player = save.youth[s.playerId];
       from = ACADEMY_FROM;
@@ -1637,10 +1770,11 @@ export function CareerScreen({ onExit }: Props) {
       id: t.id, name: `${t.team}`, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t),
       players: t.players, region: teamRegion(t), vrs: aiTeamVrs(t), isUser: false,
     }));
-    const orgPlayers = buildTeam(save)?.players ?? [];
+    const ut = buildTeam(save);
+    const orgPlayers = ut?.players ?? [];
     if (orgPlayers.length && save.org) {
       const reg = save.region ?? macroRegionPlurality(orgPlayers.map((p) => p.country));
-      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: save.vrs, isUser: true });
+      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userBaseVrsFor(ut?.teamwork ?? 78) + save.vrs, isUser: true });
     }
     const groups = new Map<CareerRegion, Row[]>();
     for (const r of rows) {
@@ -1650,7 +1784,9 @@ export function CareerScreen({ onExit }: Props) {
     return CAREER_REGION_ORDER.filter((k) => groups.has(k)).map((k) => ({
       key: k,
       label: CAREER_REGION_LABELS[k],
-      teams: groups.get(k)!.sort((a, b) => b.vrs - a.vrs),
+      // empate de VRS: desempata o usuário pra FRENTE, igual ao critério do
+      // fim de temporada (worldRank conta só quem tem VRS estritamente maior).
+      teams: groups.get(k)!.sort((a, b) => b.vrs - a.vrs || (a.isUser ? -1 : b.isUser ? 1 : 0)),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save, currentEra]);
@@ -1705,21 +1841,30 @@ export function CareerScreen({ onExit }: Props) {
 
   // ---------- fundação ----------
   if (stage === 'found') {
+    const startFromOrg = (s: OrgStart) => {
+      update({
+        org: s.org, squad: s.squad, coachFromId: s.coachFromId, budget: s.budget,
+        tier: s.tier, takeoverId: s.takeoverId, region: s.region,
+        board: s.board ?? 60, scenario: s.scenario ?? null,
+      });
+      setStage('market');
+    };
     if (orgChoice === 'fictional') {
       return <FoundOrg onExit={() => setOrgChoice('select')} onFound={(org) => {
-        update({ org, takeoverId: null });
+        update({ org, takeoverId: null, scenario: null });
         setStage('market');
       }} />;
+    }
+    if (orgChoice === 'scenario') {
+      return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} />;
     }
     return (
       <OrgSelect
         teams={currentEra}
         onExit={onExit}
         onFictional={() => setOrgChoice('fictional')}
-        onStart={(s) => {
-          update({ org: s.org, squad: s.squad, coachFromId: s.coachFromId, budget: s.budget, tier: s.tier, takeoverId: s.takeoverId, region: s.region });
-          setStage('market');
-        }}
+        onScenarios={() => setOrgChoice('scenario')}
+        onStart={startFromOrg}
       />
     );
   }
@@ -1938,6 +2083,14 @@ export function CareerScreen({ onExit }: Props) {
                   playoff: null,
                   history: [...save.history, finished],
                   academy: evolveAcademy(save),
+                  scenario: applyScenarioProgress(save.scenario, {
+                    // resultado real do circuito deste split vem do pendingSplit (rec),
+                    // pra creditar winCircuit/top4 mesmo num split que vai pro Major
+                    isChampion: rec?.champion ?? false,
+                    circuitTier: save.circuit?.tier ?? save.tier,
+                    finalPos: rec?.position ?? 99,
+                    qualified: true, endTier: save.tier, wonMajor: mr.champion,
+                  }),
                   ...evo,
                   ...applyTransferWindow(save),
                   pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
@@ -1993,7 +2146,6 @@ export function CareerScreen({ onExit }: Props) {
     const seasonTop20 = seasonTopPlayersYear(currentEra, save.split, 20);
     const mySquadOids = new Set(save.squad.map((s) => s.playerId)); // ids do seu elenco (relabel HLTV)
     const nextFeed = feedMemo;
-    const spots = save.circuit?.spots ?? MAJOR_SPOTS;
     // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
     const poRank = poUserRank(save.playoff);
     const isChampion = save.playoff?.champion === 'user';
@@ -2001,23 +2153,26 @@ export function CareerScreen({ onExit }: Props) {
     const poMult = isChampion ? 1.6 : poRank === 2 ? 1.25 : 1;
     const prize = Math.round((PRIZE_BY_POS[pos - 1] ?? 50_000) * (save.circuit?.prizeMult ?? 1) * poMult);
     const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsMult ?? 1) * poMult);
-    // vaga pelo mata-mata, mas o Major só acontece a cada MAJOR_EVERY splits:
-    // a jornada até ele é mais longa (rank garante, mas tem que ser split de Major)
-    // o Major só é alcançável pelo Tier 1 (circuito BLAST): a meta é SUBIR de tier
-    const rankQualified = save.playoff ? poRank <= spots : pos <= spots;
+    // CLASSIFICAÇÃO AO MAJOR = TOP 16 DO RANKING VRS MUNDIAL (como na vida real).
+    // Some VRS vencendo partidas e indo longe; sua posição é base do elenco + ganhos.
+    // Projeta o VRS já com o ganho DESTE split pra decidir a vaga no fim da temporada.
+    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? 78) + save.vrs + vrsGain;
+    const worldRank = oppEra.filter((t) => aiTeamVrs(t) > userProjVrs).length + 1; // posição mundial projetada
+    const rankQualified = worldRank <= MAJOR_VRS_CUT;
     const majorNow = isMajorSplit(save.split);
-    const isTier1 = (save.circuit?.tier ?? 3) === 1;
-    const qualified = rankQualified && majorNow && isTier1;
+    const qualified = rankQualified && majorNow;
     const nextMajorSplit = save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
 
     // promoção/rebaixamento: só conta se você jogou no SEU tier (não farmando abaixo).
-    // campeão sobe; fundo da tabela (penúltimo/último) cai.
+    // CHEGAR NA FINAL (campeão OU vice) promove — não precisa mais SÓ vencer; bater
+    // final em todo campeonato e perder pra um top não pode te travar. Fundo da tabela cai.
     const finalPos = save.playoff ? Math.min(pos, poRank) : pos;
+    const reachedFinal = finalPos <= 2;
     const circuitTier = save.circuit?.tier ?? save.tier;
     const fieldSize = league.teams.length;
     const tierResult: { tier: number; tierChange: 'up' | 'down' | null } = (() => {
       if (circuitTier !== save.tier) return { tier: save.tier, tierChange: null };
-      if (isChampion) return { tier: Math.max(1, save.tier - 1), tierChange: save.tier > 1 ? 'up' : null };
+      if (reachedFinal) return { tier: Math.max(1, save.tier - 1), tierChange: save.tier > 1 ? 'up' : null };
       if (finalPos >= fieldSize - 1) return { tier: Math.min(3, save.tier + 1), tierChange: save.tier < 3 ? 'down' : null };
       return { tier: save.tier, tierChange: null };
     })();
@@ -2095,19 +2250,18 @@ export function CareerScreen({ onExit }: Props) {
             )}
             {qualified ? (
               <div className="qualify-banner">
-                <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Chegar ao top {spots} do mata-mata do {save.circuit?.name ?? 'circuito'}
-                {' '}garantiu a vaga. Hora de enfrentar os melhores do mundo.
+                <b>CLASSIFICADO PRO MAJOR MUNDIAL!</b> Você está em <b>#{worldRank}</b> no ranking VRS mundial
+                {' '}(top {MAJOR_VRS_CUT} garantem vaga). Hora de enfrentar os melhores do mundo.
               </div>
             ) : rankQualified && !majorNow ? (
               <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
-                Campanha de Major, mas calma: o <b>Major Mundial acontece a cada {MAJOR_EVERY} splits</b>.
-                O próximo é no fim do <b>Split {nextMajorSplit}</b>. Mantenha o nível até lá.
+                Você está <b>dentro do top {MAJOR_VRS_CUT} do VRS mundial</b> (#{worldRank}) — vaga no Major encaminhada!
+                O Major acontece a cada <b>{MAJOR_EVERY} splits</b>; o próximo é no fim do <b>Split {nextMajorSplit}</b>. Mantenha o nível.
               </p>
             ) : (
               <p className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
-                Chegue ao <b>top {spots}</b> do mata-mata do {save.circuit?.name ?? 'circuito'} no split de Major
-                (a cada {MAJOR_EVERY} splits; o próximo é no <b>Split {majorNow ? save.split : nextMajorSplit}</b>) para garantir a vaga.
-                Continue acumulando VRS e reforçando o elenco.
+                A vaga no Major é dos <b>top {MAJOR_VRS_CUT} do ranking VRS mundial</b> (você está em <b>#{worldRank}</b>).
+                Ganhe VRS <b>vencendo partidas, indo longe e levando campeonatos</b> pra subir no ranking. Major a cada {MAJOR_EVERY} splits (próximo: Split {majorNow ? save.split : nextMajorSplit}).
               </p>
             )}
             {save.playoff && <PlayoffBracket p={save.playoff} teamOf={(id) => leagueTeam(league, id)} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />}
@@ -2233,6 +2387,9 @@ export function CareerScreen({ onExit }: Props) {
                     playoff: null,
                     history: [...save.history, baseRecord()],
                     academy: evolveAcademy(save),
+                    scenario: applyScenarioProgress(save.scenario, {
+                      isChampion, circuitTier, finalPos, qualified, endTier: tierResult.tier, wonMajor: false,
+                    }),
                     ...bankStats(save),
                     ...evo,
                     ...applyTransferWindow(save),
@@ -2532,8 +2689,8 @@ export function CareerScreen({ onExit }: Props) {
       {/* ===== VISÃO GERAL ===== */}
       {hubTab === 'overview' && (() => {
         const prizeNow = Math.round((PRIZE_BY_POS[Math.max(0, myPos - 1)] ?? 0) * (save.circuit?.prizeMult ?? 1));
-        const qualifying = myPos > 0 && myPos <= spots;
-        const nextMajor = isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
+        // vaga no Major = top 16 do ranking VRS mundial (posição atual da org)
+        const qualifying = myVrsRank > 0 && myVrsRank <= MAJOR_VRS_CUT;
         const net = effSponsorIncome(save) - payroll;
         const myStars = seasonStats.filter((s) => mySquadIds.has(s.id)).slice(0, 5);
         const prestige = careerPrestige(save);
@@ -2541,6 +2698,26 @@ export function CareerScreen({ onExit }: Props) {
         return (
         <div className="career-grid">
           <div className="career-main">
+            {/* DESAFIO: metas do cenário assumido (se houver) */}
+            {save.scenario && (() => {
+              const sc = save.scenario;
+              const doneN = sc.goals.filter((g) => g.done).length;
+              const allDone = doneN === sc.goals.length;
+              return (
+                <div className={`scenario-banner${allDone ? ' done' : ''}`}>
+                  <div className="scenario-banner-head">
+                    🎯 Desafio: <b>{sc.title}</b>
+                    <span className="spacer" />
+                    <span className="muted small">{doneN}/{sc.goals.length} metas{allDone ? ' · concluído! 🏆' : ''}</span>
+                  </div>
+                  <div className="scenario-banner-goals">
+                    {sc.goals.map((g, i) => (
+                      <span key={i} className={`scenario-banner-goal${g.done ? ' done' : ''}`}>{g.done ? '✅' : '◻️'} {g.text}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {/* HERO: central de comando do split */}
             <div className="dash-hero" style={{ background: `linear-gradient(120deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--panel-3) 65%)` }}>
               <div className="dh-id">
@@ -2563,8 +2740,8 @@ export function CareerScreen({ onExit }: Props) {
                   <span>Forma</span>
                 </div>
                 <div className={`dh-chip ${qualifying ? 'q-ok' : 'q-no'}`}>
-                  <b>{qualifying ? '✓ na zona' : `top ${spots}`}</b>
-                  <span>{isMajorSplit(save.split) ? 'vale vaga no Major' : `Major no Split ${nextMajor}`}</span>
+                  <b>{qualifying ? `✓ #${myVrsRank} VRS` : `#${myVrsRank} VRS`}</b>
+                  <span>{qualifying ? 'na zona do Major (top 16)' : `fora do top ${MAJOR_VRS_CUT} do VRS`}</span>
                 </div>
                 <div className="dh-chip"><b>{formatMoney(prizeNow)}</b><span>prêmio na {myPos}ª</span></div>
               </div>
@@ -2607,7 +2784,7 @@ export function CareerScreen({ onExit }: Props) {
                 </div>
                 <ul>
                   <li><b>Fase de grupos GSL</b> (2 grupos de 4, dupla eliminação: abertura → vencedores/eliminação → decisão; abertura é MD1, o resto MD3) → os <b>2 melhores de cada grupo</b> vão pro <b>mata-mata</b> (semis MD3 + final MD5). É o formato real do CS (IEM/BLAST/Major), não liga de pontos.</li>
-                  <li><b>Major Mundial a cada {MAJOR_EVERY} splits</b>: chegue ao top {spots} do mata-mata num split de Major (o próximo é no Split {isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY))}) pra garantir a vaga.</li>
+                  <li><b>Major Mundial a cada {MAJOR_EVERY} splits</b>: vão os <b>top {MAJOR_VRS_CUT} do ranking VRS mundial</b>. Ganhe VRS vencendo partidas, indo longe e levando campeonatos (próximo Major: Split {isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY))}).</li>
                   <li><b>Janela de transferências só entre temporadas</b>: durante o split é com o elenco que você tem.</li>
                   <li><b>Seu elenco evolui entre temporadas</b>: jogador em ascensão melhora, veterano em declínio cai; valor e salário acompanham. Olhe a fase de carreira antes de contratar.</li>
                   <li><b>Patrocinadores</b> pagam por split, e marcas maiores exigem mais VRS (seu ranking).</li>
@@ -3239,7 +3416,7 @@ export function CareerScreen({ onExit }: Props) {
         const stages: { ic: string; name: string; status: StStatus; detail: string }[] = [
           { ic: '🎯', name: `Fase de grupos · ${save.circuit?.name ?? 'Circuito'}`, status: groupDone ? 'done' : 'live', detail: groupDone ? 'Concluída' : `Rodada ${league.current + 1} de ${league.rounds.length} · você em ${myPos}º` },
           { ic: '🏆', name: 'Mata-mata do circuito', status: save.playoff ? (save.playoff.champion ? 'done' : 'live') : 'locked', detail: save.playoff ? (save.playoff.champion ? 'Encerrado' : 'Semis (MD3) + final (MD5)') : 'Os 4 melhores do grupo avançam' },
-          { ic: '🌍', name: 'Major Mundial', status: majorSplitNow ? (save.majorT ? 'live' : 'locked') : 'na', detail: majorSplitNow ? `Top ${spots} do mata-mata garantem a vaga` : `Só em split de Major · próximo no Split ${nextMajor}` },
+          { ic: '🌍', name: 'Major Mundial', status: majorSplitNow ? (save.majorT ? 'live' : 'locked') : 'na', detail: majorSplitNow ? `Top ${MAJOR_VRS_CUT} do ranking VRS mundial garantem a vaga` : `Só em split de Major · próximo no Split ${nextMajor}` },
         ];
         const STLABEL: Record<StStatus, string> = { done: 'concluído', live: 'em andamento', locked: 'a seguir', na: 'fora deste split' };
         // próximos splits (mini-calendário do cadenciamento dos Majors)
@@ -3249,8 +3426,8 @@ export function CareerScreen({ onExit }: Props) {
           <div className="panel-body">
             <div className={`cal-major-banner ${splitsToMajor === 0 ? 'now' : ''}`}>
               {splitsToMajor === 0
-                ? <>🌍 <b>É split de Major!</b> Chegue ao top {spots} do mata-mata pra garantir a vaga mundial.</>
-                : <>🌍 <b>Major Mundial no Split {nextMajor}</b> · {splitsToMajor === 1 ? 'falta 1 split' : `faltam ${splitsToMajor} splits`}. Acumule VRS e mantenha o nível {save.tier === 1 ? '(você já está no Tier 1, a elite que disputa o Major).' : `(é preciso chegar ao Tier 1 — você está no Tier ${save.tier}).`}</>}
+                ? <>🌍 <b>É split de Major!</b> Os <b>top {MAJOR_VRS_CUT} do ranking VRS mundial</b> garantem a vaga. Você está em <b>#{myVrsRank}</b>.</>
+                : <>🌍 <b>Major Mundial no Split {nextMajor}</b> · {splitsToMajor === 1 ? 'falta 1 split' : `faltam ${splitsToMajor} splits`}. Suba no <b>ranking VRS</b> (você está em #{myVrsRank}) vencendo partidas e campeonatos — os top {MAJOR_VRS_CUT} vão ao Major.</>}
             </div>
 
             <div className="muted small section-label">Temporada atual · Split {save.split}</div>
@@ -4292,10 +4469,11 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
 
 // escolha da org: assumir um time real (com elenco e contexto) ou uma org sem
 // line pra montar do zero. Substitui o "inventar do nada" como entrada padrão.
-function OrgSelect({ teams, onStart, onFictional, onExit }: {
+function OrgSelect({ teams, onStart, onFictional, onScenarios, onExit }: {
   teams: TeamSeason[];
   onStart: (s: OrgStart) => void;
   onFictional: () => void;
+  onScenarios: () => void;
   onExit: () => void;
 }) {
   // candidatos a ASSUMIR: times reais de tier 2/3 (ninguém começa na elite).
@@ -4348,6 +4526,15 @@ function OrgSelect({ teams, onStart, onFictional, onExit }: {
             elenco te dão <b>mais verba</b> pra montar do zero. Suba de tier até o Major.
           </p>
 
+          <button className="scenario-cta" onClick={onScenarios}>
+            <span className="scenario-cta-ic">🎯</span>
+            <span className="scenario-cta-txt">
+              <b>Desafios de carreira</b>
+              <span className="muted small">Assuma uma org com contexto e metas: FaZe em reconstrução, lendas como a MIBR 2006, a SAW de Portugal e mais.</span>
+            </span>
+            <span className="scenario-cta-arrow">→</span>
+          </button>
+
           <div className="muted small section-label">Assumir org com elenco (tier baixo/médio)</div>
           <div className="org-grid">
             {takeovers.map(({ t, tier, ovr }) => (
@@ -4380,6 +4567,85 @@ function OrgSelect({ teams, onStart, onFictional, onExit }: {
           <div className="center" style={{ marginTop: 18 }}>
             <button className="btn ghost" onClick={onFictional}>ou criar uma org fictícia do zero →</button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----- DESAFIOS: assumir uma org real com contexto + metas (estilo Draft) -----
+function ScenarioPicker({ current, onBack, onStart }: {
+  current: TeamSeason[];
+  onBack: () => void;
+  onStart: (s: OrgStart) => void;
+}) {
+  const items = useMemo(
+    () => CAREER_SCENARIOS.map((sc) => ({ sc, team: scenarioTeam(sc, current) })).filter((x) => x.team),
+    [current],
+  );
+  const pick = (sc: CareerScenario, t: TeamSeason) => {
+    const tier = teamTier(t);
+    onStart({
+      org: { name: t.team, tag: t.tag, colors: t.colors, logo: t.logoUrl ?? logoForTeam(t) },
+      squad: t.players.slice(0, 5).map((p) => ({ playerId: p.id, fromId: t.id })),
+      coachFromId: t.id,
+      budget: sc.budget ?? takeoverBudget(tier),
+      tier,
+      takeoverId: t.id,
+      region: macroRegionPlurality(t.players.slice(0, 5).map((p) => p.country)),
+      board: sc.board ?? 60,
+      scenario: { id: sc.id, cat: sc.cat, title: sc.title, context: sc.context, goals: sc.goals.map((g) => ({ ...g, done: false })) },
+    });
+  };
+  return (
+    <div className="fade-in">
+      <div className="panel" style={{ maxWidth: 1000, margin: '24px auto' }}>
+        <div className="panel-head">
+          🎯 Desafios de carreira
+          <span className="spacer" />
+          <button className="btn" onClick={onBack}>← Voltar</button>
+        </div>
+        <div className="panel-body">
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Assuma uma organização com <b>contexto</b> e <b>metas</b> próprias. O elenco e o técnico já vêm prontos; cumpra os objetivos do desafio ao longo da campanha.
+          </p>
+          {SCENARIO_CAT_ORDER.map((cat) => {
+            const group = items.filter((x) => x.sc.cat === cat);
+            if (!group.length) return null;
+            return (
+              <div key={cat}>
+                <div className="muted small section-label">{SCENARIO_CAT_LABELS[cat]}</div>
+                <div className="scenario-grid">
+                  {group.map(({ sc, team }) => {
+                    const t = team!;
+                    const tier = teamTier(t);
+                    const ovr = Math.round(t.players.reduce((a, p) => a + playerOvr(p), 0) / Math.max(1, t.players.length));
+                    return (
+                      <button key={sc.id} className="scenario-card" onClick={() => pick(sc, t)}>
+                        <div className="scenario-card-head">
+                          <TeamBadge tag={t.tag} colors={t.colors} size={38} logoUrl={t.logoUrl ?? logoForTeam(t)} />
+                          <div>
+                            <div className="scenario-title"><Flag cc={t.country} /> {sc.title}</div>
+                            <div className="org-meta">
+                              <span className={`tier-badge t${tier}`}>TIER {tier}</span>
+                              <span className="muted small">OVR {ovr} · {t.era}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="scenario-context muted small">{sc.context}</div>
+                        <div className="scenario-goals">
+                          {sc.goals.map((g, i) => (
+                            <span key={i} className="scenario-goal">🎯 {g.text}</span>
+                          ))}
+                        </div>
+                        <div className="org-budget">💰 {formatMoney(sc.budget ?? takeoverBudget(tier))} de caixa</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

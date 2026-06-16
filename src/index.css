@@ -4176,6 +4176,41 @@ table.crm-players input.num {
 .aca-replace { margin-top: 6px; border-top: 1px solid var(--border-soft); padding-top: 6px; }
 .aca-replace-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 
+/* desafios de carreira (assumir org com contexto + metas) */
+.scenario-cta {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  padding: 13px 15px; margin: 4px 0 16px; border-radius: var(--r);
+  background: linear-gradient(120deg, var(--gold-glow), rgba(216,169,67,0.02)), linear-gradient(160deg, var(--panel-3), var(--panel-2));
+  border: 1px solid var(--gold-soft); color: var(--text);
+}
+.scenario-cta:hover { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.scenario-cta-ic { font-size: 1.7rem; flex: 0 0 auto; }
+.scenario-cta-txt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.scenario-cta-txt b { font-family: var(--font-cond); font-size: 1.12rem; color: var(--gold-2); }
+.scenario-cta-arrow { font-size: 1.3rem; color: var(--gold-2); flex: 0 0 auto; }
+.scenario-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.scenario-card {
+  display: flex; flex-direction: column; gap: 8px; text-align: left; cursor: pointer; padding: 13px;
+  background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: var(--r-sm); color: var(--text);
+}
+.scenario-card:hover { border-color: var(--gold-soft); box-shadow: 0 0 0 1px var(--gold-soft) inset; transform: translateY(-1px); }
+.scenario-card-head { display: flex; align-items: center; gap: 10px; }
+.scenario-title { font-family: var(--font-cond); font-weight: 800; font-size: 1.08rem; display: flex; align-items: center; gap: 6px; }
+.scenario-context { line-height: 1.45; }
+.scenario-goals { display: flex; flex-direction: column; gap: 3px; }
+.scenario-goal { font-size: 12px; color: var(--gold-2); font-weight: 600; }
+.scenario-banner {
+  padding: 11px 14px; border-radius: var(--r-sm); margin-bottom: 14px;
+  background: linear-gradient(120deg, var(--gold-glow), rgba(216,169,67,0.02)), var(--panel-2);
+  border: 1px solid var(--gold-soft);
+}
+.scenario-banner.done { border-color: var(--pos); }
+.scenario-banner-head { display: flex; align-items: center; gap: 8px; font-family: var(--font-cond); font-size: 1.05rem; }
+.scenario-banner-head b { color: var(--gold-2); }
+.scenario-banner-goals { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; }
+.scenario-banner-goal { font-size: 12.5px; color: var(--muted); }
+.scenario-banner-goal.done { color: var(--green-bright); font-weight: 600; }
+
 /* calendário multi-torneio */
 .cal-major-banner {
   padding: 12px 15px; border-radius: var(--r); margin-bottom: 16px; font-size: 13.5px;
