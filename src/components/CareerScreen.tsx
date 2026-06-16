@@ -755,6 +755,7 @@ export function CareerScreen({ onExit }: Props) {
   const [profilePlayer, setProfilePlayer] = useState<Player | null>(null); // perfil detalhado do jogador (modal)
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [newsCat, setNewsCat] = useState<NewsCat | 'all'>('all'); // filtro da Inbox
+  const [vrsMode, setVrsMode] = useState<'regiao' | 'geral'>('geral'); // ranking VRS: por região ou geral
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   // registro parcial do split, finalizado após o Major (se houver)
@@ -1375,6 +1376,12 @@ export function CareerScreen({ onExit }: Props) {
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save, currentEra]);
+
+  // ranking VRS GERAL (todos os times do mundo num ranking só)
+  const vrsAllMemo = useMemo(
+    () => vrsByRegionMemo.flatMap((g) => g.teams).sort((a, b) => b.vrs - a.vrs),
+    [vrsByRegionMemo],
+  );
 
   // overlay de simulação rápida (mini partida acelerada), sobrepõe qualquer tela
   if (quickSim) {
@@ -2064,6 +2071,8 @@ export function CareerScreen({ onExit }: Props) {
   ];
 
   const vrsByRegion = vrsByRegionMemo;
+  const vrsAll = vrsAllMemo;
+  const myVrsRank = vrsAll.findIndex((t) => t.isUser) + 1; // posição global (0 = sem time)
 
   const top20 = top20Memo;
   const careerTop20 = careerTop20Memo;
@@ -2314,6 +2323,28 @@ export function CareerScreen({ onExit }: Props) {
             <div className="side-card">
               <div className="muted small section-label" style={{ marginTop: 0 }}>Classificação · top {spots} vai ao Major</div>
               <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} />
+            </div>
+            <div className="side-card">
+              <div className="vrs-snap-head">
+                <span className="muted small section-label" style={{ margin: 0 }}>🌍 Ranking VRS mundial</span>
+                <button className="btn ghost small" onClick={() => setHubTab('vrs')}>Ver tudo →</button>
+              </div>
+              {myVrsRank > 0 && <div className="vrs-snap-me">Você: <b>#{myVrsRank}</b> no mundo · {save.vrs} VRS</div>}
+              <div className="vrs-snap-list">
+                {(() => {
+                  const top = vrsAll.slice(0, 5);
+                  const meRow = myVrsRank > 5 ? vrsAll[myVrsRank - 1] : null;
+                  const rows = meRow ? [...top.map((t, i) => ({ t, r: i + 1 })), { t: meRow, r: myVrsRank }] : top.map((t, i) => ({ t, r: i + 1 }));
+                  return rows.map(({ t, r }) => (
+                    <div key={t.id} className={`vrs-snap-row${t.isUser ? ' me' : ''}`}>
+                      <span className="vsr-rank">{r}</span>
+                      <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={t.logoUrl} />
+                      <span className="vsr-name">{t.name}</span>
+                      <span className="vsr-vrs">{t.vrs}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
             {myStars.length > 0 && (
               <div className="side-card">
@@ -2604,7 +2635,36 @@ export function CareerScreen({ onExit }: Props) {
       {hubTab === 'vrs' && (
         <div className="panel">
           <div className="panel-body">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>Ranking mundial de VRS por região</div>
+            <div className="t20-head">
+              <div className="muted small section-label" style={{ marginTop: 0 }}>
+                {vrsMode === 'geral' ? 'Ranking mundial de VRS · geral' : 'Ranking mundial de VRS · por região'}
+                {myVrsRank > 0 && <span className="muted small"> · você é <b style={{ color: 'var(--blue-bright)' }}>#{myVrsRank}</b> no mundo</span>}
+              </div>
+              <div className="t20-toggle">
+                <button className={`btn small${vrsMode === 'geral' ? ' gold' : ' ghost'}`} onClick={() => setVrsMode('geral')}>Geral</button>
+                <button className={`btn small${vrsMode === 'regiao' ? ' gold' : ' ghost'}`} onClick={() => setVrsMode('regiao')}>Por região</button>
+              </div>
+            </div>
+            {vrsMode === 'geral' ? (
+              <table className="stats vrs-geral">
+                <tbody>
+                  {vrsAll.map((t, i) => (
+                    <tr key={t.id} className={t.isUser ? 'human-row' : ''}>
+                      <td style={{ width: 30, textAlign: 'left', fontWeight: 800, color: i < 3 ? 'var(--gold)' : undefined }}>{i + 1}</td>
+                      <td style={{ textAlign: 'left' }}>
+                        <span className="pcell">
+                          <TeamBadge tag={t.tag} colors={t.colors} size={20} logoUrl={t.logoUrl} />
+                          <OrgFlag players={t.players} />
+                          <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--blue-bright)' : undefined }}>{t.name}</span>
+                          <span className="muted small vrs-reg">{CAREER_REGION_LABELS[t.region]}</span>
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{t.vrs}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
             <div className="vrs-regions">
               {vrsByRegion.map((g) => (
                 <div key={g.key} className="vrs-region">
@@ -2629,6 +2689,7 @@ export function CareerScreen({ onExit }: Props) {
                 </div>
               ))}
             </div>
+            )}
           </div>
         </div>
       )}
