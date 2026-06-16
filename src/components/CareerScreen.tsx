@@ -110,6 +110,19 @@ function formatFans(n: number): string {
   return `${n}`;
 }
 
+// leitura do olheiro: força por mapa de um time. Usa o mapPrefs real (se houver)
+// + uma assinatura determinística por time, pra SEMPRE existir um mapa perigoso
+// e um fraco plausíveis (a base do bo3 vem com mapPrefs vazio na maioria).
+function scoutMaps(team: { id: string; mapPrefs?: Partial<Record<MapId, number>> }) {
+  return MAP_POOL
+    .map((m) => {
+      const pref = team.mapPrefs?.[m] ?? 0;
+      const sig = ((hashStr(`map:${team.id}:${m}`) % 100) - 50) / 25; // -2..+2 determinístico
+      return { m, v: pref + sig };
+    })
+    .sort((a, b) => b.v - a.v);
+}
+
 // campeonato escolhido para o split (define o chaveamento e a premiação)
 interface CircuitChoice {
   id: string;
@@ -245,13 +258,14 @@ interface CareerSave {
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
-type NewsCat = 'result' | 'transfer' | 'board' | 'scene' | 'social';
+type NewsCat = 'result' | 'transfer' | 'board' | 'scene' | 'social' | 'scout';
 interface NewsItem { id: string; split: number; icon: string; tone: 'good' | 'bad' | 'info'; title: string; body: string; cat?: NewsCat; handle?: string; }
 const NEWS_CATS: { key: NewsCat | 'all'; label: string }[] = [
   { key: 'all', label: 'Todas' },
   { key: 'result', label: 'Resultados' },
   { key: 'transfer', label: 'Mercado' },
   { key: 'board', label: 'Diretoria' },
+  { key: 'scout', label: 'Olheiros' },
   { key: 'scene', label: 'Cenário' },
   { key: 'social', label: 'Social' },
 ];
@@ -989,9 +1003,16 @@ export function CareerScreen({ onExit }: Props) {
       title: `Split ${s.split} começa: ${circuit.name}`,
       body: `Meta da diretoria: "${objective.text}" (bônus ${formatMoney(objective.bonus)}).`,
     };
+    // relatório do olheiro: o time a temer no circuito + o mapa forte dele
+    const toughest = ai.slice().sort((a, b) => b.strength - a.strength)[0];
+    const scoutItem: NewsItem[] = toughest ? [{
+      id: `${s.split}:scout`, split: s.split, icon: '🔍', tone: 'info', cat: 'scout',
+      title: `Olheiros: ${toughest.name} é o time a temer`,
+      body: `O favorito do ${circuit.name} é a ${toughest.name} (força ${toughest.strength.toFixed(1)}), perigosa em ${MAP_LABELS[scoutMaps(toughest)[0].m]}. Pré-jogo: confira o relatório do adversário na Visão geral antes de cada partida.`,
+    }] : [];
     const next = {
       ...s, league, circuit: choice, tierChange: null, objective,
-      ...pushNews(s, [startItem]),
+      ...pushNews(s, [startItem, ...scoutItem]),
     };
     persist(next);
     setSave(next);
@@ -2328,6 +2349,24 @@ export function CareerScreen({ onExit }: Props) {
             ) : (
               <div className="career-banner">Rodada concluída. Avançando…</div>
             )}
+
+            {/* relatório do olheiro: leitura do próximo adversário (pré-jogo) */}
+            {opp && myMatch && (() => {
+              const sc = scoutMaps(opp);
+              const danger = sc[0].m, weak = sc[sc.length - 1].m;
+              const diff = me.strength - opp.strength;
+              const verdict = diff >= 4 ? { t: 'Você é o favorito', c: 'pos' } : diff <= -4 ? { t: 'Eles são favoritos', c: 'neg' } : { t: 'Confronto equilibrado', c: 'warn' };
+              return (
+                <div className="scout-card">
+                  <div className="scout-head">🔍 Relatório do olheiro <span className="muted small">· {opp.name}</span></div>
+                  <div className={`scout-verdict ${verdict.c}`}>{verdict.t} · força {opp.strength.toFixed(1)} <span className="muted">(você {me.strength.toFixed(1)})</span></div>
+                  <div className="scout-maps">
+                    <div className="sc-map ban"><span className="sc-tag">⛔ BANIR</span><b>{MAP_LABELS[danger]}</b><span className="muted small">o mapa mais forte deles</span></div>
+                    <div className="sc-map pick"><span className="sc-tag">✅ PICAR</span><b>{MAP_LABELS[weak]}</b><span className="muted small">onde têm dificuldade</span></div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* resumo da temporada atual + pulso financeiro */}
             <div className="career-statgrid">
