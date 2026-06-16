@@ -10,7 +10,7 @@ import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, 
 import { teamSeasonToTTeam } from '../engine/ratings';
 import { simulateSeries } from '../engine/match';
 import { autoVeto } from '../engine/veto';
-import { createTournament, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
+import { createSwissStage, createPlayoffStage, stageAdvancers, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 import { Hub } from './Hub';
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
 import type { Coach, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
@@ -36,7 +36,7 @@ const PRIZE_BY_POS = [1_250_000, 750_000, 450_000, 280_000, 170_000, 110_000, 70
 const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
-const MAJOR_VRS_CUT = 16; // os 16 melhores do ranking VRS mundial vão ao Major
+const MAJOR_VRS_CUT = 32; // os 32 melhores do ranking VRS vão ao Major (3 stages)
 // o Major Mundial fecha a TEMPORADA: a cada N campeonatos/splits acontece um Major.
 // 4 = a temporada tem 3 campeonatos tier-1 + o Major encerrando o ano.
 const MAJOR_EVERY = 4;
@@ -406,6 +406,12 @@ interface CareerSave {
   sponsors: string[];
   playoff: Playoff | null;
   majorT: Tournament | null;
+  // Major em 3 stages (Swiss 1->2->3 + playoffs): estado da orquestração
+  majorStage?: number;        // stage ao vivo: 1/2/3 (Swiss) ou 4 (Champions/playoffs)
+  majorUserStage?: number;    // stage de entrada do usuário (pelo tier VRS)
+  majorSeed2?: TTeam[];       // 8 seeds que entram no Stage 2
+  majorSeed3?: TTeam[];       // 8 seeds que entram no Stage 3
+  majorPre?: { stage: number; advancers: { tag: string; name: string }[] }[]; // stages auto-simulados antes do usuário
   evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
   lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
   sponsorUntil: Record<string, number>; // patrocinador id -> split até onde o contrato vale
@@ -1063,6 +1069,11 @@ export function CareerScreen({ onExit }: Props) {
     setMajorTState(t);
     setSave((s) => { const n = { ...s, majorT: t }; persist(n); return n; });
   };
+  // persiste o torneio ao vivo + o estado dos stages num único save
+  const setMajorState = (t: Tournament | null, patch: Partial<CareerSave> = {}) => {
+    setMajorTState(t);
+    setSave((s) => { const n = { ...s, majorT: t, ...patch }; persist(n); return n; });
+  };
   const [hubTab, setHubTab] = useState<HubTab>(() => (loadSave().majorT ? 'major' : 'overview'));
   // guia "como funciona a temporada" (explica a jornada; some ao dispensar)
   const [guideOpen, setGuideOpen] = useState(() => {
@@ -1663,16 +1674,53 @@ export function CareerScreen({ onExit }: Props) {
     const user = buildTeam(s);
     if (!user) return;
     rngRef.current = makeRng(randomSeed());
-    const pool = currentEra.filter((t) => t.id !== 'user');
-    const major = createTournament(pool, user, rngRef.current, MAJOR_NAME(s.split), 6 + Math.min(8, (s.split - 1)));
-    setMajorT(major);
+    const rng = rngRef.current;
+    // Major real (32 times, 3 stages de Swiss + playoffs). O field é ordenado por
+    // VRS; o usuário entra no STAGE do seu tier: top 8 = Stage 3, 9-16 = Stage 2,
+    // 17-32 = Stage 1. Os stages antes do seu são AUTO-SIMULADOS.
+    const aiSorted = oppEra
+      .filter((t) => t.id !== 'user' && t.id !== s.takeoverId)
+      .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t) }))
+      .sort((a, b) => b.vrs - a.vrs);
+    const userVrs = userBaseVrsFor(user.teamwork) + s.vrs;
+    const userRank = aiSorted.filter((x) => x.vrs > userVrs).length + 1; // posição mundial
+    const userStage = userRank <= 8 ? 3 : userRank <= 16 ? 2 : 1;
+    const field: TTeam[] = aiSorted.map((x) => x.tt).slice(0, 31);
+    field.splice(Math.min(userRank - 1, field.length), 0, user); // insere o usuário pela posição VRS
+    const fieldT = field.slice(0, 32);
+    const s3band = fieldT.slice(0, 8);
+    const s2band = fieldT.slice(8, 16);
+    const s1band = fieldT.slice(16, 32);
+    const pre: NonNullable<CareerSave['majorPre']> = [];
+    const runAuto = (teams: TTeam[], label: string): TTeam[] => {
+      const st = createSwissStage(teams, rng, label);
+      let g = 0;
+      while (st.phase !== 'done' && g++ < 12) resolveRound(st, rng);
+      return stageAdvancers(st);
+    };
+    let carry: TTeam[] = [];
+    if (userStage >= 2) {
+      carry = runAuto(s1band, 'Stage 1');
+      pre.push({ stage: 1, advancers: carry.map((t) => ({ tag: t.tag, name: t.name })) });
+    }
+    if (userStage === 3) {
+      carry = runAuto([...carry, ...s2band], 'Stage 2');
+      pre.push({ stage: 2, advancers: carry.map((t) => ({ tag: t.tag, name: t.name })) });
+    }
+    const liveTeams = userStage === 1 ? s1band : userStage === 2 ? [...carry, ...s2band] : [...carry, ...s3band];
+    const live = createSwissStage(liveTeams, rng, `${MAJOR_NAME(s.split)} · Stage ${userStage}`);
     setHubTab('major');
     setStage('hub');
+    setMajorState(live, {
+      majorStage: userStage, majorUserStage: userStage,
+      majorSeed2: userStage <= 1 ? s2band : [],
+      majorSeed3: userStage <= 2 ? s3band : [],
+      majorPre: pre,
+    });
   };
 
-  // encerra o Major: calcula colocação, prêmio e VRS
-  const concludeMajor = (t: Tournament) => {
-    const placement = placementCode(t, 'user');
+  // encerra o Major do usuário: colocação, prêmio e VRS
+  const concludeMajor = (t: Tournament, placement: PlacementCode) => {
     setMajorResult({
       tournament: t,
       placement,
@@ -1681,6 +1729,37 @@ export function CareerScreen({ onExit }: Props) {
       champion: placement === 'champion',
     });
     setStage('major');
+  };
+
+  // avança o Major em STAGES: transiciona stage->stage->playoffs e encerra quando
+  // o usuário é eliminado ou vence o Champions Stage.
+  const progressMajor = (clone: Tournament) => {
+    const u = getTeam(clone, 'user');
+    const stageNow = save.majorStage ?? 1;
+    if (u && u.status === 'eliminated') {
+      // eliminado: encerra na colocação alcançada (passar do Stage 3 = playoffs)
+      const placement: PlacementCode = clone.stageOnly ? (stageNow >= 3 ? 'playoffs' : 'swiss') : placementCode(clone, 'user');
+      concludeMajor(clone, placement);
+      return;
+    }
+    if (clone.phase !== 'done') { setMajorState(clone); setHubTab('major'); setStage('hub'); return; }
+    if (clone.stageOnly) {
+      // stage encerrado e usuário classificado: monta o próximo stage (ou playoffs)
+      const advancers = stageAdvancers(clone);
+      if (stageNow < 3) {
+        const seeds = stageNow === 1 ? (save.majorSeed2 ?? []) : (save.majorSeed3 ?? []);
+        const next = createSwissStage([...advancers, ...seeds], rngRef.current, `${MAJOR_NAME(save.split)} · Stage ${stageNow + 1}`);
+        setMajorState(next, { majorStage: stageNow + 1 });
+      } else {
+        const po = createPlayoffStage(advancers, `${MAJOR_NAME(save.split)} · Champions Stage`);
+        setMajorState(po, { majorStage: 4 });
+      }
+      setHubTab('major');
+      setStage('hub');
+    } else {
+      // Champions Stage encerrado com o usuário vivo => campeão
+      concludeMajor(clone, placementCode(clone, 'user'));
+    }
   };
 
   // abre o veto/partida da rodada do usuário no Major
@@ -1710,15 +1789,11 @@ export function CareerScreen({ onExit }: Props) {
     }
     resolveRound(clone, rngRef.current);
     setMatchCtx(null);
-    setMajorT(clone);
-    if (clone.phase === 'done') concludeMajor(clone);
-    else { setHubTab('major'); setStage('hub'); }
+    progressMajor(clone);
   };
 
   const advanceMajor = (clone: Tournament) => {
-    setMajorT(clone);
-    if (clone.phase === 'done') concludeMajor(clone);
-    else { setHubTab('major'); setStage('hub'); }
+    progressMajor(clone);
   };
   // simula a rodada do Major; anima a partida do usuário quando ele tem jogo
   const simMajorRound = () => {
@@ -2105,6 +2180,8 @@ export function CareerScreen({ onExit }: Props) {
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
+                  majorStage: undefined, majorUserStage: undefined,
+                  majorSeed2: undefined, majorSeed3: undefined, majorPre: undefined,
                   league: null,
                   circuit: null,
                   playoff: null,
@@ -2768,7 +2845,7 @@ export function CareerScreen({ onExit }: Props) {
                 </div>
                 <div className={`dh-chip ${qualifying ? 'q-ok' : 'q-no'}`}>
                   <b>{qualifying ? `✓ #${myVrsRank} VRS` : `#${myVrsRank} VRS`}</b>
-                  <span>{qualifying ? 'na zona do Major (top 16)' : `fora do top ${MAJOR_VRS_CUT} do VRS`}</span>
+                  <span>{qualifying ? `na zona do Major (top ${MAJOR_VRS_CUT})` : `fora do top ${MAJOR_VRS_CUT} do VRS`}</span>
                 </div>
                 <div className="dh-chip"><b>{formatMoney(prizeNow)}</b><span>prêmio na {myPos}ª</span></div>
               </div>
@@ -2931,18 +3008,36 @@ export function CareerScreen({ onExit }: Props) {
       })()}
 
       {/* ===== MAJOR AO VIVO (dentro do hub) ===== */}
-      {hubTab === 'major' && majorT && (
-        <Hub
-          t={majorT}
-          career={{ season: save.split, titles: save.titles, budget: save.budget }}
-          pickem={{ picks: {}, score: 0, total: 0 }}
-          onPick={() => {}}
-          onPlay={playMajorMine}
-          onSimRound={simMajorRound}
-          onStats={() => {}}
-          onOpenSeries={(p) => p.result && setSelSeries({ series: p.result, teams: [getTeam(majorT, p.a), getTeam(majorT, p.b)] })}
-        />
-      )}
+      {hubTab === 'major' && majorT && (() => {
+        const st = save.majorStage ?? 1;
+        const entered = save.majorUserStage ?? 1;
+        const stLabel = st >= 4 ? '🏆 Champions Stage (playoffs)' : `Stage ${st} de 3 · fase Suíça`;
+        const enterTop = entered === 3 ? 8 : entered === 2 ? 16 : 32;
+        return (
+          <>
+            <div className="cal-major-banner now" style={{ marginBottom: 12 }}>
+              <b>🌍 {majorT.name.split(' · ')[0]}</b> · <b>{stLabel}</b>. Você entrou no <b>Stage {entered}</b> (top {enterTop} do ranking VRS). {st < 4 ? 'Top 8 avançam ao próximo stage.' : 'Mata-mata MD3 (final MD5).'}
+              {(save.majorPre?.length ?? 0) > 0 && (
+                <div className="muted small" style={{ marginTop: 6 }}>
+                  {save.majorPre!.map((p) => (
+                    <div key={p.stage}>Stage {p.stage} (auto-simulado): avançaram {p.advancers.slice(0, 6).map((a) => a.tag).join(', ')}{p.advancers.length > 6 ? '…' : ''}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Hub
+              t={majorT}
+              career={{ season: save.split, titles: save.titles, budget: save.budget }}
+              pickem={{ picks: {}, score: 0, total: 0 }}
+              onPick={() => {}}
+              onPlay={playMajorMine}
+              onSimRound={simMajorRound}
+              onStats={() => {}}
+              onOpenSeries={(p) => p.result && setSelSeries({ series: p.result, teams: [getTeam(majorT, p.a), getTeam(majorT, p.b)] })}
+            />
+          </>
+        );
+      })()}
 
       {/* ===== MERCADO: janela FECHADA durante a temporada ===== */}
       {hubTab === 'market' && (

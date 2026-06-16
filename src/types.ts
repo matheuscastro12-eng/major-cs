@@ -227,6 +227,9 @@ export interface Tournament {
   history: { phase: string; pairing: Pairing }[];
   championId?: string;
   mvpId?: string;
+  // Major em STAGES: um Swiss isolado que para ao definir os 8 classificados
+  // (phase 'done', sem playoffs) — o stage seguinte carrega esses 8 + 8 seeds.
+  stageOnly?: boolean;
 }
 
 export interface DraftRound {

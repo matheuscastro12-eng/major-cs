@@ -52,6 +52,37 @@ export function createTournamentFromTeams(teams: TTeam[], rng: Rng, name = 'MAJO
   return t;
 }
 
+// ----- MAJOR EM STAGES (formato real 2025+): 3 Swiss encadeados + playoffs -----
+// Stage = um Swiss de 16 que PARA quando os 8 classificados são definidos
+// (phase 'done'), sem ir pros playoffs. O stage seguinte recebe esses 8 + 8 seeds.
+export function createSwissStage(teams: TTeam[], rng: Rng, name: string): Tournament {
+  const t = createTournamentFromTeams(teams, rng, name);
+  t.stageOnly = true;
+  return t;
+}
+// os 8 classificados de um stage (seed por menos derrotas / saldo / força)
+export function stageAdvancers(t: Tournament): TTeam[] {
+  return seedAdvanced(t).slice(0, 8);
+}
+// Champions Stage: mata-mata MD3 (final MD5) direto a partir de 8 seeds.
+export function createPlayoffStage(seeds8: TTeam[], name: string): Tournament {
+  const seeds = seeds8.map((t) => ({ ...t, status: 'alive' as const }));
+  const t: Tournament = {
+    name,
+    teams: seeds,
+    phase: 'quarters',
+    swissRound: 5,
+    pairings: [
+      { a: seeds[0].id, b: seeds[7].id, label: 'QF1', bestOf: 3 },
+      { a: seeds[3].id, b: seeds[4].id, label: 'QF2', bestOf: 3 },
+      { a: seeds[1].id, b: seeds[6].id, label: 'QF3', bestOf: 3 },
+      { a: seeds[2].id, b: seeds[5].id, label: 'QF4', bestOf: 3 },
+    ],
+    history: [],
+  };
+  return t;
+}
+
 // Até onde um time chegou no Major, como código estável (identificador de
 // lógica: premiação, ranking, estilo). O texto exibido vem do i18n
 // ('placement.<code>'), nunca deste código.
@@ -244,6 +275,11 @@ export function resolveRound(t: Tournament, rng: Rng): Tournament {
     if (t.swissRound < 5 && stillAlive.length > 0) {
       t.swissRound++;
       t.pairings = makeSwissPairings(t, rng);
+    } else if (t.stageOnly) {
+      // stage encerrado: os 8 classificados estão definidos. Não vai pros playoffs;
+      // o orquestrador do Major leva os 8 (stageAdvancers) pro próximo stage.
+      t.phase = 'done';
+      t.pairings = [];
     } else {
       t.phase = 'quarters';
       const seeds = seedAdvanced(t);
