@@ -88,6 +88,28 @@ const SPONSOR_SLOTS = 3;
 const sponsorById = (id: string) => SPONSORS.find((s) => s.id === id);
 const sponsorIncome = (ids: string[]) => ids.reduce((a, id) => a + (sponsorById(id)?.perSplit ?? 0), 0);
 
+// ----- prestígio + fãs da org (estilo Brasval) -----
+// Derivados de conquistas (sem campo novo no save: não quebram saves e sobem ao
+// longo da carreira). Prestígio 5-99; fãs crescem junto.
+function careerPrestige(save: CareerSave): number {
+  const h = aggregateHistory(save.history);
+  const v = 22 + save.titles * 7 + h.majorApps * 4 + h.circuitTitles * 3 + (3 - (save.tier ?? 3)) * 6 + (save.vrs ?? 0) / 40;
+  return Math.max(5, Math.min(99, Math.round(v)));
+}
+function careerFans(save: CareerSave): number {
+  const p = careerPrestige(save);
+  return Math.round(Math.pow(p, 1.6) * 1100 + aggregateHistory(save.history).totalPrize / 120);
+}
+// patrocínio efetivo: prestígio atrai marcas melhores (até +33% no topo).
+function effSponsorIncome(save: CareerSave): number {
+  return Math.round(sponsorIncome(save.sponsors) * (1 + careerPrestige(save) / 300));
+}
+function formatFans(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return `${n}`;
+}
+
 // campeonato escolhido para o split (define o chaveamento e a premiação)
 interface CircuitChoice {
   id: string;
@@ -1621,7 +1643,7 @@ export function CareerScreen({ onExit }: Props) {
                 });
                 const next = {
                   ...save,
-                  budget: Math.max(0, save.budget + mr.prize - payroll + sponsorIncome(save.sponsors) + majBonus),
+                  budget: Math.max(0, save.budget + mr.prize - payroll + effSponsorIncome(save) + majBonus),
                   vrs: save.vrs + mr.vrs,
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
@@ -1892,7 +1914,7 @@ export function CareerScreen({ onExit }: Props) {
                     ...save,
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
-                    budget: Math.max(0, save.budget + prize - payroll + sponsorIncome(save.sponsors) + objBonus),
+                    budget: Math.max(0, save.budget + prize - payroll + effSponsorIncome(save) + objBonus),
                     vrs: save.vrs + vrsGain,
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
@@ -2114,6 +2136,8 @@ export function CareerScreen({ onExit }: Props) {
           <span title="Folha salarial por split"><i className="muted small">FOLHA</i> {formatMoney(payroll)}</span>
           <span title="Pontos de ranking (VRS)"><i className="muted small">VRS</i> {save.vrs}</span>
           <span title="Títulos"><i className="muted small">TÍTULOS</i> {save.titles}</span>
+          <span title="Prestígio da org: cresce com títulos, Major, tier e VRS; atrai mais patrocínio"><i className="muted small">PRESTÍGIO</i> ★{careerPrestige(save)}</span>
+          <span title="Torcida da organização"><i className="muted small">FÃS</i> {formatFans(careerFans(save))}</span>
         </div>
         <div className="ct-actions">
           <button className="btn ghost" title="Apagar tudo e recomeçar do zero" onClick={() => {
@@ -2196,8 +2220,10 @@ export function CareerScreen({ onExit }: Props) {
         const prizeNow = Math.round((PRIZE_BY_POS[Math.max(0, myPos - 1)] ?? 0) * (save.circuit?.prizeMult ?? 1));
         const qualifying = myPos > 0 && myPos <= spots;
         const nextMajor = isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
-        const net = sponsorIncome(save.sponsors) - payroll;
+        const net = effSponsorIncome(save) - payroll;
         const myStars = seasonStats.filter((s) => mySquadIds.has(s.id)).slice(0, 5);
+        const prestige = careerPrestige(save);
+        const fans = careerFans(save);
         return (
         <div className="career-grid">
           <div className="career-main">
@@ -2211,6 +2237,8 @@ export function CareerScreen({ onExit }: Props) {
                     <span className="dh-tier">TIER {save.tier}</span>
                     <span>Split {save.split}</span>
                     {save.region && <span>{MACRO_REGION_LABELS[save.region]}</span>}
+                    <span title="Prestígio da org (cresce com títulos, Major, tier e VRS; atrai patrocínio)">★ Prestígio {prestige}</span>
+                    <span title="Torcida da organização">👥 {formatFans(fans)} fãs</span>
                   </div>
                 </div>
               </div>
@@ -2427,7 +2455,7 @@ export function CareerScreen({ onExit }: Props) {
         const picks = save.squad.map((s) => ({ sig: s, f: findSigning(s) })).filter((x) => x.f) as { sig: Signing; f: { player: Player } }[];
         const wages = picks.map((x) => ({ ...x, wage: playerWage(x.f.player), until: save.contracts?.[x.sig.playerId] }));
         const folha = wages.reduce((a, w) => a + w.wage, 0);
-        const sponsorInc = sponsorIncome(save.sponsors);
+        const sponsorInc = effSponsorIncome(save);
         const net = sponsorInc - folha;
         return (
           <div className="career-grid">
