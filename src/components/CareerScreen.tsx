@@ -5,7 +5,8 @@
 // fases. Textos em PT por enquanto (modo em refino, não lançado).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
-import { createLeague, leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League } from '../engine/league';
+import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League } from '../engine/league';
+import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
 import { teamSeasonToTTeam } from '../engine/ratings';
 import { simulateSeries } from '../engine/match';
 import { autoVeto } from '../engine/veto';
@@ -986,9 +987,9 @@ export function CareerScreen({ onExit }: Props) {
       tt.strength += aiBoost;
       return tt;
     });
-    // fase de grupos (todos contra todos uma vez, estilo CS) → playoffs.
-    // CS não usa liga ida-e-volta (futebol); é grupo + mata-mata.
-    const league = createLeague(`${circuit.name} - Split ${s.split}`, [user, ...ai], 1);
+    // formato real do CS: 2 grupos GSL (dupla eliminação, 4 times, top 2
+    // avançam) → playoffs mata-mata. Nada de pontos corridos (isso é futebol).
+    const league = createGSLStage(`${circuit.name} - Split ${s.split}`, [user, ...ai]);
     const choice: CircuitChoice = {
       id: circuit.id,
       name: circuit.name,
@@ -1142,11 +1143,17 @@ export function CareerScreen({ onExit }: Props) {
       const m = userLeagueMatch(l);
       if (m) m.result = series;
     }
-    resolveLeagueRound(l, rngRef.current, LEAGUE_BO);
     setMatchCtx(null);
-    if (leagueDone(l)) {
-      enterPlayoffs(l);
-      return;
+    if (l.gsl) {
+      resolveGSLRound(l, rngRef.current);
+      // auto-resolve as rodadas seguintes que não têm o usuário (ele já passou
+      // como 1º, ou caiu) até aparecer um jogo seu ou a fase acabar
+      let guard = 0;
+      while (!gslDone(l) && !userLeagueMatch(l) && guard++ < 6) resolveGSLRound(l, rngRef.current);
+      if (gslDone(l)) { enterPlayoffs(l); return; }
+    } else {
+      resolveLeagueRound(l, rngRef.current, LEAGUE_BO);
+      if (leagueDone(l)) { enterPlayoffs(l); return; }
     }
     const next = { ...save, league: { ...l } };
     persist(next);
@@ -1154,9 +1161,17 @@ export function CareerScreen({ onExit }: Props) {
     setStage('hub');
   };
 
-  // entra no mata-mata do circuito: top 4 jogam SF + final pelo título e vagas
+  // entra no mata-mata: GSL = 4 classificados com cross-seed (1A x 2B, 1B x 2A);
+  // round-robin antigo = top 4 da tabela. SF + final pelo título e vagas.
   const enterPlayoffs = (l: League) => {
-    const p = buildPlayoff(leagueTable(l), save.circuit?.name ?? l.name);
+    let seedTable: TTeam[];
+    if (l.gsl) {
+      const q = gslQualifiers(l);
+      seedTable = [q.firstA, q.firstB, q.secondA, q.secondB].map((id) => leagueTeam(l, id));
+    } else {
+      seedTable = leagueTable(l);
+    }
+    const p = buildPlayoff(seedTable, save.circuit?.name ?? l.name);
     poRunAI(p, (id) => leagueTeam(l, id), rngRef.current); // sima o que não envolve o usuário
     const next = { ...save, league: { ...l }, playoff: p };
     persist(next);
@@ -1236,10 +1251,11 @@ export function CareerScreen({ onExit }: Props) {
     rngRef.current = makeRng(randomSeed());
     const a = syncUser(leagueTeam(l, m.a));
     const b = syncUser(leagueTeam(l, m.b));
-    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
+    const bo = m.bo ?? LEAGUE_BO; // GSL: abertura Bo1, resto Bo3
+    const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
     setQuickSim({
       series, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1,
-      label: `${l.name} · Rodada ${l.current + 1}`,
+      label: `${l.name} · ${l.gsl ? GSL_ROUND_LABELS[l.current] : `Rodada ${l.current + 1}`}`,
       onDone: () => { setQuickSim(null); finishUserRound(l, series); },
     });
   };
@@ -1250,6 +1266,20 @@ export function CareerScreen({ onExit }: Props) {
   const simWholeSplit = (l: League) => {
     rngRef.current = makeRng(randomSeed());
     let guard = 0;
+    if (l.gsl) {
+      while (!gslDone(l) && guard++ < 12) {
+        const m = userLeagueMatch(l);
+        if (m && !m.result) {
+          const a = syncUser(leagueTeam(l, m.a));
+          const b = syncUser(leagueTeam(l, m.b));
+          const bo = m.bo ?? 3;
+          m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+        }
+        resolveGSLRound(l, rngRef.current);
+      }
+      enterPlayoffs(l);
+      return;
+    }
     while (!leagueDone(l) && guard++ < 80) {
       const m = userLeagueMatch(l);
       if (m && !m.result) {
@@ -1703,8 +1733,17 @@ export function CareerScreen({ onExit }: Props) {
   // ---------- fim de temporada (split) ----------
   if (stage === 'seasonEnd' && league) {
     const table = leagueTable(league);
-    const pos = table.findIndex((t) => t.id === 'user') + 1;
     const me = leagueTeam(league, 'user');
+    // posição final do usuário: no GSL vem da colocação no grupo (3º grupo ≈ 5º
+    // geral, 4º ≈ 7º) ou do resultado do playoff se classificou (top 2 do grupo);
+    // no formato antigo (pontos corridos) é a posição na tabela.
+    const pos = league.gsl
+      ? (() => {
+          const gp = league.gsl.place['user'] ?? 4;
+          if (gp <= 2) { const pr = poUserRank(save.playoff); return pr === 99 ? 4 : pr; }
+          return gp === 3 ? 5 : 7;
+        })()
+      : table.findIndex((t) => t.id === 'user') + 1;
     // premiações e destaques da temporada
     const seStats = seasonPlayerStats(league);
     const circuitMvp = seStats[0];
@@ -2066,8 +2105,8 @@ export function CareerScreen({ onExit }: Props) {
       teams: [a, b],
       userIdx: myMatch.a === 'user' ? 0 : 1,
       mode: 'league',
-      bestOf: LEAGUE_BO,
-      phaseLabel: `${league.name} · Rodada ${league.current + 1}`,
+      bestOf: myMatch.bo ?? LEAGUE_BO, // GSL: abertura Bo1, resto Bo3
+      phaseLabel: `${league.name} · ${league.gsl ? GSL_ROUND_LABELS[league.current] : `Rodada ${league.current + 1}`}`,
     });
     setStage('veto');
   };
@@ -2314,7 +2353,7 @@ export function CareerScreen({ onExit }: Props) {
                   <button className="btn ghost small" onClick={dismissGuide}>Entendi ✕</button>
                 </div>
                 <ul>
-                  <li><b>Fase de grupos</b> (todos contra todos, {league.rounds.length} rodadas) → os <b>4 melhores</b> vão pro <b>mata-mata</b> (semis MD3 + final MD5) que decide o campeão. É o formato real do CS — grupo + playoffs, não liga ida-e-volta.</li>
+                  <li><b>Fase de grupos GSL</b> (2 grupos de 4, dupla eliminação: abertura → vencedores/eliminação → decisão; abertura é MD1, o resto MD3) → os <b>2 melhores de cada grupo</b> vão pro <b>mata-mata</b> (semis MD3 + final MD5). É o formato real do CS (IEM/BLAST/Major), não liga de pontos.</li>
                   <li><b>Major Mundial a cada {MAJOR_EVERY} splits</b>: chegue ao top {spots} do mata-mata num split de Major (o próximo é no Split {isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY))}) pra garantir a vaga.</li>
                   <li><b>Janela de transferências só entre temporadas</b>: durante o split é com o elenco que você tem.</li>
                   <li><b>Seu elenco evolui entre temporadas</b>: jogador em ascensão melhora, veterano em declínio cai; valor e salário acompanham. Olhe a fase de carreira antes de contratar.</li>
@@ -2325,7 +2364,7 @@ export function CareerScreen({ onExit }: Props) {
             {opp && myMatch ? (
               <div className="play-match-card" style={{ background: `linear-gradient(110deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--header) 70%)` }}>
                 <div className="pm-info">
-                  <div className="pm-label">PRÓXIMA PARTIDA · MD3 · Rodada {league.current + 1}/{league.rounds.length}</div>
+                  <div className="pm-label">PRÓXIMA PARTIDA · {(myMatch.bo ?? 3) === 1 ? 'MD1' : (myMatch.bo ?? 3) === 5 ? 'MD5' : 'MD3'} · {league.gsl ? `Grupos · ${GSL_ROUND_LABELS[league.current]}` : `Rodada ${league.current + 1}/${league.rounds.length}`}</div>
                   <div className="pm-teams">
                     <span className="pm-side">
                       <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={40} logoUrl={save.org?.logo} />
@@ -2338,7 +2377,7 @@ export function CareerScreen({ onExit }: Props) {
                     </span>
                   </div>
                   <div className="pm-opp muted small">
-                    <Flag cc={opp.country} /> {oppPos}º na tabela · força {opp.strength.toFixed(1)}
+                    <Flag cc={opp.country} /> {league.gsl ? `Grupo ${league.gsl.groups[0].includes(opp.id) ? 'A' : 'B'}` : `${oppPos}º na tabela`} · força {opp.strength.toFixed(1)}
                   </div>
                 </div>
                 <div className="pm-actions">
@@ -2389,8 +2428,10 @@ export function CareerScreen({ onExit }: Props) {
 
           <div className="career-side">
             <div className="side-card">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>Classificação · top {spots} vai ao Major</div>
-              <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} />
+              <div className="muted small section-label" style={{ marginTop: 0 }}>Fase de grupos · top 2 de cada grupo avança</div>
+              {league.gsl
+                ? <GSLGroups league={league} onOpen={setSelSeries} compact />
+                : <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} />}
             </div>
             <div className="side-card">
               <div className="vrs-snap-head">
@@ -2483,9 +2524,11 @@ export function CareerScreen({ onExit }: Props) {
       {hubTab === 'standings' && (
         <div className="panel">
           <div className="panel-body">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>{save.circuit?.name ?? 'Circuito'} · top {spots} vai ao Major Mundial</div>
-            <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} detailed />
-            <p className="muted small" style={{ marginTop: 10 }}>Clique em um time para ver elenco, técnico e força.</p>
+            <div className="muted small section-label" style={{ marginTop: 0 }}>{save.circuit?.name ?? 'Circuito'} · fase de grupos (GSL) · top 2 de cada grupo vão ao mata-mata</div>
+            {league.gsl
+              ? <GSLGroups league={league} onOpen={setSelSeries} />
+              : <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} detailed />}
+            <p className="muted small" style={{ marginTop: 10 }}>{league.gsl ? 'Clique num jogo concluído pra ver o placar.' : 'Clique em um time para ver elenco, técnico e força.'}</p>
           </div>
         </div>
       )}
@@ -3152,6 +3195,58 @@ function MatchLine({ league, m, onOpen }: {
 const PLACE_SHORT: Record<PlacementCode, string> = {
   champion: 'Campeão', runnerup: 'Vice', semi: 'Semi', quarters: 'Quartas', playoffs: 'Playoffs', swiss: 'Suíça',
 };
+
+// fase de grupos GSL: 2 grupos com classificação (1-4) e os jogos por estágio.
+// compact = só a classificação (cabe no card lateral). full = + jogos clicáveis.
+function GSLGroups({ league, onOpen, compact }: {
+  league: League;
+  onOpen: (s: { series: SeriesResult; teams: [TTeam, TTeam] }) => void;
+  compact?: boolean;
+}) {
+  const groups = gslGroupView(league);
+  return (
+    <div className={`gsl-groups${compact ? ' compact' : ''}`}>
+      {groups.map((g) => (
+        <div key={g.key} className="gsl-group">
+          <div className="gsl-group-head">Grupo {g.key} <span className="muted small">· top 2 avançam</span></div>
+          <div className="gsl-standings">
+            {[...g.teams].sort((x, y) => (g.place[x] || 9) - (g.place[y] || 9)).map((id) => {
+              const t = leagueTeam(league, id);
+              const pl = g.place[id];
+              return (
+                <div key={id} className={`gsl-st-row${pl && pl <= 2 ? ' adv' : pl ? ' out' : ''}${id === 'user' ? ' me' : ''}`}>
+                  <span className="gsl-pl">{pl || '–'}</span>
+                  <TeamBadge tag={t.tag} colors={t.colors} size={16} logoUrl={t.logoUrl} />
+                  <span className="gsl-st-name">{t.name}</span>
+                  {pl && pl <= 2 ? <span className="gsl-q" title="Classificado">✓</span> : null}
+                </div>
+              );
+            })}
+          </div>
+          {!compact && (
+            <>
+              <div className="gsl-stage-label">Abertura · MD1</div>
+              {g.opening.map((m, i) => <MatchLine key={`o${i}`} league={league} m={m} onOpen={onOpen} />)}
+              {g.winners && (
+                <>
+                  <div className="gsl-stage-label">Vencedores · Eliminação · MD3</div>
+                  <MatchLine league={league} m={g.winners} onOpen={onOpen} />
+                  {g.elim && <MatchLine league={league} m={g.elim} onOpen={onOpen} />}
+                </>
+              )}
+              {g.decider && (
+                <>
+                  <div className="gsl-stage-label">Decisão · MD3</div>
+                  <MatchLine league={league} m={g.decider} onOpen={onOpen} />
+                </>
+              )}
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ranking de jogadores (destaques da temporada)
 function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<string>; ranked?: boolean }) {

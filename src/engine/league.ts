@@ -9,6 +9,8 @@ export interface LeagueMatch {
   a: string;
   b: string;
   result?: SeriesResult;
+  tag?: string; // GSL: identifica o jogo no grupo (ex.: 'A-O1','A-WIN','A-ELIM','A-DEC')
+  bo?: 1 | 3 | 5; // best-of deste jogo (GSL: opening Bo1, resto Bo3)
 }
 
 export interface League {
@@ -16,6 +18,12 @@ export interface League {
   teams: TTeam[];
   rounds: LeagueMatch[][];
   current: number; // índice da rodada atual (0-based)
+  // metadados do formato GSL (2 grupos de 4, dupla eliminação). Ausente = liga
+  // de pontos corridos (formato antigo, mantido como fallback).
+  gsl?: {
+    groups: [string[], string[]]; // ids em ordem de seed por grupo (A, B)
+    place: Record<string, number>; // id -> colocação no grupo (1 a 4), preenchido ao resolver
+  };
 }
 
 // tabela round-robin pelo método do círculo (sem rng: a ordem dos times define).
