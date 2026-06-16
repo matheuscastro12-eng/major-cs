@@ -5,7 +5,7 @@
 // fases. Textos em PT por enquanto (modo em refino, não lançado).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
-import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League } from '../engine/league';
+import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
 import { teamSeasonToTTeam } from '../engine/ratings';
 import { simulateSeries } from '../engine/match';
@@ -36,8 +36,9 @@ const PRIZE_BY_POS = [1_250_000, 750_000, 450_000, 280_000, 170_000, 110_000, 70
 const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
-// o Major Mundial só acontece a cada N splits: a jornada até ele é mais longa
-const MAJOR_EVERY = 2;
+// o Major Mundial fecha a TEMPORADA: a cada N campeonatos/splits acontece um Major.
+// 4 = a temporada tem 3 campeonatos tier-1 + o Major encerrando o ano.
+const MAJOR_EVERY = 4;
 const isMajorSplit = (split: number) => split % MAJOR_EVERY === 0;
 // premiação e VRS do Major por colocação (bem maior que o circuito)
 const MAJOR_PRIZE: Record<PlacementCode, number> = {
@@ -59,6 +60,16 @@ const MAJOR_VRS: Record<PlacementCode, number> = {
 // nomes reais de Majors (fonte: Liquipedia), rotacionando por split
 const MAJOR_NAMES = ['PGL Major Copenhagen', 'BLAST.tv Austin Major', 'IEM Major Rio', 'PGL Major Budapest', 'ESL One Major Cologne'];
 const MAJOR_NAME = (split: number) => MAJOR_NAMES[(split - 1) % MAJOR_NAMES.length];
+// CALENDÁRIO TIER 1 (Liquipedia/HLTV): cada split é um campeonato real DISTINTO do
+// ano, jogado em sequência (datas diferentes). Por serem em datas diferentes, os
+// mesmos melhores times disputam todos — sem "jogar dois ao mesmo tempo". O ciclo
+// é contínuo entre temporadas, então cada split traz um evento diferente.
+const T1_EVENTS = [
+  'IEM Katowice', 'ESL Pro League', 'IEM Cologne', 'IEM Dallas',
+  'PGL Cluj-Napoca', 'BLAST Premier World Final', 'IEM Chengdu', 'Esports World Cup',
+  'BLAST Open Lisboa', 'IEM Melbourne', 'PGL Astana', 'Thunderpick World Championship',
+];
+const t1EventName = (split: number) => T1_EVENTS[(split - 1) % T1_EVENTS.length];
 
 interface Signing {
   playerId: string;
@@ -629,10 +640,25 @@ function playerSeasonRating(p: Player, split: number): number {
   // escala estilo HLTV: ~0.95 (mediano) até ~1.40 (melhor do mundo)
   return Math.max(0.85, 0.95 + (ovr - 70) / 55 + form);
 }
-// melhores N jogadores da temporada (entre todos os elencos da era)
-function seasonTopPlayers(pool: TeamSeason[], split: number, n: number) {
+// uma "temporada" (ano competitivo) = MAJOR_EVERY campeonatos/splits, fechando no
+// split de Major. A premiação do Top 20 HLTV é um prêmio de FIM DE ANO: não sai
+// depois de um único campeonato, e sim no encerramento da temporada.
+const seasonOf = (split: number) => Math.ceil(split / MAJOR_EVERY); // temporada a que o split pertence (1, 2, ...)
+// splits que compõem a temporada que termina no split de Major informado
+function seasonSplitRange(endSplit: number): number[] {
+  const out: number[] = [];
+  for (let s = Math.max(1, endSplit - (MAJOR_EVERY - 1)); s <= endSplit; s++) out.push(s);
+  return out;
+}
+// rating "do ano" agregado: média do rating do jogador em cada split da temporada
+function playerYearRating(p: Player, endSplit: number): number {
+  const splits = seasonSplitRange(endSplit);
+  return splits.reduce((acc, s) => acc + playerSeasonRating(p, s), 0) / splits.length;
+}
+// melhores N jogadores da TEMPORADA inteira (média sobre os splits do ano)
+function seasonTopPlayersYear(pool: TeamSeason[], endSplit: number, n: number) {
   return pool
-    .flatMap((t) => t.players.map((p) => ({ p, team: t, rating: playerSeasonRating(p, split) })))
+    .flatMap((t) => t.players.map((p) => ({ p, team: t, rating: playerYearRating(p, endSplit) })))
     .sort((a, b) => b.rating - a.rating)
     .slice(0, n);
 }
@@ -727,7 +753,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', countr
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'squad' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar';
+type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar';
 
 interface MajorResult {
   tournament: Tournament;
@@ -893,15 +919,30 @@ export function CareerScreen({ onExit }: Props) {
       vrsMult: number,
       tier: number,
     ) => ({ id, name, desc, teams: teams.slice(0, 7), spots, prizeMult, vrsMult, tier });
-    // Tier 1 = eventos mundiais (grupos + playoffs) que dão vaga no Major; dois
-    // convites pra dar escolha. Tier 2/3 = circuitos da SUA região.
+    // REPARTE os melhores times entre os campeonatos para NENHUM time aparecer em
+    // dois ao mesmo tempo. Na vida real a Vitality não joga BLAST e ESL no mesmo
+    // dia: cada evento tem o melhor field possível, mas sem repetir time.
+    const used = new Set<string>();
+    const take = (src: TeamSeason[], n: number): TeamSeason[] => {
+      const out: TeamSeason[] = [];
+      for (const t of src) {
+        if (out.length >= n) break;
+        if (!used.has(t.id)) { used.add(t.id); out.push(t); }
+      }
+      return out;
+    };
+    const t1Teams = take(byStrength, 7);                                  // a elite mundial vai pro Tier 1
+    const t2Teams = take(regional, 7);                                    // melhores da região que sobraram
+    const t3Teams = take(regMid.length >= 5 ? regMid : byStrength, 7);    // acesso (o que restou)
+    const t1Name = t1EventName(save.split);
+    // Tier 1 = UM evento mundial por split (calendário sequencial, nome real).
+    // Tier 2/3 = circuitos da SUA região. Fields disjuntos: sem time repetido.
     return [
-      mk('eslpl', 'ESL Pro League', 'Tier 1 mundial: fase de grupos + playoffs (mata-mata). O principal caminho de pontos pro Major. Paga muito.', byStrength, 2, 1.8, 1.7, 1),
-      mk('blast', 'BLAST Premier', 'Tier 1 mundial: os gigantes em grupos + playoffs. Prêmio e VRS altíssimos; vaga direta na briga pelo Major.', byStrength, 2, 1.7, 1.6, 1),
-      mk('t2', T2[reg], `Tier 2 (${regLbl}): liga regional forte, fase de grupos + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.`, regional, 2, 1, 1, 2),
-      mk('t3', T3[reg], `Tier 3 (${regLbl}): circuito de acesso da região, grupos + playoffs. Onde toda org começa.`, regMid, 1, 0.6, 0.6, 3),
+      mk('t1', t1Name, `Tier 1 mundial · ${t1Name}: fase de grupos (GSL, dupla eliminação) + playoffs com a elite do ranking. Principal caminho de pontos pro Major; paga muito.`, t1Teams, 2, 1.8, 1.7, 1),
+      mk('t2', T2[reg], `Tier 2 (${regLbl}): liga regional forte, grupos GSL + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.`, t2Teams, 2, 1, 1, 2),
+      mk('t3', T3[reg], `Tier 3 (${regLbl}): circuito de acesso da região, grupos + playoffs. Onde toda org começa.`, t3Teams, 1, 0.6, 0.6, 3),
     ].filter((c) => c.teams.length >= 5);
-  }, [oppEra, save.region]);
+  }, [oppEra, save.region, save.split]);
 
   // mercado: jogadores reais dos elencos atuais (CS2), com preço de mercado
   const market = useMemo(
@@ -1625,6 +1666,12 @@ export function CareerScreen({ onExit }: Props) {
   // ---------- resultado do Major ----------
   if (stage === 'major' && majorResult) {
     const mr = majorResult;
+    // o Major fecha a temporada (sempre cai num split de Major): entrega aqui a
+    // premiação do Top 20 HLTV do ano
+    const seasonNo = seasonOf(save.split);
+    const mySquadOidsM = new Set(save.squad.map((s) => s.playerId));
+    const seasonTop3 = seasonTopPlayersYear(currentEra, save.split, 3);
+    const seasonTop20 = seasonTopPlayersYear(currentEra, save.split, 20);
     const PLACE_PT: Record<PlacementCode, string> = {
       champion: 'CAMPEÃO DO MAJOR',
       runnerup: 'VICE-CAMPEÃO',
@@ -1649,6 +1696,29 @@ export function CareerScreen({ onExit }: Props) {
                 ? 'Sua organização é CAMPEÃ MUNDIAL! O nome entrou para a história do CS.'
                 : 'Sua org representou o circuito no Major mundial. Volte mais forte no próximo split.'}
             </p>
+
+            {/* o Major encerra a temporada: aqui sai a premiação do Top 20 HLTV do ano */}
+            <div className="se-awards">
+              <div className="se-award">
+                <div className="se-award-title">Top 3 HLTV da temporada</div>
+                <div className="se-top3">
+                  {seasonTop3.map((e, i) => {
+                    const tag = mySquadOidsM.has(e.p.id) ? (save.org?.tag ?? 'VOCÊ') : e.team.tag;
+                    return (
+                      <div key={e.p.id} className="se-top3-row">
+                        <span className="t20-rank">{i + 1}</span>
+                        <span className="bp-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tag}</span></span>
+                        <span className="t20-rating">{e.rating.toFixed(2)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <button className="btn gold big ceremony-cta" onClick={() => setShowCeremony(true)}>
+              🏆 Cerimônia do Top 20 HLTV — Temporada {seasonNo}
+            </button>
+
             <button
               className="btn gold big"
               onClick={() => {
@@ -1726,6 +1796,9 @@ export function CareerScreen({ onExit }: Props) {
             </button>
           </div>
         </div>
+        {showCeremony && (
+          <Top20Ceremony entries={seasonTop20} mine={mySquadOidsM} orgTag={save.org?.tag ?? 'VOCÊ'} split={save.split} circuit={save.circuit?.name ?? 'Temporada'} onClose={() => setShowCeremony(false)} />
+        )}
       </div>
     );
   }
@@ -1749,8 +1822,10 @@ export function CareerScreen({ onExit }: Props) {
     const circuitMvp = seStats[0];
     const mySquadIdsSE = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
     const myStar = seStats.find((s) => mySquadIdsSE.has(s.id));
-    const seasonTop3 = seasonTopPlayers(currentEra, save.split, 3);
-    const seasonTop20 = seasonTopPlayers(currentEra, save.split, 20);
+    const seasonEndsNow = isMajorSplit(save.split); // a temporada (ano) só fecha no split de Major
+    const seasonNo = seasonOf(save.split);
+    const seasonTop3 = seasonTopPlayersYear(currentEra, save.split, 3);
+    const seasonTop20 = seasonTopPlayersYear(currentEra, save.split, 20);
     const mySquadOids = new Set(save.squad.map((s) => s.playerId)); // ids do seu elenco (relabel HLTV)
     const nextFeed = feedMemo;
     const spots = save.circuit?.spots ?? MAJOR_SPOTS;
@@ -1890,27 +1965,37 @@ export function CareerScreen({ onExit }: Props) {
                   <div className="muted small">rating {myStar.rating.toFixed(2)} · {myStar.kd.toFixed(2)} K/D</div>
                 </div>
               )}
-              <div className="se-award">
-                <div className="se-award-title">Top 3 HLTV da temporada</div>
-                <div className="se-top3">
-                  {seasonTop3.map((e, i) => {
-                    const tag = mySquadOids.has(e.p.id) ? (save.org?.tag ?? 'VOCÊ') : e.team.tag;
-                    return (
-                      <div key={e.p.id} className="se-top3-row">
-                        <span className="t20-rank">{i + 1}</span>
-                        <span className="bp-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tag}</span></span>
-                        <span className="t20-rating">{e.rating.toFixed(2)}</span>
-                      </div>
-                    );
-                  })}
+              {seasonEndsNow && (
+                <div className="se-award">
+                  <div className="se-award-title">Top 3 HLTV da temporada</div>
+                  <div className="se-top3">
+                    {seasonTop3.map((e, i) => {
+                      const tag = mySquadOids.has(e.p.id) ? (save.org?.tag ?? 'VOCÊ') : e.team.tag;
+                      return (
+                        <div key={e.p.id} className="se-top3-row">
+                          <span className="t20-rank">{i + 1}</span>
+                          <span className="bp-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tag}</span></span>
+                          <span className="t20-rating">{e.rating.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* cerimônia do ranking HLTV (premiação do fim de temporada) */}
-            <button className="btn gold big ceremony-cta" onClick={() => setShowCeremony(true)}>
-              🏆 Cerimônia do Top 20 HLTV
-            </button>
+            {/* premiação HLTV: prêmio de FIM DE TEMPORADA (a cada MAJOR_EVERY campeonatos),
+                não depois de um único campeonato */}
+            {seasonEndsNow ? (
+              <button className="btn gold big ceremony-cta" onClick={() => setShowCeremony(true)}>
+                🏆 Cerimônia do Top 20 HLTV — Temporada {seasonNo}
+              </button>
+            ) : (
+              <div className="muted small" style={{ maxWidth: 520, margin: '12px auto' }}>
+                🏆 A <b>Premiação do Top 20 HLTV</b> fecha a temporada (a cada {MAJOR_EVERY} campeonatos) —
+                a próxima é no <b>Split {nextMajorSplit}</b>. Ainda não acabou a temporada.
+              </div>
+            )}
 
             {/* prévia da próxima janela de transferências */}
             <div className="muted small section-label">Rumores para a próxima janela</div>
@@ -2144,6 +2229,7 @@ export function CareerScreen({ onExit }: Props) {
     { id: 'inbox', label: unread > 0 ? `📨 Inbox (${unread})` : '📨 Inbox' },
     { id: 'results', label: 'Resultados' },
     { id: 'standings', label: 'Classificação' },
+    { id: 'bracket', label: '🗺️ Chave' },
     { id: 'squad', label: 'Elenco' },
     { id: 'finance', label: expiringCount > 0 ? `💰 Finanças ⚠️${expiringCount}` : '💰 Finanças' },
     { id: 'market', label: 'Mercado' },
@@ -2529,6 +2615,26 @@ export function CareerScreen({ onExit }: Props) {
               ? <GSLGroups league={league} onOpen={setSelSeries} />
               : <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} detailed />}
             <p className="muted small" style={{ marginTop: 10 }}>{league.gsl ? 'Clique num jogo concluído pra ver o placar.' : 'Clique em um time para ver elenco, técnico e força.'}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CHAVE (BRACKET DEDICADO) ===== */}
+      {hubTab === 'bracket' && (
+        <div className="panel">
+          <div className="panel-body">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>
+              {save.circuit?.name ?? 'Circuito'} · chave da fase de grupos (GSL · dupla eliminação) — top 2 de cada grupo vão ao mata-mata
+            </div>
+            {league.gsl
+              ? <GSLBracket league={league} onOpen={setSelSeries} />
+              : <p className="muted small">Este circuito não usa fase de grupos GSL.</p>}
+            {save.playoff && (
+              <div style={{ marginTop: 18 }}>
+                <PlayoffBracket p={save.playoff} teamOf={(id) => leagueTeam(league, id)} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
+              </div>
+            )}
+            <p className="muted small" style={{ marginTop: 10 }}>Clique num confronto concluído pra ver o placar completo da série.</p>
           </div>
         </div>
       )}
@@ -3248,6 +3354,103 @@ function GSLGroups({ league, onOpen, compact }: {
   );
 }
 
+// célula de confronto no estilo do bracket do Major (duas linhas + placar)
+function GslBrCell({ league, m, onOpen }: {
+  league: League;
+  m?: LeagueMatch;
+  onOpen: (s: { series: SeriesResult; teams: [TTeam, TTeam] }) => void;
+}) {
+  if (!m) {
+    return <div className="hb-match empty"><div className="hb-row ghost">?</div><div className="hb-row ghost">?</div></div>;
+  }
+  const a = leagueTeam(league, m.a);
+  const b = leagueTeam(league, m.b);
+  const r = m.result;
+  const row = (t: TTeam, sc: number | undefined, loser: boolean) => (
+    <div className={`hb-row${loser ? ' loser' : ''}${t.id === 'user' ? ' is-user' : ''}`}>
+      <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={t.logoUrl} />
+      <span className="hb-tag">{t.tag}</span>
+      <span className="hb-score">{sc ?? '–'}</span>
+    </div>
+  );
+  return (
+    <div className={`hb-match${r ? ' clickable' : ''}`}
+      onClick={r ? () => onOpen({ series: r, teams: [a, b] }) : undefined}
+      title={r ? 'Ver estatísticas da série' : undefined}>
+      {row(a, r?.mapScore[0], !!r && r.winner === 1)}
+      {row(b, r?.mapScore[1], !!r && r.winner === 0)}
+    </div>
+  );
+}
+
+// CHAVE DEDICADA do GSL (dupla eliminação por grupo), no mesmo visual do Major:
+// Abertura (MD1) → Vencedores/Eliminação (MD3) → Decisão (MD3) → Classificados.
+function GSLBracket({ league, onOpen }: {
+  league: League;
+  onOpen: (s: { series: SeriesResult; teams: [TTeam, TTeam] }) => void;
+}) {
+  const groups = gslGroupView(league);
+  const token = (id: string, tone: 'adv' | 'elim', place: number) => {
+    const t = leagueTeam(league, id);
+    return (
+      <div key={id} className={`hb-token ${tone}${id === 'user' ? ' is-user' : ''}`}>
+        <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={t.logoUrl} />
+        <span>{t.tag}</span>
+        <span className="gsl-br-seed">{place}º</span>
+      </div>
+    );
+  };
+  return (
+    <div className="gsl-bracket">
+      {groups.map((g) => {
+        const ordered = [...g.teams].sort((x, y) => (g.place[x] || 9) - (g.place[y] || 9));
+        const adv = ordered.filter((id) => (g.place[id] ?? 9) <= 2);
+        const out = ordered.filter((id) => (g.place[id] ?? 9) >= 3);
+        return (
+          <div key={g.key} className="gsl-br-group">
+            <div className="gsl-br-title">Grupo {g.key} <span className="muted small">· dupla eliminação · top 2 avançam</span></div>
+            <div className="hb-scroll">
+              <div className="hb-col">
+                <div className="hb-reclabel">Abertura · MD1</div>
+                <div className="hb-group">
+                  {g.opening.map((m, i) => <GslBrCell key={i} league={league} m={m} onOpen={onOpen} />)}
+                </div>
+              </div>
+              <div className="hb-col">
+                <div className="hb-reclabel">Vencedores / Eliminação · MD3</div>
+                <div className="hb-group">
+                  <div className="gsl-br-sub adv">⬆ Vencedores (1º)</div>
+                  <GslBrCell league={league} m={g.winners} onOpen={onOpen} />
+                  <div className="gsl-br-sub elim">⬇ Eliminação (4º)</div>
+                  <GslBrCell league={league} m={g.elim} onOpen={onOpen} />
+                </div>
+              </div>
+              <div className="hb-col">
+                <div className="hb-reclabel">Decisão · MD3</div>
+                <div className="hb-group">
+                  <div className="gsl-br-sub">Vaga final (2º/3º)</div>
+                  <GslBrCell league={league} m={g.decider} onOpen={onOpen} />
+                </div>
+              </div>
+              <div className="hb-col">
+                <div className="hb-reclabel">Resultado</div>
+                <div className="hb-resultbox adv">
+                  <div className="hb-resultbox-title">✓ Classificados</div>
+                  {adv.length ? adv.map((id) => token(id, 'adv', g.place[id])) : <div className="hb-row ghost">?</div>}
+                </div>
+                <div className="hb-resultbox elim">
+                  <div className="hb-resultbox-title">✕ Eliminados</div>
+                  {out.length ? out.map((id) => token(id, 'elim', g.place[id])) : <div className="hb-row ghost">?</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ranking de jogadores (destaques da temporada)
 function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<string>; ranked?: boolean }) {
   if (stats.length === 0) return <p className="muted small">Os destaques aparecem após as primeiras partidas.</p>;
@@ -3285,7 +3488,7 @@ function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
       <div className="ceremony" onClick={(e) => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}>✕</button>
         <div className="cer-head">
-          <div className="cer-kicker">Premiação · {circuit} · Split {split}</div>
+          <div className="cer-kicker">Premiação de fim de temporada · Temporada {seasonOf(split)} · {circuit}</div>
           <h2>🏆 Ranking HLTV — Top 20 do ano</h2>
         </div>
         {top1 && (

@@ -4149,6 +4149,15 @@ table.crm-players input.num {
 .gsl-q { color: var(--pos); font-weight: 800; }
 .gsl-stage-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; margin: 8px 0 3px; }
 
+/* chave dedicada do GSL (reaproveita o visual hb-* do bracket do Major) */
+.gsl-bracket { display: flex; flex-direction: column; gap: 18px; }
+.gsl-br-group { background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: var(--r-sm); padding: 12px 12px 14px; }
+.gsl-br-title { font-family: var(--font-cond); font-weight: 800; font-size: 1.08rem; margin-bottom: 10px; }
+.gsl-br-sub { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 800; margin: 6px 0 3px; }
+.gsl-br-sub.adv { color: var(--green-bright); }
+.gsl-br-sub.elim { color: var(--red-bright); }
+.gsl-br-seed { margin-left: auto; font-family: var(--font-cond); font-weight: 800; color: var(--muted); font-size: 11px; }
+
 /* calendário multi-torneio */
 .cal-major-banner {
   padding: 12px 15px; border-radius: var(--r); margin-bottom: 16px; font-size: 13.5px;
