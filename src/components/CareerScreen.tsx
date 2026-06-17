@@ -25,6 +25,7 @@ import { hashStr } from '../state/hash';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
+import { isAdminUnlocked } from './AdminGate';
 import bo3Ages from '../data/bo3-ages.json';
 
 const SAVE_KEY = 'rtm-career-v1';
@@ -1427,9 +1428,12 @@ export function CareerScreen({ onExit }: Props) {
   useEffect(() => {
     let alive = true;
     fetchBo3Edits().then((srv) => {
-      // o servidor COMPLETA, mas as edições locais do admin têm prioridade — o sync
-      // nunca apaga o que você acabou de editar no CRM (bug de "sumiu o que editei").
-      if (alive && srv) { const merged = mergeBo3Edits(srv, loadBo3Edits()); setBo3Edits(merged); saveBo3Edits(merged); }
+      if (!alive || !srv) return;
+      // jogador comum recebe o SERVIDOR CRU (fonte da verdade global): assim as
+      // edições do admin chegam a todos, e o cache velho não "volta pro que era".
+      // só o ADMIN mantém suas edições locais por cima (pra não perder trabalho).
+      const next = isAdminUnlocked() ? mergeBo3Edits(srv, loadBo3Edits()) : srv;
+      setBo3Edits(next); saveBo3Edits(next);
     });
     return () => { alive = false; };
   }, []);
