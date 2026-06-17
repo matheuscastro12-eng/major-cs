@@ -29,3 +29,6 @@ scripts/*.mjs
 *.sw?
 
 .vercel
+
+# sim bundle output
+sim/*.mjs

@@ -71,6 +71,27 @@ function emptyStats(): PlayerMapStats {
 
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
 
+// ---- balanceamento da curva força→vitória ----
+// ROUND_DIV: quanto MAIOR, mais rasa a curva (mais paridade/upsets). Calibrado por
+// simulação pra que gaps pequenos não sejam quase-determinísticos como antes.
+// MAP_SWING: cada mapa sorteia uma "forma do dia" por time (±), gerando upsets
+// realistas (um top pode ter um mapa ruim). Em produção usa os defaults; o
+// harness de simulação pode sobrescrever via env pra calibrar.
+const envNum = (k: string, def: number): number => {
+  // lê de process.env via globalThis (sem exigir os types do node); no browser
+  // process é indefinido e cai no default.
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const v = env?.[k];
+  return v != null && v !== '' ? Number(v) : def;
+};
+// defaults calibrados por simulação (sim/balance.ts): curva mais rasa + forma do
+// dia por mapa. Antes (div 15, sem swing) um gap de +4 já dava 85% de BO3 e o
+// melhor do field ganhava ~50% dos torneios — virava quase determinístico. Com
+// div 28 + swing 4: +4 ~71%, +8 ~84%, e o melhor do field ganha ~33% (paridade
+// real no topo), sem deixar gaps enormes virarem moeda (top vs tier-3 segue ~100%).
+const ROUND_DIV = envNum('ROUND_DIV', 28);
+const MAP_SWING = envNum('MAP_SWING', 4);
+
 const KILL_ROLE_MULT: Record<string, number> = {
   Entry: 1.12,
   AWP: 1.08,
@@ -315,6 +336,9 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   ];
   const formA = formBoost(a);
   const formB = formBoost(b);
+  // forma do dia DESTE mapa (±MAP_SWING): cria variância de upset por mapa
+  const mapFormA = MAP_SWING ? (rng() * 2 - 1) * MAP_SWING : 0;
+  const mapFormB = MAP_SWING ? (rng() * 2 - 1) * MAP_SWING : 0;
 
   let round = 0;
   let nextBuys: [BuyTier, BuyTier] = ['pistol', 'pistol'];
@@ -375,8 +399,8 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]));
     eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]));
 
-    let effA = effStrength(a, flags[0], map, aSide, buys[0], lastWinner === 1, isPistol, secondHalf, pickedBy === 0) + formA;
-    let effB = effStrength(b, flags[1], map, bSide, buys[1], lastWinner === 0, isPistol, secondHalf, pickedBy === 1) + formB;
+    let effA = effStrength(a, flags[0], map, aSide, buys[0], lastWinner === 1, isPistol, secondHalf, pickedBy === 0) + formA + mapFormA;
+    let effB = effStrength(b, flags[1], map, bSide, buys[1], lastWinner === 0, isPistol, secondHalf, pickedBy === 1) + formB + mapFormB;
     if (boostTeam === 0) effA += 3.5; // timeout tático
     if (boostTeam === 1) effB += 3.5;
 
@@ -409,7 +433,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     const sideFor = (teamIdx: 0 | 1): 'ct' | 't' => (teamIdx === 0 ? aSide : bSide);
 
     const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
-    const pA = sigmoid(diff / 15);
+    const pA = sigmoid(diff / ROUND_DIV);
     const winner: 0 | 1 = rng() < pA ? 0 : 1;
 
     const closeness = 1 - Math.abs(pA - 0.5) * 2;
