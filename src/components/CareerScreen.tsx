@@ -862,6 +862,36 @@ function evoDelta(pid: string, split: number, age: number, atCeiling: boolean): 
   return r < 55 ? -2 : -1;                              // declínio tardio, mais firme (mas nunca -3)
 }
 
+// envelhecimento da IA: aplica a MESMA evolução por idade do seu elenco (evoDelta),
+// acumulada até o split atual. Jovem da IA sobe rumo ao potencial, veterano cai e o
+// auge oscila — o cenário fica VIVO entre temporadas (o field não congela) e o
+// usuário não passa a IA estática só treinando o próprio time.
+function aiAttrDrift(p: Player, split: number): number {
+  if (split <= 1) return 0;
+  const base = playerOvr(p);
+  const a0 = baseAge(p);
+  const pot = playerPotentialOvr(p, a0);
+  let cur = base;
+  for (let s = 1; s < split; s++) {
+    const age = a0 + Math.floor((s - 1) / 3);
+    cur = Math.max(40, Math.min(99, cur + evoDelta(p.id, s, age, cur >= pot)));
+  }
+  return Math.round(Math.max(-10, Math.min(10, cur - base)));
+}
+function applyAiAging(teams: TeamSeason[], split: number, skip: Set<string>): TeamSeason[] {
+  if (split <= 1) return teams;
+  const clamp = (v: number) => Math.max(40, Math.min(99, v));
+  return teams.map((t) => ({
+    ...t,
+    players: t.players.map((p) => {
+      if (skip.has(p.id)) return p; // SEUS jogadores evoluem pelo save.evo (não duplica)
+      const d = aiAttrDrift(p, split);
+      if (!d) return p;
+      return { ...p, aim: clamp(p.aim + d), consistency: clamp(p.consistency + d), clutch: clamp(p.clutch + d), awp: clamp(p.awp + d), igl: clamp(p.igl + d) };
+    }),
+  }));
+}
+
 // ----- helpers do playoff (mata-mata do circuito) -----
 function buildPlayoff(table: TTeam[], circuit: string): Playoff {
   const ids = table.map((t) => t.id);
@@ -1404,10 +1434,14 @@ export function CareerScreen({ onExit }: Props) {
     return () => { alive = false; };
   }, []);
   const currentEra = useMemo(
-    // aplica as transferências já realizadas (save.moves) por cima da base:
-    // assim os jogadores transferidos aparecem MESMO nos elencos novos
-    () => applyMoves(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves).filter((t) => t.players.length >= 5),
-    [save.moves, bo3Edits],
+    // aplica as transferências já realizadas (save.moves) por cima da base, e o
+    // ENVELHECIMENTO da IA por split (pulando seus jogadores, que evoluem pelo evo).
+    () => {
+      const skip = new Set(save.squad.map((s) => s.playerId));
+      return applyAiAging(applyMoves(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves), save.split, skip)
+        .filter((t) => t.players.length >= 5);
+    },
+    [save.moves, bo3Edits, save.split, save.squad],
   );
   // pool de ADVERSÁRIOS: tira o time que você assumiu E remove qualquer jogador
   // que está no SEU elenco do time de origem (sem duplicar ninguém), repondo com
