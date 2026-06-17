@@ -3499,6 +3499,22 @@ table.crm-players input.num {
   overflow-y: auto;
 }
 
+/* ---- tutorial de primeira vez (onboarding) ---- */
+.onb-backdrop { align-items: center; }
+.onb-modal {
+  position: relative; width: min(440px, 94vw); margin-top: 0; text-align: center;
+  background: linear-gradient(180deg, #20262e, var(--panel));
+  border: 1px solid var(--border); border-radius: 18px; padding: 30px 26px 22px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.55);
+}
+.onb-icon { font-size: 52px; line-height: 1; margin-bottom: 10px; }
+.onb-title { font-family: var(--font-cond); font-weight: 700; font-size: 1.5rem; color: var(--text-strong); margin: 0 0 10px; }
+.onb-body { color: var(--text); font-size: 0.98rem; line-height: 1.55; margin: 0 auto 18px; max-width: 360px; }
+.onb-dots { display: flex; gap: 7px; justify-content: center; margin-bottom: 18px; }
+.onb-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--border); cursor: pointer; transition: background 0.15s, transform 0.15s; }
+.onb-dots i.on { background: var(--gold); transform: scale(1.25); }
+.onb-actions { display: flex; align-items: center; gap: 8px; }
+
 /* ---- modal de negociação de transferência ---- */
 .nego-modal {
   position: relative; width: min(460px, 94vw); margin-top: 4vh;

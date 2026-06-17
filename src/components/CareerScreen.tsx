@@ -1380,6 +1380,8 @@ export function CareerScreen({ onExit }: Props) {
   };
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
+  const [showOnb, setShowOnb] = useState(() => { try { return !localStorage.getItem('rtm-onboarded-v1'); } catch { return false; } });
+  const dismissOnb = () => { try { localStorage.setItem('rtm-onboarded-v1', '1'); } catch { /* sem storage */ } setShowOnb(false); };
   const [promoting, setPromoting] = useState<string | null>(null); // prospecto escolhendo quem sai do elenco
   const [profilePlayer, setProfilePlayer] = useState<Player | null>(null); // perfil detalhado do jogador (modal)
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
@@ -2322,6 +2324,9 @@ export function CareerScreen({ onExit }: Props) {
   }
 
   // ---------- fundação ----------
+  // tutorial de primeira vez (ou reaberto pelo botão ❔): mostra antes de tudo
+  if (showOnb) return <CareerOnboarding onClose={dismissOnb} />;
+
   if (stage === 'found') {
     const startFromOrg = (s: OrgStart) => {
       update({
@@ -3143,6 +3148,7 @@ export function CareerScreen({ onExit }: Props) {
           <span title="Torcida da organização"><i className="muted small">FÃS</i> {formatFans(careerFans(save))}</span>
         </div>
         <div className="ct-actions">
+          <button className="btn ghost" title="Rever o tutorial" onClick={() => setShowOnb(true)}>❔</button>
           <button className="btn ghost" title="Apagar tudo e recomeçar do zero" onClick={() => {
             if (!confirm('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.')) return;
             const fresh = emptySave();
@@ -5082,6 +5088,38 @@ function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string
 // ---------- fundação da organização ----------
 // proposta de uma org de elite por um jogador seu (assédio do topo). Vender dá
 // um caixa gordo mas abre um buraco no elenco; recusar mantém a base.
+// tutorial de primeira vez: slides explicando o loop do modo carreira.
+const ONB_SLIDES: { icon: string; title: string; body: string }[] = [
+  { icon: '🏆', title: 'Bem-vindo ao Modo Carreira', body: 'Você assume uma organização de Counter-Strike e leva ela do zero até o Major. Monta o elenco, joga os campeonatos e gerencia tudo entre as temporadas.' },
+  { icon: '🎯', title: 'Comece por um desafio', body: 'Escolha um desafio (uma org pronta, com contexto e metas próprias) ou funde a sua do zero. Cada desafio traz objetivos pra cumprir ao longo da campanha.' },
+  { icon: '🗓️', title: 'Escolha o campeonato', body: 'A cada split você entra num circuito. O Tier 3 é o acesso (onde toda org começa) e o Tier 1 é a elite mundial. Vencer promove; só o Tier 1 dá vaga no Major.' },
+  { icon: '🤝', title: 'Gerencie entre os splits', body: 'Na janela você negocia reforços (até com troca de jogadores), renova contratos, treina mapas e o playbook, e forma jovens na academia. Suas decisões pesam no time.' },
+  { icon: '📊', title: 'Suba no ranking e vá ao Major', body: 'Você ganha pontos de VRS vencendo eventos fortes — ganhar de time fraco rende pouco. Os melhores do ranking mundial vão ao Major, que fecha a temporada.' },
+  { icon: '🚀', title: 'Tá pronto!', body: 'Boa sorte na estrada até o Major. Dá pra rever este guia quando quiser no botão ❔ lá no topo. Bora.' },
+];
+function CareerOnboarding({ onClose }: { onClose: () => void }) {
+  const [i, setI] = useState(0);
+  const last = i === ONB_SLIDES.length - 1;
+  const s = ONB_SLIDES[i];
+  return (
+    <div className="modal-backdrop onb-backdrop" onClick={onClose}>
+      <div className="onb-modal" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-x" onClick={onClose} title="Pular">✕</button>
+        <div className="onb-icon">{s.icon}</div>
+        <h2 className="onb-title">{s.title}</h2>
+        <p className="onb-body">{s.body}</p>
+        <div className="onb-dots">{ONB_SLIDES.map((_, k) => <i key={k} className={k === i ? 'on' : ''} onClick={() => setI(k)} />)}</div>
+        <div className="onb-actions">
+          <button className="btn ghost" onClick={onClose}>{last ? '' : 'Pular'}</button>
+          <span className="spacer" />
+          {i > 0 && <button className="btn" onClick={() => setI(i - 1)}>Voltar</button>}
+          <button className="btn gold" onClick={() => (last ? onClose() : setI(i + 1))}>{last ? 'Começar' : 'Próximo'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // tela OBRIGATÓRIA de renovação: aparece na janela quando há contratos vencendo.
 // O usuário decide quem fica (paga 1 salário) e quem sai. Sem perder jogador "do nada".
 function RenewalScreen({ renewals, budget, onConfirm }: {
