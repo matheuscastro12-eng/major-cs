@@ -38,23 +38,19 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
     return () => window.clearTimeout(timer.current);
   }, [veto, done, isUserTurn, step, teams, rng, userIdx]);
 
-  // tendência de pick/ban por mapa: mapas em que OS DOIS times jogam bem tendem
-  // a ser pickados; onde os dois jogam mal tendem a ser banidos. É o mesmo
-  // raciocínio que a IA do veto usa, exposto pro usuário ler antes de agir.
+  // recomendação por mapa SEMPRE do SEU ponto de vista (igual ao painel de
+  // vantagem): mapa onde VOCÊ joga melhor = bom pra pickar; onde o ADVERSÁRIO
+  // joga melhor = melhor banir. Sem misturar perspectivas (o que confundia).
   const tendency = useMemo(() => {
-    const combo = MAP_POOL.map((m) => ({ m, v: (teams[0].mapPrefs[m] ?? 0) + (teams[1].mapPrefs[m] ?? 0) }));
-    const vals = combo.map((c) => c.v);
-    const max = Math.max(...vals), min = Math.min(...vals);
-    const span = max - min;
-    const out: Record<string, { kind: 'pick' | 'ban' | 'even'; pct: number }> = {};
-    for (const { m, v } of combo) {
-      // sem diferença entre mapas (ex.: prefs ainda zeradas) → tudo neutro, em vez
-      // de marcar todo mapa como "tende a ban"
-      const norm = span === 0 ? 0.5 : (v - min) / span; // 0..1
-      out[m] = { kind: norm >= 0.62 ? 'pick' : norm <= 0.38 ? 'ban' : 'even', pct: Math.round(norm * 100) };
+    const me = teams[userIdx], opp = teams[userIdx === 0 ? 1 : 0];
+    const out: Record<string, { kind: 'pick' | 'ban' | 'even'; edge: number }> = {};
+    for (const m of MAP_POOL) {
+      const rec = mapRecord[m] ?? { w: 0, l: 0 };
+      const edge = (me.mapPrefs[m] ?? 0) - (opp.mapPrefs[m] ?? 0) + (rec.w - rec.l) * 0.6;
+      out[m] = { kind: edge >= 1 ? 'pick' : edge <= -1 ? 'ban' : 'even', edge: Math.round(edge * 10) / 10 };
     }
     return out;
-  }, [teams]);
+  }, [teams, userIdx, mapRecord]);
 
   const mapState = useMemo(() => {
     const state: Record<string, { kind: 'banned' | 'picked' | 'decider'; by: 0 | 1 | -1 } | undefined> = {};
@@ -121,8 +117,8 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
                 >
                   <MapThumb map={m} className="mapcard-img" />
                   {!st && tendency[m] && (
-                    <span className={`mtend ${tendency[m].kind}`} title={`${t('veto.tendency')}: ${tendency[m].pct}%`}>
-                      {tendency[m].kind === 'pick' ? `🔥 ${t('veto.tendPick')}` : tendency[m].kind === 'ban' ? `🚫 ${t('veto.tendBan')}` : `➖ ${t('veto.tendEven')}`}
+                    <span className={`mtend ${tendency[m].kind}`} title={`${t('veto.tendency')}: ${tendency[m].edge >= 0 ? '+' : ''}${tendency[m].edge}`}>
+                      {tendency[m].kind === 'pick' ? `✅ ${t('veto.tendPick')}` : tendency[m].kind === 'ban' ? `🚫 ${t('veto.tendBan')}` : `➖ ${t('veto.tendEven')}`}
                     </span>
                   )}
                   {st && (

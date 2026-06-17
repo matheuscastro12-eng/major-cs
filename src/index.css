@@ -3255,8 +3255,10 @@ table.crm-players input.num {
   border-radius: 4px;
 }
 
-.map-edge .bar i.pos { left: 50%; background: linear-gradient(90deg, #3f8f4f, var(--green-bright)); }
-.map-edge .bar i.neg { right: 50%; background: linear-gradient(270deg, #8f3f3f, var(--red-bright)); }
+/* legenda: você ⟵ ... ⟶ adversário. SUA vantagem (pos, verde) cresce pra ESQUERDA
+   (seu lado); vantagem do adversário (neg, vermelho) cresce pra DIREITA. */
+.map-edge .bar i.pos { right: 50%; background: linear-gradient(270deg, #3f8f4f, var(--green-bright)); }
+.map-edge .bar i.neg { left: 50%; background: linear-gradient(90deg, #8f3f3f, var(--red-bright)); }
 
 .map-edge .verdict-chip {
   text-align: right;
