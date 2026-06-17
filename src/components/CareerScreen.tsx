@@ -143,18 +143,29 @@ type NegoReply =
   | { kind: 'accept' }
   | { kind: 'counter'; value: number }
   | { kind: 'reject'; firm: boolean; msg: string };
-// resposta do clube a uma proposta de fee (determinística por jogador+rodada).
+// resposta do clube a uma proposta (offer = dinheiro + valor da troca).
 function clubReply(offer: number, asking: number, player: Player, fromTeamwork: number, round: number): NegoReply {
   const ovr = playerOvr(player);
   // estrela de time forte às vezes simplesmente não está à venda
   if (ovr >= 89 && fromTeamwork >= 84 && round === 0 && hashStr(`${player.id}:nfs`) % 100 < 55) {
     return { kind: 'reject', firm: true, msg: `${player.nick} não está à venda. O clube não quer nem ouvir.` };
   }
+  // PISO: o menor valor que o clube aceita. Amolece no MÁXIMO ~12% ao longo de
+  // poucas rodadas e NUNCA abaixo disso — insistir com a mesma oferta não derruba
+  // mais o preço (antes a contraproposta caía sem limite e dava pra pagar 0).
+  const soft = Math.round(asking * (1 - 0.04 * Math.min(round, 3)));
+  if (offer >= soft) return { kind: 'accept' };
   const ratio = offer / Math.max(1, asking);
-  if (ratio >= 0.97) return { kind: 'accept' };
-  if (ratio >= 0.8) return { kind: 'counter', value: Math.round((offer + asking * 1.02) / 2) };
-  if (ratio >= 0.58) return { kind: 'counter', value: Math.round(asking * (0.94 - round * 0.03)) };
-  return { kind: 'reject', firm: false, msg: 'Proposta muito abaixo do valor. O clube recusou na hora.' };
+  // lowball repetido: o clube cansa e encerra a negociação
+  if (ratio < 0.6 && round >= 2) {
+    return { kind: 'reject', firm: true, msg: 'O clube cansou da conversa: proposta baixa demais, negociação encerrada.' };
+  }
+  if (ratio < 0.45) {
+    return { kind: 'reject', firm: false, msg: 'Proposta muito abaixo do valor. O clube recusou na hora.' };
+  }
+  // contraproposta entre a sua oferta e a pedida, SEMPRE >= o piso (nunca abaixo)
+  const counter = Math.max(soft, Math.round((offer + asking) / 2));
+  return { kind: 'counter', value: counter };
 }
 
 // Patrocinadores: marcas reais que pagam por split. Os de maior tier exigem
