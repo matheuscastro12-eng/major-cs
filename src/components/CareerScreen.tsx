@@ -543,6 +543,8 @@ interface CareerSave {
   pendingOffer?: PoachOffer | null; // proposta de uma org maior por um jogador seu
   pendingDeals?: PendingDeal[]; // acordos fechados DURANTE a temporada; entram em vigor na janela (próximo split)
   renewals?: Renewal[]; // contratos vencendo: forçam a tela de renovação na abertura da janela
+  pendingSales?: { playerId: string; nick: string; fee: number; toTag: string }[]; // propostas aceitas por jogadores SEUS: o jogador sai (e entra a grana) na janela
+  rejectedOffers?: string[]; // ids de jogadores cuja proposta você recusou neste split (some até a virada)
   board: number; // confiança da diretoria (0-100). Cai se você falha os objetivos.
   objective?: BoardObjective | null; // meta da diretoria pro split atual
   lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
@@ -1715,7 +1717,9 @@ export function CareerScreen({ onExit }: Props) {
   // caixa pro acordo no momento da janela, o acordo simplesmente cai (sem dívida).
   const consummateDeals = (s: CareerSave): CareerSave => {
     const deals = s.pendingDeals ?? [];
-    if (!deals.length) return s.pendingDeals ? { ...s, pendingDeals: [] } : s;
+    const sales = s.pendingSales ?? [];
+    const dirty = deals.length || sales.length || s.pendingDeals || s.pendingSales || s.rejectedOffers;
+    if (!dirty) return s;
     let squad = [...s.squad];
     let budget = s.budget;
     const contracts = { ...(s.contracts ?? {}) };
@@ -1723,28 +1727,33 @@ export function CareerScreen({ onExit }: Props) {
     const peakOvr = { ...(s.peakOvr ?? {}) };
     const evo = { ...(s.evo ?? {}) };
     const arrivals: string[] = [];
+    const departures: string[] = [];
+    // VENDAS: jogador seu sai (proposta aceita na temporada) e entra a grana
+    for (const sale of sales) {
+      if (!squad.some((x) => x.playerId === sale.playerId)) continue; // já não está
+      squad = squad.filter((x) => x.playerId !== sale.playerId);
+      delete contracts[sale.playerId]; delete morale[sale.playerId]; delete peakOvr[sale.playerId]; delete evo[sale.playerId];
+      budget += sale.fee;
+      departures.push(`${sale.nick} (${sale.toTag})`);
+    }
+    // ACORDOS DE COMPRA: tira a troca, traz o alvo e desconta o dinheiro
     for (const d of deals) {
       if (budget < d.fee) continue; // sem caixa agora: acordo cai
       if (squad.some((x) => x.playerId === d.inPlayerId)) continue; // já está no elenco
-      // tira os jogadores dados na troca
       for (const out of d.outPlayerIds) {
         squad = squad.filter((x) => x.playerId !== out);
         delete contracts[out]; delete morale[out]; delete peakOvr[out]; delete evo[out];
       }
-      // traz o alvo com contrato novo e desconta o dinheiro
       squad.push({ playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee });
       contracts[d.inPlayerId] = s.split + CONTRACT_TERM - 1;
       budget -= d.fee;
       arrivals.push(d.inNick);
     }
-    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, pendingDeals: [] };
-    if (arrivals.length) {
-      next = { ...next, ...pushNews(next, [{
-        id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board',
-        title: 'Reforços confirmados na janela',
-        body: `Acordos fechados na temporada passada entraram em vigor: ${arrivals.join(', ')}.`,
-      }]) };
-    }
+    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
+    const news: NewsItem[] = [];
+    if (arrivals.length) news.push({ id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board', title: 'Reforços confirmados na janela', body: `Acordos fechados na temporada passada entraram em vigor: ${arrivals.join(', ')}.` });
+    if (departures.length) news.push({ id: `${s.split}:sales`, split: s.split, icon: '💸', tone: 'info', cat: 'transfer', title: 'Vendas confirmadas na janela', body: `Saíram por proposta aceita: ${departures.join(', ')}.` });
+    if (news.length) next = { ...next, ...pushNews(next, news) };
     return next;
   };
 
@@ -1755,7 +1764,10 @@ export function CareerScreen({ onExit }: Props) {
   // a lista pra FORÇAR a tela de renovação na janela (o usuário decide quem fica).
   // Ignora quem já está saindo numa troca (pendingDeals) pra não listar duplicado.
   const dueRenewals = (s: CareerSave, newSplit: number): Renewal[] => {
-    const inDeal = new Set((s.pendingDeals ?? []).flatMap((d) => d.outPlayerIds));
+    const inDeal = new Set([
+      ...(s.pendingDeals ?? []).flatMap((d) => d.outPlayerIds),
+      ...(s.pendingSales ?? []).map((sale) => sale.playerId),
+    ]);
     const out: Renewal[] = [];
     for (const sig of s.squad) {
       if (inDeal.has(sig.playerId)) continue;
@@ -2159,6 +2171,33 @@ export function CareerScreen({ onExit }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.careerStats, save.roles, save.org, currentEra]);
   const feedMemo = useMemo(() => transferFeed(save.split, currentEra), [save.split, currentEra]);
+  // propostas que CHEGAM pelos seus jogadores: clubes assediam seus melhores nomes.
+  // Determinístico por split; some quem você já vendeu ou recusou.
+  const incomingOffers = useMemo(() => {
+    const sold = new Set([
+      ...(save.pendingSales ?? []).map((x) => x.playerId),
+      ...(save.rejectedOffers ?? []),
+      ...(save.pendingDeals ?? []).flatMap((d) => d.outPlayerIds),
+    ]);
+    const buyers = currentEra.filter((t) => t.id !== save.takeoverId).sort((a, b) => b.teamwork - a.teamwork);
+    if (!buyers.length) return [];
+    const out: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toName: string }[] = [];
+    for (const sig of save.squad) {
+      if (sold.has(sig.playerId)) continue;
+      const p = findSigning(sig)?.player;
+      if (!p) continue;
+      const ovr = playerOvr(p);
+      if (ovr < 75) continue; // só os bons atraem proposta
+      const h = hashStr(`offer:${save.split}:${p.id}`);
+      // chance de proposta sobe com o OVR (estrela é mais assediada)
+      const chance = Math.min(70, 18 + (ovr - 75) * 4);
+      if (h % 100 >= chance) continue;
+      const buyer = buyers[h % Math.min(14, buyers.length)];
+      const fee = Math.round(playerValue(p) * (1.05 + (h % 35) / 100)); // 1.05x..1.39x do valor
+      out.push({ playerId: p.id, nick: p.nick, ovr, country: p.country, fee, toTag: buyer.tag, toName: buyer.team });
+    }
+    return out;
+  }, [save.squad, save.split, save.pendingSales, save.rejectedOffers, save.pendingDeals, currentEra, save.takeoverId]);
   const vrsByRegionMemo = useMemo(() => {
     // bandeira E região de cada time saem do CORE do elenco (o país do header da
     // base é furado). A org usa a região que escolheu competir (save.region).
@@ -3405,9 +3444,14 @@ export function CareerScreen({ onExit }: Props) {
           squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
           budget={save.budget}
           pendingDeals={save.pendingDeals ?? []}
+          pendingSales={save.pendingSales ?? []}
+          offers={incomingOffers}
           feed={feedMemo}
           onAddDeal={(d) => update({ pendingDeals: [...(save.pendingDeals ?? []), d] })}
           onCancelDeal={(id) => update({ pendingDeals: (save.pendingDeals ?? []).filter((x) => x.id !== id) })}
+          onAcceptOffer={(o) => update({ pendingSales: [...(save.pendingSales ?? []), o] })}
+          onRejectOffer={(pid) => update({ rejectedOffers: [...(save.rejectedOffers ?? []), pid] })}
+          onCancelSale={(pid) => update({ pendingSales: (save.pendingSales ?? []).filter((x) => x.playerId !== pid) })}
         />
       )}
 
@@ -5444,13 +5488,18 @@ function NegotiationModal({ player, from, budget, swapPool, onClose, onAgree }: 
 }
 
 // ---------- negociações durante a temporada (acordos pendentes p/ a janela) ----------
-function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, onAddDeal, onCancelDeal, feed }: {
+function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed }: {
   market: { player: Player; from: TeamSeason; price: number }[];
   squadPlayers: Player[];
   budget: number;
   pendingDeals: PendingDeal[];
+  pendingSales: { playerId: string; nick: string; fee: number; toTag: string }[];
+  offers: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toName: string }[];
   onAddDeal: (d: PendingDeal) => void;
   onCancelDeal: (id: string) => void;
+  onAcceptOffer: (o: { playerId: string; nick: string; fee: number; toTag: string }) => void;
+  onRejectOffer: (playerId: string) => void;
+  onCancelSale: (playerId: string) => void;
   feed: TransferItem[];
 }) {
   const [target, setTarget] = useState<{ player: Player; from: TeamSeason } | null>(null);
@@ -5476,6 +5525,27 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, onAddD
           Caixa pra acordos: <b className={dealBudget < 0 ? 'neg' : 'pos'}>{formatMoney(dealBudget)}</b>
           {committedCash > 0 && <span className="muted small"> · {formatMoney(committedCash)} já comprometido</span>}
         </div>
+        {(offers.length > 0 || pendingSales.length > 0) && (
+          <div className="nego-offers">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>📨 Propostas pelos seus jogadores</div>
+            {pendingSales.map((s) => (
+              <div key={s.playerId} className="nego-offer-row sold">
+                <span className="nego-offer-who">💸 <b>{s.nick}</b> <span className="muted small">vendido pra {s.toTag}</span></span>
+                <span className="nego-offer-fee pos">{formatMoney(s.fee)}</span>
+                <button className="btn ghost small" onClick={() => onCancelSale(s.playerId)}>Desfazer</button>
+              </div>
+            ))}
+            {offers.map((o) => (
+              <div key={o.playerId} className="nego-offer-row">
+                <span className="nego-offer-who"><Flag cc={o.country} /> <b>{o.nick}</b> <span className="muted small">OVR {o.ovr} · {o.toName} quer</span></span>
+                <span className="nego-offer-fee">{formatMoney(o.fee)}</span>
+                <button className="btn gold small" onClick={() => onAcceptOffer({ playerId: o.playerId, nick: o.nick, fee: o.fee, toTag: o.toTag })}>Vender</button>
+                <button className="btn ghost small" onClick={() => onRejectOffer(o.playerId)}>Recusar</button>
+              </div>
+            ))}
+            <p className="muted small" style={{ margin: '6px 0 0' }}>Aceitar vende o jogador na próxima janela (a grana entra no caixa). O jogador continua jogando até lá.</p>
+          </div>
+        )}
         {pendingDeals.length > 0 && (
           <div className="nego-pending">
             <div className="muted small section-label">Acordos fechados ({pendingDeals.length})</div>
