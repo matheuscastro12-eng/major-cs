@@ -960,11 +960,76 @@ function playerYearRating(p: Player, endSplit: number): number {
   const splits = seasonSplitRange(endSplit);
   return splits.reduce((acc, s) => acc + playerSeasonRating(p, s), 0) / splits.length;
 }
-// melhores N jogadores da TEMPORADA inteira (média sobre os splits do ano)
-function seasonTopPlayersYear(pool: TeamSeason[], endSplit: number, n: number) {
+// ---------- estatísticas estilo HLTV (determinísticas) + currículo do Top 20 ----------
+// Tudo derivado dos atributos + função + semente da temporada. Só leitura.
+interface HltvStat { rating: number; kast: number; adr: number; entry: number; awpKills: number; impact: number; }
+function hltvStatline(p: Player, role: Role, split: number): HltvStat {
+  const rating = playerSeasonRating(p, split);
+  const u = (k: string) => (hashStr(`${p.id}:${k}:s${split}`) % 1000) / 1000; // 0..1 determinístico
+  const aim = p.aim ?? 70, awp = p.awp ?? 40, cons = p.consistency ?? 70, clutch = p.clutch ?? 70;
+  // entries ganhas por mapa: entry/rifler com bom aim sobem; awp/igl bem menos
+  const roleEntry = role === 'Entry' ? 1 : role === 'Rifler' ? 0.66 : role === 'IGL' ? 0.32 : 0.28;
+  const entry = Math.round((3 + roleEntry * (aim - 55) / 7 + u('e') * 1.4) * 10) / 10;
+  // abates de AWP por mapa: só o AWPer de verdade pontua alto
+  const awpKills = Math.round((role === 'AWP' ? (8 + (awp - 60) / 3.5 + u('a') * 3) : (1 + u('a') * 1.5)) * 10) / 10;
+  // impacto/swing: clutch + consistência + rating (multikills e rounds decisivos)
+  const impact = Math.round((0.9 + (clutch - 70) / 85 + (rating - 1.05) * 0.7 + u('i') * 0.12) * 100) / 100;
+  const kast = Math.round(66 + (cons - 70) / 2.8 + u('k') * 6);
+  const adr = Math.round(68 + (aim - 70) / 1.5 + (rating - 1.05) * 32 + u('d') * 8);
+  return { rating, kast, adr, entry, awpKills, impact };
+}
+// proxy de TÍTULOS / runs fundas: times fortes ganham mais troféus (entra no currículo).
+function teamTitlePower(team: TeamSeason): number {
+  return Math.max(0, Math.min(1, (team.teamwork - 70) / 20));
+}
+// pontos do "currículo" num split: o rating é a base, mas IMPACTO, FUNÇÃO (entry/AWP)
+// e TÍTULOS (sucesso do time) pesam — Top 20 não é só rating cru.
+function hltvPointsAt(p: Player, team: TeamSeason, role: Role, split: number): number {
+  const sl = hltvStatline(p, role, split);
+  // AWPer pontua pelos abates de AWP; os demais pela presença de entry — balanceado
+  // pra função não dominar (o Top 20 tem rifler, entry, lurker, IGL e AWP).
+  const frag = role === 'AWP' ? sl.awpKills * 0.75 : sl.entry * 1.5;
+  // forma do split (sobe e desce): mexe no ranking de UM split, mas se dilui na
+  // média do ano — o currículo anual fica estável.
+  const swing = (hashStr(`${p.id}:f:s${split}`) % 240) - 110;
+  return sl.rating * 1000 + sl.impact * 60 + frag * 6 + sl.kast * 1.1 + teamTitlePower(team) * 130 + swing;
+}
+// MVP de um torneio: melhor participante pelos pontos do split (rating+impacto+função).
+interface MvpResult { p: Player; team: TeamSeason; statline: HltvStat; points: number; }
+function tournamentMvp(participants: TeamSeason[], split: number, exclude?: Set<string>): MvpResult | null {
+  let best: MvpResult | null = null;
+  for (const t of participants) for (const p of t.players) {
+    if (exclude?.has(p.id)) continue;
+    const points = hltvPointsAt(p, t, p.role as Role, split);
+    if (!best || points > best.points) best = { p, team: t, statline: hltvStatline(p, p.role as Role, split), points };
+  }
+  return best;
+}
+// MVPs do ano: cada split (evento) premia o melhor que AINDA não foi MVP na
+// temporada — eventos diferentes têm donos diferentes, então o prêmio se espalha
+// pelos craques do ano em vez de um só levar tudo.
+function seasonMvpCounts(pool: TeamSeason[], endSplit: number): Map<string, number> {
+  const counts = new Map<string, number>();
+  const won = new Set<string>();
+  for (const s of seasonSplitRange(endSplit)) {
+    const mvp = tournamentMvp(pool, s, won);
+    if (mvp) { won.add(mvp.p.id); counts.set(mvp.p.id, 1); }
+  }
+  return counts;
+}
+interface Top20Entry { p: Player; team: TeamSeason; role: Role; rating: number; mvps: number; sl: HltvStat; points: number; }
+// melhores N jogadores da TEMPORADA inteira: currículo composto (média dos pontos
+// por split do ano + bônus por MVP), não só a média de rating.
+function seasonTopPlayersYear(pool: TeamSeason[], endSplit: number, n: number): Top20Entry[] {
+  const splits = seasonSplitRange(endSplit);
+  const mvps = seasonMvpCounts(pool, endSplit);
   return pool
-    .flatMap((t) => t.players.map((p) => ({ p, team: t, rating: playerYearRating(p, endSplit) })))
-    .sort((a, b) => b.rating - a.rating)
+    .flatMap((t) => t.players.map((p) => {
+      const m = mvps.get(p.id) ?? 0;
+      const yearAvg = splits.reduce((a, s) => a + hltvPointsAt(p, t, p.role as Role, s), 0) / splits.length;
+      return { p, team: t, role: p.role as Role, rating: playerYearRating(p, endSplit), mvps: m, sl: hltvStatline(p, p.role as Role, endSplit), points: yearAvg + m * 85 };
+    }))
+    .sort((a, b) => b.points - a.points)
     .slice(0, n);
 }
 
@@ -1931,11 +1996,19 @@ export function CareerScreen({ onExit }: Props) {
   // memoizados aqui pra não recomputar a cada render do hub
   const seasonStatsMemo = useMemo(() => (save.league ? seasonPlayerStats(save.league) : []), [save.league]);
   const top20Memo = useMemo(
-    () =>
-      currentEra
-        .flatMap((t) => t.players.map((p) => ({ p, team: t, rating: playerSeasonRating(p, save.split) })))
-        .sort((a, b) => b.rating - a.rating)
-        .slice(0, 20),
+    () => {
+      const mvps = seasonMvpCounts(currentEra, save.split);
+      return currentEra
+        .flatMap((t) => t.players.map((p): Top20Entry => ({
+          p, team: t, role: p.role as Role,
+          rating: playerSeasonRating(p, save.split),
+          mvps: mvps.get(p.id) ?? 0,
+          sl: hltvStatline(p, p.role as Role, save.split),
+          points: hltvPointsAt(p, t, p.role as Role, save.split),
+        })))
+        .sort((a, b) => b.points - a.points)
+        .slice(0, 20);
+    },
     [currentEra, save.split],
   );
   // ranking de CARREIRA: maiores ratings acumulados (estatísticas que sobem com
@@ -3628,6 +3701,10 @@ export function CareerScreen({ onExit }: Props) {
                       <TeamBadge tag={tag} colors={colors} size={16} logoUrl={logo} /> {tag}
                     </span>
                     <span className={`role-pill ${e.p.role}`}>{e.p.role}</span>
+                    <span className="muted small t20-extra">
+                      {e.mvps > 0 && <b className="t20-mvp">{e.mvps}× MVP</b>}
+                      {e.sl.kast} KAST · {e.role === 'AWP' ? `${e.sl.awpKills} AWP/m` : `${e.sl.entry} entry/m`} · {e.sl.impact.toFixed(2)} imp
+                    </span>
                     <span className="t20-rating">{e.rating.toFixed(2)}</span>
                   </div>
                   );
@@ -4175,7 +4252,7 @@ function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<s
 // Cerimônia do Top 20 HLTV ao fim de cada temporada — revelação dos 20 melhores
 // jogadores do ano, com o #1 em destaque e os seus jogadores realçados.
 function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
-  entries: { p: Player; team: TeamSeason; rating: number }[];
+  entries: { p: Player; team: TeamSeason; rating: number; mvps?: number; sl?: HltvStat; role?: Role }[];
   mine: Set<string>;
   orgTag: string;
   split: number;
@@ -4201,6 +4278,7 @@ function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
             <div className="cer-1-id">
               <div className="cer-1-nick"><Flag cc={top1.p.country} /> {top1.p.nick}</div>
               <div className="muted small">{tagOf(top1)} · {top1.p.name}</div>
+              {!!top1.mvps && <div className="t20-mvp" style={{ marginTop: 4 }}>🏆 {top1.mvps}× MVP de torneio no ano</div>}
             </div>
             <div className="cer-1-rating">{top1.rating.toFixed(2)}<span>rating</span></div>
           </div>
@@ -4210,7 +4288,7 @@ function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
             <div key={e.p.id} className={`cer-row${mine.has(e.p.id) ? ' mine' : ''}`} style={{ animationDelay: `${0.1 + i * 0.045}s` }}>
               <span className="cer-rank">{i + 2}</span>
               <PlayerAvatar nick={e.p.nick} size={24} />
-              <span className="cer-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tagOf(e)}</span></span>
+              <span className="cer-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tagOf(e)}</span>{!!e.mvps && <span className="t20-mvp" style={{ marginLeft: 6 }}>{e.mvps}× MVP</span>}</span>
               <span className="cer-rating">{e.rating.toFixed(2)}</span>
             </div>
           ))}

@@ -1641,6 +1641,11 @@ tr.human-row {
 .t20-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .t20-toggle { display: flex; gap: 6px; }
 .t20-extra { margin-left: auto; white-space: nowrap; font-size: 11px; }
+.t20-mvp {
+  display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.3px;
+  color: #1a1408; background: linear-gradient(150deg, var(--gold-2), var(--gold-soft));
+  border-radius: 4px; padding: 1px 5px; margin-right: 6px; vertical-align: middle;
+}
 @media (max-width: 560px) {
   .t20-extra { display: none; }
 }
