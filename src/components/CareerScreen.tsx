@@ -852,18 +852,24 @@ function poUserRank(p: Playoff | null): number {
 }
 
 // ---------- cenário competitivo: VRS por região e Top 20 HLTV ----------
-// VRS determinístico de um time da IA (o time do usuário usa o VRS real do save)
+// VRS determinístico de um time da IA. Curva PROGRESSIVA: o miolo do field
+// (entrosamento ~78-82, onde se amontoam quase todos os times) fica ~480-540,
+// mas a elite (~85+) dispara via termo quadrático, abrindo distância do bolo.
+// Esse buraco entre miolo e topo é DE PROPÓSITO: é maior do que um campeão de
+// Tier 2 consegue somar, então vencer o acesso te leva ao top-10, nunca a #1.
 function aiTeamVrs(t: TeamSeason): number {
-  const base = Math.max(0, t.teamwork - 38);
-  return Math.round(base * 24 + (hashStr(t.id) % 90));
+  const tw = t.teamwork;
+  const elite = Math.max(0, tw - 82);
+  return Math.round(Math.max(0, tw - 61) * 25 + elite * elite * 10 + (hashStr(t.id) % 55));
 }
-// VRS-BASE do usuário: na MESMA escala da IA (pelo entrosamento do elenco), pra
-// um time forte já entrar bem ranqueado e SUBIR com resultados, em vez de começar
-// do zero atrás de todo mundo. O VRS de ranking = base + pontos ganhos (save.vrs).
+// VRS-BASE do usuário: um PISO modesto pela qualidade do elenco (um time forte
+// não começa em último), mas pequeno o bastante pra que o RANKING seja movido
+// pelos RESULTADOS (save.vrs, que decai). O ranking = base + pontos ganhos.
+// Com isso: time bom recém-montado entra no meio-baixo da tabela; temporada
+// ruim faz o save.vrs decair e o time DESPENCA pro piso; só chega a #1 quem
+// vence de verdade (Tier 1 + Major), não quem ganhou um campeonato de acesso.
 function userBaseVrsFor(teamwork: number): number {
-  // +45 ≈ jitter médio que a IA recebe em aiTeamVrs (0-89); sem isso o usuário
-  // ficaria sistematicamente ~45 VRS atrás de uma IA de mesmo entrosamento.
-  return Math.round(Math.max(0, teamwork - 38) * 24) + 45;
+  return Math.round(Math.max(0, teamwork - 55) * 18);
 }
 // Região de circuito no modo carreira (Américas N/S/Central = uma só). Tipos e
 // helpers ficam em data/regions.ts (compartilhados com as bandeiras).
