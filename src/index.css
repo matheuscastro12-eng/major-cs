@@ -3522,6 +3522,23 @@ table.crm-players input.num {
 .nego-reply.reject { background: rgba(226, 90, 90, 0.12); border: 1px solid rgba(226, 90, 90, 0.3); }
 .nego-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .nego-actions .btn { flex: 1 1 auto; }
+/* troca de jogadores no modal */
+.nego-swap { margin: 14px 0 2px; }
+.nego-swap-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.nego-swap-chip {
+  background: var(--panel-2); border: 1px solid var(--border-soft); color: var(--text);
+  border-radius: 8px; padding: 5px 9px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.nego-swap-chip.on { border-color: var(--gold); background: var(--gold-glow); color: var(--gold-2); }
+/* aba de negociações (temporada) */
+.nego-budget { font-size: 0.95rem; margin: 8px 0 12px; }
+.nego-pending { background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+.nego-deal-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-soft); }
+.nego-deal-row:last-child { border-bottom: none; }
+.nego-deal-in { font-family: var(--font-cond); }
+.nego-deal-row .muted { margin-left: auto; }
+.nego-search { width: 100%; margin: 6px 0 10px; padding: 9px 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-size: 0.9rem; }
 
 .modal {
   background: var(--panel);

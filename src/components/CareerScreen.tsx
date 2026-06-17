@@ -115,6 +115,18 @@ interface Signing {
   fee?: number; // valor negociado da transferência (se ausente, usa o de tabela)
 }
 
+// acordo de transferência fechado durante a temporada: entra em vigor só na
+// janela (próximo split). Pode ser só dinheiro ou dinheiro + troca de jogadores.
+interface PendingDeal {
+  id: string;
+  inPlayerId: string;   // jogador que CHEGA
+  inFromId: string;     // clube de origem dele
+  inNick: string;       // nick (cache, pra exibir sem resolver)
+  fee: number;          // dinheiro que VOCÊ paga (líquido, já descontada a troca)
+  outPlayerIds: string[]; // seus jogadores que SAEM na troca (ids)
+  outNicks: string[];   // nicks dos que saem (cache)
+}
+
 // ---------- negociação de transferência (mercado) ----------
 // resistência do clube a vender: estrela e jogador de time forte valem MAIS que o
 // preço de tabela — é o ágio pra tirar alguém de um clube que não quer vender.
@@ -515,6 +527,7 @@ interface CareerSave {
   tierChange?: 'up' | 'down' | null; // resultado da última temporada (promoção/rebaixamento)
   takeoverId?: string | null; // id do time real que o jogador assumiu (excluído dos adversários)
   pendingOffer?: PoachOffer | null; // proposta de uma org maior por um jogador seu
+  pendingDeals?: PendingDeal[]; // acordos fechados DURANTE a temporada; entram em vigor na janela (próximo split)
   board: number; // confiança da diretoria (0-100). Cai se você falha os objetivos.
   objective?: BoardObjective | null; // meta da diretoria pro split atual
   lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
@@ -1681,6 +1694,45 @@ export function CareerScreen({ onExit }: Props) {
     return { moves, lastMoves };
   };
 
+  // janela aberta: consuma os acordos fechados durante a temporada (pendingDeals).
+  // Roda sobre o save JÁ montado da virada (split novo, contratos vencidos, etc.).
+  // Tira os jogadores da troca, traz o alvo e desconta o dinheiro. Se não houver
+  // caixa pro acordo no momento da janela, o acordo simplesmente cai (sem dívida).
+  const consummateDeals = (s: CareerSave): CareerSave => {
+    const deals = s.pendingDeals ?? [];
+    if (!deals.length) return s.pendingDeals ? { ...s, pendingDeals: [] } : s;
+    let squad = [...s.squad];
+    let budget = s.budget;
+    const contracts = { ...(s.contracts ?? {}) };
+    const morale = { ...(s.morale ?? {}) };
+    const peakOvr = { ...(s.peakOvr ?? {}) };
+    const evo = { ...(s.evo ?? {}) };
+    const arrivals: string[] = [];
+    for (const d of deals) {
+      if (budget < d.fee) continue; // sem caixa agora: acordo cai
+      if (squad.some((x) => x.playerId === d.inPlayerId)) continue; // já está no elenco
+      // tira os jogadores dados na troca
+      for (const out of d.outPlayerIds) {
+        squad = squad.filter((x) => x.playerId !== out);
+        delete contracts[out]; delete morale[out]; delete peakOvr[out]; delete evo[out];
+      }
+      // traz o alvo com contrato novo e desconta o dinheiro
+      squad.push({ playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee });
+      contracts[d.inPlayerId] = s.split + CONTRACT_TERM - 1;
+      budget -= d.fee;
+      arrivals.push(d.inNick);
+    }
+    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, pendingDeals: [] };
+    if (arrivals.length) {
+      next = { ...next, ...pushNews(next, [{
+        id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board',
+        title: 'Reforços confirmados na janela',
+        body: `Acordos fechados na temporada passada entraram em vigor: ${arrivals.join(', ')}.`,
+      }]) };
+    }
+    return next;
+  };
+
   // contratos vencidos: o jogador cujo contrato acaba SAI de graça no próximo
   // split (a não ser que tenha sido renovado nas Finanças). Devolve o elenco
   // sem eles + os nicks que saíram (pra avisar no resumo do split).
@@ -2434,8 +2486,9 @@ export function CareerScreen({ onExit }: Props) {
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
                   ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
-                persist(next);
-                setSave(next);
+                const fin = consummateDeals(next);
+                persist(fin);
+                setSave(fin);
                 setMajorResult(null);
                 setStage('market');
               }}
@@ -2736,8 +2789,9 @@ export function CareerScreen({ onExit }: Props) {
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
                     ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
                   };
-                  persist(next);
-                  setSave(next);
+                  const fin = consummateDeals(next);
+                  persist(fin);
+                  setSave(fin);
                   setStage('market'); // se foi demitido, o render mostra a tela de demissão
                 }}
               >
@@ -2882,7 +2936,7 @@ export function CareerScreen({ onExit }: Props) {
   const TAB_LABEL: Record<HubTab, string> = {
     overview: 'Visão geral', major: '★ Major', calendar: 'Calendário', results: 'Resultados',
     standings: 'Classificação', bracket: 'Chave', squad: 'Elenco', academy: 'Academia',
-    market: 'Mercado', finance: 'Finanças', vrs: 'Ranking VRS', top20: 'Top 20 HLTV',
+    market: 'Negociações', finance: 'Finanças', vrs: 'Ranking VRS', top20: 'Top 20 HLTV',
     world: 'Cena mundial', inbox: 'Inbox', history: 'História da org',
   };
   const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
@@ -3289,21 +3343,15 @@ export function CareerScreen({ onExit }: Props) {
 
       {/* ===== MERCADO: janela FECHADA durante a temporada ===== */}
       {hubTab === 'market' && (
-        <div className="panel">
-          <div className="panel-body center">
-            <div className="trophy" style={{ fontSize: 40 }}>🔒</div>
-            <h2>Janela de transferências fechada</h2>
-            <p className="muted" style={{ maxWidth: 520, margin: '10px auto 4px' }}>
-              Contratações só entre temporadas: a janela abre quando o split termina
-              (depois dos playoffs{majorT ? ' e do Major' : ''}). Enquanto isso, é com
-              o elenco que você tem.
-            </p>
-            <p className="muted small">Rodada {league.current + 1} de {league.rounds.length} · a janela abre ao fim do split</p>
-            {/* prévia do mercado: dá pra olhar os rumores, mas não contratar */}
-            <div className="muted small section-label" style={{ textAlign: 'left' }}>Rumores da próxima janela</div>
-            <TransferFeed items={feedMemo} compact />
-          </div>
-        </div>
+        <SeasonNegotiations
+          market={market}
+          squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
+          budget={save.budget}
+          pendingDeals={save.pendingDeals ?? []}
+          feed={feedMemo}
+          onAddDeal={(d) => update({ pendingDeals: [...(save.pendingDeals ?? []), d] })}
+          onCancelDeal={(id) => update({ pendingDeals: (save.pendingDeals ?? []).filter((x) => x.id !== id) })}
+        />
       )}
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
@@ -5185,9 +5233,10 @@ function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
-  onClose: () => void; onAgree: (fee: number) => void;
+  swapPool?: Player[]; // seus jogadores disponíveis pra incluir na troca (habilita swap)
+  onClose: () => void; onAgree: (fee: number, outIds: string[]) => void;
 }) {
   const ask = askingPrice(player, from.teamwork);
   const mkt = playerValue(player);
@@ -5195,12 +5244,26 @@ function NegotiationModal({ player, from, budget, onClose, onAgree }: {
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
   const [round, setRound] = useState(0);
   const [reply, setReply] = useState<NegoReply | null>(null);
+  const [swapOut, setSwapOut] = useState<string[]>([]);
+  const swapValue = swapOut.reduce((a, id) => {
+    const p = swapPool?.find((x) => x.id === id);
+    return a + (p ? playerValue(p) : 0);
+  }, 0);
+  const effectiveOffer = offer + swapValue;
   const overBudget = offer > budget;
+  const reset = () => setReply(null);
   const submit = () => {
     if (overBudget) return;
-    setReply(clubReply(offer, ask, player, from.teamwork, round));
+    setReply(clubReply(effectiveOffer, ask, player, from.teamwork, round));
     setRound((r) => r + 1);
   };
+  const toggleSwap = (id: string) => {
+    setSwapOut((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+    reset();
+  };
+  // ao aceitar a contraproposta (valor TOTAL que o clube quer), o dinheiro que você
+  // paga é o total menos o valor dos jogadores da troca (nunca negativo).
+  const counterCash = reply?.kind === 'counter' ? Math.max(0, reply.value - swapValue) : 0;
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="nego-modal" onClick={(e) => e.stopPropagation()}>
@@ -5217,34 +5280,49 @@ function NegotiationModal({ player, from, budget, onClose, onAgree }: {
           <div><span className="muted small">Pedida do clube</span><b>{formatMoney(ask)}</b></div>
           <div><span className="muted small">Salário / split</span><b>{formatMoney(wage)}</b></div>
         </div>
+        {swapPool && swapPool.length > 0 && (
+          <div className="nego-swap">
+            <div className="muted small section-label" style={{ marginTop: 0 }}>Incluir na troca (abate o valor em dinheiro)</div>
+            <div className="nego-swap-list">
+              {swapPool.map((p) => (
+                <button key={p.id} className={`nego-swap-chip${swapOut.includes(p.id) ? ' on' : ''}`} onClick={() => toggleSwap(p.id)}>
+                  <Flag cc={p.country} /> {p.nick} <span className="muted small">{formatMoney(playerValue(p))}</span>
+                </button>
+              ))}
+            </div>
+            {swapValue > 0 && <div className="muted small">Valor da troca: <b className="pos">{formatMoney(swapValue)}</b></div>}
+          </div>
+        )}
         <div className="nego-offer">
           <div className="nego-presets">
-            <button className="btn small ghost" onClick={() => { setOffer(Math.round(ask * 0.7)); setReply(null); }}>Proposta baixa</button>
-            <button className="btn small ghost" onClick={() => { setOffer(ask); setReply(null); }}>Proposta justa</button>
-            <button className="btn small ghost" onClick={() => { setOffer(Math.round(ask * 1.1)); setReply(null); }}>Proposta generosa</button>
+            <button className="btn small ghost" onClick={() => { setOffer(Math.max(0, Math.round(ask * 0.7) - swapValue)); reset(); }}>Baixa</button>
+            <button className="btn small ghost" onClick={() => { setOffer(Math.max(0, ask - swapValue)); reset(); }}>Justa</button>
+            <button className="btn small ghost" onClick={() => { setOffer(Math.max(0, Math.round(ask * 1.1) - swapValue)); reset(); }}>Generosa</button>
           </div>
-          <input type="range" min={Math.round(mkt * 0.4)} max={Math.round(ask * 1.4)} step={10000}
-            value={offer} onChange={(e) => { setOffer(Number(e.target.value)); setReply(null); }} />
+          <input type="range" min={0} max={Math.round(ask * 1.4)} step={10000}
+            value={offer} onChange={(e) => { setOffer(Number(e.target.value)); reset(); }} />
           <div className={`nego-amount${overBudget ? ' neg' : ''}`}>
-            Sua proposta: <b>{formatMoney(offer)}</b>{overBudget && ' · sem caixa'}
+            Dinheiro: <b>{formatMoney(offer)}</b>
+            {swapValue > 0 && <span className="muted small"> + troca {formatMoney(swapValue)} = oferta de {formatMoney(effectiveOffer)}</span>}
+            {overBudget && <span className="neg"> · sem caixa</span>}
           </div>
         </div>
         {reply && (
           <div className={`nego-reply ${reply.kind}`}>
-            {reply.kind === 'accept' && <span>✅ {from.team} aceitou a proposta de <b>{formatMoney(offer)}</b>.</span>}
-            {reply.kind === 'counter' && <span>↔️ {from.team} contrapropôs: quer <b>{formatMoney(reply.value)}</b>.</span>}
+            {reply.kind === 'accept' && <span>✅ {from.team} aceitou a oferta de <b>{formatMoney(effectiveOffer)}</b>.</span>}
+            {reply.kind === 'counter' && <span>↔️ {from.team} quer <b>{formatMoney(reply.value)}</b> no total{swapValue > 0 ? ` (${formatMoney(counterCash)} em dinheiro + sua troca)` : ''}.</span>}
             {reply.kind === 'reject' && <span>❌ {reply.msg}</span>}
           </div>
         )}
         <div className="nego-actions">
           {reply?.kind === 'accept' ? (
-            <button className="btn gold" onClick={() => onAgree(offer)}>Fechar por {formatMoney(offer)}</button>
+            <button className="btn gold" onClick={() => onAgree(offer, swapOut)}>Fechar acordo</button>
           ) : reply?.kind === 'counter' ? (
             <>
-              <button className="btn gold" disabled={reply.value > budget} onClick={() => onAgree(reply.value)}>
-                Aceitar {formatMoney(reply.value)}
+              <button className="btn gold" disabled={counterCash > budget} onClick={() => onAgree(counterCash, swapOut)}>
+                Aceitar ({formatMoney(counterCash)})
               </button>
-              <button className="btn" disabled={overBudget} onClick={submit}>Insistir na proposta</button>
+              <button className="btn" disabled={overBudget} onClick={submit}>Insistir</button>
             </>
           ) : reply?.kind === 'reject' && reply.firm ? (
             <button className="btn" onClick={onClose}>Sair</button>
@@ -5254,6 +5332,96 @@ function NegotiationModal({ player, from, budget, onClose, onAgree }: {
           <button className="btn ghost" onClick={onClose}>Desistir</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------- negociações durante a temporada (acordos pendentes p/ a janela) ----------
+function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, onAddDeal, onCancelDeal, feed }: {
+  market: { player: Player; from: TeamSeason; price: number }[];
+  squadPlayers: Player[];
+  budget: number;
+  pendingDeals: PendingDeal[];
+  onAddDeal: (d: PendingDeal) => void;
+  onCancelDeal: (id: string) => void;
+  feed: TransferItem[];
+}) {
+  const [target, setTarget] = useState<{ player: Player; from: TeamSeason } | null>(null);
+  const [q, setQ] = useState('');
+  const committedCash = pendingDeals.reduce((a, d) => a + d.fee, 0);
+  const dealBudget = budget - committedCash;
+  const committedOut = new Set(pendingDeals.flatMap((d) => d.outPlayerIds));
+  const targeted = new Set(pendingDeals.map((d) => d.inPlayerId));
+  const squadIds = new Set(squadPlayers.map((p) => p.id));
+  const swapPool = squadPlayers.filter((p) => !committedOut.has(p.id));
+  const list = market
+    .filter((m) => m.from.id !== '__free__' && !targeted.has(m.player.id) && !squadIds.has(m.player.id))
+    .filter((m) => !q || m.player.nick.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => playerOvr(b.player) - playerOvr(a.player))
+    .slice(0, 60);
+  return (
+    <div className="panel">
+      <div className="panel-body">
+        <div className="muted small section-label" style={{ marginTop: 0 }}>
+          🤝 Negociações · você fecha agora, o jogador entra na <b>próxima janela</b> (fim do split)
+        </div>
+        <div className="nego-budget">
+          Caixa pra acordos: <b className={dealBudget < 0 ? 'neg' : 'pos'}>{formatMoney(dealBudget)}</b>
+          {committedCash > 0 && <span className="muted small"> · {formatMoney(committedCash)} já comprometido</span>}
+        </div>
+        {pendingDeals.length > 0 && (
+          <div className="nego-pending">
+            <div className="muted small section-label">Acordos fechados ({pendingDeals.length})</div>
+            {pendingDeals.map((d) => (
+              <div key={d.id} className="nego-deal-row">
+                <span className="nego-deal-in">🤝 <b>{d.inNick}</b></span>
+                <span className="muted small">{formatMoney(d.fee)}{d.outNicks.length > 0 ? ` + troca: ${d.outNicks.join(', ')}` : ''}</span>
+                <button className="btn ghost small" onClick={() => onCancelDeal(d.id)}>Cancelar</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="muted small section-label">Mercado · negocie com os clubes</div>
+        <input className="nego-search" placeholder="Buscar jogador…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="career-market scroll">
+          {list.length === 0 && <div className="muted small" style={{ padding: 12 }}>Nenhum jogador com esse filtro.</div>}
+          {list.map((m) => (
+            <button key={m.player.id} className="pcard" onClick={() => setTarget({ player: m.player, from: m.from })}>
+              <PlayerAvatar nick={m.player.nick} size={48} />
+              <OvrBadge ovr={playerOvr(m.player)} />
+              <div className="nick">{m.player.nick}</div>
+              <div className="meta"><span className={`role-pill ${m.player.role}`}>{m.player.role}</span></div>
+              <div className="meta muted small">
+                <TeamBadge tag={m.from.tag} colors={m.from.colors} size={16} logoUrl={m.from.logoUrl ?? logoForTeam(m.from)} /> {m.from.team}
+              </div>
+              <div className="meta small"><span className="muted">pedida</span> {formatMoney(askingPrice(m.player, m.from.teamwork))}</div>
+            </button>
+          ))}
+        </div>
+        <div className="muted small section-label">Rumores da janela</div>
+        <TransferFeed items={feed} compact />
+      </div>
+      {target && (
+        <NegotiationModal
+          player={target.player}
+          from={target.from}
+          budget={dealBudget}
+          swapPool={swapPool}
+          onClose={() => setTarget(null)}
+          onAgree={(fee, outIds) => {
+            onAddDeal({
+              id: target.player.id,
+              inPlayerId: target.player.id,
+              inFromId: target.from.id,
+              inNick: target.player.nick,
+              fee,
+              outPlayerIds: outIds,
+              outNicks: outIds.map((id) => squadPlayers.find((p) => p.id === id)?.nick ?? id),
+            });
+            setTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }
