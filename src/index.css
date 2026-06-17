@@ -4002,14 +4002,19 @@ table.crm-players input.num {
 }
 
 /* ===== Modo carreira: hub com abas, stats, história, campeonatos ===== */
-.career-tabs {
+/* navegação em 2 níveis: grupos (barra-pílula) + sub-abas do grupo ativo */
+.career-nav { margin: 14px 0 16px; }
+.career-groups {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex-wrap: wrap;
-  margin: 14px 0 16px;
-  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 5px;
 }
-.career-tab {
+.career-group {
+  flex: 1 1 auto;
   background: none;
   border: none;
   color: var(--muted);
@@ -4017,20 +4022,49 @@ table.crm-players input.num {
   font-weight: 700;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  font-size: 0.84rem;
-  padding: 9px 15px;
+  font-size: 0.86rem;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+}
+.career-group:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.career-group.on {
+  color: #1a1408;
+  background: linear-gradient(150deg, var(--gold-2), var(--gold-soft));
+  box-shadow: 0 3px 12px rgba(216, 169, 67, 0.25);
+}
+.career-subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+  border-bottom: 1px solid var(--border);
+}
+.career-subtab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-cond);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  padding: 8px 14px;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   border-radius: 8px 8px 0 0;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.career-tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.03); }
-.career-tab.on {
+.career-subtab:hover { color: var(--text); background: rgba(255, 255, 255, 0.03); }
+.career-subtab.on {
   color: var(--gold-2);
   background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
   border-bottom-color: var(--gold);
   box-shadow: 0 2px 0 var(--gold);
 }
+.career-group.finance-alert, .career-subtab.finance-alert { color: var(--gold-2); }
 
 /* alerta de contrato vencendo (overview): chama atenção pra renovação, já que
    no mobile a aba Finanças some no overflow das abas */
@@ -4436,21 +4470,22 @@ table.crm-players input.num {
 
 /* ===== carreira no mobile: evita layout quebrado em telas estreitas ===== */
 @media (max-width: 640px) {
-  /* abas: rolam na horizontal em vez de empilhar em 4 linhas.
-     o fade à direita sinaliza que há mais abas (Finanças/Mercado…) pra rolar */
-  .career-tabs {
+  /* grupos: quebram em 2 linhas se preciso; sub-abas rolam na horizontal.
+     o fade à direita sinaliza que há mais sub-abas pra rolar */
+  .career-nav { margin: 10px 0 12px; }
+  .career-group { flex: 1 1 auto; padding: 8px 10px; font-size: 0.78rem; }
+  .career-subtabs {
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    margin: 10px 0 12px;
-    -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent 100%);
-    mask-image: linear-gradient(90deg, #000 88%, transparent 100%);
+    -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent 100%);
+    mask-image: linear-gradient(90deg, #000 90%, transparent 100%);
   }
-  .career-tabs::-webkit-scrollbar { display: none; }
-  .career-tab { flex: 0 0 auto; padding: 8px 11px; font-size: 0.8rem; }
-  /* aba Finanças com contrato vencendo: pisca pra puxar a rolagem até ela */
-  .career-tab.finance-alert { color: var(--gold-2); animation: contract-pulse 1.8s ease-in-out infinite; }
+  .career-subtabs::-webkit-scrollbar { display: none; }
+  .career-subtab { flex: 0 0 auto; padding: 8px 12px; font-size: 0.8rem; }
+  /* aba com alerta (Finanças/Inbox): pisca pra puxar atenção */
+  .career-group.finance-alert, .career-subtab.finance-alert { color: var(--gold-2); animation: contract-pulse 1.8s ease-in-out infinite; }
 
   /* topbar do clube: empilha e encolhe os números pra não estourar */
   .career-topbar { padding: 10px 12px; gap: 10px; }

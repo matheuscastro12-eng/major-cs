@@ -2846,23 +2846,27 @@ export function CareerScreen({ onExit }: Props) {
   const expiringCount = expiringContracts.length;
 
   const unread = save.unread ?? 0;
-  const TABS: { id: HubTab; label: string }[] = [
-    { id: 'overview', label: 'Visão geral' },
-    ...(majorActive ? [{ id: 'major' as HubTab, label: '★ Major' }] : []),
-    { id: 'calendar', label: '📅 Calendário' },
-    { id: 'inbox', label: unread > 0 ? `📨 Inbox (${unread})` : '📨 Inbox' },
-    { id: 'results', label: 'Resultados' },
-    { id: 'standings', label: 'Classificação' },
-    { id: 'bracket', label: '🗺️ Chave' },
-    { id: 'squad', label: 'Elenco' },
-    { id: 'academy', label: '🎓 Academia' },
-    { id: 'finance', label: expiringCount > 0 ? `💰 Finanças ⚠️${expiringCount}` : '💰 Finanças' },
-    { id: 'market', label: 'Mercado' },
-    { id: 'world', label: '🌐 Cena mundial' },
-    { id: 'vrs', label: 'Ranking VRS' },
-    { id: 'top20', label: 'Top 20 HLTV' },
-    { id: 'history', label: 'História da org' },
+  // navegação em 2 níveis: grupos no topo + sub-abas do grupo ativo. Reduz a
+  // confusão de 15 abas planas pra ~5 grupos com 1-5 itens cada.
+  const TAB_LABEL: Record<HubTab, string> = {
+    overview: 'Visão geral', major: '★ Major', calendar: 'Calendário', results: 'Resultados',
+    standings: 'Classificação', bracket: 'Chave', squad: 'Elenco', academy: 'Academia',
+    market: 'Mercado', finance: 'Finanças', vrs: 'Ranking VRS', top20: 'Top 20 HLTV',
+    world: 'Cena mundial', inbox: 'Inbox', history: 'História da org',
+  };
+  const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
+    { id: 'inicio', label: '🏠 Início', tabs: ['overview'] },
+    { id: 'comp', label: '🏆 Competição', tabs: [...(majorActive ? ['major' as HubTab] : []), 'calendar', 'bracket', 'results', 'standings'] },
+    { id: 'time', label: '👥 Meu time', tabs: ['squad', 'academy', 'market', 'finance'] },
+    { id: 'mundo', label: '🌐 Mundo', tabs: ['vrs', 'top20', 'world'] },
+    { id: 'org', label: '📨 Organização', tabs: ['inbox', 'history'] },
   ];
+  const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);
+  const tabLabelFull = (id: HubTab) =>
+    id === 'inbox' && unread > 0 ? `Inbox (${unread})`
+    : id === 'finance' && expiringCount > 0 ? `Finanças ⚠️${expiringCount}`
+    : TAB_LABEL[id];
+  const activeGroup = HUB_GROUPS.find((g) => g.tabs.includes(hubTab)) ?? HUB_GROUPS[0];
 
   const vrsByRegion = vrsByRegionMemo;
   const vrsAll = vrsAllMemo;
@@ -2924,13 +2928,28 @@ export function CareerScreen({ onExit }: Props) {
         </div>
       </div>
 
-      <div className="career-tabs">
-        {TABS.map((tab) => (
-          <button key={tab.id} className={`career-tab${hubTab === tab.id ? ' on' : ''}${tab.id === 'finance' && expiringCount > 0 ? ' finance-alert' : ''}${tab.id === 'inbox' && unread > 0 ? ' finance-alert' : ''}`}
-            onClick={(e) => { setHubTab(tab.id); setSelSeries(null); e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); if (tab.id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 }); }}>
-            {tab.label}
-          </button>
-        ))}
+      <div className="career-nav">
+        <div className="career-groups">
+          {HUB_GROUPS.map((g) => {
+            const hasAlert = g.tabs.some(tabAlert);
+            return (
+              <button key={g.id} className={`career-group${activeGroup.id === g.id ? ' on' : ''}${hasAlert ? ' finance-alert' : ''}`}
+                onClick={() => { setHubTab(g.tabs[0]); setSelSeries(null); }}>
+                {g.label}
+              </button>
+            );
+          })}
+        </div>
+        {activeGroup.tabs.length > 1 && (
+          <div className="career-subtabs">
+            {activeGroup.tabs.map((id) => (
+              <button key={id} className={`career-subtab${hubTab === id ? ' on' : ''}${tabAlert(id) ? ' finance-alert' : ''}`}
+                onClick={(e) => { setHubTab(id); setSelSeries(null); e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); if (id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 }); }}>
+                {tabLabelFull(id)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* conteúdo da aba com transição (key força remount → reanima na troca) */}
