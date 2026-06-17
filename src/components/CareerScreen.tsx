@@ -112,6 +112,37 @@ const t3EventName = (split: number) => T3_EVENTS[(split - 1) % T3_EVENTS.length]
 interface Signing {
   playerId: string;
   fromId: string;
+  fee?: number; // valor negociado da transferência (se ausente, usa o de tabela)
+}
+
+// ---------- negociação de transferência (mercado) ----------
+// resistência do clube a vender: estrela e jogador de time forte valem MAIS que o
+// preço de tabela — é o ágio pra tirar alguém de um clube que não quer vender.
+function sellResistance(player: Player, fromTeamwork: number): number {
+  const ovr = playerOvr(player);
+  let r = ovr >= 88 ? 1.9 : ovr >= 84 ? 1.55 : ovr >= 80 ? 1.32 : ovr >= 76 ? 1.14 : 1.0;
+  r += Math.max(0, (fromTeamwork - 80) / 90); // tirar de um top custa mais
+  return r;
+}
+function askingPrice(player: Player, fromTeamwork: number): number {
+  return Math.round(playerValue(player) * sellResistance(player, fromTeamwork));
+}
+type NegoReply =
+  | { kind: 'accept' }
+  | { kind: 'counter'; value: number }
+  | { kind: 'reject'; firm: boolean; msg: string };
+// resposta do clube a uma proposta de fee (determinística por jogador+rodada).
+function clubReply(offer: number, asking: number, player: Player, fromTeamwork: number, round: number): NegoReply {
+  const ovr = playerOvr(player);
+  // estrela de time forte às vezes simplesmente não está à venda
+  if (ovr >= 89 && fromTeamwork >= 84 && round === 0 && hashStr(`${player.id}:nfs`) % 100 < 55) {
+    return { kind: 'reject', firm: true, msg: `${player.nick} não está à venda. O clube não quer nem ouvir.` };
+  }
+  const ratio = offer / Math.max(1, asking);
+  if (ratio >= 0.97) return { kind: 'accept' };
+  if (ratio >= 0.8) return { kind: 'counter', value: Math.round((offer + asking * 1.02) / 2) };
+  if (ratio >= 0.58) return { kind: 'counter', value: Math.round(asking * (0.94 - round * 0.03)) };
+  return { kind: 'reject', firm: false, msg: 'Proposta muito abaixo do valor. O clube recusou na hora.' };
 }
 
 // Patrocinadores: marcas reais que pagam por split. Os de maior tier exigem
@@ -5153,6 +5184,80 @@ function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['
   );
 }
 
+// ---------- negociação de transferência (modal) ----------
+function NegotiationModal({ player, from, budget, onClose, onAgree }: {
+  player: Player; from: TeamSeason; budget: number;
+  onClose: () => void; onAgree: (fee: number) => void;
+}) {
+  const ask = askingPrice(player, from.teamwork);
+  const mkt = playerValue(player);
+  const wage = playerWage(player);
+  const [offer, setOffer] = useState(Math.round(ask * 0.85));
+  const [round, setRound] = useState(0);
+  const [reply, setReply] = useState<NegoReply | null>(null);
+  const overBudget = offer > budget;
+  const submit = () => {
+    if (overBudget) return;
+    setReply(clubReply(offer, ask, player, from.teamwork, round));
+    setRound((r) => r + 1);
+  };
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="nego-modal" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-x" onClick={onClose}>✕</button>
+        <div className="nego-head">
+          <PlayerAvatar nick={player.nick} size={48} />
+          <div>
+            <div className="nego-nick"><Flag cc={player.country} /> {player.nick} <span className={`role-pill ${player.role}`}>{player.role}</span></div>
+            <div className="muted small">Negociando com <b>{from.team}</b> · OVR {playerOvr(player)}</div>
+          </div>
+        </div>
+        <div className="nego-figures">
+          <div><span className="muted small">Valor de mercado</span><b>{formatMoney(mkt)}</b></div>
+          <div><span className="muted small">Pedida do clube</span><b>{formatMoney(ask)}</b></div>
+          <div><span className="muted small">Salário / split</span><b>{formatMoney(wage)}</b></div>
+        </div>
+        <div className="nego-offer">
+          <div className="nego-presets">
+            <button className="btn small ghost" onClick={() => { setOffer(Math.round(ask * 0.7)); setReply(null); }}>Proposta baixa</button>
+            <button className="btn small ghost" onClick={() => { setOffer(ask); setReply(null); }}>Proposta justa</button>
+            <button className="btn small ghost" onClick={() => { setOffer(Math.round(ask * 1.1)); setReply(null); }}>Proposta generosa</button>
+          </div>
+          <input type="range" min={Math.round(mkt * 0.4)} max={Math.round(ask * 1.4)} step={10000}
+            value={offer} onChange={(e) => { setOffer(Number(e.target.value)); setReply(null); }} />
+          <div className={`nego-amount${overBudget ? ' neg' : ''}`}>
+            Sua proposta: <b>{formatMoney(offer)}</b>{overBudget && ' · sem caixa'}
+          </div>
+        </div>
+        {reply && (
+          <div className={`nego-reply ${reply.kind}`}>
+            {reply.kind === 'accept' && <span>✅ {from.team} aceitou a proposta de <b>{formatMoney(offer)}</b>.</span>}
+            {reply.kind === 'counter' && <span>↔️ {from.team} contrapropôs: quer <b>{formatMoney(reply.value)}</b>.</span>}
+            {reply.kind === 'reject' && <span>❌ {reply.msg}</span>}
+          </div>
+        )}
+        <div className="nego-actions">
+          {reply?.kind === 'accept' ? (
+            <button className="btn gold" onClick={() => onAgree(offer)}>Fechar por {formatMoney(offer)}</button>
+          ) : reply?.kind === 'counter' ? (
+            <>
+              <button className="btn gold" disabled={reply.value > budget} onClick={() => onAgree(reply.value)}>
+                Aceitar {formatMoney(reply.value)}
+              </button>
+              <button className="btn" disabled={overBudget} onClick={submit}>Insistir na proposta</button>
+            </>
+          ) : reply?.kind === 'reject' && reply.firm ? (
+            <button className="btn" onClick={onClose}>Sair</button>
+          ) : (
+            <button className="btn gold" disabled={overBudget} onClick={submit}>Fazer proposta</button>
+          )}
+          <button className="btn ghost" onClick={onClose}>Desistir</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- mercado de contratações ----------
 function MarketScreen({
   save,
@@ -5172,6 +5277,7 @@ function MarketScreen({
   embedded?: boolean;
 }) {
   const [squad, setSquad] = useState<Signing[]>(save.squad);
+  const [nego, setNego] = useState<{ player: Player; from: TeamSeason } | null>(null);
   const [coachId, setCoachId] = useState<string | null>(save.coachFromId);
   const [filter, setFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>(''); // filtro por função
@@ -5207,7 +5313,8 @@ function MarketScreen({
   const spentPlayers = squad.reduce((acc, s) => {
     if (owned.has(s.playerId)) return acc;
     const f = findSigning(s);
-    return acc + (f ? playerValue(f.player) : 0);
+    // usa o fee NEGOCIADO; se não houver (free agent / save antigo), o de tabela
+    return acc + (f ? (s.fee ?? playerValue(f.player)) : 0);
   }, 0);
   const soldPlayers = save.squad
     .filter((s) => !squad.some((x) => x.playerId === s.playerId))
@@ -5355,11 +5462,16 @@ function MarketScreen({
             {visible.length === 0 && <div className="muted small" style={{ padding: 12 }}>Nenhum jogador com esses filtros.</div>}
             {visible.map((m) => {
               const dup = signedNicks.has(m.player.nick.toLowerCase());
-              const affordable = m.price <= budgetLeft && squad.length < 5 && !dup;
+              const isFA = m.from.id === '__free__';
+              // free agent entra direto (sem clube pra negociar); jogador de clube
+              // abre a NEGOCIAÇÃO (o orçamento é checado lá dentro).
+              const canPick = squad.length < 5 && !dup && (isFA ? m.price <= budgetLeft : true);
               return (
-                <button key={m.player.id} className={`pcard${!affordable ? ' taken' : ''}`}
-                  disabled={!affordable}
-                  onClick={() => setSquad([...squad, { playerId: m.player.id, fromId: m.from.id }])}>
+                <button key={m.player.id} className={`pcard${!canPick ? ' taken' : ''}`}
+                  disabled={!canPick}
+                  onClick={() => isFA
+                    ? setSquad([...squad, { playerId: m.player.id, fromId: m.from.id, fee: m.price }])
+                    : setNego({ player: m.player, from: m.from })}>
                   <PlayerAvatar nick={m.player.nick} size={48} />
                   <OvrBadge ovr={playerOvr(m.player)} />
                   <div className="nick">{m.player.nick}</div>
@@ -5462,6 +5574,18 @@ function MarketScreen({
           </div>
         </div>
       </div>
+      {nego && (
+        <NegotiationModal
+          player={nego.player}
+          from={nego.from}
+          budget={budgetLeft}
+          onClose={() => setNego(null)}
+          onAgree={(fee) => {
+            setSquad([...squad, { playerId: nego.player.id, fromId: nego.from.id, fee }]);
+            setNego(null);
+          }}
+        />
+      )}
     </div>
   );
 }

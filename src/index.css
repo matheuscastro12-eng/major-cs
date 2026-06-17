@@ -3497,6 +3497,32 @@ table.crm-players input.num {
   overflow-y: auto;
 }
 
+/* ---- modal de negociação de transferência ---- */
+.nego-modal {
+  position: relative; width: min(460px, 94vw); margin-top: 4vh;
+  background: linear-gradient(180deg, #20262e, var(--panel));
+  border: 1px solid var(--border); border-radius: 16px; padding: 22px 22px 18px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+.nego-head { display: flex; align-items: center; gap: 12px; }
+.nego-nick { font-family: var(--font-cond); font-weight: 800; font-size: 1.1rem; color: var(--text-strong); display: flex; align-items: center; gap: 8px; }
+.nego-figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0; }
+.nego-figures > div { background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 9px; display: flex; flex-direction: column; gap: 3px; }
+.nego-figures b { font-family: var(--font-cond); font-size: 1.02rem; color: var(--text-strong); }
+.nego-offer { display: flex; flex-direction: column; gap: 9px; }
+.nego-presets { display: flex; gap: 6px; }
+.nego-presets .btn { flex: 1; }
+.nego-offer input[type=range] { width: 100%; accent-color: var(--gold); }
+.nego-amount { font-size: 0.95rem; }
+.nego-amount.neg { color: var(--red-bright); }
+.nego-amount b { font-family: var(--font-cond); color: var(--gold-2); }
+.nego-reply { margin: 12px 0 4px; padding: 10px 12px; border-radius: 10px; font-size: 0.92rem; }
+.nego-reply.accept { background: rgba(92, 184, 92, 0.14); border: 1px solid rgba(92, 184, 92, 0.32); }
+.nego-reply.counter { background: var(--gold-glow); border: 1px solid var(--gold-soft); }
+.nego-reply.reject { background: rgba(226, 90, 90, 0.12); border: 1px solid rgba(226, 90, 90, 0.3); }
+.nego-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.nego-actions .btn { flex: 1 1 auto; }
+
 .modal {
   background: var(--panel);
   border: 1px solid var(--border);
