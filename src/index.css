@@ -3550,6 +3550,7 @@ table.crm-players input.num {
 .nego-offer-fee { font-family: var(--font-cond); font-weight: 800; color: var(--gold-2); margin-left: auto; }
 .nego-offer-fee.pos { color: var(--pos); }
 /* tela de renovação de contratos */
+.renew-bulk { display: flex; gap: 8px; margin: 10px 0 2px; }
 .renew-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .renew-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 10px; border-left: 3px solid var(--border-soft); }
 .renew-row.keep { border-left-color: var(--pos); }

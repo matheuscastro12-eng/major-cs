@@ -5089,33 +5089,41 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
   budget: number;
   onConfirm: (renewIds: string[]) => void;
 }) {
-  const [keep, setKeep] = useState<Set<string>>(() => new Set(renewals.map((r) => r.playerId)));
-  const cost = renewals.filter((r) => keep.has(r.playerId)).reduce((a, r) => a + r.wage, 0);
+  // NADA pré-selecionado: você decide cada jogador (renovar/liberar). Sem isso, o
+  // default "renovar todos" fazia clicar em Renovar parecer que não fazia nada.
+  const [decided, setDecided] = useState<Record<string, 'keep' | 'drop'>>({});
+  const set = (id: string, v: 'keep' | 'drop') => setDecided((d) => ({ ...d, [id]: v }));
+  const setAll = (v: 'keep' | 'drop') => setDecided(Object.fromEntries(renewals.map((r) => [r.playerId, v])));
+  const kept = renewals.filter((r) => decided[r.playerId] === 'keep');
+  const cost = kept.reduce((a, r) => a + r.wage, 0);
   const overBudget = cost > budget;
-  const setRenew = (id: string) => setKeep((s) => new Set(s).add(id));
-  const setRelease = (id: string) => setKeep((s) => { const n = new Set(s); n.delete(id); return n; });
+  const allDecided = renewals.every((r) => decided[r.playerId]);
   return (
     <div className="fade-in">
       <div className="panel" style={{ maxWidth: 720, margin: '24px auto' }}>
         <div className="panel-head">📝 Renovação de contratos</div>
         <div className="panel-body">
           <p className="muted small" style={{ marginTop: 0 }}>
-            Estes contratos venceram. <b>Renove</b> quem você quer manter (custa 1 salário) ou <b>libere</b> de graça.
-            Quem não for renovado deixa o elenco agora.
+            Estes contratos venceram. Decida cada um: <b>Renovar</b> (mantém no elenco, custa 1 salário)
+            ou <b>Liberar</b> (sai de graça agora).
           </p>
+          <div className="renew-bulk">
+            <button className="btn small ghost" onClick={() => setAll('keep')}>Renovar todos</button>
+            <button className="btn small ghost" onClick={() => setAll('drop')}>Liberar todos</button>
+          </div>
           <div className="renew-list">
             {renewals.map((r) => {
-              const on = keep.has(r.playerId);
+              const v = decided[r.playerId];
               return (
-                <div key={r.playerId} className={`renew-row${on ? ' keep' : ' drop'}`}>
+                <div key={r.playerId} className={`renew-row${v === 'keep' ? ' keep' : v === 'drop' ? ' drop' : ''}`}>
                   <PlayerAvatar nick={r.nick} size={40} />
                   <div className="renew-id">
                     <div className="renew-nick"><Flag cc={r.country} /> {r.nick} <span className={`role-pill ${r.role}`}>{r.role}</span></div>
                     <div className="muted small">OVR {r.ovr} · salário {formatMoney(r.wage)}</div>
                   </div>
                   <div className="renew-actions">
-                    <button className={`btn small${on ? ' gold' : ' ghost'}`} onClick={() => setRenew(r.playerId)}>{on ? '✓ Renovar' : 'Renovar'}</button>
-                    <button className={`btn small${!on ? ' armed' : ' ghost'}`} onClick={() => setRelease(r.playerId)}>{!on ? '✓ Liberar' : 'Liberar'}</button>
+                    <button className={`btn small${v === 'keep' ? ' gold' : ' ghost'}`} onClick={() => set(r.playerId, 'keep')}>{v === 'keep' ? '✓ Renovar' : 'Renovar'}</button>
+                    <button className={`btn small${v === 'drop' ? ' armed' : ' ghost'}`} onClick={() => set(r.playerId, 'drop')}>{v === 'drop' ? '✓ Liberar' : 'Liberar'}</button>
                   </div>
                 </div>
               );
@@ -5123,8 +5131,12 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
           </div>
           <div className="renew-foot">
             <span>Custo das renovações: <b className={overBudget ? 'neg' : ''}>{formatMoney(cost)}</b> · caixa {formatMoney(budget)}</span>
-            <button className="btn gold" disabled={overBudget} onClick={() => onConfirm([...keep])}>Confirmar e abrir o mercado</button>
+            <button className="btn gold" disabled={overBudget || !allDecided}
+              onClick={() => onConfirm(kept.map((r) => r.playerId))}>
+              Confirmar e abrir o mercado
+            </button>
           </div>
+          {!allDecided && <p className="muted small" style={{ marginTop: 8 }}>Escolha <b>Renovar</b> ou <b>Liberar</b> para cada jogador antes de confirmar.</p>}
           {overBudget && <p className="neg small" style={{ marginTop: 8 }}>Sem caixa pra renovar todos. Libere alguém pra caber no orçamento.</p>}
         </div>
       </div>
