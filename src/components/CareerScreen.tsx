@@ -813,7 +813,10 @@ function baseAge(p: Pick<Player, 'id' | 'nick'>, youthAge?: Record<string, numbe
   if (y != null) return y;
   const real = REAL_AGES[p.nick]?.age;
   if (real && real >= 15 && real <= 45) return real;
-  return 20 + (hashStr(`age:${p.id}`) % 6); // 20-25 pros sem dado
+  // sem dado: assume AUGE (25-29), não juventude. Um pro de elenco real não pode
+  // virar "jovem em ascensão" só por falta de idade na tabela (bug do coldzera/fer).
+  // Jovens de verdade vêm da academia, que grava a idade na promoção (youthAge).
+  return 25 + (hashStr(`age:${p.id}`) % 5);
 }
 function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number, youthAge?: Record<string, number>): number {
   return baseAge(p, youthAge) + Math.floor((split - 1) / 3);
@@ -1233,7 +1236,10 @@ function persist(s: CareerSave): void {
   }
 }
 
-const coachFee = (c: Coach): number => Math.max(100_000, (c.rating - 60) * 30_000);
+// preço do técnico: curva acelerada (não linear). Iniciante é barato, mas técnico
+// de elite custa MILHÕES — contratar um top tem que doer no caixa.
+// rating 66 ~80k · 72 ~380k · 80 ~1.4M · 85 ~2.6M · 88 ~3.5M
+const coachFee = (c: Coach): number => Math.round(60_000 + Math.pow(Math.max(0, c.rating - 62), 2.5) * 1000);
 
 // opção de entrada: técnico iniciante barato para clubes recém-fundados
 const ROOKIE_COACH: Coach = { nick: 'rook1e', name: 'Técnico Iniciante', country: 'br', rating: 66, style: 'tactical' };
@@ -3577,6 +3583,17 @@ export function CareerScreen({ onExit }: Props) {
                           <button className="btn small gold"
                             onClick={() => (squadFull ? setPromoting(promoting === p.id ? null : p.id) : promoteProspect(p.id))}>
                             ⬆ Promover
+                          </button>
+                          <button className="btn small ghost" title="Dispensar o prospecto da academia"
+                            onClick={() => {
+                              if (!confirm(`Dispensar ${p.nick} da academia? Não dá pra desfazer.`)) return;
+                              update({
+                                academy: aca.filter((x) => x.id !== p.id),
+                                academyFocus: save.academyFocus === p.id ? null : save.academyFocus,
+                              });
+                              if (promoting === p.id) setPromoting(null);
+                            }}>
+                            🗑
                           </button>
                         </div>
                         {promoting === p.id && squadFull && (
