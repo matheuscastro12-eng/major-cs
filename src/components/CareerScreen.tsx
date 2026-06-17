@@ -4521,27 +4521,32 @@ function PlayoffBracket({ p, teamOf, onOpen }: {
   teamOf: (id: string) => TTeam;
   onOpen: (s: SeriesResult, ts: [TTeam, TTeam]) => void;
 }) {
-  const side = (id?: string, win?: boolean, seed?: number) => {
-    if (!id) return <div className="po-side tbd"><span className="muted small">a definir</span></div>;
+  // mesma linguagem visual do bracket do Major (hb-*): colunas lado a lado com
+  // conector tracejado e a coluna do campeão (caixa de troféu) no fim.
+  const row = (id?: string, score?: number, loser?: boolean, seed?: number) => {
+    if (!id) return <div className="hb-row ghost">?</div>;
     const t = teamOf(id);
     return (
-      <div className={`po-side${win ? ' win' : ''}${id === 'user' ? ' mine' : ''}`}>
-        {seed && <span className="po-seed">{seed}</span>}
-        <TeamBadge tag={t.tag} colors={t.colors} size={24} logoUrl={t.logoUrl} />
-        <span className="po-tname"><Flag cc={t.country} /> {t.name}</span>
+      <div className={`hb-row po-hb-row${loser ? ' loser' : ''}${id === 'user' ? ' is-user' : ''}`}>
+        {seed != null && <span className="po-seed">{seed}</span>}
+        <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={t.logoUrl} />
+        <span className="hb-tag po-hb-name"><Flag cc={t.country} /> {t.name}</span>
+        <span className="hb-score">{score ?? '–'}</span>
       </div>
     );
   };
-  const matchRow = (m: PlayoffMatch | null, label: string, seeds?: [number, number]) => {
+  const cell = (m: PlayoffMatch | null, seeds?: [number, number]) => {
+    if (!m || !m.a) return (
+      <div className="hb-match po-hb-match empty"><div className="hb-row ghost">?</div><div className="hb-row ghost">?</div></div>
+    );
     const w = poWinner(m);
-    const r = m?.result;
+    const r = m.result;
     return (
-      <div className={`po-match${r ? ' clickable' : ''}`}
-        onClick={() => r && m && onOpen(r, [teamOf(m.a), teamOf(m.b)])}>
-        <div className="po-label">{label}</div>
-        {side(m?.a, !!w && w === m?.a, seeds?.[0])}
-        <div className="po-score">{r ? `${r.mapScore[0]} : ${r.mapScore[1]}` : 'vs'}</div>
-        {side(m?.b, !!w && w === m?.b, seeds?.[1])}
+      <div className={`hb-match po-hb-match${r ? ' clickable' : ''}`}
+        onClick={() => r && onOpen(r, [teamOf(m.a), teamOf(m.b)])}
+        title={r ? 'Ver estatísticas da série' : undefined}>
+        {row(m.a, r?.mapScore[0], !!w && w !== m.a, seeds?.[0])}
+        {row(m.b, r?.mapScore[1], !!w && w !== m.b, seeds?.[1])}
       </div>
     );
   };
@@ -4550,31 +4555,44 @@ function PlayoffBracket({ p, teamOf, onOpen }: {
     <div className="panel">
       <div className="panel-head">{p.circuit} · Playoffs (mata-mata)</div>
       <div className="panel-body">
-        <div className="po-bracket">
+        <div className="hb-scroll playoff">
           {p.qf && (
-            <div className="po-col">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>Quartas (MD3)</div>
-              {matchRow(p.qf[0], 'QF1', [1, 8])}
-              {matchRow(p.qf[1], 'QF2', [4, 5])}
-              {matchRow(p.qf[2], 'QF3', [2, 7])}
-              {matchRow(p.qf[3], 'QF4', [3, 6])}
+            <div className="hb-col">
+              <div className="hb-reclabel">Quartas · MD3</div>
+              <div className="hb-group playoff-group">
+                {cell(p.qf[0], [1, 8])}
+                {cell(p.qf[1], [4, 5])}
+                {cell(p.qf[2], [2, 7])}
+                {cell(p.qf[3], [3, 6])}
+              </div>
             </div>
           )}
-          <div className="po-col">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>Semifinais (MD3)</div>
-            {matchRow(p.sf[0].a ? p.sf[0] : null, 'SF1', p.qf ? undefined : [1, 4])}
-            {matchRow(p.sf[1].a ? p.sf[1] : null, 'SF2', p.qf ? undefined : [2, 3])}
+          <div className="hb-col">
+            <div className="hb-reclabel">Semifinal · MD3</div>
+            <div className="hb-group playoff-group">
+              {cell(p.sf[0].a ? p.sf[0] : null, p.qf ? undefined : [1, 4])}
+              {cell(p.sf[1].a ? p.sf[1] : null, p.qf ? undefined : [2, 3])}
+            </div>
           </div>
-          <div className="po-col">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>Grande final (MD5)</div>
-            {matchRow(p.final, 'FINAL')}
-            {champ && (
-              <div className="po-champ">
-                <div className="trophy" style={{ fontSize: 30 }}>🏆</div>
-                <TeamBadge tag={champ.tag} colors={champ.colors} size={34} logoUrl={champ.logoUrl} />
-                <div><b>{champ.name}</b><div className="muted small">campeão do {p.circuit}</div></div>
-              </div>
-            )}
+          <div className="hb-col">
+            <div className="hb-reclabel">Grande final · MD5</div>
+            <div className="hb-group playoff-group">
+              {cell(p.final)}
+            </div>
+          </div>
+          <div className="hb-col">
+            <div className="hb-reclabel">Campeão</div>
+            <div className="hb-resultbox adv" style={{ minWidth: 150 }}>
+              <div className="hb-resultbox-title">🏆 Troféu</div>
+              {champ ? (
+                <div className={`hb-token adv${champ.isUser ? ' is-user' : ''}`} style={{ fontSize: 13 }}>
+                  <TeamBadge tag={champ.tag} colors={champ.colors} size={24} logoUrl={champ.logoUrl} />
+                  <span><Flag cc={champ.country} /> {champ.name}</span>
+                </div>
+              ) : (
+                <div className="hb-row ghost">a definir</div>
+              )}
+            </div>
           </div>
         </div>
       </div>

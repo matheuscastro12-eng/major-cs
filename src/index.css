@@ -2008,6 +2008,12 @@ table.standings tr.is-user td {
 
 .playoff-group { gap: 14px; }
 
+/* bracket de playoff do circuito: mesma linguagem do Major, mas células mais
+   largas pra caber o nome completo do time + assento do seed */
+.po-hb-match { width: 210px; }
+.po-hb-row { gap: 7px; }
+.po-hb-name { display: flex; align-items: center; gap: 5px; }
+
 /* ---------- match banner (bandeira de país/região atrás) ---------- */
 .match-banner {
   display: grid;
