@@ -886,6 +886,16 @@ function aiTeamVrs(t: TeamSeason): number {
 function opponentMult(fieldAvgCore: number): number {
   return Math.max(0.08, Math.min(1.25, (fieldAvgCore - 250) / 450));
 }
+// embaralhamento determinístico (Fisher-Yates com semente) — mesmo seed, mesma
+// ordem. Usado pra variar o field dos torneios por split sem perder estabilidade.
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = hashStr(`${seed}:${i}`) % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 // VRS-BASE do usuário: um PISO modesto pela qualidade do elenco (um time forte
 // não começa em último), mas pequeno o bastante pra que o RANKING seja movido
 // pelos RESULTADOS (save.vrs, que decai). O ranking = base + pontos ganhos.
@@ -1352,14 +1362,24 @@ export function CareerScreen({ onExit }: Props) {
   const circuits = useMemo(() => {
     const pool = oppEra.filter((t) => t.id !== 'user');
     const byStrength = [...pool].sort((a, b) => b.teamwork - a.teamwork);
-    // TIERS GLOBAIS (espelham o ranking HLTV), não por região: a elite mundial vai
-    // pro Tier 1, o segundo escalão do ranking (Astralis, paiN, FaZe, MIBR, TYLOO,
-    // Liquid…) pro Tier 2, e os times de acesso pro Tier 3. Os campos são fatias
-    // disjuntas do ranking, então nenhum time aparece em dois eventos e o Tier 3
-    // SEMPRE existe (não depende de quantos times tem a sua região).
-    const t1Teams = byStrength.slice(0, 15);
-    const t2Teams = byStrength.slice(15, 31);
-    const t3Teams = byStrength.slice(31, 47);
+    // TIERS GLOBAIS (espelham o ranking HLTV), não por região. Cada torneio tem um
+    // NÚCLEO (os melhores da faixa, que quase sempre comparecem) + vagas ROTATIVAS
+    // de uma janela mais ampla, embaralhadas POR SPLIT. Assim o Tier 1 às vezes
+    // recebe um Tier 2, o Tier 2 recebe um Tier 3, e o field muda de split pra
+    // split — sem ser sempre os mesmos. Montados em sequência removendo quem já foi
+    // sorteado, então os campos ficam disjuntos (ninguém em dois eventos no split).
+    const used = new Set<string>();
+    const buildField = (coreN: number, windowN: number, n: number, seed: number): TeamSeason[] => {
+      const avail = byStrength.filter((t) => !used.has(t.id));
+      const core = avail.slice(0, coreN);
+      const rot = seededShuffle(avail.slice(coreN, coreN + windowN), seed).slice(0, Math.max(0, n - core.length));
+      const field = [...core, ...rot];
+      for (const t of field) used.add(t.id);
+      return field;
+    };
+    const t1Teams = buildField(9, 13, 15, save.split * 101 + 1); // top 9 fixos + 6 rotativos (alcança o Tier 2)
+    const t2Teams = buildField(9, 13, 15, save.split * 101 + 2); // melhores restantes + rotativos (alcança o Tier 3)
+    const t3Teams = buildField(9, 13, 15, save.split * 101 + 3); // o que sobrou + rotativos da base
     const mk = (
       id: string,
       name: string,
