@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Player, Role } from '../types';
 import { CS2_REAL_2026 } from '../data/bo3';
-import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, pushBo3Edits, saveBo3Edits, type Bo3Edits, type PlayerEdit } from '../state/bo3-edits';
+import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, pushBo3Edits, saveBo3Edits, type Bo3Edits, type PlayerEdit } from '../state/bo3-edits';
 import { adminPassword } from './AdminGate';
 import { playerOvr } from '../engine/ratings';
 import { logoForTeam } from '../data/media';
@@ -32,7 +32,11 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
   // o cache local não sobrepõe o que está salvo no servidor.
   useEffect(() => {
     let alive = true;
-    fetchBo3Edits().then((srv) => { if (alive && srv) { setEdits(srv); saveBo3Edits(srv); } });
+    // servidor COMPLETA; o que está em edição local tem prioridade (não perde edição)
+    fetchBo3Edits().then((srv) => {
+      if (!alive || !srv) return;
+      setEdits((local) => { const merged = mergeBo3Edits(srv, local); saveBo3Edits(merged); return merged; });
+    });
     return () => { alive = false; };
   }, []);
 
@@ -41,7 +45,10 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
   const visible = teams.filter((t) => !filter || t.team.toLowerCase().includes(filter.toLowerCase()) || t.tag.toLowerCase().includes(filter.toLowerCase()));
   const sel = teams.find((t) => t.id === selId) ?? teams[0];
 
-  const update = (next: Bo3Edits) => { setEdits(next); setDirty(true); setSavedFlash(''); };
+  // mutador base: SEMPRE deriva do estado mais recente (forma funcional), senão
+  // editar vários jogadores seguidos faz um sobrescrever o outro (o bug do "não
+  // salva pra todos os jogadores").
+  const mutate = (fn: (prev: Bo3Edits) => Bo3Edits) => { setEdits(fn); setDirty(true); setSavedFlash(''); };
 
   // salva GLOBAL (servidor, vale pra todos) + cache local. Precisa da senha admin
   // (já validada no AdminGate). Se o servidor falhar, avisa e mantém o cache local.
@@ -57,19 +64,19 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
   };
 
   const setPlayer = (pid: string, patch: Partial<PlayerEdit>) => {
-    const cur = edits.players[pid] ?? {};
-    update({ ...edits, players: { ...edits.players, [pid]: { ...cur, ...patch } } });
+    mutate((prev) => ({ ...prev, players: { ...prev.players, [pid]: { ...(prev.players[pid] ?? {}), ...patch } } }));
   };
   const setTeam = (tid: string, patch: { teamwork?: number; tag?: string; name?: string }) => {
-    const cur = edits.teams[tid] ?? {};
-    update({ ...edits, teams: { ...edits.teams, [tid]: { ...cur, ...patch } } });
+    mutate((prev) => ({ ...prev, teams: { ...prev.teams, [tid]: { ...(prev.teams[tid] ?? {}), ...patch } } }));
   };
   const resetTeam = (tid: string) => {
-    const players = { ...edits.players };
     const base = CS2_REAL_2026.find((t) => t.id === tid);
-    base?.players.forEach((p) => delete players[p.id]);
-    const t2 = { ...edits.teams }; delete t2[tid];
-    update({ players, teams: t2 });
+    mutate((prev) => {
+      const players = { ...prev.players };
+      base?.players.forEach((p) => delete players[p.id]);
+      const teams = { ...prev.teams }; delete teams[tid];
+      return { players, teams };
+    });
   };
 
   const exportJson = () => {

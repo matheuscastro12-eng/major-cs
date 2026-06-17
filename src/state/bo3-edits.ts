@@ -32,6 +32,15 @@ export function saveBo3Edits(e: Bo3Edits): void {
   try { localStorage.setItem(KEY, JSON.stringify(e)); } catch { /* sem storage */ }
 }
 
+// junta edições: `over` (local do editor) tem prioridade sobre `base` (servidor).
+// Assim o sync do servidor NUNCA apaga uma edição local que o admin acabou de fazer.
+export function mergeBo3Edits(base: Bo3Edits, over: Bo3Edits): Bo3Edits {
+  return {
+    players: { ...base.players, ...over.players },
+    teams: { ...base.teams, ...over.teams },
+  };
+}
+
 // recompõe os atributos a partir do OVR + role (mesma lógica da importação)
 export function attrsFromOvr(ovr: number, role: Role): Pick<Player, 'aim' | 'consistency' | 'clutch' | 'awp' | 'igl'> {
   return {

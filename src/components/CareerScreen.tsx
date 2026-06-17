@@ -24,7 +24,7 @@ import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
-import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
+import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
 import bo3Ages from '../data/bo3-ages.json';
 
 const SAVE_KEY = 'rtm-career-v1';
@@ -1391,7 +1391,9 @@ export function CareerScreen({ onExit }: Props) {
   useEffect(() => {
     let alive = true;
     fetchBo3Edits().then((srv) => {
-      if (alive && srv) { setBo3Edits(srv); saveBo3Edits(srv); }
+      // o servidor COMPLETA, mas as edições locais do admin têm prioridade — o sync
+      // nunca apaga o que você acabou de editar no CRM (bug de "sumiu o que editei").
+      if (alive && srv) { const merged = mergeBo3Edits(srv, loadBo3Edits()); setBo3Edits(merged); saveBo3Edits(merged); }
     });
     return () => { alive = false; };
   }, []);
