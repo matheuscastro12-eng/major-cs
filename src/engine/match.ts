@@ -91,6 +91,11 @@ const envNum = (k: string, def: number): number => {
 // real no topo), sem deixar gaps enormes virarem moeda (top vs tier-3 segue ~100%).
 const ROUND_DIV = envNum('ROUND_DIV', 28);
 const MAP_SWING = envNum('MAP_SWING', 4);
+// AI_EDGE: vantagem de DIFICULDADE dada a todo time da IA (não-usuário) na força
+// efetiva. Em partidas só da IA (bracket) os dois levam o bônus e se cancela; nas
+// SUAS partidas, o adversário joga um degrau acima — ganhar tudo deixa de ser fácil.
+// Não toca no VRS/tiers (que usam team.strength cru), só no resultado da partida.
+const AI_EDGE = envNum('AI_EDGE', 4);
 
 const KILL_ROLE_MULT: Record<string, number> = {
   Entry: 1.12,
@@ -248,6 +253,7 @@ function effStrength(
   pickedOwnMap: boolean,
 ): number {
   let s = team.strength + (team.mapPrefs[map] ?? 0) * 1.35;
+  if (!team.isUser) s += AI_EDGE; // dificuldade: a IA joga um degrau acima nas suas partidas
   if (side === 'ct') s += 1.1;
   s += BUY_PENALTY[tier];
 

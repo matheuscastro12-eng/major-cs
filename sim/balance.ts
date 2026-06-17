@@ -69,6 +69,7 @@ const t1Field = teams.slice(0, 16);
 function careerOutcome(userStrength: number, field: TTeam[], n: number) {
   const user = withStrength(field[0], userStrength);
   user.id = 'USER';
+  user.isUser = true; // pra valer o AI_EDGE (a IA leva o bônus de dificuldade contra o usuário)
   const f = [user, ...field.slice(1)];
   let champ = 0, fin = 0;
   for (let i = 0; i < n; i++) {
