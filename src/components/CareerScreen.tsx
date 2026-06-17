@@ -96,6 +96,18 @@ const T1_EVENTS = [
   'BLAST Open Lisboa', 'IEM Melbourne', 'PGL Astana', 'Thunderpick World Championship',
 ];
 const t1EventName = (split: number) => T1_EVENTS[(split - 1) % T1_EVENTS.length];
+// Tier 2 mundial: circuitos de segundo escalão reais (sem trava de região).
+const T2_EVENTS = [
+  'ESL Challenger League', 'CCT Global Finals', 'Elisa Masters Espoo', 'YaLLa Compass',
+  'Thunderpick World Champ', 'Pinnacle Cup', 'CCT Season Finals', 'Skyesports Masters',
+];
+const t2EventName = (split: number) => T2_EVENTS[(split - 1) % T2_EVENTS.length];
+// Tier 3: circuitos de acesso/qualificatórias (onde toda org começa).
+const T3_EVENTS = [
+  'ESEA Advanced Season', 'CCT Open Series', 'Gamers Club Liga Pro', 'European Pro League',
+  'Pinnacle Winter Series', 'Elisa Invitational Qual', 'ESL Challenger Open', 'CCT Series',
+];
+const t3EventName = (split: number) => T3_EVENTS[(split - 1) % T3_EVENTS.length];
 
 interface Signing {
   playerId: string;
@@ -175,7 +187,9 @@ interface CircuitChoice {
 // o jogador começa no Tier 3 e precisa SUBIR vencendo no seu nível.
 const TIER_NAMES: Record<number, string> = { 1: 'Tier 1 · Elite', 2: 'Tier 2 · Challenger', 3: 'Tier 3 · Acesso' };
 function teamTier(t: TeamSeason): number {
-  return t.teamwork >= 84 ? 1 : t.teamwork >= 80 ? 2 : 3;
+  // limiares alinhados às faixas do ranking HLTV: T1 = top ~15 (tw>=82),
+  // T2 = segundo escalão (tw 77-81), T3 = acesso (abaixo).
+  return t.teamwork >= 82 ? 1 : t.teamwork >= 77 ? 2 : 3;
 }
 
 // orgs reais SEM line de CS2 (saíram do jogo): o jogador assume a marca e monta
@@ -1026,12 +1040,33 @@ function healYouthPlayer(p: Player): Player {
   return { ...p, nick: p.nick || ident.nick, name: p.name || ident.name, role };
 }
 
+// saves antigos gravaram o nome do time com a era colada ("Vitality 2026") na
+// liga/playoff/major persistidos. Remove o sufixo de ano dos campos de nome.
+const ERA_SUFFIX = / 20\d\d$/;
+function stripEraDeep(node: unknown, depth = 0): void {
+  if (depth > 8 || node === null || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const v of node) stripEraDeep(v, depth + 1);
+    return;
+  }
+  const o = node as Record<string, unknown>;
+  for (const k in o) {
+    const v = o[k];
+    if ((k === 'name' || k === 'fromTeam') && typeof v === 'string') o[k] = v.replace(ERA_SUFFIX, '');
+    else stripEraDeep(v, depth + 1);
+  }
+}
+
 function loadSave(): CareerSave {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return emptySave();
     const s = JSON.parse(raw) as CareerSave;
     const merged = { ...emptySave(), ...s };
+    stripEraDeep(merged.league);
+    stripEraDeep(merged.playoff);
+    stripEraDeep(merged.majorT);
+    stripEraDeep(merged.majorSeed2);
     merged.academy = (merged.academy ?? []).map(healProspect);
     if (merged.youth) {
       const y: Record<string, Player> = {};
@@ -1240,27 +1275,16 @@ export function CareerScreen({ onExit }: Props) {
   // já sabendo quais times vai enfrentar em cada um. Cada circuito tem força,
   // premiação e número de vagas pro Major diferentes.
   const circuits = useMemo(() => {
-    const reg: MacroRegion = save.region ?? 'americas';
     const pool = oppEra.filter((t) => t.id !== 'user');
     const byStrength = [...pool].sort((a, b) => b.teamwork - a.teamwork);
-    // campo regional do tier 2/3 (se a região tiver poucos times, completa com o global)
-    const regAll = pool.filter((t) => teamRegion(t) === reg).sort((a, b) => b.teamwork - a.teamwork);
-    const regional = regAll.length >= 5 ? regAll : byStrength;
-    // tier 3 = times mais fracos (tira os top 5); se sobrar pouco, usa o miolo global
-    const regMidPool = regional.slice(5);
-    const regMid = regMidPool.length >= 5 ? regMidPool : byStrength.slice(8, 16);
-    // nomes reais (Liquipedia) dos circuitos regionais por macro-região
-    // Tier 2 = grandes campeonatos regionais (nomes críveis: time grande joga isso).
-    const T2: Record<MacroRegion, string> = {
-      americas: 'CS Americas Championship', europe: 'Elisa Masters Espoo', cis: 'CIS Masters',
-      asia: 'CS Asia Championship', oceania: 'Thunderpick Oceania', africa: 'CCT Africa Championship',
-    };
-    // Tier 3 = circuitos de acesso da região (de onde toda org começa).
-    const T3: Record<MacroRegion, string> = {
-      americas: 'Gamers Club Liga Pro', europe: 'ESEA Premier EU', cis: 'Winline Insight',
-      asia: 'Asia Champions League', oceania: 'ESEA APAC Advanced', africa: 'VS Gaming Masters',
-    };
-    const regLbl = MACRO_REGION_LABELS[reg];
+    // TIERS GLOBAIS (espelham o ranking HLTV), não por região: a elite mundial vai
+    // pro Tier 1, o segundo escalão do ranking (Astralis, paiN, FaZe, MIBR, TYLOO,
+    // Liquid…) pro Tier 2, e os times de acesso pro Tier 3. Os campos são fatias
+    // disjuntas do ranking, então nenhum time aparece em dois eventos e o Tier 3
+    // SEMPRE existe (não depende de quantos times tem a sua região).
+    const t1Teams = byStrength.slice(0, 15);
+    const t2Teams = byStrength.slice(15, 31);
+    const t3Teams = byStrength.slice(31, 47);
     const mk = (
       id: string,
       name: string,
@@ -1271,30 +1295,16 @@ export function CareerScreen({ onExit }: Props) {
       vrsMult: number,
       tier: number,
     ) => ({ id, name, desc, teams: teams.slice(0, 15), spots, prizeMult, vrsMult, tier });
-    // REPARTE os melhores times entre os campeonatos para NENHUM time aparecer em
-    // dois ao mesmo tempo. Na vida real a Vitality não joga BLAST e ESL no mesmo
-    // dia: cada evento tem o melhor field possível, mas sem repetir time.
-    const used = new Set<string>();
-    const take = (src: TeamSeason[], n: number): TeamSeason[] => {
-      const out: TeamSeason[] = [];
-      for (const t of src) {
-        if (out.length >= n) break;
-        if (!used.has(t.id)) { used.add(t.id); out.push(t); }
-      }
-      return out;
-    };
-    const t1Teams = take(byStrength, 15);                                  // a elite mundial vai pro Tier 1 (16 com você)
-    const t2Teams = take(regional, 15);                                    // melhores da região que sobraram
-    const t3Teams = take(regMid.length >= 5 ? regMid : byStrength, 15);    // acesso (o que restou)
     const t1Name = t1EventName(save.split);
-    // Tier 1 = UM evento mundial por split (calendário sequencial, nome real).
-    // Tier 2/3 = circuitos da SUA região. Fields disjuntos: sem time repetido.
+    const t2Name = t2EventName(save.split);
+    const t3Name = t3EventName(save.split);
+    // Cada split é um evento real distinto do calendário (nomes rotativos).
     return [
       mk('t1', t1Name, `Tier 1 mundial · ${t1Name}: fase de grupos (GSL, dupla eliminação) + playoffs com a elite do ranking. Principal caminho de pontos pro Major; paga muito.`, t1Teams, 2, 1.8, 1.7, 1),
-      mk('t2', T2[reg], `Tier 2 (${regLbl}): liga regional forte, grupos GSL + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.`, t2Teams, 2, 1, 1, 2),
-      mk('t3', T3[reg], `Tier 3 (${regLbl}): circuito de acesso da região, grupos + playoffs. Onde toda org começa.`, t3Teams, 1, 0.6, 0.6, 3),
+      mk('t2', t2Name, `Tier 2 mundial · ${t2Name}: o segundo escalão do ranking (Astralis, paiN, FaZe, MIBR, TYLOO e cia), grupos GSL + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.`, t2Teams, 2, 1, 1, 2),
+      mk('t3', t3Name, `Tier 3 · ${t3Name}: circuito de acesso, times em ascensão. Grupos + playoffs. Onde toda org começa.`, t3Teams, 1, 0.6, 0.6, 3),
     ].filter((c) => c.teams.length >= 5);
-  }, [oppEra, save.region, save.split]);
+  }, [oppEra, save.split]);
 
   // mercado: jogadores reais dos elencos atuais (CS2) + FREE AGENTS (pros sem
   // time), com preço de mercado. Free agents saem 25% mais barato (sem multa).
@@ -4874,7 +4884,7 @@ function ScenarioPicker({ current, onBack, onStart }: {
                             <div className="scenario-title"><Flag cc={t.country} /> {sc.title}</div>
                             <div className="org-meta">
                               <span className={`tier-badge t${tier}`}>TIER {tier}</span>
-                              <span className="muted small">OVR {ovr} · {t.era}</span>
+                              <span className="muted small">OVR {ovr}</span>
                             </div>
                           </div>
                         </div>

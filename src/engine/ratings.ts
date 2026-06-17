@@ -219,7 +219,7 @@ export function teamSeasonToTTeam(ts: TeamSeason): TTeam {
   );
   return {
     id: ts.id,
-    name: `${ts.team} ${ts.era}`,
+    name: ts.team,
     tag: ts.tag,
     country: ts.country,
     isUser: false,
