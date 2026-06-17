@@ -179,7 +179,7 @@ interface CircuitChoice {
   name: string;
   spots: number;     // vagas que vão ao Major
   prizeMult: number; // multiplicador de premiação
-  vrsMult: number;   // multiplicador de VRS
+  vrsWeight: number; // peso de VRS do evento (força média dos adversários, 0.08-1.25)
   tier: number;      // 1 = elite (caminho do Major), 3 = liga de acesso
 }
 
@@ -871,10 +871,20 @@ function poUserRank(p: Playoff | null): number {
 // mas a elite (~85+) dispara via termo quadrático, abrindo distância do bolo.
 // Esse buraco entre miolo e topo é DE PROPÓSITO: é maior do que um campeão de
 // Tier 2 consegue somar, então vencer o acesso te leva ao top-10, nunca a #1.
-function aiTeamVrs(t: TeamSeason): number {
-  const tw = t.teamwork;
+// núcleo determinístico do VRS pela qualidade do elenco (entrosamento). É a base
+// tanto do VRS da IA quanto da "força dos adversários" (Opponent Network) de um evento.
+function vrsCore(tw: number): number {
   const elite = Math.max(0, tw - 82);
-  return Math.round(Math.max(0, tw - 61) * 25 + elite * elite * 10 + (hashStr(t.id) % 55));
+  return Math.max(0, tw - 61) * 25 + elite * elite * 10;
+}
+function aiTeamVrs(t: TeamSeason): number {
+  return Math.round(vrsCore(t.teamwork) + (hashStr(t.id) % 55));
+}
+// "Opponent Network" do VRS real (Valve): o peso de um evento vem da FORÇA MÉDIA
+// dos adversários. Campo fraco (Tier 3) ~0.2; elite (Tier 1/Major) ~1.2. É isso
+// que faz ganhar um campeonato fraco render quase nada no ranking mundial.
+function opponentMult(fieldAvgCore: number): number {
+  return Math.max(0.08, Math.min(1.25, (fieldAvgCore - 250) / 450));
 }
 // VRS-BASE do usuário: um PISO modesto pela qualidade do elenco (um time forte
 // não começa em último), mas pequeno o bastante pra que o RANKING seja movido
@@ -883,7 +893,7 @@ function aiTeamVrs(t: TeamSeason): number {
 // ruim faz o save.vrs decair e o time DESPENCA pro piso; só chega a #1 quem
 // vence de verdade (Tier 1 + Major), não quem ganhou um campeonato de acesso.
 function userBaseVrsFor(teamwork: number): number {
-  return Math.round(Math.max(0, teamwork - 55) * 18);
+  return Math.round(Math.max(0, teamwork - 60) * 14);
 }
 // Região de circuito no modo carreira (Américas N/S/Central = uma só). Tipos e
 // helpers ficam em data/regions.ts (compartilhados com as bandeiras).
@@ -1292,17 +1302,22 @@ export function CareerScreen({ onExit }: Props) {
       teams: TeamSeason[],
       spots: number,
       prizeMult: number,
-      vrsMult: number,
       tier: number,
-    ) => ({ id, name, desc, teams: teams.slice(0, 15), spots, prizeMult, vrsMult, tier });
+    ) => {
+      const ai = teams.slice(0, 15);
+      // peso de VRS do evento = força média dos adversários (Opponent Network):
+      // campo forte rende muito, campo fraco rende pouco. Calculado do field real.
+      const favg = ai.length ? ai.reduce((a, t) => a + vrsCore(t.teamwork), 0) / ai.length : 400;
+      return { id, name, desc, teams: ai, spots, prizeMult, vrsWeight: opponentMult(favg), tier };
+    };
     const t1Name = t1EventName(save.split);
     const t2Name = t2EventName(save.split);
     const t3Name = t3EventName(save.split);
     // Cada split é um evento real distinto do calendário (nomes rotativos).
     return [
-      mk('t1', t1Name, `Tier 1 mundial · ${t1Name}: fase de grupos (GSL, dupla eliminação) + playoffs com a elite do ranking. Principal caminho de pontos pro Major; paga muito.`, t1Teams, 2, 1.8, 1.7, 1),
-      mk('t2', t2Name, `Tier 2 mundial · ${t2Name}: o segundo escalão do ranking (Astralis, paiN, FaZe, MIBR, TYLOO e cia), grupos GSL + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.`, t2Teams, 2, 1, 1, 2),
-      mk('t3', t3Name, `Tier 3 · ${t3Name}: circuito de acesso, times em ascensão. Grupos + playoffs. Onde toda org começa.`, t3Teams, 1, 0.6, 0.6, 3),
+      mk('t1', t1Name, `Tier 1 mundial · ${t1Name}: fase de grupos (GSL, dupla eliminação) + playoffs com a elite do ranking. Principal caminho de pontos pro Major; paga muito.`, t1Teams, 2, 1.8, 1),
+      mk('t2', t2Name, `Tier 2 mundial · ${t2Name}: o segundo escalão do ranking (Astralis, paiN, FaZe, MIBR, TYLOO e cia), grupos GSL + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.`, t2Teams, 2, 1, 2),
+      mk('t3', t3Name, `Tier 3 · ${t3Name}: circuito de acesso, times em ascensão. Grupos + playoffs. Onde toda org começa.`, t3Teams, 1, 0.6, 3),
     ].filter((c) => c.teams.length >= 5);
   }, [oppEra, save.split]);
 
@@ -1411,7 +1426,7 @@ export function CareerScreen({ onExit }: Props) {
       name: circuit.name,
       spots: circuit.spots,
       prizeMult: circuit.prizeMult,
-      vrsMult: circuit.vrsMult,
+      vrsWeight: circuit.vrsWeight,
       tier: circuit.tier,
     };
     const objective = objectiveFor(circuit.tier, s.split, isMajorSplit(s.split));
@@ -2343,7 +2358,9 @@ export function CareerScreen({ onExit }: Props) {
     // bônus de mata-mata: campeão +60%, vice +25%
     const poMult = isChampion ? 1.6 : poRank === 2 ? 1.25 : 1;
     const prize = Math.round((PRIZE_BY_POS[pos - 1] ?? 50_000) * (save.circuit?.prizeMult ?? 1) * poMult);
-    const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsMult ?? 1) * poMult);
+    // ganho de VRS ponderado pelo Opponent Network do evento: ir longe num campo
+    // forte vale muito; ganhar um campeonato fraco rende quase nada no mundial.
+    const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsWeight ?? 0.4) * poMult);
     // CLASSIFICAÇÃO AO MAJOR = TOP 16 DO RANKING VRS MUNDIAL (como na vida real).
     // Some VRS vencendo partidas e indo longe; sua posição é base do elenco + ganhos.
     // Projeta o VRS já com o ganho DESTE split pra decidir a vaga no fim da temporada.
@@ -4573,7 +4590,7 @@ interface CircuitOption {
   teams: TeamSeason[];
   spots: number;
   prizeMult: number;
-  vrsMult: number;
+  vrsWeight: number;
   tier: number;
 }
 function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPick, onBack }: {
@@ -4623,7 +4640,7 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
                   <div className="cc-meta">
                     <span>{opt.spots} {opt.spots === 1 ? 'vaga' : 'vagas'} ao Major</span>
                     <span>prêmio ×{opt.prizeMult}</span>
-                    <span>VRS ×{opt.vrsMult}</span>
+                    <span>VRS ×{opt.vrsWeight.toFixed(2)}</span>
                   </div>
                   {locked && <div className="cc-lock muted small">🔒 Suba ao {TIER_NAMES[opt.tier]} para disputar</div>}
                 </button>
