@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLang } from '../state/i18n';
 
 export const PIXGG_URL = 'https://pixgg.com/MatheusCastro';
 export const KOFI_URL = 'https://ko-fi.com/matheuscastrobr';
@@ -37,14 +38,16 @@ export function invalidateDonors(): void {
 }
 
 export function DonateButton({ onClick }: { onClick: () => void }) {
+  const { t } = useLang();
   return (
     <button className="donate-cta" onClick={onClick}>
-      💜 Apoie o projeto
+      {t('donate.cta')}
     </button>
   );
 }
 
 export function DonateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useLang();
   const [data, setData] = useState<DonorData | null>(donorCache);
 
   useEffect(() => {
@@ -58,40 +61,38 @@ export function DonateModal({ open, onClose }: { open: boolean; onClose: () => v
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal donate-modal fade-in" onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
-          💜 Apoie o Road to Major
+          {t('donate.title')}
           <span className="spacer" />
-          <button className="icon-btn" onClick={onClose} aria-label="fechar">
+          <button className="icon-btn" onClick={onClose} aria-label={t('donate.close')}>
             ✕
           </button>
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0 }}>
-            O jogo é gratuito e feito com muito amor pelo CS. Se ele te divertiu, considere apoiar -
-            cada doação mantém o projeto vivo e acelera as próximas features (modo carreira, novos
-            elencos, melhorias do simulador).
+            {t('donate.blurb')}
           </p>
           <div className="donate-actions">
             <a className="btn gold big" href={PIXGG_URL} target="_blank" rel="noreferrer">
-              ⚡ Doar com PIX (PixGG)
+              {t('donate.pix')}
             </a>
             <a className="btn big" href={KOFI_URL} target="_blank" rel="noreferrer">
-              ☕ Apoiar no Ko-fi
+              {t('donate.kofi')}
             </a>
           </div>
 
           <div className="donors-box">
             <div className="donors-head">
-              🏆 Mural de apoiadores
+              {t('donate.wall')}
               {data && data.count > 0 && (
                 <span className="muted small">
                   {' '}
-                  - {data.count} doações · R$ {data.total.toFixed(2).replace('.', ',')}
+                  - {data.count} {t('donate.donations')} · R$ {data.total.toFixed(2).replace('.', ',')}
                 </span>
               )}
             </div>
-            {!data && <div className="muted small">Carregando apoiadores…</div>}
+            {!data && <div className="muted small">{t('donate.loading')}</div>}
             {data && data.donors.length === 0 && (
-              <div className="muted small">Seja o primeiro nome deste mural! 💜</div>
+              <div className="muted small">{t('donate.first')}</div>
             )}
             {data && data.donors.length > 0 && (
               <div className="donors-list">
@@ -115,6 +116,7 @@ export function DonateModal({ open, onClose }: { open: boolean; onClose: () => v
 
 // Painel compacto de apoiadores para a home
 export function DonorsPanel({ onDonate }: { onDonate: () => void }) {
+  const { t } = useLang();
   const [data, setData] = useState<DonorData | null>(donorCache);
   useEffect(() => {
     fetchDonors().then((d) => d && setData(d));
@@ -123,16 +125,16 @@ export function DonorsPanel({ onDonate }: { onDonate: () => void }) {
   return (
     <div className="panel" style={{ maxWidth: 640, margin: '26px auto 0' }}>
       <div className="panel-head">
-        💜 Apoiadores
+        {t('donate.panel')}
         <span className="spacer" />
         <button className="btn gold" onClick={onDonate}>
-          Quero apoiar
+          {t('donate.want')}
         </button>
       </div>
       <div className="panel-body">
         {!data || data.donors.length === 0 ? (
           <div className="muted small center">
-            Este projeto é mantido pela comunidade. Seu nome pode abrir este mural! ⚡
+            {t('donate.empty')}
           </div>
         ) : (
           <div className="donors-list compact">
