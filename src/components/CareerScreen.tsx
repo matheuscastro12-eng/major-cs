@@ -115,6 +115,9 @@ interface Signing {
   fee?: number; // valor negociado da transferência (se ausente, usa o de tabela)
 }
 
+// jogador com contrato vencendo: vai pra tela de renovação na janela.
+interface Renewal { playerId: string; nick: string; ovr: number; wage: number; country: string; role: Role; }
+
 // acordo de transferência fechado durante a temporada: entra em vigor só na
 // janela (próximo split). Pode ser só dinheiro ou dinheiro + troca de jogadores.
 interface PendingDeal {
@@ -539,6 +542,7 @@ interface CareerSave {
   takeoverId?: string | null; // id do time real que o jogador assumiu (excluído dos adversários)
   pendingOffer?: PoachOffer | null; // proposta de uma org maior por um jogador seu
   pendingDeals?: PendingDeal[]; // acordos fechados DURANTE a temporada; entram em vigor na janela (próximo split)
+  renewals?: Renewal[]; // contratos vencendo: forçam a tela de renovação na abertura da janela
   board: number; // confiança da diretoria (0-100). Cai se você falha os objetivos.
   objective?: BoardObjective | null; // meta da diretoria pro split atual
   lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
@@ -1747,19 +1751,21 @@ export function CareerScreen({ onExit }: Props) {
   // contratos vencidos: o jogador cujo contrato acaba SAI de graça no próximo
   // split (a não ser que tenha sido renovado nas Finanças). Devolve o elenco
   // sem eles + os nicks que saíram (pra avisar no resumo do split).
-  const expireContracts = (s: CareerSave, newSplit: number): Pick<CareerSave, 'squad' | 'contracts' | 'lastReleases'> => {
-    const c = { ...(s.contracts ?? {}) };
-    const released: string[] = [];
-    const squad = s.squad.filter((sig) => {
-      const until = c[sig.playerId];
+  // contratos vencendo no novo split: NÃO solta ninguém automaticamente. Devolve
+  // a lista pra FORÇAR a tela de renovação na janela (o usuário decide quem fica).
+  // Ignora quem já está saindo numa troca (pendingDeals) pra não listar duplicado.
+  const dueRenewals = (s: CareerSave, newSplit: number): Renewal[] => {
+    const inDeal = new Set((s.pendingDeals ?? []).flatMap((d) => d.outPlayerIds));
+    const out: Renewal[] = [];
+    for (const sig of s.squad) {
+      if (inDeal.has(sig.playerId)) continue;
+      const until = s.contracts?.[sig.playerId];
       if (until !== undefined && until < newSplit) {
-        released.push(findSigning(sig)?.player.nick ?? sig.playerId);
-        delete c[sig.playerId];
-        return false;
+        const f = findSigning(sig);
+        if (f) out.push({ playerId: sig.playerId, nick: f.player.nick, ovr: playerOvr(f.player), wage: playerWage(f.player), country: f.player.country, role: f.player.role });
       }
-      return true;
-    });
-    return { squad, contracts: c, lastReleases: released };
+    }
+    return out;
   };
 
   // assédio do topo: uma org de ELITE (tier 1) pode fazer proposta pelo seu
@@ -2262,6 +2268,46 @@ export function CareerScreen({ onExit }: Props) {
 
   // ---------- mercado ----------
   if (stage === 'market') {
+    // contratos vencendo: FORÇA a tela de renovação antes do mercado, pra você
+    // nunca perder jogador "do nada" — decide quem renova e quem libera.
+    if (save.renewals && save.renewals.length > 0) {
+      return (
+        <RenewalScreen
+          renewals={save.renewals}
+          budget={save.budget}
+          onConfirm={(renewIds) => {
+            const keep = new Set(renewIds);
+            let squad = [...save.squad];
+            const contracts = { ...(save.contracts ?? {}) };
+            const morale = { ...(save.morale ?? {}) };
+            const peakOvr = { ...(save.peakOvr ?? {}) };
+            const evo = { ...(save.evo ?? {}) };
+            let budget = save.budget;
+            const released: string[] = [];
+            for (const r of save.renewals ?? []) {
+              if (keep.has(r.playerId)) {
+                contracts[r.playerId] = save.split + CONTRACT_TERM - 1; // renova: estende e paga 1 salário
+                budget = Math.max(0, budget - r.wage);
+              } else {
+                squad = squad.filter((x) => x.playerId !== r.playerId); // libera de graça
+                delete contracts[r.playerId]; delete morale[r.playerId]; delete peakOvr[r.playerId]; delete evo[r.playerId];
+                released.push(r.nick);
+              }
+            }
+            let next: CareerSave = { ...save, squad, contracts, morale, peakOvr, evo, budget, renewals: [] };
+            if (released.length) {
+              next = { ...next, ...pushNews(next, [{
+                id: `${save.split}:rel`, split: save.split, icon: '👋', tone: 'info', cat: 'transfer',
+                title: 'Saídas por fim de contrato',
+                body: `Sem renovação, saíram do elenco: ${released.join(', ')}.`,
+              }]) };
+            }
+            persist(next);
+            setSave(next);
+          }}
+        />
+      );
+    }
     // proposta de uma org grande pendente: resolve ANTES do mercado (assim o
     // mercado já abre com o elenco certo e você repõe quem saiu)
     if (save.pendingOffer) {
@@ -2437,10 +2483,10 @@ export function CareerScreen({ onExit }: Props) {
                 const majObj = save.objective;
                 const majBonus = majObj ? majObj.bonus + (mr.champion ? 400_000 : 0) : 0;
                 const majBoard = Math.min(100, save.board + (mr.champion ? 18 : 12));
-                const expired = expireContracts(save, save.split + 1);
+                const renewals = dueRenewals(save, save.split + 1);
                 // evolui só quem FICOU (pós-fim de contrato): quem saiu não carrega
                 // a evolução/declínio acumulado pra uma futura recontratação
-                const evo = evolveSquad({ ...save, squad: expired.squad });
+                const evo = evolveSquad(save);
                 // moral: usa a forma do time no Major (atualizada série a série)
                 const uTeam = save.majorT ? getTeam(save.majorT, 'user') : null;
                 const nickByOid: Record<string, string> = {};
@@ -2456,7 +2502,7 @@ export function CareerScreen({ onExit }: Props) {
                 const items = splitNews({
                   split: save.split, org: save.org?.name ?? 'Sua org', champion: false,
                   circuit: save.circuit?.name ?? 'circuito', objMet: true, objText: majObj?.text,
-                  tierChange: null, releases: expired.lastReleases ?? [], offer: null,
+                  tierChange: null, releases: [], offer: null,
                   risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                   sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
                   unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
@@ -2490,7 +2536,7 @@ export function CareerScreen({ onExit }: Props) {
                   board: majBoard,
                   lastObjective: majObj ? { text: majObj.text, met: true, delta: majBoard - save.board } : null,
                   objective: null,
-                  ...expired,
+                  renewals,
                   morale,
                   peakOvr,
                   mapTraining: applyMapTraining(save),
@@ -2745,10 +2791,10 @@ export function CareerScreen({ onExit }: Props) {
               <button
                 className={qualified ? 'btn ghost big' : 'btn gold big'}
                 onClick={() => {
-                  const expired = expireContracts(save, save.split + 1);
+                  const renewals = dueRenewals(save, save.split + 1);
                   // evolui só quem FICOU (pós-fim de contrato): quem saiu não carrega
                   // a evolução/declínio acumulado pra uma futura recontratação
-                  const evo = evolveSquad({ ...save, squad: expired.squad });
+                  const evo = evolveSquad(save);
                   const offer = makeOffer(save, tierResult.tier);
                   // moral por jogador (forma no fim do split + resultado coletivo)
                   const nickByOid: Record<string, string> = {};
@@ -2765,7 +2811,7 @@ export function CareerScreen({ onExit }: Props) {
                     split: save.split, org: save.org?.name ?? 'Sua org', champion: isChampion,
                     circuit: save.circuit?.name ?? 'circuito', objMet, objText: obj?.text,
                     tierChange: tierResult.tierChange, tierName: TIER_NAMES[tierResult.tier],
-                    releases: expired.lastReleases ?? [], offer,
+                    releases: [], offer,
                     risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                     sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
                     unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
@@ -2793,7 +2839,7 @@ export function CareerScreen({ onExit }: Props) {
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
                     pendingOffer: offer,
-                    ...expired,
+                    renewals,
                     morale,
                     peakOvr,
                     mapTraining: applyMapTraining(save),
@@ -4935,6 +4981,56 @@ function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string
 // ---------- fundação da organização ----------
 // proposta de uma org de elite por um jogador seu (assédio do topo). Vender dá
 // um caixa gordo mas abre um buraco no elenco; recusar mantém a base.
+// tela OBRIGATÓRIA de renovação: aparece na janela quando há contratos vencendo.
+// O usuário decide quem fica (paga 1 salário) e quem sai. Sem perder jogador "do nada".
+function RenewalScreen({ renewals, budget, onConfirm }: {
+  renewals: Renewal[];
+  budget: number;
+  onConfirm: (renewIds: string[]) => void;
+}) {
+  const [keep, setKeep] = useState<Set<string>>(() => new Set(renewals.map((r) => r.playerId)));
+  const cost = renewals.filter((r) => keep.has(r.playerId)).reduce((a, r) => a + r.wage, 0);
+  const overBudget = cost > budget;
+  const setRenew = (id: string) => setKeep((s) => new Set(s).add(id));
+  const setRelease = (id: string) => setKeep((s) => { const n = new Set(s); n.delete(id); return n; });
+  return (
+    <div className="fade-in">
+      <div className="panel" style={{ maxWidth: 720, margin: '24px auto' }}>
+        <div className="panel-head">📝 Renovação de contratos</div>
+        <div className="panel-body">
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Estes contratos venceram. <b>Renove</b> quem você quer manter (custa 1 salário) ou <b>libere</b> de graça.
+            Quem não for renovado deixa o elenco agora.
+          </p>
+          <div className="renew-list">
+            {renewals.map((r) => {
+              const on = keep.has(r.playerId);
+              return (
+                <div key={r.playerId} className={`renew-row${on ? ' keep' : ' drop'}`}>
+                  <PlayerAvatar nick={r.nick} size={40} />
+                  <div className="renew-id">
+                    <div className="renew-nick"><Flag cc={r.country} /> {r.nick} <span className={`role-pill ${r.role}`}>{r.role}</span></div>
+                    <div className="muted small">OVR {r.ovr} · salário {formatMoney(r.wage)}</div>
+                  </div>
+                  <div className="renew-actions">
+                    <button className={`btn small${on ? ' gold' : ' ghost'}`} onClick={() => setRenew(r.playerId)}>{on ? '✓ Renovar' : 'Renovar'}</button>
+                    <button className={`btn small${!on ? ' armed' : ' ghost'}`} onClick={() => setRelease(r.playerId)}>{!on ? '✓ Liberar' : 'Liberar'}</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="renew-foot">
+            <span>Custo das renovações: <b className={overBudget ? 'neg' : ''}>{formatMoney(cost)}</b> · caixa {formatMoney(budget)}</span>
+            <button className="btn gold" disabled={overBudget} onClick={() => onConfirm([...keep])}>Confirmar e abrir o mercado</button>
+          </div>
+          {overBudget && <p className="neg small" style={{ marginTop: 8 }}>Sem caixa pra renovar todos. Libere alguém pra caber no orçamento.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
   offer: PoachOffer;
   orgName: string;

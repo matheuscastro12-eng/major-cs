@@ -3539,6 +3539,16 @@ table.crm-players input.num {
 .nego-deal-in { font-family: var(--font-cond); }
 .nego-deal-row .muted { margin-left: auto; }
 .nego-search { width: 100%; margin: 6px 0 10px; padding: 9px 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-size: 0.9rem; }
+/* tela de renovação de contratos */
+.renew-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.renew-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 10px; border-left: 3px solid var(--border-soft); }
+.renew-row.keep { border-left-color: var(--pos); }
+.renew-row.drop { border-left-color: var(--red); opacity: 0.78; }
+.renew-id { flex: 1; min-width: 0; }
+.renew-nick { font-family: var(--font-cond); font-weight: 800; display: flex; align-items: center; gap: 7px; }
+.renew-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.renew-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.renew-foot b.neg { color: var(--red-bright); }
 
 .modal {
   background: var(--panel);
