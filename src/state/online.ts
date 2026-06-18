@@ -2,11 +2,18 @@
 // determinísticos a partir do seed do lobby: todos os clientes computam
 // exatamente as mesmas opções e o mesmo resultado, sem servidor de jogo.
 import { BASE_TEAMS } from '../data/teams';
+import { CS2_REAL_2026 } from '../data/bo3';
 import { buildUserTeam, playerOvr, teamSeasonToTTeam } from '../engine/ratings';
+import { simulateSeries } from '../engine/match';
 import { makeRng, type Rng } from '../engine/rng';
+import { autoVeto } from '../engine/veto';
 import { hashStr } from './hash';
 import { createTournamentFromTeams, placementCode, resolveRound, standings, type PlacementCode } from '../engine/swiss';
-import type { Player, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
+import type { MapId, Player, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
+
+export type UltimateRuleset = 'open' | 'current' | 'legends' | 'brworld' | 'era' | 'ovrcap' | 'unique_country' | 'gauntlet';
+export type OnlineTactic = 'balanced' | 'aggressive' | 'tactical' | 'controlled';
+export interface OnlineStrategy { tactic: OnlineTactic; favoriteMap: MapId; banMap: MapId }
 
 export interface LobbyState {
   lobby: {
@@ -15,17 +22,23 @@ export interface LobbyState {
     host: string;
     status: 'waiting' | 'drafting' | 'done';
     seed: number;
+    run_seed?: number;
     pool: TournamentPool;
     locked?: boolean;
     season?: number;
+    stage?: number;
+    ruleset?: UltimateRuleset;
   };
-  players: { nick: string; picks: string[]; coach_pick: string; done: boolean }[];
+  players: { nick: string; picks: string[]; coach_pick: string; done: boolean; ready_stage?: number; strategy?: OnlineStrategy }[];
 }
 
-// IMPORTANTE: o online usa sempre a base padrão (BASE_TEAMS), nunca o
-// dataset customizado do localStorage, para todos os clientes verem o mesmo.
-export function onlineDataset(pool: TournamentPool): TeamSeason[] {
-  const eligible = BASE_TEAMS.filter((t) => t.players.length >= 5 && !t.pending);
+// O Ultimate Team mistura cartas históricas com o elenco atual de 2026. As duas
+// bases vêm do build (nunca do localStorage), então todos os clientes reconstroem
+// exatamente o mesmo sorteio a partir do seed do lobby.
+export function onlineDataset(pool: TournamentPool, ruleset: UltimateRuleset = 'open'): TeamSeason[] {
+  let eligible = [...CS2_REAL_2026, ...BASE_TEAMS].filter((t) => t.players.length >= 5 && !t.pending);
+  if (ruleset === 'current') eligible = eligible.filter((t) => t.id.startsWith('bo3_team_'));
+  if (ruleset === 'legends') eligible = eligible.filter((t) => !t.id.startsWith('bo3_team_'));
   return pool === 'br' ? eligible.filter((t) => t.country === 'br') : eligible;
 }
 
@@ -62,9 +75,9 @@ export interface OnlineDraftSetup {
   coachOptions: TeamSeason[]; // 5 opções de coach
 }
 
-export function buildDraftFromSeed(seed: number, pool: TournamentPool): OnlineDraftSetup {
+export function buildDraftFromSeed(seed: number, pool: TournamentPool, ruleset: UltimateRuleset = 'open'): OnlineDraftSetup {
   const rng = makeRng(seed);
-  const base = onlineDataset(pool);
+  const base = onlineDataset(pool, ruleset);
   const sources = weightedSample(rng, base, 5);
   const used = new Set(sources.map((t) => t.id));
   const coachOptions = weightedSample(rng, base.filter((t) => !used.has(t.id)), 5);
@@ -75,8 +88,8 @@ export function buildDraftFromSeed(seed: number, pool: TournamentPool): OnlineDr
 // CADA jogador recebe um sorteio DIFERENTE (mas determinístico por seed+nick,
 // então todos os clientes reconstroem o mesmo elenco de cada jogador). Antes
 // todos draftavam dos mesmos 5 elencos, o que deixava os times sempre iguais.
-export function buildDraftForPlayer(seed: number, pool: TournamentPool, nick: string): OnlineDraftSetup {
-  return buildDraftFromSeed((seed ^ hashStr(nick.toLowerCase())) >>> 0, pool);
+export function buildDraftForPlayer(seed: number, pool: TournamentPool, nick: string, ruleset: UltimateRuleset = 'open'): OnlineDraftSetup {
+  return buildDraftFromSeed((seed ^ hashStr(nick.toLowerCase())) >>> 0, pool, ruleset);
 }
 
 export function teamFromPicks(
@@ -84,6 +97,8 @@ export function teamFromPicks(
   picks: string[],
   coachPick: string,
   setup: OnlineDraftSetup,
+  strategy?: OnlineStrategy,
+  ruleset: UltimateRuleset = 'open',
 ): TTeam | null {
   const chosen: { player: Player; from: TeamSeason }[] = [];
   for (let i = 0; i < 5; i++) {
@@ -95,7 +110,27 @@ export function teamFromPicks(
     chosen.push({ player, from });
   }
   const coachTeam = setup.coachOptions.find((t) => t.id === coachPick) ?? setup.coachOptions[0];
-  const team = buildUserTeam(nick, chosen, coachTeam.coach);
+  let team = buildUserTeam(nick, chosen, coachTeam.coach);
+  const plan = strategy ?? { tactic: 'balanced', favoriteMap: 'mirage', banMap: 'nuke' };
+  const mapPrefs = { ...team.mapPrefs };
+  mapPrefs[plan.favoriteMap] = Math.min(5, (mapPrefs[plan.favoriteMap] ?? 0) + 2);
+  mapPrefs[plan.banMap] = Math.max(-5, (mapPrefs[plan.banMap] ?? 0) - 3);
+  const tacticStrength = plan.tactic === 'aggressive' ? 1.1 : plan.tactic === 'tactical' ? 0.7 : plan.tactic === 'controlled' ? 0.45 : 0;
+  const tacticTeamwork = plan.tactic === 'tactical' ? 2 : plan.tactic === 'controlled' ? 1.5 : plan.tactic === 'aggressive' ? -1 : 0;
+  const avgOvr = team.players.reduce((sum, p) => sum + p.ovr, 0) / team.players.length;
+  const capPenalty = ruleset === 'ovrcap' ? Math.max(0, avgOvr - 84) * 1.5 : 0;
+  const roleDepth = new Set(chosen.map((c) => c.player.role)).size;
+  const gauntletBonus = ruleset === 'gauntlet' ? (roleDepth - 3) * 0.8 : 0;
+  const brCount = chosen.filter((c) => c.player.country === 'br').length;
+  const brWorldBonus = ruleset === 'brworld' && brCount >= 2 && chosen.length - brCount >= 2 ? 1 : 0;
+  team = {
+    ...team,
+    mapPrefs,
+    strength: team.strength + tacticStrength - capPenalty + gauntletBonus + brWorldBonus,
+    teamwork: team.teamwork + tacticTeamwork,
+    playbook: plan.tactic === 'balanced' ? undefined : plan.tactic,
+    playbookFam: plan.tactic === 'balanced' ? undefined : 0.72,
+  };
   // ids de jogador PRECISAM ser únicos no torneio: dois jogadores podem draftar
   // a mesma lenda, e stats/killfeed/MVP são indexados por id
   const players = team.players.map((p) => ({ ...p, id: `online_${nick}__${p.sourcePlayerId}` }));
@@ -106,6 +141,36 @@ export function teamFromPicks(
 // depende do locale do navegador e quebraria o determinismo do Major online)
 const byNickCodepoint = (x: { nick: string }, y: { nick: string }): number =>
   x.nick < y.nick ? -1 : x.nick > y.nick ? 1 : 0;
+
+// ===================== DUELO ULTIMATE TEAM =====================
+
+export interface OnlineDuel {
+  teams: [TTeam, TTeam];
+  nicks: [string, string];
+  series: SeriesResult;
+}
+
+// Confronto direto MD3 para salas 1v1. Veto e série usam o mesmo RNG seedável,
+// logo os dois navegadores exibem os mesmos mapas, rounds, kills e estatísticas.
+export function simulateOnlineDuel(state: LobbyState): OnlineDuel | null {
+  if (state.lobby.mode !== 'duel' || state.players.length < 2) return null;
+  const ordered = [...state.players].sort(byNickCodepoint).slice(0, 2);
+  const ruleset = state.lobby.ruleset ?? 'open';
+  const teams = ordered.map((p) => {
+    const setup = buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, ruleset);
+    return teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup, p.strategy, ruleset);
+  });
+  if (!teams[0] || !teams[1]) return null;
+
+  const pair = teams as [TTeam, TTeam];
+  const rng = makeRng(((state.lobby.run_seed ?? state.lobby.seed) ^ 0x55544d) >>> 0);
+  const maps = autoVeto(pair, rng, 3);
+  return {
+    teams: pair,
+    nicks: [ordered[0].nick, ordered[1].nick],
+    series: simulateSeries(rng, pair[0], pair[1], maps, 3),
+  };
+}
 
 // ===================== MAJOR ONLINE (ultimate team) =====================
 // Em vez de só os jogadores se enfrentarem, os times draftados entram num Major
@@ -125,14 +190,15 @@ export interface OnlineMajor {
 
 export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
   const ordered = [...state.players].sort(byNickCodepoint);
+  const ruleset = state.lobby.ruleset ?? 'open';
 
   const humanByTeamId: Record<string, string> = {};
   const humanTeams: TTeam[] = [];
   const usedSources = new Set<string>();
   for (const p of ordered) {
     // cada jogador draftou do PRÓPRIO sorteio (seed + nick)
-    const setup = buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick);
-    const t = teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup);
+    const setup = buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, ruleset);
+    const t = teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup, p.strategy, ruleset);
     if (!t) return null; // alguém ainda não terminou o draft
     humanByTeamId[t.id] = p.nick;
     humanTeams.push(t);
@@ -140,18 +206,19 @@ export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
   }
 
   // preenche com times da IA (determinístico), evitando repetir os elencos-fonte
-  let aiPool = onlineDataset(state.lobby.pool).filter((s) => !usedSources.has(s.id));
+  let aiPool = onlineDataset(state.lobby.pool, ruleset).filter((s) => !usedSources.has(s.id));
   const need = Math.max(0, MAJOR_SIZE - humanTeams.length);
   // pool regional pequeno demais (ex.: BR após edições no CRM): completa com o
   // mundo para o bracket de 16 nunca quebrar (seeds[7] exige 8 classificados)
   if (aiPool.length < need && state.lobby.pool !== 'world') {
     const haveIds = new Set([...usedSources, ...aiPool.map((s) => s.id)]);
-    aiPool = [...aiPool, ...onlineDataset('world').filter((s) => !haveIds.has(s.id))];
+    aiPool = [...aiPool, ...onlineDataset('world', ruleset).filter((s) => !haveIds.has(s.id))];
   }
-  const aiRng = makeRng(state.lobby.seed + 4242);
+  const runSeed = state.lobby.run_seed ?? state.lobby.seed;
+  const aiRng = makeRng(runSeed + 4242);
   const aiTeams = weightedSample(aiRng, aiPool, need).map((s) => teamSeasonToTTeam(s));
 
-  const tRng = makeRng(state.lobby.seed + 9999);
+  const tRng = makeRng(runSeed + 9999);
   const tournament = createTournamentFromTeams([...humanTeams, ...aiTeams], tRng, 'MAJOR ONLINE');
   let guard = 0;
   while (tournament.phase !== 'done' && guard++ < 40) resolveRound(tournament, tRng);
@@ -206,14 +273,14 @@ export function majorStandings(major: OnlineMajor) {
 
 // ---- chamadas de API ----
 
-export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string }> {
+export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean }> {
   const res = await fetch('/api/lobby', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(9000),
   });
-  return (await res.json()) as { ok?: boolean; code?: string; error?: string };
+  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean };
 }
 
 export interface OpenRoom { code: string; mode: 'duel' | 'party'; pool: TournamentPool; host: string; players: number; max: number; }

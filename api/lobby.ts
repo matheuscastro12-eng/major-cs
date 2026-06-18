@@ -1,12 +1,16 @@
 // Modo online: lobbies com código, draft sincronizado por polling.
 // A simulação é determinística no cliente (mesmo seed = mesmo resultado),
-// então o servidor só guarda o estado do lobby e os picks.
+// então o servidor guarda o estado do lobby, os picks e a barreira coletiva de
+// cada etapa do Major (todos prontos antes de avançar).
 import { neon } from '@neondatabase/serverless';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sem 0/O/1/I/L
 const MAX_PLAYERS: Record<string, number> = { duel: 2, party: 8 };
+const RULESETS = new Set(['open', 'current', 'legends', 'brworld', 'era', 'ovrcap', 'unique_country', 'gauntlet']);
+const TACTICS = new Set(['balanced', 'aggressive', 'tactical', 'controlled']);
+const MAPS = new Set(['mirage', 'inferno', 'nuke', 'ancient', 'anubis', 'dust2', 'train']);
 
 function genCode(): string {
   let c = '';
@@ -22,6 +26,11 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage int DEFAULT 0`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS ruleset text DEFAULT 'open'`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_seed bigint DEFAULT 0`;
+  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS ready_stage int DEFAULT -1`;
+  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS strategy jsonb DEFAULT '{}'::jsonb`;
   schemaReady = true;
 }
 
@@ -78,15 +87,18 @@ export default async function handler(
       return;
     }
     try {
-      const lobby = await sql`SELECT code, mode, host, status, seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(ruleset, 'open') AS ruleset FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
       }
       const players = await sql`
-        SELECT nick, picks, coach_pick, done, joined_at FROM lobby_players
+        SELECT nick, picks, coach_pick, done, joined_at, COALESCE(ready_stage, -1) AS ready_stage, COALESCE(strategy, '{}'::jsonb) AS strategy FROM lobby_players
         WHERE code = ${code} ORDER BY joined_at ASC`;
-      res.status(200).json({ lobby: { ...lobby[0], seed: Number(lobby[0].seed) }, players });
+      res.status(200).json({
+        lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage) },
+        players: players.map((p) => ({ ...p, ready_stage: Number(p.ready_stage) })),
+      });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }
@@ -110,6 +122,10 @@ export default async function handler(
     isPublic?: boolean;
     locked?: boolean;
     target?: string;
+    stage?: number;
+    ruleset?: string;
+    strategy?: unknown;
+    keepRoster?: boolean;
   };
   const action = String(body.action ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 20);
@@ -123,6 +139,7 @@ export default async function handler(
       }
       const mode = body.mode === 'party' ? 'party' : 'duel';
       const pool = body.pool === 'br' ? 'br' : 'world';
+      const ruleset = RULESETS.has(String(body.ruleset)) ? String(body.ruleset) : 'open';
       const isPublic = body.isPublic === true;
       const seed = Math.floor(Math.random() * 2147483647);
       // fecha salas inativas: ninguém com a aba aberta há mais de 2min (sem
@@ -134,7 +151,7 @@ export default async function handler(
         const newCode = genCode();
         const exists = await sql`SELECT 1 FROM lobbies WHERE code = ${newCode}`;
         if (exists.length > 0) continue;
-        await sql`INSERT INTO lobbies (code, mode, host, seed, pool, is_public) VALUES (${newCode}, ${mode}, ${nick}, ${seed}, ${pool}, ${isPublic})`;
+        await sql`INSERT INTO lobbies (code, mode, host, seed, run_seed, pool, is_public, ruleset) VALUES (${newCode}, ${mode}, ${nick}, ${seed}, ${seed}, ${pool}, ${isPublic}, ${ruleset})`;
         await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${nick})`;
         res.status(200).json({ ok: true, code: newCode });
         return;
@@ -260,9 +277,56 @@ export default async function handler(
         return;
       }
       const newSeed = Math.floor(Math.random() * 2147483647);
-      await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, season = COALESCE(season, 1) + 1, updated_at = now() WHERE code = ${code}`;
-      await sql`UPDATE lobby_players SET picks = '[]'::jsonb, coach_pick = '', done = false WHERE code = ${code}`;
-      res.status(200).json({ ok: true, seed: newSeed });
+      const keepRoster = body.keepRoster === true;
+      if (keepRoster) {
+        await sql`UPDATE lobbies SET status = 'done', run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, updated_at = now() WHERE code = ${code}`;
+        await sql`UPDATE lobby_players SET ready_stage = -1 WHERE code = ${code}`;
+      } else {
+        await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, updated_at = now() WHERE code = ${code}`;
+        await sql`UPDATE lobby_players SET picks = '[]'::jsonb, coach_pick = '', strategy = '{}'::jsonb, done = false, ready_stage = -1 WHERE code = ${code}`;
+      }
+      res.status(200).json({ ok: true, seed: newSeed, keepRoster });
+      return;
+    }
+
+    if (action === 'readyStage') {
+      const requestedStage = Math.max(0, Math.min(40, Number(body.stage) || 0));
+      const lobby = await sql`
+        SELECT status, mode, COALESCE(stage, 0) AS stage
+        FROM lobbies WHERE code = ${code}`;
+      if (lobby.length === 0) {
+        res.status(404).json({ error: 'lobby não encontrado' });
+        return;
+      }
+      const currentStage = Number(lobby[0].stage);
+      if (lobby[0].status !== 'done' || lobby[0].mode !== 'party') {
+        res.status(409).json({ error: 'o Major em grupo não está em andamento' });
+        return;
+      }
+      if (requestedStage !== currentStage) {
+        res.status(409).json({ error: 'etapa desatualizada', stage: currentStage });
+        return;
+      }
+      const updated = await sql`
+        UPDATE lobby_players SET ready_stage = ${currentStage}
+        WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}
+        RETURNING id`;
+      if (updated.length === 0) {
+        res.status(404).json({ error: 'jogador não está neste lobby' });
+        return;
+      }
+      const pending = await sql`
+        SELECT COUNT(*) AS n FROM lobby_players
+        WHERE code = ${code} AND COALESCE(ready_stage, -1) < ${currentStage}`;
+      let nextStage = currentStage;
+      if (Number(pending[0].n) === 0) {
+        const advanced = await sql`
+          UPDATE lobbies SET stage = ${currentStage + 1}, updated_at = now()
+          WHERE code = ${code} AND COALESCE(stage, 0) = ${currentStage}
+          RETURNING stage`;
+        if (advanced.length > 0) nextStage = Number(advanced[0].stage);
+      }
+      res.status(200).json({ ok: true, stage: nextStage, advanced: nextStage > currentStage });
       return;
     }
 
@@ -281,8 +345,14 @@ export default async function handler(
       );
       const coachPick = String(body.coachPick ?? '').slice(0, 60);
       const done = body.done === true;
+      const rawStrategy = body.strategy && typeof body.strategy === 'object' ? body.strategy as Record<string, unknown> : {};
+      const strategy = JSON.stringify({
+        tactic: TACTICS.has(String(rawStrategy.tactic)) ? String(rawStrategy.tactic) : 'balanced',
+        favoriteMap: MAPS.has(String(rawStrategy.favoriteMap)) ? String(rawStrategy.favoriteMap) : 'mirage',
+        banMap: MAPS.has(String(rawStrategy.banMap)) ? String(rawStrategy.banMap) : 'nuke',
+      });
       const updated = await sql`
-        UPDATE lobby_players SET picks = ${picks}::jsonb, coach_pick = ${coachPick}, done = ${done}
+        UPDATE lobby_players SET picks = ${picks}::jsonb, coach_pick = ${coachPick}, strategy = ${strategy}::jsonb, done = ${done}
         WHERE code = ${code} AND nick = ${nick}
         RETURNING id`;
       if (updated.length === 0) {
