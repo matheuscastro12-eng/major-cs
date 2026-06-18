@@ -5183,6 +5183,27 @@ body.has-ad-footer { padding-bottom: 112px; }
   body.has-ad-footer { padding-bottom: 78px; }
 }
 
+/* faixa do narrador (momentos-chave da partida ao vivo) */
+@keyframes casterIn {
+  0% { opacity: 0; transform: translateY(-6px) scale(0.99); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.caster-line {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 10px; padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(212,164,65,0.35);
+  border-left: 3px solid var(--gold);
+  background: linear-gradient(90deg, rgba(212,164,65,0.16), rgba(212,164,65,0.03));
+  animation: casterIn 0.32s ease;
+}
+.caster-line.mine { border-left-color: #58c46a; background: linear-gradient(90deg, rgba(88,196,106,0.16), rgba(88,196,106,0.03)); }
+.caster-line.opp { border-left-color: #d2603e; background: linear-gradient(90deg, rgba(210,96,62,0.15), rgba(210,96,62,0.03)); }
+.caster-mic { font-size: 1.1rem; flex-shrink: 0; }
+.caster-text { font-weight: 600; font-size: 0.95rem; line-height: 1.25; color: var(--text); }
+.caster-line.big { padding: 12px 16px; }
+.caster-line.big .caster-text { font-size: 1.06rem; font-weight: 700; }
+
 /* no mobile: leaderboard vira banner de celular e o premium vira anchor sticky */
 @media (max-width: 640px) {
   .ad-slot .ad-size { font-size: 0.78rem; }

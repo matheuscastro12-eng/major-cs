@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
+import { narrateRound, type RoundNarration } from '../engine/narration';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
 import { derivePlaystyle, MAP_LABELS, PLAYBOOK_LABELS, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
@@ -99,6 +100,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [timeoutsLeft, setTimeoutsLeft] = useState(TIMEOUTS_PER_MAP);
   const [boostRounds, setBoostRounds] = useState(0);
   const [pausedMsg, setPausedMsg] = useState('');
+  const [caster, setCaster] = useState<RoundNarration | null>(null); // narração do último momento-chave
+  const lastNarrated = useRef('');
   const [speedIdx, setSpeedIdx] = useState(DEFAULT_SPEED_IDX);
   const [stance, setStance] = useState<Stance>('default');
   // hint de descoberta das calls ao vivo (some ao dispensar; 1ª vez forte)
@@ -245,6 +248,30 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tactical, freeze, finished, pausedMsg, mapIdx, boostRounds]);
 
+  // narração: depois de cada round, olha o último round concluído e, se foi um
+  // momento-chave (clutch/ace/multi-kill), gera a fala do "caster"
+  useEffect(() => {
+    if (finished) return;
+    const sim = getSim(mapIdx);
+    const log = sim.roundLog();
+    const completed = log.length - 1;
+    if (completed < 0) return;
+    const key = `${mapIdx}:${completed}`;
+    if (key === lastNarrated.current) return;
+    lastNarrated.current = key;
+    const ks = sim.killFeed().filter((k) => k.round === completed);
+    const n = narrateRound(ks, log[completed], teams, { round: completed, score: sim.score() });
+    if (n) setCaster(n);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, mapIdx, finished]);
+
+  // a fala some sozinha alguns segundos depois (cada nova substitui a anterior)
+  useEffect(() => {
+    if (!caster) return;
+    const id = window.setTimeout(() => setCaster(null), 5200);
+    return () => window.clearTimeout(id);
+  }, [caster]);
+
   const skipAll = () => {
     setPausedMsg(' '); // congela o interval enquanto resolvemos tudo de forma síncrona
     let idx = mapIdx;
@@ -345,6 +372,16 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
             </button>
           )}
         </div>
+
+        {!finished && caster && (
+          <div
+            key={caster.text}
+            className={`caster-line ${caster.teamIdx === userIdx ? 'mine' : 'opp'}${caster.big ? ' big' : ''}`}
+          >
+            <span className="caster-mic">🎙️</span>
+            <span className="caster-text">{caster.text}</span>
+          </div>
+        )}
 
         <div className="live-stage">
           <MapThumb map={currentMap} className="live-map-art" />
