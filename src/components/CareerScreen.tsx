@@ -16,6 +16,7 @@ import { makeRng, randomSeed, type Rng } from '../engine/rng';
 import type { Coach, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL, PLAYBOOK_DESC, PLAYBOOK_LABELS } from '../types';
 import { MatchScreen } from './MatchScreen';
+import { bestSeriesMoment } from '../engine/narration';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -3024,12 +3025,26 @@ export function CareerScreen({ onExit }: Props) {
 
   // ---------- veto / partida (liga OU Major, ao vivo) ----------
   if ((stage === 'veto' || stage === 'match') && matchCtx) {
-    const finish = (series: SeriesResult) =>
-      matchCtx.mode === 'major'
-        ? finishMajorRound(series)
-        : matchCtx.mode === 'playoff'
-          ? finishPlayoffRound(series)
-          : league && finishUserRound(league, series);
+    const finish = (series: SeriesResult) => {
+      if (matchCtx.mode === 'major') finishMajorRound(series);
+      else if (matchCtx.mode === 'playoff') finishPlayoffRound(series);
+      else if (league) finishUserRound(league, series);
+      // manchete do melhor lance do usuário na partida (clutch/ace/4k+)
+      const hl = bestSeriesMoment(series, matchCtx.teams, matchCtx.userIdx);
+      if (hl) {
+        const oppTag = matchCtx.teams[matchCtx.userIdx === 0 ? 1 : 0].tag;
+        const item: NewsItem = {
+          id: `${save.split}:hl:${hl.nick}:${matchCtx.phaseLabel}`.slice(0, 80),
+          split: save.split,
+          icon: '🎬',
+          tone: 'good',
+          title: hl.text,
+          body: `${matchCtx.phaseLabel} · vs ${oppTag}.`,
+        };
+        // setSave funcional roda após o dispatch acima: adiciona a notícia ao estado já atualizado
+        setSave((s) => { const n = { ...s, ...pushNews(s, [item]) }; persist(n); return n; });
+      }
+    };
     if (stage === 'veto') {
       return (
         <VetoScreen

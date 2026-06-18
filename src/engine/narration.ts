@@ -1,16 +1,29 @@
-// Narração de momentos-chave da partida (clutch 1vX, ace, multi-kill). Reconstrói
-// o que rolou no round a partir do killFeed (ordem dos abates, arma, headshot) e
-// monta uma frase com cara de caster. Flair é determinístico (via hashStr), então
-// a mesma narração não muda a cada re-render. Idioma vem de getLang().
-import type { KillEvent, TTeam } from '../types';
+// Narração de momentos-chave da partida. Reconstrói o que rolou no round a partir
+// do killFeed (ordem dos abates, arma, headshot) e monta uma frase com cara de
+// caster. Detecta jogada (clutch 1vX, ace, multi-kill) e contexto (pistol, eco/
+// force, map/match point, virada, embalo). Flair é determinístico (via hashStr),
+// então a narração não muda a cada re-render. Idioma vem de getLang().
+import type { KillEvent, SeriesResult, TTeam } from '../types';
+import type { BuyTier } from './match';
 import { getLang, type Lang } from '../state/i18n';
 import { hashStr } from '../state/hash';
 
+export type NarrationKind = 'clutch' | 'ace' | 'multi' | 'eco' | 'mappoint' | 'matchpoint' | 'comeback' | 'pistol';
+
 export interface RoundNarration {
-  kind: 'clutch' | 'ace' | 'multi';
+  kind: NarrationKind;
   text: string;
   teamIdx: 0 | 1; // time do protagonista (pra colorir como "seu" ou "adversário")
-  big: boolean; // clutch/ace = destaque maior
+  big: boolean; // destaque maior (clutch/ace/map point/eco)
+}
+
+export interface NarrationCtx {
+  round: number;
+  score: [number, number]; // placar APÓS o round
+  roundLog: (0 | 1)[]; // log completo do mapa até aqui (inclui este round)
+  buys?: [BuyTier, BuyTier]; // compra do round (capturada antes do step)
+  mapWon: boolean; // este round fechou o mapa
+  seriesPoint?: boolean; // fechar o mapa fecha a série
 }
 
 // fragmentos sempre montados como "... com/with/con {flair}", então cada um é um
@@ -69,6 +82,34 @@ const T = {
   es: { clutch: (n: string, s: number) => `${n} en el 1v${s} y la CERRÓ`, verb: 'mata', con: 'con', and: 'y', close: 'cierra con', aceLead: (n: string) => `${n} PASÓ POR ENCIMA DE TODOS`, multiLead: (n: string, k: number) => `${n} hizo ${k} en la ronda` },
 } as const;
 
+// rótulos de contexto (prefixos) e linhas "só contexto" (quando não houve jogada)
+const CTX_STR = {
+  pt: {
+    matchPoint: '🏆 MATCH POINT!', mapPoint: '🏁 MAP POINT!', pistol: '🔫 PISTOL!', eco: '💰 ECO!', force: '💸 FORCE!', comeback: '↩️ VIRADA!',
+    streak: (n: number) => `🔥 ${n} seguidos!`,
+    ecoLine: (t: string) => `${t} ROUBA o round no eco`, forceLine: (t: string) => `${t} segura no force`,
+    pistolLine: (t: string) => `${t} leva o pistol`, mapLine: (t: string) => `${t} FECHA o mapa`, seriesLine: (t: string) => `${t} FECHA a série`, comebackLine: (t: string) => `${t} virou o jogo`,
+  },
+  en: {
+    matchPoint: '🏆 MATCH POINT!', mapPoint: '🏁 MAP POINT!', pistol: '🔫 PISTOL!', eco: '💰 ECO!', force: '💸 FORCE!', comeback: '↩️ COMEBACK!',
+    streak: (n: number) => `🔥 ${n} in a row!`,
+    ecoLine: (t: string) => `${t} STEALS the round on eco`, forceLine: (t: string) => `${t} holds it on force`,
+    pistolLine: (t: string) => `${t} takes the pistol`, mapLine: (t: string) => `${t} CLOSES the map`, seriesLine: (t: string) => `${t} CLOSES the series`, comebackLine: (t: string) => `${t} turned it around`,
+  },
+  es: {
+    matchPoint: '🏆 MATCH POINT!', mapPoint: '🏁 MAP POINT!', pistol: '🔫 PISTOL!', eco: '💰 ECO!', force: '💸 FORCE!', comeback: '↩️ REMONTADA!',
+    streak: (n: number) => `🔥 ${n} seguidos!`,
+    ecoLine: (t: string) => `${t} ROBA la ronda en eco`, forceLine: (t: string) => `${t} la aguanta en force`,
+    pistolLine: (t: string) => `${t} se lleva el pistol`, mapLine: (t: string) => `${t} CIERRA el mapa`, seriesLine: (t: string) => `${t} CIERRA la serie`, comebackLine: (t: string) => `${t} dio la vuelta`,
+  },
+} as const;
+
+const NEWS = {
+  pt: { clutch: (n: string, s: number) => `${n} guardou um clutch 1v${s}`, ace: (n: string) => `${n} cravou um ACE`, multi: (n: string, k: number) => `${n} fez um ${k}K decisivo` },
+  en: { clutch: (n: string, s: number) => `${n} pulled off a 1v${s} clutch`, ace: (n: string) => `${n} landed an ACE`, multi: (n: string, k: number) => `${n} got a clutch ${k}K` },
+  es: { clutch: (n: string, s: number) => `${n} sacó un clutch 1v${s}`, ace: (n: string) => `${n} clavó un ACE`, multi: (n: string, k: number) => `${n} hizo un ${k}K decisivo` },
+} as const;
+
 function flairFor(k: KillEvent, seed: number, lang: Lang): string {
   const pool = FLAIR[lang];
   const pick = (arr: string[]) => arr[seed % arr.length];
@@ -82,12 +123,10 @@ function flairFor(k: KillEvent, seed: number, lang: Lang): string {
   return pick(pool.spray);
 }
 
-// narra a sequência de abates de um protagonista (ex.: o clutcher):
-// "mata o primeiro com um hs seco, o segundo com uma AWP e fecha com um 1-tap"
 function narrateKills(ks: KillEvent[], round: number, lang: Lang): string {
   const t = T[lang];
   const ord = ORD[lang];
-  const shown = ks.slice(0, 4); // até 4 pra não virar parágrafo
+  const shown = ks.slice(0, 4);
   if (shown.length === 0) return '';
   const frag = (k: KillEvent, i: number): string =>
     `${ord[Math.min(i, ord.length - 1)]} ${t.con} ${flairFor(k, hashStr(`${k.killerId}:${round}:${i}`), lang)}`;
@@ -98,25 +137,17 @@ function narrateKills(ks: KillEvent[], round: number, lang: Lang): string {
   return `${t.verb} ${mids.join(', ')} ${t.and} ${closer}`;
 }
 
-export function narrateRound(
-  kills: KillEvent[],
-  winner: 0 | 1,
-  teams: [TTeam, TTeam],
-  ctx: { round: number; score: [number, number] },
-): RoundNarration | null {
-  if (kills.length === 0) return null;
-  const lang = getLang();
-  const nickOf = (id: string): string =>
-    teams[0].players.find((p) => p.id === id)?.nick ?? teams[1].players.find((p) => p.id === id)?.nick ?? '?';
+interface Play { kind: 'clutch' | 'ace' | 'multi'; who: string; size: number; kills: KillEvent[]; }
 
-  // abates por autor (na ordem que aconteceram)
+// detecta a jogada de destaque do round a partir dos abates (sem texto)
+function scanPlay(kills: KillEvent[], winner: 0 | 1, teams: [TTeam, TTeam]): Play | null {
+  if (kills.length === 0) return null;
   const byKiller = new Map<string, KillEvent[]>();
   for (const k of kills) {
     if (!byKiller.has(k.killerId)) byKiller.set(k.killerId, []);
     byKiller.get(k.killerId)!.push(k);
   }
-
-  // simula quem está vivo pra detectar clutch (winner caiu pra 1 e ganhou)
+  // clutch: o time vencedor caiu pra 1 e o sobrevivente fechou
   const aliveW = new Set(teams[winner].players.map((p) => p.id));
   const aliveL = new Set(teams[1 - winner].players.map((p) => p.id));
   let survivor: string | null = null;
@@ -126,44 +157,125 @@ export function narrateRound(
     else aliveL.delete(k.victimId);
     if (survivor === null && aliveW.size === 1) {
       survivor = [...aliveW][0];
-      clutchSize = aliveL.size; // inimigos vivos no momento em que ficou sozinho
+      clutchSize = aliveL.size;
     }
   }
+  if (survivor && clutchSize >= 2) return { kind: 'clutch', who: survivor, size: clutchSize, kills: byKiller.get(survivor) ?? [] };
+  // ace / multi: melhor matador do time vencedor
+  let topId: string | null = null;
+  let topN = 0;
+  for (const [id, ks] of byKiller) {
+    if (teams[winner].players.some((p) => p.id === id) && ks.length > topN) { topN = ks.length; topId = id; }
+  }
+  if (topId && topN >= 5) return { kind: 'ace', who: topId, size: topN, kills: byKiller.get(topId)! };
+  if (topId && topN >= 3) return { kind: 'multi', who: topId, size: topN, kills: byKiller.get(topId)! };
+  return null;
+}
+
+function trailingStreak(log: (0 | 1)[], team: 0 | 1): number {
+  let n = 0;
+  for (let i = log.length - 1; i >= 0; i--) {
+    if (log[i] === team) n++;
+    else break;
+  }
+  return n;
+}
+
+// pior déficit que o time enfrentou no mapa (negativo = esteve atrás)
+function worstDeficit(log: (0 | 1)[], team: 0 | 1): number {
+  let a = 0;
+  let b = 0;
+  let worst = 0;
+  for (const w of log) {
+    if (w === 0) a++; else b++;
+    worst = Math.min(worst, team === 0 ? a - b : b - a);
+  }
+  return worst;
+}
+
+export function narrateRound(kills: KillEvent[], winner: 0 | 1, teams: [TTeam, TTeam], ctx: NarrationCtx): RoundNarration | null {
+  const lang = getLang();
+  const c = CTX_STR[lang];
+  const nickOf = (id: string): string =>
+    teams[0].players.find((p) => p.id === id)?.nick ?? teams[1].players.find((p) => p.id === id)?.nick ?? '?';
+  const teamTag = teams[winner].tag;
 
   // placar ANTES do round (tensão): tira 1 do vencedor
   const before: [number, number] = [...ctx.score];
   before[winner] = Math.max(0, before[winner] - 1);
-  const scorePrefix = `${before[0]}-${before[1]}`;
+  const sp = `${before[0]}-${before[1]}`;
 
-  // 1) CLUTCH 1v2+ guardado pelo sobrevivente
-  if (survivor && clutchSize >= 2) {
-    const ks = byKiller.get(survivor) ?? [];
-    const nick = nickOf(survivor);
-    const lead = T[lang].clutch(nick, clutchSize);
-    const tail = ks.length ? `. ${narrateKills(ks, ctx.round, lang)}` : '';
-    const ex = FLAIR[lang].exclamClutch[hashStr(`${survivor}:${ctx.round}:ex`) % FLAIR[lang].exclamClutch.length];
-    return { kind: 'clutch', text: `${scorePrefix}: ${lead}${tail}. ${ex}`, teamIdx: winner, big: true };
+  // ---- contexto (prefixos) ----
+  const tags: string[] = [];
+  if (ctx.mapWon && ctx.seriesPoint) tags.push(c.matchPoint);
+  else if (ctx.mapWon) tags.push(c.mapPoint);
+  const curDiff = winner === 0 ? ctx.score[0] - ctx.score[1] : ctx.score[1] - ctx.score[0];
+  const comeback = worstDeficit(ctx.roundLog, winner) <= -5 && curDiff >= 0;
+  const streak = trailingStreak(ctx.roundLog, winner);
+  if (comeback) tags.push(c.comeback);
+  else if (streak >= 6) tags.push(c.streak(streak));
+  const isPistol = ctx.round === 0 || ctx.round === 12;
+  if (isPistol) tags.push(c.pistol);
+  let ecoKind: 'eco' | 'force' | null = null;
+  if (ctx.buys) {
+    const wb = ctx.buys[winner];
+    const lb = ctx.buys[1 - winner];
+    if (lb === 'full' && (wb === 'eco' || wb === 'force')) { ecoKind = wb; tags.push(wb === 'eco' ? c.eco : c.force); }
+  }
+  const tag = tags.length ? tags[0] + ' ' : ''; // só o contexto de maior prioridade (evita poluir)
+
+  // ---- jogada de destaque ----
+  const play = scanPlay(kills, winner, teams);
+  if (play) {
+    const nick = nickOf(play.who);
+    let body: string;
+    if (play.kind === 'clutch') {
+      const ex = FLAIR[lang].exclamClutch[hashStr(`${play.who}:${ctx.round}:ex`) % FLAIR[lang].exclamClutch.length];
+      const tail = play.kills.length ? `. ${narrateKills(play.kills, ctx.round, lang)}` : '';
+      body = `${sp}: ${T[lang].clutch(nick, play.size)}${tail}. ${ex}`;
+    } else if (play.kind === 'ace') {
+      const ex = FLAIR[lang].exclamAce[hashStr(`${play.who}:${ctx.round}`) % FLAIR[lang].exclamAce.length];
+      body = `${sp}: ${T[lang].aceLead(nick)}. ${narrateKills(play.kills, ctx.round, lang)}. ${ex}`;
+    } else {
+      const ex = FLAIR[lang].exclamMulti[hashStr(`${play.who}:${ctx.round}`) % FLAIR[lang].exclamMulti.length];
+      body = `${sp}: ${T[lang].multiLead(nick, play.size)}. ${narrateKills(play.kills.slice(0, 3), ctx.round, lang)}. ${ex}`;
+    }
+    const big = play.kind !== 'multi' || ctx.mapWon || !!ecoKind;
+    return { kind: play.kind, text: `${tag}${body}`.trim(), teamIdx: winner, big };
   }
 
-  // 2) ACE (5 abates de um jogador do time vencedor)
-  let topId: string | null = null;
-  let topN = 0;
-  for (const [id, ks] of byKiller) {
-    const onWinner = teams[winner].players.some((p) => p.id === id);
-    if (onWinner && ks.length > topN) { topN = ks.length; topId = id; }
-  }
-  if (topId && topN >= 5) {
-    const nick = nickOf(topId);
-    const ex = FLAIR[lang].exclamAce[hashStr(`${topId}:${ctx.round}`) % FLAIR[lang].exclamAce.length];
-    return { kind: 'ace', text: `${scorePrefix}: ${T[lang].aceLead(nick)}. ${narrateKills(byKiller.get(topId)!, ctx.round, lang)}. ${ex}`, teamIdx: winner, big: true };
-  }
+  // ---- sem jogada: narra só se o contexto for forte ----
+  if (ecoKind) return { kind: 'eco', text: `${tag}${sp}: ${ecoKind === 'eco' ? c.ecoLine(teamTag) : c.forceLine(teamTag)}`, teamIdx: winner, big: true };
+  if (ctx.mapWon) return { kind: ctx.seriesPoint ? 'matchpoint' : 'mappoint', text: `${tag}${ctx.seriesPoint ? c.seriesLine(teamTag) : c.mapLine(teamTag)}`, teamIdx: winner, big: true };
+  if (comeback) return { kind: 'comeback', text: `${tag}${sp}: ${c.comebackLine(teamTag)}`, teamIdx: winner, big: true };
+  if (isPistol) return { kind: 'pistol', text: `${tag}${c.pistolLine(teamTag)}`, teamIdx: winner, big: false };
+  return null;
+}
 
-  // 3) MULTI-KILL (3-4 abates)
-  if (topId && topN >= 3) {
-    const nick = nickOf(topId);
-    const ex = FLAIR[lang].exclamMulti[hashStr(`${topId}:${ctx.round}`) % FLAIR[lang].exclamMulti.length];
-    return { kind: 'multi', text: `${scorePrefix}: ${T[lang].multiLead(nick, topN)}. ${narrateKills(byKiller.get(topId)!.slice(0, 3), ctx.round, lang)}. ${ex}`, teamIdx: winner, big: false };
+// melhor lance de um jogador DO time do usuário em toda a série (pro feed do carreira)
+export function bestSeriesMoment(series: SeriesResult, teams: [TTeam, TTeam], userIdx: 0 | 1): { nick: string; text: string } | null {
+  let best: { rank: number; play: Play } | null = null;
+  for (const map of series.maps) {
+    const byRound = new Map<number, KillEvent[]>();
+    for (const k of map.killFeed) {
+      if (!byRound.has(k.round)) byRound.set(k.round, []);
+      byRound.get(k.round)!.push(k);
+    }
+    for (const [round, ks] of byRound) {
+      const winner = map.roundLog[round];
+      if (winner === undefined) continue;
+      const p = scanPlay(ks, winner, teams);
+      if (!p) continue;
+      if (!teams[userIdx].players.some((pl) => pl.id === p.who)) continue;
+      const rank = p.kind === 'clutch' ? 100 + p.size : p.kind === 'ace' ? 95 : 80 + p.size;
+      if (!best || rank > best.rank) best = { rank, play: p };
+    }
   }
-
-  return null; // round comum: silêncio (mantém os momentos especiais)
+  // só vira manchete se for notável de verdade: clutch, ace ou 4k+
+  if (!best || (best.play.kind === 'multi' && best.play.size < 4)) return null;
+  const lang = getLang();
+  const nick = teams[userIdx].players.find((pl) => pl.id === best!.play.who)?.nick ?? '?';
+  const n = NEWS[lang];
+  const text = best.play.kind === 'clutch' ? n.clutch(nick, best.play.size) : best.play.kind === 'ace' ? n.ace(nick) : n.multi(nick, best.play.size);
+  return { nick, text };
 }

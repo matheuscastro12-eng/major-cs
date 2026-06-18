@@ -102,6 +102,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [pausedMsg, setPausedMsg] = useState('');
   const [caster, setCaster] = useState<RoundNarration | null>(null); // narração do último momento-chave
   const lastNarrated = useRef('');
+  const [moments, setMoments] = useState<RoundNarration[]>([]); // todos os lances narrados (replay no fim)
+  const buysByRound = useRef<Record<string, [BuyTier, BuyTier]>>({}); // compra de cada round (pra detectar eco/force)
   const [speedIdx, setSpeedIdx] = useState(DEFAULT_SPEED_IDX);
   const [stance, setStance] = useState<Stance>('default');
   // hint de descoberta das calls ao vivo (some ao dispensar; 1ª vez forte)
@@ -200,6 +202,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       for (let i = 0; i < due && !mapEnded; i++) {
         // chamada de round (rush/retake/force/save) vale para 1 round e some
         const c = callRef.current ? ({ team: userIdx, kind: callRef.current } as const) : undefined;
+        buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
         if (boostRounds - boostsUsed > 0) {
           sim.step(userIdx, stanceMod, c);
           boostsUsed++;
@@ -234,6 +237,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     const stanceMod = stanceRef.current !== 'default' ? { team: userIdx, mode: stanceRef.current } : undefined;
     const c = callRef.current ? ({ team: userIdx, kind: callRef.current } as const) : undefined;
     const boost = boostRounds > 0;
+    buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
     sim.step(boost ? userIdx : null, stanceMod, c);
     if (boost) setBoostRounds((b) => Math.max(0, b - 1));
     if (c) {
@@ -260,8 +264,26 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     if (key === lastNarrated.current) return;
     lastNarrated.current = key;
     const ks = sim.killFeed().filter((k) => k.round === completed);
-    const n = narrateRound(ks, log[completed], teams, { round: completed, score: sim.score() });
-    if (n) setCaster(n);
+    const winner = log[completed];
+    const mapWon = sim.done();
+    let seriesPoint = false;
+    if (mapWon) {
+      const won = resultsRef.current.filter((r) => r && r.winner === winner).length;
+      const need = Math.floor(maps.length / 2) + 1;
+      seriesPoint = won + 1 >= need;
+    }
+    const n = narrateRound(ks, winner, teams, {
+      round: completed,
+      score: sim.score(),
+      roundLog: log,
+      buys: buysByRound.current[key],
+      mapWon,
+      seriesPoint,
+    });
+    if (n) {
+      setCaster(n);
+      setMoments((m) => [...m, n]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, mapIdx, finished]);
 
@@ -338,6 +360,15 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     });
     return { label: lean.label, good: lean.delta >= 0 };
   })();
+
+  // melhores momentos pro replay no fim (prioriza clutch/ace > virada/eco > multi)
+  const MOMENT_RANK: Record<string, number> = { clutch: 6, ace: 6, matchpoint: 5, mappoint: 4, eco: 3, comeback: 3, multi: 2, pistol: 1 };
+  const topMoments = useMemo(
+    () => [...moments].sort((a, b) => (MOMENT_RANK[b.kind] ?? 0) - (MOMENT_RANK[a.kind] ?? 0)).slice(0, 4),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [moments],
+  );
+  const highlightsTitle = lang === 'en' ? '🎬 Best moments' : lang === 'es' ? '🎬 Mejores momentos' : '🎬 Melhores momentos';
 
   return (
     <div className="fade-in">
@@ -579,6 +610,20 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           })}
         </div>
       </div>
+
+      {finished && series && topMoments.length > 0 && (
+        <div className="panel highlights-panel fade-in">
+          <div className="panel-head">{highlightsTitle}</div>
+          <div className="panel-body">
+            {topMoments.map((m, i) => (
+              <div key={i} className={`caster-line ${m.teamIdx === userIdx ? 'mine' : 'opp'}${m.big ? ' big' : ''}`}>
+                <span className="caster-mic">🎙️</span>
+                <span className="caster-text">{m.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {finished && series && <InsightPanel series={series} teams={teams} userIdx={userIdx} />}
 
