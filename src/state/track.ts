@@ -20,7 +20,9 @@ export function sessionId(): string {
 // dá contagem de acessos/países pro patrocinador. Eventos de jogo (game_start,
 // online_*, etc.) viram no-op pra não gerar invocação de função nem observability.
 export function track(type: string, data: Record<string, unknown> = {}): void {
-  if (type !== 'visit') return;
+  // só 'visit' e 'ad_click' são enviados (controle de custo no Neon); os demais
+  // tipos existem na allowlist do backend mas estão pausados no cliente
+  if (type !== 'visit' && type !== 'ad_click') return;
   try {
     fetch('/api/track', {
       method: 'POST',

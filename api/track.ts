@@ -10,6 +10,7 @@ const ALLOWED_TYPES = new Set([
   'online_join',
   'online_done',
   'donate_click',
+  'ad_click',
   'share_card',
   'presence',
 ]);

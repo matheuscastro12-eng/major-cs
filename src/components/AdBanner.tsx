@@ -4,6 +4,7 @@
 // estiver no ar ainda (ou falhar), o banner se esconde sozinho — nada quebra.
 import { useEffect, useState } from 'react';
 import { getLang } from '../state/i18n';
+import { track } from '../state/track';
 
 const DEST = 'https://g4skins.com/ref/RTMBRASIL';
 
@@ -33,6 +34,7 @@ export function AdBanner() {
         target="_blank"
         rel="noreferrer sponsored nofollow"
         aria-label="G4 Skins"
+        onClick={() => track('ad_click', { sponsor: 'g4skins', placement: 'footer' })}
       >
         <picture>
           {/* mobile: 320×50 (2x 650×100) */}

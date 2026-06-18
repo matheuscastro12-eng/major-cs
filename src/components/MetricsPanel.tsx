@@ -13,6 +13,8 @@ interface Metrics {
     games_finished: string;
     seasons_started: string;
     donate_clicks: string;
+    ad_clicks: string;
+    ad_clicks_24h: string;
     share_cards: string;
   };
   visitsByDay: { day: string; visits: string; visitors: string }[];
@@ -114,6 +116,7 @@ export function MetricsPanel() {
           <Card label="Jogadores online agora" value={data.online.online_now ?? '0'} hint="ativos nos ultimos 2 min" />
           <Card label="Salas online" value={data.online.lobbies_total} hint={`${data.online.lobbies_7d} esta semana`} />
           <Card label="Cliques em doar" value={t.donate_clicks} />
+          <Card label="Cliques no banner (G4)" value={t.ad_clicks} hint={`${t.ad_clicks_24h} nas últimas 24h`} />
           <Card label="Cards compartilhados" value={t.share_cards} />
           <Card label="Campanhas no Hall" value={data.hall.campaigns} hint={`${data.hall.titles} títulos`} />
         </div>

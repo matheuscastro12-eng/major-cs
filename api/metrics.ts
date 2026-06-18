@@ -47,6 +47,8 @@ export default async function handler(
             COUNT(*) FILTER (WHERE type = 'game_end') AS games_finished,
             COUNT(*) FILTER (WHERE type = 'season_start') AS seasons_started,
             COUNT(*) FILTER (WHERE type = 'donate_click') AS donate_clicks,
+            COUNT(*) FILTER (WHERE type = 'ad_click') AS ad_clicks,
+            COUNT(*) FILTER (WHERE type = 'ad_click' AND created_at > now() - interval '1 day') AS ad_clicks_24h,
             COUNT(*) FILTER (WHERE type = 'share_card') AS share_cards
           FROM events`,
       sql`SELECT date_trunc('day', created_at AT TIME ZONE 'America/Sao_Paulo')::date AS day,
