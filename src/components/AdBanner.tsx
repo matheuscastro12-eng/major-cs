@@ -35,12 +35,14 @@ export function AdBanner() {
         aria-label="G4 Skins"
       >
         <picture>
-          {/* mobile: 320×50 (2x 640×100) */}
-          <source media="(max-width: 640px)" srcSet="/ads/g4skins-320x50.png 1x, /ads/g4skins-640x100.png 2x" />
+          {/* mobile: 320×50 (2x 650×100) */}
+          <source media="(max-width: 640px)" srcSet="/ads/320x50.jpg 1x, /ads/650x100.jpg 2x" />
+          {/* tablet/intermediário: 728×90 */}
+          <source media="(max-width: 820px)" srcSet="/ads/728x90.jpg" />
           {/* desktop: 970×90 (2x 1940×180) */}
           <img
-            src="/ads/g4skins-970x90.png"
-            srcSet="/ads/g4skins-970x90.png 1x, /ads/g4skins-1940x180.png 2x"
+            src="/ads/970x90.jpg"
+            srcSet="/ads/970x90.jpg 1x, /ads/1940x180.jpg 2x"
             alt="G4 Skins"
             width={970}
             height={90}
