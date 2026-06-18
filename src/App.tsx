@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { AdminGate } from './components/AdminGate';
 import { BrandMark } from './components/brand';
 import { DonateButton, DonateModal } from './components/Donate';
+import { AdBanner } from './components/AdBanner';
 import { Draft } from './components/Draft';
 import { Home } from './components/Home';
 import { Hub } from './components/Hub';
@@ -774,6 +775,10 @@ export default function App() {
       )}
       </Suspense>
       </main>
+
+      {/* patrocinador sempre visível no rodapé (G4 Skins). Some sozinho se o asset
+          ainda não estiver no ar. Não aparece no modo de preview de banners. */}
+      {!bannerPreview && <AdBanner />}
     </>
   );
 }

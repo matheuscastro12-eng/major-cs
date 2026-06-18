@@ -5159,6 +5159,30 @@ tr.fin-expiring { background: rgba(212,164,65,0.1); }
 }
 .ad-close:hover { color: var(--text); border-color: var(--muted); }
 
+/* banner de patrocínio real, fixo no rodapé (sempre visível) */
+.ad-footer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(0deg, rgba(10,12,16,0.97), rgba(10,12,16,0.82));
+  border-top: 1px solid var(--gold);
+  backdrop-filter: blur(4px);
+}
+.ad-footer-label {
+  font-size: 0.58rem; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--muted); opacity: 0.55; line-height: 1;
+}
+.ad-footer-link { display: block; line-height: 0; }
+.ad-footer-link img {
+  display: block; width: 970px; max-width: 100%; height: auto; border-radius: 6px;
+}
+/* reserva espaço no rodapé só quando o banner está no ar (classe ligada pelo React) */
+body.has-ad-footer { padding-bottom: 112px; }
+@media (max-width: 640px) {
+  .ad-footer-link img { width: 320px; }
+  body.has-ad-footer { padding-bottom: 78px; }
+}
+
 /* no mobile: leaderboard vira banner de celular e o premium vira anchor sticky */
 @media (max-width: 640px) {
   .ad-slot .ad-size { font-size: 0.78rem; }
