@@ -13,6 +13,7 @@ import type { MapId, Player, SeriesResult, TeamSeason, Tournament, TournamentPoo
 
 export type UltimateRuleset = 'open' | 'current' | 'legends' | 'brworld' | 'era' | 'ovrcap' | 'unique_country' | 'gauntlet';
 export type OnlineTactic = 'balanced' | 'aggressive' | 'tactical' | 'controlled';
+export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
 export interface OnlineStrategy { tactic: OnlineTactic; favoriteMap: MapId; banMap: MapId }
 
 export interface LobbyState {
@@ -28,6 +29,7 @@ export interface LobbyState {
     season?: number;
     stage?: number;
     ruleset?: UltimateRuleset;
+    playback_speed?: PlaybackSpeed;
   };
   players: { nick: string; picks: string[]; coach_pick: string; done: boolean; ready_stage?: number; strategy?: OnlineStrategy }[];
 }
