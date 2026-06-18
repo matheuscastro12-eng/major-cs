@@ -13,6 +13,7 @@ import {
   type OnlineStrategy,
   type OnlineTactic,
   type OpenRoom,
+  type PlaybackSpeed,
   type UltimateRuleset,
 } from '../state/online';
 import { useLang } from '../state/i18n';
@@ -36,6 +37,7 @@ interface Props {
 const NICK_KEY = 'rtm-nick';
 const POLL_MS = 5000; // corte de custo: mais lento = menos invocações de função
 const DEFAULT_STRATEGY: OnlineStrategy = { tactic: 'balanced', favoriteMap: 'mirage', banMap: 'nuke' };
+const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 4];
 
 const RULESET_OPTIONS: { id: UltimateRuleset; label: string; desc: string }[] = [
   { id: 'open', label: 'Livre', desc: 'Atuais e lendas, sem restrição.' },
@@ -107,6 +109,7 @@ export function OnlineScreen({ onBack }: Props) {
   const runSeedRef = useRef<number | null>(null); // revanche pode manter o draft e trocar apenas a simulacao
   const statusRef = useRef<string | null>(null);
   const stageRef = useRef<number | null>(null);
+  const playbackSpeedRef = useRef<PlaybackSpeed | null>(null);
   const progressRef = useRef<string | null>(null);
 
   // reveal por temporada: a chave inclui o seed, então cada Major tem o seu
@@ -161,8 +164,10 @@ export function OnlineScreen({ onBack }: Props) {
     const prevRunSeed = runSeedRef.current;
     const prevStatus = statusRef.current;
     const prevStage = stageRef.current;
+    const prevPlaybackSpeed = playbackSpeedRef.current;
     const prevProgress = progressRef.current;
-    const progress = `${s.lobby.stage ?? 0}|${s.players.map((p) => `${p.nick}:${p.ready_stage ?? -1}`).join(',')}`;
+    const playbackSpeed = PLAYBACK_SPEEDS.includes(s.lobby.playback_speed ?? 1) ? (s.lobby.playback_speed ?? 1) : 1;
+    const progress = `${s.lobby.stage ?? 0}|speed:${playbackSpeed}|${s.players.map((p) => `${p.nick}:${p.ready_stage ?? -1}`).join(',')}`;
     // nova temporada: o host gerou um novo seed -> zera o draft local e recomeça
     if (prevSeed !== null && prevSeed !== s.lobby.seed) {
       setMyPicks([]);
@@ -189,13 +194,15 @@ export function OnlineScreen({ onBack }: Props) {
     runSeedRef.current = runSeed;
     statusRef.current = s.lobby.status;
     stageRef.current = s.lobby.stage ?? 0;
+    playbackSpeedRef.current = playbackSpeed;
     progressRef.current = progress;
     // com o Major encerrado o estado é imutável: se nada mudou, NÃO re-seta o
     // state (evita re-simular o Major inteiro a cada poll). Mas segue detectando
     // a transição pra próxima temporada (seed/status diferentes).
     if (
       s.lobby.status === 'done' && s.lobby.mode === 'duel' &&
-      prevSeed === s.lobby.seed && prevRunSeed === runSeed && prevStatus === 'done' && prevStage === (s.lobby.stage ?? 0)
+      prevSeed === s.lobby.seed && prevRunSeed === runSeed && prevStatus === 'done' &&
+      prevStage === (s.lobby.stage ?? 0) && prevPlaybackSpeed === playbackSpeed
     ) return;
     if (
       s.lobby.status === 'done' && s.lobby.mode === 'party' &&
@@ -231,7 +238,7 @@ export function OnlineScreen({ onBack }: Props) {
     // depois de 'done' o resultado é imutável (refresh não re-seta o state, então
     // não re-simula), mas seguimos com um poll lento pra detectar quando o host
     // inicia a próxima temporada.
-    const syncMs = lobbyDone && state?.lobby.mode === 'party' ? 3000 : lobbyDone ? 12000 : POLL_MS;
+    const syncMs = lobbyDone ? 1500 : POLL_MS;
     pollRef.current = window.setInterval(refresh, syncMs);
     return () => window.clearInterval(pollRef.current);
   }, [code, refresh, lobbyDone, localDemo, state?.lobby.mode]);
@@ -281,7 +288,7 @@ export function OnlineScreen({ onBack }: Props) {
     setWatchedMatches([]);
     setActiveReplayKey(null);
     setState({
-      lobby: { code: 'LOCAL', mode, host: playerNick, status: 'drafting', seed, run_seed: seed, pool, season: 1, stage: 0, ruleset },
+      lobby: { code: 'LOCAL', mode, host: playerNick, status: 'drafting', seed, run_seed: seed, pool, season: 1, stage: 0, ruleset, playback_speed: 1 },
       players: [
         { nick: playerNick, picks: [], coach_pick: '', done: false, ready_stage: -1, strategy: DEFAULT_STRATEGY },
         ...rivals,
@@ -572,6 +579,14 @@ export function OnlineScreen({ onBack }: Props) {
   }
 
   const isHost = state.lobby.host.toLowerCase() === nick.toLowerCase();
+  const playbackSpeed = state.lobby.playback_speed ?? 1;
+  const changePlaybackSpeed = async (speed: PlaybackSpeed) => {
+    if (!isHost || speed === playbackSpeed) return;
+    setState((prev) => prev ? { ...prev, lobby: { ...prev.lobby, playback_speed: speed } } : prev);
+    if (localDemo) return;
+    const result = await lobbyApi({ action: 'setPlaybackSpeed', nick: nick.trim(), code, speed }).catch(() => null);
+    if (!result?.ok) await refresh();
+  };
 
   // sala de espera
   if (state.lobby.status === 'waiting') {
@@ -659,6 +674,10 @@ export function OnlineScreen({ onBack }: Props) {
                 teams={duel.teams}
                 onClose={() => setDuelReplayOpen(false)}
                 onFinish={() => setDuelFinished(true)}
+                playbackSpeed={playbackSpeed}
+                canControlSpeed={isHost}
+                onPlaybackSpeedChange={changePlaybackSpeed}
+                allowSkip={localDemo}
               />
             )}
 
@@ -919,6 +938,9 @@ export function OnlineScreen({ onBack }: Props) {
               onClose={() => setSelMatch(null)}
               onFinish={() => { if (activeReplayKey) markWatched(activeReplayKey); }}
               allowSkip={false}
+              playbackSpeed={playbackSpeed}
+              canControlSpeed={isHost}
+              onPlaybackSpeedChange={changePlaybackSpeed}
             />
           )}
         </div>
@@ -1060,6 +1082,9 @@ export function OnlineScreen({ onBack }: Props) {
               series={selMatch.series}
               teams={[major.teamsById[selMatch.a], major.teamsById[selMatch.b]]}
               onClose={() => setSelMatch(null)}
+              playbackSpeed={playbackSpeed}
+              canControlSpeed={isHost}
+              onPlaybackSpeedChange={changePlaybackSpeed}
             />
           )}
       </div>
@@ -1430,11 +1455,28 @@ function LiveStatsSide({ team, stats }: { team: TTeam; stats: Record<string, { k
 // Replay AO VIVO de uma série já calculada (determinístico): o placar sobe
 // round a round, com killfeed e K/D acumulados a partir do resultado gravado.
 // Assim a partida "acontece" na tela sem quebrar a sincronia entre clientes.
-function MatchReplay({ series, teams, onClose, onFinish, allowSkip = true }: { series: SeriesResult; teams: [TTeam, TTeam]; onClose: () => void; onFinish?: () => void; allowSkip?: boolean }) {
+function MatchReplay({
+  series,
+  teams,
+  onClose,
+  onFinish,
+  allowSkip = true,
+  playbackSpeed,
+  canControlSpeed,
+  onPlaybackSpeedChange,
+}: {
+  series: SeriesResult;
+  teams: [TTeam, TTeam];
+  onClose: () => void;
+  onFinish?: () => void;
+  allowSkip?: boolean;
+  playbackSpeed: PlaybackSpeed;
+  canControlSpeed: boolean;
+  onPlaybackSpeedChange: (speed: PlaybackSpeed) => void;
+}) {
   const [mapIdx, setMapIdx] = useState(0);
   const [round, setRound] = useState(0);
   const [done, setDone] = useState(false);
-  const [fast, setFast] = useState(false);
   const finishNotified = useRef(false);
 
   useEffect(() => {
@@ -1449,12 +1491,12 @@ function MatchReplay({ series, teams, onClose, onFinish, allowSkip = true }: { s
     if (!map) { setDone(true); return; }
     if (round >= map.roundLog.length) {
       if (mapIdx + 1 >= series.maps.length) { setDone(true); return; }
-      const t = setTimeout(() => { setMapIdx(mapIdx + 1); setRound(0); }, fast ? 300 : 1200);
+      const t = setTimeout(() => { setMapIdx(mapIdx + 1); setRound(0); }, 1200 / playbackSpeed);
       return () => clearTimeout(t);
     }
-    const t = setTimeout(() => setRound((r) => r + 1), fast ? 120 : 850);
+    const t = setTimeout(() => setRound((r) => r + 1), 850 / playbackSpeed);
     return () => clearTimeout(t);
-  }, [mapIdx, round, done, series, fast]);
+  }, [mapIdx, round, done, series, playbackSpeed]);
 
   const idIndex = useMemo(() => {
     const m = new Map<string, { nick: string; team: 0 | 1 }>();
@@ -1490,7 +1532,20 @@ function MatchReplay({ series, teams, onClose, onFinish, allowSkip = true }: { s
       <div className="panel-head">
         {map ? MAP_LABELS[map.map] : 'FIM'} {!done && `· ${round === 0 ? 'LIVE' : `R${round}`}`}
         <span className="spacer" />
-        {!done && <button className="btn ghost small" onClick={() => setFast((f) => !f)}>{fast ? '1x' : '4x'}</button>}
+        {!done && (
+          <div className="ut-playback-speed" title={canControlSpeed ? 'O host controla a velocidade para toda a sala' : 'Velocidade definida pelo host'}>
+            <span>{canControlSpeed ? 'VELOCIDADE DA SALA' : `HOST · ${playbackSpeed}x`}</span>
+            {canControlSpeed && PLAYBACK_SPEEDS.map((speed) => (
+              <button
+                key={speed}
+                className={`btn ghost small${playbackSpeed === speed ? ' active' : ''}`}
+                onClick={() => onPlaybackSpeedChange(speed)}
+              >
+                {speed}x
+              </button>
+            ))}
+          </div>
+        )}
         {!done && allowSkip && <button className="btn ghost small" onClick={() => setDone(true)}>Pular ⏭</button>}
         <button className="btn small" onClick={onClose}>Fechar ✕</button>
       </div>

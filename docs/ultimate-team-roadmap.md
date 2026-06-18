@@ -17,6 +17,8 @@
 - Demonstracao local em grupo com tres rivais e Major completo.
 - Match Center com tabela de stats ao vivo, killfeed, MVP, lideres do torneio,
   objetivos do evento e pontos da sessao.
+- Velocidade global das partidas controlada pelo host e sincronizada para toda
+  a sala (0.5x, 1x, 2x ou 4x).
 - Revanche mantendo os elencos ou redraft completo.
 - Lobbies multiplayer continuam separados da demonstracao local.
 

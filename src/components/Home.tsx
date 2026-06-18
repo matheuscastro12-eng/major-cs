@@ -311,7 +311,7 @@ export function Home({
         <div className="footnote">
           {teamCount} {t('home.teams')} · {playerCount} {t('home.players')} ·{' '}
           <a
-            href="#hall"
+            href="/hall"
             onClick={(e) => {
               e.preventDefault();
               onHall();

@@ -11,6 +11,7 @@ const MAX_PLAYERS: Record<string, number> = { duel: 2, party: 8 };
 const RULESETS = new Set(['open', 'current', 'legends', 'brworld', 'era', 'ovrcap', 'unique_country', 'gauntlet']);
 const TACTICS = new Set(['balanced', 'aggressive', 'tactical', 'controlled']);
 const MAPS = new Set(['mirage', 'inferno', 'nuke', 'ancient', 'anubis', 'dust2', 'train']);
+const PLAYBACK_SPEEDS = new Set([0.5, 1, 2, 4]);
 
 function genCode(): string {
   let c = '';
@@ -29,6 +30,7 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage int DEFAULT 0`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS ruleset text DEFAULT 'open'`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_seed bigint DEFAULT 0`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS playback_speed real DEFAULT 1`;
   await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS ready_stage int DEFAULT -1`;
   await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS strategy jsonb DEFAULT '{}'::jsonb`;
   schemaReady = true;
@@ -87,7 +89,7 @@ export default async function handler(
       return;
     }
     try {
-      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(ruleset, 'open') AS ruleset FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -96,7 +98,7 @@ export default async function handler(
         SELECT nick, picks, coach_pick, done, joined_at, COALESCE(ready_stage, -1) AS ready_stage, COALESCE(strategy, '{}'::jsonb) AS strategy FROM lobby_players
         WHERE code = ${code} ORDER BY joined_at ASC`;
       res.status(200).json({
-        lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage) },
+        lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage), playback_speed: Number(lobby[0].playback_speed) },
         players: players.map((p) => ({ ...p, ready_stage: Number(p.ready_stage) })),
       });
     } catch (e) {
@@ -126,6 +128,7 @@ export default async function handler(
     ruleset?: string;
     strategy?: unknown;
     keepRoster?: boolean;
+    speed?: number;
   };
   const action = String(body.action ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 20);
@@ -261,6 +264,24 @@ export default async function handler(
       if (!code) { res.status(200).json({ ok: false }); return; }
       await sql`UPDATE lobbies SET last_ping = now() WHERE code = ${code}`;
       res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (action === 'setPlaybackSpeed') {
+      const speed = Number(body.speed);
+      if (!PLAYBACK_SPEEDS.has(speed)) {
+        res.status(400).json({ error: 'velocidade inválida' });
+        return;
+      }
+      const updated = await sql`
+        UPDATE lobbies SET playback_speed = ${speed}, updated_at = now()
+        WHERE code = ${code} AND lower(host) = ${nick.toLowerCase()}
+        RETURNING playback_speed`;
+      if (updated.length === 0) {
+        res.status(403).json({ error: 'só o host controla a velocidade' });
+        return;
+      }
+      res.status(200).json({ ok: true, speed });
       return;
     }
 

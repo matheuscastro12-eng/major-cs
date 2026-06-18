@@ -5067,9 +5067,35 @@ table.crm-players input.num {
 
 /* replay ao vivo da partida no online */
 .match-replay { margin-top: 14px; }
+.ut-playback-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.ut-playback-speed > span {
+  padding: 0 5px;
+  color: var(--muted);
+  font: 800 0.65rem var(--font-cond);
+  letter-spacing: 0.45px;
+  white-space: nowrap;
+}
+.ut-playback-speed .btn.active {
+  color: var(--bg);
+  border-color: var(--gold);
+  background: var(--gold);
+}
 .replay-feed { min-height: 92px; display: flex; flex-direction: column; gap: 3px; margin: 10px 0; }
 .rf-row { font-size: 0.88rem; }
 .rf-row .kf-round { color: var(--muted); font-size: 0.72rem; margin-right: 6px; }
+
+@media (max-width: 680px) {
+  .match-replay .panel-head { flex-wrap: wrap; }
+  .ut-playback-speed { order: 3; width: 100%; justify-content: center; }
+}
 
 /* ===== conquistas ===== */
 .ach-modal { width: min(560px, 100%); }

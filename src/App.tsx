@@ -56,6 +56,66 @@ type Screen =
   | 'careerCRM'
   | 'careerAccess';
 
+const SCREEN_PATH: Record<Screen, string> = {
+  home: '/',
+  online: '/online',
+  career: '/carreira',
+  hall: '/hall',
+  draft: '/jogo/draft',
+  hub: '/jogo/major',
+  veto: '/jogo/veto',
+  match: '/jogo/partida',
+  final: '/jogo/resultado',
+  stats: '/jogo/estatisticas',
+  transfer: '/jogo/transferencias',
+  matchdetail: '/jogo/partida/detalhes',
+  admin: '/admin',
+  lab: '/admin/lab',
+  careerCRM: '/admin/carreira',
+  careerAccess: '/admin/acessos',
+};
+
+const PATH_SCREEN: Record<string, Screen> = Object.fromEntries(
+  Object.entries(SCREEN_PATH).map(([screen, path]) => [path, screen as Screen]),
+) as Record<string, Screen>;
+
+const TRANSIENT_SCREENS = new Set<Screen>([
+  'draft', 'hub', 'veto', 'match', 'final', 'stats', 'transfer', 'matchdetail',
+]);
+const ROUTE_SESSION_ID = `${Date.now()}-${Math.random()}`;
+
+const normalizePath = (path: string) => {
+  const normalized = path.toLowerCase().replace(/\/+$/, '');
+  return normalized || '/';
+};
+
+function routeFromLocation(): { screen: Screen; bannerPreview: boolean } {
+  const hash = window.location.hash.toLowerCase();
+  const legacyHash: Record<string, Screen> = {
+    '#admin': 'admin',
+    '#hall': 'hall',
+    '#carreira': 'career',
+    '#carreira-crm': 'careerCRM',
+    '#carreira-acessos': 'careerAccess',
+  };
+  if (hash === '#banners') return { screen: 'home', bannerPreview: true };
+  if (legacyHash[hash]) return { screen: legacyHash[hash], bannerPreview: false };
+
+  const path = normalizePath(window.location.pathname);
+  if (path === '/ultimateteam' || path === '/ultimate-team') {
+    return { screen: 'online', bannerPreview: false };
+  }
+  if (path === '/banners') return { screen: 'home', bannerPreview: true };
+  const matched = PATH_SCREEN[path] ?? 'home';
+  if (TRANSIENT_SCREENS.has(matched)) {
+    const routeState = window.history.state as { screen?: Screen; routeSession?: string } | null;
+    if (routeState?.routeSession !== ROUTE_SESSION_ID || routeState.screen !== matched) {
+      return { screen: 'home', bannerPreview: false };
+    }
+  }
+  return { screen: matched, bannerPreview: false };
+}
+
 interface MatchCtx {
   teams: [TTeam, TTeam];
   maps: { map: MapId; pickedBy: 0 | 1 | -1 }[];
@@ -108,8 +168,8 @@ try {
 
 export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
-  const [screen, setScreen] = useState<Screen>('home');
-  const [bannerPreview, setBannerPreview] = useState(false); // demo de espaços de banner (#banners)
+  const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
+  const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
   const [achToast, setAchToast] = useState<AchDef[]>([]); // conquistas recém-desbloqueadas
   const [achOpen, setAchOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -123,6 +183,8 @@ export default function App() {
   const [donateOpen, setDonateOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => shouldOnboard());
   const rngRef = useRef(makeRng(randomSeed()));
+  const routeReadyRef = useRef(false);
+  const popNavigationRef = useRef(false);
   const rng = useCallback(() => rngRef.current(), []);
   const { t } = useLang();
 
@@ -208,37 +270,34 @@ export default function App() {
     setScreen(savedSession.tournament.phase === 'done' ? 'final' : 'hub');
   };
 
-  // A base de dados não tem botão no front: só abre acessando a URL com
-  // #admin (ex: https://site/#admin). O hash some da barra ao entrar.
+  // Restaura a tela ao usar voltar/avançar do navegador. Os hashes antigos
+  // continuam aceitos, mas são convertidos para os caminhos canônicos.
   useEffect(() => {
-    const checkHash = () => {
-      const h = window.location.hash.toLowerCase();
-      // o hash é mantido em sincronia com a tela (ver efeito abaixo), então
-      // sobrevive ao F5 nas telas ocultas (#admin, #carreira, etc.)
-      if (h === '#admin') setScreen('admin');
-      else if (h === '#hall') setScreen('hall');
-      else if (h === '#carreira') setScreen('career');
-      else if (h === '#carreira-crm') setScreen('careerCRM');
-      else if (h === '#carreira-acessos') setScreen('careerAccess');
-      else if (h === '#banners') { setScreen('home'); setBannerPreview(true); }
+    const onPopState = () => {
+      const route = routeFromLocation();
+      popNavigationRef.current = true;
+      setScreen(route.screen);
+      setBannerPreview(route.bannerPreview);
     };
-    checkHash();
-    window.addEventListener('hashchange', checkHash);
-    return () => window.removeEventListener('hashchange', checkHash);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // mantém o hash da URL refletindo a tela atual: as telas ocultas guardam o
-  // hash (sobrevivem ao F5) e ele some quando o usuário volta pro fluxo normal.
+  // Cada tela ganha uma URL real e navegável. A primeira sincronização usa
+  // replace para canonicalizar aliases; cliques seguintes criam histórico.
   useEffect(() => {
-    const SCREEN_HASH: Partial<Record<Screen, string>> = {
-      admin: '#admin', hall: '#hall', career: '#carreira',
-      careerCRM: '#carreira-crm', careerAccess: '#carreira-acessos',
-    };
-    // o preview de banners também sobrevive ao F5 (demo pro patrocinador)
-    const target = screen === 'home' && bannerPreview ? '#banners' : SCREEN_HASH[screen] ?? '';
-    if (window.location.hash !== target) {
-      history.replaceState(null, '', window.location.pathname + window.location.search + target);
+    const targetPath = screen === 'home' && bannerPreview ? '/banners' : SCREEN_PATH[screen];
+    const target = `${targetPath}${window.location.search}`;
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (current !== target) {
+      if (!routeReadyRef.current || popNavigationRef.current) {
+        window.history.replaceState({ screen, routeSession: ROUTE_SESSION_ID }, '', target);
+      } else {
+        window.history.pushState({ screen, routeSession: ROUTE_SESSION_ID }, '', target);
+      }
     }
+    routeReadyRef.current = true;
+    popNavigationRef.current = false;
   }, [screen, bannerPreview]);
 
   // título da aba acompanha a tela (cara mais profissional, abas distinguíveis)
@@ -563,7 +622,7 @@ export default function App() {
       {achOpen && <AchievementsModal onClose={() => setAchOpen(false)} />}
 
       {/* DEMO: banner premium SEMPRE VISÍVEL (fica em todas as telas, inclusive
-          durante a partida). Pré-visualização para o patrocinador via #banners */}
+          durante a partida). Pré-visualização para o patrocinador via /banners */}
       {bannerPreview && (
         <div className="ad-persistent">
           <div className="ad-persistent-inner">
@@ -659,7 +718,7 @@ export default function App() {
           </div>
           <div className="ad-info">
             Pré-visualização dos espaços de banner para o patrocinador. Acesse por
-            <b> roadtomajor.com.br/#banners</b>. Formatos IAB padrão; dá pra ajustar tamanhos e posições.
+            <b> roadtomajor.com.br/banners</b>. Formatos IAB padrão; dá pra ajustar tamanhos e posições.
           </div>
         </>
       )}
