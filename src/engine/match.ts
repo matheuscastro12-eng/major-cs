@@ -407,8 +407,8 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
 
     let effA = effStrength(a, flags[0], map, aSide, buys[0], lastWinner === 1, isPistol, secondHalf, pickedBy === 0) + formA + mapFormA;
     let effB = effStrength(b, flags[1], map, bSide, buys[1], lastWinner === 0, isPistol, secondHalf, pickedBy === 1) + formB + mapFormB;
-    if (boostTeam === 0) effA += 3.5; // timeout tático
-    if (boostTeam === 1) effB += 3.5;
+    if (boostTeam === 0) effA += 2.0; // timeout tático (reduzido de 3.5: a vantagem ao vivo era exclusiva do usuário)
+    if (boostTeam === 1) effB += 2.0;
 
     // postura tática escolhida ao vivo: valoriza quem combina com a tática.
     // O delta depende do lado E de quantos jogadores têm o estilo certo.

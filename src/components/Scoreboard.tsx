@@ -4,6 +4,7 @@ import type { PlayerLine, SeriesResult, TTeam } from '../types';
 import { MAP_LABELS } from '../types';
 import { ratingClass, swingFmt } from './statFormat';
 import { Flag, PlayerAvatar, TeamBadge } from './ui';
+import { ct } from '../state/career-i18n';
 
 type SideFilter = 'both' | 't' | 'ct';
 
@@ -93,12 +94,12 @@ export function Scoreboard({ series, teams }: Props) {
   return (
     <div className="panel">
       <div className="panel-head">
-        Match stats
+        {ct('Estatísticas da partida')}
         <span className="spacer" />
         <div className="seg">
           {(['both', 't', 'ct'] as SideFilter[]).map((s) => (
-            <button key={s} className={side === s ? 'active' : ''} onClick={() => setSide(s)} title={s === 'both' ? 'Ambos os lados' : s === 't' ? 'Terrorista (TR)' : 'Counter-Terrorist (CT)'}>
-              {s === 'both' ? 'Ambos' : s === 't' ? 'TR' : 'CT'}
+            <button key={s} className={side === s ? 'active' : ''} onClick={() => setSide(s)} title={s === 'both' ? ct('Ambos os lados') : s === 't' ? ct('Terrorista (TR)') : ct('Counter-Terrorist (CT)')}>
+              {s === 'both' ? ct('Ambos') : s === 't' ? 'TR' : 'CT'}
             </button>
           ))}
         </div>
@@ -109,7 +110,7 @@ export function Scoreboard({ series, teams }: Props) {
       <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--border-soft)' }}>
         <div className="tabs">
           <button className={`tab${mapTab === -1 ? ' active' : ''}`} onClick={() => setMapTab(-1)}>
-            Todos os mapas
+            {ct('Todos os mapas')}
           </button>
           {series.maps.map((m, i) => (
             <button key={i} className={`tab${mapTab === i ? ' active' : ''}`} onClick={() => setMapTab(i)}>
@@ -126,13 +127,13 @@ export function Scoreboard({ series, teams }: Props) {
           <table className="stats sb-table">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>Jogador</th>
-                <th title="Kills - Assistências - Mortes">K-A-D</th>
-                <th title="Rounds com 2+ abates (multi-kills)">MKs</th>
-                <th title="Kill / Assist / Survive / Trade">KAST</th>
-                <th title="Clutches (1vX) vencidos">1vsX</th>
-                <th title="Abates (de headshot)">K (hs)</th>
-                <th title="Mortes (trocadas)">D (t)</th>
+                <th style={{ textAlign: 'left' }}>{ct('Jogador')}</th>
+                <th title={ct('Kills - Assistências - Mortes')}>K-A-D</th>
+                <th title={ct('Rounds com 2+ abates (multi-kills)')}>MKs</th>
+                <th title={ct('Kill / Assist / Survive / Trade')}>KAST</th>
+                <th title={ct('Clutches (1vX) vencidos')}>1vsX</th>
+                <th title={ct('Abates (de headshot)')}>K (hs)</th>
+                <th title={ct('Mortes (trocadas)')}>D (t)</th>
                 <th>ADR</th>
                 <th>Swing</th>
                 <th>Rating<br />3.0</th>
@@ -169,7 +170,7 @@ function PlayerOfMatch({ team, pid, line }: { team: TTeam; pid: string; line: Pl
   return (
     <div className="potm">
       <div className="potm-id">
-        <span className="potm-tag">Destaque da partida</span>
+        <span className="potm-tag">{ct('Destaque da partida')}</span>
         <PlayerAvatar nick={p.nick} size={46} />
         <div className="potm-name"><Flag cc={p.country} /> <b>{p.nick}</b></div>
         <div className="muted small">{team.tag} · {p.name}</div>

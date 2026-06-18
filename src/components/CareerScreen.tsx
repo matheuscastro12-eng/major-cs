@@ -28,10 +28,11 @@ import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits
 import { isAdminUnlocked } from './AdminGate';
 import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
+import { captureError } from '../state/errlog';
 import bo3Ages from '../data/bo3-ages.json';
 
 const SAVE_KEY = 'rtm-career-v1';
-const STARTING_BUDGET = 3_800_000; // começo mais magro: forca um elenco humilde no inicio
+const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
 // dava pra ter o melhor elenco com grana sobrando já no split 3)
@@ -535,6 +536,7 @@ interface CareerSave {
   majorSeed2?: TTeam[];       // 8 seeds que entram no Stage 2
   majorSeed3?: TTeam[];       // 8 seeds que entram no Stage 3
   majorPre?: { stage: number; advancers: { tag: string; name: string }[] }[]; // stages auto-simulados antes do usuário
+  majorResult?: MajorResult | null; // resultado do Major persistido: reidrata a tela de resultado no F5 (evita re-simular a final)
   evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
   lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
   sponsorUntil: Record<string, number>; // patrocinador id -> split até onde o contrato vale
@@ -1239,33 +1241,81 @@ function stripEraDeep(node: unknown, depth = 0): void {
   }
 }
 
+const SAVE_BAK = SAVE_KEY + '.bak';
+const SAVE_CORRUPT = SAVE_KEY + '.corrupt';
+
+// transforma o JSON cru num save válido (merge com defaults + cura de dados antigos).
+// Lança se o JSON estiver corrompido — quem chama trata o fallback.
+function hydrate(raw: string): CareerSave {
+  const s = JSON.parse(raw) as CareerSave;
+  const merged = { ...emptySave(), ...s };
+  stripEraDeep(merged.league);
+  stripEraDeep(merged.playoff);
+  stripEraDeep(merged.majorT);
+  stripEraDeep(merged.majorSeed2);
+  merged.academy = (merged.academy ?? []).map(healProspect);
+  if (merged.youth) {
+    const y: Record<string, Player> = {};
+    for (const [k, v] of Object.entries(merged.youth)) y[k] = healYouthPlayer(v);
+    merged.youth = y;
+  }
+  return merged;
+}
+
 function loadSave(): CareerSave {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return emptySave();
-    const s = JSON.parse(raw) as CareerSave;
-    const merged = { ...emptySave(), ...s };
-    stripEraDeep(merged.league);
-    stripEraDeep(merged.playoff);
-    stripEraDeep(merged.majorT);
-    stripEraDeep(merged.majorSeed2);
-    merged.academy = (merged.academy ?? []).map(healProspect);
-    if (merged.youth) {
-      const y: Record<string, Player> = {};
-      for (const [k, v] of Object.entries(merged.youth)) y[k] = healYouthPlayer(v);
-      merged.youth = y;
-    }
-    return merged;
+    raw = localStorage.getItem(SAVE_KEY);
   } catch {
+    return emptySave(); // storage indisponível
+  }
+  if (!raw) return emptySave();
+  try {
+    return hydrate(raw);
+  } catch (e) {
+    // save principal ilegível: NÃO descarta em silêncio. Preserva o cru pra
+    // diagnóstico e tenta o backup de um passo antes de cair no save vazio.
+    captureError(e, 'save-load');
+    try {
+      localStorage.setItem(SAVE_CORRUPT, raw);
+    } catch {
+      /* sem espaço pro diagnóstico */
+    }
+    try {
+      const bak = localStorage.getItem(SAVE_BAK);
+      if (bak) return hydrate(bak);
+    } catch {
+      /* backup também ilegível */
+    }
     return emptySave();
   }
 }
 
+let persistWarned = false;
 function persist(s: CareerSave): void {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(s));
-  } catch {
-    /* sem storage */
+    const json = JSON.stringify(s);
+    let prev: string | null = null;
+    try {
+      prev = localStorage.getItem(SAVE_KEY);
+    } catch {
+      /* segue */
+    }
+    localStorage.setItem(SAVE_KEY, json);
+    // backup de um passo: se o save novo ficar ilegível, dá pra voltar ao anterior
+    if (prev && prev !== json) {
+      try {
+        localStorage.setItem(SAVE_BAK, prev);
+      } catch {
+        /* backup é best-effort; quota não pode derrubar o save principal */
+      }
+    }
+  } catch (e) {
+    // QuotaExceeded ou storage indisponível: avisa uma vez e não derruba o jogo
+    if (!persistWarned) {
+      persistWarned = true;
+      captureError(e, 'save-persist');
+    }
   }
 }
 
@@ -1342,6 +1392,7 @@ export function CareerScreen({ onExit }: Props) {
     if (s.squad.length < 5 || !s.coachFromId) return 'market';
     // elenco pronto mas sem liga = escolha do campeonato (qual convite aceitar)
     if (!s.league) return 'circuit';
+    if (s.majorResult) return 'major'; // Major encerrado: reidrata a tela de resultado (F5-safe)
     if (s.majorT && s.majorT.phase !== 'done') return 'hub'; // Major ao vivo, dentro do hub
     if (leagueDone(s.league)) {
       // fase de pontos corridos encerrada: vai pro mata-mata; só depois do
@@ -1360,7 +1411,7 @@ export function CareerScreen({ onExit }: Props) {
     phaseLabel: string;
   } | null>(null);
   const [selSeries, setSelSeries] = useState<{ series: SeriesResult; teams: [TTeam, TTeam] } | null>(null);
-  const [majorResult, setMajorResult] = useState<MajorResult | null>(null);
+  const [majorResult, setMajorResult] = useState<MajorResult | null>(() => loadSave().majorResult ?? null);
   const [majorTState, setMajorTState] = useState<Tournament | null>(() => loadSave().majorT);
   const majorT = majorTState;
   // persiste o Major junto do save (sobrevive a reload no meio do torneio)
@@ -1921,7 +1972,7 @@ export function CareerScreen({ onExit }: Props) {
       userIdx: m.a === 'user' ? 0 : 1,
       mode: 'playoff',
       bestOf: isFinal ? PO_FINAL_BO : PO_SF_BO,
-      phaseLabel: `${p.circuit} · ${isFinal ? ct('GRANDE FINAL') : 'Semifinal'}`,
+      phaseLabel: `${p.circuit} · ${isFinal ? ct('GRANDE FINAL') : ct('Semifinal')}`,
     });
     setStage('veto');
   };
@@ -1960,7 +2011,7 @@ export function CareerScreen({ onExit }: Props) {
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
     setQuickSim({
       series, teams: [a, b], userIdx: live.a === 'user' ? 0 : 1,
-      label: `${p.circuit} · ${isFinal ? 'Final' : 'Semifinal'}`,
+      label: `${p.circuit} · ${isFinal ? ct('Final') : ct('Semifinal')}`,
       onDone: () => {
         setQuickSim(null);
         const clone: Playoff = structuredClone(p);
@@ -2072,13 +2123,18 @@ export function CareerScreen({ onExit }: Props) {
 
   // encerra o Major do usuário: colocação, prêmio e VRS
   const concludeMajor = (t: Tournament, placement: PlacementCode) => {
-    setMajorResult({
+    const result: MajorResult = {
       tournament: t,
       placement,
       prize: MAJOR_PRIZE[placement],
       vrs: MAJOR_VRS[placement],
       champion: placement === 'champion',
-    });
+    };
+    setMajorResult(result);
+    setMajorTState(t);
+    // persiste o resultado: se o jogador der F5 na tela de resultado, reidrata aqui
+    // em vez de voltar pro hub com o Major "vivo" e re-jogar a última série
+    setSave((s) => { const n = { ...s, majorT: t, majorResult: result }; persist(n); return n; });
     setStage('major');
   };
 
@@ -2608,6 +2664,7 @@ export function CareerScreen({ onExit }: Props) {
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
+                  majorResult: null, // limpa o resultado reidratável (já consumido)
                   majorStage: undefined, majorUserStage: undefined,
                   majorSeed2: undefined, majorSeed3: undefined, majorPre: undefined,
                   league: null,
@@ -3117,7 +3174,7 @@ export function CareerScreen({ onExit }: Props) {
         <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={46} logoUrl={save.org?.logo} />
         <div className="ct-id">
           <div className="ct-name">
-            {(buildTeam(save)?.players?.length ?? 0) > 0 && <OrgFlag players={buildTeam(save)!.players} title="Nacionalidade do core" />}
+            {(buildTeam(save)?.players?.length ?? 0) > 0 && <OrgFlag players={buildTeam(save)!.players} title={ct('Nacionalidade do core')} />}
             {save.org?.name}
             <span className={`tier-badge t${save.tier}`}>TIER {save.tier}</span>
           </div>
@@ -3284,7 +3341,7 @@ export function CareerScreen({ onExit }: Props) {
                     <span className="dh-tier">TIER {save.tier}</span>
                     <span>Split {save.split}</span>
                     {save.region && <span>{MACRO_REGION_LABELS[save.region]}</span>}
-                    <span title="Prestígio da org (cresce com títulos, Major, tier e VRS; atrai patrocínio)">★ Prestígio {prestige}</span>
+                    <span title={ct('Prestígio da org (cresce com títulos, Major, tier e VRS; atrai patrocínio)')}>★ Prestígio {prestige}</span>
                     <span title={ct('Torcida da organização')}>👥 {formatFans(fans)} fãs</span>
                   </div>
                 </div>
@@ -3350,7 +3407,7 @@ export function CareerScreen({ onExit }: Props) {
             {opp && myMatch ? (
               <div className="play-match-card" style={{ background: `linear-gradient(110deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--header) 70%)` }}>
                 <div className="pm-info">
-                  <div className="pm-label">PRÓXIMA PARTIDA · {(myMatch.bo ?? 3) === 1 ? 'MD1' : (myMatch.bo ?? 3) === 5 ? 'MD5' : 'MD3'} · {league.gsl ? `Grupos · ${GSL_ROUND_LABELS[league.current]}` : `${ct('Rodada')} ${league.current + 1}/${league.rounds.length}`}</div>
+                  <div className="pm-label">{ct('PRÓXIMA PARTIDA ·')} {(myMatch.bo ?? 3) === 1 ? 'MD1' : (myMatch.bo ?? 3) === 5 ? 'MD5' : 'MD3'} · {league.gsl ? `${ct('Grupos')} · ${ct(GSL_ROUND_LABELS[league.current])}` : `${ct('Rodada')} ${league.current + 1}/${league.rounds.length}`}</div>
                   <div className="pm-teams">
                     <span className="pm-side">
                       <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={40} logoUrl={save.org?.logo} />
@@ -3370,7 +3427,7 @@ export function CareerScreen({ onExit }: Props) {
                 <div className="pm-actions">
                   <button className="btn gold big" onClick={playMine}>▶ JOGAR</button>
                   <button className="btn ghost" onClick={() => simMine(league)}>⏩ Simular</button>
-                  <button className="btn ghost" onClick={() => simWholeSplit(league)} title="Resolve todas as rodadas restantes de uma vez e vai pro mata-mata">⏩⏩ Split inteiro</button>
+                  <button className="btn ghost" onClick={() => simWholeSplit(league)} title={ct('Resolve todas as rodadas restantes de uma vez e vai pro mata-mata')}>⏩⏩ Split inteiro</button>
                 </div>
               </div>
             ) : (
@@ -3772,7 +3829,7 @@ export function CareerScreen({ onExit }: Props) {
                 const mi = moraleInfo(mor);
                 return (
                   <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
-                    <button className="cs-open" onClick={() => setProfilePlayer(p)} title="Ver perfil do jogador">
+                    <button className="cs-open" onClick={() => setProfilePlayer(p)} title={ct('Ver perfil do jogador')}>
                       <PlayerAvatar nick={p.nick} size={32} />
                       <span className="cs-nick"><Flag cc={p.country} /> {p.nick}
                         {grew > 0 && <span className="cs-grew" title={`+${grew} ${ct('de evolução na carreira')}`}> ▲{grew}</span>}
@@ -3781,7 +3838,7 @@ export function CareerScreen({ onExit }: Props) {
                     <span className={`cs-morale ${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${mor}/100)`}>{mi.icon} {mor}</span>
                     <select className={`role-select ${p.role}`} value={p.role}
                       onChange={(e) => setRole(p.id, e.target.value as Role)}
-                      title="Definir a função deste jogador">
+                      title={ct('Definir a função deste jogador')}>
                       {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
                     <button className={`cs-train${focused ? ' on' : ''}`} onClick={() => setFocus(p.id)}
@@ -4040,7 +4097,7 @@ export function CareerScreen({ onExit }: Props) {
                 : <>🌍 <b>Major Mundial no Split {nextMajor}</b> · {splitsToMajor === 1 ? 'falta 1 split' : `faltam ${splitsToMajor} splits`}. Suba no <b>ranking VRS</b> (você está em #{myVrsRank}) vencendo partidas e campeonatos — os top {MAJOR_VRS_CUT} vão ao Major.</>}
             </div>
 
-            <div className="muted small section-label">Temporada atual · Split {save.split}</div>
+            <div className="muted small section-label">{ct('Temporada atual · Split')} {save.split}</div>
             <div className="cal-stages">
               {stages.map((st, i) => (
                 <div key={i} className={`cal-stage ${st.status}`}>
@@ -4081,7 +4138,7 @@ export function CareerScreen({ onExit }: Props) {
               <div className="cstat"><b>{formatMoney(org.totalPrize)}</b><span>{ct('Prêmios na história')}</span></div>
               <div className="cstat"><b>{org.bestPlacement}</b><span>Melhor campanha</span></div>
             </div>
-            <div className="muted small section-label">Linha do tempo</div>
+            <div className="muted small section-label">{ct('Linha do tempo')}</div>
             {save.history.length === 0 ? (
               <p className="muted small">{ct('Sua organização ainda não encerrou nenhum split. A história começa agora.')}</p>
             ) : (
@@ -4244,7 +4301,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
             <div className="pp-tags">
               <span className="pp-tag">{age} anos</span>
               <span className={`pp-tag pot-${tier}`}>POT {tier} ({pot})</span>
-              <span className="pp-tag" title="Maior OVR já alcançado">★ Pico {peakOvr}</span>
+              <span className="pp-tag" title={ct('Maior OVR já alcançado')}>★ Pico {peakOvr}</span>
               <span className="pp-tag">{PHASE_LABEL[phase]}</span>
               <span className={`pp-tag mood-${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${morale}/100)`}>{mi.icon} {mi.label}</span>
               {focused && <span className="pp-tag focus">{ct('🎯 em treino')}</span>}
@@ -4293,7 +4350,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
             )}
             {cur && (
               <>
-                <div className="muted small section-label">Neste split</div>
+                <div className="muted small section-label">{ct('Neste split')}</div>
                 <div className="pp-cur">
                   <span>rating <b>{cur.rating.toFixed(2)}</b></span>
                   <span>K/D <b>{cur.kd.toFixed(2)}</b></span>
@@ -4364,7 +4421,7 @@ function MatchLine({ league, m, onOpen }: {
 }
 
 const PLACE_SHORT: Record<PlacementCode, string> = {
-  champion: ct('Campeão'), runnerup: 'Vice', semi: 'Semi', quarters: ct('Quartas'), playoffs: 'Playoffs', swiss: 'Suíça',
+  champion: ct('Campeão'), runnerup: ct('Vice'), semi: ct('Semi'), quarters: ct('Quartas'), playoffs: ct('Playoffs'), swiss: ct('Suíça'),
 };
 
 // fase de grupos GSL: 2 grupos com classificação (1-4) e os jogos por estágio.
@@ -5030,7 +5087,7 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
           </div>
           {c && (
             <>
-              <div className="muted small section-label">Times confirmados no {c.name}</div>
+              <div className="muted small section-label">{ct('Times confirmados no')} {c.name}</div>
               <div className="circuit-teams">
                 {c.teams.map((t) => (
                   <div key={t.id} className="cteam">
@@ -5107,7 +5164,7 @@ function CareerOnboarding({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop onb-backdrop" onClick={onClose}>
       <div className="onb-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose} title="Pular">✕</button>
+        <button className="modal-x" onClick={onClose} title={ct('Pular')}>✕</button>
         <div className="onb-icon">{s.icon}</div>
         <h2 className="onb-title">{s.title}</h2>
         <p className="onb-body">{s.body}</p>
@@ -5658,7 +5715,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
         )}
         {pendingDeals.length > 0 && (
           <div className="nego-pending">
-            <div className="muted small section-label">Acordos fechados ({pendingDeals.length})</div>
+            <div className="muted small section-label">{ct('Acordos fechados')} ({pendingDeals.length})</div>
             {pendingDeals.map((d) => (
               <div key={d.id} className="nego-deal-row">
                 <span className="nego-deal-in">🤝 <b>{d.inNick}</b></span>
@@ -5856,7 +5913,7 @@ function MarketScreen({
             </div>
           )}
 
-          <div className="muted small section-label">Seu elenco ({squad.length}/5)</div>
+          <div className="muted small section-label">{ct('Seu elenco')} ({squad.length}/5)</div>
           <div className="roster-slots">
             {[0, 1, 2, 3, 4].map((i) => {
               const s = squad[i];
@@ -5894,7 +5951,7 @@ function MarketScreen({
             ))}
           </div>
 
-          <div className="muted small section-label">Mercado ({visible.length} de {market.length} jogadores)</div>
+          <div className="muted small section-label">{ct('Mercado')} ({visible.length}/{market.length} {ct('jogadores')})</div>
           <div className="market-filters">
             <input className="mf-search" placeholder={ct('Buscar jogador ou time…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
             <select className="mf-select" value={ccFilter} onChange={(e) => setCcFilter(e.target.value)} title={ct('Filtrar por nacionalidade')}>
@@ -5944,7 +6001,7 @@ function MarketScreen({
                     return (
                       <>
                         <div className="meta small player-bio">
-                          <span title="Idade">🎂 {age}a</span>
+                          <span title={ct('Idade')}>🎂 {age}a</span>
                           <span className={`pot-badge pot-${pot}`} title={ct('Potencial (teto de OVR)')}>POT {pot}</span>
                         </div>
                         <div className={`meta small phase-tag ${ph}`} title={ct('Jovem em ascensão melhora entre temporadas; veterano cai')}>

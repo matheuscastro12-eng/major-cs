@@ -3,6 +3,7 @@ import { type Difficulty, type TournamentPool } from '../types';
 import { useLang } from '../state/i18n';
 import { BrandMark } from './brand';
 import { DonorsPanel } from './Donate';
+import { PrivacyModal } from './Legal';
 import { AnnouncementTweet, TwitterLink } from './social';
 
 interface Props {
@@ -114,6 +115,7 @@ export function Home({
   const { t, lang } = useLang();
   const N = NEWS[(lang as 'pt' | 'en' | 'es')] ?? NEWS.pt;
   const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState('');
   const [codeErr, setCodeErr] = useState('');
@@ -338,8 +340,13 @@ export function Home({
             Liquipedia
           </a>{' '}
           (CC-BY-SA 3.0)
+          {' · '}
+          <a href="#" onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>
+            {lang === 'en' ? 'Privacy' : lang === 'es' ? 'Privacidad' : 'Privacidade'}
+          </a>
         </div>
       </div>
+      {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { liquipediaTeamUrl, logoForTeam } from '../data/media';
 import type { Coach, Game, Player, Playstyle, Role, TeamSeason, TPlayer, TTeam } from '../types';
 import { derivePlaystyle, MAP_POOL } from '../types';
 import { hashStr } from '../state/hash';
+import { ct } from '../state/career-i18n';
 
 // Dream team montado no draft nunca treinou junto: leva um malus de
 // entrosamento que torna o título mais difícil (egos, falta de rotina).
@@ -167,18 +168,18 @@ export function draftSynergy(players: TPlayer[]): SynergyReport {
   const hasSupport = players.some((p) => p.role === 'Support' || p.role === 'Lurker');
   const distinctRoles = new Set(players.map((p) => p.role)).size;
 
-  if (hasAwp) items.push({ label: 'AWPer dedicado segurando os lados', value: 2.5 });
-  else items.push({ label: 'SEM AWPER: CT vira sofrimento', value: -8 });
+  if (hasAwp) items.push({ label: ct('AWPer dedicado segurando os lados'), value: 2.5 });
+  else items.push({ label: ct('SEM AWPER: CT vira sofrimento'), value: -8 });
 
-  if (hasIgl) items.push({ label: 'IGL no comando das rondas', value: 3 });
-  else items.push({ label: 'SEM IGL: sem leitura tatica em rounds fechados', value: -10 });
+  if (hasIgl) items.push({ label: ct('IGL no comando das rondas'), value: 3 });
+  else items.push({ label: ct('SEM IGL: sem leitura tatica em rounds fechados'), value: -10 });
 
-  if (awpMains >= 3) items.push({ label: 'AWPers demais brigando pela arma', value: -6 });
-  else if (awpMains === 2) items.push({ label: 'Dois AWPers principais dividem o orcamento', value: -2.5 });
-  if (iglMains >= 2) items.push({ label: 'Vozes de comando em conflito', value: -3 });
-  if (hasEntry) items.push({ label: 'Entry fragger abrindo espaco', value: 2 });
-  if (hasSupport) items.push({ label: 'Suporte/lurker fechando o mapa', value: 2 });
-  if (distinctRoles === 5) items.push({ label: 'Composicao completa: cinco funcoes distintas', value: 3 });
+  if (awpMains >= 3) items.push({ label: ct('AWPers demais brigando pela arma'), value: -6 });
+  else if (awpMains === 2) items.push({ label: ct('Dois AWPers principais dividem o orcamento'), value: -2.5 });
+  if (iglMains >= 2) items.push({ label: ct('Vozes de comando em conflito'), value: -3 });
+  if (hasEntry) items.push({ label: ct('Entry fragger abrindo espaco'), value: 2 });
+  if (hasSupport) items.push({ label: ct('Suporte/lurker fechando o mapa'), value: 2 });
+  if (distinctRoles === 5) items.push({ label: ct('Composicao completa: cinco funcoes distintas'), value: 3 });
 
   const byGame = new Map<string, number>();
   for (const p of players) {
@@ -187,7 +188,7 @@ export function draftSynergy(players: TPlayer[]): SynergyReport {
   }
   let eraPairs = 0;
   for (const n of byGame.values()) eraPairs += (n * (n - 1)) / 2;
-  if (eraPairs > 0) items.push({ label: 'Quimica de era entre os jogadores', value: Math.min(3, eraPairs * 0.4) });
+  if (eraPairs > 0) items.push({ label: ct('Quimica de era entre os jogadores'), value: Math.min(3, eraPairs * 0.4) });
 
   const byCountry = new Map<string, number>();
   for (const p of players) byCountry.set(p.country, (byCountry.get(p.country) ?? 0) + 1);
@@ -199,7 +200,7 @@ export function draftSynergy(players: TPlayer[]): SynergyReport {
   }
   if (countryPairs > 0) {
     items.push({
-      label: `${countryStack} jogadores do mesmo pais aceleram a comunicacao`,
+      label: `${countryStack} ${ct('jogadores do mesmo pais aceleram a comunicacao')}`,
       value: Math.min(3.5, countryPairs * 0.45),
     });
   }

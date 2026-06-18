@@ -1817,7 +1817,7 @@
     "consistency": 88,
     "clutch": 86,
     "awp": 62,
-    "igl": 50
+    "igl": 84
    },
    {
     "id": "bo3_17531",
@@ -1829,7 +1829,7 @@
     "consistency": 80,
     "clutch": 78,
     "awp": 54,
-    "igl": 88
+    "igl": 58
    },
    {
     "id": "bo3_20372",
@@ -3099,7 +3099,7 @@
     "nick": "Matheos",
     "name": "Mateo Prišlin",
     "country": "hr",
-    "role": "Entry",
+    "role": "Rifler",
     "aim": 81,
     "consistency": 81,
     "clutch": 79,

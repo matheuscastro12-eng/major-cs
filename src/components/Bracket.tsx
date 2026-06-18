@@ -1,6 +1,7 @@
 import { getTeam } from '../engine/swiss';
 import type { Pairing, Tournament, TTeam } from '../types';
 import { TeamBadge } from './ui';
+import { ct } from '../state/career-i18n';
 
 interface MatchRef {
   pairing: Pairing;
@@ -30,7 +31,7 @@ function MatchCell({ t, item, onOpen }: { t: Tournament; item: MatchRef; onOpen?
     <div
       className={`hb-match${item.current ? ' current' : ''}${clickable ? ' clickable' : ''}`}
       onClick={clickable ? () => onOpen!(item.pairing) : undefined}
-      title={clickable ? 'Ver estatísticas da série' : undefined}
+      title={clickable ? ct('Ver estatísticas da série') : undefined}
     >
       <MatchTeamRow team={a} score={r?.mapScore[0]} loser={r ? r.winner === 1 : false} />
       <MatchTeamRow team={b} score={r?.mapScore[1]} loser={r ? r.winner === 0 : false} />
@@ -115,8 +116,8 @@ function SwissBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) => v
         </div>
       ))}
       <div className="hb-col results">
-        <ResultBox t={t} tone="adv" records={['3-0', '3-1', '3-2']} label="Classificados" />
-        <ResultBox t={t} tone="elim" records={['0-3', '1-3', '2-3']} label="Eliminados" />
+        <ResultBox t={t} tone="adv" records={['3-0', '3-1', '3-2']} label={ct('Classificados')} />
+        <ResultBox t={t} tone="elim" records={['0-3', '1-3', '2-3']} label={ct('Eliminados')} />
       </div>
     </div>
   );
@@ -129,9 +130,9 @@ function PlayoffBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) =>
   ];
   const find = (label: string) => all.find((item) => item.pairing.label === label);
   const columns = [
-    { title: 'Quartas', labels: ['QF1', 'QF2', 'QF3', 'QF4'] },
-    { title: 'Semifinal', labels: ['SF1', 'SF2'] },
-    { title: 'Final', labels: ['FINAL'] },
+    { title: ct('Quartas'), labels: ['QF1', 'QF2', 'QF3', 'QF4'] },
+    { title: ct('Semifinal'), labels: ['SF1', 'SF2'] },
+    { title: ct('Final'), labels: ['FINAL'] },
   ];
   const champion = t.championId ? getTeam(t, t.championId) : undefined;
 
@@ -156,9 +157,9 @@ function PlayoffBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) =>
         </div>
       ))}
       <div className="hb-col">
-        <div className="hb-reclabel">Campeão</div>
+        <div className="hb-reclabel">{ct('Campeão')}</div>
         <div className="hb-resultbox adv" style={{ minWidth: 130 }}>
-          <div className="hb-resultbox-title">🏆 Troféu</div>
+          <div className="hb-resultbox-title">{ct('🏆 Troféu')}</div>
           {champion ? (
             <div className={`hb-token adv${champion.isUser ? ' is-user' : ''}`} style={{ fontSize: 13 }}>
               <TeamBadge tag={champion.tag} colors={champion.colors} size={24} logoUrl={champion.logoUrl} />
@@ -177,10 +178,10 @@ export function TournamentBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: P
   return (
     <div className="panel">
       <div className="panel-head">
-        {t.phase === 'swiss' ? 'Fase suíça' : 'Playoffs'}
+        {t.phase === 'swiss' ? ct('Fase suíça') : ct('Playoffs')}
         <span className="spacer" />
         <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-          {t.phase === 'swiss' ? 'Clique numa série encerrada para ver as estatísticas' : 'Mata-mata MD3'}
+          {t.phase === 'swiss' ? ct('Clique numa série encerrada para ver as estatísticas') : ct('Mata-mata MD3')}
         </span>
       </div>
       <div className="panel-body">{t.phase === 'swiss' ? <SwissBracket t={t} onOpen={onOpen} /> : <PlayoffBracket t={t} onOpen={onOpen} />}</div>
