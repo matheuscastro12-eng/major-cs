@@ -129,7 +129,49 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS lineup jsonb DEFAULT '{}'::jsonb`;
   await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS rollouts jsonb DEFAULT '[]'::jsonb`;
   await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS spectator boolean DEFAULT false`;
+  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS last_seen timestamptz DEFAULT now()`;
   schemaReady = true;
+}
+
+// janela em que um jogador é considerado "presente" (heartbeat recente). Quem
+// passa disso não conta na barreira coletiva e pode ter o host migrado.
+const PRESENT_MS = 40_000;
+
+// rate-limit best-effort POR INSTÂNCIA (não cobre flood distribuído; pra isso,
+// usar o Firewall/rate-limit da Vercel). Protege o Neon do flood casual.
+const rlBuckets = new Map<string, { n: number; reset: number }>();
+function rateLimited(ip: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  if (rlBuckets.size > 5000) rlBuckets.clear(); // evita crescer sem limite
+  const b = rlBuckets.get(ip);
+  if (!b || b.reset < now) { rlBuckets.set(ip, { n: 1, reset: now + windowMs }); return false; }
+  b.n += 1;
+  return b.n > max;
+}
+function clientIp(headers?: Record<string, string | string[] | undefined>): string {
+  const h = headers ?? {};
+  const raw = h['x-forwarded-for'] ?? h['x-real-ip'] ?? h['x-vercel-forwarded-for'] ?? '';
+  const s = Array.isArray(raw) ? raw[0] : String(raw);
+  return s.split(',')[0].trim() || 'unknown';
+}
+
+// promove o jogador ativo mais antigo a host quando o host atual sumiu
+async function migrateHostIfStale(sql: ReturnType<typeof neon>, code: string): Promise<void> {
+  const rows = await sql`
+    SELECT host,
+           (SELECT nick FROM lobby_players p
+            WHERE p.code = l.code AND COALESCE(p.spectator, false) = false
+              AND COALESCE(p.last_seen, p.joined_at) > now() - interval '40 seconds'
+            ORDER BY p.joined_at ASC LIMIT 1) AS oldest_active,
+           (SELECT COALESCE(last_seen, joined_at) FROM lobby_players p
+            WHERE p.code = l.code AND lower(p.nick) = lower(l.host)) AS host_seen
+    FROM lobbies l WHERE l.code = ${code}`;
+  if (rows.length === 0) return;
+  const { host, oldest_active, host_seen } = rows[0] as { host: string; oldest_active: string | null; host_seen: string | null };
+  if (!oldest_active || String(oldest_active).toLowerCase() === String(host).toLowerCase()) return;
+  const stale = !host_seen || Date.now() - new Date(host_seen as string).getTime() > PRESENT_MS;
+  if (!stale) return;
+  await sql`UPDATE lobbies SET host = ${oldest_active}, updated_at = now() WHERE code = ${code} AND lower(host) = lower(${host})`;
 }
 
 interface Res {
@@ -138,7 +180,7 @@ interface Res {
 }
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[]> },
+  req: { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[]>; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   res.setHeader('Cache-Control', 'no-store');
@@ -183,6 +225,11 @@ export default async function handler(
     if (!code) {
       res.status(400).json({ error: 'código obrigatório' });
       return;
+    }
+    try {
+      await migrateHostIfStale(sql, code); // auto-cura: host que sumiu cede o controle
+    } catch {
+      /* migração é best-effort, nunca bloqueia o poll */
     }
     try {
       const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed, COALESCE(draft_rollouts, 2) AS draft_rollouts, COALESCE(veto_state, '{}'::jsonb) AS veto, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
@@ -249,10 +296,22 @@ export default async function handler(
     bestOf?: number;
     participants?: unknown;
     requiredVetoKeys?: unknown;
+    force?: boolean;
   };
   const action = String(body.action ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 20);
   const code = String(body.code ?? '').toUpperCase().slice(0, 5);
+
+  // rate-limit: protege o Neon de flood casual. ping é frequente (heartbeat),
+  // então tem teto próprio; create é caro, teto estrito.
+  const ip = clientIp(req.headers);
+  if (action === 'create') {
+    if (rateLimited(`create:${ip}`, 6, 60_000)) { res.status(429).json({ error: 'muitas salas criadas; espere um pouco' }); return; }
+  } else if (action !== 'ping') {
+    if (rateLimited(`w:${ip}`, 40, 10_000)) { res.status(429).json({ error: 'muitas ações; espere um instante' }); return; }
+  } else if (rateLimited(`p:${ip}`, 20, 10_000)) {
+    res.status(200).json({ ok: false }); return; // ping floodado: ignora silenciosamente
+  }
 
   try {
     if (action === 'create') {
@@ -382,9 +441,27 @@ export default async function handler(
     }
 
     if (action === 'ping') {
-      // heartbeat: mantém a sala viva enquanto alguém tem a aba aberta
+      // heartbeat: mantém a sala viva e marca a presença individual do jogador
       if (!code) { res.status(200).json({ ok: false }); return; }
       await sql`UPDATE lobbies SET last_ping = now() WHERE code = ${code}`;
+      if (nick) await sql`UPDATE lobby_players SET last_seen = now() WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`;
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (action === 'leave') {
+      // saída limpa: remove o jogador e migra o host se quem saiu era o host
+      if (!code || !nick) { res.status(200).json({ ok: false }); return; }
+      const wasHost = await sql`SELECT 1 FROM lobbies WHERE code = ${code} AND lower(host) = ${nick.toLowerCase()}`;
+      await sql`DELETE FROM lobby_players WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`;
+      if (wasHost.length > 0) {
+        const next = await sql`
+          SELECT nick FROM lobby_players
+          WHERE code = ${code} AND COALESCE(spectator, false) = false
+          ORDER BY joined_at ASC LIMIT 1`;
+        if (next.length > 0) await sql`UPDATE lobbies SET host = ${next[0].nick}, updated_at = now() WHERE code = ${code}`;
+        else await sql`DELETE FROM lobbies WHERE code = ${code}`; // ninguém sobrou
+      }
       res.status(200).json({ ok: true });
       return;
     }
@@ -578,12 +655,18 @@ export default async function handler(
         res.status(409).json({ error: 'a rodada ainda não começou' });
         return;
       }
-      const pending = await sql`
-        SELECT COUNT(*) AS n FROM lobby_players
-        WHERE code = ${code} AND COALESCE(spectator, false) = false AND COALESCE(ready_stage, -1) < ${currentStage}`;
-      if (Number(pending[0].n) > 0) {
-        res.status(409).json({ error: 'ainda há jogadores assistindo suas partidas' });
-        return;
+      // só bloqueia por quem está PRESENTE (heartbeat recente); jogador que caiu
+      // não trava a sala. force = host avança na marra (estado é determinístico).
+      if (body.force !== true) {
+        const pending = await sql`
+          SELECT COUNT(*) AS n FROM lobby_players
+          WHERE code = ${code} AND COALESCE(spectator, false) = false
+            AND COALESCE(ready_stage, -1) < ${currentStage}
+            AND COALESCE(last_seen, joined_at) > now() - interval '40 seconds'`;
+        if (Number(pending[0].n) > 0) {
+          res.status(409).json({ error: 'ainda há jogadores assistindo suas partidas' });
+          return;
+        }
       }
       const advanced = await sql`
         UPDATE lobbies SET stage = ${currentStage + 1}, stage_started_at = 0, updated_at = now()

@@ -524,10 +524,18 @@ export function OnlineScreen({ onBack }: Props) {
   // (cleanup), os pings param e o servidor fecha a sala por inatividade.
   useEffect(() => {
     if (!code || localDemo) return;
-    const ping = () => { if (!document.hidden) lobbyApi({ action: 'ping', code }).catch(() => {}); };
+    const me = nick.trim();
+    const ping = () => { if (!document.hidden) lobbyApi({ action: 'ping', code, nick: me }).catch(() => {}); };
     ping();
     const id = window.setInterval(ping, 45000); // corte de custo
-    return () => window.clearInterval(id);
+    const leave = () => { if (me) lobbyApi({ action: 'leave', code, nick: me }).catch(() => {}); };
+    window.addEventListener('beforeunload', leave);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('beforeunload', leave);
+      leave(); // saída limpa ao sair da tela (migra host / libera a barreira coletiva)
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, localDemo]);
 
   const startLocalDemo = () => {
@@ -1415,6 +1423,18 @@ export function OnlineScreen({ onBack }: Props) {
         setActiveReplayKey(null);
         setBusy(false);
       };
+      // host destrava a rodada quando alguém caiu sem confirmar (estado é determinístico)
+      const forceAdvanceStage = async () => {
+        if (!isHost || !stageIsLive || busy || localDemo) return;
+        setBusy(true);
+        setError('');
+        const result = await lobbyApi({ action: 'advanceStage', nick: nick.trim(), code, force: true }).catch(() => null);
+        if (!result?.ok) setError(result?.error ?? 'Não foi possível avançar a rodada.');
+        await refresh();
+        setSelMatch(null);
+        setActiveReplayKey(null);
+        setBusy(false);
+      };
       const markByeReady = () => {
         if (!myStageMatch && allStageResultsVisible && !myStageConfirmed) void confirmCollectiveStage();
       };
@@ -1535,8 +1555,10 @@ export function OnlineScreen({ onBack }: Props) {
                   <button className="btn gold big" disabled={busy} onClick={advanceStage}>AVANÇAR PARA A PRÓXIMA RODADA</button>
                 ) : !myStageMatch && !myStageConfirmed ? (
                   <button className="btn gold big" disabled={!allStageResultsVisible || busy} onClick={markByeReady}>{allStageResultsVisible ? 'MARCAR COMO PRONTO' : 'RODADA EM ANDAMENTO'}</button>
+                ) : isHost && myStageConfirmed ? (
+                  <button className="btn ghost big" disabled={busy} onClick={forceAdvanceStage} title="Avança ignorando quem caiu/saiu da sala">FORÇAR AVANÇO (jogador ausente)</button>
                 ) : (
-                  <button className="btn gold big" disabled>{myStageConfirmed ? (isHost ? 'AGUARDANDO OS JOGADORES' : 'AGUARDANDO O HOST AVANÇAR') : 'SUA PARTIDA ESTÁ AO VIVO'}</button>
+                  <button className="btn gold big" disabled>{myStageConfirmed ? 'AGUARDANDO O HOST AVANÇAR' : 'SUA PARTIDA ESTÁ AO VIVO'}</button>
                 )}
               </div>}
             </div>
