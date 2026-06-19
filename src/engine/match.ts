@@ -652,9 +652,45 @@ export function simulateSeries(
   const results: MapResult[] = [];
   let winsA = 0;
   let winsB = 0;
-  for (const m of maps) {
+  let currentA = a;
+  let currentB = b;
+  const applyOnlineSubstitution = (team: TTeam): TTeam => {
+    const substituteId = team.onlinePlan?.substitutePlayerId;
+    const bench = team.bench;
+    const reserve = bench?.[0];
+    if (!team.onlinePlan?.substituteAfterMap || !substituteId || !reserve) return team;
+    const outgoing = team.players.find((player) => player.id === substituteId);
+    if (!outgoing) return team;
+    return {
+      ...team,
+      players: team.players.map((player) => player.id === substituteId ? reserve : player),
+      bench: [outgoing, ...bench.slice(1)],
+    };
+  };
+  for (let mapIndex = 0; mapIndex < maps.length; mapIndex++) {
+    const m = maps[mapIndex];
     if (winsA === need || winsB === need) break;
-    const r = simulateMap(rng, a, b, m.map, m.pickedBy);
+    if (mapIndex === 1) {
+      currentA = applyOnlineSubstitution(currentA);
+      currentB = applyOnlineSubstitution(currentB);
+    }
+    const hasOnlineTimeout = currentA.onlinePlan?.timeoutMap === mapIndex || currentB.onlinePlan?.timeoutMap === mapIndex;
+    let r: MapResult;
+    if (hasOnlineTimeout) {
+      const sim = createMapSim(rng, currentA, currentB, m.map, m.pickedBy);
+      while (!sim.done()) {
+        const round = sim.round();
+        const boostTeam = currentA.onlinePlan?.timeoutMap === mapIndex && round === 7
+          ? 0
+          : currentB.onlinePlan?.timeoutMap === mapIndex && round === 8
+            ? 1
+            : null;
+        sim.step(boostTeam);
+      }
+      r = sim.result();
+    } else {
+      r = simulateMap(rng, currentA, currentB, m.map, m.pickedBy);
+    }
     results.push(r);
     if (r.winner === 0) winsA++;
     else winsB++;

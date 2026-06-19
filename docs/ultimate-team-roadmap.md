@@ -19,6 +19,18 @@
   objetivos do evento e pontos da sessao.
 - Velocidade global das partidas controlada pelo host e sincronizada para toda
   a sala (0.5x, 1x, 2x ou 4x).
+- Espectadores podem entrar em salas em andamento; eliminados acompanham os
+  confrontos restantes sem bloquear a progressao coletiva.
+- Veto 1x1 alternado com timer: bans, picks e mapa decisivo sincronizados.
+- Escalacao com capitao e reserva, ritmo, timeout tatico e substituicao entre
+  mapas afetando a simulacao.
+- Card de resultado compartilhavel e perfil da sessao com pontos, divisoes e
+  historico recente.
+- Packs com revelacao escalonada, brilho e destaque visual por raridade.
+- Bracket progressivo no Major online sem revelar as proximas rodadas.
+- Veto por confronto com ban e pick sincronizados e efeito real na simulacao.
+- Rerolls por rodada configuraveis pelo host e reconstruidos deterministicamente.
+- CTA principal para jogar e fechamento automatico ao terminar a partida.
 - Revanche mantendo os elencos ou redraft completo.
 - Lobbies multiplayer continuam separados da demonstracao local.
 

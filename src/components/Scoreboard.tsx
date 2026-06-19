@@ -7,6 +7,7 @@ import { Flag, PlayerAvatar, TeamBadge } from './ui';
 import { ct } from '../state/career-i18n';
 
 type SideFilter = 'both' | 't' | 'ct';
+const teamRoster = (team: TTeam) => [...team.players, ...(team.bench ?? [])];
 
 interface Props {
   series: SeriesResult;
@@ -34,7 +35,7 @@ export function Scoreboard({ series, teams }: Props) {
   const potm = useMemo(() => {
     let best: { team: 0 | 1; pid: string; line: PlayerLine; rating: number } | null = null;
     for (const idx of [0, 1] as const) {
-      for (const p of teams[idx].players) {
+      for (const p of teamRoster(teams[idx])) {
         const line = mergeLines(series.maps.map((m) => m.stats[p.id]).filter(Boolean).map((s) => s.both));
         if (line.rounds === 0) continue;
         const rating = computeDisplay(line).rating;
@@ -46,7 +47,7 @@ export function Scoreboard({ series, teams }: Props) {
 
   const renderTeam = (idx: 0 | 1) => {
     const team = teams[idx];
-    const rows = team.players
+    const rows = teamRoster(team)
       .map((p) => { const l = lines.get(p.id); return { p, l, d: computeDisplay(l) }; })
       .sort((a, b) => b.d.rating - a.d.rating);
 
@@ -150,7 +151,7 @@ export function Scoreboard({ series, teams }: Props) {
 
 // destaque da partida: KPR/DPR/KAST/MK/Swing/ADR/Rating em barras vs a média (~1.0)
 function PlayerOfMatch({ team, pid, line }: { team: TTeam; pid: string; line: PlayerLine }) {
-  const p = team.players.find((x) => x.id === pid);
+  const p = teamRoster(team).find((x) => x.id === pid);
   if (!p) return null;
   const r = Math.max(1, line.rounds);
   const d = computeDisplay(line);

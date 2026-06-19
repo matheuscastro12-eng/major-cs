@@ -22,16 +22,16 @@ function isRecord(label: string): boolean {
   return /^\d-\d$/.test(label);
 }
 
-function MatchCell({ t, item, onOpen }: { t: Tournament; item: MatchRef; onOpen?: (p: Pairing) => void }) {
+function MatchCell({ t, item, onOpen, onPending }: { t: Tournament; item: MatchRef; onOpen?: (p: Pairing) => void; onPending?: (p: Pairing) => void }) {
   const a = getTeam(t, item.pairing.a);
   const b = getTeam(t, item.pairing.b);
   const r = item.pairing.result;
-  const clickable = !!r && !!onOpen;
+  const clickable = (!!r && !!onOpen) || (!r && item.current && !!onPending);
   return (
     <div
       className={`hb-match${item.current ? ' current' : ''}${clickable ? ' clickable' : ''}`}
-      onClick={clickable ? () => onOpen!(item.pairing) : undefined}
-      title={clickable ? ct('Ver estatísticas da série') : undefined}
+      onClick={clickable ? () => r ? onOpen?.(item.pairing) : onPending?.(item.pairing) : undefined}
+      title={clickable ? (r ? ct('Ver estatísticas da série') : ct('Jogar esta série')) : undefined}
     >
       <MatchTeamRow team={a} score={r?.mapScore[0]} loser={r ? r.winner === 1 : false} />
       <MatchTeamRow team={b} score={r?.mapScore[1]} loser={r ? r.winner === 0 : false} />
@@ -76,7 +76,7 @@ function ResultBox({ t, tone, records, label }: { t: Tournament; tone: 'adv' | '
   );
 }
 
-function SwissBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) => void }) {
+function SwissBracket({ t, onOpen, onPending }: { t: Tournament; onOpen?: (p: Pairing) => void; onPending?: (p: Pairing) => void }) {
   const byRecord = new Map<string, MatchRef[]>();
   for (const h of t.history) {
     if (isRecord(h.pairing.label)) {
@@ -108,7 +108,7 @@ function SwissBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) => v
                     <div className="hb-row ghost">?</div>
                   </div>
                 ) : (
-                  matches.map((m, i) => <MatchCell key={i} t={t} item={m} onOpen={onOpen} />)
+                  matches.map((m, i) => <MatchCell key={i} t={t} item={m} onOpen={onOpen} onPending={onPending} />)
                 )}
               </div>
             );
@@ -123,7 +123,7 @@ function SwissBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) => v
   );
 }
 
-function PlayoffBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) => void }) {
+function PlayoffBracket({ t, onOpen, onPending }: { t: Tournament; onOpen?: (p: Pairing) => void; onPending?: (p: Pairing) => void }) {
   const all: MatchRef[] = [
     ...t.history.filter((h) => !isRecord(h.pairing.label)).map((h) => ({ pairing: h.pairing, current: false })),
     ...t.pairings.map((p) => ({ pairing: p, current: true })),
@@ -145,7 +145,7 @@ function PlayoffBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) =>
             {col.labels.map((label) => {
               const item = find(label);
               return item ? (
-                <MatchCell key={label} t={t} item={item} onOpen={onOpen} />
+                <MatchCell key={label} t={t} item={item} onOpen={onOpen} onPending={onPending} />
               ) : (
                 <div key={label} className="hb-match empty">
                   <div className="hb-row ghost">?</div>
@@ -174,7 +174,7 @@ function PlayoffBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) =>
   );
 }
 
-export function TournamentBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: Pairing) => void }) {
+export function TournamentBracket({ t, onOpen, onPending }: { t: Tournament; onOpen?: (p: Pairing) => void; onPending?: (p: Pairing) => void }) {
   return (
     <div className="panel">
       <div className="panel-head">
@@ -184,7 +184,7 @@ export function TournamentBracket({ t, onOpen }: { t: Tournament; onOpen?: (p: P
           {t.phase === 'swiss' ? ct('Clique numa série encerrada para ver as estatísticas') : ct('Mata-mata MD3')}
         </span>
       </div>
-      <div className="panel-body">{t.phase === 'swiss' ? <SwissBracket t={t} onOpen={onOpen} /> : <PlayoffBracket t={t} onOpen={onOpen} />}</div>
+      <div className="panel-body">{t.phase === 'swiss' ? <SwissBracket t={t} onOpen={onOpen} onPending={onPending} /> : <PlayoffBracket t={t} onOpen={onOpen} onPending={onPending} />}</div>
     </div>
   );
 }

@@ -10,6 +10,8 @@ import {
   simulateOnlineDuel,
   simulateOnlineMajor,
   type LobbyState,
+  type OnlineLineup,
+  type OnlinePace,
   type OnlineStrategy,
   type OnlineTactic,
   type OpenRoom,
@@ -18,9 +20,10 @@ import {
 } from '../state/online';
 import { useLang } from '../state/i18n';
 import { track } from '../state/track';
-import type { Player, PlayerLine, SeriesResult, TeamSeason, Tournament, TournamentPool, TPlayer, TTeam } from '../types';
+import type { MapId, Pairing, Phase, Player, PlayerLine, SeriesResult, TeamSeason, Tournament, TournamentPool, TPlayer, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
 import { Scoreboard } from './Scoreboard';
+import { TournamentBracket } from './Bracket';
 import { Flag, Loader, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
 
@@ -36,8 +39,45 @@ interface Props {
 
 const NICK_KEY = 'rtm-nick';
 const POLL_MS = 5000; // corte de custo: mais lento = menos invocações de função
-const DEFAULT_STRATEGY: OnlineStrategy = { tactic: 'balanced', favoriteMap: 'mirage', banMap: 'nuke' };
+const DEFAULT_STRATEGY: OnlineStrategy = {
+  tactic: 'balanced', favoriteMap: 'mirage', banMap: 'nuke', pace: 'default', timeoutMap: 0, substituteAfterMap: false,
+};
+const DEFAULT_LINEUP: OnlineLineup = { captainId: '', reserveId: '' };
 const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 4];
+const VETO_ACTIONS = ['BAN', 'BAN', 'PICK', 'PICK', 'BAN', 'BAN'];
+
+interface SessionProfile {
+  points: number;
+  wins: number;
+  losses: number;
+  titles: number;
+  history: { label: string; result: string; points: number }[];
+}
+
+const EMPTY_SESSION_PROFILE: SessionProfile = { points: 0, wins: 0, losses: 0, titles: 0, history: [] };
+const sessionDivision = (points: number) => points >= 2400 ? 'ELITE' : points >= 1400 ? 'OURO' : points >= 700 ? 'PRATA' : 'BRONZE';
+
+function loadSessionProfile(): SessionProfile {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem('rtm-online-session-profile') ?? 'null');
+    return parsed && typeof parsed.points === 'number' ? parsed : EMPTY_SESSION_PROFILE;
+  } catch { return EMPTY_SESSION_PROFILE; }
+}
+
+function localVetoStep(veto: NonNullable<LobbyState['lobby']['veto']>, map: MapId, participants: string[]) {
+  const action = VETO_ACTIONS[veto.step];
+  const by = veto.turn ?? participants[veto.step % 2];
+  const remaining = veto.remaining.filter((candidate) => candidate !== map);
+  const next = {
+    ...veto,
+    step: veto.step + 1,
+    remaining,
+    bans: action === 'BAN' ? [...veto.bans, { map, by }] : veto.bans,
+    picks: action === 'PICK' ? [...veto.picks, { map, by }] : veto.picks,
+  };
+  if (next.step >= VETO_ACTIONS.length) return { ...next, turn: undefined, deadline: undefined, maps: [...next.picks.map((pick) => pick.map), ...remaining] };
+  return { ...next, turn: participants[next.step % 2], deadline: Date.now() + 20_000 };
+}
 
 const RULESET_OPTIONS: { id: UltimateRuleset; label: string; desc: string }[] = [
   { id: 'open', label: 'Livre', desc: 'Atuais e lendas, sem restrição.' },
@@ -81,14 +121,17 @@ export function OnlineScreen({ onBack }: Props) {
     }
   });
   const [codeInput, setCodeInput] = useState('');
+  const [joinAsSpectator, setJoinAsSpectator] = useState(false);
   const [mode, setMode] = useState<'duel' | 'party'>('duel');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [ruleset, setRuleset] = useState<UltimateRuleset>('open');
   const [isPublic, setIsPublic] = useState(true); // sala aberta a qualquer um por padrão
+  const [draftRollouts, setDraftRollouts] = useState(2);
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
   const [code, setCode] = useState('');
   const [state, setState] = useState<LobbyState | null>(null);
   const [myPicks, setMyPicks] = useState<string[]>([]);
+  const [myRollouts, setMyRollouts] = useState<number[]>([0, 0, 0, 0, 0]);
   const [coachPick, setCoachPick] = useState('');
   const [myDone, setMyDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -100,7 +143,15 @@ export function OnlineScreen({ onBack }: Props) {
   const [watchedMatches, setWatchedMatches] = useState<string[]>([]);
   const [activeReplayKey, setActiveReplayKey] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<OnlineStrategy>(DEFAULT_STRATEGY);
+  const [lineup, setLineup] = useState<OnlineLineup>(DEFAULT_LINEUP);
+  const [lineupConfirmed, setLineupConfirmed] = useState(false);
+  const [vetoNow, setVetoNow] = useState(0);
+  const [sessionProfile, setSessionProfile] = useState<SessionProfile>(loadSessionProfile);
+  const [shareStatus, setShareStatus] = useState('');
   const [revealedRound, setRevealedRound] = useState(-1);
+  const [majorVetoOpen, setMajorVetoOpen] = useState(false);
+  const [majorVetoBan, setMajorVetoBan] = useState<MapId>('nuke');
+  const [majorVetoPick, setMajorVetoPick] = useState<MapId>('mirage');
   // quantas fases do Major já foram reveladas (experiência rodada a rodada,
   // sem spoiler do campeão); persiste por sala para sobreviver a F5
   const [revealed, setRevealed] = useState(0);
@@ -111,6 +162,7 @@ export function OnlineScreen({ onBack }: Props) {
   const stageRef = useRef<number | null>(null);
   const playbackSpeedRef = useRef<PlaybackSpeed | null>(null);
   const progressRef = useRef<string | null>(null);
+  const recordedSeasonsRef = useRef(new Set<string>());
 
   // reveal por temporada: a chave inclui o seed, então cada Major tem o seu
   const seasonSeed = state?.lobby.seed ?? 0;
@@ -155,6 +207,7 @@ export function OnlineScreen({ onBack }: Props) {
       setCode('');
       setState(null);
       setMyPicks([]);
+      setMyRollouts([0, 0, 0, 0, 0]);
       setMyDone(false);
       setError(OL.roomGone);
       return;
@@ -167,13 +220,15 @@ export function OnlineScreen({ onBack }: Props) {
     const prevPlaybackSpeed = playbackSpeedRef.current;
     const prevProgress = progressRef.current;
     const playbackSpeed = PLAYBACK_SPEEDS.includes(s.lobby.playback_speed ?? 1) ? (s.lobby.playback_speed ?? 1) : 1;
-    const progress = `${s.lobby.stage ?? 0}|speed:${playbackSpeed}|${s.players.map((p) => `${p.nick}:${p.ready_stage ?? -1}`).join(',')}`;
+    const progress = `${s.lobby.stage ?? 0}|speed:${playbackSpeed}|vetos:${JSON.stringify(s.lobby.major_vetos ?? {})}|${s.players.map((p) => `${p.nick}:${p.ready_stage ?? -1}`).join(',')}`;
     // nova temporada: o host gerou um novo seed -> zera o draft local e recomeça
     if (prevSeed !== null && prevSeed !== s.lobby.seed) {
       setMyPicks([]);
       setMyDone(false);
       setCoachPick('');
       setStrategy(DEFAULT_STRATEGY);
+      setLineup(DEFAULT_LINEUP);
+      setLineupConfirmed(false);
       setRevealedRound(-1);
       setRevealed(0);
       setSelMatch(null);
@@ -227,8 +282,14 @@ export function OnlineScreen({ onBack }: Props) {
     // confirmados. Funciona como restauração e como auto-correção de divergência.
     const serverPicks = Array.isArray(me.picks) ? me.picks : [];
     setMyPicks((local) => (serverPicks.length > local.length ? serverPicks : local));
+    const serverRollouts = Array.isArray(me.rollouts) ? me.rollouts : [];
+    setMyRollouts((local) => serverRollouts.some((value, index) => value > (local[index] ?? 0)) ? [...serverRollouts, 0, 0, 0, 0, 0].slice(0, 5) : local);
     if (me.coach_pick) setCoachPick((c) => c || me.coach_pick);
     if (me.strategy) setStrategy(me.strategy);
+    if (me.lineup?.captainId && me.lineup?.reserveId) {
+      setLineup(me.lineup);
+      setLineupConfirmed(true);
+    }
   }, [code, nick, myDone, localDemo]);
 
   const lobbyDone = state?.lobby.status === 'done';
@@ -238,10 +299,16 @@ export function OnlineScreen({ onBack }: Props) {
     // depois de 'done' o resultado é imutável (refresh não re-seta o state, então
     // não re-simula), mas seguimos com um poll lento pra detectar quando o host
     // inicia a próxima temporada.
-    const syncMs = lobbyDone ? 1500 : POLL_MS;
+    const syncMs = state?.lobby.status === 'veto' ? 1000 : lobbyDone ? 1500 : POLL_MS;
     pollRef.current = window.setInterval(refresh, syncMs);
     return () => window.clearInterval(pollRef.current);
-  }, [code, refresh, lobbyDone, localDemo, state?.lobby.mode]);
+  }, [code, refresh, lobbyDone, localDemo, state?.lobby.mode, state?.lobby.status]);
+
+  useEffect(() => {
+    if (state?.lobby.status !== 'veto') return;
+    const id = window.setInterval(() => setVetoNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [state?.lobby.status]);
 
   // heartbeat: mantém a sala viva enquanto a aba está aberta. Ao fechar a aba
   // (cleanup), os pings param e o servidor fecha a sala por inatividade.
@@ -278,8 +345,11 @@ export function OnlineScreen({ onBack }: Props) {
     setLocalDemo(true);
     setCode('LOCAL');
     setMyPicks([]);
+    setMyRollouts([0, 0, 0, 0, 0]);
     setCoachPick('');
     setStrategy(DEFAULT_STRATEGY);
+    setLineup(DEFAULT_LINEUP);
+    setLineupConfirmed(false);
     setRevealedRound(-1);
     setMyDone(false);
     setDuelReplayOpen(true);
@@ -288,9 +358,9 @@ export function OnlineScreen({ onBack }: Props) {
     setWatchedMatches([]);
     setActiveReplayKey(null);
     setState({
-      lobby: { code: 'LOCAL', mode, host: playerNick, status: 'drafting', seed, run_seed: seed, pool, season: 1, stage: 0, ruleset, playback_speed: 1 },
+      lobby: { code: 'LOCAL', mode, host: playerNick, status: 'drafting', seed, run_seed: seed, pool, season: 1, stage: 0, ruleset, playback_speed: 1, draft_rollouts: draftRollouts, major_vetos: {} },
       players: [
-        { nick: playerNick, picks: [], coach_pick: '', done: false, ready_stage: -1, strategy: DEFAULT_STRATEGY },
+        { nick: playerNick, picks: [], coach_pick: '', done: false, ready_stage: -1, strategy: DEFAULT_STRATEGY, lineup: DEFAULT_LINEUP, rollouts: [0, 0, 0, 0, 0], spectator: false },
         ...rivals,
       ],
     });
@@ -301,7 +371,7 @@ export function OnlineScreen({ onBack }: Props) {
     setBusy(true);
     setError('');
     try {
-      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, isPublic, ruleset });
+      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, isPublic, ruleset, draftRollouts });
       if (r.ok && r.code) {
         setCode(r.code);
         track('online_create', { mode, pool, public: isPublic });
@@ -312,7 +382,7 @@ export function OnlineScreen({ onBack }: Props) {
     setBusy(false);
   };
 
-  const join = () => doJoin(codeInput);
+  const join = () => doJoin(codeInput, joinAsSpectator);
 
   // lista de salas abertas (públicas) enquanto o jogador ainda não entrou numa.
   // Aba em segundo plano não consome API à toa (document.hidden).
@@ -327,13 +397,13 @@ export function OnlineScreen({ onBack }: Props) {
     return () => window.clearInterval(id);
   }, [code, loadRooms]);
 
-  const doJoin = async (raw: string) => {
+  const doJoin = async (raw: string, spectator = false) => {
     const target = raw.trim().toUpperCase();
     if (!nick.trim() || !target || busy) return;
     setBusy(true);
     setError('');
     try {
-      const r = await lobbyApi({ action: 'join', nick: nick.trim(), code: target });
+      const r = await lobbyApi({ action: 'join', nick: nick.trim(), code: target, spectator });
       if (r.ok) {
         setCode(target);
         track('online_join', {});
@@ -352,18 +422,24 @@ export function OnlineScreen({ onBack }: Props) {
     refresh();
   };
 
-  const sendPicks = async (picks: string[], coach: string, done: boolean, plan: OnlineStrategy = strategy) => {
+  const sendPicks = async (picks: string[], coach: string, done: boolean, plan: OnlineStrategy = strategy, selectedLineup: OnlineLineup = lineup, rollouts: number[] = myRollouts) => {
     if (localDemo) {
       setState((prev) => prev ? {
         ...prev,
-        lobby: { ...prev.lobby, status: done ? 'done' : 'drafting' },
+        lobby: done && prev.lobby.mode === 'duel'
+          ? {
+              ...prev.lobby,
+              status: 'veto',
+              veto: { step: 0, remaining: [...MAP_POOL], bans: [], picks: [], turn: prev.lobby.host, deadline: Date.now() + 20_000 },
+            }
+          : { ...prev.lobby, status: done ? 'done' : 'drafting' },
         players: prev.players.map((p) => p.nick.toLowerCase() === nick.toLowerCase()
-          ? { ...p, picks, coach_pick: coach, strategy: plan, done }
+          ? { ...p, picks, coach_pick: coach, strategy: plan, lineup: selectedLineup, rollouts, done }
           : p),
       } : prev);
       return;
     }
-    await lobbyApi({ action: 'pick', nick: nick.trim(), code, picks, coachPick: coach, strategy: plan, done }).catch(() => {});
+    await lobbyApi({ action: 'pick', nick: nick.trim(), code, picks, coachPick: coach, strategy: plan, lineup: selectedLineup, rollouts, done }).catch(() => {});
   };
 
   const toggleLock = async () => {
@@ -395,7 +471,9 @@ export function OnlineScreen({ onBack }: Props) {
         setRevealed(0);
         setState((prev) => prev ? {
           ...prev,
-          lobby: { ...prev.lobby, run_seed: nextRunSeed, season: (prev.lobby.season ?? 1) + 1, stage: 0, status: 'done' },
+          lobby: prev.lobby.mode === 'duel'
+            ? { ...prev.lobby, run_seed: nextRunSeed, season: (prev.lobby.season ?? 1) + 1, stage: 0, status: 'veto', veto: { step: 0, remaining: [...MAP_POOL], bans: [], picks: [], turn: prev.lobby.host, deadline: Date.now() + 20_000 } }
+            : { ...prev.lobby, run_seed: nextRunSeed, season: (prev.lobby.season ?? 1) + 1, stage: 0, status: 'done' },
           players: prev.players.map((p, i) => ({ ...p, ready_stage: i === 0 ? -1 : 999 })),
         } : prev);
         return;
@@ -411,8 +489,8 @@ export function OnlineScreen({ onBack }: Props) {
 
   // o MEU sorteio (cada jogador recebe elencos diferentes, por seed + nick)
   const setup = useMemo(
-    () => (state && state.lobby.status !== 'waiting' ? buildDraftForPlayer(state.lobby.seed, state.lobby.pool, nick, state.lobby.ruleset ?? 'open') : null),
-    [state, nick],
+    () => (state && state.lobby.status !== 'waiting' ? buildDraftForPlayer(state.lobby.seed, state.lobby.pool, nick, state.lobby.ruleset ?? 'open', myRollouts) : null),
+    [state, nick, myRollouts],
   );
 
   const major = useMemo(
@@ -423,17 +501,69 @@ export function OnlineScreen({ onBack }: Props) {
     () => (state && state.lobby.status === 'done' && state.lobby.mode === 'duel' ? simulateOnlineDuel(state) : null),
     [state],
   );
+  const meLobbyPlayer = state?.players.find((player) => player.nick.toLowerCase() === nick.toLowerCase());
+  const isSpectator = meLobbyPlayer?.spectator === true;
 
   useEffect(() => {
     if (major || duel) track('online_done', { players: state?.players.length ?? 0, mode: state?.lobby.mode });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!major, !!duel]);
 
+  useEffect(() => {
+    if (!state || state.lobby.status !== 'done' || isSpectator) return;
+    const key = `${state.lobby.code}-${state.lobby.season ?? 1}-${state.lobby.run_seed ?? state.lobby.seed}`;
+    if (recordedSeasonsRef.current.has(key)) return;
+    let won = false;
+    let title = false;
+    let points = 0;
+    let result = '';
+    if (duel) {
+      const myIndex = duel.nicks.findIndex((playerNick) => playerNick.toLowerCase() === nick.toLowerCase());
+      if (myIndex < 0) return;
+      won = duel.series.winner === myIndex;
+      points = won ? 180 : 70;
+      result = won ? 'Vitória no duelo' : 'Derrota no duelo';
+    } else if (major) {
+      const human = major.humans.find((entry) => entry.nick.toLowerCase() === nick.toLowerCase());
+      if (!human) return;
+      won = human.wins > human.losses;
+      title = human.placement === 'champion';
+      points = SESSION_POINTS[human.placement] ?? 80;
+      result = title ? 'Campeão do Major' : `${human.wins}V-${human.losses}D no Major`;
+    } else return;
+    const timer = window.setTimeout(() => {
+      recordedSeasonsRef.current.add(key);
+      setSessionProfile((current) => {
+        const next = {
+          points: current.points + points,
+          wins: current.wins + (won ? 1 : 0),
+          losses: current.losses + (won ? 0 : 1),
+          titles: current.titles + (title ? 1 : 0),
+          history: [{ label: `Temporada ${state.lobby.season ?? 1}`, result, points }, ...current.history].slice(0, 8),
+        };
+        try { sessionStorage.setItem('rtm-online-session-profile', JSON.stringify(next)); } catch { /* sessão sem storage */ }
+        return next;
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [duel, isSpectator, major, nick, state]);
+
   const pickPlayer = (playerId: string) => {
     if (myDone || !setup) return;
     const picks = [...myPicks, playerId];
     setMyPicks(picks);
     sendPicks(picks, coachPick, false);
+  };
+
+  const rerollCurrentPack = () => {
+    if (myDone || myPicks.length >= 5) return;
+    const round = myPicks.length;
+    const limit = state?.lobby.draft_rollouts ?? draftRollouts;
+    if ((myRollouts[round] ?? 0) >= limit) return;
+    const next = myRollouts.map((value, index) => index === round ? value + 1 : value);
+    setMyRollouts(next);
+    setRevealedRound(-1);
+    sendPicks(myPicks, coachPick, false, strategy, lineup, next);
   };
 
   const pickCoach = (teamId: string) => {
@@ -443,9 +573,17 @@ export function OnlineScreen({ onBack }: Props) {
   };
 
   const confirmStrategy = () => {
-    if (myDone || !coachPick || strategy.favoriteMap === strategy.banMap) return;
+    if (myDone || !coachPick || !lineup.captainId || !lineup.reserveId || strategy.favoriteMap === strategy.banMap) return;
     setMyDone(true);
-    sendPicks(myPicks, coachPick, true, strategy);
+    sendPicks(myPicks, coachPick, true, strategy, lineup);
+  };
+
+  const shareResult = async (text: string) => {
+    try {
+      if (navigator.share) await navigator.share({ title: 'Road to Major · Ultimate Team', text });
+      else await navigator.clipboard.writeText(text);
+      setShareStatus('Resultado pronto para compartilhar');
+    } catch { setShareStatus('Não foi possível compartilhar agora'); }
   };
 
   // ---------- telas ----------
@@ -482,6 +620,14 @@ export function OnlineScreen({ onBack }: Props) {
               <span>{OL.demoNote}</span>
             </div>
 
+            <div className="ut-session-profile">
+              <span>DIVISÃO DA SESSÃO</span>
+              <b>{sessionDivision(sessionProfile.points)}</b>
+              <strong>{sessionProfile.points} pts</strong>
+              <small>{sessionProfile.wins} vitórias · {sessionProfile.losses} derrotas · {sessionProfile.titles} títulos</small>
+              {sessionProfile.history.length > 0 && <div className="ut-season-history">{sessionProfile.history.slice(0, 3).map((entry) => <i key={`${entry.label}-${entry.result}`}>{entry.label}: {entry.result} (+{entry.points})</i>)}</div>}
+            </div>
+
             <div className="ut-event-picker">
               <div className="muted small section-label">REGRA DO EVENTO</div>
               <div className="ut-event-grid">
@@ -513,6 +659,11 @@ export function OnlineScreen({ onBack }: Props) {
                     {tr('online.poolBr')}
                   </button>
                 </div>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>Rerolls por rodada</label>
+                  <input type="number" min={0} max={5} value={draftRollouts} onChange={(event) => setDraftRollouts(Math.max(0, Math.min(5, Number(event.target.value) || 0)))} />
+                  <span className="muted small">O host define quantas novas coleções cada jogador pode abrir.</span>
+                </div>
                 <label className="public-toggle">
                   <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
                   {OL.publicRoom}
@@ -537,6 +688,10 @@ export function OnlineScreen({ onBack }: Props) {
                 <button className="btn" style={{ width: '100%' }} onClick={join} disabled={!nick.trim() || !codeInput.trim() || busy}>
                   {busy ? tr('online.joining') : tr('online.joinRoom')}
                 </button>
+                <label className="public-toggle" style={{ marginTop: 10 }}>
+                  <input type="checkbox" checked={joinAsSpectator} onChange={(e) => setJoinAsSpectator(e.target.checked)} />
+                  Entrar como espectador
+                </label>
               </div>
             </div>
 
@@ -557,7 +712,8 @@ export function OnlineScreen({ onBack }: Props) {
                         {r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'} · {r.players}/{r.max}
                       </span>
                       <span className="spacer" />
-                      <button className="btn gold small" disabled={busy} onClick={() => doJoin(r.code)}>{OL.enter}</button>
+                      <button className="btn ghost small" disabled={busy} onClick={() => doJoin(r.code, true)}>Assistir</button>
+                      <button className="btn gold small" disabled={busy} onClick={() => doJoin(r.code, false)}>{OL.enter}</button>
                     </div>
                   ))}
                 </div>
@@ -579,6 +735,8 @@ export function OnlineScreen({ onBack }: Props) {
   }
 
   const isHost = state.lobby.host.toLowerCase() === nick.toLowerCase();
+  const activePlayers = state.players.filter((player) => !player.spectator);
+  const spectators = state.players.filter((player) => player.spectator);
   const playbackSpeed = state.lobby.playback_speed ?? 1;
   const changePlaybackSpeed = async (speed: PlaybackSpeed) => {
     if (!isHost || speed === playbackSpeed) return;
@@ -586,6 +744,51 @@ export function OnlineScreen({ onBack }: Props) {
     if (localDemo) return;
     const result = await lobbyApi({ action: 'setPlaybackSpeed', nick: nick.trim(), code, speed }).catch(() => null);
     if (!result?.ok) await refresh();
+  };
+  const submitVetoMap = async (map: MapId) => {
+    const veto = state.lobby.veto;
+    if (!veto || veto.turn?.toLowerCase() !== nick.toLowerCase() || !veto.remaining.includes(map) || busy) return;
+    setBusy(true);
+    if (localDemo) {
+      setState((prev) => {
+        if (!prev?.lobby.veto) return prev;
+        const participants = prev.players.filter((player) => !player.spectator).map((player) => player.nick);
+        let nextVeto = localVetoStep(prev.lobby.veto, map, participants);
+        if (!nextVeto.maps && nextVeto.turn?.toLowerCase() !== nick.toLowerCase()) {
+          nextVeto = localVetoStep(nextVeto, nextVeto.remaining[0], participants);
+        }
+        return { ...prev, lobby: { ...prev.lobby, veto: nextVeto, status: nextVeto.maps ? 'done' : 'veto' } };
+      });
+      setBusy(false);
+      return;
+    }
+    await lobbyApi({ action: 'vetoAction', nick: nick.trim(), code, map }).catch(() => null);
+    await refresh();
+    setBusy(false);
+  };
+  const submitMajorMatchVeto = async () => {
+    if (busy || majorVetoBan === majorVetoPick) return;
+    setBusy(true);
+    const stage = state.lobby.stage ?? 0;
+    const key = `${stage}:${nick.toLowerCase()}`;
+    if (localDemo) {
+      setState((prev) => prev ? {
+        ...prev,
+        lobby: {
+          ...prev.lobby,
+          major_vetos: { ...prev.lobby.major_vetos, [key]: { banMap: majorVetoBan, pickMap: majorVetoPick } },
+        },
+      } : prev);
+      setMajorVetoOpen(false);
+      setBusy(false);
+      return;
+    }
+    const result = await lobbyApi({ action: 'majorVeto', nick: nick.trim(), code, banMap: majorVetoBan, pickMap: majorVetoPick }).catch(() => null);
+    if (result?.ok) {
+      setMajorVetoOpen(false);
+      await refresh();
+    }
+    setBusy(false);
   };
 
   // sala de espera
@@ -606,10 +809,10 @@ export function OnlineScreen({ onBack }: Props) {
               {code}
             </div>
             <div className="muted small" style={{ marginBottom: 16 }}>
-              {state.lobby.pool === 'br' ? tr('online.poolBrLong') : tr('online.poolWorldLong')} · {tr('online.clickCodeToCopy')}
+              {state.lobby.pool === 'br' ? tr('online.poolBrLong') : tr('online.poolWorldLong')} · {state.lobby.draft_rollouts ?? 2} rerolls por rodada · {tr('online.clickCodeToCopy')}
             </div>
             <div className="lobby-players">
-              {state.players.map((p) => (
+              {activePlayers.map((p) => (
                 <span key={p.nick} className="lobby-player">
                   {p.nick === state.lobby.host ? '★ ' : '• '}
                   {p.nick}
@@ -619,6 +822,9 @@ export function OnlineScreen({ onBack }: Props) {
                 </span>
               ))}
             </div>
+            {spectators.length > 0 && (
+              <div className="ut-spectators"><b>ESPECTADORES</b>{spectators.map((viewer) => <span key={viewer.nick}>◉ {viewer.nick}</span>)}</div>
+            )}
             {isHost && (
               <div style={{ marginTop: 12 }}>
                 <button className={`btn ${state.lobby.locked ? 'gold' : 'ghost'} small`} onClick={toggleLock} disabled={busy}>
@@ -628,14 +834,49 @@ export function OnlineScreen({ onBack }: Props) {
               </div>
             )}
             {isHost ? (
-              <button className="btn gold big" style={{ marginTop: 18 }} onClick={start} disabled={state.players.length < 2 || busy}>
-                {state.players.length < 2 ? tr('online.waitingPlayers') : tr('online.startDraft')}
+              <button className="btn gold big" style={{ marginTop: 18 }} onClick={start} disabled={activePlayers.length < 2 || busy}>
+                {activePlayers.length < 2 ? tr('online.waitingPlayers') : tr('online.startDraft')}
               </button>
             ) : (
               <div className="muted" style={{ marginTop: 18 }}>
                 {tr('online.waitingHost')} {state.lobby.host} {tr('online.waitingHostTail')}
               </div>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.lobby.status === 'veto' && state.lobby.veto) {
+    const veto = state.lobby.veto;
+    const myTurn = veto.turn?.toLowerCase() === nick.toLowerCase() && !isSpectator;
+    const action = VETO_ACTIONS[veto.step] ?? 'DECIDER';
+    const seconds = vetoNow ? Math.max(0, Math.ceil(((veto.deadline ?? vetoNow) - vetoNow) / 1000)) : 20;
+    return (
+      <div className="fade-in ut-live-veto">
+        <div className="panel">
+          <div className="panel-head">VETO MULTIPLAYER · {code}<span className="spacer" /><button className="btn" onClick={onBack}>Sair</button></div>
+          <div className="panel-body">
+            <div className="ut-veto-turn">
+              <span>{isSpectator ? 'ACOMPANHANDO O VETO' : myTurn ? 'SUA VEZ' : `VEZ DE ${veto.turn}`}</span>
+              <b>{action}</b>
+              <strong>{seconds}s</strong>
+            </div>
+            <div className="ut-veto-live-grid">
+              {MAP_POOL.map((map) => {
+                const banned = veto.bans.find((entry) => entry.map === map);
+                const picked = veto.picks.find((entry) => entry.map === map);
+                const available = veto.remaining.includes(map);
+                return (
+                  <button key={map} disabled={!myTurn || !available || busy} className={banned ? 'banned' : picked ? 'picked' : available ? '' : 'removed'} onClick={() => submitVetoMap(map)}>
+                    <b>{MAP_LABELS[map]}</b>
+                    <span>{banned ? `BAN · ${banned.by}` : picked ? `PICK · ${picked.by}` : available ? (myTurn ? action : 'DISPONÍVEL') : 'FORA'}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="muted small center">Ban e pick alternados. Se o tempo acabar, o primeiro mapa disponível é escolhido automaticamente.</p>
           </div>
         </div>
       </div>
@@ -654,7 +895,7 @@ export function OnlineScreen({ onBack }: Props) {
           </div>
           <div className="panel-body">
             <div className="ut-versus">
-              {duel.teams.map((team, idx) => (
+            {duel.teams.map((team, idx) => (
                 <div key={team.id} className="ut-versus-team">
                   <TeamBadge tag={team.tag} colors={team.colors} size={54} logoUrl={team.logoUrl} />
                   <div>
@@ -663,6 +904,7 @@ export function OnlineScreen({ onBack }: Props) {
                     <div className="muted small">{team.players.map((p) => p.nick).join(' · ')}</div>
                   </div>
                   <strong>{Math.round(team.strength)}</strong>
+                  <small className="ut-lineup-plan">C {team.onlinePlan?.captainNick} · R {team.onlinePlan?.reserveNick ?? '—'}</small>
                 </div>
               ))}
             </div>
@@ -706,6 +948,12 @@ export function OnlineScreen({ onBack }: Props) {
             )}
             {duelFinished && (
               <div className="center" style={{ marginTop: 16 }}>
+                <div className="ut-share-card">
+                  <b>{duel.nicks[duel.series.winner]} venceu</b>
+                  <span>{duel.series.mapScore[0]} : {duel.series.mapScore[1]} · MD3</span>
+                  <button className="btn gold small" onClick={() => shareResult(`Road to Major Ultimate Team: ${duel.nicks[duel.series.winner]} venceu ${duel.nicks[duel.series.winner === 0 ? 1 : 0]} por ${duel.series.mapScore[0]}:${duel.series.mapScore[1]}. Monte seu time em roadtomajor.com.br/online`)}>COMPARTILHAR RESULTADO</button>
+                  {shareStatus && <small>{shareStatus}</small>}
+                </div>
                 {isHost ? (
                   <div className="ut-rematch-actions">
                     <button className="btn gold" onClick={() => nextSeason(true)} disabled={busy}>REVANCHE · MANTER ELENCO</button>
@@ -736,10 +984,7 @@ export function OnlineScreen({ onBack }: Props) {
       { label: 'ADR KING', row: [...leaders].sort((a, b) => b.stats.adr - a.stats.adr)[0] },
       { label: 'CLUTCH KING', row: [...leaders].sort((a, b) => b.clutches - a.clutches)[0] },
     ];
-    // partidas dos playoffs + partidas que envolveram algum jogador humano
-    const playoffs = major.tournament.history.filter(
-      (h) => !h.phase.startsWith('Suíça') && h.pairing.result,
-    );
+    // partidas que envolveram algum jogador humano
     const humanGames = major.tournament.history.filter(
       (h) => h.pairing.result && (major.humanByTeamId[h.pairing.a] || major.humanByTeamId[h.pairing.b]),
     );
@@ -792,7 +1037,7 @@ export function OnlineScreen({ onBack }: Props) {
             <span className="tname">{teamLabel(p.b)}</span>
           </span>
           <span className={`major-match-status${watchable ? ' mine' : ''}`}>
-            {watchable ? (watched ? '✓ ASSISTIDA' : '▶ SUA PARTIDA') : phaseDisplay(h.phase)}
+            {watchable ? (watched ? '✓ ASSISTIDA' : isSpectator ? '▶ ASSISTIR' : '▶ SUA PARTIDA') : phaseDisplay(h.phase)}
           </span>
         </div>
       );
@@ -848,6 +1093,76 @@ export function OnlineScreen({ onBack }: Props) {
       const personalMatchWatched = !requiredMatchKey || watchedMatches.includes(requiredMatchKey);
       const myLobbyPlayer = state.players.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
       const myStageConfirmed = (myLobbyPlayer?.ready_stage ?? -1) >= collectiveStage;
+      const majorVetoKey = `${collectiveStage}:${nick.toLowerCase()}`;
+      const myMajorVeto = state.lobby.major_vetos?.[majorVetoKey];
+      const visibleHistory = stages.slice(0, collectiveStage).flatMap((visibleStage) => visibleStage.items);
+      const bracketPhase: Phase = stage.phase.startsWith('Suíça')
+        ? 'swiss'
+        : stage.phase.startsWith('Quartas')
+          ? 'quarters'
+          : stage.phase === 'Semifinal'
+            ? 'semis'
+            : 'final';
+      const bracketTeams: TTeam[] = major.tournament.teams.map((team) => ({
+        ...team,
+        wins: 0,
+        losses: 0,
+        roundDiff: 0,
+        status: 'alive',
+        isUser: team.id === myTeamId,
+      }));
+      for (const item of visibleHistory) {
+        const result = item.pairing.result;
+        if (!result) continue;
+        const a = bracketTeams.find((team) => team.id === item.pairing.a)!;
+        const b = bracketTeams.find((team) => team.id === item.pairing.b)!;
+        const winner = result.winner === 0 ? a : b;
+        const loser = result.winner === 0 ? b : a;
+        winner.wins++;
+        loser.losses++;
+        for (const map of result.maps) {
+          a.roundDiff += map.score[0] - map.score[1];
+          b.roundDiff += map.score[1] - map.score[0];
+        }
+        if (bracketPhase === 'swiss') {
+          if (winner.wins >= 3) winner.status = 'advanced';
+          if (loser.losses >= 3) loser.status = 'eliminated';
+        }
+      }
+      const progressiveTournament: Tournament = {
+        ...major.tournament,
+        teams: bracketTeams,
+        phase: bracketPhase,
+        swissRound: Number(/Rodada (\d+)/.exec(stage.phase)?.[1] ?? major.tournament.swissRound),
+        history: visibleHistory,
+        pairings: stage.items.map((item) => ({ ...item.pairing, result: undefined })),
+        championId: undefined,
+      };
+      const openStageMatch = (item: HistoryItem) => {
+        const key = matchKey(item);
+        const mine = key === requiredMatchKey;
+        if (!isSpectator && myStageMatch && !mine) return;
+        if (mine && !myMajorVeto && !isSpectator) {
+          setMajorVetoBan(strategy.banMap);
+          setMajorVetoPick(strategy.favoriteMap);
+          setMajorVetoOpen(true);
+          return;
+        }
+        setActiveReplayKey(key);
+        setSelMatch({ a: item.pairing.a, b: item.pairing.b, series: item.pairing.result! });
+      };
+      const findStageItem = (pairing: Pairing) => stage.items.find((item) => item.pairing.a === pairing.a && item.pairing.b === pairing.b);
+      const openPastSeries = (pairing: Pairing) => {
+        const item = visibleHistory.find((history) => history.pairing.a === pairing.a && history.pairing.b === pairing.b && history.pairing.label === pairing.label);
+        if (item?.pairing.result) setSelMatch({ a: item.pairing.a, b: item.pairing.b, series: item.pairing.result });
+      };
+      const playNextMatch = () => {
+        if (!myStageMatch || personalMatchWatched) {
+          void confirmCollectiveStage();
+          return;
+        }
+        openStageMatch(myStageMatch);
+      };
       return (
         <div className="fade-in ut-major-page">
           <div className="panel">
@@ -888,55 +1203,63 @@ export function OnlineScreen({ onBack }: Props) {
                 ))}
               </div>
 
-              {/* fases já reveladas (placares clicáveis) */}
-              {stages.slice(0, collectiveStage).map((s, si) => (
-                <div key={si}>
-                  <div className="muted small section-label">{phaseDisplay(s.phase)}</div>
-                  <div className="panel-body tight" style={{ padding: 0 }}>
-                    {s.items.map((h, i) => (
-                      <SeriesRow key={i} h={h} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {/* fase atual: a partida do jogador abre ao vivo; demais placares ficam ocultos */}
-              <div className="muted small section-label">
-                {tr('online.matchups')} - {phaseDisplay(stage.phase)}
-              </div>
-              <div className="panel-body tight" style={{ padding: 0 }}>
-                {stage.items.map((h, i) => {
-                  const key = matchKey(h);
-                  const mine = key === requiredMatchKey;
-                  return <SeriesRow key={i} h={h} hiddenScore watchable={mine} watched={watchedMatches.includes(key)} />;
-                })}
-              </div>
+              <TournamentBracket
+                t={progressiveTournament}
+                onOpen={openPastSeries}
+                onPending={(pairing) => {
+                  const item = findStageItem(pairing);
+                  if (item) openStageMatch(item);
+                }}
+              />
               {!myStageMatch && (
-                <div className="ut-major-bye">Seu time não joga nesta etapa. Você pode acompanhar os confrontos e fechar a rodada.</div>
+                <div className="ut-major-bye">{isSpectator ? 'Modo espectador: clique em qualquer confronto do bracket para acompanhar.' : 'Seu time não joga nesta etapa. Avance pelo botão principal abaixo.'}</div>
               )}
               <div className="ut-stage-ready">
-                {state.players.map((p) => {
+                {state.players.filter((player) => !player.spectator).map((p) => {
                   const ready = (p.ready_stage ?? -1) >= collectiveStage;
                   return <span key={p.nick} className={ready ? 'ready' : ''}>{ready ? '✓' : '·'} {p.nick}</span>;
                 })}
               </div>
-              <div className="center" style={{ marginTop: 14 }}>
-                <button className="btn gold big" disabled={!personalMatchWatched || myStageConfirmed || busy} onClick={confirmCollectiveStage}>
-                  {!personalMatchWatched
-                    ? 'ASSISTA SUA PARTIDA PARA CONFIRMAR'
-                    : myStageConfirmed
-                      ? 'AGUARDANDO OS OUTROS JOGADORES'
-                      : `CONFIRMAR ${phaseDisplay(stage.phase).toUpperCase()}`}
+              {!isSpectator && <div className="ut-next-match-cta">
+                <span>{myStageMatch ? `${teamLabel(myStageMatch.pairing.a)} vs ${teamLabel(myStageMatch.pairing.b)}` : 'Rodada sem partida para seu time'}</span>
+                <button className="btn gold big" disabled={myStageConfirmed || busy} onClick={playNextMatch}>
+                  {myStageConfirmed
+                    ? 'AGUARDANDO OS OUTROS JOGADORES'
+                    : !myStageMatch
+                      ? 'AVANÇAR PARA A PRÓXIMA PARTIDA'
+                      : !myMajorVeto
+                        ? 'VETAR MAPAS E JOGAR'
+                        : personalMatchWatched
+                          ? 'AVANÇAR PARA A PRÓXIMA PARTIDA'
+                          : '▶ JOGAR A PRÓXIMA PARTIDA'}
                 </button>
-              </div>
+              </div>}
             </div>
           </div>
+          {majorVetoOpen && myStageMatch && (
+            <div className="panel ut-major-veto fade-in">
+              <div className="panel-head">VETO DA PRÓXIMA PARTIDA<span className="spacer" /><button className="btn small" onClick={() => setMajorVetoOpen(false)}>Fechar ✕</button></div>
+              <div className="panel-body">
+                <p>Seu ban e seu pick alteram os mapas da série para todos os jogadores.</p>
+                <div className="muted small section-label">BANIR MAPA</div>
+                <div className="ut-map-options">{MAP_POOL.map((map) => <button key={map} disabled={majorVetoPick === map} className={majorVetoBan === map ? 'ban' : ''} onClick={() => setMajorVetoBan(map)}>{MAP_LABELS[map]}</button>)}</div>
+                <div className="muted small section-label">ESCOLHER MAPA</div>
+                <div className="ut-map-options">{MAP_POOL.map((map) => <button key={map} disabled={majorVetoBan === map} className={majorVetoPick === map ? 'pick' : ''} onClick={() => setMajorVetoPick(map)}>{MAP_LABELS[map]}</button>)}</div>
+                <button className="btn gold big" style={{ width: '100%', marginTop: 16 }} disabled={busy || majorVetoBan === majorVetoPick} onClick={submitMajorMatchVeto}>CONFIRMAR VETO</button>
+              </div>
+            </div>
+          )}
           {selMatch && (
             <MatchReplay
               series={selMatch.series}
               teams={[major.teamsById[selMatch.a], major.teamsById[selMatch.b]]}
               onClose={() => setSelMatch(null)}
-              onFinish={() => { if (activeReplayKey) markWatched(activeReplayKey); }}
+              onFinish={() => {
+                if (activeReplayKey) markWatched(activeReplayKey);
+                setSelMatch(null);
+                setActiveReplayKey(null);
+                if (!isSpectator && activeReplayKey === requiredMatchKey) void confirmCollectiveStage();
+              }}
               allowSkip={false}
               playbackSpeed={playbackSpeed}
               canControlSpeed={isHost}
@@ -966,6 +1289,12 @@ export function OnlineScreen({ onBack }: Props) {
               <div className="muted">
                 {champNick ? `${tr('online.champRoster')} ${champ?.players.map((p) => p.nick).join(', ')}` : tr('online.noHumanFinal')}
               </div>
+              <div className="ut-share-card">
+                <b>{champNick ?? champ?.name} campeão</b>
+                <span>Major Ultimate Team · Temporada {state.lobby.season ?? 1}</span>
+                <button className="btn gold small" onClick={() => shareResult(`Road to Major Ultimate Team: ${champNick ?? champ?.name} foi campeão do Major. Teste com seus amigos em roadtomajor.com.br/online`)}>COMPARTILHAR RESULTADO</button>
+                {shareStatus && <small>{shareStatus}</small>}
+              </div>
               {/* continuar a sala: nova temporada com novo draft (transferências) */}
               <div style={{ marginTop: 16 }}>
                 {isHost ? (
@@ -980,6 +1309,10 @@ export function OnlineScreen({ onBack }: Props) {
             </div>
 
             <div className="muted small section-label">PRÊMIOS DO MAJOR</div>
+            <div className="ut-session-profile compact">
+              <span>DIVISÃO DA SESSÃO</span><b>{sessionDivision(sessionProfile.points)}</b><strong>{sessionProfile.points} pts</strong>
+              <small>{sessionProfile.wins}V · {sessionProfile.losses}D · {sessionProfile.titles} títulos</small>
+            </div>
             <div className="ut-awards">
               {awards.map(({ label, row }) => row && (
                 <div key={label} className="ut-award-card">
@@ -1027,17 +1360,11 @@ export function OnlineScreen({ onBack }: Props) {
               })}
             </div>
 
-            {/* playoffs */}
-            {playoffs.length > 0 && (
-              <>
-                <div className="muted small section-label">{tr('online.playoffs')}</div>
-                <div className="panel-body tight" style={{ padding: 0 }}>
-                  {playoffs.map((h, i) => (
-                    <SeriesRow key={i} h={h} />
-                  ))}
-                </div>
-              </>
-            )}
+            <div className="muted small section-label">BRACKET FINAL</div>
+            <TournamentBracket
+              t={major.tournament}
+              onOpen={(pairing) => pairing.result && setSelMatch({ a: pairing.a, b: pairing.b, series: pairing.result })}
+            />
 
             {/* partidas dos jogadores na Suíça */}
             <div className="muted small section-label">{tr('online.playerMatches')}</div>
@@ -1092,9 +1419,22 @@ export function OnlineScreen({ onBack }: Props) {
   }
 
   // draft sincronizado
+  if (isSpectator && state.lobby.status === 'drafting') {
+    return (
+      <div className="fade-in"><div className="panel" style={{ maxWidth: 680, margin: '30px auto' }}>
+        <div className="panel-head">MODO ESPECTADOR · {code}<span className="spacer" /><button className="btn" onClick={onBack}>Sair</button></div>
+        <div className="panel-body center">
+          <h2>Os jogadores estão montando os elencos</h2>
+          <p className="muted">Você entrará automaticamente no veto e poderá acompanhar todas as partidas.</p>
+          <div className="lobby-players" style={{ justifyContent: 'center' }}>{activePlayers.map((player) => <span key={player.nick} className={`lobby-player${player.done ? ' done' : ''}`}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>)}</div>
+        </div>
+      </div></div>
+    );
+  }
   if (!setup) return null;
   const coachPhase = myPicks.length >= 5 && !coachPick && !myDone;
-  const strategyPhase = myPicks.length >= 5 && !!coachPick && !myDone;
+  const lineupPhase = myPicks.length >= 5 && !!coachPick && !lineupConfirmed && !myDone;
+  const strategyPhase = myPicks.length >= 5 && !!coachPick && lineupConfirmed && !myDone;
   const source = setup.sources[Math.min(myPicks.length, 4)];
   const pickedCards = myPicks.map((pid, i) => {
     const pickedSource = setup.sources[i];
@@ -1102,6 +1442,12 @@ export function OnlineScreen({ onBack }: Props) {
     return player && pickedSource ? { player, source: pickedSource } : null;
   }).filter((card): card is PickedCard => card !== null);
   const chemistry = ultimateChemistry(pickedCards);
+  const pickedIds = new Set(myPicks);
+  const reserveOptions = setup.sources
+    .flatMap((reserveSource) => reserveSource.players.map((player) => ({ player, source: reserveSource })))
+    .filter(({ player }) => !pickedIds.has(player.id))
+    .sort((a, b) => playerOvr(b.player) - playerOvr(a.player))
+    .slice(0, 10);
   const pickedNicks = new Set(
     myPicks.map((pid, i) => setup.sources[i]?.players.find((p) => p.id === pid)?.nick.toLowerCase()),
   );
@@ -1115,7 +1461,7 @@ export function OnlineScreen({ onBack }: Props) {
             <div className="panel-body center">
               <p className="muted">{tr('online.waitingOthers')}</p>
               <div className="lobby-players" style={{ justifyContent: 'center' }}>
-                {state.players.map((p) => (
+                {activePlayers.map((p) => (
                   <span key={p.nick} className={`lobby-player${p.done ? ' done' : ''}`}>
                     {p.done ? '✔' : '·'} {p.nick}
                   </span>
@@ -1154,8 +1500,37 @@ export function OnlineScreen({ onBack }: Props) {
                   </div>
                 </div>
               </div>
+              <div className="muted small section-label">EVENTOS DA SÉRIE</div>
+              <div className="ut-match-events">
+                <div><b>RITMO</b>{(['aggressive', 'default', 'cautious'] as OnlinePace[]).map((pace) => <button key={pace} className={strategy.pace === pace ? 'active' : ''} onClick={() => setStrategy((current) => ({ ...current, pace }))}>{pace === 'aggressive' ? 'Agressivo' : pace === 'cautious' ? 'Cauteloso' : 'Padrão'}</button>)}</div>
+                <div><b>TIMEOUT TÁTICO</b>{[0, 1, 2].map((mapIndex) => <button key={mapIndex} className={strategy.timeoutMap === mapIndex ? 'active' : ''} onClick={() => setStrategy((current) => ({ ...current, timeoutMap: mapIndex }))}>Mapa {mapIndex + 1}</button>)}</div>
+                <label><input type="checkbox" checked={strategy.substituteAfterMap === true} onChange={(event) => setStrategy((current) => ({ ...current, substituteAfterMap: event.target.checked }))} /> Usar o reserva entre os mapas</label>
+              </div>
               <p className="muted small">As escolhas entram no veto automático e alteram a força real do time. Todos os clientes recebem o mesmo plano antes do Major.</p>
               <button className="btn gold big" style={{ width: '100%' }} onClick={confirmStrategy}>CONFIRMAR E FICAR PRONTO</button>
+            </div>
+          </div>
+        ) : lineupPhase ? (
+          <div className="panel ut-lineup-builder">
+            <div className="panel-head">CAPITÃO E ESCALAÇÃO</div>
+            <div className="panel-body">
+              <div className="muted small section-label">ESCOLHA O CAPITÃO</div>
+              <div className="ut-lineup-choices">
+                {pickedCards.map(({ player }) => (
+                  <button key={player.id} className={lineup.captainId === player.id ? 'active' : ''} onClick={() => setLineup((current) => ({ ...current, captainId: player.id }))}>
+                    <PlayerAvatar nick={player.nick} size={40} /><b>{player.nick}</b><span>{player.role} · IGL {player.igl}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="muted small section-label">ESCOLHA UM RESERVA</div>
+              <div className="ut-reserve-grid">
+                {reserveOptions.map(({ player, source: reserveSource }) => (
+                  <button key={`${reserveSource.id}-${player.id}`} className={lineup.reserveId === player.id ? 'active' : ''} onClick={() => setLineup((current) => ({ ...current, reserveId: player.id }))}>
+                    <PlayerAvatar nick={player.nick} size={34} /><b>{player.nick}</b><span>{reserveSource.tag} · {playerOvr(player)} OVR</span>
+                  </button>
+                ))}
+              </div>
+              <button className="btn gold big" style={{ width: '100%' }} disabled={!lineup.captainId || !lineup.reserveId} onClick={() => setLineupConfirmed(true)}>CONFIRMAR ESCALAÇÃO</button>
             </div>
           </div>
         ) : coachPhase ? (
@@ -1182,6 +1557,9 @@ export function OnlineScreen({ onBack }: Props) {
             <div className="panel-head">
               {OL.collection} · {myPicks.length + 1} {tr('online.ofFive')}
               <span className="spacer" />
+              <button className="btn ghost small" disabled={(myRollouts[myPicks.length] ?? 0) >= (state.lobby.draft_rollouts ?? 2)} onClick={rerollCurrentPack}>
+                ↻ REROLL {(state.lobby.draft_rollouts ?? 2) - (myRollouts[myPicks.length] ?? 0)}
+              </button>
               <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
                 {tr('online.sameRosters')} {tr('online.roomLabel')} {code}
               </span>
@@ -1209,7 +1587,7 @@ export function OnlineScreen({ onBack }: Props) {
               </div>
             ) : (
               <div className="player-cards ut-revealed-cards">
-                {source.players.map((p) => {
+                {source.players.map((p, cardIndex) => {
                   const taken = pickedNicks.has(p.nick.toLowerCase());
                   const violation = ruleViolation(p, source, pickedCards, state.lobby.ruleset ?? 'open');
                   const hasValidChoice = source.players.some((candidate) =>
@@ -1224,6 +1602,7 @@ export function OnlineScreen({ onBack }: Props) {
                       blocked={hasValidChoice ? violation : null}
                       currentLabel={OL.current}
                       legendLabel={OL.legend}
+                      revealIndex={cardIndex}
                       onPick={() => pickPlayer(p.id)}
                     />
                   );
@@ -1290,11 +1669,11 @@ export function OnlineScreen({ onBack }: Props) {
           <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
             {tr('online.liveProgress')}
           </div>
-          {state.players.map((p) => {
+          {activePlayers.map((p) => {
             const mine = p.nick.toLowerCase() === nick.toLowerCase();
             const livePicks = mine ? myPicks : (p.picks ?? []);
             // cada jogador tem o próprio sorteio: resolve os nicks pelo setup dele
-            const pSetup = mine ? setup : buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, state.lobby.ruleset ?? 'open');
+            const pSetup = mine ? setup : buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, state.lobby.ruleset ?? 'open', p.rollouts);
             return (
               <div key={p.nick} className="online-progress">
                 <div className="op-head">
@@ -1391,6 +1770,7 @@ function UltimatePlayerCard({
   blocked,
   currentLabel,
   legendLabel,
+  revealIndex,
   onPick,
 }: {
   player: Player;
@@ -1399,13 +1779,14 @@ function UltimatePlayerCard({
   blocked?: string | null;
   currentLabel: string;
   legendLabel: string;
+  revealIndex: number;
   onPick: () => void;
 }) {
   const ovr = playerOvr(player);
   const tier = cardTier(ovr);
   const current = source.game === 'CS2' && /2026/.test(source.era);
   return (
-    <button type="button" title={blocked ?? undefined} className={`ut-card ${tier.className}${taken || blocked ? ' taken' : ''}`} onClick={onPick} disabled={taken || !!blocked}>
+    <button type="button" title={blocked ?? undefined} style={{ animationDelay: `${revealIndex * 110}ms` }} className={`ut-card ut-pack-card ${tier.className}${taken || blocked ? ' taken' : ''}`} onClick={onPick} disabled={taken || !!blocked}>
       <div className="ut-card-top">
         <span className="ut-card-rating">{ovr}</span>
         <span className="ut-card-tier">{tier.label}</span>
@@ -1437,7 +1818,7 @@ function LiveStatsSide({ team, stats }: { team: TTeam; stats: Record<string, { k
         <span className="lsb-tname">{team.name}</span>
         <span className="lsb-cols">K&nbsp;&nbsp;D&nbsp;&nbsp;+/-</span>
       </div>
-      {team.players.map((p) => {
+      {[...team.players, ...(team.bench ?? [])].map((p) => {
         const s = stats[p.id] ?? { k: 0, d: 0 };
         const diff = s.k - s.d;
         return (
@@ -1500,7 +1881,7 @@ function MatchReplay({
 
   const idIndex = useMemo(() => {
     const m = new Map<string, { nick: string; team: 0 | 1 }>();
-    teams.forEach((tm, ti) => tm.players.forEach((p) => m.set(p.id, { nick: p.nick, team: ti as 0 | 1 })));
+    teams.forEach((tm, ti) => [...tm.players, ...(tm.bench ?? [])].forEach((p) => m.set(p.id, { nick: p.nick, team: ti as 0 | 1 })));
     return m;
   }, [teams]);
 
@@ -1516,6 +1897,15 @@ function MatchReplay({
   }, [mapIdx, round, series]);
 
   const map = series.maps[mapIdx];
+  const tacticalEvent = !done && map
+    ? round === 8 && teams[0].onlinePlan?.timeoutMap === mapIdx
+      ? `TIMEOUT TÁTICO · ${teams[0].name}`
+      : round === 9 && teams[1].onlinePlan?.timeoutMap === mapIdx
+        ? `TIMEOUT TÁTICO · ${teams[1].name}`
+        : round === 0 && mapIdx > 0
+          ? [teams[0], teams[1]].filter((team) => team.onlinePlan?.substituteAfterMap && team.onlinePlan.reserveNick).map((team) => `${team.onlinePlan?.reserveNick} entra por ${team.name}`).join(' · ')
+          : ''
+    : '';
   // ao terminar, congela no placar FINAL do mapa e inclui o último mapa no
   // placar de mapas (antes o header ficava defasado em relação ao Scoreboard)
   const log = map ? map.roundLog.slice(0, round) : [];
@@ -1555,6 +1945,7 @@ function MatchReplay({
           <div className="qs-mid"><div className="qs-mapscore">{mapsA} - {mapsB} <span className="muted small">mapas</span></div></div>
           <div className="qs-side"><TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={40} logoUrl={teams[1].logoUrl} /><div className="qs-name">{teams[1].name}</div><div className="qs-score">{sb}</div></div>
         </div>
+        {tacticalEvent && <div className="ut-tactical-event">{tacticalEvent}</div>}
         {!done && lastWinner !== null && (
           <div className={`ut-round-winner team-${lastWinner}`}>
             ROUND {round} · {teams[lastWinner].name} pontua · {sa}:{sb}

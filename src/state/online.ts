@@ -8,20 +8,39 @@ import { simulateSeries } from '../engine/match';
 import { makeRng, type Rng } from '../engine/rng';
 import { autoVeto } from '../engine/veto';
 import { hashStr } from './hash';
-import { createTournamentFromTeams, placementCode, resolveRound, standings, type PlacementCode } from '../engine/swiss';
-import type { MapId, Player, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
+import { createTournamentFromTeams, pairingBestOf, placementCode, resolveRound, standings, type PlacementCode } from '../engine/swiss';
+import { MAP_POOL } from '../types';
+import type { MapId, Pairing, Player, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
 
 export type UltimateRuleset = 'open' | 'current' | 'legends' | 'brworld' | 'era' | 'ovrcap' | 'unique_country' | 'gauntlet';
 export type OnlineTactic = 'balanced' | 'aggressive' | 'tactical' | 'controlled';
 export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
-export interface OnlineStrategy { tactic: OnlineTactic; favoriteMap: MapId; banMap: MapId }
+export type OnlinePace = 'aggressive' | 'default' | 'cautious';
+export interface OnlineStrategy {
+  tactic: OnlineTactic;
+  favoriteMap: MapId;
+  banMap: MapId;
+  pace?: OnlinePace;
+  timeoutMap?: number;
+  substituteAfterMap?: boolean;
+}
+export interface OnlineLineup { captainId: string; reserveId: string }
+export interface OnlineVetoState {
+  step: number;
+  remaining: MapId[];
+  bans: { map: MapId; by: string }[];
+  picks: { map: MapId; by: string }[];
+  turn?: string;
+  deadline?: number;
+  maps?: MapId[];
+}
 
 export interface LobbyState {
   lobby: {
     code: string;
     mode: 'duel' | 'party';
     host: string;
-    status: 'waiting' | 'drafting' | 'done';
+    status: 'waiting' | 'drafting' | 'veto' | 'done';
     seed: number;
     run_seed?: number;
     pool: TournamentPool;
@@ -30,8 +49,21 @@ export interface LobbyState {
     stage?: number;
     ruleset?: UltimateRuleset;
     playback_speed?: PlaybackSpeed;
+    draft_rollouts?: number;
+    veto?: OnlineVetoState;
+    major_vetos?: Record<string, { banMap: MapId; pickMap: MapId }>;
   };
-  players: { nick: string; picks: string[]; coach_pick: string; done: boolean; ready_stage?: number; strategy?: OnlineStrategy }[];
+  players: {
+    nick: string;
+    picks: string[];
+    coach_pick: string;
+    done: boolean;
+    ready_stage?: number;
+    strategy?: OnlineStrategy;
+    lineup?: OnlineLineup;
+    rollouts?: number[];
+    spectator?: boolean;
+  }[];
 }
 
 // O Ultimate Team mistura cartas históricas com o elenco atual de 2026. As duas
@@ -90,8 +122,24 @@ export function buildDraftFromSeed(seed: number, pool: TournamentPool, ruleset: 
 // CADA jogador recebe um sorteio DIFERENTE (mas determinístico por seed+nick,
 // então todos os clientes reconstroem o mesmo elenco de cada jogador). Antes
 // todos draftavam dos mesmos 5 elencos, o que deixava os times sempre iguais.
-export function buildDraftForPlayer(seed: number, pool: TournamentPool, nick: string, ruleset: UltimateRuleset = 'open'): OnlineDraftSetup {
-  return buildDraftFromSeed((seed ^ hashStr(nick.toLowerCase())) >>> 0, pool, ruleset);
+export function buildDraftForPlayer(
+  seed: number,
+  pool: TournamentPool,
+  nick: string,
+  ruleset: UltimateRuleset = 'open',
+  rollouts: number[] = [],
+): OnlineDraftSetup {
+  const playerSeed = (seed ^ hashStr(nick.toLowerCase())) >>> 0;
+  const setup = buildDraftFromSeed(playerSeed, pool, ruleset);
+  return {
+    ...setup,
+    sources: setup.sources.map((source, round) => {
+      const rollout = Math.max(0, Math.min(5, Number(rollouts[round]) || 0));
+      if (rollout === 0) return source;
+      const rerolledSeed = (playerSeed ^ hashStr(`rollout-${round}-${rollout}`)) >>> 0;
+      return buildDraftFromSeed(rerolledSeed, pool, ruleset).sources[0] ?? source;
+    }),
+  };
 }
 
 export function teamFromPicks(
@@ -100,6 +148,7 @@ export function teamFromPicks(
   coachPick: string,
   setup: OnlineDraftSetup,
   strategy?: OnlineStrategy,
+  lineup?: OnlineLineup,
   ruleset: UltimateRuleset = 'open',
 ): TTeam | null {
   const chosen: { player: Player; from: TeamSeason }[] = [];
@@ -125,18 +174,51 @@ export function teamFromPicks(
   const gauntletBonus = ruleset === 'gauntlet' ? (roleDepth - 3) * 0.8 : 0;
   const brCount = chosen.filter((c) => c.player.country === 'br').length;
   const brWorldBonus = ruleset === 'brworld' && brCount >= 2 && chosen.length - brCount >= 2 ? 1 : 0;
+  const captain = chosen.find((c) => c.player.id === lineup?.captainId)?.player ?? chosen.find((c) => c.player.role === 'IGL')?.player ?? chosen[0].player;
+  const pickedIds = new Set(chosen.map((c) => c.player.id));
+  const reserveSource = setup.sources.flatMap((source) => source.players.map((player) => ({ player, source })))
+    .find((candidate) => candidate.player.id === lineup?.reserveId && !pickedIds.has(candidate.player.id));
+  const reserveOvr = reserveSource ? playerOvr(reserveSource.player) : 0;
+  const weakestOvr = Math.min(...chosen.map((c) => playerOvr(c.player)));
+  const reserveImpact = strategy?.substituteAfterMap && reserveSource ? Math.max(0, reserveOvr - weakestOvr) * 0.18 + 0.25 : 0;
+  const captainImpact = Math.max(0, captain.igl - 55) / 35;
   team = {
     ...team,
     mapPrefs,
-    strength: team.strength + tacticStrength - capPenalty + gauntletBonus + brWorldBonus,
-    teamwork: team.teamwork + tacticTeamwork,
-    playbook: plan.tactic === 'balanced' ? undefined : plan.tactic,
-    playbookFam: plan.tactic === 'balanced' ? undefined : 0.72,
+    strength: team.strength + tacticStrength - capPenalty + gauntletBonus + brWorldBonus + reserveImpact,
+    teamwork: team.teamwork + tacticTeamwork + captainImpact,
+    playbook: plan.pace === 'aggressive' ? 'fast' : plan.pace === 'cautious' ? 'controlled' : plan.tactic === 'balanced' ? undefined : plan.tactic,
+    playbookFam: plan.tactic === 'balanced' && (!plan.pace || plan.pace === 'default') ? undefined : 0.72,
+    onlinePlan: {
+      captainNick: captain.nick,
+      reserveNick: reserveSource?.player.nick,
+      timeoutMap: plan.timeoutMap,
+      pace: plan.pace ?? 'default',
+      substituteAfterMap: plan.substituteAfterMap,
+    },
   };
   // ids de jogador PRECISAM ser únicos no torneio: dois jogadores podem draftar
   // a mesma lenda, e stats/killfeed/MVP são indexados por id
   const players = team.players.map((p) => ({ ...p, id: `online_${nick}__${p.sourcePlayerId}` }));
-  return { ...team, id: `online_${nick}`, name: nick, isUser: false, players };
+  const weakestPlayer = players.reduce((weakest, player) => player.ovr < weakest.ovr ? player : weakest);
+  const reservePlayer = reserveSource
+    ? buildUserTeam(nick, [...chosen.slice(0, 4), { player: reserveSource.player, from: reserveSource.source }], coachTeam.coach).players[4]
+    : null;
+  const bench = reservePlayer
+    ? [{ ...reservePlayer, id: `online_${nick}__bench_${reservePlayer.sourcePlayerId}` }]
+    : undefined;
+  return {
+    ...team,
+    id: `online_${nick}`,
+    name: nick,
+    isUser: false,
+    players,
+    bench,
+    onlinePlan: {
+      ...team.onlinePlan,
+      substitutePlayerId: strategy?.substituteAfterMap && bench ? weakestPlayer.id : undefined,
+    },
+  };
 }
 
 // ordenação ESTÁVEL entre clientes: comparação por code point (localeCompare
@@ -156,17 +238,20 @@ export interface OnlineDuel {
 // logo os dois navegadores exibem os mesmos mapas, rounds, kills e estatísticas.
 export function simulateOnlineDuel(state: LobbyState): OnlineDuel | null {
   if (state.lobby.mode !== 'duel' || state.players.length < 2) return null;
-  const ordered = [...state.players].sort(byNickCodepoint).slice(0, 2);
+  const ordered = state.players.filter((p) => !p.spectator).sort(byNickCodepoint).slice(0, 2);
+  if (ordered.length < 2) return null;
   const ruleset = state.lobby.ruleset ?? 'open';
   const teams = ordered.map((p) => {
-    const setup = buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, ruleset);
-    return teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup, p.strategy, ruleset);
+    const setup = buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, ruleset, p.rollouts);
+    return teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup, p.strategy, p.lineup, ruleset);
   });
   if (!teams[0] || !teams[1]) return null;
 
   const pair = teams as [TTeam, TTeam];
   const rng = makeRng(((state.lobby.run_seed ?? state.lobby.seed) ^ 0x55544d) >>> 0);
-  const maps = autoVeto(pair, rng, 3);
+  const maps = state.lobby.veto?.maps?.length === 3
+    ? state.lobby.veto.maps.map((map, index) => ({ map, pickedBy: index < 2 ? index as 0 | 1 : -1 as const }))
+    : autoVeto(pair, rng, 3);
   return {
     teams: pair,
     nicks: [ordered[0].nick, ordered[1].nick],
@@ -190,8 +275,51 @@ export interface OnlineMajor {
   humans: { nick: string; teamId: string; placement: PlacementCode; wins: number; losses: number }[];
 }
 
+function majorVetoMaps(
+  tournament: Tournament,
+  pairing: Pairing,
+  rng: Rng,
+  stage: number,
+  humanByTeamId: Record<string, string>,
+  plans: LobbyState['lobby']['major_vetos'],
+) {
+  const teams = [tournament.teams.find((team) => team.id === pairing.a)!, tournament.teams.find((team) => team.id === pairing.b)!] as [TTeam, TTeam];
+  const bestOf = pairingBestOf(tournament, pairing);
+  const automatic = autoVeto(teams, rng, bestOf);
+  const selectedPlans = ([pairing.a, pairing.b] as const)
+    .map((teamId, side) => {
+      const playerNick = humanByTeamId[teamId];
+      const plan = playerNick ? plans?.[`${stage}:${playerNick.toLowerCase()}`] : undefined;
+      return plan ? { ...plan, side: side as 0 | 1 } : null;
+    })
+    .filter((plan): plan is { banMap: MapId; pickMap: MapId; side: 0 | 1 } => plan !== null);
+  if (selectedPlans.length === 0) return automatic;
+
+  const banned = new Set(selectedPlans.map((plan) => plan.banMap));
+  const preferred = selectedPlans.map((plan) => ({ map: plan.pickMap, pickedBy: plan.side }));
+  const candidates = [
+    ...preferred,
+    ...automatic,
+    ...MAP_POOL.map((map) => ({ map, pickedBy: -1 as const })),
+  ];
+  const maps: { map: MapId; pickedBy: 0 | 1 | -1 }[] = [];
+  for (const candidate of candidates) {
+    if (maps.length >= bestOf) break;
+    if (banned.has(candidate.map) || maps.some((entry) => entry.map === candidate.map)) continue;
+    maps.push(candidate);
+  }
+  // Em caso de dois bans conflitantes num MD5, completa com o pool restante.
+  if (maps.length < bestOf) {
+    for (const map of MAP_POOL) {
+      if (maps.length >= bestOf) break;
+      if (!maps.some((entry) => entry.map === map)) maps.push({ map, pickedBy: -1 });
+    }
+  }
+  return maps;
+}
+
 export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
-  const ordered = [...state.players].sort(byNickCodepoint);
+  const ordered = state.players.filter((p) => !p.spectator).sort(byNickCodepoint);
   const ruleset = state.lobby.ruleset ?? 'open';
 
   const humanByTeamId: Record<string, string> = {};
@@ -199,8 +327,8 @@ export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
   const usedSources = new Set<string>();
   for (const p of ordered) {
     // cada jogador draftou do PRÓPRIO sorteio (seed + nick)
-    const setup = buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, ruleset);
-    const t = teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup, p.strategy, ruleset);
+    const setup = buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, ruleset, p.rollouts);
+    const t = teamFromPicks(p.nick, p.picks ?? [], p.coach_pick ?? '', setup, p.strategy, p.lineup, ruleset);
     if (!t) return null; // alguém ainda não terminou o draft
     humanByTeamId[t.id] = p.nick;
     humanTeams.push(t);
@@ -223,7 +351,18 @@ export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
   const tRng = makeRng(runSeed + 9999);
   const tournament = createTournamentFromTeams([...humanTeams, ...aiTeams], tRng, 'MAJOR ONLINE');
   let guard = 0;
-  while (tournament.phase !== 'done' && guard++ < 40) resolveRound(tournament, tRng);
+  while (tournament.phase !== 'done' && guard < 40) {
+    for (const pairing of tournament.pairings) {
+      const plans = state.lobby.major_vetos;
+      const a = tournament.teams.find((team) => team.id === pairing.a)!;
+      const b = tournament.teams.find((team) => team.id === pairing.b)!;
+      const bestOf = pairingBestOf(tournament, pairing);
+      const seriesRng = makeRng((runSeed ^ hashStr(`${guard}|${pairing.a}|${pairing.b}`)) >>> 0);
+      pairing.result = simulateSeries(seriesRng, a, b, majorVetoMaps(tournament, pairing, seriesRng, guard, humanByTeamId, plans), bestOf);
+    }
+    resolveRound(tournament, tRng);
+    guard++;
+  }
 
   const teamsById: Record<string, TTeam> = {};
   for (const t of tournament.teams) teamsById[t.id] = t;

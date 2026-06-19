@@ -133,12 +133,21 @@ export interface TTeam {
   mapPrefs: Record<string, number>;
   coach: Coach;
   players: TPlayer[];
+  bench?: TPlayer[];
   wins: number;
   losses: number;
   roundDiff: number;
   status: 'alive' | 'advanced' | 'eliminated';
   playbook?: Playbook; // esquema tático treinado (modo carreira)
   playbookFam?: number; // entrosamento no esquema, 0..1 (quão bem treinado)
+  onlinePlan?: {
+    captainNick?: string;
+    reserveNick?: string;
+    timeoutMap?: number;
+    pace?: 'aggressive' | 'default' | 'cautious';
+    substituteAfterMap?: boolean;
+    substitutePlayerId?: string;
+  };
 }
 
 // Esquema tático do time (playbook). Cada um é forte em certas situações e fraco
