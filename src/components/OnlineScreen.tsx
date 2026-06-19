@@ -812,7 +812,16 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
   };
 
   const confirmStrategy = () => {
-    if (myDone || !coachPick || !lineup.captainId || !lineup.reserveId || strategy.favoriteMap === strategy.banMap) return;
+    if (myDone) return;
+    // feedback explícito em vez de falhar em silêncio
+    if (!coachPick) { setError('Escolha um coach antes de confirmar.'); return; }
+    if (!lineup.captainId || !lineup.reserveId) { setError('Defina capitão e reserva.'); return; }
+    if (strategy.favoriteMap === strategy.banMap) { setError('Mapa favorito e banido não podem ser o mesmo.'); return; }
+    // avisa sem travar (em alguns formatos pode ser impossível ter os dois)
+    const roles = new Set(pickedCards.map((c) => c.player.role));
+    const missing = [!roles.has('AWP') ? 'AWPer' : '', !roles.has('IGL') ? 'IGL' : ''].filter(Boolean);
+    if (missing.length && !window.confirm(`Seu cinco está sem ${missing.join(' e ')}. Isso enfraquece bastante o time. Confirmar mesmo assim?`)) return;
+    setError('');
     setMyDone(true);
     sendPicks(myPicks, coachPick, true, strategy, lineup);
   };
@@ -997,7 +1006,10 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
         if (!prev?.lobby.veto) return prev;
         const participants = prev.players.filter((player) => !player.spectator).map((player) => player.nick);
         let nextVeto = localVetoStep(prev.lobby.veto, map, participants);
-        if (!nextVeto.maps && nextVeto.turn?.toLowerCase() !== nick.toLowerCase()) {
+        // resolve TODOS os passos consecutivos da IA (não só um): se o host não
+        // for o índice 0 dos participantes, um único auto-step travava o veto
+        let guard = 0;
+        while (!nextVeto.maps && nextVeto.turn?.toLowerCase() !== nick.toLowerCase() && nextVeto.remaining.length && guard++ < 8) {
           nextVeto = localVetoStep(nextVeto, nextVeto.remaining[0], participants);
         }
         return { ...prev, lobby: { ...prev.lobby, veto: nextVeto, status: nextVeto.maps ? 'done' : 'veto' } };
