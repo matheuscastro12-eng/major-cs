@@ -102,8 +102,8 @@ function routeFromLocation(): { screen: Screen; bannerPreview: boolean } {
   if (legacyHash[hash]) return { screen: legacyHash[hash], bannerPreview: false };
 
   const path = normalizePath(window.location.pathname);
-  if (path === '/ultimateteam' || path === '/ultimate-team') {
-    return { screen: 'online', bannerPreview: false };
+  if (path === '/ultimateteam' || path === '/ultimate-team' || path === '/online' || path.startsWith('/online/')) {
+    return { screen: 'online', bannerPreview: false }; // /online/<código> = deep link de sala
   }
   if (path === '/banners') return { screen: 'home', bannerPreview: true };
   const matched = PATH_SCREEN[path] ?? 'home';
@@ -114,6 +114,12 @@ function routeFromLocation(): { screen: Screen; bannerPreview: boolean } {
     }
   }
   return { screen: matched, bannerPreview: false };
+}
+
+// código da sala embutido na URL (/online/ABCDE), pra deep link e F5
+function onlineCodeFromPath(): string {
+  const m = window.location.pathname.match(/^\/online\/([a-z0-9]+)/i);
+  return m ? m[1].toUpperCase().slice(0, 5) : '';
 }
 
 interface MatchCtx {
@@ -286,7 +292,11 @@ export default function App() {
   // Cada tela ganha uma URL real e navegável. A primeira sincronização usa
   // replace para canonicalizar aliases; cliques seguintes criam histórico.
   useEffect(() => {
-    const targetPath = screen === 'home' && bannerPreview ? '/banners' : SCREEN_PATH[screen];
+    let targetPath = screen === 'home' && bannerPreview ? '/banners' : SCREEN_PATH[screen];
+    // o OnlineScreen gere a própria subrota /online/<código>; não canonicaliza de volta
+    if (screen === 'online' && window.location.pathname.toLowerCase().startsWith('/online')) {
+      targetPath = window.location.pathname;
+    }
     const target = `${targetPath}${window.location.search}`;
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (current !== target) {
@@ -723,7 +733,7 @@ export default function App() {
         </>
       )}
 
-      {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} />}
+      {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} initialCode={onlineCodeFromPath()} />}
 
       {screen === 'career' && (
         <CareerGate onExit={() => setScreen('home')}>

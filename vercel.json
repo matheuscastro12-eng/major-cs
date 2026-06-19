@@ -4,6 +4,7 @@
   },
   "rewrites": [
     { "source": "/online", "destination": "/" },
+    { "source": "/online/:path*", "destination": "/" },
     { "source": "/ultimateteam", "destination": "/" },
     { "source": "/ultimate-team", "destination": "/" },
     { "source": "/carreira", "destination": "/" },
