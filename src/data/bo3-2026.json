@@ -707,11 +707,11 @@
     "nick": "REZ",
     "name": "Fredrik Sterner",
     "country": "se",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 82,
+    "awp": 54,
     "igl": 52
    },
    {
@@ -731,11 +731,11 @@
     "nick": "hypex",
     "name": "Milan Polowiec",
     "country": "pl",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 54,
+    "awp": 82,
     "igl": 50
    },
    {
@@ -2164,11 +2164,11 @@
     "nick": "Lucky",
     "name": "Lucas Chastang",
     "country": "fr",
-    "role": "Support",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 54,
+    "awp": 81,
     "igl": 46
    },
    {
@@ -2176,11 +2176,11 @@
     "nick": "Maka",
     "name": "Bryan Canda",
     "country": "fr",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 79,
     "consistency": 79,
     "clutch": 77,
-    "awp": 81,
+    "awp": 54,
     "igl": 49
    },
    {
@@ -2334,11 +2334,11 @@
     "nick": "gr1ks",
     "name": "Gleb Gazin",
     "country": "by",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 84,
     "consistency": 84,
     "clutch": 82,
-    "awp": 58,
+    "awp": 86,
     "igl": 56
    },
    {
@@ -2370,11 +2370,11 @@
     "nick": "tabseN",
     "name": "Johannes Wodarz",
     "country": "de",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 86,
+    "awp": 58,
     "igl": 52
    }
   ]
@@ -2577,11 +2577,11 @@
     "nick": "dwushka",
     "name": "Aleksandr Pakhnevich",
     "country": "ru",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 83,
     "consistency": 83,
     "clutch": 81,
-    "awp": 83,
+    "awp": 54,
     "igl": 53
    },
    {
@@ -2613,11 +2613,11 @@
     "nick": "frontales",
     "name": "Kim Argunov",
     "country": "ru",
-    "role": "Rifler",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 54,
+    "awp": 83,
     "igl": 50
    },
    {
@@ -2929,11 +2929,11 @@
     "nick": "mag1k3Y",
     "name": "Alemkhan Moldakamalov",
     "country": "kz",
-    "role": "Support",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 54,
+    "awp": 83,
     "igl": 49
    },
    {
@@ -2941,11 +2941,11 @@
     "nick": "Sdaim",
     "name": "Daniil Tupov",
     "country": "ru",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 83,
+    "awp": 54,
     "igl": 50
    },
    {
@@ -3002,12 +3002,12 @@
     "nick": "maxster",
     "name": "Max Jansson",
     "country": "se",
-    "role": "AWP",
+    "role": "IGL",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 80,
-    "igl": 50
+    "awp": 50,
+    "igl": 79
    },
    {
     "id": "bo3_31147",
@@ -3050,12 +3050,12 @@
     "nick": "JW",
     "name": "Jesper Wecksell",
     "country": "se",
-    "role": "IGL",
+    "role": "AWP",
     "aim": 76,
     "consistency": 76,
     "clutch": 74,
-    "awp": 50,
-    "igl": 79
+    "awp": 80,
+    "igl": 50
    }
   ]
  },
@@ -3087,11 +3087,11 @@
     "nick": "Jorko",
     "name": "Georgi Mitev",
     "country": "bg",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 52,
+    "awp": 82,
     "igl": 52
    },
    {
@@ -3123,11 +3123,11 @@
     "nick": "volt",
     "name": "Sebastian Malos",
     "country": "ro",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 78,
     "consistency": 78,
     "clutch": 76,
-    "awp": 82,
+    "awp": 52,
     "igl": 48
    },
    {
@@ -3172,11 +3172,11 @@
     "nick": "Koala",
     "name": "Fahad Khaled Alkadyan",
     "country": "br",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 82,
+    "awp": 54,
     "igl": 52
    },
    {
@@ -3196,11 +3196,11 @@
     "nick": "maxxkor",
     "name": "Maximo Cortina",
     "country": "ar",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 54,
+    "awp": 82,
     "igl": 50
    },
    {
@@ -3342,11 +3342,11 @@
     "nick": "SYPH0",
     "name": "Daniel Ageyev",
     "country": "kz",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 83,
     "consistency": 83,
     "clutch": 81,
-    "awp": 83,
+    "awp": 56,
     "igl": 53
    },
    {
@@ -3354,11 +3354,11 @@
     "nick": "khaN",
     "name": "Beksultan Ospan",
     "country": "kz",
-    "role": "Rifler",
+    "role": "AWP",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 56,
+    "awp": 83,
     "igl": 46
    },
    {
@@ -3512,11 +3512,11 @@
     "nick": "XeeDo",
     "name": "Aleksey Mikulich",
     "country": "by",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 82,
+    "awp": 53,
     "igl": 52
    },
    {
@@ -3536,11 +3536,11 @@
     "nick": "kashl1d",
     "name": "Danila Dronov",
     "country": "ru",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 79,
     "consistency": 79,
     "clutch": 77,
-    "awp": 53,
+    "awp": 82,
     "igl": 49
    },
    {
@@ -3767,11 +3767,11 @@
     "nick": "NAF",
     "name": "Keith Markovic",
     "country": "ca",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 79,
     "consistency": 79,
     "clutch": 77,
-    "awp": 79,
+    "awp": 51,
     "igl": 49
    },
    {
@@ -3803,11 +3803,11 @@
     "nick": "ultimate",
     "name": "Roland Tomkowiak",
     "country": "pl",
-    "role": "Support",
+    "role": "AWP",
     "aim": 77,
     "consistency": 77,
     "clutch": 75,
-    "awp": 51,
+    "awp": 79,
     "igl": 47
    },
    {
@@ -3852,24 +3852,24 @@
     "nick": "reiko",
     "name": "Kamil Cegiełko",
     "country": "pl",
-    "role": "AWP",
+    "role": "IGL",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 82,
-    "igl": 52
+    "awp": 54,
+    "igl": 80
    },
    {
     "id": "bo3_29514",
     "nick": "SaMey",
     "name": "Dawid Stańczak",
     "country": "pl",
-    "role": "IGL",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 54,
-    "igl": 80
+    "awp": 82,
+    "igl": 52
    },
    {
     "id": "bo3_29407",
@@ -4107,11 +4107,11 @@
     "nick": "tomaszin",
     "name": "Tomas Corna",
     "country": "ar",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 85,
     "consistency": 85,
     "clutch": 83,
-    "awp": 85,
+    "awp": 56,
     "igl": 55
    },
    {
@@ -4119,11 +4119,11 @@
     "nick": "cass1n",
     "name": "Cássio Santos",
     "country": "br",
-    "role": "Rifler",
+    "role": "AWP",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 56,
+    "awp": 85,
     "igl": 52
    },
    {
@@ -4192,11 +4192,11 @@
     "nick": "Leakz",
     "name": "Jamie Jensen",
     "country": "dk",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 82,
+    "awp": 50,
     "igl": 52
    },
    {
@@ -4228,11 +4228,11 @@
     "nick": "salazar",
     "name": "Jason Salazar",
     "country": "dk",
-    "role": "Rifler",
+    "role": "AWP",
     "aim": 76,
     "consistency": 76,
     "clutch": 74,
-    "awp": 50,
+    "awp": 82,
     "igl": 46
    },
    {
@@ -4459,11 +4459,11 @@
     "nick": "Artfr0st",
     "name": "Artem Kharitonov",
     "country": "ru",
-    "role": "Rifler",
+    "role": "AWP",
     "aim": 84,
     "consistency": 84,
     "clutch": 82,
-    "awp": 58,
+    "awp": 86,
     "igl": 51
    },
    {
@@ -4495,11 +4495,11 @@
     "nick": "sugaR",
     "name": "Amin Azimov",
     "country": "az",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 78,
     "consistency": 78,
     "clutch": 76,
-    "awp": 86,
+    "awp": 58,
     "igl": 48
    }
   ]
@@ -5126,11 +5126,11 @@
     "nick": "Alisson",
     "name": "Alisson Farias",
     "country": "br",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 83,
     "consistency": 83,
     "clutch": 81,
-    "awp": 83,
+    "awp": 55,
     "igl": 53
    },
    {
@@ -5150,11 +5150,11 @@
     "nick": "divine",
     "name": "Gustavo Santicioli Altapini",
     "country": "br",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 81,
     "consistency": 81,
     "clutch": 79,
-    "awp": 55,
+    "awp": 83,
     "igl": 51
    },
    {
@@ -5211,24 +5211,24 @@
     "nick": "asap",
     "name": "Tyson Paterson",
     "country": "au",
-    "role": "AWP",
+    "role": "IGL",
     "aim": 85,
     "consistency": 85,
     "clutch": 83,
-    "awp": 85,
-    "igl": 55
+    "awp": 58,
+    "igl": 84
    },
    {
     "id": "bo3_17793",
     "nick": "aliStair",
     "name": "Alistair Johnston",
     "country": "au",
-    "role": "IGL",
+    "role": "AWP",
     "aim": 84,
     "consistency": 84,
     "clutch": 82,
-    "awp": 58,
-    "igl": 84
+    "awp": 85,
+    "igl": 55
    },
    {
     "id": "bo3_17791",
@@ -5296,11 +5296,11 @@
     "nick": "NEUZ",
     "name": "Uuganbayar Nyam-Otgon",
     "country": "mn",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 82,
+    "awp": 51,
     "igl": 52
    },
    {
@@ -5320,11 +5320,11 @@
     "nick": "hoolig4n",
     "name": "Dulguun Batsaikhan",
     "country": "mn",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 77,
     "consistency": 77,
     "clutch": 75,
-    "awp": 51,
+    "awp": 82,
     "igl": 47
    },
    {
@@ -5636,11 +5636,11 @@
     "nick": "dav1deuS",
     "name": "David Maldonado",
     "country": "cl",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 84,
     "consistency": 84,
     "clutch": 82,
-    "awp": 84,
+    "awp": 44,
     "igl": 54
    },
    {
@@ -5684,11 +5684,11 @@
     "nick": "reNTU",
     "name": "Renan Cardoso",
     "country": "br",
-    "role": "Support",
+    "role": "AWP",
     "aim": 70,
     "consistency": 70,
     "clutch": 68,
-    "awp": 44,
+    "awp": 84,
     "igl": 40
    }
   ]
@@ -5891,11 +5891,11 @@
     "nick": "Z1Nny",
     "name": "Pavel Prokopiev",
     "country": "ru",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 82,
+    "awp": 55,
     "igl": 52
    },
    {
@@ -5915,11 +5915,11 @@
     "nick": "KIRO",
     "name": "Aleksandr Sherov",
     "country": "ru",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 81,
     "consistency": 81,
     "clutch": 79,
-    "awp": 55,
+    "awp": 82,
     "igl": 51
    },
    {
@@ -6061,11 +6061,11 @@
     "nick": "b1elany",
     "name": "Maciej Biliński",
     "country": "pl",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 82,
     "consistency": 82,
     "clutch": 80,
-    "awp": 82,
+    "awp": 54,
     "igl": 52
    },
    {
@@ -6097,11 +6097,11 @@
     "nick": "fr3nd",
     "name": "Sebastian Kuśmierz",
     "country": "pl",
-    "role": "Support",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 54,
+    "awp": 82,
     "igl": 50
    },
    {
@@ -6146,11 +6146,11 @@
     "nick": "nitzie",
     "name": "Nikita Prokhorov",
     "country": "ru",
-    "role": "Rifler",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 49,
+    "awp": 80,
     "igl": 50
    },
    {
@@ -6194,11 +6194,11 @@
     "nick": "k1ssly",
     "name": "Dmitry Gostev",
     "country": "ru",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 75,
     "consistency": 75,
     "clutch": 73,
-    "awp": 80,
+    "awp": 49,
     "igl": 45
    }
   ]
@@ -6340,11 +6340,11 @@
     "nick": "k1not1",
     "name": "Fabricio Manheze",
     "country": "br",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 79,
     "consistency": 79,
     "clutch": 77,
-    "awp": 53,
+    "awp": 82,
     "igl": 49
    },
    {
@@ -6364,11 +6364,11 @@
     "nick": "nython",
     "name": "Gabriel Lino",
     "country": "br",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 73,
     "consistency": 73,
     "clutch": 71,
-    "awp": 82,
+    "awp": 53,
     "igl": 43
    }
   ]
@@ -6486,11 +6486,11 @@
     "nick": "MiQ",
     "name": "Temuulen Byambadalai",
     "country": "mn",
-    "role": "Rifler",
+    "role": "AWP",
     "aim": 84,
     "consistency": 84,
     "clutch": 82,
-    "awp": 53,
+    "awp": 84,
     "igl": 54
    },
    {
@@ -6498,11 +6498,11 @@
     "nick": "Zesta",
     "name": "Munkhsaikhan Erdenebaatar",
     "country": "mn",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 79,
     "consistency": 79,
     "clutch": 77,
-    "awp": 84,
+    "awp": 53,
     "igl": 49
    },
    {
@@ -6826,11 +6826,11 @@
     "nick": "Lucaozy",
     "name": "Lucas Neves",
     "country": "br",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 79,
     "consistency": 79,
     "clutch": 77,
-    "awp": 79,
+    "awp": 53,
     "igl": 49
    },
    {
@@ -6838,11 +6838,11 @@
     "nick": "zevy",
     "name": "Romeu Rocco",
     "country": "br",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 79,
     "consistency": 79,
     "clutch": 77,
-    "awp": 53,
+    "awp": 79,
     "igl": 49
    },
    {
@@ -6911,11 +6911,11 @@
     "nick": "tuxa",
     "name": "Daniel Esteves",
     "country": "pt",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 80,
     "consistency": 80,
     "clutch": 78,
-    "awp": 54,
+    "awp": 78,
     "igl": 50
    },
    {
@@ -6935,11 +6935,11 @@
     "nick": "m0retz",
     "name": "Dinis Jalles",
     "country": "pt",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 78,
     "consistency": 78,
     "clutch": 76,
-    "awp": 78,
+    "awp": 54,
     "igl": 48
    },
    {
@@ -6996,24 +6996,24 @@
     "nick": "pepe",
     "name": "Pedro Almeida",
     "country": "br",
-    "role": "AWP",
-    "aim": 73,
-    "consistency": 73,
-    "clutch": 71,
-    "awp": 73,
-    "igl": 43
-   },
-   {
-    "id": "bo3_28857",
-    "nick": "KAISER",
-    "name": "Gianfranco Pantano",
-    "country": "ar",
     "role": "IGL",
     "aim": 73,
     "consistency": 73,
     "clutch": 71,
     "awp": 47,
     "igl": 73
+   },
+   {
+    "id": "bo3_28857",
+    "nick": "KAISER",
+    "name": "Gianfranco Pantano",
+    "country": "ar",
+    "role": "AWP",
+    "aim": 73,
+    "consistency": 73,
+    "clutch": 71,
+    "awp": 73,
+    "igl": 43
    },
    {
     "id": "bo3_32473",
@@ -7166,11 +7166,11 @@
     "nick": "r3kt",
     "name": "Caso de Mello Santos",
     "country": "br",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 73,
     "consistency": 73,
     "clutch": 71,
-    "awp": 73,
+    "awp": 47,
     "igl": 43
    },
    {
@@ -7190,11 +7190,11 @@
     "nick": "edv",
     "name": "Eduardo Vieira",
     "country": "br",
-    "role": "Entry",
+    "role": "AWP",
     "aim": 73,
     "consistency": 73,
     "clutch": 71,
-    "awp": 47,
+    "awp": 73,
     "igl": 43
    },
    {
@@ -7251,11 +7251,11 @@
     "nick": "perez",
     "name": "Henrique Perez",
     "country": "br",
-    "role": "AWP",
+    "role": "Rifler",
     "aim": 73,
     "consistency": 73,
     "clutch": 71,
-    "awp": 73,
+    "awp": 40,
     "igl": 43
    },
    {
@@ -7299,11 +7299,11 @@
     "nick": "n1cks",
     "name": "Nicolas Paixão",
     "country": "br",
-    "role": "Support",
+    "role": "AWP",
     "aim": 65,
     "consistency": 65,
     "clutch": 63,
-    "awp": 40,
+    "awp": 73,
     "igl": 35
    }
   ]
