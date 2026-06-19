@@ -41,7 +41,7 @@ function MatchCell({ t, item, onOpen, onPending }: { t: Tournament; item: MatchR
 
 function MatchTeamRow({ team, score, loser }: { team: TTeam; score?: number; loser: boolean }) {
   return (
-    <div className={`hb-row${loser ? ' loser' : ''}${team.isUser ? ' is-user' : ''}`}>
+    <div className={`hb-row${loser ? ' loser' : ''}${score !== undefined && !loser ? ' winner' : ''}${team.isUser ? ' is-user' : ''}`}>
       <TeamBadge tag={team.tag} colors={team.colors} size={18} logoUrl={team.logoUrl} />
       <span className="hb-tag">{team.tag}</span>
       <span className="hb-score">{score ?? '–'}</span>

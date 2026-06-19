@@ -13,6 +13,56 @@ const TACTICS = new Set(['balanced', 'aggressive', 'tactical', 'controlled']);
 const MAPS = new Set(['mirage', 'inferno', 'nuke', 'ancient', 'anubis', 'dust2', 'train']);
 const PLAYBACK_SPEEDS = new Set([0.5, 1, 2, 4]);
 const VETO_ACTIONS = ['ban', 'ban', 'pick', 'pick', 'ban', 'ban'] as const;
+type MajorVetoAction = 'ban' | 'pick' | 'decider';
+
+interface MajorVetoState {
+  steps: { team: 0 | 1 | -1; action: MajorVetoAction; map: string }[];
+  remaining: string[];
+  bestOf: 1 | 3 | 5;
+  participants: [string | null, string | null];
+  maps?: { map: string; pickedBy: 0 | 1 | -1 }[];
+}
+
+function majorVetoOrder(bestOf: 1 | 3 | 5): { team: 0 | 1 | -1; action: MajorVetoAction }[] {
+  if (bestOf === 5) return [
+    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
+    { team: 0, action: 'pick' }, { team: 1, action: 'pick' },
+    { team: 0, action: 'pick' }, { team: 1, action: 'pick' },
+    { team: -1, action: 'decider' },
+  ];
+  if (bestOf === 1) return [
+    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
+    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
+    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
+    { team: -1, action: 'decider' },
+  ];
+  return [
+    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
+    { team: 0, action: 'pick' }, { team: 1, action: 'pick' },
+    { team: 1, action: 'ban' }, { team: 0, action: 'ban' },
+    { team: -1, action: 'decider' },
+  ];
+}
+
+function advanceMajorVeto(state: MajorVetoState, map: string): MajorVetoState {
+  const order = majorVetoOrder(state.bestOf);
+  const step = order[state.steps.length];
+  if (!step || step.action === 'decider' || !state.remaining.includes(map)) return state;
+  const remaining = state.remaining.filter((candidate) => candidate !== map);
+  const steps = [...state.steps, { ...step, map }];
+  if (steps.length === order.length - 1) {
+    const completedSteps = [...steps, { team: -1 as const, action: 'decider' as const, map: remaining[0] }];
+    return {
+      ...state,
+      steps: completedSteps,
+      remaining: [],
+      maps: completedSteps
+        .filter((entry) => entry.action === 'pick' || entry.action === 'decider')
+        .map((entry) => ({ map: entry.map, pickedBy: entry.action === 'decider' ? -1 : entry.team as 0 | 1 })),
+    };
+  }
+  return { ...state, steps, remaining };
+}
 
 interface VetoState {
   step: number;
@@ -67,6 +117,7 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage int DEFAULT 0`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage_started_at bigint DEFAULT 0`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS ruleset text DEFAULT 'open'`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_seed bigint DEFAULT 0`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS playback_speed real DEFAULT 1`;
@@ -134,7 +185,7 @@ export default async function handler(
       return;
     }
     try {
-      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed, COALESCE(draft_rollouts, 2) AS draft_rollouts, COALESCE(veto_state, '{}'::jsonb) AS veto, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed, COALESCE(draft_rollouts, 2) AS draft_rollouts, COALESCE(veto_state, '{}'::jsonb) AS veto, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -156,7 +207,7 @@ export default async function handler(
         }
       }
       res.status(200).json({
-        lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage), playback_speed: Number(lobby[0].playback_speed) },
+        lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage), stage_started_at: Number(lobby[0].stage_started_at), playback_speed: Number(lobby[0].playback_speed) },
         players: players.map((p) => ({ ...p, ready_stage: Number(p.ready_stage) })),
       });
     } catch (e) {
@@ -194,6 +245,10 @@ export default async function handler(
     pickMap?: string;
     draftRollouts?: number;
     rollouts?: unknown;
+    matchKey?: string;
+    bestOf?: number;
+    participants?: unknown;
+    requiredVetoKeys?: unknown;
   };
   const action = String(body.action ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 20);
@@ -342,7 +397,7 @@ export default async function handler(
       }
       const updated = await sql`
         UPDATE lobbies SET playback_speed = ${speed}, updated_at = now()
-        WHERE code = ${code} AND lower(host) = ${nick.toLowerCase()}
+        WHERE code = ${code} AND lower(host) = ${nick.toLowerCase()} AND COALESCE(stage_started_at, 0) = 0
         RETURNING playback_speed`;
       if (updated.length === 0) {
         res.status(403).json({ error: 'só o host controla a velocidade' });
@@ -396,10 +451,10 @@ export default async function handler(
         const participants = participantRows.map((player) => String(player.nick));
         const duelVeto = lobby[0].mode === 'duel' ? initialVeto(participants) : {};
         const nextStatus = lobby[0].mode === 'duel' ? 'veto' : 'done';
-        await sql`UPDATE lobbies SET status = ${nextStatus}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, veto_state = ${JSON.stringify(duelVeto)}::jsonb, major_vetos = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
+        await sql`UPDATE lobbies SET status = ${nextStatus}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, stage_started_at = 0, veto_state = ${JSON.stringify(duelVeto)}::jsonb, major_vetos = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
         await sql`UPDATE lobby_players SET ready_stage = -1 WHERE code = ${code}`;
       } else {
-        await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, veto_state = '{}'::jsonb, major_vetos = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
+        await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, stage_started_at = 0, veto_state = '{}'::jsonb, major_vetos = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
         await sql`UPDATE lobby_players SET picks = '[]'::jsonb, coach_pick = '', strategy = '{}'::jsonb, lineup = '{}'::jsonb, rollouts = '[]'::jsonb, done = false, ready_stage = -1 WHERE code = ${code}`;
       }
       res.status(200).json({ ok: true, seed: newSeed, keepRoster });
@@ -432,25 +487,18 @@ export default async function handler(
         res.status(404).json({ error: 'jogador não está neste lobby' });
         return;
       }
-      const pending = await sql`
-        SELECT COUNT(*) AS n FROM lobby_players
-        WHERE code = ${code} AND COALESCE(spectator, false) = false AND COALESCE(ready_stage, -1) < ${currentStage}`;
-      let nextStage = currentStage;
-      if (Number(pending[0].n) === 0) {
-        const advanced = await sql`
-          UPDATE lobbies SET stage = ${currentStage + 1}, updated_at = now()
-          WHERE code = ${code} AND COALESCE(stage, 0) = ${currentStage}
-          RETURNING stage`;
-        if (advanced.length > 0) nextStage = Number(advanced[0].stage);
-      }
-      res.status(200).json({ ok: true, stage: nextStage, advanced: nextStage > currentStage });
+      res.status(200).json({ ok: true, stage: currentStage, advanced: false });
       return;
     }
 
-    if (action === 'majorVeto') {
-      const banMap = String(body.banMap ?? '');
-      const pickMap = String(body.pickMap ?? '');
-      const lobby = await sql`SELECT status, mode, COALESCE(stage, 0) AS stage FROM lobbies WHERE code = ${code}`;
+    if (action === 'majorVetoAction') {
+      const map = String(body.map ?? '');
+      const matchKey = String(body.matchKey ?? '').slice(0, 180);
+      const bestOf = ([1, 3, 5].includes(Number(body.bestOf)) ? Number(body.bestOf) : 3) as 1 | 3 | 5;
+      const requestedParticipants = Array.isArray(body.participants)
+        ? body.participants.slice(0, 2).map((value) => typeof value === 'string' && value.trim() ? value.trim().slice(0, 20) : null) as [string | null, string | null]
+        : [null, null] as [null, null];
+      const lobby = await sql`SELECT status, mode, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -459,20 +507,90 @@ export default async function handler(
         res.status(409).json({ error: 'o veto do Major não está disponível' });
         return;
       }
-      if (!MAPS.has(banMap) || !MAPS.has(pickMap) || banMap === pickMap) {
-        res.status(400).json({ error: 'selecione mapas diferentes para ban e pick' });
-        return;
-      }
-      const participant = await sql`SELECT 1 FROM lobby_players WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()} AND COALESCE(spectator, false) = false`;
-      if (participant.length === 0) {
-        res.status(403).json({ error: 'somente jogadores podem vetar mapas' });
+      if (Number(lobby[0].stage_started_at) > 0) {
+        res.status(409).json({ error: 'a rodada já começou' });
         return;
       }
       const stage = Number(lobby[0].stage);
-      const key = `${stage}:${nick.toLowerCase()}`;
-      const entry = JSON.stringify({ [key]: { banMap, pickMap } });
+      if (!matchKey.startsWith(`${stage}:`) || !MAPS.has(map)) {
+        res.status(400).json({ error: 'ação de veto inválida' });
+        return;
+      }
+      const lobbyPlayers = await sql`SELECT nick FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false`;
+      const validPlayers = new Set(lobbyPlayers.map((player) => String(player.nick).toLowerCase()));
+      if (!validPlayers.has(nick.toLowerCase()) || !requestedParticipants.some((participant) => participant?.toLowerCase() === nick.toLowerCase())) {
+        res.status(403).json({ error: 'somente jogadores podem vetar mapas' });
+        return;
+      }
+      const allVetos = lobby[0].major_vetos as Record<string, MajorVetoState>;
+      const current = allVetos[matchKey] ?? { steps: [], remaining: [...MAPS], bestOf, participants: requestedParticipants };
+      const step = majorVetoOrder(current.bestOf)[current.steps.length];
+      if (!step || step.team === -1 || current.maps) {
+        res.status(409).json({ error: 'o veto já terminou' });
+        return;
+      }
+      const expectedPlayer = current.participants[step.team];
+      const isHumanTurn = expectedPlayer !== null;
+      const requesterIsParticipant = current.participants.some((participant) => participant?.toLowerCase() === nick.toLowerCase());
+      if ((isHumanTurn && expectedPlayer!.toLowerCase() !== nick.toLowerCase()) || (!isHumanTurn && !requesterIsParticipant)) {
+        res.status(403).json({ error: 'aguarde sua vez no veto' });
+        return;
+      }
+      const advanced = advanceMajorVeto(current, map);
+      const entry = JSON.stringify({ [matchKey]: advanced });
       await sql`UPDATE lobbies SET major_vetos = COALESCE(major_vetos, '{}'::jsonb) || ${entry}::jsonb, updated_at = now() WHERE code = ${code}`;
-      res.status(200).json({ ok: true, stage });
+      res.status(200).json({ ok: true, stage, veto: advanced });
+      return;
+    }
+
+    if (action === 'startStage') {
+      const requiredVetoKeys = Array.isArray(body.requiredVetoKeys)
+        ? body.requiredVetoKeys.filter((value): value is string => typeof value === 'string').slice(0, 8)
+        : [];
+      const lobby = await sql`SELECT host, status, mode, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
+      if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
+        res.status(403).json({ error: 'somente o host inicia a rodada' });
+        return;
+      }
+      if (lobby[0].status !== 'done' || lobby[0].mode !== 'party') {
+        res.status(409).json({ error: 'o Major em grupo não está em andamento' });
+        return;
+      }
+      const vetos = lobby[0].major_vetos as Record<string, MajorVetoState>;
+      if (requiredVetoKeys.some((key) => !vetos[key]?.maps?.length)) {
+        res.status(409).json({ error: 'todos os vetos precisam terminar antes da rodada' });
+        return;
+      }
+      const startedAt = Number(lobby[0].stage_started_at) || Date.now() + 3_000;
+      await sql`UPDATE lobbies SET stage_started_at = ${startedAt}, updated_at = now() WHERE code = ${code}`;
+      res.status(200).json({ ok: true, startedAt });
+      return;
+    }
+
+    if (action === 'advanceStage') {
+      const lobby = await sql`SELECT host, status, mode, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at FROM lobbies WHERE code = ${code}`;
+      if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
+        res.status(403).json({ error: 'somente o host avança a rodada' });
+        return;
+      }
+      const currentStage = Number(lobby[0].stage);
+      if (lobby[0].status !== 'done' || lobby[0].mode !== 'party' || Number(lobby[0].stage_started_at) === 0) {
+        res.status(409).json({ error: 'a rodada ainda não começou' });
+        return;
+      }
+      const pending = await sql`
+        SELECT COUNT(*) AS n FROM lobby_players
+        WHERE code = ${code} AND COALESCE(spectator, false) = false AND COALESCE(ready_stage, -1) < ${currentStage}`;
+      if (Number(pending[0].n) > 0) {
+        res.status(409).json({ error: 'ainda há jogadores assistindo suas partidas' });
+        return;
+      }
+      const advanced = await sql`
+        UPDATE lobbies SET stage = ${currentStage + 1}, stage_started_at = 0, updated_at = now()
+        WHERE code = ${code} AND COALESCE(stage, 0) = ${currentStage}
+        RETURNING stage`;
+      const nextStage = advanced.length ? Number(advanced[0].stage) : currentStage;
+      res.status(200).json({ ok: true, stage: nextStage, advanced: nextStage > currentStage });
       return;
     }
 

@@ -31,6 +31,12 @@
 - Veto por confronto com ban e pick sincronizados e efeito real na simulacao.
 - Rerolls por rodada configuraveis pelo host e reconstruidos deterministicamente.
 - CTA principal para jogar e fechamento automatico ao terminar a partida.
+- Veto oficial completo por confronto, com turnos sincronizados entre jogadores.
+- Rodadas iniciadas e avancadas pelo host, com relogio unico para toda a sala.
+- Transmissao central em overlay, independente de scroll, e placares revelados ao vivo.
+- Match Center interativo com mapa, round, placar, progresso e filtros por jogador.
+- Painel de classificados, em disputa e eliminados atualizado no fim de cada serie.
+- Clique em um time para destacar e filtrar suas partidas na rodada.
 - Revanche mantendo os elencos ou redraft completo.
 - Lobbies multiplayer continuam separados da demonstracao local.
 

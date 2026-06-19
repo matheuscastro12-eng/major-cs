@@ -7,10 +7,12 @@ import {
   listOpenLobbies,
   lobbyApi,
   majorStandings,
+  majorMatchKey,
   simulateOnlineDuel,
   simulateOnlineMajor,
   type LobbyState,
   type OnlineLineup,
+  type OnlineMajorVetoState,
   type OnlinePace,
   type OnlineStrategy,
   type OnlineTactic,
@@ -18,20 +20,27 @@ import {
   type PlaybackSpeed,
   type UltimateRuleset,
 } from '../state/online';
+import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps } from '../engine/veto';
+import { makeRng } from '../engine/rng';
+import { pairingBestOf } from '../engine/swiss';
 import { useLang } from '../state/i18n';
 import { track } from '../state/track';
 import type { MapId, Pairing, Phase, Player, PlayerLine, SeriesResult, TeamSeason, Tournament, TournamentPool, TPlayer, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
 import { Scoreboard } from './Scoreboard';
 import { TournamentBracket } from './Bracket';
-import { Flag, Loader, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { Flag, Loader, MapThumb, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { logoForTeam } from '../data/media';
+import { MatchBanner } from './flags';
 
 interface SelSeries {
   a: string; // teamId
   b: string;
   series: SeriesResult;
+  completed?: boolean;
 }
+
+type MatchCenterFilter = 'all' | 'players' | 'mine' | 'finished';
 
 interface Props {
   onBack: () => void;
@@ -103,6 +112,196 @@ const RULESET_OBJECTIVES: Record<UltimateRuleset, string> = {
   unique_country: 'Vença com cinco nacionalidades', gauntlet: 'Sobreviva às cinco rodadas suíças',
 };
 
+const MAP_GAP_UNITS = 2;
+const seriesTimelineUnits = (series: SeriesResult) => series.maps.reduce((total, map, index) => total + map.roundLog.length + (index < series.maps.length - 1 ? MAP_GAP_UNITS : 0), 0);
+const seriesDurationMs = (series: SeriesResult, speed: PlaybackSpeed) => seriesTimelineUnits(series) * 850 / speed;
+
+function seriesLiveSnapshot(series: SeriesResult, elapsedMs: number, speed: PlaybackSpeed) {
+  let units = Math.max(0, Math.floor(elapsedMs * speed / 850));
+  let mapsA = 0;
+  let mapsB = 0;
+  for (let index = 0; index < series.maps.length; index++) {
+    const map = series.maps[index];
+    const rounds = map.roundLog.length;
+    if (units <= rounds) {
+      const round = Math.min(rounds, units);
+      const log = map.roundLog.slice(0, round);
+      return { done: false, interval: false, mapIndex: index, map: map.map, round, roundScore: [log.filter((side) => side === 0).length, log.filter((side) => side === 1).length] as [number, number], mapScore: [mapsA, mapsB] as [number, number] };
+    }
+    units -= rounds;
+    if (map.winner === 0) mapsA++;
+    else mapsB++;
+    if (index < series.maps.length - 1 && units <= MAP_GAP_UNITS) {
+      return { done: false, interval: true, mapIndex: index, map: map.map, round: rounds, roundScore: map.score, mapScore: [mapsA, mapsB] as [number, number] };
+    }
+    if (index < series.maps.length - 1) units -= MAP_GAP_UNITS;
+  }
+  const last = series.maps[series.maps.length - 1];
+  return { done: true, interval: false, mapIndex: Math.max(0, series.maps.length - 1), map: last?.map, round: last?.roundLog.length ?? 0, roundScore: last?.score ?? [0, 0], mapScore: series.mapScore };
+}
+
+function OnlineMatchCenter({
+  items,
+  teamsById,
+  humanByTeamId,
+  viewerTeamId,
+  elapsedMs,
+  playbackSpeed,
+  stageIsLive,
+  filter,
+  focusedTeamId,
+  onFilter,
+  onClearFocus,
+  onOpen,
+}: {
+  items: { phase: string; pairing: Pairing }[];
+  teamsById: Record<string, TTeam>;
+  humanByTeamId: Record<string, string>;
+  viewerTeamId?: string;
+  elapsedMs: number;
+  playbackSpeed: PlaybackSpeed;
+  stageIsLive: boolean;
+  filter: MatchCenterFilter;
+  focusedTeamId: string | null;
+  onFilter: (filter: MatchCenterFilter) => void;
+  onClearFocus: () => void;
+  onOpen: (item: { phase: string; pairing: Pairing }) => void;
+}) {
+  const filtered = items.filter((item) => {
+    if (focusedTeamId && item.pairing.a !== focusedTeamId && item.pairing.b !== focusedTeamId) return false;
+    if (filter === 'players') return Boolean(humanByTeamId[item.pairing.a] || humanByTeamId[item.pairing.b]);
+    if (filter === 'mine') return Boolean(viewerTeamId && (item.pairing.a === viewerTeamId || item.pairing.b === viewerTeamId));
+    if (filter === 'finished') return stageIsLive && seriesLiveSnapshot(item.pairing.result!, elapsedMs, playbackSpeed).done;
+    return true;
+  });
+  return (
+    <div className="ut-match-center">
+      <div className="ut-mc-head">
+        <div><span>MATCH CENTER</span><b>Partidas da rodada</b></div>
+        <div className="ut-mc-filters">
+          {focusedTeamId && <button className="focus" onClick={onClearFocus}>✕ {teamsById[focusedTeamId]?.tag}</button>}
+          {([['all', 'Todas'], ['players', 'Jogadores'], ['mine', 'Minha'], ['finished', 'Encerradas']] as [MatchCenterFilter, string][]).map(([id, label]) => (
+            <button key={id} className={filter === id ? 'active' : ''} onClick={() => onFilter(id)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="ut-mc-grid">
+        {filtered.map((item) => {
+          const a = teamsById[item.pairing.a];
+          const b = teamsById[item.pairing.b];
+          const live = seriesLiveSnapshot(item.pairing.result!, elapsedMs, playbackSpeed);
+          const duration = seriesDurationMs(item.pairing.result!, playbackSpeed);
+          const human = humanByTeamId[item.pairing.a] || humanByTeamId[item.pairing.b];
+          const status = !stageIsLive ? 'AGUARDANDO' : live.done ? 'FINAL' : live.interval ? 'INTERVALO' : `AO VIVO · R${live.round}`;
+          const score = live.done ? live.mapScore : live.roundScore;
+          return (
+            <button key={`${item.pairing.a}-${item.pairing.b}`} className={`ut-mc-card${live.done ? ' done' : stageIsLive ? ' live' : ''}${viewerTeamId && (item.pairing.a === viewerTeamId || item.pairing.b === viewerTeamId) ? ' mine' : ''}`} onClick={() => onOpen(item)}>
+              <div className="ut-mc-status"><span>{status}</span><em>{stageIsLive && live.map ? MAP_LABELS[live.map] : item.pairing.label}</em>{human && <i>JOGADOR</i>}</div>
+              <div className={`ut-mc-team${live.done && item.pairing.result!.winner === 1 ? ' loser' : ''}`}><TeamBadge tag={a.tag} colors={a.colors} size={24} logoUrl={a.logoUrl} /><span>{humanByTeamId[a.id] ?? a.name}</span><b>{score[0]}</b></div>
+              <div className={`ut-mc-team${live.done && item.pairing.result!.winner === 0 ? ' loser' : ''}`}><TeamBadge tag={b.tag} colors={b.colors} size={24} logoUrl={b.logoUrl} /><span>{humanByTeamId[b.id] ?? b.name}</span><b>{score[1]}</b></div>
+              <div className="ut-mc-progress"><i style={{ width: `${stageIsLive ? Math.min(100, elapsedMs / duration * 100) : 0}%` }} /></div>
+            </button>
+          );
+        })}
+        {filtered.length === 0 && <div className="ut-mc-empty">Nenhuma partida neste filtro.</div>}
+      </div>
+    </div>
+  );
+}
+
+function OnlineQualificationBoard({ teams, humanByTeamId, focusedTeamId, onFocus }: { teams: TTeam[]; humanByTeamId: Record<string, string>; focusedTeamId: string | null; onFocus: (teamId: string | null) => void }) {
+  const groups = [
+    { id: 'advanced', label: 'CLASSIFICADOS', teams: teams.filter((team) => team.status === 'advanced').sort((a, b) => a.losses - b.losses || b.roundDiff - a.roundDiff) },
+    { id: 'alive', label: 'EM DISPUTA', teams: teams.filter((team) => team.status === 'alive').sort((a, b) => b.wins - a.wins || a.losses - b.losses || b.roundDiff - a.roundDiff) },
+    { id: 'eliminated', label: 'ELIMINADOS', teams: teams.filter((team) => team.status === 'eliminated').sort((a, b) => b.wins - a.wins || b.roundDiff - a.roundDiff) },
+  ];
+  return (
+    <div className="ut-qualification-board">
+      {groups.map((group) => (
+        <div key={group.id} className={`ut-q-group ${group.id}`}>
+          <div className="ut-q-title"><b>{group.label}</b><span>{group.teams.length}</span></div>
+          <div className="ut-q-teams">
+            {group.teams.map((team) => <button key={team.id} className={focusedTeamId === team.id ? 'active' : ''} onClick={() => onFocus(focusedTeamId === team.id ? null : team.id)}><TeamBadge tag={team.tag} colors={team.colors} size={20} logoUrl={team.logoUrl} /><span>{humanByTeamId[team.id] ?? team.tag}</span><strong>{team.wins}-{team.losses}</strong></button>)}
+            {group.teams.length === 0 && <small>—</small>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OnlineMajorVetoPanel({
+  teams,
+  participants,
+  bestOf,
+  veto,
+  viewerNick,
+  busy,
+  onSelect,
+  onClose,
+}: {
+  teams: [TTeam, TTeam];
+  participants: [string | null, string | null];
+  bestOf: 1 | 3 | 5;
+  veto?: OnlineMajorVetoState;
+  viewerNick: string;
+  busy: boolean;
+  onSelect: (map: MapId) => void;
+  onClose: () => void;
+}) {
+  const current: OnlineMajorVetoState = useMemo(() => veto ?? { ...newVeto(bestOf), participants }, [bestOf, participants, veto]);
+  const done = Boolean(current.maps?.length) || vetoDone(current);
+  const step = done ? null : currentStep(current);
+  const expectedPlayer = step && step.team !== -1 ? current.participants[step.team] : null;
+  const isMyTurn = Boolean(expectedPlayer && expectedPlayer.toLowerCase() === viewerNick.toLowerCase());
+  const isAiTurn = Boolean(step && step.team !== -1 && expectedPlayer === null);
+  const canDriveAi = current.participants.some((player) => player?.toLowerCase() === viewerNick.toLowerCase());
+
+  useEffect(() => {
+    if (!isAiTurn || !canDriveAi || busy || !step) return;
+    const seed = [...`${teams[0].id}|${teams[1].id}|${current.steps.length}`].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    const timer = window.setTimeout(() => onSelect(aiChoice(current, teams, makeRng(seed))), 650);
+    return () => window.clearTimeout(timer);
+  }, [busy, canDriveAi, current, isAiTurn, onSelect, step, teams]);
+
+  const mapState = new Map(current.steps.filter((entry) => entry.map).map((entry) => [entry.map!, entry]));
+  const mdLabel = bestOf === 1 ? 'MD1' : bestOf === 5 ? 'MD5' : 'MD3';
+  return (
+    <div className="ut-live-overlay fade-in">
+      <div className="ut-veto-dialog veto-layout">
+        <div className="panel">
+          <div className="panel-head">VETO DE MAPAS · {mdLabel}<span className="spacer" /><button className="btn small" onClick={onClose}>Fechar ✕</button></div>
+          <div className="panel-body">
+            <div className="veto-banner-wrap"><MatchBanner teamA={teams[0]} teamB={teams[1]} center={mdLabel} event="MAJOR ONLINE" sub="Veto oficial" /></div>
+            {done ? (
+              <div className="veto-action pick"><span className="va-icon">✓</span><span className="va-text"><b>Veto concluído</b><span>Aguardando o host iniciar a rodada.</span></span></div>
+            ) : isMyTurn ? (
+              <div className={`veto-action ${step!.action === 'ban' ? 'ban' : 'pick'}`}><span className="va-icon">{step!.action === 'ban' ? '🚫' : '✅'}</span><span className="va-text"><b>Sua vez</b><span>{step!.action === 'ban' ? 'BANIR um mapa' : 'ESCOLHER um mapa'}</span></span></div>
+            ) : (
+              <div className="veto-action waiting"><span className="va-icon">⏳</span><span className="va-text">{isAiTurn ? `${teams[step!.team as 0 | 1].name} está escolhendo…` : `Aguardando ${expectedPlayer}…`}</span></div>
+            )}
+            <div className={`veto-maps${isMyTurn ? (step!.action === 'ban' ? ' mode-ban' : ' mode-pick') : ''}`}>
+              {MAP_POOL.map((map) => {
+                const state = mapState.get(map);
+                const selectable = isMyTurn && !state && !busy;
+                return (
+                  <div key={map} className={`mapcard${state ? ` dead ${state.action === 'ban' ? 'banned' : state.action === 'pick' ? 'picked' : 'decider'}` : ''}${selectable ? ' selectable' : ''}`} onClick={() => selectable && onSelect(map)}>
+                    <MapThumb map={map} className="mapcard-img" />
+                    {state && <span className={`mtag ${state.action === 'ban' ? 'banned' : state.action === 'pick' ? 'picked' : 'decider'}`}>{state.action === 'ban' ? '🚫 BAN' : state.action === 'pick' ? `✅ PICK ${teams[state.team as 0 | 1].tag}` : 'DECIDER'}</span>}
+                    {selectable && <span className="map-hover-action">{step!.action === 'ban' ? '🚫 BANIR' : '✅ ESCOLHER'}</span>}
+                    <div className="mname">{MAP_LABELS[map]}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="veto-log">{current.steps.map((entry, index) => entry.map && <div key={`${entry.map}-${index}`}>{index + 1}. <b>{MAP_LABELS[entry.map]}</b> · {entry.action === 'ban' ? 'ban' : entry.action === 'pick' ? `pick ${teams[entry.team as 0 | 1].tag}` : 'decider'}</div>)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // textos das salas abertas, por idioma (sem mexer no i18n global)
 const ONLINE_LOCAL = {
   pt: { title: 'ULTIMATE TEAM', lead: 'Monte seu cinco com estrelas atuais e lendas de todas as eras. Cada atleta é uma carta com atributos próprios; no duelo, as equipes se enfrentam em uma MD3 reproduzida round a round.', current: 'ATUAL', legend: 'LENDA', collection: 'Seleção de cartas', duelLive: 'Duelo ao vivo', demo: 'Testar agora contra um rival', demoNote: 'Demonstração local: fica apenas nesta sessão e não precisa de banco.', publicRoom: 'Sala aberta (qualquer um pode entrar)', openRooms: 'Salas abertas', noRooms: 'Nenhuma sala aberta agora. Crie a sua!', refresh: 'Atualizar', enter: 'Entrar', yourTeam: 'Seu Ultimate Team', emptySlot: 'vazio', rolesLabel: 'Funções', roleEntry: 'Entry', lock: '🔒 Trancar sala', unlock: '🔓 Destrancar sala', locked: 'Sala trancada', kick: 'Expulsar', kicked: 'Você foi removido da sala pelo host.', roomGone: 'A sala expirou ou foi encerrada. Crie ou entre em outra.', nextSeason: '🔁 Nova disputa (novas cartas)', season: 'Temporada', seasonWait: 'Esperando o host iniciar a próxima disputa…' },
@@ -150,8 +349,9 @@ export function OnlineScreen({ onBack }: Props) {
   const [shareStatus, setShareStatus] = useState('');
   const [revealedRound, setRevealedRound] = useState(-1);
   const [majorVetoOpen, setMajorVetoOpen] = useState(false);
-  const [majorVetoBan, setMajorVetoBan] = useState<MapId>('nuke');
-  const [majorVetoPick, setMajorVetoPick] = useState<MapId>('mirage');
+  const [broadcastNow, setBroadcastNow] = useState(0);
+  const [matchCenterFilter, setMatchCenterFilter] = useState<MatchCenterFilter>('all');
+  const [focusedTeamId, setFocusedTeamId] = useState<string | null>(null);
   // quantas fases do Major já foram reveladas (experiência rodada a rodada,
   // sem spoiler do campeão); persiste por sala para sobreviver a F5
   const [revealed, setRevealed] = useState(0);
@@ -170,15 +370,17 @@ export function OnlineScreen({ onBack }: Props) {
   const watchedKey = `rtm-online-watched-${code}-${seasonSeed}`;
   useEffect(() => {
     if (!code) return;
-    try {
-      setRevealed(Number(localStorage.getItem(revealKey) ?? '0') || 0);
-      const savedWatched = JSON.parse(localStorage.getItem(watchedKey) ?? '[]');
-      setWatchedMatches(Array.isArray(savedWatched) ? savedWatched.filter((v): v is string => typeof v === 'string') : []);
-    } catch {
-      /* sem storage */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, seasonSeed]);
+    const restore = window.setTimeout(() => {
+      try {
+        setRevealed(Number(localStorage.getItem(revealKey) ?? '0') || 0);
+        const savedWatched = JSON.parse(localStorage.getItem(watchedKey) ?? '[]');
+        setWatchedMatches(Array.isArray(savedWatched) ? savedWatched.filter((v): v is string => typeof v === 'string') : []);
+      } catch {
+        /* sem storage */
+      }
+    }, 0);
+    return () => window.clearTimeout(restore);
+  }, [code, revealKey, watchedKey]);
   const markWatched = (key: string) => {
     setWatchedMatches((current) => {
       if (current.includes(key)) return current;
@@ -220,7 +422,7 @@ export function OnlineScreen({ onBack }: Props) {
     const prevPlaybackSpeed = playbackSpeedRef.current;
     const prevProgress = progressRef.current;
     const playbackSpeed = PLAYBACK_SPEEDS.includes(s.lobby.playback_speed ?? 1) ? (s.lobby.playback_speed ?? 1) : 1;
-    const progress = `${s.lobby.stage ?? 0}|speed:${playbackSpeed}|vetos:${JSON.stringify(s.lobby.major_vetos ?? {})}|${s.players.map((p) => `${p.nick}:${p.ready_stage ?? -1}`).join(',')}`;
+    const progress = `${s.lobby.stage ?? 0}|started:${s.lobby.stage_started_at ?? 0}|speed:${playbackSpeed}|vetos:${JSON.stringify(s.lobby.major_vetos ?? {})}|${s.players.map((p) => `${p.nick}:${p.ready_stage ?? -1}`).join(',')}`;
     // nova temporada: o host gerou um novo seed -> zera o draft local e recomeça
     if (prevSeed !== null && prevSeed !== s.lobby.seed) {
       setMyPicks([]);
@@ -290,18 +492,18 @@ export function OnlineScreen({ onBack }: Props) {
       setLineup(me.lineup);
       setLineupConfirmed(true);
     }
-  }, [code, nick, myDone, localDemo]);
+  }, [code, nick, myDone, localDemo, OL.kicked, OL.roomGone]);
 
   const lobbyDone = state?.lobby.status === 'done';
   useEffect(() => {
     if (!code || localDemo) return;
-    refresh();
+    const initial = window.setTimeout(() => void refresh(), 0);
     // depois de 'done' o resultado é imutável (refresh não re-seta o state, então
     // não re-simula), mas seguimos com um poll lento pra detectar quando o host
     // inicia a próxima temporada.
     const syncMs = state?.lobby.status === 'veto' ? 1000 : lobbyDone ? 1500 : POLL_MS;
     pollRef.current = window.setInterval(refresh, syncMs);
-    return () => window.clearInterval(pollRef.current);
+    return () => { window.clearTimeout(initial); window.clearInterval(pollRef.current); };
   }, [code, refresh, lobbyDone, localDemo, state?.lobby.mode, state?.lobby.status]);
 
   useEffect(() => {
@@ -309,6 +511,14 @@ export function OnlineScreen({ onBack }: Props) {
     const id = window.setInterval(() => setVetoNow(Date.now()), 500);
     return () => window.clearInterval(id);
   }, [state?.lobby.status]);
+
+  useEffect(() => {
+    if (!(state?.lobby.stage_started_at && state.lobby.stage_started_at > 0)) return;
+    const update = () => setBroadcastNow(Date.now());
+    const initial = window.setTimeout(update, 0);
+    const id = window.setInterval(update, 500);
+    return () => { window.clearTimeout(initial); window.clearInterval(id); };
+  }, [state?.lobby.stage_started_at]);
 
   // heartbeat: mantém a sala viva enquanto a aba está aberta. Ao fechar a aba
   // (cleanup), os pings param e o servidor fecha a sala por inatividade.
@@ -358,7 +568,7 @@ export function OnlineScreen({ onBack }: Props) {
     setWatchedMatches([]);
     setActiveReplayKey(null);
     setState({
-      lobby: { code: 'LOCAL', mode, host: playerNick, status: 'drafting', seed, run_seed: seed, pool, season: 1, stage: 0, ruleset, playback_speed: 1, draft_rollouts: draftRollouts, major_vetos: {} },
+      lobby: { code: 'LOCAL', mode, host: playerNick, status: 'drafting', seed, run_seed: seed, pool, season: 1, stage: 0, stage_started_at: 0, ruleset, playback_speed: 1, draft_rollouts: draftRollouts, major_vetos: {} },
       players: [
         { nick: playerNick, picks: [], coach_pick: '', done: false, ready_stage: -1, strategy: DEFAULT_STRATEGY, lineup: DEFAULT_LINEUP, rollouts: [0, 0, 0, 0, 0], spectator: false },
         ...rivals,
@@ -392,9 +602,9 @@ export function OnlineScreen({ onBack }: Props) {
   }, [nick]);
   useEffect(() => {
     if (code) return; // já está numa sala
-    loadRooms();
+    const initial = window.setTimeout(() => void loadRooms(), 0);
     const id = window.setInterval(loadRooms, 20000); // corte de custo
-    return () => window.clearInterval(id);
+    return () => { window.clearTimeout(initial); window.clearInterval(id); };
   }, [code, loadRooms]);
 
   const doJoin = async (raw: string, spectator = false) => {
@@ -473,7 +683,7 @@ export function OnlineScreen({ onBack }: Props) {
           ...prev,
           lobby: prev.lobby.mode === 'duel'
             ? { ...prev.lobby, run_seed: nextRunSeed, season: (prev.lobby.season ?? 1) + 1, stage: 0, status: 'veto', veto: { step: 0, remaining: [...MAP_POOL], bans: [], picks: [], turn: prev.lobby.host, deadline: Date.now() + 20_000 } }
-            : { ...prev.lobby, run_seed: nextRunSeed, season: (prev.lobby.season ?? 1) + 1, stage: 0, status: 'done' },
+            : { ...prev.lobby, run_seed: nextRunSeed, season: (prev.lobby.season ?? 1) + 1, stage: 0, stage_started_at: 0, status: 'done', major_vetos: {} },
           players: prev.players.map((p, i) => ({ ...p, ready_stage: i === 0 ? -1 : 999 })),
         } : prev);
         return;
@@ -740,10 +950,14 @@ export function OnlineScreen({ onBack }: Props) {
   const playbackSpeed = state.lobby.playback_speed ?? 1;
   const changePlaybackSpeed = async (speed: PlaybackSpeed) => {
     if (!isHost || speed === playbackSpeed) return;
+    setError('');
     setState((prev) => prev ? { ...prev, lobby: { ...prev.lobby, playback_speed: speed } } : prev);
     if (localDemo) return;
     const result = await lobbyApi({ action: 'setPlaybackSpeed', nick: nick.trim(), code, speed }).catch(() => null);
-    if (!result?.ok) await refresh();
+    if (!result?.ok) {
+      setError(result?.error ?? 'Não foi possível alterar a velocidade da sala.');
+      await refresh();
+    }
   };
   const submitVetoMap = async (map: MapId) => {
     const veto = state.lobby.veto;
@@ -766,31 +980,6 @@ export function OnlineScreen({ onBack }: Props) {
     await refresh();
     setBusy(false);
   };
-  const submitMajorMatchVeto = async () => {
-    if (busy || majorVetoBan === majorVetoPick) return;
-    setBusy(true);
-    const stage = state.lobby.stage ?? 0;
-    const key = `${stage}:${nick.toLowerCase()}`;
-    if (localDemo) {
-      setState((prev) => prev ? {
-        ...prev,
-        lobby: {
-          ...prev.lobby,
-          major_vetos: { ...prev.lobby.major_vetos, [key]: { banMap: majorVetoBan, pickMap: majorVetoPick } },
-        },
-      } : prev);
-      setMajorVetoOpen(false);
-      setBusy(false);
-      return;
-    }
-    const result = await lobbyApi({ action: 'majorVeto', nick: nick.trim(), code, banMap: majorVetoBan, pickMap: majorVetoPick }).catch(() => null);
-    if (result?.ok) {
-      setMajorVetoOpen(false);
-      await refresh();
-    }
-    setBusy(false);
-  };
-
   // sala de espera
   if (state.lobby.status === 'waiting') {
     return (
@@ -1056,15 +1245,14 @@ export function OnlineScreen({ onBack }: Props) {
     const confirmCollectiveStage = async () => {
       if (busy) return;
       setBusy(true);
+      setError('');
       if (localDemo) {
         setState((prev) => prev ? {
           ...prev,
-          lobby: { ...prev.lobby, stage: collectiveStage + 1 },
           players: prev.players.map((p) => p.nick.toLowerCase() === nick.toLowerCase()
             ? { ...p, ready_stage: collectiveStage }
             : p),
         } : prev);
-        setRevealed(collectiveStage + 1);
         setSelMatch(null);
         setActiveReplayKey(null);
         setBusy(false);
@@ -1072,6 +1260,7 @@ export function OnlineScreen({ onBack }: Props) {
       }
       try {
         const result = await lobbyApi({ action: 'readyStage', nick: nick.trim(), code, stage: collectiveStage });
+        if (!result.ok) throw new Error(result.error ?? 'Não foi possível confirmar que você assistiu à partida.');
         setState((prev) => prev ? {
           ...prev,
           lobby: { ...prev.lobby, stage: result.stage ?? prev.lobby.stage ?? collectiveStage },
@@ -1080,6 +1269,8 @@ export function OnlineScreen({ onBack }: Props) {
             : p),
         } : prev);
         await refresh();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Não foi possível confirmar a rodada.');
       } finally {
         setBusy(false);
       }
@@ -1093,9 +1284,22 @@ export function OnlineScreen({ onBack }: Props) {
       const personalMatchWatched = !requiredMatchKey || watchedMatches.includes(requiredMatchKey);
       const myLobbyPlayer = state.players.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
       const myStageConfirmed = (myLobbyPlayer?.ready_stage ?? -1) >= collectiveStage;
-      const majorVetoKey = `${collectiveStage}:${nick.toLowerCase()}`;
-      const myMajorVeto = state.lobby.major_vetos?.[majorVetoKey];
+      const stageStartedAt = state.lobby.stage_started_at ?? 0;
+      const stageIsLive = stageStartedAt > 0;
+      const elapsedMs = stageIsLive ? Math.max(0, (broadcastNow || stageStartedAt) - stageStartedAt) : 0;
+      const pairingParticipants = (item: HistoryItem): [string | null, string | null] => [
+        localDemo && major.humanByTeamId[item.pairing.a]?.toLowerCase() !== nick.toLowerCase() ? null : major.humanByTeamId[item.pairing.a] ?? null,
+        localDemo && major.humanByTeamId[item.pairing.b]?.toLowerCase() !== nick.toLowerCase() ? null : major.humanByTeamId[item.pairing.b] ?? null,
+      ];
+      const humanStageMatches = stage.items.filter((item) => pairingParticipants(item).some(Boolean));
+      const requiredVetoKeys = humanStageMatches.map((item) => majorMatchKey(collectiveStage, item.pairing));
+      const allVetosDone = requiredVetoKeys.every((key) => state.lobby.major_vetos?.[key]?.maps?.length);
+      const myMajorVetoKey = myStageMatch ? majorMatchKey(collectiveStage, myStageMatch.pairing) : null;
+      const myMajorVeto = myMajorVetoKey ? state.lobby.major_vetos?.[myMajorVetoKey] : undefined;
+      const allStageResultsVisible = stage.items.every((item) => elapsedMs >= seriesDurationMs(item.pairing.result!, playbackSpeed));
+      const allPlayersReady = state.players.filter((player) => !player.spectator).every((player) => (player.ready_stage ?? -1) >= collectiveStage);
       const visibleHistory = stages.slice(0, collectiveStage).flatMap((visibleStage) => visibleStage.items);
+      const completedStageItems = stageIsLive ? stage.items.filter((item) => elapsedMs >= seriesDurationMs(item.pairing.result!, playbackSpeed)) : [];
       const bracketPhase: Phase = stage.phase.startsWith('Suíça')
         ? 'swiss'
         : stage.phase.startsWith('Quartas')
@@ -1111,7 +1315,7 @@ export function OnlineScreen({ onBack }: Props) {
         status: 'alive',
         isUser: team.id === myTeamId,
       }));
-      for (const item of visibleHistory) {
+      for (const item of [...visibleHistory, ...completedStageItems]) {
         const result = item.pairing.result;
         if (!result) continue;
         const a = bracketTeams.find((team) => team.id === item.pairing.a)!;
@@ -1127,6 +1331,8 @@ export function OnlineScreen({ onBack }: Props) {
         if (bracketPhase === 'swiss') {
           if (winner.wins >= 3) winner.status = 'advanced';
           if (loser.losses >= 3) loser.status = 'eliminated';
+        } else {
+          loser.status = 'eliminated';
         }
       }
       const progressiveTournament: Tournament = {
@@ -1135,33 +1341,101 @@ export function OnlineScreen({ onBack }: Props) {
         phase: bracketPhase,
         swissRound: Number(/Rodada (\d+)/.exec(stage.phase)?.[1] ?? major.tournament.swissRound),
         history: visibleHistory,
-        pairings: stage.items.map((item) => ({ ...item.pairing, result: undefined })),
+        pairings: stage.items.map((item) => ({
+          ...item.pairing,
+          result: stageIsLive && elapsedMs >= seriesDurationMs(item.pairing.result!, playbackSpeed) ? item.pairing.result : undefined,
+        })),
         championId: undefined,
       };
       const openStageMatch = (item: HistoryItem) => {
         const key = matchKey(item);
         const mine = key === requiredMatchKey;
         if (!isSpectator && myStageMatch && !mine) return;
-        if (mine && !myMajorVeto && !isSpectator) {
-          setMajorVetoBan(strategy.banMap);
-          setMajorVetoPick(strategy.favoriteMap);
-          setMajorVetoOpen(true);
+        if (!stageIsLive) {
+          if (mine && !myMajorVeto?.maps && !isSpectator) setMajorVetoOpen(true);
           return;
         }
-        setActiveReplayKey(key);
-        setSelMatch({ a: item.pairing.a, b: item.pairing.b, series: item.pairing.result! });
+        if (isSpectator || !myStageMatch || mine) {
+          const completed = elapsedMs >= seriesDurationMs(item.pairing.result!, playbackSpeed);
+          setActiveReplayKey(completed ? null : key);
+          setSelMatch({ a: item.pairing.a, b: item.pairing.b, series: item.pairing.result!, completed });
+        }
+      };
+      const submitMajorVetoAction = async (map: MapId) => {
+        if (!myStageMatch || !myMajorVetoKey || busy || stageIsLive) return;
+        const participants = pairingParticipants(myStageMatch);
+        const bestOf = pairingBestOf(major.tournament, myStageMatch.pairing);
+        setBusy(true);
+        setError('');
+        if (localDemo) {
+          const base = myMajorVeto ?? { ...newVeto(bestOf), participants };
+          const advanced = applyVeto(base, map);
+          const next: OnlineMajorVetoState = {
+            ...advanced,
+            participants,
+            maps: vetoDone(advanced) ? vetoMaps(advanced) : undefined,
+          };
+          setState((previous) => previous ? { ...previous, lobby: { ...previous.lobby, major_vetos: { ...previous.lobby.major_vetos, [myMajorVetoKey]: next } } } : previous);
+          if (next.maps) setMajorVetoOpen(false);
+          setBusy(false);
+          return;
+        }
+        const result = await lobbyApi({ action: 'majorVetoAction', nick: nick.trim(), code, map, matchKey: myMajorVetoKey, bestOf, participants }).catch(() => null);
+        if (!result?.ok) setError(result?.error ?? 'Não foi possível registrar o veto. Tente novamente.');
+        await refresh();
+        setBusy(false);
+      };
+      const startStageBroadcast = async () => {
+        if (!isHost || !allVetosDone || stageIsLive || busy) return;
+        setBusy(true);
+        setError('');
+        if (localDemo) {
+          setState((previous) => previous ? { ...previous, lobby: { ...previous.lobby, stage_started_at: Date.now() + 3_000 } } : previous);
+        } else {
+          const result = await lobbyApi({ action: 'startStage', nick: nick.trim(), code, requiredVetoKeys }).catch(() => null);
+          if (!result?.ok) setError(result?.error ?? 'Não foi possível iniciar a transmissão da rodada.');
+          await refresh();
+        }
+        setBusy(false);
+      };
+      const advanceStage = async () => {
+        if (!isHost || !allPlayersReady || !stageIsLive || busy) return;
+        setBusy(true);
+        setError('');
+        if (localDemo) {
+          setState((previous) => previous ? { ...previous, lobby: { ...previous.lobby, stage: collectiveStage + 1, stage_started_at: 0 } } : previous);
+          setRevealed(collectiveStage + 1);
+          setWatchedMatches([]);
+        } else {
+          const result = await lobbyApi({ action: 'advanceStage', nick: nick.trim(), code }).catch(() => null);
+          if (!result?.ok) setError(result?.error ?? 'Não foi possível avançar a rodada.');
+          await refresh();
+        }
+        setSelMatch(null);
+        setActiveReplayKey(null);
+        setBusy(false);
+      };
+      const markByeReady = () => {
+        if (!myStageMatch && allStageResultsVisible && !myStageConfirmed) void confirmCollectiveStage();
+      };
+      const liveMatch = selMatch
+        ? { a: selMatch.a, b: selMatch.b, series: selMatch.series, key: activeReplayKey, completed: selMatch.completed }
+        : stageIsLive && myStageMatch && !personalMatchWatched
+          ? { a: myStageMatch.pairing.a, b: myStageMatch.pairing.b, series: myStageMatch.pairing.result!, key: requiredMatchKey, completed: false }
+          : null;
+      const finishLiveMatch = () => {
+        if (liveMatch?.key) markWatched(liveMatch.key);
+        setSelMatch(null);
+        setActiveReplayKey(null);
+        if (!isSpectator && liveMatch?.key === requiredMatchKey && !myStageConfirmed) void confirmCollectiveStage();
       };
       const findStageItem = (pairing: Pairing) => stage.items.find((item) => item.pairing.a === pairing.a && item.pairing.b === pairing.b);
       const openPastSeries = (pairing: Pairing) => {
         const item = visibleHistory.find((history) => history.pairing.a === pairing.a && history.pairing.b === pairing.b && history.pairing.label === pairing.label);
-        if (item?.pairing.result) setSelMatch({ a: item.pairing.a, b: item.pairing.b, series: item.pairing.result });
-      };
-      const playNextMatch = () => {
-        if (!myStageMatch || personalMatchWatched) {
-          void confirmCollectiveStage();
-          return;
+        if (item?.pairing.result) {
+          setActiveReplayKey(null);
+          setSelMatch({ a: item.pairing.a, b: item.pairing.b, series: item.pairing.result, completed: true });
         }
-        openStageMatch(myStageMatch);
       };
       return (
         <div className="fade-in ut-major-page">
@@ -1174,6 +1448,7 @@ export function OnlineScreen({ onBack }: Props) {
               </button>
             </div>
             <div className="panel-body">
+              {error && <div className="ut-online-alert" role="alert">{error}</div>}
               {myMajorTeam && (
                 <div className="ut-major-squad">
                   <div className="ut-major-squad-copy">
@@ -1203,17 +1478,45 @@ export function OnlineScreen({ onBack }: Props) {
                 ))}
               </div>
 
+              <OnlineMatchCenter
+                items={stage.items}
+                teamsById={major.teamsById}
+                humanByTeamId={major.humanByTeamId}
+                viewerTeamId={myTeamId}
+                elapsedMs={elapsedMs}
+                playbackSpeed={playbackSpeed}
+                stageIsLive={stageIsLive}
+                filter={matchCenterFilter}
+                focusedTeamId={focusedTeamId}
+                onFilter={setMatchCenterFilter}
+                onClearFocus={() => setFocusedTeamId(null)}
+                onOpen={(item) => openStageMatch(item as HistoryItem)}
+              />
+
+              {bracketPhase === 'swiss' && (
+                <OnlineQualificationBoard teams={bracketTeams} humanByTeamId={major.humanByTeamId} focusedTeamId={focusedTeamId} onFocus={setFocusedTeamId} />
+              )}
+
               <TournamentBracket
                 t={progressiveTournament}
-                onOpen={openPastSeries}
+                onOpen={(pairing) => {
+                  const current = findStageItem(pairing);
+                  if (current) openStageMatch(current);
+                  else openPastSeries(pairing);
+                }}
                 onPending={(pairing) => {
                   const item = findStageItem(pairing);
                   if (item) openStageMatch(item);
                 }}
               />
               {!myStageMatch && (
-                <div className="ut-major-bye">{isSpectator ? 'Modo espectador: clique em qualquer confronto do bracket para acompanhar.' : 'Seu time não joga nesta etapa. Avance pelo botão principal abaixo.'}</div>
+                <div className="ut-major-bye">{isSpectator ? (stageIsLive ? 'Transmissão ao vivo: clique em qualquer confronto do bracket.' : 'Aguarde o host iniciar a rodada. Nenhuma partida pode ser vista antes da transmissão.') : 'Seu time não joga nesta etapa. Os resultados aparecerão ao vivo no bracket.'}</div>
               )}
+              <div className={`ut-broadcast-status${stageIsLive ? ' live' : ''}`}>
+                <b>{stageIsLive ? (elapsedMs > 0 ? '● RODADA AO VIVO' : '◉ SINCRONIZANDO TRANSMISSÃO') : '○ PRÉ-RODADA'}</b>
+                <span>{stageIsLive ? 'Todas as telas seguem o mesmo relógio da sala.' : `${requiredVetoKeys.filter((key) => state.lobby.major_vetos?.[key]?.maps?.length).length}/${requiredVetoKeys.length} vetos concluídos`}</span>
+                {isHost && !stageIsLive && <div className="ut-prestage-speed"><span>VELOCIDADE</span>{PLAYBACK_SPEEDS.map((speed) => <button key={speed} className={`btn ghost small${playbackSpeed === speed ? ' active' : ''}`} onClick={() => void changePlaybackSpeed(speed)}>{speed}x</button>)}</div>}
+              </div>
               <div className="ut-stage-ready">
                 {state.players.filter((player) => !player.spectator).map((p) => {
                   const ready = (p.ready_stage ?? -1) >= collectiveStage;
@@ -1222,49 +1525,53 @@ export function OnlineScreen({ onBack }: Props) {
               </div>
               {!isSpectator && <div className="ut-next-match-cta">
                 <span>{myStageMatch ? `${teamLabel(myStageMatch.pairing.a)} vs ${teamLabel(myStageMatch.pairing.b)}` : 'Rodada sem partida para seu time'}</span>
-                <button className="btn gold big" disabled={myStageConfirmed || busy} onClick={playNextMatch}>
-                  {myStageConfirmed
-                    ? 'AGUARDANDO OS OUTROS JOGADORES'
-                    : !myStageMatch
-                      ? 'AVANÇAR PARA A PRÓXIMA PARTIDA'
-                      : !myMajorVeto
-                        ? 'VETAR MAPAS E JOGAR'
-                        : personalMatchWatched
-                          ? 'AVANÇAR PARA A PRÓXIMA PARTIDA'
-                          : '▶ JOGAR A PRÓXIMA PARTIDA'}
-                </button>
+                {!stageIsLive && myStageMatch && !myMajorVeto?.maps ? (
+                  <button className="btn gold big" disabled={busy} onClick={() => setMajorVetoOpen(true)}>VETAR MAPAS · FORMATO OFICIAL</button>
+                ) : !stageIsLive && isHost ? (
+                  <button className="btn gold big" disabled={!allVetosDone || busy} onClick={startStageBroadcast}>{allVetosDone ? '▶ INICIAR RODADA AO VIVO' : 'AGUARDANDO TODOS OS VETOS'}</button>
+                ) : !stageIsLive ? (
+                  <button className="btn gold big" disabled>AGUARDANDO O HOST INICIAR</button>
+                ) : isHost && allPlayersReady ? (
+                  <button className="btn gold big" disabled={busy} onClick={advanceStage}>AVANÇAR PARA A PRÓXIMA RODADA</button>
+                ) : !myStageMatch && !myStageConfirmed ? (
+                  <button className="btn gold big" disabled={!allStageResultsVisible || busy} onClick={markByeReady}>{allStageResultsVisible ? 'MARCAR COMO PRONTO' : 'RODADA EM ANDAMENTO'}</button>
+                ) : (
+                  <button className="btn gold big" disabled>{myStageConfirmed ? (isHost ? 'AGUARDANDO OS JOGADORES' : 'AGUARDANDO O HOST AVANÇAR') : 'SUA PARTIDA ESTÁ AO VIVO'}</button>
+                )}
               </div>}
             </div>
           </div>
           {majorVetoOpen && myStageMatch && (
-            <div className="panel ut-major-veto fade-in">
-              <div className="panel-head">VETO DA PRÓXIMA PARTIDA<span className="spacer" /><button className="btn small" onClick={() => setMajorVetoOpen(false)}>Fechar ✕</button></div>
-              <div className="panel-body">
-                <p>Seu ban e seu pick alteram os mapas da série para todos os jogadores.</p>
-                <div className="muted small section-label">BANIR MAPA</div>
-                <div className="ut-map-options">{MAP_POOL.map((map) => <button key={map} disabled={majorVetoPick === map} className={majorVetoBan === map ? 'ban' : ''} onClick={() => setMajorVetoBan(map)}>{MAP_LABELS[map]}</button>)}</div>
-                <div className="muted small section-label">ESCOLHER MAPA</div>
-                <div className="ut-map-options">{MAP_POOL.map((map) => <button key={map} disabled={majorVetoBan === map} className={majorVetoPick === map ? 'pick' : ''} onClick={() => setMajorVetoPick(map)}>{MAP_LABELS[map]}</button>)}</div>
-                <button className="btn gold big" style={{ width: '100%', marginTop: 16 }} disabled={busy || majorVetoBan === majorVetoPick} onClick={submitMajorMatchVeto}>CONFIRMAR VETO</button>
+            <OnlineMajorVetoPanel
+              teams={[major.teamsById[myStageMatch.pairing.a], major.teamsById[myStageMatch.pairing.b]]}
+              participants={pairingParticipants(myStageMatch)}
+              bestOf={pairingBestOf(major.tournament, myStageMatch.pairing)}
+              veto={myMajorVeto}
+              viewerNick={nick}
+              busy={busy}
+              onSelect={(map) => void submitMajorVetoAction(map)}
+              onClose={() => setMajorVetoOpen(false)}
+            />
+          )}
+          {liveMatch && (
+            <div className="ut-live-overlay fade-in">
+              <div className="ut-live-dialog">
+                <MatchReplay
+                  key={`${collectiveStage}-${liveMatch.a}-${liveMatch.b}`}
+                  series={liveMatch.series}
+                  teams={[major.teamsById[liveMatch.a], major.teamsById[liveMatch.b]]}
+                  onClose={() => { setSelMatch(null); setActiveReplayKey(null); }}
+                  onFinish={liveMatch.key ? finishLiveMatch : undefined}
+                  allowSkip={false}
+                  playbackSpeed={playbackSpeed}
+                  canControlSpeed={isHost && !liveMatch.key}
+                  onPlaybackSpeedChange={changePlaybackSpeed}
+                  startedAt={liveMatch.key ? stageStartedAt : undefined}
+                  lockedLive={Boolean(liveMatch.key && stageIsLive)}
+                  initialDone={liveMatch.completed === true}
+                />
               </div>
             </div>
-          )}
-          {selMatch && (
-            <MatchReplay
-              series={selMatch.series}
-              teams={[major.teamsById[selMatch.a], major.teamsById[selMatch.b]]}
-              onClose={() => setSelMatch(null)}
-              onFinish={() => {
-                if (activeReplayKey) markWatched(activeReplayKey);
-                setSelMatch(null);
-                setActiveReplayKey(null);
-                if (!isSpectator && activeReplayKey === requiredMatchKey) void confirmCollectiveStage();
-              }}
-              allowSkip={false}
-              playbackSpeed={playbackSpeed}
-              canControlSpeed={isHost}
-              onPlaybackSpeedChange={changePlaybackSpeed}
-            />
           )}
         </div>
       );
@@ -1471,7 +1778,7 @@ export function OnlineScreen({ onBack }: Props) {
           </div>
         ) : strategyPhase ? (
           <div className="panel ut-strategy-panel">
-            <div className="panel-head">PLANO TÁTICO E VETO</div>
+            <div className="panel-head">PLANO TÁTICO</div>
             <div className="panel-body">
               <div className="ut-chem-summary">
                 <span>QUÍMICA</span><b>{chemistry.score}</b>
@@ -1488,13 +1795,13 @@ export function OnlineScreen({ onBack }: Props) {
               </div>
               <div className="ut-veto-plan">
                 <div>
-                  <div className="muted small section-label">SEU PICK DE MAPA</div>
+                  <div className="muted small section-label">MAPA PREFERIDO</div>
                   <div className="ut-map-options">
                     {MAP_POOL.map((map) => <button key={map} disabled={strategy.banMap === map} className={strategy.favoriteMap === map ? 'pick' : ''} onClick={() => setStrategy((s) => ({ ...s, favoriteMap: map }))}>{MAP_LABELS[map]}</button>)}
                   </div>
                 </div>
                 <div>
-                  <div className="muted small section-label">SEU BAN PRIORITÁRIO</div>
+                  <div className="muted small section-label">MAPA A EVITAR</div>
                   <div className="ut-map-options">
                     {MAP_POOL.map((map) => <button key={map} disabled={strategy.favoriteMap === map} className={strategy.banMap === map ? 'ban' : ''} onClick={() => setStrategy((s) => ({ ...s, banMap: map }))}>{MAP_LABELS[map]}</button>)}
                   </div>
@@ -1506,7 +1813,7 @@ export function OnlineScreen({ onBack }: Props) {
                 <div><b>TIMEOUT TÁTICO</b>{[0, 1, 2].map((mapIndex) => <button key={mapIndex} className={strategy.timeoutMap === mapIndex ? 'active' : ''} onClick={() => setStrategy((current) => ({ ...current, timeoutMap: mapIndex }))}>Mapa {mapIndex + 1}</button>)}</div>
                 <label><input type="checkbox" checked={strategy.substituteAfterMap === true} onChange={(event) => setStrategy((current) => ({ ...current, substituteAfterMap: event.target.checked }))} /> Usar o reserva entre os mapas</label>
               </div>
-              <p className="muted small">As escolhas entram no veto automático e alteram a força real do time. Todos os clientes recebem o mesmo plano antes do Major.</p>
+              <p className="muted small">Estas são preferências táticas. Antes de cada confronto, o veto oficial completo acontece no mesmo formato do modo carreira e draft.</p>
               <button className="btn gold big" style={{ width: '100%' }} onClick={confirmStrategy}>CONFIRMAR E FICAR PRONTO</button>
             </div>
           </div>
@@ -1845,6 +2152,9 @@ function MatchReplay({
   playbackSpeed,
   canControlSpeed,
   onPlaybackSpeedChange,
+  startedAt,
+  lockedLive = false,
+  initialDone = false,
 }: {
   series: SeriesResult;
   teams: [TTeam, TTeam];
@@ -1854,10 +2164,13 @@ function MatchReplay({
   playbackSpeed: PlaybackSpeed;
   canControlSpeed: boolean;
   onPlaybackSpeedChange: (speed: PlaybackSpeed) => void;
+  startedAt?: number;
+  lockedLive?: boolean;
+  initialDone?: boolean;
 }) {
   const [mapIdx, setMapIdx] = useState(0);
   const [round, setRound] = useState(0);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(initialDone);
   const finishNotified = useRef(false);
 
   useEffect(() => {
@@ -1867,17 +2180,51 @@ function MatchReplay({
   }, [done, onFinish]);
 
   useEffect(() => {
-    if (done) return;
+    if (done || startedAt) return;
     const map = series.maps[mapIdx];
-    if (!map) { setDone(true); return; }
+    if (!map) {
+      const finish = window.setTimeout(() => setDone(true), 0);
+      return () => window.clearTimeout(finish);
+    }
     if (round >= map.roundLog.length) {
-      if (mapIdx + 1 >= series.maps.length) { setDone(true); return; }
+      if (mapIdx + 1 >= series.maps.length) {
+        const finish = window.setTimeout(() => setDone(true), 0);
+        return () => window.clearTimeout(finish);
+      }
       const t = setTimeout(() => { setMapIdx(mapIdx + 1); setRound(0); }, 1200 / playbackSpeed);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => setRound((r) => r + 1), 850 / playbackSpeed);
     return () => clearTimeout(t);
-  }, [mapIdx, round, done, series, playbackSpeed]);
+  }, [mapIdx, round, done, series, playbackSpeed, startedAt]);
+
+  useEffect(() => {
+    if (!startedAt || done) return;
+    const syncToRoomClock = () => {
+      let units = Math.max(0, Math.floor((Date.now() - startedAt) * playbackSpeed / 850));
+      for (let index = 0; index < series.maps.length; index++) {
+        const rounds = series.maps[index].roundLog.length;
+        if (units <= rounds) {
+          setMapIdx(index);
+          setRound(Math.min(rounds, units));
+          return;
+        }
+        units -= rounds;
+        if (index < series.maps.length - 1) {
+          if (units <= MAP_GAP_UNITS) {
+            setMapIdx(index);
+            setRound(rounds);
+            return;
+          }
+          units -= MAP_GAP_UNITS;
+        }
+      }
+      setDone(true);
+    };
+    syncToRoomClock();
+    const timer = window.setInterval(syncToRoomClock, 250);
+    return () => window.clearInterval(timer);
+  }, [done, playbackSpeed, series, startedAt]);
 
   const idIndex = useMemo(() => {
     const m = new Map<string, { nick: string; team: 0 | 1 }>();
@@ -1937,7 +2284,7 @@ function MatchReplay({
           </div>
         )}
         {!done && allowSkip && <button className="btn ghost small" onClick={() => setDone(true)}>Pular ⏭</button>}
-        <button className="btn small" onClick={onClose}>Fechar ✕</button>
+        {!lockedLive && <button className="btn small" onClick={onClose}>Fechar ✕</button>}
       </div>
       <div className="panel-body">
         <div className="qs-board" style={{ marginBottom: 10 }}>

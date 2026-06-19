@@ -9,7 +9,6 @@ import { makeRng, type Rng } from '../engine/rng';
 import { autoVeto } from '../engine/veto';
 import { hashStr } from './hash';
 import { createTournamentFromTeams, pairingBestOf, placementCode, resolveRound, standings, type PlacementCode } from '../engine/swiss';
-import { MAP_POOL } from '../types';
 import type { MapId, Pairing, Player, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from '../types';
 
 export type UltimateRuleset = 'open' | 'current' | 'legends' | 'brworld' | 'era' | 'ovrcap' | 'unique_country' | 'gauntlet';
@@ -34,6 +33,13 @@ export interface OnlineVetoState {
   deadline?: number;
   maps?: MapId[];
 }
+export interface OnlineMajorVetoState {
+  steps: { team: 0 | 1 | -1; action: 'ban' | 'pick' | 'decider'; map?: MapId }[];
+  remaining: MapId[];
+  bestOf: 1 | 3 | 5;
+  participants: [string | null, string | null];
+  maps?: { map: MapId; pickedBy: 0 | 1 | -1 }[];
+}
 
 export interface LobbyState {
   lobby: {
@@ -50,8 +56,9 @@ export interface LobbyState {
     ruleset?: UltimateRuleset;
     playback_speed?: PlaybackSpeed;
     draft_rollouts?: number;
+    stage_started_at?: number;
     veto?: OnlineVetoState;
-    major_vetos?: Record<string, { banMap: MapId; pickMap: MapId }>;
+    major_vetos?: Record<string, OnlineMajorVetoState>;
   };
   players: {
     nick: string;
@@ -280,43 +287,15 @@ function majorVetoMaps(
   pairing: Pairing,
   rng: Rng,
   stage: number,
-  humanByTeamId: Record<string, string>,
   plans: LobbyState['lobby']['major_vetos'],
 ) {
   const teams = [tournament.teams.find((team) => team.id === pairing.a)!, tournament.teams.find((team) => team.id === pairing.b)!] as [TTeam, TTeam];
   const bestOf = pairingBestOf(tournament, pairing);
-  const automatic = autoVeto(teams, rng, bestOf);
-  const selectedPlans = ([pairing.a, pairing.b] as const)
-    .map((teamId, side) => {
-      const playerNick = humanByTeamId[teamId];
-      const plan = playerNick ? plans?.[`${stage}:${playerNick.toLowerCase()}`] : undefined;
-      return plan ? { ...plan, side: side as 0 | 1 } : null;
-    })
-    .filter((plan): plan is { banMap: MapId; pickMap: MapId; side: 0 | 1 } => plan !== null);
-  if (selectedPlans.length === 0) return automatic;
-
-  const banned = new Set(selectedPlans.map((plan) => plan.banMap));
-  const preferred = selectedPlans.map((plan) => ({ map: plan.pickMap, pickedBy: plan.side }));
-  const candidates = [
-    ...preferred,
-    ...automatic,
-    ...MAP_POOL.map((map) => ({ map, pickedBy: -1 as const })),
-  ];
-  const maps: { map: MapId; pickedBy: 0 | 1 | -1 }[] = [];
-  for (const candidate of candidates) {
-    if (maps.length >= bestOf) break;
-    if (banned.has(candidate.map) || maps.some((entry) => entry.map === candidate.map)) continue;
-    maps.push(candidate);
-  }
-  // Em caso de dois bans conflitantes num MD5, completa com o pool restante.
-  if (maps.length < bestOf) {
-    for (const map of MAP_POOL) {
-      if (maps.length >= bestOf) break;
-      if (!maps.some((entry) => entry.map === map)) maps.push({ map, pickedBy: -1 });
-    }
-  }
-  return maps;
+  const saved = plans?.[majorMatchKey(stage, pairing)];
+  return saved?.maps?.length === bestOf ? saved.maps : autoVeto(teams, rng, bestOf);
 }
+
+export const majorMatchKey = (stage: number, pairing: Pick<Pairing, 'a' | 'b'>) => `${stage}:${pairing.a}|${pairing.b}`;
 
 export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
   const ordered = state.players.filter((p) => !p.spectator).sort(byNickCodepoint);
@@ -358,7 +337,7 @@ export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
       const b = tournament.teams.find((team) => team.id === pairing.b)!;
       const bestOf = pairingBestOf(tournament, pairing);
       const seriesRng = makeRng((runSeed ^ hashStr(`${guard}|${pairing.a}|${pairing.b}`)) >>> 0);
-      pairing.result = simulateSeries(seriesRng, a, b, majorVetoMaps(tournament, pairing, seriesRng, guard, humanByTeamId, plans), bestOf);
+      pairing.result = simulateSeries(seriesRng, a, b, majorVetoMaps(tournament, pairing, seriesRng, guard, plans), bestOf);
     }
     resolveRound(tournament, tRng);
     guard++;
@@ -414,14 +393,14 @@ export function majorStandings(major: OnlineMajor) {
 
 // ---- chamadas de API ----
 
-export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean }> {
+export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState }> {
   const res = await fetch('/api/lobby', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(9000),
   });
-  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean };
+  return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState };
 }
 
 export interface OpenRoom { code: string; mode: 'duel' | 'party'; pool: TournamentPool; host: string; players: number; max: number; }
