@@ -633,11 +633,10 @@ export default async function handler(
         res.status(409).json({ error: 'o Major em grupo não está em andamento' });
         return;
       }
-      const vetos = lobby[0].major_vetos as Record<string, MajorVetoState>;
-      if (requiredVetoKeys.some((key) => !vetos[key]?.maps?.length)) {
-        res.status(409).json({ error: 'todos os vetos precisam terminar antes da rodada' });
-        return;
-      }
+      // vetos pendentes NÃO travam a rodada: a simulação faz auto-veto determinístico
+      // dos confrontos sem veto manual (online.ts). Antes, um veto que não fechava
+      // (modal fechado na vez da IA, jogador que não vetou) congelava a sala inteira.
+      void requiredVetoKeys;
       const startedAt = Number(lobby[0].stage_started_at) || Date.now() + 3_000;
       await sql`UPDATE lobbies SET stage_started_at = ${startedAt}, updated_at = now() WHERE code = ${code}`;
       res.status(200).json({ ok: true, startedAt });

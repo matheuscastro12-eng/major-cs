@@ -1442,7 +1442,8 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
         setBusy(false);
       };
       const startStageBroadcast = async () => {
-        if (!isHost || !allVetosDone || stageIsLive || busy) return;
+        // não exige allVetosDone: vetos pendentes viram mapa automático (sim faz auto-veto)
+        if (!isHost || stageIsLive || busy) return;
         setBusy(true);
         setError('');
         if (localDemo) {
@@ -1596,7 +1597,7 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
                 {!stageIsLive && myStageMatch && !myMajorVeto?.maps ? (
                   <button className="btn gold big" disabled={busy} onClick={() => setMajorVetoOpen(true)}>VETAR MAPAS · FORMATO OFICIAL</button>
                 ) : !stageIsLive && isHost ? (
-                  <button className="btn gold big" disabled={!allVetosDone || busy} onClick={startStageBroadcast}>{allVetosDone ? '▶ INICIAR RODADA AO VIVO' : 'AGUARDANDO TODOS OS VETOS'}</button>
+                  <button className="btn gold big" disabled={busy} onClick={startStageBroadcast} title={allVetosDone ? undefined : 'Vetos não concluídos viram mapa automático'}>{allVetosDone ? '▶ INICIAR RODADA AO VIVO' : '▶ INICIAR (vetos pendentes = mapa automático)'}</button>
                 ) : !stageIsLive ? (
                   <button className="btn gold big" disabled>AGUARDANDO O HOST INICIAR</button>
                 ) : isHost && allPlayersReady ? (
