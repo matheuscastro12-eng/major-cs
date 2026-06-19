@@ -101,6 +101,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [boostRounds, setBoostRounds] = useState(0);
   const [pausedMsg, setPausedMsg] = useState('');
   const [caster, setCaster] = useState<RoundNarration | null>(null); // narração do último momento-chave
+  const [reveal, setReveal] = useState(0); // quantos beats da fala já apareceram (suspense)
   const lastNarrated = useRef('');
   const [moments, setMoments] = useState<RoundNarration[]>([]); // todos os lances narrados (replay no fim)
   const buysByRound = useRef<Record<string, [BuyTier, BuyTier]>>({}); // compra de cada round (pra detectar eco/force)
@@ -277,6 +278,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       score: sim.score(),
       roundLog: log,
       buys: buysByRound.current[key],
+      map: maps[Math.min(mapIdx, maps.length - 1)].map,
       mapWon,
       seriesPoint,
     });
@@ -287,11 +289,24 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, mapIdx, finished]);
 
-  // a fala some sozinha alguns segundos depois (cada nova substitui a anterior)
+  // revelação em etapas (a "parada da tensão"): mostra os beats um a um, com uma
+  // pausa maior antes do desfecho. Depois de revelado tudo, a fala some sozinha.
   useEffect(() => {
-    if (!caster) return;
-    const id = window.setTimeout(() => setCaster(null), 5200);
-    return () => window.clearTimeout(id);
+    if (!caster) {
+      setReveal(0);
+      return;
+    }
+    const beats = caster.beats ?? [caster.text];
+    setReveal(1);
+    const timers: number[] = [];
+    for (let i = 1; i < beats.length; i++) {
+      // pausa progressiva; a última (o desfecho) demora mais pra criar suspense
+      const delay = i * 820 + (i === beats.length - 1 ? 360 : 0);
+      timers.push(window.setTimeout(() => setReveal(i + 1), delay));
+    }
+    const total = beats.length * 820 + 360;
+    timers.push(window.setTimeout(() => setCaster(null), Math.max(5200, total + 2600)));
+    return () => timers.forEach((t) => window.clearTimeout(t));
   }, [caster]);
 
   const skipAll = () => {
@@ -404,15 +419,20 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           )}
         </div>
 
-        {!finished && caster && (
-          <div
-            key={caster.text}
-            className={`caster-line ${caster.teamIdx === userIdx ? 'mine' : 'opp'}${caster.big ? ' big' : ''}`}
-          >
-            <span className="caster-mic">🎙️</span>
-            <span className="caster-text">{caster.text}</span>
-          </div>
-        )}
+        {!finished && caster && (() => {
+          const beats = caster.beats ?? [caster.text];
+          const shown = beats.slice(0, Math.max(1, reveal)).join(' ');
+          const pending = reveal < beats.length;
+          return (
+            <div
+              key={caster.text}
+              className={`caster-line ${caster.teamIdx === userIdx ? 'mine' : 'opp'}${caster.big ? ' big' : ''}${pending ? ' building' : ''}`}
+            >
+              <span className="caster-mic">🎙️</span>
+              <span className="caster-text">{shown}{pending ? <span className="caster-cursor">▍</span> : null}</span>
+            </div>
+          );
+        })()}
 
         <div className="live-stage">
           <MapThumb map={currentMap} className="live-map-art" />
