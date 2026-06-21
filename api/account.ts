@@ -1,15 +1,25 @@
 // Contas (e-mail + senha) + entitlement da conta vitalícia R$20.
-// Ações (POST body.action): signup | login | me | claim.
+// Ações (POST body.action): signup | login | me | checkout | claim.
 // - senha: scrypt (node:crypto), guardada como "salt:hash".
 // - token: HMAC-SHA256 stateless ("body.sig", body = email|exp), env APP_SECRET.
-// - claim: confere a sessão de Checkout do Stripe (env STRIPE_SECRET_KEY) e marca
-//   a conta como paga. (O webhook é um reforço opcional pra Pix assíncrono.)
+// - checkout: cria a URL do Payment Link ligada à conta autenticada.
+// - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
 import { neon } from '@neondatabase/serverless';
 import { scryptSync, randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
+import {
+  accountReference,
+  checkoutBelongsToAccount,
+  checkoutHasExpectedPrice,
+  checkoutIsPaid,
+  checkoutUrl,
+  cleanEnv,
+  findPaidCheckoutForEmail,
+  retrieveCheckout,
+  stripeClient,
+} from '../server/payments.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
-const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
-const APP_SECRET = () => clean(process.env.APP_SECRET) || `fallback:${clean(process.env.DATABASE_URL) ?? 'dev'}`;
+const APP_SECRET = () => cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
 const TTL = 60 * 60 * 24 * 180; // 180 dias
 
 function hashPw(pw: string): string {
@@ -45,11 +55,16 @@ export default async function handler(
   res: Res,
 ) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
-  const dbUrl = clean(process.env.DATABASE_URL);
+  const dbUrl = cleanEnv(process.env.DATABASE_URL);
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
-  await sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`;
-  await sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`;
+  await sql.transaction([
+    sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
+  ]);
 
   let body: Record<string, unknown> = {};
   try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {}); } catch { /* vazio */ }
@@ -60,10 +75,34 @@ export default async function handler(
 
   // verdadeiro se a conta já está paga, OU se há um e-mail pago pendente (pago
   // antes de criar a conta) — nesse caso, casa e marca a conta.
-  const resolvePaid = async (em: string, knownPaid?: boolean): Promise<boolean> => {
+  const markPaid = async (em: string, sessionId?: string): Promise<void> => {
+    const paidEmail = sql`INSERT INTO rtm_paid_emails (email) VALUES (${em}) ON CONFLICT DO NOTHING`;
+    const account = sql`UPDATE rtm_accounts SET paid=true, stripe_ref=${accountReference(em)} WHERE email=${em}`;
+    if (sessionId) {
+      await sql.transaction([
+        paidEmail,
+        account,
+        sql`INSERT INTO rtm_payment_sessions (session_id, email) VALUES (${sessionId}, ${em}) ON CONFLICT (session_id) DO NOTHING`,
+      ]);
+    } else {
+      await sql.transaction([paidEmail, account]);
+    }
+  };
+  const ensureReference = async (em: string): Promise<void> => {
+    await sql`UPDATE rtm_accounts SET stripe_ref=${accountReference(em)} WHERE email=${em} AND stripe_ref IS DISTINCT FROM ${accountReference(em)}`;
+  };
+  const resolvePaid = async (em: string, knownPaid?: boolean, reconcileStripe = false): Promise<boolean> => {
     if (knownPaid) return true;
     const p = await sql`SELECT 1 FROM rtm_paid_emails WHERE email=${em}`;
     if (p.length) { await sql`UPDATE rtm_accounts SET paid=true WHERE email=${em}`; return true; }
+    if (reconcileStripe) {
+      try {
+        const session = await findPaidCheckoutForEmail(stripeClient(), em);
+        if (session) { await markPaid(em, session.id); return true; }
+      } catch (error) {
+        console.error('stripe_reconciliation_failed', error instanceof Error ? error.message : error);
+      }
+    }
     return false;
   };
 
@@ -71,7 +110,7 @@ export default async function handler(
     if (!/\S+@\S+\.\S+/.test(email) || password.length < 6) { res.status(400).json({ error: 'E-mail inválido ou senha com menos de 6 caracteres.' }); return; }
     const exists = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email}`;
     if (exists.length) { res.status(409).json({ error: 'Já existe uma conta com esse e-mail. Faça login.' }); return; }
-    await sql`INSERT INTO rtm_accounts (email, nick, pass_hash) VALUES (${email}, ${nick}, ${hashPw(password)})`;
+    await sql`INSERT INTO rtm_accounts (email, nick, pass_hash, stripe_ref) VALUES (${email}, ${nick}, ${hashPw(password)}, ${accountReference(email)})`;
     res.status(200).json({ token: sign(email), email, nick, paid: await resolvePaid(email) });
     return;
   }
@@ -79,7 +118,8 @@ export default async function handler(
   if (action === 'login') {
     const r = await sql`SELECT nick, pass_hash, paid FROM rtm_accounts WHERE email=${email}`;
     if (!r.length || !verifyPw(password, String(r[0].pass_hash))) { res.status(401).json({ error: 'E-mail ou senha incorretos.' }); return; }
-    res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: await resolvePaid(email, Boolean(r[0].paid)) });
+    await ensureReference(email);
+    res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: await resolvePaid(email, Boolean(r[0].paid), true) });
     return;
   }
 
@@ -88,7 +128,22 @@ export default async function handler(
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
     const r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
     if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
-    res.status(200).json({ email: em, nick: r[0].nick, paid: await resolvePaid(em, Boolean(r[0].paid)) });
+    await ensureReference(em);
+    res.status(200).json({ email: em, nick: r[0].nick, paid: await resolvePaid(em, Boolean(r[0].paid), true) });
+    return;
+  }
+
+  if (action === 'checkout') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login antes de pagar.' }); return; }
+    const r = await sql`SELECT paid FROM rtm_accounts WHERE email=${em}`;
+    if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
+    await ensureReference(em);
+    if (await resolvePaid(em, Boolean(r[0].paid), true)) {
+      res.status(200).json({ paid: true });
+      return;
+    }
+    res.status(200).json({ paid: false, url: checkoutUrl(em) });
     return;
   }
 
@@ -98,25 +153,24 @@ export default async function handler(
     const cs = String(body.cs ?? '').trim();
     if (!em) { res.status(401).json({ error: 'Faça login antes de confirmar o pagamento.' }); return; }
     if (!cs) { res.status(400).json({ error: 'sessão ausente' }); return; }
-    // aceita STRIPE_SECRET_KEY ou só STRIPE (nome usado no Vercel)
-    const key = clean(process.env.STRIPE_SECRET_KEY) || clean(process.env.STRIPE);
-    if (!key) { res.status(500).json({ error: 'STRIPE_SECRET_KEY/STRIPE não configurada' }); return; }
     try {
-      const r = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(cs)}`, { headers: { Authorization: `Bearer ${key}` } });
-      const s = (await r.json()) as { payment_status?: string; customer_details?: { email?: string }; customer_email?: string };
-      const paidStatus = s.payment_status === 'paid' || s.payment_status === 'no_payment_required';
-      const sessEmail = (s.customer_details?.email ?? s.customer_email ?? '').toLowerCase();
-      if (paidStatus) {
-        // marca o e-mail da sessão como pago (mesmo que difira do logado) e, se
-        // bater com o logado, libera a conta na hora.
-        if (sessEmail) await sql`INSERT INTO rtm_paid_emails (email) VALUES (${sessEmail}) ON CONFLICT DO NOTHING`;
-        await sql`INSERT INTO rtm_paid_emails (email) VALUES (${em}) ON CONFLICT DO NOTHING`;
-        await sql`UPDATE rtm_accounts SET paid=true WHERE email=${em}`;
-        res.status(200).json({ paid: true });
-      } else {
+      const session = await retrieveCheckout(stripeClient(), cs);
+      if (!checkoutIsPaid(session)) {
         res.status(200).json({ paid: false });
+        return;
       }
-    } catch {
+      if (!checkoutHasExpectedPrice(session)) {
+        res.status(400).json({ error: 'Esta sessão não corresponde à conta vitalícia.' });
+        return;
+      }
+      if (!checkoutBelongsToAccount(session, em)) {
+        res.status(403).json({ error: 'O pagamento pertence a outra conta.' });
+        return;
+      }
+      await markPaid(em, session.id);
+      res.status(200).json({ paid: true });
+    } catch (error) {
+      console.error('stripe_claim_failed', error instanceof Error ? error.message : error);
       res.status(502).json({ error: 'Não consegui confirmar com o Stripe agora.' });
     }
     return;

@@ -33,6 +33,13 @@ export async function claim(cs: string): Promise<boolean> {
   const token = getToken(); if (!token) return false;
   try { const d = await post({ action: 'claim', token, cs }); return !!d.paid; } catch { return false; }
 }
+export async function beginCheckout(): Promise<string | null> {
+  const token = getToken(); if (!token) throw new Error('Faça login antes de pagar.');
+  const d = await post({ action: 'checkout', token });
+  if (d.paid) return null;
+  if (typeof d.url !== 'string' || !d.url) throw new Error('Checkout indisponível. Tente de novo.');
+  return d.url;
+}
 
 export function useAccount() {
   const [account, setAccount] = useState<Account | null>(null);

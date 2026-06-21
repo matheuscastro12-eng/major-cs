@@ -39,6 +39,17 @@ O dataset embutido tem **70 elencos históricos** (350 jogadores), de SK Gaming 
   - `swiss.ts` - fase suíça com grupos por campanha, anti-rematch, seeds e playoffs;
   - `ratings.ts` - força de time, sinergia de funções e química de era do time draftado.
 
+## Pagamentos Stripe
+
+A conta vitalícia é liberada pelo webhook `POST /api/stripe-webhook`; o redirect do Checkout é apenas uma confirmação adicional. Configure na Vercel:
+
+- `STRIPE_SECRET_KEY`: chave secreta live do Stripe;
+- `STRIPE_WEBHOOK_SECRET`: segredo do endpoint de webhook;
+- `STRIPE_ACCOUNT_PRICE_ID`: opcional, usa o price da conta vitalícia atual por padrão;
+- `STRIPE_PAYMENT_LINK_URL`: opcional, usa o Payment Link atual por padrão.
+
+No Stripe, envie `checkout.session.completed` e `checkout.session.async_payment_succeeded` para `https://<dominio>/api/stripe-webhook`. A API também reconcilia sessões pagas pelo e-mail no login, cobrindo pagamentos anteriores à instalação do webhook.
+
 ## Teste de fumaça
 
 ```bash

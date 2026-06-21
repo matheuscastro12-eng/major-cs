@@ -37,7 +37,7 @@ import { Landing } from './components/Landing';
 import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
 import { Leaderboard } from './components/Leaderboard';
-import { claim as claimAccount, useAccount } from './state/account';
+import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
 import { track, trackVisit } from './state/track';
@@ -92,10 +92,6 @@ const SCREEN_PATH: Record<Screen, string> = {
 const PATH_SCREEN: Record<string, Screen> = Object.fromEntries(
   Object.entries(SCREEN_PATH).map(([screen, path]) => [path, screen as Screen]),
 ) as Record<string, Screen>;
-
-// Payment Link do Stripe (live) da conta vitalícia R$20 (prod_UkJkFxDJb3x9Rt /
-// price_1Tkp7NEHvCNyCbcUcYzHFZvK). Coleta e-mail e volta pra /jogar?conta=ok.
-const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/4gM3cv4zGa2Vfcx5jQ1RC01';
 
 const TRANSIENT_SCREENS = new Set<Screen>([
   'draft', 'hub', 'veto', 'match', 'final', 'stats', 'transfer', 'matchdetail',
@@ -674,19 +670,25 @@ export default function App() {
     };
   }, [tournament]);
 
-  // checkout da conta vitalícia (R$20) via Stripe Payment Link (live). Leva o
-  // e-mail pré-preenchido e o nick como client_reference_id (pro webhook casar a
-  // conta depois). O link volta pro jogo em /jogar?conta=ok ao concluir.
-  const startCheckout = async (email: string, nick: string) => {
+  // O backend liga o Payment Link à conta autenticada com uma referência opaca.
+  const startCheckout = async () => {
     track('checkout_start', {});
-    const u = new URL(STRIPE_PAYMENT_LINK);
-    if (email) u.searchParams.set('prefilled_email', email);
-    if (nick) u.searchParams.set('client_reference_id', nick);
-    window.location.href = u.toString();
+    const url = await beginCheckout();
+    if (url) window.location.href = url;
+    else {
+      setPaidToast(true);
+      await refreshAccount();
+      setScreen(manager ? 'home' : 'setup');
+    }
   };
 
   if (screen === 'landing') {
-    return <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} />;
+    return (
+      <>
+        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} />
+        {!bannerPreview && <AdBanner />}
+      </>
+    );
   }
 
   // Portão do Setup: não vive só no botão "Jogar". Sem manager criado, qualquer
