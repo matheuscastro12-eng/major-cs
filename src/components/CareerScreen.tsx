@@ -3234,9 +3234,7 @@ export function CareerScreen({ onExit }: Props) {
         const all = save.news ?? [];
         const shown = newsCat === 'all' ? all : all.filter((n) => (n.cat ?? 'scene') === newsCat);
         return (
-        <div className="career-grid">
-          <div className="career-main">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('Caixa de entrada')}</div>
+        <Panel title={ct('Caixa de entrada')} accent="gold">
             {all.length === 0 ? (
               <p className="muted small">{ct('Sem novidades por enquanto. As manchetes aparecem ao longo da carreira (resultados, diretoria, mercado, cenário e social).')}</p>
             ) : (
@@ -3276,8 +3274,7 @@ export function CareerScreen({ onExit }: Props) {
                 </div>
               </>
             )}
-          </div>
-        </div>
+          </Panel>
         );
       })()}
 
@@ -3672,9 +3669,7 @@ export function CareerScreen({ onExit }: Props) {
         const sponsorInc = effSponsorIncome(save);
         const net = sponsorInc - folha;
         return (
-          <div className="career-grid">
-            <div className="career-main">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>Finanças da {save.org?.name}</div>
+          <Panel title={`${ct('Finanças')} · ${save.org?.name ?? ''}`} accent="gold">
               <div className="fin-cards">
                 <div className="fin-card"><span className="fin-k">{ct('Caixa')}</span><b>{formatMoney(save.budget)}</b></div>
                 <div className="fin-card"><span className="fin-k">{ct('Patrocínio / split')}</span><b className="pos">+{formatMoney(sponsorInc)}</b></div>
@@ -3713,8 +3708,7 @@ export function CareerScreen({ onExit }: Props) {
               </table>
               </div>
               <p className="muted small">Contratos vencem no fim do prazo: <b>{ct('renove (custa 1 salário)')}</b> {ct('ou o jogador sai')} <b>{ct('de graça')}</b> {ct('no próximo split.')}</p>
-            </div>
-          </div>
+          </Panel>
         );
       })()}
 
