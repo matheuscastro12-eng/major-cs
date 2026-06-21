@@ -34,13 +34,16 @@ import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
 import { Landing } from './components/Landing';
+import { ManagerSetup } from './components/ManagerSetup';
 import { claim as claimAccount, useAccount } from './state/account';
+import { getManager, useManager } from './state/manager';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
 type Screen =
   | 'landing'
+  | 'setup'
   | 'home'
   | 'draft'
   | 'hub'
@@ -60,6 +63,7 @@ type Screen =
 
 const SCREEN_PATH: Record<Screen, string> = {
   landing: '/',
+  setup: '/criar-manager',
   home: '/jogar',
   online: '/online',
   career: '/carreira',
@@ -184,6 +188,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
   const { account, refresh: refreshAccount } = useAccount();
+  const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
   useEffect(() => {
@@ -656,7 +661,11 @@ export default function App() {
   };
 
   if (screen === 'landing') {
-    return <Landing onPlay={() => setScreen('home')} onCheckout={startCheckout} />;
+    return <Landing onPlay={() => setScreen(getManager() ? 'home' : 'setup')} onCheckout={startCheckout} />;
+  }
+
+  if (screen === 'setup') {
+    return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); setScreen('home'); }} />;
   }
 
   return (
