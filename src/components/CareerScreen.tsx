@@ -22,6 +22,7 @@ import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { FutCard } from './FutCard';
 import { Button, Panel } from './ds';
+import { LangSwitcher } from './social';
 import { OrgFlag } from './flags';
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
@@ -3123,7 +3124,6 @@ export function CareerScreen({ onExit }: Props) {
 
   const myPos = userPosition(league);
   const spots = save.circuit?.spots ?? MAJOR_SPOTS;
-  const form = clubForm(league);
   const opp = myMatch ? leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a) : null;
   const seasonStats = seasonStatsMemo;
   const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
@@ -3176,84 +3176,56 @@ export function CareerScreen({ onExit }: Props) {
 
   return (
     <div className="fade-in career-hub">
-      {/* banner persistente (abas que não são o overview; o overview usa o banner do design) */}
-      {hubTab !== 'overview' && (() => {
-        const bTeam = buildTeam(save);
-        const avgOvr = bTeam?.players?.length ? Math.round(bTeam.players.reduce((a, p) => a + playerOvr(p), 0) / bTeam.players.length) : 0;
-        const org0 = save.org?.colors?.[0] ?? '#1d2530';
-        return (
-          <div className="career-hero-banner" style={{ '--org0': org0 } as React.CSSProperties}>
-            <div className="cb-art" style={{ backgroundImage: 'url(/maps/nuke.jpg)' }} />
-            <div className="cb-scrim" />
-            <div className="cb-inner">
-              <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={66} logoUrl={save.org?.logo} />
-              <div className="cb-id">
-                <div className="cb-kicker">{ct('Carreira')} · {ct('PRESTÍGIO')} ★{careerPrestige(save)} · {save.titles}× {ct('título')}</div>
-                <h1 className="cb-name">
-                  {save.org?.name}
-                  <span className={`tier-badge t${save.tier}`}>TIER {save.tier}</span>
-                </h1>
-                <div className="cb-sub">
-                  {(bTeam?.players?.length ?? 0) > 0 && <OrgFlag players={bTeam!.players} title={ct('Nacionalidade do core')} />}
-                  {save.circuit?.name ?? 'CIRCUIT X'} · Split {save.split}{save.region ? ` · ${MACRO_REGION_LABELS[save.region]}` : ''}
-                </div>
-                {save.sponsors.length > 0 && (
-                  <div className="ct-sponsors">
-                    {save.sponsors.map((id) => {
-                      const sp = sponsorById(id);
-                      return sp ? <span key={id} className="ct-sp" style={{ background: sp.color }} title={`${sp.name} · +${formatMoney(sp.perSplit)}/split`}>{sp.name}</span> : null;
-                    })}
-                  </div>
-                )}
-              </div>
-              <div className="cb-pills">
-                <div className="cb-pill" title={ct('OVR médio do elenco')}><span>OVR</span><b className="gold">{avgOvr}</b></div>
-                <div className="cb-pill" title={ct('Caixa do clube')}><span>{ct('CAIXA')}</span><b className="pos">{formatMoney(save.budget)}</b></div>
-                <div className="cb-pill" title={ct('Torcida da organização')}><span>{ct('FÃS')}</span><b>{formatFans(careerFans(save))}</b></div>
-                <div className="cb-pill" title={ct('Pontos de ranking (VRS)')}><span>VRS</span><b>{save.vrs}</b></div>
-                <div className="cb-pill" title={ct('Posição na tabela')}><span>{ct('POSIÇÃO')}</span><b className={myPos <= spots ? 'pos' : ''}>{myPos}º</b></div>
-                <div className="cb-pill cb-form"><span>FORMA</span><span className="form-chips">{form.length ? form.slice(-5).map((f, i) => <i key={i} className={`fchip ${f === 'W' ? 'w' : 'l'}`}>{f}</i>) : <i className="muted small">-</i>}</span></div>
-              </div>
-              <div className="cb-actions">
-                <button className="btn ghost" title={ct('Rever o tutorial')} onClick={() => setShowOnb(true)}>❔</button>
-                <button className="btn ghost" title={ct('Apagar tudo e recomeçar do zero')} onClick={() => {
-                  if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
-                  const fresh = emptySave();
-                  persist(fresh);
-                  setSave(fresh);
-                  setOrgChoice('select');
-                  setStage('found');
-                }}>↺</button>
-                <button className="btn" onClick={onExit}>{ct('← Sair')}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      <div className="career-nav">
-        <div className="career-groups">
-          {HUB_GROUPS.map((g) => {
-            const hasAlert = g.tabs.some(tabAlert);
-            return (
-              <button key={g.id} className={`career-group${activeGroup.id === g.id ? ' on' : ''}${hasAlert ? ' finance-alert' : ''}`}
+      {/* Header do design (Shell): top nav sticky + ticker de partidas */}
+      <header className="rtm-hdr">
+        <div className="rtm-hdr-inner">
+          <span className="rtm-hdr-logo" onClick={onExit} title={ct('Voltar ao menu')}>
+            <span className="rtm-hdr-logo-mark" />ROAD TO <span>MAJOR</span>
+          </span>
+          <button className="rtm-modes" onClick={onExit}>⇤ {ct('Modos')}</button>
+          <nav className="rtm-hdr-nav">
+            {HUB_GROUPS.map((g) => (
+              <button key={g.id} className={`rtm-hdr-tab${activeGroup.id === g.id ? ' on' : ''}${g.tabs.some(tabAlert) ? ' alert' : ''}`}
                 onClick={() => { setHubTab(g.tabs[0]); setSelSeries(null); }}>
-                {g.label}
+                {g.label.replace(/^[^\s]+\s/, '')}
               </button>
-            );
-          })}
+            ))}
+          </nav>
+          <LangSwitcher />
+          <span className="rtm-mgr-chip" title={ct('Sua organização')}>
+            <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={26} logoUrl={save.org?.logo} />
+            <span className="rtm-mgr-id"><b>{save.org?.name}</b><i>{formatMoney(save.budget)}</i></span>
+          </span>
         </div>
-        {activeGroup.tabs.length > 1 && (
-          <div className="career-subtabs">
+        <div className="rtm-ticker">
+          <div className="rtm-ticker-inner">
+            <span className="rtm-ticker-label">{ct('Partidas')}</span>
+            {(league.rounds[league.current] ?? []).slice(0, 8).map((mt, i) => {
+              const a = leagueTeam(league, mt.a), b = leagueTeam(league, mt.b);
+              const mine = mt.a === 'user' || mt.b === 'user';
+              return (
+                <button key={i} className={`rtm-ticker-pill${mine ? ' me' : ''}`} onClick={() => { if (mt.result) setSelSeries({ series: mt.result, teams: [a, b] }); else setHubTab('calendar'); }}>
+                  <span className={mt.result && mt.result.winner === 0 ? 'rtm-ticker-sc' : undefined}>{a.tag}</span>
+                  <span className="rtm-ticker-vs">{mt.result ? '·' : 'vs'}</span>
+                  <span className={mt.result && mt.result.winner === 1 ? 'rtm-ticker-sc' : undefined}>{b.tag}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </header>
+      {activeGroup.tabs.length > 1 && (
+        <div className="rtm-subbar">
+          <div className="rtm-subbar-inner">
             {activeGroup.tabs.map((id) => (
-              <button key={id} className={`career-subtab${hubTab === id ? ' on' : ''}${tabAlert(id) ? ' finance-alert' : ''}`}
+              <button key={id} className={`rtm-subtab${hubTab === id ? ' on' : ''}${tabAlert(id) ? ' alert' : ''}`}
                 onClick={(e) => { setHubTab(id); setSelSeries(null); e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); if (id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 }); }}>
                 {tabLabelFull(id)}
               </button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* conteúdo da aba com transição (key força remount → reanima na troca) */}
       <div className="tab-fade" key={hubTab}>
@@ -3318,10 +3290,7 @@ export function CareerScreen({ onExit }: Props) {
         const avg = squadPlayers.length ? Math.round(squadPlayers.reduce((a, p) => a + playerOvr(p), 0) / squadPlayers.length) : 0;
         const orgColor = save.org?.colors?.[0] ?? '#101820';
         // forma: últimas 5 séries do usuário na liga
-        const form: ('W' | 'L')[] = [];
-        for (const round of league.rounds) for (const mt of round) {
-          if ((mt.a === 'user' || mt.b === 'user') && mt.result) form.push((mt.result.winner === 0) === (mt.a === 'user') ? 'W' : 'L');
-        }
+        const form = clubForm(league);
         const form5 = form.slice(-5);
         // caminho até o título
         const inPlayoff = !!save.playoff;

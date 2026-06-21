@@ -643,20 +643,22 @@ export default function App() {
           </div>
         </div>
       )}
-      <header className="app-header">
-        <div className="topbar">
-          <span className="logo" onClick={goHome}>
-            <BrandMark size={32} className="logo-mark" />
-            ROAD&nbsp;TO&nbsp;<span>MAJOR</span>
-          </span>
-          <span className="subtitle">{t('nav.subtitle')}</span>
-          <LangSwitcher />
-          <DonateButton onClick={() => setDonateOpen(true)} />
-          <button className="nav-btn" onClick={() => setScreen('hall')}>
-            {t('nav.hall')}
-          </button>
-        </div>
-      </header>
+      {screen !== 'career' && (
+        <header className="app-header">
+          <div className="topbar">
+            <span className="logo" onClick={goHome}>
+              <BrandMark size={32} className="logo-mark" />
+              ROAD&nbsp;TO&nbsp;<span>MAJOR</span>
+            </span>
+            <span className="subtitle">{t('nav.subtitle')}</span>
+            <LangSwitcher />
+            <DonateButton onClick={() => setDonateOpen(true)} />
+            <button className="nav-btn" onClick={() => setScreen('hall')}>
+              {t('nav.hall')}
+            </button>
+          </div>
+        </header>
+      )}
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
