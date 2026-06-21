@@ -4827,8 +4827,8 @@ function CareerTable({ table, highlightTop = 0, onPick, detailed }: {
             className={`${t.id === 'user' ? 'human-row' : ''}${highlightTop && i < highlightTop ? ' qualify-row' : ''}${onPick ? ' clickable' : ''}`}
             onClick={() => onPick?.(t)}
           >
-            <td style={{ textAlign: 'left' }}>{i + 1}</td>
-            <td style={{ textAlign: 'left', fontWeight: t.id === 'user' ? 700 : 400 }}>
+            <td style={{ textAlign: 'left', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: 15, color: i < Math.max(highlightTop, 3) && i < 3 ? 'var(--gold)' : undefined }}>{i + 1}</td>
+            <td style={{ textAlign: 'left', fontWeight: t.id === 'user' ? 700 : 500 }}>
               <span className="ct-team">
                 <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={t.logoUrl} />
                 {t.name}
