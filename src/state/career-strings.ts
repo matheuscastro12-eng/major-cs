@@ -3,6 +3,11 @@
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Atributos': { en: 'Attributes', es: 'Atributos' },
   'Campanha encerrada': { en: 'Campaign complete', es: 'Campaña finalizada' },
+  'CLÁSSICO': { en: 'RIVALRY', es: 'CLÁSICO' },
+  'Os confrontos repetidos e equilibrados transformaram esta série numa rivalidade. O elenco entra mais focado nos próximos encontros.': { en: 'Repeated, close matchups turned this series into a rivalry. The roster enters future meetings with extra focus.', es: 'Los enfrentamientos repetidos y parejos convirtieron esta serie en una rivalidad. La plantilla afronta los próximos duelos con más concentración.' },
+  'Rivalidade nível': { en: 'Rivalry level', es: 'Nivel de rivalidad' },
+  'Virou clássico:': { en: 'A rivalry is born:', es: 'Nace un clásico:' },
+  'foco': { en: 'focus', es: 'concentración' },
   'Campanha registrada no Hall da Fama com elenco, MVP e recordes.': { en: 'Campaign saved to the Hall of Fame with roster, MVP and records.', es: 'Campaña guardada en el Salón de la Fama con plantilla, MVP y récords.' },
   'Hall indisponível agora. O registro será tentado novamente ao reabrir este resultado.': { en: 'The Hall is unavailable now. Registration will be retried when this result is reopened.', es: 'El Salón no está disponible ahora. El registro se reintentará al reabrir este resultado.' },
   'Registrando a campanha no Hall da Fama…': { en: 'Saving the campaign to the Hall of Fame…', es: 'Guardando la campaña en el Salón de la Fama…' },

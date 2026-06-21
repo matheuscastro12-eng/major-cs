@@ -18,6 +18,7 @@ import { MAP_LABELS, MAP_POOL, PLAYBOOK_DESC, PLAYBOOK_LABELS } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
+import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore, RIVALRY_THRESHOLD } from '../engine/career/rivalries';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -583,6 +584,7 @@ interface CareerSave {
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
   scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
+  rivalries?: Record<string, number>; // intensidade por adversario; 4+ vira classico e gera foco extra
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -669,6 +671,7 @@ const emptySave = (): CareerSave => ({
   youth: {},
   youthAge: {},
   scenario: null,
+  rivalries: {},
 });
 
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
@@ -1523,6 +1526,34 @@ export function CareerScreen({ onExit }: Props) {
     // PLANO DE JOGO da partida: buff real escolhido pelo usuário antes de jogar
     return applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined');
   };
+  const prepareTeams = (rawA: TTeam, rawB: TTeam): [TTeam, TTeam] => {
+    let a = syncUser(rawA);
+    let b = syncUser(rawB);
+    if (a.isUser) a = applyRivalryFocus(a, rivalryScore(save.rivalries, b.id));
+    if (b.isUser) b = applyRivalryFocus(b, rivalryScore(save.rivalries, a.id));
+    return [a, b];
+  };
+  const recordCareerMatch = (series: SeriesResult, teams: [TTeam, TTeam], userIdx: 0 | 1, label: string) => {
+    const opponent = teams[userIdx === 0 ? 1 : 0];
+    setSave((current) => {
+      const rivalry = recordRivalry(current.rivalries, opponent.id, series);
+      const items: NewsItem[] = [];
+      const highlight = bestSeriesMoment(series, teams, userIdx);
+      if (highlight) items.push({
+        id: `${current.split}:hl:${highlight.nick}:${label}`.slice(0, 80), split: current.split,
+        icon: '🎬', tone: 'good', cat: 'result', title: highlight.text, body: `${label} · vs ${opponent.tag}.`,
+      });
+      if (rivalry.becameRival) items.push({
+        id: `${current.split}:rival:${opponent.id}`, split: current.split,
+        icon: '⚔️', tone: 'info', cat: 'result',
+        title: `${ct('Virou clássico:')} ${current.org?.tag ?? 'ORG'} x ${opponent.tag}`,
+        body: ct('Os confrontos repetidos e equilibrados transformaram esta série numa rivalidade. O elenco entra mais focado nos próximos encontros.'),
+      });
+      const next = { ...current, rivalries: rivalry.rivalries, ...pushNews(current, items) };
+      persist(next);
+      return next;
+    });
+  };
 
   // SÓ tempos atuais: usa EXCLUSIVAMENTE os elencos REAIS de CS2 (2026) do
   // bo3.gg, exclusivos do modo carreira (não aparecem no draft/online). Os
@@ -2014,8 +2045,7 @@ export function CareerScreen({ onExit }: Props) {
     const m = poUserMatch(p);
     if (!m) return;
     rngRef.current = makeRng(randomSeed());
-    const a = syncUser(leagueTeam(save.league, m.a));
-    const b = syncUser(leagueTeam(save.league, m.b));
+    const [a, b] = prepareTeams(leagueTeam(save.league, m.a), leagueTeam(save.league, m.b));
     const isFinal = p.final === m;
     setMatchCtx({
       teams: [a, b],
@@ -2054,8 +2084,7 @@ export function CareerScreen({ onExit }: Props) {
     const live = poUserMatch(p);
     if (!live) { applyPlayoff(structuredClone(p)); return; }
     rngRef.current = makeRng(randomSeed());
-    const a = syncUser(leagueTeam(save.league, live.a));
-    const b = syncUser(leagueTeam(save.league, live.b));
+    const [a, b] = prepareTeams(leagueTeam(save.league, live.a), leagueTeam(save.league, live.b));
     const isFinal = p.final === live;
     const bo = isFinal ? PO_FINAL_BO : PO_SF_BO;
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
@@ -2068,6 +2097,7 @@ export function CareerScreen({ onExit }: Props) {
         const m = poUserMatch(clone);
         if (m) m.result = series;
         applyPlayoff(clone);
+        recordCareerMatch(series, [a, b], live.a === 'user' ? 0 : 1, `${p.circuit} · ${isFinal ? ct('Final') : ct('Semifinal')}`);
       },
     });
   };
@@ -2077,14 +2107,13 @@ export function CareerScreen({ onExit }: Props) {
     const m = userLeagueMatch(l);
     if (!m) return;
     rngRef.current = makeRng(randomSeed());
-    const a = syncUser(leagueTeam(l, m.a));
-    const b = syncUser(leagueTeam(l, m.b));
+    const [a, b] = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
     const bo = m.bo ?? LEAGUE_BO; // GSL: abertura Bo1, resto Bo3
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
     setQuickSim({
       series, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1,
       label: `${l.name} · ${l.gsl ? ct(GSL_ROUND_LABELS[l.current]) : `${ct('Rodada')} ${l.current + 1}`}`,
-      onDone: () => { setQuickSim(null); finishUserRound(l, series); },
+      onDone: () => { setQuickSim(null); finishUserRound(l, series); recordCareerMatch(series, [a, b], m.a === 'user' ? 0 : 1, `${l.name} · ${l.gsl ? ct(GSL_ROUND_LABELS[l.current]) : `${ct('Rodada')} ${l.current + 1}`}`); },
     });
   };
 
@@ -2094,30 +2123,33 @@ export function CareerScreen({ onExit }: Props) {
   const simWholeSplit = (l: League) => {
     rngRef.current = makeRng(randomSeed());
     let guard = 0;
+    const simulated: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string }[] = [];
     if (l.gsl) {
       while (!gslDone(l) && guard++ < 12) {
         const m = userLeagueMatch(l);
         if (m && !m.result) {
-          const a = syncUser(leagueTeam(l, m.a));
-          const b = syncUser(leagueTeam(l, m.b));
+          const [a, b] = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
           const bo = m.bo ?? 3;
           m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+          simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct(GSL_ROUND_LABELS[l.current])}` });
         }
         resolveGSLRound(l, rngRef.current);
       }
       enterPlayoffs(l);
+      simulated.forEach((match) => recordCareerMatch(match.series, match.teams, match.userIdx, match.label));
       return;
     }
     while (!leagueDone(l) && guard++ < 80) {
       const m = userLeagueMatch(l);
       if (m && !m.result) {
-        const a = syncUser(leagueTeam(l, m.a));
-        const b = syncUser(leagueTeam(l, m.b));
+        const [a, b] = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
         m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
+        simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct('Rodada')} ${l.current + 1}` });
       }
       resolveLeagueRound(l, rngRef.current, LEAGUE_BO);
     }
     enterPlayoffs(l);
+    simulated.forEach((match) => recordCareerMatch(match.series, match.teams, match.userIdx, match.label));
   };
 
   // Major: o time vai pro Major mundial (16 times) e disputa Suíça + playoffs
@@ -2224,8 +2256,7 @@ export function CareerScreen({ onExit }: Props) {
     if (!majorT) return;
     const up = tournamentUserPairing(majorT);
     if (!up) return;
-    const a = syncUser(getTeam(majorT, up.a));
-    const b = syncUser(getTeam(majorT, up.b));
+    const [a, b] = prepareTeams(getTeam(majorT, up.a), getTeam(majorT, up.b));
     setMatchCtx({
       teams: [a, b],
       userIdx: up.a === 'user' ? 0 : 1,
@@ -2262,8 +2293,7 @@ export function CareerScreen({ onExit }: Props) {
       advanceMajor(clone);
       return;
     }
-    const a = syncUser(getTeam(majorT, up.a));
-    const b = syncUser(getTeam(majorT, up.b));
+    const [a, b] = prepareTeams(getTeam(majorT, up.a), getTeam(majorT, up.b));
     const bo = up.bestOf ?? 3;
     rngRef.current = makeRng(randomSeed());
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
@@ -2277,6 +2307,7 @@ export function CareerScreen({ onExit }: Props) {
         if (p) p.result = series;
         resolveRound(clone, rngRef.current);
         advanceMajor(clone);
+        recordCareerMatch(series, [a, b], up.a === 'user' ? 0 : 1, `${majorT.name} · ${up.label}`);
       },
     });
   };
@@ -3083,21 +3114,7 @@ export function CareerScreen({ onExit }: Props) {
       if (matchCtx.mode === 'major') finishMajorRound(series);
       else if (matchCtx.mode === 'playoff') finishPlayoffRound(series);
       else if (league) finishUserRound(league, series);
-      // manchete do melhor lance do usuário na partida (clutch/ace/4k+)
-      const hl = bestSeriesMoment(series, matchCtx.teams, matchCtx.userIdx);
-      if (hl) {
-        const oppTag = matchCtx.teams[matchCtx.userIdx === 0 ? 1 : 0].tag;
-        const item: NewsItem = {
-          id: `${save.split}:hl:${hl.nick}:${matchCtx.phaseLabel}`.slice(0, 80),
-          split: save.split,
-          icon: '🎬',
-          tone: 'good',
-          title: hl.text,
-          body: `${matchCtx.phaseLabel} · vs ${oppTag}.`,
-        };
-        // setSave funcional roda após o dispatch acima: adiciona a notícia ao estado já atualizado
-        setSave((s) => { const n = { ...s, ...pushNews(s, [item]) }; persist(n); return n; });
-      }
+      recordCareerMatch(series, matchCtx.teams, matchCtx.userIdx, matchCtx.phaseLabel);
     };
     if (stage === 'veto') {
       return (
@@ -3169,8 +3186,7 @@ export function CareerScreen({ onExit }: Props) {
   const playMine = () => {
     if (!myMatch) return;
     rngRef.current = makeRng(randomSeed());
-    const a = syncUser(leagueTeam(league, myMatch.a));
-    const b = syncUser(leagueTeam(league, myMatch.b));
+    const [a, b] = prepareTeams(leagueTeam(league, myMatch.a), leagueTeam(league, myMatch.b));
     setMatchCtx({
       teams: [a, b],
       userIdx: myMatch.a === 'user' ? 0 : 1,
@@ -3374,6 +3390,8 @@ export function CareerScreen({ onExit }: Props) {
               [ct('Erguer o título do split'), (save.titles ?? 0) > 0],
             ];
         const recent = league.rounds.flat().filter((mt) => mt.result).slice(-5).reverse();
+        const nextRivalryScore = opp ? rivalryScore(save.rivalries, opp.id) : 0;
+        const nextRivalry = rivalryLabel(nextRivalryScore);
         const roundLabel = league.gsl ? ct(GSL_ROUND_LABELS[league.current] ?? 'Fase de grupos') : `${ct('Rodada')} ${league.current + 1}`;
         const boLabel = (myMatch?.bo ?? 3) === 1 ? 'MD1' : (myMatch?.bo ?? 3) === 5 ? 'MD5' : 'MD3';
         const pill: React.CSSProperties = { textAlign: 'center', padding: '8px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.55)', border: '1px solid var(--rtm-border-soft)' };
@@ -3430,6 +3448,7 @@ export function CareerScreen({ onExit }: Props) {
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(13,17,22,.82), rgba(13,17,22,.95))' }} />
                   <div style={{ position: 'relative', padding: '18px 22px' }}>
                     <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700, marginBottom: '14px' }}>{ct('Próximo jogo')} · {roundLabel} · {boLabel}</div>
+                    {nextRivalry !== 'none' && <div className={`career-rivalry-badge ${nextRivalry}`}>⚔ {ct('CLÁSSICO')} · {ct('Rivalidade nível')} {nextRivalryScore}/{12} · +{Math.min(1.8, 0.6 + (nextRivalryScore - RIVALRY_THRESHOLD) * 0.2).toFixed(1)} {ct('foco')}</div>}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '28px', flexWrap: 'wrap' }}>
                       <span style={vsSide}><TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={56} logoUrl={save.org?.logo} /><span style={vsTag}>{save.org?.tag}</span></span>
                       <span style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '28px', color: 'var(--rtm-gold)', letterSpacing: '2px' }}>VS</span>
