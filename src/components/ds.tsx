@@ -18,6 +18,25 @@ const SIZES: Record<BtnSize, CSSProperties> = {
   big: { padding: '13px 34px', fontSize: '16px' },
 };
 
+// Painel: a superfície base do design com a faixa de accent (azul/ouro) no header.
+export function Panel({ title, actions = null, accent = 'blue', flush = false, children, style = {} }: {
+  title?: ReactNode; actions?: ReactNode; accent?: 'blue' | 'gold' | 'none'; flush?: boolean; children?: ReactNode; style?: CSSProperties;
+}) {
+  const accentColor = accent === 'gold' ? 'var(--rtm-gold)' : accent === 'none' ? 'transparent' : 'var(--rtm-blue)';
+  return (
+    <section style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', overflow: 'hidden', boxShadow: 'var(--rtm-shadow-panel)', ...style }}>
+      {title != null && (
+        <header style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--rtm-grad-panel-head)', padding: '10px 14px', borderBottom: '1px solid var(--rtm-border-soft)', boxShadow: `inset 3px 0 0 ${accentColor}`, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>
+          <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{title}</span>
+          <span style={{ flex: 1 }} />
+          {actions}
+        </header>
+      )}
+      <div style={{ padding: flush ? 0 : '14px' }}>{children}</div>
+    </section>
+  );
+}
+
 export function Button({ variant = 'primary', size = 'md', disabled = false, icon = null, children, style = {}, onClick, title }: {
   variant?: BtnVariant; size?: BtnSize; disabled?: boolean; icon?: ReactNode; children?: ReactNode; style?: CSSProperties; onClick?: () => void; title?: string;
 }) {

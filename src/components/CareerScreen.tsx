@@ -21,7 +21,7 @@ import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { FutCard } from './FutCard';
-import { Button } from './ds';
+import { Button, Panel } from './ds';
 import { OrgFlag } from './flags';
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
@@ -3786,103 +3786,97 @@ export function CareerScreen({ onExit }: Props) {
         };
         const fam = save.playbookXp ?? 0;
         return (
-        <div className="career-grid">
-          <div className="career-main">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('Seu elenco')}</div>
-            {/* cards FUT (design system) — visão de identidade; gestão fica na lista abaixo */}
-            <div className="hub-squad-row" style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Panel title={ct('Cinco titular')} accent="gold" actions={<span style={{ fontFamily: 'var(--rtm-font-cond)', color: 'var(--rtm-gold)', fontSize: '15px' }}>{rows.length ? Math.round(rows.reduce((a, p) => a + playerOvr(p), 0) / rows.length) : 0} OVR</span>}>
+            <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', justifyContent: 'center' }}>
               {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => setProfilePlayer(p)} />)}
             </div>
-            {(!hasAwp || !hasIgl) && (
-              <div className="role-warn">
-                ⚠️ Seu time está sem {!hasAwp && !hasIgl ? 'AWP e IGL' : !hasAwp ? 'AWPer' : 'IGL'}.
-                Ajuste a função de um jogador abaixo para cobrir.
-              </div>
-            )}
-            <div className="muted small section-label">{ct('Gestão do elenco')}</div>
-            <div className="career-squad big">
-              {rows.map((p) => {
-                const rid = `user__${p.id}`;
-                const st = seasonStats.find((s) => s.id === rid);
-                const focused = save.trainingFocus === p.id;
-                const grew = save.evo?.[p.id] ?? 0;
-                const mor = save.morale?.[p.id] ?? MORALE_DEFAULT;
-                const mi = moraleInfo(mor);
-                return (
-                  <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
-                    <button className="cs-open" onClick={() => setProfilePlayer(p)} title={ct('Ver perfil do jogador')}>
-                      <PlayerAvatar nick={p.nick} size={32} />
-                      <span className="cs-nick"><Flag cc={p.country} /> {p.nick}
-                        {grew > 0 && <span className="cs-grew" title={`+${grew} ${ct('de evolução na carreira')}`}> ▲{grew}</span>}
-                      </span>
-                    </button>
-                    <span className={`cs-morale ${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${mor}/100)`}>{mi.icon} {mor}</span>
-                    <select className={`role-select ${p.role}`} value={p.role}
-                      onChange={(e) => setRole(p.id, e.target.value as Role)}
-                      title={ct('Definir a função deste jogador')}>
-                      {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                    <button className={`cs-train${focused ? ' on' : ''}`} onClick={() => setFocus(p.id)}
-                      title={focused ? 'Em foco de treino neste split' : 'Pôr em foco de treino (desenvolve mais rápido)'}>
-                      🎯
-                    </button>
-                    <span className="cs-stat">{st ? `rat ${st.rating.toFixed(2)}` : '-'}</span>
-                    <span className="cs-ovr">{playerOvr(p)}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="muted small" style={{ marginTop: 8 }}>
-              Clique no jogador pra ver o <b>perfil completo</b>. Defina a <b>{ct('função')}</b> (no CS são flexíveis: tenha 1 AWP e 1 IGL) e o
-              <b> {ct('🎯 foco de treino')}</b> do split (esse jogador evolui mais rápido). Você não edita os atributos: eles
-              <b> sobem sozinhos</b> conforme o jogador se desenvolve e joga.
-            </p>
-          </div>
-          <div className="career-side">
-            {/* PLAYBOOK: esquema tático treinado. Trocar derruba o entrosamento. */}
-            <div className="side-card">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('📋 Playbook tático')}</div>
-              <div className="pb-fam">
-                <span className="muted small">Entrosamento</span>
-                <span className="pb-bar"><i className={fam >= 70 ? 'good' : fam >= 40 ? 'warn' : 'bad'} style={{ width: `${fam}%` }} /></span>
-                <b className="small">{fam}%</b>
-              </div>
-              <div className="pb-list">
-                {(Object.keys(PLAYBOOK_LABELS) as Playbook[]).map((pb) => (
-                  <button key={pb} className={`pb-opt${save.playbook === pb ? ' on' : ''}`} onClick={() => setPlaybook(pb)}>
-                    <span className="pb-name">{PLAYBOOK_LABELS[pb]}{save.playbook === pb ? ' ✓' : ''}</span>
-                    <span className="pb-desc muted small">{PLAYBOOK_DESC[pb]}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="muted small" style={{ margin: '8px 0 0' }}>O entrosamento sobe a cada split mantendo o esquema; <b>trocar volta pra {PLAYBOOK_SWITCH_TO}%</b>{ct('. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.')}</p>
-            </div>
-
-            {/* TREINO DE MAPA: foca até 3 mapas por split; os outros decaem (não dá pra ser bom em todos) */}
-            <div className="side-card">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('🗺️ Treino de mapa')} <span className="muted small" style={{ fontWeight: 400 }}>({mapFocusList(save).length}/{MAP_FOCUS_MAX} em foco)</span></div>
-              <div className="map-train">
-                {MAP_POOL.map((m) => {
-                  const lvl = mapLevel(save, m);
-                  const pct = Math.round(((lvl - MAP_TRAIN_MIN) / (MAP_TRAIN_MAX - MAP_TRAIN_MIN)) * 100);
-                  const foc = mapFocusList(save).includes(m);
-                  const full = !foc && mapFocusList(save).length >= MAP_FOCUS_MAX;
-                  const cls = lvl >= 1 ? 'good' : lvl <= -1 ? 'bad' : 'warn';
+          </Panel>
+          <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '16px', alignItems: 'start' }}>
+            <Panel title={ct('Gestão do elenco')}>
+              {(!hasAwp || !hasIgl) && (
+                <div className="role-warn">
+                  ⚠️ Seu time está sem {!hasAwp && !hasIgl ? 'AWP e IGL' : !hasAwp ? 'AWPer' : 'IGL'}.
+                  Ajuste a função de um jogador abaixo para cobrir.
+                </div>
+              )}
+              <div className="career-squad big">
+                {rows.map((p) => {
+                  const rid = `user__${p.id}`;
+                  const st = seasonStats.find((s) => s.id === rid);
+                  const focused = save.trainingFocus === p.id;
+                  const grew = save.evo?.[p.id] ?? 0;
+                  const mor = save.morale?.[p.id] ?? MORALE_DEFAULT;
+                  const mi = moraleInfo(mor);
                   return (
-                    <button key={m} className={`mt-row${foc ? ' on' : ''}`} onClick={() => setMapFocus(m)} disabled={full} title={foc ? 'Em treino neste split (clique pra tirar)' : full ? `${ct('Máximo de')} ${MAP_FOCUS_MAX} ${ct('mapas em treino')}` : 'Treinar este mapa neste split'}>
-                      <span className="mt-name">{foc ? '🎯 ' : ''}{MAP_LABELS[m]}</span>
-                      <span className="mt-bar"><i className={cls} style={{ width: `${pct}%` }} /></span>
-                      <span className={`mt-lvl ${cls}`}>{lvl > 0 ? '+' : ''}{lvl.toFixed(1)}</span>
-                    </button>
+                    <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
+                      <button className="cs-open" onClick={() => setProfilePlayer(p)} title={ct('Ver perfil do jogador')}>
+                        <PlayerAvatar nick={p.nick} size={32} />
+                        <span className="cs-nick"><Flag cc={p.country} /> {p.nick}
+                          {grew > 0 && <span className="cs-grew" title={`+${grew} ${ct('de evolução na carreira')}`}> ▲{grew}</span>}
+                        </span>
+                      </button>
+                      <span className={`cs-morale ${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${mor}/100)`}>{mi.icon} {mor}</span>
+                      <select className={`role-select ${p.role}`} value={p.role}
+                        onChange={(e) => setRole(p.id, e.target.value as Role)}
+                        title={ct('Definir a função deste jogador')}>
+                        {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <button className={`cs-train${focused ? ' on' : ''}`} onClick={() => setFocus(p.id)}
+                        title={focused ? 'Em foco de treino neste split' : 'Pôr em foco de treino (desenvolve mais rápido)'}>
+                        🎯
+                      </button>
+                      <span className="cs-stat">{st ? `rat ${st.rating.toFixed(2)}` : '-'}</span>
+                      <span className="cs-ovr">{playerOvr(p)}</span>
+                    </div>
                   );
                 })}
               </div>
-              <p className="muted small" style={{ margin: '8px 0 0' }}>{ct('Treine até')} <b>{MAP_FOCUS_MAX} mapas</b> {ct('por split; os outros decaem um pouco. É de propósito: ninguém é forte em todos, mas dá pra montar um pool sólido.')}</p>
-            </div>
-
-            <div className="side-card">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>Melhores jogadores do {save.circuit?.name ?? ct('circuito')}</div>
-              <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
+              <p className="muted small" style={{ marginTop: 8 }}>
+                Clique no jogador pra ver o <b>perfil completo</b>. Defina a <b>{ct('função')}</b> (no CS são flexíveis: tenha 1 AWP e 1 IGL) e o
+                <b> {ct('🎯 foco de treino')}</b> do split (esse jogador evolui mais rápido). Você não edita os atributos: eles
+                <b> sobem sozinhos</b> conforme o jogador se desenvolve e joga.
+              </p>
+            </Panel>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <Panel title={ct('📋 Playbook tático')}>
+                <div className="pb-fam">
+                  <span className="muted small">Entrosamento</span>
+                  <span className="pb-bar"><i className={fam >= 70 ? 'good' : fam >= 40 ? 'warn' : 'bad'} style={{ width: `${fam}%` }} /></span>
+                  <b className="small">{fam}%</b>
+                </div>
+                <div className="pb-list">
+                  {(Object.keys(PLAYBOOK_LABELS) as Playbook[]).map((pb) => (
+                    <button key={pb} className={`pb-opt${save.playbook === pb ? ' on' : ''}`} onClick={() => setPlaybook(pb)}>
+                      <span className="pb-name">{PLAYBOOK_LABELS[pb]}{save.playbook === pb ? ' ✓' : ''}</span>
+                      <span className="pb-desc muted small">{PLAYBOOK_DESC[pb]}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="muted small" style={{ margin: '8px 0 0' }}>O entrosamento sobe a cada split mantendo o esquema; <b>trocar volta pra {PLAYBOOK_SWITCH_TO}%</b>{ct('. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.')}</p>
+              </Panel>
+              <Panel title={<>{ct('🗺️ Treino de mapa')} <span className="muted small" style={{ fontWeight: 400 }}>({mapFocusList(save).length}/{MAP_FOCUS_MAX} em foco)</span></>}>
+                <div className="map-train">
+                  {MAP_POOL.map((m) => {
+                    const lvl = mapLevel(save, m);
+                    const pct = Math.round(((lvl - MAP_TRAIN_MIN) / (MAP_TRAIN_MAX - MAP_TRAIN_MIN)) * 100);
+                    const foc = mapFocusList(save).includes(m);
+                    const full = !foc && mapFocusList(save).length >= MAP_FOCUS_MAX;
+                    const cls = lvl >= 1 ? 'good' : lvl <= -1 ? 'bad' : 'warn';
+                    return (
+                      <button key={m} className={`mt-row${foc ? ' on' : ''}`} onClick={() => setMapFocus(m)} disabled={full} title={foc ? 'Em treino neste split (clique pra tirar)' : full ? `${ct('Máximo de')} ${MAP_FOCUS_MAX} ${ct('mapas em treino')}` : 'Treinar este mapa neste split'}>
+                        <span className="mt-name">{foc ? '🎯 ' : ''}{MAP_LABELS[m]}</span>
+                        <span className="mt-bar"><i className={cls} style={{ width: `${pct}%` }} /></span>
+                        <span className={`mt-lvl ${cls}`}>{lvl > 0 ? '+' : ''}{lvl.toFixed(1)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="muted small" style={{ margin: '8px 0 0' }}>{ct('Treine até')} <b>{MAP_FOCUS_MAX} mapas</b> {ct('por split; os outros decaem um pouco. É de propósito: ninguém é forte em todos, mas dá pra montar um pool sólido.')}</p>
+              </Panel>
+              <Panel title={`${ct('Melhores do')} ${save.circuit?.name ?? ct('circuito')}`}>
+                <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
+              </Panel>
             </div>
           </div>
         </div>
