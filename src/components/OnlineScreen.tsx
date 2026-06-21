@@ -727,18 +727,30 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
   };
 
   // o MEU sorteio (cada jogador recebe elencos diferentes, por seed + nick)
+  // chaves de CONTEÚDO: o polling traz um objeto `state` novo a cada 1-5s, mas a
+  // simulação só muda quando os inputs mudam. Memoizar por [state] re-simulava
+  // toda hora -> a série ganhava nova identidade -> o replay reiniciava no round 0
+  // (bug do "0x0 que só começa depois de minutos", pior no PC). Estas chaves só
+  // mudam quando algo relevante muda, mantendo a série estável durante o replay.
+  const setupKey = state ? `${state.lobby.status !== 'waiting'}|${state.lobby.seed}|${state.lobby.pool}|${state.lobby.ruleset ?? 'open'}|${nick}|${myRollouts}` : '';
+  const simKey = state
+    ? [state.lobby.status, state.lobby.mode, state.lobby.run_seed, state.lobby.pool, state.lobby.ruleset ?? 'open', state.lobby.stage ?? 0,
+       ...state.players.map((p) => `${p.nick}:${(p.picks ?? []).join('.')}:${p.coach_pick ?? ''}:${JSON.stringify(p.strategy ?? {})}:${JSON.stringify(p.lineup ?? {})}:${(p.rollouts ?? []).join('.')}`)].join('|')
+    : '';
   const setup = useMemo(
     () => (state && state.lobby.status !== 'waiting' ? buildDraftForPlayer(state.lobby.seed, state.lobby.pool, nick, state.lobby.ruleset ?? 'open', myRollouts) : null),
-    [state, nick, myRollouts],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setupKey],
   );
-
   const major = useMemo(
     () => (state && state.lobby.status === 'done' && state.lobby.mode === 'party' ? simulateOnlineMajor(state) : null),
-    [state],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [simKey],
   );
   const duel = useMemo(
     () => (state && state.lobby.status === 'done' && state.lobby.mode === 'duel' ? simulateOnlineDuel(state) : null),
-    [state],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [simKey],
   );
   const meLobbyPlayer = state?.players.find((player) => player.nick.toLowerCase() === nick.toLowerCase());
   const isSpectator = meLobbyPlayer?.spectator === true;
