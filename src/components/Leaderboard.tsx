@@ -13,7 +13,7 @@ const DIV_COLOR: Record<string, string> = {
   'Águia': '#c792ea',
   'Global Elite': '#e8743b',
 };
-function DivBadge({ d }: { d: string }) {
+export function DivBadge({ d }: { d: string }) {
   const c = DIV_COLOR[d] ?? 'var(--rtm-dim)';
   return <span style={{ display: 'inline-block', fontSize: '10.5px', fontWeight: 800, letterSpacing: '.4px', textTransform: 'uppercase', color: c, background: 'color-mix(in srgb, ' + c + ' 15%, transparent)', border: '1px solid color-mix(in srgb, ' + c + ' 40%, transparent)', padding: '2px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}>{d}</span>;
 }

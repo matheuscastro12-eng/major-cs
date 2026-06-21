@@ -4,6 +4,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Flag } from './ui';
 import { Button, Panel } from './ds';
+import { DivBadge } from './Leaderboard';
 import type { Account } from '../state/account';
 import { fetchMyRank, type MyRank } from '../state/ranking';
 import type { Manager } from '../state/manager';
@@ -44,6 +45,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade }: 
               {paid
                 ? <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '3px 9px', borderRadius: '999px' }}>★ Conta vitalícia</span>
                 : <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', padding: '3px 9px', borderRadius: '999px' }}>{account ? 'Grátis' : 'Convidado'}</span>}
+              {paid && rank && <DivBadge d={rank.division} />}
             </div>
             <div style={{ fontSize: '13.5px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
               <Flag cc={manager.country} /> {manager.name || manager.nick}{manager.age ? `, ${manager.age} anos` : ''} · {manager.org}

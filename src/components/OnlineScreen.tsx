@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { playerOvr } from '../engine/ratings';
 import { computeDisplay, mergeLines } from '../engine/match';
 import {
@@ -26,7 +27,7 @@ import { pairingBestOf } from '../engine/swiss';
 import { useLang } from '../state/i18n';
 import { track } from '../state/track';
 import type { Account } from '../state/account';
-import { fetchMyRank, getLadder, reportResult, type MyRank, type RankRow } from '../state/ranking';
+import { fetchMyRank, getLadder, reportResult, type MyRank, type RankRow, type ReportResult } from '../state/ranking';
 import type { MapId, Pairing, Phase, Player, PlayerLine, SeriesResult, TeamSeason, Tournament, TournamentPool, TPlayer, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
 import { Scoreboard } from './Scoreboard';
@@ -327,6 +328,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
   });
   // ranking salvo (conta paga). myRank = posição/MMR do jogador; ladder = top.
   const [myRank, setMyRank] = useState<MyRank | null>(null);
+  const [rankFeedback, setRankFeedback] = useState<ReportResult | null>(null);
   const [ladder, setLadder] = useState<RankRow[] | null>(null);
   const paidRank = !!account?.paid;
   useEffect(() => { if (paidRank) void fetchMyRank(nick || account?.nick).then(setMyRank); }, [paidRank, nick, account?.nick]);
@@ -795,7 +797,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
     const timer = window.setTimeout(() => {
       recordedSeasonsRef.current.add(key);
       // ranking salvo (conta paga): manda o resultado e atualiza meu MMR
-      if (account?.paid) void reportResult(won, nick || account.nick).then((r) => { if (r?.me) setMyRank(r.me); });
+      if (account?.paid) void reportResult(won, nick || account.nick).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
       setSessionProfile((current) => {
         const next = {
           points: current.points + points,
@@ -810,6 +812,28 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [duel, isSpectator, major, nick, state]);
+
+  // some o feedback de ranking depois de alguns segundos
+  useEffect(() => {
+    if (!rankFeedback) return;
+    const t = window.setTimeout(() => setRankFeedback(null), 6500);
+    return () => window.clearTimeout(t);
+  }, [rankFeedback]);
+
+  const rankToast = rankFeedback ? createPortal(
+    <div className="rtm-rank-toast" onClick={() => setRankFeedback(null)} role="status">
+      <div className={`rtm-rank-delta ${rankFeedback.delta >= 0 ? 'up' : 'down'}`}>{rankFeedback.delta >= 0 ? '+' : ''}{rankFeedback.delta}</div>
+      <div className="rtm-rank-body">
+        <b>{
+          rankFeedback.placedNow ? `🎯 Colocação concluída · ${rankFeedback.division}`
+            : rankFeedback.placing ? '🎯 Partida de colocação'
+              : rankFeedback.promoted ? `⬆ Promovido pra ${rankFeedback.division}!`
+                : rankFeedback.demoted ? `⬇ Caiu pra ${rankFeedback.division}`
+                  : rankFeedback.delta >= 0 ? 'Vitória ranqueada' : 'Derrota ranqueada'
+        }</b>
+        <span>MMR {rankFeedback.before} → {rankFeedback.after}{rankFeedback.placing && !rankFeedback.placedNow ? ` · faltam ${rankFeedback.placementLeft} de colocação` : ` · ${rankFeedback.division}`}</span>
+      </div>
+    </div>, document.body) : null;
 
   const pickPlayer = (playerId: string) => {
     if (myDone || !setup) return;
@@ -1190,6 +1214,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
   if (state.lobby.status === 'done' && duel) {
     return (
       <div className="fade-in ut-duel-page">
+        {rankToast}
         <div className="panel">
           <div className="panel-head">
             {OL.duelLive} · {code}
@@ -1566,6 +1591,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
       };
       return (
         <div className="fade-in ut-major-page">
+          {rankToast}
           <div className="panel">
             <div className="panel-head">
               ULTIMATE TEAM · MAJOR {code}

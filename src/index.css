@@ -4470,6 +4470,14 @@ table.crm-players input.num {
 @media (max-width: 820px) { .rtm-modemenu { grid-template-columns: 1fr; } .rtm-modecard { min-height: 180px; } }
 .rtm-ranklink { background: var(--rtm-bg-deep); border: 1px solid var(--rtm-gold-soft); color: var(--rtm-gold); font-family: var(--font-cond); font-weight: 700; font-size: 13.5px; letter-spacing: .3px; padding: 8px 16px; border-radius: 999px; cursor: pointer; transition: border-color .15s, background .15s; }
 .rtm-ranklink:hover { background: rgba(216,169,67,.12); border-color: var(--rtm-gold); }
+.rtm-rank-toast { position: fixed; bottom: 104px; right: 24px; z-index: 9999; display: flex; align-items: center; gap: 14px; background: var(--rtm-panel); border: 1px solid var(--rtm-gold-soft); border-radius: 12px; padding: 14px 18px; box-shadow: var(--rtm-shadow-banner); cursor: pointer; animation: rtmRankIn .35s ease; max-width: 330px; }
+@keyframes rtmRankIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.rtm-rank-delta { font-family: var(--font-cond); font-weight: 800; font-size: 30px; line-height: 1; flex-shrink: 0; }
+.rtm-rank-delta.up { color: var(--rtm-green-bright); }
+.rtm-rank-delta.down { color: var(--rtm-red-bright); }
+.rtm-rank-body b { display: block; font-family: var(--font-cond); font-weight: 800; font-size: 15px; color: var(--rtm-text-strong); }
+.rtm-rank-body span { font-size: 12px; color: var(--rtm-dim); }
+@media (max-width: 560px) { .rtm-rank-toast { left: 12px; right: 12px; bottom: 96px; max-width: none; } }
 .rtm-signed { margin: 24px auto 0; color: var(--rtm-faint); font-size: 13px; }
 .rtm-signed b { color: var(--rtm-link); }
 .setup-panel.draft-screen { max-width: 820px; margin: 24px auto; }
