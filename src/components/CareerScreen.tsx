@@ -4042,7 +4042,22 @@ export function CareerScreen({ onExit }: Props) {
                 </div>
               ))}
             </div>
-            <p className="muted small" style={{ marginTop: 10 }}>
+            <div className="muted small section-label">{ct('Times no circuito')} ({table.length})</div>
+            <div className="rtm-field" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+              {table.map((tm) => {
+                const mine = tm.id === 'user';
+                return (
+                  <button key={tm.id} onClick={() => setSelTeam(tm)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: 'var(--rtm-radius)', background: mine ? 'rgba(67,130,182,.12)' : 'var(--rtm-panel-2)', border: `1px solid ${mine ? 'var(--rtm-blue-bright)' : 'var(--rtm-border-soft)'}`, cursor: 'pointer', textAlign: 'left' }}>
+                    <TeamBadge tag={tm.tag} colors={tm.colors} logoUrl={tm.logoUrl} size={30} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '14px', color: mine ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tm.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--rtm-faint)' }}><Flag cc={tm.country} />{tm.tag}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="muted small" style={{ marginTop: 12 }}>
               Cada split tem um <b>{ct('circuito')}</b> {ct('(fase de grupos + mata-mata) que vale prêmio e')} <b>VRS</b>. A cada {MAJOR_EVERY} splits acontece o <b>{ct('Major Mundial')}</b>: o clímax da temporada, com a maior premiação. Seu VRS e seu tier definem se você chega lá.
             </p>
         </Panel>
