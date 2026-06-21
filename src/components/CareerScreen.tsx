@@ -20,6 +20,7 @@ import { bestSeriesMoment } from '../engine/narration';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { FutCard } from './FutCard';
 import { OrgFlag } from './flags';
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
@@ -3345,6 +3346,22 @@ export function CareerScreen({ onExit }: Props) {
                     {sc.goals.map((g, i) => (
                       <span key={i} className={`scenario-banner-goal${g.done ? ' done' : ''}`}>{g.done ? '✅' : '◻️'} {g.text}</span>
                     ))}
+                  </div>
+                </div>
+              );
+            })()}
+            {/* ELENCO: seu cinco titular como cards FUT (design system) */}
+            {(() => {
+              const starters = buildTeam(save)?.players ?? [];
+              if (starters.length === 0) return null;
+              return (
+                <div className="hub-squad">
+                  <div className="hub-squad-head">
+                    <h2>{ct('Seu cinco titular')}</h2>
+                    <button className="btn ghost small" onClick={() => setHubTab('squad')}>{ct('Gerenciar elenco →')}</button>
+                  </div>
+                  <div className="hub-squad-row">
+                    {starters.map((p) => <FutCard key={p.id} player={p} onClick={() => setProfilePlayer(p)} />)}
                   </div>
                 </div>
               );

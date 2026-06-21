@@ -911,6 +911,15 @@ tr.team-row td {
 .cb-pill > b.pos { color: var(--pos); }
 .cb-form .form-chips { display: inline-flex; gap: 3px; margin-top: 2px; }
 .cb-actions { display: flex; gap: 6px; align-self: flex-start; }
+
+/* fileira de cards FUT no hub (design system) */
+.hub-squad { margin-bottom: 4px; }
+.hub-squad-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+.hub-squad-head h2 {
+  margin: 0; font-family: var(--font-cond); font-size: 16px; letter-spacing: 1.2px;
+  text-transform: uppercase; color: var(--text-strong);
+}
+.hub-squad-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
 @media (max-width: 760px) {
   .cb-name { font-size: 24px; }
   .cb-inner { gap: 14px; padding: 16px; }
