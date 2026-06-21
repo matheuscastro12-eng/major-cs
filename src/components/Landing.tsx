@@ -33,7 +33,7 @@ function SectionHead({ kicker, title, sub }: { kicker: string; title: string; su
   );
 }
 
-function Nav({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: () => void; onPlay: () => void }) {
   const [solid, setSolid] = useState(false);
   useEffect(() => {
     const h = () => setSolid(window.scrollY > 40);
@@ -51,6 +51,7 @@ function Nav({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void 
           {links.map(([id, lbl]) => <a key={id} href={'#' + id} style={{ color: 'var(--rtm-dim)', fontSize: '13px', fontWeight: 600, padding: '8px 12px' }}>{lbl}</a>)}
         </nav>
         <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: '10px' }}>
+          <Button variant="ghost" size="sm" onClick={onLogin}>Entrar</Button>
           <Button variant="ghost" size="sm" onClick={onAccount}>Criar conta</Button>
           <Button size="sm" onClick={onPlay}>Jogar agora</Button>
         </span>
@@ -240,14 +241,14 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
   );
 }
 
-function AccountModal({ open, onClose, onCheckout, onPlay }: { open: boolean; onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void }) {
-  const [mode, setMode] = useState<'signup' | 'login'>('signup');
+function AccountModal({ open, onClose, onCheckout, onPlay, initialMode = 'signup' }: { open: boolean; onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
+  const [mode, setMode] = useState<'signup' | 'login'>(initialMode);
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  useEffect(() => { if (open) { setMode('signup'); setNick(''); setEmail(''); setPw(''); setBusy(false); setErr(''); } }, [open]);
+  useEffect(() => { if (open) { setMode(initialMode); setNick(''); setEmail(''); setPw(''); setBusy(false); setErr(''); } }, [open, initialMode]);
   if (!open) return null;
   const input: CSSProperties = { width: '100%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '11px 13px', fontSize: '14px', fontFamily: 'var(--font)' };
   const lbl: CSSProperties = { fontSize: '11px', fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', display: 'block', marginBottom: '6px' };
@@ -313,19 +314,20 @@ function TweetBand() {
 
 export function Landing({ onPlay, onCheckout }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void> }) {
   const [acct, setAcct] = useState(false);
+  const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
   const ref = useReveal();
-  const openAcct = () => setAcct(true);
+  const openAcct = (mode: 'signup' | 'login' = 'signup') => { setAcctMode(mode); setAcct(true); };
   return (
     <div ref={ref} className="lp-root">
-      <Nav onAccount={openAcct} onPlay={onPlay} />
-      <Hero onAccount={openAcct} onPlay={onPlay} />
+      <Nav onAccount={() => openAcct('signup')} onLogin={() => openAcct('login')} onPlay={onPlay} />
+      <Hero onAccount={() => openAcct('signup')} onPlay={onPlay} />
       <Modes onPlay={onPlay} />
       <TweetBand />
-      <Pricing onAccount={openAcct} onPlay={onPlay} />
+      <Pricing onAccount={() => openAcct('signup')} onPlay={onPlay} />
       <How />
       <Faq />
-      <FinalCta onAccount={openAcct} onPlay={onPlay} />
-      <AccountModal open={acct} onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} />
+      <FinalCta onAccount={() => openAcct('signup')} onPlay={onPlay} />
+      <AccountModal open={acct} onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} />
     </div>
   );
 }
