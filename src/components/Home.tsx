@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { type Difficulty, type TournamentPool } from '../types';
 import { useLang } from '../state/i18n';
+import { getManager } from '../state/manager';
 import { BrandMark } from './brand';
 import { DonorsPanel } from './Donate';
 import { PrivacyModal } from './Legal';
@@ -113,6 +114,8 @@ export function Home({
   const N = NEWS[(lang as 'pt' | 'en' | 'es')] ?? NEWS.pt;
   const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [view, setView] = useState<'menu' | 'draft'>('menu'); // menu limpo x setup do draft
+  const managerNick = getManager()?.nick;
   const hasBeta = true; // carreira aberta de graça pra todos
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
@@ -125,6 +128,7 @@ export function Home({
   return (
     <div className="fade-in">
       <div className="hero landing">
+        {view === 'menu' && (<>
         <BrandMark size={88} className="hero-mark" />
         <h1>
           ROAD TO <span>MAJOR</span>
@@ -151,7 +155,7 @@ export function Home({
               <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1 jogador · campanha</span><span className="rtm-modecard-go">{hasBeta ? 'Entrar' : 'Acessar'} →</span></span>
             </span>
           </button>
-          <button className="rtm-modecard" data-tone="blue" onClick={() => document.querySelector('.setup-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+          <button className="rtm-modecard" data-tone="blue" onClick={() => setView('draft')}>
             <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/mirage.jpg)' }} />
             <span className="rtm-modecard-scrim" />
             <span className="rtm-modecard-bar" />
@@ -193,11 +197,14 @@ export function Home({
             </button>
           </div>
         )}
+        {managerNick && <div className="rtm-signed">Logado como <b>{managerNick}</b> · {teamCount} times · 5 eras · scoreboards estilo HLTV</div>}
+        </>)}
 
-
-        <section className="setup-panel">
+        {view === 'draft' && (
+        <section className="setup-panel draft-screen">
           <div className="sp-head">
-            <span className="sp-title">{L.quickMatch}</span>
+            <button className="btn ghost small" onClick={() => setView('menu')} style={{ alignSelf: 'flex-start', marginBottom: 6 }}>← Menu</button>
+            <span className="sp-title">{L.quickMatch} · Draft</span>
             <span className="sp-sub">{L.quickMatchSub}</span>
           </div>
 
@@ -256,7 +263,9 @@ export function Home({
             </button>
           </div>
         </section>
+        )}
 
+        {view === 'menu' && (<>
         <div className="social-row">
           <TwitterLink />
         </div>
@@ -310,6 +319,7 @@ export function Home({
             {lang === 'en' ? 'Privacy' : lang === 'es' ? 'Privacidad' : 'Privacidade'}
           </a>
         </div>
+        </>)}
       </div>
       {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
     </div>
