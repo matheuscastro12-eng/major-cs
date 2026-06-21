@@ -98,8 +98,9 @@ export default async function handler(
     const cs = String(body.cs ?? '').trim();
     if (!em) { res.status(401).json({ error: 'Faça login antes de confirmar o pagamento.' }); return; }
     if (!cs) { res.status(400).json({ error: 'sessão ausente' }); return; }
-    const key = clean(process.env.STRIPE_SECRET_KEY);
-    if (!key) { res.status(500).json({ error: 'STRIPE_SECRET_KEY não configurada' }); return; }
+    // aceita STRIPE_SECRET_KEY ou só STRIPE (nome usado no Vercel)
+    const key = clean(process.env.STRIPE_SECRET_KEY) || clean(process.env.STRIPE);
+    if (!key) { res.status(500).json({ error: 'STRIPE_SECRET_KEY/STRIPE não configurada' }); return; }
     try {
       const r = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(cs)}`, { headers: { Authorization: `Bearer ${key}` } });
       const s = (await r.json()) as { payment_status?: string; customer_details?: { email?: string }; customer_email?: string };
