@@ -3850,8 +3850,7 @@ export function CareerScreen({ onExit }: Props) {
       {hubTab === 'world' && (() => {
         const scene = worldScene(oppEra, save.split);
         return (
-          <div className="panel">
-            <div className="panel-body">
+          <Panel title={ct('Cena mundial')} accent="gold">
               <div className="muted small section-label" style={{ marginTop: 0 }}>Cena mundial · Split {save.split} — campeonatos regionais acontecendo em paralelo</div>
               <div className="world-grid">
                 {scene.map((s) => (
@@ -3881,15 +3880,13 @@ export function CareerScreen({ onExit }: Props) {
                 ))}
               </div>
               <p className="muted small" style={{ marginTop: 10 }}>{ct('O cenário evolui a cada split — os campeões e a ordem mudam. Clique num time pra ver elenco e mapas. Você sobe de região mudando o core do elenco (nas Finanças/Mercado).')}</p>
-            </div>
-          </div>
+          </Panel>
         );
       })()}
 
       {/* ===== RANKING VRS POR REGIÃO ===== */}
       {hubTab === 'vrs' && (
-        <div className="panel">
-          <div className="panel-body">
+        <Panel title={ct('Ranking VRS')} accent="gold">
             <div className="t20-head">
               <div className="muted small section-label" style={{ marginTop: 0 }}>
                 {vrsMode === 'geral' ? 'Ranking mundial de VRS · geral' : 'Ranking mundial de VRS · por região'}
@@ -3945,14 +3942,12 @@ export function CareerScreen({ onExit }: Props) {
               ))}
             </div>
             )}
-          </div>
-        </div>
+        </Panel>
       )}
 
       {/* ===== TOP 20 HLTV DA TEMPORADA ===== */}
       {hubTab === 'top20' && (
-        <div className="panel">
-          <div className="panel-body">
+        <Panel title={ct('HLTV Top 20')} accent="gold">
             <div className="t20-head">
               <div className="muted small section-label" style={{ marginTop: 0 }}>
                 {t20Mode === 'season'
@@ -4007,8 +4002,7 @@ export function CareerScreen({ onExit }: Props) {
                 ))}
               </div>
             )}
-          </div>
-        </div>
+        </Panel>
       )}
 
       {/* ===== HISTÓRIA DA ORGANIZAÇÃO ===== */}
@@ -4064,8 +4058,7 @@ export function CareerScreen({ onExit }: Props) {
       })()}
 
       {hubTab === 'history' && (
-        <div className="panel">
-          <div className="panel-body">
+        <Panel title={ct('Histórico da carreira')} accent="gold">
             <div className="career-statgrid">
               <div className="cstat"><b>{save.split - 1}</b><span>Splits disputados</span></div>
               <div className="cstat"><b className="pos">{org.circuitTitles}</b><span>{ct('Títulos de circuito')}</span></div>
@@ -4096,8 +4089,7 @@ export function CareerScreen({ onExit }: Props) {
                 </tbody>
               </table>
             )}
-          </div>
-        </div>
+        </Panel>
       )}
       </div>
 
