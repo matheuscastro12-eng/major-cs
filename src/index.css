@@ -856,6 +856,65 @@ tr.team-row td {
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
+
+/* banner cinematográfico do hub (redesign — design system Road to Major) */
+.career-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  box-shadow: var(--elev-2);
+  margin-bottom: 16px;
+  min-height: 140px;
+}
+.cb-art {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  opacity: 0.24; filter: saturate(0.85) contrast(1.05);
+}
+.cb-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(110deg, color-mix(in srgb, var(--org0) 45%, transparent) 0%, rgba(18, 22, 27, 0.92) 55%, var(--bg-deep) 100%);
+}
+.cb-inner {
+  position: relative;
+  display: flex; align-items: center; gap: 20px;
+  padding: 20px 24px; flex-wrap: wrap;
+}
+.cb-id { flex: 1; min-width: 200px; }
+.cb-kicker {
+  font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--gold); font-weight: 700;
+}
+.cb-name {
+  margin: 2px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-family: var(--font-cond); font-size: 32px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-strong); line-height: 1.05;
+}
+.cb-sub {
+  font-size: 13px; color: var(--dim);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.cb-pills { display: flex; gap: 10px; flex-wrap: wrap; }
+.cb-pill {
+  text-align: center; padding: 8px 14px; border-radius: var(--radius);
+  background: rgba(18, 22, 27, 0.55); border: 1px solid var(--border-soft);
+}
+.cb-pill > span {
+  display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--dim); font-weight: 700;
+}
+.cb-pill > b {
+  font-family: var(--font-cond); font-weight: 800; font-size: 18px; color: var(--text-strong);
+}
+.cb-pill > b.gold { color: var(--gold); }
+.cb-pill > b.pos { color: var(--pos); }
+.cb-form .form-chips { display: inline-flex; gap: 3px; margin-top: 2px; }
+.cb-actions { display: flex; gap: 6px; align-self: flex-start; }
+@media (max-width: 760px) {
+  .cb-name { font-size: 24px; }
+  .cb-inner { gap: 14px; padding: 16px; }
+}
 .career-topbar .ct-name {
   font-family: var(--font-cond);
   font-weight: 800;

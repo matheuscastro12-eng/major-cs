@@ -3184,57 +3184,60 @@ export function CareerScreen({ onExit }: Props) {
 
   return (
     <div className="fade-in career-hub">
-      {/* barra do clube (estilo hub do FIFA) */}
-      <div className="career-topbar">
-        <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={46} logoUrl={save.org?.logo} />
-        <div className="ct-id">
-          <div className="ct-name">
-            {(buildTeam(save)?.players?.length ?? 0) > 0 && <OrgFlag players={buildTeam(save)!.players} title={ct('Nacionalidade do core')} />}
-            {save.org?.name}
-            <span className={`tier-badge t${save.tier}`}>TIER {save.tier}</span>
-          </div>
-          <div className="ct-sub">{save.circuit?.name ?? 'CIRCUIT X'} · Split {save.split}{save.region ? ` · ${MACRO_REGION_LABELS[save.region]}` : ''}</div>
-          {save.sponsors.length > 0 && (
-            <div className="ct-sponsors">
-              {save.sponsors.map((id) => {
-                const sp = sponsorById(id);
-                return sp ? <span key={id} className="ct-sp" style={{ background: sp.color }} title={`${sp.name} · +${formatMoney(sp.perSplit)}/split`}>{sp.name}</span> : null;
-              })}
+      {/* banner cinematográfico da org (estilo hub do FIFA) */}
+      {(() => {
+        const bTeam = buildTeam(save);
+        const avgOvr = bTeam?.players?.length ? Math.round(bTeam.players.reduce((a, p) => a + playerOvr(p), 0) / bTeam.players.length) : 0;
+        const org0 = save.org?.colors?.[0] ?? '#1d2530';
+        return (
+          <div className="career-banner" style={{ '--org0': org0 } as React.CSSProperties}>
+            <div className="cb-art" style={{ backgroundImage: 'url(/maps/nuke.jpg)' }} />
+            <div className="cb-scrim" />
+            <div className="cb-inner">
+              <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={66} logoUrl={save.org?.logo} />
+              <div className="cb-id">
+                <div className="cb-kicker">{ct('Carreira')} · {ct('PRESTÍGIO')} ★{careerPrestige(save)} · {save.titles}× {ct('título')}</div>
+                <h1 className="cb-name">
+                  {save.org?.name}
+                  <span className={`tier-badge t${save.tier}`}>TIER {save.tier}</span>
+                </h1>
+                <div className="cb-sub">
+                  {(bTeam?.players?.length ?? 0) > 0 && <OrgFlag players={bTeam!.players} title={ct('Nacionalidade do core')} />}
+                  {save.circuit?.name ?? 'CIRCUIT X'} · Split {save.split}{save.region ? ` · ${MACRO_REGION_LABELS[save.region]}` : ''}
+                </div>
+                {save.sponsors.length > 0 && (
+                  <div className="ct-sponsors">
+                    {save.sponsors.map((id) => {
+                      const sp = sponsorById(id);
+                      return sp ? <span key={id} className="ct-sp" style={{ background: sp.color }} title={`${sp.name} · +${formatMoney(sp.perSplit)}/split`}>{sp.name}</span> : null;
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="cb-pills">
+                <div className="cb-pill" title={ct('OVR médio do elenco')}><span>OVR</span><b className="gold">{avgOvr}</b></div>
+                <div className="cb-pill" title={ct('Caixa do clube')}><span>{ct('CAIXA')}</span><b className="pos">{formatMoney(save.budget)}</b></div>
+                <div className="cb-pill" title={ct('Torcida da organização')}><span>{ct('FÃS')}</span><b>{formatFans(careerFans(save))}</b></div>
+                <div className="cb-pill" title={ct('Pontos de ranking (VRS)')}><span>VRS</span><b>{save.vrs}</b></div>
+                <div className="cb-pill" title={ct('Posição na tabela')}><span>{ct('POSIÇÃO')}</span><b className={myPos <= spots ? 'pos' : ''}>{myPos}º</b></div>
+                <div className="cb-pill cb-form"><span>FORMA</span><span className="form-chips">{form.length ? form.slice(-5).map((f, i) => <i key={i} className={`fchip ${f === 'W' ? 'w' : 'l'}`}>{f}</i>) : <i className="muted small">-</i>}</span></div>
+              </div>
+              <div className="cb-actions">
+                <button className="btn ghost" title={ct('Rever o tutorial')} onClick={() => setShowOnb(true)}>❔</button>
+                <button className="btn ghost" title={ct('Apagar tudo e recomeçar do zero')} onClick={() => {
+                  if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
+                  const fresh = emptySave();
+                  persist(fresh);
+                  setSave(fresh);
+                  setOrgChoice('select');
+                  setStage('found');
+                }}>↺</button>
+                <button className="btn" onClick={onExit}>{ct('← Sair')}</button>
+              </div>
             </div>
-          )}
-        </div>
-        <div className="ct-standing">
-          <span className="muted small">{ct('POSIÇÃO')}</span>
-          <b className={myPos <= spots ? 'pos' : ''}>{myPos}º</b>
-        </div>
-        <div className="ct-form">
-          <span className="muted small">FORMA</span>
-          <span className="form-chips">
-            {form.length ? form.slice(-5).map((f, i) => <i key={i} className={`fchip ${f === 'W' ? 'w' : 'l'}`}>{f}</i>) : <i className="muted small">-</i>}
-          </span>
-        </div>
-        <span className="spacer" />
-        <div className="ct-stats">
-          <span title={ct('Caixa do clube')}><i className="muted small">{ct('CAIXA')}</i> {formatMoney(save.budget)}</span>
-          <span title={ct('Folha salarial por split')}><i className="muted small">FOLHA</i> {formatMoney(payroll)}</span>
-          <span title={ct('Pontos de ranking (VRS)')}><i className="muted small">VRS</i> {save.vrs}</span>
-          <span title={ct('Títulos')}><i className="muted small">{ct('TÍTULOS')}</i> {save.titles}</span>
-          <span title={ct('Prestígio da org: cresce com títulos, Major, tier e VRS; atrai mais patrocínio')}><i className="muted small">{ct('PRESTÍGIO')}</i> ★{careerPrestige(save)}</span>
-          <span title={ct('Torcida da organização')}><i className="muted small">{ct('FÃS')}</i> {formatFans(careerFans(save))}</span>
-        </div>
-        <div className="ct-actions">
-          <button className="btn ghost" title={ct('Rever o tutorial')} onClick={() => setShowOnb(true)}>❔</button>
-          <button className="btn ghost" title={ct('Apagar tudo e recomeçar do zero')} onClick={() => {
-            if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
-            const fresh = emptySave();
-            persist(fresh);
-            setSave(fresh);
-            setOrgChoice('select');
-            setStage('found');
-          }}>{ct('↺ Resetar')}</button>
-          <button className="btn" onClick={onExit}>{ct('← Sair')}</button>
-        </div>
-      </div>
+          </div>
+        );
+      })()}
 
       <div className="career-nav">
         <div className="career-groups">
