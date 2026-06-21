@@ -34,11 +34,13 @@ import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendi
 import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
+import { Landing } from './components/Landing';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
 type Screen =
+  | 'landing'
   | 'home'
   | 'draft'
   | 'hub'
@@ -57,7 +59,8 @@ type Screen =
   | 'careerAccess';
 
 const SCREEN_PATH: Record<Screen, string> = {
-  home: '/',
+  landing: '/',
+  home: '/jogar',
   online: '/online',
   career: '/carreira',
   hall: '/hall',
@@ -622,6 +625,25 @@ export default function App() {
       mapRecord: userMapRecord(tournament),
     };
   }, [tournament]);
+
+  // checkout da conta vitalícia (R$20) via Stripe: cria a sessão no backend e
+  // redireciona pro checkout hospedado. Entitlement é confirmado no retorno.
+  const startCheckout = async (email: string, nick: string) => {
+    track('checkout_start', {});
+    const r = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, nick, origin: window.location.origin }),
+    });
+    if (!r.ok) throw new Error('checkout');
+    const data = await r.json();
+    if (data?.url) window.location.href = data.url as string;
+    else throw new Error('no-url');
+  };
+
+  if (screen === 'landing') {
+    return <Landing onPlay={() => setScreen('home')} onCheckout={startCheckout} />;
+  }
 
   return (
     <>

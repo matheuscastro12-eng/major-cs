@@ -4411,6 +4411,19 @@ table.crm-players input.num {
 
 /* ===== Modo carreira: hub com abas, stats, história, campeonatos ===== */
 /* navegação em 2 níveis: grupos (barra-pílula) + sub-abas do grupo ativo */
+/* ===== Landing page (marketing) ===== */
+.lp-root { background: var(--rtm-bg); }
+.lp-wrap { max-width: 1180px; margin: 0 auto; }
+.rtm-reveal { opacity: 1; }
+.rtm-reveal.anim { opacity: 0; transform: translateY(20px); }
+.rtm-reveal.anim.in { opacity: 1; transform: none; transition: opacity .6s var(--rtm-ease), transform .6s var(--rtm-ease); }
+@media (max-width: 880px) {
+  .l-grid3 { grid-template-columns: 1fr !important; }
+  .l-grid2 { grid-template-columns: 1fr !important; }
+  .l-hero-h1 { font-size: 52px !important; }
+  .l-nav-links { display: none !important; }
+}
+
 /* ===== Menu de modos do design (MainMenu): 3 cards cinematográficos ===== */
 .rtm-modemenu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 1080px; margin: 26px auto 6px; width: 100%; }
 .rtm-modecard {
