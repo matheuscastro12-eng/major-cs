@@ -5573,9 +5573,8 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
     .sort((a, b) => playerOvr(b.player) - playerOvr(a.player))
     .slice(0, 60);
   return (
-    <div className="panel">
-      <div className="panel-body">
-        <div className="muted small section-label" style={{ marginTop: 0 }}>
+    <Panel title={ct('Mercado')} accent="gold">
+        <div className="muted small" style={{ marginBottom: 12 }}>
           {ct('🤝 Negociações · você fecha agora, o jogador entra na')} <b>{ct('próxima janela')}</b> (fim do split)
         </div>
         <div className="nego-budget">
@@ -5634,7 +5633,6 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
         </div>
         <div className="muted small section-label">{ct('Rumores da janela')}</div>
         <TransferFeed items={feed} compact />
-      </div>
       {target && (
         <NegotiationModal
           player={target.player}
@@ -5656,7 +5654,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
           }}
         />
       )}
-    </div>
+    </Panel>
   );
 }
 
