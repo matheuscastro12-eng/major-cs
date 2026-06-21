@@ -1,8 +1,8 @@
-// MODO CARREIRA REALISTA (v0, NÃO LISTADO: só abre via #carreira).
-// Fundar sua organização nos tempos atuais (só elencos CS2), contratar dentro
-// do orçamento e disputar o CIRCUIT X (liga BR de pontos corridos). Vitórias
-// rendem dinheiro e pontos de VRS - o caminho até o Major virá nas próximas
-// fases. Textos em PT por enquanto (modo em refino, não lançado).
+// MODO CARREIRA REALISTA, gratuito e disponível em /carreira.
+// Fundar ou assumir uma organização, gerir elenco, contratos, academia e caixa,
+// disputar circuitos regionais, subir no VRS e buscar o Major Mundial completo
+// em três stages suíços mais Champions Stage. A interface usa PT como fonte e
+// traduz as strings da carreira com ct().
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
@@ -3156,11 +3156,11 @@ export function CareerScreen({ onExit }: Props) {
     world: ct('Cena mundial'), inbox: 'Inbox', history: ct('História da org'),
   };
   const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
-    { id: 'inicio', label: '🏠 Início', tabs: ['overview'] },
-    { id: 'comp', label: '🏆 Competição', tabs: [...(majorActive ? ['major' as HubTab] : []), 'calendar', 'bracket', 'results', 'standings'] },
-    { id: 'time', label: '👥 Meu time', tabs: ['squad', 'academy', 'market', 'finance'] },
-    { id: 'mundo', label: '🌐 Mundo', tabs: ['vrs', 'top20', 'world'] },
-    { id: 'org', label: '📨 Organização', tabs: ['inbox', 'history'] },
+    { id: 'inicio', label: `🏠 ${ct('Início')}`, tabs: ['overview'] },
+    { id: 'comp', label: `🏆 ${ct('Competição')}`, tabs: [...(majorActive ? ['major' as HubTab] : []), 'calendar', 'bracket', 'results', 'standings'] },
+    { id: 'time', label: `👥 ${ct('Meu time')}`, tabs: ['squad', 'academy', 'market', 'finance'] },
+    { id: 'mundo', label: `🌐 ${ct('Mundo')}`, tabs: ['vrs', 'top20', 'world'] },
+    { id: 'org', label: `📨 ${ct('Organização')}`, tabs: ['inbox', 'history'] },
   ];
   const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);
   const tabLabelFull = (id: HubTab) =>
