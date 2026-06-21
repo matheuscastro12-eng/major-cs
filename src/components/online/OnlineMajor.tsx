@@ -1,11 +1,11 @@
-// Ranked Major — 2 a 8 managers disputam o mesmo Major; ranking por quem vai mais longe.
-// Porta fiel do OnlineMajor.jsx. Vs IA (rtmResolve).
+// Ranked Major — você + adversários (IA) disputam o mesmo Major; ranking por quem vai
+// mais longe. Sem salas fake: você cria a sua (escolhe o tamanho) e joga vs IA.
 import { useState } from 'react';
 import { Panel, Button } from '../ds';
 import { Flag } from '../ui';
 import { BackBar } from './bits';
 import { QuickDraft } from './QuickDraft';
-import { ONLINE_RIVALS, OPEN_ROOMS, REGION, resolve, majorPlace, type OnlineStats, type PoolPlayer, type OpenRoom, type PlaceKey } from './onlineData';
+import { resolve, majorPlace, type OnlineStats, type PoolPlayer, type PlaceKey } from './onlineData';
 import type { Manager } from '../../state/manager';
 
 const MJ_ROUNDS = [
@@ -14,8 +14,9 @@ const MJ_ROUNDS = [
   { key: 'semi', label: 'Semifinal', opp: 88 },
   { key: 'final', label: 'Grande final', opp: 91 },
 ] as const;
+const OPP_CC = ['br', 'us', 'se', 'dk', 'ua', 'fr', 'de', 'pt', 'no', 'fi'];
 
-type Field = { nick: string; country: string; you?: boolean; mmr?: number };
+type Field = { nick: string; country: string; you?: boolean };
 type Round = { label: string; win: boolean; score: string };
 type Standing = { nick: string; country: string; you?: boolean; reach: number; place: PlaceKey; pts: number };
 
@@ -28,10 +29,8 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
   onExit: () => void;
 }) {
   const me = manager;
-  const [phase, setPhase] = useState<'browse' | 'setup' | 'draft' | 'run' | 'standings'>('browse');
+  const [phase, setPhase] = useState<'setup' | 'draft' | 'run' | 'standings'>('setup');
   const [count, setCount] = useState(4);
-  const [rooms, setRooms] = useState<OpenRoom[]>(() => OPEN_ROOMS.map((r) => ({ ...r })));
-  const [room, setRoom] = useState<OpenRoom | null>(null);
   const [field, setField] = useState<Field[]>([]);
   const [myOvr, setMyOvr] = useState(0);
   const [roundIdx, setRoundIdx] = useState(0);
@@ -41,23 +40,9 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
   const [standings, setStandings] = useState<Standing[]>([]);
 
   function buildField(n: number): Field[] {
-    const bots = [...ONLINE_RIVALS].sort(() => Math.random() - 0.5).slice(0, n - 1).map((b) => ({ nick: b.nick, country: b.country, mmr: b.mmr }));
-    return [{ nick: me.nick, country: me.country, you: true }, ...bots];
+    return [{ nick: me.nick, country: me.country, you: true }, ...Array.from({ length: n - 1 }, (_, i) => ({ nick: `Adversário ${i + 1}`, country: OPP_CC[i % OPP_CC.length] }))];
   }
-  function startDraft() { setRoom(null); setField(buildField(count)); setPhase('draft'); }
-  function joinRoom(r: OpenRoom) {
-    const others = ONLINE_RIVALS.filter((b) => b.nick !== r.host.nick).sort(() => Math.random() - 0.5).slice(0, Math.max(0, r.size - 2)).map((b) => ({ nick: b.nick, country: b.country, mmr: b.mmr }));
-    setRoom(r); setCount(r.size);
-    setField([{ nick: me.nick, country: me.country, you: true }, { nick: r.host.nick, country: r.host.country, mmr: 2000 }, ...others]);
-    setPhase('draft');
-  }
-  function refreshRooms() {
-    setRooms(OPEN_ROOMS.map((r) => {
-      if (r.status === 'full' || r.status === 'drafting') return { ...r };
-      const j = Math.max(1, Math.min(r.size, r.joined + (Math.random() < 0.5 ? -1 : 1)));
-      return { ...r, joined: j, status: j >= r.size ? 'full' : 'open' };
-    }));
-  }
+  function startDraft() { setField(buildField(count)); setPhase('draft'); }
   function onDrafted(_picked: PoolPlayer[], avg: number) { setMyOvr(avg); setRoundIdx(0); setHistory([]); setPhase('run'); }
 
   function playRound() {
@@ -69,16 +54,16 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
       const h = [...history, { label: r.label, win: res.win, score: res.score }];
       setHistory(h);
       setRolling(false);
-      if (!res.win) finish(r.key, h);
-      else if (roundIdx === MJ_ROUNDS.length - 1) finish('champion', h);
+      if (!res.win) finish(r.key);
+      else if (roundIdx === MJ_ROUNDS.length - 1) finish('champion');
       else setRoundIdx(roundIdx + 1);
     }, 900);
   }
 
-  function finish(placeKey: PlaceKey, _h: Round[]) {
+  function finish(placeKey: PlaceKey) {
     const reachOf: Record<string, number> = { swiss: 0, quarter: 1, semi: 2, final: 3, champion: 4 };
     const mine: Standing = { nick: me.nick, country: me.country, you: true, reach: reachOf[placeKey] + 0.5, place: 'swiss', pts: 0 };
-    const bots: Standing[] = field.filter((f) => !f.you).map((b) => ({ nick: b.nick, country: b.country, reach: Math.max(0, Math.min(4, ((b.mmr ?? 1700) - 1600) / 170 + (Math.random() * 2.6 - 0.3))), place: 'swiss', pts: 0 }));
+    const bots: Standing[] = field.filter((f) => !f.you).map((b) => ({ nick: b.nick, country: b.country, reach: Math.random() * 4, place: 'swiss', pts: 0 }));
     const ranked = [...bots, mine].sort((a, b) => b.reach - a.reach);
     const byRank: PlaceKey[] = ['champion', 'final', 'semi', 'semi', 'quarter', 'quarter', 'quarter', 'quarter'];
     const all = ranked.map((r, i) => { const key = byRank[i] ?? 'swiss'; return { ...r, place: key, pts: majorPlace(key).pts }; });
@@ -89,75 +74,17 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
     setPhase('standings');
   }
 
-  if (phase === 'browse') {
-    const openCount = rooms.filter((r) => r.status === 'open').length;
-    const REGION_COLOR: Record<string, string> = { SA: 'var(--rtm-green-bright)', EU: 'var(--rtm-blue-bright)', NA: 'var(--rtm-gold)' };
-    const statusMeta: Record<string, [string, string]> = { open: ['Aguardando', 'var(--rtm-green-bright)'], full: ['Cheia', 'var(--rtm-faint)'], drafting: ['Em draft', 'var(--rtm-gold)'] };
-    return (
-      <div style={{ maxWidth: '880px', margin: '0 auto' }}>
-        <BackBar onHub={onHub} onExit={onExit} />
-        <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-          <div style={{ fontSize: '34px' }}>🏆</div>
-          <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Ranked Major</h1>
-          <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '500px', margin: '8px auto 0', lineHeight: 1.55 }}>Entre numa sala aberta ou crie a sua. Todos na mesma sala disputam o Major; o ranking é por quem chega mais longe.</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--rtm-dim)' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 8px var(--rtm-green-bright)' }} />
-            <b style={{ color: 'var(--rtm-text-strong)' }}>{openCount} salas abertas</b> agora · {rooms.length} no total
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button size="sm" variant="ghost" onClick={refreshRooms}>⟳ Atualizar</Button>
-            <Button size="sm" variant="gold" onClick={() => setPhase('setup')}>+ Criar sala</Button>
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {rooms.map((r) => {
-            const [stLabel, stColor] = statusMeta[r.status];
-            const canJoin = r.status === 'open';
-            return (
-              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', opacity: canJoin ? 1 : 0.7 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '74px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: stColor, boxShadow: canJoin ? '0 0 7px ' + stColor : 'none' }} />
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: stColor, textTransform: 'uppercase', letterSpacing: '.4px' }}>{stLabel}</span>
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--rtm-dim)' }}>host <Flag cc={r.host.country} /> <b style={{ color: 'var(--rtm-text)' }}>{r.host.nick}</b></div>
-                </div>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: REGION_COLOR[r.region], padding: '3px 9px', borderRadius: '999px', border: '1px solid var(--rtm-border)', whiteSpace: 'nowrap' }} title={REGION[r.region]}>{r.region} · {r.ping}ms</span>
-                <div style={{ textAlign: 'center', minWidth: '64px' }}>
-                  <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '18px', color: r.joined >= r.size ? 'var(--rtm-faint)' : 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{r.joined}/{r.size}</div>
-                  <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '2px' }}>
-                    {Array.from({ length: r.size }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.joined ? REGION_COLOR[r.region] : 'var(--rtm-panel-3)' }} />)}
-                  </div>
-                </div>
-                <Button size="sm" variant={canJoin ? 'primary' : 'ghost'} disabled={!canJoin} onClick={() => joinRoom(r)}>{canJoin ? 'Entrar' : stLabel}</Button>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: '16px', textAlign: 'center' }}>
-          <Button variant="gold" size="big" onClick={() => setPhase('setup')}>+ Criar minha sala</Button>
-        </div>
-      </div>
-    );
-  }
-
   if (phase === 'setup') {
-    const preview: Field[] = [{ nick: me.nick, country: me.country, you: true }, ...ONLINE_RIVALS.slice(0, count - 1).map((b) => ({ nick: b.nick, country: b.country }))];
+    const preview = buildField(count);
     return (
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
-          <button type="button" onClick={() => setPhase('browse')} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← Salas abertas</button>
-          <button type="button" onClick={onExit} style={{ background: 'none', border: 'none', color: 'var(--rtm-faint)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Menu</button>
-        </div>
+        <BackBar onHub={onHub} onExit={onExit} />
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '34px' }}>🏆</div>
-          <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Criar sala</h1>
-          <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '480px', margin: '8px auto 0', lineHeight: 1.55 }}>Escolha o tamanho da sala. Cada manager monta o seu time e joga a própria campanha. No fim, o ranking é por quem foi mais longe.</p>
+          <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Ranked Major</h1>
+          <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '480px', margin: '8px auto 0', lineHeight: 1.55 }}>Escolha o tamanho da chave. Cada manager monta o seu time e joga a própria campanha. No fim, o ranking é por quem foi mais longe.</p>
         </div>
-        <Panel title="Quantos managers nesta sala?">
+        <Panel title="Quantos managers nesta chave?">
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '8px' }}>
             {[2, 4, 6, 8].map((n) => (
               <button key={n} type="button" onClick={() => setCount(n)} style={{ cursor: 'pointer', width: '64px', height: '56px', borderRadius: '10px', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '22px', border: `2px solid ${count === n ? 'var(--rtm-gold)' : 'var(--rtm-border)'}`, background: count === n ? 'rgba(216,169,67,.14)' : 'var(--rtm-bg-deep)', color: count === n ? 'var(--rtm-gold)' : 'var(--rtm-dim)' }}>{n}</button>
@@ -165,7 +92,7 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
           </div>
         </Panel>
         <div style={{ marginTop: '14px' }}>
-          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '10px' }}>Managers na sala</div>
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '10px' }}>Managers na chave</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '8px' }}>
             {preview.map((p, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: 'var(--rtm-radius)', background: p.you ? 'rgba(216,169,67,.1)' : 'var(--rtm-panel)', border: `1px solid ${p.you ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}` }}>
@@ -181,7 +108,7 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
     );
   }
 
-  if (phase === 'draft') return <QuickDraft pool={pool} count={5} title="Monte seu time para o Major" subtitle="Escolha 5 lendas. O OVR médio define suas chances em cada rodada." accent="var(--rtm-gold)" onBack={() => setPhase(room ? 'browse' : 'setup')} onDone={onDrafted} />;
+  if (phase === 'draft') return <QuickDraft pool={pool} count={5} title="Monte seu time para o Major" subtitle="Escolha 5 lendas. O OVR médio define suas chances em cada rodada." accent="var(--rtm-gold)" onBack={() => setPhase('setup')} onDone={onDrafted} />;
 
   if (phase === 'run') {
     const r = MJ_ROUNDS[roundIdx];
@@ -219,7 +146,7 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
         <h1 style={{ margin: '4px 0 0', fontFamily: 'var(--font-cond)', fontSize: '52px', fontWeight: 800, textTransform: 'uppercase', color: pl.color, lineHeight: 1, textShadow: `0 0 36px ${pl.color}55` }}>{pl.label}</h1>
         <div style={{ fontSize: '15px', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '8px' }}>+{pl.pts} pontos de ranking</div>
       </div>
-      <Panel title="Classificação final da sala" flush>
+      <Panel title="Classificação final da chave" flush>
         {standings.map((s, i) => {
           const p = majorPlace(s.place);
           return (
@@ -234,7 +161,7 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
         })}
       </Panel>
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '22px' }}>
-        <Button variant="gold" onClick={() => setPhase('browse')}>Jogar outro Major</Button>
+        <Button variant="gold" onClick={() => setPhase('setup')}>Jogar outro Major</Button>
         <Button variant="ghost" onClick={onHub}>Voltar ao hub</Button>
       </div>
     </div>

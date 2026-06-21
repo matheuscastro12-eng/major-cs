@@ -1,11 +1,12 @@
 // Hub do online — escolhe um modo ranqueado (cada um explicado) + leaderboard.
 // Porta fiel do OnlineHub.jsx. Ranking salvo só pra conta paga (gate de conta).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Panel, Button } from '../ds';
 import { Flag } from '../ui';
 import type { Manager } from '../../state/manager';
 import type { Account } from '../../state/account';
-import { ONLINE_RIVALS, LB_MAJOR, LB_GAUNTLET, OPEN_ROOMS, rankFor, majorPlace, type OnlineStats } from './onlineData';
+import { getLadder, type RankRow } from '../../state/ranking';
+import { rankFor, majorPlace, type OnlineStats } from './onlineData';
 
 export type OnlineModeId = '1v1' | 'major' | 'gauntlet';
 
@@ -20,28 +21,33 @@ export function OnlineHub({ manager, stats, account, onPlay, onExit }: {
   const rk = rankFor(stats.mmr);
   const paid = !!account?.paid;
   const [lb, setLb] = useState<OnlineModeId>('1v1');
+  const [ladder, setLadder] = useState<RankRow[]>([]);
+  useEffect(() => { void getLadder().then((d) => setLadder(d.ladder)); }, []);
 
   const MODES = [
     { id: '1v1' as const, icon: '⚔', tone: 'var(--rtm-blue-bright)', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
-    { id: 'major' as const, icon: '🏆', tone: 'var(--rtm-gold)', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'], live: OPEN_ROOMS.filter((r) => r.status === 'open').length + ' salas abertas' },
+    { id: 'major' as const, icon: '🏆', tone: 'var(--rtm-gold)', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'] },
     { id: 'gauntlet' as const, icon: '🔥', tone: 'var(--rtm-green-bright)', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
   ];
 
-  function rows() {
+  type LbRow = { nick: string; country: string; val: number; you: boolean; sub: string; subColor: string; fmt: string };
+  function rows(): LbRow[] {
     if (lb === '1v1') {
-      const all = [...ONLINE_RIVALS.map((r) => ({ nick: r.nick, country: r.country, val: r.mmr, you: false })), { nick: me.nick, country: me.country, val: stats.mmr, you: true }].sort((a, b) => b.val - a.val);
-      return all.map((r) => ({ ...r, sub: rankFor(r.val).name, subColor: rankFor(r.val).color, fmt: r.val + ' MMR' }));
+      const mine = me.nick.toLowerCase();
+      const base = ladder.map((r) => ({ nick: r.nick, country: '', val: r.mmr, you: r.nick.toLowerCase() === mine }));
+      if (!base.some((r) => r.you)) base.push({ nick: me.nick, country: me.country, val: stats.mmr, you: true });
+      return base.sort((a, b) => b.val - a.val).map((r) => ({ ...r, sub: rankFor(r.val).name, subColor: rankFor(r.val).color, fmt: r.val + ' MMR' }));
     }
+    // Major e Gauntlet ainda não têm ranking de servidor — mostra só o seu número.
     if (lb === 'major') {
-      const all = [...LB_MAJOR.map((r) => ({ nick: r.nick, country: r.country, val: r.pts, best: r.best, you: false })), { nick: me.nick, country: me.country, val: stats.majorPts, best: stats.majorPts >= 100 ? 'champion' : 'semi', you: true }].sort((a, b) => b.val - a.val);
-      return all.map((r) => { const pl = majorPlace(r.best); return { ...r, sub: 'Melhor: ' + pl.label, subColor: pl.color, fmt: r.val + ' pts' }; });
+      const pl = majorPlace(stats.majorPts >= 100 ? 'champion' : 'semi');
+      return [{ nick: me.nick, country: me.country, val: stats.majorPts, you: true, sub: 'Melhor: ' + pl.label, subColor: pl.color, fmt: stats.majorPts + ' pts' }];
     }
-    const all = [...LB_GAUNTLET.map((r) => ({ nick: r.nick, country: r.country, val: r.streak, you: false })), { nick: me.nick, country: me.country, val: stats.bestStreak, you: true }].sort((a, b) => b.val - a.val);
-    return all.map((r) => ({ ...r, sub: 'Sequência recorde', subColor: 'var(--rtm-green-bright)', fmt: r.val + ' seguidas' }));
+    return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: 'Sequência recorde', subColor: 'var(--rtm-green-bright)', fmt: stats.bestStreak + ' seguidas' }];
   }
   const LB_NOTE: Record<OnlineModeId, string> = {
-    '1v1': 'Ordenado por MMR. Ganhar sobe, perder desce. Seu elo vem do MMR.',
-    major: 'Soma dos pontos de colocação de cada Major que você disputou na temporada.',
+    '1v1': 'Ranking real por MMR (contas com ranking salvo). Ganhar sobe, perder desce.',
+    major: 'Pontos de colocação dos seus Majors. Por enquanto o placar é só o seu.',
     gauntlet: 'A maior sequência de vitórias que você já emendou sem perder.',
   };
 
@@ -91,7 +97,6 @@ export function OnlineHub({ manager, stats, account, onPlay, onExit }: {
                 <div>
                   <h2 style={{ margin: 0, fontFamily: 'var(--font-cond)', fontSize: '21px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{m.name}</h2>
                   <div style={{ fontSize: '11.5px', color: m.tone, fontWeight: 700 }}>{m.players}</div>
-                  {m.live && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--rtm-green-bright)', fontWeight: 700, marginTop: '2px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 6px var(--rtm-green-bright)' }} />{m.live}</div>}
                 </div>
               </div>
               <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--rtm-text)', lineHeight: 1.5 }}>{m.pitch}</p>
@@ -133,7 +138,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onExit }: {
                 <td style={{ padding: '10px 14px', width: '44px', textAlign: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '16px', color: i === 0 ? 'var(--rtm-gold)' : i < 3 ? 'var(--rtm-text-strong)' : 'var(--rtm-faint)' }}>{i + 1}</td>
                 <td style={{ padding: '10px 14px' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                    <Flag cc={r.country} />
+                    {r.country && <Flag cc={r.country} />}
                     <b style={{ fontFamily: 'var(--font-cond)', fontSize: '15px', color: r.you ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{r.nick}</b>
                     {r.you && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '2px 7px', borderRadius: '999px' }}>Você</span>}
                   </span>

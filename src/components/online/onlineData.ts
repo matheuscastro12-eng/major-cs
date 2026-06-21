@@ -32,18 +32,11 @@ export const ONLINE_RANKS: { name: string; min: number; color: string }[] = [
 ];
 export const rankFor = (mmr: number) => [...ONLINE_RANKS].reverse().find((r) => mmr >= r.min) ?? ONLINE_RANKS[0];
 
-export const ONLINE_RIVALS: Rival[] = [
-  { nick: 'nordavind', country: 'no', mmr: 2240 },
-  { nick: 'taclocal', country: 'us', mmr: 2090 },
-  { nick: 'zé_pequeno', country: 'br', mmr: 1980 },
-  { nick: 'ggwp_andre', country: 'pt', mmr: 1910 },
-  { nick: 'pixozin', country: 'br', mmr: 1875 },
-  { nick: 'secret_agent', country: 'se', mmr: 1820 },
-  { nick: 'mibrFanboy', country: 'br', mmr: 1760 },
-  { nick: 'clutch_or_kick', country: 'fr', mmr: 1705 },
-  { nick: 'rush_b_only', country: 'ua', mmr: 1640 },
-  { nick: 'eco_frag', country: 'de', mmr: 1560 },
-];
+// adversários são IA ANÔNIMA (sem jogadores fictícios nomeados no ranking).
+const OPP_COUNTRIES = ['br', 'us', 'se', 'dk', 'ua', 'fr', 'de', 'pt', 'no', 'fi'];
+const randCc = () => OPP_COUNTRIES[Math.floor(Math.random() * OPP_COUNTRIES.length)];
+// um adversário genérico (1v1 / fila do gauntlet / chave do major)
+export const genOpp = (i?: number): Rival => ({ nick: i == null ? 'Adversário' : `Adversário ${i}`, country: randCc(), mmr: 0 });
 
 export const MAJOR_PLACES = [
   { key: 'champion', label: 'Campeão', pts: 100, color: '#f3cf6b' },
@@ -55,26 +48,6 @@ export const MAJOR_PLACES = [
 export type PlaceKey = typeof MAJOR_PLACES[number]['key'];
 export const majorPlace = (k: PlaceKey | string) => MAJOR_PLACES.find((p) => p.key === k) ?? MAJOR_PLACES[4];
 
-export const LB_MAJOR = [
-  { nick: 'nordavind', country: 'no', pts: 540, best: 'champion' },
-  { nick: 'taclocal', country: 'us', pts: 470, best: 'champion' },
-  { nick: 'zé_pequeno', country: 'br', pts: 395, best: 'final' },
-  { nick: 'ggwp_andre', country: 'pt', pts: 310, best: 'final' },
-  { nick: 'pixozin', country: 'br', pts: 250, best: 'semi' },
-  { nick: 'secret_agent', country: 'se', pts: 205, best: 'semi' },
-  { nick: 'mibrFanboy', country: 'br', pts: 150, best: 'quarter' },
-  { nick: 'clutch_or_kick', country: 'fr', pts: 95, best: 'quarter' },
-];
-export const LB_GAUNTLET = [
-  { nick: 'nordavind', country: 'no', streak: 14 },
-  { nick: 'taclocal', country: 'us', streak: 11 },
-  { nick: 'pixozin', country: 'br', streak: 9 },
-  { nick: 'zé_pequeno', country: 'br', streak: 8 },
-  { nick: 'ggwp_andre', country: 'pt', streak: 7 },
-  { nick: 'secret_agent', country: 'se', streak: 5 },
-  { nick: 'rush_b_only', country: 'ua', streak: 4 },
-];
-
 // resolve uma partida por força de time → prob de vitória + placar plausível de MD3
 export function resolve(myOvr: number, oppOvr: number): { win: boolean; prob: number; score: string } {
   const p = Math.max(0.12, Math.min(0.88, 0.5 + (myOvr - oppOvr) / 38));
@@ -82,18 +55,6 @@ export function resolve(myOvr: number, oppOvr: number): { win: boolean; prob: nu
   const loserMaps = Math.random() < 0.5 ? 0 : 1;
   return { win, prob: p, score: win ? `2-${loserMaps}` : `${loserMaps}-2` };
 }
-
-export interface OpenRoom { id: string; name: string; host: { nick: string; country: string }; size: number; joined: number; region: string; ping: number; status: 'open' | 'full' | 'drafting'; }
-export const OPEN_ROOMS: OpenRoom[] = [
-  { id: 'r1', name: 'Major dos br', host: { nick: 'zé_pequeno', country: 'br' }, size: 8, joined: 5, region: 'SA', ping: 12, status: 'open' },
-  { id: 'r2', name: 'Só lenda, sem noob', host: { nick: 'nordavind', country: 'no' }, size: 4, joined: 3, region: 'EU', ping: 142, status: 'open' },
-  { id: 'r3', name: 'rapidinha 2 players', host: { nick: 'pixozin', country: 'br' }, size: 2, joined: 1, region: 'SA', ping: 9, status: 'open' },
-  { id: 'r4', name: 'NA grind', host: { nick: 'taclocal', country: 'us' }, size: 6, joined: 6, region: 'NA', ping: 88, status: 'full' },
-  { id: 'r5', name: 'treino de draft', host: { nick: 'ggwp_andre', country: 'pt' }, size: 4, joined: 2, region: 'EU', ping: 121, status: 'open' },
-  { id: 'r6', name: 'salão do clutch', host: { nick: 'clutch_or_kick', country: 'fr' }, size: 8, joined: 4, region: 'EU', ping: 134, status: 'drafting' },
-  { id: 'r7', name: 'copa da quebrada', host: { nick: 'mibrFanboy', country: 'br' }, size: 6, joined: 3, region: 'SA', ping: 7, status: 'open' },
-];
-export const REGION: Record<string, string> = { SA: 'América do Sul', EU: 'Europa', NA: 'América do Norte' };
 
 // stats do jogador. Persiste local pra todo mundo; o ranking SALVO (servidor) é da
 // conta paga — quem decide é o componente (mostra o gate quando não é paga).

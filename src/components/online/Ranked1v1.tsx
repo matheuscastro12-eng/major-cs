@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Panel, Button } from '../ds';
 import { Flag, OvrBadge, PlayerAvatar } from '../ui';
 import { RoleTag } from './bits';
-import { ONLINE_RIVALS, rankFor, resolve, type OnlineStats, type PoolPlayer, type Rival } from './onlineData';
+import { genOpp, rankFor, resolve, type OnlineStats, type PoolPlayer, type Rival } from './onlineData';
 import type { Manager } from '../../state/manager';
 
 const ORDER = ['me', 'rival', 'rival', 'me', 'me', 'rival', 'rival', 'me', 'me', 'rival'] as const;
@@ -37,9 +37,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     setDots(0);
     const di = window.setInterval(() => setDots((d) => (d + 1) % 4), 350);
     const done = window.setTimeout(() => {
-      const near = ONLINE_RIVALS.filter((r) => Math.abs(r.mmr - mmr) < 220);
-      const list = near.length ? near : ONLINE_RIVALS;
-      setRival(list[Math.floor(Math.random() * list.length)]);
+      setRival(genOpp());
       setPhase('draft'); setTaken({}); setPickN(0);
     }, 2400);
     return () => { window.clearInterval(di); window.clearTimeout(done); };

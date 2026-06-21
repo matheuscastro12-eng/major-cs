@@ -5,7 +5,9 @@ import { Panel, Button } from '../ds';
 import { Flag } from '../ui';
 import { BackBar } from './bits';
 import { QuickDraft } from './QuickDraft';
-import { ONLINE_RIVALS, LB_GAUNTLET, resolve, type OnlineStats, type PoolPlayer } from './onlineData';
+import { resolve, type OnlineStats, type PoolPlayer } from './onlineData';
+
+const OPP_CC = ['br', 'us', 'se', 'dk', 'ua', 'fr', 'de', 'pt', 'no', 'fi'];
 
 type Entry = { idx: number; opp: string; cc: string; win: boolean; score: string; ovr: number };
 
@@ -23,8 +25,8 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
   const [rolling, setRolling] = useState(false);
 
   const oppOvr = (s: number) => 78 + s * 2.2;
-  const oppName = (s: number) => ONLINE_RIVALS[s % ONLINE_RIVALS.length].nick;
-  const oppCc = (s: number) => ONLINE_RIVALS[s % ONLINE_RIVALS.length].country;
+  const oppName = (s: number) => `Adversário ${s + 1}`;
+  const oppCc = (s: number) => OPP_CC[s % OPP_CC.length];
 
   function onDrafted(_picked: PoolPlayer[], avg: number) { setMyOvr(avg); setStreak(0); setLog([]); setPhase('run'); }
 
@@ -51,7 +53,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
           <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '460px', margin: '8px auto 0', lineHeight: 1.55 }}>Monte um time só e enfrente uma fila de rivais. Cada vitória deixa o próximo mais forte. Sua nota é a maior sequência sem perder. Quando perder, acaba.</p>
         </div>
         <Panel title="Regras rápidas">
-          {([['Sem trocas', 'O time que você montar vai até o fim da corrida.'], ['Dificuldade sobe', 'Cada rival vencido é mais forte que o anterior.'], ['Recorde', 'Seu placar é a maior sequência de vitórias. Hoje o recorde da sala é ' + LB_GAUNTLET[0].streak + '.']] as [string, string][]).map(([t, d], i) => (
+          {([['Sem trocas', 'O time que você montar vai até o fim da corrida.'], ['Dificuldade sobe', 'Cada rival vencido é mais forte que o anterior.'], ['Recorde', 'Seu placar é a maior sequência de vitórias sem perder. Seu recorde é ' + stats.bestStreak + '.']] as [string, string][]).map(([t, d], i) => (
             <div key={i} style={{ display: 'flex', gap: '10px', padding: '8px 0', borderBottom: i < 2 ? '1px solid var(--rtm-border-soft)' : 'none' }}>
               <span style={{ color: 'var(--rtm-green-bright)', fontWeight: 800 }}>›</span>
               <div><b style={{ color: 'var(--rtm-text-strong)', fontSize: '13.5px' }}>{t}.</b> <span style={{ color: 'var(--rtm-dim)', fontSize: '13px' }}>{d}</span></div>
@@ -103,13 +105,13 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
     );
   }
 
-  const record = streak >= LB_GAUNTLET[0].streak;
+  const record = streak > 0 && streak >= stats.bestStreak;
   return (
     <div style={{ maxWidth: '520px', margin: '40px auto 0', textAlign: 'center' }}>
       <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>Fim da corrida</div>
       <div style={{ fontFamily: 'var(--font-cond)', fontSize: '80px', fontWeight: 800, color: 'var(--rtm-green-bright)', lineHeight: 1, textShadow: '0 0 40px rgba(111,208,111,.4)' }}>{streak}</div>
       <div style={{ fontSize: '15px', color: 'var(--rtm-dim)' }}>vitórias seguidas</div>
-      {record && <div style={{ marginTop: '12px', display: 'inline-block', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '5px 14px', borderRadius: '999px' }}>★ Novo recorde da sala</div>}
+      {record && <div style={{ marginTop: '12px', display: 'inline-block', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '5px 14px', borderRadius: '999px' }}>★ Novo recorde pessoal</div>}
       <p style={{ color: 'var(--rtm-faint)', fontSize: '13px', marginTop: '16px' }}>Seu recorde pessoal agora é {stats.bestStreak} vitórias.</p>
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '22px' }}>
         <Button variant="primary" onClick={() => setPhase('draft')}>Tentar de novo</Button>
