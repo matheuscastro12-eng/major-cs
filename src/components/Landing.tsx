@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { BrandMark } from './brand';
 import { Button } from './ds';
+import { AnnouncementTweet, TwitterLink } from './social';
 import { login, signup } from '../state/account';
 
 const M = '/maps/';
@@ -299,6 +300,22 @@ function AccountModal({ open, onClose, onCheckout, onPlay }: { open: boolean; on
   );
 }
 
+// banda de novidades: o tweet de anúncio do @castroomath como prova social, logo
+// abaixo dos modos e antes do plano (momento de decisão).
+function TweetBand() {
+  return (
+    <section id="novidades" className="lp-wrap" style={{ padding: '50px 22px', textAlign: 'center' }}>
+      <div className="rtm-reveal" style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <div style={{ fontSize: '11px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800, marginBottom: '6px' }}>Acompanhe o projeto</div>
+        <h2 style={{ fontFamily: 'var(--font-cond)', fontSize: '30px', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-text-strong)', margin: '0 0 6px' }}>Novidades direto do X</h2>
+        <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', margin: '0 0 22px' }}>Updates, bastidores e o anúncio oficial do Road to Major.</p>
+        <AnnouncementTweet />
+        <div style={{ marginTop: '20px' }}><TwitterLink /></div>
+      </div>
+    </section>
+  );
+}
+
 export function Landing({ onPlay, onCheckout }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void> }) {
   const [acct, setAcct] = useState(false);
   const ref = useReveal();
@@ -308,6 +325,7 @@ export function Landing({ onPlay, onCheckout }: { onPlay: () => void; onCheckout
       <Nav onAccount={openAcct} onPlay={onPlay} />
       <Hero onAccount={openAcct} onPlay={onPlay} />
       <Modes onPlay={onPlay} />
+      <TweetBand />
       <Pricing onAccount={openAcct} onPlay={onPlay} />
       <How />
       <Faq />

@@ -3,9 +3,6 @@ import { type Difficulty, type TournamentPool } from '../types';
 import { useLang } from '../state/i18n';
 import { getManager } from '../state/manager';
 import { BrandMark } from './brand';
-import { DonorsPanel } from './Donate';
-import { PrivacyModal } from './Legal';
-import { AnnouncementTweet, TwitterLink } from './social';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
@@ -25,72 +22,6 @@ interface Props {
 const DIFFICULTIES: Difficulty[] = ['normal', 'hard', 'legend'];
 
 // Novidades (changelog público) + teaser do modo carreira, por idioma.
-const NEWS = {
-  pt: {
-    newsTitle: '🆕 Novidades',
-    items: [
-      'Modo Tático na partida: freezetime de 5s antes de cada round pra escolher sua chamada com calma.',
-      'Agora dá pra ver de qual lado (CT/T) você joga e o resultado de cada chamada tática.',
-      'Velocidade dos rounds reajustada (o 0.5x ficou bem mais lento e legível).',
-      'No online, o sorteio agora vem diferente pra cada jogador.',
-      'Visual mais limpo e animações de carregamento mais suaves.',
-    ],
-    careerTitle: 'Em breve: Modo Carreira',
-    careerText: 'Estamos construindo um Modo Carreira completo: fundar sua organização, contratar jogadores reais, fechar patrocínios e disputar circuitos rumo ao Major. Apoie o projeto para entrar no beta fechado e testar antes de todo mundo.',
-    careerCta: '💜 Apoiar e testar o beta',
-    badge: 'BETA FECHADO',
-    haveCode: 'Já é apoiador? Entrar com código',
-    codePh: 'código do beta',
-    codeBtn: 'Entrar',
-    codeWrong: 'Código inválido. Apoie o projeto para receber o seu.',
-    enterCareer: '▶ Entrar no Modo Carreira (beta)',
-    contact: 'Depois de apoiar, me chame no Twitter que eu te envio o link do beta fechado:',
-    contactBtn: '𝕏 Falar com @castroomath',
-  },
-  en: {
-    newsTitle: '🆕 What\'s new',
-    items: [
-      'Tactical match mode: a 5s freezetime before each round to pick your call calmly.',
-      'You can now see which side (CT/T) you are on and the outcome of each tactical call.',
-      'Round speed retuned (0.5x is now much slower and easier to read).',
-      'In online mode, the draw now comes out different for each player.',
-      'Cleaner visuals and smoother loading animations.',
-    ],
-    careerTitle: 'Coming soon: Career Mode',
-    careerText: 'We are building a full Career Mode: found your org, sign real players, land sponsors and run circuits on the road to the Major. Support the project to join the closed beta and test it before everyone else.',
-    careerCta: '💜 Support and test the beta',
-    badge: 'CLOSED BETA',
-    haveCode: 'Already a supporter? Enter with code',
-    codePh: 'beta code',
-    codeBtn: 'Enter',
-    codeWrong: 'Invalid code. Support the project to get yours.',
-    enterCareer: '▶ Enter Career Mode (beta)',
-    contact: 'After supporting, message me on Twitter and I will send your closed-beta link:',
-    contactBtn: '𝕏 Message @castroomath',
-  },
-  es: {
-    newsTitle: '🆕 Novedades',
-    items: [
-      'Modo Táctico en la partida: freezetime de 5s antes de cada ronda para elegir tu jugada con calma.',
-      'Ahora puedes ver de qué lado (CT/T) juegas y el resultado de cada jugada táctica.',
-      'Velocidad de rondas reajustada (el 0.5x quedó mucho más lento y legible).',
-      'En el online, el sorteo ahora sale diferente para cada jugador.',
-      'Visual más limpio y animaciones de carga más suaves.',
-    ],
-    careerTitle: 'Pronto: Modo Carrera',
-    careerText: 'Estamos construyendo un Modo Carrera completo: funda tu organización, ficha jugadores reales, consigue patrocinios y compite en circuitos rumbo al Major. Apoya el proyecto para entrar en la beta cerrada y probarlo antes que nadie.',
-    careerCta: '💜 Apoyar y probar la beta',
-    badge: 'BETA CERRADA',
-    haveCode: '¿Ya eres apoyador? Entrar con código',
-    codePh: 'código de la beta',
-    codeBtn: 'Entrar',
-    codeWrong: 'Código inválido. Apoya el proyecto para recibir el tuyo.',
-    enterCareer: '▶ Entrar al Modo Carrera (beta)',
-    contact: 'Tras apoyar, escríbeme en Twitter y te envío tu enlace de la beta cerrada:',
-    contactBtn: '𝕏 Escribir a @castroomath',
-  },
-};
-
 // rótulos de seção da landing (mantém o conteúdo de hoje, só organiza melhor)
 const UI = {
   pt: { quickMatch: 'Partida rápida', quickMatchSub: 'Monte o time dos sonhos e dispute um Major completo: fase suíça, playoffs, veto e scoreboard estilo HLTV.', region: 'Cenário', gameMode: 'Modo de jogo', difficulty: 'Dificuldade', play: 'Começar', achievements: 'Conquistas' },
@@ -101,21 +32,12 @@ const UI = {
 export function Home({
   onStart,
   onDonate,
-  onHall,
-  onAchievements,
   teamCount,
-  playerCount,
-  savedCampaign,
-  onResume,
-  onDiscardCampaign,
   onOnline,
-  onLeaderboard,
   onCareer,
 }: Props) {
   const { t, lang } = useLang();
-  const N = NEWS[(lang as 'pt' | 'en' | 'es')] ?? NEWS.pt;
   const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
-  const [showPrivacy, setShowPrivacy] = useState(false);
   const [view, setView] = useState<'menu' | 'draft'>('menu'); // menu limpo x setup do draft
   const managerNick = getManager()?.nick;
   const hasBeta = true; // carreira aberta de graça pra todos
@@ -136,13 +58,6 @@ export function Home({
           ROAD TO <span>MAJOR</span>
         </h1>
         <p>{t('hero.tagline')}</p>
-        <div className="hero-stats">
-          <span><b>{teamCount}</b> {t('home.teams')}</span>
-          <i className="hs-dot" />
-          <span><b>{playerCount}</b> {t('home.players')}</span>
-          <i className="hs-dot" />
-          <span className="hs-src">{t('home.curated')} HLTV · Liquipedia</span>
-        </div>
 
         {/* menu de modos do design system (Carreira / Draft / Online) */}
         <div className="rtm-modemenu">
@@ -176,35 +91,13 @@ export function Home({
               <span className="rtm-modecard-body">
                 <span className="rtm-modecard-kicker">Competitivo</span>
                 <span className="rtm-modecard-title">Online</span>
-                <span className="rtm-modecard-desc">Snake draft 1v1 contra outro manager ao vivo. Monte, vete o mapa e jogue a série.</span>
-                <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1v1 · ao vivo</span><span className="rtm-modecard-go">Jogar →</span></span>
+                <span className="rtm-modecard-desc">Snake draft 1v1 contra outro manager. Suba no ladder ranqueado por MMR.</span>
+                <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1v1 · ranqueada</span><span className="rtm-modecard-go">Jogar →</span></span>
               </span>
             </button>
           )}
         </div>
 
-        {onLeaderboard && (
-          <div style={{ marginTop: 14, textAlign: 'center' }}>
-            <button className="rtm-ranklink" onClick={onLeaderboard}>🏆 Ranking competitivo do online →</button>
-          </div>
-        )}
-
-        {savedCampaign && (
-          <div style={{ margin: '18px auto 0', maxWidth: 640, display: 'flex', gap: 10 }}>
-            <button className="btn gold big" style={{ flex: 1 }} onClick={onResume}>
-              {t('home.resume')} - {savedCampaign.name}
-              {savedCampaign.phase === 'done' ? ` ${t('home.ended')}` : ''}
-            </button>
-            <button
-              className="btn ghost"
-              onClick={() => {
-                if (confirm(t('home.confirmDiscard'))) onDiscardCampaign?.();
-              }}
-            >
-              {t('home.newCampaign')}
-            </button>
-          </div>
-        )}
         {managerNick && <div className="rtm-signed">Logado como <b>{managerNick}</b> · {teamCount} times · 5 eras · scoreboards estilo HLTV</div>}
         </>)}
 
@@ -272,64 +165,7 @@ export function Home({
           </div>
         </section>
         )}
-
-        {view === 'menu' && (<>
-        <div className="social-row">
-          <TwitterLink />
-        </div>
-        <AnnouncementTweet />
-
-        <div className="news-card">
-          <h3>{N.newsTitle}</h3>
-          <ul className="news-list">
-            {N.items.map((it, i) => (
-              <li key={i}>{it}</li>
-            ))}
-          </ul>
-        </div>
-
-        <DonorsPanel onDonate={onDonate} />
-
-        <div className="footnote">
-          {teamCount} {t('home.teams')} · {playerCount} {t('home.players')} ·{' '}
-          <a
-            href="/hall"
-            onClick={(e) => {
-              e.preventDefault();
-              onHall();
-            }}
-          >
-            {t('home.hall')}
-          </a>
-          {onAchievements && (
-            <>
-              {' · '}
-              <a href="#" onClick={(e) => { e.preventDefault(); onAchievements(); }}>🏅 {lang === 'en' ? 'Achievements' : lang === 'es' ? 'Logros' : 'Conquistas'}</a>
-            </>
-          )}
-          {' · '}
-          {t('home.curated')}{' '}
-          <a href="https://liquipedia.net" target="_blank" rel="noreferrer">
-            Liquipedia
-          </a>{' '}
-          &amp;{' '}
-          <a href="https://www.hltv.org" target="_blank" rel="noreferrer">
-            HLTV
-          </a>
-          {' · '}
-          {t('home.photos')}{' '}
-          <a href="https://liquipedia.net" target="_blank" rel="noreferrer">
-            Liquipedia
-          </a>{' '}
-          (CC-BY-SA 3.0)
-          {' · '}
-          <a href="#" onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>
-            {lang === 'en' ? 'Privacy' : lang === 'es' ? 'Privacidad' : 'Privacidade'}
-          </a>
-        </div>
-        </>)}
       </div>
-      {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
     </div>
   );
 }
