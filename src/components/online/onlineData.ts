@@ -1,10 +1,20 @@
 // Dados + helpers do modo Online (Ranked 1v1, Ranked Major, Gauntlet). Porta fiel do
 // onlineData.jsx do design. É um modo single-player vs IA: rivais são bots e a partida
 // é resolvida por força de time. Ranking salvo só pra conta paga (ver useOnlineStats).
-import type { TeamSeason } from '../../types';
-import { playerOvr } from '../../engine/ratings';
+import type { Coach, Player, TeamSeason, TTeam } from '../../types';
+import { buildUserTeam, playerOvr } from '../../engine/ratings';
 
-export interface PoolPlayer { id: string; nick: string; country: string; role: string; ovr: number; }
+const DEFAULT_COACH: Coach = { nick: 'coach', name: 'Técnico', country: 'br', rating: 70, style: 'tactical' };
+
+// monta um TTeam real a partir das escolhas do draft, com id e ids de jogador únicos
+// (o motor de partida indexa stats/MVP por id; os dois times não podem colidir).
+export function buildOnlineTeam(name: string, picks: PoolPlayer[], idPrefix: string): TTeam {
+  const team = buildUserTeam(name, picks.map((p) => ({ player: p.player, from: p.from })), DEFAULT_COACH);
+  return { ...team, id: idPrefix, name, players: team.players.map((p) => ({ ...p, id: `${idPrefix}__${p.sourcePlayerId}` })) };
+}
+
+// PoolPlayer carrega o Player completo + a TeamSeason de origem pra montar TTeam real.
+export interface PoolPlayer { id: string; nick: string; country: string; role: string; ovr: number; player: Player; from: TeamSeason; }
 export interface Rival { nick: string; country: string; mmr: number; }
 export interface OnlineStats { mmr: number; w: number; l: number; majorPts: number; bestStreak: number; gamesMajor: number; }
 
@@ -17,7 +27,7 @@ export function buildPool(dataset: TeamSeason[]): PoolPlayer[] {
       const key = p.nick.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ id: p.id, nick: p.nick, country: p.country, role: p.role, ovr: playerOvr(p) });
+      out.push({ id: p.id, nick: p.nick, country: p.country, role: p.role, ovr: playerOvr(p), player: p, from: t });
     }
   }
   return out.sort((a, b) => b.ovr - a.ovr);

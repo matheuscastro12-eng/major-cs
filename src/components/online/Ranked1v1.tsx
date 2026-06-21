@@ -3,9 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Panel, Button } from '../ds';
 import { Flag, OvrBadge, PlayerAvatar } from '../ui';
+import { VetoScreen } from '../VetoScreen';
+import { MatchScreen } from '../MatchScreen';
+import { makeRng } from '../../engine/rng';
 import { RoleTag } from './bits';
-import { genOpp, rankFor, resolve, type OnlineStats, type PoolPlayer, type Rival } from './onlineData';
+import { buildOnlineTeam, genOpp, rankFor, type OnlineStats, type PoolPlayer, type Rival } from './onlineData';
 import type { Manager } from '../../state/manager';
+import type { MapId, SeriesResult, TTeam } from '../../types';
 
 const ORDER = ['me', 'rival', 'rival', 'me', 'me', 'rival', 'rival', 'me', 'me', 'rival'] as const;
 
@@ -20,10 +24,13 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
 }) {
   const me = manager;
   const mmr = stats.mmr;
-  const [phase, setPhase] = useState<'lobby' | 'search' | 'draft' | 'result'>('lobby');
+  const [phase, setPhase] = useState<'lobby' | 'search' | 'draft' | 'veto' | 'match' | 'result'>('lobby');
   const [rival, setRival] = useState<Rival | null>(null);
   const [dots, setDots] = useState(0);
   const [outcome, setOutcome] = useState<{ won: boolean; delta: number } | null>(null);
+  const [teams, setTeams] = useState<[TTeam, TTeam] | null>(null);
+  const [maps, setMaps] = useState<{ map: MapId; pickedBy: 0 | 1 | -1 }[]>([]);
+  const rngRef = useRef(makeRng(Math.floor(Math.random() * 2_000_000_000)));
 
   const poolRef = useRef<PoolPlayer[] | null>(null);
   if (!poolRef.current) poolRef.current = pool.slice(0, 18);
@@ -46,7 +53,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
   useEffect(() => {
     if (phase !== 'draft') return;
     if (pickN >= ORDER.length) {
-      const t = window.setTimeout(() => settle(), 700);
+      const t = window.setTimeout(() => toMatch(), 700);
       return () => window.clearTimeout(t);
     }
     if (ORDER[pickN] === 'rival') {
@@ -60,18 +67,26 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, pickN, taken]);
 
-  function settle() {
+  // draft completo: monta os 2 times reais e vai pro veto → partida ao vivo
+  function toMatch() {
     const picks = poolRef.current!;
-    const myAvg = avg(picks.filter((p) => taken[p.nick] === 'me'));
-    const rivalAvg = avg(picks.filter((p) => taken[p.nick] === 'rival'));
-    const res = resolve(myAvg, rivalAvg);
-    const delta = res.win ? 25 : -22;
-    setOutcome({ won: res.win, delta });
-    setStats((s) => ({ ...s, mmr: Math.max(0, s.mmr + delta), w: s.w + (res.win ? 1 : 0), l: s.l + (res.win ? 0 : 1) }));
-    onReport?.(res.win);
+    const mine = picks.filter((p) => taken[p.nick] === 'me');
+    const theirs = picks.filter((p) => taken[p.nick] === 'rival');
+    const myTeam = buildOnlineTeam(me.org || me.nick, mine, 'you');
+    const rivalTeam = buildOnlineTeam(rival ? rival.nick : 'Adversário', theirs, 'rival');
+    setTeams([myTeam, rivalTeam]);
+    setPhase('veto');
+  }
+
+  // fim da série: MMR sobe/desce conforme o resultado real
+  function finishMatch(series: SeriesResult) {
+    const won = series.winner === 0;
+    const delta = won ? 25 : -22;
+    setOutcome({ won, delta });
+    setStats((s) => ({ ...s, mmr: Math.max(0, s.mmr + delta), w: s.w + (won ? 1 : 0), l: s.l + (won ? 0 : 1) }));
+    onReport?.(won);
     setPhase('result');
   }
-  const avg = (ps: PoolPlayer[]) => (ps.length ? Math.round(ps.reduce((a, p) => a + p.ovr, 0) / ps.length) : 75);
 
   function myPick(p: PoolPlayer) {
     if (ORDER[pickN] !== 'me' || taken[p.nick]) return;
@@ -122,6 +137,23 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
         <p style={{ color: 'var(--rtm-dim)', marginTop: '8px' }}>Buscando perto de {mmr} MMR · {rk.name}</p>
         <Button variant="ghost" size="sm" onClick={() => setPhase('lobby')} style={{ marginTop: '18px' }}>Cancelar</Button>
         <style>{`@keyframes rtmSpin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    );
+  }
+
+  if (phase === 'veto' && teams) {
+    return (
+      <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+        {bar(() => setPhase('lobby'))}
+        <VetoScreen teams={teams} userIdx={0} rng={rngRef.current} phaseLabel="Ranked 1v1" bestOf={3} onDone={(m) => { setMaps(m); setPhase('match'); }} />
+      </div>
+    );
+  }
+
+  if (phase === 'match' && teams) {
+    return (
+      <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+        <MatchScreen teams={teams} maps={maps} userIdx={0} rng={rngRef.current} phaseLabel="Ranked 1v1" bestOf={3} onFinish={finishMatch} />
       </div>
     );
   }
