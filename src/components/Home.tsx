@@ -89,9 +89,6 @@ const NEWS = {
   },
 };
 
-const BETA_KEY = 'rtm-beta-v1';
-const TWITTER_URL = 'https://x.com/castroomath';
-
 // rótulos de seção da landing (mantém o conteúdo de hoje, só organiza melhor)
 const UI = {
   pt: { quickMatch: 'Partida rápida', quickMatchSub: 'Monte o time dos sonhos e dispute um Major completo — fase suíça, playoffs, veto e scoreboard estilo HLTV.', region: 'Cenário', gameMode: 'Modo de jogo', difficulty: 'Dificuldade', play: 'Começar', achievements: 'Conquistas' },
@@ -116,34 +113,7 @@ export function Home({
   const N = NEWS[(lang as 'pt' | 'en' | 'es')] ?? NEWS.pt;
   const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
   const [showPrivacy, setShowPrivacy] = useState(false);
-  const [showCode, setShowCode] = useState(false);
-  const [code, setCode] = useState('');
-  const [codeErr, setCodeErr] = useState('');
-  // carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking).
-  // mantém o estado/código de beta por compatibilidade, mas o acesso já nasce livre.
-  const [hasBeta, setHasBeta] = useState(true);
-
-  const submitCode = async () => {
-    setCodeErr('');
-    try {
-      const r = await fetch('/api/beta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.trim() }),
-        signal: AbortSignal.timeout(9000),
-      });
-      const j = await r.json();
-      if (j?.ok) {
-        try { localStorage.setItem(BETA_KEY, '1'); } catch { /* sem storage */ }
-        setHasBeta(true);
-        onCareer?.();
-      } else {
-        setCodeErr(N.codeWrong);
-      }
-    } catch {
-      setCodeErr(N.codeWrong);
-    }
-  };
+  const hasBeta = true; // carreira aberta de graça pra todos
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
@@ -224,43 +194,6 @@ export function Home({
           </div>
         )}
 
-
-        {/* MODO CARREIRA (beta fechado): destaque logo no topo da home */}
-        <div className="career-feature">
-          <span className="cf-badge">{N.badge}</span>
-          <h3>🏆 {N.careerTitle}</h3>
-          <p>{N.careerText}</p>
-          <div className="cf-actions">
-            {hasBeta ? (
-              <button className="btn gold big" onClick={onCareer}>{N.enterCareer}</button>
-            ) : (
-              <>
-                <button className="btn gold big" onClick={onDonate}>{N.careerCta}</button>
-                {!showCode ? (
-                  <button className="btn ghost" onClick={() => setShowCode(true)}>{N.haveCode}</button>
-                ) : (
-                  <span className="cf-code">
-                    <input
-                      value={code}
-                      maxLength={24}
-                      placeholder={N.codePh}
-                      onChange={(e) => setCode(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && submitCode()}
-                    />
-                    <button className="btn" onClick={submitCode}>{N.codeBtn}</button>
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-          {codeErr && <div className="neg small" style={{ marginTop: 8 }}>{codeErr}</div>}
-          {!hasBeta && (
-            <div className="cf-contact">
-              <span className="muted small">{N.contact}</span>
-              <a className="btn ghost small" href={TWITTER_URL} target="_blank" rel="noopener noreferrer">{N.contactBtn}</a>
-            </div>
-          )}
-        </div>
 
         <section className="setup-panel">
           <div className="sp-head">
