@@ -34,6 +34,7 @@ import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
 import { Landing } from './components/Landing';
+import { claim as claimAccount, useAccount } from './state/account';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
@@ -182,6 +183,20 @@ export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
+  const { account, refresh: refreshAccount } = useAccount();
+  const [paidToast, setPaidToast] = useState(false);
+  // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('conta') !== 'ok') return;
+    const cs = sp.get('cs') ?? '';
+    void (async () => {
+      if (cs) { const ok = await claimAccount(cs); if (ok) { setPaidToast(true); await refreshAccount(); } }
+      const url = new URL(window.location.href);
+      url.searchParams.delete('conta'); url.searchParams.delete('cs');
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    })();
+  }, [refreshAccount]);
   const [achToast, setAchToast] = useState<AchDef[]>([]); // conquistas recém-desbloqueadas
   const [achOpen, setAchOpen] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -649,6 +664,13 @@ export default function App() {
       {/* barra de progresso: remonta a cada troca de tela e replaya a animação */}
       <div className="route-progress" key={screen} />
 
+      {paidToast && (
+        <div className="paid-toast" role="status">
+          <span>★ Conta vitalícia ativada! Save na nuvem e ranking liberados.</span>
+          <button onClick={() => setPaidToast(false)} aria-label="fechar">✕</button>
+        </div>
+      )}
+
       {achToast.length > 0 && <AchievementToast items={achToast} onDone={() => setAchToast([])} />}
       {achOpen && <AchievementsModal onClose={() => setAchOpen(false)} />}
 
@@ -674,6 +696,12 @@ export default function App() {
             <span className="subtitle">{t('nav.subtitle')}</span>
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
+            {account && (
+              <span className="acct-chip" title={account.paid ? 'Conta vitalícia ativa' : 'Conta (grátis)'}>
+                {account.paid && <span className="acct-star">★</span>}
+                {account.nick || account.email}
+              </span>
+            )}
             <button className="nav-btn" onClick={() => setScreen('hall')}>
               {t('nav.hall')}
             </button>

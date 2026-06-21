@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { BrandMark } from './brand';
 import { Button } from './ds';
+import { login, signup } from '../state/account';
 
 const M = '/maps/';
 const L = '/logos/';
@@ -243,42 +244,55 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
   );
 }
 
-function AccountModal({ open, onClose, onCheckout }: { open: boolean; onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void> }) {
+function AccountModal({ open, onClose, onCheckout, onPlay }: { open: boolean; onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void }) {
+  const [mode, setMode] = useState<'signup' | 'login'>('signup');
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  useEffect(() => { if (open) { setNick(''); setEmail(''); setBusy(false); setErr(''); } }, [open]);
+  useEffect(() => { if (open) { setMode('signup'); setNick(''); setEmail(''); setPw(''); setBusy(false); setErr(''); } }, [open]);
   if (!open) return null;
   const input: CSSProperties = { width: '100%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '11px 13px', fontSize: '14px', fontFamily: 'var(--font)' };
   const lbl: CSSProperties = { fontSize: '11px', fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', display: 'block', marginBottom: '6px' };
-  const valid = /\S+@\S+\.\S+/.test(email);
+  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6;
   const go = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
-    try { await onCheckout(email.trim(), nick.trim()); } catch { setErr('Não consegui abrir o pagamento agora. Tente de novo em instantes.'); setBusy(false); }
+    try {
+      const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
+      if (acct.paid) { onPlay(); return; }           // já tem conta vitalícia: entra direto
+      await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Erro. Tente de novo.'); setBusy(false); }
   };
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(8,11,15,.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '440px', maxWidth: '100%', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 24px 70px rgba(0,0,0,.6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', borderBottom: '1px solid var(--rtm-border-soft)', background: 'var(--rtm-grad-panel-head)' }}>
           <BrandMark size={26} />
-          <b style={{ fontFamily: 'var(--font-cond)', fontSize: '17px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)' }}>Criar conta</b>
+          <b style={{ fontFamily: 'var(--font-cond)', fontSize: '17px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)' }}>{mode === 'signup' ? 'Criar conta' : 'Entrar'}</b>
           <span style={{ flex: 1 }} />
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--rtm-dim)', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
         </div>
         <div style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <span style={{ fontFamily: 'var(--font-cond)', fontSize: '34px', fontWeight: 800, color: 'var(--rtm-gold)' }}>R$20</span>
-            <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>pagamento único, acesso vitalício</span>
-          </div>
+          {mode === 'signup' && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
+              <span style={{ fontFamily: 'var(--font-cond)', fontSize: '34px', fontWeight: 800, color: 'var(--rtm-gold)' }}>R$20</span>
+              <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>pagamento único, acesso vitalício</span>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div><label style={lbl}>Nick de manager</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>
-            <div><label style={lbl}>E-mail</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" type="email" /></div>
+            {mode === 'signup' && <div><label style={lbl}>Nick de manager</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
+            <div><label style={lbl}>E-mail</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" type="email" autoComplete="email" /></div>
+            <div><label style={lbl}>Senha</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="mínimo 6 caracteres" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} /></div>
           </div>
           {err && <p style={{ color: 'var(--rtm-red-bright)', fontSize: '12.5px', margin: '12px 0 0' }}>{err}</p>}
-          <Button variant="gold" style={{ width: '100%', marginTop: '20px', opacity: valid && !busy ? 1 : 0.5 }} onClick={go}>{busy ? 'Abrindo pagamento…' : 'Pagar R$20 com segurança'}</Button>
-          <p style={{ fontSize: '11.5px', color: 'var(--rtm-faint)', textAlign: 'center', margin: '12px 0 0' }}>Pagamento via Stripe (Pix ou cartão). Sem conta você continua jogando de graça, com save só no navegador.</p>
+          <Button variant="gold" style={{ width: '100%', marginTop: '20px', opacity: valid && !busy ? 1 : 0.5 }} onClick={go}>{busy ? 'Aguarde…' : mode === 'signup' ? 'Criar conta e pagar R$20' : 'Entrar'}</Button>
+          <p style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', textAlign: 'center', margin: '14px 0 0' }}>
+            {mode === 'signup' ? 'Já tem conta? ' : 'Não tem conta? '}
+            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); }} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontWeight: 700, fontSize: '12.5px' }}>{mode === 'signup' ? 'Entrar' : 'Criar conta'}</button>
+          </p>
+          <p style={{ fontSize: '11.5px', color: 'var(--rtm-faint)', textAlign: 'center', margin: '10px 0 0' }}>Pagamento via Stripe (Pix ou cartão). Sem conta você joga de graça, com save só no navegador.</p>
         </div>
       </div>
     </div>
@@ -298,7 +312,7 @@ export function Landing({ onPlay, onCheckout }: { onPlay: () => void; onCheckout
       <How />
       <Faq />
       <FinalCta onAccount={openAcct} onPlay={onPlay} />
-      <AccountModal open={acct} onClose={() => setAcct(false)} onCheckout={onCheckout} />
+      <AccountModal open={acct} onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} />
     </div>
   );
 }
