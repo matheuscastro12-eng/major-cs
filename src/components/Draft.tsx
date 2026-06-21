@@ -3,7 +3,8 @@ import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import type { DraftState, Player, TeamSeason } from '../types';
 import { useLang } from '../state/i18n';
-import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { FutCard } from './FutCard';
 
 const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 
@@ -335,16 +336,27 @@ function PlayerCard({
   onPick: () => void;
 }) {
   const { t: tr } = useLang();
+  const flag = fills ? (
+    <span className={`fills-flag${fills.critical ? ' critical' : ''}`} style={{ position: 'absolute', top: '-9px', left: '50%', transform: 'translateX(-50%)', zIndex: 3, whiteSpace: 'nowrap' }}>
+      {fills.critical ? `⚠ ${tr('draft.fills')} ` : '+ '}
+      {tr(`draft.need${fills.key}Short`)}
+    </span>
+  ) : null;
+  // modo clássico: cards FUT do design (info completa). Almanaque mantém o card com
+  // info oculta (o jogo é adivinhar a era), só com a função visível.
+  if (classic) {
+    return (
+      <div style={{ position: 'relative', opacity: taken ? 0.5 : 1, pointerEvents: taken ? 'none' : 'auto' }}>
+        {flag}
+        <FutCard player={p} onClick={taken ? undefined : onPick} />
+        {taken && <span style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-faint)', zIndex: 3 }}>{tr('draft.alreadyPicked')}</span>}
+      </div>
+    );
+  }
   return (
-    <button className={`pcard${taken ? ' taken' : ''}${fills ? ' fills-need' : ''}`} onClick={onPick}>
-      {fills && (
-        <span className={`fills-flag${fills.critical ? ' critical' : ''}`}>
-          {fills.critical ? `⚠ ${tr('draft.fills')} ` : '+ '}
-          {tr(`draft.need${fills.key}Short`)}
-        </span>
-      )}
+    <button className={`pcard${taken ? ' taken' : ''}${fills ? ' fills-need' : ''}`} onClick={onPick} style={{ position: 'relative' }}>
+      {flag}
       <PlayerAvatar nick={p.nick} size={56} />
-      {classic && <OvrBadge ovr={playerOvr(p)} />}
       <div className="nick">{p.nick}</div>
       <div className="meta">
         <Flag cc={p.country} />
@@ -353,15 +365,6 @@ function PlayerCard({
       <div className="meta">
         <span className={`role-pill ${p.role}`}>{p.role}</span>
       </div>
-      {classic && (
-        <div className="attr-bars">
-          <AttrBar label={tr('draft.attrAim')} value={p.aim} />
-          <AttrBar label={tr('draft.attrClutch')} value={p.clutch} />
-          <AttrBar label={tr('draft.attrConsistency')} value={p.consistency} />
-          <AttrBar label="AWP" value={p.awp} />
-          <AttrBar label="IGL" value={p.igl} />
-        </div>
-      )}
       {taken && <div className="meta muted small">{tr('draft.alreadyPicked')}</div>}
     </button>
   );
