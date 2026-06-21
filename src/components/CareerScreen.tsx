@@ -3848,12 +3848,17 @@ export function CareerScreen({ onExit }: Props) {
         <div className="career-grid">
           <div className="career-main">
             <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('Seu elenco')}</div>
+            {/* cards FUT (design system) — visão de identidade; gestão fica na lista abaixo */}
+            <div className="hub-squad-row" style={{ marginBottom: 14 }}>
+              {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => setProfilePlayer(p)} />)}
+            </div>
             {(!hasAwp || !hasIgl) && (
               <div className="role-warn">
                 ⚠️ Seu time está sem {!hasAwp && !hasIgl ? 'AWP e IGL' : !hasAwp ? 'AWPer' : 'IGL'}.
                 Ajuste a função de um jogador abaixo para cobrir.
               </div>
             )}
+            <div className="muted small section-label">{ct('Gestão do elenco')}</div>
             <div className="career-squad big">
               {rows.map((p) => {
                 const rid = `user__${p.id}`;
