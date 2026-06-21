@@ -6058,3 +6058,19 @@ body.has-ad-footer { padding-bottom: 112px; }
   .ut-mc-grid { grid-template-columns: 1fr; }
   .ut-qualification-board { grid-template-columns: 1fr; }
 }
+.career-hall-status { min-height: 20px; margin: 8px auto 14px; font-size: 12px; font-weight: 700; color: var(--rtm-dim); }
+.career-hall-status.saved { color: var(--rtm-green-bright); }
+.career-hall-status.error { color: var(--rtm-gold); }
+.career-major-path { display: grid; grid-template-columns: repeat(4, minmax(90px, 1fr)); gap: 8px; margin: 14px 0 10px; }
+.career-major-path > span { display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 1px 8px; padding: 9px; border: 1px solid var(--rtm-border-soft); border-radius: 8px; background: rgba(8, 12, 16, .42); }
+.career-major-path i { grid-row: 1 / 3; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--rtm-panel-3); color: var(--rtm-dim); font-style: normal; font-weight: 800; }
+.career-major-path b { font-size: 12px; color: var(--rtm-text-strong); }
+.career-major-path small { font-size: 10px; color: var(--rtm-dim); }
+.career-major-path .done i { background: var(--rtm-green-bright); color: #07110a; }
+.career-major-path .current { border-color: var(--rtm-gold-soft); box-shadow: inset 0 0 0 1px rgba(216, 169, 67, .14); }
+.career-major-path .current i { background: var(--rtm-gold); color: #161006; }
+.career-major-path .auto { opacity: .76; }
+.career-major-copy { margin: 8px 0 0; color: var(--rtm-text); font-size: 13px; }
+.career-major-pre { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--rtm-gold); background: rgba(216, 169, 67, .06); color: var(--rtm-dim); font-size: 11px; }
+.career-major-pre > b { display: block; margin-bottom: 4px; color: var(--rtm-text-strong); }
+@media (max-width: 640px) { .career-major-path { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

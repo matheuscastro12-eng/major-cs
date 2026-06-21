@@ -17,6 +17,7 @@ import type { Coach, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, To
 import { MAP_LABELS, MAP_POOL, PLAYBOOK_DESC, PLAYBOOK_LABELS } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
+import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -34,6 +35,7 @@ import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
 import { captureError } from '../state/errlog';
 import { cloudOnLocalSave } from '../state/cloud';
+import { getManager } from '../state/manager';
 import bo3Ages from '../data/bo3-ages.json';
 
 const SAVE_KEY = 'rtm-career-v1';
@@ -1381,6 +1383,10 @@ interface MajorResult {
   champion: boolean;
 }
 
+const HALL_PLACEMENT: Record<PlacementCode, string> = {
+  champion: '1', runnerup: '2', semi: '3-4', quarters: '5-8', playoffs: '9-16', swiss: '17-32',
+};
+
 interface Props {
   dataset: TeamSeason[];
   onExit: () => void;
@@ -1418,6 +1424,7 @@ export function CareerScreen({ onExit }: Props) {
   } | null>(null);
   const [selSeries, setSelSeries] = useState<{ series: SeriesResult; teams: [TTeam, TTeam] } | null>(null);
   const [majorResult, setMajorResult] = useState<MajorResult | null>(() => loadSave().majorResult ?? null);
+  const [careerHallStatus, setCareerHallStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [majorTState, setMajorTState] = useState<Tournament | null>(() => loadSave().majorT);
   const majorT = majorTState;
   // persiste o Major junto do save (sobrevive a reload no meio do torneio)
@@ -1452,6 +1459,51 @@ export function CareerScreen({ onExit }: Props) {
       return next;
     });
   };
+
+  useEffect(() => {
+    if (!majorResult || !save.org) return;
+    const tournament = majorResult.tournament;
+    const hallKey = `career-major-hall-${save.org.name}-${save.split}-${majorResult.placement}-${tournament.history.length}`;
+    try {
+      if (localStorage.getItem(hallKey)) {
+        const savedTimer = window.setTimeout(() => setCareerHallStatus('saved'), 0);
+        return () => window.clearTimeout(savedTimer);
+      }
+    } catch { /* sem storage: ainda tenta registrar */ }
+
+    const user = tournament.teams.find((team) => team.id === 'user');
+    if (!user) return;
+    const champion = tournament.championId
+      ? tournament.teams.find((team) => team.id === tournament.championId)?.name
+      : majorResult.champion ? save.org.name : ct('Campanha encerrada');
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 8_000);
+    const statusTimer = window.setTimeout(() => setCareerHallStatus('saving'), 0);
+    fetch('/api/hall', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player: getManager()?.nick || save.org.tag,
+        teamName: save.org.name,
+        pool: 'world',
+        placement: HALL_PLACEMENT[majorResult.placement],
+        champion: champion || ct('Campanha encerrada'),
+        mvp: tournamentMvpNick(tournament),
+        season: Math.max(1, Math.ceil(save.split / MAJOR_EVERY)),
+        roster: user.players.map((player) => ({ nick: player.nick, country: player.country, ovr: player.ovr })),
+        records: tournamentTeamRecords(tournament),
+      }),
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error('hall');
+        try { localStorage.setItem(hallKey, '1'); } catch { /* sem storage */ }
+        setCareerHallStatus('saved');
+      })
+      .catch(() => setCareerHallStatus('error'))
+      .finally(() => window.clearTimeout(timer));
+    return () => { window.clearTimeout(timer); window.clearTimeout(statusTimer); controller.abort(); };
+  }, [majorResult, save.org, save.split]);
 
   // aplica a função escolhida no Elenco ao time do usuário na hora de montar a
   // partida (o snapshot da liga/major não sabe das trocas feitas no meio do
@@ -2589,6 +2641,11 @@ export function CareerScreen({ onExit }: Props) {
                 ? ct('Sua organização é CAMPEÃ MUNDIAL! O nome entrou para a história do CS.')
                 : ct('Sua org representou o circuito no Major mundial. Volte mais forte no próximo split.')}
             </p>
+            <div className={`career-hall-status ${careerHallStatus}`}>
+              {careerHallStatus === 'saving' && ct('Registrando a campanha no Hall da Fama…')}
+              {careerHallStatus === 'saved' && ct('Campanha registrada no Hall da Fama com elenco, MVP e recordes.')}
+              {careerHallStatus === 'error' && ct('Hall indisponível agora. O registro será tentado novamente ao reabrir este resultado.')}
+            </div>
 
             {/* o Major encerra a temporada: aqui sai a premiação do Top 20 HLTV do ano */}
             <div className="se-awards">
@@ -3467,14 +3524,25 @@ export function CareerScreen({ onExit }: Props) {
         const entered = save.majorUserStage ?? 1;
         const stLabel = st >= 4 ? '🏆 Champions Stage (playoffs)' : `Stage ${st} ${ct('de 3 · fase Suíça')}`;
         const enterTop = entered === 3 ? 8 : entered === 2 ? 16 : 32;
+        const path = [1, 2, 3, 4];
         return (
           <>
             <div className="cal-major-banner now" style={{ marginBottom: 12 }}>
-              <b>🌍 {majorT.name.split(' · ')[0]}</b> · <b>{stLabel}</b>{ct('. Você entrou no')} <b>Stage {entered}</b> (top {enterTop} do ranking VRS). {st < 4 ? ct('Top 8 avançam ao próximo stage.') : ct('Mata-mata MD3 (final MD5).')}
+              <b>🌍 {majorT.name.split(' · ')[0]}</b> · <b>{stLabel}</b>
+              <div className="career-major-path" aria-label={ct('Seu caminho restante')}>
+                {path.map((stageNumber) => {
+                  const auto = stageNumber < entered;
+                  const current = stageNumber === st;
+                  const done = stageNumber < st;
+                  return <span key={stageNumber} className={`${auto ? 'auto ' : ''}${current ? 'current ' : ''}${done ? 'done' : ''}`.trim()}><i>{done ? '✓' : stageNumber}</i><b>{stageNumber === 4 ? 'Champions' : `Stage ${stageNumber}`}</b><small>{auto ? ct('auto-simulado') : current ? ct('agora') : ct('pela frente')}</small></span>;
+                })}
+              </div>
+              <p className="career-major-copy">{ct('Você entrou direto no')} <b>Stage {entered}</b> (top {enterTop} VRS). {st < 4 ? ct('Top 8 avançam ao próximo stage.') : ct('Mata-mata MD3 (final MD5).')}</p>
               {(save.majorPre?.length ?? 0) > 0 && (
-                <div className="muted small" style={{ marginTop: 6 }}>
+                <div className="career-major-pre">
+                  <b>{ct('Stages decididos antes da sua entrada')}</b>
                   {save.majorPre!.map((p) => (
-                    <div key={p.stage}>Stage {p.stage} (auto-simulado): avançaram {p.advancers.slice(0, 6).map((a) => a.tag).join(', ')}{p.advancers.length > 6 ? '…' : ''}</div>
+                    <div key={p.stage}>Stage {p.stage}: {ct('classificados')} {p.advancers.map((a) => a.tag).join(', ')}</div>
                   ))}
                 </div>
               )}

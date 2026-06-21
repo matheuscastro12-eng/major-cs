@@ -2,6 +2,17 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Atributos': { en: 'Attributes', es: 'Atributos' },
+  'Campanha encerrada': { en: 'Campaign complete', es: 'Campaña finalizada' },
+  'Campanha registrada no Hall da Fama com elenco, MVP e recordes.': { en: 'Campaign saved to the Hall of Fame with roster, MVP and records.', es: 'Campaña guardada en el Salón de la Fama con plantilla, MVP y récords.' },
+  'Hall indisponível agora. O registro será tentado novamente ao reabrir este resultado.': { en: 'The Hall is unavailable now. Registration will be retried when this result is reopened.', es: 'El Salón no está disponible ahora. El registro se reintentará al reabrir este resultado.' },
+  'Registrando a campanha no Hall da Fama…': { en: 'Saving the campaign to the Hall of Fame…', es: 'Guardando la campaña en el Salón de la Fama…' },
+  'Seu caminho restante': { en: 'Your remaining path', es: 'Tu camino restante' },
+  'Stages decididos antes da sua entrada': { en: 'Stages decided before your entry', es: 'Stages decididos antes de tu entrada' },
+  'Você entrou direto no': { en: 'You entered directly in', es: 'Entraste directamente en' },
+  'agora': { en: 'now', es: 'ahora' },
+  'auto-simulado': { en: 'auto-simulated', es: 'auto-simulado' },
+  'classificados': { en: 'qualified', es: 'clasificados' },
+  'pela frente': { en: 'ahead', es: 'por delante' },
   'Caixa pra acordos': { en: 'Deal budget', es: 'Caja para acuerdos' },
   'Caminho até o título': { en: 'Path to the title', es: 'Camino al título' },
   'Cinco titular': { en: 'Starting five', es: 'Cinco titular' },

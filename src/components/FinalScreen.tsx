@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { CareerState, PickemState } from '../App';
-import { computeDisplay, mergeLines } from '../engine/match';
+import { tournamentTeamRecords } from '../engine/hall';
 import { formatMoney } from '../engine/ratings';
 import { getTeam } from '../engine/swiss';
 import { downloadShareCard } from '../state/share';
@@ -40,39 +40,8 @@ function userCampaign(t: Tournament, tr: Translate): { label: string; placement:
 
 // recordes da campanha do usuário (para o Hall da Fama)
 function userRecords(t: Tournament, pickem: PickemState) {
-  const user = getTeam(t, 'user');
-  let bestRating = 0;
-  let bestRatingPlayer = '';
-  let biggestFrag = 0;
-  let biggestFragPlayer = '';
-  for (const p of user.players) {
-    const lines = [];
-    for (const h of t.history) {
-      const res = h.pairing.result;
-      if (!res) continue;
-      for (const m of res.maps) {
-        const st = m.stats[p.id];
-        if (!st) continue;
-        lines.push(st.both);
-        if (st.both.kills > biggestFrag) {
-          biggestFrag = st.both.kills;
-          biggestFragPlayer = p.nick;
-        }
-      }
-    }
-    if (lines.length > 0) {
-      const r = computeDisplay(mergeLines(lines)).rating;
-      if (r > bestRating) {
-        bestRating = r;
-        bestRatingPlayer = p.nick;
-      }
-    }
-  }
   return {
-    bestRating: Number(bestRating.toFixed(2)),
-    bestRatingPlayer,
-    biggestFrag,
-    biggestFragPlayer,
+    ...tournamentTeamRecords(t),
     pickemScore: pickem.total > 0 ? `${pickem.score}/${pickem.total}` : '',
   };
 }
