@@ -3,7 +3,7 @@
 // (env ADMIN_PASSWORD), mesmo padrão do api/beta.ts.
 // Ações (POST body.action): list | grant | revoke | stripe.
 import { neon } from '@neondatabase/serverless';
-import { cleanEnv, findPaidCheckoutForEmail, normalizeEmail, stripeClient } from '../server/payments.js';
+import { accountReference, cleanEnv, findPaidCheckoutForEmail, normalizeEmail, stripeClient } from '../server/payments.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 
@@ -28,6 +28,7 @@ export default async function handler(
     sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
   ]);
 
   const action = String(body.action ?? '');
@@ -55,7 +56,12 @@ export default async function handler(
     if (!emailValid) { res.status(400).json({ error: 'e-mail inválido' }); return; }
     await sql.transaction([
       sql`INSERT INTO rtm_paid_emails (email) VALUES (${email}) ON CONFLICT DO NOTHING`,
+      // se houver cadastro pendente, promove em conta paga
+      sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
+          SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}
+          ON CONFLICT (email) DO UPDATE SET paid=true`,
       sql`UPDATE rtm_accounts SET paid=true WHERE email=${email}`,
+      sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
     ]);
     const hasAccount = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email}`;
     res.status(200).json({ ok: true, email, applied: hasAccount.length > 0 });
@@ -67,6 +73,7 @@ export default async function handler(
     await sql.transaction([
       sql`DELETE FROM rtm_paid_emails WHERE email=${email}`,
       sql`UPDATE rtm_accounts SET paid=false WHERE email=${email}`,
+      sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
     ]);
     res.status(200).json({ ok: true, email });
     return;
