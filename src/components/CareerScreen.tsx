@@ -3,7 +3,7 @@
 // do orçamento e disputar o CIRCUIT X (liga BR de pontos corridos). Vitórias
 // rendem dinheiro e pontos de VRS - o caminho até o Major virá nas próximas
 // fases. Textos em PT por enquanto (modo em refino, não lançado).
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
@@ -21,6 +21,7 @@ import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { FutCard } from './FutCard';
+import { Button } from './ds';
 import { OrgFlag } from './flags';
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
@@ -1427,14 +1428,6 @@ export function CareerScreen({ onExit }: Props) {
     setSave((s) => { const n = { ...s, majorT: t, ...patch }; persist(n); return n; });
   };
   const [hubTab, setHubTab] = useState<HubTab>(() => (loadSave().majorT ? 'major' : 'overview'));
-  // guia "como funciona a temporada" (explica a jornada; some ao dispensar)
-  const [guideOpen, setGuideOpen] = useState(() => {
-    try { return localStorage.getItem('rtm-career-guide-v1') !== '1'; } catch { return true; }
-  });
-  const dismissGuide = () => {
-    setGuideOpen(false);
-    try { localStorage.setItem('rtm-career-guide-v1', '1'); } catch { /* sem storage */ }
-  };
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
   const [showOnb, setShowOnb] = useState(() => { try { return !localStorage.getItem('rtm-onboarded-v1'); } catch { return false; } });
@@ -3132,8 +3125,6 @@ export function CareerScreen({ onExit }: Props) {
   const spots = save.circuit?.spots ?? MAJOR_SPOTS;
   const form = clubForm(league);
   const opp = myMatch ? leagueTeam(league, myMatch.a === 'user' ? myMatch.b : myMatch.a) : null;
-  const oppPos = opp ? table.findIndex((t) => t.id === opp.id) + 1 : 0;
-  const me = syncUser(leagueTeam(league, 'user'));
   const seasonStats = seasonStatsMemo;
   const mySquadIds = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
   const mySquadOids = new Set(save.squad.map((s) => s.playerId)); // ids ORIGINAIS (relabel HLTV pra sua org)
@@ -3185,8 +3176,8 @@ export function CareerScreen({ onExit }: Props) {
 
   return (
     <div className="fade-in career-hub">
-      {/* banner cinematográfico da org (estilo hub do FIFA) */}
-      {(() => {
+      {/* banner persistente (abas que não são o overview; o overview usa o banner do design) */}
+      {hubTab !== 'overview' && (() => {
         const bTeam = buildTeam(save);
         const avgOvr = bTeam?.players?.length ? Math.round(bTeam.players.reduce((a, p) => a + playerOvr(p), 0) / bTeam.players.length) : 0;
         const org0 = save.org?.colors?.[0] ?? '#1d2530';
@@ -3320,232 +3311,182 @@ export function CareerScreen({ onExit }: Props) {
 
       {/* ===== VISÃO GERAL ===== */}
       {hubTab === 'overview' && (() => {
-        const prizeNow = Math.round((PRIZE_BY_POS[Math.max(0, myPos - 1)] ?? 0) * (save.circuit?.prizeMult ?? 1));
-        // vaga no Major = top 16 do ranking VRS mundial (posição atual da org)
-        const qualifying = myVrsRank > 0 && myVrsRank <= MAJOR_VRS_CUT;
-        const net = effSponsorIncome(save) - payroll;
-        const myStars = seasonStats.filter((s) => mySquadIds.has(s.id)).slice(0, 5);
+        // ===== HUB redesenhado fiel ao design kit "Road to Major" =====
         const prestige = careerPrestige(save);
         const fans = careerFans(save);
+        const squadPlayers = buildTeam(save)?.players ?? [];
+        const avg = squadPlayers.length ? Math.round(squadPlayers.reduce((a, p) => a + playerOvr(p), 0) / squadPlayers.length) : 0;
+        const orgColor = save.org?.colors?.[0] ?? '#101820';
+        // forma: últimas 5 séries do usuário na liga
+        const form: ('W' | 'L')[] = [];
+        for (const round of league.rounds) for (const mt of round) {
+          if ((mt.a === 'user' || mt.b === 'user') && mt.result) form.push((mt.result.winner === 0) === (mt.a === 'user') ? 'W' : 'L');
+        }
+        const form5 = form.slice(-5);
+        // caminho até o título
+        const inPlayoff = !!save.playoff;
+        const groupsDone = inPlayoff || leagueDone(league);
+        const PATH: [string, string][] = [
+          [ct('Grupos'), groupsDone ? 'done' : 'now'],
+          [ct('Semifinal'), inPlayoff ? 'now' : ''],
+          [ct('Final'), ''],
+          [ct('Título'), ''],
+        ];
+        // química do elenco (dados reais: moral + entrosamento + funções)
+        const moraleVals = squadPlayers.map((p) => save.morale?.[p.id] ?? MORALE_DEFAULT);
+        const avgMorale = moraleVals.length ? Math.round(moraleVals.reduce((a, b) => a + b, 0) / moraleVals.length) : 70;
+        const fam = save.playbookXp ?? 0;
+        const hasAwp = squadPlayers.some((p) => p.role === 'AWP');
+        const hasIgl = squadPlayers.some((p) => p.role === 'IGL');
+        const roleOk = (hasAwp ? 1 : 0) + (hasIgl ? 1 : 0);
+        const chem = Math.round(0.45 * avgMorale + 0.35 * fam + 0.2 * (roleOk / 2) * 100);
+        // objetivos: metas do cenário, senão objetivos padrão da temporada
+        const objectives: [string, boolean][] = save.scenario
+          ? save.scenario.goals.map((g) => [g.text, g.done] as [string, boolean])
+          : [
+              [ct('Classificar ao mata-mata'), groupsDone],
+              [ct('Vencer uma série MD3'), form.includes('W')],
+              [ct('Erguer o título do split'), (save.titles ?? 0) > 0],
+            ];
+        const recent = league.rounds.flat().filter((mt) => mt.result).slice(-5).reverse();
+        const roundLabel = league.gsl ? ct(GSL_ROUND_LABELS[league.current] ?? 'Fase de grupos') : `${ct('Rodada')} ${league.current + 1}`;
+        const boLabel = (myMatch?.bo ?? 3) === 1 ? 'MD1' : (myMatch?.bo ?? 3) === 5 ? 'MD5' : 'MD3';
+        const pill: React.CSSProperties = { textAlign: 'center', padding: '8px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.55)', border: '1px solid var(--rtm-border-soft)' };
+        const pillLabel: React.CSSProperties = { fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 };
+        const railCard: React.CSSProperties = { background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', padding: '14px 16px' };
+        const railLabel: React.CSSProperties = { fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '12px' };
+        const vsSide: React.CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' };
+        const vsTag: React.CSSProperties = { fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '17px', color: 'var(--rtm-text-strong)' };
         return (
-        <div className="career-grid">
-          <div className="career-main">
-            {/* DESAFIO: metas do cenário assumido (se houver) */}
-            {save.scenario && (() => {
-              const sc = save.scenario;
-              const doneN = sc.goals.filter((g) => g.done).length;
-              const allDone = doneN === sc.goals.length;
-              return (
-                <div className={`scenario-banner${allDone ? ' done' : ''}`}>
-                  <div className="scenario-banner-head">
-                    🎯 {ct('Desafio:')} <b>{ct(sc.title)}</b>
-                    <span className="spacer" />
-                    <span className="muted small">{doneN}/{sc.goals.length} metas{allDone ? ' · concluído! 🏆' : ''}</span>
-                  </div>
-                  <div className="scenario-banner-goals">
-                    {sc.goals.map((g, i) => (
-                      <span key={i} className={`scenario-banner-goal${g.done ? ' done' : ''}`}>{g.done ? '✅' : '◻️'} {g.text}</span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-            {/* ELENCO: seu cinco titular como cards FUT (design system) */}
-            {(() => {
-              const starters = buildTeam(save)?.players ?? [];
-              if (starters.length === 0) return null;
-              return (
-                <div className="hub-squad">
-                  <div className="hub-squad-head">
-                    <h2>{ct('Seu cinco titular')}</h2>
-                    <button className="btn ghost small" onClick={() => setHubTab('squad')}>{ct('Gerenciar elenco →')}</button>
-                  </div>
-                  <div className="hub-squad-row">
-                    {starters.map((p) => <FutCard key={p.id} player={p} onClick={() => setProfilePlayer(p)} />)}
-                  </div>
-                </div>
-              );
-            })()}
-            {/* HERO: central de comando do split */}
-            <div className="dash-hero" style={{ background: `linear-gradient(120deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--panel-3) 65%)` }}>
-              <div className="dh-id">
-                <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={44} logoUrl={save.org?.logo} />
-                <div>
-                  <div className="dh-circuit">{save.circuit?.name ?? 'Circuito'}</div>
-                  <div className="dh-sub">
-                    <span className="dh-tier">TIER {save.tier}</span>
-                    <span>Split {save.split}</span>
-                    {save.region && <span>{MACRO_REGION_LABELS[save.region]}</span>}
-                    <span title={ct('Prestígio da org (cresce com títulos, Major, tier e VRS; atrai patrocínio)')}>★ Prestígio {prestige}</span>
-                    <span title={ct('Torcida da organização')}>👥 {formatFans(fans)} fãs</span>
-                  </div>
-                </div>
-              </div>
-              <div className="dh-chips">
-                <div className="dh-chip"><b>{myPos}º<span className="dh-of"> / {league.teams.length}</span></b><span>{ct('Posição')}</span></div>
-                <div className="dh-chip">
-                  <b className="dh-form">{form.length ? form.slice(-5).map((r, i) => <i key={i} className={`fchip ${r === 'W' ? 'w' : 'l'}`}>{r}</i>) : <span className="muted">-</span>}</b>
-                  <span>{ct('Forma')}</span>
-                </div>
-                <div className={`dh-chip ${qualifying ? 'q-ok' : 'q-no'}`}>
-                  <b>{qualifying ? `✓ #${myVrsRank} VRS` : `#${myVrsRank} VRS`}</b>
-                  <span>{qualifying ? `na zona do Major (top ${MAJOR_VRS_CUT})` : `fora do top ${MAJOR_VRS_CUT} do VRS`}</span>
-                </div>
-                <div className="dh-chip"><b>{formatMoney(prizeNow)}</b><span>prêmio na {myPos}ª</span></div>
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* BANNER cinematográfico da org */}
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', minHeight: '150px', boxShadow: 'var(--rtm-shadow-banner)' }}>
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/nuke.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.26 }} />
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${orgColor}22 0%, rgba(13,17,22,.9) 55%)` }} />
+            <div style={{ position: 'absolute', top: '10px', right: '12px', display: 'flex', gap: '6px', zIndex: 2 }}>
+              <button className="btn ghost small" title={ct('Rever o tutorial')} onClick={() => setShowOnb(true)}>❔</button>
+              <button className="btn ghost small" title={ct('Apagar tudo e recomeçar do zero')} onClick={() => {
+                if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
+                const fresh = emptySave(); persist(fresh); setSave(fresh); setOrgChoice('select'); setStage('found');
+              }}>↺</button>
+              <button className="btn ghost small" onClick={onExit}>{ct('← Sair')}</button>
             </div>
-            {expiringCount > 0 && (
-              <button className="contract-alert" onClick={() => setHubTab('finance')}>
-                📄 <b>{expiringCount === 1 ? ct('1 contrato vence') : `${expiringCount} ${ct('contratos vencem')}`}</b> neste split
-                {' '}({expiringContracts.map((w) => w.nick).join(', ')}).
-                {' '}Renove em <b>{ct('Finanças')}</b> {ct('ou o jogador sai')} <b>{ct('de graça')}</b> {ct('no próximo split.')} <span className="ca-go">{ct('Abrir Finanças →')}</span>
-              </button>
-            )}
-            {/* diretoria: objetivo do split + confiança (estilo manager) */}
-            <div className="board-card">
-              <div className="board-top">
-                <span className="board-label">{ct('🏛️ Diretoria')}</span>
-                <span className={`board-conf ${save.board >= 55 ? 'ok' : save.board >= 30 ? 'warn' : 'bad'}`}>
-                  Confiança {Math.round(save.board)}%
-                </span>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>
+              <span style={{ width: '70px', height: '70px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '26px', color: '#fff', background: `linear-gradient(160deg, ${orgColor}, #20303f)`, boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.12)', flexShrink: 0, overflow: 'hidden' }}>
+                {save.org?.logo ? <img src={save.org.logo} alt="" style={{ width: '64%', height: '64%', objectFit: 'contain' }} /> : (save.org?.tag ?? '??').slice(0, 2).toUpperCase()}
+              </span>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>{ct('Carreira')} · ★{prestige} {ct('prestígio')} · {save.titles ?? 0}× {ct('título')}</div>
+                <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '34px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-text-strong)', lineHeight: 1 }}>{save.org?.name}</h1>
+                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>{squadPlayers.length > 0 && <OrgFlag players={squadPlayers} title={ct('Nacionalidade do core')} />} {save.circuit?.name} · Split {save.split}{save.region ? ` · ${MACRO_REGION_LABELS[save.region]}` : ''}</div>
               </div>
-              <div className="board-bar"><i style={{ width: `${Math.max(3, save.board)}%` }} className={save.board >= 55 ? 'ok' : save.board >= 30 ? 'warn' : 'bad'} /></div>
-              {save.objective ? (
-                <div className="board-obj">🎯 Objetivo do split: <b>{save.objective.text}</b> <span className="muted small">(bônus {formatMoney(save.objective.bonus)})</span></div>
-              ) : (
-                <div className="muted small">{ct('Defina o elenco e o circuito para receber o objetivo da diretoria.')}</div>
-              )}
-              {save.lastObjective && (
-                <div className={`board-last ${save.lastObjective.met ? 'met' : 'miss'}`}>
-                  {save.lastObjective.met ? ct('✅ Objetivo anterior cumprido') : ct('❌ Objetivo anterior falhou')} ({save.lastObjective.delta >= 0 ? '+' : ''}{save.lastObjective.delta}% confiança)
-                </div>
-              )}
-              {save.board < 30 && <div className="board-warn-msg">{ct('⚠️ A diretoria está perdendo a paciência. Falhar de novo pode custar seu emprego.')}</div>}
-            </div>
-            {/* guia da jornada: explica as regras da temporada (dispensável) */}
-            {guideOpen && (
-              <div className="career-guide">
-                <div className="cg-head">
-                  📖 Como funciona a temporada
-                  <span className="spacer" />
-                  <button className="btn ghost small" onClick={dismissGuide}>Entendi ✕</button>
-                </div>
-                <ul>
-                  <li><b>Fase de grupos GSL</b> {ct('(2 grupos de 4, dupla eliminação: abertura → vencedores/eliminação → decisão; abertura é MD1, o resto MD3) → os')} <b>2 melhores de cada grupo</b> {ct('vão pro')} <b>{ct('mata-mata')}</b> {ct('(semis MD3 + final MD5). É o formato real do CS (IEM/BLAST/Major), não liga de pontos.')}</li>
-                  <li><b>Major Mundial a cada {MAJOR_EVERY} splits</b>{ct(': vão os')} <b>top {MAJOR_VRS_CUT} do ranking VRS mundial</b>. Ganhe VRS vencendo partidas, indo longe e levando campeonatos (próximo Major: Split {isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY))}).</li>
-                  <li><b>{ct('Janela de transferências só entre temporadas')}</b>{ct(': durante o split é com o elenco que você tem.')}</li>
-                  <li><b>{ct('Seu elenco evolui entre temporadas')}</b>{ct(': jogador em ascensão melhora, veterano em declínio cai; valor e salário acompanham. Olhe a fase de carreira antes de contratar.')}</li>
-                  <li><b>Patrocinadores</b> pagam por split, e marcas maiores exigem mais VRS (seu ranking).</li>
-                </ul>
-              </div>
-            )}
-            {opp && myMatch ? (
-              <div className="play-match-card" style={{ background: `linear-gradient(110deg, ${save.org?.colors[0] ?? '#101820'}cc, var(--header) 70%)` }}>
-                <div className="pm-info">
-                  <div className="pm-label">{ct('PRÓXIMA PARTIDA ·')} {(myMatch.bo ?? 3) === 1 ? 'MD1' : (myMatch.bo ?? 3) === 5 ? 'MD5' : 'MD3'} · {league.gsl ? `${ct('Grupos')} · ${ct(GSL_ROUND_LABELS[league.current])}` : `${ct('Rodada')} ${league.current + 1}/${league.rounds.length}`}</div>
-                  <div className="pm-teams">
-                    <span className="pm-side">
-                      <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={40} logoUrl={save.org?.logo} />
-                      <b>{save.org?.tag}</b>
-                    </span>
-                    <span className="pm-vs">VS</span>
-                    <span className="pm-side">
-                      <TeamBadge tag={opp.tag} colors={opp.colors} size={40} logoUrl={opp.logoUrl} />
-                      <b>{opp.name}</b>
-                    </span>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {([['OVR', `${avg}`, 'var(--rtm-gold)'], [ct('Caixa'), formatMoney(save.budget), 'var(--rtm-green-bright)'], [ct('Fãs'), formatFans(fans), 'var(--rtm-text-strong)']] as [string, string, string][]).map(([k, v, c]) => (
+                  <div key={k} style={pill}>
+                    <div style={pillLabel}>{k}</div>
+                    <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: c }}>{v}</div>
                   </div>
-                  <div className="pm-opp muted small">
-                    <Flag cc={opp.country} /> {league.gsl ? `Grupo ${league.gsl.groups[0].includes(opp.id) ? 'A' : 'B'}` : `${oppPos}${ct('º na tabela')}`} · força {opp.strength.toFixed(1)}
-                  </div>
-                </div>
-                <GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} />
-                <div className="pm-actions">
-                  <button className="btn gold big" onClick={playMine}>▶ JOGAR</button>
-                  <button className="btn ghost" onClick={() => simMine(league)}>⏩ Simular</button>
-                  <button className="btn ghost" onClick={() => simWholeSplit(league)} title={ct('Resolve todas as rodadas restantes de uma vez e vai pro mata-mata')}>⏩⏩ Split inteiro</button>
+                ))}
+                <div style={pill}>
+                  <div style={{ ...pillLabel, marginBottom: '4px' }}>{ct('Forma')}</div>
+                  <span style={{ display: 'flex', gap: '3px' }}>{(form5.length ? form5 : (['-', '-', '-', '-', '-'] as const)).map((f, i) => <span key={i} style={{ width: '16px', height: '16px', borderRadius: '4px', fontSize: '10px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: f === 'W' ? '#06121d' : '#fff', background: f === 'W' ? 'var(--rtm-green-bright)' : f === 'L' ? 'var(--rtm-red)' : 'var(--rtm-panel-3)' }}>{f}</span>)}</span>
                 </div>
               </div>
-            ) : (
-              <div className="career-note">{ct('Rodada concluída. Avançando…')}</div>
-            )}
-
-            {/* relatório do olheiro: leitura do próximo adversário (pré-jogo) */}
-            {opp && myMatch && (() => {
-              const sc = scoutMaps(opp);
-              const danger = sc[0].m, weak = sc[sc.length - 1].m;
-              const diff = me.strength - opp.strength;
-              const verdict = diff >= 4 ? { t: ct('Você é o favorito'), c: 'pos' } : diff <= -4 ? { t: ct('Eles são favoritos'), c: 'neg' } : { t: ct('Confronto equilibrado'), c: 'warn' };
-              return (
-                <div className="scout-card">
-                  <div className="scout-head">{ct('🔍 Relatório do olheiro')} <span className="muted small">· {opp.name}</span></div>
-                  <div className={`scout-verdict ${verdict.c}`}>{verdict.t} · força {opp.strength.toFixed(1)} <span className="muted">(você {me.strength.toFixed(1)})</span></div>
-                  <div className="scout-maps">
-                    <div className="sc-map ban"><span className="sc-tag">⛔ BANIR</span><b>{MAP_LABELS[danger]}</b><span className="muted small">{ct('o mapa mais forte deles')}</span></div>
-                    <div className="sc-map pick"><span className="sc-tag">✅ PICAR</span><b>{MAP_LABELS[weak]}</b><span className="muted small">{ct('onde têm dificuldade')}</span></div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* resumo da temporada atual + pulso financeiro */}
-            <div className="career-statgrid">
-              <div className="cstat"><b>{me.wins}-{me.losses}</b><span>{ct('Campanha')}</span></div>
-              <div className="cstat"><b className={me.roundDiff >= 0 ? 'pos' : 'neg'}>{me.roundDiff >= 0 ? '+' : ''}{me.roundDiff}</b><span>{ct('Saldo de rounds')}</span></div>
-              <div className="cstat"><b>{league.current}/{league.rounds.length}</b><span>{ct('Rodadas jogadas')}</span></div>
-              <div className="cstat"><b>{formatMoney(save.budget)}</b><span>{ct('Caixa')}</span></div>
-              <div className="cstat"><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b><span>{ct('Saldo / split')}</span></div>
-              <div className="cstat"><b>{save.vrs}</b><span>VRS</span></div>
-            </div>
-
-            <div className="muted small section-label">{ct('Rodada')} {league.current + 1} {ct('- confrontos')}</div>
-            <div className="panel-body tight" style={{ padding: 0 }}>
-              {league.rounds[league.current]?.map((m, i) => (
-                <MatchLine key={i} league={league} m={m} onOpen={setSelSeries} />
-              ))}
             </div>
           </div>
 
-          <div className="career-side">
-            <div className="side-card">
-              <div className="side-card-head">
-                <span className="muted small section-label" style={{ margin: 0 }}>Chave da fase de grupos (GSL)</span>
-                {league.gsl && <button className="btn ghost small" onClick={() => setHubTab('bracket')}>{ct('Abrir →')}</button>}
-              </div>
-              {league.gsl
-                ? <GSLBracket league={league} onOpen={setSelSeries} />
-                : <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} />}
-            </div>
-            <div className="side-card">
-              <div className="vrs-snap-head">
-                <span className="muted small section-label" style={{ margin: 0 }}>{ct('🌍 Ranking VRS mundial')}</span>
-                <button className="btn ghost small" onClick={() => setHubTab('vrs')}>{ct('Ver tudo →')}</button>
-              </div>
-              {myVrsRank > 0 && <div className="vrs-snap-me">{ct('Você:')} <b>#{myVrsRank}</b> no mundo · {save.vrs} VRS</div>}
-              <div className="vrs-snap-list">
-                {(() => {
-                  const top = vrsAll.slice(0, 5);
-                  const meRow = myVrsRank > 5 ? vrsAll[myVrsRank - 1] : null;
-                  const rows = meRow ? [...top.map((t, i) => ({ t, r: i + 1 })), { t: meRow, r: myVrsRank }] : top.map((t, i) => ({ t, r: i + 1 }));
-                  return rows.map(({ t, r }) => (
-                    <div key={t.id} className={`vrs-snap-row${t.isUser ? ' me' : ''}`}>
-                      <span className="vsr-rank">{r}</span>
-                      <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={t.logoUrl} />
-                      <span className="vsr-name">{t.name}</span>
-                      <span className="vsr-vrs">{t.vrs}</span>
+          {/* GRID principal: coluna + rail */}
+          <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '16px', alignItems: 'start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* PRÓXIMO JOGO cinematográfico */}
+              {opp && myMatch ? (
+                <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-gold-soft)', boxShadow: '0 0 0 1px rgba(216,169,67,.15), var(--rtm-shadow-banner)' }}>
+                  <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/mirage.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.2 }} />
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(13,17,22,.82), rgba(13,17,22,.95))' }} />
+                  <div style={{ position: 'relative', padding: '18px 22px' }}>
+                    <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700, marginBottom: '14px' }}>{ct('Próximo jogo')} · {roundLabel} · {boLabel}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '28px', flexWrap: 'wrap' }}>
+                      <span style={vsSide}><TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={56} logoUrl={save.org?.logo} /><span style={vsTag}>{save.org?.tag}</span></span>
+                      <span style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '28px', color: 'var(--rtm-gold)', letterSpacing: '2px' }}>VS</span>
+                      <button type="button" onClick={() => setSelTeam(opp)} style={{ ...vsSide, background: 'none', border: 'none', cursor: 'pointer' }}><TeamBadge tag={opp.tag} colors={opp.colors} size={56} logoUrl={opp.logoUrl} /><span style={vsTag}>{opp.tag}</span></button>
                     </div>
-                  ));
-                })()}
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}><GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} /></div>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
+                      <Button variant="gold" onClick={playMine}>▶ {ct('Jogar')}</Button>
+                      <Button variant="ghost" onClick={() => simMine(league)}>⏩ {ct('Simular')}</Button>
+                      <Button variant="ghost" onClick={() => simWholeSplit(league)}>⏩⏩ {ct('Split inteiro')}</Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ ...railCard, textAlign: 'center', color: 'var(--rtm-dim)' }}>{ct('Rodada concluída. Avançando…')}</div>
+              )}
+
+              {/* CAMINHO até o título (stepper) */}
+              <div style={railCard}>
+                <div style={railLabel}>{ct('Caminho até o título')}</div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  {PATH.map(([lbl, st], i) => (
+                    <Fragment key={lbl}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                        <span style={{ width: '30px', height: '30px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '13px', fontFamily: 'var(--rtm-font-cond)', background: st === 'done' ? 'var(--rtm-green-bright)' : st === 'now' ? 'var(--rtm-gold)' : 'var(--rtm-panel-3)', color: st ? '#06121d' : 'var(--rtm-faint)', boxShadow: st === 'now' ? '0 0 0 4px rgba(216,169,67,.2)' : 'none' }}>{st === 'done' ? '✓' : i + 1}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: st === 'now' ? 'var(--rtm-gold)' : st === 'done' ? 'var(--rtm-text)' : 'var(--rtm-faint)', whiteSpace: 'nowrap' }}>{lbl}</span>
+                      </div>
+                      {i < PATH.length - 1 && <span style={{ flex: 1, height: '2px', background: st === 'done' ? 'var(--rtm-green-bright)' : 'var(--rtm-border)', margin: '0 6px 20px' }} />}
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
+
+              {/* SEU CINCO TITULAR (cards FUT) */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <h2 style={{ margin: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '16px', letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Seu cinco titular')}</h2>
+                  <button type="button" onClick={() => setHubTab('squad')} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>{ct('Gerenciar elenco →')}</button>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '6px' }}>
+                  {squadPlayers.map((p) => <FutCard key={p.id} player={p} onClick={() => setProfilePlayer(p)} />)}
+                </div>
               </div>
             </div>
-            {myStars.length > 0 && (
-              <div className="side-card">
-                <div className="muted small section-label" style={{ marginTop: 0 }}>⭐ Seus destaques no split</div>
-                <BestPlayers stats={myStars} mine={mySquadIds} ranked />
+
+            {/* RAIL lateral */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={railCard}>
+                <div style={railLabel}>{ct('Objetivos')}</div>
+                {objectives.map(([o, d], i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', borderBottom: i < objectives.length - 1 ? '1px solid var(--rtm-border-soft)' : 'none' }}>
+                    <span style={{ width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, background: d ? 'var(--rtm-green-bright)' : 'transparent', color: '#06121d', border: d ? 'none' : '1px solid var(--rtm-border)' }}>{d ? '✓' : ''}</span>
+                    <span style={{ fontSize: '13px', color: d ? 'var(--rtm-dim)' : 'var(--rtm-text)', textDecoration: d ? 'line-through' : 'none' }}>{o}</span>
+                  </div>
+                ))}
               </div>
-            )}
-            <div className="side-card">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('Destaques da temporada')}</div>
-              <BestPlayers stats={seasonStats.slice(0, 5)} mine={mySquadIds} ranked />
+
+              <div style={railCard}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Química do elenco')}</span>
+                  <span style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '17px', color: chem >= 70 ? 'var(--rtm-green-bright)' : chem >= 50 ? 'var(--rtm-gold)' : 'var(--rtm-red-bright)' }}>{chem}</span>
+                </div>
+                <div style={{ height: '7px', borderRadius: '4px', background: 'var(--rtm-bg-deep)', overflow: 'hidden', marginBottom: '12px' }}>
+                  <span style={{ display: 'block', height: '100%', width: `${chem}%`, borderRadius: '4px', background: 'linear-gradient(90deg, #3f8f4f, var(--rtm-green-bright))' }} />
+                </div>
+                {([[ct('Moral média'), avgMorale], [ct('Entrosamento'), fam], [ct('Funções AWP+IGL'), roleOk === 2 ? 100 : roleOk === 1 ? 50 : 0]] as [string, number][]).map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', padding: '4px 0' }}>
+                    <span style={{ color: 'var(--rtm-dim)' }}>{k}</span>
+                    <span style={{ color: v >= 60 ? 'var(--rtm-green-bright)' : v >= 40 ? 'var(--rtm-gold)' : 'var(--rtm-red-bright)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ ...railCard, padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--rtm-border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Em volta do circuito')}</span>
+                  <button type="button" onClick={() => setHubTab('results')} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '11px', fontWeight: 700 }}>{ct('Ver tudo')}</button>
+                </div>
+                <div style={{ padding: '4px 6px' }}>
+                  {recent.length ? recent.map((mt, i) => <MatchLine key={i} league={league} m={mt} onOpen={setSelSeries} />) : <p className="muted small" style={{ padding: '10px 8px' }}>{ct('Sem resultados ainda.')}</p>}
+                </div>
+              </div>
             </div>
           </div>
         </div>

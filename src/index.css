@@ -51,6 +51,38 @@
   --font: 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-cond: 'Oswald', 'Bahnschrift', 'Arial Narrow', 'Segoe UI', sans-serif;
   --mono: Consolas, 'Roboto Mono', monospace;
+
+  /* ============================================================
+     TOKENS DO DESIGN SYSTEM (--rtm-*) — espelham exatamente o
+     "Road to Major — Design System". Mesmos valores dos tokens
+     acima; existem com este NOME pra que o JSX do design kit seja
+     portado literalmente (o design usa var(--rtm-X)). Não remover.
+     ============================================================ */
+  --rtm-bg-deep: #12161b; --rtm-bg: #181d23; --rtm-header: #1d232b;
+  --rtm-panel: #242b34; --rtm-panel-2: #2a323d; --rtm-panel-3: #323b48;
+  --rtm-row-a: #2c3440; --rtm-row-b: #262e38;
+  --rtm-border: #3a4452; --rtm-border-soft: #303945;
+  --rtm-text: #dfe5ec; --rtm-text-strong: #ffffff; --rtm-dim: #8b96a3; --rtm-faint: #5e6975;
+  --rtm-blue: #4382b6; --rtm-blue-bright: #61a8dd; --rtm-link: #87b9e0;
+  --rtm-gold: #d8a943; --rtm-gold-soft: #b08a3e; --rtm-gold-glow: #f3cf6b;
+  --rtm-green: #5cb85c; --rtm-green-bright: #6fd06f;
+  --rtm-red: #e25a5a; --rtm-red-bright: #f06c6c;
+  --rtm-role-awp: #d8a943; --rtm-role-igl: #c792ea; --rtm-role-entry: #f06c6c;
+  --rtm-role-support: #6fd06f; --rtm-role-lurker: #6fc3df;
+  --rtm-font: var(--font); --rtm-font-cond: var(--font-cond);
+  --rtm-mono: ui-monospace, Consolas, 'SFMono-Regular', Menlo, monospace;
+  --rtm-radius: 5px; --rtm-radius-sm: 3px; --rtm-radius-pill: 999px;
+  --rtm-shadow-panel: 0 1px 6px rgba(0, 0, 0, 0.3);
+  --rtm-shadow-card-hover: 0 8px 22px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(97, 168, 221, 0.25);
+  --rtm-shadow-banner: 0 8px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --rtm-shadow-header: 0 4px 18px rgba(0, 0, 0, 0.45);
+  --rtm-shadow-btn: 0 2px 6px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --rtm-accent-inset: inset 3px 0 0 var(--rtm-blue);
+  --rtm-grad-btn: linear-gradient(180deg, #5290c4 0%, #4382b6 100%);
+  --rtm-grad-btn-hover: linear-gradient(180deg, #67a7da 0%, #61a8dd 100%);
+  --rtm-grad-header: linear-gradient(180deg, #313e4d 0%, #2a3541 100%);
+  --rtm-grad-panel-head: linear-gradient(180deg, #222933 0%, #1d232b 100%);
+  --rtm-ease: cubic-bezier(0.22, 0.61, 0.36, 1); --rtm-dur-fast: 0.12s; --rtm-dur: 0.32s;
 }
 
 * {
