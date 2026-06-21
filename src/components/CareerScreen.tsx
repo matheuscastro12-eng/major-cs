@@ -21,6 +21,7 @@ import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore, RIVALRY_THRESHOLD } from '../engine/career/rivalries';
 import { applyFatigueForm, fatigueBand, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, FACILITY_MAX_LEVEL, facilityUpkeep, facilityUpgradeCost, normalizeFacilities, stabilizeMorale, type FacilityKey } from '../engine/career/facilities';
+import { personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -733,6 +734,7 @@ function nextMorale(
     m += ((s.form ?? 1) - 1) * 55;
     if (ctx.champion) m += 12; else if (ctx.objMet) m += 4; else m -= 7;
     if (s.expiring) m -= 6;
+    m += personalityMoraleDelta(s.oid, { champion: ctx.champion, objectiveMet: ctx.objMet, expiring: s.expiring });
     out[s.oid] = clampMorale(m);
   }
   return out;
@@ -1830,6 +1832,7 @@ export function CareerScreen({ onExit }: Props) {
         else if (d < 0) d += 1; // mitiga o declínio do veterano
       }
       if (!atCeiling && d > 0) d += developmentBonus(sig.playerId, s.split, normalizeFacilities(s.facilities).training);
+      if (!atCeiling && d > 0) d += personalityDevelopmentBonus(sig.playerId, s.split, age);
       if (d > 0) d = Math.min(d, Math.max(0, pot - ovr));
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
@@ -1990,10 +1993,15 @@ export function CareerScreen({ onExit }: Props) {
   const makeOffer = (s: CareerSave, newTier: number): PoachOffer | null => {
     if (newTier <= 1) return null;
     const picks = s.squad.map(findSigning).filter(Boolean) as { player: Player }[];
-    const best = picks.map((p) => p.player).sort((a, b) => playerOvr(b) - playerOvr(a))[0];
+    const best = picks.map((p) => p.player).sort((a, b) => {
+      const aScore = playerOvr(a) + personalityOfferBonus(a.id, s.morale?.[a.id] ?? MORALE_DEFAULT) / 8;
+      const bScore = playerOvr(b) + personalityOfferBonus(b.id, s.morale?.[b.id] ?? MORALE_DEFAULT) / 8;
+      return bScore - aScore;
+    })[0];
     if (!best || playerOvr(best) < 78) return null; // ninguém assedia jogador mediano
     const h = hashStr(`offer:${s.split}:${best.id}`);
-    if (h % 100 >= 50) return null; // ~50% de chance por split
+    const offerChance = 50 + personalityOfferBonus(best.id, s.morale?.[best.id] ?? MORALE_DEFAULT);
+    if (h % 100 >= Math.max(20, Math.min(80, offerChance))) return null;
     const elite = oppEra.filter((t) => teamTier(t) === 1 && t.id !== s.takeoverId);
     if (elite.length === 0) return null;
     const org = elite[h % elite.length];
@@ -4340,6 +4348,14 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
   const tier = potentialTier(pot);
   const phase = playerPhase(player.id, age);
   const ovr = playerOvr(player);
+  const personality = playerPersonality(player.id);
+  const personalityUi: Record<PlayerPersonality, { label: string; desc: string }> = {
+    leader: { label: ct('Líder nato'), desc: ct('Segura o vestiário sob pressão e perde menos moral em fases ruins.') },
+    mercenary: { label: ct('Ambicioso'), desc: ct('Valoriza contratos e oportunidades; atrai mais propostas de organizações maiores.') },
+    prodigy: { label: ct('Prodígio'), desc: ct('Pode se desenvolver mais rápido enquanto ainda é jovem.') },
+    hothead: { label: ct('Cabeça-quente'), desc: ct('Oscila mais com resultados e acumula carga com maior facilidade.') },
+    resilient: { label: ct('Resiliente'), desc: ct('Recupera-se melhor da pressão e acumula menos fadiga.') },
+  };
   const left = contractUntil != null ? contractUntil - split + 1 : null;
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -4372,6 +4388,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
                   <span className="pp-tag">{PHASE_LABEL[phase]}</span>
                   <span className={`pp-tag mood-${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${morale}/100)`}>{mi.icon} {mi.label}</span>
                   <span className={`pp-tag fatigue-${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}>🔋 {ct('Fadiga')} {fatigue}</span>
+                  <span className={`pp-tag personality-${personality}`}>◆ {personalityUi[personality].label}</span>
                   {focused && <span className="pp-tag focus">{ct('🎯 em treino')}</span>}
                 </div>
               </div>
@@ -4399,6 +4416,10 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
                 <div><span className="muted small">{ct('Salário/split')}</span><b className="neg">{formatMoney(playerWage(player))}</b></div>
                 <div><span className="muted small">{ct('Contrato')}</span><b>{left == null ? '-' : left <= 0 ? 'vencido' : `${left} split${left > 1 ? 's' : ''}`}</b></div>
               </div>
+            </Panel>
+
+            <Panel title={ct('Personalidade')}>
+              <div className={`career-personality personality-${personality}`}><b>◆ {personalityUi[personality].label}</b><span>{personalityUi[personality].desc}</span></div>
             </Panel>
 
             <Panel title={ct('Estatísticas de carreira')}>

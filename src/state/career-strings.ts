@@ -2,6 +2,17 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Atributos': { en: 'Attributes', es: 'Atributos' },
+  'Ambicioso': { en: 'Ambitious', es: 'Ambicioso' },
+  'Cabeça-quente': { en: 'Hot-headed', es: 'Temperamental' },
+  'Líder nato': { en: 'Natural leader', es: 'Líder nato' },
+  'Personalidade': { en: 'Personality', es: 'Personalidad' },
+  'Pode se desenvolver mais rápido enquanto ainda é jovem.': { en: 'Can develop faster while still young.', es: 'Puede desarrollarse más rápido mientras aún es joven.' },
+  'Prodígio': { en: 'Prodigy', es: 'Prodigio' },
+  'Recupera-se melhor da pressão e acumula menos fadiga.': { en: 'Recovers better from pressure and builds up less fatigue.', es: 'Se recupera mejor de la presión y acumula menos fatiga.' },
+  'Resiliente': { en: 'Resilient', es: 'Resiliente' },
+  'Segura o vestiário sob pressão e perde menos moral em fases ruins.': { en: 'Keeps the locker room together under pressure and loses less morale during bad runs.', es: 'Sostiene el vestuario bajo presión y pierde menos moral en malas rachas.' },
+  'Valoriza contratos e oportunidades; atrai mais propostas de organizações maiores.': { en: 'Values contracts and opportunities; attracts more offers from bigger organizations.', es: 'Valora contratos y oportunidades; atrae más ofertas de organizaciones grandes.' },
+  'Oscila mais com resultados e acumula carga com maior facilidade.': { en: 'Reacts more strongly to results and builds up load more easily.', es: 'Oscila más con los resultados y acumula carga con mayor facilidad.' },
   'Acelera a evolução do elenco e da academia.': { en: 'Speeds up roster and academy development.', es: 'Acelera el desarrollo de la plantilla y la academia.' },
   'Centro de treino': { en: 'Training center', es: 'Centro de entrenamiento' },
   'Departamento de análise': { en: 'Analysis department', es: 'Departamento de análisis' },

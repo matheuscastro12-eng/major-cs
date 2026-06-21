@@ -1,4 +1,5 @@
 import type { TPlayer, TTeam } from '../../types';
+import { personalityFatigueDelta } from './personality';
 
 export const BURNOUT_THRESHOLD = 80;
 
@@ -48,7 +49,7 @@ export function updateMatchFatigue(
     const before = fatigue[id] ?? 0;
     const mood = morale?.[id] ?? 70;
     const moodLoad = mood < 35 ? 2 : mood >= 78 ? -1 : 0;
-    const delta = resting.has(id) ? -(8 + recoveryBonus) : 4 + mapsPlayed * 2 + moodLoad - recoveryBonus;
+    const delta = resting.has(id) ? -(8 + recoveryBonus) : 4 + mapsPlayed * 2 + moodLoad + personalityFatigueDelta(id) - recoveryBonus;
     const next = Math.max(0, Math.min(100, Math.round(before + delta)));
     fatigue[id] = next;
     if (before < BURNOUT_THRESHOLD && next >= BURNOUT_THRESHOLD) newBurnouts.push(player.nick);
