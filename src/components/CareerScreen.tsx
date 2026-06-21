@@ -829,7 +829,7 @@ function worldNews(teams: TeamSeason[], split: number, userRegion: CareerRegion)
 // atributos, então segurar um veterano caro vira decisão estratégica.
 export type PlayerPhase = 'rising' | 'prime' | 'declining';
 export const PHASE_LABEL: Record<PlayerPhase, string> = {
-  rising: ct('jovem em ascensão'), prime: ct('no auge'), declining: ct('veterano em declínio'),
+  rising: 'jovem em ascensão', prime: 'no auge', declining: 'veterano em declínio',
 };
 
 // ----- idade e potencial (jogadores vivos, estilo Brasval) -----
@@ -3927,6 +3927,9 @@ export function CareerScreen({ onExit }: Props) {
                   const mi = moraleInfo(mor);
                   const fatigue = save.fatigue?.[p.id] ?? 0;
                   const reduced = save.restingPlayers?.includes(p.id) ?? false;
+                  const age = effectiveAge(p, save.split, save.youthAge);
+                  const potential = playerPotentialOvr(p, age);
+                  const phase = playerPhase(p.id, age);
                   return (
                     <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
                       <button className="cs-open" onClick={() => setProfilePlayer(p)} title={ct('Ver perfil do jogador')}>
@@ -3937,6 +3940,7 @@ export function CareerScreen({ onExit }: Props) {
                       </button>
                       <span className={`cs-morale ${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${mor}/100)`}>{mi.icon} {mor}</span>
                       <span className={`cs-fatigue ${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}>🔋 {fatigue}</span>
+                      <span className={`cs-development ${phase}`} title={`${ct('Potencial (teto de OVR)')}: ${potential} · ${ct(PHASE_LABEL[phase])}`}>POT {potential} {phase === 'rising' ? '↗' : phase === 'declining' ? '↘' : '→'}</span>
                       <select className={`role-select ${p.role}`} value={p.role}
                         onChange={(e) => setRole(p.id, e.target.value as Role)}
                         title={ct('Definir a função deste jogador')}>
@@ -4293,6 +4297,7 @@ export function CareerScreen({ onExit }: Props) {
             morale={save.morale?.[p.id] ?? MORALE_DEFAULT}
             fatigue={save.fatigue?.[p.id] ?? 0}
             reducedLoad={save.restingPlayers?.includes(p.id) ?? false}
+            trainingLevel={normalizeFacilities(save.facilities).training}
             peakOvr={Math.max(save.peakOvr?.[p.id] ?? 0, playerOvr(p))}
             focused={save.trainingFocus === p.id}
             onToggleFocus={() => update({ trainingFocus: save.trainingFocus === p.id ? null : p.id })}
@@ -4344,7 +4349,7 @@ function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
 // O cartão de jogador (FUT) agora é o componente compartilhado FutCard (FutCard.tsx),
 // usado no hub, elenco e perfil — réplica do design system.
 
-function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, fatigue, peakOvr, focused, reducedLoad, onToggleFocus, onToggleRest, onClose, youthAge }: {
+function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, fatigue, peakOvr, focused, reducedLoad, trainingLevel, onToggleFocus, onToggleRest, onClose, youthAge }: {
   player: Player;
   split: number;
   career: ReturnType<typeof deriveCareer>;
@@ -4356,6 +4361,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
   peakOvr: number;
   focused: boolean;
   reducedLoad: boolean;
+  trainingLevel: number;
   onToggleFocus: () => void;
   onToggleRest: () => void;
   onClose: () => void;
@@ -4375,6 +4381,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
     hothead: { label: ct('Cabeça-quente'), desc: ct('Oscila mais com resultados e acumula carga com maior facilidade.') },
     resilient: { label: ct('Resiliente'), desc: ct('Recupera-se melhor da pressão e acumula menos fadiga.') },
   };
+  const developmentProgress = Math.max(0, Math.min(100, Math.round((ovr - 40) / Math.max(1, pot - 40) * 100)));
   const left = contractUntil != null ? contractUntil - split + 1 : null;
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -4404,7 +4411,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
                   <span className="pp-tag">{age} anos</span>
                   <span className={`pp-tag pot-${tier}`}>POT {tier} ({pot})</span>
                   <span className="pp-tag" title={ct('Maior OVR já alcançado')}>★ Pico {peakOvr}</span>
-                  <span className="pp-tag">{PHASE_LABEL[phase]}</span>
+                  <span className="pp-tag">{ct(PHASE_LABEL[phase])}</span>
                   <span className={`pp-tag mood-${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${morale}/100)`}>{mi.icon} {mi.label}</span>
                   <span className={`pp-tag fatigue-${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}>🔋 {ct('Fadiga')} {fatigue}</span>
                   <span className={`pp-tag personality-${personality}`}>◆ {personalityUi[personality].label}</span>
@@ -4439,6 +4446,22 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
 
             <Panel title={ct('Personalidade')}>
               <div className={`career-personality personality-${personality}`}><b>◆ {personalityUi[personality].label}</b><span>{personalityUi[personality].desc}</span></div>
+            </Panel>
+
+            <Panel title={ct('Plano de desenvolvimento')}>
+              <div className="career-development-summary">
+                <div><span>{ct('OVR atual')}</span><b>{ovr}</b></div>
+                <div><span>{ct('Pico da carreira')}</span><b>{peakOvr}</b></div>
+                <div><span>{ct('Potencial')}</span><b>{pot}</b></div>
+                <div><span>{ct('Margem')}</span><b>{Math.max(0, pot - ovr)}</b></div>
+              </div>
+              <div className="career-development-track"><i style={{ width: `${developmentProgress}%` }} /></div>
+              <p className="muted small">{ct('Fase atual:')} <b>{ct(PHASE_LABEL[phase])}</b> · {ct('progresso até o teto')} <b>{developmentProgress}%</b>.</p>
+              <div className="career-development-effects">
+                <span className={focused ? 'active' : ''}>🎯 {ct('Foco individual')} {focused ? `+1 ${ct('por split')}` : ct('inativo')}</span>
+                <span className={trainingLevel > 0 ? 'active' : ''}>🏋️ {ct('Centro de treino')} · {ct('nível')} {trainingLevel}</span>
+                <span className={personality === 'prodigy' ? 'active' : ''}>◆ {personalityUi[personality].label}</span>
+              </div>
             </Panel>
 
             <Panel title={ct('Estatísticas de carreira')}>
@@ -6016,7 +6039,7 @@ function MarketScreen({
                 {save.lastEvo.map((e) => (
                   <span key={e.nick} className={`evo-chip ${e.delta > 0 ? 'up' : e.delta < 0 ? 'down' : 'flat'}`}>
                     {e.delta > 0 ? '▲' : e.delta < 0 ? '▼' : '▬'} {e.nick}
-                    <i>{e.delta > 0 ? `+${e.delta}` : e.delta} · {PHASE_LABEL[e.phase]}</i>
+                    <i>{e.delta > 0 ? `+${e.delta}` : e.delta} · {ct(PHASE_LABEL[e.phase])}</i>
                   </span>
                 ))}
               </div>
@@ -6121,7 +6144,7 @@ function MarketScreen({
                           <span className={`pot-badge pot-${pot}`} title={ct('Potencial (teto de OVR)')}>POT {pot}</span>
                         </div>
                         <div className={`meta small phase-tag ${ph}`} title={ct('Jovem em ascensão melhora entre temporadas; veterano cai')}>
-                          {ph === 'rising' ? '📈' : ph === 'declining' ? '📉' : '▬'} {PHASE_LABEL[ph]}
+                          {ph === 'rising' ? '📈' : ph === 'declining' ? '📉' : '▬'} {ct(PHASE_LABEL[ph])}
                         </div>
                       </>
                     );

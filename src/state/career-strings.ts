@@ -2,6 +2,16 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Atributos': { en: 'Attributes', es: 'Atributos' },
+  'Fase atual:': { en: 'Current phase:', es: 'Fase actual:' },
+  'Foco individual': { en: 'Individual focus', es: 'Enfoque individual' },
+  'Margem': { en: 'Headroom', es: 'Margen' },
+  'OVR atual': { en: 'Current OVR', es: 'OVR actual' },
+  'Pico da carreira': { en: 'Career peak', es: 'Pico de carrera' },
+  'Plano de desenvolvimento': { en: 'Development plan', es: 'Plan de desarrollo' },
+  'inativo': { en: 'inactive', es: 'inactivo' },
+  'nível': { en: 'level', es: 'nivel' },
+  'por split': { en: 'per split', es: 'por split' },
+  'progresso até o teto': { en: 'progress toward ceiling', es: 'progreso hasta el techo' },
   'A confiança chegou ao limite. O próximo campeonato precisa mostrar evolução ou o cargo estará em risco.': { en: 'Confidence has hit its limit. The next tournament must show progress or the job will be at risk.', es: 'La confianza llegó al límite. El próximo torneo debe mostrar progreso o el puesto estará en riesgo.' },
   'A zebra que abalou o circuito': { en: 'The upset that shook the circuit', es: 'La sorpresa que sacudió el circuito' },
   'As arquibancadas perderam a paciência. O próximo split começa com cobrança por desempenho e atitude.': { en: 'The stands have lost patience. The next split begins with demands for performance and attitude.', es: 'Las gradas perdieron la paciencia. El próximo split comienza con exigencias de rendimiento y actitud.' },

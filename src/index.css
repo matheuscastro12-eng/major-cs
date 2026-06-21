@@ -6099,4 +6099,17 @@ body.has-ad-footer { padding-bottom: 112px; }
 .career-personality.personality-prodigy { border-color: var(--rtm-gold); background: rgba(216, 169, 67, .07); }
 .pp-tag.personality-hothead { color: var(--rtm-red-bright); }
 .pp-tag.personality-prodigy { color: var(--rtm-gold); }
+.cs-development { min-width: 72px; color: var(--rtm-dim); font-size: 10px; font-weight: 800; text-align: center; }
+.cs-development.rising { color: var(--rtm-green-bright); }
+.cs-development.declining { color: var(--rtm-red-bright); }
+.career-development-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.career-development-summary > div { display: flex; flex-direction: column; gap: 2px; padding: 9px; border: 1px solid var(--rtm-border-soft); border-radius: 7px; background: var(--rtm-panel-2); }
+.career-development-summary span { color: var(--rtm-dim); font-size: 10px; text-transform: uppercase; }
+.career-development-summary b { color: var(--rtm-text-strong); font-family: var(--rtm-font-cond); font-size: 20px; }
+.career-development-track { height: 7px; margin: 12px 0 8px; overflow: hidden; border-radius: 6px; background: var(--rtm-bg-deep); }
+.career-development-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--rtm-blue-bright), var(--rtm-green-bright)); }
+.career-development-effects { display: flex; flex-wrap: wrap; gap: 6px; }
+.career-development-effects span { padding: 5px 8px; border: 1px solid var(--rtm-border-soft); border-radius: 999px; color: var(--rtm-dim); font-size: 10px; }
+.career-development-effects span.active { border-color: var(--rtm-gold-soft); color: var(--rtm-gold); background: rgba(216, 169, 67, .06); }
+@media (max-width: 620px) { .career-development-summary { grid-template-columns: repeat(2, 1fr); } .cs-development { display: none; } }
 @media (max-width: 640px) { .career-major-path { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
