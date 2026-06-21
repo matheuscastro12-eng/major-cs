@@ -3571,8 +3571,7 @@ export function CareerScreen({ onExit }: Props) {
         const full = aca.length >= ACADEMY_MAX;
         const squadFull = save.squad.length >= 5;
         return (
-          <div className="panel">
-            <div className="panel-body">
+          <Panel title={ct('Academia')} accent="gold">
               <div className="aca-head">
                 <div>
                   <div className="muted small section-label" style={{ marginTop: 0 }}>Academia · {aca.length}/{ACADEMY_MAX} prospectos</div>
@@ -3661,8 +3660,7 @@ export function CareerScreen({ onExit }: Props) {
                   })}
                 </div>
               )}
-            </div>
-          </div>
+          </Panel>
         );
       })()}
 
