@@ -1,6 +1,13 @@
 // Dicionario de traducao do modo carreira (chave = string PT normalizada -> EN/ES).
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
+  'Seu cinco titular': { en: 'Your starting five', es: 'Tu quinteto titular' },
+  'Gerenciar elenco →': { en: 'Manage squad →', es: 'Gestionar plantilla →' },
+  'Gestão do elenco': { en: 'Squad management', es: 'Gestión de la plantilla' },
+  'OVR médio do elenco': { en: 'Squad average OVR', es: 'OVR promedio de la plantilla' },
+  'Posição na tabela': { en: 'Standing', es: 'Posición en la tabla' },
+  'Carreira': { en: 'Career', es: 'Carrera' },
+  'título': { en: 'title', es: 'título' },
   'Semifinal': { en: 'Semifinal', es: 'Semifinal' },
   'Final': { en: 'Final', es: 'Final' },
   'Fase suíça': { en: 'Swiss stage', es: 'Fase suiza' },
