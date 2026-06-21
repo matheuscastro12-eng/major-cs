@@ -601,8 +601,10 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       // empate no fim de um bloco de OT (15-15, 18-18, 21-21…): mais um MR3
       target += 3;
     }
-    // trava de segurança bem alta (na prática a OT MR3 sempre decide bem antes)
-    if (round > 120) finished = true;
+    // limite de transmissão: depois de seis blocos de OT, o 43o round funciona
+    // como sudden death. Evita mapas intermináveis e preserva o contrato do
+    // simulador (roundLog nunca passa de 43).
+    if (round >= 43) finished = true;
 
     if (!finished) nextBuys = computeBuys();
     return finished;

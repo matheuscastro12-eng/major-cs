@@ -18,7 +18,7 @@ const a = teamSeasonToTTeam(BASE_TEAMS[0]);
 const b = teamSeasonToTTeam(BASE_TEAMS[1]);
 const series = simulateSeries(rng, a, b, autoVeto([a, b], rng));
 const sbHtml = renderToString(<Scoreboard series={series} teams={[a, b]} />);
-if (!sbHtml.includes('Match stats')) throw new Error('Scoreboard nao renderizou');
+if (!sbHtml.includes('panel-head') || !sbHtml.includes(a.name) || !sbHtml.includes(b.name)) throw new Error('Scoreboard nao renderizou');
 console.log('Scoreboard OK -', series.mapScore.join(':'), '-', series.maps.map((m) => `${m.map} ${m.score[0]}:${m.score[1]}`).join(', '));
 
 let otCount = 0;
