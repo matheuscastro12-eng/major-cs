@@ -2,6 +2,17 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Atributos': { en: 'Attributes', es: 'Atributos' },
+  'Acelera a evolução do elenco e da academia.': { en: 'Speeds up roster and academy development.', es: 'Acelera el desarrollo de la plantilla y la academia.' },
+  'Centro de treino': { en: 'Training center', es: 'Centro de entrenamiento' },
+  'Departamento de análise': { en: 'Analysis department', es: 'Departamento de análisis' },
+  'Infraestrutura & staff': { en: 'Facilities & staff', es: 'Infraestructura y staff' },
+  'Infraestrutura / split': { en: 'Facilities / split', es: 'Infraestructura / split' },
+  'MÁXIMO': { en: 'MAXED', es: 'MÁXIMO' },
+  'Melhora a preparação e o veto nos mapas fortes.': { en: 'Improves preparation and vetoes on strong maps.', es: 'Mejora la preparación y el veto en los mapas fuertes.' },
+  'Melhorar': { en: 'Upgrade', es: 'Mejorar' },
+  'Nível': { en: 'Level', es: 'Nivel' },
+  'Psicologia esportiva': { en: 'Sports psychology', es: 'Psicología deportiva' },
+  'Reduz fadiga e estabiliza a moral do elenco.': { en: 'Reduces fatigue and stabilizes roster morale.', es: 'Reduce la fatiga y estabiliza la moral de la plantilla.' },
   'Campanha encerrada': { en: 'Campaign complete', es: 'Campaña finalizada' },
   'CLÁSSICO': { en: 'RIVALRY', es: 'CLÁSICO' },
   'A sequência de partidas pesou. Use carga reduzida ou invista em psicologia para recuperar o elenco.': { en: 'The run of matches took its toll. Use reduced load or invest in psychology to recover the roster.', es: 'La seguidilla de partidos pasó factura. Usa carga reducida o invierte en psicología para recuperar la plantilla.' },

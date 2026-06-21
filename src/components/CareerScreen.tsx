@@ -20,6 +20,7 @@ import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore, RIVALRY_THRESHOLD } from '../engine/career/rivalries';
 import { applyFatigueForm, fatigueBand, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
+import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, FACILITY_MAX_LEVEL, facilityUpkeep, facilityUpgradeCost, normalizeFacilities, stabilizeMorale, type FacilityKey } from '../engine/career/facilities';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -588,6 +589,7 @@ interface CareerSave {
   rivalries?: Record<string, number>; // intensidade por adversario; 4+ vira classico e gera foco extra
   fatigue?: Record<string, number>; // carga acumulada 0-100 por jogador
   restingPlayers?: string[]; // ate dois jogadores em carga reduzida na proxima serie
+  facilities?: Record<string, number>; // centro de treino, analista e psicologo (nivel 0-3)
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -677,6 +679,7 @@ const emptySave = (): CareerSave => ({
   rivalries: {},
   fatigue: {},
   restingPlayers: [],
+  facilities: { ...EMPTY_FACILITIES },
 });
 
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
@@ -1529,7 +1532,7 @@ export function CareerScreen({ onExit }: Props) {
       playbookFam: Math.max(0, Math.min(1, (save.playbookXp ?? 0) / 100)),
     };
     // PLANO DE JOGO da partida: buff real escolhido pelo usuário antes de jogar
-    return applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined');
+    return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined'), normalizeFacilities(save.facilities).analyst);
   };
   const prepareTeams = (rawA: TTeam, rawB: TTeam): [TTeam, TTeam] => {
     let a = applyFatigueForm(syncUser(rawA), save.fatigue, save.restingPlayers);
@@ -1543,7 +1546,8 @@ export function CareerScreen({ onExit }: Props) {
     setSave((current) => {
       const rivalry = recordRivalry(current.rivalries, opponent.id, series);
       const userTeam = teams[userIdx];
-      const load = updateMatchFatigue(current.fatigue, userTeam.players, series.maps.length, current.restingPlayers, current.morale);
+      const psychologist = normalizeFacilities(current.facilities).psychologist;
+      const load = updateMatchFatigue(current.fatigue, userTeam.players, series.maps.length, current.restingPlayers, current.morale, psychologist);
       const items: NewsItem[] = [];
       const highlight = bestSeriesMoment(series, teams, userIdx);
       if (highlight) items.push({
@@ -1825,6 +1829,8 @@ export function CareerScreen({ onExit }: Props) {
         if (!atCeiling) d += 1;
         else if (d < 0) d += 1; // mitiga o declínio do veterano
       }
+      if (!atCeiling && d > 0) d += developmentBonus(sig.playerId, s.split, normalizeFacilities(s.facilities).training);
+      if (d > 0) d = Math.min(d, Math.max(0, pot - ovr));
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age) });
@@ -1843,6 +1849,7 @@ export function CareerScreen({ onExit }: Props) {
       const r = hashStr(`acaevo:${a.id}:${s.split}`) % 100;
       let d = r < 35 ? 3 : r < 75 ? 2 : 1;
       if (s.academyFocus === a.id) d += 1; // treino focado acelera
+      d += developmentBonus(a.id, s.split, normalizeFacilities(s.facilities).training);
       d = Math.min(d, a.potential - ovr); // não ultrapassa o potencial
       const clamp = (v: number) => Math.max(40, Math.min(99, v));
       return {
@@ -2744,7 +2751,7 @@ export function CareerScreen({ onExit }: Props) {
                   const until = save.contracts?.[sg.playerId];
                   return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                 });
-                const morale = nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true });
+                const morale = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }), normalizeFacilities(save.facilities).psychologist);
                 const peakOvr = { ...(save.peakOvr ?? {}) };
                 for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                 const items = splitNews({
@@ -2758,7 +2765,7 @@ export function CareerScreen({ onExit }: Props) {
                 });
                 const next = {
                   ...save,
-                  budget: Math.max(0, save.budget + mr.prize - payroll + effSponsorIncome(save) + majBonus),
+                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) + effSponsorIncome(save) + majBonus),
                   vrs: Math.round(save.vrs * VRS_DECAY) + mr.vrs, // VRS rolante (decai e soma o do Major)
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
@@ -3055,7 +3062,7 @@ export function CareerScreen({ onExit }: Props) {
                     const until = save.contracts?.[sg.playerId];
                     return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                   });
-                  const morale = nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet });
+                  const morale = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }), normalizeFacilities(save.facilities).psychologist);
                   const peakOvr = { ...(save.peakOvr ?? {}) };
                   for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                   const items = splitNews({
@@ -3071,7 +3078,7 @@ export function CareerScreen({ onExit }: Props) {
                     ...save,
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
-                    budget: Math.max(0, save.budget + prize - payroll + effSponsorIncome(save) + objBonus),
+                    budget: Math.max(0, save.budget + prize - payroll - facilityUpkeep(save.facilities) + effSponsorIncome(save) + objBonus),
                     vrs: Math.round(save.vrs * VRS_DECAY) + vrsGain, // VRS rolante (decai e soma o ganho do split)
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
@@ -3773,16 +3780,38 @@ export function CareerScreen({ onExit }: Props) {
         const wages = picks.map((x) => ({ ...x, wage: playerWage(x.f.player), until: save.contracts?.[x.sig.playerId] }));
         const folha = wages.reduce((a, w) => a + w.wage, 0);
         const sponsorInc = effSponsorIncome(save);
-        const net = sponsorInc - folha;
+        const facilities = normalizeFacilities(save.facilities);
+        const upkeep = facilityUpkeep(facilities);
+        const net = sponsorInc - folha - upkeep;
+        const facilityCards: { key: FacilityKey; icon: string; name: string; effect: string }[] = [
+          { key: 'training', icon: '🏋️', name: ct('Centro de treino'), effect: ct('Acelera a evolução do elenco e da academia.') },
+          { key: 'analyst', icon: '📊', name: ct('Departamento de análise'), effect: ct('Melhora a preparação e o veto nos mapas fortes.') },
+          { key: 'psychologist', icon: '🧠', name: ct('Psicologia esportiva'), effect: ct('Reduz fadiga e estabiliza a moral do elenco.') },
+        ];
+        const upgradeFacility = (key: FacilityKey) => {
+          const level = facilities[key];
+          const cost = facilityUpgradeCost(key, level);
+          if (!cost || save.budget < cost) return;
+          update({ budget: save.budget - cost, facilities: { ...facilities, [key]: level + 1 } });
+        };
         return (
           <Panel title={`${ct('Finanças')} · ${save.org?.name ?? ''}`} accent="gold">
               <div className="fin-cards">
                 <div className="fin-card"><span className="fin-k">{ct('Caixa')}</span><b>{formatMoney(save.budget)}</b></div>
                 <div className="fin-card"><span className="fin-k">{ct('Patrocínio / split')}</span><b className="pos">+{formatMoney(sponsorInc)}</b></div>
                 <div className="fin-card"><span className="fin-k">Folha / split</span><b className="neg">-{formatMoney(folha)}</b></div>
+                <div className="fin-card"><span className="fin-k">{ct('Infraestrutura / split')}</span><b className="neg">-{formatMoney(upkeep)}</b></div>
                 <div className="fin-card"><span className="fin-k">Saldo fixo / split</span><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b></div>
               </div>
               <p className="muted small">{ct('A premiação entra conforme sua colocação. O "saldo fixo" é patrocínio − folha (antes do prêmio); se ficar negativo, você queima caixa todo split.')}</p>
+              <div className="muted small section-label">{ct('Infraestrutura & staff')}</div>
+              <div className="career-facilities">
+                {facilityCards.map((facility) => {
+                  const level = facilities[facility.key];
+                  const cost = facilityUpgradeCost(facility.key, level);
+                  return <div key={facility.key} className="career-facility-card"><span>{facility.icon}</span><div><b>{facility.name}</b><small>{facility.effect}</small><i>{ct('Nível')} {level}/{FACILITY_MAX_LEVEL}</i></div><button className="btn small gold" disabled={!cost || save.budget < cost} onClick={() => upgradeFacility(facility.key)}>{level >= FACILITY_MAX_LEVEL ? ct('MÁXIMO') : `${ct('Melhorar')} · ${formatMoney(cost)}`}</button></div>;
+                })}
+              </div>
               <div className="muted small section-label">{ct('Contratos do elenco')}</div>
               <div className="fin-table-wrap">
               <table className="stats fin-contracts">
