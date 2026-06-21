@@ -22,7 +22,7 @@ const FinalScreen = lazy(() => import('./components/FinalScreen').then((m) => ({
 const HallScreen = lazy(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazy(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
 const MatchDetail = lazy(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
-const OnlineScreen = lazy(() => import('./components/OnlineScreen').then((m) => ({ default: m.OnlineScreen })));
+const OnlineMode = lazy(() => import('./components/online/OnlineMode').then((m) => ({ default: m.OnlineMode })));
 const TournamentStats = lazy(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
 import { VetoScreen } from './components/VetoScreen';
@@ -130,11 +130,6 @@ function routeFromLocation(): { screen: Screen; bannerPreview: boolean } {
   return { screen: matched, bannerPreview: false };
 }
 
-// código da sala embutido na URL (/online/ABCDE), pra deep link e F5
-function onlineCodeFromPath(): string {
-  const m = window.location.pathname.match(/^\/online\/([a-z0-9]+)/i);
-  return m ? m[1].toUpperCase().slice(0, 5) : '';
-}
 
 interface MatchCtx {
   teams: [TTeam, TTeam];
@@ -846,7 +841,7 @@ export default function App() {
         </>
       )}
 
-      {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} initialCode={onlineCodeFromPath()} account={account} />}
+      {screen === 'online' && <OnlineMode onBack={() => setScreen('home')} account={account} dataset={dataset} />}
 
       {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
       {screen === 'career' && (
