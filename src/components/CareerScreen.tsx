@@ -3151,7 +3151,7 @@ export function CareerScreen({ onExit }: Props) {
   // confusão de 15 abas planas pra ~5 grupos com 1-5 itens cada.
   const TAB_LABEL: Record<HubTab, string> = {
     overview: ct('Visão geral'), major: '★ Major', calendar: ct('Calendário'), results: ct('Resultados'),
-    standings: ct('Classificação'), bracket: 'Chave', squad: 'Elenco', academy: ct('Academia'),
+    standings: ct('Classificação'), bracket: ct('Chave'), squad: ct('Elenco'), academy: ct('Academia'),
     market: ct('Negociações'), finance: ct('Finanças'), vrs: ct('Ranking VRS'), top20: 'Top 20 HLTV',
     world: ct('Cena mundial'), inbox: 'Inbox', history: ct('História da org'),
   };
