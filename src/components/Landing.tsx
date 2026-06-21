@@ -8,7 +8,6 @@ import { AnnouncementTweet, TwitterLink } from './social';
 import { login, signup } from '../state/account';
 
 const M = '/maps/';
-const L = '/logos/';
 
 function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -61,7 +60,6 @@ function Nav({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void 
 }
 
 function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
-  const teams = ['navi', 'faze', 'g2', 'vitality', 'astralis', 'fnatic', 'furia', 'mibr'];
   return (
     <section id="topo" style={{ position: 'relative', overflow: 'hidden', marginTop: '-66px', paddingTop: '66px' }}>
       <img src={M + 'mirage.jpg'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }} />
@@ -85,9 +83,6 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
           <span><b style={{ color: 'var(--rtm-text-strong)' }}>5</b> eras de CS</span>
           <span><b style={{ color: 'var(--rtm-text-strong)' }}>3</b> modos de jogo</span>
           <span>Dados de HLTV e Liquipedia</span>
-        </div>
-        <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginTop: '34px', flexWrap: 'wrap', opacity: 0.9 }}>
-          {teams.map((id) => <img key={id} src={L + id + '.png'} alt="" style={{ height: '34px', filter: 'grayscale(.3)' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />)}
         </div>
       </div>
     </section>
