@@ -5591,9 +5591,15 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
         <div className="muted small" style={{ marginBottom: 12 }}>
           {ct('🤝 Negociações · você fecha agora, o jogador entra na')} <b>{ct('próxima janela')}</b> (fim do split)
         </div>
-        <div className="nego-budget">
-          {ct('Caixa pra acordos:')} <b className={dealBudget < 0 ? 'neg' : 'pos'}>{formatMoney(dealBudget)}</b>
-          {committedCash > 0 && <span className="muted small"> · {formatMoney(committedCash)} já comprometido</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', padding: '12px 16px', borderRadius: 'var(--rtm-radius)', background: 'linear-gradient(120deg, var(--rtm-panel-2), var(--rtm-header))', border: '1px solid var(--rtm-border-soft)', marginBottom: '14px' }}>
+          <div>
+            <div style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Caixa pra acordos')}</div>
+            <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, color: dealBudget < 0 ? 'var(--rtm-red-bright)' : 'var(--rtm-gold)', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(dealBudget)}</div>
+          </div>
+          <div style={{ flex: 1 }} />
+          <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>
+            {committedCash > 0 ? <span><b style={{ color: 'var(--rtm-gold)' }}>{formatMoney(committedCash)}</b> {ct('já comprometido')}</span> : ct('Janela aberta · feche acordos pra próxima temporada')}
+          </div>
         </div>
         {(offers.length > 0 || pendingSales.length > 0) && (
           <div className="nego-offers">
