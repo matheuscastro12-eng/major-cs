@@ -4332,7 +4332,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
       <div className="modal player-profile" onClick={(e) => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}>✕</button>
         <div className="pp-head">
-          <PlayerCard player={player} ovr={ovr} />
+          <FutCard player={player} size="lg" />
           <div className="pp-id">
             <div className="pp-nick"><Flag cc={player.country} /> {player.nick}
               <span className={`role-pill ${player.role}`} style={{ marginLeft: 8 }}>{player.role}</span>
