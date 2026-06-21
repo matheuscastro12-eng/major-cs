@@ -66,7 +66,7 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
           <div style={{ gridColumn: '1 / -1' }}><label style={label}>Nick de manager</label><input style={input} value={nick} maxLength={24} onChange={(e) => setNick(e.target.value)} /></div>
           <div style={{ gridColumn: '1 / -1' }}><label style={label}>Nome completo</label><input style={input} value={name} maxLength={40} placeholder="ex: Caio Ferreira" onChange={(e) => setName(e.target.value)} /></div>
           <div>
-            <label style={label}>Idade — {age}</label>
+            <label style={label}>Idade · {age}</label>
             <input type="range" min={18} max={70} value={age} onChange={(e) => setAge(+e.target.value)} style={{ width: '100%', accentColor: 'var(--rtm-blue-bright)' }} />
           </div>
           <div><label style={label}>País</label>
@@ -85,7 +85,7 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
           </div>
         </div>
         <Button size="big" onClick={start} style={{ width: '100%', marginTop: '28px' }}>Continuar →</Button>
-        <p style={{ fontSize: '11px', color: 'var(--rtm-faint)', textAlign: 'center', marginTop: '12px' }}>A idade afeta só a narrativa — sem efeito mecânico.</p>
+        <p style={{ fontSize: '11px', color: 'var(--rtm-faint)', textAlign: 'center', marginTop: '12px' }}>A idade afeta só a narrativa, sem efeito mecânico.</p>
       </div>
     </div>
   );

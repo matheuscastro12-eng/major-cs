@@ -3329,7 +3329,7 @@ export function CareerScreen({ onExit }: Props) {
           <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', minHeight: '150px', boxShadow: 'var(--rtm-shadow-banner)' }}>
             <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/nuke.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.26 }} />
             <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${orgColor}22 0%, rgba(13,17,22,.9) 55%)` }} />
-            <div style={{ position: 'absolute', top: '10px', right: '12px', display: 'flex', gap: '6px', zIndex: 2 }}>
+            <div className="hub-banner-ctrl" style={{ position: 'absolute', top: '10px', right: '12px', display: 'flex', gap: '6px', zIndex: 2 }}>
               <button className="btn ghost small" title={ct('Rever o tutorial')} onClick={() => setShowOnb(true)}>❔</button>
               <button className="btn ghost small" title={ct('Apagar tudo e recomeçar do zero')} onClick={() => {
                 if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
@@ -3337,7 +3337,7 @@ export function CareerScreen({ onExit }: Props) {
               }}>↺</button>
               <button className="btn ghost small" onClick={onExit}>{ct('← Sair')}</button>
             </div>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>
+            <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>
               <span style={{ width: '70px', height: '70px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '26px', color: '#fff', background: `linear-gradient(160deg, ${orgColor}, #20303f)`, boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.12)', flexShrink: 0, overflow: 'hidden' }}>
                 {save.org?.logo ? <img src={save.org.logo} alt="" style={{ width: '64%', height: '64%', objectFit: 'contain' }} /> : (save.org?.tag ?? '??').slice(0, 2).toUpperCase()}
               </span>
