@@ -3514,8 +3514,7 @@ export function CareerScreen({ onExit }: Props) {
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
       {hubTab === 'results' && (
-        <div className="panel">
-          <div className="panel-body">
+        <Panel title={ct('Resultados')}>
             {league.rounds.map((round, r) => (
               <div key={r} className="results-round">
                 <div className="muted small section-label" style={{ marginTop: r === 0 ? 0 : 14 }}>
@@ -3525,28 +3524,24 @@ export function CareerScreen({ onExit }: Props) {
               </div>
             ))}
             <p className="muted small" style={{ marginTop: 12 }}>{ct('Clique em qualquer partida finalizada para ver o placar mapa a mapa.')}</p>
-          </div>
-        </div>
+        </Panel>
       )}
 
       {/* ===== CLASSIFICAÇÃO (detalhada) ===== */}
       {hubTab === 'standings' && (
-        <div className="panel">
-          <div className="panel-body">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>{save.circuit?.name ?? 'Circuito'} · fase de grupos (GSL) · top 2 de cada grupo vão ao mata-mata</div>
+        <Panel title={ct('Classificação')} accent="gold">
+            <div className="muted small" style={{ marginBottom: 12 }}>{save.circuit?.name ?? 'Circuito'} · fase de grupos (GSL) · top 2 de cada grupo vão ao mata-mata</div>
             {league.gsl
               ? <GSLGroups league={league} onOpen={setSelSeries} />
               : <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} detailed />}
             <p className="muted small" style={{ marginTop: 10 }}>{league.gsl ? ct('Clique num jogo concluído pra ver o placar.') : ct('Clique em um time para ver elenco, técnico e força.')}</p>
-          </div>
-        </div>
+        </Panel>
       )}
 
       {/* ===== CHAVE (BRACKET DEDICADO) ===== */}
       {hubTab === 'bracket' && (
-        <div className="panel">
-          <div className="panel-body">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>
+        <Panel title={ct('Chave')} accent="gold">
+            <div className="muted small" style={{ marginBottom: 12 }}>
               {save.circuit?.name ?? 'Circuito'} · chave da fase de grupos (GSL · dupla eliminação) — top 2 de cada grupo vão ao mata-mata
             </div>
             {opp && myMatch && (
@@ -3567,8 +3562,7 @@ export function CareerScreen({ onExit }: Props) {
               </div>
             )}
             <p className="muted small" style={{ marginTop: 10 }}>{ct('Clique num confronto concluído pra ver o placar completo da série.')}</p>
-          </div>
-        </div>
+        </Panel>
       )}
 
       {/* ===== ACADEMIA (prospectos: revelar, treinar, promover) ===== */}
@@ -4033,8 +4027,7 @@ export function CareerScreen({ onExit }: Props) {
         // próximos splits (mini-calendário do cadenciamento dos Majors)
         const upcoming = Array.from({ length: 6 }, (_, i) => save.split + i).map((sp) => ({ sp, major: isMajorSplit(sp) }));
         return (
-        <div className="panel">
-          <div className="panel-body">
+        <Panel title={ct('Calendário')} accent="gold">
             <div className={`cal-major-banner ${splitsToMajor === 0 ? 'now' : ''}`}>
               {splitsToMajor === 0
                 ? <>🌍 <b>{ct('É split de Major!')}</b> Os <b>top {MAJOR_VRS_CUT} do ranking VRS mundial</b> {ct('garantem a vaga. Você está em')} <b>#{myVrsRank}</b>.</>
@@ -4066,8 +4059,7 @@ export function CareerScreen({ onExit }: Props) {
             <p className="muted small" style={{ marginTop: 10 }}>
               Cada split tem um <b>{ct('circuito')}</b> {ct('(fase de grupos + mata-mata) que vale prêmio e')} <b>VRS</b>. A cada {MAJOR_EVERY} splits acontece o <b>{ct('Major Mundial')}</b>: o clímax da temporada, com a maior premiação. Seu VRS e seu tier definem se você chega lá.
             </p>
-          </div>
-        </div>
+        </Panel>
         );
       })()}
 
