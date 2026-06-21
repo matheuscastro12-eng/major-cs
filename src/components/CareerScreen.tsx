@@ -548,6 +548,7 @@ interface CareerSave {
   majorSeed2?: TTeam[];       // 8 seeds que entram no Stage 2
   majorSeed3?: TTeam[];       // 8 seeds que entram no Stage 3
   majorPre?: { stage: number; advancers: { tag: string; name: string }[] }[]; // stages auto-simulados antes do usuário
+  majorHistory?: Tournament['history']; // partidas do usuario acumuladas entre os stages do Major
   majorResult?: MajorResult | null; // resultado do Major persistido: reidrata a tela de resultado no F5 (evita re-simular a final)
   evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
   lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
@@ -1279,6 +1280,7 @@ function hydrate(raw: string): CareerSave {
   stripEraDeep(merged.playoff);
   stripEraDeep(merged.majorT);
   stripEraDeep(merged.majorSeed2);
+  stripEraDeep(merged.majorHistory);
   merged.academy = (merged.academy ?? []).map(healProspect);
   if (merged.youth) {
     const y: Record<string, Player> = {};
@@ -2246,23 +2248,25 @@ export function CareerScreen({ onExit }: Props) {
       majorSeed2: userStage <= 1 ? s2band : [],
       majorSeed3: userStage <= 2 ? s3band : [],
       majorPre: pre,
+      majorHistory: [],
     });
   };
 
   // encerra o Major do usuário: colocação, prêmio e VRS
   const concludeMajor = (t: Tournament, placement: PlacementCode) => {
+    const tournament = { ...t, history: [...(save.majorHistory ?? []), ...t.history] };
     const result: MajorResult = {
-      tournament: t,
+      tournament,
       placement,
       prize: MAJOR_PRIZE[placement],
       vrs: MAJOR_VRS[placement],
       champion: placement === 'champion',
     };
     setMajorResult(result);
-    setMajorTState(t);
+    setMajorTState(tournament);
     // persiste o resultado: se o jogador der F5 na tela de resultado, reidrata aqui
     // em vez de voltar pro hub com o Major "vivo" e re-jogar a última série
-    setSave((s) => { const n = { ...s, majorT: t, majorResult: result }; persist(n); return n; });
+    setSave((s) => { const n = { ...s, majorT: tournament, majorResult: result }; persist(n); return n; });
     setStage('major');
   };
 
@@ -2281,13 +2285,14 @@ export function CareerScreen({ onExit }: Props) {
     if (clone.stageOnly) {
       // stage encerrado e usuário classificado: monta o próximo stage (ou playoffs)
       const advancers = stageAdvancers(clone);
+      const majorHistory = [...(save.majorHistory ?? []), ...clone.history];
       if (stageNow < 3) {
         const seeds = stageNow === 1 ? (save.majorSeed2 ?? []) : (save.majorSeed3 ?? []);
         const next = createSwissStage([...advancers, ...seeds], rngRef.current, `${MAJOR_NAME(save.split)} · Stage ${stageNow + 1}`);
-        setMajorState(next, { majorStage: stageNow + 1 });
+        setMajorState(next, { majorStage: stageNow + 1, majorHistory });
       } else {
         const po = createPlayoffStage(advancers, `${MAJOR_NAME(save.split)} · Champions Stage`);
-        setMajorState(po, { majorStage: 4 });
+        setMajorState(po, { majorStage: 4, majorHistory });
       }
       setHubTab('major');
       setStage('hub');
@@ -2799,7 +2804,7 @@ export function CareerScreen({ onExit }: Props) {
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
                   majorResult: null, // limpa o resultado reidratável (já consumido)
                   majorStage: undefined, majorUserStage: undefined,
-                  majorSeed2: undefined, majorSeed3: undefined, majorPre: undefined,
+                  majorSeed2: undefined, majorSeed3: undefined, majorPre: undefined, majorHistory: undefined,
                   league: null,
                   circuit: null,
                   playoff: null,
