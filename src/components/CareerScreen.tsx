@@ -33,6 +33,7 @@ import { isAdminUnlocked } from './AdminGate';
 import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
 import { captureError } from '../state/errlog';
+import { cloudOnLocalSave } from '../state/cloud';
 import bo3Ages from '../data/bo3-ages.json';
 
 const SAVE_KEY = 'rtm-career-v1';
@@ -1306,6 +1307,7 @@ function persist(s: CareerSave): void {
       /* segue */
     }
     localStorage.setItem(SAVE_KEY, json);
+    cloudOnLocalSave('career', SAVE_KEY, () => json); // espelha na nuvem (conta paga)
     // backup de um passo: se o save novo ficar ilegível, dá pra voltar ao anterior
     if (prev && prev !== json) {
       try {

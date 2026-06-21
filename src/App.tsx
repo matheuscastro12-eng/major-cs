@@ -39,6 +39,7 @@ import { ManagerProfile } from './components/ManagerProfile';
 import { Leaderboard } from './components/Leaderboard';
 import { claim as claimAccount, useAccount } from './state/account';
 import { useManager } from './state/manager';
+import { setCloudEnabled, syncSlot } from './state/cloud';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
@@ -297,6 +298,24 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, sessionStamp]);
+
+  // save na nuvem (conta vitalícia): liga o espelhamento e reconcilia no login.
+  // Se a nuvem estiver mais nova, restaura no localStorage e atualiza a home.
+  const [cloudToast, setCloudToast] = useState('');
+  useEffect(() => {
+    setCloudEnabled(!!account?.paid);
+    if (!account?.paid) return;
+    let alive = true;
+    void syncSlot('career', 'rtm-career-v1').then((r) => {
+      if (alive && r === 'restored') { setCloudToast('☁ Save da carreira carregado da nuvem'); setSessionStamp((s) => s + 1); }
+    });
+    return () => { alive = false; };
+  }, [account?.paid]);
+  useEffect(() => {
+    if (!cloudToast) return;
+    const t = window.setTimeout(() => setCloudToast(''), 5000);
+    return () => window.clearTimeout(t);
+  }, [cloudToast]);
 
   const resumeSession = () => {
     if (!savedSession?.tournament) return;
@@ -701,6 +720,13 @@ export default function App() {
         <div className="paid-toast" role="status">
           <span>★ Conta vitalícia ativada! Save na nuvem e ranking liberados.</span>
           <button onClick={() => setPaidToast(false)} aria-label="fechar">✕</button>
+        </div>
+      )}
+
+      {cloudToast && (
+        <div className="paid-toast" role="status">
+          <span>{cloudToast}</span>
+          <button onClick={() => setCloudToast('')} aria-label="fechar">✕</button>
         </div>
       )}
 

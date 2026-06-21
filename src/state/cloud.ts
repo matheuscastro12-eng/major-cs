@@ -1,0 +1,68 @@
+// Save na nuvem (conta vitalícia): sincroniza chaves do localStorage com a conta,
+// last-write-wins por timestamp. O grátis ignora tudo isso (save só local).
+import { getToken } from './account';
+
+const TS = (key: string) => `${key}.cloudts`;
+export const localSavedAt = (key: string): number => { try { return Number(localStorage.getItem(TS(key)) || 0); } catch { return 0; } };
+export const markSavedAt = (key: string, ts = Date.now()): void => { try { localStorage.setItem(TS(key), String(ts)); } catch { /* sem storage */ } };
+
+let enabled = false; // ligado só quando a conta é paga
+export function setCloudEnabled(v: boolean) { enabled = v; }
+export function cloudEnabled() { return enabled && !!getToken(); }
+
+async function post(body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  try {
+    const r = await fetch('/api/cloud-save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) return null;
+    return (await r.json().catch(() => null)) as Record<string, unknown> | null;
+  } catch { return null; }
+}
+
+export async function pullCloud(slot: string): Promise<{ data: string | null; updatedAt: number } | null> {
+  if (!cloudEnabled()) return null;
+  const d = await post({ action: 'pull', token: getToken(), slot });
+  if (!d) return null;
+  return { data: (d.data as string) ?? null, updatedAt: Number(d.updatedAt ?? 0) };
+}
+
+export async function pushCloud(slot: string, data: string, updatedAt: number): Promise<boolean> {
+  if (!cloudEnabled()) return false;
+  const d = await post({ action: 'push', token: getToken(), slot, data, updatedAt });
+  return !!d?.ok;
+}
+
+// push com debounce: chamado a cada gravação local enquanto joga.
+const timers: Record<string, ReturnType<typeof setTimeout>> = {};
+export function cloudOnLocalSave(slot: string, localKey: string, getData: () => string | null) {
+  if (!cloudEnabled()) return;
+  const ts = Date.now();
+  markSavedAt(localKey, ts);
+  clearTimeout(timers[slot]);
+  timers[slot] = setTimeout(() => {
+    const data = getData();
+    if (data) void pushCloud(slot, data, ts);
+  }, 2500);
+}
+
+// no login (conta paga): reconcilia a nuvem com o local. Devolve o que aconteceu.
+// 'restored' = a nuvem era mais nova e foi gravada no localStorage (recarregar a tela).
+export async function syncSlot(slot: string, localKey: string): Promise<'restored' | 'pushed' | 'none'> {
+  if (!cloudEnabled()) return 'none';
+  const cloud = await pullCloud(slot);
+  let localData: string | null = null;
+  try { localData = localStorage.getItem(localKey); } catch { /* sem storage */ }
+  const localTs = localSavedAt(localKey);
+
+  if (cloud?.data && (!localData || cloud.updatedAt > localTs)) {
+    try { localStorage.setItem(localKey, cloud.data); } catch { return 'none'; }
+    markSavedAt(localKey, cloud.updatedAt);
+    return 'restored';
+  }
+  if (localData && (!cloud?.data || localTs >= cloud.updatedAt)) {
+    const ts = localTs || Date.now();
+    markSavedAt(localKey, ts);
+    void pushCloud(slot, localData, ts);
+    return 'pushed';
+  }
+  return 'none';
+}
