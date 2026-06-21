@@ -4055,6 +4055,8 @@ table.crm-players input.num {
   color: rgba(255, 255, 255, 0.035);
   font: 900 128px/1 var(--font-cond);
 }
+.ut-hero::before { content: ''; position: absolute; inset: 0; z-index: 0; background: url(/maps/dust2.jpg) center/cover; opacity: 0.14; pointer-events: none; }
+.ut-hero > * { position: relative; z-index: 1; }
 .ut-kicker { color: var(--gold); font: 800 0.72rem var(--font-cond); letter-spacing: 2.4px; }
 .ut-hero h1 { margin: 3px 0 6px; color: var(--text-strong); font: 900 2.2rem/1 var(--font-cond); letter-spacing: 1px; }
 .ut-hero p { position: relative; z-index: 1; max-width: 680px; margin: 0; color: var(--muted); line-height: 1.45; }
