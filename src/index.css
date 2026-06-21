@@ -2603,12 +2603,20 @@ table.standings tr.is-user td {
 
 .finale h1 {
   font-family: var(--font-cond);
-  font-size: 34px;
-  letter-spacing: 3px;
-  margin: 14px 0 4px;
-  color: var(--gold);
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  margin: 12px 0 4px;
+  color: var(--rtm-gold);
   text-transform: uppercase;
+  line-height: 1;
+  text-shadow: 0 0 40px rgba(216, 169, 67, 0.4);
 }
+.finale h1.lost {
+  color: var(--rtm-red-bright);
+  text-shadow: 0 0 40px rgba(226, 90, 90, 0.4);
+}
+@media (max-width: 720px) { .finale h1 { font-size: 38px; letter-spacing: 2px; } }
 
 .finale h1.lost { color: var(--red-bright); }
 
