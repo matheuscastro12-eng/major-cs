@@ -22,6 +22,7 @@ import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore, RIVALRY_T
 import { applyFatigueForm, fatigueBand, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, FACILITY_MAX_LEVEL, facilityUpkeep, facilityUpgradeCost, normalizeFacilities, stabilizeMorale, type FacilityKey } from '../engine/career/facilities';
 import { personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
+import { hydrateCareerDepth } from '../engine/career/save';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -1273,7 +1274,7 @@ const SAVE_CORRUPT = SAVE_KEY + '.corrupt';
 // Lança se o JSON estiver corrompido — quem chama trata o fallback.
 function hydrate(raw: string): CareerSave {
   const s = JSON.parse(raw) as CareerSave;
-  const merged = { ...emptySave(), ...s };
+  const merged = { ...emptySave(), ...s, ...hydrateCareerDepth(s as unknown as Record<string, unknown>) };
   stripEraDeep(merged.league);
   stripEraDeep(merged.playoff);
   stripEraDeep(merged.majorT);
