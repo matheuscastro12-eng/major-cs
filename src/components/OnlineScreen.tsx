@@ -338,6 +338,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
   const [pool, setPool] = useState<TournamentPool>('world');
   const [ruleset, setRuleset] = useState<UltimateRuleset>('open');
   const [isPublic, setIsPublic] = useState(true); // sala aberta a qualquer um por padrão
+  const [ranked, setRanked] = useState(false); // sala ranqueada (conta MMR)
   const [draftRollouts, setDraftRollouts] = useState(2);
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
   const [code, setCode] = useState('');
@@ -602,11 +603,39 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
     setBusy(true);
     setError('');
     try {
-      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, isPublic, ruleset, draftRollouts });
+      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, isPublic, ranked: ranked && mode === 'duel', ruleset, draftRollouts });
       if (r.ok && r.code) {
         setCode(r.code);
-        track('online_create', { mode, pool, public: isPublic });
+        track('online_create', { mode, pool, public: isPublic, ranked });
       } else setError(r.error ?? tr('online.errCreate'));
+    } catch {
+      setError(tr('online.errServer'));
+    }
+    setBusy(false);
+  };
+
+  // matchmaking ranqueado: acha uma sala ranqueada de duelo aberta perto do meu MMR;
+  // se não houver, cria uma pública ranqueada e espera um rival.
+  const matchmake = async () => {
+    if (!nick.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const rooms = await listOpenLobbies();
+      const myMmr = myRank?.mmr ?? 1000;
+      const mine = nick.trim().toLowerCase();
+      const candidate = rooms
+        .filter((r) => r.ranked && r.mode === 'duel' && r.players < r.max && r.host.toLowerCase() !== mine)
+        .sort((a, b) => Math.abs((a.host_mmr ?? 1000) - myMmr) - Math.abs((b.host_mmr ?? 1000) - myMmr))[0];
+      if (candidate) {
+        track('online_matchmake', { joined: true });
+        setBusy(false);
+        await doJoin(candidate.code, false);
+        return;
+      }
+      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode: 'duel', pool, isPublic: true, ranked: true, ruleset, draftRollouts });
+      if (r.ok && r.code) { setCode(r.code); track('online_matchmake', { joined: false }); }
+      else setError(r.error ?? tr('online.errCreate'));
     } catch {
       setError(tr('online.errServer'));
     }
@@ -796,8 +825,8 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
     } else return;
     const timer = window.setTimeout(() => {
       recordedSeasonsRef.current.add(key);
-      // ranking salvo (conta paga): manda o resultado e atualiza meu MMR
-      if (account?.paid) void reportResult(won, nick || account.nick).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
+      // ranking salvo (conta paga, só em sala RANQUEADA): manda o resultado e atualiza meu MMR
+      if (account?.paid && state.lobby.ranked) void reportResult(won, nick || account.nick).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
       setSessionProfile((current) => {
         const next = {
           points: current.points + points,
@@ -970,6 +999,14 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
               </div>
             </div>
 
+            <div className="ranked-cta">
+              <div className="ranked-cta-copy">
+                <b>⚔️ Partida ranqueada</b>
+                <span>Acha um rival de MMR parecido e vale pro ladder da temporada{account?.paid ? '' : ' (no grátis o MMR não persiste)'}.</span>
+              </div>
+              <button className="btn gold" onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : 'Jogar ranqueada'}</button>
+            </div>
+
             <div className="online-split">
               <div className="online-box">
                 <h4>{tr('online.createRoom')}</h4>
@@ -998,6 +1035,12 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
                   <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
                   {OL.publicRoom}
                 </label>
+                {mode === 'duel' && (
+                  <label className="public-toggle">
+                    <input type="checkbox" checked={ranked} onChange={(e) => setRanked(e.target.checked)} />
+                    🏆 Ranqueada (conta pro ladder)
+                  </label>
+                )}
                 <button className="btn gold" style={{ width: '100%' }} onClick={create} disabled={!nick.trim() || busy}>
                   {busy ? tr('online.creating') : tr('online.createRoom')}
                 </button>
@@ -1037,9 +1080,9 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
                 <div className="or-list">
                   {openRooms.map((r) => (
                     <div key={r.code} className="or-row">
-                      <span className="or-host">{r.host}</span>
+                      <span className="or-host">{r.host}{r.ranked && <span className="ranked-badge">RANQUEADA</span>}</span>
                       <span className="muted small">
-                        {r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'} · {r.players}/{r.max}
+                        {r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'} · {r.players}/{r.max}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}
                       </span>
                       <span className="spacer" />
                       <button className="btn ghost small" disabled={busy} onClick={() => doJoin(r.code, true)}>Assistir</button>
@@ -1217,7 +1260,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
         {rankToast}
         <div className="panel">
           <div className="panel-head">
-            {OL.duelLive} · {code}
+            {OL.duelLive} · {code}{state?.lobby.ranked && <span className="ranked-badge">RANQUEADA</span>}
             <span className="spacer" />
             <button className="btn" onClick={onBack}>{tr('online.exitOnline')}</button>
           </div>

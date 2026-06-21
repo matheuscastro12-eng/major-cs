@@ -112,7 +112,11 @@ function genCode(): string {
 let schemaReady = false;
 async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   if (schemaReady) return;
+  // rtm_ranking é de api/ranking.ts; garante a base aqui (mesma definição) pra o
+  // matchmaking poder ler o MMR do host sem quebrar a listagem se a tabela faltar.
+  await sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS ranked boolean DEFAULT false`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
@@ -203,14 +207,15 @@ export default async function handler(
       await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '2 minutes'`;
       // só lista salas com alguém ativo (ping nos últimos 60s)
       const rows = await sql`
-        SELECT l.code, l.mode, l.pool, l.host, l.created_at,
-               (SELECT COUNT(*) FROM lobby_players p WHERE p.code = l.code AND COALESCE(p.spectator, false) = false) AS players
+        SELECT l.code, l.mode, l.pool, l.host, l.created_at, COALESCE(l.ranked, false) AS ranked,
+               (SELECT COUNT(*) FROM lobby_players p WHERE p.code = l.code AND COALESCE(p.spectator, false) = false) AS players,
+               (SELECT mmr FROM rtm_ranking rr WHERE lower(rr.nick) = lower(l.host) ORDER BY mmr DESC LIMIT 1) AS host_mmr
         FROM lobbies l
         WHERE l.is_public = true AND l.status = 'waiting'
               AND COALESCE(l.last_ping, l.created_at) > now() - interval '60 seconds'
         ORDER BY l.created_at DESC LIMIT 30`;
       const rooms = rows
-        .map((r) => ({ ...r, players: Number(r.players), max: MAX_PLAYERS[r.mode as string] ?? 8 }))
+        .map((r) => ({ ...r, players: Number(r.players), max: MAX_PLAYERS[r.mode as string] ?? 8, ranked: !!r.ranked, host_mmr: r.host_mmr == null ? null : Number(r.host_mmr) }))
         .filter((r) => r.players < r.max);
       res.status(200).json({ rooms });
     } catch (e) {
@@ -232,7 +237,7 @@ export default async function handler(
       /* migração é best-effort, nunca bloqueia o poll */
     }
     try {
-      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed, COALESCE(draft_rollouts, 2) AS draft_rollouts, COALESCE(veto_state, '{}'::jsonb) AS veto, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, created_at, COALESCE(locked, false) AS locked, COALESCE(ranked, false) AS ranked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed, COALESCE(draft_rollouts, 2) AS draft_rollouts, COALESCE(veto_state, '{}'::jsonb) AS veto, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -323,6 +328,7 @@ export default async function handler(
       const pool = body.pool === 'br' ? 'br' : 'world';
       const ruleset = RULESETS.has(String(body.ruleset)) ? String(body.ruleset) : 'open';
       const isPublic = body.isPublic === true;
+      const ranked = body.ranked === true;
       const draftRollouts = Math.max(0, Math.min(5, body.draftRollouts == null ? 2 : Number(body.draftRollouts) || 0));
       const seed = Math.floor(Math.random() * 2147483647);
       // fecha salas inativas: ninguém com a aba aberta há mais de 2min (sem
@@ -334,7 +340,7 @@ export default async function handler(
         const newCode = genCode();
         const exists = await sql`SELECT 1 FROM lobbies WHERE code = ${newCode}`;
         if (exists.length > 0) continue;
-        await sql`INSERT INTO lobbies (code, mode, host, seed, run_seed, pool, is_public, ruleset, draft_rollouts) VALUES (${newCode}, ${mode}, ${nick}, ${seed}, ${seed}, ${pool}, ${isPublic}, ${ruleset}, ${draftRollouts})`;
+        await sql`INSERT INTO lobbies (code, mode, host, seed, run_seed, pool, is_public, ranked, ruleset, draft_rollouts) VALUES (${newCode}, ${mode}, ${nick}, ${seed}, ${seed}, ${pool}, ${isPublic}, ${ranked}, ${ruleset}, ${draftRollouts})`;
         await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${nick})`;
         res.status(200).json({ ok: true, code: newCode });
         return;
