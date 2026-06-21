@@ -37,7 +37,7 @@ import { Landing } from './components/Landing';
 import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
 import { claim as claimAccount, useAccount } from './state/account';
-import { getManager, useManager } from './state/manager';
+import { useManager } from './state/manager';
 import { track, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
@@ -664,10 +664,12 @@ export default function App() {
   };
 
   if (screen === 'landing') {
-    return <Landing onPlay={() => setScreen(getManager() ? 'home' : 'setup')} onCheckout={startCheckout} />;
+    return <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} />;
   }
 
-  if (screen === 'setup') {
+  // Portão do Setup: não vive só no botão "Jogar". Sem manager criado, qualquer
+  // entrada direta no jogo (deep link, F5, retorno do Stripe em /jogar) cai aqui.
+  if (screen === 'setup' || !manager) {
     return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); setScreen('home'); }} />;
   }
 
@@ -717,7 +719,7 @@ export default function App() {
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
             {account && (
-              <button className="acct-chip" title={account.paid ? 'Conta vitalícia ativa · ver perfil' : 'Ver perfil'} onClick={() => setScreen(getManager() ? 'profile' : 'setup')}>
+              <button className="acct-chip" title={account.paid ? 'Conta vitalícia ativa · ver perfil' : 'Ver perfil'} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
                 {account.paid && <span className="acct-star">★</span>}
                 {account.nick || account.email}
               </button>
