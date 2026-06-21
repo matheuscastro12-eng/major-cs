@@ -18,6 +18,7 @@ interface Props {
   onResume?: () => void;
   onDiscardCampaign?: () => void;
   onOnline?: () => void;
+  onLeaderboard?: () => void;
   onCareer?: () => void;
 }
 
@@ -108,6 +109,7 @@ export function Home({
   onResume,
   onDiscardCampaign,
   onOnline,
+  onLeaderboard,
   onCareer,
 }: Props) {
   const { t, lang } = useLang();
@@ -180,6 +182,12 @@ export function Home({
             </button>
           )}
         </div>
+
+        {onLeaderboard && (
+          <div style={{ marginTop: 14, textAlign: 'center' }}>
+            <button className="rtm-ranklink" onClick={onLeaderboard}>🏆 Ranking competitivo do online →</button>
+          </div>
+        )}
 
         {savedCampaign && (
           <div style={{ margin: '18px auto 0', maxWidth: 640, display: 'flex', gap: 10 }}>

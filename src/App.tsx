@@ -36,6 +36,7 @@ import { LangSwitcher } from './components/social';
 import { Landing } from './components/Landing';
 import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
+import { Leaderboard } from './components/Leaderboard';
 import { claim as claimAccount, useAccount } from './state/account';
 import { useManager } from './state/manager';
 import { track, trackVisit } from './state/track';
@@ -46,6 +47,7 @@ type Screen =
   | 'landing'
   | 'setup'
   | 'profile'
+  | 'leaderboard'
   | 'home'
   | 'draft'
   | 'hub'
@@ -67,6 +69,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   landing: '/',
   setup: '/criar-manager',
   profile: '/perfil',
+  leaderboard: '/ranking',
   home: '/jogar',
   online: '/online',
   career: '/carreira',
@@ -681,6 +684,14 @@ export default function App() {
     );
   }
 
+  if (screen === 'leaderboard') {
+    return (
+      <main className="page" style={{ paddingTop: 24 }}>
+        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => setScreen('landing')} />
+      </main>
+    );
+  }
+
   return (
     <>
       {/* barra de progresso: remonta a cada troca de tela e replaya a animação */}
@@ -764,6 +775,7 @@ export default function App() {
           }}
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
+          onLeaderboard={() => setScreen('leaderboard')}
           onCareer={() => setScreen('career')}
           onAchievements={() => setAchOpen(true)}
           teamCount={dataset.length}
