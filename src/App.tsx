@@ -35,6 +35,7 @@ import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
 import { Landing } from './components/Landing';
 import { ManagerSetup } from './components/ManagerSetup';
+import { ManagerProfile } from './components/ManagerProfile';
 import { claim as claimAccount, useAccount } from './state/account';
 import { getManager, useManager } from './state/manager';
 import { track, trackVisit } from './state/track';
@@ -44,6 +45,7 @@ import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, 
 type Screen =
   | 'landing'
   | 'setup'
+  | 'profile'
   | 'home'
   | 'draft'
   | 'hub'
@@ -64,6 +66,7 @@ type Screen =
 const SCREEN_PATH: Record<Screen, string> = {
   landing: '/',
   setup: '/criar-manager',
+  profile: '/perfil',
   home: '/jogar',
   online: '/online',
   career: '/carreira',
@@ -668,6 +671,14 @@ export default function App() {
     return <ManagerSetup initial={manager} defaultNick={account?.nick} onDone={(m) => { saveManager(m); setScreen('home'); }} />;
   }
 
+  if (screen === 'profile' && manager) {
+    return (
+      <main className="page" style={{ paddingTop: 24 }}>
+        <ManagerProfile manager={manager} account={account} onBack={() => setScreen('home')} onEdit={() => setScreen('setup')} onUpgrade={() => setScreen('landing')} />
+      </main>
+    );
+  }
+
   return (
     <>
       {/* barra de progresso: remonta a cada troca de tela e replaya a animação */}
@@ -706,10 +717,10 @@ export default function App() {
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
             {account && (
-              <span className="acct-chip" title={account.paid ? 'Conta vitalícia ativa' : 'Conta (grátis)'}>
+              <button className="acct-chip" title={account.paid ? 'Conta vitalícia ativa · ver perfil' : 'Ver perfil'} onClick={() => setScreen(getManager() ? 'profile' : 'setup')}>
                 {account.paid && <span className="acct-star">★</span>}
                 {account.nick || account.email}
-              </span>
+              </button>
             )}
             <button className="nav-btn" onClick={() => setScreen('hall')}>
               {t('nav.hall')}
