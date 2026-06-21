@@ -4181,79 +4181,85 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal player-profile" onClick={(e) => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}>✕</button>
-        <div className="pp-head">
-          <FutCard player={player} size="lg" />
-          <div className="pp-id">
-            <div className="pp-nick"><Flag cc={player.country} /> {player.nick}
-              <span className={`role-pill ${player.role}`} style={{ marginLeft: 8 }}>{player.role}</span>
-            </div>
-            <div className="muted small">{player.name}</div>
-            <div className="pp-tags">
-              <span className="pp-tag">{age} anos</span>
-              <span className={`pp-tag pot-${tier}`}>POT {tier} ({pot})</span>
-              <span className="pp-tag" title={ct('Maior OVR já alcançado')}>★ Pico {peakOvr}</span>
-              <span className="pp-tag">{PHASE_LABEL[phase]}</span>
-              <span className={`pp-tag mood-${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${morale}/100)`}>{mi.icon} {mi.label}</span>
-              {focused && <span className="pp-tag focus">{ct('🎯 em treino')}</span>}
-            </div>
-          </div>
-        </div>
-
-        <div className="pp-grid">
-          <div className="pp-col">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>Atributos
-              {evoTotal > 0 && <span className="cs-grew"> ▲{evoTotal} na carreira</span>}
-            </div>
-            <AttrRadar attrs={[
-              { label: 'Mira', value: player.aim },
-              { label: 'AWP', value: player.awp },
-              { label: 'IGL', value: player.igl },
-              { label: 'Clutch', value: player.clutch },
-              { label: 'Consist.', value: player.consistency },
-            ]} />
-            <div className="attr-bars">
-              <AttrBar label="Mira" value={player.aim} />
-              <AttrBar label="Consist." value={player.consistency} />
-              <AttrBar label="Clutch" value={player.clutch} />
-              <AttrBar label="AWP" value={player.awp} />
-              <AttrBar label="IGL" value={player.igl} />
-            </div>
-            <div className="pp-fin">
-              <div><span className="muted small">Valor</span><b>{formatMoney(playerValue({ ...player, ovr }))}</b></div>
-              <div><span className="muted small">{ct('Salário/split')}</span><b className="neg">{formatMoney(playerWage(player))}</b></div>
-              <div><span className="muted small">{ct('Contrato')}</span><b>{left == null ? '-' : left <= 0 ? 'vencido' : `${left} split${left > 1 ? 's' : ''}`}</b></div>
-            </div>
-          </div>
-          <div className="pp-col">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('Estatísticas de carreira')}</div>
-            {career ? (
-              <div className="pp-stats">
-                <div className="pp-stat"><b>{career.rating.toFixed(2)}</b><span>Rating 2.0</span></div>
-                <div className="pp-stat"><b>{career.kd.toFixed(2)}</b><span>K/D</span></div>
-                <div className="pp-stat"><b>{career.adr.toFixed(0)}</b><span>ADR</span></div>
-                <div className="pp-stat"><b>{career.kastPct.toFixed(0)}%</b><span>KAST</span></div>
-                <div className="pp-stat"><b>{career.kills}</b><span>Abates</span></div>
-                <div className="pp-stat"><b>{career.maps}</b><span>Mapas</span></div>
-              </div>
-            ) : (
-              <p className="muted small">Sem partidas registradas ainda. As stats aparecem (e sobem) conforme ele joga e evolui.</p>
-            )}
-            {cur && (
-              <>
-                <div className="muted small section-label">{ct('Neste split')}</div>
-                <div className="pp-cur">
-                  <span>rating <b>{cur.rating.toFixed(2)}</b></span>
-                  <span>K/D <b>{cur.kd.toFixed(2)}</b></span>
-                  <span>ADR <b>{cur.adr.toFixed(0)}</b></span>
-                </div>
-              </>
-            )}
-            <button className={`btn small${focused ? ' gold' : ''}`} style={{ marginTop: 12 }} onClick={onToggleFocus}>
-              {focused ? '🎯 Tirar do foco de treino' : '🎯 Pôr em foco de treino'}
+        <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: '230px minmax(0,1fr)', gap: '18px', alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+            <FutCard player={player} size="lg" />
+            <button className={`btn small${focused ? ' gold' : ''}`} style={{ width: '100%' }} onClick={onToggleFocus}>
+              {focused ? '🎯 Tirar do treino' : '🎯 Pôr em treino'}
             </button>
-            <p className="muted small" style={{ marginTop: 8 }}>
-              Os atributos não são editáveis aqui: sobem sozinhos com a evolução. O foco de treino acelera o desenvolvimento neste split.
-            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* banner de identidade */}
+            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', padding: '18px 20px' }}>
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(110deg, rgba(67,130,182,.16), rgba(13,17,22,.4))' }} />
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <Flag cc={player.country} /><span className={`role-pill ${player.role}`}>{player.role}</span>
+                </div>
+                <h1 style={{ margin: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '36px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 1 }}>{player.nick}</h1>
+                <div style={{ color: 'var(--rtm-dim)', fontSize: '13px', marginTop: '4px' }}>{player.name}</div>
+                <div className="pp-tags" style={{ marginTop: 10 }}>
+                  <span className="pp-tag">{age} anos</span>
+                  <span className={`pp-tag pot-${tier}`}>POT {tier} ({pot})</span>
+                  <span className="pp-tag" title={ct('Maior OVR já alcançado')}>★ Pico {peakOvr}</span>
+                  <span className="pp-tag">{PHASE_LABEL[phase]}</span>
+                  <span className={`pp-tag mood-${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${morale}/100)`}>{mi.icon} {mi.label}</span>
+                  {focused && <span className="pp-tag focus">{ct('🎯 em treino')}</span>}
+                </div>
+              </div>
+            </div>
+
+            <Panel title={<>{ct('Atributos')}{evoTotal > 0 && <span className="cs-grew" style={{ marginLeft: 8 }}> ▲{evoTotal} na carreira</span>}</>}>
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <AttrRadar attrs={[
+                  { label: 'Mira', value: player.aim },
+                  { label: 'AWP', value: player.awp },
+                  { label: 'IGL', value: player.igl },
+                  { label: 'Clutch', value: player.clutch },
+                  { label: 'Consist.', value: player.consistency },
+                ]} />
+                <div className="attr-bars" style={{ flex: 1, minWidth: 220 }}>
+                  <AttrBar label="Mira" value={player.aim} />
+                  <AttrBar label="Consist." value={player.consistency} />
+                  <AttrBar label="Clutch" value={player.clutch} />
+                  <AttrBar label="AWP" value={player.awp} />
+                  <AttrBar label="IGL" value={player.igl} />
+                </div>
+              </div>
+              <div className="pp-fin" style={{ marginTop: 12 }}>
+                <div><span className="muted small">Valor</span><b>{formatMoney(playerValue({ ...player, ovr }))}</b></div>
+                <div><span className="muted small">{ct('Salário/split')}</span><b className="neg">{formatMoney(playerWage(player))}</b></div>
+                <div><span className="muted small">{ct('Contrato')}</span><b>{left == null ? '-' : left <= 0 ? 'vencido' : `${left} split${left > 1 ? 's' : ''}`}</b></div>
+              </div>
+            </Panel>
+
+            <Panel title={ct('Estatísticas de carreira')}>
+              {career ? (
+                <div className="pp-stats">
+                  <div className="pp-stat"><b>{career.rating.toFixed(2)}</b><span>Rating 2.0</span></div>
+                  <div className="pp-stat"><b>{career.kd.toFixed(2)}</b><span>K/D</span></div>
+                  <div className="pp-stat"><b>{career.adr.toFixed(0)}</b><span>ADR</span></div>
+                  <div className="pp-stat"><b>{career.kastPct.toFixed(0)}%</b><span>KAST</span></div>
+                  <div className="pp-stat"><b>{career.kills}</b><span>Abates</span></div>
+                  <div className="pp-stat"><b>{career.maps}</b><span>Mapas</span></div>
+                </div>
+              ) : (
+                <p className="muted small">Sem partidas registradas ainda. As stats aparecem (e sobem) conforme ele joga e evolui.</p>
+              )}
+              {cur && (
+                <>
+                  <div className="muted small section-label">{ct('Neste split')}</div>
+                  <div className="pp-cur">
+                    <span>rating <b>{cur.rating.toFixed(2)}</b></span>
+                    <span>K/D <b>{cur.kd.toFixed(2)}</b></span>
+                    <span>ADR <b>{cur.adr.toFixed(0)}</b></span>
+                  </div>
+                </>
+              )}
+              <p className="muted small" style={{ marginTop: 8 }}>
+                Os atributos não são editáveis aqui: sobem sozinhos com a evolução. O foco de treino acelera o desenvolvimento neste split.
+              </p>
+            </Panel>
           </div>
         </div>
       </div>
@@ -4553,47 +4559,55 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card team-detail" onClick={(e) => e.stopPropagation()}>
-        <div className="td-head">
-          <TeamBadge tag={team.tag} colors={team.colors} size={42} logoUrl={team.logoUrl} />
-          <div>
-            <div className="td-name"><Flag cc={team.country} /> {team.name}</div>
-            <div className="muted small">{team.wins}-{team.losses} · saldo {team.roundDiff >= 0 ? '+' : ''}{team.roundDiff} · força {team.strength.toFixed(1)}</div>
-          </div>
-          <span className="spacer" />
-          <button className="btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="td-body">
-          {team.players.map((p) => (
-            <div key={p.id} className="cs-row">
-              <PlayerAvatar nick={p.nick} size={28} />
-              <span className="cs-nick"><Flag cc={p.country} /> {p.nick}</span>
-              <span className={`role-pill ${p.role}`}>{p.role}</span>
-              <span className="cs-ovr">{p.ovr}</span>
+        <button className="modal-x" onClick={onClose}>✕</button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* hero do time */}
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', boxShadow: 'var(--rtm-shadow-banner)' }}>
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${team.colors[0]}33, rgba(13,17,22,.92))` }} />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '20px 22px', flexWrap: 'wrap' }}>
+              <TeamBadge tag={team.tag} colors={team.colors} logoUrl={team.logoUrl} size={64} />
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>{team.wins}-{team.losses} · {ct('saldo')} {team.roundDiff >= 0 ? '+' : ''}{team.roundDiff} · {ct('força')} {team.strength.toFixed(1)}</div>
+                <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '34px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 1 }}>{team.name}</h1>
+                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={team.country} /> {team.tag}{team.coach && <> · {ct('Técnico:')} <b style={{ color: 'var(--rtm-text)' }}>{team.coach.nick}</b> ({team.coach.rating})</>}</div>
+              </div>
             </div>
-          ))}
-          {team.coach && <div className="td-coach muted small">{ct('Técnico:')} <b>{team.coach.nick}</b> ({team.coach.rating})</div>}
-          <div className="muted small section-label">{ct('Mapas na temporada')}</div>
-          {mapStats.length === 0 ? (
-            <p className="muted small" style={{ margin: 0 }}>{ct('Sem partidas jogadas ainda nesta temporada.')}</p>
-          ) : (
-            <table className="stats td-maps">
-              <thead><tr><th style={{ textAlign: 'left' }}>{ct('Mapa')}</th><th>V-D</th><th>{ct('Rounds')}</th><th>{ct('Aprov.')}</th></tr></thead>
-              <tbody>
-                {mapStats.map(([mp, r]) => {
-                  const tot = r.w + r.l;
-                  const pct = Math.round((r.w / tot) * 100);
-                  return (
-                    <tr key={mp}>
-                      <td style={{ textAlign: 'left' }}>{MAP_LABELS[mp as MapId] ?? mp}</td>
-                      <td><b className={r.w >= r.l ? 'pos' : 'neg'}>{r.w}-{r.l}</b></td>
-                      <td className="muted">{r.rf}:{r.ra}</td>
-                      <td className={pct >= 50 ? 'pos' : 'neg'}>{pct}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+          </div>
+          <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: '14px', alignItems: 'start' }}>
+            <Panel title={ct('Elenco')} flush>
+              {team.players.map((p, i) => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)', padding: '9px 14px' }}>
+                  <PlayerAvatar nick={p.nick} size={30} />
+                  <b style={{ fontFamily: 'var(--rtm-font-cond)', color: 'var(--rtm-text-strong)', fontSize: '15px', flex: 1, display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Flag cc={p.country} /> {p.nick}</b>
+                  <span className={`role-pill ${p.role}`}>{p.role}</span>
+                  <span className="cs-ovr">{p.ovr}</span>
+                </div>
+              ))}
+            </Panel>
+            <Panel title={ct('Mapas na temporada')}>
+              {mapStats.length === 0 ? (
+                <p className="muted small" style={{ margin: 0 }}>{ct('Sem partidas jogadas ainda nesta temporada.')}</p>
+              ) : (
+                <table className="stats td-maps">
+                  <thead><tr><th style={{ textAlign: 'left' }}>{ct('Mapa')}</th><th>V-D</th><th>{ct('Rounds')}</th><th>{ct('Aprov.')}</th></tr></thead>
+                  <tbody>
+                    {mapStats.map(([mp, r]) => {
+                      const tot = r.w + r.l;
+                      const pct = Math.round((r.w / tot) * 100);
+                      return (
+                        <tr key={mp}>
+                          <td style={{ textAlign: 'left' }}>{MAP_LABELS[mp as MapId] ?? mp}</td>
+                          <td><b className={r.w >= r.l ? 'pos' : 'neg'}>{r.w}-{r.l}</b></td>
+                          <td className="muted">{r.rf}:{r.ra}</td>
+                          <td className={pct >= 50 ? 'pos' : 'neg'}>{pct}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </Panel>
+          </div>
         </div>
       </div>
     </div>
