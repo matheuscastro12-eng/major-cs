@@ -11,7 +11,7 @@ const MAX_PLAYERS: Record<string, number> = { duel: 2, party: 8 };
 const RULESETS = new Set(['open', 'current', 'legends', 'brworld', 'era', 'ovrcap', 'unique_country', 'gauntlet']);
 const TACTICS = new Set(['balanced', 'aggressive', 'tactical', 'controlled']);
 const MAPS = new Set(['mirage', 'inferno', 'nuke', 'ancient', 'anubis', 'dust2', 'train']);
-const PLAYBACK_SPEEDS = new Set([0.5, 1, 2, 4]);
+const PLAYBACK_SPEEDS = new Set([0.5, 1, 2, 4, 8]);
 const VETO_ACTIONS = ['ban', 'ban', 'pick', 'pick', 'ban', 'ban'] as const;
 type MajorVetoAction = 'ban' | 'pick' | 'decider';
 

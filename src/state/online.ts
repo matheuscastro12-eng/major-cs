@@ -13,7 +13,7 @@ import type { MapId, Pairing, Player, SeriesResult, TeamSeason, Tournament, Tour
 
 export type UltimateRuleset = 'open' | 'current' | 'legends' | 'brworld' | 'era' | 'ovrcap' | 'unique_country' | 'gauntlet';
 export type OnlineTactic = 'balanced' | 'aggressive' | 'tactical' | 'controlled';
-export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
+export type PlaybackSpeed = 0.5 | 1 | 2 | 4 | 8;
 export type OnlinePace = 'aggressive' | 'default' | 'cautious';
 export interface OnlineStrategy {
   tactic: OnlineTactic;

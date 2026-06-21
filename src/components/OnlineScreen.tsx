@@ -53,7 +53,7 @@ const DEFAULT_STRATEGY: OnlineStrategy = {
   tactic: 'balanced', favoriteMap: 'mirage', banMap: 'nuke', pace: 'default', timeoutMap: 0, substituteAfterMap: false,
 };
 const DEFAULT_LINEUP: OnlineLineup = { captainId: '', reserveId: '' };
-const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 4];
+const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 4, 8];
 const VETO_ACTIONS = ['BAN', 'BAN', 'PICK', 'PICK', 'BAN', 'BAN'];
 
 interface SessionProfile {
@@ -115,7 +115,9 @@ const RULESET_OBJECTIVES: Record<UltimateRuleset, string> = {
 
 const MAP_GAP_UNITS = 2;
 const seriesTimelineUnits = (series: SeriesResult) => series.maps.reduce((total, map, index) => total + map.roundLog.length + (index < series.maps.length - 1 ? MAP_GAP_UNITS : 0), 0);
-const seriesDurationMs = (series: SeriesResult, speed: PlaybackSpeed) => seriesTimelineUnits(series) * 850 / speed;
+// 8x = "instantâneo": replay limitado a ~1,2s, cai direto no placar/stats (dinâmica de stream)
+const seriesDurationMs = (series: SeriesResult, speed: PlaybackSpeed) =>
+  speed >= 8 ? Math.min(1200, seriesTimelineUnits(series) * 850 / speed) : seriesTimelineUnits(series) * 850 / speed;
 
 function seriesLiveSnapshot(series: SeriesResult, elapsedMs: number, speed: PlaybackSpeed) {
   let units = Math.max(0, Math.floor(elapsedMs * speed / 850));
@@ -1596,7 +1598,7 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
               <div className={`ut-broadcast-status${stageIsLive ? ' live' : ''}`}>
                 <b>{stageIsLive ? (elapsedMs > 0 ? '● RODADA AO VIVO' : '◉ SINCRONIZANDO TRANSMISSÃO') : '○ PRÉ-RODADA'}</b>
                 <span>{stageIsLive ? 'Todas as telas seguem o mesmo relógio da sala.' : `${requiredVetoKeys.filter((key) => state.lobby.major_vetos?.[key]?.maps?.length).length}/${requiredVetoKeys.length} vetos concluídos`}</span>
-                {isHost && !stageIsLive && <div className="ut-prestage-speed"><span>VELOCIDADE</span>{PLAYBACK_SPEEDS.map((speed) => <button key={speed} className={`btn ghost small${playbackSpeed === speed ? ' active' : ''}`} onClick={() => void changePlaybackSpeed(speed)}>{speed}x</button>)}</div>}
+                {isHost && !stageIsLive && <div className="ut-prestage-speed"><span>VELOCIDADE</span>{PLAYBACK_SPEEDS.map((speed) => <button key={speed} className={`btn ghost small${playbackSpeed === speed ? ' active' : ''}`} onClick={() => void changePlaybackSpeed(speed)} title={speed === 8 ? 'Instantâneo: cai direto no placar' : undefined}>{speed === 8 ? '⚡' : `${speed}x`}</button>)}</div>}
               </div>
               <div className="ut-stage-ready">
                 {state.players.filter((player) => !player.spectator).map((p) => {
@@ -2360,8 +2362,9 @@ function MatchReplay({
                 key={speed}
                 className={`btn ghost small${playbackSpeed === speed ? ' active' : ''}`}
                 onClick={() => onPlaybackSpeedChange(speed)}
+                title={speed === 8 ? 'Instantâneo: cai direto no placar' : undefined}
               >
-                {speed}x
+                {speed === 8 ? '⚡' : `${speed}x`}
               </button>
             ))}
           </div>
