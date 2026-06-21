@@ -1,0 +1,27 @@
+// Cliente do ranking online (MMR/ladder). O ranking SALVO é da conta paga;
+// jogador grátis joga online normal, mas não persiste pontos.
+import { getToken } from './account';
+
+export interface RankRow { rank: number; nick: string; mmr: number; division: string; wins: number; losses: number; }
+export interface MyRank { mmr: number; wins: number; losses: number; peak: number; division: string; rank: number; }
+export interface ReportResult { delta: number; before: number; after: number; division: string; me: MyRank | null }
+
+async function post(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const r = await fetch('/api/ranking', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'erro');
+  return data as Record<string, unknown>;
+}
+
+export async function getLadder(): Promise<{ total: number; ladder: RankRow[] }> {
+  try { const d = await post({ action: 'ladder' }); return { total: Number(d.total ?? 0), ladder: (d.ladder as RankRow[]) ?? [] }; }
+  catch { return { total: 0, ladder: [] }; }
+}
+export async function fetchMyRank(nick?: string): Promise<MyRank | null> {
+  if (!getToken()) return null;
+  try { return (await post({ action: 'me', token: getToken(), nick })) as unknown as MyRank; } catch { return null; }
+}
+export async function reportResult(won: boolean, nick?: string): Promise<ReportResult | null> {
+  if (!getToken()) return null;
+  try { return (await post({ action: 'report', token: getToken(), won, nick })) as unknown as ReportResult; } catch { return null; }
+}

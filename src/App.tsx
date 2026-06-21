@@ -784,7 +784,7 @@ export default function App() {
         </>
       )}
 
-      {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} initialCode={onlineCodeFromPath()} />}
+      {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} initialCode={onlineCodeFromPath()} account={account} />}
 
       {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
       {screen === 'career' && (

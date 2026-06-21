@@ -25,6 +25,8 @@ import { makeRng } from '../engine/rng';
 import { pairingBestOf } from '../engine/swiss';
 import { useLang } from '../state/i18n';
 import { track } from '../state/track';
+import type { Account } from '../state/account';
+import { fetchMyRank, getLadder, reportResult, type MyRank, type RankRow } from '../state/ranking';
 import type { MapId, Pairing, Phase, Player, PlayerLine, SeriesResult, TeamSeason, Tournament, TournamentPool, TPlayer, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
 import { Scoreboard } from './Scoreboard';
@@ -45,6 +47,7 @@ type MatchCenterFilter = 'all' | 'players' | 'mine' | 'finished';
 interface Props {
   onBack: () => void;
   initialCode?: string; // código vindo da URL (/online/ABCDE): deep link / F5
+  account?: Account | null; // conta logada (ranking salvo é da conta paga)
 }
 
 const NICK_KEY = 'rtm-nick';
@@ -312,7 +315,7 @@ const ONLINE_LOCAL = {
   es: { title: 'ULTIMATE TEAM', lead: 'Arma tu cinco con estrellas actuales y leyendas de todas las épocas. Cada atleta es una carta con atributos propios; en el duelo, los equipos juegan una MD3 ronda por ronda.', current: 'ACTUAL', legend: 'LEYENDA', collection: 'Selección de cartas', duelLive: 'Duelo en vivo', demo: 'Probar ahora contra un rival', demoNote: 'Demo local: solo dura esta sesión y no necesita base de datos.', publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu Ultimate Team', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.', roomGone: 'La sala expiró o fue cerrada. Crea o entra en otra.', nextSeason: '🔁 Nueva disputa (nuevas cartas)', season: 'Temporada', seasonWait: 'Esperando que el host inicie la próxima disputa…' },
 };
 
-export function OnlineScreen({ onBack, initialCode }: Props) {
+export function OnlineScreen({ onBack, initialCode, account }: Props) {
   const { t: tr, lang } = useLang();
   const OL = ONLINE_LOCAL[(lang as 'pt' | 'en' | 'es')] ?? ONLINE_LOCAL.pt;
   const [nick, setNick] = useState(() => {
@@ -322,6 +325,11 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
       return '';
     }
   });
+  // ranking salvo (conta paga). myRank = posição/MMR do jogador; ladder = top.
+  const [myRank, setMyRank] = useState<MyRank | null>(null);
+  const [ladder, setLadder] = useState<RankRow[] | null>(null);
+  const paidRank = !!account?.paid;
+  useEffect(() => { if (paidRank) void fetchMyRank(nick || account?.nick).then(setMyRank); }, [paidRank, nick, account?.nick]);
   const [codeInput, setCodeInput] = useState('');
   const [joinAsSpectator, setJoinAsSpectator] = useState(false);
   const [mode, setMode] = useState<'duel' | 'party'>('duel');
@@ -786,6 +794,8 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
     } else return;
     const timer = window.setTimeout(() => {
       recordedSeasonsRef.current.add(key);
+      // ranking salvo (conta paga): manda o resultado e atualiza meu MMR
+      if (account?.paid) void reportResult(won, nick || account.nick).then((r) => { if (r?.me) setMyRank(r.me); });
       setSessionProfile((current) => {
         const next = {
           points: current.points + points,
@@ -888,6 +898,40 @@ export function OnlineScreen({ onBack, initialCode }: Props) {
               <strong>{sessionProfile.points} pts</strong>
               <small>{sessionProfile.wins} vitórias · {sessionProfile.losses} derrotas · {sessionProfile.titles} títulos</small>
               {sessionProfile.history.length > 0 && <div className="ut-season-history">{sessionProfile.history.slice(0, 3).map((entry) => <i key={`${entry.label}-${entry.result}`}>{entry.label}: {entry.result} (+{entry.points})</i>)}</div>}
+            </div>
+
+            {/* RANKING ONLINE SALVO (conta vitalícia) */}
+            <div style={{ margin: '14px 0', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--rtm-border-soft)', background: 'var(--rtm-bg-deep)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: (paidRank && myRank) || ladder ? 10 : 0 }}>
+                <span style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '13px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>🏆 Ranking online</span>
+                <span style={{ flex: 1 }} />
+                <button className="btn ghost small" onClick={async () => { if (ladder) { setLadder(null); } else { setLadder((await getLadder()).ladder); } }}>{ladder ? 'Fechar ladder' : 'Ver ladder'}</button>
+              </div>
+              {paidRank ? (
+                myRank ? (
+                  <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'baseline' }}>
+                    <span><b style={{ fontFamily: 'var(--font-cond)', fontSize: '22px', color: 'var(--rtm-gold)' }}>{myRank.mmr}</b> <span className="muted small">MMR</span></span>
+                    <span style={{ color: 'var(--rtm-text-strong)', fontWeight: 700 }}>{myRank.division}</span>
+                    <span className="muted small">#{myRank.rank} no mundo</span>
+                    <span className="muted small">{myRank.wins}V · {myRank.losses}D · pico {myRank.peak}</span>
+                  </div>
+                ) : <span className="muted small">Jogue uma partida online pra entrar no ranking.</span>
+              ) : (
+                <span className="muted small">O <b>ranking salvo</b> é da conta vitalícia. Jogue à vontade de graça; pra valer pontos no ladder, crie a conta na tela inicial.</span>
+              )}
+              {ladder && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {ladder.length === 0 && <span className="muted small">Ladder ainda vazio. Seja o primeiro.</span>}
+                  {ladder.slice(0, 10).map((r) => (
+                    <div key={r.rank} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 8px', borderRadius: '5px', background: r.nick === (nick || account?.nick) ? 'rgba(67,130,182,.14)' : (r.rank % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)') }}>
+                      <span style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, width: 22, color: r.rank <= 3 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{r.rank}</span>
+                      <b style={{ flex: 1, fontSize: '13px', color: 'var(--rtm-text-strong)' }}>{r.nick}</b>
+                      <span className="muted small">{r.division}</span>
+                      <b style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--rtm-gold)' }}>{r.mmr}</b>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="ut-event-picker">
