@@ -168,6 +168,45 @@ export function Home({
           <span className="hs-src">{t('home.curated')} HLTV · Liquipedia</span>
         </div>
 
+        {/* menu de modos do design system (Carreira / Draft / Online) */}
+        <div className="rtm-modemenu">
+          <button className="rtm-modecard" data-tone="gold" onClick={() => (hasBeta ? onCareer?.() : onDonate())}>
+            <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/nuke.jpg)' }} />
+            <span className="rtm-modecard-scrim" />
+            <span className="rtm-modecard-bar" />
+            <span className="rtm-modecard-body">
+              <span className="rtm-modecard-kicker">Destaque</span>
+              <span className="rtm-modecard-title">Carreira</span>
+              <span className="rtm-modecard-desc">Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.</span>
+              <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1 jogador · campanha</span><span className="rtm-modecard-go">{hasBeta ? 'Entrar' : 'Acessar'} →</span></span>
+            </span>
+          </button>
+          <button className="rtm-modecard" data-tone="blue" onClick={() => document.querySelector('.setup-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+            <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/mirage.jpg)' }} />
+            <span className="rtm-modecard-scrim" />
+            <span className="rtm-modecard-bar" />
+            <span className="rtm-modecard-body">
+              <span className="rtm-modecard-kicker">Partida rápida</span>
+              <span className="rtm-modecard-title">Draft</span>
+              <span className="rtm-modecard-desc">Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.</span>
+              <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1 jogador · ~15 min</span><span className="rtm-modecard-go">Montar →</span></span>
+            </span>
+          </button>
+          {onOnline && (
+            <button className="rtm-modecard" data-tone="green" onClick={onOnline}>
+              <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/dust2.jpg)' }} />
+              <span className="rtm-modecard-scrim" />
+              <span className="rtm-modecard-bar" />
+              <span className="rtm-modecard-body">
+                <span className="rtm-modecard-kicker">Competitivo</span>
+                <span className="rtm-modecard-title">Online</span>
+                <span className="rtm-modecard-desc">Snake draft 1v1 contra outro manager ao vivo. Monte, vete o mapa e jogue a série.</span>
+                <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1v1 · ao vivo</span><span className="rtm-modecard-go">Jogar →</span></span>
+              </span>
+            </button>
+          )}
+        </div>
+
         {savedCampaign && (
           <div style={{ margin: '18px auto 0', maxWidth: 640, display: 'flex', gap: 10 }}>
             <button className="btn gold big" style={{ flex: 1 }} onClick={onResume}>
@@ -185,13 +224,6 @@ export function Home({
           </div>
         )}
 
-        {onOnline && (
-          <div style={{ margin: '14px auto 0', maxWidth: 640 }}>
-            <button className="btn big online-cta" style={{ width: '100%' }} onClick={onOnline}>
-              {t('home.online')}
-            </button>
-          </div>
-        )}
 
         {/* MODO CARREIRA (beta fechado): destaque logo no topo da home */}
         <div className="career-feature">
