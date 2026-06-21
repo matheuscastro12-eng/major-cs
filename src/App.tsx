@@ -81,6 +81,10 @@ const PATH_SCREEN: Record<string, Screen> = Object.fromEntries(
   Object.entries(SCREEN_PATH).map(([screen, path]) => [path, screen as Screen]),
 ) as Record<string, Screen>;
 
+// Payment Link do Stripe (live) da conta vitalícia R$20 (prod_UkJkFxDJb3x9Rt /
+// price_1Tkp7NEHvCNyCbcUcYzHFZvK). Coleta e-mail e volta pra /jogar?conta=ok.
+const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/4gM3cv4zGa2Vfcx5jQ1RC01';
+
 const TRANSIENT_SCREENS = new Set<Screen>([
   'draft', 'hub', 'veto', 'match', 'final', 'stats', 'transfer', 'matchdetail',
 ]);
@@ -625,19 +629,15 @@ export default function App() {
     };
   }, [tournament]);
 
-  // checkout da conta vitalícia (R$20) via Stripe: cria a sessão no backend e
-  // redireciona pro checkout hospedado. Entitlement é confirmado no retorno.
+  // checkout da conta vitalícia (R$20) via Stripe Payment Link (live). Leva o
+  // e-mail pré-preenchido e o nick como client_reference_id (pro webhook casar a
+  // conta depois). O link volta pro jogo em /jogar?conta=ok ao concluir.
   const startCheckout = async (email: string, nick: string) => {
     track('checkout_start', {});
-    const r = await fetch('/api/checkout', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, nick, origin: window.location.origin }),
-    });
-    if (!r.ok) throw new Error('checkout');
-    const data = await r.json();
-    if (data?.url) window.location.href = data.url as string;
-    else throw new Error('no-url');
+    const u = new URL(STRIPE_PAYMENT_LINK);
+    if (email) u.searchParams.set('prefilled_email', email);
+    if (nick) u.searchParams.set('client_reference_id', nick);
+    window.location.href = u.toString();
   };
 
   if (screen === 'landing') {
