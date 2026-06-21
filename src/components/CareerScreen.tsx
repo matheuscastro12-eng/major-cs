@@ -3191,7 +3191,7 @@ export function CareerScreen({ onExit }: Props) {
         const avgOvr = bTeam?.players?.length ? Math.round(bTeam.players.reduce((a, p) => a + playerOvr(p), 0) / bTeam.players.length) : 0;
         const org0 = save.org?.colors?.[0] ?? '#1d2530';
         return (
-          <div className="career-banner" style={{ '--org0': org0 } as React.CSSProperties}>
+          <div className="career-hero-banner" style={{ '--org0': org0 } as React.CSSProperties}>
             <div className="cb-art" style={{ backgroundImage: 'url(/maps/nuke.jpg)' }} />
             <div className="cb-scrim" />
             <div className="cb-inner">
@@ -3466,7 +3466,7 @@ export function CareerScreen({ onExit }: Props) {
                 </div>
               </div>
             ) : (
-              <div className="career-banner">{ct('Rodada concluída. Avançando…')}</div>
+              <div className="career-note">{ct('Rodada concluída. Avançando…')}</div>
             )}
 
             {/* relatório do olheiro: leitura do próximo adversário (pré-jogo) */}
@@ -4273,38 +4273,8 @@ function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
 // potencial, fase, valor/salário/contrato e as STATS DE CARREIRA acumuladas
 // (rating/K-D/ADR/KAST/mapas). O jogador da carreira não edita nada aqui — os
 // atributos sobem sozinhos com a evolução; quem edita é o admin no CRM.
-// abreviação curta da função pro cartão
-const ROLE_ABBR: Record<Role, string> = { AWP: 'AWP', IGL: 'IGL', Rifler: 'RIF', Entry: 'ENT', Support: 'SUP', Lurker: 'LUR' };
-// raridade do cartão pelo OVR (estilo FUT): ícone > ouro > prata > bronze
-function cardTier(ovr: number): 'icon' | 'gold' | 'silver' | 'bronze' {
-  return ovr >= 90 ? 'icon' : ovr >= 86 ? 'gold' : ovr >= 80 ? 'silver' : 'bronze';
-}
-
-// cartão de jogador estilo FIFA Ultimate Team (o "rosto" do jogador)
-function PlayerCard({ player, ovr }: { player: Player; ovr: number }) {
-  const tier = cardTier(ovr);
-  const stats: [string, number][] = [
-    ['MIR', player.aim], ['AWP', player.awp], ['IGL', player.igl], ['CLT', player.clutch],
-  ];
-  return (
-    <div className={`fut-card fut-${tier}`}>
-      <div className="fut-top">
-        <div className="fut-rating">
-          <span className="fut-ovr">{ovr}</span>
-          <span className="fut-role">{ROLE_ABBR[player.role]}</span>
-          <Flag cc={player.country} />
-        </div>
-        <PlayerAvatar nick={player.nick} size={62} />
-      </div>
-      <div className="fut-name">{player.nick}</div>
-      <div className="fut-stats">
-        {stats.map(([k, v]) => (
-          <div key={k} className="fut-stat"><b>{v}</b><span>{k}</span></div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// O cartão de jogador (FUT) agora é o componente compartilhado FutCard (FutCard.tsx),
+// usado no hub, elenco e perfil — réplica do design system.
 
 function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, peakOvr, focused, onToggleFocus, onClose, youthAge }: {
   player: Player;
@@ -5920,7 +5890,7 @@ function MarketScreen({
           <button className="btn" onClick={onExit}>{embedded ? ct('← Voltar ao hub') : ct('← Sair')}</button>
         </div>
         <div className="panel-body">
-          <div className="career-banner muted small">
+          <div className="career-note muted small">
             Contrate <b>{ct('5 jogadores')}</b> {ct('e')} <b>1 coach</b> dentro do orçamento. Só
             jogadores dos elencos atuais (CS2). Clique num contratado para dispensar:
             contratação desta janela tem reembolso integral; jogador do seu elenco é

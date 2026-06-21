@@ -858,7 +858,7 @@ tr.team-row td {
 }
 
 /* banner cinematográfico do hub (redesign — design system Road to Major) */
-.career-banner {
+.career-hero-banner {
   position: relative;
   overflow: hidden;
   border-radius: var(--r);
@@ -1047,9 +1047,18 @@ tr.team-row td {
   font-size: 18px;
 }
 .pm-side { display: inline-flex; align-items: center; gap: 8px; }
-.pm-vs { color: var(--gold, #e6b34d); font-weight: 800; }
+.pm-vs { color: var(--gold, #e6b34d); font-weight: 800; font-family: var(--font-cond); font-size: 24px; letter-spacing: 2px; }
 .pm-opp { margin-top: 8px; }
 .pm-actions { display: flex; flex-direction: column; gap: 8px; }
+
+/* próximo jogo cinematográfico (redesign — fundo de mapa + borda dourada) */
+.play-match-card { border-color: var(--gold-soft); box-shadow: 0 0 0 1px rgba(216, 169, 67, 0.15), var(--elev-2); }
+.play-match-card::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: url(/maps/mirage.jpg) center/cover; opacity: 0.13;
+}
+.play-match-card > * { position: relative; z-index: 1; }
+.pm-label { color: var(--gold); }
 .career-side { display: flex; flex-direction: column; gap: 16px; }
 .side-card {
   background: linear-gradient(160deg, var(--panel-3), var(--panel-2));
@@ -1075,7 +1084,7 @@ tr.qualify-row { background: rgba(95, 208, 138, 0.08); }
 }
 
 /* modo carreira (beta fechado) */
-.career-banner {
+.career-banner, .career-note {
   padding: 8px 12px;
   border-radius: var(--radius);
   background: rgba(97, 168, 221, 0.08);
