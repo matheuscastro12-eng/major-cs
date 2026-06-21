@@ -754,6 +754,7 @@ function splitNews(ctx: {
   releases: string[]; offer: PoachOffer | null;
   risers: string[]; sliders: string[]; unhappy: string[];
   major?: { placement: number | string; champion: boolean } | null;
+  boardConfidence?: number;
 }): NewsItem[] {
   const s = ctx.split;
   const out: NewsItem[] = [];
@@ -776,6 +777,10 @@ function splitNews(ctx: {
   if (ctx.risers.length) add('rise', '📈', 'good', 'board', `${ct('Em ascensão:')} ${ctx.risers.join(', ')}`, `${ct('A comissão técnica destaca a evolução de')} ${ctx.risers.join(', ')} ${ct('no último split.')}`);
   if (ctx.sliders.length) add('slide', '📉', 'info', 'board', `${ct('Em queda:')} ${ctx.sliders.join(', ')}`, `${ctx.sliders.join(', ')} ${ctx.sliders.length === 1 ? 'perdeu' : ct('perderam')} ${ct('rendimento. Veteranos cobram mais minutos de treino.')}`);
   if (ctx.unhappy.length) add('mood', '😟', 'bad', 'board', `${ct('Vestiário:')} ${ctx.unhappy.join(', ')} insatisfeito${ctx.unhappy.length > 1 ? 's' : ''}`, `${ct('Moral baixa no elenco. Vitórias, renovação de contrato e títulos levantam o astral.')}`);
+  if ((ctx.boardConfidence ?? 100) <= 25) add('ultimatum', '🚨', 'bad', 'board', ct('Ultimato da diretoria'), ct('A confiança chegou ao limite. O próximo campeonato precisa mostrar evolução ou o cargo estará em risco.'));
+  else if ((ctx.boardConfidence ?? 100) <= 42) add('pressure', '📰', 'bad', 'board', ct('Pressão aumenta nos bastidores'), ct('Diretoria e torcida cobram uma resposta imediata depois dos resultados recentes.'));
+  if (!ctx.champion && !ctx.objMet) add('fans', '📣', 'bad', 'scene', ct('Torcida pede reação'), ct('As arquibancadas perderam a paciência. O próximo split começa com cobrança por desempenho e atitude.'));
+  else if (ctx.champion) add('fans', '📣', 'good', 'scene', ct('Festa com a torcida'), ct('O título levou a torcida às ruas e aumentou a expectativa pelo próximo campeonato.'));
   return out;
 }
 
@@ -1552,6 +1557,8 @@ export function CareerScreen({ onExit }: Props) {
       const load = updateMatchFatigue(current.fatigue, userTeam.players, series.maps.length, current.restingPlayers, current.morale, psychologist);
       const items: NewsItem[] = [];
       const highlight = bestSeriesMoment(series, teams, userIdx);
+      const userWon = series.winner === userIdx;
+      const mapGap = Math.abs(series.mapScore[0] - series.mapScore[1]);
       if (highlight) items.push({
         id: `${current.split}:hl:${highlight.nick}:${label}`.slice(0, 80), split: current.split,
         icon: '🎬', tone: 'good', cat: 'result', title: highlight.text, body: `${label} · vs ${opponent.tag}.`,
@@ -1561,6 +1568,16 @@ export function CareerScreen({ onExit }: Props) {
         icon: '⚔️', tone: 'info', cat: 'result',
         title: `${ct('Virou clássico:')} ${current.org?.tag ?? 'ORG'} x ${opponent.tag}`,
         body: ct('Os confrontos repetidos e equilibrados transformaram esta série numa rivalidade. O elenco entra mais focado nos próximos encontros.'),
+      });
+      if (userWon && userTeam.strength + 2 < opponent.strength) items.push({
+        id: `${current.split}:upset:${opponent.id}:${label}`.slice(0, 80), split: current.split,
+        icon: '📰', tone: 'good', cat: 'scene', title: ct('A zebra que abalou o circuito'),
+        body: `${current.org?.name ?? ct('Sua organização')} ${ct('derrubou um favorito e virou assunto entre analistas e torcedores.')}`,
+      });
+      else if (userWon && mapGap >= 2) items.push({
+        id: `${current.split}:dominant:${opponent.id}:${label}`.slice(0, 80), split: current.split,
+        icon: '📣', tone: 'good', cat: 'social', handle: '@arena_cs', title: ct('Vitória dominante'),
+        body: `${current.org?.tag ?? 'ORG'} ${ct('controlou a série do início ao fim. A torcida já pede voo mais alto.')}`,
       });
       if (load.newBurnouts.length) items.push({
         id: `${current.split}:burnout:${load.newBurnouts.join('-')}`.slice(0, 80), split: current.split,
@@ -2763,13 +2780,14 @@ export function CareerScreen({ onExit }: Props) {
                 const peakOvr = { ...(save.peakOvr ?? {}) };
                 for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                 const items = splitNews({
-                  split: save.split, org: save.org?.name ?? 'Sua org', champion: false,
+                  split: save.split, org: save.org?.name ?? 'Sua org', champion: mr.champion,
                   circuit: save.circuit?.name ?? ct('circuito'), objMet: true, objText: majObj?.text,
                   tierChange: null, releases: [], offer: null,
                   risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                   sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
                   unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                   major: { placement: mr.placement, champion: mr.champion },
+                  boardConfidence: majBoard,
                 });
                 const next = {
                   ...save,
@@ -3081,6 +3099,7 @@ export function CareerScreen({ onExit }: Props) {
                     risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                     sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
                     unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
+                    boardConfidence: newBoard,
                   });
                   const next = {
                     ...save,

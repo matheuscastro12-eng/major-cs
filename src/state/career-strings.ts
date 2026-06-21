@@ -2,6 +2,18 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Atributos': { en: 'Attributes', es: 'Atributos' },
+  'A confiança chegou ao limite. O próximo campeonato precisa mostrar evolução ou o cargo estará em risco.': { en: 'Confidence has hit its limit. The next tournament must show progress or the job will be at risk.', es: 'La confianza llegó al límite. El próximo torneo debe mostrar progreso o el puesto estará en riesgo.' },
+  'A zebra que abalou o circuito': { en: 'The upset that shook the circuit', es: 'La sorpresa que sacudió el circuito' },
+  'As arquibancadas perderam a paciência. O próximo split começa com cobrança por desempenho e atitude.': { en: 'The stands have lost patience. The next split begins with demands for performance and attitude.', es: 'Las gradas perdieron la paciencia. El próximo split comienza con exigencias de rendimiento y actitud.' },
+  'controlou a série do início ao fim. A torcida já pede voo mais alto.': { en: 'controlled the series from start to finish. Fans are already asking for bigger things.', es: 'controló la serie de principio a fin. La afición ya pide metas más altas.' },
+  'derrubou um favorito e virou assunto entre analistas e torcedores.': { en: 'took down a favorite and became the talk of analysts and fans.', es: 'derribó a un favorito y se convirtió en tema entre analistas y aficionados.' },
+  'Diretoria e torcida cobram uma resposta imediata depois dos resultados recentes.': { en: 'The board and fans demand an immediate response after recent results.', es: 'La directiva y la afición exigen una respuesta inmediata tras los últimos resultados.' },
+  'Festa com a torcida': { en: 'Celebration with the fans', es: 'Fiesta con la afición' },
+  'O título levou a torcida às ruas e aumentou a expectativa pelo próximo campeonato.': { en: 'The title brought fans into the streets and raised expectations for the next tournament.', es: 'El título llevó a la afición a las calles y aumentó las expectativas para el próximo torneo.' },
+  'Pressão aumenta nos bastidores': { en: 'Pressure rises behind the scenes', es: 'Aumenta la presión interna' },
+  'Torcida pede reação': { en: 'Fans demand a response', es: 'La afición pide una reacción' },
+  'Ultimato da diretoria': { en: 'Board ultimatum', es: 'Ultimátum de la directiva' },
+  'Vitória dominante': { en: 'Dominant victory', es: 'Victoria dominante' },
   'Ambicioso': { en: 'Ambitious', es: 'Ambicioso' },
   'Cabeça-quente': { en: 'Hot-headed', es: 'Temperamental' },
   'Líder nato': { en: 'Natural leader', es: 'Líder nato' },
