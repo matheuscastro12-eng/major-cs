@@ -119,9 +119,9 @@ export function Home({
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState('');
   const [codeErr, setCodeErr] = useState('');
-  const [hasBeta, setHasBeta] = useState(() => {
-    try { return localStorage.getItem(BETA_KEY) === '1'; } catch { return false; }
-  });
+  // carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking).
+  // mantém o estado/código de beta por compatibilidade, mas o acesso já nasce livre.
+  const [hasBeta, setHasBeta] = useState(true);
 
   const submitCode = async () => {
     setCodeErr('');

@@ -11,7 +11,6 @@ import { Onboarding, shouldOnboard } from './components/Onboarding';
 import { Loader } from './components/ui';
 import { AchievementsModal, AchievementToast } from './components/Achievements';
 import { recordGameEnd, type AchDef } from './state/achievements';
-import { CareerGate } from './components/CareerGate';
 
 // telas pesadas e/ou pouco usadas: carregadas sob demanda (code-splitting) pra
 // deixar o carregamento inicial bem mais leve.
@@ -759,10 +758,9 @@ export default function App() {
 
       {screen === 'online' && <OnlineScreen onBack={() => setScreen('home')} initialCode={onlineCodeFromPath()} />}
 
+      {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
       {screen === 'career' && (
-        <CareerGate onExit={() => setScreen('home')}>
-          <CareerScreen dataset={dataset} onExit={() => setScreen('home')} />
-        </CareerGate>
+        <CareerScreen dataset={dataset} onExit={() => setScreen('home')} />
       )}
       {screen === 'careerCRM' && (
         <AdminGate>
