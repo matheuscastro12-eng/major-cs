@@ -18,6 +18,7 @@
   },
   "include": [
     "api/account.ts",
+    "api/admin-accounts.ts",
     "api/stripe-webhook.ts",
     "server/payments.ts",
     "server/payments.test.ts"

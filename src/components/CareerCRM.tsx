@@ -6,6 +6,7 @@ import type { Player, Role } from '../types';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, pushBo3Edits, saveBo3Edits, type Bo3Edits, type PlayerEdit } from '../state/bo3-edits';
 import { adminPassword } from './AdminGate';
+import { AdminNav } from './AdminNav';
 import { playerOvr } from '../engine/ratings';
 import { logoForTeam } from '../data/media';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -100,6 +101,7 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
           <button className="btn" onClick={() => { if (!dirty || confirm('Há alterações não salvas. Sair mesmo assim?')) onExit(); }}>← Sair</button>
         </div>
         <div className="panel-body">
+          <AdminNav current="/admin/carreira" />
           <p className="muted small" style={{ marginTop: 0 }}>
             Edite <b>OVR, função e cada stat</b> (mira/AWP/IGL/clutch/consist.) dos jogadores, e o nome/tag/entrosamento dos times.
             Ao <b>Salvar</b>, as mudanças vão pro servidor e valem <b>pra todos os usuários</b> do modo carreira (sem cache local sobrepondo).

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { AdminNav } from './AdminNav';
 import { logoForTeam } from '../data/media';
 import { playerOvr } from '../engine/ratings';
 import { adminPassword, lockAdmin } from './AdminGate';
@@ -213,6 +214,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
           </button>
         </div>
         <div className="panel-body">
+          <AdminNav current="/admin" />
           {saveMsg && (
             <div className={`crm-save-msg${saveMsg.startsWith('✅') ? ' ok' : ' err'}`}>{saveMsg}</div>
           )}

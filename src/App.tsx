@@ -17,7 +17,7 @@ import { recordGameEnd, type AchDef } from './state/achievements';
 const Admin = lazy(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
 const CareerScreen = lazy(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
 const CareerCRM = lazy(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
-const BetaAccessCRM = lazy(() => import('./components/BetaAccessCRM').then((m) => ({ default: m.BetaAccessCRM })));
+const AccountsCRM = lazy(() => import('./components/AccountsCRM').then((m) => ({ default: m.AccountsCRM })));
 const FinalScreen = lazy(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
 const HallScreen = lazy(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazy(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
@@ -859,7 +859,7 @@ export default function App() {
       )}
       {screen === 'careerAccess' && (
         <AdminGate>
-          <BetaAccessCRM onExit={() => setScreen('home')} />
+          <AccountsCRM onExit={() => setScreen('home')} />
         </AdminGate>
       )}
 
