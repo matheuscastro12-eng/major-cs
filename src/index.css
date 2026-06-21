@@ -6075,4 +6075,12 @@ body.has-ad-footer { padding-bottom: 112px; }
 .career-major-pre > b { display: block; margin-bottom: 4px; color: var(--rtm-text-strong); }
 .career-rivalry-badge { width: fit-content; margin: -4px auto 12px; padding: 6px 10px; border: 1px solid rgba(226, 90, 90, .45); border-radius: 999px; background: rgba(226, 90, 90, .1); color: #ffb1b1; font-size: 10px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
 .career-rivalry-badge.historic { border-color: var(--rtm-gold-soft); color: var(--rtm-gold); box-shadow: 0 0 16px rgba(216, 169, 67, .12); }
+.cs-fatigue { min-width: 52px; color: var(--rtm-dim); font-size: 11px; font-weight: 700; }
+.cs-fatigue.tired { color: var(--rtm-gold); }
+.cs-fatigue.burnout { color: var(--rtm-red-bright); }
+.cs-rest { width: 29px; height: 29px; border: 1px solid var(--rtm-border); border-radius: 6px; background: var(--rtm-panel-2); cursor: pointer; }
+.cs-rest.on { border-color: var(--rtm-gold-soft); background: rgba(216, 169, 67, .13); }
+.cs-rest:disabled { opacity: .35; cursor: not-allowed; }
+.pp-tag.fatigue-tired { color: var(--rtm-gold); border-color: var(--rtm-gold-soft); }
+.pp-tag.fatigue-burnout { color: var(--rtm-red-bright); border-color: rgba(226, 90, 90, .4); }
 @media (max-width: 640px) { .career-major-path { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

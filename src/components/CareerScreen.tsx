@@ -19,6 +19,7 @@ import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore, RIVALRY_THRESHOLD } from '../engine/career/rivalries';
+import { applyFatigueForm, fatigueBand, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -585,6 +586,8 @@ interface CareerSave {
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
   scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
   rivalries?: Record<string, number>; // intensidade por adversario; 4+ vira classico e gera foco extra
+  fatigue?: Record<string, number>; // carga acumulada 0-100 por jogador
+  restingPlayers?: string[]; // ate dois jogadores em carga reduzida na proxima serie
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -672,6 +675,8 @@ const emptySave = (): CareerSave => ({
   youthAge: {},
   scenario: null,
   rivalries: {},
+  fatigue: {},
+  restingPlayers: [],
 });
 
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
@@ -1527,8 +1532,8 @@ export function CareerScreen({ onExit }: Props) {
     return applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined');
   };
   const prepareTeams = (rawA: TTeam, rawB: TTeam): [TTeam, TTeam] => {
-    let a = syncUser(rawA);
-    let b = syncUser(rawB);
+    let a = applyFatigueForm(syncUser(rawA), save.fatigue, save.restingPlayers);
+    let b = applyFatigueForm(syncUser(rawB), save.fatigue, save.restingPlayers);
     if (a.isUser) a = applyRivalryFocus(a, rivalryScore(save.rivalries, b.id));
     if (b.isUser) b = applyRivalryFocus(b, rivalryScore(save.rivalries, a.id));
     return [a, b];
@@ -1537,6 +1542,8 @@ export function CareerScreen({ onExit }: Props) {
     const opponent = teams[userIdx === 0 ? 1 : 0];
     setSave((current) => {
       const rivalry = recordRivalry(current.rivalries, opponent.id, series);
+      const userTeam = teams[userIdx];
+      const load = updateMatchFatigue(current.fatigue, userTeam.players, series.maps.length, current.restingPlayers, current.morale);
       const items: NewsItem[] = [];
       const highlight = bestSeriesMoment(series, teams, userIdx);
       if (highlight) items.push({
@@ -1549,7 +1556,13 @@ export function CareerScreen({ onExit }: Props) {
         title: `${ct('Virou clássico:')} ${current.org?.tag ?? 'ORG'} x ${opponent.tag}`,
         body: ct('Os confrontos repetidos e equilibrados transformaram esta série numa rivalidade. O elenco entra mais focado nos próximos encontros.'),
       });
-      const next = { ...current, rivalries: rivalry.rivalries, ...pushNews(current, items) };
+      if (load.newBurnouts.length) items.push({
+        id: `${current.split}:burnout:${load.newBurnouts.join('-')}`.slice(0, 80), split: current.split,
+        icon: '🔋', tone: 'bad', cat: 'board',
+        title: `${ct('Risco de burnout:')} ${load.newBurnouts.join(', ')}`,
+        body: ct('A sequência de partidas pesou. Use carga reduzida ou invista em psicologia para recuperar o elenco.'),
+      });
+      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], ...pushNews(current, items) };
       persist(next);
       return next;
     });
@@ -2774,6 +2787,8 @@ export function CareerScreen({ onExit }: Props) {
                   objective: null,
                   renewals,
                   morale,
+                  fatigue: recoverFatigue(save.fatigue, 18),
+                  restingPlayers: [],
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
@@ -3077,6 +3092,8 @@ export function CareerScreen({ onExit }: Props) {
                     pendingOffer: offer,
                     renewals,
                     morale,
+                    fatigue: recoverFatigue(save.fatigue, 18),
+                    restingPlayers: [],
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
@@ -3852,6 +3869,8 @@ export function CareerScreen({ onExit }: Props) {
                   const grew = save.evo?.[p.id] ?? 0;
                   const mor = save.morale?.[p.id] ?? MORALE_DEFAULT;
                   const mi = moraleInfo(mor);
+                  const fatigue = save.fatigue?.[p.id] ?? 0;
+                  const reduced = save.restingPlayers?.includes(p.id) ?? false;
                   return (
                     <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
                       <button className="cs-open" onClick={() => setProfilePlayer(p)} title={ct('Ver perfil do jogador')}>
@@ -3861,6 +3880,7 @@ export function CareerScreen({ onExit }: Props) {
                         </span>
                       </button>
                       <span className={`cs-morale ${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${mor}/100)`}>{mi.icon} {mor}</span>
+                      <span className={`cs-fatigue ${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}>🔋 {fatigue}</span>
                       <select className={`role-select ${p.role}`} value={p.role}
                         onChange={(e) => setRole(p.id, e.target.value as Role)}
                         title={ct('Definir a função deste jogador')}>
@@ -3869,6 +3889,11 @@ export function CareerScreen({ onExit }: Props) {
                       <button className={`cs-train${focused ? ' on' : ''}`} onClick={() => setFocus(p.id)}
                         title={focused ? 'Em foco de treino neste split' : 'Pôr em foco de treino (desenvolve mais rápido)'}>
                         🎯
+                      </button>
+                      <button className={`cs-rest${reduced ? ' on' : ''}`} disabled={!reduced && (save.restingPlayers?.length ?? 0) >= 2}
+                        onClick={() => update({ restingPlayers: reduced ? (save.restingPlayers ?? []).filter((id) => id !== p.id) : [...(save.restingPlayers ?? []), p.id] })}
+                        title={reduced ? ct('Remover carga reduzida') : ct('Aplicar carga reduzida na próxima série')}>
+                        🛌
                       </button>
                       <span className="cs-stat">{st ? `rat ${st.rating.toFixed(2)}` : '-'}</span>
                       <span className="cs-ovr">{playerOvr(p)}</span>
@@ -3879,7 +3904,7 @@ export function CareerScreen({ onExit }: Props) {
               <p className="muted small" style={{ marginTop: 8 }}>
                 Clique no jogador pra ver o <b>perfil completo</b>. Defina a <b>{ct('função')}</b> (no CS são flexíveis: tenha 1 AWP e 1 IGL) e o
                 <b> {ct('🎯 foco de treino')}</b> do split (esse jogador evolui mais rápido). Você não edita os atributos: eles
-                <b> sobem sozinhos</b> conforme o jogador se desenvolve e joga.
+                <b> sobem sozinhos</b> conforme o jogador se desenvolve e joga. A <b>{ct('carga reduzida')}</b> recupera fadiga, mas tira um pouco de ritmo na próxima série.
               </p>
             </Panel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -4210,9 +4235,12 @@ export function CareerScreen({ onExit }: Props) {
             contractUntil={save.contracts?.[p.id]}
             evoTotal={save.evo?.[p.id] ?? 0}
             morale={save.morale?.[p.id] ?? MORALE_DEFAULT}
+            fatigue={save.fatigue?.[p.id] ?? 0}
+            reducedLoad={save.restingPlayers?.includes(p.id) ?? false}
             peakOvr={Math.max(save.peakOvr?.[p.id] ?? 0, playerOvr(p))}
             focused={save.trainingFocus === p.id}
             onToggleFocus={() => update({ trainingFocus: save.trainingFocus === p.id ? null : p.id })}
+            onToggleRest={() => update({ restingPlayers: save.restingPlayers?.includes(p.id) ? (save.restingPlayers ?? []).filter((id) => id !== p.id) : (save.restingPlayers?.length ?? 0) < 2 ? [...(save.restingPlayers ?? []), p.id] : save.restingPlayers })}
             onClose={() => setProfilePlayer(null)}
             youthAge={save.youthAge}
           />
@@ -4260,7 +4288,7 @@ function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
 // O cartão de jogador (FUT) agora é o componente compartilhado FutCard (FutCard.tsx),
 // usado no hub, elenco e perfil — réplica do design system.
 
-function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, peakOvr, focused, onToggleFocus, onClose, youthAge }: {
+function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, fatigue, peakOvr, focused, reducedLoad, onToggleFocus, onToggleRest, onClose, youthAge }: {
   player: Player;
   split: number;
   career: ReturnType<typeof deriveCareer>;
@@ -4268,9 +4296,12 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
   contractUntil?: number;
   evoTotal: number;
   morale: number;
+  fatigue: number;
   peakOvr: number;
   focused: boolean;
+  reducedLoad: boolean;
   onToggleFocus: () => void;
+  onToggleRest: () => void;
   onClose: () => void;
   youthAge?: Record<string, number>;
 }) {
@@ -4291,6 +4322,9 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
             <button className={`btn small${focused ? ' gold' : ''}`} style={{ width: '100%' }} onClick={onToggleFocus}>
               {focused ? '🎯 Tirar do treino' : '🎯 Pôr em treino'}
             </button>
+            <button className={`btn small${reducedLoad ? ' gold' : ''}`} style={{ width: '100%' }} onClick={onToggleRest}>
+              {reducedLoad ? ct('🛌 Carga reduzida ativa') : ct('🛌 Dar carga reduzida')}
+            </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {/* banner de identidade */}
@@ -4308,6 +4342,7 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
                   <span className="pp-tag" title={ct('Maior OVR já alcançado')}>★ Pico {peakOvr}</span>
                   <span className="pp-tag">{PHASE_LABEL[phase]}</span>
                   <span className={`pp-tag mood-${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${morale}/100)`}>{mi.icon} {mi.label}</span>
+                  <span className={`pp-tag fatigue-${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}>🔋 {ct('Fadiga')} {fatigue}</span>
                   {focused && <span className="pp-tag focus">{ct('🎯 em treino')}</span>}
                 </div>
               </div>
