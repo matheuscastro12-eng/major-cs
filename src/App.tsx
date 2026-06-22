@@ -33,6 +33,7 @@ import { createTournament, getTeam, pairingBestOf, phaseLabel, placementCode, re
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
 import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
+import { setCareerLang } from './state/career-i18n';
 import { LangSwitcher } from './components/social';
 import { Landing, AccountModal } from './components/Landing';
 import { LegalPage } from './components/Legal';
@@ -227,7 +228,8 @@ export default function App() {
   const routeReadyRef = useRef(false);
   const popNavigationRef = useRef(false);
   const rng = useCallback(() => rngRef.current(), []);
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  setCareerLang(lang); // idioma global: ct() traduz em QUALQUER tela (não só na carreira)
 
   // jogadores só veem times aprovados (pending fica oculto até liberar no CRM)
   const eligible = useMemo(() => dataset.filter((t) => t.players.length >= 5 && !t.pending), [dataset]);
