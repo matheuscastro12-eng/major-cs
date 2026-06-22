@@ -946,6 +946,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false 
               <span>{OL.demoNote}</span>
             </div>
 
+            {!casualOnly && (
             <div className="ut-session-profile">
               <span>DIVISÃO DA SESSÃO</span>
               <b>{sessionDivision(sessionProfile.points)}</b>
@@ -953,8 +954,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false 
               <small>{sessionProfile.wins} vitórias · {sessionProfile.losses} derrotas · {sessionProfile.titles} títulos</small>
               {sessionProfile.history.length > 0 && <div className="ut-season-history">{sessionProfile.history.slice(0, 3).map((entry) => <i key={`${entry.label}-${entry.result}`}>{entry.label}: {entry.result} (+{entry.points})</i>)}</div>}
             </div>
+            )}
 
             {/* RANKING ONLINE SALVO (conta vitalícia) */}
+            {!casualOnly && (
             <div style={{ margin: '14px 0', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--rtm-border-soft)', background: 'var(--rtm-bg-deep)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: (paidRank && myRank) || ladder ? 10 : 0 }}>
                 <span style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '13px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>🏆 Ranking online</span>
@@ -987,6 +990,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false 
                 </div>
               )}
             </div>
+            )}
 
             <div className="ut-event-picker">
               <div className="muted small section-label">REGRA DO EVENTO</div>
