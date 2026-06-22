@@ -3503,6 +3503,12 @@ export function CareerScreen({ onExit }: Props) {
   const top20 = top20Memo;
   const careerTop20 = careerTop20Memo;
 
+  // recomeçar a carreira do zero (disponível pra TODOS, inclusive grátis)
+  const resetCareer = () => {
+    if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
+    const fresh = emptySave(); persist(fresh); setSave(fresh); setOrgChoice('select'); setStage('found');
+  };
+
   return (
     <div className="fade-in career-hub">
       {/* Header do design (Shell): top nav sticky + ticker de partidas */}
@@ -3512,6 +3518,7 @@ export function CareerScreen({ onExit }: Props) {
             <span className="rtm-hdr-logo-mark" />ROAD TO <span>MAJOR</span>
           </span>
           <button className="rtm-modes" onClick={onExit}>⇤ {ct('Modos')}</button>
+          <button className="rtm-modes" onClick={resetCareer} title={ct('Apagar tudo e recomeçar do zero')}>↺ {ct('Recomeçar')}</button>
           <nav className="rtm-hdr-nav">
             {HUB_GROUPS.map((g) => (
               <button key={g.id} className={`rtm-hdr-tab${activeGroup.id === g.id ? ' on' : ''}${g.tabs.some(tabAlert) ? ' alert' : ''}`}
@@ -3662,10 +3669,7 @@ export function CareerScreen({ onExit }: Props) {
             <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${orgColor}22 0%, rgba(13,17,22,.9) 55%)` }} />
             <div className="hub-banner-ctrl" style={{ position: 'absolute', top: '10px', right: '12px', display: 'flex', gap: '6px', zIndex: 2 }}>
               <button className="btn ghost small" title={ct('Rever o tutorial')} onClick={() => setShowOnb(true)}>❔</button>
-              <button className="btn ghost small" title={ct('Apagar tudo e recomeçar do zero')} onClick={() => {
-                if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
-                const fresh = emptySave(); persist(fresh); setSave(fresh); setOrgChoice('select'); setStage('found');
-              }}>↺</button>
+              <button className="btn ghost small" title={ct('Apagar tudo e recomeçar do zero')} onClick={resetCareer}>↺ {ct('Recomeçar')}</button>
               <button className="btn ghost small" onClick={onExit}>{ct('← Sair')}</button>
             </div>
             <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>

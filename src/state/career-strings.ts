@@ -1433,4 +1433,6 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "1v1 · ranqueada": { en: "1v1 · ranked", es: "1v1 · clasificatoria" },
   "Logado como": { en: "Signed in as", es: "Conectado como" },
   "times · 5 eras · scoreboards estilo HLTV": { en: "teams · 5 eras · HLTV-style scoreboards", es: "equipos · 5 eras · scoreboards estilo HLTV" },
+
+  "Recomeçar": { en: "Restart", es: "Reiniciar" },
 };
