@@ -7,8 +7,6 @@ import { BackBar } from './bits';
 import { QuickDraft } from './QuickDraft';
 import { resolve, type OnlineStats, type PoolPlayer } from './onlineData';
 
-const OPP_CC = ['br', 'us', 'se', 'dk', 'ua', 'fr', 'de', 'pt', 'no', 'fi'];
-
 type Entry = { idx: number; opp: string; cc: string; win: boolean; score: string; ovr: number };
 
 export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
@@ -24,9 +22,14 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
   const [log, setLog] = useState<Entry[]>([]);
   const [rolling, setRolling] = useState(false);
 
-  const oppOvr = (s: number) => 78 + s * 2.2;
-  const oppName = (s: number) => `Adversário ${s + 1}`;
-  const oppCc = (s: number) => OPP_CC[s % OPP_CC.length];
+  // cada rival é um ESQUADRÃO DE IA montado com lendas do pool; a força sobe com a
+  // sequência (a IA escolhe um time mais forte a cada vitória sua).
+  const aiOpp = (s: number) => {
+    const target = 78 + s * 2.2;
+    const five = [...pool].sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5).sort((a, b) => b.ovr - a.ovr);
+    const ovr = five.length ? Math.round(five.reduce((a, p) => a + p.ovr, 0) / five.length) : Math.round(target);
+    return { name: `Esquadrão IA #${s + 1}`, ovr, star: five[0]?.nick ?? 'IA', cc: five[0]?.country ?? 'br' };
+  };
 
   function onDrafted(_picked: PoolPlayer[], avg: number) { setMyOvr(avg); setStreak(0); setLog([]); setPhase('run'); }
 
@@ -35,8 +38,9 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
     setRolling(true);
     const cur = streak;
     window.setTimeout(() => {
-      const res = resolve(myOvr, oppOvr(cur));
-      setLog((l) => [{ idx: cur + 1, opp: oppName(cur), cc: oppCc(cur), win: res.win, score: res.score, ovr: Math.round(oppOvr(cur)) }, ...l]);
+      const o = aiOpp(cur);
+      const res = resolve(myOvr, o.ovr);
+      setLog((l) => [{ idx: cur + 1, opp: o.name, cc: o.cc, win: res.win, score: res.score, ovr: o.ovr }, ...l]);
       setRolling(false);
       if (res.win) setStreak(cur + 1);
       else { setStats((s) => ({ ...s, bestStreak: Math.max(s.bestStreak, cur) })); setPhase('over'); }
@@ -68,6 +72,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
   if (phase === 'draft') return <QuickDraft pool={pool} count={5} title="Monte seu time do Gauntlet" subtitle="Escolha 5. Esse time encara a fila inteira, sem substituições." accent="var(--rtm-green-bright)" onBack={() => setPhase('intro')} onDone={onDrafted} />;
 
   if (phase === 'run') {
+    const o = aiOpp(streak);
     return (
       <div style={{ maxWidth: '620px', margin: '0 auto' }}>
         <BackBar onHub={onHub} onExit={onExit} />
@@ -77,12 +82,16 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '16px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', marginBottom: '16px' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>Próximo rival</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}><Flag cc={oppCc(streak)} /><b style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', color: 'var(--rtm-text-strong)' }}>{oppName(streak)}</b></div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>Próximo rival (IA)</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+              <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: '#06121d', background: 'var(--rtm-green-bright)', padding: '1px 6px', borderRadius: '4px' }}>IA</span>
+              <b style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', color: 'var(--rtm-text-strong)' }}>{o.name}</b>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}><Flag cc={o.cc} /> puxado por {o.star}</div>
           </div>
           <div style={{ textAlign: 'center', paddingLeft: '16px', borderLeft: '1px solid var(--rtm-border-soft)' }}>
             <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>Força</div>
-            <div style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', fontWeight: 800, color: oppOvr(streak) > myOvr ? 'var(--rtm-red-bright)' : 'var(--rtm-text-strong)' }}>{Math.round(oppOvr(streak))}</div>
+            <div style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', fontWeight: 800, color: o.ovr > myOvr ? 'var(--rtm-red-bright)' : 'var(--rtm-text-strong)' }}>{o.ovr}</div>
           </div>
         </div>
         <Button variant="primary" size="big" style={{ width: '100%' }} disabled={rolling} onClick={fight}>{rolling ? 'Jogando…' : 'Enfrentar rival'}</Button>
