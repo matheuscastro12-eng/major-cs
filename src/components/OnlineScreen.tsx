@@ -51,6 +51,7 @@ interface Props {
   account?: Account | null; // conta logada (ranking salvo é da conta paga)
   casualOnly?: boolean; // modo casual: esconde ranqueada/MMR (salas com amigos)
   preset?: 'duel' | 'party'; // modo pré-selecionado ao abrir (1v1=duel, Major=party)
+  forceRanked?: boolean; // entrada ranqueada (Ranked 1v1): salas já nascem valendo MMR
 }
 
 const NICK_KEY = 'rtm-nick';
@@ -318,7 +319,7 @@ const ONLINE_LOCAL = {
   es: { title: 'ULTIMATE TEAM', lead: 'Arma tu cinco con estrellas actuales y leyendas de todas las épocas. Cada atleta es una carta con atributos propios; en el duelo, los equipos juegan una MD3 ronda por ronda.', current: 'ACTUAL', legend: 'LEYENDA', collection: 'Selección de cartas', duelLive: 'Duelo en vivo', demo: 'Probar ahora contra un rival', demoNote: 'Demo local: solo dura esta sesión y no necesita base de datos.', publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu Ultimate Team', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.', roomGone: 'La sala expiró o fue cerrada. Crea o entra en otra.', nextSeason: '🔁 Nueva disputa (nuevas cartas)', season: 'Temporada', seasonWait: 'Esperando que el host inicie la próxima disputa…' },
 };
 
-export function OnlineScreen({ onBack, initialCode, account, casualOnly = false, preset }: Props) {
+export function OnlineScreen({ onBack, initialCode, account, casualOnly = false, preset, forceRanked = false }: Props) {
   const { t: tr, lang } = useLang();
   const OL = ONLINE_LOCAL[(lang as 'pt' | 'en' | 'es')] ?? ONLINE_LOCAL.pt;
   const [nick, setNick] = useState(() => {
@@ -340,7 +341,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   const [pool, setPool] = useState<TournamentPool>('world');
   const [ruleset, setRuleset] = useState<UltimateRuleset>('open');
   const [isPublic, setIsPublic] = useState(true); // sala aberta a qualquer um por padrão
-  const [ranked, setRanked] = useState(false); // sala ranqueada (conta MMR)
+  const [ranked, setRanked] = useState(forceRanked); // sala ranqueada (conta MMR)
   const [draftRollouts, setDraftRollouts] = useState(2);
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
   const [code, setCode] = useState('');
