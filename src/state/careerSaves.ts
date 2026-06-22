@@ -1,7 +1,7 @@
 // Gerência de saves da carreira. Conta vitalícia (apoiador) pode ter até 5 saves
 // e apagar qualquer um quando quiser. O grátis usa só o slot 1 (save local único).
 import { getToken } from './account';
-import { pushCloud } from './cloud';
+import { pushCloud, pullCloud, cloudEnabled } from './cloud';
 
 export const CAREER_SLOTS = 5;
 const BASE = 'rtm-career-v1';      // slot 1 = chave legada (preserva o save de quem já jogava)
@@ -22,6 +22,7 @@ export function setActiveSlot(n: number): void {
 export interface SlotSummary {
   slot: number;
   exists: boolean;
+  fromCloud?: boolean; // existe só na nuvem (ainda não baixado neste aparelho)
   org?: string;
   tag?: string;
   colors?: [string, string];
@@ -32,10 +33,8 @@ export interface SlotSummary {
   budget?: number;
 }
 
-export function readSlot(n: number): SlotSummary {
-  let raw: string | null = null;
-  try { raw = localStorage.getItem(slotKey(n)); } catch { return { slot: n, exists: false }; }
-  if (!raw) return { slot: n, exists: false };
+// extrai um resumo do JSON cru de um save de carreira
+function summaryFromRaw(n: number, raw: string): SlotSummary {
   try {
     const s = JSON.parse(raw) as {
       org?: { name?: string; tag?: string; colors?: [string, string]; logo?: string } | null;
@@ -51,8 +50,35 @@ export function readSlot(n: number): SlotSummary {
   }
 }
 
+export function readSlot(n: number): SlotSummary {
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(slotKey(n)); } catch { return { slot: n, exists: false }; }
+  if (!raw) return { slot: n, exists: false };
+  return summaryFromRaw(n, raw);
+}
+
 export function listSlots(): SlotSummary[] {
   return Array.from({ length: CAREER_SLOTS }, (_, i) => readSlot(i + 1));
+}
+
+// resumo do save na nuvem de um slot (null se vazio/tombstone ou sem conta)
+async function readCloudSlot(n: number): Promise<SlotSummary | null> {
+  if (!cloudEnabled()) return null;
+  const c = await pullCloud(cloudSlot(n));
+  if (!c?.data) return null; // '' = tombstone (apagado) → conta como vazio
+  return { ...summaryFromRaw(n, c.data), fromCloud: true };
+}
+
+// lista os slots mesclando local + nuvem: um save que só existe na nuvem
+// (ex.: outro aparelho) aparece aqui pra não ser sobrescrito por engano.
+export async function listSlotsCloudMerged(): Promise<SlotSummary[]> {
+  const local = listSlots();
+  if (!cloudEnabled()) return local;
+  return Promise.all(local.map(async (l) => {
+    if (l.exists) return l; // local sempre ganha na exibição (reconcilia ao continuar)
+    const c = await readCloudSlot(l.slot).catch(() => null);
+    return c ?? l;
+  }));
 }
 
 // apaga um save (local + tombstone na nuvem pra não restaurar no próximo login)

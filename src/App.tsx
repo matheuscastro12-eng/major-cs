@@ -876,6 +876,7 @@ export default function App() {
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (
         <CareerSaves
+          paid={!!account?.paid}
           onPlay={(slot) => { setActiveSlot(slot); setScreen('career'); }}
           onBack={() => setScreen('home')}
         />

@@ -1737,6 +1737,12 @@ export function CareerScreen({ onExit }: Props) {
       const fa = FREE_AGENT_PLAYERS.find((p) => p.id === s.playerId);
       if (fa) { from = FREE_AGENTS_FROM; player = fa; }
     }
+    // 4b) rookie GRÁTIS (custo 0): vem do backfill determinístico do free agent.
+    // Sem isto o jogador some da line (findSigning null) e a carreira trava em 5/5.
+    if (!player) {
+      const rk = backfillPlayers(FREE_AGENTS_FROM, 8).find((p) => p.id === s.playerId);
+      if (rk) { from = FREE_AGENTS_FROM; player = rk; }
+    }
     // 5) prospecto promovido da academia (não está na base): resolve do save.youth
     if (!player && save.youth?.[s.playerId]) {
       player = save.youth[s.playerId];
