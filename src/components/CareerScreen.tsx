@@ -5833,6 +5833,10 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
 }) {
   const [target, setTarget] = useState<{ player: Player; from: TeamSeason } | null>(null);
   const [q, setQ] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [countryFilter, setCountryFilter] = useState('');
+  const marketRoles = [...new Set(market.map((m) => m.player.role))];
+  const marketCountries = [...new Set(market.map((m) => m.player.country).filter(Boolean))].sort();
   const committedCash = pendingDeals.reduce((a, d) => a + d.fee, 0);
   const dealBudget = budget - committedCash;
   const committedOut = new Set(pendingDeals.flatMap((d) => d.outPlayerIds));
@@ -5842,6 +5846,8 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   const list = market
     .filter((m) => m.from.id !== '__free__' && !targeted.has(m.player.id) && !squadIds.has(m.player.id))
     .filter((m) => !q || m.player.nick.toLowerCase().includes(q.toLowerCase()))
+    .filter((m) => !roleFilter || m.player.role === roleFilter)
+    .filter((m) => !countryFilter || m.player.country === countryFilter)
     .sort((a, b) => playerOvr(b.player) - playerOvr(a.player))
     .slice(0, 60);
   return (
@@ -5894,6 +5900,17 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
         )}
         <div className="muted small section-label">{ct('Mercado · negocie com os clubes')}</div>
         <input className="nego-search" placeholder={ct('Buscar jogador…')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="nego-filters" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', margin: '8px 0 4px' }}>
+          <span style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+            {['', ...marketRoles].map((r) => (
+              <button key={r || 'all'} type="button" onClick={() => setRoleFilter(r)} style={{ cursor: 'pointer', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '999px', border: `1px solid ${roleFilter === r ? 'var(--rtm-blue-bright)' : 'var(--rtm-border)'}`, background: roleFilter === r ? 'var(--rtm-blue-bright)' : 'transparent', color: roleFilter === r ? '#fff' : 'var(--rtm-dim)' }}>{r || ct('Todas')}</button>
+            ))}
+          </span>
+          <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} style={{ background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '5px 10px', fontSize: '12px', marginLeft: 'auto' }}>
+            <option value="">{ct('Todos os países')}</option>
+            {marketCountries.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+          </select>
+        </div>
         <div className="career-market scroll">
           {list.length === 0 && <div className="muted small" style={{ padding: 12 }}>{ct('Nenhum jogador com esse filtro.')}</div>}
           {list.map((m) => (
