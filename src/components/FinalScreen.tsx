@@ -53,9 +53,10 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
   const user = getTeam(t, 'user');
   const campaign = useMemo(() => userCampaign(t, tr), [t, tr]);
   const [copied, setCopied] = useState(false);
-  const [nick, setNick] = useState(() => localStorage.getItem('major-nick') ?? '');
+  const [nick, setNick] = useState(() => {
+    try { return localStorage.getItem('major-nick') ?? ''; } catch { return ''; }
+  });
   const [hallStatus, setHallStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const postedRef = useRef(false);
 
   const mvp = useMemo(() => {
     if (!t.mvpId || !champion) return undefined;
@@ -63,15 +64,18 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
   }, [t, champion]);
 
   const hallKey = `major-hall-posted-${user.name}-${career.season}-${campaign.placementCode}-${t.history.length}`;
-  const alreadyPosted = postedRef.current || !!localStorage.getItem(hallKey);
+  const [postedKey, setPostedKey] = useState('');
+  let storedAsPosted = false;
+  try { storedAsPosted = !!localStorage.getItem(hallKey); } catch { /* storage indisponível */ }
+  const alreadyPosted = postedKey === hallKey || storedAsPosted;
+  const postingRef = useRef(false);
 
   // registra no Hall com o nick do jogador (manual, no máximo uma vez por torneio)
   const registerHall = () => {
     const player = nick.trim();
-    if (!player || alreadyPosted || hallStatus === 'saving') return;
-    postedRef.current = true;
-    localStorage.setItem(hallKey, '1');
-    localStorage.setItem('major-nick', player);
+    if (!player || alreadyPosted || postingRef.current || hallStatus === 'saving') return;
+    postingRef.current = true;
+    try { localStorage.setItem('major-nick', player); } catch { /* storage indisponível */ }
     setHallStatus('saving');
     fetch('/api/hall', {
       method: 'POST',
@@ -89,8 +93,14 @@ export function FinalScreen({ t, career, pickem, pool, onRestart, onStats, onHal
       }),
       signal: AbortSignal.timeout(8000),
     })
-      .then((r) => setHallStatus(r.ok ? 'saved' : 'error'))
-      .catch(() => setHallStatus('error'));
+      .then((r) => {
+        if (!r.ok) throw new Error(`hall ${r.status}`);
+        try { localStorage.setItem(hallKey, '1'); } catch { /* storage indisponível */ }
+        setPostedKey(hallKey);
+        setHallStatus('saved');
+      })
+      .catch(() => setHallStatus('error'))
+      .finally(() => { postingRef.current = false; });
   };
 
   const share = async () => {

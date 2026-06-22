@@ -1,11 +1,12 @@
 // Ranked 1v1 — matchmaking → snake draft → resultado (MMR). Porta do Ranked1v1.jsx.
 // Nesta fase a partida é resolvida por força de time; veto/match completos vêm depois.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Panel, Button } from '../ds';
 import { Flag, OvrBadge, PlayerAvatar } from '../ui';
 import { VetoScreen } from '../VetoScreen';
 import { MatchScreen } from '../MatchScreen';
-import { makeRng } from '../../engine/rng';
+import { makeRng, randomSeed } from '../../engine/rng';
+import { hashStr } from '../../state/hash';
 import { RoleTag } from './bits';
 import { buildOnlineTeam, genOpp, rankFor, type OnlineStats, type PoolPlayer, type Rival } from './onlineData';
 import type { Manager } from '../../state/manager';
@@ -31,25 +32,43 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
   const [outcome, setOutcome] = useState<{ won: boolean; delta: number } | null>(null);
   const [teams, setTeams] = useState<[TTeam, TTeam] | null>(null);
   const [maps, setMaps] = useState<{ map: MapId; pickedBy: 0 | 1 | -1 }[]>([]);
-  const rngRef = useRef(makeRng(Math.floor(Math.random() * 2_000_000_000)));
-
-  const poolRef = useRef<PoolPlayer[] | null>(null);
-  if (!poolRef.current) poolRef.current = pool.slice(0, 18);
+  const [matchSeed, setMatchSeed] = useState(() => hashStr(`ranked:${manager.nick}:${stats.w}:${stats.l}`));
+  const rng = useMemo(() => makeRng(matchSeed), [matchSeed]);
+  const draftPool = useMemo(() => pool.slice(0, 18), [pool]);
   const [taken, setTaken] = useState<Record<string, 'me' | 'rival'>>({});
   const [pickN, setPickN] = useState(0);
   const myCount = Object.values(taken).filter((x) => x === 'me').length;
   const rivalCount = Object.values(taken).filter((x) => x === 'rival').length;
 
+  const beginSearch = () => {
+    setMatchSeed(randomSeed());
+    setDots(0);
+    setOutcome(null);
+    setTeams(null);
+    setMaps([]);
+    setPhase('search');
+  };
+
+  // draft completo: monta os 2 times reais e vai pro veto → partida ao vivo
+  const toMatch = useCallback(() => {
+    const mine = draftPool.filter((p) => taken[p.nick] === 'me');
+    const theirs = draftPool.filter((p) => taken[p.nick] === 'rival');
+    if (mine.length !== 5 || theirs.length !== 5) return;
+    const myTeam = buildOnlineTeam(me.org || me.nick, mine, 'you');
+    const rivalTeam = buildOnlineTeam(rival ? rival.nick : 'Adversário', theirs, 'rival');
+    setTeams([myTeam, rivalTeam]);
+    setPhase('veto');
+  }, [draftPool, taken, me.org, me.nick, rival]);
+
   useEffect(() => {
     if (phase !== 'search') return;
-    setDots(0);
     const di = window.setInterval(() => setDots((d) => (d + 1) % 4), 350);
     const done = window.setTimeout(() => {
       setRival(genOpp());
       setPhase('draft'); setTaken({}); setPickN(0);
     }, 2400);
     return () => { window.clearInterval(di); window.clearTimeout(done); };
-  }, [phase, mmr]);
+  }, [phase]);
 
   useEffect(() => {
     if (phase !== 'draft') return;
@@ -59,25 +78,13 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     }
     if (ORDER[pickN] === 'rival') {
       const t = window.setTimeout(() => {
-        const avail = poolRef.current!.filter((p) => !taken[p.nick]);
-        const choice = avail[Math.floor(Math.random() * Math.min(3, avail.length))];
+        const avail = draftPool.filter((p) => !taken[p.nick]);
+        const choice = avail[Math.floor(rng() * Math.min(3, avail.length))];
         if (choice) { setTaken((tk) => ({ ...tk, [choice.nick]: 'rival' })); setPickN((n) => n + 1); }
       }, 700);
       return () => window.clearTimeout(t);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, pickN, taken]);
-
-  // draft completo: monta os 2 times reais e vai pro veto → partida ao vivo
-  function toMatch() {
-    const picks = poolRef.current!;
-    const mine = picks.filter((p) => taken[p.nick] === 'me');
-    const theirs = picks.filter((p) => taken[p.nick] === 'rival');
-    const myTeam = buildOnlineTeam(me.org || me.nick, mine, 'you');
-    const rivalTeam = buildOnlineTeam(rival ? rival.nick : 'Adversário', theirs, 'rival');
-    setTeams([myTeam, rivalTeam]);
-    setPhase('veto');
-  }
+  }, [phase, pickN, taken, draftPool, rng, toMatch]);
 
   // fim da série: MMR sobe/desce conforme o resultado real
   function finishMatch(series: SeriesResult) {
@@ -124,7 +131,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
         </div>
         <Panel title={ct('Ranked 1v1')} accent="blue">
           <p style={{ margin: '0 0 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.5 }}>{ct('O matchmaking busca um rival perto do seu MMR. Vocês sorteiam cinco lendas em draft alternado e jogam uma melhor de três. Leia o board e escolha para contrapor o adversário.')}</p>
-          <Button size="big" variant="primary" onClick={() => setPhase('search')} style={{ width: '100%' }}>🔍 {ct('Procurar partida')}</Button>
+          <Button size="big" variant="primary" onClick={beginSearch} style={{ width: '100%' }}>🔍 {ct('Procurar partida')}</Button>
         </Panel>
       </div>
     );
@@ -146,7 +153,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     return (
       <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
         {bar(() => setPhase('lobby'))}
-        <VetoScreen teams={teams} userIdx={0} rng={rngRef.current} phaseLabel={ct('Ranked 1v1')} bestOf={3} onDone={(m) => { setMaps(m); setPhase('match'); }} />
+        <VetoScreen teams={teams} userIdx={0} rng={rng} phaseLabel={ct('Ranked 1v1')} bestOf={3} onDone={(m) => { setMaps(m); setPhase('match'); }} />
       </div>
     );
   }
@@ -154,7 +161,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
   if (phase === 'match' && teams) {
     return (
       <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
-        <MatchScreen teams={teams} maps={maps} userIdx={0} rng={rngRef.current} phaseLabel={ct('Ranked 1v1')} bestOf={3} onFinish={finishMatch} />
+        <MatchScreen teams={teams} maps={maps} userIdx={0} rng={rng} phaseLabel={ct('Ranked 1v1')} bestOf={3} onFinish={finishMatch} />
       </div>
     );
   }
@@ -170,7 +177,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
           <div style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', fontWeight: 800, color: won ? 'var(--rtm-green-bright)' : 'var(--rtm-red-bright)' }}>{outcome.delta >= 0 ? '+' : ''}{outcome.delta}</div>
         </div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '26px' }}>
-          <Button variant="primary" onClick={() => { setOutcome(null); setPhase('search'); }}>{ct('Jogar de novo')}</Button>
+          <Button variant="primary" onClick={beginSearch}>{ct('Jogar de novo')}</Button>
           <Button variant="ghost" onClick={onHub}>{ct('Voltar ao hub')}</Button>
         </div>
       </div>
@@ -198,7 +205,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
         {pickN >= ORDER.length ? ct('Draft completo — resolvendo…') : myTurn ? `● ${ct('Sua escolha')}` : `${rival ? rival.nick : 'rival'} ${ct('está escolhendo…')}`}
       </div>
       <div className="rtm-pcards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', opacity: myTurn ? 1 : 0.75 }}>
-        {poolRef.current!.map((p) => {
+        {draftPool.map((p) => {
           const owner = taken[p.nick];
           return (
             <button key={p.nick} type="button" disabled={!!owner || !myTurn} onClick={() => myPick(p)} style={{ position: 'relative', textAlign: 'center', cursor: owner || !myTurn ? 'default' : 'pointer', background: owner === 'me' ? 'rgba(67,130,182,.16)' : owner === 'rival' ? 'rgba(216,169,67,.14)' : 'var(--rtm-panel-2)', border: `1px solid ${owner === 'me' ? 'var(--rtm-blue-bright)' : owner === 'rival' ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}`, borderRadius: 'var(--rtm-radius)', padding: '12px 8px', opacity: owner ? 0.6 : 1 }}>

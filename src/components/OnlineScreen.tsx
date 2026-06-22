@@ -25,6 +25,7 @@ import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps } from '.
 import { makeRng } from '../engine/rng';
 import { pairingBestOf } from '../engine/swiss';
 import { useLang } from '../state/i18n';
+import { ct } from '../state/career-i18n';
 import { track } from '../state/track';
 import type { Account } from '../state/account';
 import { fetchMyRank, getLadder, reportResult, type MyRank, type RankRow, type ReportResult } from '../state/ranking';
@@ -189,11 +190,11 @@ function OnlineMatchCenter({
   return (
     <div className="ut-match-center">
       <div className="ut-mc-head">
-        <div><span>MATCH CENTER</span><b>Partidas da rodada</b></div>
+        <div><span>MATCH CENTER</span><b>{ct('Partidas da rodada')}</b></div>
         <div className="ut-mc-filters">
           {focusedTeamId && <button className="focus" onClick={onClearFocus}>✕ {teamsById[focusedTeamId]?.tag}</button>}
           {([['all', 'Todas'], ['players', 'Jogadores'], ['mine', 'Minha'], ['finished', 'Encerradas']] as [MatchCenterFilter, string][]).map(([id, label]) => (
-            <button key={id} className={filter === id ? 'active' : ''} onClick={() => onFilter(id)}>{label}</button>
+            <button key={id} className={filter === id ? 'active' : ''} onClick={() => onFilter(id)}>{ct(label)}</button>
           ))}
         </div>
       </div>
@@ -204,18 +205,18 @@ function OnlineMatchCenter({
           const live = seriesLiveSnapshot(item.pairing.result!, elapsedMs, playbackSpeed);
           const duration = seriesDurationMs(item.pairing.result!, playbackSpeed);
           const human = humanByTeamId[item.pairing.a] || humanByTeamId[item.pairing.b];
-          const status = !stageIsLive ? 'AGUARDANDO' : live.done ? 'FINAL' : live.interval ? 'INTERVALO' : `AO VIVO · R${live.round}`;
+          const status = !stageIsLive ? ct('AGUARDANDO') : live.done ? ct('FINAL') : live.interval ? ct('INTERVALO') : `${ct('AO VIVO')} · R${live.round}`;
           const score = live.done ? live.mapScore : live.roundScore;
           return (
             <button key={`${item.pairing.a}-${item.pairing.b}`} className={`ut-mc-card${live.done ? ' done' : stageIsLive ? ' live' : ''}${viewerTeamId && (item.pairing.a === viewerTeamId || item.pairing.b === viewerTeamId) ? ' mine' : ''}`} onClick={() => onOpen(item)}>
-              <div className="ut-mc-status"><span>{status}</span><em>{stageIsLive && live.map ? MAP_LABELS[live.map] : item.pairing.label}</em>{human && <i>JOGADOR</i>}</div>
+              <div className="ut-mc-status"><span>{status}</span><em>{stageIsLive && live.map ? MAP_LABELS[live.map] : item.pairing.label}</em>{human && <i>{ct('JOGADOR')}</i>}</div>
               <div className={`ut-mc-team${live.done && item.pairing.result!.winner === 1 ? ' loser' : ''}`}><TeamBadge tag={a.tag} colors={a.colors} size={24} logoUrl={a.logoUrl} /><span>{humanByTeamId[a.id] ?? a.name}</span><b>{score[0]}</b></div>
               <div className={`ut-mc-team${live.done && item.pairing.result!.winner === 0 ? ' loser' : ''}`}><TeamBadge tag={b.tag} colors={b.colors} size={24} logoUrl={b.logoUrl} /><span>{humanByTeamId[b.id] ?? b.name}</span><b>{score[1]}</b></div>
               <div className="ut-mc-progress"><i style={{ width: `${stageIsLive ? Math.min(100, elapsedMs / duration * 100) : 0}%` }} /></div>
             </button>
           );
         })}
-        {filtered.length === 0 && <div className="ut-mc-empty">Nenhuma partida neste filtro.</div>}
+        {filtered.length === 0 && <div className="ut-mc-empty">{ct('Nenhuma partida neste filtro.')}</div>}
       </div>
     </div>
   );
@@ -231,7 +232,7 @@ function OnlineQualificationBoard({ teams, humanByTeamId, focusedTeamId, onFocus
     <div className="ut-qualification-board">
       {groups.map((group) => (
         <div key={group.id} className={`ut-q-group ${group.id}`}>
-          <div className="ut-q-title"><b>{group.label}</b><span>{group.teams.length}</span></div>
+          <div className="ut-q-title"><b>{ct(group.label)}</b><span>{group.teams.length}</span></div>
           <div className="ut-q-teams">
             {group.teams.map((team) => <button key={team.id} className={focusedTeamId === team.id ? 'active' : ''} onClick={() => onFocus(focusedTeamId === team.id ? null : team.id)}><TeamBadge tag={team.tag} colors={team.colors} size={20} logoUrl={team.logoUrl} /><span>{humanByTeamId[team.id] ?? team.tag}</span><strong>{team.wins}-{team.losses}</strong></button>)}
             {group.teams.length === 0 && <small>—</small>}
@@ -282,15 +283,15 @@ function OnlineMajorVetoPanel({
     <div className="ut-live-overlay fade-in">
       <div className="ut-veto-dialog veto-layout">
         <div className="panel">
-          <div className="panel-head">VETO DE MAPAS · {mdLabel}<span className="spacer" /><button className="btn small" onClick={onClose}>Fechar ✕</button></div>
+          <div className="panel-head">{ct('VETO DE MAPAS')} · {mdLabel}<span className="spacer" /><button className="btn small" onClick={onClose}>{ct('Fechar')} ✕</button></div>
           <div className="panel-body">
-            <div className="veto-banner-wrap"><MatchBanner teamA={teams[0]} teamB={teams[1]} center={mdLabel} event="MAJOR ONLINE" sub="Veto oficial" /></div>
+            <div className="veto-banner-wrap"><MatchBanner teamA={teams[0]} teamB={teams[1]} center={mdLabel} event="MAJOR ONLINE" sub={ct('Veto oficial')} /></div>
             {done ? (
-              <div className="veto-action pick"><span className="va-icon">✓</span><span className="va-text"><b>Veto concluído</b><span>Aguardando o host iniciar a rodada.</span></span></div>
+              <div className="veto-action pick"><span className="va-icon">✓</span><span className="va-text"><b>{ct('Veto concluído')}</b><span>{ct('Aguardando o host iniciar a rodada.')}</span></span></div>
             ) : isMyTurn ? (
-              <div className={`veto-action ${step!.action === 'ban' ? 'ban' : 'pick'}`}><span className="va-icon">{step!.action === 'ban' ? '🚫' : '✅'}</span><span className="va-text"><b>Sua vez</b><span>{step!.action === 'ban' ? 'BANIR um mapa' : 'ESCOLHER um mapa'}</span></span></div>
+              <div className={`veto-action ${step!.action === 'ban' ? 'ban' : 'pick'}`}><span className="va-icon">{step!.action === 'ban' ? '🚫' : '✅'}</span><span className="va-text"><b>{ct('Sua vez')}</b><span>{step!.action === 'ban' ? ct('BANIR um mapa') : ct('ESCOLHER um mapa')}</span></span></div>
             ) : (
-              <div className="veto-action waiting"><span className="va-icon">⏳</span><span className="va-text">{isAiTurn ? `${teams[step!.team as 0 | 1].name} está escolhendo…` : `Aguardando ${expectedPlayer}…`}</span></div>
+              <div className="veto-action waiting"><span className="va-icon">⏳</span><span className="va-text">{isAiTurn ? `${teams[step!.team as 0 | 1].name} ${ct('está escolhendo…')}` : `${ct('Aguardando')} ${expectedPlayer}…`}</span></div>
             )}
             <div className={`veto-maps${isMyTurn ? (step!.action === 'ban' ? ' mode-ban' : ' mode-pick') : ''}`}>
               {MAP_POOL.map((map) => {
@@ -300,7 +301,7 @@ function OnlineMajorVetoPanel({
                   <div key={map} className={`mapcard${state ? ` dead ${state.action === 'ban' ? 'banned' : state.action === 'pick' ? 'picked' : 'decider'}` : ''}${selectable ? ' selectable' : ''}`} onClick={() => selectable && onSelect(map)}>
                     <MapThumb map={map} className="mapcard-img" />
                     {state && <span className={`mtag ${state.action === 'ban' ? 'banned' : state.action === 'pick' ? 'picked' : 'decider'}`}>{state.action === 'ban' ? '🚫 BAN' : state.action === 'pick' ? `✅ PICK ${teams[state.team as 0 | 1].tag}` : 'DECIDER'}</span>}
-                    {selectable && <span className="map-hover-action">{step!.action === 'ban' ? '🚫 BANIR' : '✅ ESCOLHER'}</span>}
+                    {selectable && <span className="map-hover-action">{step!.action === 'ban' ? `🚫 ${ct('BANIR')}` : `✅ ${ct('ESCOLHER')}`}</span>}
                     <div className="mname">{MAP_LABELS[map]}</div>
                   </div>
                 );
@@ -1005,7 +1006,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     if (preset === 'party' && !casualOnly) {
       const openCount = openRooms.filter((r) => r.players < r.max).length;
       const poolColor = (p: TournamentPool) => (p === 'br' ? 'var(--rtm-gold)' : 'var(--rtm-blue-bright)');
-      const poolLabel = (p: TournamentPool) => (p === 'br' ? '🇧🇷 GC' : '🌍 Mundial');
+      const poolLabel = (p: TournamentPool) => tr(p === 'br' ? 'home.poolBr' : 'home.poolWorld');
 
       if (!majorCreate) {
         return (
@@ -1318,7 +1319,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `Sala de ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {tr(r.pool === 'br' ? 'home.poolBr' : 'home.poolWorld')}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
                       </div>
                       <div style={{ textAlign: 'center', minWidth: '64px' }}>
                         <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: full ? 'var(--rtm-faint)' : 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{r.players}/{r.max}</div>
@@ -1421,7 +1422,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
             {shareStatus && <div style={{ fontSize: '12px', color: 'var(--rtm-green-bright)', marginTop: 6 }}>{shareStatus}</div>}
             <div style={{ fontSize: '12px', color: 'var(--rtm-dim)', margin: '12px auto 0', maxWidth: 420, lineHeight: 1.5 }}>
-              {state.lobby.pool === 'br' ? tr('online.poolBrLong') : tr('online.poolWorldLong')} · {state.lobby.draft_rollouts ?? 2} rerolls por rodada · {tr('online.clickCodeToCopy')}
+              {tr(state.lobby.pool === 'br' ? 'online.poolBrLong' : 'online.poolWorldLong')} · {state.lobby.draft_rollouts ?? 2} rerolls por rodada · {tr('online.clickCodeToCopy')}
             </div>
           </div>
 
@@ -2515,4 +2516,3 @@ function tournamentLeaders(tournament: Tournament) {
     stats: computeDisplay(mergeLines(row.lines)),
   })).sort((a, b) => b.stats.rating - a.stats.rating);
 }
-

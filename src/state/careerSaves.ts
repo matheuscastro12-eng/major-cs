@@ -51,7 +51,7 @@ function summaryFromRaw(n: number, raw: string): SlotSummary {
 }
 
 export function readSlot(n: number): SlotSummary {
-  let raw: string | null = null;
+  let raw: string | null;
   try { raw = localStorage.getItem(slotKey(n)); } catch { return { slot: n, exists: false }; }
   if (!raw) return { slot: n, exists: false };
   return summaryFromRaw(n, raw);

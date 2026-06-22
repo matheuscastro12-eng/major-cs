@@ -14,7 +14,7 @@ export function createTournament(
   dataset: TeamSeason[],
   user: TTeam,
   rng: Rng,
-  name = 'MAJOR DOS SONHOS',
+  name = '🏆 Major Mundial',
   oppBoost = 0,
 ): Tournament {
   const pool = shuffle(rng, dataset).slice(0, 15).map((ts) => {

@@ -33,7 +33,7 @@ import { createTournament, getTeam, pairingBestOf, phaseLabel, placementCode, re
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
 import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
-import { setCareerLang } from './state/career-i18n';
+import { ct, setCareerLang } from './state/career-i18n';
 import { LangSwitcher } from './components/social';
 import { Landing, AccountModal } from './components/Landing';
 import { LegalPage } from './components/Legal';
@@ -312,7 +312,7 @@ export default function App() {
     if (!account?.paid) return;
     let alive = true;
     void syncSlot(cloudSlot(getActiveSlot()), slotKey(getActiveSlot())).then((r) => {
-      if (alive && r === 'restored') { setCloudToast('☁ Save da carreira carregado da nuvem'); setSessionStamp((s) => s + 1); }
+      if (alive && r === 'restored') { setCloudToast(ct('☁ Save da carreira carregado da nuvem')); setSessionStamp((s) => s + 1); }
     });
     return () => { alive = false; };
   }, [account?.paid]);
@@ -375,8 +375,8 @@ export default function App() {
       privacy: 'Privacidade', terms: 'Termos', refund: 'Reembolso',
     };
     const sub = TITLES[screen];
-    document.title = sub ? `${sub} · Road to Major` : 'Road to Major · simulador de CS de todas as eras';
-  }, [screen]);
+    document.title = sub ? `${ct(sub)} · Road to Major` : ct('Road to Major · simulador de CS de todas as eras');
+  }, [screen, lang]);
 
   // telemetria: SÓ 1 evento de visita por sessão (barato). Removido o heartbeat
   // de presença ("online agora"), que batia /api/track a cada 90s em TODO
@@ -424,7 +424,7 @@ export default function App() {
     rngRef.current = makeRng(randomSeed());
     const base = poolTeams(pool);
     if (base.length < 16) {
-      alert('A base precisa de pelo menos 16 times neste modo. Adicione times no CRM.');
+      alert(ct('A base precisa de pelo menos 16 times neste modo. Adicione times no CRM.'));
       return;
     }
     const sources = weightedSample(base, 5, difficulty);
@@ -463,7 +463,7 @@ export default function App() {
   };
 
   const tournamentName = (pool: TournamentPool, season: number) =>
-    `${pool === 'br' ? 'GC MASTERS' : 'MAJOR DOS SONHOS'}${season > 1 ? ` · TEMPORADA ${season}` : ''}`;
+    `${t(pool === 'br' ? 'home.poolBr' : 'home.poolWorld')}${season > 1 ? ` · ${t('final.season').toUpperCase()} ${season}` : ''}`;
 
   const pickCoach = (teamSeasonId: string) => {
     if (!draft) return;
@@ -661,7 +661,7 @@ export default function App() {
       return;
     }
     if (tournament.phase !== 'done' && screen !== 'final') {
-      if (!confirm('Abandonar o Major em andamento e voltar para o início?')) return;
+      if (!confirm(ct('Abandonar o Major em andamento e voltar para o início?'))) return;
     }
     restart();
   };
@@ -724,7 +724,7 @@ export default function App() {
           onAccountDeleted={() => {
             logout();
             setCloudEnabled(false);
-            setCloudToast('Conta e dados na nuvem excluídos. Seus saves locais continuam neste navegador.');
+            setCloudToast(ct('Conta e dados na nuvem excluídos. Seus saves locais continuam neste navegador.'));
             setScreen('home');
           }}
         />
@@ -747,15 +747,15 @@ export default function App() {
 
       {paidToast && (
         <div className="paid-toast" role="status">
-          <span>★ Conta com save ativada! Nuvem e ranking persistente liberados.</span>
-          <button onClick={() => setPaidToast(false)} aria-label="fechar">✕</button>
+          <span>{ct('★ Conta com save ativada! Nuvem e ranking persistente liberados.')}</span>
+          <button onClick={() => setPaidToast(false)} aria-label={ct('fechar')}>✕</button>
         </div>
       )}
 
       {cloudToast && (
         <div className="paid-toast" role="status">
           <span>{cloudToast}</span>
-          <button onClick={() => setCloudToast('')} aria-label="fechar">✕</button>
+          <button onClick={() => setCloudToast('')} aria-label={ct('fechar')}>✕</button>
         </div>
       )}
 
@@ -767,10 +767,10 @@ export default function App() {
       {bannerPreview && (
         <div className="ad-persistent">
           <div className="ad-persistent-inner">
-            <span className="ad-tag">ESPAÇO PUBLICITÁRIO PREMIUM</span>
-            <span className="ad-size">sempre visível durante o jogo · desktop 970×90 · mobile 320×50 (sticky)</span>
+            <span className="ad-tag">{ct('ESPAÇO PUBLICITÁRIO PREMIUM')}</span>
+            <span className="ad-size">{ct('sempre visível durante o jogo · desktop 970×90 · mobile 320×50 (sticky)')}</span>
             <span className="spacer" />
-            <button className="ad-close" onClick={() => setBannerPreview(false)}>fechar preview ✕</button>
+            <button className="ad-close" onClick={() => setBannerPreview(false)}>{ct('fechar preview ✕')}</button>
           </div>
         </div>
       )}
@@ -785,18 +785,18 @@ export default function App() {
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
             {account && (
-              <button className="acct-chip" title={account.paid ? 'Conta vitalícia (apoiador) · perfil, saves e conta' : 'Sua conta · ver perfil'} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
+              <button className="acct-chip" title={account.paid ? ct('Conta vitalícia (apoiador) · perfil, saves e conta') : ct('Sua conta · ver perfil')} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
                 {account.paid && <span className="acct-star">★</span>}
                 {account.nick || account.email}
-                {account.paid && <span className="acct-tag">VITALÍCIA</span>}
+                {account.paid && <span className="acct-tag">{ct('VITALÍCIA')}</span>}
               </button>
             )}
             <button
               className="nav-btn"
-              title={account ? 'Perfil e configurações da conta' : 'Entrar ou criar conta'}
+              title={account ? ct('Perfil e configurações da conta') : ct('Entrar ou criar conta')}
               onClick={() => { if (account) { setScreen(manager ? 'profile' : 'setup'); } else { setAuthOpen(true); } }}
             >
-              {account ? 'Conta' : 'Entrar'}
+              {account ? ct('Conta') : ct('Entrar')}
             </button>
             <button className="nav-btn" onClick={() => setScreen('hall')}>
               {t('nav.hall')}
@@ -821,19 +821,19 @@ export default function App() {
       {bannerPreview && screen === 'home' && (
         <>
           <div className="ad-slot leaderboard">
-            <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
-            <span className="ad-size">Leaderboard · desktop 970×90 / 728×90 · mobile 320×100 / 320×50</span>
-            <span className="ad-note">banner do parceiro aqui, no topo (acima da dobra)</span>
+            <span className="ad-tag">{ct('ESPAÇO PUBLICITÁRIO')}</span>
+            <span className="ad-size">{ct('Leaderboard · desktop 970×90 / 728×90 · mobile 320×100 / 320×50')}</span>
+            <span className="ad-note">{ct('banner do parceiro aqui, no topo (acima da dobra)')}</span>
           </div>
           <div className="ad-slot ad-side left">
-            <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
-            <span className="ad-size">Skyscraper · 160×600 / 300×600</span>
-            <span className="ad-note">lateral esquerda</span>
+            <span className="ad-tag">{ct('ESPAÇO PUBLICITÁRIO')}</span>
+            <span className="ad-size">{ct('Skyscraper · 160×600 / 300×600')}</span>
+            <span className="ad-note">{ct('lateral esquerda')}</span>
           </div>
           <div className="ad-slot ad-side right">
-            <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
-            <span className="ad-size">Skyscraper · 160×600 / 300×600</span>
-            <span className="ad-note">lateral direita</span>
+            <span className="ad-tag">{ct('ESPAÇO PUBLICITÁRIO')}</span>
+            <span className="ad-size">{ct('Skyscraper · 160×600 / 300×600')}</span>
+            <span className="ad-note">{ct('lateral direita')}</span>
           </div>
         </>
       )}
@@ -867,24 +867,24 @@ export default function App() {
         <>
           <div className="ad-grid">
             <div className="ad-slot rectangle">
-              <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
-              <span className="ad-size">Retângulo · 300×250</span>
-              <span className="ad-note">no meio do conteúdo / lateral</span>
+              <span className="ad-tag">{ct('ESPAÇO PUBLICITÁRIO')}</span>
+              <span className="ad-size">{ct('Retângulo · 300×250')}</span>
+              <span className="ad-note">{ct('no meio do conteúdo / lateral')}</span>
             </div>
             <div className="ad-slot rectangle">
-              <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
-              <span className="ad-size">Retângulo · 300×250</span>
-              <span className="ad-note">segundo bloco lateral</span>
+              <span className="ad-tag">{ct('ESPAÇO PUBLICITÁRIO')}</span>
+              <span className="ad-size">{ct('Retângulo · 300×250')}</span>
+              <span className="ad-note">{ct('segundo bloco lateral')}</span>
             </div>
           </div>
           <div className="ad-slot billboard">
-            <span className="ad-tag">ESPAÇO PUBLICITÁRIO</span>
-            <span className="ad-size">Billboard / rodapé · 970×250 ou 728×90</span>
-            <span className="ad-note">banner fixo no rodapé do site</span>
+            <span className="ad-tag">{ct('ESPAÇO PUBLICITÁRIO')}</span>
+            <span className="ad-size">{ct('Billboard / rodapé · 970×250 ou 728×90')}</span>
+            <span className="ad-note">{ct('banner fixo no rodapé do site')}</span>
           </div>
           <div className="ad-info">
-            Pré-visualização dos espaços de banner para o patrocinador. Acesse por
-            <b> roadtomajor.com.br/banners</b>. Formatos IAB padrão; dá pra ajustar tamanhos e posições.
+            {ct('Pré-visualização dos espaços de banner para o patrocinador. Acesse por')}{' '}
+            <b>roadtomajor.com.br/banners</b>. {ct('Formatos IAB padrão; dá pra ajustar tamanhos e posições.')}
           </div>
         </>
       )}

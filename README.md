@@ -27,7 +27,7 @@ npm run build    # build de produção em dist/
 
 A área administrativa **não aparece no site** - acesse `/admin` (ex: `https://major-cs-pi.vercel.app/admin`) e informe a senha de admin (env `ADMIN_PASSWORD` na Vercel; `dev` em localhost). Lá você cria, edita e exclui times e jogadores (nick, país, função, atributos, força por mapa, cores, coach, logos), registra doações no mural de apoiadores e abre o 🧪 Lab de balanceamento. As alterações de dataset ficam salvas no `localStorage` do navegador; "Restaurar padrão" volta ao dataset original.
 
-O dataset embutido tem **70 elencos históricos** (350 jogadores), de SK Gaming 2003 e mibr 2006 a NiP 87-0, fnatic 2015, SK 2016, Astralis 2018, NaVi s1mple 2021, FaZe 2022, Spirit do donk, Vitality 2025, Legacy e TYLOO - incluindo times tier B/C (Copenhagen Flames, Bad News Eagles, forZe, Sprout, 9z…) e uma base brasileira completa para o modo **GC MASTERS** (Immortals 2017, MIBR 2019, 00 Nation, RED Canids, Fluxo, ODDIK, W7M…) - curados com base em [Liquipedia](https://liquipedia.net) e [HLTV](https://www.hltv.org). Uploads de logo por time e foto por mapa direto no CRM.
+O dataset embutido tem **70 elencos históricos** (350 jogadores), de SK Gaming 2003 e mibr 2006 a NiP 87-0, fnatic 2015, SK 2016, Astralis 2018, NaVi s1mple 2021, FaZe 2022, Spirit do donk, Vitality 2025, Legacy e TYLOO - incluindo times tier B/C (Copenhagen Flames, Bad News Eagles, forZe, Sprout, 9z…) e uma base brasileira completa para o modo **🇧🇷 GC Masters** (Immortals 2017, MIBR 2019, 00 Nation, RED Canids, Fluxo, ODDIK, W7M…) - curados com base em [Liquipedia](https://liquipedia.net) e [HLTV](https://www.hltv.org). Uploads de logo por time e foto por mapa direto no CRM.
 
 ## Stack
 

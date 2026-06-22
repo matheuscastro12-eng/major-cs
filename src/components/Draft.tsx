@@ -5,6 +5,8 @@ import type { DraftState, Player, TeamSeason } from '../types';
 import { useLang } from '../state/i18n';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { FutCard } from './FutCard';
+import { hashStr } from '../state/hash';
+import { makeRng } from '../engine/rng';
 
 const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 
@@ -244,10 +246,11 @@ function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: T
   const { t: tr } = useLang();
   const reel = useMemo(() => {
     const others = pool.filter((t) => t.id !== target.id);
+    const rng = makeRng(hashStr(`draft-reel:${target.id}`));
     const items: TeamSeason[] = [];
     for (let i = 0; i < REEL_LEN; i++) {
       if (i === REEL_TARGET) items.push(target);
-      else items.push(others[Math.floor(Math.random() * others.length)] ?? target);
+      else items.push(others[Math.floor(rng() * others.length)] ?? target);
     }
     return items;
   }, [pool, target]);
@@ -257,7 +260,7 @@ function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: T
   const [rolling, setRolling] = useState(false);
   const doneRef = useRef(false);
   const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
+  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
 
   // mede a largura da janela da roleta para centralizar o card alvo
   useEffect(() => {

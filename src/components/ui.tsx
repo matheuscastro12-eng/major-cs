@@ -1,18 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { MAP_IMAGES, photoForNick } from '../data/media';
 import { loadMapImages } from '../state/crm';
 import { MAP_LABELS, type MapId, type TTeam } from '../types';
 
 // Avatar do jogador: foto real da Liquipedia (via proxy) com fallback de iniciais
 export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string; size?: number; coach?: boolean }) {
-  const [err, setErr] = useState(false);
+  const [failedUrl, setFailedUrl] = useState('');
   const safeNick = nick || '?'; // protege contra nick indefinido (não quebra o render)
   const url = photoForNick(safeNick, Math.max(120, size * 2));
-  useEffect(() => setErr(false), [url]);
-  if (url && !err) {
+  if (url && failedUrl !== url) {
     return (
       <span className="pavatar" style={{ width: size, height: size }}>
-        <img src={url} alt={nick} loading="lazy" onError={() => setErr(true)} />
+        <img src={url} alt={nick} loading="lazy" onError={() => setFailedUrl(url)} />
       </span>
     );
   }
@@ -34,15 +33,15 @@ export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string;
 }
 
 export function Flag({ cc, title }: { cc: string; title?: string }) {
-  const [err, setErr] = useState(false);
-  if (err || !cc) return <span className="flag-chip">{(cc || '??').toUpperCase()}</span>;
+  const [failedCountry, setFailedCountry] = useState('');
+  if (failedCountry === cc || !cc) return <span className="flag-chip">{(cc || '??').toUpperCase()}</span>;
   return (
     <img
       className="flag"
       src={`https://flagcdn.com/w20/${cc.toLowerCase()}.png`}
       alt={cc}
       title={title ?? cc.toUpperCase()}
-      onError={() => setErr(true)}
+      onError={() => setFailedCountry(cc)}
     />
   );
 }

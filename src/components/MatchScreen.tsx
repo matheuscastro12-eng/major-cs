@@ -117,25 +117,20 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     try { localStorage.setItem('rtm-match-calls-hint-v1', '1'); } catch { /* sem storage */ }
   };
   const stanceRef = useRef<Stance>('default');
-  stanceRef.current = stance;
+  useEffect(() => { stanceRef.current = stance; }, [stance]);
   const [pendingCall, setPendingCall] = useState<RoundCall | null>(null);
   const callRef = useRef<RoundCall | null>(null);
-  callRef.current = pendingCall;
+  useEffect(() => { callRef.current = pendingCall; }, [pendingCall]);
   // modo Tático: freezetime de 5s antes de cada round pra escolher a chamada
   const [tactical, setTactical] = useState(false);
   const [freeze, setFreeze] = useState(0);
   const [lastCall, setLastCall] = useState<{ call: RoundCall; won: boolean; round: number } | null>(null);
+  const endedMapsRef = useRef<Set<number>>(new Set());
+  const mapTransitionRef = useRef<number | null>(null);
 
-  // ao terminar a série, sobe pro topo pra mostrar o resultado e o botão Continuar.
-  // Também TRAVA o resultado na hora (onDecided), pra sair antes do Continuar não
-  // permitir re-rolar a partida ao reentrar.
-  const decidedRef = useRef(false);
-  useEffect(() => {
-    if (!finished) return;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (!decidedRef.current) { decidedRef.current = true; onDecided?.(buildSeries()); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finished]);
+  useEffect(() => () => {
+    if (mapTransitionRef.current !== null) window.clearTimeout(mapTransitionRef.current);
+  }, []);
 
   const seriesOver = () => {
     const wins = resultsRef.current.reduce(
@@ -155,6 +150,16 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     return { teamIds: [teams[0].id, teams[1].id], maps: ms, winner: winsA > winsB ? 0 : 1, mapScore: [winsA, winsB] };
   };
 
+  // ao terminar a série, sobe pro topo pra mostrar o resultado e o botão Continuar.
+  // Também trava o resultado na hora, evitando re-rolar ao sair antes de continuar.
+  const decidedRef = useRef(false);
+  useEffect(() => {
+    if (!finished) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!decidedRef.current) { decidedRef.current = true; onDecided?.(buildSeries()); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
+
   const getSim = (idx: number): MapSim => {
     const safe = Math.min(idx, maps.length - 1); // guarda defensiva contra índice além do veto
     if (!simsRef.current[safe]) {
@@ -168,6 +173,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const lastStepRef = useRef(0);
   // fim de mapa: registra o resultado e prepara o próximo (ou encerra a série)
   const onMapEnded = (sim: MapSim) => {
+    // O interval pode disparar novamente antes de o estado de pausa renderizar.
+    // Sem esta trava, o mesmo mapa agendava duas transições e pulava o próximo.
+    if (endedMapsRef.current.has(mapIdx)) return;
+    endedMapsRef.current.add(mapIdx);
     resultsRef.current[mapIdx] = sim.result();
     if (seriesOver()) {
       const s = buildSeries();
@@ -177,12 +186,13 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       const next = maps[mapIdx + 1];
       setPausedMsg(`${t('match.mapEnd')} ${mapIdx + 1}${next ? ` - ${t('match.preparing')} ${MAP_LABELS[next.map]}…` : '…'}`);
       // pausa maior pra dar tempo de ver como ficaram as stats do mapa
-      window.setTimeout(() => {
+      mapTransitionRef.current = window.setTimeout(() => {
         setMapIdx((m) => m + 1);
         setTimeoutsLeft(TIMEOUTS_PER_MAP);
         setBoostRounds(0);
         setFreeze(0);
         setPausedMsg('');
+        mapTransitionRef.current = null;
       }, 3500);
     }
   };

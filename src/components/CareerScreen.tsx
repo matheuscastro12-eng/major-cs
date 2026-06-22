@@ -24,6 +24,7 @@ import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, FACILITY_MAX_LEVE
 import { personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
+import { matchesNegotiationFilters } from '../engine/career/market';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -1391,7 +1392,7 @@ function loadSave(): CareerSave {
   const SAVE_KEY = curKey();
   const SAVE_BAK = SAVE_KEY + '.bak';
   const SAVE_CORRUPT = SAVE_KEY + '.corrupt';
-  let raw: string | null = null;
+  let raw: string | null;
   try {
     raw = localStorage.getItem(SAVE_KEY);
   } catch {
@@ -2308,7 +2309,9 @@ export function CareerScreen({ onExit }: Props) {
   };
 
   // SIM MATCH: simula a partida do usuário com animação rápida (mini partida)
-  const simMine = (l: League) => {
+  const simMine = () => {
+    if (!save.league) return;
+    const l = structuredClone(save.league);
     const m = userLeagueMatch(l);
     if (!m) return;
     rngRef.current = makeRng(randomSeed());
@@ -2325,7 +2328,9 @@ export function CareerScreen({ onExit }: Props) {
   // SIM SPLIT: resolve TODAS as rodadas restantes do turno de uma vez (sem
   // animação) e para no mata-mata — corta a repetição de clicar rodada a rodada
   // (pedido de quem joga no celular) sem pular a parte decisiva (playoffs).
-  const simWholeSplit = (l: League) => {
+  const simWholeSplit = () => {
+    if (!save.league) return;
+    const l = structuredClone(save.league);
     rngRef.current = makeRng(randomSeed());
     let guard = 0;
     const simulated: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string }[] = [];
@@ -2565,12 +2570,11 @@ export function CareerScreen({ onExit }: Props) {
       });
     }
     return rows.sort((a, b) => b.rating - a.rating).slice(0, 20);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.careerStats, save.roles, save.org, currentEra]);
   const feedMemo = useMemo(() => transferFeed(save.split, currentEra), [save.split, currentEra]);
   // propostas que CHEGAM pelos seus jogadores: clubes assediam seus melhores nomes.
   // Determinístico por split; some quem você já vendeu ou recusou.
-  const incomingOffers = useMemo(() => {
+  const incomingOffers = (() => {
     const sold = new Set([
       ...(save.pendingSales ?? []).map((x) => x.playerId),
       ...(save.rejectedOffers ?? []),
@@ -2594,7 +2598,7 @@ export function CareerScreen({ onExit }: Props) {
       out.push({ playerId: p.id, nick: p.nick, ovr, country: p.country, fee, toTag: buyer.tag, toName: buyer.team });
     }
     return out;
-  }, [save.squad, save.split, save.pendingSales, save.rejectedOffers, save.pendingDeals, currentEra, save.takeoverId]);
+  })();
   const vrsByRegionMemo = useMemo(() => {
     // bandeira E região de cada time saem do CORE do elenco (o país do header da
     // base é furado). A org usa a região que escolheu competir (save.region).
@@ -3696,8 +3700,8 @@ export function CareerScreen({ onExit }: Props) {
                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}><GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} /></div>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
                       <Button variant="gold" onClick={playMine}>▶ {ct('Jogar')}</Button>
-                      <Button variant="ghost" onClick={() => simMine(league)}>⏩ {ct('Simular')}</Button>
-                      <Button variant="ghost" onClick={() => simWholeSplit(league)}>⏩⏩ {ct('Split inteiro')}</Button>
+                      <Button variant="ghost" onClick={simMine}>⏩ {ct('Simular')}</Button>
+                      <Button variant="ghost" onClick={simWholeSplit}>⏩⏩ {ct('Split inteiro')}</Button>
                     </div>
                   </div>
                 </div>
@@ -3875,7 +3879,7 @@ export function CareerScreen({ onExit }: Props) {
                 <GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} />
                 <span className="spacer" />
                 <button className="btn gold" onClick={playMine}>▶ JOGAR</button>
-                <button className="btn ghost small" onClick={() => simMine(league)}>⏩ Simular</button>
+                <button className="btn ghost small" onClick={simMine}>⏩ Simular</button>
               </div>
             )}
             {league.gsl
@@ -5176,9 +5180,9 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
   useEffect(() => {
     if (done) return;
     const map = series.maps[mapIdx];
-    if (!map) { setDone(true); return; }
+    if (!map) return;
     if (round >= map.roundLog.length) {
-      if (mapIdx + 1 >= series.maps.length) { setDone(true); return; }
+      if (mapIdx + 1 >= series.maps.length) return;
       const t = setTimeout(() => { setMapIdx(mapIdx + 1); setRound(0); }, 380);
       return () => clearTimeout(t);
     }
@@ -5187,6 +5191,8 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
   }, [mapIdx, round, done, series]);
 
   const map = series.maps[mapIdx];
+  const naturallyDone = !map || (mapIdx + 1 >= series.maps.length && round >= map.roundLog.length);
+  const finished = done || naturallyDone;
   const log = map ? map.roundLog.slice(0, round) : [];
   const sa = log.filter((w) => w === 0).length;
   const sb = log.filter((w) => w === 1).length;
@@ -5194,29 +5200,21 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
   const mapsWonA = series.maps.slice(0, mapIdx).filter((m) => m.winner === 0).length;
   const mapsWonB = series.maps.slice(0, mapIdx).filter((m) => m.winner === 1).length;
 
-  const Side = ({ t, sc, idx }: { t: TTeam; sc: number; idx: 0 | 1 }) => (
-    <div className={`qs-side${idx === userIdx ? ' mine' : ''}`}>
-      <TeamBadge tag={t.tag} colors={t.colors} size={48} logoUrl={t.logoUrl} />
-      <div className="qs-name">{t.name}</div>
-      <div className="qs-score">{sc}</div>
-    </div>
-  );
-
   return (
     <div className="modal-backdrop" style={{ alignItems: 'center' }}>
       <div className="qs-card">
         <div className="qs-label">{label} · simulação rápida</div>
         <div className="qs-board">
-          <Side t={teams[0]} sc={sa} idx={0} />
+          <QuickSimSide team={teams[0]} score={sa} mine={userIdx === 0} />
           <div className="qs-mid">
             <div className="qs-map">{map ? map.map.toUpperCase() : 'FIM'}</div>
             <div className="qs-vs">vs</div>
             <div className="qs-mapscore">{mapsWonA} - {mapsWonB} <span className="muted small">mapas</span></div>
           </div>
-          <Side t={teams[1]} sc={sb} idx={1} />
+          <QuickSimSide team={teams[1]} score={sb} mine={userIdx === 1} />
         </div>
         <div className="qs-foot">
-          {done ? (
+          {finished ? (
             <>
               <span className="qs-final">
                 {series.winner === userIdx ? ct('Vitória!') : ct('Derrota')} · {series.mapScore[0]}-{series.mapScore[1]}
@@ -5237,6 +5235,16 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function QuickSimSide({ team, score, mine }: { team: TTeam; score: number; mine: boolean }) {
+  return (
+    <div className={`qs-side${mine ? ' mine' : ''}`}>
+      <TeamBadge tag={team.tag} colors={team.colors} size={48} logoUrl={team.logoUrl} />
+      <div className="qs-name">{team.name}</div>
+      <div className="qs-score">{score}</div>
     </div>
   );
 }
@@ -5367,11 +5375,10 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
   // você só entra em circuitos do SEU tier ou mais fáceis (tier maior). Subir de
   // tier libera os circuitos de cima (o Tier 1 / BLAST é o caminho do Major).
   const canEnter = (opt: CircuitOption) => opt.tier >= playerTier;
-  const firstOk = Math.max(0, circuits.findIndex((o) => canEnter(o)));
-  const [sel, setSel] = useState(firstOk);
-  // os circuitos mudam ao realocar de região: reposiciona a seleção num válido
-  useEffect(() => { setSel(Math.max(0, circuits.findIndex((o) => canEnter(o)))); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [circuits]);
-  const c = circuits[sel];
+  const firstAvailable = circuits.find(canEnter) ?? circuits[0];
+  const [selectedId, setSelectedId] = useState(firstAvailable?.id ?? '');
+  const selected = circuits.find((option) => option.id === selectedId);
+  const c = selected ?? firstAvailable;
   const cOk = c && canEnter(c);
   return (
     <div className="fade-in">
@@ -5391,10 +5398,10 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
           )}
           <p className="muted small">{ct('Cada circuito é um')} <b>tier</b>{ct('. Você joga no seu tier ou abaixo; vencer o seu circuito te')} <b>promove</b>{ct(', terminar no fundo te')} <b>rebaixa</b>{ct('. Só o')} <b>Tier 1</b> {ct('dá vaga no Major.')}</p>
           <div className="circuit-cards">
-            {circuits.map((opt, i) => {
+            {circuits.map((opt) => {
               const locked = !canEnter(opt);
               return (
-                <button key={opt.id} className={`circuit-card${sel === i ? ' on' : ''}${locked ? ' locked' : ''}`} onClick={() => setSel(i)}>
+                <button key={opt.id} className={`circuit-card${c?.id === opt.id ? ' on' : ''}${locked ? ' locked' : ''}`} onClick={() => setSelectedId(opt.id)}>
                   <div className="cc-name">
                     <span className={`tier-badge t${opt.tier}`}>TIER {opt.tier}</span> {opt.name}
                   </div>
@@ -5995,23 +6002,27 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
 }) {
   const [target, setTarget] = useState<{ player: Player; from: TeamSeason } | null>(null);
   const [q, setQ] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState<Role | ''>('');
   const [countryFilter, setCountryFilter] = useState('');
-  const marketRoles = [...new Set(market.map((m) => m.player.role))];
-  const marketCountries = [...new Set(market.map((m) => m.player.country).filter(Boolean))].sort();
+  const marketRoles = ROLE_OPTS.filter((role) => market.some((item) => item.player.role === role));
+  const marketCountries = [...new Set(market.map((m) => m.player.country).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
   const committedCash = pendingDeals.reduce((a, d) => a + d.fee, 0);
   const dealBudget = budget - committedCash;
   const committedOut = new Set(pendingDeals.flatMap((d) => d.outPlayerIds));
   const targeted = new Set(pendingDeals.map((d) => d.inPlayerId));
   const squadIds = new Set(squadPlayers.map((p) => p.id));
   const swapPool = squadPlayers.filter((p) => !committedOut.has(p.id));
-  const list = market
+  const filteredMarket = market
     .filter((m) => m.from.id !== '__free__' && !targeted.has(m.player.id) && !squadIds.has(m.player.id))
-    .filter((m) => !q || m.player.nick.toLowerCase().includes(q.toLowerCase()))
-    .filter((m) => !roleFilter || m.player.role === roleFilter)
-    .filter((m) => !countryFilter || m.player.country === countryFilter)
-    .sort((a, b) => playerOvr(b.player) - playerOvr(a.player))
-    .slice(0, 60);
+    .filter((m) => matchesNegotiationFilters(m.player, m.from.team, {
+      query: q,
+      role: roleFilter,
+      country: countryFilter,
+    }))
+    .sort((a, b) => playerOvr(b.player) - playerOvr(a.player));
+  const list = filteredMarket.slice(0, 60);
+  const filtersActive = !!(q.trim() || roleFilter || countryFilter);
   return (
     <Panel title={ct('Mercado')} accent="gold">
         <div className="muted small" style={{ marginBottom: 12 }}>
@@ -6060,18 +6071,24 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
             ))}
           </div>
         )}
-        <div className="muted small section-label">{ct('Mercado · negocie com os clubes')}</div>
-        <input className="nego-search" placeholder={ct('Buscar jogador…')} value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="nego-filters" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', margin: '8px 0 4px' }}>
-          <span style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-            {['', ...marketRoles].map((r) => (
-              <button key={r || 'all'} type="button" onClick={() => setRoleFilter(r)} style={{ cursor: 'pointer', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '999px', border: `1px solid ${roleFilter === r ? 'var(--rtm-blue-bright)' : 'var(--rtm-border)'}`, background: roleFilter === r ? 'var(--rtm-blue-bright)' : 'transparent', color: roleFilter === r ? '#fff' : 'var(--rtm-dim)' }}>{r || ct('Todas')}</button>
-            ))}
-          </span>
-          <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} style={{ background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '5px 10px', fontSize: '12px', marginLeft: 'auto' }}>
-            <option value="">{ct('Todos os países')}</option>
-            {marketCountries.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+        <div className="muted small section-label">
+          {ct('Mercado · negocie com os clubes')} · {filteredMarket.length} {ct(filteredMarket.length === 1 ? 'jogador' : 'jogadores')}
+        </div>
+        <div className="market-filters negotiation-filter-bar">
+          <input className="mf-search" aria-label={ct('Buscar jogador ou time')} placeholder={ct('Buscar jogador ou time…')} value={q} onChange={(e) => setQ(e.target.value)} />
+          <select className="mf-select" aria-label={ct('Filtrar por função')} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as Role | '')}>
+            <option value="">{ct('Todas as funções')}</option>
+            {marketRoles.map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
+          <select className="mf-select" aria-label={ct('Filtrar por nacionalidade')} value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+            <option value="">{ct('Todos os países')}</option>
+            {marketCountries.map((country) => <option key={country} value={country}>{country.toUpperCase()}</option>)}
+          </select>
+          {filtersActive && (
+            <button className="mf-clear" type="button" onClick={() => { setQ(''); setRoleFilter(''); setCountryFilter(''); }}>
+              {ct('✕ Limpar')}
+            </button>
+          )}
         </div>
         <div className="career-market scroll">
           {list.length === 0 && <div className="muted small" style={{ padding: 12 }}>{ct('Nenhum jogador com esse filtro.')}</div>}

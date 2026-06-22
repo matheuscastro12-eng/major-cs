@@ -51,7 +51,7 @@ export function AchievementToast({ items, onDone }: { items: AchDef[]; onDone: (
   // onDone vem inline do App (identidade nova a cada render): guardamos num
   // ref pra que re-renders do App NÃO resetem o timer de auto-dismiss
   const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
+  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
   useEffect(() => {
     const t = setTimeout(() => onDoneRef.current(), 4200 + items.length * 600);
     return () => clearTimeout(t);

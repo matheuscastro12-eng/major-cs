@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Flag, PlayerAvatar } from './ui';
 import { Button, Panel } from './ds';
+import { ct } from '../state/career-i18n';
 
 interface Campaign {
   id: number;
@@ -52,9 +53,9 @@ export function HallScreen({ onBack }: Props) {
   return (
     <div className="rtm-fade-in" style={{ maxWidth: '1180px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        <h1 style={{ margin: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)' }}>🏛 Hall da Fama</h1>
+        <h1 style={{ margin: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)' }}>🏛 {ct('Hall da Fama')}</h1>
         <span style={{ flex: 1 }} />
-        <Button variant="ghost" size="sm" onClick={onBack}>← Voltar</Button>
+        <Button variant="ghost" size="sm" onClick={onBack}>← {ct('Voltar')}</Button>
       </div>
 
       {!data && !err && <div style={{ color: 'var(--rtm-dim)', padding: '24px' }}>Carregando o hall…</div>}
