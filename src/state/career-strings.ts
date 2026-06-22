@@ -1435,4 +1435,14 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "times · 5 eras · scoreboards estilo HLTV": { en: "teams · 5 eras · HLTV-style scoreboards", es: "equipos · 5 eras · scoreboards estilo HLTV" },
 
   "Recomeçar": { en: "Restart", es: "Reiniciar" },
+
+  "Jogar com amigos": { en: "Play with friends", es: "Jugar con amigos" },
+  "Crie uma sala e mande o código pros amigos, ou entre numa sala aberta. Casual não conta pro ranking.": { en: "Create a room and send the code to friends, or join an open one. Casual does not count toward ranking.", es: "Crea una sala y manda el código a tus amigos, o entra en una abierta. El casual no cuenta para el ranking." },
+  "Coleção": { en: "Collection", es: "Colección" },
+  "Criar sala": { en: "Create room", es: "Crear sala" },
+  "Sala aberta (qualquer um pode entrar)": { en: "Open room (anyone can join)", es: "Sala abierta (cualquiera puede entrar)" },
+  "Entrar com código": { en: "Join with code", es: "Entrar con código" },
+  "Entrar na sala": { en: "Join room", es: "Entrar en la sala" },
+  "Cheia": { en: "Full", es: "Llena" },
+  "Sala de": { en: "Room of", es: "Sala de" },
 };

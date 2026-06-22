@@ -922,6 +922,73 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // ---------- telas ----------
 
   if (!code) {
+    // Casual: tela SIMPLES (jogar com amigos). Sem demo/regra/rerolls/ranking — só
+    // criar sala, entrar por código e a lista de salas abertas.
+    if (casualOnly) {
+      return (
+        <div className="fade-in" style={{ maxWidth: 720, margin: '0 auto' }}>
+          <BackBar onExit={onBack} />
+          <div style={{ textAlign: 'center', marginBottom: '18px' }}>
+            <div style={{ fontSize: '34px' }}>👥</div>
+            <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '30px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Jogar com amigos')}</h1>
+            <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '460px', margin: '8px auto 0', lineHeight: 1.5 }}>{ct('Crie uma sala e mande o código pros amigos, ou entre numa sala aberta. Casual não conta pro ranking.')}</p>
+          </div>
+
+          <Field label={tr('online.yourNick')} style={{ marginBottom: 16 }}>
+            <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={onlineInputStyle} />
+          </Field>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+            <Panel title={ct('Criar sala')} accent="gold">
+              <Field label={ct('Modo')}>
+                <Seg accent="gold" value={mode} onChange={(id) => setMode(id as 'duel' | 'party')} options={[{ id: 'duel', label: tr('online.modeDuel') }, { id: 'party', label: tr('online.modeParty') }]} />
+              </Field>
+              <Field label={ct('Coleção')}>
+                <Seg accent="gold" value={pool} onChange={(id) => setPool(id as 'world' | 'br')} options={[{ id: 'world', label: tr('online.poolWorld') }, { id: 'br', label: tr('online.poolBr') }]} />
+              </Field>
+              <div style={{ marginBottom: 14 }}>
+                <Check checked={isPublic} onChange={setIsPublic}>{ct('Sala aberta (qualquer um pode entrar)')}</Check>
+              </div>
+              <Button variant="gold" style={{ width: '100%' }} onClick={create} disabled={!nick.trim() || busy}>{busy ? tr('online.creating') : ct('Criar sala')}</Button>
+            </Panel>
+            <Panel title={ct('Entrar com código')} accent="blue">
+              <Field label={tr('online.roomCode')}>
+                <input value={codeInput} maxLength={5} placeholder="ex: K7KPQ" style={{ ...onlineInputStyle, textTransform: 'uppercase', letterSpacing: 4, fontFamily: 'var(--rtm-font-cond)', fontSize: 18 }} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && join()} />
+              </Field>
+              <Button variant="primary" style={{ width: '100%' }} onClick={join} disabled={!nick.trim() || !codeInput.trim() || busy}>{busy ? tr('online.joining') : ct('Entrar na sala')}</Button>
+            </Panel>
+          </div>
+
+          <Panel title={OL.openRooms} accent="blue" actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}>
+            {openRooms.length === 0 ? (
+              <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{OL.noRooms}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {openRooms.map((r) => {
+                  const full = r.players >= r.max;
+                  return (
+                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.7 : 1 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', boxShadow: full ? 'none' : '0 0 7px var(--rtm-green-bright)' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'} · {r.players}/{r.max}</div>
+                      </div>
+                      <Button variant={full ? 'ghost' : 'primary'} size="sm" disabled={busy || full} onClick={() => doJoin(r.code, false)}>{full ? ct('Cheia') : OL.enter}</Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
+          {error && (
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+          )}
+        </div>
+      );
+    }
     // Ranked 1v1: lobby dedicado (hero com MMR/rank + procurar partida), no layout do design.
     if (forceRanked) {
       const duelRooms = openRooms.filter((r) => r.mode === 'duel' && r.players < r.max);
