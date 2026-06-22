@@ -1279,26 +1279,25 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // Duelo Ultimate Team: confronto humano direto, sem preencher o lobby com IA.
   if (state.lobby.status === 'done' && duel) {
     return (
-      <div className="fade-in ut-duel-page">
+      <div className="fade-in ut-duel-page" style={{ maxWidth: 900, margin: '0 auto' }}>
         {rankToast}
-        <div className="panel">
-          <div className="panel-head">
-            {OL.duelLive} · {code}{state?.lobby.ranked && <span className="ranked-badge">RANQUEADA</span>}
-            <span className="spacer" />
-            <button className="btn" onClick={onBack}>{tr('online.exitOnline')}</button>
-          </div>
-          <div className="panel-body">
-            <div className="ut-versus">
+        <BackBar onExit={onBack} />
+        <Panel
+          accent="gold"
+          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>{OL.duelLive} · {code}{state?.lobby.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</span>}
+          actions={<Button variant="ghost" size="sm" onClick={onBack}>{tr('online.exitOnline')}</Button>}
+        >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
             {duel.teams.map((team, idx) => (
-                <div key={team.id} className="ut-versus-team">
+                <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)' }}>
                   <TeamBadge tag={team.tag} colors={team.colors} size={54} logoUrl={team.logoUrl} />
-                  <div>
-                    <span className="muted small">{duel.nicks[idx]}</span>
-                    <h2>{team.name}</h2>
-                    <div className="muted small">{team.players.map((p) => p.nick).join(' · ')}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{duel.nicks[idx]}</span>
+                    <h2 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{team.name}</h2>
+                    <div style={{ fontSize: '11px', color: 'var(--rtm-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.players.map((p) => p.nick).join(' · ')}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--rtm-faint)', marginTop: '2px' }}>C {team.onlinePlan?.captainNick} · R {team.onlinePlan?.reserveNick ?? '—'}</div>
                   </div>
-                  <strong>{Math.round(team.strength)}</strong>
-                  <small className="ut-lineup-plan">C {team.onlinePlan?.captainNick} · R {team.onlinePlan?.reserveNick ?? '—'}</small>
+                  <strong style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, color: 'var(--rtm-gold)' }}>{Math.round(team.strength)}</strong>
                 </div>
               ))}
             </div>
@@ -1317,7 +1316,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               />
             )}
 
-            <div className="muted small section-label">{OL.collection}</div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, margin: '4px 0 8px' }}>{OL.collection}</div>
             <div className="ut-lineups">
               {duel.teams.map((team) => (
                 <div key={team.id} className="ut-lineup">
@@ -1336,30 +1335,29 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
 
             {!duelReplayOpen && (
-              <div className="center" style={{ marginTop: 16 }}>
-                <button className="btn gold big" onClick={() => setDuelReplayOpen(true)}>▶ REVER MD3 ROUND A ROUND</button>
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <Button variant="gold" size="big" onClick={() => setDuelReplayOpen(true)}>▶ Rever MD3 round a round</Button>
               </div>
             )}
             {duelFinished && (
-              <div className="center" style={{ marginTop: 16 }}>
-                <div className="ut-share-card">
-                  <b>{duel.nicks[duel.series.winner]} venceu</b>
-                  <span>{duel.series.mapScore[0]} : {duel.series.mapScore[1]} · MD3</span>
-                  <button className="btn gold small" onClick={() => shareResult(`Road to Major Ultimate Team: ${duel.nicks[duel.series.winner]} venceu ${duel.nicks[duel.series.winner === 0 ? 1 : 0]} por ${duel.series.mapScore[0]}:${duel.series.mapScore[1]}. Monte seu time em roadtomajor.com.br/online`)}>COMPARTILHAR RESULTADO</button>
-                  {shareStatus && <small>{shareStatus}</small>}
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '18px 28px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-gold-soft)' }}>
+                  <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '24px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', textShadow: '0 0 28px rgba(216,169,67,.35)' }}>{duel.nicks[duel.series.winner]} venceu</b>
+                  <span style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '18px', fontWeight: 800, color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{duel.series.mapScore[0]} : {duel.series.mapScore[1]} · MD3</span>
+                  <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${duel.nicks[duel.series.winner]} venceu ${duel.nicks[duel.series.winner === 0 ? 1 : 0]} por ${duel.series.mapScore[0]}:${duel.series.mapScore[1]}. Monte seu time em roadtomajor.com.br/online`)}>Compartilhar resultado</Button>
+                  {shareStatus && <small style={{ fontSize: '11px', color: 'var(--rtm-green-bright)' }}>{shareStatus}</small>}
                 </div>
                 {isHost ? (
-                  <div className="ut-rematch-actions">
-                    <button className="btn gold" onClick={() => nextSeason(true)} disabled={busy}>REVANCHE · MANTER ELENCO</button>
-                    <button className="btn" onClick={() => nextSeason(false)} disabled={busy}>NOVAS CARTAS</button>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: 14 }}>
+                    <Button variant="gold" onClick={() => nextSeason(true)} disabled={busy}>Revanche · manter elenco</Button>
+                    <Button variant="ghost" onClick={() => nextSeason(false)} disabled={busy}>Novas cartas</Button>
                   </div>
                 ) : (
-                  <span className="muted small">{OL.seasonWait}</span>
+                  <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', marginTop: 12 }}>{OL.seasonWait}</div>
                 )}
               </div>
             )}
-          </div>
-        </div>
+        </Panel>
       </div>
     );
   }
@@ -1799,39 +1797,36 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     }
 
     return (
-      <div className="fade-in">
-        <div className="panel">
-          <div className="panel-head">
-            {tr('online.roomMajor')} {code} · {OL.season} {state.lobby.season ?? 1}
-            <span className="spacer" />
-            <button className="btn" onClick={onBack}>
-              {tr('online.exitOnline')}
-            </button>
-          </div>
-          <div className="panel-body">
-            <div className="finale" style={{ padding: '10px 0 18px' }}>
-              <div className="trophy">🏆</div>
-              <h1 style={{ fontSize: 26 }}>
+      <div className="fade-in" style={{ maxWidth: 900, margin: '0 auto' }}>
+        <BackBar onExit={onBack} />
+        <Panel
+          accent="gold"
+          title={`${tr('online.roomMajor')} ${code} · ${OL.season} ${state.lobby.season ?? 1}`}
+          actions={<Button variant="ghost" size="sm" onClick={onBack}>{tr('online.exitOnline')}</Button>}
+        >
+            <div style={{ textAlign: 'center', padding: '6px 0 18px' }}>
+              <div style={{ fontSize: '48px', lineHeight: 1 }}>🏆</div>
+              <h1 style={{ margin: '8px 0 4px', fontFamily: 'var(--rtm-font-cond)', fontSize: '30px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', textShadow: '0 0 36px rgba(216,169,67,.35)' }}>
                 {champNick ? `${champNick} ${tr('online.champTitleHuman')}` : `${champ?.name} ${tr('online.champTitleAi')}`}
               </h1>
-              <div className="muted">
+              <div style={{ color: 'var(--rtm-dim)', fontSize: '13px' }}>
                 {champNick ? `${tr('online.champRoster')} ${champ?.players.map((p) => p.nick).join(', ')}` : tr('online.noHumanFinal')}
               </div>
-              <div className="ut-share-card">
-                <b>{champNick ?? champ?.name} campeão</b>
-                <span>Major Ultimate Team · Temporada {state.lobby.season ?? 1}</span>
-                <button className="btn gold small" onClick={() => shareResult(`Road to Major Ultimate Team: ${champNick ?? champ?.name} foi campeão do Major. Teste com seus amigos em roadtomajor.com.br/online`)}>COMPARTILHAR RESULTADO</button>
-                {shareStatus && <small>{shareStatus}</small>}
+              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', margin: '16px auto 0', padding: '16px 26px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-gold-soft)' }}>
+                <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{champNick ?? champ?.name} campeão</b>
+                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>Major Ultimate Team · Temporada {state.lobby.season ?? 1}</span>
+                <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${champNick ?? champ?.name} foi campeão do Major. Teste com seus amigos em roadtomajor.com.br/online`)}>Compartilhar resultado</Button>
+                {shareStatus && <small style={{ fontSize: '11px', color: 'var(--rtm-green-bright)' }}>{shareStatus}</small>}
               </div>
               {/* continuar a sala: nova temporada com novo draft (transferências) */}
               <div style={{ marginTop: 16 }}>
                 {isHost ? (
-                  <div className="ut-rematch-actions">
-                    <button className="btn gold big" onClick={() => nextSeason(true)} disabled={busy}>NOVO MAJOR · MANTER ELENCOS</button>
-                    <button className="btn big" onClick={() => nextSeason(false)} disabled={busy}>REDRAFT COMPLETO</button>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <Button variant="gold" size="big" onClick={() => nextSeason(true)} disabled={busy}>Novo Major · manter elencos</Button>
+                    <Button variant="ghost" size="big" onClick={() => nextSeason(false)} disabled={busy}>Redraft completo</Button>
                   </div>
                 ) : (
-                  <div className="muted small">{OL.seasonWait}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{OL.seasonWait}</div>
                 )}
               </div>
             </div>
@@ -1930,8 +1925,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
+        </Panel>
         {selMatch && (
             <MatchReplay
               series={selMatch.series}
