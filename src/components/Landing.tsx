@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { BrandMark } from './brand';
 import { Button } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
+import { LegalLinks } from './Legal';
+import { LEGAL_PATHS } from '../legal';
 import { login, signup } from '../state/account';
 
 const M = '/maps/';
@@ -77,7 +79,7 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
         </p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '28px', flexWrap: 'wrap' }}>
           <Button size="big" onClick={onPlay}>Jogar agora, de graça</Button>
-          <Button size="big" variant="gold" onClick={onAccount}>Criar conta por R$20</Button>
+          <Button size="big" variant="gold" onClick={onAccount}>Save na nuvem por R$20</Button>
         </div>
         <div style={{ display: 'flex', gap: '22px', justifyContent: 'center', marginTop: '24px', flexWrap: 'wrap', color: 'var(--rtm-faint)', fontSize: '13px' }}>
           <span><b style={{ color: 'var(--rtm-text-strong)' }}>16</b> times</span>
@@ -128,7 +130,7 @@ function Modes({ onPlay }: { onPlay: () => void }) {
 
 function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
   const FREE = ['Os três modos liberados', 'Save no navegador (localStorage)', 'Roleta, draft e Major completos', 'Sem ranking salvo no online'];
-  const PAID = ['Tudo do gratuito incluso', 'Save na nuvem, joga de qualquer lugar', 'Ranking e MMR salvos no online', 'Histórico de todas as partidas', 'Selo de apoiador no perfil', 'Acesso vitalício, pagamento único'];
+  const PAID = ['Todo o gameplay continua gratuito', 'Save na nuvem, joga de qualquer lugar', 'Ranking e MMR salvos no online', 'Histórico de todas as partidas', 'Selo de apoiador no perfil', 'Pagamento único, sem mensalidade'];
   return (
     <section id="conta" className="lp-wrap" style={{ padding: '60px 22px' }}>
       <SectionHead kicker="Conta e save" title="Grátis pra jogar, conta pra valer pontos" sub="Você joga tudo de graça com save no navegador. A conta guarda o seu progresso na nuvem e libera o ranking salvo do modo online." />
@@ -144,20 +146,20 @@ function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => v
         </div>
         <div style={{ position: 'relative', background: 'linear-gradient(160deg, rgba(216,169,67,.12), var(--rtm-panel))', border: '1px solid var(--rtm-gold-soft)', borderRadius: '12px', padding: '26px 24px', display: 'flex', flexDirection: 'column', boxShadow: '0 0 0 1px rgba(216,169,67,.18), 0 12px 36px rgba(0,0,0,.4)' }}>
           <span style={{ position: 'absolute', top: '18px', right: '20px', fontSize: '10px', fontWeight: 800, letterSpacing: '.8px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '4px 10px', borderRadius: '999px' }}>Recomendado</span>
-          <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>Conta vitalícia</span>
+          <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>Conta com save na nuvem</span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '6px 0 2px' }}>
             <span style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, color: 'var(--rtm-gold)' }}>R$20</span>
             <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>uma vez, sem assinatura</span>
           </div>
-          <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '18px' }}>Save na nuvem e ranking salvo pra sempre</span>
+          <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '18px' }}>Persistência enquanto o serviço estiver em operação</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
             {PAID.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: i === 0 ? 'var(--rtm-dim)' : 'var(--rtm-text)' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{f}</span>)}
           </div>
-          <Button variant="gold" style={{ marginTop: '22px', width: '100%' }} onClick={onAccount}>Criar conta por R$20</Button>
+          <Button variant="gold" style={{ marginTop: '22px', width: '100%' }} onClick={onAccount}>Ativar conta com save</Button>
         </div>
       </div>
       <p className="rtm-reveal" style={{ textAlign: 'center', color: 'var(--rtm-faint)', fontSize: '12.5px', marginTop: '18px' }}>
-        Pagamento único via Pix ou cartão (Stripe). Sem mensalidade, sem cobrança escondida. Você pode jogar de graça pra sempre se quiser.
+        O jogo completo é gratuito. Os R$20 cobrem conta, banco de dados e persistência em nuvem, sem mensalidade.
       </p>
     </section>
   );
@@ -189,10 +191,10 @@ function How() {
 function Faq() {
   const Q: [string, string][] = [
     ['Preciso pagar pra jogar?', 'Não. Os três modos estão liberados de graça e o save fica no seu navegador. A conta de R$20 serve pra guardar o progresso na nuvem e liberar o ranking salvo do online.'],
-    ['O que a conta me dá?', 'Save na nuvem pra jogar de qualquer aparelho, ranking e MMR salvos no modo online, histórico de todas as partidas e um selo de apoiador no perfil. É pagamento único, sem mensalidade.'],
+    ['O que a conta me dá?', 'Save na nuvem pra jogar de qualquer aparelho, ranking e MMR persistentes no modo online, histórico de partidas e um selo de apoiador. Nenhum modo ou vantagem de gameplay é vendido.'],
     ['Por que o ranking online pede conta?', 'O ranking precisa guardar o seu histórico em servidor pra ser justo e não dar pra burlar. Sem conta você ainda joga partidas online, mas elas não contam pontos salvos.'],
     ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
-    ['Como pago os R$20?', 'Via Pix na hora ou cartão, pelo Stripe. O acesso é liberado assim que o pagamento cai e vale pra sempre.'],
+    ['Como pago os R$20?', 'Via Pix ou cartão, pelo Stripe. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
     ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, cobrindo as cinco eras do Counter-Strike.'],
   ];
   const [open, setOpen] = useState(0);
@@ -229,30 +231,30 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
           <p style={{ color: 'var(--rtm-dim)', fontSize: '16px', maxWidth: '520px', margin: '0 auto 24px' }}>Comece de graça agora. Quando quiser salvar tudo e disputar o ranking, é só criar a sua conta.</p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Button size="big" onClick={onPlay}>Jogar agora</Button>
-            <Button size="big" variant="gold" onClick={onAccount}>Criar conta por R$20</Button>
+            <Button size="big" variant="gold" onClick={onAccount}>Ativar save na nuvem</Button>
           </div>
         </div>
       </div>
-      <footer style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', marginTop: '40px', paddingTop: '20px', borderTop: '1px solid var(--rtm-border-soft)', color: 'var(--rtm-faint)', fontSize: '12.5px' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><BrandMark size={22} /> Road to Major</span>
-        <span>Dados curados de HLTV e Liquipedia (CC BY-SA 3.0). Projeto de fã, sem fins comerciais com a Valve.</span>
+      <footer className="landing-legal-footer">
+        <span className="landing-footer-brand"><BrandMark size={22} /> Road to Major</span>
+        <span>Produto comercial independente, não afiliado ou endossado pela Valve, HLTV, Liquipedia, equipes ou jogadores.</span>
+        <LegalLinks />
       </footer>
     </section>
   );
 }
 
-function AccountModal({ open, onClose, onCheckout, onPlay, initialMode = 'signup' }: { open: boolean; onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
+function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
   const [mode, setMode] = useState<'signup' | 'login'>(initialMode);
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  useEffect(() => { if (open) { setMode(initialMode); setNick(''); setEmail(''); setPw(''); setBusy(false); setErr(''); } }, [open, initialMode]);
-  if (!open) return null;
+  const [accepted, setAccepted] = useState(false);
   const input: CSSProperties = { width: '100%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '11px 13px', fontSize: '14px', fontFamily: 'var(--font)' };
   const lbl: CSSProperties = { fontSize: '11px', fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', display: 'block', marginBottom: '6px' };
-  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6;
+  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6 && (mode === 'login' || accepted);
   const go = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
@@ -275,7 +277,7 @@ function AccountModal({ open, onClose, onCheckout, onPlay, initialMode = 'signup
           {mode === 'signup' && (
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
               <span style={{ fontFamily: 'var(--font-cond)', fontSize: '34px', fontWeight: 800, color: 'var(--rtm-gold)' }}>R$20</span>
-              <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>pagamento único, acesso vitalício</span>
+              <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>pagamento único pelo save em nuvem</span>
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -283,13 +285,19 @@ function AccountModal({ open, onClose, onCheckout, onPlay, initialMode = 'signup
             <div><label style={lbl}>E-mail</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" type="email" autoComplete="email" /></div>
             <div><label style={lbl}>Senha</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="mínimo 6 caracteres" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} /></div>
           </div>
+          {mode === 'signup' && (
+            <label className="checkout-legal-accept">
+              <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
+              <span>Li e aceito os <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">Termos</a> e a <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">Política de Reembolso</a>, consultei a <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">Privacidade</a> e confirmo ser maior de 18 anos ou responsável legal pela compra.</span>
+            </label>
+          )}
           {err && <p style={{ color: 'var(--rtm-red-bright)', fontSize: '12.5px', margin: '12px 0 0' }}>{err}</p>}
-          <Button variant="gold" style={{ width: '100%', marginTop: '20px', opacity: valid && !busy ? 1 : 0.5 }} onClick={go}>{busy ? 'Aguarde…' : mode === 'signup' ? 'Criar conta e pagar R$20' : 'Entrar'}</Button>
+          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? 'Aguarde…' : mode === 'signup' ? 'Ativar save por R$20' : 'Entrar'}</Button>
           <p style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', textAlign: 'center', margin: '14px 0 0' }}>
             {mode === 'signup' ? 'Já tem conta? ' : 'Não tem conta? '}
             <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); }} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontWeight: 700, fontSize: '12.5px' }}>{mode === 'signup' ? 'Entrar' : 'Criar conta'}</button>
           </p>
-          <p style={{ fontSize: '11.5px', color: 'var(--rtm-faint)', textAlign: 'center', margin: '10px 0 0' }}>Pagamento via Stripe (Pix ou cartão). Sem conta você joga de graça, com save só no navegador.</p>
+          <p style={{ fontSize: '11.5px', color: 'var(--rtm-faint)', textAlign: 'center', margin: '10px 0 0' }}>Pagamento via Stripe. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.</p>
         </div>
       </div>
     </div>
@@ -327,7 +335,7 @@ export function Landing({ onPlay, onCheckout }: { onPlay: () => void; onCheckout
       <How />
       <Faq />
       <FinalCta onAccount={() => openAcct('signup')} onPlay={onPlay} />
-      <AccountModal open={acct} onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} />
+      {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} />}
     </div>
   );
 }

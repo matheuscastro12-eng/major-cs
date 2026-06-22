@@ -3,6 +3,13 @@
     "api/*.ts": { "memory": 256, "maxDuration": 10 }
   },
   "rewrites": [
+    { "source": "/jogar", "destination": "/" },
+    { "source": "/criar-manager", "destination": "/" },
+    { "source": "/perfil", "destination": "/" },
+    { "source": "/ranking", "destination": "/" },
+    { "source": "/privacidade", "destination": "/" },
+    { "source": "/termos", "destination": "/" },
+    { "source": "/reembolso", "destination": "/" },
     { "source": "/online", "destination": "/" },
     { "source": "/online/:path*", "destination": "/" },
     { "source": "/ultimateteam", "destination": "/" },

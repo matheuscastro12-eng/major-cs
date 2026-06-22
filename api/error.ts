@@ -33,8 +33,11 @@ export default async function handler(
     const ccHeader = req.headers?.['x-vercel-ip-country'];
     const country = cut(Array.isArray(ccHeader) ? ccHeader[0] : ccHeader, 2).toLowerCase();
     try {
-      await sql`INSERT INTO client_errors (sid, kind, message, stack, page, ua, country)
-        VALUES (${cut(body.sid, 40)}, ${cut(body.kind, 20)}, ${message}, ${cut(body.stack, 2000)}, ${cut(body.url, 300)}, ${cut(body.ua, 300)}, ${country})`;
+      await sql`WITH inserted AS (
+        INSERT INTO client_errors (sid, kind, message, stack, page, ua, country)
+        VALUES (${cut(body.sid, 40)}, ${cut(body.kind, 20)}, ${message}, ${cut(body.stack, 2000)}, ${cut(body.url, 300)}, ${cut(body.ua, 300)}, ${country})
+        RETURNING 1
+      ) DELETE FROM client_errors WHERE ts < now() - interval '90 days'`;
       res.status(200).json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: String(e) });

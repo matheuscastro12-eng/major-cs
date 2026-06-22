@@ -81,7 +81,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
         {!paid && (
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 26px', background: 'rgba(216,169,67,.1)', borderTop: '1px solid var(--rtm-gold-soft)', fontSize: '12.5px', color: 'var(--rtm-dim)', flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>★</span>
-            Você joga casual à vontade. Para o seu rank entrar no <b style={{ color: 'var(--rtm-text)' }}>ranking salvo</b>, ative a conta vitalícia.
+            Todo o online é gratuito. Para manter seu rank no <b style={{ color: 'var(--rtm-text)' }}>ranking persistente</b> entre sessões, ative a conta com save na nuvem.
             <a href="/" style={{ marginLeft: 'auto', color: 'var(--rtm-link)', fontWeight: 700, whiteSpace: 'nowrap' }}>Ativar conta →</a>
           </div>
         )}

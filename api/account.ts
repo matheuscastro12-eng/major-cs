@@ -1,5 +1,5 @@
 // Contas (e-mail + senha) + entitlement da conta vitalícia R$20.
-// Ações (POST body.action): signup | login | me | checkout | claim.
+// Ações (POST body.action): signup | login | me | checkout | claim | export | delete.
 // - senha: scrypt (node:crypto), guardada como "salt:hash".
 // - token: HMAC-SHA256 stateless ("body.sig", body = email|exp), env APP_SECRET.
 // - checkout: cria a URL do Payment Link ligada à conta autenticada.
@@ -55,6 +55,7 @@ export default async function handler(
   res: Res,
 ) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
+  res.setHeader('Cache-Control', 'no-store');
   const dbUrl = cleanEnv(process.env.DATABASE_URL);
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
@@ -67,6 +68,9 @@ export default async function handler(
     // cadastro pendente: credenciais de quem iniciou o signup mas ainda NÃO pagou.
     // Vira conta de verdade só quando o pagamento confirma (regra: só pago tem conta).
     sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_saves (email TEXT, slot TEXT, data TEXT, updated_at BIGINT DEFAULT 0, PRIMARY KEY (email, slot))`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`,
   ]);
 
   let body: Record<string, unknown> = {};
@@ -75,6 +79,53 @@ export default async function handler(
   const email = String(body.email ?? '').trim().toLowerCase().slice(0, 200);
   const password = String(body.password ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 40);
+
+  if (action === 'export' || action === 'delete') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Sessão inválida. Entre novamente na conta.' }); return; }
+    const accounts = await sql`SELECT email, nick, pass_hash, paid, created_at FROM rtm_accounts WHERE email=${em}`;
+    if (!accounts.length) { res.status(404).json({ error: 'Conta não encontrada.' }); return; }
+
+    if (action === 'export') {
+      const [saves, ranking, seasons, payments] = await Promise.all([
+        sql`SELECT slot, data, updated_at FROM rtm_saves WHERE email=${em} ORDER BY slot`,
+        sql`SELECT nick, mmr, wins, losses, peak, updated_at FROM rtm_ranking WHERE email=${em}`,
+        sql`SELECT season, nick, mmr, division, place FROM rtm_season_archive WHERE email=${em} ORDER BY season DESC`,
+        sql`SELECT session_id, created_at FROM rtm_payment_sessions WHERE email=${em} ORDER BY created_at DESC`,
+      ]);
+      res.status(200).json({
+        exportedAt: new Date().toISOString(),
+        account: {
+          email: String(accounts[0].email),
+          nick: String(accounts[0].nick ?? ''),
+          paid: Boolean(accounts[0].paid),
+          createdAt: accounts[0].created_at,
+        },
+        cloudSaves: saves.map((row) => ({ slot: row.slot, data: row.data, updatedAt: Number(row.updated_at ?? 0) })),
+        ranking: ranking[0] ?? null,
+        seasonHistory: seasons,
+        paymentReferences: payments,
+        note: 'O hash da senha não integra a exportação por segurança. Dados mantidos diretamente pelo Stripe devem ser solicitados ao processador.',
+      });
+      return;
+    }
+
+    if (!password || !verifyPw(password, String(accounts[0].pass_hash))) {
+      res.status(403).json({ error: 'Senha incorreta. A conta não foi excluída.' });
+      return;
+    }
+    await sql.transaction([
+      sql`DELETE FROM rtm_saves WHERE email=${em}`,
+      sql`DELETE FROM rtm_ranking WHERE email=${em}`,
+      sql`DELETE FROM rtm_season_archive WHERE email=${em}`,
+      sql`DELETE FROM rtm_payment_sessions WHERE email=${em}`,
+      sql`DELETE FROM rtm_paid_emails WHERE email=${em}`,
+      sql`DELETE FROM rtm_pending_signups WHERE email=${em}`,
+      sql`DELETE FROM rtm_accounts WHERE email=${em}`,
+    ]);
+    res.status(200).json({ deleted: true });
+    return;
+  }
 
   // verdadeiro se a conta já está paga, OU se há um e-mail pago pendente (pago
   // antes de criar a conta) — nesse caso, casa e marca a conta.
@@ -137,7 +188,7 @@ export default async function handler(
     if (!r.length || !verifyPw(password, String(r[0].pass_hash))) { res.status(401).json({ error: 'E-mail ou senha incorretos.' }); return; }
     await ensureReference(email);
     const paid = await resolvePaid(email, Boolean(r[0].paid), true);
-    if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento da conta vitalícia.', url: checkoutUrl(email) }); return; }
+    if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: checkoutUrl(email) }); return; }
     res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: true });
     return;
   }
@@ -183,7 +234,7 @@ export default async function handler(
         return;
       }
       if (!checkoutHasExpectedPrice(session)) {
-        res.status(400).json({ error: 'Esta sessão não corresponde à conta vitalícia.' });
+        res.status(400).json({ error: 'Esta sessão não corresponde à conta com save na nuvem.' });
         return;
       }
       if (!checkoutBelongsToAccount(session, em)) {

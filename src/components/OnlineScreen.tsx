@@ -845,7 +845,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [duel, isSpectator, major, nick, state]);
+  }, [account?.nick, account?.paid, duel, isSpectator, major, nick, state]);
 
   // some o feedback de ranking depois de alguns segundos
   useEffect(() => {
@@ -984,7 +984,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   </div>
                 ) : <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>Jogue uma partida online pra entrar no ranking.</span>
               ) : (
-                <span style={{ fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>O <b style={{ color: 'var(--rtm-text)' }}>ranking salvo</b> é da conta vitalícia. Jogue à vontade de graça; pra valer pontos no ladder, crie a conta na tela inicial.</span>
+                <span style={{ fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>Todo o online é gratuito. A <b style={{ color: 'var(--rtm-text)' }}>persistência do ranking</b> faz parte da conta com save na nuvem, que cobre a infraestrutura.</span>
               )}
               {ladder && (
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: '2px' }}>

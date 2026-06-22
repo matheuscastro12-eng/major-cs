@@ -89,7 +89,7 @@ export default async function handler(
   // só conta paga tem ranking salvo
   const acc = await sql`SELECT paid, nick FROM rtm_accounts WHERE email=${email}`;
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
-  if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O ranking salvo é da conta vitalícia.' }); return; }
+  if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O ranking persistente faz parte da conta com save na nuvem.' }); return; }
   const nick = String((body.nick as string) || acc[0].nick || 'manager').slice(0, 40);
 
   // garante a linha do jogador na temporada atual (faz reset lazy se preciso) e devolve o estado fresco.

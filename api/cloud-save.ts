@@ -40,7 +40,7 @@ export default async function handler(
 
   const acc = await sql`SELECT paid FROM rtm_accounts WHERE email=${email}`;
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
-  if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O save na nuvem é da conta vitalícia.' }); return; }
+  if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'Este recurso faz parte da conta com save na nuvem.' }); return; }
 
   const slot = String(body.slot ?? 'career').slice(0, 40);
 

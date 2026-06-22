@@ -41,11 +41,32 @@ export async function beginCheckout(): Promise<string | null> {
   return d.url;
 }
 
+export async function exportAccountData(): Promise<Record<string, unknown>> {
+  const token = getToken();
+  if (!token) throw new Error('Entre novamente na conta para exportar seus dados.');
+  return post({ action: 'export', token });
+}
+
+export async function deleteAccount(password: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error('Entre novamente na conta para excluí-la.');
+  await post({ action: 'delete', token, password });
+  clearToken();
+}
+
 export function useAccount() {
   const [account, setAccount] = useState<Account | null>(null);
   const [ready, setReady] = useState(false);
   const refresh = useCallback(async () => { setAccount(await fetchMe()); setReady(true); }, []);
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    let active = true;
+    void fetchMe().then((next) => {
+      if (!active) return;
+      setAccount(next);
+      setReady(true);
+    });
+    return () => { active = false; };
+  }, []);
   const logout = useCallback(() => { clearToken(); setAccount(null); }, []);
   return { account, ready, setAccount, refresh, logout };
 }

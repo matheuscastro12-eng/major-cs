@@ -126,8 +126,8 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
 
           {!paid && (
             <Panel title="Entre no ranking" accent="gold">
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>O ladder salvo é da conta vitalícia. No grátis você joga ranqueada, mas o MMR não persiste entre sessões.</p>
-              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>Ativar conta vitalícia (R$20)</Button>
+              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.</p>
+              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>Ativar ranking persistente (R$20)</Button>
             </Panel>
           )}
 

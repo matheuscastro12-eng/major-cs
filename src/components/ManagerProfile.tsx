@@ -5,20 +5,60 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { Flag } from './ui';
 import { Button, Panel } from './ds';
 import { DivBadge } from './Leaderboard';
-import type { Account } from '../state/account';
+import { LegalLinks } from './Legal';
+import { deleteAccount, exportAccountData, type Account } from '../state/account';
 import { fetchMyRank, type MyRank } from '../state/ranking';
 import type { Manager } from '../state/manager';
 
-export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade }: {
+export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, onAccountDeleted }: {
   manager: Manager;
   account: Account | null;
   onBack: () => void;
   onEdit: () => void;
   onUpgrade: () => void;
+  onAccountDeleted: () => void;
 }) {
   const paid = !!account?.paid;
   const [rank, setRank] = useState<MyRank | null>(null);
+  const [dataBusy, setDataBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [dataError, setDataError] = useState('');
   useEffect(() => { if (paid) void fetchMyRank(manager.nick).then(setRank); }, [paid, manager.nick]);
+
+  const downloadData = async () => {
+    if (dataBusy) return;
+    setDataBusy(true);
+    setDataError('');
+    try {
+      const data = await exportAccountData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `road-to-major-dados-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : 'Não foi possível exportar agora.');
+    } finally {
+      setDataBusy(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (dataBusy || deleteConfirm !== 'EXCLUIR' || !deletePassword) return;
+    setDataBusy(true);
+    setDataError('');
+    try {
+      await deleteAccount(deletePassword);
+      onAccountDeleted();
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : 'Não foi possível excluir a conta.');
+      setDataBusy(false);
+    }
+  };
 
   const games = rank ? rank.wins + rank.losses : 0;
   const winRate = games ? Math.round((rank!.wins / games) * 100) : 0;
@@ -43,7 +83,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade }: 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <h1 style={{ margin: 0, ...cond, fontSize: '34px', color: 'var(--rtm-text-strong)', letterSpacing: '.5px' }}>{manager.nick}</h1>
               {paid
-                ? <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '3px 9px', borderRadius: '999px' }}>★ Conta vitalícia</span>
+                ? <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '3px 9px', borderRadius: '999px' }}>★ Save na nuvem</span>
                 : <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', padding: '3px 9px', borderRadius: '999px' }}>{account ? 'Grátis' : 'Convidado'}</span>}
               {paid && rank && <DivBadge d={rank.division} />}
             </div>
@@ -80,7 +120,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade }: 
               </div>
             ) : <p className="muted small" style={{ margin: 0 }}>Jogue uma partida online ranqueada pra entrar no ladder.</p>
           ) : (
-            <p className="muted small" style={{ margin: 0 }}>O ranking salvo é da conta vitalícia. No grátis você joga online, mas os pontos não persistem.</p>
+            <p className="muted small" style={{ margin: 0 }}>O ranking persistente faz parte da conta com save. No grátis você joga online, mas os pontos não persistem.</p>
           )}
         </Panel>
 
@@ -101,25 +141,57 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade }: 
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                   <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--rtm-gold)', fontSize: '18px' }}>★</span>
-                  <div><div style={{ ...cond, fontWeight: 700, color: 'var(--rtm-text-strong)', fontSize: '15px' }}>Conta vitalícia ativa</div><div style={{ fontSize: '11.5px', color: 'var(--rtm-dim)' }}>{account?.email}</div></div>
+                  <div><div style={{ ...cond, fontWeight: 700, color: 'var(--rtm-text-strong)', fontSize: '15px' }}>Conta com save ativa</div><div style={{ fontSize: '11.5px', color: 'var(--rtm-dim)' }}>{account?.email}</div></div>
                 </div>
                 {['Save sincronizado em todos os aparelhos', 'Ranking e MMR salvos no online', 'Histórico completo de partidas'].map((f, i) => (
                   <div key={i} style={{ display: 'flex', gap: '9px', fontSize: '13px', color: 'var(--rtm-dim)', padding: '4px 0' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{f}</div>
                 ))}
+                <div className="account-data-actions">
+                  <Button variant="ghost" size="sm" onClick={downloadData} disabled={dataBusy}>{dataBusy ? 'Aguarde…' : 'Exportar meus dados'}</Button>
+                  <button type="button" className="account-delete-link" onClick={() => { setDeleteOpen(true); setDataError(''); }}>Excluir conta</button>
+                </div>
+                {dataError && !deleteOpen && <p className="account-data-error">{dataError}</p>}
+                <LegalLinks className="account-legal-links" />
               </div>
             ) : (
               <div>
-                <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>Você joga de graça com save no navegador. A conta vitalícia guarda tudo na nuvem e libera o ranking salvo do online.</p>
+                <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>Você joga tudo de graça com save no navegador. A conta opcional paga a infraestrutura para guardar dados na nuvem e persistir o ranking online.</p>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '12px' }}>
                   <span style={{ ...cond, fontSize: '30px', color: 'var(--rtm-gold)' }}>R$20</span>
-                  <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>uma vez, acesso vitalício</span>
+                  <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>uma vez, sem mensalidade</span>
                 </div>
-                <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>Ativar conta vitalícia</Button>
+                <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>Ativar save na nuvem</Button>
               </div>
             )}
           </Panel>
         </div>
       </div>
+
+      {deleteOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={() => !dataBusy && setDeleteOpen(false)}>
+          <section className="account-delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title" onClick={(event) => event.stopPropagation()}>
+            <span className="account-delete-kicker">AÇÃO IRREVERSÍVEL</span>
+            <h2 id="delete-account-title">Excluir conta e dados na nuvem?</h2>
+            <p>Serão apagados o acesso da conta, saves na nuvem, ranking e histórico associado. O jogo continuará gratuito e os saves que já estão neste navegador não serão apagados.</p>
+            <p>Essa ação não solicita reembolso automaticamente. Faça o pedido de estorno antes da exclusão, quando aplicável.</p>
+            <label>
+              Senha atual
+              <input type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" />
+            </label>
+            <label>
+              Digite <b>EXCLUIR</b> para confirmar
+              <input value={deleteConfirm} onChange={(event) => setDeleteConfirm(event.target.value.toUpperCase())} autoComplete="off" />
+            </label>
+            {dataError && <p className="account-data-error">{dataError}</p>}
+            <div className="account-delete-actions">
+              <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={dataBusy}>Cancelar</Button>
+              <button type="button" className="account-delete-confirm" disabled={dataBusy || deleteConfirm !== 'EXCLUIR' || !deletePassword} onClick={confirmDelete}>
+                {dataBusy ? 'Excluindo…' : 'Excluir definitivamente'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

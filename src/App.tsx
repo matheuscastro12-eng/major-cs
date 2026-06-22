@@ -34,6 +34,7 @@ import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
 import { Landing } from './components/Landing';
+import { LegalPage } from './components/Legal';
 import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
 import { Leaderboard } from './components/Leaderboard';
@@ -64,7 +65,10 @@ type Screen =
   | 'online'
   | 'career'
   | 'careerCRM'
-  | 'careerAccess';
+  | 'careerAccess'
+  | 'privacy'
+  | 'terms'
+  | 'refund';
 
 const SCREEN_PATH: Record<Screen, string> = {
   landing: '/',
@@ -87,6 +91,9 @@ const SCREEN_PATH: Record<Screen, string> = {
   lab: '/admin/lab',
   careerCRM: '/admin/carreira',
   careerAccess: '/admin/acessos',
+  privacy: '/privacidade',
+  terms: '/termos',
+  refund: '/reembolso',
 };
 
 const PATH_SCREEN: Record<string, Screen> = Object.fromEntries(
@@ -185,7 +192,7 @@ export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
-  const { account, refresh: refreshAccount } = useAccount();
+  const { account, refresh: refreshAccount, logout } = useAccount();
   const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
@@ -358,6 +365,7 @@ export default function App() {
       draft: 'Draft', hub: 'Campeonato', veto: 'Veto de mapas', match: 'Partida ao vivo',
       final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama',
       stats: 'Estatísticas', admin: 'Admin',
+      privacy: 'Privacidade', terms: 'Termos', refund: 'Reembolso',
     };
     const sub = TITLES[screen];
     document.title = sub ? `${sub} · Road to Major` : 'Road to Major · simulador de CS de todas as eras';
@@ -686,6 +694,10 @@ export default function App() {
     );
   }
 
+  if (screen === 'privacy' || screen === 'terms' || screen === 'refund') {
+    return <LegalPage kind={screen} onBack={() => setScreen('landing')} />;
+  }
+
   // Portão do Setup: não vive só no botão "Jogar". Sem manager criado, qualquer
   // entrada direta no jogo (deep link, F5, retorno do Stripe em /jogar) cai aqui.
   if (screen === 'setup' || !manager) {
@@ -695,7 +707,19 @@ export default function App() {
   if (screen === 'profile' && manager) {
     return (
       <main className="page" style={{ paddingTop: 24 }}>
-        <ManagerProfile manager={manager} account={account} onBack={() => setScreen('home')} onEdit={() => setScreen('setup')} onUpgrade={() => setScreen('landing')} />
+        <ManagerProfile
+          manager={manager}
+          account={account}
+          onBack={() => setScreen('home')}
+          onEdit={() => setScreen('setup')}
+          onUpgrade={() => setScreen('landing')}
+          onAccountDeleted={() => {
+            logout();
+            setCloudEnabled(false);
+            setCloudToast('Conta e dados na nuvem excluídos. Seus saves locais continuam neste navegador.');
+            setScreen('home');
+          }}
+        />
       </main>
     );
   }
@@ -715,7 +739,7 @@ export default function App() {
 
       {paidToast && (
         <div className="paid-toast" role="status">
-          <span>★ Conta vitalícia ativada! Save na nuvem e ranking liberados.</span>
+          <span>★ Conta com save ativada! Nuvem e ranking persistente liberados.</span>
           <button onClick={() => setPaidToast(false)} aria-label="fechar">✕</button>
         </div>
       )}
@@ -753,7 +777,7 @@ export default function App() {
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
             {account && (
-              <button className="acct-chip" title={account.paid ? 'Conta vitalícia ativa · ver perfil' : 'Ver perfil'} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
+              <button className="acct-chip" title={account.paid ? 'Conta com save na nuvem · ver perfil' : 'Ver perfil'} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
                 {account.paid && <span className="acct-star">★</span>}
                 {account.nick || account.email}
               </button>

@@ -75,7 +75,10 @@ export default async function handler(
       res.status(200).json({ ok: true });
       return;
     }
-    await sql`INSERT INTO events (type, sid, data) VALUES (${type}, ${sid}, ${data}::jsonb)`;
+    await sql`WITH inserted AS (
+      INSERT INTO events (type, sid, data) VALUES (${type}, ${sid}, ${data}::jsonb)
+      RETURNING 1
+    ) DELETE FROM events WHERE created_at < now() - interval '24 months'`;
     res.status(200).json({ ok: true });
   } catch {
     res.status(200).json({ ok: false }); // telemetria nunca quebra o jogo

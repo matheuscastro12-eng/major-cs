@@ -9,6 +9,11 @@ import { track } from '../state/track';
 const DEST = 'https://g4skins.com/ref/RTMBRASIL';
 
 const ADLABEL = { pt: 'publicidade', en: 'ad', es: 'publicidad' } as const;
+const AGE_WARNING = {
+  pt: '18+ · caixas com itens aleatórios · não destinado a menores',
+  en: '18+ · cases with random items · not intended for minors',
+  es: '18+ · cajas con artículos aleatorios · no dirigido a menores',
+} as const;
 
 export function AdBanner() {
   const [broken, setBroken] = useState(false);
@@ -24,16 +29,20 @@ export function AdBanner() {
 
   const lang = getLang();
   const label = ADLABEL[lang] ?? ADLABEL.pt;
+  const warning = AGE_WARNING[lang] ?? AGE_WARNING.pt;
 
   return (
     <aside className="ad-footer" aria-label={label}>
-      <span className="ad-footer-label">{label}</span>
+      <div className="ad-footer-meta">
+        <span className="ad-footer-label">{label}</span>
+        <strong className="ad-footer-age">{warning}</strong>
+      </div>
       <a
         className="ad-footer-link"
         href={DEST}
         target="_blank"
         rel="noreferrer sponsored nofollow"
-        aria-label="G4 Skins"
+        aria-label={`G4 Skins · ${warning}`}
         onClick={() => track('ad_click', { sponsor: 'g4skins', placement: 'footer' })}
       >
         <picture>
