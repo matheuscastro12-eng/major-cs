@@ -74,7 +74,7 @@ export function CareerSaves({ onPlay, onBack }: { onPlay: (slot: number) => void
 
       <Panel title="Como funciona" accent="blue" style={{ marginTop: '18px' }}>
         <p style={{ margin: 0, fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.55 }}>
-          Cada save é uma carreira independente (org, elenco, títulos, dinheiro). Apagar um save libera o slot na hora e não dá pra desfazer. Como sua conta é vitalícia, os saves sincronizam na nuvem e te seguem em qualquer aparelho.
+          Cada save é uma carreira independente (org, elenco, títulos, dinheiro). Apagar um save libera o slot na hora e não dá pra desfazer. A carreira em que você está jogando sincroniza na nuvem da sua conta vitalícia.
         </p>
       </Panel>
     </div>
