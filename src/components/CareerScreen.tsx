@@ -1150,6 +1150,25 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 function userBaseVrsFor(teamwork: number): number {
   return Math.round(Math.max(0, teamwork - 60) * 14);
 }
+// LEGADO: dominância sustentada (Majors vencidos + títulos tier-1) deixa uma marca
+// que NÃO decai. O VRS rolante sozinho tinha teto ~2.5x o ganho de 1 split, então
+// um campeão em série estacionava abaixo do #1. Com o legado, quem vence DE
+// VERDADE e SEGUIDO sobe acima do field (1 título sozinho ainda rende pouco).
+function userLegacyVrs(save: CareerSave): number {
+  const h = aggregateHistory(save.history);
+  return (h.majorTitles ?? 0) * 130 + h.circuitTitles * 28;
+}
+// VRS COMPLETO do usuário (base do elenco + rolante + legado) — o mesmo número do
+// ranking. Versão self-contained pra telas que não têm o buildTeam no closure.
+function userVrsTotal(save: CareerSave, findSigning: (s: Signing) => ResolvedSigning | null, coaches: TeamSeason[]): number {
+  const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
+  let teamwork = 78;
+  if (save.org && picks.length >= 5 && save.coachFromId) {
+    const coach = coaches.find((t) => t.id === save.coachFromId)?.coach ?? ROOKIE_COACH;
+    teamwork = buildUserTeam(save.org.name, picks.slice(0, 5), coach).teamwork;
+  }
+  return userBaseVrsFor(teamwork) + (save.vrs ?? 0) + userLegacyVrs(save);
+}
 // Região de circuito no modo carreira (Américas N/S/Central = uma só). Tipos e
 // helpers ficam em data/regions.ts (compartilhados com as bandeiras).
 type CareerRegion = MacroRegion;
@@ -2392,7 +2411,7 @@ export function CareerScreen({ onExit }: Props) {
       .filter((t) => t.id !== 'user' && t.id !== s.takeoverId)
       .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t) }))
       .sort((a, b) => b.vrs - a.vrs);
-    const userVrs = userBaseVrsFor(user.teamwork) + s.vrs;
+    const userVrs = userBaseVrsFor(user.teamwork) + s.vrs + userLegacyVrs(s);
     const userRank = aiSorted.filter((x) => x.vrs > userVrs).length + 1; // posição mundial
     const userStage = userRank <= 8 ? 3 : userRank <= 16 ? 2 : 1;
     const field: TTeam[] = aiSorted.map((x) => x.tt).slice(0, 31);
@@ -2643,7 +2662,7 @@ export function CareerScreen({ onExit }: Props) {
     const orgPlayers = ut?.players ?? [];
     if (orgPlayers.length && save.org) {
       const reg = save.region ?? macroRegionPlurality(orgPlayers.map((p) => p.country));
-      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userBaseVrsFor(ut?.teamwork ?? 78) + save.vrs, isUser: true });
+      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userBaseVrsFor(ut?.teamwork ?? 78) + save.vrs + userLegacyVrs(save), isUser: true });
     }
     const groups = new Map<CareerRegion, Row[]>();
     for (const r of rows) {
@@ -3085,7 +3104,7 @@ export function CareerScreen({ onExit }: Props) {
     // CLASSIFICAÇÃO AO MAJOR = TOP 16 DO RANKING VRS MUNDIAL (como na vida real).
     // Some VRS vencendo partidas e indo longe; sua posição é base do elenco + ganhos.
     // Projeta o VRS já com o ganho DESTE split pra decidir a vaga no fim da temporada.
-    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? 78) + save.vrs + vrsGain;
+    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? 78) + save.vrs + vrsGain + userLegacyVrs(save);
     const worldRank = oppEra.filter((t) => aiTeamVrs(t) > userProjVrs).length + 1; // posição mundial projetada
     const rankQualified = worldRank <= MAJOR_VRS_CUT;
     const majorNow = isMajorSplit(save.split);
@@ -6434,10 +6453,12 @@ function MarketScreen({
             {ct('Ao assinar você se compromete por X splits (não dá pra rescindir antes). Marcas maiores pedem mais VRS e contratos mais longos.')}
           </div>
           <div className="sponsor-grid">
-            {SPONSORS.map((sp) => {
+            {(() => { const sponsorVrs = userVrsTotal(save, findSigning, coaches); return SPONSORS.map((sp) => {
               const active = sponsors.includes(sp.id);
               const committed = active && underContract(sp.id);
-              const reqVrs = !active && sp.minVrs > save.vrs;
+              // gate pelo VRS COMPLETO (o mesmo do ranking), não só o save.vrs rolante:
+              // antes as marcas top (Red Bull/Samsung) eram praticamente inalcançáveis.
+              const reqVrs = !active && sp.minVrs > sponsorVrs;
               const full = !active && sponsors.length >= SPONSOR_SLOTS;
               const blocked = reqVrs || full;
               return (
@@ -6459,7 +6480,7 @@ function MarketScreen({
                   {active && <span className="sp-check">✔</span>}
                 </button>
               );
-            })}
+            }); })()}
           </div>
 
           {/* transferências que já se concretizaram (jogadores agora nos novos times) */}
