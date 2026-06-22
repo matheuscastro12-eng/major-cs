@@ -1,10 +1,11 @@
-// Draft "estilo Major" (pacotes/cartas) reutilizável, montado a partir de um
-// pool de jogadores. Cada rodada abre um pacote e o jogador escolhe 1 carta.
-// Usado pelo Gauntlet (e pronto pra outros modos solo).
+// Draft "estilo Major" (pacotes/cartas) reutilizável, montado a partir de um pool de
+// jogadores. Cada rodada abre um pacote e o jogador escolhe 1 carta. Usa a MESMA
+// cartinha (ut-card) e a MESMA animação de pack/abertura dos outros modos.
 import { useMemo, useState } from 'react';
 import { Panel } from '../ds';
-import { Flag, OvrBadge, PlayerAvatar } from '../ui';
+import { Flag, PlayerAvatar } from '../ui';
 import { RoleTag } from './bits';
+import { UltimatePlayerCard } from './cards';
 import type { PoolPlayer } from './onlineData';
 
 const ROLE_KEYS: { role: string; label: string }[] = [
@@ -66,24 +67,27 @@ export function PackDraft({ pool, count = 5, title, subtitle, accent, onBack, on
 
       <Panel title={`Pacote ${Math.min(round + 1, count)} de ${count}`} accent="gold" style={{ marginBottom: '16px' }}>
         {!revealed ? (
-          <div style={{ textAlign: 'center', padding: '18px 0' }}>
-            <button type="button" onClick={() => setRevealed(true)} style={{ cursor: 'pointer', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '26px 44px', borderRadius: 'var(--rtm-radius)', background: 'linear-gradient(160deg, rgba(216,169,67,.18), rgba(13,17,22,.5))', border: `1px solid ${tone}` }}>
-              <span style={{ fontSize: '11px', fontWeight: 800, letterSpacing: '2px', color: 'var(--rtm-gold)' }}>RTM</span>
-              <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Abrir cartas</b>
-              <small style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>5 opções · escolha 1</small>
+          <div className="ut-pack-reveal">
+            <button type="button" onClick={() => setRevealed(true)}>
+              <span>RTM</span>
+              <b>ABRIR PACOTE</b>
+              <small>5 cartas · escolha 1</small>
             </button>
-            <p style={{ color: 'var(--rtm-dim)', fontSize: '13px', marginTop: '14px' }}>As cinco cartas do pacote serão reveladas. Escolha uma para o seu elenco.</p>
+            <p>As cinco cartas do pacote serão reveladas. Escolha uma para o seu elenco.</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
-            {pack.map((p) => (
-              <button key={p.id} type="button" onClick={() => pick(p)} style={{ position: 'relative', textAlign: 'center', cursor: 'pointer', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', padding: '12px 8px' }}>
-                <OvrBadge ovr={p.ovr} />
-                <PlayerAvatar nick={p.nick} size={44} />
-                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 700, color: 'var(--rtm-text-strong)', marginTop: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nick}</div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', marginTop: '4px' }}><Flag cc={p.country} /><RoleTag role={p.role} /></div>
-                <div style={{ marginTop: '8px', fontSize: '10px', fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase', color: tone }}>Contratar</div>
-              </button>
+          <div className="player-cards ut-revealed-cards">
+            {pack.map((p, i) => (
+              <UltimatePlayerCard
+                key={p.id}
+                player={p.player}
+                source={p.from}
+                taken={false}
+                currentLabel="ATUAL"
+                legendLabel="LENDA"
+                revealIndex={i}
+                onPick={() => pick(p)}
+              />
             ))}
           </div>
         )}
