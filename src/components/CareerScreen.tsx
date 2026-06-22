@@ -853,7 +853,15 @@ function baseAge(p: Pick<Player, 'id' | 'nick'>, youthAge?: Record<string, numbe
   // Jovens de verdade vêm da academia, que grava a idade na promoção (youthAge).
   return 25 + (hashStr(`age:${p.id}`) % 5);
 }
+// jogador gerado pela base da IA (regen): o id carrega o split de estreia e a
+// idade de estreia, pra idade/evolução baterem com o relógio próprio dele.
+function regenInfo(id: string): { debut: number; a0: number } | null {
+  const m = /~rg\d+\.\d+\.(\d+)\.(\d+)$/.exec(id);
+  return m ? { debut: Number(m[1]), a0: Number(m[2]) } : null;
+}
 function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number, youthAge?: Record<string, number>): number {
+  const rg = regenInfo(p.id);
+  if (rg) return rg.a0 + Math.floor(Math.max(0, split - rg.debut) / 3);
   return baseAge(p, youthAge) + Math.floor((split - 1) / 3);
 }
 // potencial = teto de OVR. Jovem bom tem espaço pra crescer (S/A); veterano já
@@ -913,18 +921,72 @@ function aiAttrDrift(p: Player, split: number): number {
   }
   return Math.round(Math.max(-10, Math.min(10, cur - base)));
 }
+// idade em que um jogador da IA se aposenta (determinístico, mesmo eixo de
+// longevidade do evoDelta): a maioria sai por volta de 35-38.
+function aiRetireAge(pid: string): number {
+  return 35 + Math.floor((hashStr(`long:${pid}`) % 100) / 25); // 35..38
+}
+
+// drift de OVR entre o split de estreia e o atual, pelo relógio de idade próprio
+// do jogador (serve tanto pro titular original quanto pro jovem da base).
+function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, split: number): number {
+  if (split <= debut) return 0;
+  const room = a0 <= 18 ? 9 : a0 <= 20 ? 7 : a0 <= 22 ? 4 : a0 <= 24 ? 2 : a0 <= 26 ? 1 : 0;
+  const talent = room > 0 ? hashStr(`pot:${pid}`) % 4 : 0;
+  const pot = Math.min(99, baseOvr + room + talent);
+  let cur = baseOvr;
+  for (let s = debut; s < split; s++) {
+    const age = a0 + Math.floor((s - debut) / 3);
+    cur = Math.max(40, Math.min(99, cur + evoDelta(pid, s, age, cur >= pot)));
+  }
+  return Math.round(Math.max(-12, Math.min(12, cur - baseOvr)));
+}
+
+// jovem da base que assume a vaga de um titular aposentado. OVR de estreia abaixo
+// do nível do time (cru, com espaço pra crescer). Determinístico por time/vaga/geração.
+function regenYouth(team: TeamSeason, slot: number, gen: number, debut: number, a0: number, baselineOvr: number, role: Role): Player {
+  const seed = `regen:${team.id}:${slot}:${gen}`;
+  const region = macroRegionOf(team.country) ?? 'europe';
+  const ident = prospectIdentity(seed, region);
+  const h = hashStr(seed);
+  const base = Math.max(54, Math.min(86, baselineOvr - (5 + (h % 5)))); // -5..-9 vs. nível do time
+  return {
+    id: `${team.id}~rg${slot}.${gen}.${debut}.${a0}`,
+    nick: ident.nick, name: ident.name, country: ident.country, role,
+    aim: base + (h % 3), consistency: base - 1, clutch: base - 2,
+    awp: role === 'AWP' ? base + 1 : base - 6,
+    igl: role === 'IGL' ? base + 1 : base - 5,
+  };
+}
+
+// resolve o jogador ATUAL de uma vaga da IA no split dado: o titular original
+// envelhece até se aposentar; aí um jovem da base (academia) assume e evolui no
+// lugar dele — e assim por diante. Mantém os elencos da IA vivos e renovados.
+function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split: number, baselineOvr: number, skip: Set<string>): Player {
+  const clamp = (v: number) => Math.max(40, Math.min(99, v));
+  let curPlayer = orig, curId = orig.id, curBaseOvr = playerOvr(orig), curA0 = baseAge(orig), debut = 1, gen = 0, isYouth = false;
+  for (let guard = 0; guard < 8; guard++) {
+    const need = aiRetireAge(curId) - curA0;
+    const retireSplit = need <= 0 ? debut + 1 : debut + 3 * need;
+    if (split < retireSplit) break; // titular atual ainda em atividade
+    gen++; debut = retireSplit;
+    const a0 = 17 + (hashStr(`yage:${team.id}:${slot}:${gen}:${debut}`) % 3); // estreia 17-19
+    curPlayer = regenYouth(team, slot, gen, debut, a0, baselineOvr, orig.role);
+    curId = curPlayer.id; curBaseOvr = playerOvr(curPlayer); curA0 = a0; isYouth = true;
+  }
+  if (skip.has(curId)) return curPlayer; // se o usuário contratou esse jovem, ele evolui pelo save.evo
+  const d = driftFrom(curId, curBaseOvr, curA0, debut, split);
+  if (!d) return isYouth ? curPlayer : orig;
+  const p = curPlayer;
+  return { ...p, aim: clamp(p.aim + d), consistency: clamp(p.consistency + d), clutch: clamp(p.clutch + d), awp: clamp(p.awp + d), igl: clamp(p.igl + d) };
+}
+
 function applyAiAging(teams: TeamSeason[], split: number, skip: Set<string>): TeamSeason[] {
   if (split <= 1) return teams;
-  const clamp = (v: number) => Math.max(40, Math.min(99, v));
-  return teams.map((t) => ({
-    ...t,
-    players: t.players.map((p) => {
-      if (skip.has(p.id)) return p; // SEUS jogadores evoluem pelo save.evo (não duplica)
-      const d = aiAttrDrift(p, split);
-      if (!d) return p;
-      return { ...p, aim: clamp(p.aim + d), consistency: clamp(p.consistency + d), clutch: clamp(p.clutch + d), awp: clamp(p.awp + d), igl: clamp(p.igl + d) };
-    }),
-  }));
+  return teams.map((t) => {
+    const baseline = Math.round(t.players.reduce((a, p) => a + playerOvr(p), 0) / Math.max(1, t.players.length));
+    return { ...t, players: t.players.map((p, i) => (skip.has(p.id) ? p : aiSlotPlayer(p, t, i, split, baseline, skip))) };
+  });
 }
 
 // ----- helpers do playoff (mata-mata do circuito) -----
@@ -4290,7 +4352,7 @@ export function CareerScreen({ onExit }: Props) {
             <div className="career-statgrid">
               <div className="cstat"><b>{save.split - 1}</b><span>Splits disputados</span></div>
               <div className="cstat"><b className="pos">{org.circuitTitles}</b><span>{ct('Títulos de circuito')}</span></div>
-              <div className="cstat"><b className="gold-text">{save.titles}</b><span>Majors vencidos</span></div>
+              <div className="cstat"><b className="gold-text">{org.majorTitles}</b><span>Majors vencidos</span></div>
               <div className="cstat"><b>{org.majorApps}</b><span>Majors disputados</span></div>
               <div className="cstat"><b>{formatMoney(org.totalPrize)}</b><span>{ct('Prêmios na história')}</span></div>
               <div className="cstat"><b>{org.bestPlacement}</b><span>Melhor campanha</span></div>
@@ -4961,15 +5023,16 @@ function deriveCareer(s: CareerStatLine | undefined) {
 }
 
 function aggregateHistory(h: SplitRecord[]) {
-  let circuitTitles = 0, majorApps = 0, totalPrize = 0, bestPos = 99;
+  let circuitTitles = 0, majorApps = 0, majorTitles = 0, totalPrize = 0, bestPos = 99;
   for (const r of h) {
     if (r.champion) circuitTitles++;
     if (r.major) majorApps++;
+    if (r.major?.champion) majorTitles++; // só Major vencido (não título de circuito)
     totalPrize += r.prize;
     if (r.position && r.position < bestPos) bestPos = r.position;
   }
   return {
-    circuitTitles, majorApps, totalPrize,
+    circuitTitles, majorApps, majorTitles, totalPrize,
     bestPlacement: bestPos === 99 ? '-' : `${bestPos}º`,
   };
 }
