@@ -1445,4 +1445,6 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Entrar na sala": { en: "Join room", es: "Entrar en la sala" },
   "Cheia": { en: "Full", es: "Llena" },
   "Sala de": { en: "Room of", es: "Sala de" },
+
+  "Remover jogador ausente (libera a sala)": { en: "Remove idle player (unblocks the room)", es: "Quitar jugador ausente (libera la sala)" },
 };

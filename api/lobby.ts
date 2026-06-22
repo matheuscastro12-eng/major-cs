@@ -435,8 +435,9 @@ export default async function handler(
         res.status(403).json({ error: 'só o host expulsa' });
         return;
       }
-      if (lobby[0].status !== 'waiting') {
-        res.status(409).json({ error: 'o draft já começou' });
+      // host pode remover na espera E no draft (libera sala travada por AFK)
+      if (lobby[0].status !== 'waiting' && lobby[0].status !== 'drafting') {
+        res.status(409).json({ error: 'não dá pra expulsar agora' });
         return;
       }
       if (!target || target.toLowerCase() === String(lobby[0].host).toLowerCase()) {
@@ -444,6 +445,20 @@ export default async function handler(
         return;
       }
       await sql`DELETE FROM lobby_players WHERE code = ${code} AND lower(nick) = ${target.toLowerCase()}`;
+      // se estava no draft, reavalia a barreira: remover um AFK que não terminou
+      // pode liberar o avanço dos que já estão prontos (não trava mais).
+      if (lobby[0].status === 'drafting') {
+        const actives = await sql`SELECT nick, done FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false ORDER BY joined_at ASC`;
+        const allDone = actives.length > 0 && actives.every((p) => p.done === true);
+        if (allDone) {
+          if (lobby[0].mode === 'duel' && actives.length >= 2) {
+            const participants = actives.map((p) => String(p.nick));
+            await sql`UPDATE lobbies SET status = 'veto', veto_state = ${JSON.stringify(initialVeto(participants))}::jsonb, updated_at = now() WHERE code = ${code}`;
+          } else if (lobby[0].mode !== 'duel') {
+            await sql`UPDATE lobbies SET status = 'done', updated_at = now() WHERE code = ${code}`;
+          }
+        }
+      }
       res.status(200).json({ ok: true });
       return;
     }

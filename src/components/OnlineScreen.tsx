@@ -2529,6 +2529,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   <span style={{ fontSize: '11px', fontWeight: 700, color: ready ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)' }}>
                     {ready ? tr('online.ready') : `${livePicks.length}/5 ${tr('online.picks')}`}
                   </span>
+                  {isHost && !mine && p.nick !== state.lobby.host && !ready && (
+                    <button type="button" title={ct('Remover jogador ausente (libera a sala)')} disabled={busy} onClick={() => kick(p.nick)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--rtm-faint)', fontSize: '13px', lineHeight: 1, padding: 0 }}>✕</button>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   {[0, 1, 2, 3, 4].map((i) => {
