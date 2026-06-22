@@ -3173,6 +3173,26 @@ export function CareerScreen({ onExit }: Props) {
       else if (league) finishUserRound(league, series);
       recordCareerMatch(series, matchCtx.teams, matchCtx.userIdx, matchCtx.phaseLabel);
     };
+    // TRAVA o resultado assim que a série é decidida (antes do "Continuar"). Sem isso,
+    // sair da carreira na tela de resultado deixava re-rolar a partida ao reentrar.
+    const commitDecided = (series: SeriesResult) => {
+      if (matchCtx.mode === 'playoff') {
+        if (!save.playoff || !save.league) return;
+        const clone: Playoff = structuredClone(save.playoff);
+        const m = poUserMatch(clone);
+        if (!m) return;
+        m.result = series;
+        const next = { ...save, playoff: clone };
+        persist(next); setSave(next);
+      } else if (matchCtx.mode !== 'major' && league) {
+        const clone: League = structuredClone(league);
+        const m = userLeagueMatch(clone);
+        if (!m) return;
+        m.result = series;
+        const next = { ...save, league: clone };
+        persist(next); setSave(next);
+      }
+    };
     if (stage === 'veto') {
       return (
         <VetoScreen
@@ -3197,6 +3217,7 @@ export function CareerScreen({ onExit }: Props) {
         phaseLabel={matchCtx.phaseLabel}
         bestOf={matchCtx.bestOf}
         onFinish={finish}
+        onDecided={commitDecided}
       />
     );
   }

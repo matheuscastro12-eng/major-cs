@@ -19,6 +19,7 @@ interface Props {
   phaseLabel: string;
   bestOf?: 1 | 3 | 5;
   onFinish: (series: SeriesResult) => void;
+  onDecided?: (series: SeriesResult) => void; // dispara ao DECIDIR a série (antes do Continuar): trava o resultado
 }
 
 const TIMEOUTS_PER_MAP = 2;
@@ -86,7 +87,7 @@ const BUY_LABEL: Record<BuyTier, string> = {
   full: 'FULL BUY',
 };
 
-export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish }: Props) {
+export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish, onDecided }: Props) {
   const { t, lang } = useLang();
   const L = LOCAL[(lang as 'pt' | 'en' | 'es')] ?? LOCAL.pt;
   const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
@@ -125,9 +126,15 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [freeze, setFreeze] = useState(0);
   const [lastCall, setLastCall] = useState<{ call: RoundCall; won: boolean; round: number } | null>(null);
 
-  // ao terminar a série, sobe pro topo pra mostrar o resultado e o botão Continuar
+  // ao terminar a série, sobe pro topo pra mostrar o resultado e o botão Continuar.
+  // Também TRAVA o resultado na hora (onDecided), pra sair antes do Continuar não
+  // permitir re-rolar a partida ao reentrar.
+  const decidedRef = useRef(false);
   useEffect(() => {
-    if (finished) window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!finished) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!decidedRef.current) { decidedRef.current = true; onDecided?.(buildSeries()); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
   const seriesOver = () => {
