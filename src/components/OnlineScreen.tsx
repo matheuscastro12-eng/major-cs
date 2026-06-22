@@ -1832,9 +1832,16 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
 
             <div className="muted small section-label">PRÊMIOS DO MAJOR</div>
-            <div className="ut-session-profile compact">
-              <span>DIVISÃO DA SESSÃO</span><b>{sessionDivision(sessionProfile.points)}</b><strong>{sessionProfile.points} pts</strong>
-              <small>{sessionProfile.wins}V · {sessionProfile.losses}D · {sessionProfile.titles} títulos</small>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 14px', padding: '12px 16px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
+              <div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>Divisão da sessão</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--rtm-gold)' }}>{sessionDivision(sessionProfile.points)}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{sessionProfile.points}</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>pts</div>
+              </div>
+              <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{sessionProfile.wins}V · {sessionProfile.losses}D · {sessionProfile.titles} títulos</span>
             </div>
             <div className="ut-awards">
               {awards.map(({ label, row }) => row && (
