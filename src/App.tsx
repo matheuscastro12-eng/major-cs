@@ -34,7 +34,7 @@ import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendi
 import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
 import { LangSwitcher } from './components/social';
-import { Landing } from './components/Landing';
+import { Landing, AccountModal } from './components/Landing';
 import { LegalPage } from './components/Legal';
 import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
@@ -304,6 +304,7 @@ export default function App() {
   // save na nuvem (conta vitalícia): liga o espelhamento e reconcilia no login.
   // Se a nuvem estiver mais nova, restaura no localStorage e atualiza a home.
   const [cloudToast, setCloudToast] = useState('');
+  const [authOpen, setAuthOpen] = useState(false); // modal de login/conta acessível do header
   useEffect(() => {
     setCloudEnabled(!!account?.paid);
     if (!account?.paid) return;
@@ -788,6 +789,13 @@ export default function App() {
                 {account.paid && <span className="acct-tag">VITALÍCIA</span>}
               </button>
             )}
+            <button
+              className="nav-btn"
+              title={account ? 'Perfil e configurações da conta' : 'Entrar ou criar conta'}
+              onClick={() => { if (account) { setScreen(manager ? 'profile' : 'setup'); } else { setAuthOpen(true); } }}
+            >
+              {account ? 'Conta' : 'Entrar'}
+            </button>
             <button className="nav-btn" onClick={() => setScreen('hall')}>
               {t('nav.hall')}
             </button>
@@ -796,6 +804,14 @@ export default function App() {
       )}
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
+      {authOpen && !account && (
+        <AccountModal
+          initialMode="login"
+          onClose={() => setAuthOpen(false)}
+          onCheckout={startCheckout}
+          onPlay={async () => { setAuthOpen(false); await refreshAccount(); setScreen(manager ? 'home' : 'setup'); }}
+        />
+      )}
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
       <main className="page">

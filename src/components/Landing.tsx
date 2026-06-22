@@ -244,7 +244,7 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
   );
 }
 
-function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
+export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
   const [mode, setMode] = useState<'signup' | 'login'>(initialMode);
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
