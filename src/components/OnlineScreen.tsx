@@ -36,7 +36,7 @@ import { Flag, Loader, MapThumb, OvrBadge, PlayerAvatar, TeamBadge } from './ui'
 import { logoForTeam } from '../data/media';
 import { MatchBanner } from './flags';
 import { Panel, Button } from './ds';
-import { BackBar, Field, Seg, Check, onlineInputStyle } from './online/bits';
+import { BackBar, Field, Seg, Check, RoleTag, onlineInputStyle } from './online/bits';
 
 interface SelSeries {
   a: string; // teamId
@@ -1949,14 +1949,20 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // draft sincronizado
   if (isSpectator && state.lobby.status === 'drafting') {
     return (
-      <div className="fade-in"><div className="panel" style={{ maxWidth: 680, margin: '30px auto' }}>
-        <div className="panel-head">MODO ESPECTADOR · {code}<span className="spacer" /><button className="btn" onClick={onBack}>Sair</button></div>
-        <div className="panel-body center">
-          <h2>Os jogadores estão montando os elencos</h2>
-          <p className="muted">Você entrará automaticamente no veto e poderá acompanhar todas as partidas.</p>
-          <div className="lobby-players" style={{ justifyContent: 'center' }}>{activePlayers.map((player) => <span key={player.nick} className={`lobby-player${player.done ? ' done' : ''}`}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>)}</div>
-        </div>
-      </div></div>
+      <div className="fade-in" style={{ maxWidth: 680, margin: '0 auto' }}>
+        <BackBar onExit={onBack} />
+        <Panel title={`Modo espectador · ${code}`} accent="blue">
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', fontWeight: 800, color: 'var(--rtm-text-strong)', margin: '0 0 6px' }}>Os jogadores estão montando os elencos</h2>
+            <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', margin: '0 0 14px' }}>Você entrará automaticamente no veto e poderá acompanhar todas as partidas.</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+              {activePlayers.map((player) => (
+                <span key={player.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: player.done ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)', background: player.done ? 'rgba(111,208,111,.12)' : 'var(--rtm-panel-2)', border: `1px solid ${player.done ? 'var(--rtm-green)' : 'var(--rtm-border-soft)'}` }}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>
+              ))}
+            </div>
+          </div>
+        </Panel>
+      </div>
     );
   }
   if (!setup) return null;
@@ -1984,23 +1990,19 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     <div className="fade-in online-draft-layout">
       <div>
         {myDone ? (
-          <div className="panel">
-            <div className="panel-head">{tr('online.draftSent')}</div>
-            <div className="panel-body center">
-              <p className="muted">{tr('online.waitingOthers')}</p>
-              <div className="lobby-players" style={{ justifyContent: 'center' }}>
-                {activePlayers.map((p) => (
-                  <span key={p.nick} className={`lobby-player${p.done ? ' done' : ''}`}>
-                    {p.done ? '✔' : '·'} {p.nick}
-                  </span>
-                ))}
-              </div>
+          <Panel title={tr('online.draftSent')} accent="blue">
+            <p style={{ textAlign: 'center', color: 'var(--rtm-dim)', fontSize: '14px', marginTop: 0 }}>{tr('online.waitingOthers')}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+              {activePlayers.map((p) => (
+                <span key={p.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: p.done ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)', background: p.done ? 'rgba(111,208,111,.12)' : 'var(--rtm-panel-2)', border: `1px solid ${p.done ? 'var(--rtm-green)' : 'var(--rtm-border-soft)'}` }}>
+                  {p.done ? '✔' : '·'} {p.nick}
+                </span>
+              ))}
             </div>
-          </div>
+          </Panel>
         ) : strategyPhase ? (
-          <div className="panel ut-strategy-panel">
-            <div className="panel-head">PLANO TÁTICO</div>
-            <div className="panel-body">
+          <Panel title="Plano tático" accent="gold">
+            <div className="ut-strategy-panel">
               <div className="ut-chem-summary">
                 <span>QUÍMICA</span><b>{chemistry.score}</b>
                 <div><i style={{ width: `${chemistry.score}%` }} /></div>
@@ -2035,13 +2037,12 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 <label><input type="checkbox" checked={strategy.substituteAfterMap === true} onChange={(event) => setStrategy((current) => ({ ...current, substituteAfterMap: event.target.checked }))} /> Usar o reserva entre os mapas</label>
               </div>
               <p className="muted small">Estas são preferências táticas. Antes de cada confronto, o veto oficial completo acontece no mesmo formato do modo carreira e draft.</p>
-              <button className="btn gold big" style={{ width: '100%' }} onClick={confirmStrategy}>CONFIRMAR E FICAR PRONTO</button>
+              <Button variant="gold" size="big" style={{ width: '100%' }} onClick={confirmStrategy}>Confirmar e ficar pronto</Button>
             </div>
-          </div>
+          </Panel>
         ) : lineupPhase ? (
-          <div className="panel ut-lineup-builder">
-            <div className="panel-head">CAPITÃO E ESCALAÇÃO</div>
-            <div className="panel-body">
+          <Panel title="Capitão e escalação" accent="gold">
+            <div className="ut-lineup-builder">
               <div className="muted small section-label">ESCOLHA O CAPITÃO</div>
               <div className="ut-lineup-choices">
                 {pickedCards.map(({ player }) => (
@@ -2058,12 +2059,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   </button>
                 ))}
               </div>
-              <button className="btn gold big" style={{ width: '100%' }} disabled={!lineup.captainId || !lineup.reserveId} onClick={() => setLineupConfirmed(true)}>CONFIRMAR ESCALAÇÃO</button>
+              <Button variant="gold" size="big" style={{ width: '100%' }} disabled={!lineup.captainId || !lineup.reserveId} onClick={() => setLineupConfirmed(true)}>Confirmar escalação</Button>
             </div>
-          </div>
+          </Panel>
         ) : coachPhase ? (
-          <div className="panel">
-            <div className="panel-head">{tr('online.chooseCoach')}</div>
+          <Panel title={tr('online.chooseCoach')} accent="gold">
             <div className="player-cards">
               {setup.coachOptions.map((t) => (
                 <button key={t.id} className="pcard" onClick={() => pickCoach(t.id)}>
@@ -2079,18 +2079,15 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 </button>
               ))}
             </div>
-          </div>
+          </Panel>
         ) : (
-          <div className="panel">
-            <div className="panel-head">
-              {OL.collection} · {myPicks.length + 1} {tr('online.ofFive')}
-              <span className="spacer" />
-              <button className="btn ghost small" disabled={(myRollouts[myPicks.length] ?? 0) >= (state.lobby.draft_rollouts ?? 2)} onClick={rerollCurrentPack}>
-                ↻ REROLL {(state.lobby.draft_rollouts ?? 2) - (myRollouts[myPicks.length] ?? 0)}
-              </button>
-              <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-                {tr('online.sameRosters')} {tr('online.roomLabel')} {code}
-              </span>
+          <Panel
+            title={`${OL.collection} · ${myPicks.length + 1} ${tr('online.ofFive')}`}
+            accent="gold"
+            actions={<Button variant="ghost" size="sm" disabled={(myRollouts[myPicks.length] ?? 0) >= (state.lobby.draft_rollouts ?? 2)} onClick={rerollCurrentPack}>↻ REROLL {(state.lobby.draft_rollouts ?? 2) - (myRollouts[myPicks.length] ?? 0)}</Button>}
+          >
+            <div style={{ fontSize: '11px', color: 'var(--rtm-dim)', marginBottom: '10px' }}>
+              {tr('online.sameRosters')} {tr('online.roomLabel')} {code}
             </div>
             <div className="draft-source">
               <TeamBadge tag={source.tag} colors={source.colors} size={56} logoUrl={source.logoUrl ?? logoForTeam(source)} />
@@ -2157,69 +2154,72 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 { role: 'Entry', label: OL.roleEntry },
               ];
               return (
-                <div className="online-roster">
-                  <div className="muted small section-label" style={{ marginTop: 4 }}>
+                <div style={{ marginTop: '14px' }}>
+                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '8px' }}>
                     {OL.yourTeam} ({myPicks.length}/5)
                   </div>
-                  <div className="roster-slots">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '8px' }}>
                     {roster.map((p, i) => (
-                      <div key={i} className={`slot${p ? ' filled' : ''}`}>
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: 'var(--rtm-radius)', background: p ? 'var(--rtm-panel-2)' : 'var(--rtm-bg-deep)', border: `1px solid ${p ? 'var(--rtm-border-soft)' : 'var(--rtm-border-soft)'}`, borderStyle: p ? 'solid' : 'dashed', minHeight: '46px' }}>
                         {p ? (
                           <>
-                            <PlayerAvatar nick={p.nick} size={34} />
-                            <div className="nick"><Flag cc={p.country} /> {p.nick} <span className="ovr-inline">{playerOvr(p)}</span></div>
-                            <span className={`role-pill ${p.role}`}>{p.role}</span>
+                            <PlayerAvatar nick={p.nick} size={32} />
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '13px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><Flag cc={p.country} /> {p.nick} <span style={{ color: 'var(--rtm-gold)', fontVariantNumeric: 'tabular-nums' }}>{playerOvr(p)}</span></span>
+                              <RoleTag role={p.role} />
+                            </span>
                           </>
                         ) : (
-                          <span className="muted small">{OL.emptySlot}</span>
+                          <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-faint)' }}>{OL.emptySlot}</span>
                         )}
                       </div>
                     ))}
                   </div>
-                  <div className="roster-roles">
-                    <span className="muted small">{OL.rolesLabel}:</span>
-                    {KEY.map((k) => (
-                      <span key={k.role} className={`role-need ${present.has(k.role) ? 'ok' : 'miss'}`}>
-                        {present.has(k.role) ? '✓' : '✗'} {k.label}
-                      </span>
-                    ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{OL.rolesLabel}:</span>
+                    {KEY.map((k) => {
+                      const ok = present.has(k.role);
+                      return (
+                        <span key={k.role} style={{ fontSize: '11px', fontWeight: 700, color: ok ? 'var(--rtm-green-bright)' : 'var(--rtm-faint)' }}>
+                          {ok ? '✓' : '✗'} {k.label}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               );
             })()}
-          </div>
+          </Panel>
         )}
       </div>
 
-      <div className="panel online-side">
-        <div className="panel-head">{tr('online.roomLabel')} {code}</div>
-        <div className="panel-body">
-          <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
-            {tr('online.liveProgress')}
-          </div>
+      <Panel title={`${tr('online.roomLabel')} ${code}`} accent="blue" style={{ alignSelf: 'start' }}>
+        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', fontWeight: 700, color: 'var(--rtm-dim)', marginBottom: '10px' }}>
+          {tr('online.liveProgress')}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {activePlayers.map((p) => {
             const mine = p.nick.toLowerCase() === nick.toLowerCase();
             const livePicks = mine ? myPicks : (p.picks ?? []);
+            const ready = p.done || (mine && myDone);
             // cada jogador tem o próprio sorteio: resolve os nicks pelo setup dele
             const pSetup = mine ? setup : buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, state.lobby.ruleset ?? 'open', p.rollouts);
             return (
-              <div key={p.nick} className="online-progress">
-                <div className="op-head">
-                  <b>
-                    {p.nick === state.lobby.host ? '★ ' : ''}
-                    {p.nick}
-                    {mine ? ` (${tr('common.you')})` : ''}
+              <div key={p.nick} style={{ padding: '10px 12px', borderRadius: 'var(--rtm-radius)', background: mine ? 'rgba(67,130,182,.1)' : 'var(--rtm-panel-2)', border: `1px solid ${mine ? 'var(--rtm-border)' : 'var(--rtm-border-soft)'}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: mine ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {p.nick === state.lobby.host ? '★ ' : ''}{p.nick}{mine ? ` (${tr('common.you')})` : ''}
                   </b>
-                  <span className={p.done || (mine && myDone) ? 'pos small' : 'muted small'}>
-                    {p.done || (mine && myDone) ? tr('online.ready') : `${livePicks.length}/5 ${tr('online.picks')}`}
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: ready ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)' }}>
+                    {ready ? tr('online.ready') : `${livePicks.length}/5 ${tr('online.picks')}`}
                   </span>
                 </div>
-                <div className="op-picks">
+                <div style={{ display: 'flex', gap: '4px' }}>
                   {[0, 1, 2, 3, 4].map((i) => {
                     const pid = livePicks[i];
                     const player = pid ? pSetup.sources[i]?.players.find((x) => x.id === pid) : undefined;
                     return (
-                      <span key={i} className={`op-slot${player ? ' filled' : ''}`}>
+                      <span key={i} title={player ? player.nick : undefined} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderRadius: 'var(--rtm-radius-sm)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: player ? 'var(--rtm-text-strong)' : 'var(--rtm-faint)', background: player ? 'var(--rtm-blue)' : 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
                         {player ? player.nick : '·'}
                       </span>
                     );
@@ -2228,11 +2228,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               </div>
             );
           })}
-          <p className="muted small" style={{ marginTop: 12 }}>
-            {tr('online.sideExplain')}
-          </p>
         </div>
-      </div>
+        <p style={{ fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '12px', lineHeight: 1.45 }}>
+          {tr('online.sideExplain')}
+        </p>
+      </Panel>
     </div>
   );
 }
