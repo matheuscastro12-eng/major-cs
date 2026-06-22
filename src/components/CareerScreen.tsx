@@ -977,6 +977,19 @@ function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, spli
   return Math.round(Math.max(-12, Math.min(12, cur - baseOvr)));
 }
 
+// drift de envelhecimento que reproduz o OVR de MERCADO ao contratar (do BASE até o
+// split atual). Regen usa o relógio próprio (estreia gravada no id) com o MESMO teto
+// do aiSlotPlayer; os demais usam aiAttrDrift. Assim o contratado entra no MESMO OVR
+// que aparecia no mercado (sem "cair" 86 -> 78) e não muda de função entre splits.
+function signingDrift(player: Player, split: number): number {
+  const r = parseRegenPlayerId(player.id);
+  if (r) {
+    const orig = CS2_REAL_2026.find((t) => t.id === r.teamId)?.players[r.slot];
+    return driftFrom(player.id, playerOvr(player), r.ageAtDebut, r.debut, split, orig ? playerOvr(orig) + 2 : undefined);
+  }
+  return aiAttrDrift(player, split);
+}
+
 // jovem da base que assume a vaga de um titular aposentado. OVR de estreia abaixo
 // do nível do time (cru, com espaço pra crescer). Determinístico por time/vaga/geração.
 function regenYouth(team: TeamSeason, slot: number, gen: number, debut: number, a0: number, orig: Player): Player {
@@ -1814,20 +1827,16 @@ export function CareerScreen({ onExit }: Props) {
   );
 
   const findSigning = (s: Signing): ResolvedSigning | null => {
-    // 1) time de origem. 2) se uma transferência mudou o time dele, procura em
-    // QUALQUER time. 3) por fim na base. Um jogador do SEU elenco nunca "some".
+    // O jogador é resolvido SEMPRE pelos atributos da BASE (não-envelhecida); o
+    // envelhecimento é aplicado UMA vez abaixo (signingDrift). Resolver pelo
+    // currentEra (já envelhecido) e ainda aplicar drift causava queda dupla de OVR
+    // (86 -> 78) e, com a base regenerada, troca de função entre splits.
     let from = currentEra.find((t) => t.id === s.fromId);
-    let player = from?.players.find((p) => p.id === s.playerId);
-    if (!player) {
-      for (const t of currentEra) {
-        const p = t.players.find((pp) => pp.id === s.playerId);
-        if (p) { from = t; player = p; break; }
-      }
-    }
+    let player = CS2_REAL_2026.find((t) => t.id === s.fromId)?.players.find((p) => p.id === s.playerId);
     if (!player) {
       for (const t of CS2_REAL_2026) {
         const p = t.players.find((pp) => pp.id === s.playerId);
-        if (p) { from = t; player = p; break; }
+        if (p) { from = from ?? currentEra.find((ct) => ct.id === t.id) ?? t; player = p; break; }
       }
     }
     // 4) free agent (pro sem time): resolve da lista de free agents
@@ -1894,7 +1903,7 @@ export function CareerScreen({ onExit }: Props) {
     // ainda sem evo registrado HERDA o drift que a IA tinha aplicado nele (senão ele
     // "cai" do OVR mostrado no mercado pro OVR base ao ser contratado).
     const basePlayer = player;
-    const d = save.evo?.[player.id] ?? aiAttrDrift(player, save.split);
+    const d = save.evo?.[player.id] ?? signingDrift(player, save.split);
     if (!d) return { player, from, basePlayer };
     const clamp = (v: number) => Math.max(40, Math.min(99, v));
     return {
@@ -1995,11 +2004,13 @@ export function CareerScreen({ onExit }: Props) {
     for (const sig of s.squad) {
       const f = findSigning(sig);
       if (!f) continue;
-      // recém-contratado sem evo herda o drift da IA (mesmo OVR do mercado)
-      const prev = s.evo?.[sig.playerId] ?? aiAttrDrift(f.player, s.split);
-      const ovr = playerOvr(f.player) + prev; // OVR efetivo atual (base + evolução)
-      const age = effectiveAge(f.player, s.split, s.youthAge);
-      const pot = playerPotentialOvr(f.player, age);
+      // recém-contratado sem evo herda o drift da IA (mesmo OVR do mercado).
+      // Usa o BASE (não-envelhecido) + o drift acumulado; f.player já vem driftado,
+      // então somar prev de novo contava o envelhecimento em dobro.
+      const prev = s.evo?.[sig.playerId] ?? signingDrift(f.basePlayer, s.split);
+      const ovr = playerOvr(f.basePlayer) + prev; // OVR efetivo atual (base + evolução)
+      const age = effectiveAge(f.basePlayer, s.split, s.youthAge);
+      const pot = playerPotentialOvr(f.basePlayer, age);
       const atCeiling = ovr >= pot;
       let d = evoDelta(sig.playerId, s.split, age, atCeiling);
       // foco de treino: o jogador escolhido desenvolve mais rápido. Jovem/auge
