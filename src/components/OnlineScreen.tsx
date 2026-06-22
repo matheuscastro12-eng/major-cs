@@ -1175,7 +1175,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             {!casualOnly && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 14px', padding: '14px 16px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
               <div>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>Divisão da sessão</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Divisão da sessão')}</div>
                 <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--rtm-gold)' }}>{sessionDivision(sessionProfile.points)}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
@@ -2066,7 +2066,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <div className="muted small section-label">PRÊMIOS DO MAJOR</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 14px', padding: '12px 16px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
               <div>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>Divisão da sessão</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Divisão da sessão')}</div>
                 <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--rtm-gold)' }}>{sessionDivision(sessionProfile.points)}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
@@ -2184,10 +2184,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     return (
       <div className="fade-in" style={{ maxWidth: 680, margin: '0 auto' }}>
         <BackBar onExit={onBack} />
-        <Panel title={`Modo espectador · ${code}`} accent="blue">
+        <Panel title={`${ct('Modo espectador')} · ${code}`} accent="blue">
           <div style={{ textAlign: 'center' }}>
-            <h2 style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', fontWeight: 800, color: 'var(--rtm-text-strong)', margin: '0 0 6px' }}>Os jogadores estão montando os elencos</h2>
-            <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', margin: '0 0 14px' }}>Você entrará automaticamente no veto e poderá acompanhar todas as partidas.</p>
+            <h2 style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', fontWeight: 800, color: 'var(--rtm-text-strong)', margin: '0 0 6px' }}>{ct('Os jogadores estão montando os elencos')}</h2>
+            <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', margin: '0 0 14px' }}>{ct('Você entrará automaticamente no veto e poderá acompanhar todas as partidas.')}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
               {activePlayers.map((player) => (
                 <span key={player.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: player.done ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)', background: player.done ? 'rgba(111,208,111,.12)' : 'var(--rtm-panel-2)', border: `1px solid ${player.done ? 'var(--rtm-green)' : 'var(--rtm-border-soft)'}` }}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>
@@ -2269,7 +2269,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 <div><b>TIMEOUT TÁTICO</b>{[0, 1, 2].map((mapIndex) => <button key={mapIndex} className={strategy.timeoutMap === mapIndex ? 'active' : ''} onClick={() => setStrategy((current) => ({ ...current, timeoutMap: mapIndex }))}>Mapa {mapIndex + 1}</button>)}</div>
                 <label><input type="checkbox" checked={strategy.substituteAfterMap === true} onChange={(event) => setStrategy((current) => ({ ...current, substituteAfterMap: event.target.checked }))} /> Usar o reserva entre os mapas</label>
               </div>
-              <p className="muted small">Estas são preferências táticas. Antes de cada confronto, o veto oficial completo acontece no mesmo formato do modo carreira e draft.</p>
+              <p className="muted small">{ct('Estas são preferências táticas. Antes de cada confronto, o veto oficial completo acontece no mesmo formato do modo carreira e draft.')}</p>
               <Button variant="gold" size="big" style={{ width: '100%' }} onClick={confirmStrategy}>Confirmar e ficar pronto</Button>
             </div>
           </Panel>
@@ -2292,7 +2292,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   </button>
                 ))}
               </div>
-              <Button variant="gold" size="big" style={{ width: '100%' }} disabled={!lineup.captainId || !lineup.reserveId} onClick={() => setLineupConfirmed(true)}>Confirmar escalação</Button>
+              <Button variant="gold" size="big" style={{ width: '100%' }} disabled={!lineup.captainId || !lineup.reserveId} onClick={() => setLineupConfirmed(true)}>{ct('Confirmar escalação')}</Button>
             </div>
           </Panel>
         ) : coachPhase ? (
@@ -2341,7 +2341,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   <b>ABRIR CARTAS</b>
                   <small>{RULESET_OPTIONS.find((r) => r.id === (state.lobby.ruleset ?? 'open'))?.label}</small>
                 </button>
-                <p>As cinco opções serão reveladas. Escolha uma para o seu elenco.</p>
+                <p>{ct('As cinco opções serão reveladas. Escolha uma para o seu elenco.')}</p>
               </div>
             ) : (
               <div className="player-cards ut-revealed-cards">

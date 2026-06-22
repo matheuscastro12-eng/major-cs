@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { type Difficulty, type TournamentPool } from '../types';
 import { useLang } from '../state/i18n';
 import { getManager } from '../state/manager';
+import { ct } from '../state/career-i18n';
 import { BrandMark } from './brand';
 
 interface Props {
@@ -66,10 +67,10 @@ export function Home({
             <span className="rtm-modecard-scrim" />
             <span className="rtm-modecard-bar" />
             <span className="rtm-modecard-body">
-              <span className="rtm-modecard-kicker">Destaque</span>
-              <span className="rtm-modecard-title">Carreira</span>
-              <span className="rtm-modecard-desc">Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.</span>
-              <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1 jogador · campanha</span><span className="rtm-modecard-go">{hasBeta ? 'Entrar' : 'Acessar'} →</span></span>
+              <span className="rtm-modecard-kicker">{ct('Destaque')}</span>
+              <span className="rtm-modecard-title">{ct('Carreira')}</span>
+              <span className="rtm-modecard-desc">{ct('Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.')}</span>
+              <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">{ct('1 jogador · campanha')}</span><span className="rtm-modecard-go">{hasBeta ? ct('Entrar') : ct('Acessar')} →</span></span>
             </span>
           </button>
           <button className="rtm-modecard" data-tone="blue" onClick={() => setView('draft')}>
@@ -77,10 +78,10 @@ export function Home({
             <span className="rtm-modecard-scrim" />
             <span className="rtm-modecard-bar" />
             <span className="rtm-modecard-body">
-              <span className="rtm-modecard-kicker">Partida rápida</span>
+              <span className="rtm-modecard-kicker">{ct('Partida rápida')}</span>
               <span className="rtm-modecard-title">Draft</span>
-              <span className="rtm-modecard-desc">Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.</span>
-              <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1 jogador · ~15 min</span><span className="rtm-modecard-go">Montar →</span></span>
+              <span className="rtm-modecard-desc">{ct('Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.')}</span>
+              <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">{ct('1 jogador · ~15 min')}</span><span className="rtm-modecard-go">{ct('Montar')} →</span></span>
             </span>
           </button>
           {onOnline && (
@@ -89,22 +90,22 @@ export function Home({
               <span className="rtm-modecard-scrim" />
               <span className="rtm-modecard-bar" />
               <span className="rtm-modecard-body">
-                <span className="rtm-modecard-kicker">Competitivo</span>
+                <span className="rtm-modecard-kicker">{ct('Competitivo')}</span>
                 <span className="rtm-modecard-title">Online</span>
-                <span className="rtm-modecard-desc">Snake draft 1v1 contra outro manager. Suba no ladder ranqueado por MMR.</span>
-                <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">1v1 · ranqueada</span><span className="rtm-modecard-go">Jogar →</span></span>
+                <span className="rtm-modecard-desc">{ct('Snake draft 1v1 contra outro manager. Suba no ladder ranqueado por MMR.')}</span>
+                <span className="rtm-modecard-foot"><span className="rtm-modecard-meta">{ct('1v1 · ranqueada')}</span><span className="rtm-modecard-go">{ct('Jogar')} →</span></span>
               </span>
             </button>
           )}
         </div>
 
-        {managerNick && <div className="rtm-signed">Logado como <b>{managerNick}</b> · {teamCount} times · 5 eras · scoreboards estilo HLTV</div>}
+        {managerNick && <div className="rtm-signed">{ct('Logado como')} <b>{managerNick}</b> · {teamCount} {ct('times · 5 eras · scoreboards estilo HLTV')}</div>}
         </>)}
 
         {view === 'draft' && (
         <section className="setup-panel draft-screen">
           <div className="sp-head">
-            <button className="btn ghost small" onClick={() => setView('menu')} style={{ alignSelf: 'flex-start', marginBottom: 6 }}>← Menu</button>
+            <button className="btn ghost small" onClick={() => setView('menu')} style={{ alignSelf: 'flex-start', marginBottom: 6 }}>← {ct('Menu')}</button>
             <span className="sp-title">{L.quickMatch} · Draft</span>
             <span className="sp-sub">{L.quickMatchSub}</span>
           </div>
