@@ -515,8 +515,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     const serverRollouts = Array.isArray(me.rollouts) ? me.rollouts : [];
     setMyRollouts((local) => serverRollouts.some((value, index) => value > (local[index] ?? 0)) ? [...serverRollouts, 0, 0, 0, 0, 0].slice(0, 5) : local);
     if (me.coach_pick) setCoachPick((c) => c || me.coach_pick);
-    if (me.strategy) setStrategy(me.strategy);
-    if (me.lineup?.captainId && me.lineup?.reserveId) {
+    // strategy/lineup são INPUT do usuário: só restaura do servidor quando ele já
+    // marcou pronto (reconexão/F5). Antes, sobrescrevia a cada poll e zerava os
+    // mapas/táticas que o jogador estava escolhendo ("sempre volta ao padrão").
+    if (me.done && me.strategy) setStrategy(me.strategy);
+    if (me.done && me.lineup?.captainId && me.lineup?.reserveId) {
       setLineup(me.lineup);
       setLineupConfirmed(true);
     }
