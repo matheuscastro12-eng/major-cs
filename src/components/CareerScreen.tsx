@@ -1699,7 +1699,13 @@ export function CareerScreen({ onExit }: Props) {
       const freeAgents = FREE_AGENT_PLAYERS
         .filter((p) => !squadIds.has(p.id)) // some do mercado quando já contratado
         .map((p) => ({ player: p, from: FREE_AGENTS_FROM, price: Math.round(playerValue(p) * 0.75) }));
-      return [...fromTeams, ...freeAgents].sort((a, b) => a.price - b.price);
+      // rookies GRÁTIS (preço 0) sempre disponíveis: garantem que dá pra montar um
+      // cinco mesmo sem grana — sem isso, liberar todos e ficar sem caixa travava a
+      // carreira (não dava pra fechar 5 jogadores dentro do orçamento).
+      const freeRookies = backfillPlayers(FREE_AGENTS_FROM, 5)
+        .filter((p) => !squadIds.has(p.id))
+        .map((p) => ({ player: p, from: FREE_AGENTS_FROM, price: 0 }));
+      return [...fromTeams, ...freeAgents, ...freeRookies].sort((a, b) => a.price - b.price);
     },
     [currentEra, save.squad],
   );
@@ -1737,8 +1743,10 @@ export function CareerScreen({ onExit }: Props) {
     const ovrRole = save.roles?.[player.id];
     if (ovrRole && ovrRole !== player.role) player = { ...player, role: ovrRole };
     // aplica a evolução acumulada do SEU elenco (atributos sobem/caem entre
-    // temporadas; valor e salário acompanham automaticamente)
-    const d = save.evo?.[player.id] ?? 0;
+    // temporadas; valor e salário acompanham automaticamente). Jogador recém-contratado
+    // ainda sem evo registrado HERDA o drift que a IA tinha aplicado nele (senão ele
+    // "cai" do OVR mostrado no mercado pro OVR base ao ser contratado).
+    const d = save.evo?.[player.id] ?? aiAttrDrift(player, save.split);
     if (!d) return { player, from };
     const clamp = (v: number) => Math.max(40, Math.min(99, v));
     return {
@@ -1838,8 +1846,9 @@ export function CareerScreen({ onExit }: Props) {
     for (const sig of s.squad) {
       const f = findSigning(sig);
       if (!f) continue;
-      const prev = s.evo?.[sig.playerId] ?? 0;
-      const ovr = playerOvr(f.player);
+      // recém-contratado sem evo herda o drift da IA (mesmo OVR do mercado)
+      const prev = s.evo?.[sig.playerId] ?? aiAttrDrift(f.player, s.split);
+      const ovr = playerOvr(f.player) + prev; // OVR efetivo atual (base + evolução)
       const age = effectiveAge(f.player, s.split, s.youthAge);
       const pot = playerPotentialOvr(f.player, age);
       const atCeiling = ovr >= pot;
