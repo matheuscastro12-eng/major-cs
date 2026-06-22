@@ -1406,4 +1406,12 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Aguardando": { en: "Waiting for", es: "Esperando a" },
   "BANIR": { en: "BAN", es: "VETAR" },
   "ESCOLHER": { en: "PICK", es: "ELEGIR" },
+
+  "voce@email.com": { en: "you@email.com", es: "tu@email.com" },
+  "Sua identidade": { en: "Your identity", es: "Tu identidad" },
+  "Configuração da sala": { en: "Room setup", es: "Configuración de la sala" },
+  "ex: só lenda, sem noob": { en: "e.g. legends only, no noobs", es: "ej: solo leyendas, sin noobs" },
+  "Avança ignorando quem caiu/saiu da sala": { en: "Advance, ignoring who dropped/left the room", es: "Avanza ignorando a quien cayó/salió de la sala" },
+  "Plano tático": { en: "Tactical plan", es: "Plan táctico" },
+  "Capitão e escalação": { en: "Captain & lineup", es: "Capitán y alineación" },
 };

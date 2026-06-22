@@ -1092,13 +1092,13 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </p>
           </div>
 
-          <Panel title="Sua identidade" accent="blue" style={{ marginBottom: '16px' }}>
+          <Panel title={ct("Sua identidade")} accent="blue" style={{ marginBottom: '16px' }}>
             <Field label={tr('online.yourNick')} style={{ marginBottom: 0 }}>
               <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={onlineInputStyle} />
             </Field>
           </Panel>
 
-          <Panel title="Configuração da sala" accent="gold" style={{ marginBottom: '16px' }}>
+          <Panel title={ct("Configuração da sala")} accent="gold" style={{ marginBottom: '16px' }}>
             <Field label="Nome da sala" hint="Aparece na lista de salas. Deixe em branco para usar 'Sala de {seu nick}'.">
               <input value={roomName} maxLength={40} placeholder="ex: Major dos br" onChange={(e) => setRoomName(e.target.value)} style={onlineInputStyle} />
             </Field>
@@ -1162,7 +1162,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           </div>
         </div>
 
-        <Panel title="Sua identidade" accent="blue" style={{ marginBottom: '16px' }}>
+        <Panel title={ct("Sua identidade")} accent="blue" style={{ marginBottom: '16px' }}>
           <Field label={tr('online.yourNick')} style={{ marginBottom: 0 }}>
             <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={onlineInputStyle} />
           </Field>
@@ -1258,7 +1258,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
               <Panel title={tr('online.createRoom')} accent="gold">
                 <Field label="Nome da sala (opcional)">
-                  <input value={roomName} maxLength={40} placeholder="ex: só lenda, sem noob" onChange={(e) => setRoomName(e.target.value)} style={onlineInputStyle} />
+                  <input value={roomName} maxLength={40} placeholder={ct("ex: só lenda, sem noob")} onChange={(e) => setRoomName(e.target.value)} style={onlineInputStyle} />
                 </Field>
                 <Field label="Modo">
                   <Seg accent="gold" value={mode} onChange={(id) => setMode(id as 'duel' | 'party')} options={[{ id: 'duel', label: tr('online.modeDuel') }, { id: 'party', label: tr('online.modeParty') }]} />
@@ -1985,7 +1985,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 ) : !myStageMatch && !myStageConfirmed ? (
                   <button className="btn gold big" disabled={!allStageResultsVisible || busy} onClick={markByeReady}>{allStageResultsVisible ? 'MARCAR COMO PRONTO' : 'RODADA EM ANDAMENTO'}</button>
                 ) : isHost && myStageConfirmed ? (
-                  <button className="btn ghost big" disabled={busy} onClick={forceAdvanceStage} title="Avança ignorando quem caiu/saiu da sala">FORÇAR AVANÇO (jogador ausente)</button>
+                  <button className="btn ghost big" disabled={busy} onClick={forceAdvanceStage} title={ct("Avança ignorando quem caiu/saiu da sala")}>FORÇAR AVANÇO (jogador ausente)</button>
                 ) : (
                   <button className="btn gold big" disabled>{myStageConfirmed ? 'AGUARDANDO O HOST AVANÇAR' : 'SUA PARTIDA ESTÁ AO VIVO'}</button>
                 )}
@@ -2234,7 +2234,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
           </Panel>
         ) : strategyPhase ? (
-          <Panel title="Plano tático" accent="gold">
+          <Panel title={ct("Plano tático")} accent="gold">
             <div className="ut-strategy-panel">
               <div className="ut-chem-summary">
                 <span>QUÍMICA</span><b>{chemistry.score}</b>
@@ -2274,7 +2274,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
           </Panel>
         ) : lineupPhase ? (
-          <Panel title="Capitão e escalação" accent="gold">
+          <Panel title={ct("Capitão e escalação")} accent="gold">
             <div className="ut-lineup-builder">
               <div className="muted small section-label">ESCOLHA O CAPITÃO</div>
               <div className="ut-lineup-choices">
