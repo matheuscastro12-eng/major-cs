@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Panel, Button } from '../ds';
 import { Flag } from '../ui';
 import { BackBar } from './bits';
-import { QuickDraft } from './QuickDraft';
+import { PackDraft } from './PackDraft';
 import { resolve, type OnlineStats, type PoolPlayer } from './onlineData';
 
 type Entry = { idx: number; opp: string; cc: string; win: boolean; score: string; ovr: number };
@@ -69,7 +69,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
     );
   }
 
-  if (phase === 'draft') return <QuickDraft pool={pool} count={5} title="Monte seu time do Gauntlet" subtitle="Escolha 5. Esse time encara a fila inteira, sem substituições." accent="var(--rtm-green-bright)" onBack={() => setPhase('intro')} onDone={onDrafted} />;
+  if (phase === 'draft') return <PackDraft pool={pool} count={5} title="Monte seu time do Gauntlet" subtitle="Abra os pacotes e escolha 1 carta por rodada. Esse time encara a fila inteira, sem substituições." accent="var(--rtm-green-bright)" onBack={() => setPhase('intro')} onDone={onDrafted} />;
 
   if (phase === 'run') {
     const o = aiOpp(streak);
