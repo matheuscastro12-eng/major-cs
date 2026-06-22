@@ -697,10 +697,16 @@ export function simulateSeries(
     if (r.winner === 0) winsA++;
     else winsB++;
   }
+  // Em série com mapas insuficientes pra decidir (pool pequeno, veto curto) pode
+  // dar empate de mapas. NUNCA dar a vitória "no escuro" pro time B: desempata
+  // pela diferença total de rounds (quem jogou melhor) — assim o vencedor gravado
+  // bate com o que o jogador viu na tela (antes um 1–1 virava derrota do time A).
+  const roundDiffA = results.reduce((sum, m) => sum + (m.score[0] - m.score[1]), 0);
+  const winner: 0 | 1 = winsA !== winsB ? (winsA > winsB ? 0 : 1) : (roundDiffA >= 0 ? 0 : 1);
   return {
     teamIds: [a.id, b.id],
     maps: results,
-    winner: winsA > winsB ? 0 : 1,
+    winner,
     mapScore: [winsA, winsB],
   };
 }
