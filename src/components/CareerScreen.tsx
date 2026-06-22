@@ -23,6 +23,7 @@ import { applyFatigueForm, fatigueBand, recoverFatigue, updateMatchFatigue } fro
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, FACILITY_MAX_LEVEL, facilityUpkeep, facilityUpgradeCost, normalizeFacilities, stabilizeMorale, type FacilityKey } from '../engine/career/facilities';
 import { personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
+import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -132,6 +133,39 @@ interface Signing {
   playerId: string;
   fromId: string;
   fee?: number; // valor negociado da transferência (se ausente, usa o de tabela)
+  // Saves antigos guardavam apenas IDs. O snapshot evita que uma atualização da
+  // base transforme um contratado em uma vaga invisível e bloqueie o mercado.
+  playerSnapshot?: Player;
+  fromSnapshot?: {
+    id: string;
+    team: string;
+    tag: string;
+    country: string;
+    colors: [string, string];
+    logoUrl?: string;
+  };
+}
+
+interface ResolvedSigning {
+  player: Player;
+  from: TeamSeason;
+  basePlayer: Player;
+}
+
+function signingWithSnapshot(signing: Signing, resolved: ResolvedSigning): Signing {
+  const { from, basePlayer } = resolved;
+  return {
+    ...signing,
+    playerSnapshot: { ...basePlayer },
+    fromSnapshot: {
+      id: from.id,
+      team: from.team,
+      tag: from.tag,
+      country: from.country,
+      colors: [...from.colors] as [string, string],
+      logoUrl: from.logoUrl,
+    },
+  };
 }
 
 // jogador com contrato vencendo: vai pra tela de renovação na janela.
@@ -856,8 +890,8 @@ function baseAge(p: Pick<Player, 'id' | 'nick'>, youthAge?: Record<string, numbe
 // jogador gerado pela base da IA (regen): o id carrega o split de estreia e a
 // idade de estreia, pra idade/evolução baterem com o relógio próprio dele.
 function regenInfo(id: string): { debut: number; a0: number } | null {
-  const m = /~rg\d+\.\d+\.(\d+)\.(\d+)$/.exec(id);
-  return m ? { debut: Number(m[1]), a0: Number(m[2]) } : null;
+  const parsed = parseRegenPlayerId(id);
+  return parsed ? { debut: parsed.debut, a0: parsed.ageAtDebut } : null;
 }
 function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number, youthAge?: Record<string, number>): number {
   const rg = regenInfo(p.id);
@@ -1778,7 +1812,7 @@ export function CareerScreen({ onExit }: Props) {
     [currentEra, save.squad],
   );
 
-  const findSigning = (s: Signing): { player: Player; from: TeamSeason } | null => {
+  const findSigning = (s: Signing): ResolvedSigning | null => {
     // 1) time de origem. 2) se uma transferência mudou o time dele, procura em
     // QUALQUER time. 3) por fim na base. Um jogador do SEU elenco nunca "some".
     let from = currentEra.find((t) => t.id === s.fromId);
@@ -1811,6 +1845,44 @@ export function CareerScreen({ onExit }: Props) {
       player = save.youth[s.playerId];
       from = ACADEMY_FROM;
     }
+    // 6) jovens gerados por versões anteriores. O ID carrega todos os dados para
+    // reconstruí-los, mesmo quando a geração atual da IA já trocou aquele atleta.
+    if (!player) {
+      const generated = parseRegenPlayerId(s.playerId);
+      const origin = generated && CS2_REAL_2026.find((t) => t.id === generated.teamId);
+      const original = generated && origin?.players[generated.slot];
+      if (generated && origin && original) {
+        player = regenYouth(origin, generated.slot, generated.generation, generated.debut, generated.ageAtDebut, original);
+        from = currentEra.find((t) => t.id === generated.teamId) ?? origin;
+      }
+    }
+    // 7) atletas de base também são determinísticos e podem ser refeitos mesmo
+    // quando um save antigo referencia um índice maior que o mercado atual exibe.
+    if (!player) {
+      const academy = parseAcademyPlayerId(s.playerId);
+      const origin = academy?.teamId === FREE_AGENTS_FROM.id
+        ? FREE_AGENTS_FROM
+        : academy && (currentEra.find((t) => t.id === academy.teamId) ?? CS2_REAL_2026.find((t) => t.id === academy.teamId));
+      if (academy && origin) {
+        player = backfillPlayers(origin, academy.index + 1)[academy.index];
+        from = origin;
+      }
+    }
+    // 8) último recurso para saves novos: usa a cópia do jogador gravada quando
+    // o elenco foi fechado, independente de alterações futuras na base.
+    if (!player && s.playerSnapshot) {
+      player = s.playerSnapshot;
+      const src = s.fromSnapshot;
+      from = src ? {
+        ...FREE_AGENTS_FROM,
+        id: src.id,
+        team: src.team,
+        tag: src.tag,
+        country: src.country,
+        colors: src.colors,
+        logoUrl: src.logoUrl,
+      } : { ...FREE_AGENTS_FROM, id: s.fromId };
+    }
     if (!from || !player) return null;
     // função definida pelo técnico (override do dado da base; corrige dados
     // errados e dá controle de tática igual ao gerenciamento do Brasval)
@@ -1820,8 +1892,9 @@ export function CareerScreen({ onExit }: Props) {
     // temporadas; valor e salário acompanham automaticamente). Jogador recém-contratado
     // ainda sem evo registrado HERDA o drift que a IA tinha aplicado nele (senão ele
     // "cai" do OVR mostrado no mercado pro OVR base ao ser contratado).
+    const basePlayer = player;
     const d = save.evo?.[player.id] ?? aiAttrDrift(player, save.split);
-    if (!d) return { player, from };
+    if (!d) return { player, from, basePlayer };
     const clamp = (v: number) => Math.max(40, Math.min(99, v));
     return {
       player: {
@@ -1833,6 +1906,7 @@ export function CareerScreen({ onExit }: Props) {
         igl: clamp(player.igl + d),
       },
       from,
+      basePlayer,
     };
   };
 
@@ -2720,10 +2794,14 @@ export function CareerScreen({ onExit }: Props) {
         findSigning={findSigning}
         onExit={onExit}
         onConfirm={(squad, coachFromId, budget, sponsors, sponsorUntil) => {
+          const stableSquad = squad.map((signing) => {
+            const resolved = findSigning(signing);
+            return resolved ? signingWithSnapshot(signing, resolved) : signing;
+          });
           // todo jogador do elenco fechado tem contrato; novos ganham CONTRACT_TERM
           const contracts = { ...(save.contracts ?? {}) };
-          const ids = new Set(squad.map((x) => x.playerId));
-          for (const sig of squad) {
+          const ids = new Set(stableSquad.map((x) => x.playerId));
+          for (const sig of stableSquad) {
             if (!(sig.playerId in contracts) || contracts[sig.playerId] < save.split) {
               contracts[sig.playerId] = save.split + CONTRACT_TERM - 1;
             }
@@ -2742,8 +2820,8 @@ export function CareerScreen({ onExit }: Props) {
           const evo = { ...(save.evo ?? {}) };
           for (const k of Object.keys(evo)) if (!ids.has(k)) delete evo[k];
           // org do zero (sem região ainda): define a região pelo core do 1º elenco
-          const region = save.region ?? macroRegionPlurality(squad.map((s) => findSigning(s)?.player.country ?? '').filter(Boolean));
-          const next = { ...save, squad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region };
+          const region = save.region ?? macroRegionPlurality(stableSquad.map((s) => findSigning(s)?.player.country ?? '').filter(Boolean));
+          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -6050,12 +6128,14 @@ function MarketScreen({
   save: CareerSave;
   market: { player: Player; from: TeamSeason; price: number }[];
   coaches: TeamSeason[];
-  findSigning: (s: Signing) => { player: Player; from: TeamSeason } | null;
+  findSigning: (s: Signing) => ResolvedSigning | null;
   onConfirm: (squad: Signing[], coachFromId: string, budget: number, sponsors: string[], sponsorUntil: Record<string, number>) => void;
   onExit: () => void;
   embedded?: boolean;
 }) {
-  const [squad, setSquad] = useState<Signing[]>(save.squad);
+  const [initialSquad] = useState(() => partitionResolvable(save.squad, findSigning));
+  const [squad, setSquad] = useState<Signing[]>(initialSquad.resolved);
+  const recoveredSlots = initialSquad.unresolved.length;
   const [nego, setNego] = useState<{ player: Player; from: TeamSeason } | null>(null);
   const [coachId, setCoachId] = useState<string | null>(save.coachFromId);
   const [filter, setFilter] = useState('');
@@ -6156,6 +6236,15 @@ function MarketScreen({
           {(save.lastReleases?.length ?? 0) > 0 && (
             <div className="release-banner">
               {ct('📄 Contrato vencido:')} <b>{save.lastReleases!.join(', ')}</b> {ct('saiu de graça. Reforce o elenco no mercado.')}
+            </div>
+          )}
+          {recoveredSlots > 0 && (
+            <div className="save-recovery-banner" role="status">
+              <b>{ct('Save reparado:')}</b>{' '}
+              {recoveredSlots === 1
+                ? ct('1 jogador de uma versão antiga não pôde ser recuperado e teve a vaga liberada.')
+                : `${recoveredSlots} ${ct('jogadores de uma versão antiga não puderam ser recuperados e tiveram as vagas liberadas.')}`}{' '}
+              {ct('Contrate substitutos para continuar.')}
             </div>
           )}
 

@@ -1359,4 +1359,8 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "CONTRATAR": { en: "SIGN", es: "FICHAR" },
   "Login de admin necessário.": { en: "Admin login required.", es: "Inicio de sesión de admin requerido." },
   "erro": { en: "error", es: "error" },
+  "Save reparado:": { en: "Save repaired:", es: "Partida reparada:" },
+  "1 jogador de uma versão antiga não pôde ser recuperado e teve a vaga liberada.": { en: "One player from an older version could not be recovered, so the roster slot was released.", es: "No se pudo recuperar a un jugador de una versión anterior, así que se liberó su plaza." },
+  "jogadores de uma versão antiga não puderam ser recuperados e tiveram as vagas liberadas.": { en: "players from an older version could not be recovered, so their roster slots were released.", es: "jugadores de una versión anterior no pudieron recuperarse, así que se liberaron sus plazas." },
+  "Contrate substitutos para continuar.": { en: "Sign replacements to continue.", es: "Ficha sustitutos para continuar." },
 };

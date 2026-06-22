@@ -5617,6 +5617,7 @@ table.crm-players input.num {
 .fin-card b { font-family: var(--font-cond); font-size: 1.5rem; line-height: 1; color: var(--text-strong); }
 tr.fin-expiring { background: rgba(212,164,65,0.1); }
 .release-banner { margin: 0 0 12px; padding: 9px 12px; border-radius: 9px; font-size: 0.86rem; background: rgba(224,86,79,0.14); border: 1px solid rgba(224,86,79,0.35); color: #ffc2bf; }
+.save-recovery-banner { margin: 0 0 12px; padding: 10px 12px; border-radius: 9px; font-size: 0.86rem; background: rgba(212,164,65,0.14); border: 1px solid rgba(212,164,65,0.42); color: #f4d992; }
 .ct-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 @media (max-width: 640px) { .fin-cards { grid-template-columns: 1fr 1fr; } }
 
