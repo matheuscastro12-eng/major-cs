@@ -378,6 +378,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // sem spoiler do campeão); persiste por sala para sobreviver a F5
   const [revealed, setRevealed] = useState(0);
   const pollRef = useRef<number | undefined>(undefined);
+  const goneRef = useRef(0); // 404 consecutivos: só dropa após 2 (tolera race/replica)
   const seedRef = useRef<number | null>(null); // detecta nova temporada (seed muda)
   const runSeedRef = useRef<number | null>(null); // revanche pode manter o draft e trocar apenas a simulacao
   const statusRef = useRef<string | null>(null);
@@ -426,6 +427,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     if (!code || localDemo || document.hidden) return; // demo local não chama backend
     const s = await fetchLobby(code);
     if (s === 'gone') {
+      // tolera UM 404 transitório (corrida logo após criar / réplica atrasada):
+      // só dropa de verdade após 2 seguidos, pra não chutar o jogador à toa.
+      goneRef.current += 1;
+      if (goneRef.current < 2) return;
       // a sala expirou/foi encerrada no servidor: volta pra entrada com aviso
       // (antes o jogador ficava pendurado numa tela que nunca atualizava)
       setCode('');
@@ -437,6 +442,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       return;
     }
     if (!s) return;
+    goneRef.current = 0; // resposta válida: zera o contador de 404
     const prevSeed = seedRef.current;
     const prevRunSeed = runSeedRef.current;
     const prevStatus = statusRef.current;
