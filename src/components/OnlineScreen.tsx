@@ -50,6 +50,7 @@ interface Props {
   initialCode?: string; // código vindo da URL (/online/ABCDE): deep link / F5
   account?: Account | null; // conta logada (ranking salvo é da conta paga)
   casualOnly?: boolean; // modo casual: esconde ranqueada/MMR (salas com amigos)
+  preset?: 'duel' | 'party'; // modo pré-selecionado ao abrir (1v1=duel, Major=party)
 }
 
 const NICK_KEY = 'rtm-nick';
@@ -317,7 +318,7 @@ const ONLINE_LOCAL = {
   es: { title: 'ULTIMATE TEAM', lead: 'Arma tu cinco con estrellas actuales y leyendas de todas las épocas. Cada atleta es una carta con atributos propios; en el duelo, los equipos juegan una MD3 ronda por ronda.', current: 'ACTUAL', legend: 'LEYENDA', collection: 'Selección de cartas', duelLive: 'Duelo en vivo', demo: 'Probar ahora contra un rival', demoNote: 'Demo local: solo dura esta sesión y no necesita base de datos.', publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu Ultimate Team', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.', roomGone: 'La sala expiró o fue cerrada. Crea o entra en otra.', nextSeason: '🔁 Nueva disputa (nuevas cartas)', season: 'Temporada', seasonWait: 'Esperando que el host inicie la próxima disputa…' },
 };
 
-export function OnlineScreen({ onBack, initialCode, account, casualOnly = false }: Props) {
+export function OnlineScreen({ onBack, initialCode, account, casualOnly = false, preset }: Props) {
   const { t: tr, lang } = useLang();
   const OL = ONLINE_LOCAL[(lang as 'pt' | 'en' | 'es')] ?? ONLINE_LOCAL.pt;
   const [nick, setNick] = useState(() => {
@@ -335,7 +336,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false 
   useEffect(() => { if (paidRank) void fetchMyRank(nick || account?.nick).then(setMyRank); }, [paidRank, nick, account?.nick]);
   const [codeInput, setCodeInput] = useState('');
   const [joinAsSpectator, setJoinAsSpectator] = useState(false);
-  const [mode, setMode] = useState<'duel' | 'party'>('duel');
+  const [mode, setMode] = useState<'duel' | 'party'>(preset ?? 'duel');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [ruleset, setRuleset] = useState<UltimateRuleset>('open');
   const [isPublic, setIsPublic] = useState(true); // sala aberta a qualquer um por padrão
@@ -1084,18 +1085,30 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false 
               {openRooms.length === 0 ? (
                 <div className="muted small">{OL.noRooms}</div>
               ) : (
-                <div className="or-list">
-                  {openRooms.map((r) => (
-                    <div key={r.code} className="or-row">
-                      <span className="or-host">{r.host}{r.ranked && <span className="ranked-badge">RANQUEADA</span>}</span>
-                      <span className="muted small">
-                        {r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'} · {r.players}/{r.max}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {openRooms.map((r) => {
+                    const full = r.players >= r.max;
+                    return (
+                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.75 : 1 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '94px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', boxShadow: full ? 'none' : '0 0 7px var(--rtm-green-bright)' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? 'Cheia' : 'Aguardando'}</span>
                       </span>
-                      <span className="spacer" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Sala de {r.host}{r.ranked && <span className="ranked-badge">RANQUEADA</span>}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
+                      </div>
+                      <div style={{ textAlign: 'center', minWidth: '64px' }}>
+                        <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '18px', color: full ? 'var(--rtm-faint)' : 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{r.players}/{r.max}</div>
+                        <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '2px' }}>
+                          {Array.from({ length: r.max }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.players ? 'var(--rtm-blue-bright)' : 'var(--rtm-panel-3)' }} />)}
+                        </div>
+                      </div>
                       <button className="btn ghost small" disabled={busy} onClick={() => doJoin(r.code, true)}>Assistir</button>
-                      <button className="btn gold small" disabled={busy} onClick={() => doJoin(r.code, false)}>{OL.enter}</button>
+                      <button className="btn gold small" disabled={busy || full} onClick={() => doJoin(r.code, false)}>{OL.enter}</button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

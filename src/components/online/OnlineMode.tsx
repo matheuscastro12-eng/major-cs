@@ -5,11 +5,8 @@ import { useCallback, useMemo, useState } from 'react';
 import type { TeamSeason } from '../../types';
 import type { Account } from '../../state/account';
 import { getManager } from '../../state/manager';
-import { reportResult } from '../../state/ranking';
 import { Button } from '../ds';
 import { OnlineHub, type OnlineModeId } from './OnlineHub';
-import { Ranked1v1 } from './Ranked1v1';
-import { OnlineMajor } from './OnlineMajor';
 import { OnlineGauntlet } from './OnlineGauntlet';
 import { OnlineScreen } from '../OnlineScreen';
 import { buildPool, loadStats, saveStats, type OnlineStats } from './onlineData';
@@ -24,11 +21,6 @@ export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; a
     setStatsRaw((prev) => { const next = fn(prev); saveStats(next); return next; });
   }, []);
 
-  // conta paga: o MMR da ranqueada 1v1 também entra no ranking SALVO do servidor.
-  const onReport = useCallback((won: boolean) => {
-    if (account?.paid) void reportResult(won, account.nick);
-  }, [account]);
-
   if (!manager) {
     return (
       <div style={{ maxWidth: 520, margin: '80px auto 0', textAlign: 'center' }}>
@@ -42,8 +34,9 @@ export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; a
   return (
     <div className="rtm-fade-in">
       {screen === 'hub' && <OnlineHub manager={manager} stats={stats} account={account} onPlay={(id) => setScreen(id)} onCasual={() => setScreen('casual')} onExit={onBack} />}
-      {screen === '1v1' && <Ranked1v1 manager={manager} pool={pool} stats={stats} setStats={setStats} onReport={onReport} onHub={toHub} onExit={onBack} />}
-      {screen === 'major' && <OnlineMajor manager={manager} pool={pool} stats={stats} setStats={setStats} onHub={toHub} onExit={onBack} />}
+      {/* online REAL via lobby (api/lobby.ts): 1v1 = duelo, Major = grupo. Gauntlet é o único vs IA. */}
+      {screen === '1v1' && <OnlineScreen preset="duel" account={account} onBack={toHub} />}
+      {screen === 'major' && <OnlineScreen preset="party" account={account} onBack={toHub} />}
       {screen === 'gauntlet' && <OnlineGauntlet pool={pool} stats={stats} setStats={setStats} onHub={toHub} onExit={onBack} />}
       {screen === 'casual' && <OnlineScreen casualOnly account={account} onBack={toHub} />}
     </div>
