@@ -11,12 +11,13 @@ import { OnlineHub, type OnlineModeId } from './OnlineHub';
 import { Ranked1v1 } from './Ranked1v1';
 import { OnlineMajor } from './OnlineMajor';
 import { OnlineGauntlet } from './OnlineGauntlet';
+import { OnlineScreen } from '../OnlineScreen';
 import { buildPool, loadStats, saveStats, type OnlineStats } from './onlineData';
 
 export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; account: Account | null; dataset: TeamSeason[] }) {
   const manager = getManager();
   const pool = useMemo(() => buildPool(dataset), [dataset]);
-  const [screen, setScreen] = useState<'hub' | OnlineModeId>('hub');
+  const [screen, setScreen] = useState<'hub' | 'casual' | OnlineModeId>('hub');
   const [stats, setStatsRaw] = useState<OnlineStats>(loadStats);
 
   const setStats = useCallback((fn: (s: OnlineStats) => OnlineStats) => {
@@ -40,10 +41,11 @@ export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; a
   const toHub = () => setScreen('hub');
   return (
     <div className="rtm-fade-in">
-      {screen === 'hub' && <OnlineHub manager={manager} stats={stats} account={account} onPlay={(id) => setScreen(id)} onExit={onBack} />}
+      {screen === 'hub' && <OnlineHub manager={manager} stats={stats} account={account} onPlay={(id) => setScreen(id)} onCasual={() => setScreen('casual')} onExit={onBack} />}
       {screen === '1v1' && <Ranked1v1 manager={manager} pool={pool} stats={stats} setStats={setStats} onReport={onReport} onHub={toHub} onExit={onBack} />}
       {screen === 'major' && <OnlineMajor manager={manager} pool={pool} stats={stats} setStats={setStats} onHub={toHub} onExit={onBack} />}
       {screen === 'gauntlet' && <OnlineGauntlet pool={pool} stats={stats} setStats={setStats} onHub={toHub} onExit={onBack} />}
+      {screen === 'casual' && <OnlineScreen casualOnly account={account} onBack={toHub} />}
     </div>
   );
 }

@@ -10,11 +10,12 @@ import { rankFor, majorPlace, type OnlineStats } from './onlineData';
 
 export type OnlineModeId = '1v1' | 'major' | 'gauntlet';
 
-export function OnlineHub({ manager, stats, account, onPlay, onExit }: {
+export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }: {
   manager: Manager;
   stats: OnlineStats;
   account: Account | null;
   onPlay: (id: OnlineModeId) => void;
+  onCasual: () => void;
   onExit: () => void;
 }) {
   const me = manager;
@@ -120,6 +121,16 @@ export function OnlineHub({ manager, stats, account, onPlay, onExit }: {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* casual com amigos (salas reais, sem ranking) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', padding: '16px 20px' }}>
+        <span style={{ fontSize: '28px', width: '50px', height: '50px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', flexShrink: 0 }}>👥</span>
+        <div style={{ flex: 1, minWidth: '220px' }}>
+          <b style={{ fontFamily: 'var(--font-cond)', fontSize: '19px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Casual · jogar com amigos</b>
+          <div style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', marginTop: '2px' }}>Crie uma sala <b style={{ color: 'var(--rtm-text)' }}>aberta</b> (qualquer um entra) ou <b style={{ color: 'var(--rtm-text)' }}>fechada</b> (só com o código que você manda pros amigos). Duelo 1v1 ou Major em grupo, ao vivo. Não conta pro ranking.</div>
+        </div>
+        <Button variant="ghost" onClick={onCasual} style={{ whiteSpace: 'nowrap' }}>Criar / entrar em sala</Button>
       </div>
 
       {/* leaderboard */}

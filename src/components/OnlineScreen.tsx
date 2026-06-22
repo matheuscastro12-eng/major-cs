@@ -49,6 +49,7 @@ interface Props {
   onBack: () => void;
   initialCode?: string; // código vindo da URL (/online/ABCDE): deep link / F5
   account?: Account | null; // conta logada (ranking salvo é da conta paga)
+  casualOnly?: boolean; // modo casual: esconde ranqueada/MMR (salas com amigos)
 }
 
 const NICK_KEY = 'rtm-nick';
@@ -316,7 +317,7 @@ const ONLINE_LOCAL = {
   es: { title: 'ULTIMATE TEAM', lead: 'Arma tu cinco con estrellas actuales y leyendas de todas las épocas. Cada atleta es una carta con atributos propios; en el duelo, los equipos juegan una MD3 ronda por ronda.', current: 'ACTUAL', legend: 'LEYENDA', collection: 'Selección de cartas', duelLive: 'Duelo en vivo', demo: 'Probar ahora contra un rival', demoNote: 'Demo local: solo dura esta sesión y no necesita base de datos.', publicRoom: 'Sala abierta (cualquiera puede entrar)', openRooms: 'Salas abiertas', noRooms: 'No hay salas abiertas ahora. ¡Crea la tuya!', refresh: 'Actualizar', enter: 'Entrar', yourTeam: 'Tu Ultimate Team', emptySlot: 'vacío', rolesLabel: 'Funciones', roleEntry: 'Entry', lock: '🔒 Bloquear sala', unlock: '🔓 Desbloquear sala', locked: 'Sala bloqueada', kick: 'Expulsar', kicked: 'El host te quitó de la sala.', roomGone: 'La sala expiró o fue cerrada. Crea o entra en otra.', nextSeason: '🔁 Nueva disputa (nuevas cartas)', season: 'Temporada', seasonWait: 'Esperando que el host inicie la próxima disputa…' },
 };
 
-export function OnlineScreen({ onBack, initialCode, account }: Props) {
+export function OnlineScreen({ onBack, initialCode, account, casualOnly = false }: Props) {
   const { t: tr, lang } = useLang();
   const OL = ONLINE_LOCAL[(lang as 'pt' | 'en' | 'es')] ?? ONLINE_LOCAL.pt;
   const [nick, setNick] = useState(() => {
@@ -999,6 +1000,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
               </div>
             </div>
 
+            {!casualOnly && (
             <div className="ranked-cta">
               <div className="ranked-cta-copy">
                 <b>⚔️ Partida ranqueada</b>
@@ -1006,6 +1008,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
               </div>
               <button className="btn gold" onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : 'Jogar ranqueada'}</button>
             </div>
+            )}
 
             <div className="online-split">
               <div className="online-box">
@@ -1035,7 +1038,7 @@ export function OnlineScreen({ onBack, initialCode, account }: Props) {
                   <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
                   {OL.publicRoom}
                 </label>
-                {mode === 'duel' && (
+                {!casualOnly && mode === 'duel' && (
                   <label className="public-toggle">
                     <input type="checkbox" checked={ranked} onChange={(e) => setRanked(e.target.checked)} />
                     🏆 Ranqueada (conta pro ladder)
