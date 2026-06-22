@@ -16,6 +16,7 @@ import { recordGameEnd, type AchDef } from './state/achievements';
 // deixar o carregamento inicial bem mais leve.
 const Admin = lazy(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
 const CareerScreen = lazy(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
+const CareerSaves = lazy(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
 const CareerCRM = lazy(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
 const AccountsCRM = lazy(() => import('./components/AccountsCRM').then((m) => ({ default: m.AccountsCRM })));
 const FinalScreen = lazy(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
@@ -39,6 +40,7 @@ import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
 import { Leaderboard } from './components/Leaderboard';
 import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
+import { getActiveSlot, setActiveSlot, slotKey, cloudSlot } from './state/careerSaves';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
 import { track, trackVisit } from './state/track';
@@ -64,6 +66,7 @@ type Screen =
   | 'matchdetail'
   | 'online'
   | 'career'
+  | 'careerSaves'
   | 'careerCRM'
   | 'careerAccess'
   | 'privacy'
@@ -78,6 +81,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   home: '/jogar',
   online: '/online',
   career: '/carreira',
+  careerSaves: '/carreira/saves',
   hall: '/hall',
   draft: '/jogo/draft',
   hub: '/jogo/major',
@@ -304,7 +308,7 @@ export default function App() {
     setCloudEnabled(!!account?.paid);
     if (!account?.paid) return;
     let alive = true;
-    void syncSlot('career', 'rtm-career-v1').then((r) => {
+    void syncSlot(cloudSlot(getActiveSlot()), slotKey(getActiveSlot())).then((r) => {
       if (alive && r === 'restored') { setCloudToast('☁ Save da carreira carregado da nuvem'); setSessionStamp((s) => s + 1); }
     });
     return () => { alive = false; };
@@ -713,6 +717,7 @@ export default function App() {
           onBack={() => setScreen('home')}
           onEdit={() => setScreen('setup')}
           onUpgrade={() => setScreen('landing')}
+          onManageSaves={account?.paid ? () => setScreen('careerSaves') : undefined}
           onAccountDeleted={() => {
             logout();
             setCloudEnabled(false);
@@ -777,9 +782,10 @@ export default function App() {
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
             {account && (
-              <button className="acct-chip" title={account.paid ? 'Conta com save na nuvem · ver perfil' : 'Ver perfil'} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
+              <button className="acct-chip" title={account.paid ? 'Conta vitalícia (apoiador) · perfil, saves e conta' : 'Sua conta · ver perfil'} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
                 {account.paid && <span className="acct-star">★</span>}
                 {account.nick || account.email}
+                {account.paid && <span className="acct-tag">VITALÍCIA</span>}
               </button>
             )}
             <button className="nav-btn" onClick={() => setScreen('hall')}>
@@ -823,7 +829,7 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
           onLeaderboard={() => setScreen('leaderboard')}
-          onCareer={() => setScreen('career')}
+          onCareer={() => { if (account?.paid) { setScreen('careerSaves'); } else { setActiveSlot(1); setScreen('career'); } }}
           onAchievements={() => setAchOpen(true)}
           teamCount={dataset.length}
           playerCount={playerCount}
@@ -867,9 +873,16 @@ export default function App() {
 
       {screen === 'online' && <OnlineMode onBack={() => setScreen('home')} account={account} dataset={dataset} />}
 
+      {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
+      {screen === 'careerSaves' && (
+        <CareerSaves
+          onPlay={(slot) => { setActiveSlot(slot); setScreen('career'); }}
+          onBack={() => setScreen('home')}
+        />
+      )}
       {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
       {screen === 'career' && (
-        <CareerScreen dataset={dataset} onExit={() => setScreen('home')} />
+        <CareerScreen dataset={dataset} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
       )}
       {screen === 'careerCRM' && (
         <AdminGate>

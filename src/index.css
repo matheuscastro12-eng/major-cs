@@ -4412,9 +4412,10 @@ table.crm-players input.num {
 /* ===== Modo carreira: hub com abas, stats, história, campeonatos ===== */
 /* navegação em 2 níveis: grupos (barra-pílula) + sub-abas do grupo ativo */
 /* conta do jogador no header + toast de pagamento confirmado */
-.acct-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 999px; background: var(--rtm-bg-deep); border: 1px solid var(--rtm-border-soft); font-family: var(--font-cond); font-weight: 700; font-size: 13px; color: var(--rtm-text-strong); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.acct-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 999px; background: var(--rtm-bg-deep); border: 1px solid var(--rtm-border-soft); font-family: var(--font-cond); font-weight: 700; font-size: 13px; color: var(--rtm-text-strong); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .acct-chip:hover { border-color: var(--rtm-blue-bright); }
 .acct-star { color: var(--rtm-gold); }
+.acct-tag { flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: .5px; color: #06121d; background: var(--rtm-gold); padding: 1px 6px; border-radius: 999px; }
 .paid-toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 10px; background: linear-gradient(120deg, rgba(216,169,67,.18), var(--rtm-panel)); border: 1px solid var(--rtm-gold-soft); box-shadow: 0 12px 36px rgba(0,0,0,.5); color: var(--rtm-text-strong); font-weight: 600; font-size: 14px; }
 .paid-toast button { background: none; border: none; color: var(--rtm-dim); cursor: pointer; font-size: 15px; }
 

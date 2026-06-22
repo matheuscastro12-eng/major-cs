@@ -10,13 +10,14 @@ import { deleteAccount, exportAccountData, type Account } from '../state/account
 import { fetchMyRank, type MyRank } from '../state/ranking';
 import type { Manager } from '../state/manager';
 
-export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, onAccountDeleted }: {
+export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, onAccountDeleted, onManageSaves }: {
   manager: Manager;
   account: Account | null;
   onBack: () => void;
   onEdit: () => void;
   onUpgrade: () => void;
   onAccountDeleted: () => void;
+  onManageSaves?: () => void;
 }) {
   const paid = !!account?.paid;
   const [rank, setRank] = useState<MyRank | null>(null);
@@ -83,7 +84,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <h1 style={{ margin: 0, ...cond, fontSize: '34px', color: 'var(--rtm-text-strong)', letterSpacing: '.5px' }}>{manager.nick}</h1>
               {paid
-                ? <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '3px 9px', borderRadius: '999px' }}>★ Save na nuvem</span>
+                ? <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '3px 9px', borderRadius: '999px' }}>★ Conta vitalícia · apoiador</span>
                 : <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', padding: '3px 9px', borderRadius: '999px' }}>{account ? 'Grátis' : 'Convidado'}</span>}
               {paid && rank && <DivBadge d={rank.division} />}
             </div>
@@ -141,11 +142,12 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                   <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--rtm-gold)', fontSize: '18px' }}>★</span>
-                  <div><div style={{ ...cond, fontWeight: 700, color: 'var(--rtm-text-strong)', fontSize: '15px' }}>Conta com save ativa</div><div style={{ fontSize: '11.5px', color: 'var(--rtm-dim)' }}>{account?.email}</div></div>
+                  <div><div style={{ ...cond, fontWeight: 700, color: 'var(--rtm-text-strong)', fontSize: '15px' }}>Conta vitalícia ativa</div><div style={{ fontSize: '11.5px', color: 'var(--rtm-dim)' }}>{account?.email}</div></div>
                 </div>
-                {['Save sincronizado em todos os aparelhos', 'Ranking e MMR salvos no online', 'Histórico completo de partidas'].map((f, i) => (
+                {['Pagamento único, acesso pra sempre', 'Até 5 carreiras salvas na nuvem', 'Ranking e MMR salvos no online', 'Histórico completo de partidas'].map((f, i) => (
                   <div key={i} style={{ display: 'flex', gap: '9px', fontSize: '13px', color: 'var(--rtm-dim)', padding: '4px 0' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{f}</div>
                 ))}
+                {onManageSaves && <Button variant="gold" size="sm" style={{ width: '100%', marginTop: '12px' }} onClick={onManageSaves}>Gerenciar minhas carreiras</Button>}
                 <div className="account-data-actions">
                   <Button variant="ghost" size="sm" onClick={downloadData} disabled={dataBusy}>{dataBusy ? 'Aguarde…' : 'Exportar meus dados'}</Button>
                   <button type="button" className="account-delete-link" onClick={() => { setDeleteOpen(true); setDataError(''); }}>Excluir conta</button>

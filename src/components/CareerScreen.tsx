@@ -41,9 +41,12 @@ import { ct, setCareerLang } from '../state/career-i18n';
 import { captureError } from '../state/errlog';
 import { cloudOnLocalSave } from '../state/cloud';
 import { getManager } from '../state/manager';
+import { getActiveSlot, slotKey, cloudSlot } from '../state/careerSaves';
 import bo3Ages from '../data/bo3-ages.json';
 
-const SAVE_KEY = 'rtm-career-v1';
+// chave do save = slot ativo (conta vitalícia escolhe; grátis fica no slot 1).
+// Lida dinamicamente a cada load/persist pra trocar de slot sem recarregar a página.
+const curKey = () => slotKey(getActiveSlot());
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
@@ -1268,9 +1271,6 @@ function stripEraDeep(node: unknown, depth = 0): void {
   }
 }
 
-const SAVE_BAK = SAVE_KEY + '.bak';
-const SAVE_CORRUPT = SAVE_KEY + '.corrupt';
-
 // transforma o JSON cru num save válido (merge com defaults + cura de dados antigos).
 // Lança se o JSON estiver corrompido — quem chama trata o fallback.
 function hydrate(raw: string): CareerSave {
@@ -1291,6 +1291,9 @@ function hydrate(raw: string): CareerSave {
 }
 
 function loadSave(): CareerSave {
+  const SAVE_KEY = curKey();
+  const SAVE_BAK = SAVE_KEY + '.bak';
+  const SAVE_CORRUPT = SAVE_KEY + '.corrupt';
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(SAVE_KEY);
@@ -1321,6 +1324,8 @@ function loadSave(): CareerSave {
 
 let persistWarned = false;
 function persist(s: CareerSave): void {
+  const SAVE_KEY = curKey();
+  const SAVE_BAK = SAVE_KEY + '.bak';
   try {
     const json = JSON.stringify(s);
     let prev: string | null = null;
@@ -1330,7 +1335,7 @@ function persist(s: CareerSave): void {
       /* segue */
     }
     localStorage.setItem(SAVE_KEY, json);
-    cloudOnLocalSave('career', SAVE_KEY, () => json); // espelha na nuvem (conta paga)
+    cloudOnLocalSave(cloudSlot(getActiveSlot()), SAVE_KEY, () => json); // espelha na nuvem (conta paga)
     // backup de um passo: se o save novo ficar ilegível, dá pra voltar ao anterior
     if (prev && prev !== json) {
       try {
