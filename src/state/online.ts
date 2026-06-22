@@ -46,6 +46,7 @@ export interface LobbyState {
     code: string;
     mode: 'duel' | 'party';
     host: string;
+    name?: string;
     status: 'waiting' | 'drafting' | 'veto' | 'done';
     seed: number;
     run_seed?: number;
@@ -404,7 +405,7 @@ export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: bo
   return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState };
 }
 
-export interface OpenRoom { code: string; mode: 'duel' | 'party'; pool: TournamentPool; host: string; players: number; max: number; ranked?: boolean; host_mmr?: number | null; }
+export interface OpenRoom { code: string; mode: 'duel' | 'party'; pool: TournamentPool; host: string; name?: string | null; players: number; max: number; ranked?: boolean; host_mmr?: number | null; }
 export async function listOpenLobbies(): Promise<OpenRoom[]> {
   try {
     const res = await fetch('/api/lobby?list=1', { signal: AbortSignal.timeout(9000) });

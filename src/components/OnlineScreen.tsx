@@ -340,6 +340,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   const [codeInput, setCodeInput] = useState('');
   const [joinAsSpectator, setJoinAsSpectator] = useState(false);
   const [majorCreate, setMajorCreate] = useState(false); // Ranked Major: alterna entre browse e criar sala
+  const [roomName, setRoomName] = useState(''); // nome opcional da sala (host define ao criar)
   const [mode, setMode] = useState<'duel' | 'party'>(preset ?? 'duel');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [ruleset, setRuleset] = useState<UltimateRuleset>('open');
@@ -609,7 +610,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     setBusy(true);
     setError('');
     try {
-      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, isPublic, ranked: ranked && mode === 'duel', ruleset, draftRollouts });
+      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, name: roomName.trim(), isPublic, ranked: ranked && mode === 'duel', ruleset, draftRollouts });
       if (r.ok && r.code) {
         setCode(r.code);
         track('online_create', { mode, pool, public: isPublic, ranked });
@@ -969,7 +970,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                       <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? 'Cheia' : 'Aguardando'}</span>
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Sala de {r.host}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `Sala de ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</div>
                       <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>host <b style={{ color: 'var(--rtm-text)' }}>{r.host}</b> · grupo até {r.max}</div>
                     </div>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: pc, padding: '3px 9px', borderRadius: '999px', border: '1px solid var(--rtm-border)', whiteSpace: 'nowrap' }}>{poolLabel(r.pool)}</span>
@@ -1017,6 +1018,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           </Panel>
 
           <Panel title="Configuração da sala" accent="gold" style={{ marginBottom: '16px' }}>
+            <Field label="Nome da sala" hint="Aparece na lista de salas. Deixe em branco para usar 'Sala de {seu nick}'.">
+              <input value={roomName} maxLength={40} placeholder="ex: Major dos br" onChange={(e) => setRoomName(e.target.value)} style={onlineInputStyle} />
+            </Field>
             <Field label="Coleção">
               <Seg accent="gold" value={pool} onChange={(id) => setPool(id as 'world' | 'br')} options={[{ id: 'world', label: tr('online.poolWorld') }, { id: 'br', label: tr('online.poolBr') }]} />
             </Field>
@@ -1172,6 +1176,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
               <Panel title={tr('online.createRoom')} accent="gold">
+                <Field label="Nome da sala (opcional)">
+                  <input value={roomName} maxLength={40} placeholder="ex: só lenda, sem noob" onChange={(e) => setRoomName(e.target.value)} style={onlineInputStyle} />
+                </Field>
                 <Field label="Modo">
                   <Seg accent="gold" value={mode} onChange={(id) => setMode(id as 'duel' | 'party')} options={[{ id: 'duel', label: tr('online.modeDuel') }, { id: 'party', label: tr('online.modeParty') }]} />
                 </Field>
@@ -1230,7 +1237,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                         <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? 'Cheia' : 'Aguardando'}</span>
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Sala de {r.host}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `Sala de ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</div>
                         <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
                       </div>
                       <div style={{ textAlign: 'center', minWidth: '64px' }}>
@@ -1305,7 +1312,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       <div className="fade-in" style={{ maxWidth: 620, margin: '0 auto' }}>
         <BackBar onExit={onBack} />
         <Panel
-          title={`${tr('online.roomLabel')} ${state.lobby.mode === 'duel' ? tr('online.roomDuel') : tr('online.roomParty')}`}
+          title={state.lobby.name?.trim() || `${tr('online.roomLabel')} ${state.lobby.mode === 'duel' ? tr('online.roomDuel') : tr('online.roomParty')}`}
           accent="gold"
         >
           {/* código grande e clicável */}

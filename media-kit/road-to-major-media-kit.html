@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Road to Major · Media Kit 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Oswald:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-deep:#12161b; --bg:#181d23; --header:#1d232b;
+    --panel:#242b34; --panel-2:#2a323d; --panel-3:#323b48;
+    --border:#3a4452; --border-soft:#303945;
+    --text:#dfe5ec; --text-strong:#ffffff; --dim:#8b96a3; --faint:#5e6975;
+    --blue:#4382b6; --blue-bright:#61a8dd; --link:#87b9e0;
+    --gold:#d8a943; --gold-soft:#b08a3e; --gold-glow:#f3cf6b;
+    --green:#5cb85c; --green-bright:#6fd06f;
+    --red:#e25a5a; --red-bright:#f06c6c;
+    --font:'Inter','Segoe UI',Roboto,Arial,sans-serif;
+    --cond:'Oswald','Bahnschrift','Arial Narrow',sans-serif;
+    --radius:5px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body {
+    background:var(--bg-deep); color:var(--text);
+    font-family:var(--font); -webkit-font-smoothing:antialiased;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  .deck { width:100%; }
+  .slide {
+    position:relative; width:100%; min-height:100vh; overflow:hidden;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:5.2vh 6vw; scroll-snap-align:start;
+    background:
+      radial-gradient(1200px 600px at 12% -10%, rgba(67,130,182,.16), transparent 60%),
+      radial-gradient(1000px 500px at 100% 110%, rgba(216,169,67,.10), transparent 55%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+    border-bottom:1px solid var(--border-soft);
+  }
+  .deck { scroll-snap-type:y mandatory; }
+  /* top brand bar inside each slide */
+  .brandbar { position:absolute; top:3.4vh; left:6vw; right:6vw; display:flex; align-items:center; justify-content:space-between; }
+  .logo { display:inline-flex; align-items:center; gap:9px; font-family:var(--cond); font-weight:700; font-size:18px; letter-spacing:1px; color:var(--text-strong); text-transform:uppercase; }
+  .logo .mark { width:24px; height:24px; border-radius:6px; background:linear-gradient(160deg, var(--blue-bright), #25405c); box-shadow:inset 0 0 0 2px rgba(255,255,255,.18); }
+  .logo b { color:var(--blue-bright); font-weight:700; }
+  .brandbar .pageno { font-family:var(--cond); font-size:13px; letter-spacing:1px; color:var(--faint); }
+  .kicker { font-size:13px; font-weight:800; letter-spacing:2.6px; text-transform:uppercase; color:var(--blue-bright); }
+  .kicker.gold { color:var(--gold); }
+  h1 { font-family:var(--cond); font-weight:800; text-transform:uppercase; color:var(--text-strong); line-height:.98; }
+  h2 { font-family:var(--cond); font-weight:800; text-transform:uppercase; color:var(--text-strong); line-height:1.02; }
+  p { line-height:1.6; color:var(--dim); }
+  .accent-blue { color:var(--blue-bright); }
+  .accent-gold { color:var(--gold); }
+
+  /* ---------- COVER ---------- */
+  .cover h1 { font-size:clamp(48px, 8.6vw, 132px); letter-spacing:1px; }
+  .cover h1 .b { color:var(--blue-bright); }
+  .cover .tag { margin-top:22px; max-width:760px; font-size:clamp(16px,1.9vw,22px); color:var(--text); }
+  .cover .sub { margin-top:8px; max-width:720px; font-size:clamp(13px,1.4vw,16px); color:var(--dim); }
+  .cover .foot { position:absolute; left:6vw; right:6vw; bottom:4.6vh; display:flex; align-items:center; justify-content:space-between; font-size:14px; color:var(--faint); }
+  .cover .foot b { color:var(--gold); }
+  .badgerow { display:flex; gap:10px; flex-wrap:wrap; margin-top:34px; }
+  .pill { font-family:var(--cond); font-size:13px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--dim); padding:7px 14px; border-radius:999px; border:1px solid var(--border); }
+  .pill.on { color:var(--text-strong); border-color:var(--blue-bright); background:rgba(67,130,182,.12); }
+
+  /* ---------- generic head ---------- */
+  .head { margin-bottom:3vh; }
+  .head h2 { font-size:clamp(30px,4.2vw,52px); margin-top:8px; }
+  .lead { font-size:clamp(14px,1.5vw,17px); max-width:780px; margin-top:10px; }
+
+  /* ---------- panels / cards ---------- */
+  .panel { background:var(--panel); border:1px solid var(--border-soft); border-radius:var(--radius); box-shadow:0 1px 6px rgba(0,0,0,.3); overflow:hidden; }
+  .panel > .ph { display:flex; align-items:center; gap:10px; background:linear-gradient(180deg,#222933,#1d232b); padding:10px 14px; border-bottom:1px solid var(--border-soft); box-shadow:inset 3px 0 0 var(--blue); font-family:var(--cond); font-size:13px; font-weight:600; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-strong); }
+  .panel.gold > .ph { box-shadow:inset 3px 0 0 var(--gold); }
+  .panel .pb { padding:16px; }
+
+  /* ---------- WHAT IS grid ---------- */
+  .two { display:grid; grid-template-columns:1.05fr 1fr; gap:34px; align-items:center; }
+  .featlist { display:flex; flex-direction:column; gap:10px; }
+  .feat { display:flex; gap:13px; align-items:flex-start; padding:13px 15px; border-radius:var(--radius); background:var(--panel-2); border:1px solid var(--border-soft); }
+  .feat .ic { width:34px; height:34px; flex-shrink:0; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; background:rgba(67,130,182,.16); border:1px solid rgba(97,168,221,.4); }
+  .feat.g .ic { background:rgba(216,169,67,.16); border-color:var(--gold-soft); }
+  .feat b { font-family:var(--cond); font-size:15.5px; font-weight:700; letter-spacing:.3px; color:var(--text-strong); text-transform:uppercase; display:block; }
+  .feat span { font-size:12.5px; color:var(--dim); line-height:1.45; }
+  .modes { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
+  .mode { flex:1 1 0; min-width:120px; padding:14px; border-radius:var(--radius); background:var(--panel); border:1px solid var(--border-soft); }
+  .mode .mk { font-size:10px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:var(--blue-bright); }
+  .mode .mt { font-family:var(--cond); font-size:18px; font-weight:800; color:var(--text-strong); margin:3px 0 2px; }
+  .mode .md { font-size:11.5px; color:var(--dim); line-height:1.4; }
+
+  /* ---------- STATS ---------- */
+  .statgrid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .stat { padding:20px 18px; border-radius:var(--radius); background:var(--panel); border:1px solid var(--border-soft); position:relative; overflow:hidden; }
+  .stat::after { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--blue-bright); }
+  .stat.g::after { background:var(--gold); }
+  .stat.gr::after { background:var(--green-bright); }
+  .stat .n { font-family:var(--cond); font-weight:800; font-size:clamp(30px,3.6vw,46px); color:var(--text-strong); line-height:1; font-variant-numeric:tabular-nums; }
+  .stat.g .n { color:var(--gold); }
+  .stat .l { margin-top:7px; font-size:12.5px; color:var(--dim); }
+  .stat .l b { color:var(--text); font-weight:600; }
+
+  .chart { margin-top:16px; display:grid; grid-template-columns:1.55fr 1fr; gap:18px; align-items:stretch; }
+  .bars { display:flex; align-items:flex-end; gap:6px; height:150px; padding:10px 4px 0; }
+  .bars .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%; justify-content:flex-end; }
+  .bars .bar { width:100%; border-radius:3px 3px 0 0; background:linear-gradient(180deg, var(--blue-bright), var(--blue)); }
+  .bars .col:last-child .bar { background:linear-gradient(180deg, var(--gold-glow), var(--gold)); }
+  .bars .day { font-size:9.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
+  .ctrybars { display:flex; flex-direction:column; gap:8px; justify-content:center; }
+  .ctry { display:flex; align-items:center; gap:9px; font-size:12.5px; }
+  .ctry .cc { width:34px; color:var(--text-strong); font-family:var(--cond); font-weight:700; }
+  .ctry .track { flex:1; height:9px; border-radius:99px; background:var(--panel-3); overflow:hidden; }
+  .ctry .fill { height:100%; border-radius:99px; background:linear-gradient(90deg, var(--blue), var(--blue-bright)); }
+  .ctry .v { width:54px; text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; }
+
+  /* ---------- SPONSOR ---------- */
+  .spgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+  .sp { padding:16px 17px; border-radius:var(--radius); background:var(--panel); border:1px solid var(--border-soft); }
+  .sp .spt { font-family:var(--cond); font-size:17px; font-weight:800; color:var(--text-strong); text-transform:uppercase; display:flex; align-items:center; gap:9px; }
+  .sp .spt .dot { width:9px; height:9px; border-radius:50%; background:var(--gold); box-shadow:0 0 8px var(--gold); }
+  .sp p { font-size:12.5px; margin-top:7px; }
+
+  /* ---------- DESIGN SYSTEM ---------- */
+  .ds { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .swatches { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+  .sw { border-radius:var(--radius); border:1px solid var(--border-soft); overflow:hidden; }
+  .sw .chip { height:46px; }
+  .sw .meta { padding:6px 8px; background:var(--panel); }
+  .sw .nm { font-family:var(--cond); font-size:11px; font-weight:700; color:var(--text-strong); text-transform:uppercase; }
+  .sw .hex { font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; }
+  .typ { display:flex; flex-direction:column; gap:6px; }
+  .typ .big { font-family:var(--cond); font-weight:800; font-size:34px; color:var(--text-strong); text-transform:uppercase; line-height:1; }
+  .typ .small { font-size:13px; color:var(--dim); }
+  .comprow { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:4px; }
+  .btn { font-family:var(--cond); font-weight:600; letter-spacing:1.2px; text-transform:uppercase; border-radius:var(--radius); padding:9px 18px; font-size:13px; border:none; }
+  .btn.primary { background:linear-gradient(180deg,#5290c4,#4382b6); color:#fff; box-shadow:0 2px 6px rgba(0,0,0,.3); }
+  .btn.gold { background:var(--gold-soft); color:#1a1205; }
+  .btn.ghost { background:transparent; color:var(--dim); border:1px solid var(--border); }
+  .ovr { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; width:42px; height:42px; border-radius:8px; background:linear-gradient(160deg,#2a3340,#1c232c); border:1px solid var(--gold-soft); }
+  .ovr b { font-family:var(--cond); font-weight:800; font-size:18px; color:var(--gold); line-height:1; }
+  .ovr span { font-size:7px; letter-spacing:.5px; color:var(--dim); }
+  .role { font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; padding:3px 9px; border-radius:5px; }
+  .role.awp { color:var(--gold); background:rgba(216,169,67,.16); border:1px solid var(--gold-soft); }
+  .role.igl { color:var(--blue-bright); background:rgba(97,168,221,.14); border:1px solid rgba(97,168,221,.4); }
+  .role.entry { color:var(--red-bright); background:rgba(226,90,90,.14); border:1px solid rgba(226,90,90,.4); }
+
+  /* ---------- CONTACT ---------- */
+  .contact { text-align:center; align-items:center; }
+  .contact h2 { font-size:clamp(34px,5vw,64px); }
+  .contact .cta { margin-top:14px; font-size:clamp(15px,1.7vw,20px); color:var(--text); max-width:680px; }
+  .contact .links { margin-top:30px; display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+  .clink { display:inline-flex; align-items:center; gap:9px; padding:13px 22px; border-radius:var(--radius); border:1px solid var(--border); background:var(--panel); font-family:var(--cond); font-weight:700; letter-spacing:.6px; color:var(--text-strong); font-size:15px; }
+  .clink.gold { background:var(--gold-soft); color:#1a1205; border-color:transparent; }
+
+  .note { font-size:11px; color:var(--faint); margin-top:14px; }
+
+  /* ---------- PRINT (PDF) ---------- */
+  @media print {
+    @page { size:1280px 720px; margin:0; }
+    html, body { background:var(--bg-deep); }
+    .deck { scroll-snap-type:none; }
+    .slide { width:1280px; height:720px; min-height:720px; page-break-after:always; break-after:page; border-bottom:none; }
+    .slide:last-child { page-break-after:auto; }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- 1 · CAPA -->
+  <section class="slide cover">
+    <div class="brandbar">
+      <span class="logo"><span class="mark"></span>ROAD TO <b>MAJOR</b></span>
+      <span class="pageno">MEDIA KIT 2026</span>
+    </div>
+    <div class="kicker">Media kit · Proposta de patrocínio</div>
+    <h1>ROAD TO<br><span class="b">MAJOR</span></h1>
+    <div class="tag">O manager de Counter-Strike que virou rotina de quem ama o jogo. Monte um time dos sonhos com lendas de todas as eras e dispute um Major completo, no navegador.</div>
+    <div class="sub">CS 1.6 · Source · CS:GO · CS2 · feito para o público brasileiro de Counter-Strike.</div>
+    <div class="badgerow">
+      <span class="pill on">19,7 mil jogadores únicos</span>
+      <span class="pill on">86 países</span>
+      <span class="pill on">15,2 mil campanhas</span>
+    </div>
+    <div class="foot"><span>roadtomajor.com.br</span><span>Dados desde o lançamento · <b>10/06/2026</b></span></div>
+  </section>
+
+  <!-- 2 · O QUE É -->
+  <section class="slide">
+    <div class="brandbar"><span class="logo"><span class="mark"></span>ROAD TO <b>MAJOR</b></span><span class="pageno">01 · O PRODUTO</span></div>
+    <div class="head">
+      <div class="kicker">O que é</div>
+      <h2>Um Major de CS na <span class="accent-blue">palma da mão</span></h2>
+      <p class="lead">Road to Major é um jogo e manager de Counter-Strike no navegador. O jogador sorteia elencos históricos, monta seu cinco e disputa um Major inteiro: fase suíça, playoffs e todas as séries em MD3 com veto de mapa e scoreboard no estilo HLTV.</p>
+    </div>
+    <div class="two">
+      <div class="featlist">
+        <div class="feat"><span class="ic">🗂️</span><div><b>70 elencos · 350 jogadores</b><span>Lendas de 4 eras curadas com base em HLTV e Liquipedia, do NiP 87-0 ao Vitality 2025.</span></div></div>
+        <div class="feat"><span class="ic">🎯</span><div><b>Partidas MD3 round a round</b><span>Economia, timeouts e scoreboard completo: Rating 3.0, ADR, KAST, K-D, por mapa e por lado.</span></div></div>
+        <div class="feat g"><span class="ic">🏆</span><div><b>Multiplayer real com ranking</b><span>Ranked 1v1, Major em grupo e Gauntlet. MMR, ladder e temporadas no servidor.</span></div></div>
+        <div class="feat g"><span class="ic">🇧🇷</span><div><b>GC Masters</b><span>Base brasileira completa: Imperial, MIBR, Fluxo, RED, ODDIK, Legacy e mais.</span></div></div>
+      </div>
+      <div>
+        <div class="panel"><div class="ph">Modos de jogo</div><div class="pb">
+          <div class="modes" style="margin-top:0">
+            <div class="mode"><div class="mk">Solo</div><div class="mt">Carreira</div><div class="md">Conduza uma organização temporada após temporada.</div></div>
+            <div class="mode"><div class="mk">PvP</div><div class="mt">Online</div><div class="md">1v1, Major em grupo e Gauntlet, ao vivo e ranqueado.</div></div>
+          </div>
+          <p style="margin-top:14px; font-size:12.5px">Roda 100% no navegador (React + TypeScript). Identidade visual própria inspirada no HLTV. Hall da Fama persistido para cada campanha concluída.</p>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · NÚMEROS -->
+  <section class="slide">
+    <div class="brandbar"><span class="logo"><span class="mark"></span>ROAD TO <b>MAJOR</b></span><span class="pageno">02 · NÚMEROS</span></div>
+    <div class="head">
+      <div class="kicker gold">Tração</div>
+      <h2>Os números desde o <span class="accent-gold">lançamento</span></h2>
+      <p class="lead">Dados reais do painel interno, de 10/06/2026 até hoje. Cerca de duas semanas no ar.</p>
+    </div>
+    <div class="statgrid">
+      <div class="stat"><div class="n">19.754</div><div class="l"><b>Jogadores únicos</b></div></div>
+      <div class="stat gr"><div class="n">10.391</div><div class="l">Jogadores únicos nos <b>últimos 7 dias</b></div></div>
+      <div class="stat g"><div class="n">15.261</div><div class="l">Campanhas registradas no <b>Hall da Fama</b></div></div>
+      <div class="stat"><div class="n">51.291</div><div class="l">Temporadas / Majors iniciados</div></div>
+      <div class="stat"><div class="n">60.289</div><div class="l">Partidas MD3 disputadas</div></div>
+      <div class="stat g"><div class="n">86</div><div class="l">Países alcançados</div></div>
+    </div>
+    <div class="chart">
+      <div class="panel"><div class="ph">Jogadores únicos por dia</div><div class="pb">
+        <div class="bars" id="bars"></div>
+      </div></div>
+      <div class="panel gold"><div class="ph">Engajamento</div><div class="pb">
+        <div style="display:flex; flex-direction:column; gap:13px">
+          <div><div class="n" style="font-family:var(--cond); font-weight:800; font-size:30px; color:var(--text-strong)">4.187</div><div class="l" style="font-size:12px; color:var(--dim)">visitas nas últimas 24h</div></div>
+          <div><div class="n" style="font-family:var(--cond); font-weight:800; font-size:30px; color:var(--gold)">1.193</div><div class="l" style="font-size:12px; color:var(--dim)">cards de resultado compartilhados</div></div>
+          <div><div class="n" style="font-family:var(--cond); font-weight:800; font-size:30px; color:var(--green-bright)">~3 mil</div><div class="l" style="font-size:12px; color:var(--dim)">jogadores únicos por dia em média</div></div>
+        </div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- 4 · ALCANCE -->
+  <section class="slide">
+    <div class="brandbar"><span class="logo"><span class="mark"></span>ROAD TO <b>MAJOR</b></span><span class="pageno">03 · AUDIÊNCIA</span></div>
+    <div class="head">
+      <div class="kicker">Audiência</div>
+      <h2>Público fiel, <span class="accent-blue">100% Counter-Strike</span></h2>
+      <p class="lead">Quem entra, joga: 60 mil partidas e 15 mil campanhas concluídas mostram uma base que volta. Forte no Brasil, com alcance global em 86 países.</p>
+    </div>
+    <div class="two" style="grid-template-columns:1fr 1fr">
+      <div class="panel"><div class="ph">Top países · jogadores únicos</div><div class="pb">
+        <div class="ctrybars" id="ctry"></div>
+      </div></div>
+      <div style="display:flex; flex-direction:column; gap:14px">
+        <div class="stat g"><div class="n">66%</div><div class="l">do público é do <b>Brasil</b>: o coração do CS na América do Sul</div></div>
+        <div class="stat"><div class="n">+50%</div><div class="l">dos jogadores únicos voltaram nos <b>últimos 7 dias</b></div></div>
+        <div class="feat" style="background:var(--panel)"><span class="ic">📣</span><div><b>Perfil</b><span>Fãs de Counter-Strike: acompanham Majors, conhecem times e lendas, consomem skins e conteúdo de esports.</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · POR QUE PATROCINAR -->
+  <section class="slide">
+    <div class="brandbar"><span class="logo"><span class="mark"></span>ROAD TO <b>MAJOR</b></span><span class="pageno">04 · PATROCÍNIO</span></div>
+    <div class="head">
+      <div class="kicker gold">Oportunidade</div>
+      <h2>Coloque sua marca <span class="accent-gold">dentro do Major</span></h2>
+      <p class="lead">Inventário nativo num produto onde o público de CS passa minutos engajado, não segundos de scroll. Formatos flexíveis, do display ao branded content.</p>
+    </div>
+    <div class="spgrid spgrid">
+      <div class="sp"><div class="spt"><span class="dot"></span>Display premium</div><p>Banner fixo já ativo no produto, com inventário próprio e métricas reais de cliques. Espaço de destaque visto em cada sessão.</p></div>
+      <div class="sp"><div class="spt"><span class="dot"></span>Brand integration</div><p>Sua marca no jogo: time, sala ranqueada ou temporada patrocinada, skin/coleção assinada e naming de torneio.</p></div>
+      <div class="sp"><div class="spt"><span class="dot"></span>Conteúdo social</div><p>Mais de mil cards de resultado já compartilhados. Co-branding nos cards leva sua marca para fora do site, de graça.</p></div>
+      <div class="sp"><div class="spt"><span class="dot"></span>Ativações GC Masters</div><p>Acesso direto à torcida brasileira de CS via o modo GC Masters: o casamento natural para marcas que falam com o Brasil.</p></div>
+    </div>
+    <p class="note">Pacotes e valores sob medida conforme objetivo da campanha. Inventário e prazos negociáveis.</p>
+  </section>
+
+  <!-- 6 · DESIGN SYSTEM -->
+  <section class="slide">
+    <div class="brandbar"><span class="logo"><span class="mark"></span>ROAD TO <b>MAJOR</b></span><span class="pageno">05 · DESIGN SYSTEM</span></div>
+    <div class="head">
+      <div class="kicker">Nosso design system</div>
+      <h2>Uma identidade <span class="accent-blue">de esports</span>, consistente</h2>
+      <p class="lead">Tudo no Road to Major nasce do mesmo sistema: paleta escura inspirada no HLTV, tipografia condensada e componentes reutilizáveis. É nele que a sua marca vai se integrar.</p>
+    </div>
+    <div class="ds">
+      <div class="panel"><div class="ph">Paleta</div><div class="pb">
+        <div class="swatches">
+          <div class="sw"><div class="chip" style="background:#12161b"></div><div class="meta"><div class="nm">BG</div><div class="hex">#12161B</div></div></div>
+          <div class="sw"><div class="chip" style="background:#242b34"></div><div class="meta"><div class="nm">Panel</div><div class="hex">#242B34</div></div></div>
+          <div class="sw"><div class="chip" style="background:#4382b6"></div><div class="meta"><div class="nm">Blue</div><div class="hex">#4382B6</div></div></div>
+          <div class="sw"><div class="chip" style="background:#61a8dd"></div><div class="meta"><div class="nm">Blue+</div><div class="hex">#61A8DD</div></div></div>
+          <div class="sw"><div class="chip" style="background:#d8a943"></div><div class="meta"><div class="nm">Gold</div><div class="hex">#D8A943</div></div></div>
+          <div class="sw"><div class="chip" style="background:#6fd06f"></div><div class="meta"><div class="nm">Green</div><div class="hex">#6FD06F</div></div></div>
+          <div class="sw"><div class="chip" style="background:#e25a5a"></div><div class="meta"><div class="nm">Red</div><div class="hex">#E25A5A</div></div></div>
+          <div class="sw"><div class="chip" style="background:#dfe5ec"></div><div class="meta"><div class="nm">Text</div><div class="hex">#DFE5EC</div></div></div>
+        </div>
+      </div></div>
+      <div style="display:flex; flex-direction:column; gap:14px">
+        <div class="panel"><div class="ph">Tipografia</div><div class="pb">
+          <div class="typ">
+            <div class="big">Oswald · Display</div>
+            <div class="small" style="font-family:var(--font); font-size:14px; color:var(--text)">Inter · texto corrido, legível e neutro para os dados.</div>
+          </div>
+        </div></div>
+        <div class="panel gold"><div class="ph">Componentes</div><div class="pb">
+          <div class="comprow">
+            <button class="btn primary">Jogar</button>
+            <button class="btn gold">Ranqueada</button>
+            <button class="btn ghost">Menu</button>
+            <span class="ovr"><b>92</b><span>OVR</span></span>
+            <span class="role awp">AWP</span>
+            <span class="role igl">IGL</span>
+            <span class="role entry">Entry</span>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · CONTATO -->
+  <section class="slide contact">
+    <div class="brandbar"><span class="logo"><span class="mark"></span>ROAD TO <b>MAJOR</b></span><span class="pageno">06 · CONTATO</span></div>
+    <div class="kicker gold">Bora conversar</div>
+    <h2>Vamos colocar sua marca<br>no <span class="accent-gold">Major</span></h2>
+    <p class="cta">Um público de CS engajado, crescendo e global, esperando a sua marca. Conta o seu objetivo que a gente monta o pacote.</p>
+    <div class="links">
+      <span class="clink gold">roadtomajor.com.br</span>
+      <span class="clink">castroomath7@gmail.com</span>
+    </div>
+    <div class="note">Road to Major · Media Kit 2026 · números desde 10/06/2026</div>
+  </section>
+
+</div>
+
+<script>
+  // dados reais (jogadores únicos por dia, 10/06 a 21/06)
+  var trend = [
+    ['10/06',1699],['11/06',4964],['12/06',4002],['13/06',2825],
+    ['14/06',3024],['15/06',2829],['16/06',3399],['17/06',2593],
+    ['18/06',2320],['19/06',1782],['20/06',1330],['21/06',2462]
+  ];
+  var max = Math.max.apply(null, trend.map(function(d){return d[1];}));
+  document.getElementById('bars').innerHTML = trend.map(function(d){
+    var h = Math.round(d[1]/max*100);
+    return '<div class="col"><div class="bar" style="height:'+h+'%"></div><div class="day">'+d[0].slice(0,2)+'</div></div>';
+  }).join('');
+
+  var ctry = [['BR',13017],['PT',1311],['US',756],['AR',445],['PL',188],['GB',118],['FR',109]];
+  var cmax = ctry[0][1];
+  document.getElementById('ctry').innerHTML = ctry.map(function(c){
+    var w = Math.round(c[1]/cmax*100);
+    return '<div class="ctry"><span class="cc">'+c[0]+'</span><span class="track"><span class="fill" style="width:'+w+'%"></span></span><span class="v">'+c[1].toLocaleString('pt-BR')+'</span></div>';
+  }).join('');
+
+  // modo "flat" só para captura/verificação: empilha slides em altura fixa
+  if (location.search.indexOf('flat') >= 0) {
+    document.querySelector('.deck').style.scrollSnapType = 'none';
+    [].forEach.call(document.querySelectorAll('.slide'), function(s){
+      s.style.minHeight = '720px'; s.style.height = '720px';
+    });
+  }
+
+  // navegação: #sN abre direto num slide; setas esquerda/direita avançam
+  if (location.hash && /^#s\d+$/.test(location.hash)) {
+    var idx = parseInt(location.hash.slice(2), 10) - 1;
+    var s = document.querySelectorAll('.slide')[idx];
+    if (s) s.scrollIntoView();
+  }
+  document.addEventListener('keydown', function(e){
+    var slides = [].slice.call(document.querySelectorAll('.slide'));
+    var cur = slides.findIndex(function(el){ return el.getBoundingClientRect().top >= -5; });
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') { if (slides[cur+1]) slides[cur+1].scrollIntoView({behavior:'smooth'}); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { if (slides[cur-1]) slides[cur-1].scrollIntoView({behavior:'smooth'}); }
+  });
+</script>
+</body>
+</html>
