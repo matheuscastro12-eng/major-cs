@@ -341,14 +341,19 @@ const REGION_CC: Record<MacroRegion, string[]> = {
   africa: ['za', 'ma', 'eg', 'ng'],
 };
 // identidade determinística de um jovem (nick/nome/país) a partir de um seed
+// sufixos pra compor nicks: 50 bases x ~13 variações = centenas de nicks únicos,
+// evitando o "monte de jogador repetido" (com a renovação, muitos jovens nascem).
+const PROSPECT_NICK_SUFFIX = ['', '', 'zy', 'ko', 'ix', 'er', '1x', 'zin', 'oo', 'qt', 'on', 'sk', 'y0'];
 function prospectIdentity(seed: string, region: MacroRegion): { nick: string; name: string; country: string } {
   const h = hashStr(seed);
   const names = PROSPECT_NAMES[region] ?? PROSPECT_NAMES.europe;
   const ccs = REGION_CC[region] ?? REGION_CC.europe;
   // IMPORTANTE: usar shift SEM sinal (>>>). hashStr retorna 0..2^32-1, e `h >> k`
   // (com sinal) vira NEGATIVO p/ h >= 2^31, gerando índice negativo => undefined.
+  const base = PROSPECT_NICKS[(h >>> 4) % PROSPECT_NICKS.length];
+  const suffix = PROSPECT_NICK_SUFFIX[(h >>> 11) % PROSPECT_NICK_SUFFIX.length];
   return {
-    nick: PROSPECT_NICKS[(h >>> 4) % PROSPECT_NICKS.length],
+    nick: base + suffix,
     name: names[(h >>> 7) % names.length],
     country: ccs[h % ccs.length],
   };
