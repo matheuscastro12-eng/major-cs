@@ -929,11 +929,11 @@ function aiRetireAge(pid: string): number {
 
 // drift de OVR entre o split de estreia e o atual, pelo relógio de idade próprio
 // do jogador (serve tanto pro titular original quanto pro jovem da base).
-function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, split: number): number {
+function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, split: number, potCap?: number): number {
   if (split <= debut) return 0;
   const room = a0 <= 18 ? 9 : a0 <= 20 ? 7 : a0 <= 22 ? 4 : a0 <= 24 ? 2 : a0 <= 26 ? 1 : 0;
   const talent = room > 0 ? hashStr(`pot:${pid}`) % 4 : 0;
-  const pot = Math.min(99, baseOvr + room + talent);
+  const pot = Math.min(99, potCap ?? 99, baseOvr + room + talent);
   let cur = baseOvr;
   for (let s = debut; s < split; s++) {
     const age = a0 + Math.floor((s - debut) / 3);
@@ -944,38 +944,42 @@ function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, spli
 
 // jovem da base que assume a vaga de um titular aposentado. OVR de estreia abaixo
 // do nível do time (cru, com espaço pra crescer). Determinístico por time/vaga/geração.
-function regenYouth(team: TeamSeason, slot: number, gen: number, debut: number, a0: number, baselineOvr: number, role: Role): Player {
+function regenYouth(team: TeamSeason, slot: number, gen: number, debut: number, a0: number, orig: Player): Player {
   const seed = `regen:${team.id}:${slot}:${gen}`;
   const region = macroRegionOf(team.country) ?? 'europe';
   const ident = prospectIdentity(seed, region);
   const h = hashStr(seed);
-  const base = Math.max(54, Math.min(86, baselineOvr - (5 + (h % 5)))); // -5..-9 vs. nível do time
+  // herda o PERFIL do titular que saiu (mesma função/estilo) e entra um pouco abaixo:
+  // quanto mais forte a vaga, menor o gap — o time mantém a firepower ao renovar.
+  const anchor = playerOvr(orig);
+  const gap = (anchor >= 90 ? 4 : anchor >= 86 ? 5 : anchor >= 82 ? 6 : 8) + (h % 2);
+  const at = (v: number) => Math.max(40, Math.min(95, v - gap));
   return {
     id: `${team.id}~rg${slot}.${gen}.${debut}.${a0}`,
-    nick: ident.nick, name: ident.name, country: ident.country, role,
-    aim: base + (h % 3), consistency: base - 1, clutch: base - 2,
-    awp: role === 'AWP' ? base + 1 : base - 6,
-    igl: role === 'IGL' ? base + 1 : base - 5,
+    nick: ident.nick, name: ident.name, country: ident.country, role: orig.role,
+    aim: at(orig.aim), consistency: at(orig.consistency), clutch: at(orig.clutch), awp: at(orig.awp), igl: at(orig.igl),
   };
 }
 
 // resolve o jogador ATUAL de uma vaga da IA no split dado: o titular original
 // envelhece até se aposentar; aí um jovem da base (academia) assume e evolui no
 // lugar dele — e assim por diante. Mantém os elencos da IA vivos e renovados.
-function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split: number, baselineOvr: number, skip: Set<string>): Player {
+function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split: number, skip: Set<string>): Player {
   const clamp = (v: number) => Math.max(40, Math.min(99, v));
-  let curPlayer = orig, curId = orig.id, curBaseOvr = playerOvr(orig), curA0 = baseAge(orig), debut = 1, gen = 0, isYouth = false;
+  const anchor = playerOvr(orig); // nível da vaga: a base entra perto disso
+  let curPlayer = orig, curId = orig.id, curBaseOvr = anchor, curA0 = baseAge(orig), debut = 1, gen = 0, isYouth = false;
   for (let guard = 0; guard < 8; guard++) {
     const need = aiRetireAge(curId) - curA0;
     const retireSplit = need <= 0 ? debut + 1 : debut + 3 * need;
     if (split < retireSplit) break; // titular atual ainda em atividade
     gen++; debut = retireSplit;
     const a0 = 17 + (hashStr(`yage:${team.id}:${slot}:${gen}:${debut}`) % 3); // estreia 17-19
-    curPlayer = regenYouth(team, slot, gen, debut, a0, baselineOvr, orig.role);
+    curPlayer = regenYouth(team, slot, gen, debut, a0, orig);
     curId = curPlayer.id; curBaseOvr = playerOvr(curPlayer); curA0 = a0; isYouth = true;
   }
   if (skip.has(curId)) return curPlayer; // se o usuário contratou esse jovem, ele evolui pelo save.evo
-  const d = driftFrom(curId, curBaseOvr, curA0, debut, split);
+  // jovem da base pode crescer até um pouco acima do titular que saiu (não vira monstro)
+  const d = driftFrom(curId, curBaseOvr, curA0, debut, split, isYouth ? anchor + 2 : undefined);
   if (!d) return isYouth ? curPlayer : orig;
   const p = curPlayer;
   return { ...p, aim: clamp(p.aim + d), consistency: clamp(p.consistency + d), clutch: clamp(p.clutch + d), awp: clamp(p.awp + d), igl: clamp(p.igl + d) };
@@ -983,10 +987,7 @@ function aiSlotPlayer(orig: Player, team: TeamSeason, slot: number, split: numbe
 
 function applyAiAging(teams: TeamSeason[], split: number, skip: Set<string>): TeamSeason[] {
   if (split <= 1) return teams;
-  return teams.map((t) => {
-    const baseline = Math.round(t.players.reduce((a, p) => a + playerOvr(p), 0) / Math.max(1, t.players.length));
-    return { ...t, players: t.players.map((p, i) => (skip.has(p.id) ? p : aiSlotPlayer(p, t, i, split, baseline, skip))) };
-  });
+  return teams.map((t) => ({ ...t, players: t.players.map((p, i) => (skip.has(p.id) ? p : aiSlotPlayer(p, t, i, split, skip))) }));
 }
 
 // ----- helpers do playoff (mata-mata do circuito) -----
