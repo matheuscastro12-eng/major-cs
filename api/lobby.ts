@@ -140,7 +140,7 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
 
 // janela em que um jogador é considerado "presente" (heartbeat recente). Quem
 // passa disso não conta na barreira coletiva e pode ter o host migrado.
-const PRESENT_MS = 40_000;
+const PRESENT_MS = 70_000; // host só é considerado ausente após ~70s (cliente pinga a cada 25s: tolera pings perdidos)
 
 // rate-limit best-effort POR INSTÂNCIA (não cobre flood distribuído; pra isso,
 // usar o Firewall/rate-limit da Vercel). Protege o Neon do flood casual.
@@ -166,7 +166,7 @@ async function migrateHostIfStale(sql: ReturnType<typeof neon>, code: string): P
     SELECT host,
            (SELECT nick FROM lobby_players p
             WHERE p.code = l.code AND COALESCE(p.spectator, false) = false
-              AND COALESCE(p.last_seen, p.joined_at) > now() - interval '40 seconds'
+              AND COALESCE(p.last_seen, p.joined_at) > now() - interval '70 seconds'
             ORDER BY p.joined_at ASC LIMIT 1) AS oldest_active,
            (SELECT COALESCE(last_seen, joined_at) FROM lobby_players p
             WHERE p.code = l.code AND lower(p.nick) = lower(l.host)) AS host_seen
@@ -205,7 +205,7 @@ export default async function handler(
   if ((req.method === 'GET' || !req.method) && req.query?.list != null) {
     try {
       // aproveita pra fechar salas inativas (sem heartbeat há mais de 2min)
-      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '2 minutes'`;
+      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes'`;
       // só lista salas com alguém ativo (ping nos últimos 60s)
       const rows = await sql`
         SELECT l.code, l.mode, l.pool, l.host, l.name, l.created_at, COALESCE(l.ranked, false) AS ranked,
@@ -213,7 +213,7 @@ export default async function handler(
                (SELECT mmr FROM rtm_ranking rr WHERE lower(rr.nick) = lower(l.host) ORDER BY mmr DESC LIMIT 1) AS host_mmr
         FROM lobbies l
         WHERE l.is_public = true AND l.status = 'waiting'
-              AND COALESCE(l.last_ping, l.created_at) > now() - interval '60 seconds'
+              AND COALESCE(l.last_ping, l.created_at) > now() - interval '90 seconds'
         ORDER BY l.created_at DESC LIMIT 30`;
       const rooms = rows
         .map((r) => ({ ...r, players: Number(r.players), max: MAX_PLAYERS[r.mode as string] ?? 8, ranked: !!r.ranked, host_mmr: r.host_mmr == null ? null : Number(r.host_mmr) }))
@@ -335,7 +335,7 @@ export default async function handler(
       const seed = Math.floor(Math.random() * 2147483647);
       // fecha salas inativas: ninguém com a aba aberta há mais de 2min (sem
       // heartbeat). Backstop de 6h pra qualquer resíduo.
-      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '2 minutes'`;
+      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes'`;
       await sql`DELETE FROM lobbies WHERE created_at < now() - interval '6 hours'`;
       // tenta alguns códigos até achar um livre
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -669,7 +669,7 @@ export default async function handler(
           SELECT COUNT(*) AS n FROM lobby_players
           WHERE code = ${code} AND COALESCE(spectator, false) = false
             AND COALESCE(ready_stage, -1) < ${currentStage}
-            AND COALESCE(last_seen, joined_at) > now() - interval '40 seconds'`;
+            AND COALESCE(last_seen, joined_at) > now() - interval '70 seconds'`;
         if (Number(pending[0].n) > 0) {
           res.status(409).json({ error: 'ainda há jogadores assistindo suas partidas' });
           return;

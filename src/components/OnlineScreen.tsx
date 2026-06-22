@@ -523,7 +523,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     // depois de 'done' o resultado é imutável (refresh não re-seta o state, então
     // não re-simula), mas seguimos com um poll lento pra detectar quando o host
     // inicia a próxima temporada.
-    const syncMs = state?.lobby.status === 'veto' ? 1000 : lobbyDone ? 1500 : POLL_MS;
+    // poll por fase: veto rápido; espera/draft ágil (entrar, host iniciar e picks
+    // aparecem em ~2s em vez de 5s); 'done' lento (resultado imutável, só detecta
+    // a próxima temporada). A partida ao vivo sincroniza pelo relógio da sala.
+    const st = state?.lobby.status;
+    const syncMs = st === 'veto' ? 1000 : st === 'waiting' || st === 'drafting' ? 2000 : lobbyDone ? 1500 : POLL_MS;
     pollRef.current = window.setInterval(refresh, syncMs);
     return () => { window.clearTimeout(initial); window.clearInterval(pollRef.current); };
   }, [code, refresh, lobbyDone, localDemo, state?.lobby.mode, state?.lobby.status]);
@@ -547,13 +551,19 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   useEffect(() => {
     if (!code || localDemo) return;
     const me = nick.trim();
-    const ping = () => { if (!document.hidden) lobbyApi({ action: 'ping', code, nick: me }).catch(() => {}); };
+    // pinga MESMO com a aba em segundo plano (senão a sala "some" quando o jogador
+    // troca de aba); cadência < janela de presença do servidor (70s) com folga.
+    const ping = () => { if (me) lobbyApi({ action: 'ping', code, nick: me }).catch(() => {}); };
     ping();
-    const id = window.setInterval(ping, 45000); // corte de custo
+    const id = window.setInterval(ping, 25000);
+    // ao voltar pra aba, pinga e ressincroniza na hora (não espera o próximo poll)
+    const onVis = () => { if (!document.hidden) { ping(); void refresh(); } };
+    document.addEventListener('visibilitychange', onVis);
     const leave = () => { if (me) lobbyApi({ action: 'leave', code, nick: me }).catch(() => {}); };
     window.addEventListener('beforeunload', leave);
     return () => {
       window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('beforeunload', leave);
       leave(); // saída limpa ao sair da tela (migra host / libera a barreira coletiva)
     };
