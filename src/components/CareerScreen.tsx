@@ -2540,10 +2540,26 @@ export function CareerScreen({ onExit }: Props) {
   // stats da temporada, rankings e feed de transferências são caros de calcular;
   // memoizados aqui pra não recomputar a cada render do hub
   const seasonStatsMemo = useMemo(() => (save.league ? seasonPlayerStats(save.league) : []), [save.league]);
+  // o SEU time como TeamSeason, pra entrar nos rankings da temporada (MVP/Top 20).
+  // Sem isto os seus jogadores nunca apareciam (o pool era só a IA do currentEra).
+  const userTeamSeason = useMemo((): TeamSeason | null => {
+    if (!save.org) return null;
+    const players = save.squad.map(findSigning).filter(Boolean).map((f) => (f as ResolvedSigning).player);
+    if (players.length < 5) return null;
+    return {
+      id: 'user', team: save.org.name, tag: save.org.tag, era: 'CS2 2026', game: 'CS2',
+      country: players[0]?.country ?? 'br', teamwork: 80, honors: '', colors: save.org.colors,
+      mapPrefs: {}, coach: ROOKIE_COACH, players,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.squad, save.org, save.evo, save.roles, save.split, currentEra]);
+  // pool dos rankings da temporada = SEU time + a IA
+  const top20Pool = useMemo(() => (userTeamSeason ? [userTeamSeason, ...currentEra] : currentEra), [userTeamSeason, currentEra]);
+
   const top20Memo = useMemo(
     () => {
-      const mvps = seasonMvpCounts(currentEra, save.split);
-      return currentEra
+      const mvps = seasonMvpCounts(top20Pool, save.split);
+      return top20Pool
         .flatMap((t) => t.players.map((p): Top20Entry => ({
           p, team: t, role: p.role as Role,
           rating: playerSeasonRating(p, save.split),
@@ -2554,7 +2570,7 @@ export function CareerScreen({ onExit }: Props) {
         .sort((a, b) => b.points - a.points)
         .slice(0, 20);
     },
-    [currentEra, save.split],
+    [top20Pool, save.split],
   );
   // ranking de CARREIRA: maiores ratings acumulados (estatísticas que sobem com
   // a evolução). Inclui você e quem você enfrentou pelos circuitos.
@@ -2873,8 +2889,8 @@ export function CareerScreen({ onExit }: Props) {
     // premiação do Top 20 HLTV do ano
     const seasonNo = seasonOf(save.split);
     const mySquadOidsM = new Set(save.squad.map((s) => s.playerId));
-    const seasonTop3 = seasonTopPlayersYear(currentEra, save.split, 3);
-    const seasonTop20 = seasonTopPlayersYear(currentEra, save.split, 20);
+    const seasonTop3 = seasonTopPlayersYear(top20Pool, save.split, 3);
+    const seasonTop20 = seasonTopPlayersYear(top20Pool, save.split, 20);
     const PLACE_PT: Record<PlacementCode, string> = {
       champion: ct('CAMPEÃO DO MAJOR'),
       runnerup: ct('VICE-CAMPEÃO'),
@@ -3048,8 +3064,8 @@ export function CareerScreen({ onExit }: Props) {
     const myStar = seStats.find((s) => mySquadIdsSE.has(s.id));
     const seasonEndsNow = isMajorSplit(save.split); // a temporada (ano) só fecha no split de Major
     const seasonNo = seasonOf(save.split);
-    const seasonTop3 = seasonTopPlayersYear(currentEra, save.split, 3);
-    const seasonTop20 = seasonTopPlayersYear(currentEra, save.split, 20);
+    const seasonTop3 = seasonTopPlayersYear(top20Pool, save.split, 3);
+    const seasonTop20 = seasonTopPlayersYear(top20Pool, save.split, 20);
     const mySquadOids = new Set(save.squad.map((s) => s.playerId)); // ids do seu elenco (relabel HLTV)
     const nextFeed = feedMemo;
     // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
@@ -3957,7 +3973,7 @@ export function CareerScreen({ onExit }: Props) {
                           <span className="muted small">{p.age} anos</span>
                         </div>
                         <div className="aca-pot">
-                          <span className="muted small">{ct('Potencial')}</span>
+                          <span className="muted small">{ct('OVR atual')} <b style={{ color: 'var(--rtm-text-strong)' }}>{ovr}</b> · {ct('Potencial')}</span>
                           <div className="aca-potbar"><div style={{ width: `${potPct}%` }} /></div>
                           <span className="aca-potval">{p.potential}</span>
                         </div>
