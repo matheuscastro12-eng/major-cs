@@ -921,6 +921,86 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // ---------- telas ----------
 
   if (!code) {
+    // Ranked 1v1: lobby dedicado (hero com MMR/rank + procurar partida), no layout do design.
+    if (forceRanked) {
+      const duelRooms = openRooms.filter((r) => r.mode === 'duel' && r.players < r.max);
+      const initials = (nick || account?.nick || '??').slice(0, 2).toUpperCase();
+      const displayNick = nick || account?.nick || 'Você';
+      return (
+        <div className="fade-in" style={{ maxWidth: 760, margin: '0 auto' }}>
+          <BackBar onHub={onBack} onExit={onBack} />
+
+          {/* HERO */}
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--rtm-border)', padding: '26px 24px', marginBottom: '16px' }}>
+            <img src="/maps/dust2.jpg" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22 }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(13,17,22,.92), rgba(13,17,22,.6))' }} />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
+              <span style={{ width: '64px', height: '64px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '22px', color: '#fff', background: 'linear-gradient(160deg, var(--rtm-blue-bright), #20303f)' }}>{initials}</span>
+              <div style={{ flex: 1, minWidth: '160px' }}>
+                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800 }}>{myRank?.division ?? (paidRank ? 'Sem ranking ainda' : 'Conta grátis')}</div>
+                <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '28px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{displayNick}</h1>
+                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{myRank ? `${myRank.mmr} MMR · #${myRank.rank} no mundo` : (paidRank ? 'Jogue uma ranqueada pra entrar no ladder' : 'No grátis o MMR não persiste')}</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.6)', border: '1px solid var(--rtm-border-soft)' }}>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>Temporada</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--rtm-green-bright)' }}>{myRank ? `${myRank.wins}W · ${myRank.losses}L` : '0W · 0L'}</div>
+              </div>
+            </div>
+          </div>
+
+          {!nick.trim() && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 16px', padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>Escolha um nick para jogar:</span>
+              <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={{ ...onlineInputStyle, width: 'auto', flex: 1, minWidth: '160px' }} />
+            </div>
+          )}
+
+          <Panel title="Ranked 1v1" accent="blue" style={{ marginBottom: '16px' }}>
+            <p style={{ margin: '0 0 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.5 }}>
+              O matchmaking busca um rival perto do seu MMR. Vocês montam os times em draft e jogam uma melhor de três. Vitória sobe o MMR, derrota desce{paidRank ? '' : ' (no grátis não persiste)'}.
+            </p>
+            <Button variant="primary" size="big" style={{ width: '100%' }} onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : '🔍 Procurar partida'}</Button>
+          </Panel>
+
+          <Panel
+            title="Salas ranqueadas abertas"
+            accent="blue"
+            actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}
+            style={{ marginBottom: '16px' }}
+          >
+            {duelRooms.length === 0 ? (
+              <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>Nenhuma sala 1v1 aberta agora. Use “Procurar partida” que eu crio uma e espero um rival.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {duelRooms.map((r) => (
+                  <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 7px var(--rtm-green-bright)' }} />
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>Aguardando</span>
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `Sala de ${r.host}`}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>host <b style={{ color: 'var(--rtm-text)' }}>{r.host}</b>{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
+                    </div>
+                    <Button variant="primary" size="sm" disabled={busy || !nick.trim()} onClick={() => doJoin(r.code, false)}>{OL.enter}</Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Panel>
+
+          <Panel title={tr('online.joinWithCode')} accent="blue">
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <input value={codeInput} maxLength={5} placeholder="ex: K7KPQ" style={{ ...onlineInputStyle, flex: 1, minWidth: '140px', textTransform: 'uppercase', letterSpacing: 4, fontFamily: 'var(--rtm-font-cond)', fontSize: 18 }} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && join()} />
+              <Button variant="ghost" onClick={join} disabled={!nick.trim() || !codeInput.trim() || busy}>{busy ? tr('online.joining') : tr('online.joinRoom')}</Button>
+            </div>
+          </Panel>
+          {error && (
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+          )}
+        </div>
+      );
+    }
     // Ranked Major: tela dedicada de salas (browse) + passo de criar sala, no layout do design.
     if (preset === 'party' && !casualOnly) {
       const openCount = openRooms.filter((r) => r.players < r.max).length;
