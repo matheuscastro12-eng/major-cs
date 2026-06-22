@@ -1158,71 +1158,85 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // sala de espera
   if (state.lobby.status === 'waiting') {
     return (
-      <div className="fade-in">
-        <div className="panel" style={{ maxWidth: 560, margin: '30px auto' }}>
-          <div className="panel-head">
-            {tr('online.roomLabel')} {state.lobby.mode === 'duel' ? tr('online.roomDuel') : tr('online.roomParty')}
-            <span className="spacer" />
-            <button className="btn ghost" onClick={onBack}>
-              {tr('common.exit')}
-            </button>
-          </div>
-          <div className="panel-body center">
-            <div className="muted small">{tr('online.shareCode')}</div>
-            <div className="lobby-code" onClick={() => navigator.clipboard?.writeText(code)} title={tr('online.clickToCopy')}>
+      <div className="fade-in" style={{ maxWidth: 620, margin: '0 auto' }}>
+        <BackBar onExit={onBack} />
+        <Panel
+          title={`${tr('online.roomLabel')} ${state.lobby.mode === 'duel' ? tr('online.roomDuel') : tr('online.roomParty')}`}
+          accent="gold"
+        >
+          {/* código grande e clicável */}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{tr('online.shareCode')}</div>
+            <div
+              onClick={() => navigator.clipboard?.writeText(code)}
+              title={tr('online.clickToCopy')}
+              style={{ cursor: 'pointer', display: 'inline-block', margin: '8px 0 2px', padding: '10px 26px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-gold-soft)', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '40px', letterSpacing: '8px', color: 'var(--rtm-gold)', textShadow: '0 0 24px rgba(216,169,67,.35)' }}
+            >
               {code}
             </div>
-            <button
-              className="btn ghost small"
-              style={{ marginTop: 6 }}
-              onClick={async () => {
-                const link = `${window.location.origin}/online/${code}`;
-                try {
-                  if (navigator.share) await navigator.share({ title: 'Road to Major · Ultimate Team', text: 'Bora jogar?', url: link });
-                  else await navigator.clipboard.writeText(link);
-                  setShareStatus(tr('online.linkCopied'));
-                } catch { /* cancelado */ }
-              }}
-            >
-              🔗 {tr('online.copyLink')}
-            </button>
-            {shareStatus && <div className="muted small">{shareStatus}</div>}
-            <div className="muted small" style={{ marginBottom: 16 }}>
+            <div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  const link = `${window.location.origin}/online/${code}`;
+                  try {
+                    if (navigator.share) await navigator.share({ title: 'Road to Major · Ultimate Team', text: 'Bora jogar?', url: link });
+                    else await navigator.clipboard.writeText(link);
+                    setShareStatus(tr('online.linkCopied'));
+                  } catch { /* cancelado */ }
+                }}
+              >🔗 {tr('online.copyLink')}</Button>
+            </div>
+            {shareStatus && <div style={{ fontSize: '12px', color: 'var(--rtm-green-bright)', marginTop: 6 }}>{shareStatus}</div>}
+            <div style={{ fontSize: '12px', color: 'var(--rtm-dim)', margin: '12px auto 0', maxWidth: 420, lineHeight: 1.5 }}>
               {state.lobby.pool === 'br' ? tr('online.poolBrLong') : tr('online.poolWorldLong')} · {state.lobby.draft_rollouts ?? 2} rerolls por rodada · {tr('online.clickCodeToCopy')}
             </div>
-            <div className="lobby-players">
-              {activePlayers.map((p) => (
-                <span key={p.nick} className="lobby-player">
-                  {p.nick === state.lobby.host ? '★ ' : '• '}
-                  {p.nick}
-                  {isHost && p.nick !== state.lobby.host && (
-                    <button className="kick-btn" title={OL.kick} disabled={busy} onClick={() => kick(p.nick)}>✕</button>
-                  )}
-                </span>
-              ))}
-            </div>
-            {spectators.length > 0 && (
-              <div className="ut-spectators"><b>ESPECTADORES</b>{spectators.map((viewer) => <span key={viewer.nick}>◉ {viewer.nick}</span>)}</div>
-            )}
-            {isHost && (
-              <div style={{ marginTop: 12 }}>
-                <button className={`btn ${state.lobby.locked ? 'gold' : 'ghost'} small`} onClick={toggleLock} disabled={busy}>
-                  {state.lobby.locked ? OL.unlock : OL.lock}
-                </button>
-                {state.lobby.locked && <div className="muted small" style={{ marginTop: 4 }}>{OL.locked}</div>}
-              </div>
-            )}
-            {isHost ? (
-              <button className="btn gold big" style={{ marginTop: 18 }} onClick={start} disabled={activePlayers.length < 2 || busy}>
-                {activePlayers.length < 2 ? tr('online.waitingPlayers') : tr('online.startDraft')}
-              </button>
-            ) : (
-              <div className="muted" style={{ marginTop: 18 }}>
-                {tr('online.waitingHost')} {state.lobby.host} {tr('online.waitingHostTail')}
-              </div>
-            )}
           </div>
-        </div>
+
+          {/* jogadores na sala */}
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, margin: '18px 0 10px' }}>Jogadores na sala ({activePlayers.length})</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '8px' }}>
+            {activePlayers.map((p) => {
+              const host = p.nick === state.lobby.host;
+              return (
+                <div key={p.nick} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: 'var(--rtm-radius)', background: host ? 'rgba(216,169,67,.1)' : 'var(--rtm-panel-2)', border: `1px solid ${host ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}` }}>
+                  <span style={{ width: '30px', height: '30px', flexShrink: 0, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '12px', color: host ? '#1a1205' : '#fff', background: host ? 'linear-gradient(160deg, var(--rtm-gold-glow), var(--rtm-gold-soft))' : 'linear-gradient(160deg, var(--rtm-blue-bright), #20303f)' }}>{p.nick.slice(0, 2).toUpperCase()}</span>
+                  <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: host ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{host ? '★ ' : ''}{p.nick}</b>
+                  {isHost && !host && (
+                    <button type="button" title={OL.kick} disabled={busy} onClick={() => kick(p.nick)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--rtm-faint)', fontSize: '14px', lineHeight: 1, padding: 0 }}>✕</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {spectators.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+              <b style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)' }}>Espectadores</b>
+              {spectators.map((viewer) => <span key={viewer.nick} style={{ fontSize: '11px', color: 'var(--rtm-dim)', padding: '2px 8px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--rtm-border-soft)' }}>◉ {viewer.nick}</span>)}
+            </div>
+          )}
+
+          {isHost && (
+            <div style={{ marginTop: '14px' }}>
+              <Button variant={state.lobby.locked ? 'gold' : 'ghost'} size="sm" onClick={toggleLock} disabled={busy}>
+                {state.lobby.locked ? OL.unlock : OL.lock}
+              </Button>
+              {state.lobby.locked && <div style={{ fontSize: '12px', color: 'var(--rtm-dim)', marginTop: 4 }}>{OL.locked}</div>}
+            </div>
+          )}
+
+          {isHost ? (
+            <Button variant="gold" size="big" style={{ width: '100%', marginTop: '18px' }} onClick={start} disabled={activePlayers.length < 2 || busy}>
+              {activePlayers.length < 2 ? tr('online.waitingPlayers') : tr('online.startDraft')}
+            </Button>
+          ) : (
+            <div style={{ textAlign: 'center', color: 'var(--rtm-dim)', fontSize: '14px', marginTop: '18px' }}>
+              {tr('online.waitingHost')} {state.lobby.host} {tr('online.waitingHostTail')}
+            </div>
+          )}
+        </Panel>
       </div>
     );
   }
