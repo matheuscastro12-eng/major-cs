@@ -1,4 +1,5 @@
 // Cliente do CRM de contas pagas (admin). Manda a senha de admin em cada chamada.
+import { ct } from './career-i18n';
 export interface AdminAccount { email: string; nick: string | null; paid: boolean; created_at: string; hasRef: boolean; }
 export interface OrphanPaid { email: string; created_at: string; }
 export interface AccountsList { accounts: AdminAccount[]; orphanPaid: OrphanPaid[]; total: number; paidTotal: number; }
@@ -7,7 +8,7 @@ export interface StripeLookup { found: boolean; sessionId?: string; amount?: num
 async function post(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   const r = await fetch('/api/admin-accounts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : (r.status === 401 ? 'Login de admin necessário.' : 'erro'));
+  if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : (r.status === 401 ? ct('Login de admin necessário.') : ct('erro')));
   return data as Record<string, unknown>;
 }
 
@@ -22,5 +23,5 @@ export async function revokeAccess(password: string, email: string): Promise<boo
 }
 export async function lookupStripe(password: string, email: string): Promise<StripeLookup> {
   try { return (await post({ action: 'stripe', password, email })) as unknown as StripeLookup; }
-  catch (e) { return { found: false, error: e instanceof Error ? e.message : 'erro' }; }
+  catch (e) { return { found: false, error: e instanceof Error ? e.message : ct('erro') }; }
 }

@@ -7,6 +7,7 @@ import { BackBar } from './bits';
 import { QuickDraft } from './QuickDraft';
 import { resolve, majorPlace, type OnlineStats, type PoolPlayer, type PlaceKey } from './onlineData';
 import type { Manager } from '../../state/manager';
+import { ct } from '../../state/career-i18n';
 
 const MJ_ROUNDS = [
   { key: 'swiss', label: 'Fase suíça', opp: 80 },
@@ -81,10 +82,10 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
         <BackBar onHub={onHub} onExit={onExit} />
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '34px' }}>🏆</div>
-          <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Ranked Major</h1>
-          <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '480px', margin: '8px auto 0', lineHeight: 1.55 }}>Escolha o tamanho da chave. Cada manager monta o seu time e joga a própria campanha. No fim, o ranking é por quem foi mais longe.</p>
+          <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Ranked Major')}</h1>
+          <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '480px', margin: '8px auto 0', lineHeight: 1.55 }}>{ct('Escolha o tamanho da chave. Cada manager monta o seu time e joga a própria campanha. No fim, o ranking é por quem foi mais longe.')}</p>
         </div>
-        <Panel title="Quantos managers nesta chave?">
+        <Panel title={ct('Quantos managers nesta chave?')}>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '8px' }}>
             {[2, 4, 6, 8].map((n) => (
               <button key={n} type="button" onClick={() => setCount(n)} style={{ cursor: 'pointer', width: '64px', height: '56px', borderRadius: '10px', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '22px', border: `2px solid ${count === n ? 'var(--rtm-gold)' : 'var(--rtm-border)'}`, background: count === n ? 'rgba(216,169,67,.14)' : 'var(--rtm-bg-deep)', color: count === n ? 'var(--rtm-gold)' : 'var(--rtm-dim)' }}>{n}</button>
@@ -92,23 +93,23 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
           </div>
         </Panel>
         <div style={{ marginTop: '14px' }}>
-          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '10px' }}>Managers na chave</div>
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '10px' }}>{ct('Managers na chave')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '8px' }}>
             {preview.map((p, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: 'var(--rtm-radius)', background: p.you ? 'rgba(216,169,67,.1)' : 'var(--rtm-panel)', border: `1px solid ${p.you ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}` }}>
                 <Flag cc={p.country} />
                 <b style={{ fontFamily: 'var(--font-cond)', fontSize: '14px', color: p.you ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nick}</b>
-                {p.you && <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>Você</span>}
+                {p.you && <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{ct('Você')}</span>}
               </div>
             ))}
           </div>
         </div>
-        <Button variant="gold" size="big" style={{ width: '100%', marginTop: '20px' }} onClick={startDraft}>Montar meu time →</Button>
+        <Button variant="gold" size="big" style={{ width: '100%', marginTop: '20px' }} onClick={startDraft}>{ct('Montar meu time →')}</Button>
       </div>
     );
   }
 
-  if (phase === 'draft') return <QuickDraft pool={pool} count={5} title="Monte seu time para o Major" subtitle="Escolha 5 lendas. O OVR médio define suas chances em cada rodada." accent="var(--rtm-gold)" onBack={() => setPhase('setup')} onDone={onDrafted} />;
+  if (phase === 'draft') return <QuickDraft pool={pool} count={5} title={ct('Monte seu time para o Major')} subtitle={ct('Escolha 5 lendas. O OVR médio define suas chances em cada rodada.')} accent="var(--rtm-gold)" onBack={() => setPhase('setup')} onDone={onDrafted} />;
 
   if (phase === 'run') {
     const r = MJ_ROUNDS[roundIdx];
@@ -116,9 +117,9 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
         <BackBar onHub={onHub} onExit={onExit} />
         <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-gold)', fontWeight: 800 }}>Sua campanha · time {myOvr} OVR</span>
-          <h1 style={{ margin: '4px 0 0', fontFamily: 'var(--font-cond)', fontSize: '30px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{r.label}</h1>
-          <p style={{ color: 'var(--rtm-dim)', fontSize: '13px', marginTop: '4px' }}>Adversário do nível {r.opp} OVR. Vença para avançar.</p>
+          <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-gold)', fontWeight: 800 }}>{ct('Sua campanha · time')} {myOvr} OVR</span>
+          <h1 style={{ margin: '4px 0 0', fontFamily: 'var(--font-cond)', fontSize: '30px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct(r.label)}</h1>
+          <p style={{ color: 'var(--rtm-dim)', fontSize: '13px', marginTop: '4px' }}>{ct('Adversário do nível')} {r.opp} {ct('OVR. Vença para avançar.')}</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
           {MJ_ROUNDS.map((rd, i) => {
@@ -126,14 +127,14 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
             return (
               <div key={rd.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: 'var(--rtm-radius)', background: current ? 'rgba(216,169,67,.1)' : 'var(--rtm-panel)', border: `1px solid ${current ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}`, opacity: !done && !current && i > roundIdx ? 0.5 : 1 }}>
                 <span style={{ width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '12px', fontFamily: 'var(--font-cond)', background: done ? (done.win ? 'var(--rtm-green-bright)' : 'var(--rtm-red)') : current ? 'var(--rtm-gold)' : 'var(--rtm-panel-3)', color: done || current ? '#06121d' : 'var(--rtm-faint)' }}>{done ? (done.win ? '✓' : '✕') : i + 1}</span>
-                <b style={{ flex: 1, fontFamily: 'var(--font-cond)', fontSize: '16px', color: 'var(--rtm-text-strong)' }}>{rd.label}</b>
+                <b style={{ flex: 1, fontFamily: 'var(--font-cond)', fontSize: '16px', color: 'var(--rtm-text-strong)' }}>{ct(rd.label)}</b>
                 {done && <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 800, color: done.win ? 'var(--rtm-green-bright)' : 'var(--rtm-red-bright)' }}>{done.score}</span>}
-                {current && <span style={{ fontSize: '11px', color: 'var(--rtm-gold)', fontWeight: 700, textTransform: 'uppercase' }}>Agora</span>}
+                {current && <span style={{ fontSize: '11px', color: 'var(--rtm-gold)', fontWeight: 700, textTransform: 'uppercase' }}>{ct('Agora')}</span>}
               </div>
             );
           })}
         </div>
-        <Button variant="gold" size="big" style={{ width: '100%' }} disabled={rolling} onClick={playRound}>{rolling ? 'Jogando…' : `Jogar ${r.label}`}</Button>
+        <Button variant="gold" size="big" style={{ width: '100%' }} disabled={rolling} onClick={playRound}>{rolling ? ct('Jogando…') : `${ct('Jogar')} ${ct(r.label)}`}</Button>
       </div>
     );
   }
@@ -142,18 +143,18 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
   return (
     <div style={{ maxWidth: '640px', margin: '0 auto' }}>
       <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-        <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>Sua colocação</span>
+        <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>{ct('Sua colocação')}</span>
         <h1 style={{ margin: '4px 0 0', fontFamily: 'var(--font-cond)', fontSize: '52px', fontWeight: 800, textTransform: 'uppercase', color: pl.color, lineHeight: 1, textShadow: `0 0 36px ${pl.color}55` }}>{pl.label}</h1>
-        <div style={{ fontSize: '15px', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '8px' }}>+{pl.pts} pontos de ranking</div>
+        <div style={{ fontSize: '15px', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '8px' }}>+{pl.pts} {ct('pontos de ranking')}</div>
       </div>
-      <Panel title="Classificação final da chave" flush>
+      <Panel title={ct('Classificação final da chave')} flush>
         {standings.map((s, i) => {
           const p = majorPlace(s.place);
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', background: s.you ? 'rgba(216,169,67,.1)' : (i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)'), boxShadow: s.you ? 'inset 3px 0 0 var(--rtm-gold)' : 'none' }}>
               <span style={{ width: '28px', textAlign: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '16px', color: i === 0 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{i + 1}</span>
               <Flag cc={s.country} />
-              <b style={{ flex: 1, fontFamily: 'var(--font-cond)', fontSize: '15px', color: s.you ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{s.nick}{s.you ? ' (você)' : ''}</b>
+              <b style={{ flex: 1, fontFamily: 'var(--font-cond)', fontSize: '15px', color: s.you ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{s.nick}{s.you ? ` (${ct('você')})` : ''}</b>
               <span style={{ fontSize: '12px', fontWeight: 700, color: p.color }}>{p.label}</span>
               <span style={{ width: '54px', textAlign: 'right', fontFamily: 'var(--font-cond)', fontWeight: 800, color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{s.pts}</span>
             </div>
@@ -161,8 +162,8 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
         })}
       </Panel>
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '22px' }}>
-        <Button variant="gold" onClick={() => setPhase('setup')}>Jogar outro Major</Button>
-        <Button variant="ghost" onClick={onHub}>Voltar ao hub</Button>
+        <Button variant="gold" onClick={() => setPhase('setup')}>{ct('Jogar outro Major')}</Button>
+        <Button variant="ghost" onClick={onHub}>{ct('Voltar ao hub')}</Button>
       </div>
     </div>
   );

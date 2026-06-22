@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { Button, Panel } from './ds';
 import type { Account } from '../state/account';
 import { getLadder, getChampions, fetchMyRank, type RankRow, type MyRank, type Champion } from '../state/ranking';
+import { ct } from '../state/career-i18n';
 
 const DIV_COLOR: Record<string, string> = {
   Calibrando: 'var(--rtm-dim)',
@@ -21,7 +22,7 @@ export function DivBadge({ d }: { d: string }) {
 function countdown(iso: string): string {
   if (!iso) return '';
   const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return 'encerrando';
+  if (ms <= 0) return ct('encerrando');
   const d = Math.floor(ms / 86400000), h = Math.floor((ms % 86400000) / 3600000);
   return d > 0 ? `${d}d ${h}h` : `${h}h`;
 }
@@ -47,13 +48,13 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(216,169,67,.18) 0%, rgba(13,17,22,.92) 60%)' }} />
         <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '22px 26px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '220px' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800 }}>Ranking competitivo · Online</div>
-            <h1 style={{ margin: '4px 0 0', ...cond, fontSize: '34px', color: 'var(--rtm-text-strong)', textTransform: 'uppercase', letterSpacing: '1px' }}>Temporada {data?.season ?? '—'}</h1>
+            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800 }}>{ct('Ranking competitivo · Online')}</div>
+            <h1 style={{ margin: '4px 0 0', ...cond, fontSize: '34px', color: 'var(--rtm-text-strong)', textTransform: 'uppercase', letterSpacing: '1px' }}>{ct('Temporada')} {data?.season ?? '—'}</h1>
             <div style={{ fontSize: '13.5px', color: 'var(--rtm-dim)', marginTop: '4px' }}>
-              {data ? <>Termina em <b style={{ color: 'var(--rtm-text-strong)' }}>{countdown(data.endsAt)}</b> · {data.total} {data.total === 1 ? 'manager' : 'managers'} no ladder</> : 'Carregando…'}
+              {data ? <>{ct('Termina em')} <b style={{ color: 'var(--rtm-text-strong)' }}>{countdown(data.endsAt)}</b> · {data.total} {data.total === 1 ? ct('manager') : ct('managers')} {ct('no ladder')}</> : ct('Carregando…')}
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={onBack}>⇤ Menu</Button>
+          <Button variant="ghost" size="sm" onClick={onBack}>⇤ {ct('Menu')}</Button>
         </div>
       </div>
 
@@ -62,28 +63,28 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1px', background: 'var(--rtm-border-soft)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--rtm-border)' }} className="rtm-kpis">
           {([['Sua posição', mine.placing ? '—' : `#${mine.rank}`], ['MMR', String(mine.mmr)], ['Divisão', mine.division], ['Vitórias', `${mine.wins}-${mine.losses}`], ['Pico', String(mine.peak)]] as [string, string][]).map(([k, v], i) => (
             <div key={k} style={{ padding: '14px 12px', textAlign: 'center', background: 'var(--rtm-panel)' }}>
-              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{k}</div>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct(k)}</div>
               {k === 'Divisão' ? <div style={{ marginTop: '5px' }}><DivBadge d={v} /></div> : <div style={{ ...cond, fontSize: '22px', color: i === 1 || i === 4 ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{v}</div>}
             </div>
           ))}
         </div>
       )}
       {paid && mine?.placing && (
-        <p className="muted small" style={{ margin: 0, color: 'var(--rtm-gold)' }}>🎯 Calibrando: faltam {mine.placementLeft} {mine.placementLeft === 1 ? 'partida' : 'partidas'} de colocação pra cravar sua divisão.</p>
+        <p className="muted small" style={{ margin: 0, color: 'var(--rtm-gold)' }}>🎯 {ct('Calibrando: faltam')} {mine.placementLeft} {mine.placementLeft === 1 ? ct('partida') : ct('partidas')} {ct('de colocação pra cravar sua divisão.')}</p>
       )}
 
       <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '16px', alignItems: 'start' }}>
         {/* ladder */}
-        <Panel title={`Ladder · Temporada ${data?.season ?? ''}`} accent="blue" flush>
+        <Panel title={`${ct('Ladder · Temporada')} ${data?.season ?? ''}`} accent="blue" flush>
           {!data || data.ladder.length === 0 ? (
-            <p className="muted small" style={{ padding: '18px' }}>Ninguém pontuou nesta temporada ainda. Jogue uma ranqueada e seja o primeiro.</p>
+            <p className="muted small" style={{ padding: '18px' }}>{ct('Ninguém pontuou nesta temporada ainda. Jogue uma ranqueada e seja o primeiro.')}</p>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
                 <thead><tr>
                   <th style={{ ...th, textAlign: 'left' }}>#</th>
-                  <th style={{ ...th, textAlign: 'left' }}>Manager</th>
-                  <th style={{ ...th, textAlign: 'left' }}>Divisão</th>
+                  <th style={{ ...th, textAlign: 'left' }}>{ct('Manager')}</th>
+                  <th style={{ ...th, textAlign: 'left' }}>{ct('Divisão')}</th>
                   <th style={{ ...th, textAlign: 'right' }}>V-D</th>
                   <th style={{ ...th, textAlign: 'right' }}>MMR</th>
                 </tr></thead>
@@ -93,7 +94,7 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
                     return (
                       <tr key={r.nick + i} style={{ background: isMe ? 'rgba(67,130,182,.16)' : i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)', boxShadow: isMe ? 'inset 3px 0 0 var(--rtm-blue-bright)' : 'none' }}>
                         <td style={{ padding: '10px 12px', ...cond, fontSize: '15px', color: i < 3 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{i < 3 ? ['🥇', '🥈', '🥉'][i] : r.rank}</td>
-                        <td style={{ padding: '10px 12px' }}><b style={{ color: isMe ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)' }}>{r.nick}</b>{isMe && <span className="muted small"> · você</span>}</td>
+                        <td style={{ padding: '10px 12px' }}><b style={{ color: isMe ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)' }}>{r.nick}</b>{isMe && <span className="muted small"> · {ct('você')}</span>}</td>
                         <td style={{ padding: '10px 12px' }}><DivBadge d={r.division} /></td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--rtm-text)' }}>{r.wins}-{r.losses}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', ...cond, fontVariantNumeric: 'tabular-nums', color: 'var(--rtm-text-strong)' }}>{r.mmr}</td>
@@ -108,9 +109,9 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
 
         {/* rail: campeões + CTA */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Panel title={champs && champs.season >= 0 ? `Campeões · Temporada ${champs.season}` : 'Campeões'} accent="gold">
+          <Panel title={champs && champs.season >= 0 ? `${ct('Campeões · Temporada')} ${champs.season}` : ct('Campeões')} accent="gold">
             {!champs || champs.champions.length === 0 ? (
-              <p className="muted small" style={{ margin: 0 }}>Quando a temporada virar, os 10 primeiros ficam eternizados aqui.</p>
+              <p className="muted small" style={{ margin: 0 }}>{ct('Quando a temporada virar, os 10 primeiros ficam eternizados aqui.')}</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {champs.champions.map((c) => (
@@ -125,18 +126,18 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
           </Panel>
 
           {!paid && (
-            <Panel title="Entre no ranking" accent="gold">
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.</p>
-              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>Ativar ranking persistente (R$20)</Button>
+            <Panel title={ct('Entre no ranking')} accent="gold">
+              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>{ct('Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.')}</p>
+              <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{ct('Ativar ranking persistente (R$20)')}</Button>
             </Panel>
           )}
 
-          <Panel title="Como funciona">
+          <Panel title={ct('Como funciona')}>
             <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12.5px', color: 'var(--rtm-dim)', lineHeight: 1.7 }}>
-              <li>Vitória rende <b>+25</b> de MMR, derrota tira até <b>20</b>.</li>
-              <li>As <b>5 primeiras</b> partidas da temporada são de colocação (valem mais).</li>
-              <li>Divisões: Prata → Ouro Nova → Mestre Guardião → Águia → Global Elite.</li>
-              <li>A cada mês a temporada vira e o MMR faz um <b>soft-reset</b> rumo a 1000.</li>
+              <li>{ct('Vitória rende')} <b>+25</b> {ct('de MMR, derrota tira até')} <b>20</b>.</li>
+              <li>{ct('As')} <b>{ct('5 primeiras')}</b> {ct('partidas da temporada são de colocação (valem mais).')}</li>
+              <li>{ct('Divisões: Prata → Ouro Nova → Mestre Guardião → Águia → Global Elite.')}</li>
+              <li>{ct('A cada mês a temporada vira e o MMR faz um')} <b>soft-reset</b> {ct('rumo a 1000.')}</li>
             </ul>
           </Panel>
         </div>

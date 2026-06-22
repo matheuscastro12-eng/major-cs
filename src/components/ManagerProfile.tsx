@@ -9,6 +9,7 @@ import { LegalLinks } from './Legal';
 import { deleteAccount, exportAccountData, type Account } from '../state/account';
 import { fetchMyRank, type MyRank } from '../state/ranking';
 import type { Manager } from '../state/manager';
+import { ct } from '../state/career-i18n';
 
 export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, onAccountDeleted, onManageSaves }: {
   manager: Manager;
@@ -42,7 +43,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      setDataError(error instanceof Error ? error.message : 'Não foi possível exportar agora.');
+      setDataError(error instanceof Error ? error.message : ct('Não foi possível exportar agora.'));
     } finally {
       setDataBusy(false);
     }
@@ -56,7 +57,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
       await deleteAccount(deletePassword);
       onAccountDeleted();
     } catch (error) {
-      setDataError(error instanceof Error ? error.message : 'Não foi possível excluir a conta.');
+      setDataError(error instanceof Error ? error.message : ct('Não foi possível excluir a conta.'));
       setDataBusy(false);
     }
   };
@@ -84,24 +85,24 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <h1 style={{ margin: 0, ...cond, fontSize: '34px', color: 'var(--rtm-text-strong)', letterSpacing: '.5px' }}>{manager.nick}</h1>
               {paid
-                ? <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '3px 9px', borderRadius: '999px' }}>★ Conta vitalícia · apoiador</span>
-                : <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', padding: '3px 9px', borderRadius: '999px' }}>{account ? 'Grátis' : 'Convidado'}</span>}
+                ? <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '3px 9px', borderRadius: '999px' }}>{ct('★ Conta vitalícia · apoiador')}</span>
+                : <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', padding: '3px 9px', borderRadius: '999px' }}>{account ? ct('Grátis') : ct('Convidado')}</span>}
               {paid && rank && <DivBadge d={rank.division} />}
             </div>
             <div style={{ fontSize: '13.5px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-              <Flag cc={manager.country} /> {manager.name || manager.nick}{manager.age ? `, ${manager.age} anos` : ''} · {manager.org}
+              <Flag cc={manager.country} /> {manager.name || manager.nick}{manager.age ? `, ${manager.age} ${ct('anos')}` : ''} · {manager.org}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-            <Button variant="ghost" size="sm" onClick={onEdit}>✎ Editar perfil</Button>
-            <Button variant="ghost" size="sm" onClick={onBack}>⇤ Menu</Button>
+            <Button variant="ghost" size="sm" onClick={onEdit}>{ct('✎ Editar perfil')}</Button>
+            <Button variant="ghost" size="sm" onClick={onBack}>{ct('⇤ Menu')}</Button>
           </div>
         </div>
         {/* KPIs */}
         <div className="rtm-kpis" style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderTop: '1px solid var(--rtm-border-soft)' }}>
           {KPI.map(([k, v, c], i) => (
             <div key={k} style={{ padding: '14px 16px', textAlign: 'center', borderLeft: i ? '1px solid var(--rtm-border-soft)' : 'none', background: 'rgba(18,22,27,.4)' }}>
-              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{k}</div>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct(k)}</div>
               <div style={{ ...cond, fontSize: '22px', color: c }}>{v}</div>
             </div>
           ))}
@@ -110,59 +111,59 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
 
       <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: '16px', alignItems: 'start' }}>
         {/* esquerda: ranking online */}
-        <Panel title="Ranking online" accent="gold">
+        <Panel title={ct('Ranking online')} accent="gold">
           {paid ? (
             rank ? (
               <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'baseline' }}>
                 <div><div style={{ ...cond, fontSize: '40px', color: 'var(--rtm-gold)' }}>{rank.mmr}</div><div className="muted small">MMR · {rank.division}</div></div>
-                <div><div style={{ ...cond, fontSize: '22px', color: 'var(--rtm-text-strong)' }}>#{rank.rank}</div><div className="muted small">no mundo</div></div>
-                <div><div style={{ ...cond, fontSize: '22px', color: 'var(--rtm-green-bright)' }}>{rank.wins}-{rank.losses}</div><div className="muted small">vitórias · {winRate}% win rate</div></div>
-                <div><div style={{ ...cond, fontSize: '22px', color: 'var(--rtm-gold)' }}>{rank.peak}</div><div className="muted small">MMR de pico</div></div>
+                <div><div style={{ ...cond, fontSize: '22px', color: 'var(--rtm-text-strong)' }}>#{rank.rank}</div><div className="muted small">{ct('no mundo')}</div></div>
+                <div><div style={{ ...cond, fontSize: '22px', color: 'var(--rtm-green-bright)' }}>{rank.wins}-{rank.losses}</div><div className="muted small">{ct('vitórias')} · {winRate}% win rate</div></div>
+                <div><div style={{ ...cond, fontSize: '22px', color: 'var(--rtm-gold)' }}>{rank.peak}</div><div className="muted small">{ct('MMR de pico')}</div></div>
               </div>
-            ) : <p className="muted small" style={{ margin: 0 }}>Jogue uma partida online ranqueada pra entrar no ladder.</p>
+            ) : <p className="muted small" style={{ margin: 0 }}>{ct('Jogue uma partida online ranqueada pra entrar no ladder.')}</p>
           ) : (
-            <p className="muted small" style={{ margin: 0 }}>O ranking persistente faz parte da conta com save. No grátis você joga online, mas os pontos não persistem.</p>
+            <p className="muted small" style={{ margin: 0 }}>{ct('O ranking persistente faz parte da conta com save. No grátis você joga online, mas os pontos não persistem.')}</p>
           )}
         </Panel>
 
         {/* direita: detalhes + conta */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Panel title="Detalhes">
+          <Panel title={ct('Detalhes')}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
-              {([['Nick', manager.nick], ['Nome', manager.name || '—'], ['Idade', manager.age ? `${manager.age} anos` : '—'], ['País', manager.country.toUpperCase()], ['Organização', manager.org]] as [string, string][]).map(([k, v]) => (
+              {([['Nick', manager.nick], ['Nome', manager.name || '—'], ['Idade', manager.age ? `${manager.age} ${ct('anos')}` : '—'], ['País', manager.country.toUpperCase()], ['Organização', manager.org]] as [string, string][]).map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13.5px', paddingBottom: '9px', borderBottom: '1px solid var(--rtm-border-soft)' }}>
-                  <span style={{ color: 'var(--rtm-dim)' }}>{k}</span><b style={{ color: 'var(--rtm-text-strong)' }}>{v}</b>
+                  <span style={{ color: 'var(--rtm-dim)' }}>{ct(k)}</span><b style={{ color: 'var(--rtm-text-strong)' }}>{v}</b>
                 </div>
               ))}
             </div>
           </Panel>
 
-          <Panel title="Conta" accent={paid ? 'gold' : 'blue'}>
+          <Panel title={ct('Conta')} accent={paid ? 'gold' : 'blue'}>
             {paid ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                   <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--rtm-gold)', fontSize: '18px' }}>★</span>
-                  <div><div style={{ ...cond, fontWeight: 700, color: 'var(--rtm-text-strong)', fontSize: '15px' }}>Conta vitalícia ativa</div><div style={{ fontSize: '11.5px', color: 'var(--rtm-dim)' }}>{account?.email}</div></div>
+                  <div><div style={{ ...cond, fontWeight: 700, color: 'var(--rtm-text-strong)', fontSize: '15px' }}>{ct('Conta vitalícia ativa')}</div><div style={{ fontSize: '11.5px', color: 'var(--rtm-dim)' }}>{account?.email}</div></div>
                 </div>
-                {['Pagamento único, acesso pra sempre', 'Até 5 carreiras salvas na nuvem', 'Ranking e MMR salvos no online', 'Histórico completo de partidas'].map((f, i) => (
+                {[ct('Pagamento único, acesso pra sempre'), ct('Até 5 carreiras salvas na nuvem'), ct('Ranking e MMR salvos no online'), ct('Histórico completo de partidas')].map((f, i) => (
                   <div key={i} style={{ display: 'flex', gap: '9px', fontSize: '13px', color: 'var(--rtm-dim)', padding: '4px 0' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{f}</div>
                 ))}
-                {onManageSaves && <Button variant="gold" size="sm" style={{ width: '100%', marginTop: '12px' }} onClick={onManageSaves}>Gerenciar minhas carreiras</Button>}
+                {onManageSaves && <Button variant="gold" size="sm" style={{ width: '100%', marginTop: '12px' }} onClick={onManageSaves}>{ct('Gerenciar minhas carreiras')}</Button>}
                 <div className="account-data-actions">
-                  <Button variant="ghost" size="sm" onClick={downloadData} disabled={dataBusy}>{dataBusy ? 'Aguarde…' : 'Exportar meus dados'}</Button>
-                  <button type="button" className="account-delete-link" onClick={() => { setDeleteOpen(true); setDataError(''); }}>Excluir conta</button>
+                  <Button variant="ghost" size="sm" onClick={downloadData} disabled={dataBusy}>{dataBusy ? ct('Aguarde…') : ct('Exportar meus dados')}</Button>
+                  <button type="button" className="account-delete-link" onClick={() => { setDeleteOpen(true); setDataError(''); }}>{ct('Excluir conta')}</button>
                 </div>
                 {dataError && !deleteOpen && <p className="account-data-error">{dataError}</p>}
                 <LegalLinks className="account-legal-links" />
               </div>
             ) : (
               <div>
-                <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>Você joga tudo de graça com save no navegador. A conta opcional paga a infraestrutura para guardar dados na nuvem e persistir o ranking online.</p>
+                <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>{ct('Você joga tudo de graça com save no navegador. A conta opcional paga a infraestrutura para guardar dados na nuvem e persistir o ranking online.')}</p>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '12px' }}>
                   <span style={{ ...cond, fontSize: '30px', color: 'var(--rtm-gold)' }}>R$20</span>
-                  <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>uma vez, sem mensalidade</span>
+                  <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{ct('uma vez, sem mensalidade')}</span>
                 </div>
-                <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>Ativar save na nuvem</Button>
+                <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{ct('Ativar save na nuvem')}</Button>
               </div>
             )}
           </Panel>
@@ -172,23 +173,23 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
       {deleteOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => !dataBusy && setDeleteOpen(false)}>
           <section className="account-delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title" onClick={(event) => event.stopPropagation()}>
-            <span className="account-delete-kicker">AÇÃO IRREVERSÍVEL</span>
-            <h2 id="delete-account-title">Excluir conta e dados na nuvem?</h2>
-            <p>Serão apagados o acesso da conta, saves na nuvem, ranking e histórico associado. O jogo continuará gratuito e os saves que já estão neste navegador não serão apagados.</p>
-            <p>Essa ação não solicita reembolso automaticamente. Faça o pedido de estorno antes da exclusão, quando aplicável.</p>
+            <span className="account-delete-kicker">{ct('AÇÃO IRREVERSÍVEL')}</span>
+            <h2 id="delete-account-title">{ct('Excluir conta e dados na nuvem?')}</h2>
+            <p>{ct('Serão apagados o acesso da conta, saves na nuvem, ranking e histórico associado. O jogo continuará gratuito e os saves que já estão neste navegador não serão apagados.')}</p>
+            <p>{ct('Essa ação não solicita reembolso automaticamente. Faça o pedido de estorno antes da exclusão, quando aplicável.')}</p>
             <label>
-              Senha atual
+              {ct('Senha atual')}
               <input type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" />
             </label>
             <label>
-              Digite <b>EXCLUIR</b> para confirmar
+              {ct('Digite')} <b>EXCLUIR</b> {ct('para confirmar')}
               <input value={deleteConfirm} onChange={(event) => setDeleteConfirm(event.target.value.toUpperCase())} autoComplete="off" />
             </label>
             {dataError && <p className="account-data-error">{dataError}</p>}
             <div className="account-delete-actions">
-              <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={dataBusy}>Cancelar</Button>
+              <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={dataBusy}>{ct('Cancelar')}</Button>
               <button type="button" className="account-delete-confirm" disabled={dataBusy || deleteConfirm !== 'EXCLUIR' || !deletePassword} onClick={confirmDelete}>
-                {dataBusy ? 'Excluindo…' : 'Excluir definitivamente'}
+                {dataBusy ? ct('Excluindo…') : ct('Excluir definitivamente')}
               </button>
             </div>
           </section>

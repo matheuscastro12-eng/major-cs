@@ -12,6 +12,7 @@ import { makeRng } from '../../engine/rng';
 import { autoVeto } from '../../engine/veto';
 import { simulateSeries } from '../../engine/match';
 import type { PlaybackSpeed } from '../../state/online';
+import { ct } from '../../state/career-i18n';
 import type { SeriesResult, TTeam } from '../../types';
 
 type Entry = { idx: number; opp: string; cc: string; win: boolean; score: string; ovr: number };
@@ -79,22 +80,22 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '34px' }}>🔥</div>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Gauntlet</h1>
-          <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '460px', margin: '8px auto 0', lineHeight: 1.55 }}>Monte um time só e enfrente uma fila de rivais. Cada vitória deixa o próximo mais forte. Sua nota é a maior sequência sem perder. Quando perder, acaba.</p>
+          <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '460px', margin: '8px auto 0', lineHeight: 1.55 }}>{ct('Monte um time só e enfrente uma fila de rivais. Cada vitória deixa o próximo mais forte. Sua nota é a maior sequência sem perder. Quando perder, acaba.')}</p>
         </div>
-        <Panel title="Regras rápidas">
-          {([['Sem trocas', 'O time que você montar vai até o fim da corrida.'], ['Dificuldade sobe', 'Cada rival vencido é mais forte que o anterior.'], ['Recorde', 'Seu placar é a maior sequência de vitórias sem perder. Seu recorde é ' + stats.bestStreak + '.']] as [string, string][]).map(([t, d], i) => (
+        <Panel title={ct('Regras rápidas')}>
+          {([[ct('Sem trocas'), ct('O time que você montar vai até o fim da corrida.')], [ct('Dificuldade sobe'), ct('Cada rival vencido é mais forte que o anterior.')], [ct('Recorde'), ct('Seu placar é a maior sequência de vitórias sem perder. Seu recorde é ') + stats.bestStreak + '.']] as [string, string][]).map(([t, d], i) => (
             <div key={i} style={{ display: 'flex', gap: '10px', padding: '8px 0', borderBottom: i < 2 ? '1px solid var(--rtm-border-soft)' : 'none' }}>
               <span style={{ color: 'var(--rtm-green-bright)', fontWeight: 800 }}>›</span>
               <div><b style={{ color: 'var(--rtm-text-strong)', fontSize: '13.5px' }}>{t}.</b> <span style={{ color: 'var(--rtm-dim)', fontSize: '13px' }}>{d}</span></div>
             </div>
           ))}
         </Panel>
-        <Button variant="primary" size="big" style={{ width: '100%', marginTop: '20px' }} onClick={() => setPhase('draft')}>Montar meu time →</Button>
+        <Button variant="primary" size="big" style={{ width: '100%', marginTop: '20px' }} onClick={() => setPhase('draft')}>{ct('Montar meu time →')}</Button>
       </div>
     );
   }
 
-  if (phase === 'draft') return <PackDraft pool={pool} count={5} title="Monte seu time do Gauntlet" subtitle="Abra os pacotes e escolha 1 carta por rodada. Esse time encara a fila inteira, sem substituições." accent="var(--rtm-green-bright)" onBack={() => setPhase('intro')} onDone={onDrafted} />;
+  if (phase === 'draft') return <PackDraft pool={pool} count={5} title={ct('Monte seu time do Gauntlet')} subtitle={ct('Abra os pacotes e escolha 1 carta por rodada. Esse time encara a fila inteira, sem substituições.')} accent="var(--rtm-green-bright)" onBack={() => setPhase('intro')} onDone={onDrafted} />;
 
   if (phase === 'run') {
     // partida rolando: mostra o replay MD3 com scoreboard e stats (igual aos outros modos)
@@ -102,7 +103,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
       return (
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <BackBar onHub={onHub} onExit={onExit} />
-          <div style={{ textAlign: 'center', marginBottom: '12px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>Sequência {streak} · {match.teams[0].name} vs {match.oppName}</div>
+          <div style={{ textAlign: 'center', marginBottom: '12px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>{ct('Sequência')} {streak} · {match.teams[0].name} vs {match.oppName}</div>
           <MatchReplay
             series={match.series}
             teams={match.teams}
@@ -120,27 +121,27 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
       <div style={{ maxWidth: '620px', margin: '0 auto' }}>
         <BackBar onHub={onHub} onExit={onExit} />
         <div style={{ textAlign: 'center', marginBottom: '8px' }}>
-          <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>Sequência atual · time {myOvr} OVR</div>
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>{ct('Sequência atual · time')} {myOvr} OVR</div>
           <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '70px', fontWeight: 800, color: 'var(--rtm-green-bright)', lineHeight: 1, textShadow: '0 0 36px rgba(111,208,111,.35)' }}>{streak}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '16px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', marginBottom: '16px' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>Próximo rival (IA)</div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Próximo rival (IA)')}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
               <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: '#06121d', background: 'var(--rtm-green-bright)', padding: '1px 6px', borderRadius: '4px' }}>IA</span>
               <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', color: 'var(--rtm-text-strong)' }}>{o.team.name}</b>
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}><Flag cc={o.cc} /> puxado por {o.team.players[0]?.nick ?? 'IA'}</div>
+            <div style={{ fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}><Flag cc={o.cc} /> {ct('puxado por')} {o.team.players[0]?.nick ?? 'IA'}</div>
           </div>
           <div style={{ textAlign: 'center', paddingLeft: '16px', borderLeft: '1px solid var(--rtm-border-soft)' }}>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>Força</div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Força')}</div>
             <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, color: o.ovr > myOvr ? 'var(--rtm-red-bright)' : 'var(--rtm-text-strong)' }}>{o.ovr}</div>
           </div>
         </div>
-        <Button variant="primary" size="big" style={{ width: '100%' }} onClick={startMatch}>Enfrentar rival</Button>
+        <Button variant="primary" size="big" style={{ width: '100%' }} onClick={startMatch}>{ct('Enfrentar rival')}</Button>
         {log.length > 0 && (
           <div style={{ marginTop: '18px' }}>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '8px' }}>Corrida</div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '8px' }}>{ct('Corrida')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {log.map((e, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 12px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', boxShadow: `inset 3px 0 0 ${e.win ? 'var(--rtm-green)' : 'var(--rtm-red)'}` }}>
@@ -160,14 +161,14 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
   const record = streak > 0 && streak >= stats.bestStreak;
   return (
     <div style={{ maxWidth: '520px', margin: '40px auto 0', textAlign: 'center' }}>
-      <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>Fim da corrida</div>
+      <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>{ct('Fim da corrida')}</div>
       <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '80px', fontWeight: 800, color: 'var(--rtm-green-bright)', lineHeight: 1, textShadow: '0 0 40px rgba(111,208,111,.4)' }}>{streak}</div>
-      <div style={{ fontSize: '15px', color: 'var(--rtm-dim)' }}>vitórias seguidas</div>
-      {record && <div style={{ marginTop: '12px', display: 'inline-block', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '5px 14px', borderRadius: '999px' }}>★ Novo recorde pessoal</div>}
-      <p style={{ color: 'var(--rtm-faint)', fontSize: '13px', marginTop: '16px' }}>Seu recorde pessoal agora é {stats.bestStreak} vitórias.</p>
+      <div style={{ fontSize: '15px', color: 'var(--rtm-dim)' }}>{ct('vitórias seguidas')}</div>
+      {record && <div style={{ marginTop: '12px', display: 'inline-block', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '5px 14px', borderRadius: '999px' }}>{ct('★ Novo recorde pessoal')}</div>}
+      <p style={{ color: 'var(--rtm-faint)', fontSize: '13px', marginTop: '16px' }}>{ct('Seu recorde pessoal agora é')} {stats.bestStreak} {ct('vitórias.')}</p>
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '22px' }}>
-        <Button variant="primary" onClick={() => setPhase('draft')}>Tentar de novo</Button>
-        <Button variant="ghost" onClick={onHub}>Voltar ao hub</Button>
+        <Button variant="primary" onClick={() => setPhase('draft')}>{ct('Tentar de novo')}</Button>
+        <Button variant="ghost" onClick={onHub}>{ct('Voltar ao hub')}</Button>
       </div>
     </div>
   );

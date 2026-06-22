@@ -5,6 +5,7 @@ import { BrandMark } from './brand';
 import { Button } from './ds';
 import { Flag } from './ui';
 import { ACCENTS, SETUP_COUNTRIES, type Manager } from '../state/manager';
+import { ct } from '../state/career-i18n';
 
 const NICKS = ['zera', 'taclocal', 'igl_diff', 'awp_main', 'clutchgod', 'br4z1l'];
 const ORGS = ['Your Dream Team', 'Selva Gaming', 'Capivara Esports', 'Aurora Major', 'Furacão CS'];
@@ -53,18 +54,17 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(13,17,22,.92), rgba(13,17,22,.65))' }} />
         <div style={{ position: 'relative' }}>
           <BrandMark size={64} />
-          <div style={{ fontSize: '12px', letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '18px' }}>Crie seu perfil</div>
-          <h1 style={{ fontFamily: 'var(--font-cond)', fontSize: '52px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--rtm-text-strong)', margin: '6px 0 14px', lineHeight: 1 }}>Vire um<br /><span style={{ color: 'var(--rtm-blue-bright)' }}>manager de Major</span></h1>
+          <div style={{ fontSize: '12px', letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '18px' }}>{ct('Crie seu perfil')}</div>
+          <h1 style={{ fontFamily: 'var(--font-cond)', fontSize: '52px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--rtm-text-strong)', margin: '6px 0 14px', lineHeight: 1 }}>{ct('Vire um')}<br /><span style={{ color: 'var(--rtm-blue-bright)' }}>{ct('manager de Major')}</span></h1>
           <p style={{ color: 'var(--rtm-dim)', fontSize: '15px', maxWidth: '440px', lineHeight: 1.6 }}>
-            Assuma o comando de uma organização. Seu nome e idade te seguem na bio, nos contratos e nas
-            notícias. Monte lendas de cada era e brigue pelo título.
+            {ct('Assuma o comando de uma organização. Seu nome e idade te seguem na bio, nos contratos e nas notícias. Monte lendas de cada era e brigue pelo título.')}
           </p>
           {/* preview ao vivo do card do manager */}
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', marginTop: '26px', padding: '14px 18px', borderRadius: '12px', background: 'rgba(18,22,27,.7)', border: '1px solid var(--rtm-border-soft)' }}>
             <span style={{ width: '56px', height: '56px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '20px', color: '#fff', background: `linear-gradient(160deg, ${accent}, #20303f)` }}>{preview.slice(0, 2).toUpperCase()}</span>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--rtm-text-strong)' }}>{preview}</div>
-              <div style={{ fontSize: '12px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '6px' }}><Flag cc={cc} /> {name || 'Seu nome'} · {age}a</div>
+              <div style={{ fontSize: '12px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '6px' }}><Flag cc={cc} /> {name || ct('Seu nome')} · {age}a</div>
               <div style={{ fontSize: '12px', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '2px' }}>{org}</div>
             </div>
           </div>
@@ -74,24 +74,24 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
       {/* direita: form */}
       <div style={{ background: 'var(--rtm-panel)', borderLeft: '1px solid var(--rtm-border-soft)', padding: '48px 44px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-cond)', fontSize: '22px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)' }}>Crie seu manager</h2>
-          <Button variant="ghost" size="sm" onClick={randomize}>⟳ Aleatório</Button>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-cond)', fontSize: '22px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)' }}>{ct('Crie seu manager')}</h2>
+          <Button variant="ghost" size="sm" onClick={randomize}>⟳ {ct('Aleatório')}</Button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div style={{ gridColumn: '1 / -1' }}><label style={label}>Nick de manager</label><input style={input} value={nick} maxLength={24} onChange={(e) => { nickEdited.current = true; setNick(e.target.value); }} /></div>
-          <div style={{ gridColumn: '1 / -1' }}><label style={label}>Nome completo</label><input style={input} value={name} maxLength={40} placeholder="ex: Caio Ferreira" onChange={(e) => setName(e.target.value)} /></div>
+          <div style={{ gridColumn: '1 / -1' }}><label style={label}>{ct('Nick de manager')}</label><input style={input} value={nick} maxLength={24} onChange={(e) => { nickEdited.current = true; setNick(e.target.value); }} /></div>
+          <div style={{ gridColumn: '1 / -1' }}><label style={label}>{ct('Nome completo')}</label><input style={input} value={name} maxLength={40} placeholder={ct('ex: Caio Ferreira')} onChange={(e) => setName(e.target.value)} /></div>
           <div>
-            <label style={label}>Idade · {age}</label>
+            <label style={label}>{ct('Idade')} · {age}</label>
             <input type="range" min={18} max={70} value={age} onChange={(e) => setAge(+e.target.value)} style={{ width: '100%', accentColor: 'var(--rtm-blue-bright)' }} />
           </div>
-          <div><label style={label}>País</label>
+          <div><label style={label}>{ct('País')}</label>
             <select style={input} value={cc} onChange={(e) => setCc(e.target.value)}>
               {countries.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
             </select>
           </div>
-          <div style={{ gridColumn: '1 / -1' }}><label style={label}>Organização</label><input style={input} value={org} maxLength={30} onChange={(e) => setOrg(e.target.value)} /></div>
+          <div style={{ gridColumn: '1 / -1' }}><label style={label}>{ct('Organização')}</label><input style={input} value={org} maxLength={30} onChange={(e) => setOrg(e.target.value)} /></div>
           <div style={{ gridColumn: '1 / -1' }}>
-            <label style={label}>Cor do time</label>
+            <label style={label}>{ct('Cor do time')}</label>
             <div style={{ display: 'flex', gap: '10px' }}>
               {ACCENTS.map((c) => (
                 <button key={c} type="button" onClick={() => setAccent(c)} style={{ width: '38px', height: '38px', borderRadius: '50%', background: c, cursor: 'pointer', border: accent === c ? '2px solid var(--rtm-text-strong)' : '2px solid transparent', boxShadow: accent === c ? `0 0 0 2px ${c}` : 'none' }} />
@@ -99,8 +99,8 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
             </div>
           </div>
         </div>
-        <Button size="big" onClick={start} style={{ width: '100%', marginTop: '28px' }}>Continuar →</Button>
-        <p style={{ fontSize: '11px', color: 'var(--rtm-faint)', textAlign: 'center', marginTop: '12px' }}>A idade afeta só a narrativa, sem efeito mecânico.</p>
+        <Button size="big" onClick={start} style={{ width: '100%', marginTop: '28px' }}>{ct('Continuar')} →</Button>
+        <p style={{ fontSize: '11px', color: 'var(--rtm-faint)', textAlign: 'center', marginTop: '12px' }}>{ct('A idade afeta só a narrativa, sem efeito mecânico.')}</p>
       </div>
     </div>
   );

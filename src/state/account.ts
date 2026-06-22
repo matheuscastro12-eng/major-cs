@@ -1,6 +1,7 @@
 // Conta do jogador (e-mail + senha) + entitlement da conta vitalícia R$20.
 // Token fica no localStorage; o backend (api/account.ts) valida e diz se é paga.
 import { useCallback, useEffect, useState } from 'react';
+import { ct } from './career-i18n';
 
 const TOKEN_KEY = 'rtm-acct-token-v1';
 export interface Account { email: string; nick: string; paid: boolean; }
@@ -12,7 +13,7 @@ export function clearToken() { try { localStorage.removeItem(TOKEN_KEY); } catch
 async function post(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   const r = await fetch('/api/account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Erro de conexão. Tente de novo.');
+  if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : ct('Erro de conexão. Tente de novo.'));
   return data as Record<string, unknown>;
 }
 const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid });
@@ -34,22 +35,22 @@ export async function claim(cs: string): Promise<boolean> {
   try { const d = await post({ action: 'claim', token, cs }); return !!d.paid; } catch { return false; }
 }
 export async function beginCheckout(): Promise<string | null> {
-  const token = getToken(); if (!token) throw new Error('Faça login antes de pagar.');
+  const token = getToken(); if (!token) throw new Error(ct('Faça login antes de pagar.'));
   const d = await post({ action: 'checkout', token });
   if (d.paid) return null;
-  if (typeof d.url !== 'string' || !d.url) throw new Error('Checkout indisponível. Tente de novo.');
+  if (typeof d.url !== 'string' || !d.url) throw new Error(ct('Checkout indisponível. Tente de novo.'));
   return d.url;
 }
 
 export async function exportAccountData(): Promise<Record<string, unknown>> {
   const token = getToken();
-  if (!token) throw new Error('Entre novamente na conta para exportar seus dados.');
+  if (!token) throw new Error(ct('Entre novamente na conta para exportar seus dados.'));
   return post({ action: 'export', token });
 }
 
 export async function deleteAccount(password: string): Promise<void> {
   const token = getToken();
-  if (!token) throw new Error('Entre novamente na conta para excluí-la.');
+  if (!token) throw new Error(ct('Entre novamente na conta para excluí-la.'));
   await post({ action: 'delete', token, password });
   clearToken();
 }

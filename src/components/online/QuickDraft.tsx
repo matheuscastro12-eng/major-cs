@@ -5,6 +5,7 @@ import { Button } from '../ds';
 import { Flag, OvrBadge, PlayerAvatar } from '../ui';
 import { RoleTag } from './bits';
 import type { PoolPlayer } from './onlineData';
+import { ct } from '../../state/career-i18n';
 
 const ROLES = ['AWP', 'Entry', 'IGL', 'Support', 'Lurker'];
 
@@ -32,7 +33,7 @@ export function QuickDraft({ pool, count, title, subtitle, accent, onDone, onBac
   return (
     <div style={{ maxWidth: '1040px', margin: '0 auto' }}>
       <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
-        {onBack && <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← Voltar</button>}
+        {onBack && <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← {ct('Voltar')}</button>}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', marginBottom: '14px' }}>
         <div>
@@ -41,10 +42,10 @@ export function QuickDraft({ pool, count, title, subtitle, accent, onDone, onBac
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>Time · OVR médio</div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Time · OVR médio')}</div>
             <div style={{ fontFamily: 'var(--font-cond)', fontSize: '24px', fontWeight: 800, color: full ? tone : 'var(--rtm-text-strong)' }}>{picked.length}/{count} · {avg || '—'}</div>
           </div>
-          <Button variant="gold" disabled={!full} onClick={() => onDone(picked, avg)} style={{ opacity: full ? 1 : 0.5 }}>Confirmar time →</Button>
+          <Button variant="gold" disabled={!full} onClick={() => onDone(picked, avg)} style={{ opacity: full ? 1 : 0.5 }}>{ct('Confirmar time')} →</Button>
         </div>
       </div>
 

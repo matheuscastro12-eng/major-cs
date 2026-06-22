@@ -1,6 +1,7 @@
 // Cartinha "Ultimate Team" compartilhada (ut-card): usada no draft do Online e no
 // PackDraft (Gauntlet). Mesmo visual de carta em todos os modos.
 import { playerOvr } from '../../engine/ratings';
+import { ct } from '../../state/career-i18n';
 import { Flag, PlayerAvatar } from '../ui';
 import type { Player, TeamSeason } from '../../types';
 
@@ -53,7 +54,7 @@ export function UltimatePlayerCard({
         <span><b>{player.awp}</b> AWP</span>
         <span><b>{player.igl}</b> IGL</span>
       </div>
-      <span className="ut-card-pick">{taken ? 'NO ELENCO' : blocked ?? 'CONTRATAR'}</span>
+      <span className="ut-card-pick">{taken ? ct('NO ELENCO') : blocked ?? ct('CONTRATAR')}</span>
     </button>
   );
 }

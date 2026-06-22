@@ -7,6 +7,7 @@ import type { Manager } from '../../state/manager';
 import type { Account } from '../../state/account';
 import { getLadder, type RankRow } from '../../state/ranking';
 import { rankFor, majorPlace, type OnlineStats } from './onlineData';
+import { ct } from '../../state/career-i18n';
 
 export type OnlineModeId = '1v1' | 'major' | 'gauntlet';
 
@@ -42,9 +43,9 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
     // Major e Gauntlet ainda não têm ranking de servidor — mostra só o seu número.
     if (lb === 'major') {
       const pl = majorPlace(stats.majorPts >= 100 ? 'champion' : 'semi');
-      return [{ nick: me.nick, country: me.country, val: stats.majorPts, you: true, sub: 'Melhor: ' + pl.label, subColor: pl.color, fmt: stats.majorPts + ' pts' }];
+      return [{ nick: me.nick, country: me.country, val: stats.majorPts, you: true, sub: ct('Melhor:') + ' ' + pl.label, subColor: pl.color, fmt: stats.majorPts + ' ' + ct('pts') }];
     }
-    return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: 'Sequência recorde', subColor: 'var(--rtm-green-bright)', fmt: stats.bestStreak + ' seguidas' }];
+    return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: ct('Sequência recorde'), subColor: 'var(--rtm-green-bright)', fmt: stats.bestStreak + ' ' + ct('seguidas') }];
   }
   const LB_NOTE: Record<OnlineModeId, string> = {
     '1v1': 'Ranking real por MMR (contas com ranking salvo). Ganhar sobe, perder desce.',
@@ -55,7 +56,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
   return (
     <div style={{ maxWidth: '1080px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'flex', gap: '12px' }}>
-        <button type="button" onClick={onExit} style={{ background: 'none', border: 'none', color: 'var(--rtm-faint)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>⇤ Menu</button>
+        <button type="button" onClick={onExit} style={{ background: 'none', border: 'none', color: 'var(--rtm-faint)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>⇤ {ct('Menu')}</button>
       </div>
 
       {/* banner do jogador */}
@@ -65,7 +66,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
         <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>
           <span style={{ width: '70px', height: '70px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '24px', color: '#fff', background: `linear-gradient(160deg, ${me.accent || '#4382b6'}, #20303f)`, boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.12)', flexShrink: 0 }}>{me.nick.slice(0, 2).toUpperCase()}</span>
           <div style={{ flex: 1, minWidth: '180px' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-green-bright)', fontWeight: 800 }}>Modo online</div>
+            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-green-bright)', fontWeight: 800 }}>{ct('Modo online')}</div>
             <h1 style={{ margin: '2px 0', fontFamily: 'var(--font-cond)', fontSize: '30px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{me.nick}</h1>
             <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={me.country} /> <b style={{ color: rk.color }}>{rk.name}</b> · {stats.mmr} MMR</div>
           </div>
@@ -81,8 +82,8 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
         {!paid && (
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 26px', background: 'rgba(216,169,67,.1)', borderTop: '1px solid var(--rtm-gold-soft)', fontSize: '12.5px', color: 'var(--rtm-dim)', flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>★</span>
-            Todo o online é gratuito. Para manter seu rank no <b style={{ color: 'var(--rtm-text)' }}>ranking persistente</b> entre sessões, ative a conta com save na nuvem.
-            <a href="/" style={{ marginLeft: 'auto', color: 'var(--rtm-link)', fontWeight: 700, whiteSpace: 'nowrap' }}>Ativar conta →</a>
+            {ct('Todo o online é gratuito. Para manter seu rank no')} <b style={{ color: 'var(--rtm-text)' }}>{ct('ranking persistente')}</b> {ct('entre sessões, ative a conta com save na nuvem.')}
+            <a href="/" style={{ marginLeft: 'auto', color: 'var(--rtm-link)', fontWeight: 700, whiteSpace: 'nowrap' }}>{ct('Ativar conta →')}</a>
           </div>
         )}
       </div>
@@ -96,28 +97,28 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '26px', width: '46px', height: '46px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>{m.icon}</span>
                 <div>
-                  <h2 style={{ margin: 0, fontFamily: 'var(--font-cond)', fontSize: '21px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{m.name}</h2>
-                  <div style={{ fontSize: '11.5px', color: m.tone, fontWeight: 700 }}>{m.players}</div>
+                  <h2 style={{ margin: 0, fontFamily: 'var(--font-cond)', fontSize: '21px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct(m.name)}</h2>
+                  <div style={{ fontSize: '11.5px', color: m.tone, fontWeight: 700 }}>{ct(m.players)}</div>
                 </div>
               </div>
-              <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--rtm-text)', lineHeight: 1.5 }}>{m.pitch}</p>
+              <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--rtm-text)', lineHeight: 1.5 }}>{ct(m.pitch)}</p>
             </div>
             <div style={{ padding: '16px 20px', flex: 1 }}>
-              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '10px' }}>Como funciona</div>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '10px' }}>{ct('Como funciona')}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
                 {m.how.map((h, i) => (
                   <div key={i} style={{ display: 'flex', gap: '10px', fontSize: '12.5px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>
                     <span style={{ flexShrink: 0, width: '18px', height: '18px', borderRadius: '50%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', color: m.tone, fontSize: '10px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
-                    {h}
+                    {ct(h)}
                   </div>
                 ))}
               </div>
             </div>
             <div style={{ padding: '0 20px 18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--rtm-faint)', marginBottom: '12px' }}>
-                <span style={{ color: 'var(--rtm-dim)' }}>Vale para:</span> <b style={{ color: m.tone }}>{m.ranked}</b>
+                <span style={{ color: 'var(--rtm-dim)' }}>{ct('Vale para:')}</span> <b style={{ color: m.tone }}>{ct(m.ranked)}</b>
               </div>
-              <Button variant={m.id === 'major' ? 'gold' : 'primary'} style={{ width: '100%' }} onClick={() => onPlay(m.id)}>Jogar {m.name}</Button>
+              <Button variant={m.id === 'major' ? 'gold' : 'primary'} style={{ width: '100%' }} onClick={() => onPlay(m.id)}>{ct('Jogar')} {ct(m.name)}</Button>
             </div>
           </div>
         ))}
@@ -127,21 +128,21 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', padding: '16px 20px' }}>
         <span style={{ fontSize: '28px', width: '50px', height: '50px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', flexShrink: 0 }}>👥</span>
         <div style={{ flex: 1, minWidth: '220px' }}>
-          <b style={{ fontFamily: 'var(--font-cond)', fontSize: '19px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Casual · jogar com amigos</b>
-          <div style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', marginTop: '2px' }}>Crie uma sala <b style={{ color: 'var(--rtm-text)' }}>aberta</b> (qualquer um entra) ou <b style={{ color: 'var(--rtm-text)' }}>fechada</b> (só com o código que você manda pros amigos). Duelo 1v1 ou Major em grupo, ao vivo. Não conta pro ranking.</div>
+          <b style={{ fontFamily: 'var(--font-cond)', fontSize: '19px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Casual · jogar com amigos')}</b>
+          <div style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', marginTop: '2px' }}>{ct('Crie uma sala')} <b style={{ color: 'var(--rtm-text)' }}>{ct('aberta')}</b> {ct('(qualquer um entra) ou')} <b style={{ color: 'var(--rtm-text)' }}>{ct('fechada')}</b> {ct('(só com o código que você manda pros amigos). Duelo 1v1 ou Major em grupo, ao vivo. Não conta pro ranking.')}</div>
         </div>
-        <Button variant="ghost" onClick={onCasual} style={{ whiteSpace: 'nowrap' }}>Criar / entrar em sala</Button>
+        <Button variant="ghost" onClick={onCasual} style={{ whiteSpace: 'nowrap' }}>{ct('Criar / entrar em sala')}</Button>
       </div>
 
       {/* leaderboard */}
-      <Panel title="Ranking" accent="gold" flush actions={
+      <Panel title={ct('Ranking')} accent="gold" flush actions={
         <span style={{ display: 'flex', gap: '6px' }}>
           {([['1v1', 'Ranked 1v1'], ['major', 'Ranked Major'], ['gauntlet', 'Gauntlet']] as [OnlineModeId, string][]).map(([id, lbl]) => (
-            <button key={id} type="button" onClick={() => setLb(id)} style={{ cursor: 'pointer', borderRadius: '999px', padding: '5px 13px', fontSize: '12px', fontWeight: 700, border: `1px solid ${lb === id ? 'var(--rtm-gold)' : 'var(--rtm-border)'}`, background: lb === id ? 'var(--rtm-gold)' : 'transparent', color: lb === id ? '#06121d' : 'var(--rtm-dim)' }}>{lbl}</button>
+            <button key={id} type="button" onClick={() => setLb(id)} style={{ cursor: 'pointer', borderRadius: '999px', padding: '5px 13px', fontSize: '12px', fontWeight: 700, border: `1px solid ${lb === id ? 'var(--rtm-gold)' : 'var(--rtm-border)'}`, background: lb === id ? 'var(--rtm-gold)' : 'transparent', color: lb === id ? '#06121d' : 'var(--rtm-dim)' }}>{ct(lbl)}</button>
           ))}
         </span>
       }>
-        <div style={{ padding: '10px 16px', fontSize: '12px', color: 'var(--rtm-faint)', borderBottom: '1px solid var(--rtm-border-soft)' }}>{LB_NOTE[lb]}{!paid && ' (no casual seu rank não é salvo)'}</div>
+        <div style={{ padding: '10px 16px', fontSize: '12px', color: 'var(--rtm-faint)', borderBottom: '1px solid var(--rtm-border-soft)' }}>{ct(LB_NOTE[lb])}{!paid && ' ' + ct('(no casual seu rank não é salvo)')}</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <tbody>
             {rows().map((r, i) => (
@@ -151,7 +152,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
                   <span style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
                     {r.country && <Flag cc={r.country} />}
                     <b style={{ fontFamily: 'var(--font-cond)', fontSize: '15px', color: r.you ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{r.nick}</b>
-                    {r.you && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '2px 7px', borderRadius: '999px' }}>Você</span>}
+                    {r.you && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '2px 7px', borderRadius: '999px' }}>{ct('Você')}</span>}
                   </span>
                 </td>
                 <td style={{ padding: '10px 14px', color: r.subColor, fontSize: '11.5px', fontWeight: 700 }}>{r.sub}</td>

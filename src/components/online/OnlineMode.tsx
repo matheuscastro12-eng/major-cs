@@ -10,6 +10,7 @@ import { OnlineHub, type OnlineModeId } from './OnlineHub';
 import { OnlineGauntlet } from './OnlineGauntlet';
 import { OnlineScreen } from '../OnlineScreen';
 import { buildPool, loadStats, saveStats, type OnlineStats } from './onlineData';
+import { ct } from '../../state/career-i18n';
 
 export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; account: Account | null; dataset: TeamSeason[] }) {
   const manager = getManager();
@@ -24,8 +25,8 @@ export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; a
   if (!manager) {
     return (
       <div style={{ maxWidth: 520, margin: '80px auto 0', textAlign: 'center' }}>
-        <p className="muted">Crie seu manager antes de jogar online.</p>
-        <Button variant="primary" onClick={onBack} style={{ marginTop: 12 }}>← Voltar</Button>
+        <p className="muted">{ct('Crie seu manager antes de jogar online.')}</p>
+        <Button variant="primary" onClick={onBack} style={{ marginTop: 12 }}>← {ct('Voltar')}</Button>
       </div>
     );
   }

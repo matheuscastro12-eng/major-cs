@@ -10,6 +10,7 @@ import { RoleTag } from './bits';
 import { buildOnlineTeam, genOpp, rankFor, type OnlineStats, type PoolPlayer, type Rival } from './onlineData';
 import type { Manager } from '../../state/manager';
 import type { MapId, SeriesResult, TTeam } from '../../types';
+import { ct } from '../../state/career-i18n';
 
 const ORDER = ['me', 'rival', 'rival', 'me', 'me', 'rival', 'rival', 'me', 'me', 'rival'] as const;
 
@@ -96,8 +97,8 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
   const rk = rankFor(mmr);
   const bar = (back?: () => void) => (
     <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
-      {back && <button type="button" onClick={back} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← Hub online</button>}
-      <button type="button" onClick={onExit} style={{ background: 'none', border: 'none', color: 'var(--rtm-faint)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Menu</button>
+      {back && <button type="button" onClick={back} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← {ct('Hub online')}</button>}
+      <button type="button" onClick={onExit} style={{ background: 'none', border: 'none', color: 'var(--rtm-faint)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>{ct('Menu')}</button>
     </div>
   );
 
@@ -116,14 +117,14 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
               <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={me.country} /> {mmr} MMR</div>
             </div>
             <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.6)', border: '1px solid var(--rtm-border-soft)' }}>
-              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>Temporada</div>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Temporada')}</div>
               <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--rtm-green-bright)' }}>{stats.w}W · {stats.l}L</div>
             </div>
           </div>
         </div>
-        <Panel title="Ranked 1v1" accent="blue">
-          <p style={{ margin: '0 0 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.5 }}>O matchmaking busca um rival perto do seu MMR. Vocês sorteiam cinco lendas em draft alternado e jogam uma melhor de três. Leia o board e escolha para contrapor o adversário.</p>
-          <Button size="big" variant="primary" onClick={() => setPhase('search')} style={{ width: '100%' }}>🔍 Procurar partida</Button>
+        <Panel title={ct('Ranked 1v1')} accent="blue">
+          <p style={{ margin: '0 0 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.5 }}>{ct('O matchmaking busca um rival perto do seu MMR. Vocês sorteiam cinco lendas em draft alternado e jogam uma melhor de três. Leia o board e escolha para contrapor o adversário.')}</p>
+          <Button size="big" variant="primary" onClick={() => setPhase('search')} style={{ width: '100%' }}>🔍 {ct('Procurar partida')}</Button>
         </Panel>
       </div>
     );
@@ -133,9 +134,9 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     return (
       <div style={{ maxWidth: '560px', margin: '60px auto 0', textAlign: 'center' }}>
         <div style={{ width: '80px', height: '80px', margin: '0 auto 20px', borderRadius: '50%', border: '3px solid var(--rtm-border)', borderTopColor: 'var(--rtm-blue-bright)', animation: 'rtmSpin 0.9s linear infinite' }} />
-        <h1 style={{ fontFamily: 'var(--font-cond)', fontSize: '26px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', margin: 0 }}>Procurando rival{'.'.repeat(dots)}</h1>
-        <p style={{ color: 'var(--rtm-dim)', marginTop: '8px' }}>Buscando perto de {mmr} MMR · {rk.name}</p>
-        <Button variant="ghost" size="sm" onClick={() => setPhase('lobby')} style={{ marginTop: '18px' }}>Cancelar</Button>
+        <h1 style={{ fontFamily: 'var(--font-cond)', fontSize: '26px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', margin: 0 }}>{ct('Procurando rival')}{'.'.repeat(dots)}</h1>
+        <p style={{ color: 'var(--rtm-dim)', marginTop: '8px' }}>{ct('Buscando perto de')} {mmr} MMR · {rk.name}</p>
+        <Button variant="ghost" size="sm" onClick={() => setPhase('lobby')} style={{ marginTop: '18px' }}>{ct('Cancelar')}</Button>
         <style>{`@keyframes rtmSpin{to{transform:rotate(360deg)}}`}</style>
       </div>
     );
@@ -145,7 +146,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     return (
       <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
         {bar(() => setPhase('lobby'))}
-        <VetoScreen teams={teams} userIdx={0} rng={rngRef.current} phaseLabel="Ranked 1v1" bestOf={3} onDone={(m) => { setMaps(m); setPhase('match'); }} />
+        <VetoScreen teams={teams} userIdx={0} rng={rngRef.current} phaseLabel={ct('Ranked 1v1')} bestOf={3} onDone={(m) => { setMaps(m); setPhase('match'); }} />
       </div>
     );
   }
@@ -153,7 +154,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
   if (phase === 'match' && teams) {
     return (
       <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
-        <MatchScreen teams={teams} maps={maps} userIdx={0} rng={rngRef.current} phaseLabel="Ranked 1v1" bestOf={3} onFinish={finishMatch} />
+        <MatchScreen teams={teams} maps={maps} userIdx={0} rng={rngRef.current} phaseLabel={ct('Ranked 1v1')} bestOf={3} onFinish={finishMatch} />
       </div>
     );
   }
@@ -162,15 +163,15 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     const won = outcome.won;
     return (
       <div style={{ maxWidth: '560px', margin: '50px auto 0', textAlign: 'center' }}>
-        <div style={{ fontFamily: 'var(--font-cond)', fontSize: '64px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '4px', color: won ? 'var(--rtm-green-bright)' : 'var(--rtm-red-bright)', textShadow: `0 0 40px ${won ? 'rgba(111,208,111,.4)' : 'rgba(226,90,90,.4)'}` }}>{won ? 'Vitória' : 'Derrota'}</div>
+        <div style={{ fontFamily: 'var(--font-cond)', fontSize: '64px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '4px', color: won ? 'var(--rtm-green-bright)' : 'var(--rtm-red-bright)', textShadow: `0 0 40px ${won ? 'rgba(111,208,111,.4)' : 'rgba(226,90,90,.4)'}` }}>{won ? ct('Vitória') : ct('Derrota')}</div>
         <div style={{ fontSize: '15px', color: 'var(--rtm-dim)', marginTop: '4px' }}>vs {rival ? rival.nick : 'rival'}</div>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', margin: '24px auto 0', padding: '16px 28px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)' }}>
           <div><div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700, letterSpacing: '.6px' }}>MMR</div><div style={{ fontFamily: 'var(--font-cond)', fontSize: '28px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{stats.mmr}</div></div>
           <div style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', fontWeight: 800, color: won ? 'var(--rtm-green-bright)' : 'var(--rtm-red-bright)' }}>{outcome.delta >= 0 ? '+' : ''}{outcome.delta}</div>
         </div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '26px' }}>
-          <Button variant="primary" onClick={() => { setOutcome(null); setPhase('search'); }}>Jogar de novo</Button>
-          <Button variant="ghost" onClick={onHub}>Voltar ao hub</Button>
+          <Button variant="primary" onClick={() => { setOutcome(null); setPhase('search'); }}>{ct('Jogar de novo')}</Button>
+          <Button variant="ghost" onClick={onHub}>{ct('Voltar ao hub')}</Button>
         </div>
       </div>
     );
@@ -185,16 +186,16 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '14px', padding: '14px 20px', borderRadius: '10px', background: 'linear-gradient(120deg, rgba(67,130,182,.16), rgba(13,17,22,.4))', border: '1px solid var(--rtm-border-soft)', marginBottom: '14px' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ width: '38px', height: '38px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, color: '#fff', background: `linear-gradient(160deg, ${me.accent || '#4382b6'}, #20303f)` }}>{me.nick.slice(0, 2).toUpperCase()}</span>
-          <span><b style={{ color: 'var(--rtm-blue-bright)', fontFamily: 'var(--font-cond)', fontSize: '16px' }}>{me.nick}</b><div style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{myCount}/5 escolhidos</div></span>
+          <span><b style={{ color: 'var(--rtm-blue-bright)', fontFamily: 'var(--font-cond)', fontSize: '16px' }}>{me.nick}</b><div style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{myCount}/5 {ct('escolhidos')}</div></span>
         </span>
-        <span style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, color: 'var(--rtm-gold)', fontSize: '18px' }}>DRAFT</span>
+        <span style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, color: 'var(--rtm-gold)', fontSize: '18px' }}>{ct('DRAFT')}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
-          <span style={{ textAlign: 'right' }}><b style={{ color: 'var(--rtm-gold)', fontFamily: 'var(--font-cond)', fontSize: '16px' }}>{rival ? rival.nick : 'rival'}</b><div style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{rivalCount}/5 escolhidos</div></span>
+          <span style={{ textAlign: 'right' }}><b style={{ color: 'var(--rtm-gold)', fontFamily: 'var(--font-cond)', fontSize: '16px' }}>{rival ? rival.nick : 'rival'}</b><div style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{rivalCount}/5 {ct('escolhidos')}</div></span>
           <span style={{ width: '38px', height: '38px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, color: '#06121d', background: 'linear-gradient(160deg, var(--rtm-gold), var(--rtm-gold-soft))' }}>{rival ? rival.nick.slice(0, 2).toUpperCase() : '??'}</span>
         </span>
       </div>
       <div style={{ textAlign: 'center', marginBottom: '12px', fontFamily: 'var(--font-cond)', fontSize: '15px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: pickN >= ORDER.length ? 'var(--rtm-green-bright)' : myTurn ? 'var(--rtm-blue-bright)' : 'var(--rtm-gold)' }}>
-        {pickN >= ORDER.length ? 'Draft completo — resolvendo…' : myTurn ? '● Sua escolha' : `${rival ? rival.nick : 'rival'} está escolhendo…`}
+        {pickN >= ORDER.length ? ct('Draft completo — resolvendo…') : myTurn ? `● ${ct('Sua escolha')}` : `${rival ? rival.nick : 'rival'} ${ct('está escolhendo…')}`}
       </div>
       <div className="rtm-pcards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', opacity: myTurn ? 1 : 0.75 }}>
         {poolRef.current!.map((p) => {

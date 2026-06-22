@@ -7,6 +7,7 @@ import { Flag, PlayerAvatar } from '../ui';
 import { RoleTag } from './bits';
 import { UltimatePlayerCard } from './cards';
 import type { PoolPlayer } from './onlineData';
+import { ct } from '../../state/career-i18n';
 
 const ROLE_KEYS: { role: string; label: string }[] = [
   { role: 'AWP', label: 'AWP' },
@@ -52,7 +53,7 @@ export function PackDraft({ pool, count = 5, title, subtitle, accent, onBack, on
   return (
     <div style={{ maxWidth: '1040px', margin: '0 auto' }}>
       <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
-        {onBack && <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← Voltar</button>}
+        {onBack && <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← {ct('Voltar')}</button>}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', marginBottom: '14px' }}>
         <div>
@@ -60,20 +61,20 @@ export function PackDraft({ pool, count = 5, title, subtitle, accent, onBack, on
           <p style={{ margin: '4px 0 0', color: 'var(--rtm-dim)', fontSize: '13.5px' }}>{subtitle}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>Time · OVR médio</div>
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Time · OVR médio')}</div>
           <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '24px', fontWeight: 800, color: tone }}>{picked.length}/{count} · {avg || '—'}</div>
         </div>
       </div>
 
-      <Panel title={`Pacote ${Math.min(round + 1, count)} de ${count}`} accent="gold" style={{ marginBottom: '16px' }}>
+      <Panel title={`${ct('Pacote')} ${Math.min(round + 1, count)} ${ct('de')} ${count}`} accent="gold" style={{ marginBottom: '16px' }}>
         {!revealed ? (
           <div className="ut-pack-reveal">
             <button type="button" onClick={() => setRevealed(true)}>
               <span>RTM</span>
-              <b>ABRIR PACOTE</b>
-              <small>5 cartas · escolha 1</small>
+              <b>{ct('ABRIR PACOTE')}</b>
+              <small>{ct('5 cartas · escolha 1')}</small>
             </button>
-            <p>As cinco cartas do pacote serão reveladas. Escolha uma para o seu elenco.</p>
+            <p>{ct('As cinco cartas do pacote serão reveladas. Escolha uma para o seu elenco.')}</p>
           </div>
         ) : (
           <div className="player-cards ut-revealed-cards">
@@ -83,8 +84,8 @@ export function PackDraft({ pool, count = 5, title, subtitle, accent, onBack, on
                 player={p.player}
                 source={p.from}
                 taken={false}
-                currentLabel="ATUAL"
-                legendLabel="LENDA"
+                currentLabel={ct('ATUAL')}
+                legendLabel={ct('LENDA')}
                 revealIndex={i}
                 onPick={() => pick(p)}
               />
@@ -95,7 +96,7 @@ export function PackDraft({ pool, count = 5, title, subtitle, accent, onBack, on
 
       {/* time sendo montado */}
       <div>
-        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '8px' }}>Seu time ({picked.length}/{count})</div>
+        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '8px' }}>{ct('Seu time')} ({picked.length}/{count})</div>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${count}, 1fr)`, gap: '8px' }}>
           {Array.from({ length: count }).map((_, i) => {
             const p = picked[i];
@@ -109,13 +110,13 @@ export function PackDraft({ pool, count = 5, title, subtitle, accent, onBack, on
                       <RoleTag role={p.role} />
                     </span>
                   </>
-                ) : <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-faint)' }}>vazio</span>}
+                ) : <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-faint)' }}>{ct('vazio')}</span>}
               </div>
             );
           })}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>Funções:</span>
+          <span style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{ct('Funções:')}</span>
           {ROLE_KEYS.map((k) => {
             const ok = rolesPresent.has(k.role);
             return <span key={k.role} style={{ fontSize: '11px', fontWeight: 700, color: ok ? 'var(--rtm-green-bright)' : 'var(--rtm-faint)' }}>{ok ? '✓' : '✗'} {k.label}</span>;

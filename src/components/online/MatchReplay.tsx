@@ -7,6 +7,7 @@ import { Scoreboard } from '../Scoreboard';
 import { MAP_LABELS } from '../../types';
 import type { SeriesResult, TTeam } from '../../types';
 import type { PlaybackSpeed } from '../../state/online';
+import { ct } from '../../state/career-i18n';
 
 export const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 4, 8];
 const MAP_GAP_UNITS = 2;
@@ -136,11 +137,11 @@ export function MatchReplay({
   const map = series.maps[mapIdx];
   const tacticalEvent = !done && map
     ? round === 8 && teams[0].onlinePlan?.timeoutMap === mapIdx
-      ? `TIMEOUT TÁTICO · ${teams[0].name}`
+      ? `${ct('TIMEOUT TÁTICO')} · ${teams[0].name}`
       : round === 9 && teams[1].onlinePlan?.timeoutMap === mapIdx
-        ? `TIMEOUT TÁTICO · ${teams[1].name}`
+        ? `${ct('TIMEOUT TÁTICO')} · ${teams[1].name}`
         : round === 0 && mapIdx > 0
-          ? [teams[0], teams[1]].filter((team) => team.onlinePlan?.substituteAfterMap && team.onlinePlan.reserveNick).map((team) => `${team.onlinePlan?.reserveNick} entra por ${team.name}`).join(' · ')
+          ? [teams[0], teams[1]].filter((team) => team.onlinePlan?.substituteAfterMap && team.onlinePlan.reserveNick).map((team) => `${team.onlinePlan?.reserveNick} ${ct('entra por')} ${team.name}`).join(' · ')
           : ''
     : '';
   const log = map ? map.roundLog.slice(0, round) : [];
@@ -155,36 +156,36 @@ export function MatchReplay({
   return (
     <div className="panel match-replay fade-in">
       <div className="panel-head">
-        {map ? MAP_LABELS[map.map] : 'FIM'} {!done && `· ${round === 0 ? 'LIVE' : `R${round}`}`}
+        {map ? MAP_LABELS[map.map] : ct('FIM')} {!done && `· ${round === 0 ? ct('LIVE') : `R${round}`}`}
         <span className="spacer" />
         {!done && (
-          <div className="ut-playback-speed" title={canControlSpeed ? 'O host controla a velocidade para toda a sala' : 'Velocidade definida pelo host'}>
-            <span>{canControlSpeed ? 'VELOCIDADE DA SALA' : `HOST · ${playbackSpeed}x`}</span>
+          <div className="ut-playback-speed" title={canControlSpeed ? ct('O host controla a velocidade para toda a sala') : ct('Velocidade definida pelo host')}>
+            <span>{canControlSpeed ? ct('VELOCIDADE DA SALA') : `HOST · ${playbackSpeed}x`}</span>
             {canControlSpeed && PLAYBACK_SPEEDS.map((speed) => (
               <button
                 key={speed}
                 className={`btn ghost small${playbackSpeed === speed ? ' active' : ''}`}
                 onClick={() => onPlaybackSpeedChange(speed)}
-                title={speed === 8 ? 'Instantâneo: cai direto no placar' : undefined}
+                title={speed === 8 ? ct('Instantâneo: cai direto no placar') : undefined}
               >
                 {speed === 8 ? '⚡' : `${speed}x`}
               </button>
             ))}
           </div>
         )}
-        {!done && allowSkip && <button className="btn ghost small" onClick={() => setDone(true)}>Pular ⏭</button>}
-        {!lockedLive && <button className="btn small" onClick={onClose}>Fechar ✕</button>}
+        {!done && allowSkip && <button className="btn ghost small" onClick={() => setDone(true)}>{ct('Pular')} ⏭</button>}
+        {!lockedLive && <button className="btn small" onClick={onClose}>{ct('Fechar')} ✕</button>}
       </div>
       <div className="panel-body">
         <div className="qs-board" style={{ marginBottom: 10 }}>
           <div className="qs-side"><TeamBadge tag={teams[0].tag} colors={teams[0].colors} size={40} logoUrl={teams[0].logoUrl} /><div className="qs-name">{teams[0].name}</div><div className="qs-score">{sa}</div></div>
-          <div className="qs-mid"><div className="qs-mapscore">{mapsA} - {mapsB} <span className="muted small">mapas</span></div></div>
+          <div className="qs-mid"><div className="qs-mapscore">{mapsA} - {mapsB} <span className="muted small">{ct('mapas')}</span></div></div>
           <div className="qs-side"><TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={40} logoUrl={teams[1].logoUrl} /><div className="qs-name">{teams[1].name}</div><div className="qs-score">{sb}</div></div>
         </div>
         {tacticalEvent && <div className="ut-tactical-event">{tacticalEvent}</div>}
         {!done && lastWinner !== null && (
           <div className={`ut-round-winner team-${lastWinner}`}>
-            ROUND {round} · {teams[lastWinner].name} pontua · {sa}:{sb}
+            ROUND {round} · {teams[lastWinner].name} {ct('pontua')} · {sa}:{sb}
           </div>
         )}
         {!done && (
