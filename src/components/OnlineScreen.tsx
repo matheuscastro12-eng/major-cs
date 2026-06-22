@@ -339,6 +339,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   useEffect(() => { if (paidRank) void fetchMyRank(nick || account?.nick).then(setMyRank); }, [paidRank, nick, account?.nick]);
   const [codeInput, setCodeInput] = useState('');
   const [joinAsSpectator, setJoinAsSpectator] = useState(false);
+  const [majorCreate, setMajorCreate] = useState(false); // Ranked Major: alterna entre browse e criar sala
   const [mode, setMode] = useState<'duel' | 'party'>(preset ?? 'duel');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [ruleset, setRuleset] = useState<UltimateRuleset>('open');
@@ -919,6 +920,149 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // ---------- telas ----------
 
   if (!code) {
+    // Ranked Major: tela dedicada de salas (browse) + passo de criar sala, no layout do design.
+    if (preset === 'party' && !casualOnly) {
+      const openCount = openRooms.filter((r) => r.players < r.max).length;
+      const poolColor = (p: TournamentPool) => (p === 'br' ? 'var(--rtm-gold)' : 'var(--rtm-blue-bright)');
+      const poolLabel = (p: TournamentPool) => (p === 'br' ? '🇧🇷 GC' : '🌍 Mundial');
+
+      if (!majorCreate) {
+        return (
+          <div className="fade-in" style={{ maxWidth: 880, margin: '0 auto' }}>
+            <BackBar onHub={onBack} onExit={onBack} />
+            <div style={{ textAlign: 'center', marginBottom: '18px' }}>
+              <div style={{ fontSize: '34px' }}>🏆</div>
+              <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Ranked Major</h1>
+              <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '500px', margin: '8px auto 0', lineHeight: 1.55 }}>
+                Entre numa sala aberta ou crie a sua. Todos na mesma sala disputam o Major; o ranking é por quem chega mais longe.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--rtm-dim)' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 8px var(--rtm-green-bright)' }} />
+                <b style={{ color: 'var(--rtm-text-strong)' }}>{openCount} salas abertas</b> agora · {openRooms.length} no total
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>⟳ Atualizar</Button>
+                <Button variant="gold" size="sm" onClick={() => setMajorCreate(true)}>+ Criar sala</Button>
+              </div>
+            </div>
+
+            {!nick.trim() && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 12px', padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>Escolha um nick para entrar ou criar:</span>
+                <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={{ ...onlineInputStyle, width: 'auto', flex: 1, minWidth: '160px' }} />
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {openRooms.length === 0 ? (
+                <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '13px', color: 'var(--rtm-dim)', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)' }}>{OL.noRooms}</div>
+              ) : openRooms.map((r) => {
+                const full = r.players >= r.max;
+                const pc = poolColor(r.pool);
+                return (
+                  <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.7 : 1 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '96px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', boxShadow: full ? 'none' : '0 0 7px var(--rtm-green-bright)' }} />
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? 'Cheia' : 'Aguardando'}</span>
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Sala de {r.host}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>host <b style={{ color: 'var(--rtm-text)' }}>{r.host}</b> · grupo até {r.max}</div>
+                    </div>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: pc, padding: '3px 9px', borderRadius: '999px', border: '1px solid var(--rtm-border)', whiteSpace: 'nowrap' }}>{poolLabel(r.pool)}</span>
+                    <div style={{ textAlign: 'center', minWidth: '64px' }}>
+                      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: full ? 'var(--rtm-faint)' : 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{r.players}/{r.max}</div>
+                      <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '2px' }}>
+                        {Array.from({ length: r.max }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.players ? pc : 'var(--rtm-panel-3)' }} />)}
+                      </div>
+                    </div>
+                    <Button variant={full ? 'ghost' : 'primary'} size="sm" disabled={busy || full || !nick.trim()} onClick={() => doJoin(r.code, false)}>{full ? 'Cheia' : OL.enter}</Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: '16px' }}>
+              <Button variant="gold" size="big" onClick={() => setMajorCreate(true)}>+ Criar minha sala</Button>
+            </div>
+            {error && (
+              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+            )}
+          </div>
+        );
+      }
+
+      // Ranked Major: criar sala (passo próprio)
+      return (
+        <div className="fade-in" style={{ maxWidth: 720, margin: '0 auto' }}>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
+            <button type="button" onClick={() => setMajorCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← Salas abertas</button>
+            <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--rtm-faint)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Menu</button>
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <div style={{ fontSize: '34px' }}>🏆</div>
+            <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Criar sala</h1>
+            <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '480px', margin: '8px auto 0', lineHeight: 1.55 }}>
+              Cada manager monta o seu time e joga a própria campanha. No fim, o ranking é por quem foi mais longe.
+            </p>
+          </div>
+
+          <Panel title="Sua identidade" accent="blue" style={{ marginBottom: '16px' }}>
+            <Field label={tr('online.yourNick')} style={{ marginBottom: 0 }}>
+              <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={onlineInputStyle} />
+            </Field>
+          </Panel>
+
+          <Panel title="Configuração da sala" accent="gold" style={{ marginBottom: '16px' }}>
+            <Field label="Coleção">
+              <Seg accent="gold" value={pool} onChange={(id) => setPool(id as 'world' | 'br')} options={[{ id: 'world', label: tr('online.poolWorld') }, { id: 'br', label: tr('online.poolBr') }]} />
+            </Field>
+            <Field label="Regra do evento">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
+                {RULESET_OPTIONS.map((option) => {
+                  const on = ruleset === option.id;
+                  return (
+                    <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '10px 12px', borderRadius: 'var(--rtm-radius)', border: `1px solid ${on ? 'var(--rtm-gold)' : 'var(--rtm-border-soft)'}`, background: on ? 'rgba(216,169,67,.14)' : 'var(--rtm-bg-deep)' }}>
+                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 700, color: on ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{option.label}</b>
+                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', lineHeight: 1.4 }}>{option.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <Field label="Rerolls por rodada" hint="O host define quantas novas coleções cada jogador pode abrir.">
+              <input type="number" min={0} max={5} value={draftRollouts} onChange={(event) => setDraftRollouts(Math.max(0, Math.min(5, Number(event.target.value) || 0)))} style={onlineInputStyle} />
+            </Field>
+            <Check checked={isPublic} onChange={setIsPublic}>{OL.publicRoom}</Check>
+          </Panel>
+
+          <Button variant="gold" size="big" style={{ width: '100%' }} onClick={create} disabled={!nick.trim() || busy}>
+            {busy ? tr('online.creating') : tr('online.createRoom')}
+          </Button>
+
+          <Panel title={tr('online.joinWithCode')} accent="blue" style={{ marginTop: '16px' }}>
+            <Field label={tr('online.roomCode')}>
+              <input value={codeInput} maxLength={5} placeholder="ex: K7KPQ" style={{ ...onlineInputStyle, textTransform: 'uppercase', letterSpacing: 4, fontFamily: 'var(--rtm-font-cond)', fontSize: 18 }} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && join()} />
+            </Field>
+            <Button variant="primary" style={{ width: '100%' }} onClick={join} disabled={!nick.trim() || !codeInput.trim() || busy}>{busy ? tr('online.joining') : tr('online.joinRoom')}</Button>
+            <div style={{ marginTop: '10px' }}>
+              <Check checked={joinAsSpectator} onChange={setJoinAsSpectator}>Entrar como espectador</Check>
+            </div>
+          </Panel>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginTop: '16px' }}>
+            <Button variant="ghost" onClick={startLocalDemo}>▶ {OL.demo}</Button>
+            <span style={{ flex: 1, minWidth: '180px', fontSize: '12px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>{OL.demoNote}</span>
+          </div>
+          {error && (
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+          )}
+        </div>
+      );
+    }
     return (
       <div className="fade-in" style={{ maxWidth: 760, margin: '0 auto' }}>
         <BackBar onExit={onBack} />
