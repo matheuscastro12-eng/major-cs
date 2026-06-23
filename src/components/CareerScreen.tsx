@@ -1774,15 +1774,19 @@ export function CareerScreen({ onExit }: Props) {
   // do cache local pra render instantâneo, mas a busca global sobrescreve o cache
   // (nada de cache local sobrepondo o que o admin editou pra todo mundo).
   const [bo3Edits, setBo3Edits] = useState<Bo3Edits>(() => loadBo3Edits());
+  // só libera a FUNDAÇÃO depois que as edições globais chegam, pra carreira nova
+  // nascer com os elencos editados (o snapshot do elenco é tirado na fundação).
+  // Se o cache local já tem edições (device que já viu), começa pronto = instantâneo.
+  const [editsReady, setEditsReady] = useState(() => Object.keys(loadBo3Edits().players).length > 0);
   useEffect(() => {
     let alive = true;
     fetchBo3Edits().then((srv) => {
-      if (!alive || !srv) return;
+      if (!alive) return;
       // jogador comum recebe o SERVIDOR CRU (fonte da verdade global): assim as
       // edições do admin chegam a todos, e o cache velho não "volta pro que era".
       // só o ADMIN mantém suas edições locais por cima (pra não perder trabalho).
-      const next = isAdminUnlocked() ? mergeBo3Edits(srv, loadBo3Edits()) : srv;
-      setBo3Edits(next); saveBo3Edits(next);
+      if (srv) { const next = isAdminUnlocked() ? mergeBo3Edits(srv, loadBo3Edits()) : srv; setBo3Edits(next); saveBo3Edits(next); }
+      setEditsReady(true); // libera fundar mesmo se a API falhar (srv null), pra não travar
     });
     return () => { alive = false; };
   }, []);
@@ -2772,6 +2776,16 @@ export function CareerScreen({ onExit }: Props) {
   if (showOnb) return <CareerOnboarding onClose={dismissOnb} />;
 
   if (stage === 'found') {
+    // espera os elencos editados (global) antes de deixar fundar: senão a carreira
+    // nasce com o roster antigo congelado no snapshot e nunca pega as edições.
+    if (!editsReady) {
+      return (
+        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 14 }}>
+          <div className="spinner" />
+          <p className="muted">{ct('Carregando os elencos atualizados…')}</p>
+        </div>
+      );
+    }
     const startFromOrg = (s: OrgStart) => {
       update({
         org: s.org, squad: s.squad, coachFromId: s.coachFromId, budget: s.budget,
