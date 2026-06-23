@@ -1580,30 +1580,40 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     const myTurn = veto.turn?.toLowerCase() === nick.toLowerCase() && !isSpectator;
     const action = VETO_ACTIONS[veto.step] ?? 'DECIDER';
     const seconds = vetoNow ? Math.max(0, Math.ceil(((veto.deadline ?? vetoNow) - vetoNow) / 1000)) : 20;
+    // mesmo layout polido do veto do Major/outros modos (mapcard + thumb), porém
+    // movido pela veto turn-based do duelo (state.lobby.veto).
+    const isBan = action === 'BAN';
     return (
       <div className="fade-in ut-live-veto">
-        <div className="panel">
-          <div className="panel-head">{ct('VETO MULTIPLAYER')} · {code}<span className="spacer" /><button className="btn" onClick={onBack}>{ct('Sair')}</button></div>
-          <div className="panel-body">
-            <div className="ut-veto-turn">
-              <span>{isSpectator ? ct('ACOMPANHANDO O VETO') : myTurn ? ct('SUA VEZ') : `${ct('VEZ DE')} ${veto.turn}`}</span>
-              <b>{action}</b>
-              <strong>{seconds}s</strong>
+        <div className="ut-veto-dialog veto-layout">
+          <div className="panel">
+            <div className="panel-head">{ct('VETO DE MAPAS')} · MD3 · {code}<span className="spacer" /><button className="btn small" onClick={onBack}>{ct('Sair')}</button></div>
+            <div className="panel-body">
+              {myTurn ? (
+                <div className={`veto-action ${isBan ? 'ban' : 'pick'}`}><span className="va-icon">{isBan ? '🚫' : '✅'}</span><span className="va-text"><b>{ct('Sua vez')}</b><span>{isBan ? ct('BANIR um mapa') : ct('ESCOLHER um mapa')} · {seconds}s</span></span></div>
+              ) : (
+                <div className="veto-action waiting"><span className="va-icon">⏳</span><span className="va-text">{isSpectator ? ct('ACOMPANHANDO O VETO') : `${ct('Aguardando')} ${veto.turn}…`} · {seconds}s</span></div>
+              )}
+              <div className={`veto-maps${myTurn ? (isBan ? ' mode-ban' : ' mode-pick') : ''}`}>
+                {MAP_POOL.map((map) => {
+                  const banned = veto.bans.find((entry) => entry.map === map);
+                  const picked = veto.picks.find((entry) => entry.map === map);
+                  const available = veto.remaining.includes(map);
+                  const selectable = myTurn && available && !busy;
+                  const dead = banned ? ' dead banned' : picked ? ' dead picked' : '';
+                  return (
+                    <div key={map} className={`mapcard${dead}${selectable ? ' selectable' : ''}`} onClick={() => selectable && submitVetoMap(map)}>
+                      <MapThumb map={map} className="mapcard-img" />
+                      {banned && <span className="mtag banned">🚫 BAN · {banned.by}</span>}
+                      {picked && <span className="mtag picked">✅ PICK · {picked.by}</span>}
+                      {selectable && <span className="map-hover-action">{isBan ? `🚫 ${ct('BANIR')}` : `✅ ${ct('ESCOLHER')}`}</span>}
+                      <div className="mname">{MAP_LABELS[map]}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="muted small center">{ct('Ban e pick alternados. Se o tempo acabar, o primeiro mapa disponível é escolhido automaticamente.')}</p>
             </div>
-            <div className="ut-veto-live-grid">
-              {MAP_POOL.map((map) => {
-                const banned = veto.bans.find((entry) => entry.map === map);
-                const picked = veto.picks.find((entry) => entry.map === map);
-                const available = veto.remaining.includes(map);
-                return (
-                  <button key={map} disabled={!myTurn || !available || busy} className={banned ? 'banned' : picked ? 'picked' : available ? '' : 'removed'} onClick={() => submitVetoMap(map)}>
-                    <b>{MAP_LABELS[map]}</b>
-                    <span>{banned ? `BAN · ${banned.by}` : picked ? `PICK · ${picked.by}` : available ? (myTurn ? action : ct('DISPONÍVEL')) : ct('FORA')}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="muted small center">{ct('Ban e pick alternados. Se o tempo acabar, o primeiro mapa disponível é escolhido automaticamente.')}</p>
           </div>
         </div>
       </div>
