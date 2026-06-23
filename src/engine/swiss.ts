@@ -5,6 +5,7 @@ import { teamSeasonToTTeam } from './ratings';
 import type { Rng } from './rng';
 import { shuffle } from './rng';
 import { autoVeto } from './veto';
+import { ct } from '../state/career-i18n';
 
 export function getTeam(t: Tournament, id: string): TTeam {
   return t.teams.find((x) => x.id === id)!;
@@ -14,7 +15,7 @@ export function createTournament(
   dataset: TeamSeason[],
   user: TTeam,
   rng: Rng,
-  name = '🏆 Major Mundial',
+  name = `🏆 ${ct('Major Mundial')}`,
   oppBoost = 0,
 ): Tournament {
   const pool = shuffle(rng, dataset).slice(0, 15).map((ts) => {
@@ -99,8 +100,8 @@ export function placementCode(t: Tournament, teamId: string): PlacementCode {
     const lost = (p.result.winner === 0 ? p.b : p.a) === teamId;
     if (!lost) continue;
     if (h.phase.includes('GRANDE FINAL')) return 'runnerup';
-    if (h.phase.includes('Semi')) return 'semi';
-    if (h.phase.includes('Quartas')) return 'quarters';
+    if (h.phase.includes('Semifinal')) return 'semi';
+    if (h.phase.includes('Quartas de final')) return 'quarters';
   }
   if (team?.status === 'advanced') return 'playoffs';
   return 'swiss';
@@ -249,12 +250,22 @@ function applySeries(t: Tournament, pairing: Pairing): void {
   t.history.push({ phase: phaseLabel(t), pairing });
 }
 
+// CHAVE ESTÁVEL (PT): vai pro history e é casada por logica (placementCode,
+// FinalScreen, OnlineScreen bracketPhase, phaseDisplay). NÃO traduzir aqui.
 export function phaseLabel(t: Tournament): string {
   if (t.phase === 'swiss') return `Suíça - Rodada ${t.swissRound}`;
   if (t.phase === 'quarters') return 'Quartas de final';
   if (t.phase === 'semis') return 'Semifinal';
   if (t.phase === 'final') return 'GRANDE FINAL';
   return 'Encerrado';
+}
+// versão traduzida SÓ para exibição (nunca armazenar nem casar com isto).
+export function phaseLabelDisplay(t: Tournament): string {
+  if (t.phase === 'swiss') return `${ct('Suíça - Rodada')} ${t.swissRound}`;
+  if (t.phase === 'quarters') return ct('Quartas de final');
+  if (t.phase === 'semis') return ct('Semifinal');
+  if (t.phase === 'final') return ct('GRANDE FINAL');
+  return ct('Encerrado');
 }
 
 function seedAdvanced(t: Tournament): TTeam[] {

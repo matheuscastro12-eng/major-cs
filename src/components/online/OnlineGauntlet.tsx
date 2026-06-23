@@ -43,7 +43,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
       .sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5)
       .sort((a, b) => b.ovr - a.ovr);
     const ovr = five.length ? Math.round(five.reduce((a, p) => a + p.ovr, 0) / five.length) : Math.round(target);
-    const team = buildOnlineTeam(`Esquadrão IA #${s + 1}`, five, `gaunt-opp-${s}`);
+    const team = buildOnlineTeam(`${ct('Esquadrão IA')} #${s + 1}`, five, `gaunt-opp-${s}`);
     return { team, ovr, cc: five[0]?.country ?? 'br' };
   };
 
@@ -53,7 +53,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
 
   // dispara a partida MD3 de verdade (mesma simulação do online/carreira)
   function startMatch() {
-    const userTeam = buildOnlineTeam('Seu time', picked, 'gaunt-user');
+    const userTeam = buildOnlineTeam(ct('Seu time'), picked, 'gaunt-user');
     const o = buildOpp(streak);
     const rng = makeRng(Math.floor(Math.random() * 2147483647));
     const maps = autoVeto([userTeam, o.team], rng, 3);

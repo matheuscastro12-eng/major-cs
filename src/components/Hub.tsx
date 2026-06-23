@@ -1,5 +1,5 @@
 import { draftSynergy } from '../engine/ratings';
-import { getTeam, phaseLabel, standings, userPairing } from '../engine/swiss';
+import { getTeam, phaseLabelDisplay, standings, userPairing } from '../engine/swiss';
 import type { Pairing, Tournament } from '../types';
 import { useLang } from '../state/i18n';
 import { TournamentBracket } from './Bracket';
@@ -97,7 +97,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
       )}
       <div className="panel">
         <div className="panel-head">
-          {t.name} - {phaseLabel(t)}
+          {t.name} - {phaseLabelDisplay(t)}
           {career.titles > 0 && <span className="gold-text small">🏆×{career.titles}</span>}
           <span className="spacer" />
           {pickem.total > 0 && (

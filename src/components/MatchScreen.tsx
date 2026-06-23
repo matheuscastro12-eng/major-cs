@@ -10,6 +10,7 @@ import { Scoreboard } from './Scoreboard';
 import { Flag, MapThumb, PlayerAvatar, TeamBadge } from './ui';
 import { HeadshotIcon, WeaponIcon, WEAPON_LABELS } from './weapons';
 import { useLang } from '../state/i18n';
+import { ct } from '../state/career-i18n';
 
 interface Props {
   teams: [TTeam, TTeam];
@@ -512,7 +513,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           {pbLive && (
             <div className="center" style={{ marginTop: 4 }}>
               <span className="mm-playbook">
-                📋 {PLAYBOOK_LABELS[me.playbook!]} · <span className={`pb-note ${pbLive.good ? 'good' : 'bad'}`}>{pbLive.label} {pbLive.good ? '▲ favorável' : '▼ arriscado'}</span>
+                📋 {PLAYBOOK_LABELS[me.playbook!]} · <span className={`pb-note ${pbLive.good ? 'good' : 'bad'}`}>{pbLive.label} {pbLive.good ? `▲ ${ct('favorável')}` : `▼ ${ct('arriscado')}`}</span>
               </span>
             </div>
           )}
@@ -533,8 +534,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           <>
             {callsHint && (
               <div className="calls-hint">
-                <span>🎮 <b>Você comanda a partida, não só assiste:</b> mude a <b>postura</b> aqui embaixo (agressivo/cauteloso) quando quiser, chame <b>timeouts</b> e ligue o <b>🎯 Tático</b> (no topo) pra dar as calls round a round — tudo muda o resultado de verdade.</span>
-                <button className="calls-hint-x" onClick={dismissCallsHint}>entendi ✕</button>
+                <span>🎮 <b>{ct('Você comanda a partida, não só assiste:')}</b> {ct('mude a')} <b>{ct('postura')}</b> {ct('aqui embaixo (agressivo/cauteloso) quando quiser, chame')} <b>{ct('timeouts')}</b> {ct('e ligue o')} <b>🎯 {ct('Tático')}</b> {ct('(no topo) pra dar as calls round a round — tudo muda o resultado de verdade.')}</span>
+                <button className="calls-hint-x" onClick={dismissCallsHint}>{ct('entendi')} ✕</button>
               </div>
             )}
             <div className={`stance-bar${callsHint ? ' pulse' : ''}`}>
@@ -578,7 +579,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                     <button className="btn gold small" onClick={() => setFreeze(0)}>{L.playRound}</button>
                   </>
                 ) : (
-                  <span className="muted small">simulando round…</span>
+                  <span className="muted small">{ct('simulando round…')}</span>
                 )}
               </div>
             )}
@@ -708,7 +709,7 @@ function LiveScoreboard({ teams, userIdx, stats, label }: {
         <div className="lsb-head">
           <TeamBadge tag={team.tag} colors={team.colors} size={20} logoUrl={team.logoUrl} />
           <span className="lsb-tname">{team.name}</span>
-          {idx === userIdx && <span className="you-pill">VOCÊ</span>}
+          {idx === userIdx && <span className="you-pill">{ct('VOCÊ')}</span>}
           <span className="spacer" />
           <span className="lsb-avg">{avg.toFixed(2)}</span>
         </div>

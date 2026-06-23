@@ -2,6 +2,7 @@ import type { KillEvent, MapId, MapResult, Playbook, Playstyle, PlayerLine, Play
 import { derivePlaystyle } from '../types';
 import type { Rng } from './rng';
 import { weightedIndex } from './rng';
+import { ct } from '../state/career-i18n';
 
 const playstyleOf = (p: TPlayer): Playstyle => p.playstyle ?? derivePlaystyle(p.role);
 
@@ -221,24 +222,24 @@ export function playbookLean(pb: Playbook, ctx: PlaybookCtx): { delta: number; l
   let net = 0, best = 0, label = '';
   const add = (v: number, l: string) => { net += v; if (Math.abs(v) > Math.abs(best)) { best = v; label = l; } };
   if (pb === 'aggressive') {
-    if (ctx.side === 't') add(1.4, 'pressão no ataque'); else add(-1.1, 'pressão exposta no CT');
-    if (ctx.isPistol) add(1.3, 'pistol agressivo');
-    if (ctx.eco && !ctx.isPistol) add(0.9, 'force agressivo');
-    if (ctx.lostLast && !ctx.isPistol) add(-0.8, 'atrás no placar');
+    if (ctx.side === 't') add(1.4, ct('pressão no ataque')); else add(-1.1, ct('pressão exposta no CT'));
+    if (ctx.isPistol) add(1.3, ct('pistol agressivo'));
+    if (ctx.eco && !ctx.isPistol) add(0.9, ct('force agressivo'));
+    if (ctx.lostLast && !ctx.isPistol) add(-0.8, ct('atrás no placar'));
   } else if (pb === 'tactical') {
-    if (ctx.secondHalf) add(1.3, 'ajuste de 2º half');
-    if (ctx.pickedOwnMap) add(1.0, 'domínio do mapa');
-    if (ctx.side === 'ct') add(0.6, 'defesa estruturada');
-    if (ctx.isPistol) add(-1.1, 'pistol sem ritmo');
+    if (ctx.secondHalf) add(1.3, ct('ajuste de 2º half'));
+    if (ctx.pickedOwnMap) add(1.0, ct('domínio do mapa'));
+    if (ctx.side === 'ct') add(0.6, ct('defesa estruturada'));
+    if (ctx.isPistol) add(-1.1, ct('pistol sem ritmo'));
   } else if (pb === 'fast') {
-    if (ctx.side === 't') add(1.7, 'execução rápida'); else add(-1.4, 'CT vulnerável');
-    if (ctx.eco) add(0.8, 'rush de eco');
+    if (ctx.side === 't') add(1.7, ct('execução rápida')); else add(-1.4, ct('CT vulnerável'));
+    if (ctx.eco) add(0.8, ct('rush de eco'));
   } else {
-    if (ctx.side === 'ct') add(1.5, 'controle no CT'); else add(-1.0, 'ataque lento');
-    if (ctx.secondHalf) add(0.7, 'round longo dominado');
-    if (ctx.isPistol) add(-1.0, 'pistol arriscado');
+    if (ctx.side === 'ct') add(1.5, ct('controle no CT')); else add(-1.0, ct('ataque lento'));
+    if (ctx.secondHalf) add(0.7, ct('round longo dominado'));
+    if (ctx.isPistol) add(-1.0, ct('pistol arriscado'));
   }
-  return { delta: net, label: label || 'neutro' };
+  return { delta: net, label: label || ct('neutro') };
 }
 
 function effStrength(
@@ -625,7 +626,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       map,
       pickedBy,
       score: [scoreA, scoreB],
-      halves: halfScore ? `1o half ${halfScore}` : '',
+      halves: halfScore ? `${ct('1o half')} ${halfScore}` : '',
       ot,
       winner: scoreA > scoreB ? 0 : 1,
       roundLog,

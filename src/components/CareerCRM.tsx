@@ -10,6 +10,7 @@ import { AdminNav } from './AdminNav';
 import { playerOvr } from '../engine/ratings';
 import { logoForTeam } from '../data/media';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { ct } from '../state/career-i18n';
 
 const ROLES: Role[] = ['AWP', 'IGL', 'Entry', 'Rifler', 'Support', 'Lurker'];
 // stats individuais editáveis (rótulo curto + chave no Player)
@@ -60,7 +61,7 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
     const ok = await pushBo3Edits(edits, adminPassword());
     setSaving(false);
     setDirty(!ok);
-    setSavedFlash(ok ? '✔ salvo pra todos' : '⚠ salvo só local (servidor falhou)');
+    setSavedFlash(ok ? '✔ ' + ct('salvo pra todos') : '⚠ ' + ct('salvo só local (servidor falhou)'));
     setTimeout(() => setSavedFlash(''), 4000);
   };
 
@@ -83,8 +84,8 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
   const exportJson = () => {
     const data = JSON.stringify(applyBo3Edits(CS2_REAL_2026, edits), null, 1);
     navigator.clipboard?.writeText(data).then(
-      () => alert('Times editados copiados! Cole em src/data/bo3-2026.json para tornar permanente.'),
-      () => alert('Não foi possível copiar.'),
+      () => alert(ct('Times editados copiados! Cole em src/data/bo3-2026.json para tornar permanente.')),
+      () => alert(ct('Não foi possível copiar.')),
     );
   };
 
@@ -92,25 +93,25 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
     <div className="fade-in">
       <div className="panel" style={{ maxWidth: 1100, margin: '20px auto' }}>
         <div className="panel-head">
-          CRM da carreira · times e OVRs reais (bo3.gg)
+          {ct('CRM da carreira · times e OVRs reais (bo3.gg)')}
           <span className="spacer" />
           {savedFlash && <span className={`small ${savedFlash.startsWith('✔') ? 'pos' : 'neg'}`} style={{ marginRight: 6 }}>{savedFlash}</span>}
-          {dirty && !savedFlash && <span className="neg small" style={{ marginRight: 6 }}>alterações não salvas</span>}
-          <button className="btn ghost" onClick={exportJson}>Exportar JSON</button>
-          <button className={`btn gold${dirty && !saving ? '' : ' ghost'}`} disabled={!dirty || saving} onClick={save}>{saving ? 'Salvando…' : '💾 Salvar pra todos'}</button>
-          <button className="btn" onClick={() => { if (!dirty || confirm('Há alterações não salvas. Sair mesmo assim?')) onExit(); }}>← Sair</button>
+          {dirty && !savedFlash && <span className="neg small" style={{ marginRight: 6 }}>{ct('alterações não salvas')}</span>}
+          <button className="btn ghost" onClick={exportJson}>{ct('Exportar JSON')}</button>
+          <button className={`btn gold${dirty && !saving ? '' : ' ghost'}`} disabled={!dirty || saving} onClick={save}>{saving ? ct('Salvando…') : '💾 ' + ct('Salvar pra todos')}</button>
+          <button className="btn" onClick={() => { if (!dirty || confirm(ct('Há alterações não salvas. Sair mesmo assim?'))) onExit(); }}>← {ct('Sair')}</button>
         </div>
         <div className="panel-body">
           <AdminNav current="/admin/carreira" />
           <p className="muted small" style={{ marginTop: 0 }}>
-            Edite <b>OVR, função e cada stat</b> (mira/AWP/IGL/clutch/consist.) dos jogadores, e o nome/tag/entrosamento dos times.
-            Ao <b>Salvar</b>, as mudanças vão pro servidor e valem <b>pra todos os usuários</b> do modo carreira (sem cache local sobrepondo).
-            Ajustar uma stat sobrescreve o valor derivado do OVR.
+            {ct('Edite')} <b>{ct('OVR, função e cada stat')}</b> {ct('(mira/AWP/IGL/clutch/consist.) dos jogadores, e o nome/tag/entrosamento dos times.')}
+            {' '}{ct('Ao')} <b>{ct('Salvar')}</b>{ct(', as mudanças vão pro servidor e valem')} <b>{ct('pra todos os usuários')}</b> {ct('do modo carreira (sem cache local sobrepondo).')}
+            {' '}{ct('Ajustar uma stat sobrescreve o valor derivado do OVR.')}
           </p>
           <div className="crm-grid">
             {/* lista de times */}
             <div className="crm-teams">
-              <input placeholder="Buscar time…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <input placeholder={ct('Buscar time…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
               <div className="crm-team-list">
                 {visible.map((t) => (
                   <button key={t.id} className={`crm-team${t.id === sel?.id ? ' on' : ''}`} onClick={() => setSelId(t.id)}>
@@ -128,18 +129,18 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
                 <div className="crm-editor-head">
                   <TeamBadge tag={sel.tag} colors={sel.colors} size={40} logoUrl={sel.logoUrl ?? logoForTeam(sel)} />
                   <div className="crm-fields">
-                    <label>Nome
+                    <label>{ct('Nome')}
                       <input value={sel.team} onChange={(e) => setTeam(sel.id, { name: e.target.value })} />
                     </label>
-                    <label>Tag
+                    <label>{ct('Tag')}
                       <input value={sel.tag} maxLength={5} style={{ width: 80 }} onChange={(e) => setTeam(sel.id, { tag: e.target.value.toUpperCase() })} />
                     </label>
-                    <label>Entrosamento
+                    <label>{ct('Entrosamento')}
                       <input type="number" min={40} max={99} value={sel.teamwork} style={{ width: 80 }} onChange={(e) => setTeam(sel.id, { teamwork: Math.max(40, Math.min(99, +e.target.value || 40)) })} />
                     </label>
                   </div>
                   <span className="spacer" />
-                  <button className="btn ghost small" onClick={() => resetTeam(sel.id)}>Resetar time</button>
+                  <button className="btn ghost small" onClick={() => resetTeam(sel.id)}>{ct('Resetar time')}</button>
                 </div>
 
                 <div className="crm-players">
@@ -157,24 +158,24 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
                           <input type="number" min={50} max={99} value={ovr}
                             onChange={(e) => setPlayer(p.id, { ovr: Math.max(50, Math.min(99, +e.target.value || 50)) })} />
                         </label>
-                        <label className="crm-ctrl">Função
+                        <label className="crm-ctrl">{ct('Função')}
                           <select value={p.role} onChange={(e) => setPlayer(p.id, { role: e.target.value as Role })}>
                             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
                         </label>
-                        <label className="crm-ctrl">Função 2
+                        <label className="crm-ctrl">{ct('Função 2')}
                           <select value={p.role2 ?? ''} onChange={(e) => setPlayer(p.id, { role2: e.target.value ? (e.target.value as Role) : null })}>
                             <option value="">—</option>
                             {ROLES.filter((r) => r !== p.role).map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
                         </label>
-                        <label className="crm-ctrl">Idade
-                          <input type="number" min={15} max={45} value={p.age ?? ''} placeholder="auto" style={{ width: 64 }}
+                        <label className="crm-ctrl">{ct('Idade')}
+                          <input type="number" min={15} max={45} value={p.age ?? ''} placeholder={ct('auto')} style={{ width: 64 }}
                             onChange={(e) => setPlayer(p.id, { age: e.target.value ? Math.max(15, Math.min(45, +e.target.value)) : undefined })} />
                         </label>
                         <div className="crm-stats">
                           {STATS.map((s) => (
-                            <label key={s.key} className="crm-ctrl">{s.label}
+                            <label key={s.key} className="crm-ctrl">{ct(s.label)}
                               <input type="number" min={40} max={99} value={p[s.key]}
                                 onChange={(e) => setPlayer(p.id, { [s.key]: Math.max(40, Math.min(99, +e.target.value || 40)) })} />
                             </label>

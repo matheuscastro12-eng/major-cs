@@ -30,7 +30,7 @@ import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } fr
 import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
 import { makeRng, randomSeed, shuffle } from './engine/rng';
-import { createTournament, getTeam, pairingBestOf, phaseLabel, placementCode, resolveRound, userMapRecord, userPairing, userTeam, type PlacementCode } from './engine/swiss';
+import { createTournament, getTeam, pairingBestOf, phaseLabelDisplay, placementCode, resolveRound, userMapRecord, userPairing, userTeam, type PlacementCode } from './engine/swiss';
 import { fetchRemoteDataset, hasUnsavedEdits, loadDataset, markDirty, mergePendingBaseTeams, resetDataset, saveDataset } from './state/crm';
 import { BASE_TEAMS, BASE_REV } from './data/teams';
 import { useLang } from './state/i18n';
@@ -522,7 +522,7 @@ export default function App() {
     if (!tournament || !p.result) return;
     const a = getTeam(tournament, p.a);
     const b = getTeam(tournament, p.b);
-    setDetail({ series: p.result, teams: [a, b], event: `${tournament.name} · ${phaseLabel(tournament)}` });
+    setDetail({ series: p.result, teams: [a, b], event: `${tournament.name} · ${phaseLabelDisplay(tournament)}` });
     setDetailReturn(screen === 'final' ? 'final' : 'hub');
     setScreen('matchdetail');
   };
@@ -539,7 +539,7 @@ export default function App() {
     const a = getTeam(tournament, p.a);
     const b = getTeam(tournament, p.b);
     // a série roda AO VIVO no MatchScreen (timeouts táticos podem mudar o rumo)
-    setMatchCtx({ teams: [a, b], maps, userIdx: p.a === 'user' ? 0 : 1, phase: phaseLabel(tournament), bestOf: pairingBestOf(tournament, p) });
+    setMatchCtx({ teams: [a, b], maps, userIdx: p.a === 'user' ? 0 : 1, phase: phaseLabelDisplay(tournament), bestOf: pairingBestOf(tournament, p) });
     setScreen('match');
   };
 
@@ -964,7 +964,7 @@ export default function App() {
           teams={vetoData.teams}
           userIdx={vetoData.userIdx}
           rng={rng}
-          phaseLabel={phaseLabel(tournament)}
+          phaseLabel={phaseLabelDisplay(tournament)}
           bestOf={vetoData.bestOf}
           mapRecord={vetoData.mapRecord}
           onDone={onVetoDone}

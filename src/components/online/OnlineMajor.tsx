@@ -41,7 +41,7 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
   const [standings, setStandings] = useState<Standing[]>([]);
 
   function buildField(n: number): Field[] {
-    return [{ nick: me.nick, country: me.country, you: true }, ...Array.from({ length: n - 1 }, (_, i) => ({ nick: `Adversário ${i + 1}`, country: OPP_CC[i % OPP_CC.length] }))];
+    return [{ nick: me.nick, country: me.country, you: true }, ...Array.from({ length: n - 1 }, (_, i) => ({ nick: `${ct('Adversário')} ${i + 1}`, country: OPP_CC[i % OPP_CC.length] }))];
   }
   function startDraft() { setField(buildField(count)); setPhase('draft'); }
   function onDrafted(_picked: PoolPlayer[], avg: number) { setMyOvr(avg); setRoundIdx(0); setHistory([]); setPhase('run'); }

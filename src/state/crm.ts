@@ -1,5 +1,6 @@
 import { BASE_TEAMS, BASE_REV } from '../data/teams';
 import type { TeamSeason } from '../types';
+import { ct } from './career-i18n';
 
 // v3: invalida snapshots locais antigos (navegadores que guardaram lineups
 // desatualizadas e por isso ignoravam a base corrigida do Neon/teams.json).
@@ -45,7 +46,7 @@ export function normalizeTeams(teams: TeamSeason[]): TeamSeason[] {
     ...t,
     coach: t.coach ?? {
       nick: 'coach',
-      name: 'Coach Genérico',
+      name: ct('Coach Genérico'),
       country: t.country,
       rating: 78,
       style: 'tactical' as const,
@@ -148,7 +149,7 @@ export function saveMapImage(map: string, dataUrl: string | null): Record<string
   try {
     localStorage.setItem(MAPIMG_KEY, JSON.stringify(imgs));
   } catch {
-    alert('Não foi possível salvar a imagem (limite de armazenamento do navegador). Use uma imagem menor.');
+    alert(ct('Não foi possível salvar a imagem (limite de armazenamento do navegador). Use uma imagem menor.'));
   }
   return imgs;
 }

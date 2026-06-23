@@ -8,8 +8,9 @@ import type { Rng } from './rng';
 import { autoVeto } from './veto';
 import type { League, LeagueMatch } from './league';
 import { leagueTeam } from './league';
-
-// rótulo de cada "rodada" do GSL (3 no total)
+// rótulo de cada "rodada" do GSL (3 no total). Chaves PT estáveis: são
+// traduzidas no consumo via ct(GSL_ROUND_LABELS[...]). NÃO envolver em ct()
+// aqui — const de módulo é avaliada uma vez no import e congelaria o idioma.
 export const GSL_ROUND_LABELS = ['Rodada de abertura', 'Vencedores + Eliminação', 'Decisão'];
 
 const GROUP_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
