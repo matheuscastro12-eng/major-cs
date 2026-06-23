@@ -3160,7 +3160,9 @@ export function CareerScreen({ onExit }: Props) {
                   objective: null,
                   renewals,
                   morale,
-                  fatigue: recoverFatigue(save.fatigue, 18),
+                  // FIM DE TEMPORADA (pós-Major): pré-temporada longa, quase zera a
+                  // fadiga — é o reset que evita a espiral de burnout em carreira longa.
+                  fatigue: recoverFatigue(save.fatigue, 70, normalizeFacilities(save.facilities).psychologist * 4),
                   restingPlayers: [],
                   peakOvr,
                   mapTraining: applyMapTraining(save),
@@ -3439,7 +3441,8 @@ export function CareerScreen({ onExit }: Props) {
                       playoff: null,
                       history: [...save.history, baseRecord()],
                       ...bankStats(save),
-                      fatigue: recoverFatigue(save.fatigue, 8),
+                      // folga curta entre etapas: compensa ~um campeonato jogado
+                      fatigue: recoverFatigue(save.fatigue, 16, normalizeFacilities(save.facilities).psychologist * 2),
                       restingPlayers: [],
                     };
                     persist(nextEv);
@@ -3499,7 +3502,8 @@ export function CareerScreen({ onExit }: Props) {
                     pendingOffer: offer,
                     renewals,
                     morale,
-                    fatigue: recoverFatigue(save.fatigue, 18),
+                    // offseason de split (não-Major): descanso de verdade entre splits
+                    fatigue: recoverFatigue(save.fatigue, 40, normalizeFacilities(save.facilities).psychologist * 3),
                     restingPlayers: [],
                     peakOvr,
                     mapTraining: applyMapTraining(save),

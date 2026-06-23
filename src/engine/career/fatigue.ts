@@ -57,6 +57,11 @@ export function updateMatchFatigue(
   return { fatigue, newBurnouts };
 }
 
-export function recoverFatigue(previous: Record<string, number> | undefined, amount: number): Record<string, number> {
-  return Object.fromEntries(Object.entries(previous ?? {}).map(([id, value]) => [id, Math.max(0, Math.round(value - amount))]));
+// recuperação de fadiga (descanso). `bonus` = psicologia esportiva acelerando.
+// Subtrai amount+bonus, piso em 0. Quanto maior a folga (etapa < split < temporada),
+// maior o amount — a recuperação de fim de temporada quase zera o desgaste, evitando
+// a espiral de burnout em carreiras longas.
+export function recoverFatigue(previous: Record<string, number> | undefined, amount: number, bonus = 0): Record<string, number> {
+  const total = amount + Math.max(0, bonus);
+  return Object.fromEntries(Object.entries(previous ?? {}).map(([id, value]) => [id, Math.max(0, Math.round(value - total))]));
 }
