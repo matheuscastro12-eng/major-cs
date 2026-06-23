@@ -3351,7 +3351,9 @@ export function CareerScreen({ onExit }: Props) {
                     const nextEv = {
                       ...save,
                       budget: save.budget + prize,
-                      vrs: save.vrs + vrsGain,
+                      // VRS é POR JOGO: decai e soma o ganho a cada campeonato
+                      // (independente do envelhecimento, que é por split).
+                      vrs: Math.round(save.vrs * VRS_DECAY) + vrsGain,
                       titles: save.titles + (isChampion ? 1 : 0),
                       eventInSplit: ev + 1,
                       league: null,
