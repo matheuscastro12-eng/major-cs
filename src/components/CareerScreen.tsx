@@ -86,6 +86,11 @@ const MAJOR_VRS_CUT = 32; // os 32 melhores do ranking VRS vão ao Major (3 stag
 // o Major Mundial fecha a TEMPORADA: a cada N campeonatos/splits acontece um Major.
 // 4 = a temporada tem 3 campeonatos tier-1 + o Major encerrando o ano.
 const MAJOR_EVERY = 4;
+// CADA SPLIT TEM VÁRIOS CAMPEONATOS (etapas). O "relógio do mundo" — idade dos
+// jogadores, mercado/transferências, renovações, decaimento de VRS, Major — só
+// avança ao FECHAR o split (a última etapa). As etapas intermediárias você joga
+// com o MESMO elenco, sem offseason: mais campeonatos antes do mundo mexer.
+const EVENTS_PER_SPLIT = 3;
 const isMajorSplit = (split: number) => split % MAJOR_EVERY === 0;
 // premiação e VRS do Major por colocação (bem maior que o circuito)
 const MAJOR_PRIZE: Record<PlacementCode, number> = {
@@ -576,6 +581,7 @@ interface CareerSave {
   budget: number;
   vrs: number;
   split: number;
+  eventInSplit?: number; // etapa atual dentro do split (1..EVENTS_PER_SPLIT)
   titles: number;
   squad: Signing[];
   coachFromId: string | null;
@@ -688,6 +694,7 @@ const emptySave = (): CareerSave => ({
   budget: STARTING_BUDGET,
   vrs: 0,
   split: 1,
+  eventInSplit: 1,
   titles: 0,
   squad: [],
   coachFromId: null,
@@ -1824,9 +1831,10 @@ export function CareerScreen({ onExit }: Props) {
       for (const t of field) used.add(t.id);
       return field;
     };
-    const t1Teams = buildField(9, 13, 15, save.split * 101 + 1); // top 9 fixos + 6 rotativos (alcança o Tier 2)
-    const t2Teams = buildField(9, 13, 15, save.split * 101 + 2); // melhores restantes + rotativos (alcança o Tier 3)
-    const t3Teams = buildField(9, 13, 15, save.split * 101 + 3); // o que sobrou + rotativos da base
+    const evSeed = (save.eventInSplit ?? 1) * 7; // cada etapa do split sorteia um field diferente
+    const t1Teams = buildField(9, 13, 15, save.split * 101 + 1 + evSeed); // top 9 fixos + 6 rotativos (alcança o Tier 2)
+    const t2Teams = buildField(9, 13, 15, save.split * 101 + 2 + evSeed); // melhores restantes + rotativos (alcança o Tier 3)
+    const t3Teams = buildField(9, 13, 15, save.split * 101 + 3 + evSeed); // o que sobrou + rotativos da base
     const mk = (
       id: string,
       name: string,
@@ -1851,7 +1859,7 @@ export function CareerScreen({ onExit }: Props) {
       mk('t2', t2Name, `${ct('Tier 2 mundial ·')} ${t2Name}${ct(': o segundo escalão do ranking (Astralis, paiN, FaZe, MIBR, TYLOO e cia), grupos GSL + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.')}`, t2Teams, 2, 1, 2),
       mk('t3', t3Name, `Tier 3 · ${t3Name}${ct(': circuito de acesso, times em ascensão. Grupos + playoffs. Onde toda org começa.')}`, t3Teams, 1, 0.6, 3),
     ].filter((c) => c.teams.length >= 5);
-  }, [oppEra, save.split]);
+  }, [oppEra, save.split, save.eventInSplit]);
 
   // mercado: jogadores reais dos elencos atuais (CS2) + FREE AGENTS (pros sem
   // time), com preço de mercado. Free agents saem 25% mais barato (sem multa).
@@ -2008,7 +2016,8 @@ export function CareerScreen({ onExit }: Props) {
     });
     // formato real do CS: 2 grupos GSL (dupla eliminação, 4 times, top 2
     // avançam) → playoffs mata-mata. Nada de pontos corridos (isso é futebol).
-    const league = createGSLStage(`${circuit.name} - Split ${s.split}`, [user, ...ai]);
+    const ev = s.eventInSplit ?? 1;
+    const league = createGSLStage(`${circuit.name} · Etapa ${ev}/${EVENTS_PER_SPLIT} (Split ${s.split})`, [user, ...ai]);
     const choice: CircuitChoice = {
       id: circuit.id,
       name: circuit.name,
@@ -2017,10 +2026,11 @@ export function CareerScreen({ onExit }: Props) {
       vrsWeight: circuit.vrsWeight,
       tier: circuit.tier,
     };
-    const objective = objectiveFor(circuit.tier, s.split, isMajorSplit(s.split));
+    // a meta da diretoria é do SPLIT inteiro: define na 1ª etapa e mantém nas demais
+    const objective = ev === 1 || !s.objective ? objectiveFor(circuit.tier, s.split, isMajorSplit(s.split)) : s.objective;
     const startItem: NewsItem = {
-      id: `${s.split}:start`, split: s.split, icon: '🗓️', tone: 'info', cat: 'board',
-      title: `Split ${s.split} ${ct('começa:')} ${circuit.name}`,
+      id: `${s.split}:start:${ev}`, split: s.split, icon: '🗓️', tone: 'info', cat: 'board',
+      title: `Split ${s.split} · Etapa ${ev}/${EVENTS_PER_SPLIT}: ${circuit.name}`,
       body: `${ct('Meta da diretoria: "')}${objective.text}${ct('" (bônus')} ${formatMoney(objective.bonus)}).`,
     };
     // relatório do olheiro: o time a temer no circuito + o mapa forte dele
@@ -3046,6 +3056,7 @@ export function CareerScreen({ onExit }: Props) {
                   vrs: Math.round(save.vrs * VRS_DECAY) + mr.vrs, // VRS rolante (decai e soma o do Major)
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
+                  eventInSplit: 1, // o Major fecha o split: próximo split começa na etapa 1
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
                   majorResult: null, // limpa o resultado reidratável (já consumido)
                   majorStage: undefined, majorUserStage: undefined,
@@ -3115,7 +3126,9 @@ export function CareerScreen({ onExit }: Props) {
     const circuitMvp = seStats[0];
     const mySquadIdsSE = new Set((buildTeam(save)?.players ?? []).map((p) => p.id));
     const myStar = seStats.find((s) => mySquadIdsSE.has(s.id));
-    const seasonEndsNow = isMajorSplit(save.split); // a temporada (ano) só fecha no split de Major
+    const ev = save.eventInSplit ?? 1;
+    const lastEvent = ev >= EVENTS_PER_SPLIT; // última etapa = fecha o split (offseason)
+    const seasonEndsNow = isMajorSplit(save.split) && lastEvent; // a temporada (ano) só fecha no split de Major, na última etapa
     const seasonNo = seasonOf(save.split);
     const seasonTop3 = seasonTopPlayersYear(top20Pool, save.split, 3);
     const seasonTop20 = seasonTopPlayersYear(top20Pool, save.split, 20);
@@ -3136,7 +3149,7 @@ export function CareerScreen({ onExit }: Props) {
     const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? 78) + save.vrs + vrsGain + userLegacyVrs(save);
     const worldRank = oppEra.filter((t) => aiTeamVrs(t) > userProjVrs).length + 1; // posição mundial projetada
     const rankQualified = worldRank <= MAJOR_VRS_CUT;
-    const majorNow = isMajorSplit(save.split);
+    const majorNow = isMajorSplit(save.split) && lastEvent; // Major só na última etapa do split de Major
     const qualified = rankQualified && majorNow;
     const nextMajorSplit = save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
 
@@ -3192,7 +3205,7 @@ export function CareerScreen({ onExit }: Props) {
       <div className="fade-in">
         <div className="panel" style={{ maxWidth: 760, margin: '24px auto' }}>
           <div className="panel-head">
-            {league.name} - split encerrado
+            {league.name} — {lastEvent ? ct('split encerrado') : `${ct('etapa')} ${ev}/${EVENTS_PER_SPLIT} ${ct('concluída')}`}
             <span className="spacer" />
             <button className="btn" onClick={onExit}>{ct('← Sair')}</button>
           </div>
@@ -3211,7 +3224,12 @@ export function CareerScreen({ onExit }: Props) {
               Premiação: <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · Folha:{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
-            {obj && (
+            {!lastEvent && (
+              <div className="tier-banner up">
+                ✔ {ct('Etapa')} {ev}/{EVENTS_PER_SPLIT} {ct('concluída.')} {ct('Faltam')} {EVENTS_PER_SPLIT - ev} {ct('etapa(s) pra fechar o split — aí entra o offseason (mercado, evolução, renovações). Até lá, mesmo elenco.')}
+              </div>
+            )}
+            {obj && lastEvent && (
               <div className={`tier-banner ${objMet ? 'up' : 'down'}`}>
                 {objMet ? '✅' : '❌'} {ct('Objetivo da diretoria')} ({ct(obj.text)}): <b>{objMet ? 'CUMPRIDO' : 'falhou'}</b>
                 {' · '}confiança {boardDelta >= 0 ? '+' : ''}{boardDelta}% → {Math.round(newBoard)}%
@@ -3219,10 +3237,10 @@ export function CareerScreen({ onExit }: Props) {
                 {fired ? ' · VOCÊ FOI DEMITIDO' : ''}
               </div>
             )}
-            {tierResult.tierChange === 'up' && (
+            {lastEvent && tierResult.tierChange === 'up' && (
               <div className="tier-banner up">⬆ PROMOVIDO ao {ct(TIER_NAMES[tierResult.tier])}! Você venceu no seu nível e subiu de tier.</div>
             )}
-            {tierResult.tierChange === 'down' && (
+            {lastEvent && tierResult.tierChange === 'down' && (
               <div className="tier-banner down">⬇ Rebaixado ao {ct(TIER_NAMES[tierResult.tier])}. Terminou no fundo da tabela; recupere o nível no próximo split.</div>
             )}
             {qualified ? (
@@ -3326,6 +3344,29 @@ export function CareerScreen({ onExit }: Props) {
               <button
                 className={qualified ? 'btn ghost big' : 'btn gold big'}
                 onClick={() => {
+                  // ETAPA INTERMEDIÁRIA: não fecha o split. Bota o prêmio/VRS no
+                  // bolso (VRS sem decair, folha só no offseason), registra o
+                  // campeonato e vai pro próximo — MESMO elenco, sem mercado/idade.
+                  if (!lastEvent) {
+                    const nextEv = {
+                      ...save,
+                      budget: save.budget + prize,
+                      vrs: save.vrs + vrsGain,
+                      titles: save.titles + (isChampion ? 1 : 0),
+                      eventInSplit: ev + 1,
+                      league: null,
+                      circuit: null,
+                      playoff: null,
+                      history: [...save.history, baseRecord()],
+                      ...bankStats(save),
+                      fatigue: recoverFatigue(save.fatigue, 8),
+                      restingPlayers: [],
+                    };
+                    persist(nextEv);
+                    setSave(nextEv);
+                    setStage('circuit'); // escolhe o próximo campeonato da etapa
+                    return;
+                  }
                   const renewals = dueRenewals(save, save.split + 1);
                   // evolui só quem FICOU (pós-fim de contrato): quem saiu não carrega
                   // a evolução/declínio acumulado pra uma futura recontratação
@@ -3360,6 +3401,7 @@ export function CareerScreen({ onExit }: Props) {
                     vrs: Math.round(save.vrs * VRS_DECAY) + vrsGain, // VRS rolante (decai e soma o ganho do split)
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
+                    eventInSplit: 1, // fecha o split: volta pra etapa 1 do próximo
                     league: null,
                     circuit: null,
                     playoff: null,
@@ -3390,7 +3432,9 @@ export function CareerScreen({ onExit }: Props) {
                   setStage('market'); // se foi demitido, o render mostra a tela de demissão
                 }}
               >
-                Pagar folha e ir pro Split {save.split + 1}
+                {lastEvent
+                  ? `Fechar Split ${save.split} · pagar folha e abrir o mercado`
+                  : `Próxima etapa (Etapa ${ev + 1}/${EVENTS_PER_SPLIT}) →`}
               </button>
             </div>
           </div>
