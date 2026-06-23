@@ -364,24 +364,24 @@ export default async function handler(
         return;
       }
       const spectator = body.spectator === true;
+      // RECONEXÃO PRIMEIRO: quem JÁ está na sala sempre volta (F5/reload),
+      // independente de status (draft/jogo já rolando), lock ou lotação. Antes,
+      // o check de status barrava o próprio membro que deu F5 e ele perdia a sala.
+      const already = await sql`SELECT 1 FROM lobby_players WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`;
+      if (already.length > 0) {
+        res.status(200).json({ ok: true, code, rejoined: true });
+        return;
+      }
+      // a partir daqui é ENTRADA NOVA:
       if (lobby[0].status !== 'waiting' && !spectator) {
         res.status(409).json({ error: 'o draft já começou' });
         return;
       }
-      if (lobby[0].locked) {
-        // host trancou: só quem já estava na sala pode reconectar
-        const already = await sql`SELECT 1 FROM lobby_players WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`;
-        if (already.length === 0) {
-          res.status(403).json({ error: 'sala trancada' });
-          return;
-        }
-      }
-      const players = await sql`SELECT nick, COALESCE(spectator, false) AS spectator FROM lobby_players WHERE code = ${code}`;
-      const max = MAX_PLAYERS[lobby[0].mode as string] ?? 8;
-      if (players.some((p) => (p.nick as string).toLowerCase() === nick.toLowerCase())) {
-        res.status(200).json({ ok: true, code, rejoined: true }); // reconexão
+      if (lobby[0].locked && !spectator) {
+        res.status(403).json({ error: 'sala trancada' });
         return;
       }
+      const max = MAX_PLAYERS[lobby[0].mode as string] ?? 8;
       // INSERT atômico: só insere se ainda houver vaga (fecha a janela de corrida
       // entre dois JOINs simultâneos). UNIQUE(code,nick) cobre nicks repetidos.
       const inserted = await sql`
