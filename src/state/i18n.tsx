@@ -11,6 +11,20 @@ export const LANGS: { code: Lang; label: string; flag: string }[] = [
 ];
 
 const KEY = 'rtm-lang-v1';
+// idioma automático pelo NAVEGADOR (melhor que IP: mais preciso pro idioma, sem
+// geolocalização). Gringo cai no inglês, espanhol no ES, brasileiro/pt no PT.
+// Só vale enquanto o usuário não escolher manualmente (aí grava no localStorage).
+const detect = (): Lang => {
+  try {
+    const langs = [navigator.language, ...(navigator.languages ?? [])].filter(Boolean).map((l) => l.toLowerCase());
+    for (const l of langs) {
+      if (l.startsWith('pt')) return 'pt';
+      if (l.startsWith('es')) return 'es';
+      if (l.startsWith('en')) return 'en';
+    }
+    return langs.length ? 'en' : 'pt'; // qualquer outro idioma: inglês (alcance global)
+  } catch { return 'pt'; }
+};
 const read = (): Lang => {
   try {
     const v = localStorage.getItem(KEY) as Lang | null;
@@ -18,7 +32,7 @@ const read = (): Lang => {
   } catch {
     /* sem storage */
   }
-  return 'pt';
+  return detect();
 };
 
 let current: Lang = read();
