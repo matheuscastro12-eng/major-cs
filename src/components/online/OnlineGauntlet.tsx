@@ -36,15 +36,21 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
 
   // monta o ESQUADRÃO DE IA da rodada: 5 lendas do pool perto do alvo de força (sobe
   // com a sequência), excluindo quem já está no seu time. Vira um TTeam real.
-  const buildOpp = (s: number): { team: TTeam; ovr: number; cc: string } => {
-    const target = 78 + s * 2.2;
+  const buildOpp = (s: number): { team: TTeam; ovr: number; force: number; cc: string } => {
+    const target = 80 + s * 1.6;
     const mine = new Set(picked.map((p) => p.id));
     const five = pool.filter((p) => !mine.has(p.id))
       .sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5)
       .sort((a, b) => b.ovr - a.ovr);
-    const ovr = five.length ? Math.round(five.reduce((a, p) => a + p.ovr, 0) / five.length) : Math.round(target);
+    const ovr = five.length ? Math.round(five.reduce((a, p) => a + p.ovr, 0) / five.length) : Math.min(99, Math.round(target));
     const team = buildOnlineTeam(`${ct('Esquadrão IA')} #${s + 1}`, five, `gaunt-opp-${s}`);
-    return { team, ovr, cc: five[0]?.country ?? 'br' };
+    // DIFICULDADE SEM TETO: o OVR satura no teto do pool (~95), então a corrida
+    // nunca apertava de verdade (streak de 100). Aqui a FORÇA real do rival sobe a
+    // cada vitória, sem teto — cada rival é genuinamente mais forte e a corrida
+    // termina numa sequência saudável (boa run ~ dezenas, não centenas).
+    const boost = s * 0.9 + Math.max(0, s - 6) * 0.8;
+    team.strength += boost;
+    return { team, ovr, force: Math.round(team.strength), cc: five[0]?.country ?? 'br' };
   };
 
   const nextOpp = useMemo(() => buildOpp(streak), [streak, picked, pool]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -135,7 +141,7 @@ export function OnlineGauntlet({ pool, stats, setStats, onHub, onExit }: {
           </div>
           <div style={{ textAlign: 'center', paddingLeft: '16px', borderLeft: '1px solid var(--rtm-border-soft)' }}>
             <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Força')}</div>
-            <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, color: o.ovr > myOvr ? 'var(--rtm-red-bright)' : 'var(--rtm-text-strong)' }}>{o.ovr}</div>
+            <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, color: o.force > myOvr ? 'var(--rtm-red-bright)' : 'var(--rtm-text-strong)' }}>{o.force}</div>
           </div>
         </div>
         <Button variant="primary" size="big" style={{ width: '100%' }} onClick={startMatch}>{ct('Enfrentar rival')}</Button>
