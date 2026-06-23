@@ -1015,7 +1015,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       );
     }
     // Ranked 1v1: lobby dedicado (hero com MMR/rank + procurar partida), no layout do design.
-    if (forceRanked) {
+    // SÓ pro 1v1 (duel). O Ranked Major também vem com forceRanked, mas tem preset
+    // 'party' e cai no branch do Major abaixo — sem este guard, clicar em Major abria
+    // a tela de 1v1.
+    if (forceRanked && preset !== 'party') {
       const duelRooms = openRooms.filter((r) => r.mode === 'duel' && r.players < r.max);
       const initials = (nick || account?.nick || '??').slice(0, 2).toUpperCase();
       const displayNick = nick || account?.nick || ct('Você');
@@ -1628,7 +1631,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     <div style={{ fontSize: '11px', color: 'var(--rtm-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.players.map((p) => p.nick).join(' · ')}</div>
                     <div style={{ fontSize: '11px', color: 'var(--rtm-faint)', marginTop: '2px' }}>C {team.onlinePlan?.captainNick} · R {team.onlinePlan?.reserveNick ?? '—'}</div>
                   </div>
-                  <strong style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, color: 'var(--rtm-gold)' }}>{Math.round(team.strength)}</strong>
+                  {/* força só APÓS o fim: mostrá-la antes entregava quem ia ganhar */}
+                  <strong style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, color: 'var(--rtm-gold)' }}>{duelFinished ? Math.round(team.strength) : '—'}</strong>
                 </div>
               ))}
             </div>
