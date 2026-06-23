@@ -75,6 +75,11 @@ export interface LobbyState {
     // O bracket é simulado a partir DESTE snapshot, não dos players ao vivo —
     // assim entrar/sair da sala não re-embaralha resultados já jogados.
     run_roster?: RosterEntry[] | null;
+    // RESULTADOS AUTORITATIVOS reportados: o jogador dono da partida manda só o
+    // DESFECHO (vencedor + placar de mapas) ao terminar; o bracket usa isso como
+    // verdade. Round-a-round NÃO trafega — fica local. Imune a divergência entre
+    // versões. Chave = `${stage}:${pairing.a}|${pairing.b}`.
+    stage_results?: Record<string, { winner: 0 | 1; mapScore: [number, number] }>;
   };
   players: {
     nick: string;
@@ -364,6 +369,13 @@ export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
       const bestOf = pairingBestOf(tournament, pairing);
       const seriesRng = makeRng((runSeed ^ hashStr(`${guard}|${pairing.a}|${pairing.b}`)) >>> 0);
       pairing.result = simulateSeries(seriesRng, a, b, majorVetoMaps(tournament, pairing, seriesRng, guard, plans), bestOf);
+      // DESFECHO AUTORITATIVO: se o dono da partida já reportou o resultado, ele é a
+      // verdade — sobrepõe vencedor/placar (mantém os mapas locais só pro replay).
+      // Garante que os clientes concordem mesmo em versões diferentes do simulador.
+      const reported = state.lobby.stage_results?.[`${guard}:${pairing.a}|${pairing.b}`];
+      if (reported && (reported.winner === 0 || reported.winner === 1)) {
+        pairing.result = { ...pairing.result, winner: reported.winner, mapScore: reported.mapScore ?? pairing.result.mapScore };
+      }
     }
     resolveRound(tournament, tRng);
     guard++;

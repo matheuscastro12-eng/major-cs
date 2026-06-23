@@ -1970,11 +1970,19 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         : stageIsLive && myStageMatch && !personalMatchWatched
           ? { a: myStageMatch.pairing.a, b: myStageMatch.pairing.b, series: myStageMatch.pairing.result!, key: requiredMatchKey, completed: false }
           : null;
+      // DESFECHO AUTORITATIVO: ao terminar a PRÓPRIA partida, manda só o resultado
+      // (vencedor + placar de mapas) pro servidor. O round-a-round fica local; o
+      // bracket de todos passa a usar este desfecho como verdade.
+      const reportMyResult = () => {
+        const r = myStageMatch?.pairing.result;
+        if (localDemo || isSpectator || !r || !myMajorVetoKey) return;
+        void lobbyApi({ action: 'reportResult', nick: nick.trim(), code, matchKey: myMajorVetoKey, winner: r.winner, mapScore: r.mapScore }).catch(() => {});
+      };
       const finishLiveMatch = () => {
         if (liveMatch?.key) markWatched(liveMatch.key);
         setSelMatch(null);
         setActiveReplayKey(null);
-        if (!isSpectator && liveMatch?.key === requiredMatchKey && !myStageConfirmed) void confirmCollectiveStage();
+        if (!isSpectator && liveMatch?.key === requiredMatchKey && !myStageConfirmed) { reportMyResult(); void confirmCollectiveStage(); }
       };
       const findStageItem = (pairing: Pairing) => stage.items.find((item) => item.pairing.a === pairing.a && item.pairing.b === pairing.b);
       const openPastSeries = (pairing: Pairing) => {
