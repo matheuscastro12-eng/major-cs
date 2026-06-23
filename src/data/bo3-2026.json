@@ -7307,5 +7307,89 @@
     "igl": 35
    }
   ]
+ },
+ {
+  "id": "oddik2025",
+  "team": "ODDIK",
+  "tag": "ODK",
+  "era": "2026",
+  "game": "CS2",
+  "country": "br",
+  "teamwork": 77,
+  "honors": "Line BR 2025",
+  "colors": [
+   "#111317",
+   "#e8a23a"
+  ],
+  "mapPrefs": {},
+  "coach": {
+   "nick": "rikz",
+   "name": "Henrique Waku",
+   "country": "br",
+   "rating": 74,
+   "style": "tactical"
+  },
+  "players": [
+   {
+    "id": "oddik2025__ksloks",
+    "nick": "ksloks",
+    "name": "Kaike Cerato",
+    "country": "br",
+    "role": "AWP",
+    "aim": 83,
+    "consistency": 80,
+    "clutch": 81,
+    "awp": 86,
+    "igl": 48
+   },
+   {
+    "id": "oddik2025__coldzera",
+    "nick": "coldzera",
+    "name": "Marcelo David",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 88,
+    "consistency": 86,
+    "clutch": 86,
+    "awp": 64,
+    "igl": 58
+   },
+   {
+    "id": "oddik2025__naitte",
+    "nick": "naitte",
+    "name": "João Maia",
+    "country": "br",
+    "role": "IGL",
+    "aim": 79,
+    "consistency": 78,
+    "clutch": 75,
+    "awp": 56,
+    "igl": 74
+   },
+   {
+    "id": "oddik2025__pancc",
+    "nick": "pancc",
+    "name": "pancc",
+    "country": "br",
+    "role": "Entry",
+    "aim": 81,
+    "consistency": 75,
+    "clutch": 74,
+    "awp": 55,
+    "igl": 50
+   },
+   {
+    "id": "oddik2025__wood",
+    "nick": "wood",
+    "name": "wood",
+    "country": "br",
+    "role": "Rifler",
+    "aim": 79,
+    "consistency": 76,
+    "clutch": 74,
+    "awp": 55,
+    "igl": 52
+   }
+  ]
  }
 ]
