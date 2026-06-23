@@ -6,6 +6,7 @@ import { useLang } from '../state/i18n';
 import {
   type BetaStatus, checkAccess, hasCodeAccess, requestAccess, saveCareerNick, savedCareerNick,
 } from '../state/beta';
+import { ct } from '../state/career-i18n';
 
 type Lang = 'pt' | 'en' | 'es';
 const L: Record<Lang, Record<string, string>> = {
@@ -75,7 +76,7 @@ export function CareerGate({ children, onExit }: { children: React.ReactNode; on
       const s = await requestAccess(n);
       setStatus(s);
     } catch {
-      setErr('Erro de conexão. Tente de novo.');
+      setErr(ct('Erro de conexão. Tente de novo.'));
     }
     setBusy(false);
   };

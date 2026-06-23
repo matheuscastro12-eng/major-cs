@@ -58,8 +58,8 @@ export function HallScreen({ onBack }: Props) {
         <Button variant="ghost" size="sm" onClick={onBack}>← {ct('Voltar')}</Button>
       </div>
 
-      {!data && !err && <div style={{ color: 'var(--rtm-dim)', padding: '24px' }}>Carregando o hall…</div>}
-      {err && <div style={{ color: 'var(--rtm-dim)', padding: '24px' }}>Hall indisponível agora. Jogue offline que os títulos não fogem.</div>}
+      {!data && !err && <div style={{ color: 'var(--rtm-dim)', padding: '24px' }}>{ct('Carregando o hall…')}</div>}
+      {err && <div style={{ color: 'var(--rtm-dim)', padding: '24px' }}>{ct('Hall indisponível agora. Jogue offline que os títulos não fogem.')}</div>}
 
       {data && (
         <>
@@ -69,10 +69,10 @@ export function HallScreen({ onBack }: Props) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 24px', flexWrap: 'wrap' }}>
                 <div style={{ fontSize: '56px', lineHeight: 1 }}>🏆</div>
                 <div style={{ flex: 1, minWidth: '200px' }}>
-                  <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>Campeão mais recente · Temporada {latest.season}</div>
+                  <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>{ct('Campeão mais recente · Temporada')} {latest.season}</div>
                   <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '30px', fontWeight: 800, color: 'var(--rtm-text-strong)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '2px 0' }}>{latest.team_name}</div>
                   <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    dirigido por <b style={{ color: 'var(--rtm-link)' }}>{latest.player ?? 'anônimo'}</b>
+                    {ct('dirigido por')} <b style={{ color: 'var(--rtm-link)' }}>{latest.player ?? ct('anônimo')}</b>
                     {latest.mvp && <> · MVP <b style={{ color: 'var(--rtm-gold)' }}>{latest.mvp}</b></>}
                   </div>
                 </div>
@@ -80,7 +80,7 @@ export function HallScreen({ onBack }: Props) {
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-gold-soft)', borderRadius: 'var(--rtm-radius)', padding: '12px 18px' }}>
                     <PlayerAvatar nick={latest.mvp} size={48} />
                     <div>
-                      <div style={{ fontSize: '10px', letterSpacing: '2px', color: 'var(--rtm-gold)', textTransform: 'uppercase', fontWeight: 700 }}>MVP da final</div>
+                      <div style={{ fontSize: '10px', letterSpacing: '2px', color: 'var(--rtm-gold)', textTransform: 'uppercase', fontWeight: 700 }}>{ct('MVP da final')}</div>
                       <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 700, color: 'var(--rtm-text-strong)' }}>{latest.mvp}</div>
                       {latest.records?.bestRating ? <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '13px', color: 'var(--rtm-green-bright)', fontWeight: 700 }}>{latest.records.bestRating.toFixed(2)} rating</div> : null}
                     </div>
@@ -92,35 +92,35 @@ export function HallScreen({ onBack }: Props) {
 
           {/* recordes */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
-            <div style={pill}><span style={pillK}>🏆 Títulos registrados</span><b style={pillV}>{data.totalTitles}</b></div>
+            <div style={pill}><span style={pillK}>🏆 {ct('Títulos registrados')}</span><b style={pillV}>{data.totalTitles}</b></div>
             {bestRating?.records?.bestRating ? (
-              <div style={pill}><span style={pillK}>📈 Melhor rating · {bestRating.records.bestRatingPlayer} ({bestRating.team_name})</span><b style={{ ...pillV, color: 'var(--rtm-green-bright)' }}>{bestRating.records.bestRating.toFixed(2)}</b></div>
+              <div style={pill}><span style={pillK}>📈 {ct('Melhor rating')} · {bestRating.records.bestRatingPlayer} ({bestRating.team_name})</span><b style={{ ...pillV, color: 'var(--rtm-green-bright)' }}>{bestRating.records.bestRating.toFixed(2)}</b></div>
             ) : null}
             {bestFrag?.records?.biggestFrag ? (
-              <div style={pill}><span style={pillK}>🔫 Maior frag · {bestFrag.records.biggestFragPlayer} ({bestFrag.team_name})</span><b style={{ ...pillV, color: 'var(--rtm-text-strong)' }}>{bestFrag.records.biggestFrag} kills</b></div>
+              <div style={pill}><span style={pillK}>🔫 {ct('Maior frag')} · {bestFrag.records.biggestFragPlayer} ({bestFrag.team_name})</span><b style={{ ...pillV, color: 'var(--rtm-text-strong)' }}>{bestFrag.records.biggestFrag} kills</b></div>
             ) : null}
           </div>
 
           {/* campanhas */}
-          <Panel title="Campanhas registradas" accent="gold" flush>
+          <Panel title={ct('Campanhas registradas')} accent="gold" flush>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
-                <tr>{['Jogador', 'Time', 'Elenco', 'Modo', 'Temp.', 'Resultado', 'Campeão'].map((h) => <th key={h} style={th}>{h}</th>)}</tr>
+                <tr>{['Jogador', 'Time', 'Elenco', 'Modo', 'Temp.', 'Resultado', 'Campeão'].map((h) => <th key={h} style={th}>{ct(h)}</th>)}</tr>
               </thead>
               <tbody>
                 {data.campaigns.map((c, i) => (
                   <tr key={c.id} style={{ background: i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)' }}>
-                    <td style={{ padding: '9px 12px', fontWeight: 700, color: c.placement === '1' ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap' }}>{c.placement === '1' ? '🏆 ' : ''}{c.player ?? 'anônimo'}</td>
+                    <td style={{ padding: '9px 12px', fontWeight: 700, color: c.placement === '1' ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap' }}>{c.placement === '1' ? '🏆 ' : ''}{c.player ?? ct('anônimo')}</td>
                     <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--rtm-text)' }}>{c.team_name}</td>
                     <td style={{ padding: '9px 12px', color: 'var(--rtm-dim)', fontSize: '12px' }}>{(c.roster ?? []).map((p, j) => <span key={j} style={{ marginRight: 8, whiteSpace: 'nowrap' }}><Flag cc={p.country} /> {p.nick}</span>)}</td>
                     <td style={{ padding: '9px 12px', color: 'var(--rtm-dim)' }}>{c.pool === 'br' ? '🇧🇷 GC' : '🌍 Major'}</td>
                     <td style={{ padding: '9px 12px', color: 'var(--rtm-dim)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{c.season}</td>
-                    <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: c.placement === '1' ? 'var(--rtm-gold)' : 'var(--rtm-text)' }}>{c.placement === '1' ? 'CAMPEÃO' : `${c.placement}º`}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: c.placement === '1' ? 'var(--rtm-gold)' : 'var(--rtm-text)' }}>{c.placement === '1' ? ct('CAMPEÃO') : `${c.placement}º`}</td>
                     <td style={{ padding: '9px 12px', color: 'var(--rtm-dim)' }}>{c.champion}</td>
                   </tr>
                 ))}
                 {data.campaigns.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: 'var(--rtm-dim)' }}>Nenhuma campanha registrada ainda. Seja o primeiro do Hall!</td></tr>
+                  <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: 'var(--rtm-dim)' }}>{ct('Nenhuma campanha registrada ainda. Seja o primeiro do Hall!')}</td></tr>
                 )}
               </tbody>
             </table>

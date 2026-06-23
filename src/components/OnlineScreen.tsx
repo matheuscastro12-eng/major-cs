@@ -841,14 +841,14 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       if (myIndex < 0) return;
       won = duel.series.winner === myIndex;
       points = won ? 180 : 70;
-      result = won ? 'Vitória no duelo' : 'Derrota no duelo';
+      result = won ? ct('Vitória no duelo') : ct('Derrota no duelo');
     } else if (major) {
       const human = major.humans.find((entry) => entry.nick.toLowerCase() === nick.toLowerCase());
       if (!human) return;
       won = human.wins > human.losses;
       title = human.placement === 'champion';
       points = SESSION_POINTS[human.placement] ?? 80;
-      result = title ? 'Campeão do Major' : `${human.wins}V-${human.losses}D no Major`;
+      result = title ? ct('Campeão do Major') : `${human.wins}V-${human.losses}D ${ct('no Major')}`;
     } else return;
     const timer = window.setTimeout(() => {
       recordedSeasonsRef.current.add(key);
@@ -860,7 +860,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           wins: current.wins + (won ? 1 : 0),
           losses: current.losses + (won ? 0 : 1),
           titles: current.titles + (title ? 1 : 0),
-          history: [{ label: `Temporada ${state.lobby.season ?? 1}`, result, points }, ...current.history].slice(0, 8),
+          history: [{ label: `${ct('Temporada')} ${state.lobby.season ?? 1}`, result, points }, ...current.history].slice(0, 8),
         };
         try { sessionStorage.setItem('rtm-online-session-profile', JSON.stringify(next)); } catch { /* sessão sem storage */ }
         return next;
@@ -881,13 +881,13 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       <div className={`rtm-rank-delta ${rankFeedback.delta >= 0 ? 'up' : 'down'}`}>{rankFeedback.delta >= 0 ? '+' : ''}{rankFeedback.delta}</div>
       <div className="rtm-rank-body">
         <b>{
-          rankFeedback.placedNow ? `🎯 Colocação concluída · ${rankFeedback.division}`
-            : rankFeedback.placing ? '🎯 Partida de colocação'
-              : rankFeedback.promoted ? `⬆ Promovido pra ${rankFeedback.division}!`
-                : rankFeedback.demoted ? `⬇ Caiu pra ${rankFeedback.division}`
-                  : rankFeedback.delta >= 0 ? 'Vitória ranqueada' : 'Derrota ranqueada'
+          rankFeedback.placedNow ? `🎯 ${ct('Colocação concluída')} · ${rankFeedback.division}`
+            : rankFeedback.placing ? `🎯 ${ct('Partida de colocação')}`
+              : rankFeedback.promoted ? `⬆ ${ct('Promovido pra')} ${rankFeedback.division}!`
+                : rankFeedback.demoted ? `⬇ ${ct('Caiu pra')} ${rankFeedback.division}`
+                  : rankFeedback.delta >= 0 ? ct('Vitória ranqueada') : ct('Derrota ranqueada')
         }</b>
-        <span>MMR {rankFeedback.before} → {rankFeedback.after}{rankFeedback.placing && !rankFeedback.placedNow ? ` · faltam ${rankFeedback.placementLeft} de colocação` : ` · ${rankFeedback.division}`}</span>
+        <span>MMR {rankFeedback.before} → {rankFeedback.after}{rankFeedback.placing && !rankFeedback.placedNow ? ` · ${ct('faltam')} ${rankFeedback.placementLeft} ${ct('de colocação')}` : ` · ${rankFeedback.division}`}</span>
       </div>
     </div>, document.body) : null;
 
@@ -918,13 +918,13 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   const confirmStrategy = () => {
     if (myDone) return;
     // feedback explícito em vez de falhar em silêncio
-    if (!coachPick) { setError('Escolha um coach antes de confirmar.'); return; }
-    if (!lineup.captainId || !lineup.reserveId) { setError('Defina capitão e reserva.'); return; }
-    if (strategy.favoriteMap === strategy.banMap) { setError('Mapa favorito e banido não podem ser o mesmo.'); return; }
+    if (!coachPick) { setError(ct('Escolha um coach antes de confirmar.')); return; }
+    if (!lineup.captainId || !lineup.reserveId) { setError(ct('Defina capitão e reserva.')); return; }
+    if (strategy.favoriteMap === strategy.banMap) { setError(ct('Mapa favorito e banido não podem ser o mesmo.')); return; }
     // avisa sem travar (em alguns formatos pode ser impossível ter os dois)
     const roles = new Set(pickedCards.map((c) => c.player.role));
     const missing = [!roles.has('AWP') ? 'AWPer' : '', !roles.has('IGL') ? 'IGL' : ''].filter(Boolean);
-    if (missing.length && !window.confirm(`Seu cinco está sem ${missing.join(' e ')}. Isso enfraquece bastante o time. Confirmar mesmo assim?`)) return;
+    if (missing.length && !window.confirm(`${ct('Seu cinco está sem')} ${missing.join(` ${ct('e')} `)}. ${ct('Isso enfraquece bastante o time. Confirmar mesmo assim?')}`)) return;
     setError('');
     setMyDone(true);
     sendPicks(myPicks, coachPick, true, strategy, lineup);
@@ -934,8 +934,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     try {
       if (navigator.share) await navigator.share({ title: 'Road to Major · Ultimate Team', text });
       else await navigator.clipboard.writeText(text);
-      setShareStatus('Resultado pronto para compartilhar');
-    } catch { setShareStatus('Não foi possível compartilhar agora'); }
+      setShareStatus(ct('Resultado pronto para compartilhar'));
+    } catch { setShareStatus(ct('Não foi possível compartilhar agora')); }
   };
 
   // ---------- telas ----------
@@ -1012,7 +1012,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     if (forceRanked) {
       const duelRooms = openRooms.filter((r) => r.mode === 'duel' && r.players < r.max);
       const initials = (nick || account?.nick || '??').slice(0, 2).toUpperCase();
-      const displayNick = nick || account?.nick || 'Você';
+      const displayNick = nick || account?.nick || ct('Você');
       return (
         <div className="fade-in" style={{ maxWidth: 760, margin: '0 auto' }}>
           <BackBar onHub={onBack} onExit={onBack} />
@@ -1024,12 +1024,12 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
               <span style={{ width: '64px', height: '64px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '22px', color: '#fff', background: 'linear-gradient(160deg, var(--rtm-blue-bright), #20303f)' }}>{initials}</span>
               <div style={{ flex: 1, minWidth: '160px' }}>
-                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800 }}>{myRank?.division ?? (paidRank ? 'Sem ranking ainda' : 'Conta grátis')}</div>
+                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800 }}>{myRank?.division ?? (paidRank ? ct('Sem ranking ainda') : ct('Conta grátis'))}</div>
                 <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '28px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{displayNick}</h1>
-                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{myRank ? `${myRank.mmr} MMR · #${myRank.rank} no mundo` : (paidRank ? 'Jogue uma ranqueada pra entrar no ladder' : 'No grátis o MMR não persiste')}</div>
+                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{myRank ? `${myRank.mmr} MMR · #${myRank.rank} ${ct('no mundo')}` : (paidRank ? ct('Jogue uma ranqueada pra entrar no ladder') : ct('No grátis o MMR não persiste'))}</div>
               </div>
               <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.6)', border: '1px solid var(--rtm-border-soft)' }}>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>Temporada</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Temporada')}</div>
                 <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--rtm-green-bright)' }}>{myRank ? `${myRank.wins}W · ${myRank.losses}L` : '0W · 0L'}</div>
               </div>
             </div>
@@ -1037,36 +1037,36 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
           {!nick.trim() && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 16px', padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>Escolha um nick para jogar:</span>
+              <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>{ct('Escolha um nick para jogar:')}</span>
               <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={{ ...onlineInputStyle, width: 'auto', flex: 1, minWidth: '160px' }} />
             </div>
           )}
 
           <Panel title="Ranked 1v1" accent="blue" style={{ marginBottom: '16px' }}>
             <p style={{ margin: '0 0 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.5 }}>
-              O matchmaking busca um rival perto do seu MMR. Vocês montam os times em draft e jogam uma melhor de três. Vitória sobe o MMR, derrota desce{paidRank ? '' : ' (no grátis não persiste)'}.
+              {ct('O matchmaking busca um rival perto do seu MMR. Vocês montam os times em draft e jogam uma melhor de três. Vitória sobe o MMR, derrota desce')}{paidRank ? '' : ` ${ct('(no grátis não persiste)')}`}.
             </p>
-            <Button variant="primary" size="big" style={{ width: '100%' }} onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : '🔍 Procurar partida'}</Button>
+            <Button variant="primary" size="big" style={{ width: '100%' }} onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : `🔍 ${ct('Procurar partida')}`}</Button>
           </Panel>
 
           <Panel
-            title="Salas ranqueadas abertas"
+            title={ct('Salas ranqueadas abertas')}
             accent="blue"
             actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}
             style={{ marginBottom: '16px' }}
           >
             {duelRooms.length === 0 ? (
-              <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>Nenhuma sala 1v1 aberta agora. Use “Procurar partida” que eu crio uma e espero um rival.</div>
+              <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('Nenhuma sala 1v1 aberta agora. Use “Procurar partida” que eu crio uma e espero um rival.')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {duelRooms.map((r) => (
                   <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 7px var(--rtm-green-bright)' }} />
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>Aguardando</span>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{ct('Aguardando')}</span>
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `Sala de ${r.host}`}</div>
+                      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}</div>
                       <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>host <b style={{ color: 'var(--rtm-text)' }}>{r.host}</b>{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
                     </div>
                     <Button variant="primary" size="sm" disabled={busy || !nick.trim()} onClick={() => doJoin(r.code, false)}>{OL.enter}</Button>
@@ -1102,24 +1102,24 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               <div style={{ fontSize: '34px' }}>🏆</div>
               <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Ranked Major</h1>
               <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '500px', margin: '8px auto 0', lineHeight: 1.55 }}>
-                Entre numa sala aberta ou crie a sua. Todos na mesma sala disputam o Major; o ranking é por quem chega mais longe.
+                {ct('Entre numa sala aberta ou crie a sua. Todos na mesma sala disputam o Major; o ranking é por quem chega mais longe.')}
               </p>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--rtm-dim)' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 8px var(--rtm-green-bright)' }} />
-                <b style={{ color: 'var(--rtm-text-strong)' }}>{openCount} salas abertas</b> agora · {openRooms.length} no total
+                <b style={{ color: 'var(--rtm-text-strong)' }}>{openCount} {ct('salas abertas')}</b> {ct('agora')} · {openRooms.length} {ct('no total')}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>⟳ Atualizar</Button>
-                <Button variant="gold" size="sm" onClick={() => setMajorCreate(true)}>+ Criar sala</Button>
+                <Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>⟳ {ct('Atualizar')}</Button>
+                <Button variant="gold" size="sm" onClick={() => setMajorCreate(true)}>+ {ct('Criar sala')}</Button>
               </div>
             </div>
 
             {!nick.trim() && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 12px', padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
-                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>Escolha um nick para entrar ou criar:</span>
+                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>{ct('Escolha um nick para entrar ou criar:')}</span>
                 <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={{ ...onlineInputStyle, width: 'auto', flex: 1, minWidth: '160px' }} />
               </div>
             )}
@@ -1134,11 +1134,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.7 : 1 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '96px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', boxShadow: full ? 'none' : '0 0 7px var(--rtm-green-bright)' }} />
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? 'Cheia' : 'Aguardando'}</span>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `Sala de ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>host <b style={{ color: 'var(--rtm-text)' }}>{r.host}</b> · grupo até {r.max}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>host <b style={{ color: 'var(--rtm-text)' }}>{r.host}</b> · {ct('grupo até')} {r.max}</div>
                     </div>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: pc, padding: '3px 9px', borderRadius: '999px', border: '1px solid var(--rtm-border)', whiteSpace: 'nowrap' }}>{poolLabel(r.pool)}</span>
                     <div style={{ textAlign: 'center', minWidth: '64px' }}>
@@ -1147,14 +1147,14 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                         {Array.from({ length: r.max }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.players ? pc : 'var(--rtm-panel-3)' }} />)}
                       </div>
                     </div>
-                    <Button variant={full ? 'ghost' : 'primary'} size="sm" disabled={busy || full || !nick.trim()} onClick={() => doJoin(r.code, false)}>{full ? 'Cheia' : OL.enter}</Button>
+                    <Button variant={full ? 'ghost' : 'primary'} size="sm" disabled={busy || full || !nick.trim()} onClick={() => doJoin(r.code, false)}>{full ? ct('Cheia') : OL.enter}</Button>
                   </div>
                 );
               })}
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '16px' }}>
-              <Button variant="gold" size="big" onClick={() => setMajorCreate(true)}>+ Criar minha sala</Button>
+              <Button variant="gold" size="big" onClick={() => setMajorCreate(true)}>+ {ct('Criar minha sala')}</Button>
             </div>
             {error && (
               <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
@@ -1167,14 +1167,14 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       return (
         <div className="fade-in" style={{ maxWidth: 720, margin: '0 auto' }}>
           <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
-            <button type="button" onClick={() => setMajorCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← Salas abertas</button>
-            <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--rtm-faint)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Menu</button>
+            <button type="button" onClick={() => setMajorCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>← {ct('Salas abertas')}</button>
+            <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--rtm-faint)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>{ct('Menu')}</button>
           </div>
           <div style={{ textAlign: 'center', marginBottom: '20px' }}>
             <div style={{ fontSize: '34px' }}>🏆</div>
-            <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Criar sala</h1>
+            <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Criar sala')}</h1>
             <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '480px', margin: '8px auto 0', lineHeight: 1.55 }}>
-              Cada manager monta o seu time e joga a própria campanha. No fim, o ranking é por quem foi mais longe.
+              {ct('Cada manager monta o seu time e joga a própria campanha. No fim, o ranking é por quem foi mais longe.')}
             </p>
           </div>
 
@@ -1185,26 +1185,26 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           </Panel>
 
           <Panel title={ct("Configuração da sala")} accent="gold" style={{ marginBottom: '16px' }}>
-            <Field label="Nome da sala" hint="Aparece na lista de salas. Deixe em branco para usar 'Sala de {seu nick}'.">
-              <input value={roomName} maxLength={40} placeholder="ex: Major dos br" onChange={(e) => setRoomName(e.target.value)} style={onlineInputStyle} />
+            <Field label={ct("Nome da sala")} hint={ct("Aparece na lista de salas. Deixe em branco para usar 'Sala de {seu nick}'.")}>
+              <input value={roomName} maxLength={40} placeholder={ct("ex: Major dos br")} onChange={(e) => setRoomName(e.target.value)} style={onlineInputStyle} />
             </Field>
-            <Field label="Coleção">
+            <Field label={ct("Coleção")}>
               <Seg accent="gold" value={pool} onChange={(id) => setPool(id as 'world' | 'br')} options={[{ id: 'world', label: tr('online.poolWorld') }, { id: 'br', label: tr('online.poolBr') }]} />
             </Field>
-            <Field label="Regra do evento">
+            <Field label={ct("Regra do evento")}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
                 {RULESET_OPTIONS.map((option) => {
                   const on = ruleset === option.id;
                   return (
                     <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '10px 12px', borderRadius: 'var(--rtm-radius)', border: `1px solid ${on ? 'var(--rtm-gold)' : 'var(--rtm-border-soft)'}`, background: on ? 'rgba(216,169,67,.14)' : 'var(--rtm-bg-deep)' }}>
-                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 700, color: on ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{option.label}</b>
-                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', lineHeight: 1.4 }}>{option.desc}</span>
+                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 700, color: on ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{ct(option.label)}</b>
+                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', lineHeight: 1.4 }}>{ct(option.desc)}</span>
                     </button>
                   );
                 })}
               </div>
             </Field>
-            <Field label="Rerolls por rodada" hint="O host define quantas novas coleções cada jogador pode abrir.">
+            <Field label={ct("Rerolls por rodada")} hint={ct("O host define quantas novas coleções cada jogador pode abrir.")}>
               <input type="number" min={0} max={5} value={draftRollouts} onChange={(event) => setDraftRollouts(Math.max(0, Math.min(5, Number(event.target.value) || 0)))} style={onlineInputStyle} />
             </Field>
             <Check checked={isPublic} onChange={setIsPublic}>{OL.publicRoom}</Check>
@@ -1220,7 +1220,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </Field>
             <Button variant="primary" style={{ width: '100%' }} onClick={join} disabled={!nick.trim() || !codeInput.trim() || busy}>{busy ? tr('online.joining') : tr('online.joinRoom')}</Button>
             <div style={{ marginTop: '10px' }}>
-              <Check checked={joinAsSpectator} onChange={setJoinAsSpectator}>Entrar como espectador</Check>
+              <Check checked={joinAsSpectator} onChange={setJoinAsSpectator}>{ct("Entrar como espectador")}</Check>
             </div>
           </Panel>
 
@@ -1242,7 +1242,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{OL.title}</h1>
           <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '520px', margin: '8px auto 0', lineHeight: 1.55 }}>{OL.lead}</p>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '14px' }}>
-            {['✦ 2026 + HISTÓRIA', '5 CARTAS + COACH', 'MD3 ROUND A ROUND'].map((feat) => (
+            {[ct('✦ 2026 + HISTÓRIA'), ct('5 CARTAS + COACH'), ct('MD3 ROUND A ROUND')].map((feat) => (
               <span key={feat} style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', color: 'var(--rtm-dim)', padding: '4px 11px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--rtm-border)' }}>{feat}</span>
             ))}
           </div>
@@ -1269,7 +1269,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>pts</div>
               </div>
               <div style={{ flex: 1, minWidth: '150px', fontSize: '12px', color: 'var(--rtm-dim)' }}>
-                {sessionProfile.wins} vitórias · {sessionProfile.losses} derrotas · {sessionProfile.titles} títulos
+                {sessionProfile.wins} {ct('vitórias')} · {sessionProfile.losses} {ct('derrotas')} · {sessionProfile.titles} {ct('títulos')}
                 {sessionProfile.history.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
                     {sessionProfile.history.slice(0, 3).map((entry) => (
@@ -1284,26 +1284,26 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             {/* RANKING ONLINE SALVO (conta vitalícia) */}
             {!casualOnly && (
             <Panel
-              title="🏆 Ranking online"
+              title={`🏆 ${ct("Ranking online")}`}
               accent="gold"
               style={{ marginBottom: '16px' }}
-              actions={<Button variant="ghost" size="sm" onClick={async () => { if (ladder) { setLadder(null); } else { setLadder((await getLadder()).ladder); } }}>{ladder ? 'Fechar ladder' : 'Ver ladder'}</Button>}
+              actions={<Button variant="ghost" size="sm" onClick={async () => { if (ladder) { setLadder(null); } else { setLadder((await getLadder()).ladder); } }}>{ladder ? ct('Fechar ladder') : ct('Ver ladder')}</Button>}
             >
               {paidRank ? (
                 myRank ? (
                   <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'baseline' }}>
                     <span><b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', color: 'var(--rtm-gold)' }}>{myRank.mmr}</b> <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>MMR</span></span>
                     <span style={{ color: 'var(--rtm-text-strong)', fontWeight: 700 }}>{myRank.division}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>#{myRank.rank} no mundo</span>
-                    <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{myRank.wins}V · {myRank.losses}D · pico {myRank.peak}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>#{myRank.rank} {ct('no mundo')}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{myRank.wins}V · {myRank.losses}D · {ct('pico')} {myRank.peak}</span>
                   </div>
-                ) : <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>Jogue uma partida online pra entrar no ranking.</span>
+                ) : <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('Jogue uma partida online pra entrar no ranking.')}</span>
               ) : (
-                <span style={{ fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>Todo o online é gratuito. A <b style={{ color: 'var(--rtm-text)' }}>persistência do ranking</b> faz parte da conta com save na nuvem, que cobre a infraestrutura.</span>
+                <span style={{ fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>{ct('Todo o online é gratuito. A')} <b style={{ color: 'var(--rtm-text)' }}>{ct('persistência do ranking')}</b> {ct('faz parte da conta com save na nuvem, que cobre a infraestrutura.')}</span>
               )}
               {ladder && (
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {ladder.length === 0 && <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>Ladder ainda vazio. Seja o primeiro.</span>}
+                  {ladder.length === 0 && <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('Ladder ainda vazio. Seja o primeiro.')}</span>}
                   {ladder.slice(0, 10).map((r) => (
                     <div key={r.rank} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 8px', borderRadius: '5px', background: r.nick === (nick || account?.nick) ? 'rgba(67,130,182,.14)' : (r.rank % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)') }}>
                       <span style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, width: 22, color: r.rank <= 3 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{r.rank}</span>
@@ -1317,14 +1317,14 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </Panel>
             )}
 
-            <Panel title="Regra do evento" accent="blue" style={{ marginBottom: '16px' }}>
+            <Panel title={ct("Regra do evento")} accent="blue" style={{ marginBottom: '16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
                 {RULESET_OPTIONS.map((option) => {
                   const on = ruleset === option.id;
                   return (
                     <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '11px 13px', borderRadius: 'var(--rtm-radius)', border: `1px solid ${on ? 'var(--rtm-blue-bright)' : 'var(--rtm-border-soft)'}`, background: on ? 'rgba(67,130,182,.14)' : 'var(--rtm-bg-deep)' }}>
-                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '15px', fontWeight: 700, color: on ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)' }}>{option.label}</b>
-                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', lineHeight: 1.4 }}>{option.desc}</span>
+                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '15px', fontWeight: 700, color: on ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)' }}>{ct(option.label)}</b>
+                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', lineHeight: 1.4 }}>{ct(option.desc)}</span>
                     </button>
                   );
                 })}
@@ -1334,31 +1334,31 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             {!casualOnly && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 16px', padding: '16px 18px', borderRadius: 'var(--rtm-radius)', background: 'linear-gradient(120deg, rgba(216,169,67,.16), rgba(13,17,22,.4))', border: '1px solid var(--rtm-gold-soft)' }}>
               <div style={{ flex: 1, minWidth: '200px' }}>
-                <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '17px', fontWeight: 800, color: 'var(--rtm-gold)' }}>⚔️ Partida ranqueada</b>
-                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>Acha um rival de MMR parecido e vale pro ladder da temporada{account?.paid ? '' : ' (no grátis o MMR não persiste)'}.</span>
+                <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '17px', fontWeight: 800, color: 'var(--rtm-gold)' }}>⚔️ {ct('Partida ranqueada')}</b>
+                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>{ct('Acha um rival de MMR parecido e vale pro ladder da temporada')}{account?.paid ? '' : ` ${ct('(no grátis o MMR não persiste)')}`}.</span>
               </div>
-              <Button variant="gold" onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : 'Jogar ranqueada'}</Button>
+              <Button variant="gold" onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : ct('Jogar ranqueada')}</Button>
             </div>
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
               <Panel title={tr('online.createRoom')} accent="gold">
-                <Field label="Nome da sala (opcional)">
+                <Field label={ct("Nome da sala (opcional)")}>
                   <input value={roomName} maxLength={40} placeholder={ct("ex: só lenda, sem noob")} onChange={(e) => setRoomName(e.target.value)} style={onlineInputStyle} />
                 </Field>
-                <Field label="Modo">
+                <Field label={ct("Modo")}>
                   <Seg accent="gold" value={mode} onChange={(id) => setMode(id as 'duel' | 'party')} options={[{ id: 'duel', label: tr('online.modeDuel') }, { id: 'party', label: tr('online.modeParty') }]} />
                 </Field>
-                <Field label="Coleção">
+                <Field label={ct("Coleção")}>
                   <Seg accent="gold" value={pool} onChange={(id) => setPool(id as 'world' | 'br')} options={[{ id: 'world', label: tr('online.poolWorld') }, { id: 'br', label: tr('online.poolBr') }]} />
                 </Field>
-                <Field label="Rerolls por rodada" hint="O host define quantas novas coleções cada jogador pode abrir.">
+                <Field label={ct("Rerolls por rodada")} hint={ct("O host define quantas novas coleções cada jogador pode abrir.")}>
                   <input type="number" min={0} max={5} value={draftRollouts} onChange={(event) => setDraftRollouts(Math.max(0, Math.min(5, Number(event.target.value) || 0)))} style={onlineInputStyle} />
                 </Field>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
                   <Check checked={isPublic} onChange={setIsPublic}>{OL.publicRoom}</Check>
                   {!casualOnly && mode === 'duel' && (
-                    <Check checked={ranked} onChange={setRanked}>🏆 Ranqueada (conta pro ladder)</Check>
+                    <Check checked={ranked} onChange={setRanked}>🏆 {ct('Ranqueada (conta pro ladder)')}</Check>
                   )}
                 </div>
                 <Button variant="gold" style={{ width: '100%' }} onClick={create} disabled={!nick.trim() || busy}>
@@ -1380,7 +1380,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   {busy ? tr('online.joining') : tr('online.joinRoom')}
                 </Button>
                 <div style={{ marginTop: '10px' }}>
-                  <Check checked={joinAsSpectator} onChange={setJoinAsSpectator}>Entrar como espectador</Check>
+                  <Check checked={joinAsSpectator} onChange={setJoinAsSpectator}>{ct("Entrar como espectador")}</Check>
                 </div>
               </Panel>
             </div>
@@ -1401,10 +1401,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.75 : 1 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '94px' }}>
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', boxShadow: full ? 'none' : '0 0 7px var(--rtm-green-bright)' }} />
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? 'Cheia' : 'Aguardando'}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `Sala de ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</div>
                         <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {tr(r.pool === 'br' ? 'home.poolBr' : 'home.poolWorld')}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
                       </div>
                       <div style={{ textAlign: 'center', minWidth: '64px' }}>
@@ -1413,7 +1413,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                           {Array.from({ length: r.max }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.players ? 'var(--rtm-blue-bright)' : 'var(--rtm-panel-3)' }} />)}
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" disabled={busy} onClick={() => doJoin(r.code, true)}>Assistir</Button>
+                      <Button variant="ghost" size="sm" disabled={busy} onClick={() => doJoin(r.code, true)}>{ct("Assistir")}</Button>
                       <Button variant="gold" size="sm" disabled={busy || full} onClick={() => doJoin(r.code, false)}>{OL.enter}</Button>
                     </div>
                     );
@@ -1445,7 +1445,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     if (localDemo) return;
     const result = await lobbyApi({ action: 'setPlaybackSpeed', nick: nick.trim(), code, speed }).catch(() => null);
     if (!result?.ok) {
-      setError(result?.error ?? 'Não foi possível alterar a velocidade da sala.');
+      setError(result?.error ?? ct('Não foi possível alterar a velocidade da sala.'));
       await refresh();
     }
   };
@@ -1513,7 +1513,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           </div>
 
           {/* jogadores na sala */}
-          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, margin: '18px 0 10px' }}>Jogadores na sala ({activePlayers.length})</div>
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, margin: '18px 0 10px' }}>{ct('Jogadores na sala')} ({activePlayers.length})</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '8px' }}>
             {activePlayers.map((p) => {
               const host = p.nick === state.lobby.host;
@@ -1531,7 +1531,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
           {spectators.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
-              <b style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)' }}>Espectadores</b>
+              <b style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)' }}>{ct('Espectadores')}</b>
               {spectators.map((viewer) => <span key={viewer.nick} style={{ fontSize: '11px', color: 'var(--rtm-dim)', padding: '2px 8px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--rtm-border-soft)' }}>◉ {viewer.nick}</span>)}
             </div>
           )}
@@ -1567,10 +1567,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     return (
       <div className="fade-in ut-live-veto">
         <div className="panel">
-          <div className="panel-head">VETO MULTIPLAYER · {code}<span className="spacer" /><button className="btn" onClick={onBack}>Sair</button></div>
+          <div className="panel-head">{ct('VETO MULTIPLAYER')} · {code}<span className="spacer" /><button className="btn" onClick={onBack}>{ct('Sair')}</button></div>
           <div className="panel-body">
             <div className="ut-veto-turn">
-              <span>{isSpectator ? 'ACOMPANHANDO O VETO' : myTurn ? 'SUA VEZ' : `VEZ DE ${veto.turn}`}</span>
+              <span>{isSpectator ? ct('ACOMPANHANDO O VETO') : myTurn ? ct('SUA VEZ') : `${ct('VEZ DE')} ${veto.turn}`}</span>
               <b>{action}</b>
               <strong>{seconds}s</strong>
             </div>
@@ -1582,12 +1582,12 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 return (
                   <button key={map} disabled={!myTurn || !available || busy} className={banned ? 'banned' : picked ? 'picked' : available ? '' : 'removed'} onClick={() => submitVetoMap(map)}>
                     <b>{MAP_LABELS[map]}</b>
-                    <span>{banned ? `BAN · ${banned.by}` : picked ? `PICK · ${picked.by}` : available ? (myTurn ? action : 'DISPONÍVEL') : 'FORA'}</span>
+                    <span>{banned ? `BAN · ${banned.by}` : picked ? `PICK · ${picked.by}` : available ? (myTurn ? action : ct('DISPONÍVEL')) : ct('FORA')}</span>
                   </button>
                 );
               })}
             </div>
-            <p className="muted small center">Ban e pick alternados. Se o tempo acabar, o primeiro mapa disponível é escolhido automaticamente.</p>
+            <p className="muted small center">{ct('Ban e pick alternados. Se o tempo acabar, o primeiro mapa disponível é escolhido automaticamente.')}</p>
           </div>
         </div>
       </div>
@@ -1602,7 +1602,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         <BackBar onExit={onBack} />
         <Panel
           accent="gold"
-          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>{OL.duelLive} · {code}{state?.lobby.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>RANQUEADA</span>}</span>}
+          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>{OL.duelLive} · {code}{state?.lobby.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</span>}
           actions={<Button variant="ghost" size="sm" onClick={onBack}>{tr('online.exitOnline')}</Button>}
         >
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
@@ -1654,21 +1654,21 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
             {!duelReplayOpen && (
               <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <Button variant="gold" size="big" onClick={() => setDuelReplayOpen(true)}>▶ Rever MD3 round a round</Button>
+                <Button variant="gold" size="big" onClick={() => setDuelReplayOpen(true)}>▶ {ct('Rever MD3 round a round')}</Button>
               </div>
             )}
             {duelFinished && (
               <div style={{ textAlign: 'center', marginTop: 16 }}>
                 <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '18px 28px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-gold-soft)' }}>
-                  <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '24px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', textShadow: '0 0 28px rgba(216,169,67,.35)' }}>{duel.nicks[duel.series.winner]} venceu</b>
+                  <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '24px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', textShadow: '0 0 28px rgba(216,169,67,.35)' }}>{duel.nicks[duel.series.winner]} {ct('venceu')}</b>
                   <span style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '18px', fontWeight: 800, color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{duel.series.mapScore[0]} : {duel.series.mapScore[1]} · MD3</span>
-                  <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${duel.nicks[duel.series.winner]} venceu ${duel.nicks[duel.series.winner === 0 ? 1 : 0]} por ${duel.series.mapScore[0]}:${duel.series.mapScore[1]}. Monte seu time em roadtomajor.com.br/online`)}>Compartilhar resultado</Button>
+                  <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${duel.nicks[duel.series.winner]} ${ct('venceu')} ${duel.nicks[duel.series.winner === 0 ? 1 : 0]} ${ct('por')} ${duel.series.mapScore[0]}:${duel.series.mapScore[1]}. ${ct('Monte seu time em roadtomajor.com.br/online')}`)}>{ct('Compartilhar resultado')}</Button>
                   {shareStatus && <small style={{ fontSize: '11px', color: 'var(--rtm-green-bright)' }}>{shareStatus}</small>}
                 </div>
                 {isHost ? (
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: 14 }}>
-                    <Button variant="gold" onClick={() => nextSeason(true)} disabled={busy}>Revanche · manter elenco</Button>
-                    <Button variant="ghost" onClick={() => nextSeason(false)} disabled={busy}>Novas cartas</Button>
+                    <Button variant="gold" onClick={() => nextSeason(true)} disabled={busy}>{ct('Revanche · manter elenco')}</Button>
+                    <Button variant="ghost" onClick={() => nextSeason(false)} disabled={busy}>{ct('Novas cartas')}</Button>
                   </div>
                 ) : (
                   <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', marginTop: 12 }}>{OL.seasonWait}</div>
@@ -1747,7 +1747,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <span className="tname">{teamLabel(p.b)}</span>
           </span>
           <span className={`major-match-status${watchable ? ' mine' : ''}`}>
-            {watchable ? (watched ? '✓ ASSISTIDA' : isSpectator ? '▶ ASSISTIR' : '▶ SUA PARTIDA') : phaseDisplay(h.phase)}
+            {watchable ? (watched ? `✓ ${ct('ASSISTIDA')}` : isSpectator ? `▶ ${ct('ASSISTIR')}` : `▶ ${ct('SUA PARTIDA')}`) : phaseDisplay(h.phase)}
           </span>
         </div>
       );
@@ -1781,7 +1781,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       }
       try {
         const result = await lobbyApi({ action: 'readyStage', nick: nick.trim(), code, stage: collectiveStage });
-        if (!result.ok) throw new Error(result.error ?? 'Não foi possível confirmar que você assistiu à partida.');
+        if (!result.ok) throw new Error(result.error ?? ct('Não foi possível confirmar que você assistiu à partida.'));
         setState((prev) => prev ? {
           ...prev,
           lobby: { ...prev.lobby, stage: result.stage ?? prev.lobby.stage ?? collectiveStage },
@@ -1791,7 +1791,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         } : prev);
         await refresh();
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Não foi possível confirmar a rodada.');
+        setError(cause instanceof Error ? cause.message : ct('Não foi possível confirmar a rodada.'));
       } finally {
         setBusy(false);
       }
@@ -1902,7 +1902,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           return;
         }
         const result = await lobbyApi({ action: 'majorVetoAction', nick: nick.trim(), code, map, matchKey: myMajorVetoKey, bestOf, participants }).catch(() => null);
-        if (!result?.ok) setError(result?.error ?? 'Não foi possível registrar o veto. Tente novamente.');
+        if (!result?.ok) setError(result?.error ?? ct('Não foi possível registrar o veto. Tente novamente.'));
         await refresh();
         setBusy(false);
       };
@@ -1915,7 +1915,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           setState((previous) => previous ? { ...previous, lobby: { ...previous.lobby, stage_started_at: Date.now() + 3_000 } } : previous);
         } else {
           const result = await lobbyApi({ action: 'startStage', nick: nick.trim(), code, requiredVetoKeys }).catch(() => null);
-          if (!result?.ok) setError(result?.error ?? 'Não foi possível iniciar a transmissão da rodada.');
+          if (!result?.ok) setError(result?.error ?? ct('Não foi possível iniciar a transmissão da rodada.'));
           await refresh();
         }
         setBusy(false);
@@ -1930,7 +1930,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           setWatchedMatches([]);
         } else {
           const result = await lobbyApi({ action: 'advanceStage', nick: nick.trim(), code }).catch(() => null);
-          if (!result?.ok) setError(result?.error ?? 'Não foi possível avançar a rodada.');
+          if (!result?.ok) setError(result?.error ?? ct('Não foi possível avançar a rodada.'));
           await refresh();
         }
         setSelMatch(null);
@@ -1987,10 +1987,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               {myMajorTeam && (
                 <div className="ut-major-squad">
                   <div className="ut-major-squad-copy">
-                    <span className="ut-kicker">SUA CAMPANHA</span>
+                    <span className="ut-kicker">{ct('SUA CAMPANHA')}</span>
                     <h2>{nick}</h2>
-                    <p>{phaseDisplay(stage.phase)} · acompanhe sua partida ao vivo antes de fechar a rodada.</p>
-                    <div className="ut-live-objective">OBJETIVO: {RULESET_OBJECTIVES[majorRuleset]}</div>
+                    <p>{phaseDisplay(stage.phase)} · {ct('acompanhe sua partida ao vivo antes de fechar a rodada.')}</p>
+                    <div className="ut-live-objective">{ct('OBJETIVO')}: {ct(RULESET_OBJECTIVES[majorRuleset])}</div>
                   </div>
                   <div className="ut-major-five">
                     {myMajorTeam.players.map((p) => (
@@ -2045,12 +2045,12 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 }}
               />
               {!myStageMatch && (
-                <div className="ut-major-bye">{isSpectator ? (stageIsLive ? 'Transmissão ao vivo: clique em qualquer confronto do bracket.' : 'Aguarde o host iniciar a rodada. Nenhuma partida pode ser vista antes da transmissão.') : 'Seu time não joga nesta etapa. Os resultados aparecerão ao vivo no bracket.'}</div>
+                <div className="ut-major-bye">{isSpectator ? (stageIsLive ? ct('Transmissão ao vivo: clique em qualquer confronto do bracket.') : ct('Aguarde o host iniciar a rodada. Nenhuma partida pode ser vista antes da transmissão.')) : ct('Seu time não joga nesta etapa. Os resultados aparecerão ao vivo no bracket.')}</div>
               )}
               <div className={`ut-broadcast-status${stageIsLive ? ' live' : ''}`}>
-                <b>{stageIsLive ? (elapsedMs > 0 ? '● RODADA AO VIVO' : '◉ SINCRONIZANDO TRANSMISSÃO') : '○ PRÉ-RODADA'}</b>
-                <span>{stageIsLive ? 'Todas as telas seguem o mesmo relógio da sala.' : `${requiredVetoKeys.filter((key) => state.lobby.major_vetos?.[key]?.maps?.length).length}/${requiredVetoKeys.length} vetos concluídos`}</span>
-                {isHost && !stageIsLive && <div className="ut-prestage-speed"><span>VELOCIDADE</span>{PLAYBACK_SPEEDS.map((speed) => <button key={speed} className={`btn ghost small${playbackSpeed === speed ? ' active' : ''}`} onClick={() => void changePlaybackSpeed(speed)} title={speed === 8 ? 'Instantâneo: cai direto no placar' : undefined}>{speed === 8 ? '⚡' : `${speed}x`}</button>)}</div>}
+                <b>{stageIsLive ? (elapsedMs > 0 ? `● ${ct('RODADA AO VIVO')}` : `◉ ${ct('SINCRONIZANDO TRANSMISSÃO')}`) : `○ ${ct('PRÉ-RODADA')}`}</b>
+                <span>{stageIsLive ? ct('Todas as telas seguem o mesmo relógio da sala.') : `${requiredVetoKeys.filter((key) => state.lobby.major_vetos?.[key]?.maps?.length).length}/${requiredVetoKeys.length} ${ct('vetos concluídos')}`}</span>
+                {isHost && !stageIsLive && <div className="ut-prestage-speed"><span>{ct('VELOCIDADE')}</span>{PLAYBACK_SPEEDS.map((speed) => <button key={speed} className={`btn ghost small${playbackSpeed === speed ? ' active' : ''}`} onClick={() => void changePlaybackSpeed(speed)} title={speed === 8 ? ct('Instantâneo: cai direto no placar') : undefined}>{speed === 8 ? '⚡' : `${speed}x`}</button>)}</div>}
               </div>
               <div className="ut-stage-ready">
                 {state.players.filter((player) => !player.spectator).map((p) => {
@@ -2059,21 +2059,21 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 })}
               </div>
               {!isSpectator && <div className="ut-next-match-cta">
-                <span>{myStageMatch ? `${teamLabel(myStageMatch.pairing.a)} vs ${teamLabel(myStageMatch.pairing.b)}` : 'Rodada sem partida para seu time'}</span>
+                <span>{myStageMatch ? `${teamLabel(myStageMatch.pairing.a)} vs ${teamLabel(myStageMatch.pairing.b)}` : ct('Rodada sem partida para seu time')}</span>
                 {!stageIsLive && myStageMatch && !myMajorVeto?.maps ? (
-                  <button className="btn gold big" disabled={busy} onClick={() => setMajorVetoOpen(true)}>VETAR MAPAS · FORMATO OFICIAL</button>
+                  <button className="btn gold big" disabled={busy} onClick={() => setMajorVetoOpen(true)}>{ct('VETAR MAPAS · FORMATO OFICIAL')}</button>
                 ) : !stageIsLive && isHost ? (
-                  <button className="btn gold big" disabled={busy} onClick={startStageBroadcast} title={allVetosDone ? undefined : 'Vetos não concluídos viram mapa automático'}>{allVetosDone ? '▶ INICIAR RODADA AO VIVO' : '▶ INICIAR (vetos pendentes = mapa automático)'}</button>
+                  <button className="btn gold big" disabled={busy} onClick={startStageBroadcast} title={allVetosDone ? undefined : ct('Vetos não concluídos viram mapa automático')}>{allVetosDone ? `▶ ${ct('INICIAR RODADA AO VIVO')}` : `▶ ${ct('INICIAR (vetos pendentes = mapa automático)')}`}</button>
                 ) : !stageIsLive ? (
-                  <button className="btn gold big" disabled>AGUARDANDO O HOST INICIAR</button>
+                  <button className="btn gold big" disabled>{ct('AGUARDANDO O HOST INICIAR')}</button>
                 ) : isHost && allPlayersReady ? (
-                  <button className="btn gold big" disabled={busy} onClick={advanceStage}>AVANÇAR PARA A PRÓXIMA RODADA</button>
+                  <button className="btn gold big" disabled={busy} onClick={advanceStage}>{ct('AVANÇAR PARA A PRÓXIMA RODADA')}</button>
                 ) : !myStageMatch && !myStageConfirmed ? (
-                  <button className="btn gold big" disabled={!allStageResultsVisible || busy} onClick={markByeReady}>{allStageResultsVisible ? 'MARCAR COMO PRONTO' : 'RODADA EM ANDAMENTO'}</button>
+                  <button className="btn gold big" disabled={!allStageResultsVisible || busy} onClick={markByeReady}>{allStageResultsVisible ? ct('MARCAR COMO PRONTO') : ct('RODADA EM ANDAMENTO')}</button>
                 ) : isHost && myStageConfirmed ? (
-                  <button className="btn ghost big" disabled={busy} onClick={forceAdvanceStage} title={ct("Avança ignorando quem caiu/saiu da sala")}>FORÇAR AVANÇO (jogador ausente)</button>
+                  <button className="btn ghost big" disabled={busy} onClick={forceAdvanceStage} title={ct("Avança ignorando quem caiu/saiu da sala")}>{ct('FORÇAR AVANÇO (jogador ausente)')}</button>
                 ) : (
-                  <button className="btn gold big" disabled>{myStageConfirmed ? 'AGUARDANDO O HOST AVANÇAR' : 'SUA PARTIDA ESTÁ AO VIVO'}</button>
+                  <button className="btn gold big" disabled>{myStageConfirmed ? ct('AGUARDANDO O HOST AVANÇAR') : ct('SUA PARTIDA ESTÁ AO VIVO')}</button>
                 )}
               </div>}
             </div>
@@ -2131,17 +2131,17 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 {champNick ? `${tr('online.champRoster')} ${champ?.players.map((p) => p.nick).join(', ')}` : tr('online.noHumanFinal')}
               </div>
               <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', margin: '16px auto 0', padding: '16px 26px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-gold-soft)' }}>
-                <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{champNick ?? champ?.name} campeão</b>
-                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>Major Ultimate Team · Temporada {state.lobby.season ?? 1}</span>
-                <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${champNick ?? champ?.name} foi campeão do Major. Teste com seus amigos em roadtomajor.com.br/online`)}>Compartilhar resultado</Button>
+                <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{champNick ?? champ?.name} {ct('campeão')}</b>
+                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>Major Ultimate Team · {ct('Temporada')} {state.lobby.season ?? 1}</span>
+                <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${champNick ?? champ?.name} ${ct('foi campeão do Major. Teste com seus amigos em roadtomajor.com.br/online')}`)}>{ct('Compartilhar resultado')}</Button>
                 {shareStatus && <small style={{ fontSize: '11px', color: 'var(--rtm-green-bright)' }}>{shareStatus}</small>}
               </div>
               {/* continuar a sala: nova temporada com novo draft (transferências) */}
               <div style={{ marginTop: 16 }}>
                 {isHost ? (
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <Button variant="gold" size="big" onClick={() => nextSeason(true)} disabled={busy}>Novo Major · manter elencos</Button>
-                    <Button variant="ghost" size="big" onClick={() => nextSeason(false)} disabled={busy}>Redraft completo</Button>
+                    <Button variant="gold" size="big" onClick={() => nextSeason(true)} disabled={busy}>{ct('Novo Major · manter elencos')}</Button>
+                    <Button variant="ghost" size="big" onClick={() => nextSeason(false)} disabled={busy}>{ct('Redraft completo')}</Button>
                   </div>
                 ) : (
                   <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{OL.seasonWait}</div>
@@ -2149,7 +2149,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               </div>
             </div>
 
-            <div className="muted small section-label">PRÊMIOS DO MAJOR</div>
+            <div className="muted small section-label">{ct('PRÊMIOS DO MAJOR')}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 14px', padding: '12px 16px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
               <div>
                 <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Divisão da sessão')}</div>
@@ -2159,7 +2159,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{sessionProfile.points}</div>
                 <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>pts</div>
               </div>
-              <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{sessionProfile.wins}V · {sessionProfile.losses}D · {sessionProfile.titles} títulos</span>
+              <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{sessionProfile.wins}V · {sessionProfile.losses}D · {sessionProfile.titles} {ct('títulos')}</span>
             </div>
             <div className="ut-awards">
               {awards.map(({ label, row }) => row && (
@@ -2167,12 +2167,12 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   <span>{label}</span>
                   <PlayerAvatar nick={row.player.nick} size={48} />
                   <b>{row.player.nick}</b>
-                  <small>{row.team.tag} · Rating {row.stats.rating.toFixed(2)}</small>
+                  <small>{row.team.tag} · {ct('Rating')} {row.stats.rating.toFixed(2)}</small>
                 </div>
               ))}
             </div>
 
-            <div className="muted small section-label">TOP 10 DA SESSÃO</div>
+            <div className="muted small section-label">{ct('TOP 10 DA SESSÃO')}</div>
             <div className="ut-session-leaders">
               {leaders.slice(0, 10).map((row, index) => (
                 <div key={row.player.id}>
@@ -2201,14 +2201,14 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     </div>
                     <div className="hr-roster muted small">{tm?.players.map((p) => p.nick).join(', ')}</div>
                     <div className="hr-rec muted small">{tr('online.campaign')} {h.wins}{tr('common.wins')} - {h.losses}{tr('common.losses')}</div>
-                    <div className="ut-session-points">+{SESSION_POINTS[h.placement] ?? 0} pontos da sessão</div>
-                    <div className={h.wins >= 2 ? 'ut-objective-done' : 'muted small'}>{h.wins >= 2 ? '✓ Objetivo concluído' : 'Objetivo não concluído'}</div>
+                    <div className="ut-session-points">+{SESSION_POINTS[h.placement] ?? 0} {ct('pontos da sessão')}</div>
+                    <div className={h.wins >= 2 ? 'ut-objective-done' : 'muted small'}>{h.wins >= 2 ? `✓ ${ct('Objetivo concluído')}` : ct('Objetivo não concluído')}</div>
                   </div>
                 );
               })}
             </div>
 
-            <div className="muted small section-label">BRACKET FINAL</div>
+            <div className="muted small section-label">{ct('BRACKET FINAL')}</div>
             <TournamentBracket
               t={major.tournament}
               onOpen={(pairing) => pairing.result && setSelMatch({ a: pairing.a, b: pairing.b, series: pairing.result })}
@@ -2323,46 +2323,46 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           <Panel title={ct("Plano tático")} accent="gold">
             <div className="ut-strategy-panel">
               <div className="ut-chem-summary">
-                <span>QUÍMICA</span><b>{chemistry.score}</b>
+                <span>{ct('QUÍMICA')}</span><b>{chemistry.score}</b>
                 <div><i style={{ width: `${chemistry.score}%` }} /></div>
-                <small>{chemistry.links} conexões · {chemistry.roles} funções</small>
+                <small>{chemistry.links} {ct('conexões')} · {chemistry.roles} {ct('funções')}</small>
               </div>
-              <div className="muted small section-label">IDENTIDADE TÁTICA</div>
+              <div className="muted small section-label">{ct('IDENTIDADE TÁTICA')}</div>
               <div className="ut-tactic-grid">
                 {TACTIC_OPTIONS.map((option) => (
                   <button key={option.id} className={strategy.tactic === option.id ? 'active' : ''} onClick={() => setStrategy((s) => ({ ...s, tactic: option.id }))}>
-                    <b>{option.label}</b><span>{option.desc}</span>
+                    <b>{ct(option.label)}</b><span>{ct(option.desc)}</span>
                   </button>
                 ))}
               </div>
               <div className="ut-veto-plan">
                 <div>
-                  <div className="muted small section-label">MAPA PREFERIDO</div>
+                  <div className="muted small section-label">{ct('MAPA PREFERIDO')}</div>
                   <div className="ut-map-options">
                     {MAP_POOL.map((map) => <button key={map} disabled={strategy.banMap === map} className={strategy.favoriteMap === map ? 'pick' : ''} onClick={() => setStrategy((s) => ({ ...s, favoriteMap: map }))}>{MAP_LABELS[map]}</button>)}
                   </div>
                 </div>
                 <div>
-                  <div className="muted small section-label">MAPA A EVITAR</div>
+                  <div className="muted small section-label">{ct('MAPA A EVITAR')}</div>
                   <div className="ut-map-options">
                     {MAP_POOL.map((map) => <button key={map} disabled={strategy.favoriteMap === map} className={strategy.banMap === map ? 'ban' : ''} onClick={() => setStrategy((s) => ({ ...s, banMap: map }))}>{MAP_LABELS[map]}</button>)}
                   </div>
                 </div>
               </div>
-              <div className="muted small section-label">EVENTOS DA SÉRIE</div>
+              <div className="muted small section-label">{ct('EVENTOS DA SÉRIE')}</div>
               <div className="ut-match-events">
-                <div><b>RITMO</b>{(['aggressive', 'default', 'cautious'] as OnlinePace[]).map((pace) => <button key={pace} className={strategy.pace === pace ? 'active' : ''} onClick={() => setStrategy((current) => ({ ...current, pace }))}>{pace === 'aggressive' ? 'Agressivo' : pace === 'cautious' ? 'Cauteloso' : 'Padrão'}</button>)}</div>
-                <div><b>TIMEOUT TÁTICO</b>{[0, 1, 2].map((mapIndex) => <button key={mapIndex} className={strategy.timeoutMap === mapIndex ? 'active' : ''} onClick={() => setStrategy((current) => ({ ...current, timeoutMap: mapIndex }))}>Mapa {mapIndex + 1}</button>)}</div>
-                <label><input type="checkbox" checked={strategy.substituteAfterMap === true} onChange={(event) => setStrategy((current) => ({ ...current, substituteAfterMap: event.target.checked }))} /> Usar o reserva entre os mapas</label>
+                <div><b>{ct('RITMO')}</b>{(['aggressive', 'default', 'cautious'] as OnlinePace[]).map((pace) => <button key={pace} className={strategy.pace === pace ? 'active' : ''} onClick={() => setStrategy((current) => ({ ...current, pace }))}>{pace === 'aggressive' ? ct('Agressivo') : pace === 'cautious' ? ct('Cauteloso') : ct('Padrão')}</button>)}</div>
+                <div><b>{ct('TIMEOUT TÁTICO')}</b>{[0, 1, 2].map((mapIndex) => <button key={mapIndex} className={strategy.timeoutMap === mapIndex ? 'active' : ''} onClick={() => setStrategy((current) => ({ ...current, timeoutMap: mapIndex }))}>{ct('Mapa')} {mapIndex + 1}</button>)}</div>
+                <label><input type="checkbox" checked={strategy.substituteAfterMap === true} onChange={(event) => setStrategy((current) => ({ ...current, substituteAfterMap: event.target.checked }))} /> {ct('Usar o reserva entre os mapas')}</label>
               </div>
               <p className="muted small">{ct('Estas são preferências táticas. Antes de cada confronto, o veto oficial completo acontece no mesmo formato do modo carreira e draft.')}</p>
-              <Button variant="gold" size="big" style={{ width: '100%' }} onClick={confirmStrategy}>Confirmar e ficar pronto</Button>
+              <Button variant="gold" size="big" style={{ width: '100%' }} onClick={confirmStrategy}>{ct('Confirmar e ficar pronto')}</Button>
             </div>
           </Panel>
         ) : lineupPhase ? (
           <Panel title={ct("Capitão e escalação")} accent="gold">
             <div className="ut-lineup-builder">
-              <div className="muted small section-label">ESCOLHA O CAPITÃO</div>
+              <div className="muted small section-label">{ct('ESCOLHA O CAPITÃO')}</div>
               <div className="ut-lineup-choices">
                 {pickedCards.map(({ player }) => (
                   <button key={player.id} className={lineup.captainId === player.id ? 'active' : ''} onClick={() => setLineup((current) => ({ ...current, captainId: player.id }))}>
@@ -2370,7 +2370,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   </button>
                 ))}
               </div>
-              <div className="muted small section-label">ESCOLHA UM RESERVA</div>
+              <div className="muted small section-label">{ct('ESCOLHA UM RESERVA')}</div>
               <div className="ut-reserve-grid">
                 {reserveOptions.map(({ player, source: reserveSource }) => (
                   <button key={`${reserveSource.id}-${player.id}`} className={lineup.reserveId === player.id ? 'active' : ''} onClick={() => setLineup((current) => ({ ...current, reserveId: player.id }))}>
@@ -2424,8 +2424,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               <div className="ut-pack-reveal">
                 <button onClick={() => setRevealedRound(myPicks.length)}>
                   <span>RTM</span>
-                  <b>ABRIR CARTAS</b>
-                  <small>{RULESET_OPTIONS.find((r) => r.id === (state.lobby.ruleset ?? 'open'))?.label}</small>
+                  <b>{ct('ABRIR CARTAS')}</b>
+                  <small>{ct(RULESET_OPTIONS.find((r) => r.id === (state.lobby.ruleset ?? 'open'))?.label ?? '')}</small>
                 </button>
                 <p>{ct('As cinco opções serão reveladas. Escolha uma para o seu elenco.')}</p>
               </div>
@@ -2455,9 +2455,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             )}
 
             <div className="ut-chem-live">
-              <div><span>QUÍMICA DO ELENCO</span><b>{chemistry.score}</b></div>
+              <div><span>{ct('QUÍMICA DO ELENCO')}</span><b>{chemistry.score}</b></div>
               <div className="ut-chem-track"><i style={{ width: `${chemistry.score}%` }} /></div>
-              <small>{chemistry.links} conexões · regra {RULESET_OPTIONS.find((r) => r.id === (state.lobby.ruleset ?? 'open'))?.label}</small>
+              <small>{chemistry.links} {ct('conexões')} · {ct('regra')} {ct(RULESET_OPTIONS.find((r) => r.id === (state.lobby.ruleset ?? 'open'))?.label ?? '')}</small>
             </div>
 
             {/* time sendo montado: jogadores, funções e o que falta (igual ao draft SP) */}
@@ -2577,12 +2577,12 @@ function ultimateChemistry(cards: PickedCard[]) {
 }
 
 function ruleViolation(player: Player, source: TeamSeason, picked: PickedCard[], ruleset: UltimateRuleset): string | null {
-  if (ruleset === 'unique_country' && picked.some((c) => c.player.country === player.country)) return 'PAÍS REPETIDO';
-  if (ruleset === 'era' && picked.filter((c) => c.source.game === source.game).length >= 2) return 'ERA JÁ LOTADA';
+  if (ruleset === 'unique_country' && picked.some((c) => c.player.country === player.country)) return ct('PAÍS REPETIDO');
+  if (ruleset === 'era' && picked.filter((c) => c.source.game === source.game).length >= 2) return ct('ERA JÁ LOTADA');
   if (ruleset === 'brworld' && picked.length === 4) {
     const final = [...picked, { player, source }];
     const br = final.filter((c) => c.player.country === 'br').length;
-    if (br < 2 || final.length - br < 2) return 'PRECISA 2 BR + 2 MUNDO';
+    if (br < 2 || final.length - br < 2) return ct('PRECISA 2 BR + 2 MUNDO');
   }
   return null;
 }

@@ -38,12 +38,12 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       const mine = me.nick.toLowerCase();
       const base = ladder.map((r) => ({ nick: r.nick, country: '', val: r.mmr, you: r.nick.toLowerCase() === mine }));
       if (!base.some((r) => r.you)) base.push({ nick: me.nick, country: me.country, val: stats.mmr, you: true });
-      return base.sort((a, b) => b.val - a.val).map((r) => ({ ...r, sub: rankFor(r.val).name, subColor: rankFor(r.val).color, fmt: r.val + ' MMR' }));
+      return base.sort((a, b) => b.val - a.val).map((r) => ({ ...r, sub: ct(rankFor(r.val).name), subColor: rankFor(r.val).color, fmt: r.val + ' MMR' }));
     }
     // Major e Gauntlet ainda não têm ranking de servidor — mostra só o seu número.
     if (lb === 'major') {
       const pl = majorPlace(stats.majorPts >= 100 ? 'champion' : 'semi');
-      return [{ nick: me.nick, country: me.country, val: stats.majorPts, you: true, sub: ct('Melhor:') + ' ' + pl.label, subColor: pl.color, fmt: stats.majorPts + ' ' + ct('pts') }];
+      return [{ nick: me.nick, country: me.country, val: stats.majorPts, you: true, sub: ct('Melhor:') + ' ' + ct(pl.label), subColor: pl.color, fmt: stats.majorPts + ' ' + ct('pts') }];
     }
     return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: ct('Sequência recorde'), subColor: 'var(--rtm-green-bright)', fmt: stats.bestStreak + ' ' + ct('seguidas') }];
   }
@@ -68,7 +68,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
           <div style={{ flex: 1, minWidth: '180px' }}>
             <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-green-bright)', fontWeight: 800 }}>{ct('Modo online')}</div>
             <h1 style={{ margin: '2px 0', fontFamily: 'var(--font-cond)', fontSize: '30px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{me.nick}</h1>
-            <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={me.country} /> <b style={{ color: rk.color }}>{rk.name}</b> · {stats.mmr} MMR</div>
+            <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={me.country} /> <b style={{ color: rk.color }}>{ct(rk.name)}</b> · {stats.mmr} MMR</div>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {([['1v1', stats.w + 'W ' + stats.l + 'L', 'var(--rtm-green-bright)'], ['Major', stats.majorPts + ' pts', 'var(--rtm-gold)'], ['Gauntlet', stats.bestStreak + ' rec', 'var(--rtm-blue-bright)']] as [string, string, string][]).map(([k, v, c]) => (

@@ -3,6 +3,7 @@
 // é resolvida por força de time. Ranking salvo só pra conta paga (ver useOnlineStats).
 import type { Coach, Player, TeamSeason, TTeam } from '../../types';
 import { buildUserTeam, playerOvr } from '../../engine/ratings';
+import { ct } from '../../state/career-i18n';
 
 const DEFAULT_COACH: Coach = { nick: 'coach', name: 'Técnico', country: 'br', rating: 70, style: 'tactical' };
 
@@ -46,7 +47,7 @@ export const rankFor = (mmr: number) => [...ONLINE_RANKS].reverse().find((r) => 
 const OPP_COUNTRIES = ['br', 'us', 'se', 'dk', 'ua', 'fr', 'de', 'pt', 'no', 'fi'];
 const randCc = () => OPP_COUNTRIES[Math.floor(Math.random() * OPP_COUNTRIES.length)];
 // um adversário genérico (1v1 / fila do gauntlet / chave do major)
-export const genOpp = (i?: number): Rival => ({ nick: i == null ? 'Adversário' : `Adversário ${i}`, country: randCc(), mmr: 0 });
+export const genOpp = (i?: number): Rival => ({ nick: i == null ? ct('Adversário') : `${ct('Adversário')} ${i}`, country: randCc(), mmr: 0 });
 
 export const MAJOR_PLACES = [
   { key: 'champion', label: 'Campeão', pts: 100, color: '#f3cf6b' },

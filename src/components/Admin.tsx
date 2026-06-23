@@ -9,6 +9,7 @@ import { clearDirty, exportDataset, fileToDataUrl, importDatasetFromFile, loadMa
 import type { CoachStyle, Game, MapId, Player, Playstyle, Role, TeamSeason } from '../types';
 import { COACH_STYLE_LABELS, derivePlaystyle, MAP_LABELS, MAP_POOL, PLAYSTYLE_ICONS, PLAYSTYLE_LABELS } from '../types';
 import { Flag, MapThumb, TeamBadge } from './ui';
+import { ct } from '../state/career-i18n';
 
 const GAMES: Game[] = ['CS 1.6', 'CS:Source', 'CS:GO', 'CS2'];
 const ROLES: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
@@ -31,16 +32,16 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
 
   const saveToServer = async () => {
     if (saving) return;
-    if (!confirm(`Salvar estes ${dataset.length} times no banco? Vai valer para TODOS os usuários e para qualquer campanha nova.`)) return;
+    if (!confirm(`${ct('Salvar estes')} ${dataset.length} ${ct('times no banco? Vai valer para TODOS os usuários e para qualquer campanha nova.')}`)) return;
     setSaving(true);
     setSaveMsg('');
     const r = await saveDatasetToServer(dataset, adminPassword());
     setSaving(false);
     if (r.ok) {
       clearDirty(); // a cópia local agora é igual à do servidor
-      setSaveMsg('✅ Base salva no banco! Já vale para todos os jogadores.');
+      setSaveMsg('✅ ' + ct('Base salva no banco! Já vale para todos os jogadores.'));
     } else {
-      setSaveMsg(`❌ Falha ao salvar: ${r.error ?? 'erro desconhecido'}`);
+      setSaveMsg(`❌ ${ct('Falha ao salvar:')} ${r.error ?? ct('erro desconhecido')}`);
     }
   };
 
@@ -66,7 +67,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
     onChange(dataset.map((t) => (t.id === id ? { ...t, pending: true } : t)));
   };
   const approveAll = () => {
-    if (!confirm(`Aprovar todos os ${pendingTeams.length} times pendentes?`)) return;
+    if (!confirm(`${ct('Aprovar todos os')} ${pendingTeams.length} ${ct('times pendentes?')}`)) return;
     onChange(dataset.map((t) => (t.pending ? { ...t, pending: false } : t)));
   };
 
@@ -139,10 +140,10 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
 
   const deleteTeam = (id: string) => {
     if (dataset.length <= 16) {
-      alert('A base precisa de pelo menos 16 times para montar o Major.');
+      alert(ct('A base precisa de pelo menos 16 times para montar o Major.'));
       return;
     }
-    if (!confirm('Excluir este time da base?')) return;
+    if (!confirm(ct('Excluir este time da base?'))) return;
     recordDeletedTeam(id); // tombstone: o "Salvar no banco" apaga só este id
     const next = dataset.filter((t) => t.id !== id);
     onChange(next);
@@ -153,19 +154,19 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
-          Base de dados - times &amp; jogadores
+          {ct('Base de dados - times & jogadores')}
           <span className="spacer" />
-          <button className="btn" onClick={saveToServer} disabled={saving} title="Grava a base no banco Neon: passa a valer para todos os usuários e campanhas novas">
-            {saving ? '💾 Salvando…' : '💾 Salvar no banco (todos veem)'}
+          <button className="btn" onClick={saveToServer} disabled={saving} title={ct('Grava a base no banco Neon: passa a valer para todos os usuários e campanhas novas')}>
+            {saving ? '💾 ' + ct('Salvando…') : '💾 ' + ct('Salvar no banco (todos veem)')}
           </button>
           <button className="btn ghost" onClick={addTeam}>
-            + Novo time
+            + {ct('Novo time')}
           </button>
-          <button className="btn ghost" onClick={() => exportDataset(dataset)} title="Baixa a base atual como JSON (backup / migrar entre domínios)">
-            ⬇ Exportar
+          <button className="btn ghost" onClick={() => exportDataset(dataset)} title={ct('Baixa a base atual como JSON (backup / migrar entre domínios)')}>
+            ⬇ {ct('Exportar')}
           </button>
-          <span className="btn ghost upload-btn" title="Carrega uma base de um arquivo JSON exportado">
-            ⬆ Importar
+          <span className="btn ghost upload-btn" title={ct('Carrega uma base de um arquivo JSON exportado')}>
+            ⬆ {ct('Importar')}
             <input
               type="file"
               accept="application/json,.json"
@@ -174,13 +175,13 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                 if (!file) return;
                 try {
                   const teams = await importDatasetFromFile(file);
-                  if (confirm(`Importar ${teams.length} times deste arquivo? A base atual será substituída.`)) {
+                  if (confirm(`${ct('Importar')} ${teams.length} ${ct('times deste arquivo? A base atual será substituída.')}`)) {
                     onChange(teams);
                     setSelId(teams[0]?.id ?? null);
-                    alert('Base importada com sucesso!');
+                    alert(ct('Base importada com sucesso!'));
                   }
                 } catch {
-                  alert('Arquivo inválido. Use um JSON exportado pelo próprio jogo.');
+                  alert(ct('Arquivo inválido. Use um JSON exportado pelo próprio jogo.'));
                 }
                 e.target.value = '';
               }}
@@ -194,23 +195,23 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
           <button
             className="btn danger"
             onClick={() => {
-              if (confirm('Restaurar a base original? Suas edições serão perdidas.')) onReset();
+              if (confirm(ct('Restaurar a base original? Suas edições serão perdidas.'))) onReset();
             }}
           >
-            Restaurar padrão
+            {ct('Restaurar padrão')}
           </button>
           <button
             className="btn danger"
-            title="Bloqueia a área administrativa neste navegador"
+            title={ct('Bloqueia a área administrativa neste navegador')}
             onClick={() => {
               lockAdmin();
               onBack();
             }}
           >
-            🔒 Sair
+            🔒 {ct('Sair')}
           </button>
           <button className="btn" onClick={onBack}>
-            ← Voltar
+            ← {ct('Voltar')}
           </button>
         </div>
         <div className="panel-body">
@@ -221,21 +222,21 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
           {pendingTeams.length > 0 && (
             <div className="pending-banner">
               <span>
-                ⏳ <b>{pendingTeams.length}</b> {pendingTeams.length === 1 ? 'time aguardando' : 'times aguardando'} aprovação — ficam ocultos para os jogadores até você liberar e <b>Salvar no banco</b>.
+                ⏳ <b>{pendingTeams.length}</b> {pendingTeams.length === 1 ? ct('time aguardando') : ct('times aguardando')} {ct('aprovação — ficam ocultos para os jogadores até você liberar e')} <b>{ct('Salvar no banco')}</b>.
               </span>
               <span className="spacer" />
               <button className="btn ghost" onClick={() => setSelId(pendingTeams[0].id)}>
-                Revisar
+                {ct('Revisar')}
               </button>
               <button className="btn" onClick={approveAll}>
-                ✅ Aprovar todos
+                ✅ {ct('Aprovar todos')}
               </button>
             </div>
           )}
           <div className="crm-layout">
             <div>
               <div className="field" style={{ marginBottom: 8 }}>
-                <input placeholder="Buscar time, era ou jogador…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+                <input placeholder={ct('Buscar time, era ou jogador…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
               </div>
               <div className="panel crm-list" style={{ marginBottom: 0 }}>
                 {filtered.map((t) => (
@@ -243,16 +244,16 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                     <TeamBadge tag={t.tag} colors={t.colors} size={22} logoUrl={t.logoUrl ?? logoForTeam(t)} />
                     <span style={{ flex: 1 }}>
                       {t.team} <span className="sub">{t.era}</span>
-                      {t.pending && <span className="pending-tag">⏳ pendente</span>}
+                      {t.pending && <span className="pending-tag">⏳ {ct('pendente')}</span>}
                       <br />
                       <span className="sub">
-                        {t.game} · {t.players.length} jogadores
+                        {t.game} · {t.players.length} {ct('jogadores')}
                       </span>
                     </span>
                     <Flag cc={t.country} />
                   </button>
                 ))}
-                {filtered.length === 0 && <div style={{ padding: 14 }} className="muted">Nada encontrado.</div>}
+                {filtered.length === 0 && <div style={{ padding: 14 }} className="muted">{ct('Nada encontrado.')}</div>}
               </div>
             </div>
 
@@ -261,33 +262,33 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                 <div className={`approve-bar ${sel.pending ? 'is-pending' : 'is-live'}`}>
                   {sel.pending ? (
                     <>
-                      <span>⏳ <b>{sel.team}</b> está pendente — invisível para os jogadores.</span>
+                      <span>⏳ <b>{sel.team}</b> {ct('está pendente — invisível para os jogadores.')}</span>
                       <span className="spacer" />
-                      <button className="btn" onClick={() => approveTeam(sel.id)}>✅ Aprovar e liberar</button>
+                      <button className="btn" onClick={() => approveTeam(sel.id)}>✅ {ct('Aprovar e liberar')}</button>
                     </>
                   ) : (
                     <>
-                      <span>✅ <b>{sel.team}</b> está liberado para os jogadores.</span>
+                      <span>✅ <b>{sel.team}</b> {ct('está liberado para os jogadores.')}</span>
                       <span className="spacer" />
-                      <button className="btn ghost" onClick={() => unapproveTeam(sel.id)}>Tornar pendente</button>
+                      <button className="btn ghost" onClick={() => unapproveTeam(sel.id)}>{ct('Tornar pendente')}</button>
                     </>
                   )}
                 </div>
                 <div className="form-grid" style={{ marginBottom: 12 }}>
                   <div className="field" style={{ gridColumn: 'span 2' }}>
-                    <label>Time</label>
+                    <label>{ct('Time')}</label>
                     <input value={sel.team} onChange={(e) => updateTeam(sel.id, { team: e.target.value })} />
                   </div>
                   <div className="field">
-                    <label>Tag</label>
+                    <label>{ct('Tag')}</label>
                     <input value={sel.tag} maxLength={4} onChange={(e) => updateTeam(sel.id, { tag: e.target.value.toUpperCase() })} />
                   </div>
                   <div className="field">
-                    <label>Era</label>
+                    <label>{ct('Era')}</label>
                     <input value={sel.era} onChange={(e) => updateTeam(sel.id, { era: e.target.value })} />
                   </div>
                   <div className="field">
-                    <label>Jogo</label>
+                    <label>{ct('Jogo')}</label>
                     <select value={sel.game} onChange={(e) => updateTeam(sel.id, { game: e.target.value as Game })}>
                       {GAMES.map((g) => (
                         <option key={g}>{g}</option>
@@ -295,11 +296,11 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                     </select>
                   </div>
                   <div className="field">
-                    <label>País (ISO2)</label>
+                    <label>{ct('País (ISO2)')}</label>
                     <input value={sel.country} maxLength={2} onChange={(e) => updateTeam(sel.id, { country: e.target.value.toLowerCase() })} />
                   </div>
                   <div className="field">
-                    <label>Entrosamento (50-99)</label>
+                    <label>{ct('Entrosamento (50-99)')}</label>
                     <input
                       type="number"
                       min={50}
@@ -309,24 +310,24 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                     />
                   </div>
                   <div className="field">
-                    <label>Cores</label>
+                    <label>{ct('Cores')}</label>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <input type="color" value={sel.colors[0]} onChange={(e) => updateTeam(sel.id, { colors: [e.target.value, sel.colors[1]] })} />
                       <input type="color" value={sel.colors[1]} onChange={(e) => updateTeam(sel.id, { colors: [sel.colors[0], e.target.value] })} />
                     </div>
                   </div>
                   <div className="field" style={{ gridColumn: 'span 4' }}>
-                    <label>História / conquistas</label>
+                    <label>{ct('História / conquistas')}</label>
                     <input value={sel.honors} onChange={(e) => updateTeam(sel.id, { honors: e.target.value })} />
                   </div>
                   <div className="field" style={{ gridColumn: 'span 4' }}>
-                    <label>Logo do time (upload)</label>
+                    <label>{ct('Logo do time (upload)')}</label>
                     <div className="upload-row">
                       <span className="preview">
                         <TeamBadge tag={sel.tag} colors={sel.colors} size={40} logoUrl={sel.logoUrl ?? logoForTeam(sel)} />
                       </span>
                       <span className="btn ghost upload-btn">
-                        📤 Enviar logo
+                        📤 {ct('Enviar logo')}
                         <input
                           type="file"
                           accept="image/*"
@@ -337,7 +338,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                               const dataUrl = await fileToDataUrl(file, 160);
                               updateTeam(sel.id, { logoUrl: dataUrl });
                             } catch {
-                              alert('Não foi possível ler a imagem.');
+                              alert(ct('Não foi possível ler a imagem.'));
                             }
                             e.target.value = '';
                           }}
@@ -345,22 +346,22 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                       </span>
                       {sel.logoUrl && (
                         <button className="btn danger" onClick={() => updateTeam(sel.id, { logoUrl: undefined })}>
-                          Remover logo
+                          {ct('Remover logo')}
                         </button>
                       )}
-                      <span className="muted small">PNG/JPG, redimensionada para 160px. Sem upload, usamos a logo da Liquipedia.</span>
+                      <span className="muted small">{ct('PNG/JPG, redimensionada para 160px. Sem upload, usamos a logo da Liquipedia.')}</span>
                     </div>
                   </div>
                   <div className="field">
-                    <label>Coach (nick)</label>
+                    <label>{ct('Coach (nick)')}</label>
                     <input value={sel.coach.nick} onChange={(e) => updateTeam(sel.id, { coach: { ...sel.coach, nick: e.target.value } })} />
                   </div>
                   <div className="field">
-                    <label>Coach (nome)</label>
+                    <label>{ct('Coach (nome)')}</label>
                     <input value={sel.coach.name} onChange={(e) => updateTeam(sel.id, { coach: { ...sel.coach, name: e.target.value } })} />
                   </div>
                   <div className="field">
-                    <label>Coach país / rating</label>
+                    <label>{ct('Coach país / rating')}</label>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <input
                         value={sel.coach.country}
@@ -378,7 +379,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                     </div>
                   </div>
                   <div className="field">
-                    <label>Estilo do coach</label>
+                    <label>{ct('Estilo do coach')}</label>
                     <select
                       value={sel.coach.style}
                       onChange={(e) => updateTeam(sel.id, { coach: { ...sel.coach, style: e.target.value as CoachStyle } })}
@@ -393,7 +394,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                 </div>
 
                 <div className="field" style={{ marginBottom: 6 }}>
-                  <label>Força por mapa (-3 a +3)</label>
+                  <label>{ct('Força por mapa (-3 a +3)')}</label>
                 </div>
                 <div className="form-grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 14 }}>
                   {MAP_POOL.map((m) => (
@@ -414,14 +415,14 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                 <table className="crm-players">
                   <thead>
                     <tr>
-                      <th>Nick</th>
-                      <th>Nome</th>
-                      <th>País</th>
-                      <th>Função</th>
-                      <th>Estilo</th>
-                      <th>Mira</th>
-                      <th>Clutch</th>
-                      <th>Const.</th>
+                      <th>{ct('Nick')}</th>
+                      <th>{ct('Nome')}</th>
+                      <th>{ct('País')}</th>
+                      <th>{ct('Função')}</th>
+                      <th>{ct('Estilo')}</th>
+                      <th>{ct('Mira')}</th>
+                      <th>{ct('Clutch')}</th>
+                      <th>{ct('Const.')}</th>
                       <th>AWP</th>
                       <th>IGL</th>
                       <th>OVR</th>
@@ -477,7 +478,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                         <td>
                           <button
                             className="icon-btn"
-                            title={sel.players.length <= 5 ? 'Mínimo de 5 jogadores' : 'Remover jogador'}
+                            title={sel.players.length <= 5 ? ct('Mínimo de 5 jogadores') : ct('Remover jogador')}
                             onClick={() => deletePlayer(sel.id, p.id)}
                             disabled={sel.players.length <= 5}
                           >
@@ -491,19 +492,19 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
 
                 <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
                   <button className="btn ghost" onClick={() => addPlayer(sel.id)} disabled={sel.players.length >= 7}>
-                    + Adicionar jogador
+                    + {ct('Adicionar jogador')}
                   </button>
                   <span className="spacer" style={{ flex: 1 }} />
                   <button className="btn danger" onClick={() => deleteTeam(sel.id)}>
-                    Excluir time
+                    {ct('Excluir time')}
                   </button>
                 </div>
                 <p className="muted small" style={{ marginTop: 10 }}>
-                  As alterações são salvas automaticamente no seu navegador. Os 5 primeiros jogadores da lista entram em quadra.
+                  {ct('As alterações são salvas automaticamente no seu navegador. Os 5 primeiros jogadores da lista entram em quadra.')}
                 </p>
               </div>
             ) : (
-              <div className="muted">Selecione um time para editar.</div>
+              <div className="muted">{ct('Selecione um time para editar.')}</div>
             )}
           </div>
         </div>
@@ -527,7 +528,7 @@ function DonorsAdminPanel() {
 
   const submit = async () => {
     if (!name.trim()) return;
-    setStatus('Salvando…');
+    setStatus(ct('Salvando…'));
     try {
       const res = await fetch('/api/donors', {
         method: 'POST',
@@ -543,49 +544,49 @@ function DonorsAdminPanel() {
       });
       if (res.ok) {
         invalidateDonors();
-        setStatus(`✔ ${name.trim()} adicionado ao mural!`);
+        setStatus(`✔ ${name.trim()} ${ct('adicionado ao mural!')}`);
         setName('');
         setAmount('');
         setMessage('');
       } else if (res.status === 401) {
-        setStatus('Senha de admin inválida - saia e entre de novo na área administrativa.');
+        setStatus(ct('Senha de admin inválida - saia e entre de novo na área administrativa.'));
       } else {
-        setStatus('Erro ao salvar.');
+        setStatus(ct('Erro ao salvar.'));
       }
     } catch {
-      setStatus('API indisponível (em localhost o mural só funciona no deploy).');
+      setStatus(ct('API indisponível (em localhost o mural só funciona no deploy).'));
     }
   };
 
   return (
     <div className="panel">
-      <div className="panel-head">💜 Apoiadores - registrar doação</div>
+      <div className="panel-head">💜 {ct('Apoiadores - registrar doação')}</div>
       <div className="panel-body">
         <div className="form-grid">
           <div className="field">
-            <label>Nome do doador</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="ex: Gaules" />
+            <label>{ct('Nome do doador')}</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={ct('ex: Gaules')} />
           </div>
           <div className="field">
-            <label>Valor (R$)</label>
+            <label>{ct('Valor (R$)')}</label>
             <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10,00" />
           </div>
           <div className="field">
-            <label>Origem</label>
+            <label>{ct('Origem')}</label>
             <select value={source} onChange={(e) => setSource(e.target.value)}>
               <option value="pixgg">PixGG</option>
               <option value="kofi">Ko-fi</option>
-              <option value="outro">Outro</option>
+              <option value="outro">{ct('Outro')}</option>
             </select>
           </div>
           <div className="field">
-            <label>Mensagem (opcional)</label>
+            <label>{ct('Mensagem (opcional)')}</label>
             <input value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
           <button className="btn gold" onClick={submit} disabled={!name.trim()}>
-            Adicionar ao mural
+            {ct('Adicionar ao mural')}
           </button>
           <span className="muted small">{status}</span>
         </div>
@@ -606,17 +607,17 @@ function MapImagesPanel() {
       saveMapImage(map, dataUrl);
       setVersion((v) => v + 1);
     } catch {
-      alert('Não foi possível ler a imagem.');
+      alert(ct('Não foi possível ler a imagem.'));
     }
   };
 
   return (
     <div className="panel">
       <div className="panel-head">
-        Fotos dos mapas
+        {ct('Fotos dos mapas')}
         <span className="spacer" />
         <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-          Uploads substituem a arte padrão no veto e nas partidas (salvo no navegador)
+          {ct('Uploads substituem a arte padrão no veto e nas partidas (salvo no navegador)')}
         </span>
       </div>
       <div className="panel-body">
@@ -628,11 +629,11 @@ function MapImagesPanel() {
               </div>
               <div className="mname">
                 {MAP_LABELS[m]}
-                {customs[m] && <span className="muted small"> · custom</span>}
+                {customs[m] && <span className="muted small"> · {ct('custom')}</span>}
               </div>
               <div className="actions">
                 <span className="btn ghost upload-btn" style={{ padding: '4px 10px', fontSize: 11 }}>
-                  📤 Foto
+                  📤 {ct('Foto')}
                   <input type="file" accept="image/*" onChange={(e) => upload(m, e.target.files?.[0])} />
                 </span>
                 {customs[m] && (
@@ -644,7 +645,7 @@ function MapImagesPanel() {
                       setVersion((v) => v + 1);
                     }}
                   >
-                    Padrão
+                    {ct('Padrão')}
                   </button>
                 )}
               </div>

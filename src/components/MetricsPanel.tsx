@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminPassword } from './AdminGate';
 import { Flag } from './ui';
+import { ct } from '../state/career-i18n';
 
 interface Metrics {
   totals: {
@@ -61,7 +62,7 @@ export function MetricsPanel() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(setData)
-      .catch((e) => setErr(e?.message === '401' ? 'Senha de admin inválida.' : 'Métricas indisponíveis (só funcionam no site publicado).'));
+      .catch((e) => setErr(e?.message === '401' ? ct('Senha de admin inválida.') : ct('Métricas indisponíveis (só funcionam no site publicado).')));
   }, []);
 
   const load = () => {
@@ -76,7 +77,7 @@ export function MetricsPanel() {
   if (err) {
     return (
       <div className="panel">
-        <div className="panel-head">📈 Métricas</div>
+        <div className="panel-head">📈 {ct('Métricas')}</div>
         <div className="panel-body muted">{err}</div>
       </div>
     );
@@ -84,8 +85,8 @@ export function MetricsPanel() {
   if (!data) {
     return (
       <div className="panel">
-        <div className="panel-head">📈 Métricas</div>
-        <div className="panel-body muted">Carregando métricas…</div>
+        <div className="panel-head">📈 {ct('Métricas')}</div>
+        <div className="panel-body muted">{ct('Carregando métricas…')}</div>
       </div>
     );
   }
@@ -98,33 +99,33 @@ export function MetricsPanel() {
   return (
     <div className="panel">
       <div className="panel-head">
-        📈 Métricas do jogo
+        📈 {ct('Métricas do jogo')}
         <span className="spacer" />
         <button className="btn ghost" onClick={load}>
-          🔄 Atualizar
+          🔄 {ct('Atualizar')}
         </button>
       </div>
       <div className="panel-body">
         <div className="metric-grid">
-          <Card label="Visitantes únicos (total)" value={t.unique_visitors} />
-          <Card label="Visitantes hoje" value={t.visitors_24h} hint={`${t.visits_24h} visitas`} />
-          <Card label="Visitantes (7 dias)" value={t.visitors_7d} />
-          <Card label="Partidas iniciadas" value={t.games_started} />
-          <Card label="Partidas concluídas" value={t.games_finished} hint={`${conv}% de conclusão`} />
-          <Card label="Temporadas extras" value={t.seasons_started} hint="modo carreira" />
-          <Card label="Taxa de título" value={`${titleRate}%`} hint="o quão fácil está ganhar" />
-          <Card label="Jogadores online agora" value={data.online.online_now ?? '0'} hint="ativos nos ultimos 2 min" />
-          <Card label="Salas online" value={data.online.lobbies_total} hint={`${data.online.lobbies_7d} esta semana`} />
-          <Card label="Cliques em doar" value={t.donate_clicks} />
-          <Card label="Cliques no banner (G4)" value={t.ad_clicks} hint={`${t.ad_clicks_24h} nas últimas 24h`} />
-          <Card label="Cards compartilhados" value={t.share_cards} />
-          <Card label="Campanhas no Hall" value={data.hall.campaigns} hint={`${data.hall.titles} títulos`} />
+          <Card label={ct('Visitantes únicos (total)')} value={t.unique_visitors} />
+          <Card label={ct('Visitantes hoje')} value={t.visitors_24h} hint={`${t.visits_24h} ${ct('visitas')}`} />
+          <Card label={ct('Visitantes (7 dias)')} value={t.visitors_7d} />
+          <Card label={ct('Partidas iniciadas')} value={t.games_started} />
+          <Card label={ct('Partidas concluídas')} value={t.games_finished} hint={`${conv}% ${ct('de conclusão')}`} />
+          <Card label={ct('Temporadas extras')} value={t.seasons_started} hint={ct('modo carreira')} />
+          <Card label={ct('Taxa de título')} value={`${titleRate}%`} hint={ct('o quão fácil está ganhar')} />
+          <Card label={ct('Jogadores online agora')} value={data.online.online_now ?? '0'} hint={ct('ativos nos ultimos 2 min')} />
+          <Card label={ct('Salas online')} value={data.online.lobbies_total} hint={`${data.online.lobbies_7d} ${ct('esta semana')}`} />
+          <Card label={ct('Cliques em doar')} value={t.donate_clicks} />
+          <Card label={ct('Cliques no banner (G4)')} value={t.ad_clicks} hint={`${t.ad_clicks_24h} ${ct('nas últimas 24h')}`} />
+          <Card label={ct('Cards compartilhados')} value={t.share_cards} />
+          <Card label={ct('Campanhas no Hall')} value={data.hall.campaigns} hint={`${data.hall.titles} ${ct('títulos')}`} />
         </div>
 
         <div className="muted small" style={{ margin: '18px 0 6px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
-          Visitas por dia (14 dias)
+          {ct('Visitas por dia (14 dias)')}
         </div>
-        {data.visitsByDay.length === 0 && <div className="muted small">Sem visitas registradas ainda.</div>}
+        {data.visitsByDay.length === 0 && <div className="muted small">{ct('Sem visitas registradas ainda.')}</div>}
         {data.visitsByDay.map((d) => (
           <div key={d.day} className="lab-bar">
             {/* d.day é 'YYYY-MM-DD' do servidor (fuso SP); formatar direto da
@@ -134,7 +135,7 @@ export function MetricsPanel() {
               <i style={{ width: `${(Number(d.visits) / maxV) * 100}%` }} />
             </span>
             <span className="muted">
-              {d.visits} visitas · {d.visitors} únicos
+              {d.visits} {ct('visitas')} · {d.visitors} {ct('únicos')}
             </span>
           </div>
         ))}
@@ -142,18 +143,18 @@ export function MetricsPanel() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginTop: 18 }}>
           <div>
             <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
-              Título por dificuldade
+              {ct('Título por dificuldade')}
             </div>
-            {data.byDifficulty.length === 0 && <div className="muted small">Sem partidas concluídas ainda.</div>}
+            {data.byDifficulty.length === 0 && <div className="muted small">{ct('Sem partidas concluídas ainda.')}</div>}
             {data.byDifficulty.map((d) => {
               const rate = Number(d.games) > 0 ? ((Number(d.titles) / Number(d.games)) * 100).toFixed(1) : '0';
               return (
                 <div key={d.difficulty} className="synergy-list">
                   <div className="item">
                     <span className="muted">
-                      {DIFF_LABEL[d.difficulty] ?? d.difficulty} ({d.games} jogos)
+                      {ct(DIFF_LABEL[d.difficulty] ?? d.difficulty)} ({d.games} {ct('jogos')})
                     </span>
-                    <span className={Number(rate) > 35 ? 'neg' : 'pos'}>{rate}% título</span>
+                    <span className={Number(rate) > 35 ? 'neg' : 'pos'}>{rate}% {ct('título')}</span>
                   </div>
                 </div>
               );
@@ -161,36 +162,36 @@ export function MetricsPanel() {
           </div>
           <div>
             <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
-              Modos mais jogados
+              {ct('Modos mais jogados')}
             </div>
             {data.byPool.map((p) => (
               <div key={p.pool} className="synergy-list">
                 <div className="item">
-                  <span className="muted">{p.pool === 'br' ? '🇧🇷 GC Masters' : '🌍 Major Mundial'}</span>
+                  <span className="muted">{p.pool === 'br' ? '🇧🇷 GC Masters' : '🌍 ' + ct('Major Mundial')}</span>
                   <span className="pos">{p.games}</span>
                 </div>
               </div>
             ))}
             <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '14px 0 6px' }}>
-              Países dos visitantes
+              {ct('Países dos visitantes')}
             </div>
             {(() => {
               const list = data.byCountry ?? [];
               if (list.length === 0) {
-                return <div className="muted small">Sem dados de país ainda (começa a contar a partir de agora, no site publicado).</div>;
+                return <div className="muted small">{ct('Sem dados de país ainda (começa a contar a partir de agora, no site publicado).')}</div>;
               }
               const max = Math.max(1, ...list.map((c) => Number(c.visitors)));
               return list.map((c) => (
                 <div key={c.country} className="country-row">
                   <Flag cc={c.country} />
-                  <span className="country-name">{COUNTRY_NAME[c.country] ?? c.country.toUpperCase()}</span>
+                  <span className="country-name">{COUNTRY_NAME[c.country] ? ct(COUNTRY_NAME[c.country]) : c.country.toUpperCase()}</span>
                   <span className="country-bar"><i style={{ width: `${(Number(c.visitors) / max) * 100}%` }} /></span>
                   <span className="country-n">{c.visitors}</span>
                 </div>
               ));
             })()}
             <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '14px 0 6px' }}>
-              Eventos nas últimas 24h
+              {ct('Eventos nas últimas 24h')}
             </div>
             {data.last24h.map((e) => (
               <div key={e.type} className="synergy-list">

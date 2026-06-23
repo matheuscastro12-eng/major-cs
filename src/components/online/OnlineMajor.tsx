@@ -144,7 +144,7 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
     <div style={{ maxWidth: '640px', margin: '0 auto' }}>
       <div style={{ textAlign: 'center', marginBottom: '20px' }}>
         <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--rtm-dim)', fontWeight: 800 }}>{ct('Sua colocação')}</span>
-        <h1 style={{ margin: '4px 0 0', fontFamily: 'var(--font-cond)', fontSize: '52px', fontWeight: 800, textTransform: 'uppercase', color: pl.color, lineHeight: 1, textShadow: `0 0 36px ${pl.color}55` }}>{pl.label}</h1>
+        <h1 style={{ margin: '4px 0 0', fontFamily: 'var(--font-cond)', fontSize: '52px', fontWeight: 800, textTransform: 'uppercase', color: pl.color, lineHeight: 1, textShadow: `0 0 36px ${pl.color}55` }}>{ct(pl.label)}</h1>
         <div style={{ fontSize: '15px', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '8px' }}>+{pl.pts} {ct('pontos de ranking')}</div>
       </div>
       <Panel title={ct('Classificação final da chave')} flush>
@@ -155,7 +155,7 @@ export function OnlineMajor({ manager, pool, setStats, onHub, onExit }: {
               <span style={{ width: '28px', textAlign: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '16px', color: i === 0 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{i + 1}</span>
               <Flag cc={s.country} />
               <b style={{ flex: 1, fontFamily: 'var(--font-cond)', fontSize: '15px', color: s.you ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{s.nick}{s.you ? ` (${ct('você')})` : ''}</b>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: p.color }}>{p.label}</span>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: p.color }}>{ct(p.label)}</span>
               <span style={{ width: '54px', textAlign: 'right', fontFamily: 'var(--font-cond)', fontWeight: 800, color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{s.pts}</span>
             </div>
           );

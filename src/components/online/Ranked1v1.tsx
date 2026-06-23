@@ -55,7 +55,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     const theirs = draftPool.filter((p) => taken[p.nick] === 'rival');
     if (mine.length !== 5 || theirs.length !== 5) return;
     const myTeam = buildOnlineTeam(me.org || me.nick, mine, 'you');
-    const rivalTeam = buildOnlineTeam(rival ? rival.nick : 'Adversário', theirs, 'rival');
+    const rivalTeam = buildOnlineTeam(rival ? rival.nick : ct('Adversário'), theirs, 'rival');
     setTeams([myTeam, rivalTeam]);
     setPhase('veto');
   }, [draftPool, taken, me.org, me.nick, rival]);

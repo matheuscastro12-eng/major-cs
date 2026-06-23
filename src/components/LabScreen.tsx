@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { makeRng, randomSeed } from '../engine/rng';
 import { simulateAiTournament } from '../engine/swiss';
 import type { TeamSeason } from '../types';
+import { ct } from '../state/career-i18n';
 
 interface Props {
   dataset: TeamSeason[];
@@ -71,28 +72,27 @@ export function LabScreen({ dataset, onBack }: Props) {
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
-          🧪 Lab de balanceamento
+          🧪 {ct('Lab de balanceamento')}
           <span className="spacer" />
           <button className="btn" onClick={onBack}>
-            ← Voltar
+            ← {ct('Voltar')}
           </button>
         </div>
         <div className="panel-body">
           <p className="muted small" style={{ marginTop: 0 }}>
-            Simula torneios inteiros entre os times da base (sem jogador humano) e mede a taxa de
-            título de cada um quando participa. Use para calibrar atributos, sinergia e coaches.
+            {ct('Simula torneios inteiros entre os times da base (sem jogador humano) e mede a taxa de título de cada um quando participa. Use para calibrar atributos, sinergia e coaches.')}
           </p>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
             <div className="field" style={{ width: 140 }}>
-              <label>Torneios</label>
+              <label>{ct('Torneios')}</label>
               <input type="number" min={50} max={2000} value={n} onChange={(e) => setN(Number(e.target.value) || 300)} />
             </div>
             <button className="btn gold" onClick={run} disabled={running}>
-              {running ? `Simulando… ${progress}/${Math.max(50, Math.min(2000, n))}` : '▶ Rodar simulação'}
+              {running ? `${ct('Simulando…')} ${progress}/${Math.max(50, Math.min(2000, n))}` : `▶ ${ct('Rodar simulação')}`}
             </button>
             {running && (
               <button className="btn ghost" onClick={() => (cancelRef.current = true)}>
-                Parar
+                {ct('Parar')}
               </button>
             )}
           </div>
@@ -100,7 +100,7 @@ export function LabScreen({ dataset, onBack }: Props) {
           {result && (
             <>
               <div className="muted small" style={{ marginBottom: 8 }}>
-                {result.ran} torneios simulados · taxa = títulos ÷ participações
+                {result.ran} {ct('torneios simulados · taxa = títulos ÷ participações')}
               </div>
               {rows.map((r) => (
                 <div key={r.name} className="lab-bar">
