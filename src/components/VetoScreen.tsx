@@ -1,3 +1,4 @@
+import { ct } from '../state/career-i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { draftSynergy } from '../engine/ratings';
 import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, vetoOrder, type VetoState } from '../engine/veto';
@@ -227,7 +228,7 @@ function VetoAnalysis({
 
         {me.playbook && (
           <div className="pb-analysis" style={{ margin: '4px 0 10px' }}>
-            <span>📋 Playbook: <span className="pb-chip">{PLAYBOOK_LABELS[me.playbook]}</span></span>
+            <span>📋 Playbook: <span className="pb-chip">{ct(PLAYBOOK_LABELS[me.playbook])}</span></span>
             <span className="muted small">· entrosamento {Math.round((me.playbookFam ?? 0) * 100)}%</span>
           </div>
         )}

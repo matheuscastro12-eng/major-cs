@@ -513,7 +513,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           {pbLive && (
             <div className="center" style={{ marginTop: 4 }}>
               <span className="mm-playbook">
-                📋 {PLAYBOOK_LABELS[me.playbook!]} · <span className={`pb-note ${pbLive.good ? 'good' : 'bad'}`}>{pbLive.label} {pbLive.good ? `▲ ${ct('favorável')}` : `▼ ${ct('arriscado')}`}</span>
+                📋 {ct(PLAYBOOK_LABELS[me.playbook!])} · <span className={`pb-note ${pbLive.good ? 'good' : 'bad'}`}>{pbLive.label} {pbLive.good ? `▲ ${ct('favorável')}` : `▼ ${ct('arriscado')}`}</span>
               </span>
             </div>
           )}
@@ -560,7 +560,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 const ps = p.playstyle ?? derivePlaystyle(p.role);
                 const rel = stanceRelation(ps, stance);
                 return (
-                  <span key={p.id} className={`style-chip ${rel}`} title={`${p.nick} — ${PLAYSTYLE_LABELS[ps]}`}>
+                  <span key={p.id} className={`style-chip ${rel}`} title={`${p.nick} — ${ct(PLAYSTYLE_LABELS[ps])}`}>
                     {PLAYSTYLE_ICONS[ps]} {p.nick}
                     {rel === 'buff' && <span className="sc-tag up">{t('match.valued')}</span>}
                     {rel === 'nerf' && <span className="sc-tag down">{t('match.outOfPlan')}</span>}

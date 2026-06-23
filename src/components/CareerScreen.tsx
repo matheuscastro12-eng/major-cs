@@ -3827,7 +3827,7 @@ export function CareerScreen({ onExit }: Props) {
               <div style={{ flex: 1, minWidth: '200px' }}>
                 <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>{ct('Carreira')} · ★{prestige} {ct('prestígio')} · {save.titles ?? 0}× {ct('título')}</div>
                 <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '34px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-text-strong)', lineHeight: 1 }}>{save.org?.name}</h1>
-                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>{squadPlayers.length > 0 && <OrgFlag players={squadPlayers} title={ct('Nacionalidade do core')} />} {save.circuit?.name} · Split {save.split}{save.region ? ` · ${MACRO_REGION_LABELS[save.region]}` : ''}</div>
+                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>{squadPlayers.length > 0 && <OrgFlag players={squadPlayers} title={ct('Nacionalidade do core')} />} {save.circuit?.name} · Split {save.split}{save.region ? ` · ${ct(MACRO_REGION_LABELS[save.region])}` : ''}</div>
               </div>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 {([['OVR', `${avg}`, 'var(--rtm-gold)'], [ct('Caixa'), formatMoney(save.budget), 'var(--rtm-green-bright)'], [ct('Fãs'), formatFans(fans), 'var(--rtm-text-strong)']] as [string, string, string][]).map(([k, v, c]) => (
@@ -4332,8 +4332,8 @@ export function CareerScreen({ onExit }: Props) {
                 <div className="pb-list">
                   {(Object.keys(PLAYBOOK_LABELS) as Playbook[]).map((pb) => (
                     <button key={pb} className={`pb-opt${save.playbook === pb ? ' on' : ''}`} onClick={() => setPlaybook(pb)}>
-                      <span className="pb-name">{PLAYBOOK_LABELS[pb]}{save.playbook === pb ? ' ✓' : ''}</span>
-                      <span className="pb-desc muted small">{PLAYBOOK_DESC[pb]}</span>
+                      <span className="pb-name">{ct(PLAYBOOK_LABELS[pb])}{save.playbook === pb ? ' ✓' : ''}</span>
+                      <span className="pb-desc muted small">{ct(PLAYBOOK_DESC[pb])}</span>
                     </button>
                   ))}
                 </div>
@@ -5556,9 +5556,9 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
         <div className="panel-body">
           {relocate && (
             <div className="relocate-banner">
-              🌍 Seu <b>core</b> {ct('mudou: agora é da')} <b>{MACRO_REGION_LABELS[relocate.to]}</b>{ct(', mas você compete na')} <b>{MACRO_REGION_LABELS[relocate.from]}</b>.
-              {' '}Quer <b>realocar a org para a {MACRO_REGION_LABELS[relocate.to]}</b>? A bandeira do time passa a ser a dessa região.
-              <button className="btn small" onClick={onRelocate}>Mudar para {MACRO_REGION_LABELS[relocate.to]}</button>
+              🌍 Seu <b>core</b> {ct('mudou: agora é da')} <b>{ct(MACRO_REGION_LABELS[relocate.to])}</b>{ct(', mas você compete na')} <b>{ct(MACRO_REGION_LABELS[relocate.from])}</b>.
+              {' '}Quer <b>realocar a org para a {ct(MACRO_REGION_LABELS[relocate.to])}</b>? A bandeira do time passa a ser a dessa região.
+              <button className="btn small" onClick={onRelocate}>Mudar para {ct(MACRO_REGION_LABELS[relocate.to])}</button>
             </div>
           )}
           <p className="muted small">{ct('Cada circuito é um')} <b>tier</b>{ct('. Você joga no seu tier ou abaixo; vencer o seu circuito te')} <b>promove</b>{ct(', terminar no fundo te')} <b>rebaixa</b>{ct('. Só o')} <b>Tier 1</b> {ct('dá vaga no Major.')}</p>

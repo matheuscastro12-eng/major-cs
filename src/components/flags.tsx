@@ -1,3 +1,4 @@
+import { ct } from '../state/career-i18n';
 import { useState } from 'react';
 import { coreIdentity, orgCore, MACRO_REGION_LABELS, REGION_LABELS, type CoreId, type MacroRegion, type RegionKey } from '../data/regions';
 import type { TPlayer } from '../types';
@@ -129,7 +130,7 @@ export function OrgFlag({ players, title }: { players: { country: string }[]; ti
   if (core.kind === 'country') return <Flag cc={core.cc} title={title} />;
   if (core.kind === 'region') {
     return (
-      <span className="flag region-mini" title={title ?? MACRO_REGION_LABELS[core.region]}>
+      <span className="flag region-mini" title={title ?? ct(MACRO_REGION_LABELS[core.region])}>
         <MacroRegionFlagSvg region={core.region} />
       </span>
     );
@@ -139,7 +140,7 @@ export function OrgFlag({ players, title }: { players: { country: string }[]; ti
 export function orgFlagLabel(players: { country: string }[]): string {
   const core = orgCore(players.map((p) => p.country));
   if (core.kind === 'country') return core.cc.toUpperCase();
-  if (core.kind === 'region') return MACRO_REGION_LABELS[core.region];
+  if (core.kind === 'region') return ct(MACRO_REGION_LABELS[core.region]);
   return 'Internacional';
 }
 
@@ -171,7 +172,7 @@ export function CoreFlag({ players, className = '' }: { players: { country: stri
 export function coreLabel(players: { country: string }[]): string {
   const core = coreIdentity(players.map((p) => p.country));
   if (core.kind === 'country') return core.cc.toUpperCase();
-  if (core.kind === 'region') return REGION_LABELS[core.region];
+  if (core.kind === 'region') return ct(REGION_LABELS[core.region]);
   return 'Internacional';
 }
 

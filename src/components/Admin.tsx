@@ -386,7 +386,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                     >
                       {STYLES.map((s) => (
                         <option key={s} value={s}>
-                          {COACH_STYLE_LABELS[s]}
+                          {ct(COACH_STYLE_LABELS[s])}
                         </option>
                       ))}
                     </select>
@@ -455,7 +455,7 @@ export function Admin({ dataset, onChange, onReset, onBack, onLab }: Props) {
                           >
                             {PLAYSTYLES.map((s) => (
                               <option key={s} value={s}>
-                                {PLAYSTYLE_ICONS[s]} {PLAYSTYLE_LABELS[s]}
+                                {PLAYSTYLE_ICONS[s]} {ct(PLAYSTYLE_LABELS[s])}
                               </option>
                             ))}
                           </select>
