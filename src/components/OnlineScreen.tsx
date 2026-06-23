@@ -349,6 +349,12 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   const [ranked, setRanked] = useState(forceRanked); // sala ranqueada (conta MMR)
   const [draftRollouts, setDraftRollouts] = useState(2);
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
+  // só mostra as salas do MODO e do tipo (ranked/casual) da tela atual. Sem isso,
+  // a lista era universal: sala de ranked aparecia no casual e os modos se misturavam.
+  const visibleRooms = useMemo(
+    () => openRooms.filter((r) => r.mode === mode && Boolean(r.ranked) === Boolean(ranked)),
+    [openRooms, mode, ranked],
+  );
   const [code, setCode] = useState('');
   const [state, setState] = useState<LobbyState | null>(null);
   const [myPicks, setMyPicks] = useState<string[]>([]);
@@ -979,11 +985,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           </div>
 
           <Panel title={OL.openRooms} accent="blue" actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}>
-            {openRooms.length === 0 ? (
+            {visibleRooms.length === 0 ? (
               <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{OL.noRooms}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {openRooms.map((r) => {
+                {visibleRooms.map((r) => {
                   const full = r.players >= r.max;
                   return (
                     <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.7 : 1 }}>
@@ -1109,7 +1115,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--rtm-dim)' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 8px var(--rtm-green-bright)' }} />
-                <b style={{ color: 'var(--rtm-text-strong)' }}>{openCount} {ct('salas abertas')}</b> {ct('agora')} · {openRooms.length} {ct('no total')}
+                <b style={{ color: 'var(--rtm-text-strong)' }}>{openCount} {ct('salas abertas')}</b> {ct('agora')} · {visibleRooms.length} {ct('no total')}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>⟳ {ct('Atualizar')}</Button>
@@ -1125,9 +1131,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {openRooms.length === 0 ? (
+              {visibleRooms.length === 0 ? (
                 <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '13px', color: 'var(--rtm-dim)', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)' }}>{OL.noRooms}</div>
-              ) : openRooms.map((r) => {
+              ) : visibleRooms.map((r) => {
                 const full = r.players >= r.max;
                 const pc = poolColor(r.pool);
                 return (
@@ -1391,11 +1397,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               accent="blue"
               actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}
             >
-              {openRooms.length === 0 ? (
+              {visibleRooms.length === 0 ? (
                 <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{OL.noRooms}</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {openRooms.map((r) => {
+                  {visibleRooms.map((r) => {
                     const full = r.players >= r.max;
                     return (
                     <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.75 : 1 }}>
