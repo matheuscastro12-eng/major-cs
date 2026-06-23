@@ -4528,7 +4528,9 @@ export function CareerScreen({ onExit }: Props) {
                       <td style={{ textAlign: 'left' }}>{h.circuit}{h.champion && ' 🏆'}</td>
                       <td>{h.position || '-'}º</td>
                       <td>{h.wins}-{h.losses}</td>
-                      <td>{h.major ? PLACE_SHORT[h.major.placement] : '-'}</td>
+                      <td className={h.major?.champion ? 'gold-text' : undefined}>
+                        {h.major ? `${PLACE_SHORT[h.major.placement]}${h.major.champion ? ' 🌍🏆' : ''}` : '-'}
+                      </td>
                       <td>{formatMoney(h.prize)}</td>
                     </tr>
                   ))}
@@ -6087,7 +6089,8 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   const squadIds = new Set(squadPlayers.map((p) => p.id));
   const swapPool = squadPlayers.filter((p) => !committedOut.has(p.id));
   const filteredMarket = market
-    .filter((m) => m.from.id !== '__free__' && !targeted.has(m.player.id) && !squadIds.has(m.player.id))
+    // free agents (sem time) também entram: negociam direto a pedida, sem clube
+    .filter((m) => !targeted.has(m.player.id) && !squadIds.has(m.player.id))
     .filter((m) => matchesNegotiationFilters(m.player, m.from.team, {
       query: q,
       role: roleFilter,

@@ -83,7 +83,15 @@ export function analyzeSeries(series: SeriesResult, teams: [TTeam, TTeam], povId
   }
 
   // 4.5) forma dos jogadores
-  const cold = me.players.filter((p) => (p.form ?? 1) <= 0.96);
+  // "má fase" só faz sentido quando o jogador REALMENTE rendeu mal nesta série:
+  // não acusa numa vitória, nem quem rendeu igual/acima do esperado pro seu OVR
+  // (a forma é uma média lenta e ficava contradizendo um bom jogo / título).
+  const cold = won ? [] : me.players.filter((p) => {
+    if ((p.form ?? 1) > 0.96) return false;
+    const line = playerSeriesLine(series, p.id);
+    const rating = line ? computeDisplay(line).rating : 1;
+    return rating < expectedRating(p.ovr);
+  });
   const hot = me.players.filter((p) => (p.form ?? 1) >= 1.05);
   if (cold.length > 0) {
     bullets.push({ icon: '🥶', text: `${cold.map((p) => p.nick).join(', ')} chegou em má fase à série - a forma do torneio pesa na pontaria.`, tone: 'bad' });
