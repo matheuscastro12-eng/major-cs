@@ -41,6 +41,16 @@ export interface OnlineMajorVetoState {
   maps?: { map: MapId; pickedBy: 0 | 1 | -1 }[];
 }
 
+// entrada do snapshot de elenco congelado (run_roster)
+export interface RosterEntry {
+  nick: string;
+  picks: string[];
+  coach_pick: string;
+  strategy?: OnlineStrategy;
+  lineup?: OnlineLineup;
+  rollouts?: number[];
+}
+
 export interface LobbyState {
   lobby: {
     code: string;
@@ -61,6 +71,10 @@ export interface LobbyState {
     stage_started_at?: number;
     veto?: OnlineVetoState;
     major_vetos?: Record<string, OnlineMajorVetoState>;
+    // SNAPSHOT congelado do elenco da corrida (gravado quando o Major começa).
+    // O bracket é simulado a partir DESTE snapshot, não dos players ao vivo —
+    // assim entrar/sair da sala não re-embaralha resultados já jogados.
+    run_roster?: RosterEntry[] | null;
   };
   players: {
     nick: string;
@@ -300,7 +314,17 @@ function majorVetoMaps(
 export const majorMatchKey = (stage: number, pairing: Pick<Pairing, 'a' | 'b'>) => `${stage}:${pairing.a}|${pairing.b}`;
 
 export function simulateOnlineMajor(state: LobbyState): OnlineMajor | null {
-  const ordered = state.players.filter((p) => !p.spectator).sort(byNickCodepoint);
+  // ELENCO CONGELADO: se o Major já começou (run_roster gravado), simula a partir
+  // DELE — não dos players ao vivo. Sem isso, alguém entrando/saindo da sala muda
+  // a contagem de humanos, re-sorteia os times de IA e re-embaralha TODO o bracket,
+  // invertendo resultados que já tinham sido jogados/assistidos.
+  const roster: RosterEntry[] = state.lobby.run_roster && state.lobby.run_roster.length
+    ? state.lobby.run_roster
+    : state.players.filter((p) => !p.spectator).map((p) => ({
+        nick: p.nick, picks: p.picks, coach_pick: p.coach_pick,
+        strategy: p.strategy, lineup: p.lineup, rollouts: p.rollouts,
+      }));
+  const ordered = [...roster].sort(byNickCodepoint);
   const ruleset = state.lobby.ruleset ?? 'open';
 
   const humanByTeamId: Record<string, string> = {};

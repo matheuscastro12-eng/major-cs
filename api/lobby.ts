@@ -129,6 +129,7 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS draft_rollouts int DEFAULT 2`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS veto_state jsonb DEFAULT '{}'::jsonb`;
   await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS major_vetos jsonb DEFAULT '{}'::jsonb`;
+  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_roster jsonb DEFAULT NULL`;
   await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS ready_stage int DEFAULT -1`;
   await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS strategy jsonb DEFAULT '{}'::jsonb`;
   await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS lineup jsonb DEFAULT '{}'::jsonb`;
@@ -238,7 +239,7 @@ export default async function handler(
       /* migração é best-effort, nunca bloqueia o poll */
     }
     try {
-      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, COALESCE(name, '') AS name, created_at, COALESCE(locked, false) AS locked, COALESCE(ranked, false) AS ranked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed, COALESCE(draft_rollouts, 2) AS draft_rollouts, COALESCE(veto_state, '{}'::jsonb) AS veto, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, COALESCE(name, '') AS name, created_at, COALESCE(locked, false) AS locked, COALESCE(ranked, false) AS ranked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed, COALESCE(draft_rollouts, 2) AS draft_rollouts, COALESCE(veto_state, '{}'::jsonb) AS veto, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos, run_roster FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -455,7 +456,13 @@ export default async function handler(
             const participants = actives.map((p) => String(p.nick));
             await sql`UPDATE lobbies SET status = 'veto', veto_state = ${JSON.stringify(initialVeto(participants))}::jsonb, updated_at = now() WHERE code = ${code}`;
           } else if (lobby[0].mode !== 'duel') {
-            await sql`UPDATE lobbies SET status = 'done', updated_at = now() WHERE code = ${code}`;
+            await sql`UPDATE lobbies SET status = 'done', run_roster = (
+              SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                'nick', nick, 'picks', COALESCE(picks, '[]'::jsonb), 'coach_pick', COALESCE(coach_pick, ''),
+                'strategy', COALESCE(strategy, '{}'::jsonb), 'lineup', COALESCE(lineup, '{}'::jsonb), 'rollouts', COALESCE(rollouts, '[]'::jsonb)
+              ) ORDER BY joined_at ASC), '[]'::jsonb)
+              FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false
+            ), updated_at = now() WHERE code = ${code}`;
           }
         }
       }
@@ -552,9 +559,19 @@ export default async function handler(
         const duelVeto = lobby[0].mode === 'duel' ? initialVeto(participants) : {};
         const nextStatus = lobby[0].mode === 'duel' ? 'veto' : 'done';
         await sql`UPDATE lobbies SET status = ${nextStatus}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, stage_started_at = 0, veto_state = ${JSON.stringify(duelVeto)}::jsonb, major_vetos = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
+        // novo Major mantendo elencos: re-congela o snapshot (mesmos jogadores, run_seed novo)
+        if (lobby[0].mode === 'party') {
+          await sql`UPDATE lobbies SET run_roster = (
+            SELECT COALESCE(jsonb_agg(jsonb_build_object(
+              'nick', nick, 'picks', COALESCE(picks, '[]'::jsonb), 'coach_pick', COALESCE(coach_pick, ''),
+              'strategy', COALESCE(strategy, '{}'::jsonb), 'lineup', COALESCE(lineup, '{}'::jsonb), 'rollouts', COALESCE(rollouts, '[]'::jsonb)
+            ) ORDER BY joined_at ASC), '[]'::jsonb)
+            FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false
+          ) WHERE code = ${code}`;
+        }
         await sql`UPDATE lobby_players SET ready_stage = -1 WHERE code = ${code}`;
       } else {
-        await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, stage_started_at = 0, veto_state = '{}'::jsonb, major_vetos = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
+        await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, stage_started_at = 0, veto_state = '{}'::jsonb, major_vetos = '{}'::jsonb, run_roster = NULL, updated_at = now() WHERE code = ${code}`;
         await sql`UPDATE lobby_players SET picks = '[]'::jsonb, coach_pick = '', strategy = '{}'::jsonb, lineup = '{}'::jsonb, rollouts = '[]'::jsonb, done = false, ready_stage = -1 WHERE code = ${code}`;
       }
       res.status(200).json({ ok: true, seed: newSeed, keepRoster });
@@ -748,7 +765,16 @@ export default async function handler(
             const participants = participantRows.map((player) => String(player.nick));
             await sql`UPDATE lobbies SET status = 'veto', veto_state = ${JSON.stringify(initialVeto(participants))}::jsonb, updated_at = now() WHERE code = ${code}`;
           } else {
-            await sql`UPDATE lobbies SET status = 'done', updated_at = now() WHERE code = ${code}`;
+            // Major começou: CONGELA o elenco da corrida (snapshot). A partir daqui
+            // o bracket é simulado do snapshot, não dos players ao vivo — entrar/sair
+            // da sala não re-embaralha mais resultados já jogados.
+            await sql`UPDATE lobbies SET status = 'done', run_roster = (
+              SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                'nick', nick, 'picks', COALESCE(picks, '[]'::jsonb), 'coach_pick', COALESCE(coach_pick, ''),
+                'strategy', COALESCE(strategy, '{}'::jsonb), 'lineup', COALESCE(lineup, '{}'::jsonb), 'rollouts', COALESCE(rollouts, '[]'::jsonb)
+              ) ORDER BY joined_at ASC), '[]'::jsonb)
+              FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false
+            ), updated_at = now() WHERE code = ${code}`;
           }
         }
       }
