@@ -1889,7 +1889,19 @@ export function CareerScreen({ onExit }: Props) {
   const market = useMemo(
     () => {
       const squadIds = new Set(save.squad.map((s) => s.playerId));
-      const fromTeams = currentEra.flatMap((t) => t.players.map((p) => ({ player: p, from: t, price: playerValue(p) })));
+      // jogador que CAIU de OVR enquanto era seu (declínio acumulado em save.evo)
+      // não pode voltar pro mercado com o OVR antigo, alto. Aplica o evo sobre a
+      // BASE (mesma conta do findSigning) pra mostrar o OVR ATUAL, caído.
+      const evoMap = save.evo ?? {};
+      const baseById = new Map<string, Player>(CS2_REAL_2026.flatMap((t) => t.players.map((p) => [p.id, p] as const)));
+      const clampA = (v: number) => Math.max(40, Math.min(99, v));
+      const withDecline = (p: Player): Player => {
+        const d = evoMap[p.id];
+        if (d == null || d >= 0) return p; // só caída (negativa); sem evo, segue igual
+        const base = baseById.get(p.id) ?? p;
+        return { ...base, aim: clampA(base.aim + d), consistency: clampA(base.consistency + d), clutch: clampA(base.clutch + d), awp: clampA(base.awp + d), igl: clampA(base.igl + d) };
+      };
+      const fromTeams = currentEra.flatMap((t) => t.players.map((p) => { const pl = withDecline(p); return { player: pl, from: t, price: playerValue(pl) }; }));
       const freeAgents = FREE_AGENT_PLAYERS
         .filter((p) => !squadIds.has(p.id)) // some do mercado quando já contratado
         .map((p) => ({ player: p, from: FREE_AGENTS_FROM, price: Math.round(playerValue(p) * 0.75) }));
@@ -1901,7 +1913,7 @@ export function CareerScreen({ onExit }: Props) {
         .map((p) => ({ player: p, from: FREE_AGENTS_FROM, price: 0 }));
       return [...fromTeams, ...freeAgents, ...freeRookies].sort((a, b) => a.price - b.price);
     },
-    [currentEra, save.squad],
+    [currentEra, save.squad, save.evo],
   );
 
   const findSigning = (s: Signing): ResolvedSigning | null => {
@@ -1932,6 +1944,12 @@ export function CareerScreen({ onExit }: Props) {
     if (!player && save.youth?.[s.playerId]) {
       player = save.youth[s.playerId];
       from = ACADEMY_FROM;
+    }
+    // 5b) prospecto AINDA na academia (promovido direto na janela de transferências,
+    // antes de virar youth): resolve da lista save.academy pra entrar no elenco.
+    if (!player) {
+      const ac = save.academy?.find((a) => a.id === s.playerId);
+      if (ac) { player = ac; from = ACADEMY_FROM; }
     }
     // 6) jovens gerados por versões anteriores. O ID carrega todos os dados para
     // reconstruí-los, mesmo quando a geração atual da IA já trocou aquele atleta.
@@ -2940,15 +2958,30 @@ export function CareerScreen({ onExit }: Props) {
           for (const k of Object.keys(morale)) if (!ids.has(k)) delete morale[k];
           const peakOvr = { ...(save.peakOvr ?? {}) };
           for (const k of Object.keys(peakOvr)) if (!ids.has(k)) delete peakOvr[k];
-          // zera a evolução de quem saiu do elenco: ao recontratar, ele volta no
-          // OVR de mercado (base), sem o declínio/ganho antigo grudado (KSCERATO).
-          // Quem é dispensado e recontratado na MESMA janela (sem transação) é
-          // mantido — continua sendo seu, então preserva a evolução.
+          // quem saiu do elenco: MANTÉM o declínio acumulado (evo negativo) pra não
+          // "ressuscitar" no OVR base, alto, quando volta ao mercado (bug do veterano
+          // que caiu e voltava caro/forte). Só o GANHO (evo positivo) é zerado, pra
+          // ninguém recontratar barato um jogador que você desenvolveu.
           const evo = { ...(save.evo ?? {}) };
-          for (const k of Object.keys(evo)) if (!ids.has(k)) delete evo[k];
+          for (const k of Object.keys(evo)) if (!ids.has(k) && (evo[k] ?? 0) >= 0) delete evo[k];
+          // prospectos PROMOVIDOS da academia dentro da janela: move academia -> youth
+          // (mesma conta do promoteProspect) pra eles persistirem e seguirem evoluindo.
+          const youth = { ...(save.youth ?? {}) };
+          const youthAge = { ...(save.youthAge ?? {}) };
+          let academy = save.academy ?? [];
+          let academyFocus = save.academyFocus;
+          for (const sig of stableSquad) {
+            const ac = (save.academy ?? []).find((a) => a.id === sig.playerId);
+            if (ac && !youth[ac.id]) {
+              youth[ac.id] = { id: ac.id, nick: ac.nick, name: ac.name, country: ac.country, role: ac.role, aim: ac.aim, consistency: ac.consistency, clutch: ac.clutch, awp: ac.awp, igl: ac.igl };
+              youthAge[ac.id] = ac.age - Math.floor((save.split - 1) / 3);
+              academy = academy.filter((x) => x.id !== ac.id);
+              if (academyFocus === ac.id) academyFocus = null;
+            }
+          }
           // org do zero (sem região ainda): define a região pelo core do 1º elenco
           const region = save.region ?? macroRegionPlurality(stableSquad.map((s) => findSigning(s)?.player.country ?? '').filter(Boolean));
-          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region };
+          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region, youth, youthAge, academy, academyFocus };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -6470,6 +6503,29 @@ function MarketScreen({
               return <div key={i} className="slot">Contratação {i + 1}</div>;
             })}
           </div>
+
+          {(save.academy ?? []).filter((a) => !squad.some((s) => s.playerId === a.id)).length > 0 && (
+            <>
+              <div className="muted small section-label">{ct('Promover da academia')} <span className="muted">({ct('grátis, sem precisar comprar')})</span></div>
+              <div className="aca-window-list">
+                {(save.academy ?? []).filter((a) => !squad.some((s) => s.playerId === a.id)).map((a) => {
+                  const full = squad.length >= 5;
+                  return (
+                    <button key={a.id} className="aca-window-pick" disabled={full}
+                      title={full ? ct('Elenco cheio — dispense alguém pra promover') : ct('Promover ao elenco (grátis)')}
+                      onClick={() => { if (!full) setSquad([...squad, { playerId: a.id, fromId: '__youth__' }]); }}>
+                      <PlayerAvatar nick={a.nick} size={32} />
+                      <div className="aw-info">
+                        <div className="nick"><Flag cc={a.country} /> {a.nick} <span className="ovr-inline">{playerOvr(a)}</span></div>
+                        <div className="from"><span className={`role-pill ${a.role}`}>{a.role}</span> {a.age} {ct('anos')} · {ct('pot.')} {a.potential}</div>
+                      </div>
+                      <span className="aw-add">⬆ {ct('Promover')}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           <div className="muted small section-label">{ct('Coach')}</div>
           <div className="career-coaches">

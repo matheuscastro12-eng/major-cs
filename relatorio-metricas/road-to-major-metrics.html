@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root{
+    --bg:#0c0f14; --bg2:#121722; --card:#161c28; --line:#222c3c;
+    --gold:#e9b949; --gold2:#f4d27a; --txt:#e7ecf3; --mut:#8c99ad; --mut2:#5f6c80;
+    --blue:#5aa9e6; --green:#5fcf80; --red:#e2685f; --pur:#a98be0;
+  }
+  html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body{ font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--txt); }
+  .page{ width:210mm; min-height:297mm; padding:16mm 15mm; position:relative; page-break-after:always; overflow:hidden; }
+  .page:last-child{ page-break-after:auto; }
+  .bg-grad{ position:absolute; inset:0; background:
+     radial-gradient(900px 380px at 88% -8%, rgba(233,185,73,.10), transparent 60%),
+     radial-gradient(700px 360px at -5% 108%, rgba(90,169,230,.07), transparent 60%),
+     var(--bg); z-index:0; }
+  .ct{ position:relative; z-index:1; }
+
+  /* COVER */
+  .cover{ display:flex; flex-direction:column; justify-content:center; height:265mm; }
+  .kick{ letter-spacing:.42em; font-size:11px; color:var(--gold); font-weight:700; text-transform:uppercase; }
+  .cover h1{ font-size:62px; line-height:.98; font-weight:800; margin:14px 0 6px; letter-spacing:-1px; }
+  .cover h1 span{ color:var(--gold); }
+  .cover .sub{ font-size:17px; color:var(--mut); max-width:430px; line-height:1.5; margin-top:10px; }
+  .cover .meta{ margin-top:34px; font-size:13px; color:var(--mut2); border-top:1px solid var(--line); padding-top:16px; }
+  .cover .meta b{ color:var(--txt); }
+  .hero-kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:40px; }
+  .hk{ background:linear-gradient(160deg,rgba(233,185,73,.12),rgba(22,28,40,.6)); border:1px solid var(--line); border-radius:14px; padding:18px 16px; }
+  .hk .v{ font-size:34px; font-weight:800; color:var(--gold2); letter-spacing:-.5px; }
+  .hk .l{ font-size:11.5px; color:var(--mut); margin-top:4px; line-height:1.35; }
+
+  h2.sec{ font-size:13px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); font-weight:700; margin-bottom:3px; }
+  .sec-sub{ color:var(--mut2); font-size:12px; margin-bottom:18px; }
+  .pg-head{ display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:22px; }
+  .pg-head .brand{ font-weight:800; font-size:13px; letter-spacing:.5px; }
+  .pg-head .brand span{ color:var(--gold); }
+  .pg-head .pn{ font-size:11px; color:var(--mut2); }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .grid4{ display:grid; grid-template-columns:repeat(4,1fr); gap:11px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:13px; padding:16px; }
+  .card .ct-t{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); margin-bottom:12px; font-weight:600; }
+  .kpi .v{ font-size:27px; font-weight:800; letter-spacing:-.5px; }
+  .kpi .l{ font-size:11px; color:var(--mut); margin-top:3px; line-height:1.3; }
+  .kpi .d{ font-size:10.5px; color:var(--green); margin-top:6px; }
+  .gold{color:var(--gold2)} .blue{color:var(--blue)} .green{color:var(--green)} .red{color:var(--red)} .pur{color:var(--pur)}
+
+  table{ width:100%; border-collapse:collapse; font-size:12px; }
+  th{ text-align:left; color:var(--mut2); font-weight:600; font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:7px 8px; border-bottom:1px solid var(--line); }
+  td{ padding:7px 8px; border-bottom:1px solid rgba(34,44,60,.5); }
+  td.r,th.r{ text-align:right; }
+  tr:last-child td{ border-bottom:none; }
+  .flag{ font-weight:700; color:var(--txt); }
+
+  .bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; }
+  .bar-row .nm{ width:118px; color:var(--mut); flex:none; }
+  .bar-row .track{ flex:1; height:13px; background:rgba(255,255,255,.05); border-radius:7px; overflow:hidden; }
+  .bar-row .fill{ height:100%; border-radius:7px; }
+  .bar-row .vv{ width:74px; text-align:right; flex:none; font-variant-numeric:tabular-nums; color:var(--txt); font-weight:600; }
+
+  .spark{ display:flex; align-items:flex-end; gap:5px; height:120px; padding-top:8px; }
+  .spark .col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .spark .bar{ width:100%; background:linear-gradient(180deg,var(--gold2),var(--gold)); border-radius:4px 4px 0 0; }
+  .spark .bar.b2{ background:linear-gradient(180deg,#3a4658,#2a3340); }
+  .spark .dl{ font-size:8px; color:var(--mut2); transform:rotate(-0deg); }
+
+  .note{ background:rgba(90,169,230,.07); border:1px solid rgba(90,169,230,.25); border-radius:10px; padding:12px 14px; font-size:11px; color:var(--mut); line-height:1.5; }
+  .note b{ color:var(--txt); }
+  .legend{ display:flex; gap:16px; font-size:10.5px; color:var(--mut); margin-top:10px; }
+  .legend i{ width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:5px; vertical-align:middle; }
+  .foot{ position:absolute; bottom:9mm; left:15mm; right:15mm; display:flex; justify-content:space-between; font-size:9px; color:var(--mut2); border-top:1px solid var(--line); padding-top:7px; z-index:1; }
+  .funnel-row{ display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  .funnel-row .fn{ width:160px; font-size:12px; color:var(--mut); flex:none; }
+  .funnel-row .ftrack{ flex:1; height:26px; background:rgba(255,255,255,.04); border-radius:6px; position:relative; overflow:hidden; }
+  .funnel-row .ffill{ height:100%; background:linear-gradient(90deg,rgba(233,185,73,.85),rgba(233,185,73,.4)); display:flex; align-items:center; padding-left:10px; font-size:11.5px; font-weight:700; color:#1a1407; }
+</style>
+</head>
+<body>
+
+<!-- ===================== CAPA ===================== -->
+<div class="page">
+  <div class="bg-grad"></div>
+  <div class="ct cover">
+    <div class="kick">Relatório de Dados · Métrico & Demográfico</div>
+    <h1>ROAD TO <span>MAJOR</span></h1>
+    <div class="sub">Panorama de audiência, engajamento, comunidade e monetização do simulador de carreira de Counter-Strike.</div>
+
+    <div class="hero-kpis">
+      <div class="hk"><div class="v">23.814</div><div class="l">Visitantes únicos</div></div>
+      <div class="hk"><div class="v">73.348</div><div class="l">Visitas totais</div></div>
+      <div class="hk"><div class="v">93</div><div class="l">Países alcançados</div></div>
+      <div class="hk"><div class="v">6.544</div><div class="l">Jogadores em campanha</div></div>
+      <div class="hk"><div class="v">60.290</div><div class="l">Torneios concluídos</div></div>
+      <div class="hk"><div class="v">60</div><div class="l">Contas vitalícias (pagas)</div></div>
+    </div>
+
+    <div class="meta">
+      Janela dos dados: <b>10–23 de junho de 2026</b> &nbsp;·&nbsp; Fonte: <b>telemetria própria (Neon/Postgres)</b> &nbsp;·&nbsp; Gerado em <b>23/06/2026</b><br>
+      roadtomajor.com.br — documento interno / apresentação.
+    </div>
+  </div>
+  <div class="foot"><span>ROAD TO MAJOR · Relatório de métricas</span><span>Confidencial</span></div>
+</div>
+
+<!-- ===================== AUDIÊNCIA ===================== -->
+<div class="page">
+  <div class="bg-grad"></div>
+  <div class="ct">
+    <div class="pg-head"><span class="brand">ROAD TO <span>MAJOR</span></span><span class="pn">01 · Audiência & Tráfego</span></div>
+    <h2 class="sec">Audiência & Tráfego</h2>
+    <div class="sec-sub">Alcance total no período e padrão de retorno dos visitantes.</div>
+
+    <div class="grid4" style="margin-bottom:14px;">
+      <div class="card kpi"><div class="v gold">23.814</div><div class="l">Visitantes únicos</div></div>
+      <div class="card kpi"><div class="v">73.348</div><div class="l">Visitas totais</div></div>
+      <div class="card kpi"><div class="v">3,1</div><div class="l">Visitas por visitante</div></div>
+      <div class="card kpi"><div class="v blue">93</div><div class="l">Países</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="ct-t">Visitas por dia · únicos (cinza) vs. totais (dourado)</div>
+      <div class="spark">
+        <!-- max visits 9714 -->
+        <div class="col"><div class="bar" style="height:8px"></div><div class="dl">10/06</div></div>
+        <div class="col"><div class="bar" style="height:119px"></div><div class="dl">11/06</div></div>
+        <div class="col"><div class="bar" style="height:80px"></div><div class="dl">12/06</div></div>
+        <div class="col"><div class="bar" style="height:81px"></div><div class="dl">13/06</div></div>
+        <div class="col"><div class="bar" style="height:66px"></div><div class="dl">14/06</div></div>
+        <div class="col"><div class="bar" style="height:73px"></div><div class="dl">15/06</div></div>
+        <div class="col"><div class="bar" style="height:82px"></div><div class="dl">16/06</div></div>
+        <div class="col"><div class="bar" style="height:63px"></div><div class="dl">17/06</div></div>
+        <div class="col"><div class="bar" style="height:51px"></div><div class="dl">18/06</div></div>
+        <div class="col"><div class="bar" style="height:46px"></div><div class="dl">19/06</div></div>
+        <div class="col"><div class="bar" style="height:30px"></div><div class="dl">20/06</div></div>
+        <div class="col"><div class="bar" style="height:31px"></div><div class="dl">21/06</div></div>
+        <div class="col"><div class="bar" style="height:120px"></div><div class="dl">22/06</div></div>
+        <div class="col"><div class="bar" style="height:55px"></div><div class="dl">23/06</div></div>
+      </div>
+      <div class="legend"><span><i style="background:var(--gold)"></i>Visitas/dia (pico 9.714 em 22/06)</span><span>Total 73.348 · média ~5.240/dia</span></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="ct-t">Dispositivo (visitantes únicos)</div>
+        <div class="bar-row"><span class="nm">Desktop</span><span class="track"><span class="fill" style="width:60%;background:var(--blue)"></span></span><span class="vv">14.349</span></div>
+        <div class="bar-row"><span class="nm">Mobile</span><span class="track"><span class="fill" style="width:40%;background:var(--gold)"></span></span><span class="vv">9.727</span></div>
+        <div class="legend"><span>~60% desktop · ~40% mobile</span></div>
+      </div>
+      <div class="card">
+        <div class="ct-t">Canais de aquisição (visitas)</div>
+        <div class="bar-row"><span class="nm">Direto</span><span class="track"><span class="fill" style="width:100%;background:var(--gold)"></span></span><span class="vv">43.589</span></div>
+        <div class="bar-row"><span class="nm">Google</span><span class="track"><span class="fill" style="width:35%;background:var(--gold2)"></span></span><span class="vv">15.107</span></div>
+        <div class="bar-row"><span class="nm">Twitter / X</span><span class="track"><span class="fill" style="width:24%;background:var(--blue)"></span></span><span class="vv">10.399</span></div>
+        <div class="bar-row"><span class="nm">Interno</span><span class="track"><span class="fill" style="width:4%;background:#3a4658"></span></span><span class="vv">1.491</span></div>
+        <div class="bar-row"><span class="nm">YouTube</span><span class="track"><span class="fill" style="width:2%;background:var(--red)"></span></span><span class="vv">808</span></div>
+        <div class="bar-row"><span class="nm">HLTV</span><span class="track"><span class="fill" style="width:1%;background:#3a4658"></span></span><span class="vv">268</span></div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:14px;">
+      <b>Aquisição orgânica forte:</b> mesmo com ~60% de tráfego direto, o Google (15,1 mil visitas) e o Twitter/X (10,4 mil) trazem juntos mais de um terço do volume — sinal de buzz orgânico e SEO inicial saudável, sem mídia paga.
+    </div>
+  </div>
+  <div class="foot"><span>ROAD TO MAJOR · Relatório de métricas</span><span>01 · Audiência</span></div>
+</div>
+
+<!-- ===================== DEMOGRAFIA ===================== -->
+<div class="page">
+  <div class="bg-grad"></div>
+  <div class="ct">
+    <div class="pg-head"><span class="brand">ROAD TO <span>MAJOR</span></span><span class="pn">02 · Demografia</span></div>
+    <h2 class="sec">Demografia geográfica</h2>
+    <div class="sec-sub">93 países alcançados. Base concentrada no Brasil, com forte cauda lusófona e hispano-americana.</div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="ct-t">Top mercados · visitantes únicos</div>
+        <div class="bar-row"><span class="nm">🇧🇷 Brasil</span><span class="track"><span class="fill" style="width:100%;background:var(--gold)"></span></span><span class="vv">15.962</span></div>
+        <div class="bar-row"><span class="nm">🇵🇹 Portugal</span><span class="track"><span class="fill" style="width:10.5%;background:var(--gold2)"></span></span><span class="vv">1.675</span></div>
+        <div class="bar-row"><span class="nm">🇺🇸 EUA</span><span class="track"><span class="fill" style="width:6.2%;background:var(--blue)"></span></span><span class="vv">989</span></div>
+        <div class="bar-row"><span class="nm">🇦🇷 Argentina</span><span class="track"><span class="fill" style="width:3.5%;background:var(--blue)"></span></span><span class="vv">558</span></div>
+        <div class="bar-row"><span class="nm">🇵🇱 Polônia</span><span class="track"><span class="fill" style="width:1.5%;background:var(--pur)"></span></span><span class="vv">245</span></div>
+        <div class="bar-row"><span class="nm">🇬🇧 Reino Unido</span><span class="track"><span class="fill" style="width:1.1%;background:var(--pur)"></span></span><span class="vv">170</span></div>
+        <div class="bar-row"><span class="nm">🇪🇸 Espanha</span><span class="track"><span class="fill" style="width:.9%;background:var(--pur)"></span></span><span class="vv">140</span></div>
+        <div class="bar-row"><span class="nm">🇫🇷 França</span><span class="track"><span class="fill" style="width:.8%;background:#3a4658"></span></span><span class="vv">131</span></div>
+        <div class="bar-row"><span class="nm">🇩🇪 Alemanha</span><span class="track"><span class="fill" style="width:.8%;background:#3a4658"></span></span><span class="vv">130</span></div>
+      </div>
+      <div class="card">
+        <div class="ct-t">Cauda internacional · únicos</div>
+        <table>
+          <tr><td class="flag">🇨🇦 Canadá</td><td class="r">80</td><td class="flag">🇸🇪 Suécia</td><td class="r">50</td></tr>
+          <tr><td class="flag">🇷🇺 Rússia</td><td class="r">75</td><td class="flag">🇦🇺 Austrália</td><td class="r">45</td></tr>
+          <tr><td class="flag">🇹🇷 Turquia</td><td class="r">73</td><td class="flag">🇺🇾 Uruguai</td><td class="r">43</td></tr>
+          <tr><td class="flag">🇳🇱 Holanda</td><td class="r">65</td><td class="flag">🇯🇵 Japão</td><td class="r">42</td></tr>
+          <tr><td class="flag">🇫🇮 Finlândia</td><td class="r">63</td><td class="flag">🇷🇴 Romênia</td><td class="r">35</td></tr>
+        </table>
+        <div class="note" style="margin-top:14px;">
+          <b>Brasil ≈ 67%</b> dos visitantes com país identificado. Somando <b>PT, AR, ES e UY</b>, o eixo <b>luso-hispânico</b> representa a ampla maioria — coerente com o esforço de tradução para <b>EN/ES</b> abrir mercados de língua espanhola e o público europeu/NA do CS.
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="ct-t">Idiomas-alvo do produto vs. demanda observada</div>
+      <table>
+        <tr><th>Idioma</th><th>Mercados representados</th><th class="r">Visitantes únicos (aprox.)</th><th class="r">Cobertura</th></tr>
+        <tr><td class="flag">Português</td><td>BR, PT</td><td class="r">17.637</td><td class="r green">✓ nativo</td></tr>
+        <tr><td class="flag">Espanhol</td><td>AR, ES, UY, MX, CL…</td><td class="r">~900+</td><td class="r green">✓ traduzido</td></tr>
+        <tr><td class="flag">Inglês</td><td>US, GB, CA, AU, demais</td><td class="r">~2.000+</td><td class="r green">✓ traduzido</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot"><span>ROAD TO MAJOR · Relatório de métricas</span><span>02 · Demografia</span></div>
+</div>
+
+<!-- ===================== ENGAJAMENTO ===================== -->
+<div class="page">
+  <div class="bg-grad"></div>
+  <div class="ct">
+    <div class="pg-head"><span class="brand">ROAD TO <span>MAJOR</span></span><span class="pn">03 · Engajamento de Jogo</span></div>
+    <h2 class="sec">Engajamento de jogo</h2>
+    <div class="sec-sub">Funil de ativação e volume de partidas simuladas.</div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="ct-t">Funil: visitante → jogador → torneios concluídos</div>
+      <div class="funnel-row"><span class="fn">Visitantes únicos</span><span class="ftrack"><span class="ffill" style="width:100%">23.814</span></span></div>
+      <div class="funnel-row"><span class="fn">Iniciaram campanha</span><span class="ftrack"><span class="ffill" style="width:27.5%">6.544 · 27,5%</span></span></div>
+      <div class="funnel-row"><span class="fn">Temporadas jogadas</span><span class="ftrack"><span class="ffill" style="width:80%">51.292</span></span></div>
+      <div class="funnel-row"><span class="fn">Torneios concluídos</span><span class="ftrack"><span class="ffill" style="width:94%">60.290</span></span></div>
+      <div class="legend"><span>Ativação de <b style="color:var(--gold2)">27,5%</b> (visitante → campanha) é alta para jogo de browser sem cadastro.</span></div>
+    </div>
+
+    <div class="grid4" style="margin-bottom:14px;">
+      <div class="card kpi"><div class="v gold">20.495</div><div class="l">Campanhas iniciadas</div></div>
+      <div class="card kpi"><div class="v">51.292</div><div class="l">Temporadas jogadas</div></div>
+      <div class="card kpi"><div class="v">60.290</div><div class="l">Torneios concluídos</div></div>
+      <div class="card kpi"><div class="v green">40,1%</div><div class="l">Taxa de título global</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="ct-t">Taxa de título por dificuldade</div>
+        <div class="bar-row"><span class="nm">Normal</span><span class="track"><span class="fill" style="width:52%;background:var(--green)"></span></span><span class="vv">52,4%</span></div>
+        <div class="bar-row"><span class="nm">Difícil</span><span class="track"><span class="fill" style="width:34%;background:var(--gold)"></span></span><span class="vv">34,4%</span></div>
+        <div class="bar-row"><span class="nm">Lendário</span><span class="track"><span class="fill" style="width:22%;background:var(--red)"></span></span><span class="vv">22,1%</span></div>
+        <div class="legend"><span>Curva de dificuldade saudável: cada tier derruba a taxa de título de forma consistente.</span></div>
+      </div>
+      <div class="card">
+        <div class="ct-t">Volume por dificuldade (torneios)</div>
+        <div class="bar-row"><span class="nm">Normal</span><span class="track"><span class="fill" style="width:100%;background:var(--gold)"></span></span><span class="vv">31.865</span></div>
+        <div class="bar-row"><span class="nm">Lendário</span><span class="track"><span class="fill" style="width:60%;background:var(--pur)"></span></span><span class="vv">19.052</span></div>
+        <div class="bar-row"><span class="nm">Difícil</span><span class="track"><span class="fill" style="width:29%;background:var(--blue)"></span></span><span class="vv">9.373</span></div>
+        <div class="ct-t" style="margin-top:16px;">Cenário escolhido</div>
+        <div class="bar-row"><span class="nm">Mundo</span><span class="track"><span class="fill" style="width:96%;background:var(--gold)"></span></span><span class="vv">95,7%</span></div>
+        <div class="bar-row"><span class="nm">Brasil</span><span class="track"><span class="fill" style="width:4.3%;background:var(--green)"></span></span><span class="vv">4,3%</span></div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px;">
+      <b>Engajamento profundo:</b> em média cada jogador de campanha concluiu <b>~9 torneios</b> e jogou <b>~8 temporadas</b> — o público não só testa, ele <b>sessiona</b>. A preferência por "Lendário" como 2ª dificuldade mais jogada indica uma base hardcore relevante.
+    </div>
+  </div>
+  <div class="foot"><span>ROAD TO MAJOR · Relatório de métricas</span><span>03 · Engajamento</span></div>
+</div>
+
+<!-- ===================== ONLINE + COMUNIDADE ===================== -->
+<div class="page">
+  <div class="bg-grad"></div>
+  <div class="ct">
+    <div class="pg-head"><span class="brand">ROAD TO <span>MAJOR</span></span><span class="pn">04 · Multiplayer, Comunidade & Monetização</span></div>
+    <h2 class="sec">Multiplayer & Comunidade</h2>
+    <div class="sec-sub">Modo online, base de contas, monetização e tração social.</div>
+
+    <div class="grid4" style="margin-bottom:14px;">
+      <div class="card kpi"><div class="v blue">1.049</div><div class="l">Jogadores online únicos</div></div>
+      <div class="card kpi"><div class="v">9.428</div><div class="l">Séries online concluídas</div></div>
+      <div class="card kpi"><div class="v">2.258</div><div class="l">Salas criadas</div></div>
+      <div class="card kpi"><div class="v">3.964</div><div class="l">Entradas em sala</div></div>
+    </div>
+
+    <div class="grid2" style="margin-bottom:14px;">
+      <div class="card">
+        <div class="ct-t">Comunidade & retenção</div>
+        <table>
+          <tr><td>Contas criadas</td><td class="r flag">64</td></tr>
+          <tr><td>Contas vitalícias (pagas)</td><td class="r flag gold">60</td></tr>
+          <tr><td>Saves na nuvem</td><td class="r flag">94</td></tr>
+          <tr><td>Campanhas no Hall da Fama</td><td class="r flag">24.780</td></tr>
+          <tr><td>Pedidos de acesso (beta)</td><td class="r flag">196</td></tr>
+          <tr><td>Linhas no ranking ranqueado</td><td class="r flag">36</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="ct-t">Tração social & monetização</div>
+        <table>
+          <tr><td>Cards compartilhados</td><td class="r flag">1.193</td></tr>
+          <tr><td>Cliques em "doar"</td><td class="r flag">863</td></tr>
+          <tr><td>Cliques em banner (parceiro)</td><td class="r flag">308</td></tr>
+          <tr><td>Conversão p/ conta vitalícia</td><td class="r flag gold">93,8%*</td></tr>
+        </table>
+        <div class="legend"><span>*das 64 contas criadas, 60 são pagas — quem cria conta, paga.</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct-t">Destaques estratégicos</div>
+      <div style="font-size:12px;line-height:1.65;color:var(--mut)">
+        <b style="color:var(--txt)">▸ Viralização orgânica:</b> 1.193 cards compartilhados e 10,4 mil visitas via Twitter/X mostram um loop social funcionando sem investimento em mídia.<br>
+        <b style="color:var(--txt)">▸ Intenção de monetizar:</b> 863 cliques em doar + 93,8% das contas sendo pagas indicam disposição clara da base a apoiar o projeto.<br>
+        <b style="color:var(--txt)">▸ Multiplayer validado:</b> mais de 1.000 jogadores únicos e 9,4 mil séries online provam apetite por PvP — eixo central do roadmap.<br>
+        <b style="color:var(--txt)">▸ Profundidade:</b> 24,8 mil campanhas eternizadas no Hall da Fama é prova de retenção e apego à progressão.
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:14px;">
+      <b>Notas metodológicas:</b> dados de telemetria própria (Neon/Postgres), janela 10–23/06/2026. Países por geolocalização de IP no acesso. O funil de <b>jogo e online</b> concentra-se na janela de lançamento (10–13/06), quando a instrumentação desses eventos esteve mais ativa; as <b>visitas</b> seguem contínuas até 23/06. Erros de cliente registrados no período: <b>8.369</b> (monitoramento de estabilidade).
+    </div>
+  </div>
+  <div class="foot"><span>ROAD TO MAJOR · roadtomajor.com.br</span><span>04 · Comunidade</span></div>
+</div>
+
+</body>
+</html>

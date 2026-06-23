@@ -6216,3 +6216,14 @@ body.has-ad-footer { padding-bottom: 126px; }
 .upsell-later{ background:none; border:none; color:#8b96a3; font-size:12.5px; cursor:pointer; padding:6px; }
 .upsell-later:hover{ color:#c7ced7; }
 .upsell-foot{ margin-top:12px; font-size:10.5px; color:#5e6975; text-align:center; line-height:1.4; }
+
+/* ===== Promover da academia dentro da janela de transferências ===== */
+.aca-window-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 6px; }
+.aca-window-pick { display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px 10px; border-radius: var(--r-sm, 8px);
+  background: var(--panel-2); border: 1px solid var(--gold-soft); cursor: pointer; }
+.aca-window-pick:hover:not(:disabled) { border-color: var(--gold); background: var(--panel-3, #2a323d); }
+.aca-window-pick:disabled { opacity: .45; cursor: not-allowed; }
+.aca-window-pick .aw-info { flex: 1; min-width: 0; }
+.aca-window-pick .aw-info .nick { font-family: var(--font-cond); font-weight: 800; display: flex; align-items: center; gap: 6px; }
+.aca-window-pick .aw-info .from { font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.aca-window-pick .aw-add { font-family: var(--font-cond); font-weight: 800; text-transform: uppercase; font-size: 11px; color: var(--gold); white-space: nowrap; }
