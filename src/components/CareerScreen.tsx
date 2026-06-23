@@ -41,7 +41,7 @@ import { isAdminUnlocked } from './AdminGate';
 import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
 import { captureError } from '../state/errlog';
-import { cloudOnLocalSave } from '../state/cloud';
+import { cloudOnLocalSave, cloudEnabled, pushCloud } from '../state/cloud';
 import { getManager } from '../state/manager';
 import { getActiveSlot, slotKey, cloudSlot } from '../state/careerSaves';
 import bo3Ages from '../data/bo3-ages.json';
@@ -1479,6 +1479,17 @@ function loadSave(): CareerSave {
   }
 }
 
+// RESET de verdade: apaga TODO rastro do save do slot ativo (principal, backup de
+// um passo e cópia de diagnóstico) e marca a nuvem como vazia (tombstone). Sem
+// isso, "Recomeçar" deixava o save antigo no .bak/nuvem e ele voltava depois.
+function wipeActiveSlot(): void {
+  const KEY = curKey();
+  for (const k of [KEY, KEY + '.bak', KEY + '.corrupt']) {
+    try { localStorage.removeItem(k); } catch { /* sem storage */ }
+  }
+  try { if (cloudEnabled()) void pushCloud(cloudSlot(getActiveSlot()), '', Date.now()); } catch { /* offline */ }
+}
+
 let persistWarned = false;
 function persist(s: CareerSave): void {
   const SAVE_KEY = curKey();
@@ -2791,6 +2802,7 @@ export function CareerScreen({ onExit }: Props) {
               {ct('Os resultados ficaram abaixo do esperado e a confiança da diretoria chegou ao fundo. Sua passagem termina aqui — mas toda lenda recomeça.')}
             </p>
             <button className="btn gold big" onClick={() => {
+              wipeActiveSlot();
               const fresh = emptySave();
               persist(fresh);
               setSave(fresh);
@@ -3687,7 +3699,7 @@ export function CareerScreen({ onExit }: Props) {
   // recomeçar a carreira do zero (disponível pra TODOS, inclusive grátis)
   const resetCareer = () => {
     if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
-    const fresh = emptySave(); persist(fresh); setSave(fresh); setOrgChoice('select'); setStage('found');
+    wipeActiveSlot(); const fresh = emptySave(); persist(fresh); setSave(fresh); setOrgChoice('select'); setStage('found');
   };
 
   return (

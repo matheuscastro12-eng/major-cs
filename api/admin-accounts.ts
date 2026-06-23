@@ -3,7 +3,14 @@
 // (env ADMIN_PASSWORD), mesmo padrão do api/beta.ts.
 // Ações (POST body.action): list | grant | revoke | stripe.
 import { neon } from '@neondatabase/serverless';
+import { randomBytes, scryptSync } from 'node:crypto';
 import { accountReference, cleanEnv, findPaidCheckoutForEmail, normalizeEmail, stripeClient } from '../server/payments.js';
+
+// mesmo formato "salt:hash" (scrypt) do api/account.ts, pro login validar igual.
+function hashPw(pw: string): string {
+  const salt = randomBytes(16).toString('hex');
+  return `${salt}:${scryptSync(pw, salt, 64).toString('hex')}`;
+}
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 
@@ -76,6 +83,20 @@ export default async function handler(
       sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
     ]);
     res.status(200).json({ ok: true, email });
+    return;
+  }
+
+  // define/reseta a senha de um usuário (suporte: quem pagou e esqueceu a senha).
+  // O admin digita a nova senha no painel; aqui ela é HASHEADA (scrypt) e gravada.
+  if (action === 'setpassword') {
+    if (!emailValid) { res.status(400).json({ error: 'e-mail inválido' }); return; }
+    const newPass = String(body.newPassword ?? '');
+    if (newPass.length < 6) { res.status(400).json({ error: 'senha precisa de ao menos 6 caracteres' }); return; }
+    const hash = hashPw(newPass);
+    const upd = await sql`UPDATE rtm_accounts SET pass_hash=${hash} WHERE email=${email} RETURNING email`;
+    // se ainda for só cadastro pendente (pagou mas conta não nasceu), atualiza lá também
+    await sql`UPDATE rtm_pending_signups SET pass_hash=${hash} WHERE email=${email}`;
+    res.status(200).json({ ok: true, email, applied: upd.length > 0 });
     return;
   }
 

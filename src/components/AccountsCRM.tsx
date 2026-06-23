@@ -5,7 +5,7 @@ import { adminPassword } from './AdminGate';
 import { AdminNav } from './AdminNav';
 import { ct } from '../state/career-i18n';
 import {
-  listAccounts, grantAccess, revokeAccess, lookupStripe,
+  listAccounts, grantAccess, revokeAccess, lookupStripe, setUserPassword,
   type AccountsList, type StripeLookup,
 } from '../state/adminAccounts';
 
@@ -49,6 +49,19 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
     const ok = await revokeAccess(adminPassword(), email);
     setMsg(ok ? `✓ ${ct('Acesso removido de')} ${email}.` : ct('Falhou ao remover.'));
     await load(query);
+    setBusy(false);
+  };
+  // reset de senha (suporte: pagou e esqueceu a senha). O admin digita a nova
+  // senha; o servidor hasheia (scrypt) e grava. Nunca guarda em texto puro.
+  const doSetPassword = async (email: string) => {
+    const np = window.prompt(`${ct('Nova senha para')} ${email} ${ct('(mínimo 6 caracteres). Passe essa senha ao jogador e peça pra ele trocar depois.')}`);
+    if (np == null) return;
+    if (np.trim().length < 6) { setMsg(ct('Senha muito curta (mínimo 6).')); return; }
+    setBusy(true); setMsg('');
+    const r = await setUserPassword(adminPassword(), email, np.trim());
+    setMsg(r.ok && r.applied ? `✓ ${ct('Senha redefinida para')} ${email}.`
+      : r.ok ? `⚠ ${ct('E-mail sem conta criada ainda (atualizado no cadastro pendente).')}`
+      : `${ct('Falhou:')} ${r.error ?? ''}`);
     setBusy(false);
   };
   const checkStripe = async (email: string) => {
@@ -133,9 +146,12 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
                       </td>
                       <td style={{ padding: '9px 10px', textAlign: 'center' }}><StripeCell email={a.email} /></td>
                       <td style={{ padding: '9px 10px', textAlign: 'center' }}>
-                        {a.paid
-                          ? <button className="btn danger small" disabled={busy} onClick={() => doRevoke(a.email)}>✕ {ct('Remover')}</button>
-                          : <button className="btn gold small" disabled={busy} onClick={() => doGrant(a.email)}>★ {ct('Conceder')}</button>}
+                        <div style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                          {a.paid
+                            ? <button className="btn danger small" disabled={busy} onClick={() => doRevoke(a.email)}>✕ {ct('Remover')}</button>
+                            : <button className="btn gold small" disabled={busy} onClick={() => doGrant(a.email)}>★ {ct('Conceder')}</button>}
+                          <button className="btn ghost small" disabled={busy} title={ct('Resetar a senha deste usuário')} onClick={() => doSetPassword(a.email)}>🔑 {ct('Senha')}</button>
+                        </div>
                       </td>
                     </tr>
                   ))}

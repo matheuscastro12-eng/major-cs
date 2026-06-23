@@ -21,6 +21,11 @@ export async function grantAccess(password: string, email: string): Promise<bool
 export async function revokeAccess(password: string, email: string): Promise<boolean> {
   try { const d = await post({ action: 'revoke', password, email }); return !!d.ok; } catch { return false; }
 }
+// reseta/define a senha de um usuário (suporte: pagou e esqueceu a senha)
+export async function setUserPassword(password: string, email: string, newPassword: string): Promise<{ ok: boolean; applied?: boolean; error?: string }> {
+  try { const d = await post({ action: 'setpassword', password, email, newPassword }); return { ok: !!d.ok, applied: !!d.applied, error: d.error as string | undefined }; }
+  catch { return { ok: false, error: 'falha de rede' }; }
+}
 export async function lookupStripe(password: string, email: string): Promise<StripeLookup> {
   try { return (await post({ action: 'stripe', password, email })) as unknown as StripeLookup; }
   catch (e) { return { found: false, error: e instanceof Error ? e.message : ct('erro') }; }
