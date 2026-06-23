@@ -24,6 +24,10 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
   const [grantEmail, setGrantEmail] = useState('');
   const [msg, setMsg] = useState('');
   const [stripe, setStripe] = useState<Record<string, StripeLookup | 'loading'>>({});
+  const [filter, setFilter] = useState<'all' | 'paid' | 'free'>('all');
+  const rows = (data?.accounts ?? []).filter((a) => filter === 'all' || (filter === 'paid' ? a.paid : !a.paid));
+  const conv = data && data.total ? Math.round((data.paidTotal / data.total) * 100) : 0;
+  const revenue = (data?.paidTotal ?? 0) * 20; // conta vitalícia = R$20
 
   const load = useCallback(async (q = '') => {
     setErr('');
@@ -81,7 +85,7 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 920, margin: '24px auto' }}>
+      <div className="panel" style={{ maxWidth: 1040, margin: "24px auto" }}>
         <div className="panel-head">
           {ct('Contas pagas')}
           <span className="spacer" />
@@ -95,8 +99,15 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
           {msg && <div className="pos small" style={{ marginBottom: 10 }}>{msg}</div>}
 
           {data && (
-            <div className="muted small" style={{ marginBottom: 14 }}>
-              <b style={{ color: 'var(--rtm-text-strong)' }}>{data.total}</b> {ct('contas')} · <b style={{ color: 'var(--rtm-gold)' }}>{data.paidTotal}</b> {ct('vitalícias')}
+            <div className="crm-stats">
+              <div className="crm-stat"><span className="cs-val">{data.total}</span><span className="cs-lbl">{ct('Contas')}</span></div>
+              <div className="crm-stat gold"><span className="cs-val">{data.paidTotal}</span><span className="cs-lbl">{ct('Vitalícias')}</span></div>
+              <div className="crm-stat green"><span className="cs-val">R$ {revenue.toLocaleString('pt-BR')}</span><span className="cs-lbl">{ct('Receita')}</span></div>
+              <div className="crm-stat"><span className="cs-val">{conv}%</span><span className="cs-lbl">{ct('Conversão')}</span></div>
+              <div className="crm-stat"><span className="cs-val">+{data.new7 ?? 0}</span><span className="cs-lbl">{ct('Novas 7d')}</span></div>
+              <div className="crm-stat"><span className="cs-val">+{data.new30 ?? 0}</span><span className="cs-lbl">{ct('Novas 30d')}</span></div>
+              <div className="crm-stat blue"><span className="cs-val">{data.paid30 ?? 0}</span><span className="cs-lbl">{ct('Vendas 30d')}</span></div>
+              <div className="crm-stat"><span className="cs-val">{data.orphanTotal ?? data.orphanPaid.length}</span><span className="cs-lbl">{ct('Pagas s/ conta')}</span></div>
             </div>
           )}
 
@@ -113,15 +124,21 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
             <button className="btn gold" disabled={busy || !grantEmail.trim()} onClick={() => doGrant(grantEmail)}>★ {ct('Conceder acesso')}</button>
           </div>
 
-          {/* busca */}
-          <div className="field" style={{ marginBottom: 10 }}>
+          {/* busca + filtros */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               placeholder={ct('buscar por e-mail ou nick…')}
               value={query}
               onChange={(e) => { setQuery(e.target.value); }}
               onKeyDown={(e) => e.key === 'Enter' && load(query)}
               onBlur={() => load(query)}
+              style={{ flex: 1, minWidth: 200 }}
             />
+            <div className="crm-filters">
+              {([['all', ct('Todas')], ['paid', ct('Vitalícias')], ['free', ct('Grátis')]] as const).map(([f, lbl]) => (
+                <button key={f} className={`crm-chip${filter === f ? ' on' : ''}`} onClick={() => setFilter(f)}>{lbl}</button>
+              ))}
+            </div>
           </div>
 
           {data === null && !err && <div className="muted">{ct('Carregando…')}</div>}
@@ -135,7 +152,7 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
                   ))}
                 </tr></thead>
                 <tbody>
-                  {data.accounts.map((a, i) => (
+                  {rows.map((a, i) => (
                     <tr key={a.email} style={{ background: i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)' }}>
                       <td style={{ padding: '9px 10px' }}><b style={{ color: 'var(--rtm-text-strong)' }}>{a.email}</b>{a.nick && <span className="muted small"> · {a.nick}</span>}</td>
                       <td style={{ padding: '9px 10px', color: 'var(--rtm-dim)' }}>{fmtDate(a.created_at)}</td>
@@ -155,7 +172,7 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
                       </td>
                     </tr>
                   ))}
-                  {data.accounts.length === 0 && <tr><td colSpan={5} className="muted" style={{ padding: 14 }}>{ct('Nenhuma conta encontrada.')}</td></tr>}
+                  {rows.length === 0 && <tr><td colSpan={5} className="muted" style={{ padding: 14 }}>{ct('Nenhuma conta encontrada.')}</td></tr>}
                 </tbody>
               </table>
 

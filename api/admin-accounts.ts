@@ -50,11 +50,20 @@ export default async function handler(
       : await sql`SELECT email, nick, paid, created_at, (stripe_ref IS NOT NULL) AS has_ref FROM rtm_accounts ORDER BY paid DESC, created_at DESC LIMIT 200`;
     // e-mails pagos que ainda não viraram conta (pagou antes de cadastrar)
     const orphanPaid = await sql`SELECT p.email, p.created_at FROM rtm_paid_emails p WHERE NOT EXISTS (SELECT 1 FROM rtm_accounts a WHERE a.email = p.email) ORDER BY p.created_at DESC LIMIT 200`;
-    const counts = await sql`SELECT count(*)::int AS total, count(*) FILTER (WHERE paid)::int AS paid FROM rtm_accounts`;
+    const counts = await sql`SELECT
+        count(*)::int AS total,
+        count(*) FILTER (WHERE paid)::int AS paid,
+        count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS new7,
+        count(*) FILTER (WHERE created_at > now() - interval '30 days')::int AS new30,
+        count(*) FILTER (WHERE paid AND created_at > now() - interval '30 days')::int AS paid30
+      FROM rtm_accounts`;
+    const orphanCount = await sql`SELECT count(*)::int AS n FROM rtm_paid_emails p WHERE NOT EXISTS (SELECT 1 FROM rtm_accounts a WHERE a.email = p.email)`;
     res.status(200).json({
       accounts: accounts.map((a) => ({ email: String(a.email), nick: a.nick ? String(a.nick) : null, paid: !!a.paid, created_at: a.created_at, hasRef: !!a.has_ref })),
       orphanPaid: orphanPaid.map((p) => ({ email: String(p.email), created_at: p.created_at })),
       total: counts[0]?.total ?? 0, paidTotal: counts[0]?.paid ?? 0,
+      new7: counts[0]?.new7 ?? 0, new30: counts[0]?.new30 ?? 0, paid30: counts[0]?.paid30 ?? 0,
+      orphanTotal: orphanCount[0]?.n ?? 0,
     });
     return;
   }
