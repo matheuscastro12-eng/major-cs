@@ -8,7 +8,7 @@ import type { BuyTier } from './match';
 import { getLang, type Lang } from '../state/i18n';
 import { hashStr } from '../state/hash';
 
-export type NarrationKind = 'clutch' | 'ace' | 'multi' | 'eco' | 'mappoint' | 'matchpoint' | 'comeback' | 'pistol';
+export type NarrationKind = 'clutch' | 'ace' | 'multi' | 'eco' | 'mappoint' | 'matchpoint' | 'comeback' | 'pistol' | 'round';
 
 export interface RoundNarration {
   kind: NarrationKind;
@@ -191,6 +191,57 @@ function worstDeficit(log: (0 | 1)[], team: 0 | 1): number {
   return worst;
 }
 
+// linhas de round "tranquilo" (sem clutch/ace/multi): mantém o feed VIVO, com uma
+// fala diferente a cada round citando quem abriu, quem fechou, arma e local reais.
+// Variedade por seed (round+abridor+fechador) pra não repetir a mesma frase.
+const QUIET = {
+  pt: (tag: string, open: string | null, close: string | null, spot: string, flair: string) => [
+    open && `${open} abre o round${spot ? ` ${spot}` : ''} ${T.pt.con} ${flair}, e a ${tag} encaixa atrás.`,
+    `Troca parelha na entrada e a ${tag} sai melhor${close ? `, ${close} dando o último` : ''}.`,
+    open && `${open} pega o primeiro contato${spot ? ` ${spot}` : ''} e a ${tag} converte com paciência.`,
+    close && `Round controlado da ${tag}: ${close} fecha o espaço e ninguém arrisca a rotação.`,
+    `A ${tag} domina o tempo do round${close ? ` e ${close} carimba${spot ? ` ${spot}` : ''}` : ''}.`,
+    `Pós-plant nervoso, mas a ${tag} segura${close ? ` com ${close} no último duelo` : ' no detalhe'}.`,
+    open && `${open} ganha o duelo de abertura${spot ? ` ${spot}` : ''} e dita o ritmo pra ${tag}.`,
+    `Leitura perfeita da ${tag}, que joga no erro do adversário e leva limpo.`,
+  ],
+  en: (tag: string, open: string | null, close: string | null, spot: string, flair: string) => [
+    open && `${open} opens the round${spot ? ` ${spot}` : ''} ${T.en.con} ${flair}, and ${tag} follows up.`,
+    `Even opening trade and ${tag} comes out ahead${close ? `, ${close} getting the last` : ''}.`,
+    open && `${open} wins first contact${spot ? ` ${spot}` : ''} and ${tag} converts patiently.`,
+    close && `Controlled round for ${tag}: ${close} shuts the space and no rotation comes.`,
+    `${tag} owns the round timing${close ? ` and ${close} stamps it${spot ? ` ${spot}` : ''}` : ''}.`,
+    `Tense post-plant, but ${tag} holds${close ? ` with ${close} in the last duel` : ' on the detail'}.`,
+    open && `${open} takes the opening duel${spot ? ` ${spot}` : ''} and sets the pace for ${tag}.`,
+    `Perfect read by ${tag}, punishing the mistake and taking it clean.`,
+  ],
+  es: (tag: string, open: string | null, close: string | null, spot: string, flair: string) => [
+    open && `${open} abre la ronda${spot ? ` ${spot}` : ''} ${T.es.con} ${flair}, y ${tag} acompaña.`,
+    `Intercambio parejo en la entrada y ${tag} sale mejor${close ? `, ${close} dando el último` : ''}.`,
+    open && `${open} gana el primer contacto${spot ? ` ${spot}` : ''} y ${tag} convierte con paciencia.`,
+    close && `Ronda controlada de ${tag}: ${close} cierra el espacio y no llega la rotación.`,
+    `${tag} domina el tiempo de la ronda${close ? ` y ${close} la sella${spot ? ` ${spot}` : ''}` : ''}.`,
+    `Post-plant tenso, pero ${tag} aguanta${close ? ` con ${close} en el último duelo` : ' en el detalle'}.`,
+    open && `${open} gana el duelo de apertura${spot ? ` ${spot}` : ''} y marca el ritmo de ${tag}.`,
+    `Lectura perfecta de ${tag}, que castiga el error y se la lleva limpia.`,
+  ],
+} as const;
+
+function quietLine(kills: KillEvent[], winner: 0 | 1, teams: [TTeam, TTeam], ctx: NarrationCtx, lang: Lang, tag: string): RoundNarration {
+  const nickOf = (id: string) => teams[0].players.find((p) => p.id === id)?.nick ?? teams[1].players.find((p) => p.id === id)?.nick ?? null;
+  const wins = kills.filter((k) => k.victimTeam !== winner);
+  const opener = wins[0] ?? kills[0];
+  const closer = wins[wins.length - 1] ?? kills[kills.length - 1];
+  const seed = hashStr(`${ctx.round}:${winner}:${kills.map((k) => k.killerId).join('')}`);
+  const spot = ctx.map ? spotFor(ctx.map, lang, seed) : '';
+  const flair = opener ? flairFor(opener, seed, lang) : '';
+  const open = opener ? nickOf(opener.killerId) : null;
+  const close = closer ? nickOf(closer.killerId) : null;
+  const variants = QUIET[lang](tag, open, close, spot, flair).filter(Boolean) as string[];
+  const text = variants[seed % variants.length];
+  return { kind: 'round', text, teamIdx: winner, big: false };
+}
+
 export function narrateRound(kills: KillEvent[], winner: 0 | 1, teams: [TTeam, TTeam], ctx: NarrationCtx): RoundNarration | null {
   const lang = getLang();
   const c = CTX_STR[lang];
@@ -262,7 +313,8 @@ export function narrateRound(kills: KillEvent[], winner: 0 | 1, teams: [TTeam, T
   if (ctx.mapWon) return { kind: ctx.seriesPoint ? 'matchpoint' : 'mappoint', text: `${tag}${ctx.seriesPoint ? c.seriesLine(teamTag) : c.mapLine(teamTag)}`, teamIdx: winner, big: true };
   if (comeback) return { kind: 'comeback', text: `${tag}${sp}: ${c.comebackLine(teamTag)}`, teamIdx: winner, big: true };
   if (isPistol) return { kind: 'pistol', text: `${tag}${c.pistolLine(teamTag)}`, teamIdx: winner, big: false };
-  return null;
+  // round sem jogada-chave: ainda assim narra (feed sempre vivo, frase variada)
+  return quietLine(kills, winner, teams, ctx, lang, teamTag);
 }
 
 export function bestSeriesMoment(series: SeriesResult, teams: [TTeam, TTeam], userIdx: 0 | 1): { nick: string; text: string } | null {
