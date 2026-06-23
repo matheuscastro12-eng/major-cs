@@ -264,6 +264,10 @@ export default async function handler(
       res.status(200).json({
         lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage), stage_started_at: Number(lobby[0].stage_started_at), playback_speed: Number(lobby[0].playback_speed) },
         players: players.map((p) => ({ ...p, ready_stage: Number(p.ready_stage) })),
+        // hora do SERVIDOR: o relógio da sala (stage_started_at) é gravado em tempo
+        // de servidor; o cliente corrige a diferença pro seu Date.now() não travar o
+        // replay quando o relógio do PC está adiantado/atrasado.
+        serverNow: Date.now(),
       });
     } catch (e) {
       res.status(500).json({ error: String(e) });

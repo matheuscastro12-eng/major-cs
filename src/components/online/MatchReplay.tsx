@@ -45,6 +45,7 @@ export function MatchReplay({
   canControlSpeed,
   onPlaybackSpeedChange,
   startedAt,
+  nowOffset = 0,
   lockedLive = false,
   initialDone = false,
 }: {
@@ -57,6 +58,7 @@ export function MatchReplay({
   canControlSpeed: boolean;
   onPlaybackSpeedChange: (speed: PlaybackSpeed) => void;
   startedAt?: number;
+  nowOffset?: number; // skew servidor−cliente: relógio da sala = Date.now() + nowOffset
   lockedLive?: boolean;
   initialDone?: boolean;
 }) {
@@ -93,7 +95,7 @@ export function MatchReplay({
   useEffect(() => {
     if (!startedAt || done) return;
     const syncToRoomClock = () => {
-      let units = Math.max(0, Math.floor((Date.now() - startedAt) * playbackSpeed / 850));
+      let units = Math.max(0, Math.floor((Date.now() + nowOffset - startedAt) * playbackSpeed / 850));
       for (let index = 0; index < series.maps.length; index++) {
         const rounds = series.maps[index].roundLog.length;
         if (units <= rounds) {
@@ -116,7 +118,7 @@ export function MatchReplay({
     syncToRoomClock();
     const timer = window.setInterval(syncToRoomClock, 250);
     return () => window.clearInterval(timer);
-  }, [done, playbackSpeed, series, startedAt]);
+  }, [done, playbackSpeed, series, startedAt, nowOffset]);
 
   const idIndex = useMemo(() => {
     const m = new Map<string, { nick: string; team: 0 | 1 }>();

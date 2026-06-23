@@ -92,6 +92,7 @@ export interface LobbyState {
     rollouts?: number[];
     spectator?: boolean;
   }[];
+  serverNow?: number; // Date.now() do servidor no momento da resposta (correção de skew)
 }
 
 // O Ultimate Team mistura cartas históricas com o elenco atual de 2026. As duas

@@ -378,6 +378,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   const [revealedRound, setRevealedRound] = useState(-1);
   const [majorVetoOpen, setMajorVetoOpen] = useState(false);
   const [broadcastNow, setBroadcastNow] = useState(0);
+  const serverSkewRef = useRef(0); // (serverNow − clientNow): alinha o relógio da sala
   const [matchCenterFilter, setMatchCenterFilter] = useState<MatchCenterFilter>('all');
   const [focusedTeamId, setFocusedTeamId] = useState<string | null>(null);
   // quantas fases do Major já foram reveladas (experiência rodada a rodada,
@@ -449,6 +450,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     }
     if (!s) return;
     goneRef.current = 0; // resposta válida: zera o contador de 404
+    // corrige a diferença entre o relógio do servidor e o do PC (evita replay
+    // travado em 0x0 quando o clock local está adiantado/atrasado).
+    if (typeof s.serverNow === 'number') serverSkewRef.current = s.serverNow - Date.now();
     const prevSeed = seedRef.current;
     const prevRunSeed = runSeedRef.current;
     const prevStatus = statusRef.current;
@@ -555,7 +559,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
   useEffect(() => {
     if (!(state?.lobby.stage_started_at && state.lobby.stage_started_at > 0)) return;
-    const update = () => setBroadcastNow(Date.now());
+    const update = () => setBroadcastNow(Date.now() + serverSkewRef.current); // relógio da sala (corrigido)
     const initial = window.setTimeout(update, 0);
     const id = window.setInterval(update, 500);
     return () => { window.clearTimeout(initial); window.clearInterval(id); };
@@ -2139,6 +2143,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   canControlSpeed={isHost && !liveMatch.key}
                   onPlaybackSpeedChange={changePlaybackSpeed}
                   startedAt={liveMatch.key ? stageStartedAt : undefined}
+                  nowOffset={serverSkewRef.current}
                   lockedLive={Boolean(liveMatch.key && stageIsLive)}
                   initialDone={liveMatch.completed === true}
                 />
