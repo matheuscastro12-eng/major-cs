@@ -8,6 +8,7 @@ import { Home } from './components/Home';
 import { Hub } from './components/Hub';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
+import { UpsellCard } from './components/UpsellCard';
 import { Loader } from './components/ui';
 import { AchievementsModal, AchievementToast } from './components/Achievements';
 import { recordGameEnd, type AchDef } from './state/achievements';
@@ -901,7 +902,10 @@ export default function App() {
       )}
       {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
       {screen === 'career' && (
-        <CareerScreen dataset={dataset} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
+        <>
+          <CareerScreen dataset={dataset} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
+          {!account?.paid && <UpsellCard onUpgrade={startCheckout} />}
+        </>
       )}
       {screen === 'careerCRM' && (
         <AdminGate>

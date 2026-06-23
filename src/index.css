@@ -6190,3 +6190,26 @@ body.has-ad-footer { padding-bottom: 126px; }
 .career-development-effects span.active { border-color: var(--rtm-gold-soft); color: var(--rtm-gold); background: rgba(216, 169, 67, .06); }
 @media (max-width: 620px) { .career-development-summary { grid-template-columns: repeat(2, 1fr); } .cs-development { display: none; } }
 @media (max-width: 640px) { .career-major-path { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ===== Card de ativação (upsell) para contas grátis ===== */
+.upsell-overlay{ position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
+  background:rgba(8,11,15,.72); backdrop-filter:blur(3px); padding:18px; animation:upsellFade .18s ease; }
+@keyframes upsellFade{ from{ opacity:0 } to{ opacity:1 } }
+.upsell-card{ position:relative; width:min(440px,94vw); background:linear-gradient(180deg,#1d232b,#141a20);
+  border:1px solid var(--gold-soft); border-radius:16px; padding:26px 24px 20px;
+  box-shadow:0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(216,169,67,.12); animation:upsellPop .22s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes upsellPop{ from{ transform:translateY(12px) scale(.97); opacity:0 } to{ transform:none; opacity:1 } }
+.upsell-x{ position:absolute; top:12px; right:12px; width:30px; height:30px; border-radius:8px; border:1px solid #313a45;
+  background:#222a33; color:#9aa4b2; font-size:13px; cursor:pointer; }
+.upsell-x:hover{ color:#fff; background:#2c343d; }
+.upsell-kicker{ font-size:11px; letter-spacing:1.6px; text-transform:uppercase; font-weight:800; color:var(--gold); }
+.upsell-title{ font-family:'Oswald','Arial Narrow',sans-serif; font-weight:700; color:#fff; font-size:22px; line-height:1.15; margin:8px 0 14px; max-width:340px; }
+.upsell-list{ list-style:none; display:flex; flex-direction:column; gap:9px; margin:0 0 18px; padding:0; }
+.upsell-list li{ font-size:13px; color:#c7ced7; line-height:1.4; padding-left:22px; position:relative; }
+.upsell-list li::before{ content:'★'; position:absolute; left:0; color:var(--gold); font-size:12px; }
+.upsell-list li b{ color:#fff; }
+.upsell-actions{ display:flex; flex-direction:column; gap:8px; }
+.upsell-actions .btn.gold.big{ width:100%; justify-content:center; font-size:15px; }
+.upsell-later{ background:none; border:none; color:#8b96a3; font-size:12.5px; cursor:pointer; padding:6px; }
+.upsell-later:hover{ color:#c7ced7; }
+.upsell-foot{ margin-top:12px; font-size:10.5px; color:#5e6975; text-align:center; line-height:1.4; }

@@ -1516,6 +1516,8 @@ const FREE_AGENT_PLAYERS: Player[] = [
   { id: 'fa__exit', nick: 'exit', name: 'Lucas Nogueira', country: 'br', role: 'Entry', aim: 78, consistency: 74, clutch: 72, awp: 55, igl: 52 },
   { id: 'fa__taco', nick: 'TACO', name: 'Epitácio de Melo', country: 'br', role: 'Support', aim: 72, consistency: 77, clutch: 71, awp: 50, igl: 71 },
   { id: 'fa__junior', nick: 'JOTA', name: 'João Pedro', country: 'br', role: 'AWP', aim: 77, consistency: 75, clutch: 73, awp: 81, igl: 47 },
+  { id: 'fa__nqz', nick: 'nqz', name: 'Lucas Soares', country: 'br', role: 'AWP', aim: 86, consistency: 82, clutch: 82, awp: 88, igl: 52 },
+  { id: 'fa__lux', nick: 'lux', name: 'Lucas Meneghini', country: 'br', role: 'Rifler', aim: 81, consistency: 78, clutch: 77, awp: 56, igl: 54 },
   { id: 'fa__shox', nick: 'shox', name: 'Richard Papillon', country: 'fr', role: 'Rifler', aim: 81, consistency: 76, clutch: 80, awp: 70, igl: 62 },
   { id: 'fa__amanek', nick: 'AmaNEk', name: 'Ali Saouli', country: 'fr', role: 'Rifler', aim: 77, consistency: 77, clutch: 74, awp: 60, igl: 74 },
   { id: 'fa__kioshima', nick: 'kioShiMa', name: 'Fabien Fiey', country: 'fr', role: 'Support', aim: 75, consistency: 76, clutch: 74, awp: 58, igl: 58 },
@@ -1557,6 +1559,22 @@ export function CareerScreen({ onExit }: Props) {
   const { lang } = useLang();
   setCareerLang(lang); // idioma a nivel de modulo: ct() funciona em todos os subcomponentes
   const [save, setSave] = useState<CareerSave>(() => loadSave());
+  // ativação (upsell) de conta grátis: marcos da carreira abrem o card (que decide se mostra).
+  const upsellSplitRef = useRef(0);
+  const upsellTitleRef = useRef<number | null>(null);
+  useEffect(() => {
+    if ([3, 6, 10].includes(save.split) && upsellSplitRef.current !== save.split) {
+      upsellSplitRef.current = save.split;
+      window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: save.split >= 6 ? 'milestone' : 'save-risk' } }));
+    }
+  }, [save.split]);
+  useEffect(() => {
+    if (upsellTitleRef.current === null) { upsellTitleRef.current = save.titles; return; }
+    if (save.titles > upsellTitleRef.current) {
+      upsellTitleRef.current = save.titles;
+      window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'split-win' } }));
+    }
+  }, [save.titles]);
   const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
