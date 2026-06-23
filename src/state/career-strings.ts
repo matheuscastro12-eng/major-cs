@@ -1856,4 +1856,8 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Última chamada': { en: 'Last call', es: 'Última llamada' },
   '✦ 2026 + HISTÓRIA': { en: '✦ 2026 + HISTORY', es: '✦ 2026 + HISTORIA' },
   '🎯 Tático': { en: '🎯 Tactical', es: '🎯 Táctico' },
+  'concluída.': { en: 'complete.', es: 'completada.' },
+  'não rolou': { en: 'didn\'t work', es: 'no salió' },
+  'splits (próximo: Split': { en: 'splits (next: Split', es: 'splits (próximo: Split' },
+  'etapa(s) pra fechar o split — aí entra o offseason (mercado, evolução, renovações). Até lá, mesmo elenco.': { en: 'stage(s) to close the split — then the offseason kicks in (market, evolution, renewals). Until then, same roster.', es: 'etapa(s) para cerrar el split — luego entra la offseason (mercado, evolución, renovaciones). Hasta entonces, misma plantilla.' },
 };
