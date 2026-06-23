@@ -162,6 +162,16 @@ export function CareerCRM({ onExit }: { onExit: () => void }) {
                             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
                         </label>
+                        <label className="crm-ctrl">Função 2
+                          <select value={p.role2 ?? ''} onChange={(e) => setPlayer(p.id, { role2: e.target.value ? (e.target.value as Role) : null })}>
+                            <option value="">—</option>
+                            {ROLES.filter((r) => r !== p.role).map((r) => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </label>
+                        <label className="crm-ctrl">Idade
+                          <input type="number" min={15} max={45} value={p.age ?? ''} placeholder="auto" style={{ width: 64 }}
+                            onChange={(e) => setPlayer(p.id, { age: e.target.value ? Math.max(15, Math.min(45, +e.target.value)) : undefined })} />
+                        </label>
                         <div className="crm-stats">
                           {STATS.map((s) => (
                             <label key={s.key} className="crm-ctrl">{s.label}

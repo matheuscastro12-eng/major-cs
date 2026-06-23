@@ -893,11 +893,13 @@ export const PHASE_LABEL: Record<PlayerPhase, string> = {
 // idades REAIS do bo3 (196/240) por nick; quem falta recebe uma idade plausível
 // determinística. A idade efetiva sobe ~1 ano a cada 3 splits de carreira.
 const REAL_AGES = bo3Ages as Record<string, { age: number; born: string }>;
-function baseAge(p: Pick<Player, 'id' | 'nick'>, youthAge?: Record<string, number>): number {
+function baseAge(p: Pick<Player, 'id' | 'nick' | 'age'>, youthAge?: Record<string, number>): number {
   // prospecto promovido da academia: idade-base guardada na promoção. Vem ANTES do
   // lookup por nick (um prospecto pode ter um nick que colide com um pro real).
   const y = youthAge?.[p.id];
   if (y != null) return y;
+  // idade editada no CRM (override global): tem prioridade sobre a tabela por nick.
+  if (p.age != null && p.age >= 15 && p.age <= 45) return p.age;
   const real = REAL_AGES[p.nick]?.age;
   if (real && real >= 15 && real <= 45) return real;
   // sem dado: assume AUGE (25-29), não juventude. Um pro de elenco real não pode
@@ -3753,8 +3755,8 @@ export function CareerScreen({ onExit }: Props) {
         const moraleVals = squadPlayers.map((p) => save.morale?.[p.id] ?? MORALE_DEFAULT);
         const avgMorale = moraleVals.length ? Math.round(moraleVals.reduce((a, b) => a + b, 0) / moraleVals.length) : 70;
         const fam = save.playbookXp ?? 0;
-        const hasAwp = squadPlayers.some((p) => p.role === 'AWP');
-        const hasIgl = squadPlayers.some((p) => p.role === 'IGL');
+        const hasAwp = squadPlayers.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
+        const hasIgl = squadPlayers.some((p) => p.role === 'IGL' || p.role2 === 'IGL');
         const roleOk = (hasAwp ? 1 : 0) + (hasIgl ? 1 : 0);
         const chem = Math.round(0.45 * avgMorale + 0.35 * fam + 0.2 * (roleOk / 2) * 100);
         // objetivos: metas do cenário, senão objetivos padrão da temporada
@@ -4200,8 +4202,8 @@ export function CareerScreen({ onExit }: Props) {
         // itera as contratações (findSigning resolve o jogador pelo id ORIGINAL,
         // já com evolução e função aplicadas). rid = id de runtime nas partidas.
         const rows = save.squad.map((sig) => findSigning(sig)?.player).filter(Boolean) as Player[];
-        const hasAwp = rows.some((p) => p.role === 'AWP');
-        const hasIgl = rows.some((p) => p.role === 'IGL');
+        const hasAwp = rows.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
+        const hasIgl = rows.some((p) => p.role === 'IGL' || p.role2 === 'IGL');
         const setRole = (pid: string, role: Role) =>
           update({ roles: { ...(save.roles ?? {}), [pid]: role } });
         const setFocus = (pid: string) =>

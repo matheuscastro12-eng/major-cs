@@ -30,6 +30,8 @@ export interface Player {
   name: string;
   country: string; // ISO-3166 alpha-2, lowercase
   role: Role;
+  role2?: Role; // função secundária (ex.: AWP + IGL); opcional, conta nas duas
+  age?: number; // idade explícita (override da tabela REAL_AGES, editável no CRM)
   playstyle?: Playstyle; // estilo de jogo (default derivado da role)
   aim: number;
   clutch: number;
@@ -102,6 +104,7 @@ export interface TPlayer {
   name: string;
   country: string;
   role: Role;
+  role2?: Role; // função secundária (ex.: AWP + IGL)
   playstyle: Playstyle; // estilo de jogo (sempre definido no runtime)
   aim: number;
   clutch: number;

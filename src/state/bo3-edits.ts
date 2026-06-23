@@ -6,7 +6,7 @@ import type { Player, Role, TeamSeason } from '../types';
 const KEY = 'rtm-bo3-edits-v1';
 
 export interface PlayerEdit {
-  ovr?: number; role?: Role; nick?: string;
+  ovr?: number; role?: Role; role2?: Role | null; nick?: string; age?: number;
   // stats individuais: têm prioridade sobre o OVR derivado (edição fina no CRM)
   aim?: number; consistency?: number; clutch?: number; awp?: number; igl?: number;
 }
@@ -41,14 +41,17 @@ export function mergeBo3Edits(base: Bo3Edits, over: Bo3Edits): Bo3Edits {
   };
 }
 
-// recompõe os atributos a partir do OVR + role (mesma lógica da importação)
-export function attrsFromOvr(ovr: number, role: Role): Pick<Player, 'aim' | 'consistency' | 'clutch' | 'awp' | 'igl'> {
+// recompõe os atributos a partir do OVR + role (mesma lógica da importação).
+// role2 conta junto: um AWP+IGL ganha os dois stats altos a partir do OVR.
+export function attrsFromOvr(ovr: number, role: Role, role2?: Role | null): Pick<Player, 'aim' | 'consistency' | 'clutch' | 'awp' | 'igl'> {
+  const isAwp = role === 'AWP' || role2 === 'AWP';
+  const isIgl = role === 'IGL' || role2 === 'IGL';
   return {
     aim: ovr,
     consistency: ovr,
     clutch: Math.max(40, ovr - 2),
-    awp: role === 'AWP' ? ovr : Math.max(40, ovr - 26),
-    igl: role === 'IGL' ? ovr : Math.max(35, ovr - 30),
+    awp: isAwp ? ovr : Math.max(40, ovr - 26),
+    igl: isIgl ? ovr : Math.max(35, ovr - 30),
   };
 }
 
@@ -60,8 +63,10 @@ export function applyBo3Edits(teams: TeamSeason[], e: Bo3Edits = loadBo3Edits())
       const pe = e.players[p.id];
       if (!pe) return p;
       const role = pe.role ?? p.role;
-      let np = { ...p, role, nick: pe.nick ?? p.nick };
-      if (pe.ovr != null) np = { ...np, ...attrsFromOvr(pe.ovr, role) };
+      const role2 = pe.role2 === null ? undefined : (pe.role2 ?? p.role2);
+      let np = { ...p, role, role2, nick: pe.nick ?? p.nick };
+      if (pe.age != null) np.age = pe.age;
+      if (pe.ovr != null) np = { ...np, ...attrsFromOvr(pe.ovr, role, role2) };
       // stats individuais sobrescrevem o OVR derivado (edição fina do admin)
       for (const k of STAT_KEYS) if (pe[k] != null) np[k] = Math.max(40, Math.min(99, pe[k]!));
       return np;
