@@ -4790,8 +4790,11 @@ table.crm-players input.num {
 .aca-potbar { flex: 1; height: 6px; border-radius: 999px; background: var(--bg-deep); overflow: hidden; }
 .aca-potbar > div { height: 100%; background: linear-gradient(90deg, var(--blue), var(--gold)); }
 .aca-potval { font-family: var(--font-cond); font-weight: 800; color: var(--gold-2); font-size: 12px; }
-.aca-actions { display: flex; gap: 6px; margin-top: 4px; }
-.aca-actions .btn { flex: 1; }
+.aca-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.aca-promote { width: 100%; justify-content: center; }
+.aca-actions-row { display: flex; gap: 6px; }
+.aca-train { flex: 1; min-width: 0; justify-content: center; }
+.aca-drop { flex: 0 0 40px; padding: 0; display: flex; align-items: center; justify-content: center; }
 .aca-replace { margin-top: 6px; border-top: 1px solid var(--border-soft); padding-top: 6px; }
 .aca-replace-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 

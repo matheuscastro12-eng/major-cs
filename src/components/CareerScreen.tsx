@@ -4110,25 +4110,27 @@ export function CareerScreen({ onExit }: Props) {
                           <span className="aca-potval">{p.potential}</span>
                         </div>
                         <div className="aca-actions">
-                          <button className={`btn small${focused ? ' gold' : ' ghost'}`}
-                            onClick={() => update({ academyFocus: focused ? null : p.id })}>
-                            {focused ? ct('🎯 Em foco') : ct('Treinar')}
-                          </button>
-                          <button className="btn small gold"
+                          <button className="btn small gold aca-promote"
                             onClick={() => (squadFull ? setPromoting(promoting === p.id ? null : p.id) : promoteProspect(p.id))}>
-                            {ct('⬆ Promover')}
+                            {ct('⬆ Promover ao elenco')}
                           </button>
-                          <button className="btn small ghost" title={ct('Dispensar o prospecto da academia')}
-                            onClick={() => {
-                              if (!confirm(`${ct('Dispensar')} ${p.nick} ${ct('da academia? Não dá pra desfazer.')}`)) return;
-                              update({
-                                academy: aca.filter((x) => x.id !== p.id),
-                                academyFocus: save.academyFocus === p.id ? null : save.academyFocus,
-                              });
-                              if (promoting === p.id) setPromoting(null);
-                            }}>
-                            🗑
-                          </button>
+                          <div className="aca-actions-row">
+                            <button className={`btn small aca-train${focused ? ' gold' : ' ghost'}`}
+                              onClick={() => update({ academyFocus: focused ? null : p.id })}>
+                              {focused ? ct('🎯 Em foco') : ct('🎯 Treinar')}
+                            </button>
+                            <button className="btn small ghost aca-drop" title={ct('Dispensar o prospecto da academia')}
+                              onClick={() => {
+                                if (!confirm(`${ct('Dispensar')} ${p.nick} ${ct('da academia? Não dá pra desfazer.')}`)) return;
+                                update({
+                                  academy: aca.filter((x) => x.id !== p.id),
+                                  academyFocus: save.academyFocus === p.id ? null : save.academyFocus,
+                                });
+                                if (promoting === p.id) setPromoting(null);
+                              }}>
+                              🗑
+                            </button>
+                          </div>
                         </div>
                         {promoting === p.id && squadFull && (
                           <div className="aca-replace">
