@@ -774,13 +774,18 @@ function nextMorale(
 ): Record<string, number> {
   const out: Record<string, number> = {};
   for (const s of squad) {
-    let m = prev[s.oid] ?? MORALE_DEFAULT;
-    m += (MORALE_DEFAULT - m) * 0.12;
-    m += ((s.form ?? 1) - 1) * 55;
+    const prevM = prev[s.oid] ?? MORALE_DEFAULT;
+    let m = prevM;
+    m += (MORALE_DEFAULT - m) * 0.25; // reversão à média mais firme (não trava em baixa)
+    // forma só puxa pra CIMA: fase quente motiva, mas fase fria não realimenta a
+    // queda de moral (senão vira má fase eterna num time que perde sempre).
+    m += Math.max(0, (s.form ?? 1) - 1) * 55;
     if (ctx.champion) m += 12; else if (ctx.objMet) m += 4; else m -= 7;
     if (s.expiring) m -= 6;
     m += personalityMoraleDelta(s.oid, { champion: ctx.champion, objectiveMet: ctx.objMet, expiring: s.expiring });
-    out[s.oid] = clampMorale(m);
+    // piso de recuperação: a moral cai no máximo 12 por split, então ninguém fica
+    // preso em má fase por muitas temporadas seguidas (sobe de volta em 1-2 splits).
+    out[s.oid] = clampMorale(Math.max(m, prevM - 12));
   }
   return out;
 }
@@ -1936,6 +1941,12 @@ export function CareerScreen({ onExit }: Props) {
       } : { ...FREE_AGENTS_FROM, id: s.fromId };
     }
     if (!from || !player) return null;
+    // trava a FUNÇÃO no snapshot tirado na contratação: backfill/regen podem
+    // reconstruir o atleta com função diferente da que apareceu no mercado
+    // (atributos seguem vindo de base+drift; só a role é fixada aqui).
+    if (s.playerSnapshot && player.role !== s.playerSnapshot.role) {
+      player = { ...player, role: s.playerSnapshot.role };
+    }
     // função definida pelo técnico (override do dado da base; corrige dados
     // errados e dá controle de tática igual ao gerenciamento do Brasval)
     const ovrRole = save.roles?.[player.id];
