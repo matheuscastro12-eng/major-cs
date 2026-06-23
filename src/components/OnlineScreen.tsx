@@ -636,7 +636,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     setBusy(true);
     setError('');
     try {
-      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, name: roomName.trim(), isPublic, ranked: ranked && mode === 'duel', ruleset, draftRollouts });
+      const r = await lobbyApi({ action: 'create', nick: nick.trim(), mode, pool, name: roomName.trim(), isPublic, ranked, ruleset, draftRollouts });
       if (r.ok && r.code) {
         setCode(r.code);
         track('online_create', { mode, pool, public: isPublic, ranked });
@@ -1053,6 +1053,13 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               {ct('O matchmaking busca um rival perto do seu MMR. Vocês montam os times em draft e jogam uma melhor de três. Vitória sobe o MMR, derrota desce')}{paidRank ? '' : ` ${ct('(no grátis não persiste)')}`}.
             </p>
             <Button variant="primary" size="big" style={{ width: '100%' }} onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : `🔍 ${ct('Procurar partida')}`}</Button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '12px 0' }}>
+              <span style={{ flex: 1, height: 1, background: 'var(--rtm-border-soft)' }} />
+              <span style={{ fontSize: 11, color: 'var(--rtm-faint)', textTransform: 'uppercase', letterSpacing: '.6px' }}>{ct('ou')}</span>
+              <span style={{ flex: 1, height: 1, background: 'var(--rtm-border-soft)' }} />
+            </div>
+            <Button variant="gold" style={{ width: '100%' }} onClick={create} disabled={!nick.trim() || busy}>{busy ? '…' : `➕ ${ct('Criar minha sala e esperar um rival')}`}</Button>
+            <p style={{ margin: '10px 0 0', color: 'var(--rtm-faint)', fontSize: '12px', lineHeight: 1.45 }}>{ct('Criar sala te dá um código pra chamar um amigo direto. Procurar partida acha um rival aleatório no seu nível.')}</p>
           </Panel>
 
           <Panel

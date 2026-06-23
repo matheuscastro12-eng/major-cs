@@ -37,7 +37,7 @@ export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; a
       {screen === 'hub' && <OnlineHub manager={manager} stats={stats} account={account} onPlay={(id) => setScreen(id)} onCasual={() => setScreen('casual')} onExit={onBack} />}
       {/* online REAL via lobby (api/lobby.ts): 1v1 = duelo, Major = grupo. Gauntlet é o único vs IA. */}
       {screen === '1v1' && <OnlineScreen preset="duel" forceRanked account={account} onBack={toHub} />}
-      {screen === 'major' && <OnlineScreen preset="party" account={account} onBack={toHub} />}
+      {screen === 'major' && <OnlineScreen preset="party" forceRanked account={account} onBack={toHub} />}
       {screen === 'gauntlet' && <OnlineGauntlet pool={pool} stats={stats} setStats={setStats} onHub={toHub} onExit={onBack} />}
       {screen === 'casual' && <OnlineScreen casualOnly account={account} onBack={toHub} />}
     </div>
