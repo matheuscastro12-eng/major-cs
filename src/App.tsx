@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { AdminGate } from './components/AdminGate';
 import { BrandMark } from './components/brand';
 import { DonateButton, DonateModal } from './components/Donate';
@@ -18,14 +18,15 @@ import { recordGameEnd, type AchDef } from './state/achievements';
 // lazyWithReload recarrega a página UMA vez (guard em sessionStorage) pra pegar os
 // assets frescos, em vez de cair no ErrorBoundary. O guard é limpo num load OK.
 const CHUNK_RELOAD_KEY = 'rtm-chunk-reload';
-function lazyWithReload<T extends { default: React.ComponentType<unknown> }>(factory: () => Promise<T>) {
-  return lazy(() => factory().then((m) => { try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch { /* ok */ } return m; }).catch((err) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function lazyWithReload<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
+  return lazy<T>(() => factory().then((m) => { try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch { /* ok */ } return m; }).catch((err): Promise<{ default: T }> => {
     let already = false;
     try { already = sessionStorage.getItem(CHUNK_RELOAD_KEY) === '1'; } catch { /* ok */ }
     if (!already) {
       try { sessionStorage.setItem(CHUNK_RELOAD_KEY, '1'); } catch { /* ok */ }
       window.location.reload();
-      return new Promise<T>(() => {}); // nunca resolve: segura até o reload
+      return new Promise<{ default: T }>(() => {}); // nunca resolve: segura até o reload
     }
     throw err; // já tentou recarregar: deixa o ErrorBoundary mostrar
   }));
