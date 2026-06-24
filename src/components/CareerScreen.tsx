@@ -53,7 +53,6 @@ const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra mo
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
 // dava pra ter o melhor elenco com grana sobrando já no split 3)
-const PRIZE_BY_POS = [1_250_000, 750_000, 450_000, 280_000, 170_000, 110_000, 70_000, 40_000];
 const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
 // VRS é ROLANTE (como o Valve ranking real): a cada split os pontos antigos
 // decaem, então não acumulam pra sempre (acabou o usuário com 3000 e a IA com
@@ -92,15 +91,7 @@ const MAJOR_EVERY = 4;
 // com o MESMO elenco, sem offseason: mais campeonatos antes do mundo mexer.
 const EVENTS_PER_SPLIT = 3;
 const isMajorSplit = (split: number) => split % MAJOR_EVERY === 0;
-// premiação e VRS do Major por colocação (bem maior que o circuito)
-const MAJOR_PRIZE: Record<PlacementCode, number> = {
-  champion: 8_000_000,
-  runnerup: 4_000_000,
-  semi: 2_400_000,
-  quarters: 1_400_000,
-  playoffs: 800_000,
-  swiss: 400_000,
-};
+// VRS do Major por colocação (o prêmio em $ vem do pool real × fatia, ver eventPrize)
 const MAJOR_VRS: Record<PlacementCode, number> = {
   champion: 600,
   runnerup: 400,
@@ -200,6 +191,14 @@ const TIER_DEFAULT_POOL: Record<number, { prize: number; venue: string }> = {
 const eventMeta = (name: string, tier: number) => EVENT_META[name] ?? TIER_DEFAULT_POOL[tier] ?? TIER_DEFAULT_POOL[3];
 // prize pool compacto em USD: $1.25M / $850k
 const fmtPool = (usd: number) => (usd >= 1_000_000 ? `$${(usd / 1_000_000).toFixed(usd % 1_000_000 === 0 ? 0 : 2)}M` : `$${Math.round(usd / 1000)}k`);
+// O prêmio que CAI NO CAIXA é o POOL REAL × fatia da colocação. Fatias enxutas de
+// propósito: só fica rico vencendo os grandes eventos (pool alto), e devagar —
+// grindar tier-3 (pool baixo) quase não paga. Evita enriquecer rápido/snowball.
+const PRIZE_SHARE = [0.28, 0.14, 0.075, 0.075, 0.04, 0.04, 0.025, 0.025, 0.013, 0.013, 0.013, 0.013, 0.006, 0.006, 0.006, 0.006];
+const prizeShareByRank = (rank: number) => PRIZE_SHARE[Math.max(1, Math.min(16, Math.round(rank))) - 1] ?? 0.006;
+const eventPrize = (name: string, tier: number, rank: number) => Math.round(eventMeta(name, tier).prize * prizeShareByRank(rank) / 1000) * 1000;
+// colocação no Major → rank representativo pra fatia do pool ($1.25M)
+const MAJOR_RANK: Record<PlacementCode, number> = { champion: 1, runnerup: 2, semi: 3, quarters: 5, playoffs: 9, swiss: 13 };
 
 interface Signing {
   playerId: string;
@@ -1713,7 +1712,7 @@ export function CareerScreen({ onExit }: Props) {
     if (upsellTitleRef.current === null) { upsellTitleRef.current = save.titles; return; }
     if (save.titles > upsellTitleRef.current) {
       upsellTitleRef.current = save.titles;
-      window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'split-win' } }));
+      window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'major' } }));
     }
   }, [save.titles]);
   const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
@@ -2682,7 +2681,7 @@ export function CareerScreen({ onExit }: Props) {
     const result: MajorResult = {
       tournament,
       placement,
-      prize: MAJOR_PRIZE[placement],
+      prize: eventPrize(MAJOR_NAME(save.split), 1, MAJOR_RANK[placement]),
       vrs: MAJOR_VRS[placement],
       champion: placement === 'champion',
     };
@@ -3356,9 +3355,13 @@ export function CareerScreen({ onExit }: Props) {
     // o título e as vagas no Major saem do PLAYOFF (mata-mata), não da fase de pontos
     const poRank = poUserRank(save.playoff);
     const isChampion = save.playoff?.champion === 'user';
-    // bônus de mata-mata: campeão +60%, vice +25%
+    // bônus de mata-mata pro VRS: campeão +60%, vice +25%
     const poMult = isChampion ? 1.6 : poRank === 2 ? 1.25 : 1;
-    const prize = Math.round((PRIZE_BY_POS[pos - 1] ?? 50_000) * (save.circuit?.prizeMult ?? 1) * poMult);
+    // PRÊMIO = POOL REAL do evento × fatia da colocação final (mata-mata já conta:
+    // campeão = rank 1). Sem multiplicador artificial; a riqueza vem de vencer os
+    // grandes pools, devagar.
+    const prizeRank = save.playoff ? Math.min(pos, poRank) : pos;
+    const prize = eventPrize(save.circuit?.name ?? '', save.circuit?.tier ?? save.tier, prizeRank);
     // ganho de VRS ponderado pelo Opponent Network do evento: ir longe num campo
     // forte vale muito; ganhar um campeonato fraco rende quase nada no mundial.
     const vrsGain = Math.round((VRS_BY_POS[pos - 1] ?? 10) * (save.circuit?.vrsWeight ?? 0.4) * poMult);
