@@ -5773,10 +5773,12 @@ function CircuitPicker({ circuits, split, playerTier, inviteTier, relocate, onRe
   onPick: (c: CircuitOption) => void;
   onBack: () => void;
 }) {
-  // você disputa o circuito do SEU tier; e, se recebeu CONVITE, também o tier de
-  // cima (sem estar classificado pelo VRS). Farmar tier abaixo segue proibido.
-  const canEnter = (opt: CircuitOption) => opt.tier === playerTier || opt.tier === inviteTier;
+  // você disputa: o circuito do SEU tier; o tier de CIMA se recebeu CONVITE; e UM
+  // tier ABAIXO por opção (T1→T2, T2→T3). Descer rende menos VRS/prêmio (pool
+  // menor), então é escolha estratégica, não farm. Dois tiers abaixo segue bloqueado.
+  const canEnter = (opt: CircuitOption) => opt.tier === playerTier || opt.tier === inviteTier || opt.tier === playerTier + 1;
   const isInvite = (opt: CircuitOption) => opt.tier === inviteTier && opt.tier !== playerTier;
+  const isBelow = (opt: CircuitOption) => opt.tier === playerTier + 1;
   const firstAvailable = circuits.find(canEnter) ?? circuits[0];
   const [selectedId, setSelectedId] = useState(firstAvailable?.id ?? '');
   const selected = circuits.find((option) => option.id === selectedId);
@@ -5817,6 +5819,7 @@ function CircuitPicker({ circuits, split, playerTier, inviteTier, relocate, onRe
                     <span>VRS ×{opt.vrsWeight.toFixed(2)}</span>
                   </div>
                   {isInvite(opt) && <div className="cc-lock small" style={{ color: 'var(--rtm-gold)' }}>✉ {ct('Convite: jogar aqui acelera a evolução dos seus jogadores mais jovens.')}</div>}
+                  {isBelow(opt) && <div className="cc-lock muted small">↓ {ct('Opcional: um tier abaixo (menos VRS e prêmio).')}</div>}
                   {locked && (opt.tier < playerTier
                     ? <div className="cc-lock muted small">🔒 {ct('Acima da sua divisão — suba pelo ranking VRS')}</div>
                     : <div className="cc-lock muted small">🔒 {ct('Fora da sua divisão (você joga o seu tier)')}</div>)}

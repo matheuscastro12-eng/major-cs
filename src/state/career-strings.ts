@@ -1872,4 +1872,5 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Fora da sua divisão (você joga o seu tier)': { en: 'Outside your division (you play your tier)', es: 'Fuera de tu división (juegas tu tier)' },
   'CONVITE': { en: 'INVITE', es: 'INVITACIÓN' },
   'Convite: jogar aqui acelera a evolução dos seus jogadores mais jovens.': { en: 'Invite: playing here speeds up the development of your youngest players.', es: 'Invitación: jugar aquí acelera la evolución de tus jugadores más jóvenes.' },
+  'Opcional: um tier abaixo (menos VRS e prêmio).': { en: 'Optional: one tier below (less VRS and prize).', es: 'Opcional: un tier por debajo (menos VRS y premio).' },
 };
