@@ -18,6 +18,7 @@ const HOOKS: Record<string, string> = {
   'major': 'Campanha histórica! Não perca esse progresso.',
   'milestone': 'Sua carreira está ficando séria. Garanta que ela não se perca.',
   'save-risk': 'Seu progresso fica só neste navegador. Uma conta guarda tudo na nuvem.',
+  'ranked-free': 'Você está jogando ranqueada, mas no grátis o MMR não conta no ladder. Ative pra valer.',
   default: 'Leve sua carreira pro próximo nível.',
 };
 
@@ -30,8 +31,9 @@ export function UpsellCard({ onUpgrade }: { onUpgrade: () => void }) {
     const onEvt = (e: Event) => {
       if (account?.paid) return; // pagos nunca veem
       const trigger = (e as CustomEvent).detail?.trigger as string | undefined;
+      const force = Boolean((e as CustomEvent).detail?.force); // clique explícito do usuário fura o cooldown
       const last = Number(localStorage.getItem(LAST_KEY) || 0);
-      if (Date.now() - last < COOLDOWN_MS) return; // respeita cooldown
+      if (!force && Date.now() - last < COOLDOWN_MS) return; // respeita cooldown só nos disparos automáticos
       setHook(HOOKS[trigger ?? 'default'] ?? HOOKS.default);
       setOpen(true);
       localStorage.setItem(LAST_KEY, String(Date.now()));

@@ -14,6 +14,9 @@ function hashPw(pw: string): string {
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 
+// mesmo teto da Edição Fundador usado em api/account.ts
+const FOUNDER_LIMIT = Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
+
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string },
   res: Res,
@@ -34,6 +37,8 @@ export default async function handler(
   await sql.transaction([
     sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
   ]);
@@ -46,22 +51,23 @@ export default async function handler(
     const q = String(body.query ?? '').trim().toLowerCase();
     const like = `%${q}%`;
     const accounts = q
-      ? await sql`SELECT email, nick, paid, created_at, (stripe_ref IS NOT NULL) AS has_ref FROM rtm_accounts WHERE lower(email) LIKE ${like} OR lower(coalesce(nick,'')) LIKE ${like} ORDER BY paid DESC, created_at DESC LIMIT 200`
-      : await sql`SELECT email, nick, paid, created_at, (stripe_ref IS NOT NULL) AS has_ref FROM rtm_accounts ORDER BY paid DESC, created_at DESC LIMIT 200`;
+      ? await sql`SELECT email, nick, paid, is_founder, founder_no, created_at, (stripe_ref IS NOT NULL) AS has_ref FROM rtm_accounts WHERE lower(email) LIKE ${like} OR lower(coalesce(nick,'')) LIKE ${like} ORDER BY paid DESC, created_at DESC LIMIT 200`
+      : await sql`SELECT email, nick, paid, is_founder, founder_no, created_at, (stripe_ref IS NOT NULL) AS has_ref FROM rtm_accounts ORDER BY paid DESC, created_at DESC LIMIT 200`;
     // e-mails pagos que ainda não viraram conta (pagou antes de cadastrar)
     const orphanPaid = await sql`SELECT p.email, p.created_at FROM rtm_paid_emails p WHERE NOT EXISTS (SELECT 1 FROM rtm_accounts a WHERE a.email = p.email) ORDER BY p.created_at DESC LIMIT 200`;
     const counts = await sql`SELECT
         count(*)::int AS total,
         count(*) FILTER (WHERE paid)::int AS paid,
+        count(*) FILTER (WHERE is_founder)::int AS founders,
         count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS new7,
         count(*) FILTER (WHERE created_at > now() - interval '30 days')::int AS new30,
         count(*) FILTER (WHERE paid AND created_at > now() - interval '30 days')::int AS paid30
       FROM rtm_accounts`;
     const orphanCount = await sql`SELECT count(*)::int AS n FROM rtm_paid_emails p WHERE NOT EXISTS (SELECT 1 FROM rtm_accounts a WHERE a.email = p.email)`;
     res.status(200).json({
-      accounts: accounts.map((a) => ({ email: String(a.email), nick: a.nick ? String(a.nick) : null, paid: !!a.paid, created_at: a.created_at, hasRef: !!a.has_ref })),
+      accounts: accounts.map((a) => ({ email: String(a.email), nick: a.nick ? String(a.nick) : null, paid: !!a.paid, isFounder: !!a.is_founder, founderNo: a.founder_no != null ? Number(a.founder_no) : null, created_at: a.created_at, hasRef: !!a.has_ref })),
       orphanPaid: orphanPaid.map((p) => ({ email: String(p.email), created_at: p.created_at })),
-      total: counts[0]?.total ?? 0, paidTotal: counts[0]?.paid ?? 0,
+      total: counts[0]?.total ?? 0, paidTotal: counts[0]?.paid ?? 0, foundersTotal: counts[0]?.founders ?? 0, founderLimit: FOUNDER_LIMIT,
       new7: counts[0]?.new7 ?? 0, new30: counts[0]?.new30 ?? 0, paid30: counts[0]?.paid30 ?? 0,
       orphanTotal: orphanCount[0]?.n ?? 0,
     });
@@ -79,6 +85,11 @@ export default async function handler(
       sql`UPDATE rtm_accounts SET paid=true WHERE email=${email}`,
       sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
     ]);
+    // Edição Fundador: conceder acesso também atribui número de fundador (até o teto).
+    await sql`UPDATE rtm_accounts SET is_founder=true,
+        founder_no=(SELECT COALESCE(MAX(founder_no),0)+1 FROM rtm_accounts WHERE is_founder)
+      WHERE email=${email} AND paid=true AND is_founder=false
+        AND (SELECT count(*) FROM rtm_accounts WHERE is_founder) < ${FOUNDER_LIMIT}`;
     const hasAccount = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email}`;
     res.status(200).json({ ok: true, email, applied: hasAccount.length > 0 });
     return;

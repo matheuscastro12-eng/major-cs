@@ -53,13 +53,16 @@ export default async function handler(
 
   if (action === 'push') {
     const data = String(body.data ?? '');
-    if (!data) { res.status(400).json({ error: 'sem dados' }); return; }
-    if (Buffer.byteLength(data, 'utf8') > MAX_BYTES) { res.status(413).json({ error: 'save grande demais' }); return; }
+    // data vazio = tombstone (lápide) de exclusão. NÃO é erro: grava '' com o
+    // timestamp pra que o last-write-wins marque o slot como apagado e ele não
+    // ressuscite no próximo sync. Antes isso retornava 400 e o save voltava.
+    if (data && Buffer.byteLength(data, 'utf8') > MAX_BYTES) { res.status(413).json({ error: 'save grande demais' }); return; }
     const updatedAt = Number(body.updatedAt) || Date.now();
     await sql`
       INSERT INTO rtm_saves (email, slot, data, updated_at) VALUES (${email}, ${slot}, ${data}, ${updatedAt})
-      ON CONFLICT (email, slot) DO UPDATE SET data=EXCLUDED.data, updated_at=EXCLUDED.updated_at`;
-    res.status(200).json({ ok: true, updatedAt });
+      ON CONFLICT (email, slot) DO UPDATE SET data=EXCLUDED.data, updated_at=EXCLUDED.updated_at
+      WHERE EXCLUDED.updated_at >= rtm_saves.updated_at`;
+    res.status(200).json({ ok: true, updatedAt, deleted: !data });
     return;
   }
 

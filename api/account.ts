@@ -21,6 +21,8 @@ import {
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const APP_SECRET = () => cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
 const TTL = 60 * 60 * 24 * 180; // 180 dias
+// Edição Fundador: selo numerado vitalício pros primeiros que pagam (teto configurável).
+const FOUNDER_LIMIT = Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
 
 function hashPw(pw: string): string {
   const salt = randomBytes(16).toString('hex');
@@ -62,6 +64,8 @@ export default async function handler(
   await sql.transaction([
     sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
     sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
@@ -83,7 +87,7 @@ export default async function handler(
   if (action === 'export' || action === 'delete') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida. Entre novamente na conta.' }); return; }
-    const accounts = await sql`SELECT email, nick, pass_hash, paid, created_at FROM rtm_accounts WHERE email=${em}`;
+    const accounts = await sql`SELECT email, nick, pass_hash, paid, is_founder, founder_no, created_at FROM rtm_accounts WHERE email=${em}`;
     if (!accounts.length) { res.status(404).json({ error: 'Conta não encontrada.' }); return; }
 
     if (action === 'export') {
@@ -99,6 +103,8 @@ export default async function handler(
           email: String(accounts[0].email),
           nick: String(accounts[0].nick ?? ''),
           paid: Boolean(accounts[0].paid),
+          founder: Boolean(accounts[0].is_founder),
+          founderNo: accounts[0].founder_no != null ? Number(accounts[0].founder_no) : null,
           createdAt: accounts[0].created_at,
         },
         cloudSaves: saves.map((row) => ({ slot: row.slot, data: row.data, updatedAt: Number(row.updated_at ?? 0) })),
@@ -142,6 +148,19 @@ export default async function handler(
     ];
     if (sessionId) stmts.push(sql`INSERT INTO rtm_payment_sessions (session_id, email) VALUES (${sessionId}, ${em}) ON CONFLICT (session_id) DO NOTHING`);
     await sql.transaction(stmts);
+    await claimFounder(em);
+  };
+  // Edição Fundador: atribui o próximo número de fundador a uma conta paga, até o teto.
+  // Idempotente: não renumera quem já é fundador nem ultrapassa o limite.
+  const claimFounder = async (em: string): Promise<void> => {
+    await sql`UPDATE rtm_accounts SET is_founder=true,
+        founder_no=(SELECT COALESCE(MAX(founder_no),0)+1 FROM rtm_accounts WHERE is_founder)
+      WHERE email=${em} AND paid=true AND is_founder=false
+        AND (SELECT count(*) FROM rtm_accounts WHERE is_founder) < ${FOUNDER_LIMIT}`;
+  };
+  const founderOf = async (em: string): Promise<{ founder: boolean; founderNo: number | null }> => {
+    const r = await sql`SELECT is_founder, founder_no FROM rtm_accounts WHERE email=${em}`;
+    return { founder: Boolean(r[0]?.is_founder), founderNo: r[0]?.founder_no != null ? Number(r[0].founder_no) : null };
   };
   const ensureReference = async (em: string): Promise<void> => {
     await sql`UPDATE rtm_accounts SET stripe_ref=${accountReference(em)} WHERE email=${em} AND stripe_ref IS DISTINCT FROM ${accountReference(em)}`;
@@ -174,12 +193,13 @@ export default async function handler(
       await sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref) VALUES (${email}, ${nick}, ${passHash}, true, ${accountReference(email)})
                 ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, paid=true`;
       await sql`DELETE FROM rtm_pending_signups WHERE email=${email}`;
-      res.status(200).json({ token: sign(email), email, nick, paid: true });
+      await claimFounder(email);
+      res.status(200).json({ token: sign(email), email, nick, paid: true, ...(await founderOf(email)) });
       return;
     }
     await sql`INSERT INTO rtm_pending_signups (email, nick, pass_hash) VALUES (${email}, ${nick}, ${passHash})
               ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, created_at=now()`;
-    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, url: checkoutUrl(email) });
+    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, url: checkoutUrl(email) });
     return;
   }
 
@@ -189,7 +209,8 @@ export default async function handler(
     await ensureReference(email);
     const paid = await resolvePaid(email, Boolean(r[0].paid), true);
     if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: checkoutUrl(email) }); return; }
-    res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: true });
+    await claimFounder(email);
+    res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: true, ...(await founderOf(email)) });
     return;
   }
 
@@ -205,7 +226,8 @@ export default async function handler(
     }
     if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
     await ensureReference(em);
-    res.status(200).json({ email: em, nick: r[0].nick, paid });
+    if (paid) await claimFounder(em);
+    res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)) });
     return;
   }
 
@@ -242,7 +264,7 @@ export default async function handler(
         return;
       }
       await markPaid(em, session.id);
-      res.status(200).json({ paid: true });
+      res.status(200).json({ paid: true, ...(await founderOf(em)) });
     } catch (error) {
       console.error('stripe_claim_failed', error instanceof Error ? error.message : error);
       res.status(502).json({ error: 'Não consegui confirmar com o Stripe agora.' });

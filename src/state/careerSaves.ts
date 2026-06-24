@@ -1,7 +1,7 @@
 // Gerência de saves da carreira. Conta vitalícia (apoiador) pode ter até 5 saves
 // e apagar qualquer um quando quiser. O grátis usa só o slot 1 (save local único).
 import { getToken } from './account';
-import { pushCloud, pullCloud, cloudEnabled } from './cloud';
+import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave } from './cloud';
 
 export const CAREER_SLOTS = 5;
 const BASE = 'rtm-career-v1';      // slot 1 = chave legada (preserva o save de quem já jogava)
@@ -90,5 +90,8 @@ export function deleteSlot(n: number): void {
     localStorage.removeItem(key + '.corrupt');
     localStorage.removeItem(key + '.cloudts');
   } catch { /* sem storage */ }
-  if (getToken()) void pushCloud(cloudSlot(n), '', Date.now());
+  if (getToken()) {
+    cancelCloudSave(cloudSlot(n));               // mata push pendente do autosave
+    void pushCloud(cloudSlot(n), '', Date.now()); // grava o tombstone na nuvem
+  }
 }

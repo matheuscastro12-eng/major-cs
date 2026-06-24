@@ -33,6 +33,8 @@ export async function pushCloud(slot: string, data: string, updatedAt: number): 
 
 // push com debounce: chamado a cada gravação local enquanto joga.
 const timers: Record<string, ReturnType<typeof setTimeout>> = {};
+// cancela um push pendente do slot (ex.: ao apagar, pra não ressuscitar o save).
+export function cancelCloudSave(slot: string) { clearTimeout(timers[slot]); delete timers[slot]; }
 export function cloudOnLocalSave(slot: string, localKey: string, getData: () => string | null) {
   if (!cloudEnabled()) return;
   const ts = Date.now();
@@ -46,19 +48,29 @@ export function cloudOnLocalSave(slot: string, localKey: string, getData: () => 
 
 // no login (conta paga): reconcilia a nuvem com o local. Devolve o que aconteceu.
 // 'restored' = a nuvem era mais nova e foi gravada no localStorage (recarregar a tela).
-export async function syncSlot(slot: string, localKey: string): Promise<'restored' | 'pushed' | 'none'> {
+export async function syncSlot(slot: string, localKey: string): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
   if (!cloudEnabled()) return 'none';
   const cloud = await pullCloud(slot);
   let localData: string | null = null;
   try { localData = localStorage.getItem(localKey); } catch { /* sem storage */ }
   const localTs = localSavedAt(localKey);
 
+  // tombstone na nuvem (data === '') mais nova/igual que o local: a exclusão venceu.
+  // Apaga o local e NÃO re-sobe nada, senão o save ressuscitaria neste aparelho.
+  const isTombstone = !!cloud && cloud.data === '';
+  if (isTombstone && cloud.updatedAt >= localTs) {
+    try { localStorage.removeItem(localKey); localStorage.removeItem(localKey + '.bak'); } catch { /* sem storage */ }
+    markSavedAt(localKey, cloud.updatedAt);
+    return 'deleted';
+  }
+
   if (cloud?.data && (!localData || cloud.updatedAt > localTs)) {
     try { localStorage.setItem(localKey, cloud.data); } catch { return 'none'; }
     markSavedAt(localKey, cloud.updatedAt);
     return 'restored';
   }
-  if (localData && (!cloud?.data || localTs >= cloud.updatedAt)) {
+  // só re-sobe o local quando ele é genuinamente mais novo (inclusive que um tombstone).
+  if (localData && (cloud?.data == null || localTs > cloud.updatedAt)) {
     const ts = localTs || Date.now();
     markSavedAt(localKey, ts);
     void pushCloud(slot, localData, ts);

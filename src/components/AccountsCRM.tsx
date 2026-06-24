@@ -102,6 +102,7 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
             <div className="crm-stats">
               <div className="crm-stat"><span className="cs-val">{data.total}</span><span className="cs-lbl">{ct('Contas')}</span></div>
               <div className="crm-stat gold"><span className="cs-val">{data.paidTotal}</span><span className="cs-lbl">{ct('Vitalícias')}</span></div>
+              <div className="crm-stat gold"><span className="cs-val">{data.foundersTotal ?? 0}{data.founderLimit ? `/${data.founderLimit}` : ''}</span><span className="cs-lbl">{ct('Fundadores')}</span></div>
               <div className="crm-stat green"><span className="cs-val">R$ {revenue.toLocaleString('pt-BR')}</span><span className="cs-lbl">{ct('Receita')}</span></div>
               <div className="crm-stat"><span className="cs-val">{conv}%</span><span className="cs-lbl">{ct('Conversão')}</span></div>
               <div className="crm-stat"><span className="cs-val">+{data.new7 ?? 0}</span><span className="cs-lbl">{ct('Novas 7d')}</span></div>
@@ -158,7 +159,10 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
                       <td style={{ padding: '9px 10px', color: 'var(--rtm-dim)' }}>{fmtDate(a.created_at)}</td>
                       <td style={{ padding: '9px 10px', textAlign: 'center' }}>
                         {a.paid
-                          ? <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '2px 8px', borderRadius: 999 }}>★ {ct('Vitalícia')}</span>
+                          ? <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                              <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '2px 8px', borderRadius: 999 }}>★ {ct('Vitalícia')}</span>
+                              {a.isFounder && <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', border: '1px solid var(--rtm-gold)', padding: '1px 7px', borderRadius: 999 }}>{ct('Fundador')}{a.founderNo != null ? ` #${a.founderNo}` : ''}</span>}
+                            </div>
                           : <span className="muted small">{ct('Grátis')}</span>}
                       </td>
                       <td style={{ padding: '9px 10px', textAlign: 'center' }}><StripeCell email={a.email} /></td>

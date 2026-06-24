@@ -1048,6 +1048,18 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
           </div>
 
+          {/* rank fantasma: conta grátis vê a divisão que TERIA + CTA pra valer no ladder */}
+          {!paidRank && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', margin: '0 0 16px', padding: '14px 16px', borderRadius: 'var(--rtm-radius)', background: 'linear-gradient(120deg, rgba(216,169,67,.14), rgba(13,17,22,.5))', border: '1px solid var(--rtm-gold-soft)' }}>
+              <span style={{ fontSize: '24px' }} aria-hidden>🏆</span>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '15px', color: 'var(--rtm-text-strong)', textTransform: 'uppercase', letterSpacing: '.5px' }}>{ct('Sua ranqueada não está contando')}</div>
+                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>{ct('Nesta sessão você jogaria como')} <b style={{ color: 'var(--rtm-gold)' }}>{sessionDivision(sessionProfile.points)}</b> · {sessionProfile.wins}V · {sessionProfile.losses}D. {ct('No grátis o MMR zera ao fechar a aba e não entra no ladder mundial.')}</div>
+              </div>
+              <Button variant="gold" onClick={() => window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'ranked-free', force: true } }))}>★ {ct('Valer no ladder')}</Button>
+            </div>
+          )}
+
           {!nick.trim() && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 16px', padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
               <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>{ct('Escolha um nick para jogar:')}</span>

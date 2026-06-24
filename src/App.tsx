@@ -786,10 +786,12 @@ export default function App() {
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
             {account && (
-              <button className="acct-chip" title={account.paid ? ct('Conta vitalícia (apoiador) · perfil, saves e conta') : ct('Sua conta · ver perfil')} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
+              <button className="acct-chip" title={account.founder ? `${ct('Fundador')}${account.founderNo != null ? ` #${account.founderNo}` : ''} · ${ct('apoiador desde o lançamento')}` : account.paid ? ct('Conta vitalícia (apoiador) · perfil, saves e conta') : ct('Sua conta · ver perfil')} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
                 {account.paid && <span className="acct-star">★</span>}
                 {account.nick || account.email}
-                {account.paid && <span className="acct-tag">{ct('VITALÍCIA')}</span>}
+                {account.founder
+                  ? <span className="acct-tag">{ct('FUNDADOR')}{account.founderNo != null ? ` #${account.founderNo}` : ''}</span>
+                  : account.paid && <span className="acct-tag">{ct('VITALÍCIA')}</span>}
               </button>
             )}
             <button
@@ -807,6 +809,8 @@ export default function App() {
       )}
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
+      {/* card de ativação (upsell) global: abre via evento rtm:upsell de qualquer tela */}
+      {!account?.paid && <UpsellCard onUpgrade={startCheckout} />}
       {authOpen && !account && (
         <AccountModal
           initialMode="login"
@@ -904,7 +908,6 @@ export default function App() {
       {screen === 'career' && (
         <>
           <CareerScreen dataset={dataset} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
-          {!account?.paid && <UpsellCard onUpgrade={startCheckout} />}
         </>
       )}
       {screen === 'careerCRM' && (

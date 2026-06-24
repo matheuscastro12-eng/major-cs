@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ct } from './career-i18n';
 
 const TOKEN_KEY = 'rtm-acct-token-v1';
-export interface Account { email: string; nick: string; paid: boolean; }
+export interface Account { email: string; nick: string; paid: boolean; founder: boolean; founderNo: number | null; }
 
 export function getToken(): string | null { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } }
 function setToken(t: string) { try { localStorage.setItem(TOKEN_KEY, t); } catch { /* sem storage */ } }
@@ -16,7 +16,7 @@ async function post(body: Record<string, unknown>): Promise<Record<string, unkno
   if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : ct('Erro de conexão. Tente de novo.'));
   return data as Record<string, unknown>;
 }
-const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid });
+const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid, founder: !!d.founder, founderNo: d.founderNo != null ? Number(d.founderNo) : null });
 
 export async function signup(email: string, password: string, nick: string): Promise<Account> {
   const d = await post({ action: 'signup', email, password, nick });
