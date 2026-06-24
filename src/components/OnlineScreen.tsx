@@ -875,6 +875,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         try { sessionStorage.setItem('rtm-online-session-profile', JSON.stringify(next)); } catch { /* sessão sem storage */ }
         return next;
       });
+      // ativação: terminou uma partida online no grátis → o resultado não persiste
+      if (!account?.paid) {
+        window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: state.lobby.ranked ? 'ranked-free' : 'online-done' } }));
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, [account?.nick, account?.paid, duel, isSpectator, major, nick, state]);

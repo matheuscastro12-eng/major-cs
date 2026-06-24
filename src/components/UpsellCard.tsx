@@ -18,7 +18,12 @@ const HOOKS: Record<string, string> = {
   'major': 'Campanha histórica! Não perca esse progresso.',
   'milestone': 'Sua carreira está ficando séria. Garanta que ela não se perca.',
   'save-risk': 'Seu progresso fica só neste navegador. Uma conta guarda tudo na nuvem.',
+  'promotion': 'Subiu de divisão! Garanta essa evolução com save na nuvem.',
+  'market': 'Montando seu elenco? Save na nuvem pra não perder o time dos sonhos.',
   'ranked-free': 'Você está jogando ranqueada, mas no grátis o MMR não conta no ladder. Ative pra valer.',
+  'online-done': 'Boa partida! No grátis o resultado some ao fechar a aba — ative pra contar no ladder mundial.',
+  'draft-win': 'Mandou bem no Major! Crie sua conta e leve isso pra uma carreira de verdade.',
+  'founder': 'Os 500 primeiros viram FUNDADORES (selo #001–#500). Número baixo é troféu — garanta o seu.',
   default: 'Leve sua carreira pro próximo nível.',
 };
 
@@ -57,6 +62,7 @@ export function UpsellCard({ onUpgrade }: { onUpgrade: () => void }) {
           <li><b>{ct('Até 5 carreiras')}</b> {ct('· toque várias orgs ao mesmo tempo')}</li>
           <li><b>{ct('Ranqueada com pontuação')}</b> {ct('· suba no ladder e dispute o topo')}</li>
           <li><b>{ct('Perfil e selo de apoiador')}</b> {ct('· identidade no jogo todo')}</li>
+          <li><b>{ct('Selo de Fundador #001–#500')}</b> {ct('· logo própria do clube + número baixo é troféu (500 primeiros)')}</li>
         </ul>
         <div className="upsell-actions">
           <button className="btn gold big" onClick={() => { close(); onUpgrade(); }}>

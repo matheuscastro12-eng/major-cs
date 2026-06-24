@@ -161,7 +161,7 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
                         {a.paid
                           ? <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                               <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '2px 8px', borderRadius: 999 }}>★ {ct('Vitalícia')}</span>
-                              {a.isFounder && <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', border: '1px solid var(--rtm-gold)', padding: '1px 7px', borderRadius: 999 }}>{ct('Fundador')}{a.founderNo != null ? ` #${a.founderNo}` : ''}</span>}
+                              {a.isFounder && <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', border: '1px solid var(--rtm-gold)', padding: '1px 7px', borderRadius: 999 }}>{ct('Fundador')}{a.founderNo != null ? ` #${String(a.founderNo).padStart(3, '0')}` : ''}</span>}
                             </div>
                           : <span className="muted small">{ct('Grátis')}</span>}
                       </td>

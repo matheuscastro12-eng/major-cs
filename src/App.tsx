@@ -605,6 +605,10 @@ export default function App() {
         totalTitles: career.titles + (champ ? 1 : 0),
       });
       if (fresh.length) setAchToast(fresh);
+      // ativação: fechou o Major do draft no grátis → gancho pra criar conta/carreira
+      if (clone.phase === 'done' && !account?.paid) {
+        window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: champ ? 'draft-win' : 'save-risk' } }));
+      }
     }
     setTournament(clone);
     setScreen(clone.phase === 'done' ? 'final' : 'hub');
@@ -817,11 +821,11 @@ export default function App() {
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
             {account && (
-              <button className="acct-chip" title={account.founder ? `${ct('Fundador')}${account.founderNo != null ? ` #${account.founderNo}` : ''} · ${ct('apoiador desde o lançamento')}` : account.paid ? ct('Conta vitalícia (apoiador) · perfil, saves e conta') : ct('Sua conta · ver perfil')} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
+              <button className="acct-chip" title={account.founder ? `${ct('Fundador')}${account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''} · ${ct('apoiador desde o lançamento')}` : account.paid ? ct('Conta vitalícia (apoiador) · perfil, saves e conta') : ct('Sua conta · ver perfil')} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
                 {account.paid && <span className="acct-star">★</span>}
                 {account.nick || account.email}
                 {account.founder
-                  ? <span className="acct-tag">{ct('FUNDADOR')}{account.founderNo != null ? ` #${account.founderNo}` : ''}</span>
+                  ? <span className="acct-tag">{ct('FUNDADOR')}{account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''}</span>
                   : account.paid && <span className="acct-tag">{ct('VITALÍCIA')}</span>}
               </button>
             )}

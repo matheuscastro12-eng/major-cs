@@ -1860,4 +1860,12 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'não rolou': { en: 'didn\'t work', es: 'no salió' },
   'splits (próximo: Split': { en: 'splits (next: Split', es: 'splits (próximo: Split' },
   'etapa(s) pra fechar o split — aí entra o offseason (mercado, evolução, renovações). Até lá, mesmo elenco.': { en: 'stage(s) to close the split — then the offseason kicks in (market, evolution, renewals). Until then, same roster.', es: 'etapa(s) para cerrar el split — luego entra la offseason (mercado, evolución, renovaciones). Hasta entonces, misma plantilla.' },
+  'Subiu de divisão! Garanta essa evolução com save na nuvem.': { en: 'Promoted! Lock in that progress with cloud save.', es: '¡Ascendiste! Asegura ese progreso con guardado en la nube.' },
+  'Montando seu elenco? Save na nuvem pra não perder o time dos sonhos.': { en: 'Building your roster? Cloud save so you never lose the dream team.', es: '¿Armando tu plantilla? Guardado en la nube para no perder el equipo de tus sueños.' },
+  'Boa partida! No grátis o resultado some ao fechar a aba — ative pra contar no ladder mundial.': { en: 'Nice match! On free, results vanish when you close the tab — activate to count on the world ladder.', es: '¡Buena partida! En la gratis el resultado desaparece al cerrar la pestaña — actívala para contar en el ladder mundial.' },
+  'Mandou bem no Major! Crie sua conta e leve isso pra uma carreira de verdade.': { en: 'Great Major run! Create your account and take this to a real career.', es: '¡Buen Major! Crea tu cuenta y lleva esto a una carrera de verdad.' },
+  'Os 500 primeiros viram FUNDADORES (selo #001–#500). Número baixo é troféu — garanta o seu.': { en: 'The first 500 become FOUNDERS (badge #001–#500). A low number is a trophy — claim yours.', es: 'Los primeros 500 se vuelven FUNDADORES (insignia #001–#500). Un número bajo es un trofeo — consigue el tuyo.' },
+  'Selo de Fundador #001–#500': { en: 'Founder badge #001–#500', es: 'Insignia de Fundador #001–#500' },
+  '· logo própria do clube + número baixo é troféu (500 primeiros)': { en: '· custom club logo + a low number is a trophy (first 500)', es: '· logo propia del club + número bajo es un trofeo (primeros 500)' },
+  'apoiador desde o lançamento': { en: 'supporter since launch', es: 'patrocinador desde el lanzamiento' },
 };

@@ -1709,12 +1709,22 @@ export function CareerScreen({ onExit, founder = false }: Props) {
   // ativação (upsell) de conta grátis: marcos da carreira abrem o card (que decide se mostra).
   const upsellSplitRef = useRef(0);
   const upsellTitleRef = useRef<number | null>(null);
+  const upsellTierRef = useRef<number | null>(null);
   useEffect(() => {
-    if ([3, 6, 10].includes(save.split) && upsellSplitRef.current !== save.split) {
+    // mais momentos de ativação ao longo da carreira (o card respeita cooldown de 45min)
+    if ([2, 3, 5, 8, 12, 16].includes(save.split) && upsellSplitRef.current !== save.split) {
       upsellSplitRef.current = save.split;
-      window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: save.split >= 6 ? 'milestone' : 'save-risk' } }));
+      window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: save.split >= 5 ? 'milestone' : 'save-risk' } }));
     }
   }, [save.split]);
+  useEffect(() => {
+    // promoção de divisão (tier menor = melhor) é um momento de orgulho → ativação
+    if (upsellTierRef.current === null) { upsellTierRef.current = save.tier; return; }
+    if (save.tier < upsellTierRef.current) {
+      upsellTierRef.current = save.tier;
+      window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'promotion' } }));
+    } else { upsellTierRef.current = save.tier; }
+  }, [save.tier]);
   useEffect(() => {
     if (upsellTitleRef.current === null) { upsellTitleRef.current = save.titles; return; }
     if (save.titles > upsellTitleRef.current) {
@@ -1984,22 +1994,28 @@ export function CareerScreen({ onExit, founder = false }: Props) {
     // deslocando a banda de força. Assim os 3 eventos do split não repetem os
     // mesmos times nem a mesma 1ª rodada (o GSL semeia por força, então mudar o
     // conjunto de times muda os grupos e os confrontos de abertura).
-    const buildField = (coreN: number, windowN: number, n: number, seed: number, rotBy: number): TeamSeason[] => {
-      const avail = byStrength.filter((t) => !used.has(t.id));
-      const band = avail.slice(0, coreN + windowN);
-      const off = band.length ? (((rotBy % band.length) + band.length) % band.length) : 0;
-      const rotated = [...band.slice(off), ...band.slice(0, off)];
-      const core = rotated.slice(0, coreN);
-      const rot = seededShuffle(rotated.slice(coreN), seed).slice(0, Math.max(0, n - core.length));
+    // BANDA DE FORÇA POR TIER (por índice no ranking, não rotação global): o Tier-1
+    // sai SÓ da faixa de elite, o Tier-3 SÓ da faixa de acesso. O núcleo é sempre o
+    // mais forte da faixa; a rotação por etapa mexe apenas nas vagas rotativas DENTRO
+    // da banda. Bandas com leve sobreposição (ex.: um Tier-2 forte às vezes sobe ao
+    // Tier-1), mas elite NUNCA despenca pro acesso. Antes a rotação da banda inteira
+    // empurrava um time de elite pro Tier-3 (Falcons na CCT Open Series).
+    const bandField = (lo: number, hi: number, coreN: number, n: number, seed: number, rotBy: number): TeamSeason[] => {
+      const band = byStrength.slice(lo, hi).filter((t) => !used.has(t.id));
+      const core = band.slice(0, coreN);                  // os mais fortes da faixa, fixos
+      const windowPart = band.slice(coreN);               // vagas rotativas (variam por etapa)
+      const off = windowPart.length ? (((rotBy % windowPart.length) + windowPart.length) % windowPart.length) : 0;
+      const rotatedWindow = [...windowPart.slice(off), ...windowPart.slice(0, off)];
+      const rot = seededShuffle(rotatedWindow, seed).slice(0, Math.max(0, n - core.length));
       const field = [...core, ...rot];
       for (const t of field) used.add(t.id);
       return field;
     };
     const evSeed = ev * 7;          // cada etapa do split sorteia um field diferente
-    const evRot = (ev - 1) * 4;     // desloca a banda 4 posições por etapa (conjunto/1ª rodada diferentes)
-    const t1Teams = buildField(9, 16, 15, save.split * 101 + 1 + evSeed, evRot);       // elite (top da banda, rotacionada por etapa)
-    const t2Teams = buildField(9, 16, 15, save.split * 101 + 2 + evSeed, evRot + 1);   // segundo escalão
-    const t3Teams = buildField(9, 16, 15, save.split * 101 + 3 + evSeed, evRot + 2);   // acesso
+    const evRot = (ev - 1) * 4;     // desloca as vagas rotativas por etapa (1ª rodada diferente)
+    const t1Teams = bandField(0, 24, 9, 15, save.split * 101 + 1 + evSeed, evRot);       // elite (ranking ~top 24)
+    const t2Teams = bandField(15, 42, 9, 15, save.split * 101 + 2 + evSeed, evRot + 1);  // segundo escalão (~15-42)
+    const t3Teams = bandField(34, 80, 9, 15, save.split * 101 + 3 + evSeed, evRot + 2);  // acesso (~34+)
     const mk = (
       id: string,
       name: string,
