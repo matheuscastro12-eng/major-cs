@@ -658,6 +658,7 @@ interface CareerSave {
   coachFromId: string | null;
   league: League | null;
   circuit: CircuitChoice | null;
+  inviteAccepted?: boolean; // jogou um circuito acima do tier por convite neste split (boost dos jovens)
   history: SplitRecord[];
   sponsors: string[];
   playoff: Playoff | null;
@@ -2251,6 +2252,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
     }] : [];
     const next = {
       ...s, league, circuit: choice, tierChange: null, objective,
+      inviteAccepted: choice.tier < s.tier || s.inviteAccepted, // jogou acima do tier por convite
       ...pushNews(s, [startItem, ...scoutItem]),
     };
     persist(next);
@@ -2294,6 +2296,8 @@ export function CareerScreen({ onExit, founder = false }: Props) {
       }
       if (!atCeiling && d > 0) d += developmentBonus(sig.playerId, s.split, normalizeFacilities(s.facilities).training);
       if (!atCeiling && d > 0) d += personalityDevelopmentBonus(sig.playerId, s.split, age);
+      // CONVITE: encarar um tier acima acelera os jovens (rodagem contra os grandes)
+      if (s.inviteAccepted && !atCeiling && d > 0 && age <= 22) d += 2;
       if (d > 0) d = Math.min(d, Math.max(0, pot - ovr));
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
@@ -3301,6 +3305,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
                   eventInSplit: 1, // o Major fecha o split: próximo split começa na etapa 1
+                  inviteAccepted: false, // convite é consumido ao fechar o split
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
                   majorResult: null, // limpa o resultado reidratável (já consumido)
                   majorStage: undefined, majorUserStage: undefined,
@@ -3654,6 +3659,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
                     eventInSplit: 1, // fecha o split: volta pra etapa 1 do próximo
+                    inviteAccepted: false, // convite é consumido ao fechar o split
                     league: null,
                     circuit: null,
                     playoff: null,
@@ -5810,6 +5816,7 @@ function CircuitPicker({ circuits, split, playerTier, inviteTier, relocate, onRe
                     <span>prêmio ×{opt.prizeMult}</span>
                     <span>VRS ×{opt.vrsWeight.toFixed(2)}</span>
                   </div>
+                  {isInvite(opt) && <div className="cc-lock small" style={{ color: 'var(--rtm-gold)' }}>✉ {ct('Convite: jogar aqui acelera a evolução dos seus jogadores mais jovens.')}</div>}
                   {locked && (opt.tier < playerTier
                     ? <div className="cc-lock muted small">🔒 {ct('Acima da sua divisão — suba pelo ranking VRS')}</div>
                     : <div className="cc-lock muted small">🔒 {ct('Fora da sua divisão (você joga o seu tier)')}</div>)}

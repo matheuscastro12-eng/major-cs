@@ -1871,4 +1871,5 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Acima da sua divisão — suba pelo ranking VRS': { en: 'Above your division — climb via VRS ranking', es: 'Por encima de tu división — sube por el ranking VRS' },
   'Fora da sua divisão (você joga o seu tier)': { en: 'Outside your division (you play your tier)', es: 'Fuera de tu división (juegas tu tier)' },
   'CONVITE': { en: 'INVITE', es: 'INVITACIÓN' },
+  'Convite: jogar aqui acelera a evolução dos seus jogadores mais jovens.': { en: 'Invite: playing here speeds up the development of your youngest players.', es: 'Invitación: jugar aquí acelera la evolución de tus jugadores más jóvenes.' },
 };
