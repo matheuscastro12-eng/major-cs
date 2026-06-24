@@ -169,7 +169,14 @@ function scanPlay(kills: KillEvent[], winner: 0 | 1, teams: [TTeam, TTeam]): Pla
     else aliveL.delete(k.victimId);
     if (survivor === null && aliveW.size === 1) { survivor = [...aliveW][0]; clutchSize = aliveL.size; }
   }
-  if (survivor && clutchSize >= 2) return { kind: 'clutch', who: survivor, size: clutchSize, kills: byKiller.get(survivor) ?? [] };
+  // o killfeed do round não é cronológico (vem em blocos por time), então
+  // "inimigos vivos quando sobrou 1" infla pra 5. O tamanho real do clutch é
+  // limitado por quantos o sobrevivente DE FATO matou: 1v5 exige 5 abates dele.
+  if (survivor && clutchSize >= 2) {
+    const survKills = byKiller.get(survivor)?.length ?? 0;
+    const size = Math.min(clutchSize, survKills);
+    if (size >= 2) return { kind: 'clutch', who: survivor, size, kills: byKiller.get(survivor) ?? [] };
+  }
   let topId: string | null = null;
   let topN = 0;
   for (const [id, ks] of byKiller) {

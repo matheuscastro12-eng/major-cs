@@ -396,11 +396,22 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
 
   // melhores momentos pro replay no fim (prioriza clutch/ace > virada/eco > multi)
   const MOMENT_RANK: Record<string, number> = { clutch: 6, ace: 6, matchpoint: 5, mappoint: 4, eco: 3, comeback: 3, multi: 2, pistol: 1 };
-  const topMoments = useMemo(
-    () => [...moments].sort((a, b) => (MOMENT_RANK[b.kind] ?? 0) - (MOMENT_RANK[a.kind] ?? 0)).slice(0, 4),
+  const topMoments = useMemo(() => {
+    const ranked = [...moments].sort((a, b) => (MOMENT_RANK[b.kind] ?? 0) - (MOMENT_RANK[a.kind] ?? 0));
+    const seen = new Set<string>();
+    const out: typeof ranked = [];
+    let clutches = 0;
+    for (const m of ranked) {
+      if (seen.has(m.text)) continue;          // nunca repete a mesma fala
+      if (m.kind === 'clutch' && clutches >= 2) continue; // no máx. 2 clutches no replay
+      seen.add(m.text);
+      if (m.kind === 'clutch') clutches++;
+      out.push(m);
+      if (out.length >= 4) break;
+    }
+    return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [moments],
-  );
+  }, [moments]);
   const highlightsTitle = lang === 'en' ? '🎬 Best moments' : lang === 'es' ? '🎬 Mejores momentos' : '🎬 Melhores momentos';
 
   return (
