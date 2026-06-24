@@ -13,19 +13,49 @@ import { Loader } from './components/ui';
 import { AchievementsModal, AchievementToast } from './components/Achievements';
 import { recordGameEnd, type AchDef } from './state/achievements';
 
+// Deploy novo troca os hashes dos chunks; uma aba aberta tenta carregar um chunk
+// antigo que sumiu do servidor → "Failed to fetch dynamically imported module".
+// lazyWithReload recarrega a página UMA vez (guard em sessionStorage) pra pegar os
+// assets frescos, em vez de cair no ErrorBoundary. O guard é limpo num load OK.
+const CHUNK_RELOAD_KEY = 'rtm-chunk-reload';
+function lazyWithReload<T extends { default: React.ComponentType<unknown> }>(factory: () => Promise<T>) {
+  return lazy(() => factory().then((m) => { try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch { /* ok */ } return m; }).catch((err) => {
+    let already = false;
+    try { already = sessionStorage.getItem(CHUNK_RELOAD_KEY) === '1'; } catch { /* ok */ }
+    if (!already) {
+      try { sessionStorage.setItem(CHUNK_RELOAD_KEY, '1'); } catch { /* ok */ }
+      window.location.reload();
+      return new Promise<T>(() => {}); // nunca resolve: segura até o reload
+    }
+    throw err; // já tentou recarregar: deixa o ErrorBoundary mostrar
+  }));
+}
+// Vite também emite este evento quando o PRELOAD de um chunk falha (mesma causa).
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', (e) => {
+    let already = false;
+    try { already = sessionStorage.getItem(CHUNK_RELOAD_KEY) === '1'; } catch { /* ok */ }
+    if (!already) {
+      e.preventDefault();
+      try { sessionStorage.setItem(CHUNK_RELOAD_KEY, '1'); } catch { /* ok */ }
+      window.location.reload();
+    }
+  });
+}
+
 // telas pesadas e/ou pouco usadas: carregadas sob demanda (code-splitting) pra
 // deixar o carregamento inicial bem mais leve.
-const Admin = lazy(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
-const CareerScreen = lazy(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
-const CareerSaves = lazy(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
-const CareerCRM = lazy(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
-const AccountsCRM = lazy(() => import('./components/AccountsCRM').then((m) => ({ default: m.AccountsCRM })));
-const FinalScreen = lazy(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
-const HallScreen = lazy(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
-const LabScreen = lazy(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
-const MatchDetail = lazy(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
-const OnlineMode = lazy(() => import('./components/online/OnlineMode').then((m) => ({ default: m.OnlineMode })));
-const TournamentStats = lazy(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
+const Admin = lazyWithReload(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
+const CareerScreen = lazyWithReload(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
+const CareerSaves = lazyWithReload(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
+const CareerCRM = lazyWithReload(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
+const AccountsCRM = lazyWithReload(() => import('./components/AccountsCRM').then((m) => ({ default: m.AccountsCRM })));
+const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
+const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
+const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
+const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
+const OnlineMode = lazyWithReload(() => import('./components/online/OnlineMode').then((m) => ({ default: m.OnlineMode })));
+const TournamentStats = lazyWithReload(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
 import { VetoScreen } from './components/VetoScreen';
 import { buildUserTeam, playerOvr } from './engine/ratings';
