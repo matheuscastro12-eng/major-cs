@@ -321,8 +321,8 @@ function TweetBand() {
   );
 }
 
-export function Landing({ onPlay, onCheckout }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void> }) {
-  const [acct, setAcct] = useState(false);
+export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean }) {
+  const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
   const ref = useReveal();
   const openAcct = (mode: 'signup' | 'login' = 'signup') => { setAcctMode(mode); setAcct(true); };

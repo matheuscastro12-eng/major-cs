@@ -225,6 +225,17 @@ try {
   /* sem storage */
 }
 
+// deep-link de CRIAÇÃO DE CONTA: /?criar (ou #criar) abre o modal já no cadastro.
+// Lido UMA vez no carregamento (nível de módulo) pra sobreviver ao remount do
+// StrictMode em dev — se fosse lido no efeito, a limpeza da URL no 1º mount faria
+// o 2º mount não reabrir.
+const WANTS_SIGNUP = (() => {
+  try {
+    return new URLSearchParams(window.location.search).get('criar') !== null
+      || window.location.hash.toLowerCase() === '#criar';
+  } catch { return false; }
+})();
+
 export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
@@ -338,7 +349,17 @@ export default function App() {
   // save na nuvem (conta vitalícia): liga o espelhamento e reconcilia no login.
   // Se a nuvem estiver mais nova, restaura no localStorage e atualiza a home.
   const [cloudToast, setCloudToast] = useState('');
-  const [authOpen, setAuthOpen] = useState(false); // modal de login/conta acessível do header
+  // já abre no cadastro quando veio do deep-link /?criar (pra divulgar no Twitter).
+  const [authOpen, setAuthOpen] = useState(WANTS_SIGNUP); // modal de login/conta acessível do header
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>(WANTS_SIGNUP ? 'signup' : 'login');
+  // limpa o ?criar/#criar da URL depois que a intenção já foi capturada.
+  useEffect(() => {
+    if (!WANTS_SIGNUP) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('criar');
+    if (url.hash.toLowerCase() === '#criar') url.hash = '';
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }, []);
   useEffect(() => {
     setCloudEnabled(!!account?.paid);
     if (!account?.paid) return;
@@ -731,7 +752,7 @@ export default function App() {
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} />
+        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -848,8 +869,8 @@ export default function App() {
       {!account?.paid && <UpsellCard onUpgrade={startCheckout} />}
       {authOpen && !account && (
         <AccountModal
-          initialMode="login"
-          onClose={() => setAuthOpen(false)}
+          initialMode={authMode}
+          onClose={() => { setAuthOpen(false); setAuthMode('login'); }}
           onCheckout={startCheckout}
           onPlay={async () => { setAuthOpen(false); await refreshAccount(); setScreen(manager ? 'home' : 'setup'); }}
         />
