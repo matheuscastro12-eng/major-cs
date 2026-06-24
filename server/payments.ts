@@ -6,6 +6,37 @@ export const DEFAULT_PRICE_ID = 'price_1Tkp7NEHvCNyCbcUcYzHFZvK';
 
 export const cleanEnv = (value?: string): string => value?.replace(/^\uFEFF/, '').trim() ?? '';
 
+// teto do selo de Fundador (numerados; o resto paga e joga, s\u00F3 n\u00E3o ganha n\u00FAmero).
+export const founderLimit = (): number => Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
+
+// cliente sql do neon usado como template tag (basta a forma de tagged template).
+type SqlTag = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Record<string, unknown>[]>;
+
+// Numera\u00E7\u00E3o de FUNDADOR por ORDEM DE PAGAMENTO: #001 = primeiro a pagar no Stripe.
+// Ordena pelo momento em que o e-mail virou pago (rtm_paid_emails.created_at, com
+// fallback no created_at da conta). Determin\u00EDstico e idempotente: s\u00F3 atualiza as
+// linhas que mudam, ent\u00E3o \u00E9 barato rodar a cada pagamento E como backfill do que
+// j\u00E1 existe. Antes os pagantes do webhook n\u00E3o recebiam n\u00FAmero nenhum.
+export async function renumberFounders(sql: SqlTag, limit = founderLimit()): Promise<void> {
+  await sql`
+    WITH ordered AS (
+      SELECT a.email,
+             row_number() OVER (
+               ORDER BY COALESCE(pe.created_at, a.created_at), a.created_at, a.email
+             ) AS rn
+      FROM rtm_accounts a
+      LEFT JOIN rtm_paid_emails pe ON pe.email = a.email
+      WHERE a.paid
+    )
+    UPDATE rtm_accounts a
+    SET is_founder = (o.rn <= ${limit}),
+        founder_no = CASE WHEN o.rn <= ${limit} THEN o.rn::int ELSE NULL END
+    FROM ordered o
+    WHERE a.email = o.email
+      AND (a.founder_no IS DISTINCT FROM (CASE WHEN o.rn <= ${limit} THEN o.rn::int ELSE NULL END)
+           OR a.is_founder IS DISTINCT FROM (o.rn <= ${limit}))`;
+}
+
 export function appSecret(): string {
   return cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
 }

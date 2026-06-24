@@ -6,6 +6,7 @@ import {
   checkoutHasExpectedPrice,
   checkoutIsPaid,
   cleanEnv,
+  renumberFounders,
   retrieveCheckout,
   stripeClient,
 } from '../server/payments.js';
@@ -44,6 +45,8 @@ async function fetchHandler(request: Request): Promise<Response> {
   await sql.transaction([
     sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
     sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
@@ -70,6 +73,10 @@ async function fetchHandler(request: Request): Promise<Response> {
     sql`UPDATE rtm_accounts SET paid=true, stripe_ref=COALESCE(stripe_ref, ${accountReference(email)}) WHERE email=${email}`,
     sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
   ]);
+
+  // numera o fundador por ordem de pagamento (#001 = primeiro a pagar). Backfilla
+  // quem ainda não tinha número e encaixa este pagante na posição certa.
+  await renumberFounders(sql);
 
   return Response.json({ received: true, processed: true });
 }

@@ -14,6 +14,7 @@ import {
   checkoutUrl,
   cleanEnv,
   findPaidCheckoutForEmail,
+  renumberFounders,
   retrieveCheckout,
   stripeClient,
 } from '../server/payments.js';
@@ -76,6 +77,16 @@ export default async function handler(
     sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`,
   ]);
+
+  // Backfill de fundador: numera os pagantes antigos (que pagaram antes do selo
+  // existir / pelo webhook) por ordem de pagamento. Guardado por um SELECT barato
+  // pra rodar só quando há divergência — depois de numerar, fica quieto.
+  {
+    const g = await sql`SELECT
+        (SELECT count(*) FILTER (WHERE is_founder) FROM rtm_accounts)::int AS have,
+        LEAST((SELECT count(*) FILTER (WHERE paid) FROM rtm_accounts)::int, ${FOUNDER_LIMIT})::int AS want`;
+    if (Number(g[0]?.have ?? 0) !== Number(g[0]?.want ?? 0)) await renumberFounders(sql, FOUNDER_LIMIT);
+  }
 
   let body: Record<string, unknown> = {};
   try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {}); } catch { /* vazio */ }
@@ -150,13 +161,11 @@ export default async function handler(
     await sql.transaction(stmts);
     await claimFounder(em);
   };
-  // Edição Fundador: atribui o próximo número de fundador a uma conta paga, até o teto.
-  // Idempotente: não renumera quem já é fundador nem ultrapassa o limite.
-  const claimFounder = async (em: string): Promise<void> => {
-    await sql`UPDATE rtm_accounts SET is_founder=true,
-        founder_no=(SELECT COALESCE(MAX(founder_no),0)+1 FROM rtm_accounts WHERE is_founder)
-      WHERE email=${em} AND paid=true AND is_founder=false
-        AND (SELECT count(*) FROM rtm_accounts WHERE is_founder) < ${FOUNDER_LIMIT}`;
+  // Edição Fundador: renumera TODOS os pagantes por ordem de pagamento (#001 = o
+  // primeiro do Stripe). Idempotente e determinístico (só toca o que muda), então
+  // serve tanto pra novo pagamento quanto pra backfill dos antigos.
+  const claimFounder = async (_em?: string): Promise<void> => {
+    await renumberFounders(sql, FOUNDER_LIMIT);
   };
   const founderOf = async (em: string): Promise<{ founder: boolean; founderNo: number | null }> => {
     const r = await sql`SELECT is_founder, founder_no FROM rtm_accounts WHERE email=${em}`;
