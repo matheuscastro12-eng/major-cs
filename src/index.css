@@ -3469,12 +3469,18 @@ table.crm-players input.num {
   flex-shrink: 0;
 }
 
+.kf2-row .wpn .wpn-svg { display: inline-flex; align-items: center; }
 .kf2-row .wpn svg {
   display: block;
-  height: 14px;
+  height: 15px;
   width: auto;
+  max-width: 56px;
   fill: #e8edf2;
 }
+/* os SVGs oficiais têm paths sem fill (preto default): força herdar a cor clara */
+.kf2-row .wpn svg path,
+.kf2-row .wpn svg polygon,
+.kf2-row .wpn svg rect { fill: #e8edf2; }
 
 .kf2-row .hs svg {
   height: 12px;

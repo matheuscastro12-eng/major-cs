@@ -34,3 +34,7 @@ scripts/*.mjs
 sim/*.mjs
 
 .claude/worktrees/
+
+# pastas-fonte de icones de arma (uso os copiados em src/assets/weapons)
+/svg_normal/
+/svg_outline/

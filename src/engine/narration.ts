@@ -120,7 +120,7 @@ function flairFor(k: KillEvent, seed: number, lang: Lang): string {
   const pick = (arr: string[]) => arr[seed % arr.length];
   if (seed % 9 === 0) return pick(pool.style);
   const w = k.weapon.toLowerCase();
-  if (w.includes('awp')) return pick(pool.awp);
+  if (w.includes('awp') || w === 'ssg08') return pick(pool.awp);
   if (w === 'deagle') return pick(k.headshot ? pool.deagleHs : pool.deagle);
   if (w === 'knife') return pick(pool.knife);
   if (k.headshot) return pick(pool.hs);

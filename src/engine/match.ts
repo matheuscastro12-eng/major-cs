@@ -189,28 +189,42 @@ function buyCost(tier: BuyTier): number {
 }
 
 function weaponFor(p: TPlayer, rng: Rng, tier: BuyTier, side: 'ct' | 't'): string {
+  // 1º round de cada half: pistol puro. CT = USP-S, T = Glock-18 (Deagle/Tec-9 raro).
   if (tier === 'pistol') {
-    if (rng() < 0.12) return 'deagle';
+    if (rng() < 0.10) return side === 't' ? 'tec9' : 'deagle';
     return side === 'ct' ? 'usp' : 'glock';
+  }
+  // AWPer puxa a AWP com mais frequência (pedido): bem provável no full, e às vezes
+  // o Scout (SSG 08) no force. Fica antes dos blocos de eco/force pra ter prioridade.
+  if (p.role === 'AWP') {
+    if (tier === 'full' && rng() < 0.82) return 'awp';
+    if (tier === 'force' && rng() < 0.40) return rng() < 0.65 ? 'awp' : 'ssg08';
   }
   if (tier === 'eco') {
     const r = rng();
-    if (r < 0.45) return 'mac10';
-    if (r < 0.65) return 'deagle';
-    if (r < 0.85) return side === 'ct' ? 'usp' : 'glock';
-    // rifle salvo do round anterior
+    if (r < 0.42) return side === 't' ? 'mac10' : 'mp9';
+    if (r < 0.62) return 'deagle';
+    if (r < 0.82) return side === 'ct' ? 'usp' : (rng() < 0.5 ? 'glock' : 'tec9');
+    // resto: rifle salvo do round anterior
   }
+  // force buy: SMG barata + pistolas pesadas. CT = MP9/Deagle, T = MAC-10/Tec-9/Deagle.
   if (tier === 'force') {
     const r = rng();
-    if (r < 0.3) return 'mac10';
-    if (r < 0.45) return 'deagle';
+    if (side === 'ct') {
+      if (r < 0.46) return 'mp9';
+      if (r < 0.66) return 'deagle';
+    } else {
+      if (r < 0.34) return 'mac10';
+      if (r < 0.56) return 'tec9';
+      if (r < 0.70) return 'deagle';
+    }
+    // resto cai pro rifle (force alto / arma salva)
   }
-  if (p.role === 'AWP' && tier === 'full' && rng() < 0.62) return 'awp';
-  if (rng() < 0.015) return 'knife';
-  if (tier === 'full' && rng() < 0.06) return 'deagle';
+  if (rng() < 0.012) return 'knife';
+  if (tier === 'full' && rng() < 0.05) return 'deagle';
   const main = side === 't' ? 'ak47' : 'm4';
   const off = side === 't' ? 'm4' : 'ak47';
-  return rng() < 0.88 ? main : off;
+  return rng() < 0.9 ? main : off;
 }
 
 // Efeito do PLAYBOOK por round: cada esquema é forte em certos contextos e fraco
