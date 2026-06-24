@@ -1107,6 +1107,21 @@ const poMatches = (p: Playoff): PlayoffMatch[] =>
 function poUserMatch(p: Playoff): PlayoffMatch | null {
   return poMatches(p).find((m) => !m.result && (m.a === 'user' || m.b === 'user')) ?? null;
 }
+function poFindMatch(p: Playoff, ids?: [string, string]): PlayoffMatch | null {
+  if (!ids) return poUserMatch(p);
+  return poMatches(p).find((m) => m.a === ids[0] && m.b === ids[1]) ?? null;
+}
+function poProgressKey(p: Playoff): string {
+  const mKey = (m: PlayoffMatch | null | undefined) =>
+    m ? `${m.a}:${m.b}:${m.result ? `${m.result.winner}/${m.result.mapScore.join('-')}` : '_'}` : '_';
+  return [
+    ...(p.qf ?? []).map(mKey),
+    ...p.sf.map(mKey),
+    mKey(p.final),
+    p.champion ?? '_',
+    p.runnerUp ?? '_',
+  ].join('|');
+}
 // resolve em cascata todas as partidas que NÃO envolvem o usuário
 function poRunAI(p: Playoff, team: (id: string) => TTeam, rng: Rng): void {
   for (let guard = 0; guard < 16; guard++) {
@@ -1668,6 +1683,7 @@ export function CareerScreen({ onExit }: Props) {
     mode: 'league' | 'major' | 'playoff';
     bestOf: 1 | 3 | 5;
     phaseLabel: string;
+    playoffIds?: [string, string];
   } | null>(null);
   const [selSeries, setSelSeries] = useState<{ series: SeriesResult; teams: [TTeam, TTeam] } | null>(null);
   const [majorResult, setMajorResult] = useState<MajorResult | null>(() => loadSave().majorResult ?? null);
@@ -1706,6 +1722,22 @@ export function CareerScreen({ onExit }: Props) {
       return next;
     });
   };
+
+  useEffect(() => {
+    if (stage !== 'playoffHub' || !save.playoff || !save.league) return;
+    const clone: Playoff = structuredClone(save.playoff);
+    const before = poProgressKey(clone);
+    poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
+    if (poProgressKey(clone) === before) return;
+
+    const next = { ...save, playoff: clone };
+    persist(next);
+    const timer = window.setTimeout(() => {
+      setSave(next);
+      if (clone.champion) setStage('seasonEnd');
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [save, stage]);
 
   useEffect(() => {
     if (!majorResult || !save.org) return;
@@ -2430,15 +2462,16 @@ export function CareerScreen({ onExit }: Props) {
       mode: 'playoff',
       bestOf: isFinal ? PO_FINAL_BO : PO_SF_BO,
       phaseLabel: `${p.circuit} · ${isFinal ? ct('GRANDE FINAL') : ct('Semifinal')}`,
+      playoffIds: [m.a, m.b],
     });
     setStage('veto');
   };
 
-  const finishPlayoffRound = (series?: SeriesResult) => {
+  const finishPlayoffRound = (series?: SeriesResult, playedIds?: [string, string]) => {
     const p = save.playoff;
     if (!p || !save.league) return;
     const clone: Playoff = structuredClone(p);
-    const m = poUserMatch(clone);
+    const m = poFindMatch(clone, playedIds);
     if (series && m) m.result = series;
     poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
     const next = { ...save, playoff: clone };
@@ -3590,7 +3623,7 @@ export function CareerScreen({ onExit }: Props) {
   if ((stage === 'veto' || stage === 'match') && matchCtx) {
     const finish = (series: SeriesResult) => {
       if (matchCtx.mode === 'major') finishMajorRound(series);
-      else if (matchCtx.mode === 'playoff') finishPlayoffRound(series);
+      else if (matchCtx.mode === 'playoff') finishPlayoffRound(series, matchCtx.playoffIds);
       else if (league) finishUserRound(league, series);
       recordCareerMatch(series, matchCtx.teams, matchCtx.userIdx, matchCtx.phaseLabel);
     };
@@ -3600,9 +3633,10 @@ export function CareerScreen({ onExit }: Props) {
       if (matchCtx.mode === 'playoff') {
         if (!save.playoff || !save.league) return;
         const clone: Playoff = structuredClone(save.playoff);
-        const m = poUserMatch(clone);
+        const m = poFindMatch(clone, matchCtx.playoffIds);
         if (!m) return;
         m.result = series;
+        poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
         const next = { ...save, playoff: clone };
         persist(next); setSave(next);
       } else if (matchCtx.mode !== 'major' && league) {
@@ -3654,6 +3688,7 @@ export function CareerScreen({ onExit }: Props) {
         <div className="major-live-bar">
           <b>PLAYOFFS</b> · {p.circuit} · Split {save.split}
           <span className="spacer" />
+          <button className="btn ghost" onClick={onExit}>← {ct('Sair')}</button>
           {userMatch ? (
             <>
               <button className="btn ghost" onClick={simPlayoffMine}>⏩ Simular</button>
