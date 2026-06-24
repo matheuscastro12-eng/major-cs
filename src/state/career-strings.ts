@@ -1868,4 +1868,6 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Selo de Fundador #001–#500': { en: 'Founder badge #001–#500', es: 'Insignia de Fundador #001–#500' },
   '· logo própria do clube + número baixo é troféu (500 primeiros)': { en: '· custom club logo + a low number is a trophy (first 500)', es: '· logo propia del club + número bajo es un trofeo (primeros 500)' },
   'apoiador desde o lançamento': { en: 'supporter since launch', es: 'patrocinador desde el lanzamiento' },
+  'Acima da sua divisão — suba pelo ranking VRS': { en: 'Above your division — climb via VRS ranking', es: 'Por encima de tu división — sube por el ranking VRS' },
+  'Fora da sua divisão (você joga o seu tier)': { en: 'Outside your division (you play your tier)', es: 'Fuera de tu división (juegas tu tier)' },
 };

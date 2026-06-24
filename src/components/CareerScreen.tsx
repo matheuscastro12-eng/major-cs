@@ -3398,13 +3398,16 @@ export function CareerScreen({ onExit, founder = false }: Props) {
     // CHEGAR NA FINAL (campeão OU vice) promove — não precisa mais SÓ vencer; bater
     // final em todo campeonato e perder pra um top não pode te travar. Fundo da tabela cai.
     const finalPos = save.playoff ? Math.min(pos, poRank) : pos;
-    const reachedFinal = finalPos <= 2;
     const circuitTier = save.circuit?.tier ?? save.tier;
-    const fieldSize = league.teams.length;
+    // TIER POR RANKING VRS (não só título): sua divisão segue sua posição mundial.
+    // top 32 = Tier 1; 33–64 = Tier 2; 65+ = Tier 3. Sobe/cai UM degrau por split
+    // rumo ao que o VRS diz. Vencer ajuda porque dá VRS — mas título sozinho, sem
+    // ranking, não promove. (E só conta jogando no SEU tier — farmar abaixo nem rola.)
+    const tierByVrs = worldRank <= MAJOR_VRS_CUT ? 1 : worldRank <= MAJOR_VRS_CUT * 2 ? 2 : 3;
     const tierResult: { tier: number; tierChange: 'up' | 'down' | null } = (() => {
       if (circuitTier !== save.tier) return { tier: save.tier, tierChange: null };
-      if (reachedFinal) return { tier: Math.max(1, save.tier - 1), tierChange: save.tier > 1 ? 'up' : null };
-      if (finalPos >= fieldSize - 1) return { tier: Math.min(3, save.tier + 1), tierChange: save.tier < 3 ? 'down' : null };
+      if (tierByVrs < save.tier) return { tier: save.tier - 1, tierChange: 'up' };
+      if (tierByVrs > save.tier) return { tier: save.tier + 1, tierChange: 'down' };
       return { tier: save.tier, tierChange: null };
     })();
 
@@ -5758,9 +5761,9 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
   onPick: (c: CircuitOption) => void;
   onBack: () => void;
 }) {
-  // você só entra em circuitos do SEU tier ou mais fáceis (tier maior). Subir de
-  // tier libera os circuitos de cima (o Tier 1 / BLAST é o caminho do Major).
-  const canEnter = (opt: CircuitOption) => opt.tier >= playerTier;
+  // você só disputa o circuito do SEU tier — acabou farmar tier abaixo (um Tier 1
+  // não joga mais Tier 2/3). Subir/cair de tier é pelo ranking VRS no fim do split.
+  const canEnter = (opt: CircuitOption) => opt.tier === playerTier;
   const firstAvailable = circuits.find(canEnter) ?? circuits[0];
   const [selectedId, setSelectedId] = useState(firstAvailable?.id ?? '');
   const selected = circuits.find((option) => option.id === selectedId);
@@ -5799,7 +5802,9 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
                     <span>prêmio ×{opt.prizeMult}</span>
                     <span>VRS ×{opt.vrsWeight.toFixed(2)}</span>
                   </div>
-                  {locked && <div className="cc-lock muted small">🔒 Suba ao {ct(TIER_NAMES[opt.tier])} para disputar</div>}
+                  {locked && (opt.tier < playerTier
+                    ? <div className="cc-lock muted small">🔒 {ct('Acima da sua divisão — suba pelo ranking VRS')}</div>
+                    : <div className="cc-lock muted small">🔒 {ct('Fora da sua divisão (você joga o seu tier)')}</div>)}
                 </button>
               );
             })}
