@@ -3169,11 +3169,16 @@ export function CareerScreen({ onExit, founder = false }: Props) {
     const orgPlayers = buildTeam(save)?.players ?? [];
     const coreReg = orgPlayers.length ? macroRegionPlurality(orgPlayers.map((p) => p.country)) : undefined;
     const relocate = save.region && coreReg && coreReg !== save.region ? { from: save.region, to: coreReg } : null;
+    // CONVITE: às vezes (determinístico por split) um time recebe convite pra
+    // disputar o circuito UM tier acima, mesmo sem estar classificado pelo VRS.
+    // Chance maior pra quem já está perto do topo da sua divisão (forte no split).
+    const inviteTier = save.tier > 1 && hashStr(`invite:${save.org?.tag ?? ''}:${save.split}`) % 100 < 35 ? save.tier - 1 : null;
     return (
       <CircuitPicker
         circuits={circuits}
         split={save.split}
         playerTier={save.tier}
+        inviteTier={inviteTier}
         relocate={relocate}
         onRelocate={() => coreReg && update({ region: coreReg })}
         onBack={() => setStage('market')}
@@ -5752,18 +5757,20 @@ interface CircuitOption {
   vrsWeight: number;
   tier: number;
 }
-function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPick, onBack }: {
+function CircuitPicker({ circuits, split, playerTier, inviteTier, relocate, onRelocate, onPick, onBack }: {
   circuits: CircuitOption[];
   split: number;
   playerTier: number;
+  inviteTier: number | null;
   relocate: { from: MacroRegion; to: MacroRegion } | null;
   onRelocate: () => void;
   onPick: (c: CircuitOption) => void;
   onBack: () => void;
 }) {
-  // você só disputa o circuito do SEU tier — acabou farmar tier abaixo (um Tier 1
-  // não joga mais Tier 2/3). Subir/cair de tier é pelo ranking VRS no fim do split.
-  const canEnter = (opt: CircuitOption) => opt.tier === playerTier;
+  // você disputa o circuito do SEU tier; e, se recebeu CONVITE, também o tier de
+  // cima (sem estar classificado pelo VRS). Farmar tier abaixo segue proibido.
+  const canEnter = (opt: CircuitOption) => opt.tier === playerTier || opt.tier === inviteTier;
+  const isInvite = (opt: CircuitOption) => opt.tier === inviteTier && opt.tier !== playerTier;
   const firstAvailable = circuits.find(canEnter) ?? circuits[0];
   const [selectedId, setSelectedId] = useState(firstAvailable?.id ?? '');
   const selected = circuits.find((option) => option.id === selectedId);
@@ -5793,6 +5800,7 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
                 <button key={opt.id} className={`circuit-card${c?.id === opt.id ? ' on' : ''}${locked ? ' locked' : ''}`} onClick={() => setSelectedId(opt.id)}>
                   <div className="cc-name">
                     <span className={`tier-badge t${opt.tier}`}>TIER {opt.tier}</span> {opt.name}
+                    {isInvite(opt) && <span className="tier-badge" style={{ background: 'var(--rtm-gold)', color: '#06121d', marginLeft: 6 }}>✉ {ct('CONVITE')}</span>}
                   </div>
                   <div className="cc-desc muted small">{opt.desc}</div>
                   <div className="cc-meta">

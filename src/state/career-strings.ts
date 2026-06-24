@@ -1870,4 +1870,5 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'apoiador desde o lançamento': { en: 'supporter since launch', es: 'patrocinador desde el lanzamiento' },
   'Acima da sua divisão — suba pelo ranking VRS': { en: 'Above your division — climb via VRS ranking', es: 'Por encima de tu división — sube por el ranking VRS' },
   'Fora da sua divisão (você joga o seu tier)': { en: 'Outside your division (you play your tier)', es: 'Fuera de tu división (juegas tu tier)' },
+  'CONVITE': { en: 'INVITE', es: 'INVITACIÓN' },
 };
