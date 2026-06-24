@@ -1699,9 +1699,10 @@ const HALL_PLACEMENT: Record<PlacementCode, string> = {
 interface Props {
   dataset: TeamSeason[];
   onExit: () => void;
+  founder?: boolean; // conta Fundador: pode subir logo própria ao fundar a org
 }
 
-export function CareerScreen({ onExit }: Props) {
+export function CareerScreen({ onExit, founder = false }: Props) {
   const { lang } = useLang();
   setCareerLang(lang); // idioma a nivel de modulo: ct() funciona em todos os subcomponentes
   const [save, setSave] = useState<CareerSave>(() => loadSave());
@@ -2986,7 +2987,7 @@ export function CareerScreen({ onExit }: Props) {
       setStage('market');
     };
     if (orgChoice === 'fictional') {
-      return <FoundOrg onExit={() => setOrgChoice('select')} onFound={(org) => {
+      return <FoundOrg founder={founder} onExit={() => setOrgChoice('select')} onFound={(org) => {
         update({ org, takeoverId: null, scenario: null });
         setStage('market');
       }} />;
@@ -6157,15 +6158,48 @@ function ScenarioPicker({ current, onBack, onStart }: {
   );
 }
 
-function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['org']>) => void; onExit: () => void }) {
+// redimensiona a imagem enviada pra 128px (contain) e devolve um PNG data-url
+// pequeno — evita estourar o localStorage/save na nuvem com um arquivo grande.
+function resizeLogoToDataUrl(file: File, size = 128): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('img'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('ctx'));
+        const scale = Math.min(size / img.width, size / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNullable<CareerSave['org']>) => void; onExit: () => void; founder?: boolean }) {
   const [name, setName] = useState('');
   const [tag, setTag] = useState('');
   const [c1, setC1] = useState('#101820');
   const [c2, setC2] = useState('#61a8dd');
   const [emblem, setEmblem] = useState<EmblemId>('shield');
+  const [customLogo, setCustomLogo] = useState<string | null>(null); // upload do Fundador
+  const [logoErr, setLogoErr] = useState('');
 
-  // logo = emblema construído (upload de imagem removido por custo/transferência)
-  const logo = useMemo(() => buildLogoDataUrl(emblem, c1, c2, tag || name), [emblem, c1, c2, tag, name]);
+  // Fundador pode subir a própria logo; senão, usa o emblema construído.
+  const logo = useMemo(() => customLogo ?? buildLogoDataUrl(emblem, c1, c2, tag || name), [customLogo, emblem, c1, c2, tag, name]);
+  const onUpload = async (file: File | undefined) => {
+    if (!file) return;
+    setLogoErr('');
+    if (file.size > 5_000_000) { setLogoErr(ct('Imagem muito grande (máx 5MB).')); return; }
+    try { setCustomLogo(await resizeLogoToDataUrl(file)); } catch { setLogoErr(ct('Não foi possível ler a imagem.')); }
+  };
 
   return (
     <div className="fade-in">
@@ -6219,6 +6253,21 @@ function FoundOrg({ onFound, onExit }: { onFound: (org: NonNullable<CareerSave['
                   ))}
                 </div>
               </div>
+
+              {/* VANTAGEM DE FUNDADOR: subir a própria logo (PNG/JPG) */}
+              {founder ? (
+                <div className="field" style={{ marginTop: 12 }}>
+                  <label>👑 {ct('Logo própria')} <span className="muted small">({ct('vantagem de Fundador')})</span></label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input type="file" accept="image/*" onChange={(e) => { void onUpload(e.target.files?.[0]); e.target.value = ''; }} />
+                    {customLogo && <button type="button" className="btn small" onClick={() => setCustomLogo(null)}>{ct('Usar emblema')}</button>}
+                  </div>
+                  {logoErr && <div className="muted small" style={{ color: 'var(--rtm-red-bright)' }}>{logoErr}</div>}
+                  {customLogo && <div className="muted small">{ct('Logo enviada — redimensionada pra 128px.')}</div>}
+                </div>
+              ) : (
+                <div className="muted small" style={{ marginTop: 12 }}>👑 {ct('Subir a própria logo é vantagem de Fundador.')}</div>
+              )}
             </div>
 
             {/* coluna direita: preview do clube */}

@@ -938,7 +938,7 @@ export default function App() {
       {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
       {screen === 'career' && (
         <>
-          <CareerScreen dataset={dataset} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
+          <CareerScreen dataset={dataset} founder={!!account?.founder} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
         </>
       )}
       {screen === 'careerCRM' && (
