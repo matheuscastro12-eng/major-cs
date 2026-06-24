@@ -6311,3 +6311,7 @@ body.has-ad-footer { padding-bottom: 126px; }
   .rtm-modemenu > .rtm-modecard { opacity: 1; }
   .btn:hover, .rtm-btn:hover, .rtm-modecard:hover .rtm-modecard-art { transform: none; }
 }
+
+/* Top 20 HLTV — títulos do ano (chips) */
+.cer-titles { display: flex; flex-wrap: wrap; gap: 5px; }
+.cer-title-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: var(--gold-2, #f4d27a); background: rgba(216,169,67,.12); border: 1px solid var(--gold-soft, rgba(216,169,67,.4)); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }

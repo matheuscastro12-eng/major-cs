@@ -1313,18 +1313,53 @@ function seasonMvpCounts(pool: TeamSeason[], endSplit: number): Map<string, numb
   }
   return counts;
 }
-interface Top20Entry { p: Player; team: TeamSeason; role: Role; rating: number; mvps: number; sl: HltvStat; points: number; }
+interface Top20Entry { p: Player; team: TeamSeason; role: Role; rating: number; mvps: number; sl: HltvStat; points: number; titles: string[]; }
+// um jogador não pode aparecer 2x no Top 20 (estava contratado + ainda listado no
+// clube antigo, ou duplicado na era). Mantém a MELHOR entrada (mais pontos) por nick.
+function dedupeTop20ByNick(list: Top20Entry[]): Top20Entry[] {
+  const best = new Map<string, Top20Entry>();
+  for (const e of list) {
+    const k = e.p.nick.toLowerCase();
+    const cur = best.get(k);
+    if (!cur || e.points > cur.points) best.set(k, e);
+  }
+  return [...best.values()];
+}
+// TÍTULOS do ano por jogador (por nick): a cada split, o time com o melhor
+// desempenho coletivo leva o evento-bandeira (Major no split de Major, senão o
+// Tier 1). A forma varia por split, então o título roda entre os tops do ano.
+function seasonTitlesByPlayer(pool: TeamSeason[], endSplit: number): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const s of seasonSplitRange(endSplit)) {
+    let bestTeam: TeamSeason | null = null;
+    let bestScore = -1;
+    for (const t of pool) {
+      const score = t.players.reduce((a, p) => a + hltvPointsAt(p, t, p.role as Role, s), 0);
+      if (score > bestScore) { bestScore = score; bestTeam = t; }
+    }
+    if (!bestTeam) continue;
+    const ev = isMajorSplit(s) ? MAJOR_NAME(s) : t1EventName(s);
+    for (const p of bestTeam.players) {
+      const k = p.nick.toLowerCase();
+      const arr = out.get(k) ?? [];
+      arr.push(ev);
+      out.set(k, arr);
+    }
+  }
+  return out;
+}
 // melhores N jogadores da TEMPORADA inteira: currículo composto (média dos pontos
 // por split do ano + bônus por MVP), não só a média de rating.
 function seasonTopPlayersYear(pool: TeamSeason[], endSplit: number, n: number): Top20Entry[] {
   const splits = seasonSplitRange(endSplit);
   const mvps = seasonMvpCounts(pool, endSplit);
-  return pool
-    .flatMap((t) => t.players.map((p) => {
-      const m = mvps.get(p.id) ?? 0;
-      const yearAvg = splits.reduce((a, s) => a + hltvPointsAt(p, t, p.role as Role, s), 0) / splits.length;
-      return { p, team: t, role: p.role as Role, rating: playerYearRating(p, endSplit), mvps: m, sl: hltvStatline(p, p.role as Role, endSplit), points: yearAvg + m * 85 };
-    }))
+  const titlesMap = seasonTitlesByPlayer(pool, endSplit);
+  const all = pool.flatMap((t) => t.players.map((p): Top20Entry => {
+    const m = mvps.get(p.id) ?? 0;
+    const yearAvg = splits.reduce((a, s) => a + hltvPointsAt(p, t, p.role as Role, s), 0) / splits.length;
+    return { p, team: t, role: p.role as Role, rating: playerYearRating(p, endSplit), mvps: m, sl: hltvStatline(p, p.role as Role, endSplit), points: yearAvg + m * 85, titles: titlesMap.get(p.nick.toLowerCase()) ?? [] };
+  }));
+  return dedupeTop20ByNick(all)
     .sort((a, b) => b.points - a.points)
     .slice(0, n);
 }
@@ -2684,14 +2719,17 @@ export function CareerScreen({ onExit }: Props) {
   const top20Memo = useMemo(
     () => {
       const mvps = seasonMvpCounts(top20Pool, save.split);
-      return top20Pool
+      const titlesMap = seasonTitlesByPlayer(top20Pool, save.split);
+      const all = top20Pool
         .flatMap((t) => t.players.map((p): Top20Entry => ({
           p, team: t, role: p.role as Role,
           rating: playerSeasonRating(p, save.split),
           mvps: mvps.get(p.id) ?? 0,
           sl: hltvStatline(p, p.role as Role, save.split),
           points: hltvPointsAt(p, t, p.role as Role, save.split),
-        })))
+          titles: titlesMap.get(p.nick.toLowerCase()) ?? [],
+        })));
+      return dedupeTop20ByNick(all)
         .sort((a, b) => b.points - a.points)
         .slice(0, 20);
     },
@@ -5139,7 +5177,7 @@ function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<s
 // Cerimônia do Top 20 HLTV ao fim de cada temporada — revelação dos 20 melhores
 // jogadores do ano, com o #1 em destaque e os seus jogadores realçados.
 function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
-  entries: { p: Player; team: TeamSeason; rating: number; mvps?: number; sl?: HltvStat; role?: Role }[];
+  entries: { p: Player; team: TeamSeason; rating: number; mvps?: number; sl?: HltvStat; role?: Role; titles?: string[] }[];
   mine: Set<string>;
   orgTag: string;
   split: number;
@@ -5166,6 +5204,13 @@ function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
               <div className="cer-1-nick"><Flag cc={top1.p.country} /> {top1.p.nick}</div>
               <div className="muted small">{tagOf(top1)} · {top1.p.name}</div>
               {!!top1.mvps && <div className="t20-mvp" style={{ marginTop: 4 }}>🏆 {top1.mvps}× MVP de torneio no ano</div>}
+              {!!top1.titles?.length && (
+                <div className="cer-titles" style={{ marginTop: 6 }}>
+                  {[...new Set(top1.titles)].map((t) => (
+                    <span key={t} className="cer-title-chip">🥇 {t}</span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="cer-1-rating">{top1.rating.toFixed(2)}<span>rating</span></div>
           </div>
@@ -5175,7 +5220,7 @@ function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
             <div key={e.p.id} className={`cer-row${mine.has(e.p.id) ? ' mine' : ''}`} style={{ animationDelay: `${0.1 + i * 0.045}s` }}>
               <span className="cer-rank">{i + 2}</span>
               <PlayerAvatar nick={e.p.nick} size={24} />
-              <span className="cer-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tagOf(e)}</span>{!!e.mvps && <span className="t20-mvp" style={{ marginLeft: 6 }}>{e.mvps}× MVP</span>}</span>
+              <span className="cer-nick"><Flag cc={e.p.country} /> {e.p.nick} <span className="muted small">{tagOf(e)}</span>{!!e.mvps && <span className="t20-mvp" style={{ marginLeft: 6 }}>{e.mvps}× MVP</span>}{!!e.titles?.length && <span className="cer-title-chip" style={{ marginLeft: 6 }} title={[...new Set(e.titles)].join(' · ')}>🥇 {[...new Set(e.titles)].length}</span>}</span>
               <span className="cer-rating">{e.rating.toFixed(2)}</span>
             </div>
           ))}
