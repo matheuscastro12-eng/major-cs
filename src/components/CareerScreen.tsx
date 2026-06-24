@@ -143,6 +143,64 @@ const T3_EVENTS = [
 ];
 const t3EventName = (split: number, ev = 1) => T3_EVENTS[evIndex(split, ev, T3_EVENTS.length)];
 
+// IMERSÃO: prize pool real (USD) e sede de cada evento do calendário (fonte:
+// Liquipedia/HLTV). Só FLAVOR — o prêmio que entra no caixa segue a fórmula
+// balanceada (PRIZE_BY_POS × prizeMult), não o pool real, pra não estourar a
+// economia. Eventos sem entrada caem num default por tier.
+const EVENT_META: Record<string, { prize: number; venue: string }> = {
+  // Majors
+  'PGL Major Copenhagen': { prize: 1_250_000, venue: 'Copenhague 🇩🇰' },
+  'BLAST.tv Austin Major': { prize: 1_250_000, venue: 'Austin 🇺🇸' },
+  'IEM Major Rio': { prize: 1_250_000, venue: 'Rio de Janeiro 🇧🇷' },
+  'PGL Major Budapest': { prize: 1_250_000, venue: 'Budapeste 🇭🇺' },
+  'ESL One Major Cologne': { prize: 1_250_000, venue: 'Colônia 🇩🇪' },
+  // Tier 1
+  'IEM Katowice': { prize: 1_000_000, venue: 'Katowice 🇵🇱' },
+  'ESL Pro League': { prize: 850_000, venue: 'Malta 🇲🇹' },
+  'IEM Cologne': { prize: 1_000_000, venue: 'Colônia 🇩🇪' },
+  'IEM Dallas': { prize: 250_000, venue: 'Dallas 🇺🇸' },
+  'PGL Cluj-Napoca': { prize: 1_250_000, venue: 'Cluj-Napoca 🇷🇴' },
+  'BLAST Premier World Final': { prize: 1_000_000, venue: 'Singapura 🇸🇬' },
+  'IEM Chengdu': { prize: 500_000, venue: 'Chengdu 🇨🇳' },
+  'Esports World Cup': { prize: 1_250_000, venue: 'Riade 🇸🇦' },
+  'BLAST Open Lisboa': { prize: 200_000, venue: 'Lisboa 🇵🇹' },
+  'IEM Melbourne': { prize: 250_000, venue: 'Melbourne 🇦🇺' },
+  'PGL Astana': { prize: 500_000, venue: 'Astana 🇰🇿' },
+  'Thunderpick World Championship': { prize: 1_000_000, venue: 'Malta 🇲🇹' },
+  'IEM Rio': { prize: 250_000, venue: 'Rio de Janeiro 🇧🇷' },
+  'BLAST Spring Final': { prize: 425_000, venue: 'Londres 🇬🇧' },
+  'BLAST Fall Final': { prize: 425_000, venue: 'Copenhague 🇩🇰' },
+  'IEM Sydney': { prize: 250_000, venue: 'Sydney 🇦🇺' },
+  'PGL Bucharest': { prize: 1_000_000, venue: 'Bucareste 🇷🇴' },
+  'IEM Fortaleza': { prize: 250_000, venue: 'Fortaleza 🇧🇷' },
+  'BLAST Bounty': { prize: 300_000, venue: 'Copenhague 🇩🇰' },
+  'Gamers8 Riyadh': { prize: 1_000_000, venue: 'Riade 🇸🇦' },
+  // Tier 2
+  'CCT Global Finals': { prize: 200_000, venue: 'Belgrado 🇷🇸' },
+  'Elisa Masters Espoo': { prize: 75_000, venue: 'Espoo 🇫🇮' },
+  'Thunderpick World Champ': { prize: 250_000, venue: 'Malta 🇲🇹' },
+  'Pinnacle Cup': { prize: 100_000, venue: 'online 🌐' },
+  'CCT Season Finals': { prize: 150_000, venue: 'Belgrado 🇷🇸' },
+  'Skyesports Masters': { prize: 100_000, venue: 'Mumbai 🇮🇳' },
+  'ESL Challenger Valencia': { prize: 100_000, venue: 'Valência 🇪🇸' },
+  'Pinnacle Cup Championship': { prize: 200_000, venue: 'online 🌐' },
+  'Fragadelphia': { prize: 30_000, venue: 'Filadélfia 🇺🇸' },
+  // Tier 3 / locais
+  'Gamers Club Liga Pro': { prize: 15_000, venue: 'São Paulo 🇧🇷' },
+  'Gamers Club Masters': { prize: 25_000, venue: 'São Paulo 🇧🇷' },
+  'Aorus League': { prize: 15_000, venue: 'Buenos Aires 🇦🇷' },
+  'CBCS Series': { prize: 10_000, venue: 'Brasil 🇧🇷' },
+  'Liga Gamers Club': { prize: 10_000, venue: 'São Paulo 🇧🇷' },
+};
+const TIER_DEFAULT_POOL: Record<number, { prize: number; venue: string }> = {
+  1: { prize: 500_000, venue: 'circuito mundial 🌐' },
+  2: { prize: 100_000, venue: 'circuito internacional 🌐' },
+  3: { prize: 15_000, venue: 'circuito de acesso 🌐' },
+};
+const eventMeta = (name: string, tier: number) => EVENT_META[name] ?? TIER_DEFAULT_POOL[tier] ?? TIER_DEFAULT_POOL[3];
+// prize pool compacto em USD: $1.25M / $850k
+const fmtPool = (usd: number) => (usd >= 1_000_000 ? `$${(usd / 1_000_000).toFixed(usd % 1_000_000 === 0 ? 0 : 2)}M` : `$${Math.round(usd / 1000)}k`);
+
 interface Signing {
   playerId: string;
   fromId: string;
@@ -5713,6 +5771,8 @@ function CircuitPicker({ circuits, split, playerTier, relocate, onRelocate, onPi
                   </div>
                   <div className="cc-desc muted small">{opt.desc}</div>
                   <div className="cc-meta">
+                    <span>💰 {fmtPool(eventMeta(opt.name, opt.tier).prize)}</span>
+                    <span>📍 {eventMeta(opt.name, opt.tier).venue}</span>
                     <span>{opt.spots} {opt.spots === 1 ? 'vaga' : 'vagas'} ao Major</span>
                     <span>prêmio ×{opt.prizeMult}</span>
                     <span>VRS ×{opt.vrsWeight.toFixed(2)}</span>
