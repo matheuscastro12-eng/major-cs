@@ -195,15 +195,15 @@ const fmtPool = (usd: number) => (usd >= 1_000_000 ? `$${(usd / 1_000_000).toFix
 // grande pagador (campeão ~700k, na régua do ~$500k real), e os circuitos pagam
 // uma fração disso (campeão Tier-1 ~345k com o prizeMult). Subir de tier e ir ao
 // Major é o caminho do dinheiro; grindar circuito fraco rende pouco.
-const PRIZE_BY_POS = [120_000, 72_000, 44_000, 28_000, 17_000, 11_000, 7_000, 4_000];
+const PRIZE_BY_POS = [260_000, 156_000, 95_000, 60_000, 36_000, 23_000, 15_000, 8_000];
 // premiação do Major por colocação (bem maior que o circuito)
 const MAJOR_PRIZE: Record<PlacementCode, number> = {
-  champion: 700_000,
-  runnerup: 300_000,
-  semi: 170_000,
-  quarters: 90_000,
-  playoffs: 45_000,
-  swiss: 18_000,
+  champion: 1_200_000,
+  runnerup: 550_000,
+  semi: 320_000,
+  quarters: 170_000,
+  playoffs: 90_000,
+  swiss: 35_000,
 };
 
 interface Signing {
