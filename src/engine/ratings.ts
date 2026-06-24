@@ -3,6 +3,20 @@ import type { Coach, Game, Player, Playstyle, Role, TeamSeason, TPlayer, TTeam }
 import { derivePlaystyle, MAP_POOL } from '../types';
 import { hashStr } from '../state/hash';
 import { ct } from '../state/career-i18n';
+import earningsData from '../data/bo3-earnings.json';
+
+// premiação real de carreira (Liquipedia) → PRÊMIO MODESTO no valor de mercado:
+// astro consagrado custa um pouco mais, mas o OVR continua mandando (teto +15%).
+const EARNINGS = earningsData as Record<string, number>;
+function earningsPremium(nick?: string): number {
+  const e = nick ? EARNINGS[nick] : undefined;
+  if (!e) return 1;
+  if (e >= 2_000_000) return 1.15;
+  if (e >= 1_000_000) return 1.10;
+  if (e >= 500_000) return 1.06;
+  if (e >= 200_000) return 1.03;
+  return 1;
+}
 
 // Dream team montado no draft nunca treinou junto: leva um malus de
 // entrosamento que torna o título mais difícil (egos, falta de rotina).
@@ -19,7 +33,7 @@ export function playerOvr(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'aw
 
 // valor de mercado do jogador (R$), estilo Brasfoot: cresce rápido com o
 // overall e tem prêmio para AWPer/IGL de elite; forma quente valoriza um pouco.
-export function playerValue(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'> & { ovr?: number; form?: number }): number {
+export function playerValue(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'> & { ovr?: number; form?: number; nick?: string }): number {
   const ovr = typeof p.ovr === 'number' ? p.ovr : playerOvr(p);
   // curva íngreme: medianos custam pouco e só craques disparam de preço.
   // ovr 73 ~ R$240k · 80 ~ R$820k · 85 ~ R$1,5M · 90 ~ R$2,5M · 96 ~ R$4M
@@ -27,6 +41,7 @@ export function playerValue(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | '
   let v = Math.pow(base, 2.5) * 600;
   if (p.awp >= 88) v *= 1.18; // sniper de elite valoriza
   if (p.igl >= 88) v *= 1.1; // IGL de elite valoriza
+  v *= earningsPremium(p.nick); // legado de carreira (premiação real): prêmio modesto
   if (p.form) v *= p.form; // 0.9..1.1
   return Math.max(30000, Math.round(v / 10000) * 10000);
 }

@@ -1985,6 +1985,16 @@ export function CareerScreen({ onExit }: Props) {
         from = origin;
       }
     }
+    // 7c) o ID do jogador mudou numa reimportação do bo3 (donk!), mas temos a
+    // cópia (snapshot): acha o MESMO atleta pelo NICK no dataset atual, pra ele
+    // resolver no seu eu vivo (atualizado) em vez de ser perdido / virar vaga.
+    if (!player && s.playerSnapshot?.nick) {
+      const nk = s.playerSnapshot.nick.toLowerCase();
+      for (const t of CS2_REAL_2026) {
+        const p = t.players.find((pp) => pp.nick.toLowerCase() === nk);
+        if (p) { from = currentEra.find((ct) => ct.id === t.id) ?? t; player = p; break; }
+      }
+    }
     // 8) último recurso para saves novos: usa a cópia do jogador gravada quando
     // o elenco foi fechado, independente de alterações futuras na base.
     if (!player && s.playerSnapshot) {
