@@ -3,7 +3,7 @@
 // disputar circuitos regionais, subir no VRS e buscar o Major Mundial completo
 // em três stages suíços mais Champions Stage. A interface usa PT como fonte e
 // traduz as strings da carreira com ct().
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
@@ -18,7 +18,7 @@ import { MAP_LABELS, MAP_POOL, PLAYBOOK_DESC, PLAYBOOK_LABELS } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
-import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore, RIVALRY_THRESHOLD } from '../engine/career/rivalries';
+import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore } from '../engine/career/rivalries';
 import { applyFatigueForm, fatigueBand, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, FACILITY_MAX_LEVEL, facilityUpkeep, facilityUpgradeCost, normalizeFacilities, stabilizeMorale, type FacilityKey } from '../engine/career/facilities';
 import { personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
@@ -27,10 +27,29 @@ import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '.
 import { matchesNegotiationFilters } from '../engine/career/market';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
-import { AttrBar, Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
+import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { FutCard } from './FutCard';
-import { Button, Panel } from './ds';
-import { LangSwitcher } from './social';
+import { Panel } from './ds';
+import { CareerShell, CareerDashFrame } from './career/CareerShell';
+import { CareerPlayerPage } from './career/CareerPlayerPage';
+import { CareerTeamPage } from './career/CareerTeamPage';
+import { PlayerLink } from './career/PlayerLink';
+import { playerOrgId, playerRuntimeId } from '../state/career-player-route';
+import {
+  canCareerGoBack,
+  careerHistoryBack,
+  careerHistoryForward,
+  initCareerNav,
+  navigateCareerHub,
+  navigateCareerPlayer,
+  navigateCareerTeam,
+  parseCareerPlayerId,
+  parseCareerTeamId,
+} from '../state/career-nav';
+import { buildDashboardTasks } from '../state/career-tasks';
+import { CareerOverview, type RecentMatchRow } from './career/CareerOverview';
+import { CareerIcon, CareerIconLegacy, type CareerIconName } from './career/CareerIcon';
+import { CareerConfirmProvider, useCareerConfirm } from './career/ConfirmModal';
 import { OrgFlag } from './flags';
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
@@ -61,11 +80,11 @@ const VRS_DECAY = 0.6;
 // PLANO DE JOGO: a decisão pré-partida do usuário. Cada plano dá um buff REAL na
 // simulação (some você do "modo espectador": sua escolha muda a partida).
 type GamePlan = 'disciplined' | 'antistrat' | 'mapfocus' | 'aggressive';
-const GAME_PLANS: { id: GamePlan; icon: string; label: string; desc: string }[] = [
-  { id: 'disciplined', icon: '🧠', label: ct('Disciplinado'), desc: ct('Jogo seguro e constante. Baixa variância, base sólida.') },
-  { id: 'antistrat', icon: '🔍', label: 'Anti-strat', desc: ct('Estuda o adversário: defesa mais sólida. Bom contra times melhores.') },
-  { id: 'mapfocus', icon: '🗺️', label: ct('Foco no mapa forte'), desc: ct('Puxa o veto pro seu melhor mapa e joga mais forte nele.') },
-  { id: 'aggressive', icon: '⚔️', label: ct('Agressivo'), desc: ct('Pressão nas aberturas: teto alto, mais arriscado.') },
+const GAME_PLANS: { id: GamePlan; icon: CareerIconName; label: string; desc: string }[] = [
+  { id: 'disciplined', icon: 'brain', label: ct('Disciplinado'), desc: ct('Jogo seguro e constante. Baixa variância, base sólida.') },
+  { id: 'antistrat', icon: 'search', label: 'Anti-strat', desc: ct('Estuda o adversário: defesa mais sólida. Bom contra times melhores.') },
+  { id: 'mapfocus', icon: 'map', label: ct('Foco no mapa forte'), desc: ct('Puxa o veto pro seu melhor mapa e joga mais forte nele.') },
+  { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Pressão nas aberturas: teto alto, mais arriscado.') },
 ];
 // aplica o buff do plano no time do usuário antes da partida
 function applyGamePlanBuff(t: TTeam, plan: GamePlan): TTeam {
@@ -835,12 +854,12 @@ const PLAYBOOK_SWITCH_TO = 25; // entrosamento ao adotar um esquema novo
 // ----- moral / satisfação do jogador -----
 const MORALE_DEFAULT = 70;
 const clampMorale = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
-function moraleInfo(v: number): { label: string; cls: 'good' | 'warn' | 'bad'; icon: string } {
-  if (v >= 78) return { label: ct('Motivado'), cls: 'good', icon: '😄' };
-  if (v >= 55) return { label: ct('Contente'), cls: 'good', icon: '🙂' };
-  if (v >= 38) return { label: ct('Indiferente'), cls: 'warn', icon: '😐' };
-  if (v >= 22) return { label: ct('Insatisfeito'), cls: 'bad', icon: '😟' };
-  return { label: ct('Revoltado'), cls: 'bad', icon: '😡' };
+function moraleInfo(v: number): { label: string; cls: 'good' | 'warn' | 'bad'; icon: CareerIconName } {
+  if (v >= 78) return { label: ct('Motivado'), cls: 'good', icon: 'mood-5' };
+  if (v >= 55) return { label: ct('Contente'), cls: 'good', icon: 'mood-4' };
+  if (v >= 38) return { label: ct('Indiferente'), cls: 'warn', icon: 'mood-3' };
+  if (v >= 22) return { label: ct('Insatisfeito'), cls: 'bad', icon: 'mood-2' };
+  return { label: ct('Revoltado'), cls: 'bad', icon: 'mood-1' };
 }
 // forma inicial do split derivada da moral (sutil): 100→+0.07, 40→-0.07
 const moraleForm = (m: number) => Math.max(0.93, Math.min(1.07, 1 + (m - MORALE_DEFAULT) / 430));
@@ -985,21 +1004,21 @@ function regenInfo(id: string): { debut: number; a0: number } | null {
   const parsed = parseRegenPlayerId(id);
   return parsed ? { debut: parsed.debut, a0: parsed.ageAtDebut } : null;
 }
-function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number, youthAge?: Record<string, number>): number {
+export function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number, youthAge?: Record<string, number>): number {
   const rg = regenInfo(p.id);
   if (rg) return rg.a0 + Math.floor(Math.max(0, split - rg.debut) / 3);
   return baseAge(p, youthAge) + Math.floor((split - 1) / 3);
 }
 // potencial = teto de OVR. Jovem bom tem espaço pra crescer (S/A); veterano já
 // está no teto (sem crescimento). Determinístico por jogador.
-function playerPotentialOvr(p: Player, age: number): number {
+export function playerPotentialOvr(p: Player, age: number): number {
   const base = playerOvr(p);
   const room = age <= 18 ? 9 : age <= 20 ? 7 : age <= 22 ? 4 : age <= 24 ? 2 : age <= 26 ? 1 : 0;
   const talent = room > 0 ? hashStr(`pot:${p.id}`) % 4 : 0; // 0-3 de variação de talento
   return Math.min(99, base + room + talent);
 }
 export type PotTier = 'S' | 'A' | 'B' | 'C';
-function potentialTier(potOvr: number): PotTier {
+export function potentialTier(potOvr: number): PotTier {
   return potOvr >= 90 ? 'S' : potOvr >= 86 ? 'A' : potOvr >= 82 ? 'B' : 'C';
 }
 
@@ -1353,6 +1372,29 @@ function hltvStatline(p: Player, role: Role, split: number): HltvStat {
   const adr = Math.round(68 + (aim - 70) / 1.5 + (rating - 1.05) * 32 + u('d') * 8);
   return { rating, kast, adr, entry, awpKills, impact };
 }
+function scoutOppPlayerStats(
+  p: { id: string; sourcePlayerId?: string; nick: string; name: string; country: string; role: Role; role2?: Role; aim: number; clutch: number; consistency: number; awp: number; igl: number },
+  split: number,
+  seasonStats: { id: string; nick: string; rating: number; adr: number }[],
+): { rating: number; adr: number } {
+  const st = seasonStats.find((s) => s.id === p.id || s.id === p.sourcePlayerId || s.nick === p.nick);
+  if (st && st.rating > 0) return { rating: st.rating, adr: st.adr };
+  const pl: Player = {
+    id: p.sourcePlayerId ?? p.id,
+    nick: p.nick,
+    name: p.name,
+    country: p.country,
+    role: p.role,
+    role2: p.role2,
+    aim: p.aim,
+    clutch: p.clutch,
+    consistency: p.consistency,
+    awp: p.awp,
+    igl: p.igl,
+  };
+  const sl = hltvStatline(pl, p.role, split);
+  return { rating: sl.rating, adr: sl.adr };
+}
 // proxy de TÍTULOS / runs fundas: times fortes ganham mais troféus (entra no currículo).
 function teamTitlePower(team: TeamSeason): number {
   return Math.max(0, Math.min(1, (team.teamwork - 70) / 20));
@@ -1703,7 +1745,15 @@ interface Props {
   founder?: boolean; // conta Fundador: pode subir logo própria ao fundar a org
 }
 
-export function CareerScreen({ onExit, founder = false }: Props) {
+export function CareerScreen(props: Props) {
+  return (
+    <CareerConfirmProvider>
+      <CareerScreenInner {...props} />
+    </CareerConfirmProvider>
+  );
+}
+
+function CareerScreenInner({ onExit, founder = false }: Props) {
   const { lang } = useLang();
   setCareerLang(lang); // idioma a nivel de modulo: ct() funciona em todos os subcomponentes
   const [save, setSave] = useState<CareerSave>(() => loadSave());
@@ -1781,12 +1831,15 @@ export function CareerScreen({ onExit, founder = false }: Props) {
   const [showOnb, setShowOnb] = useState(() => { try { return !localStorage.getItem('rtm-onboarded-v1'); } catch { return false; } });
   const dismissOnb = () => { try { localStorage.setItem('rtm-onboarded-v1', '1'); } catch { /* sem storage */ } setShowOnb(false); };
   const [promoting, setPromoting] = useState<string | null>(null); // prospecto escolhendo quem sai do elenco
-  const [profilePlayer, setProfilePlayer] = useState<Player | null>(null); // perfil detalhado do jogador (modal)
+  const [playerRouteId, setPlayerRouteId] = useState<string | null>(() => parseCareerPlayerId());
+  const [teamRouteId, setTeamRouteId] = useState<string | null>(() => parseCareerTeamId());
+  const [canNavBack, setCanNavBack] = useState(() => canCareerGoBack());
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [newsCat, setNewsCat] = useState<NewsCat | 'all'>('all'); // filtro da Inbox
   const [vrsMode, setVrsMode] = useState<'regiao' | 'geral'>('geral'); // ranking VRS: por região ou geral
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
+  const { askConfirm } = useCareerConfirm();
   // registro parcial do split, finalizado após o Major (se houver)
   const pendingSplit = useRef<SplitRecord | null>(null);
 
@@ -1796,6 +1849,53 @@ export function CareerScreen({ onExit, founder = false }: Props) {
       persist(next);
       return next;
     });
+  };
+
+  useEffect(() => {
+    initCareerNav(window.location.pathname);
+    const syncRoutes = () => {
+      setPlayerRouteId(parseCareerPlayerId());
+      setTeamRouteId(parseCareerTeamId());
+      setCanNavBack(canCareerGoBack());
+    };
+    window.addEventListener('popstate', syncRoutes);
+    syncRoutes();
+    return () => window.removeEventListener('popstate', syncRoutes);
+  }, []);
+
+  const closeCareerOverlays = () => {
+    if (playerRouteId || teamRouteId || parseCareerPlayerId() || parseCareerTeamId()) {
+      navigateCareerHub();
+      setPlayerRouteId(null);
+      setTeamRouteId(null);
+      setCanNavBack(canCareerGoBack());
+    }
+  };
+
+  const openPlayerProfile = (p: Player) => {
+    const baseId = playerOrgId(p.id);
+    const isOwn = save.squad.some((sig) => {
+      const f = findSigning(sig);
+      return f && (f.player.id === baseId || sig.playerId === baseId);
+    }) || !!save.youth?.[baseId] || !!save.academy?.some((a) => a.id === baseId);
+    const routeId = isOwn ? playerRuntimeId(p.id) : baseId;
+    navigateCareerPlayer(routeId);
+    setPlayerRouteId(routeId);
+    setCanNavBack(canCareerGoBack());
+  };
+
+  const closePlayerProfile = () => {
+    careerHistoryBack();
+  };
+
+  const openTeamProfile = (teamId: string) => {
+    navigateCareerTeam(teamId);
+    setTeamRouteId(teamId);
+    setCanNavBack(canCareerGoBack());
+  };
+
+  const closeTeamProfile = () => {
+    careerHistoryBack();
   };
 
   useEffect(() => {
@@ -2992,10 +3092,12 @@ export function CareerScreen({ onExit, founder = false }: Props) {
     // nasce com o roster antigo congelado no snapshot e nunca pega as edições.
     if (!editsReady) {
       return (
-        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 14 }}>
-          <div className="spinner" />
-          <p className="muted">{ct('Carregando os elencos atualizados…')}</p>
-        </div>
+        <CareerDashFrame onExit={onExit} title={ct('Modo carreira')}>
+          <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: 14 }}>
+            <div className="spinner" />
+            <p className="muted">{ct('Carregando os elencos atualizados…')}</p>
+          </div>
+        </CareerDashFrame>
       );
     }
     const startFromOrg = (s: OrgStart) => {
@@ -3016,13 +3118,15 @@ export function CareerScreen({ onExit, founder = false }: Props) {
       return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} />;
     }
     return (
-      <OrgSelect
-        teams={currentEra}
-        onExit={onExit}
-        onFictional={() => setOrgChoice('fictional')}
-        onScenarios={() => setOrgChoice('scenario')}
-        onStart={startFromOrg}
-      />
+      <CareerDashFrame onExit={onExit} title={ct('Assumir organização')}>
+        <OrgSelect
+          teams={currentEra}
+          onExit={onExit}
+          onFictional={() => setOrgChoice('fictional')}
+          onScenarios={() => setOrgChoice('scenario')}
+          onStart={startFromOrg}
+        />
+      </CareerDashFrame>
     );
   }
 
@@ -3109,6 +3213,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
       );
     }
     return (
+      <CareerDashFrame onExit={onExit} title={ct('Mercado de transferências')}>
       <MarketScreen
         save={save}
         market={market}
@@ -3164,6 +3269,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
           setStage('circuit');
         }}
       />
+      </CareerDashFrame>
     );
   }
 
@@ -3178,6 +3284,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
     // Chance maior pra quem já está perto do topo da sua divisão (forte no split).
     const inviteTier = save.tier > 1 && hashStr(`invite:${save.org?.tag ?? ''}:${save.split}`) % 100 < 35 ? save.tier - 1 : null;
     return (
+      <CareerDashFrame onExit={onExit} title={ct('Escolher campeonato')}>
       <CircuitPicker
         circuits={circuits}
         split={save.split}
@@ -3188,6 +3295,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
         onBack={() => setStage('market')}
         onPick={(c) => startSplit(save, c)}
       />
+      </CareerDashFrame>
     );
   }
 
@@ -3851,22 +3959,23 @@ export function CareerScreen({ onExit, founder = false }: Props) {
   // navegação em 2 níveis: grupos no topo + sub-abas do grupo ativo. Reduz a
   // confusão de 15 abas planas pra ~5 grupos com 1-5 itens cada.
   const TAB_LABEL: Record<HubTab, string> = {
-    overview: ct('Visão geral'), major: '★ Major', calendar: ct('Calendário'), results: ct('Resultados'),
+    overview: ct('Visão geral'), major: 'Major', calendar: ct('Calendário'), results: ct('Resultados'),
     standings: ct('Classificação'), bracket: ct('Chave'), squad: ct('Elenco'), academy: ct('Academia'),
     market: ct('Negociações'), finance: ct('Finanças'), vrs: ct('Ranking VRS'), top20: 'Top 20 HLTV',
-    world: ct('Cena mundial'), inbox: 'Inbox', history: ct('História da org'),
+    world: ct('Cena mundial'), inbox: ct('Tarefas'), history: ct('História da org'),
   };
   const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
-    { id: 'inicio', label: `🏠 ${ct('Início')}`, tabs: ['overview'] },
-    { id: 'comp', label: `🏆 ${ct('Competição')}`, tabs: [...(majorActive ? ['major' as HubTab] : []), 'calendar', 'bracket', 'results', 'standings'] },
-    { id: 'time', label: `👥 ${ct('Meu time')}`, tabs: ['squad', 'academy', 'market', 'finance'] },
-    { id: 'mundo', label: `🌐 ${ct('Mundo')}`, tabs: ['vrs', 'top20', 'world'] },
-    { id: 'org', label: `📨 ${ct('Organização')}`, tabs: ['inbox', 'history'] },
+    { id: 'dashboard', label: 'Dashboard', tabs: ['overview', 'inbox'] },
+    { id: 'team', label: ct('Meu time'), tabs: ['squad', 'academy'] },
+    { id: 'ingame', label: ct('Em jogo'), tabs: [...(majorActive ? ['major' as HubTab] : []), 'bracket', 'results', 'standings'] },
+    { id: 'transfers', label: ct('Transferências'), tabs: ['market', 'finance'] },
+    { id: 'news', label: ct('Notícias HLTV'), tabs: ['inbox'] },
+    { id: 'stats', label: ct('Estatísticas'), tabs: ['vrs', 'top20', 'world', 'history'] },
   ];
   const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);
   const tabLabelFull = (id: HubTab) =>
-    id === 'inbox' && unread > 0 ? `Inbox (${unread})`
-    : id === 'finance' && expiringCount > 0 ? `${ct('Finanças ⚠️')}${expiringCount}`
+    id === 'inbox' && unread > 0 ? `${ct('Tarefas')} (${unread})`
+    : id === 'finance' && expiringCount > 0 ? `${ct('Finanças')} (${expiringCount})`
     : TAB_LABEL[id];
   const activeGroup = HUB_GROUPS.find((g) => g.tabs.includes(hubTab)) ?? HUB_GROUPS[0];
 
@@ -3879,72 +3988,248 @@ export function CareerScreen({ onExit, founder = false }: Props) {
 
   // recomeçar a carreira do zero (disponível pra TODOS, inclusive grátis)
   const resetCareer = () => {
-    if (!confirm(ct('Resetar a carreira e começar do ZERO? Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'))) return;
-    wipeActiveSlot(); const fresh = emptySave(); persist(fresh); setSave(fresh); setOrgChoice('select'); setStage('found');
+    askConfirm({
+      title: ct('Resetar carreira'),
+      message: ct('Isso apaga todo o seu progresso (org, elenco, títulos, dinheiro). Não dá pra desfazer.'),
+      confirmLabel: ct('Resetar e começar do zero'),
+      danger: true,
+      onConfirm: () => {
+        wipeActiveSlot();
+        const fresh = emptySave();
+        persist(fresh);
+        setSave(fresh);
+        setOrgChoice('select');
+        setStage('found');
+      },
+    });
+  };
+
+  const userVrs = vrsAll.find((t) => t.isUser)?.vrs ?? save.vrs ?? 0;
+  const dateLabel = `Split ${save.split} · ${save.circuit?.name?.split(' ').slice(0, 2).join(' ') ?? '2026'}`;
+
+  const resolvePlayerById = (id: string): Player | null => {
+    const baseId = playerOrgId(id);
+    for (const sig of save.squad) {
+      const f = findSigning(sig);
+      if (f && (f.player.id === baseId || sig.playerId === baseId)) {
+        return { ...f.player, id: playerRuntimeId(f.player.id) };
+      }
+    }
+    const fromSave = save.youth?.[baseId] ?? save.academy?.find((a) => a.id === baseId);
+    if (fromSave) return fromSave;
+    if (save.league) {
+      for (const t of save.league.teams) {
+        for (const p of t.players) {
+          if (p.id === baseId || p.sourcePlayerId === baseId || p.id === id) {
+            return {
+              id: p.sourcePlayerId ?? p.id,
+              nick: p.nick,
+              name: p.name,
+              country: p.country,
+              role: p.role,
+              role2: p.role2,
+              aim: p.aim,
+              clutch: p.clutch,
+              consistency: p.consistency,
+              awp: p.awp,
+              igl: p.igl,
+            };
+          }
+        }
+      }
+    }
+    for (const t of oppEra) {
+      const p = t.players.find((pl) => pl.id === baseId);
+      if (p) return p;
+    }
+    return null;
+  };
+
+  const resolveTeamById = (id: string): TTeam | null => {
+    if (save.league) {
+      const lt = save.league.teams.find((t) => t.id === id);
+      if (lt) return lt;
+    }
+    if (id === 'user') {
+      const ut = buildTeam(save);
+      if (!ut) return null;
+      const synced = syncUser({ ...ut, id: 'user', isUser: true });
+      if (save.league) {
+        const lt = save.league.teams.find((t) => t.id === 'user');
+        if (lt) return { ...synced, wins: lt.wins, losses: lt.losses, roundDiff: lt.roundDiff, status: lt.status };
+      }
+      return synced;
+    }
+    const ts = oppEra.find((t) => t.id === id);
+    if (ts) return teamSeasonToTTeam(ts);
+    return null;
+  };
+
+  const personalityUi: Record<PlayerPersonality, { label: string; desc: string }> = {
+    leader: { label: ct('Líder nato'), desc: ct('Segura o vestiário sob pressão e perde menos moral em fases ruins.') },
+    mercenary: { label: ct('Ambicioso'), desc: ct('Valoriza contratos e oportunidades; atrai mais propostas de organizações maiores.') },
+    prodigy: { label: ct('Prodígio'), desc: ct('Pode se desenvolver mais rápido enquanto ainda é jovem.') },
+    hothead: { label: ct('Cabeça-quente'), desc: ct('Oscila mais com resultados e acumula carga com maior facilidade.') },
+    resilient: { label: ct('Resiliente'), desc: ct('Recupera-se melhor da pressão e acumula menos fadiga.') },
   };
 
   return (
-    <div className="fade-in career-hub">
-      {/* Header do design (Shell): top nav sticky + ticker de partidas */}
-      <header className="rtm-hdr">
-        <div className="rtm-hdr-inner">
-          <span className="rtm-hdr-logo" onClick={onExit} title={ct('Voltar ao menu')}>
-            <span className="rtm-hdr-logo-mark" />ROAD TO <span>MAJOR</span>
-          </span>
-          <button className="rtm-modes" onClick={onExit}>⇤ {ct('Modos')}</button>
-          <button className="rtm-modes" onClick={resetCareer} title={ct('Apagar tudo e recomeçar do zero')}>↺ {ct('Recomeçar')}</button>
-          <nav className="rtm-hdr-nav">
-            {HUB_GROUPS.map((g) => (
-              <button key={g.id} className={`rtm-hdr-tab${activeGroup.id === g.id ? ' on' : ''}${g.tabs.some(tabAlert) ? ' alert' : ''}`}
-                onClick={() => { setHubTab(g.tabs[0]); setSelSeries(null); }}>
-                {g.label.replace(/^[^\s]+\s/, '')}
-              </button>
-            ))}
-          </nav>
-          <LangSwitcher />
-          <span className="rtm-mgr-chip" title={ct('Sua organização')}>
-            <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={26} logoUrl={save.org?.logo} />
-            <span className="rtm-mgr-id"><b>{save.org?.name}</b><i>{formatMoney(save.budget)}</i></span>
-          </span>
-        </div>
-        <div className="rtm-ticker">
-          <div className="rtm-ticker-inner">
-            <span className="rtm-ticker-label">{ct('Partidas')}</span>
-            {(league.rounds[league.current] ?? []).slice(0, 8).map((mt, i) => {
-              const a = leagueTeam(league, mt.a), b = leagueTeam(league, mt.b);
-              const mine = mt.a === 'user' || mt.b === 'user';
-              return (
-                <button key={i} className={`rtm-ticker-pill${mine ? ' me' : ''}`} onClick={() => { if (mt.result) setSelSeries({ series: mt.result, teams: [a, b] }); else setHubTab('calendar'); }}>
-                  <span className={mt.result && mt.result.winner === 0 ? 'rtm-ticker-sc' : undefined}>{a.tag}</span>
-                  <span className="rtm-ticker-vs">{mt.result ? '·' : 'vs'}</span>
-                  <span className={mt.result && mt.result.winner === 1 ? 'rtm-ticker-sc' : undefined}>{b.tag}</span>
-                </button>
-              );
+    <>
+    <CareerShell
+      groups={HUB_GROUPS}
+      activeGroupId={activeGroup.id}
+      activeTab={hubTab}
+      tabLabel={(id) => tabLabelFull(id as HubTab)}
+      tabAlert={(id) => tabAlert(id as HubTab)}
+      onGroupChange={(_gid, tab) => { setHubTab(tab as HubTab); setSelSeries(null); }}
+      onTabChange={(id) => {
+        setHubTab(id as HubTab);
+        setSelSeries(null);
+        if (id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 });
+      }}
+      orgTag={save.org?.tag ?? ''}
+      orgColors={save.org?.colors ?? ['#101820', '#61a8dd']}
+      orgLogo={save.org?.logo}
+      onExit={onExit}
+      onReset={resetCareer}
+      onContinue={myMatch ? playMine : undefined}
+      dateLabel={dateLabel}
+      showOnboarding={() => setShowOnb(true)}
+      onSearch={() => setHubTab('squad')}
+      onBeforeNav={closeCareerOverlays}
+      onHistoryBack={careerHistoryBack}
+      onHistoryForward={careerHistoryForward}
+      canGoBack={canNavBack}
+    >
+      {playerRouteId && (() => {
+        const p = resolvePlayerById(playerRouteId);
+        if (!p) {
+          return (
+            <div className="pp-not-found">
+              <p>{ct('Jogador não encontrado.')}</p>
+              <button type="button" onClick={closePlayerProfile}>{ct('Voltar')}</button>
+            </div>
+          );
+        }
+        const rid = playerRuntimeId(p.id);
+        const oid = playerOrgId(p.id);
+        const age = effectiveAge(p, save.split, save.youthAge);
+        const pot = playerPotentialOvr(p, age);
+        const tier = potentialTier(pot);
+        const phase = playerPhase(oid, age);
+        const ovr = playerOvr(p);
+        const personality = playerPersonality(oid);
+        const mi = moraleInfo(save.morale?.[oid] ?? MORALE_DEFAULT);
+        const contractUntil = save.contracts?.[oid];
+        const left = contractUntil != null ? contractUntil - save.split + 1 : null;
+        const contractLeft = left == null ? '—' : left <= 0 ? ct('vencido') : `${left} split${left > 1 ? 's' : ''}`;
+        const developmentProgress = Math.max(0, Math.min(100, Math.round((ovr - 40) / Math.max(1, pot - 40) * 100)));
+        const cur = seasonStatsMemo.find((s) => s.id === rid || s.id === oid || s.nick === p.nick);
+        const playerTeam = (() => {
+          if (save.league) {
+            const lt = save.league.teams.find((t) => t.players.some((pl) => (pl.sourcePlayerId ?? pl.id) === oid || pl.id === oid));
+            if (lt) return { name: lt.name, tag: lt.tag, colors: lt.colors, logo: lt.logoUrl };
+          }
+          const ts = oppEra.find((t) => t.players.some((pl) => pl.id === oid));
+          if (ts) return { name: ts.team, tag: ts.tag, colors: ts.colors, logo: ts.logoUrl ?? logoForTeam(ts) };
+          return null;
+        })();
+        const displayOrg = playerTeam ?? (save.org ? { name: save.org.name, tag: save.org.tag, colors: save.org.colors, logo: save.org.logo } : null);
+        return (
+          <CareerPlayerPage
+            player={{ ...p, id: rid }}
+            orgName={displayOrg?.name ?? ''}
+            orgTag={displayOrg?.tag}
+            orgColors={displayOrg?.colors}
+            orgLogo={displayOrg?.logo}
+            split={save.split}
+            age={age}
+            pot={pot}
+            potTier={tier}
+            phaseLabel={ct(PHASE_LABEL[phase])}
+            ovr={ovr}
+            peakOvr={Math.max(save.peakOvr?.[oid] ?? 0, ovr)}
+            personalityLabel={personalityUi[personality].label}
+            personalityDesc={personalityUi[personality].desc}
+            morale={save.morale?.[oid] ?? MORALE_DEFAULT}
+            moraleLabel={mi.label}
+            moraleIcon={mi.icon}
+            fatigue={save.fatigue?.[oid] ?? 0}
+            valueLabel={formatMoney(playerValue({ ...p, ovr }))}
+            wageLabel={formatMoney(playerWage(p))}
+            contractLeft={contractLeft}
+            evoTotal={save.evo?.[oid] ?? 0}
+            developmentProgress={developmentProgress}
+            focused={save.trainingFocus === oid}
+            reducedLoad={save.restingPlayers?.includes(oid) ?? false}
+            trainingLevel={normalizeFacilities(save.facilities).training}
+            career={deriveCareer(save.careerStats?.[rid])}
+            cur={cur}
+            seasonGames={cur?.maps ?? 0}
+            seasonWins={0}
+            titles={save.titles ?? 0}
+            onToggleFocus={() => update({ trainingFocus: save.trainingFocus === oid ? null : oid })}
+            onToggleRest={() => update({
+              restingPlayers: save.restingPlayers?.includes(oid)
+                ? (save.restingPlayers ?? []).filter((pid) => pid !== oid)
+                : (save.restingPlayers?.length ?? 0) < 2 ? [...(save.restingPlayers ?? []), oid] : save.restingPlayers,
             })}
-          </div>
-        </div>
-      </header>
-      {activeGroup.tabs.length > 1 && (
-        <div className="rtm-subbar">
-          <div className="rtm-subbar-inner">
-            {activeGroup.tabs.map((id) => (
-              <button key={id} className={`rtm-subtab${hubTab === id ? ' on' : ''}${tabAlert(id) ? ' alert' : ''}`}
-                onClick={(e) => { setHubTab(id); setSelSeries(null); e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); if (id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 }); }}>
-                {tabLabelFull(id)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* conteúdo da aba com transição (key força remount → reanima na troca) */}
-      <div className="tab-fade" key={hubTab}>
+            onBack={closePlayerProfile}
+          />
+        );
+      })()}
+      {!playerRouteId && teamRouteId && (() => {
+        const team = resolveTeamById(teamRouteId);
+        if (!team) {
+          return (
+            <div className="tp-not-found">
+              <p>{ct('Time não encontrado.')}</p>
+              <button type="button" onClick={closeTeamProfile}>{ct('Voltar')}</button>
+            </div>
+          );
+        }
+        const isUserTeam = team.id === 'user' || team.isUser;
+        const vrsRank = vrsAll.findIndex((t) => t.id === team.id) + 1;
+        const vrsPoints = vrsAll.find((t) => t.id === team.id)?.vrs ?? 0;
+        const teamPotentialMap: Record<string, number> = {};
+        const teamAges: Record<string, number> = {};
+        for (const p of team.players) {
+          const pid = p.sourcePlayerId ?? p.id;
+          const pl: Player = {
+            id: pid, nick: p.nick, name: p.name, country: p.country, role: p.role, role2: p.role2,
+            aim: p.aim, clutch: p.clutch, consistency: p.consistency, awp: p.awp, igl: p.igl,
+          };
+          const age = effectiveAge(pl, save.split, save.youthAge);
+          teamAges[pid] = age;
+          teamPotentialMap[pid] = playerPotentialOvr(pl, age);
+        }
+        return (
+          <CareerTeamPage
+            team={team}
+            league={save.league}
+            vrsRank={vrsRank}
+            vrsPoints={vrsPoints}
+            isUserTeam={isUserTeam}
+            budgetLabel={isUserTeam ? formatMoney(save.budget) : undefined}
+            wageLabel={isUserTeam ? formatMoney(payroll) : undefined}
+            titles={isUserTeam ? (save.titles ?? 0) : 0}
+            split={save.split}
+            contracts={save.contracts ?? {}}
+            potentialMap={teamPotentialMap}
+            ages={teamAges}
+            onBack={closeTeamProfile}
+            onOpenPlayer={openPlayerProfile}
+          />
+        );
+      })()}
+      {!playerRouteId && !teamRouteId && (
+      <>
       {/* ===== INBOX (manchetes da imprensa + diretoria) ===== */}
       {hubTab === 'inbox' && (() => {
         const all = save.news ?? [];
         const shown = newsCat === 'all' ? all : all.filter((n) => (n.cat ?? 'scene') === newsCat);
         return (
-        <Panel title={ct('Caixa de entrada')} accent="gold">
+        <Panel dash title={ct('Caixa de entrada')} accent="gold">
             {all.length === 0 ? (
               <p className="muted small">{ct('Sem novidades por enquanto. As manchetes aparecem ao longo da carreira (resultados, diretoria, mercado, cenário e social).')}</p>
             ) : (
@@ -3964,7 +4249,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                   {shown.map((n) => (
                     n.cat === 'social' ? (
                       <div key={n.id} className="news-item social">
-                        <span className="news-ic">💬</span>
+                        <span className="news-ic"><CareerIcon name="chat" size={18} /></span>
                         <div className="news-body">
                           <div className="news-title"><span className="news-handle">{n.handle}</span> <span className="news-split">Split {n.split}</span></div>
                           <div className="news-text">{n.body}</div>
@@ -3972,7 +4257,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                       </div>
                     ) : (
                       <div key={n.id} className={`news-item ${n.tone}`}>
-                        <span className="news-ic">{n.icon}</span>
+                        <span className="news-ic"><CareerIconLegacy icon={n.icon} size={18} /></span>
                         <div className="news-body">
                           <div className="news-title">{n.title} <span className="news-split">Split {n.split}</span></div>
                           <div className="news-text muted small">{n.body}</div>
@@ -3988,27 +4273,11 @@ export function CareerScreen({ onExit, founder = false }: Props) {
         );
       })()}
 
-      {/* ===== VISÃO GERAL ===== */}
+      {/* ===== VISÃO GERAL (dashboard estilo análise pós-partida) ===== */}
       {hubTab === 'overview' && (() => {
-        // ===== HUB redesenhado fiel ao design kit "Road to Major" =====
-        const prestige = careerPrestige(save);
-        const fans = careerFans(save);
         const squadPlayers = buildTeam(save)?.players ?? [];
         const avg = squadPlayers.length ? Math.round(squadPlayers.reduce((a, p) => a + playerOvr(p), 0) / squadPlayers.length) : 0;
-        const orgColor = save.org?.colors?.[0] ?? '#101820';
-        // forma: últimas 5 séries do usuário na liga
         const form = clubForm(league);
-        const form5 = form.slice(-5);
-        // caminho até o título
-        const inPlayoff = !!save.playoff;
-        const groupsDone = inPlayoff || leagueDone(league);
-        const PATH: [string, string][] = [
-          [ct('Grupos'), groupsDone ? 'done' : 'now'],
-          [ct('Semifinal'), inPlayoff ? 'now' : ''],
-          [ct('Final'), ''],
-          [ct('Título'), ''],
-        ];
-        // química do elenco (dados reais: moral + entrosamento + funções)
         const moraleVals = squadPlayers.map((p) => save.morale?.[p.id] ?? MORALE_DEFAULT);
         const avgMorale = moraleVals.length ? Math.round(moraleVals.reduce((a, b) => a + b, 0) / moraleVals.length) : 70;
         const fam = save.playbookXp ?? 0;
@@ -4016,156 +4285,94 @@ export function CareerScreen({ onExit, founder = false }: Props) {
         const hasIgl = squadPlayers.some((p) => p.role === 'IGL' || p.role2 === 'IGL');
         const roleOk = (hasAwp ? 1 : 0) + (hasIgl ? 1 : 0);
         const chem = Math.round(0.45 * avgMorale + 0.35 * fam + 0.2 * (roleOk / 2) * 100);
-        // objetivos: metas do cenário, senão objetivos padrão da temporada
-        const objectives: [string, boolean][] = save.scenario
-          ? save.scenario.goals.map((g) => [g.text, g.done] as [string, boolean])
-          : [
-              [ct('Classificar ao mata-mata'), groupsDone],
-              [ct('Vencer uma série MD3'), form.includes('W')],
-              [ct('Erguer o título do split'), (save.titles ?? 0) > 0],
-            ];
-        const recent = league.rounds.flat().filter((mt) => mt.result).slice(-5).reverse();
         const nextRivalryScore = opp ? rivalryScore(save.rivalries, opp.id) : 0;
         const nextRivalry = rivalryLabel(nextRivalryScore);
         const roundLabel = league.gsl ? ct(GSL_ROUND_LABELS[league.current] ?? 'Fase de grupos') : `${ct('Rodada')} ${league.current + 1}`;
         const boLabel = (myMatch?.bo ?? 3) === 1 ? 'MD1' : (myMatch?.bo ?? 3) === 5 ? 'MD5' : 'MD3';
-        const pill: React.CSSProperties = { textAlign: 'center', padding: '8px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.55)', border: '1px solid var(--rtm-border-soft)' };
-        const pillLabel: React.CSSProperties = { fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 };
-        const railCard: React.CSSProperties = { background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', padding: '14px 16px' };
-        const railLabel: React.CSSProperties = { fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '12px' };
-        const vsSide: React.CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' };
-        const vsTag: React.CSSProperties = { fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '17px', color: 'var(--rtm-text-strong)' };
+        const venueMeta_ = eventMeta(save.circuit?.name ?? '', save.tier ?? 3);
+        const wageTotal = save.squad.reduce((acc, sig) => {
+          const f = findSigning(sig);
+          return acc + (f ? playerWage(f.player) : 0);
+        }, 0);
+        const tasks = buildDashboardTasks(save, squadPlayers, expiringCount);
+        const recentMatches: RecentMatchRow[] = [];
+        for (const mt of league.rounds.flat()) {
+          if (!mt.result || (mt.a !== 'user' && mt.b !== 'user')) continue;
+          const userWon = (mt.result.winner === 0 ? mt.a : mt.b) === 'user';
+          const oppId = mt.a === 'user' ? mt.b : mt.a;
+          const oppTeam = leagueTeam(league, oppId);
+          recentMatches.push({
+            key: `${mt.a}-${mt.b}-${recentMatches.length}`,
+            label: save.circuit?.name ?? ct('Circuito'),
+            opponent: oppTeam.name,
+            score: `${mt.result.mapScore[0]}:${mt.result.mapScore[1]}`,
+            won: userWon,
+            maps: mt.result.maps.map((mp) => `${MAP_LABELS[mp.map]} ${mp.score[0]}-${mp.score[1]}`),
+          });
+        }
+        const oppRank = opp ? vrsAll.findIndex((t) => t.id === opp.id) + 1 : 0;
+        const potentialMap: Record<string, number> = {};
+        const ages: Record<string, number> = {};
+        for (const p of squadPlayers) {
+          const age = effectiveAge(p, save.split, save.youthAge);
+          ages[p.id] = age;
+          potentialMap[p.id] = playerPotentialOvr(p, age);
+        }
+        const oppScoutStats: Record<string, { rating: number; adr: number }> = {};
+        if (opp) {
+          for (const p of opp.players) {
+            oppScoutStats[p.id] = scoutOppPlayerStats(p, save.split, seasonStats);
+          }
+        }
         return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* BANNER cinematográfico da org */}
-          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', minHeight: '150px', boxShadow: 'var(--rtm-shadow-banner)' }}>
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/nuke.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.26 }} />
-            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${orgColor}22 0%, rgba(13,17,22,.9) 55%)` }} />
-            <div className="hub-banner-ctrl" style={{ position: 'absolute', top: '10px', right: '12px', display: 'flex', gap: '6px', zIndex: 2 }}>
-              <button className="btn ghost small" title={ct('Rever o tutorial')} onClick={() => setShowOnb(true)}>❔</button>
-              <button className="btn ghost small" title={ct('Apagar tudo e recomeçar do zero')} onClick={resetCareer}>↺ {ct('Recomeçar')}</button>
-              <button className="btn ghost small" onClick={onExit}>{ct('← Sair')}</button>
-            </div>
-            <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>
-              <span style={{ width: '70px', height: '70px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '26px', color: '#fff', background: `linear-gradient(160deg, ${orgColor}, #20303f)`, boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.12)', flexShrink: 0, overflow: 'hidden' }}>
-                {save.org?.logo ? <img src={save.org.logo} alt="" style={{ width: '64%', height: '64%', objectFit: 'contain' }} /> : (save.org?.tag ?? '??').slice(0, 2).toUpperCase()}
-              </span>
-              <div style={{ flex: 1, minWidth: '200px' }}>
-                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>{ct('Carreira')} · ★{prestige} {ct('prestígio')} · {save.titles ?? 0}× {ct('título')}</div>
-                <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '34px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-text-strong)', lineHeight: 1 }}>{save.org?.name}</h1>
-                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>{squadPlayers.length > 0 && <OrgFlag players={squadPlayers} title={ct('Nacionalidade do core')} />} {save.circuit?.name} · Split {save.split}{save.region ? ` · ${ct(MACRO_REGION_LABELS[save.region])}` : ''}</div>
-              </div>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                {([['OVR', `${avg}`, 'var(--rtm-gold)'], [ct('Caixa'), formatMoney(save.budget), 'var(--rtm-green-bright)'], [ct('Fãs'), formatFans(fans), 'var(--rtm-text-strong)']] as [string, string, string][]).map(([k, v, c]) => (
-                  <div key={k} style={pill}>
-                    <div style={pillLabel}>{k}</div>
-                    <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: c }}>{v}</div>
-                  </div>
-                ))}
-                <div style={pill}>
-                  <div style={{ ...pillLabel, marginBottom: '4px' }}>{ct('Forma')}</div>
-                  <span style={{ display: 'flex', gap: '3px' }}>{(form5.length ? form5 : (['-', '-', '-', '-', '-'] as const)).map((f, i) => <span key={i} style={{ width: '16px', height: '16px', borderRadius: '4px', fontSize: '10px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: f === 'W' ? '#06121d' : '#fff', background: f === 'W' ? 'var(--rtm-green-bright)' : f === 'L' ? 'var(--rtm-red)' : 'var(--rtm-panel-3)' }}>{f}</span>)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* GRID principal: coluna + rail */}
-          <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '16px', alignItems: 'start' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* PRÓXIMO JOGO cinematográfico */}
-              {opp && myMatch ? (
-                <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-gold-soft)', boxShadow: '0 0 0 1px rgba(216,169,67,.15), var(--rtm-shadow-banner)' }}>
-                  <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/mirage.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.2 }} />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(13,17,22,.82), rgba(13,17,22,.95))' }} />
-                  <div style={{ position: 'relative', padding: '18px 22px' }}>
-                    <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700, marginBottom: '14px' }}>{ct('Próximo jogo')} · {roundLabel} · {boLabel}</div>
-                    {nextRivalry !== 'none' && <div className={`career-rivalry-badge ${nextRivalry}`}>⚔ {ct('CLÁSSICO')} · {ct('Rivalidade nível')} {nextRivalryScore}/{12} · +{Math.min(1.8, 0.6 + (nextRivalryScore - RIVALRY_THRESHOLD) * 0.2).toFixed(1)} {ct('foco')}</div>}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '28px', flexWrap: 'wrap' }}>
-                      <span style={vsSide}><TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={56} logoUrl={save.org?.logo} /><span style={vsTag}>{save.org?.tag}</span></span>
-                      <span style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '28px', color: 'var(--rtm-gold)', letterSpacing: '2px' }}>VS</span>
-                      <button type="button" onClick={() => setSelTeam(opp)} style={{ ...vsSide, background: 'none', border: 'none', cursor: 'pointer' }}><TeamBadge tag={opp.tag} colors={opp.colors} size={56} logoUrl={opp.logoUrl} /><span style={vsTag}>{opp.tag}</span></button>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}><GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} /></div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
-                      <Button variant="gold" onClick={playMine}>▶ {ct('Jogar')}</Button>
-                      <Button variant="ghost" onClick={simMine}>⏩ {ct('Simular')}</Button>
-                      <Button variant="ghost" onClick={simWholeSplit}>⏩⏩ {ct('Split inteiro')}</Button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ ...railCard, textAlign: 'center', color: 'var(--rtm-dim)' }}>{ct('Rodada concluída. Avançando…')}</div>
-              )}
-
-              {/* CAMINHO até o título (stepper) */}
-              <div style={railCard}>
-                <div style={railLabel}>{ct('Caminho até o título')}</div>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  {PATH.map(([lbl, st], i) => (
-                    <Fragment key={lbl}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                        <span style={{ width: '30px', height: '30px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '13px', fontFamily: 'var(--rtm-font-cond)', background: st === 'done' ? 'var(--rtm-green-bright)' : st === 'now' ? 'var(--rtm-gold)' : 'var(--rtm-panel-3)', color: st ? '#06121d' : 'var(--rtm-faint)', boxShadow: st === 'now' ? '0 0 0 4px rgba(216,169,67,.2)' : 'none' }}>{st === 'done' ? '✓' : i + 1}</span>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: st === 'now' ? 'var(--rtm-gold)' : st === 'done' ? 'var(--rtm-text)' : 'var(--rtm-faint)', whiteSpace: 'nowrap' }}>{lbl}</span>
-                      </div>
-                      {i < PATH.length - 1 && <span style={{ flex: 1, height: '2px', background: st === 'done' ? 'var(--rtm-green-bright)' : 'var(--rtm-border)', margin: '0 6px 20px' }} />}
-                    </Fragment>
-                  ))}
-                </div>
-              </div>
-
-              {/* SEU CINCO TITULAR (cards FUT) */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <h2 style={{ margin: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '16px', letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Seu cinco titular')}</h2>
-                  <button type="button" onClick={() => setHubTab('squad')} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>{ct('Gerenciar elenco →')}</button>
-                </div>
-                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '6px' }}>
-                  {squadPlayers.map((p) => <FutCard key={p.id} player={p} onClick={() => setProfilePlayer(p)} />)}
-                </div>
-              </div>
-            </div>
-
-            {/* RAIL lateral */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={railCard}>
-                <div style={railLabel}>{ct('Objetivos')}</div>
-                {objectives.map(([o, d], i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', borderBottom: i < objectives.length - 1 ? '1px solid var(--rtm-border-soft)' : 'none' }}>
-                    <span style={{ width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, background: d ? 'var(--rtm-green-bright)' : 'transparent', color: '#06121d', border: d ? 'none' : '1px solid var(--rtm-border)' }}>{d ? '✓' : ''}</span>
-                    <span style={{ fontSize: '13px', color: d ? 'var(--rtm-dim)' : 'var(--rtm-text)', textDecoration: d ? 'line-through' : 'none' }}>{o}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={railCard}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Química do elenco')}</span>
-                  <span style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '17px', color: chem >= 70 ? 'var(--rtm-green-bright)' : chem >= 50 ? 'var(--rtm-gold)' : 'var(--rtm-red-bright)' }}>{chem}</span>
-                </div>
-                <div style={{ height: '7px', borderRadius: '4px', background: 'var(--rtm-bg-deep)', overflow: 'hidden', marginBottom: '12px' }}>
-                  <span style={{ display: 'block', height: '100%', width: `${chem}%`, borderRadius: '4px', background: 'linear-gradient(90deg, #3f8f4f, var(--rtm-green-bright))' }} />
-                </div>
-                {([[ct('Moral média'), avgMorale], [ct('Entrosamento'), fam], [ct('Funções AWP+IGL'), roleOk === 2 ? 100 : roleOk === 1 ? 50 : 0]] as [string, number][]).map(([k, v]) => (
-                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', padding: '4px 0' }}>
-                    <span style={{ color: 'var(--rtm-dim)' }}>{k}</span>
-                    <span style={{ color: v >= 60 ? 'var(--rtm-green-bright)' : v >= 40 ? 'var(--rtm-gold)' : 'var(--rtm-red-bright)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ ...railCard, padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--rtm-border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Em volta do circuito')}</span>
-                  <button type="button" onClick={() => setHubTab('results')} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontSize: '11px', fontWeight: 700 }}>{ct('Ver tudo')}</button>
-                </div>
-                <div style={{ padding: '4px 6px' }}>
-                  {recent.length ? recent.map((mt, i) => <MatchLine key={i} league={league} m={mt} onOpen={setSelSeries} />) : <p className="muted small" style={{ padding: '10px 8px' }}>{ct('Sem resultados ainda.')}</p>}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          <CareerOverview
+            save={{
+              org: save.org ?? undefined,
+              circuit: save.circuit ?? undefined,
+              split: save.split,
+              titles: save.titles,
+              budget: save.budget,
+              tier: save.tier,
+            }}
+            league={league}
+            opp={opp}
+            myMatch={myMatch ?? null}
+            squadPlayers={squadPlayers}
+            seasonStats={seasonStats}
+            form={form}
+            myVrsRank={myVrsRank}
+            vrsPoints={userVrs}
+            avgOvr={avg}
+            budgetLabel={formatMoney(save.budget)}
+            wageLabel={formatMoney(wageTotal)}
+            chem={chem}
+            fam={fam}
+            tasks={tasks}
+            vrsRanking={vrsAll}
+            recentMatches={recentMatches.reverse().slice(0, 6)}
+            oppRank={oppRank}
+            contracts={save.contracts ?? {}}
+            moraleMap={save.morale ?? {}}
+            potentialMap={potentialMap}
+            ages={ages}
+            roundLabel={roundLabel}
+            boLabel={boLabel}
+            venueLabel={venueMeta_.venue}
+            nextRivalry={nextRivalry}
+            nextRivalryScore={nextRivalryScore}
+            onPlay={playMine}
+            onSim={simMine}
+            onSimSplit={simWholeSplit}
+            onOpenTasks={() => setHubTab('inbox')}
+            onOpenCalendar={() => setHubTab('calendar')}
+            onOpenVrs={() => setHubTab('vrs')}
+            onOpenResults={() => setHubTab('results')}
+            onSquad={() => setHubTab('squad')}
+            onPickTeam={openTeamProfile}
+            onPickPlayer={openPlayerProfile}
+            oppScoutStats={oppScoutStats}
+            gamePlanPicker={<GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} />}
+          />
         );
       })()}
 
@@ -4173,13 +4380,13 @@ export function CareerScreen({ onExit, founder = false }: Props) {
       {hubTab === 'major' && majorT && (() => {
         const st = save.majorStage ?? 1;
         const entered = save.majorUserStage ?? 1;
-        const stLabel = st >= 4 ? '🏆 Champions Stage (playoffs)' : `Stage ${st} ${ct('de 3 · fase Suíça')}`;
+        const stLabel = st >= 4 ? ct('Champions Stage (playoffs)') : `Stage ${st} ${ct('de 3 · fase Suíça')}`;
         const enterTop = entered === 3 ? 8 : entered === 2 ? 16 : 32;
         const path = [1, 2, 3, 4];
         return (
           <>
             <div className="cal-major-banner now" style={{ marginBottom: 12 }}>
-              <b>🌍 {majorT.name.split(' · ')[0]}</b> · <b>{stLabel}</b>
+              <b><CareerIcon name="globe" size={14} /> {majorT.name.split(' · ')[0]}</b> · <b>{st >= 4 && <CareerIcon name="trophy" size={14} />} {stLabel}</b>
               <div className="career-major-path" aria-label={ct('Seu caminho restante')}>
                 {path.map((stageNumber) => {
                   const auto = stageNumber < entered;
@@ -4232,7 +4439,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
       {hubTab === 'results' && (
-        <Panel title={ct('Resultados')}>
+        <Panel dash title={ct('Resultados')}>
             {league.rounds.map((round, r) => (
               <div key={r} className="results-round">
                 <div className="muted small section-label" style={{ marginTop: r === 0 ? 0 : 14 }}>
@@ -4247,7 +4454,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
 
       {/* ===== CLASSIFICAÇÃO (detalhada) ===== */}
       {hubTab === 'standings' && (
-        <Panel title={ct('Classificação')} accent="gold">
+        <Panel dash title={ct('Classificação')} accent="gold">
             <div className="muted small" style={{ marginBottom: 12 }}>{save.circuit?.name ?? 'Circuito'} · fase de grupos (GSL) · top 2 de cada grupo vão ao mata-mata</div>
             {league.gsl
               ? <GSLGroups league={league} onOpen={setSelSeries} />
@@ -4258,7 +4465,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
 
       {/* ===== CHAVE (BRACKET DEDICADO) ===== */}
       {hubTab === 'bracket' && (
-        <Panel title={ct('Chave')} accent="gold">
+        <Panel dash title={ct('Chave')} accent="gold">
             <div className="muted small" style={{ marginBottom: 12 }}>
               {save.circuit?.name ?? 'Circuito'} · chave da fase de grupos (GSL · dupla eliminação) — top 2 de cada grupo vão ao mata-mata
             </div>
@@ -4289,12 +4496,12 @@ export function CareerScreen({ onExit, founder = false }: Props) {
         const full = aca.length >= ACADEMY_MAX;
         const squadFull = save.squad.length >= 5;
         return (
-          <Panel title={ct('Academia')} accent="gold">
+          <Panel dash title={ct('Academia')} accent="gold">
               <div className="aca-head">
                 <div>
                   <div className="muted small section-label" style={{ marginTop: 0 }}>Academia · {aca.length}/{ACADEMY_MAX} prospectos</div>
                   <p className="muted small" style={{ maxWidth: 600 }}>
-                    {ct('Revele jovens talentos, deixe um em')} <b>{ct('foco 🎯')}</b> {ct('(cresce mais rápido a cada split rumo ao seu')} <b>{ct('potencial')}</b>) e <b>{ct('promova ao elenco')}</b> quando quiser. É a próxima geração da sua org.
+                    {ct('Revele jovens talentos, deixe um em')} <b>{ct('foco')}</b> {ct('(cresce mais rápido a cada split rumo ao seu')} <b>{ct('potencial')}</b>) e <b>{ct('promova ao elenco')}</b> quando quiser. É a próxima geração da sua org.
                   </p>
                 </div>
                 <button className="btn gold" disabled={full || save.budget < ACADEMY_SCOUT_COST}
@@ -4305,7 +4512,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                     const p = makeProspect(seed, region, save.split);
                     update({ academy: [...aca, p], budget: save.budget - ACADEMY_SCOUT_COST });
                   }}>
-                  🔍 Revelar prospecto ({formatMoney(ACADEMY_SCOUT_COST)})
+                  <CareerIcon name="search" size={14} /> {ct('Revelar prospecto')} ({formatMoney(ACADEMY_SCOUT_COST)})
                 </button>
               </div>
               {aca.length === 0 ? (
@@ -4338,23 +4545,28 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                         <div className="aca-actions">
                           <button className="btn small gold aca-promote"
                             onClick={() => (squadFull ? setPromoting(promoting === p.id ? null : p.id) : promoteProspect(p.id))}>
-                            {ct('⬆ Promover ao elenco')}
+                            {ct('Promover ao elenco')}
                           </button>
                           <div className="aca-actions-row">
                             <button className={`btn small aca-train${focused ? ' gold' : ' ghost'}`}
                               onClick={() => update({ academyFocus: focused ? null : p.id })}>
-                              {focused ? ct('🎯 Em foco') : ct('🎯 Treinar')}
+                              {focused ? ct('Em foco') : ct('Treinar')}
                             </button>
                             <button className="btn small ghost aca-drop" title={ct('Dispensar o prospecto da academia')}
-                              onClick={() => {
-                                if (!confirm(`${ct('Dispensar')} ${p.nick} ${ct('da academia? Não dá pra desfazer.')}`)) return;
-                                update({
-                                  academy: aca.filter((x) => x.id !== p.id),
-                                  academyFocus: save.academyFocus === p.id ? null : save.academyFocus,
-                                });
-                                if (promoting === p.id) setPromoting(null);
-                              }}>
-                              🗑
+                              onClick={() => askConfirm({
+                                title: ct('Dispensar prospecto'),
+                                message: `${ct('Dispensar')} ${p.nick} ${ct('da academia? Não dá pra desfazer.')}`,
+                                confirmLabel: ct('Dispensar'),
+                                danger: true,
+                                onConfirm: () => {
+                                  update({
+                                    academy: aca.filter((x) => x.id !== p.id),
+                                    academyFocus: save.academyFocus === p.id ? null : save.academyFocus,
+                                  });
+                                  if (promoting === p.id) setPromoting(null);
+                                },
+                              })}>
+                              <CareerIcon name="trash" size={14} />
                             </button>
                           </div>
                         </div>
@@ -4393,10 +4605,10 @@ export function CareerScreen({ onExit, founder = false }: Props) {
         const facilities = normalizeFacilities(save.facilities);
         const upkeep = facilityUpkeep(facilities);
         const net = sponsorInc - folha - upkeep;
-        const facilityCards: { key: FacilityKey; icon: string; name: string; effect: string }[] = [
-          { key: 'training', icon: '🏋️', name: ct('Centro de treino'), effect: ct('Acelera a evolução do elenco e da academia.') },
-          { key: 'analyst', icon: '📊', name: ct('Departamento de análise'), effect: ct('Melhora a preparação e o veto nos mapas fortes.') },
-          { key: 'psychologist', icon: '🧠', name: ct('Psicologia esportiva'), effect: ct('Reduz fadiga e estabiliza a moral do elenco.') },
+        const facilityCards: { key: FacilityKey; icon: CareerIconName; name: string; effect: string }[] = [
+          { key: 'training', icon: 'dumbbell', name: ct('Centro de treino'), effect: ct('Acelera a evolução do elenco e da academia.') },
+          { key: 'analyst', icon: 'chart-bar', name: ct('Departamento de análise'), effect: ct('Melhora a preparação e o veto nos mapas fortes.') },
+          { key: 'psychologist', icon: 'brain', name: ct('Psicologia esportiva'), effect: ct('Reduz fadiga e estabiliza a moral do elenco.') },
         ];
         const upgradeFacility = (key: FacilityKey) => {
           const level = facilities[key];
@@ -4405,9 +4617,10 @@ export function CareerScreen({ onExit, founder = false }: Props) {
           update({ budget: save.budget - cost, facilities: { ...facilities, [key]: level + 1 } });
         };
         return (
-          <Panel title={`${ct('Finanças')} · ${save.org?.name ?? ''}`} accent="gold">
+          <Panel dash title={`${ct('Finanças')} · ${save.org?.name ?? ''}`} accent="gold">
               <div className="fin-cards">
                 <div className="fin-card"><span className="fin-k">{ct('Caixa')}</span><b>{formatMoney(save.budget)}</b></div>
+                <div className="fin-card"><span className="fin-k">{ct('Fãs')}</span><b>{formatFans(careerFans(save))}</b></div>
                 <div className="fin-card"><span className="fin-k">{ct('Patrocínio / split')}</span><b className="pos">+{formatMoney(sponsorInc)}</b></div>
                 <div className="fin-card"><span className="fin-k">{ct('Folha / split')}</span><b className="neg">-{formatMoney(folha)}</b></div>
                 <div className="fin-card"><span className="fin-k">{ct('Infraestrutura / split')}</span><b className="neg">-{formatMoney(upkeep)}</b></div>
@@ -4419,7 +4632,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                 {facilityCards.map((facility) => {
                   const level = facilities[facility.key];
                   const cost = facilityUpgradeCost(facility.key, level);
-                  return <div key={facility.key} className="career-facility-card"><span>{facility.icon}</span><div><b>{facility.name}</b><small>{facility.effect}</small><i>{ct('Nível')} {level}/{FACILITY_MAX_LEVEL}</i></div><button className="btn small gold" disabled={!cost || save.budget < cost} onClick={() => upgradeFacility(facility.key)}>{level >= FACILITY_MAX_LEVEL ? ct('MÁXIMO') : `${ct('Melhorar')} · ${formatMoney(cost)}`}</button></div>;
+                  return <div key={facility.key} className="career-facility-card"><span><CareerIcon name={facility.icon} size={24} /></span><div><b>{facility.name}</b><small>{facility.effect}</small><i>{ct('Nível')} {level}/{FACILITY_MAX_LEVEL}</i></div><button className="btn small gold" disabled={!cost || save.budget < cost} onClick={() => upgradeFacility(facility.key)}>{level >= FACILITY_MAX_LEVEL ? ct('MÁXIMO') : `${ct('Melhorar')} · ${formatMoney(cost)}`}</button></div>;
                 })}
               </div>
               <div className="muted small section-label">{ct('Contratos do elenco')}</div>
@@ -4487,13 +4700,13 @@ export function CareerScreen({ onExit, founder = false }: Props) {
         const fam = save.playbookXp ?? 0;
         return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Panel title={ct('Cinco titular')} accent="gold" actions={<span style={{ fontFamily: 'var(--rtm-font-cond)', color: 'var(--rtm-gold)', fontSize: '15px' }}>{rows.length ? Math.round(rows.reduce((a, p) => a + playerOvr(p), 0) / rows.length) : 0} OVR</span>}>
+          <Panel dash title={ct('Cinco titular')} accent="gold" actions={<span style={{ fontFamily: 'var(--rtm-font-cond)', color: 'var(--rtm-gold)', fontSize: '15px' }}>{rows.length ? Math.round(rows.reduce((a, p) => a + playerOvr(p), 0) / rows.length) : 0} OVR</span>}>
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => setProfilePlayer(p)} />)}
+              {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => openPlayerProfile(p)} />)}
             </div>
           </Panel>
           <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '16px', alignItems: 'start' }}>
-            <Panel title={ct('Gestão do elenco')}>
+            <Panel dash title={ct('Gestão do elenco')}>
               {(!hasAwp || !hasIgl) && (
                 <div className="role-warn">
                   ⚠️ {ct('Seu time está sem')} {!hasAwp && !hasIgl ? ct('AWP e IGL') : !hasAwp ? 'AWPer' : 'IGL'}.
@@ -4515,14 +4728,13 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                   const phase = playerPhase(p.id, age);
                   return (
                     <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
-                      <button className="cs-open" onClick={() => setProfilePlayer(p)} title={ct('Ver perfil do jogador')}>
-                        <PlayerAvatar nick={p.nick} size={32} />
+                      <PlayerLink player={p} onOpen={openPlayerProfile} className="cs-open" avatarSize={32}>
                         <span className="cs-nick"><Flag cc={p.country} /> {p.nick}
                           {grew > 0 && <span className="cs-grew" title={`+${grew} ${ct('de evolução na carreira')}`}> ▲{grew}</span>}
                         </span>
-                      </button>
-                      <span className={`cs-morale ${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${mor}/100)`}>{mi.icon} {mor}</span>
-                      <span className={`cs-fatigue ${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}>🔋 {fatigue}</span>
+                      </PlayerLink>
+                      <span className={`cs-morale ${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${mor}/100)`}><CareerIcon name={mi.icon} size={14} /> {mor}</span>
+                      <span className={`cs-fatigue ${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}><CareerIcon name="battery" size={14} /> {fatigue}</span>
                       <span className={`cs-development ${phase}`} title={`${ct('Potencial (teto de OVR)')}: ${potential} · ${ct(PHASE_LABEL[phase])}`}>POT {potential} {phase === 'rising' ? '↗' : phase === 'declining' ? '↘' : '→'}</span>
                       <select className={`role-select ${p.role}`} value={p.role}
                         onChange={(e) => setRole(p.id, e.target.value as Role)}
@@ -4531,12 +4743,12 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                       </select>
                       <button className={`cs-train${focused ? ' on' : ''}`} onClick={() => setFocus(p.id)}
                         title={focused ? ct('Em foco de treino neste split') : ct('Pôr em foco de treino (desenvolve mais rápido)')}>
-                        🎯
+                        <CareerIcon name="focus" size={14} />
                       </button>
                       <button className={`cs-rest${reduced ? ' on' : ''}`} disabled={!reduced && (save.restingPlayers?.length ?? 0) >= 2}
                         onClick={() => update({ restingPlayers: reduced ? (save.restingPlayers ?? []).filter((id) => id !== p.id) : [...(save.restingPlayers ?? []), p.id] })}
                         title={reduced ? ct('Remover carga reduzida') : ct('Aplicar carga reduzida na próxima série')}>
-                        🛌
+                        <CareerIcon name="bed" size={14} />
                       </button>
                       <span className="cs-stat">{st ? `rat ${st.rating.toFixed(2)}` : '-'}</span>
                       <span className="cs-ovr">{playerOvr(p)}</span>
@@ -4546,12 +4758,12 @@ export function CareerScreen({ onExit, founder = false }: Props) {
               </div>
               <p className="muted small" style={{ marginTop: 8 }}>
                 Clique no jogador pra ver o <b>perfil completo</b>. Defina a <b>{ct('função')}</b> (no CS são flexíveis: tenha 1 AWP e 1 IGL) e o
-                <b> {ct('🎯 foco de treino')}</b> do split (esse jogador evolui mais rápido). Você não edita os atributos: eles
+                <b> {ct('foco de treino')}</b> do split (esse jogador evolui mais rápido). Você não edita os atributos: eles
                 <b> sobem sozinhos</b> conforme o jogador se desenvolve e joga. A <b>{ct('carga reduzida')}</b> recupera fadiga, mas tira um pouco de ritmo na próxima série.
               </p>
             </Panel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <Panel title={ct('📋 Playbook tático')}>
+              <Panel dash title={ct('Playbook tático')}>
                 <div className="pb-fam">
                   <span className="muted small">{ct('Entrosamento')}</span>
                   <span className="pb-bar"><i className={fam >= 70 ? 'good' : fam >= 40 ? 'warn' : 'bad'} style={{ width: `${fam}%` }} /></span>
@@ -4567,7 +4779,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                 </div>
                 <p className="muted small" style={{ margin: '8px 0 0' }}>O entrosamento sobe a cada split mantendo o esquema; <b>trocar volta pra {PLAYBOOK_SWITCH_TO}%</b>{ct('. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.')}</p>
               </Panel>
-              <Panel title={<>{ct('🗺️ Treino de mapa')} <span className="muted small" style={{ fontWeight: 400 }}>({mapFocusList(save).length}/{MAP_FOCUS_MAX} em foco)</span></>}>
+              <Panel dash title={<>{ct('Treino de mapa')} <span className="muted small" style={{ fontWeight: 400 }}>({mapFocusList(save).length}/{MAP_FOCUS_MAX} em foco)</span></>}>
                 <div className="map-train">
                   {MAP_POOL.map((m) => {
                     const lvl = mapLevel(save, m);
@@ -4577,7 +4789,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                     const cls = lvl >= 1 ? 'good' : lvl <= -1 ? 'bad' : 'warn';
                     return (
                       <button key={m} className={`mt-row${foc ? ' on' : ''}`} onClick={() => setMapFocus(m)} disabled={full} title={foc ? 'Em treino neste split (clique pra tirar)' : full ? `${ct('Máximo de')} ${MAP_FOCUS_MAX} ${ct('mapas em treino')}` : 'Treinar este mapa neste split'}>
-                        <span className="mt-name">{foc ? '🎯 ' : ''}{MAP_LABELS[m]}</span>
+                        <span className="mt-name">{foc && <CareerIcon name="focus" size={12} />} {MAP_LABELS[m]}</span>
                         <span className="mt-bar"><i className={cls} style={{ width: `${pct}%` }} /></span>
                         <span className={`mt-lvl ${cls}`}>{lvl > 0 ? '+' : ''}{lvl.toFixed(1)}</span>
                       </button>
@@ -4586,7 +4798,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                 </div>
                 <p className="muted small" style={{ margin: '8px 0 0' }}>{ct('Treine até')} <b>{MAP_FOCUS_MAX} mapas</b> {ct('por split; os outros decaem um pouco. É de propósito: ninguém é forte em todos, mas dá pra montar um pool sólido.')}</p>
               </Panel>
-              <Panel title={`${ct('Melhores do')} ${save.circuit?.name ?? ct('circuito')}`}>
+              <Panel dash title={`${ct('Melhores do')} ${save.circuit?.name ?? ct('circuito')}`}>
                 <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
               </Panel>
             </div>
@@ -4599,7 +4811,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
       {hubTab === 'world' && (() => {
         const scene = worldScene(oppEra, save.split);
         return (
-          <Panel title={ct('Cena mundial')} accent="gold">
+          <Panel dash title={ct('Cena mundial')} accent="gold">
               <div className="muted small section-label" style={{ marginTop: 0 }}>Cena mundial · Split {save.split} — campeonatos regionais acontecendo em paralelo</div>
               <div className="world-grid">
                 {scene.map((s) => (
@@ -4610,15 +4822,19 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                       {s.reg === save.region && <span className="world-you">{ct('você joga aqui')}</span>}
                     </div>
                     <div className="world-league muted small">{s.league}</div>
-                    <div className="world-champ">
-                      <span className="wc-tag">{ct('🏆 Campeão')}</span>
+                    <button type="button" className="world-champ em-btn-reset clickable" onClick={() => openTeamProfile(s.champ.id)}>
+                      <span className="wc-tag"><CareerIcon name="trophy" size={12} /> {ct('Campeão')}</span>
                       <TeamBadge tag={s.champ.tag} colors={s.champ.colors} size={22} logoUrl={s.champ.logoUrl ?? logoForTeam(s.champ)} />
                       <span className="wc-name">{s.champ.team}</span>
-                    </div>
-                    {s.runnerUp && <div className="world-runner muted small">vice: {s.runnerUp.team}</div>}
+                    </button>
+                    {s.runnerUp && (
+                      <button type="button" className="world-runner em-btn-reset clickable muted small" onClick={() => openTeamProfile(s.runnerUp!.id)}>
+                        vice: {s.runnerUp.team}
+                      </button>
+                    )}
                     <div className="world-top">
                       {s.top.map((t, i) => (
-                        <button key={t.id} className="world-row" onClick={() => setSelTeam(teamSeasonToTTeam(t))}>
+                        <button key={t.id} className="world-row" onClick={() => openTeamProfile(t.id)}>
                           <span className="wr-rank">{i + 1}</span>
                           <TeamBadge tag={t.tag} colors={t.colors} size={16} logoUrl={t.logoUrl ?? logoForTeam(t)} />
                           <span className="wr-name">{t.team}</span>
@@ -4635,7 +4851,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
 
       {/* ===== RANKING VRS POR REGIÃO ===== */}
       {hubTab === 'vrs' && (
-        <Panel title={ct('Ranking VRS')} accent="gold">
+        <Panel dash title={ct('Ranking VRS')} accent="gold">
             <div className="t20-head">
               <div className="muted small section-label" style={{ marginTop: 0 }}>
                 {vrsMode === 'geral' ? ct('Ranking mundial de VRS · geral') : ct('Ranking mundial de VRS · por região')}
@@ -4650,7 +4866,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
               <table className="stats vrs-geral">
                 <tbody>
                   {vrsAll.map((t, i) => (
-                    <tr key={t.id} className={t.isUser ? 'human-row' : ''}>
+                    <tr key={t.id} className={`${t.isUser ? 'human-row' : ''} clickable-row`} onClick={() => openTeamProfile(t.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openTeamProfile(t.id); }}>
                       <td style={{ width: 30, textAlign: 'left', fontWeight: 800, color: i < 3 ? 'var(--gold)' : undefined }}>{i + 1}</td>
                       <td style={{ textAlign: 'left' }}>
                         <span className="pcell">
@@ -4673,7 +4889,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                   <table className="stats">
                     <tbody>
                       {g.teams.map((t, i) => (
-                        <tr key={t.id} className={t.isUser ? 'human-row' : ''}>
+                        <tr key={t.id} className={`${t.isUser ? 'human-row' : ''} clickable-row`} onClick={() => openTeamProfile(t.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openTeamProfile(t.id); }}>
                           <td style={{ width: 24, textAlign: 'left' }}>{i + 1}</td>
                           <td style={{ textAlign: 'left' }}>
                             <span className="pcell">
@@ -4696,7 +4912,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
 
       {/* ===== TOP 20 HLTV DA TEMPORADA ===== */}
       {hubTab === 'top20' && (
-        <Panel title={ct('HLTV Top 20')} accent="gold">
+        <Panel dash title={ct('HLTV Top 20')} accent="gold">
             <div className="t20-head">
               <div className="muted small section-label" style={{ marginTop: 0 }}>
                 {t20Mode === 'season'
@@ -4717,7 +4933,12 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                   const colors = isMine ? (save.org?.colors ?? e.team.colors) : e.team.colors;
                   const logo = isMine ? save.org?.logo : (e.team.logoUrl ?? logoForTeam(e.team));
                   return (
-                  <div key={e.p.id} className={`t20-row${i === 0 ? ' first' : ''}`}>
+                  <button
+                    key={e.p.id}
+                    type="button"
+                    className={`t20-row em-btn-reset clickable${i === 0 ? ' first' : ''}`}
+                    onClick={() => openPlayerProfile(e.p)}
+                  >
                     <span className="t20-rank">{i + 1}</span>
                     <PlayerAvatar nick={e.p.nick} size={32} />
                     <span className="t20-nick"><Flag cc={e.p.country} /> {e.p.nick}</span>
@@ -4730,7 +4951,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                       {e.sl.kast} KAST · {e.role === 'AWP' ? `${e.sl.awpKills} AWP/m` : `${e.sl.entry} entry/m`} · {e.sl.impact.toFixed(2)} imp
                     </span>
                     <span className="t20-rating">{e.rating.toFixed(2)}</span>
-                  </div>
+                  </button>
                   );
                 })}
               </div>
@@ -4739,7 +4960,12 @@ export function CareerScreen({ onExit, founder = false }: Props) {
             ) : (
               <div className="top20-list">
                 {careerTop20.map((e, i) => (
-                  <div key={e.rid} className={`t20-row${i === 0 ? ' first' : ''}${e.isMine ? ' human-row' : ''}`}>
+                  <button
+                    key={e.rid}
+                    type="button"
+                    className={`t20-row em-btn-reset clickable${i === 0 ? ' first' : ''}${e.isMine ? ' human-row' : ''}`}
+                    onClick={() => { const pl = resolvePlayerById(e.rid); if (pl) openPlayerProfile(pl); }}
+                  >
                     <span className="t20-rank">{i + 1}</span>
                     <PlayerAvatar nick={e.nick} size={32} />
                     <span className="t20-nick"><Flag cc={e.country} /> {e.nick}{e.isMine ? ' ★' : ''}</span>
@@ -4747,7 +4973,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                     <span className={`role-pill ${e.role}`}>{e.role}</span>
                     <span className="muted small t20-extra">{e.kd.toFixed(2)} K/D · {e.adr.toFixed(0)} ADR · {e.maps}m</span>
                     <span className="t20-rating">{e.rating.toFixed(2)}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -4761,27 +4987,27 @@ export function CareerScreen({ onExit, founder = false }: Props) {
         const splitsToMajor = nextMajor - save.split;
         const majorSplitNow = isMajorSplit(save.split);
         type StStatus = 'done' | 'live' | 'locked' | 'na';
-        const stages: { ic: string; name: string; status: StStatus; detail: string }[] = [
-          { ic: '🎯', name: `${ct('Fase de grupos ·')} ${save.circuit?.name ?? ct('Circuito')}`, status: groupDone ? 'done' : 'live', detail: groupDone ? ct('Concluída') : `${ct('Rodada')} ${league.current + 1} de ${league.rounds.length} ${ct('· você em')} ${myPos}º` },
-          { ic: '🏆', name: ct('Mata-mata do circuito'), status: save.playoff ? (save.playoff.champion ? 'done' : 'live') : 'locked', detail: save.playoff ? (save.playoff.champion ? ct('Encerrado') : ct('Semis (MD3) + final (MD5)')) : ct('Os 4 melhores do grupo avançam') },
-          { ic: '🌍', name: ct('Major Mundial'), status: majorSplitNow ? (save.majorT ? 'live' : 'locked') : 'na', detail: majorSplitNow ? `Top ${MAJOR_VRS_CUT} ${ct('do ranking VRS mundial garantem a vaga')}` : `${ct('Só em split de Major · próximo no Split')} ${nextMajor}` },
+        const stages: { ic: CareerIconName; name: string; status: StStatus; detail: string }[] = [
+          { ic: 'focus', name: `${ct('Fase de grupos ·')} ${save.circuit?.name ?? ct('Circuito')}`, status: groupDone ? 'done' : 'live', detail: groupDone ? ct('Concluída') : `${ct('Rodada')} ${league.current + 1} de ${league.rounds.length} ${ct('· você em')} ${myPos}º` },
+          { ic: 'trophy', name: ct('Mata-mata do circuito'), status: save.playoff ? (save.playoff.champion ? 'done' : 'live') : 'locked', detail: save.playoff ? (save.playoff.champion ? ct('Encerrado') : ct('Semis (MD3) + final (MD5)')) : ct('Os 4 melhores do grupo avançam') },
+          { ic: 'globe', name: ct('Major Mundial'), status: majorSplitNow ? (save.majorT ? 'live' : 'locked') : 'na', detail: majorSplitNow ? `Top ${MAJOR_VRS_CUT} ${ct('do ranking VRS mundial garantem a vaga')}` : `${ct('Só em split de Major · próximo no Split')} ${nextMajor}` },
         ];
         const STLABEL: Record<StStatus, string> = { done: ct('concluído'), live: ct('em andamento'), locked: ct('a seguir'), na: ct('fora deste split') };
         // próximos splits (mini-calendário do cadenciamento dos Majors)
         const upcoming = Array.from({ length: 6 }, (_, i) => save.split + i).map((sp) => ({ sp, major: isMajorSplit(sp) }));
         return (
-        <Panel title={ct('Calendário')} accent="gold">
+        <Panel dash title={ct('Calendário')} accent="gold">
             <div className={`cal-major-banner ${splitsToMajor === 0 ? 'now' : ''}`}>
               {splitsToMajor === 0
-                ? <>🌍 <b>{ct('É split de Major!')}</b> {ct('Os')} <b>{ct('top')} {MAJOR_VRS_CUT} {ct('do ranking VRS mundial')}</b> {ct('garantem a vaga. Você está em')} <b>#{myVrsRank}</b>.</>
-                : <>🌍 <b>{ct('Major Mundial no Split')} {nextMajor}</b> · {splitsToMajor === 1 ? ct('falta 1 split') : `${ct('faltam')} ${splitsToMajor} splits`}. {ct('Suba no')} <b>{ct('ranking VRS')}</b> ({ct('você está em')} #{myVrsRank}) {ct('vencendo partidas e campeonatos — os top')} {MAJOR_VRS_CUT} {ct('vão ao Major.')}</>}
+                ? <><CareerIcon name="globe" size={16} /> <b>{ct('É split de Major!')}</b> {ct('Os')} <b>{ct('top')} {MAJOR_VRS_CUT} {ct('do ranking VRS mundial')}</b> {ct('garantem a vaga. Você está em')} <b>#{myVrsRank}</b>.</>
+                : <><CareerIcon name="globe" size={16} /> <b>{ct('Major Mundial no Split')} {nextMajor}</b> · {splitsToMajor === 1 ? ct('falta 1 split') : `${ct('faltam')} ${splitsToMajor} splits`}. {ct('Suba no')} <b>{ct('ranking VRS')}</b> ({ct('você está em')} #{myVrsRank}) {ct('vencendo partidas e campeonatos — os top')} {MAJOR_VRS_CUT} {ct('vão ao Major.')}</>}
             </div>
 
             <div className="muted small section-label">{ct('Temporada atual · Split')} {save.split}</div>
             <div className="cal-stages">
               {stages.map((st, i) => (
                 <div key={i} className={`cal-stage ${st.status}`}>
-                  <span className="cal-ic">{st.ic}</span>
+                  <span className="cal-ic"><CareerIcon name={st.ic} size={18} /></span>
                   <div className="cal-st-body">
                     <div className="cal-st-name">{st.name} <span className={`cal-st-pill ${st.status}`}>{STLABEL[st.status]}</span></div>
                     <div className="cal-st-detail muted small">{st.detail}</div>
@@ -4795,7 +5021,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
               {upcoming.map(({ sp, major }) => (
                 <div key={sp} className={`cal-up${sp === save.split ? ' current' : ''}${major ? ' major' : ''}`}>
                   <div className="cal-up-n">Split {sp}</div>
-                  <div className="cal-up-t">{major ? '🌍 Major' : '🎯 Circuito'}</div>
+                  <div className="cal-up-t">{major ? <><CareerIcon name="globe" size={12} /> Major</> : <><CareerIcon name="focus" size={12} /> {ct('Circuito')}</>}</div>
                 </div>
               ))}
             </div>
@@ -4822,7 +5048,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
       })()}
 
       {hubTab === 'history' && (
-        <Panel title={ct('Histórico da carreira')} accent="gold">
+        <Panel dash title={ct('Histórico da carreira')} accent="gold">
             <div className="career-statgrid">
               <div className="cstat"><b>{save.split - 1}</b><span>{ct('Splits disputados')}</span></div>
               <div className="cstat"><b className="pos">{org.circuitTitles}</b><span>{ct('Títulos de circuito')}</span></div>
@@ -4857,7 +5083,9 @@ export function CareerScreen({ onExit, founder = false }: Props) {
             )}
         </Panel>
       )}
-      </div>
+      </>
+      )}
+    </CareerShell>
 
       {selSeries && (
         <div className="modal-backdrop" onClick={() => setSelSeries(null)}>
@@ -4868,218 +5096,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
         </div>
       )}
       {selTeam && <TeamDetail team={selTeam} league={league} onClose={() => setSelTeam(null)} />}
-      {profilePlayer && (() => {
-        const p = profilePlayer;
-        const rid = `user__${p.id}`;
-        return (
-          <PlayerProfile
-            player={p}
-            split={save.split}
-            career={deriveCareer(save.careerStats?.[rid])}
-            cur={seasonStatsMemo.find((s) => s.id === rid)}
-            contractUntil={save.contracts?.[p.id]}
-            evoTotal={save.evo?.[p.id] ?? 0}
-            morale={save.morale?.[p.id] ?? MORALE_DEFAULT}
-            fatigue={save.fatigue?.[p.id] ?? 0}
-            reducedLoad={save.restingPlayers?.includes(p.id) ?? false}
-            trainingLevel={normalizeFacilities(save.facilities).training}
-            peakOvr={Math.max(save.peakOvr?.[p.id] ?? 0, playerOvr(p))}
-            focused={save.trainingFocus === p.id}
-            onToggleFocus={() => update({ trainingFocus: save.trainingFocus === p.id ? null : p.id })}
-            onToggleRest={() => update({ restingPlayers: save.restingPlayers?.includes(p.id) ? (save.restingPlayers ?? []).filter((id) => id !== p.id) : (save.restingPlayers?.length ?? 0) < 2 ? [...(save.restingPlayers ?? []), p.id] : save.restingPlayers })}
-            onClose={() => setProfilePlayer(null)}
-            youthAge={save.youthAge}
-          />
-        );
-      })()}
-    </div>
-  );
-}
-
-// radar de atributos (pentágono, escala 40-99) — leitura de "shape" do jogador
-function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
-  const n = attrs.length;
-  const cx = 110, cy = 96, R = 66;
-  const norm = (v: number) => Math.max(0.05, Math.min(1, (v - 40) / 59));
-  const pt = (i: number, r: number): [number, number] => {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n; // começa no topo
-    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
-  };
-  const grid = [0.25, 0.5, 0.75, 1].map((f) => attrs.map((_, i) => pt(i, R * f).join(',')).join(' '));
-  const shape = attrs.map((d, i) => pt(i, R * norm(d.value)).join(',')).join(' ');
-  return (
-    <svg viewBox="0 0 220 188" className="attr-radar" role="img" aria-label={ct('radar de atributos')}>
-      <g stroke="rgba(255,255,255,0.1)" fill="none" strokeWidth="0.8">
-        {grid.map((g, i) => <polygon key={i} points={g} />)}
-        {attrs.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} />; })}
-      </g>
-      <polygon points={shape} fill="rgba(91,160,208,0.28)" stroke="var(--blue-bright)" strokeWidth="1.6" />
-      {attrs.map((d, i) => { const [x, y] = pt(i, R * norm(d.value)); return <circle key={i} cx={x} cy={y} r="2.2" fill="var(--blue-bright)" />; })}
-      {attrs.map((d, i) => {
-        const [lx, ly] = pt(i, R + 13);
-        return (
-          <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" className="ar-label">
-            {d.label} <tspan className="ar-val">{d.value}</tspan>
-          </text>
-        );
-      })}
-    </svg>
-  );
-}
-
-// perfil completo do jogador (modal, só leitura). Atributos em barras + idade,
-// potencial, fase, valor/salário/contrato e as STATS DE CARREIRA acumuladas
-// (rating/K-D/ADR/KAST/mapas). O jogador da carreira não edita nada aqui — os
-// atributos sobem sozinhos com a evolução; quem edita é o admin no CRM.
-// O cartão de jogador (FUT) agora é o componente compartilhado FutCard (FutCard.tsx),
-// usado no hub, elenco e perfil — réplica do design system.
-
-function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, morale, fatigue, peakOvr, focused, reducedLoad, trainingLevel, onToggleFocus, onToggleRest, onClose, youthAge }: {
-  player: Player;
-  split: number;
-  career: ReturnType<typeof deriveCareer>;
-  cur?: SeasonStat;
-  contractUntil?: number;
-  evoTotal: number;
-  morale: number;
-  fatigue: number;
-  peakOvr: number;
-  focused: boolean;
-  reducedLoad: boolean;
-  trainingLevel: number;
-  onToggleFocus: () => void;
-  onToggleRest: () => void;
-  onClose: () => void;
-  youthAge?: Record<string, number>;
-}) {
-  const mi = moraleInfo(morale);
-  const age = effectiveAge(player, split, youthAge);
-  const pot = playerPotentialOvr(player, age);
-  const tier = potentialTier(pot);
-  const phase = playerPhase(player.id, age);
-  const ovr = playerOvr(player);
-  const personality = playerPersonality(player.id);
-  const personalityUi: Record<PlayerPersonality, { label: string; desc: string }> = {
-    leader: { label: ct('Líder nato'), desc: ct('Segura o vestiário sob pressão e perde menos moral em fases ruins.') },
-    mercenary: { label: ct('Ambicioso'), desc: ct('Valoriza contratos e oportunidades; atrai mais propostas de organizações maiores.') },
-    prodigy: { label: ct('Prodígio'), desc: ct('Pode se desenvolver mais rápido enquanto ainda é jovem.') },
-    hothead: { label: ct('Cabeça-quente'), desc: ct('Oscila mais com resultados e acumula carga com maior facilidade.') },
-    resilient: { label: ct('Resiliente'), desc: ct('Recupera-se melhor da pressão e acumula menos fadiga.') },
-  };
-  const developmentProgress = Math.max(0, Math.min(100, Math.round((ovr - 40) / Math.max(1, pot - 40) * 100)));
-  const left = contractUntil != null ? contractUntil - split + 1 : null;
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal player-profile" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose}>✕</button>
-        <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: '230px minmax(0,1fr)', gap: '18px', alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
-            <FutCard player={player} size="lg" />
-            <button className={`btn small${focused ? ' gold' : ''}`} style={{ width: '100%' }} onClick={onToggleFocus}>
-              {focused ? ct('🎯 Tirar do treino') : ct('🎯 Pôr em treino')}
-            </button>
-            <button className={`btn small${reducedLoad ? ' gold' : ''}`} style={{ width: '100%' }} onClick={onToggleRest}>
-              {reducedLoad ? ct('🛌 Carga reduzida ativa') : ct('🛌 Dar carga reduzida')}
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {/* banner de identidade */}
-            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', padding: '18px 20px' }}>
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(110deg, rgba(67,130,182,.16), rgba(13,17,22,.4))' }} />
-              <div style={{ position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                  <Flag cc={player.country} /><span className={`role-pill ${player.role}`}>{player.role}</span>
-                </div>
-                <h1 style={{ margin: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '36px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 1 }}>{player.nick}</h1>
-                <div style={{ color: 'var(--rtm-dim)', fontSize: '13px', marginTop: '4px' }}>{player.name}</div>
-                <div className="pp-tags" style={{ marginTop: 10 }}>
-                  <span className="pp-tag">{age} anos</span>
-                  <span className={`pp-tag pot-${tier}`}>POT {tier} ({pot})</span>
-                  <span className="pp-tag" title={ct('Maior OVR já alcançado')}>★ Pico {peakOvr}</span>
-                  <span className="pp-tag">{ct(PHASE_LABEL[phase])}</span>
-                  <span className={`pp-tag mood-${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${morale}/100)`}>{mi.icon} {mi.label}</span>
-                  <span className={`pp-tag fatigue-${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}>🔋 {ct('Fadiga')} {fatigue}</span>
-                  <span className={`pp-tag personality-${personality}`}>◆ {personalityUi[personality].label}</span>
-                  {focused && <span className="pp-tag focus">{ct('🎯 em treino')}</span>}
-                </div>
-              </div>
-            </div>
-
-            <Panel title={<>{ct('Atributos')}{evoTotal > 0 && <span className="cs-grew" style={{ marginLeft: 8 }}> ▲{evoTotal} na carreira</span>}</>}>
-              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <AttrRadar attrs={[
-                  { label: 'Mira', value: player.aim },
-                  { label: 'AWP', value: player.awp },
-                  { label: 'IGL', value: player.igl },
-                  { label: 'Clutch', value: player.clutch },
-                  { label: 'Consist.', value: player.consistency },
-                ]} />
-                <div className="attr-bars" style={{ flex: 1, minWidth: 220 }}>
-                  <AttrBar label="Mira" value={player.aim} />
-                  <AttrBar label="Consist." value={player.consistency} />
-                  <AttrBar label="Clutch" value={player.clutch} />
-                  <AttrBar label="AWP" value={player.awp} />
-                  <AttrBar label="IGL" value={player.igl} />
-                </div>
-              </div>
-              <div className="pp-fin" style={{ marginTop: 12 }}>
-                <div><span className="muted small">{ct('Valor')}</span><b>{formatMoney(playerValue({ ...player, ovr }))}</b></div>
-                <div><span className="muted small">{ct('Salário/split')}</span><b className="neg">{formatMoney(playerWage(player))}</b></div>
-                <div><span className="muted small">{ct('Contrato')}</span><b>{left == null ? '-' : left <= 0 ? ct('vencido') : `${left} split${left > 1 ? 's' : ''}`}</b></div>
-              </div>
-            </Panel>
-
-            <Panel title={ct('Personalidade')}>
-              <div className={`career-personality personality-${personality}`}><b>◆ {personalityUi[personality].label}</b><span>{personalityUi[personality].desc}</span></div>
-            </Panel>
-
-            <Panel title={ct('Plano de desenvolvimento')}>
-              <div className="career-development-summary">
-                <div><span>{ct('OVR atual')}</span><b>{ovr}</b></div>
-                <div><span>{ct('Pico da carreira')}</span><b>{peakOvr}</b></div>
-                <div><span>{ct('Potencial')}</span><b>{pot}</b></div>
-                <div><span>{ct('Margem')}</span><b>{Math.max(0, pot - ovr)}</b></div>
-              </div>
-              <div className="career-development-track"><i style={{ width: `${developmentProgress}%` }} /></div>
-              <p className="muted small">{ct('Fase atual:')} <b>{ct(PHASE_LABEL[phase])}</b> · {ct('progresso até o teto')} <b>{developmentProgress}%</b>.</p>
-              <div className="career-development-effects">
-                <span className={focused ? 'active' : ''}>🎯 {ct('Foco individual')} {focused ? `+1 ${ct('por split')}` : ct('inativo')}</span>
-                <span className={trainingLevel > 0 ? 'active' : ''}>🏋️ {ct('Centro de treino')} · {ct('nível')} {trainingLevel}</span>
-                <span className={personality === 'prodigy' ? 'active' : ''}>◆ {personalityUi[personality].label}</span>
-              </div>
-            </Panel>
-
-            <Panel title={ct('Estatísticas de carreira')}>
-              {career ? (
-                <div className="pp-stats">
-                  <div className="pp-stat"><b>{career.rating.toFixed(2)}</b><span>Rating 2.0</span></div>
-                  <div className="pp-stat"><b>{career.kd.toFixed(2)}</b><span>K/D</span></div>
-                  <div className="pp-stat"><b>{career.adr.toFixed(0)}</b><span>ADR</span></div>
-                  <div className="pp-stat"><b>{career.kastPct.toFixed(0)}%</b><span>KAST</span></div>
-                  <div className="pp-stat"><b>{career.kills}</b><span>{ct('Abates')}</span></div>
-                  <div className="pp-stat"><b>{career.maps}</b><span>{ct('Mapas')}</span></div>
-                </div>
-              ) : (
-                <p className="muted small">{ct('Sem partidas registradas ainda. As stats aparecem (e sobem) conforme ele joga e evolui.')}</p>
-              )}
-              {cur && (
-                <>
-                  <div className="muted small section-label">{ct('Neste split')}</div>
-                  <div className="pp-cur">
-                    <span>rating <b>{cur.rating.toFixed(2)}</b></span>
-                    <span>K/D <b>{cur.kd.toFixed(2)}</b></span>
-                    <span>ADR <b>{cur.adr.toFixed(0)}</b></span>
-                  </div>
-                </>
-              )}
-              <p className="muted small" style={{ marginTop: 8 }}>
-                {ct('Os atributos não são editáveis aqui: sobem sozinhos com a evolução. O foco de treino acelera o desenvolvimento neste split.')}
-              </p>
-            </Panel>
-          </div>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -5087,11 +5104,11 @@ function PlayerProfile({ player, split, career, cur, contractUntil, evoTotal, mo
 function GamePlanPicker({ plan, onPick }: { plan: GamePlan; onPick: (p: GamePlan) => void }) {
   return (
     <div className="gameplan-picker">
-      <span className="muted small gp-title">🎯 {ct('Plano de jogo')}</span>
+      <span className="muted small gp-title"><CareerIcon name="focus" size={13} /> {ct('Plano de jogo')}</span>
       <div className="gp-chips">
         {GAME_PLANS.map((g) => (
           <button key={g.id} className={`gp-chip${plan === g.id ? ' on' : ''}`} title={ct(g.desc)} onClick={() => onPick(g.id)}>
-            {g.icon} {ct(g.label)}
+            <CareerIcon name={g.icon} size={13} /> {ct(g.label)}
           </button>
         ))}
       </div>
@@ -5397,7 +5414,7 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
             </div>
           </div>
           <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: '14px', alignItems: 'start' }}>
-            <Panel title={ct('Elenco')} flush>
+            <Panel dash title={ct('Elenco')} flush>
               {team.players.map((p, i) => (
                 <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)', padding: '9px 14px' }}>
                   <PlayerAvatar nick={p.nick} size={30} />
@@ -5407,7 +5424,7 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
                 </div>
               ))}
             </Panel>
-            <Panel title={ct('Mapas na temporada')}>
+            <Panel dash title={ct('Mapas na temporada')}>
               {mapStats.length === 0 ? (
                 <p className="muted small" style={{ margin: 0 }}>{ct('Sem partidas jogadas ainda nesta temporada.')}</p>
               ) : (
@@ -5496,7 +5513,7 @@ function accumulateCareerStats(prev: Record<string, CareerStatLine> | undefined,
 }
 
 // deriva rating (HLTV 2.0), K/D, ADR e KAST% de uma linha de carreira acumulada
-function deriveCareer(s: CareerStatLine | undefined) {
+export function deriveCareer(s: CareerStatLine | undefined) {
   if (!s || s.rounds < 1) return null;
   const kpr = s.k / s.rounds, dpr = s.d / s.rounds, apr = s.a / s.rounds;
   const kast = s.kast / s.rounds, adr = s.dmg / s.rounds;
@@ -5619,7 +5636,7 @@ function QuickSimOverlay({ series, teams, userIdx, label, onDone }: {
               <span className="qs-final">
                 {series.winner === userIdx ? ct('Vitória!') : ct('Derrota')} · {series.mapScore[0]}-{series.mapScore[1]}
               </span>
-              <button className="btn ghost small" onClick={() => setShowStats(true)}>📊 Ver stats</button>
+              <button className="btn ghost small" onClick={() => setShowStats(true)}><CareerIcon name="chart-bar" size={13} /> {ct('Ver stats')}</button>
               <button className="btn small" onClick={onDone}>{ct('Continuar →')}</button>
             </>
           ) : (
@@ -5735,7 +5752,7 @@ function PlayoffBracket({ p, teamOf, onOpen }: {
           <div className="hb-col">
             <div className="hb-reclabel">{ct('Campeão')}</div>
             <div className="hb-resultbox adv" style={{ minWidth: 150 }}>
-              <div className="hb-resultbox-title">{ct('🏆 Troféu')}</div>
+              <div className="hb-resultbox-title"><CareerIcon name="trophy" size={14} /> {ct('Troféu')}</div>
               {champ ? (
                 <div className={`hb-token adv${champ.isUser ? ' is-user' : ''}`} style={{ fontSize: 13 }}>
                   <TeamBadge tag={champ.tag} colors={champ.colors} size={24} logoUrl={champ.logoUrl} />
@@ -5891,13 +5908,13 @@ function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string
 // proposta de uma org de elite por um jogador seu (assédio do topo). Vender dá
 // um caixa gordo mas abre um buraco no elenco; recusar mantém a base.
 // tutorial de primeira vez: slides explicando o loop do modo carreira.
-const ONB_SLIDES: { icon: string; title: string; body: string }[] = [
-  { icon: '🏆', title: ct('Bem-vindo ao Modo Carreira'), body: ct('Você assume uma organização de Counter-Strike e leva ela do zero até o Major. Monta o elenco, joga os campeonatos e gerencia tudo entre as temporadas.') },
-  { icon: '🎯', title: ct('Comece por um desafio'), body: ct('Escolha um desafio (uma org pronta, com contexto e metas próprias) ou funde a sua do zero. Cada desafio traz objetivos pra cumprir ao longo da campanha.') },
-  { icon: '🗓️', title: ct('Escolha o campeonato'), body: ct('A cada split você entra num circuito. O Tier 3 é o acesso (onde toda org começa) e o Tier 1 é a elite mundial. Vencer promove; só o Tier 1 dá vaga no Major.') },
-  { icon: '🤝', title: ct('Gerencie entre os splits'), body: ct('Na janela você negocia reforços (até com troca de jogadores), renova contratos, treina mapas e o playbook, e forma jovens na academia. Suas decisões pesam no time.') },
-  { icon: '📊', title: ct('Suba no ranking e vá ao Major'), body: ct('Você ganha pontos de VRS vencendo eventos fortes — ganhar de time fraco rende pouco. Os melhores do ranking mundial vão ao Major, que fecha a temporada.') },
-  { icon: '🚀', title: ct('Tá pronto!'), body: ct('Boa sorte na estrada até o Major. Dá pra rever este guia quando quiser no botão ❔ lá no topo. Bora.') },
+const ONB_SLIDES: { icon: CareerIconName; title: string; body: string }[] = [
+  { icon: 'trophy', title: ct('Bem-vindo ao Modo Carreira'), body: ct('Você assume uma organização de Counter-Strike e leva ela do zero até o Major. Monta o elenco, joga os campeonatos e gerencia tudo entre as temporadas.') },
+  { icon: 'focus', title: ct('Comece por um desafio'), body: ct('Escolha um desafio (uma org pronta, com contexto e metas próprias) ou funde a sua do zero. Cada desafio traz objetivos pra cumprir ao longo da campanha.') },
+  { icon: 'calendar', title: ct('Escolha o campeonato'), body: ct('A cada split você entra num circuito. O Tier 3 é o acesso (onde toda org começa) e o Tier 1 é a elite mundial. Vencer promove; só o Tier 1 dá vaga no Major.') },
+  { icon: 'handshake', title: ct('Gerencie entre os splits'), body: ct('Na janela você negocia reforços (até com troca de jogadores), renova contratos, treina mapas e o playbook, e forma jovens na academia. Suas decisões pesam no time.') },
+  { icon: 'chart', title: ct('Suba no ranking e vá ao Major'), body: ct('Você ganha pontos de VRS vencendo eventos fortes — ganhar de time fraco rende pouco. Os melhores do ranking mundial vão ao Major, que fecha a temporada.') },
+  { icon: 'rocket', title: ct('Tá pronto!'), body: ct('Boa sorte na estrada até o Major. Dá pra rever este guia quando quiser no botão de ajuda lá no topo. Bora.') },
 ];
 function CareerOnboarding({ onClose }: { onClose: () => void }) {
   const [i, setI] = useState(0);
@@ -5906,8 +5923,8 @@ function CareerOnboarding({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop onb-backdrop" onClick={onClose}>
       <div className="onb-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose} title={ct('Pular')}>✕</button>
-        <div className="onb-icon">{s.icon}</div>
+        <button className="modal-x" onClick={onClose} title={ct('Pular')}><CareerIcon name="x" size={16} /></button>
+        <div className="onb-icon"><CareerIcon name={s.icon} size={48} /></div>
         <h2 className="onb-title">{s.title}</h2>
         <p className="onb-body">{s.body}</p>
         <div className="onb-dots">{ONB_SLIDES.map((_, k) => <i key={k} className={k === i ? 'on' : ''} onClick={() => setI(k)} />)}</div>
@@ -6482,7 +6499,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   const list = filteredMarket.slice(0, 60);
   const filtersActive = !!(q.trim() || roleFilter || countryFilter);
   return (
-    <Panel title={ct('Mercado')} accent="gold">
+    <Panel dash title={ct('Mercado')} accent="gold">
         <div className="muted small" style={{ marginBottom: 12 }}>
           {ct('🤝 Negociações · você fecha agora, o jogador entra na')} <b>{ct('próxima janela')}</b> (fim do split)
         </div>

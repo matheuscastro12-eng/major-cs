@@ -73,6 +73,8 @@ import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
 import { Leaderboard } from './components/Leaderboard';
 import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
+import { parseCareerPlayerId, isCareerPlayerPath, careerPlayerPath } from './state/career-player-route';
+import { parseCareerTeamId, careerTeamPath, isCareerTeamPath } from './state/career-team-route';
 import { getActiveSlot, setActiveSlot, slotKey, cloudSlot } from './state/careerSaves';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
@@ -160,6 +162,7 @@ function routeFromLocation(): { screen: Screen; bannerPreview: boolean } {
   if (legacyHash[hash]) return { screen: legacyHash[hash], bannerPreview: false };
 
   const path = normalizePath(window.location.pathname);
+  if (isCareerPlayerPath(path) || isCareerTeamPath(path)) return { screen: 'career', bannerPreview: false };
   if (path === '/ultimateteam' || path === '/ultimate-team' || path === '/online' || path.startsWith('/online/')) {
     return { screen: 'online', bannerPreview: false }; // /online/<código> = deep link de sala
   }
@@ -405,6 +408,12 @@ export default function App() {
     // o OnlineScreen gere a própria subrota /online/<código>; não canonicaliza de volta
     if (screen === 'online' && window.location.pathname.toLowerCase().startsWith('/online')) {
       targetPath = window.location.pathname;
+    }
+    if (screen === 'career') {
+      const playerId = parseCareerPlayerId();
+      const teamId = parseCareerTeamId();
+      if (playerId) targetPath = careerPlayerPath(playerId);
+      else if (teamId) targetPath = careerTeamPath(teamId);
     }
     const target = `${targetPath}${window.location.search}`;
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -866,7 +875,7 @@ export default function App() {
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
       {/* card de ativação (upsell) global: abre via evento rtm:upsell de qualquer tela */}
-      {!account?.paid && <UpsellCard onUpgrade={startCheckout} />}
+      {!account?.paid && screen !== 'career' && <UpsellCard onUpgrade={startCheckout} />}
       {authOpen && !account && (
         <AccountModal
           initialMode={authMode}
@@ -877,7 +886,7 @@ export default function App() {
       )}
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
-      <main className="page">
+      <main className={screen === 'career' ? 'page page-career' : screen === 'home' ? 'page page-play' : 'page'}>
       <Suspense fallback={<Loader text="…" />}>
       {bannerPreview && screen === 'home' && (
         <>
@@ -1073,7 +1082,7 @@ export default function App() {
 
       {/* patrocinador sempre visível no rodapé (G4 Skins). Some sozinho se o asset
           ainda não estiver no ar. Não aparece no modo de preview de banners. */}
-      {!bannerPreview && <AdBanner />}
+      {!bannerPreview && screen !== 'career' && <AdBanner />}
     </>
   );
 }

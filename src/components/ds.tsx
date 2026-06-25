@@ -19,12 +19,12 @@ const SIZES: Record<BtnSize, CSSProperties> = {
 };
 
 // Painel: a superfície base do design com a faixa de accent (azul/ouro) no header.
-export function Panel({ title, actions = null, accent = 'blue', flush = false, children, style = {} }: {
-  title?: ReactNode; actions?: ReactNode; accent?: 'blue' | 'gold' | 'none'; flush?: boolean; children?: ReactNode; style?: CSSProperties;
+export function Panel({ title, actions = null, accent = 'blue', flush = false, children, style = {}, dash = false, className = '' }: {
+  title?: ReactNode; actions?: ReactNode; accent?: 'blue' | 'gold' | 'none'; flush?: boolean; children?: ReactNode; style?: CSSProperties; dash?: boolean; className?: string;
 }) {
   const accentColor = accent === 'gold' ? 'var(--rtm-gold)' : accent === 'none' ? 'transparent' : 'var(--rtm-blue)';
   return (
-    <section style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', overflow: 'hidden', boxShadow: 'var(--rtm-shadow-panel)', ...style }}>
+    <section className={`${dash ? 'dash-panel' : ''} ${className}`.trim()} style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', overflow: 'hidden', boxShadow: 'var(--rtm-shadow-panel)', ...style }}>
       {title != null && (
         <header style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--rtm-grad-panel-head)', padding: '10px 14px', borderBottom: '1px solid var(--rtm-border-soft)', boxShadow: `inset 3px 0 0 ${accentColor}`, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>
           <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{title}</span>

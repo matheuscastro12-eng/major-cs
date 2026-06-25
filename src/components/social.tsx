@@ -1,19 +1,29 @@
 import { useEffect, useRef } from 'react';
-import { LANGS, useLang } from '../state/i18n';
+import { LANGS, useLang, type Lang } from '../state/i18n';
+import { LangFlag } from './career/LangFlag';
 
-// seletor de idioma (PT / EN / ES)
-export function LangSwitcher() {
+const LANG_NAMES: Record<Lang, string> = {
+  pt: 'Português (Brasil)',
+  en: 'English',
+  es: 'Español',
+};
+
+// seletor de idioma (bandeiras SVG)
+export function LangSwitcher({ compact = false }: { compact?: boolean }) {
   const { lang, setLang } = useLang();
   return (
-    <div className="lang-switch" role="group" aria-label="Idioma">
+    <div className={`lang-switch${compact ? ' lang-switch-compact' : ''}`} role="group" aria-label="Idioma">
       {LANGS.map((l) => (
         <button
           key={l.code}
+          type="button"
           className={`lang-btn${lang === l.code ? ' on' : ''}`}
           onClick={() => setLang(l.code)}
-          title={l.code.toUpperCase()}
+          title={LANG_NAMES[l.code]}
+          aria-label={LANG_NAMES[l.code]}
+          aria-pressed={lang === l.code}
         >
-          <span className="lf">{l.flag}</span> {l.label}
+          <LangFlag lang={l.code} size={compact ? 20 : 18} />
         </button>
       ))}
     </div>

@@ -1,0 +1,255 @@
+/* ============================================================
+   /jogar — shader WebGL + UI premium
+   ============================================================ */
+
+/* ---------- dark page + header override ---------- */
+body:has(.page-play) {
+  background: #09090e !important;
+}
+.page-play {
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow-x: clip;
+}
+body:has(.page-play) .app-header {
+  background: rgba(9, 9, 14, 0.62);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-bottom-color: rgba(97, 168, 221, 0.20);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- HERO: remover aurora box que cria caixa visível ---------- */
+.play-hub .hero::before { display: none !important; }
+
+/* ---------- wrapper principal ---------- */
+.play-hub {
+  position: relative;
+  min-height: calc(100vh - 58px);
+  isolation: isolate;
+}
+
+/* ============================================================
+   BACKGROUND
+   ============================================================ */
+.play-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: #09090e;
+}
+
+/* canvas WebGL2 — hue-rotate(180deg) adapta laranja→azul RTM */
+.play-bg-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* cores definidas diretamente no shader GLSL — sem filtro */
+  filter: none;
+  /* escala o canvas CSS ao tamanho total (canvas interno é menor pra poupar GPU) */
+  object-fit: cover;
+}
+
+/* CSS orbs — visíveis quando WebGL não disponível ou como camada de profundidade */
+.play-bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+}
+.play-bg-orb--a {
+  width: 70vw; height: 55vh; top: -10%; left: -18%;
+  background: radial-gradient(ellipse, rgba(67,130,182,0.40) 0%, transparent 68%);
+  animation: playOrbFloat 18s ease-in-out infinite alternate;
+}
+.play-bg-orb--b {
+  width: 55vw; height: 45vh; top: -5%; right: -15%;
+  background: radial-gradient(ellipse, rgba(216,169,67,0.22) 0%, transparent 68%);
+  animation: playOrbFloat 22s ease-in-out infinite alternate-reverse;
+}
+.play-bg-orb--c {
+  width: 65vw; height: 60vh; bottom: -22%; left: 20%;
+  background: radial-gradient(ellipse, rgba(30,65,130,0.45) 0%, transparent 68%);
+  animation: playOrbFloat 26s ease-in-out infinite alternate;
+}
+
+.play-bg-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 110% 110% at 50% 42%,
+    transparent 40%,
+    rgba(9, 9, 14, 0.55) 100%
+  );
+}
+
+@keyframes playOrbFloat {
+  from { transform: translate(0,0) scale(1); }
+  to   { transform: translate(5%,8%) scale(1.12); }
+}
+
+/* ============================================================
+   CONTEÚDO — sem fundo, sem caixas
+   ============================================================ */
+.play-hub-content {
+  position: relative;
+  z-index: 2;
+  padding: 0 24px 80px;
+}
+
+/* hero: transparente */
+.play-hub .hero.landing {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 52px 0 0;
+  text-align: center;
+  background: none !important;
+}
+
+/* Sombra de texto por trás do título para leitura sobre qualquer fundo */
+.play-hub .hero h1 {
+  font-size: 76px !important;
+  letter-spacing: 7px !important;
+  line-height: 1 !important;
+  text-shadow:
+    0 0 0 transparent,      /* reset */
+    0 0 60px rgba(0,0,0,0.90),
+    0 0 120px rgba(0,0,0,0.70),
+    0 2px 8px rgba(0,0,0,1),
+    0 0 24px rgba(97,168,221,0.50) !important;
+}
+
+.play-hub .hero-mark {
+  filter: drop-shadow(0 0 30px rgba(97,168,221,0.55))
+          drop-shadow(0 6px 18px rgba(0,0,0,0.65)) !important;
+  height: 96px !important;
+}
+
+/* sombra por trás da tagline */
+.play-hub .hero > p {
+  font-size: 15.5px !important;
+  line-height: 1.6 !important;
+  max-width: 680px !important;
+  margin: 16px auto 0 !important;
+  color: rgba(223,229,236,0.80) !important;
+  text-shadow: 0 1px 16px rgba(0,0,0,0.90), 0 0 40px rgba(0,0,0,0.70);
+}
+
+/* ---------- mode cards: sólidos ---------- */
+.play-hub .rtm-modemenu {
+  max-width: 1060px;
+  margin: 36px auto 6px;
+  gap: 18px;
+}
+
+.play-hub .rtm-modecard {
+  min-height: 240px;
+  border-radius: 12px;
+  /* SEM backdrop-filter — isso criava o "quadrado" visível */
+  background: rgba(12, 14, 22, 0.78);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.play-hub .rtm-modecard-art { opacity: 0.35; }
+.play-hub .rtm-modecard:hover { transform: translateY(-6px); }
+.play-hub .rtm-modecard:hover .rtm-modecard-art { opacity: 0.50; transform: scale(1.06); }
+.play-hub .rtm-modecard-scrim {
+  background: linear-gradient(180deg, rgba(8,10,18,0.08) 0%, rgba(8,10,18,0.94) 80%);
+}
+.play-hub .rtm-modecard-body { padding: 24px 22px; }
+.play-hub .rtm-modecard-title { font-size: 36px !important; margin: 5px 0 10px !important; }
+.play-hub .rtm-modecard-desc { font-size: 13px; line-height: 1.55; color: rgba(223,229,236,0.78); }
+
+.play-hub .rtm-modecard[data-tone="gold"]:hover {
+  border-color: rgba(216,169,67,.35);
+  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px rgba(216,169,67,.20);
+}
+.play-hub .rtm-modecard[data-tone="blue"]:hover {
+  border-color: rgba(97,168,221,.40);
+  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px rgba(97,168,221,.20);
+}
+.play-hub .rtm-modecard[data-tone="green"]:hover {
+  border-color: rgba(111,208,111,.35);
+  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px rgba(111,208,111,.16);
+}
+
+/* chip "logado como" */
+.play-hub .rtm-signed {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(97,168,221,0.16);
+  background: rgba(9,9,14,0.60);
+  font-size: 12px;
+  color: var(--rtm-dim);
+  text-shadow: none;
+}
+.play-hub .rtm-signed b { color: var(--rtm-blue-bright); }
+
+/* tela de Draft */
+.play-hub .setup-panel.draft-screen {
+  max-width: 820px;
+  margin: 32px auto;
+  padding: 28px 28px 32px;
+  border-radius: 14px;
+  background: rgba(9,11,18,0.80);
+  border: 1px solid rgba(97,168,221,0.13);
+  box-shadow: 0 28px 72px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.play-hub .pool-card,
+.play-hub .mode-card,
+.play-hub .diff-card {
+  background: rgba(20,24,36,0.85) !important;
+  border-color: rgba(55,65,80,0.70) !important;
+}
+.play-hub .pool-card:hover,
+.play-hub .mode-card:hover,
+.play-hub .diff-card:hover { border-color: rgba(97,168,221,0.45) !important; transform: translateY(-2px); }
+.play-hub .pool-card.sel, .play-hub .mode-card.sel {
+  border-color: var(--rtm-blue-bright) !important;
+  box-shadow: 0 0 0 1px rgba(97,168,221,.28), 0 8px 24px rgba(0,0,0,.40);
+}
+.play-hub .diff-card.normal.sel { border-color: var(--rtm-green-bright) !important; }
+.play-hub .diff-card.hard.sel { border-color: #e08a2e !important; }
+.play-hub .diff-card.legend.sel { border-color: var(--rtm-red-bright) !important; }
+
+.play-hub .name-input input {
+  background: rgba(9,9,14,0.85) !important;
+  border-color: rgba(97,168,221,0.22) !important;
+  color: var(--rtm-text-strong);
+}
+.play-hub .name-input input:focus {
+  border-color: var(--rtm-blue-bright) !important;
+  box-shadow: 0 0 0 2px rgba(97,168,221,.16) !important;
+}
+
+/* crédito */
+.play-hub-credit {
+  position: fixed; right: 14px; bottom: 10px; z-index: 3;
+  font-size: 10px; color: rgba(139,150,163,0.45);
+  pointer-events: none; user-select: none;
+}
+.play-hub-credit a { color: rgba(135,185,224,0.55); text-decoration: none; pointer-events: auto; }
+.play-hub-credit a:hover { color: var(--rtm-blue-bright); }
+
+/* ---------- responsivo ---------- */
+@media (max-width: 820px) {
+  .play-hub .hero h1 { font-size: 52px !important; letter-spacing: 4px !important; }
+  .play-hub .hero-mark { height: 72px !important; }
+  .play-hub .hero > p { font-size: 14px !important; }
+  .play-hub .rtm-modecard { min-height: 200px; }
+  .play-hub-content { padding: 0 14px 60px; }
+}
+@media (max-width: 480px) {
+  .play-hub .hero h1 { font-size: 40px !important; letter-spacing: 3px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .play-bg-orb { animation: none !important; }
+}
