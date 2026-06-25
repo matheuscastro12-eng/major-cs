@@ -63,21 +63,34 @@ export function createSwissStage(teams: TTeam[], rng: Rng, name: string): Tourna
 }
 // os 8 classificados de um stage (seed por menos derrotas / saldo / força)
 export function stageAdvancers(t: Tournament): TTeam[] {
-  return seedAdvanced(t).slice(0, 8);
+  const adv = seedAdvanced(t);
+  if (adv.length >= 8) return adv.slice(0, 8);
+  // DEFENSIVO: se por algum motivo menos de 8 fecharam 3 vitórias (ex.: um time
+  // ficou sem par num grupo ímpar e congelou 'alive'), completa com os melhores
+  // restantes por record. Sem isso, createPlayoffStage pega seeds[7] = undefined
+  // e a tela do Major TRAVA (clicar não avança).
+  const taken = new Set(adv.map((x) => x.id));
+  const rest = t.teams
+    .filter((x) => !taken.has(x.id))
+    .sort((a, b) => a.losses - b.losses || b.roundDiff - a.roundDiff || b.strength - a.strength);
+  return [...adv, ...rest].slice(0, 8);
 }
 // Champions Stage: mata-mata MD3 (final MD5) direto a partir de 8 seeds.
 export function createPlayoffStage(seeds8: TTeam[], name: string): Tournament {
   const seeds = seeds8.map((t) => ({ ...t, status: 'alive' as const }));
+  // blindagem: se vierem menos de 8 seeds, repete os existentes pra fechar 8 e
+  // nunca gerar uma pairing com id undefined (que travaria a tela do Major).
+  const at = (i: number) => seeds[i] ?? seeds[i % seeds.length] ?? seeds[0];
   const t: Tournament = {
     name,
     teams: seeds,
     phase: 'quarters',
     swissRound: 5,
     pairings: [
-      { a: seeds[0].id, b: seeds[7].id, label: 'QF1', bestOf: 3 },
-      { a: seeds[3].id, b: seeds[4].id, label: 'QF2', bestOf: 3 },
-      { a: seeds[1].id, b: seeds[6].id, label: 'QF3', bestOf: 3 },
-      { a: seeds[2].id, b: seeds[5].id, label: 'QF4', bestOf: 3 },
+      { a: at(0).id, b: at(7).id, label: 'QF1', bestOf: 3 },
+      { a: at(3).id, b: at(4).id, label: 'QF2', bestOf: 3 },
+      { a: at(1).id, b: at(6).id, label: 'QF3', bestOf: 3 },
+      { a: at(2).id, b: at(5).id, label: 'QF4', bestOf: 3 },
     ],
     history: [],
   };
@@ -141,6 +154,7 @@ function makeSwissPairings(t: Tournament, rng: Rng): Pairing[] {
     groups.get(key)!.push(team);
   }
   const pairings: Pairing[] = [];
+  const leftovers: TTeam[] = []; // sobras ímpares de cada record, pareadas no fim
   const sortedKeys = [...groups.keys()].sort((a, b) => Number(b.split('-')[0]) - Number(a.split('-')[0]));
   for (const key of sortedKeys) {
     const g = groups.get(key)!;
@@ -151,7 +165,7 @@ function makeSwissPairings(t: Tournament, rng: Rng): Pairing[] {
     for (let attempt = 0; attempt < 80; attempt++) {
       const cand = shuffle(rng, g);
       let ok = true;
-      for (let i = 0; i < cand.length - 1; i += 2) {
+      for (let i = 0; i + 1 < cand.length; i += 2) {
         if (pastOpponents(t, cand[i].id).has(cand[i + 1].id)) {
           ok = false;
           break;
@@ -163,9 +177,18 @@ function makeSwissPairings(t: Tournament, rng: Rng): Pairing[] {
       }
       best = cand;
     }
-    for (let i = 0; i < best.length - 1; i += 2) {
+    let i = 0;
+    for (; i + 1 < best.length; i += 2) {
       pairings.push({ a: best[i].id, b: best[i + 1].id, label: key, bestOf: bo });
     }
+    if (i < best.length) leftovers.push(best[i]); // grupo ímpar: flutua a sobra
+  }
+  // pareia as sobras entre si (records vizinhos, pois leftovers já vem em ordem).
+  // Sem isso, um time de grupo ímpar ficava SEM PAR e congelava 'alive' pra sempre,
+  // deixando < 8 classificados e travando o Major no fim do stage.
+  for (let i = 0; i + 1 < leftovers.length; i += 2) {
+    const a = leftovers[i], b = leftovers[i + 1];
+    pairings.push({ a: a.id, b: b.id, label: `${a.wins}-${a.losses}`, bestOf: bestOfForRecord(a.wins, a.losses) });
   }
   return pairings;
 }
