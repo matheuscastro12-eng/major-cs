@@ -3477,10 +3477,12 @@ table.crm-players input.num {
   max-width: 56px;
   fill: #e8edf2;
 }
-/* os SVGs oficiais têm paths sem fill (preto default): força herdar a cor clara */
-.kf2-row .wpn svg path,
-.kf2-row .wpn svg polygon,
-.kf2-row .wpn svg rect { fill: #e8edf2; }
+/* pinta só a ARTE (paths/polygons da arma), na cor clara. NÃO tocar nos
+   <rect fill="none"> de "slice" do Illustrator: eles cobrem o viewBox inteiro e,
+   se pintados, viram um bloco branco que tampa a arma. */
+.kf2-row .wpn svg path:not([fill="none"]),
+.kf2-row .wpn svg polygon:not([fill="none"]) { fill: #e8edf2; }
+.kf2-row .wpn svg [fill="none"] { fill: none !important; }
 
 .kf2-row .hs svg {
   height: 12px;
