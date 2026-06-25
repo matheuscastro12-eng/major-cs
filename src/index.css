@@ -4804,20 +4804,6 @@ table.crm-players input.num {
 .aca-train { flex: 1; min-width: 0; justify-content: center; }
 .aca-drop { flex: 0 0 40px; padding: 0; display: flex; align-items: center; justify-content: center; }
 .aca-replace { margin-top: 6px; border-top: 1px solid var(--border-soft); padding-top: 6px; }
-
-/* Copa Academy */
-.aca-cup { margin-top: 18px; border-top: 1px solid var(--border-soft); padding-top: 14px; }
-.aca-cup-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.aca-cup-rec { display: flex; align-items: center; gap: 12px; }
-.aca-cup-place { font-family: var(--font-cond); font-weight: 800; font-size: 18px; color: var(--gold); }
-.aca-cup-lineup { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.aca-cup-pl { background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 999px; padding: 3px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
-.aca-cup-matches { display: flex; flex-direction: column; gap: 6px; }
-.aca-cup-match { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border-soft); border-left-width: 3px; border-radius: var(--r-sm); padding: 7px 12px; }
-.aca-cup-match.win { border-left-color: var(--green-bright); }
-.aca-cup-match.loss { border-left-color: var(--red-bright); }
-.aca-cup-vs { font-size: 13px; min-width: 84px; }
-.aca-cup-score { font-family: var(--font-cond); font-weight: 800; font-size: 16px; letter-spacing: 1px; }
 .aca-replace-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 
 /* desafios de carreira (assumir org com contexto + metas) */
