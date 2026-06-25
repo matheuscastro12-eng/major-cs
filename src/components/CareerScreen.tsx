@@ -4,7 +4,7 @@
 // em três stages suíços mais Champions Stage. A interface usa PT como fonte e
 // traduz as strings da carreira com ct().
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
+import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles, toTPlayer, teamStrengthFromPlayers, coachBaseBonus, fullMapPrefs } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
 import { teamSeasonToTTeam } from '../engine/ratings';
@@ -1647,6 +1647,26 @@ const ROOKIE_ID = '__rookie__';
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
 type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar';
 
+// monta um TTeam jogável a partir de prospectos (entradas da academia). Usado pra
+// o time academy e seus rivais na Copa Academy. teamwork baixo: elenco jovem/cru.
+function academyTeamFromEntries(
+  id: string, name: string, tag: string, colors: [string, string], logo: string | undefined,
+  entries: Pick<AcademyEntry, 'id' | 'nick' | 'name' | 'country' | 'role' | 'aim' | 'consistency' | 'clutch' | 'awp' | 'igl' | 'age'>[],
+): TTeam {
+  const players = entries.slice(0, 5).map((a) => toTPlayer(
+    { id: a.id, nick: a.nick, name: a.name, country: a.country, role: a.role,
+      aim: a.aim, consistency: a.consistency, clutch: a.clutch, awp: a.awp, igl: a.igl, age: a.age } as Player,
+    { runtimeId: `${id}__${a.id}` },
+  ));
+  const teamwork = 62;
+  return {
+    id, name, tag: tag.slice(0, 5), country: players[0]?.country ?? 'br', isUser: false, game: 'CS2',
+    colors, logoUrl: logo, strength: teamStrengthFromPlayers(players, teamwork) + coachBaseBonus(ROOKIE_COACH),
+    teamwork, mapPrefs: fullMapPrefs('CS2', {}, id), coach: ROOKIE_COACH,
+    players, wins: 0, losses: 0, roundDiff: 0, status: 'alive',
+  };
+}
+
 // time sintético ct('Academia') usado como origem de um prospecto promovido ao elenco
 const ACADEMY_FROM: TeamSeason = {
   id: '__youth__', team: ct('Academia'), tag: 'ACA', era: 'Base', game: 'CS2',
@@ -2317,6 +2337,7 @@ export function CareerScreen({ onExit, founder = false }: Props) {
       const r = hashStr(`acaevo:${a.id}:${s.split}`) % 100;
       let d = r < 35 ? 3 : r < 75 ? 2 : 1;
       if (s.academyFocus === a.id) d += 1; // treino focado acelera
+      if ((s.academy?.length ?? 0) >= 5) d += 1; // jogou a Copa Academy (rodagem de verdade) -> evolui mais rápido
       d += developmentBonus(a.id, s.split, normalizeFacilities(s.facilities).training);
       d = Math.min(d, a.potential - ovr); // não ultrapassa o potencial
       const clamp = (v: number) => Math.max(40, Math.min(99, v));
@@ -2817,6 +2838,48 @@ export function CareerScreen({ onExit, founder = false }: Props) {
   // stats da temporada, rankings e feed de transferências são caros de calcular;
   // memoizados aqui pra não recomputar a cada render do hub
   const seasonStatsMemo = useMemo(() => (save.league ? seasonPlayerStats(save.league) : []), [save.league]);
+  // COPA ACADEMY: com >=5 prospectos, eles formam um time que joga uma copa a cada
+  // split (em vez de ficar parado). Round-robin de 6 times, simulado de forma
+  // determinística (seed por org+split) -> as partidas são assistíveis e estáveis no
+  // F5 sem inchar o save (nada disto é persistido, é derivado da academia + split).
+  const academyCup = useMemo(() => {
+    const aca = [...(save.academy ?? [])].sort((a, b) => playerOvr(b) - playerOvr(a));
+    if (aca.length < 5 || !save.org) return null;
+    const seed = hashStr(`acacup:${save.org.tag}:${save.split}`);
+    const rng = makeRng(seed);
+    const region = save.region ?? 'europe';
+    const mine = academyTeamFromEntries('academy', `${save.org.name} Academy`, save.org.tag, save.org.colors, save.org.logo, aca);
+    const pool = currentEra.filter((t) => t.id !== save.takeoverId && t.id !== 'user');
+    const rivals = pool.length
+      ? Array.from({ length: 5 }, (_, i) => pool[(seed + i * 7) % pool.length])
+      : [];
+    const opps = rivals.map((t, i) => {
+      const ents = Array.from({ length: 5 }, (_, k) => makeProspect(`acaopp:${save.split}:${i}:${k}:${t.id}`, region, save.split));
+      return academyTeamFromEntries(`aca_${t.id}_${i}`, `${t.team} Academy`, t.tag, t.colors, t.logoUrl, ents);
+    });
+    if (opps.length < 5) return null;
+    const teams = [mine, ...opps];
+    const rec: Record<string, { w: number; l: number }> = {};
+    teams.forEach((t) => { rec[t.id] = { w: 0, l: 0 }; });
+    const myMatches: { opp: TTeam; series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1 }[] = [];
+    for (let i = 0; i < teams.length; i++) {
+      for (let j = i + 1; j < teams.length; j++) {
+        const a = teams[i], b = teams[j];
+        const series = simulateSeries(rng, a, b, autoVeto([a, b], rng, 3), 3);
+        const aWon = series.winner === 0;
+        rec[a.id][aWon ? 'w' : 'l']++; rec[b.id][aWon ? 'l' : 'w']++;
+        if (a.id === 'academy' || b.id === 'academy') {
+          const userIdx: 0 | 1 = a.id === 'academy' ? 0 : 1;
+          myMatches.push({ opp: userIdx === 0 ? b : a, series, teams: [a, b], userIdx });
+        }
+      }
+    }
+    const table = teams.map((t) => ({ t, w: rec[t.id].w, l: rec[t.id].l }))
+      .sort((x, y) => y.w - x.w || x.l - y.l || y.t.strength - x.t.strength);
+    const place = table.findIndex((r) => r.t.id === 'academy') + 1;
+    return { mine, table, myMatches, place, total: teams.length, wins: rec.academy.w, losses: rec.academy.l };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.academy, save.split, save.org, save.region, save.takeoverId, currentEra]);
   // o SEU time como TeamSeason, pra entrar nos rankings da temporada (MVP/Top 20).
   // Sem isto os seus jogadores nunca apareciam (o pool era só a IA do currentEra).
   const userTeamSeason = useMemo((): TeamSeason | null => {
@@ -4380,6 +4443,45 @@ export function CareerScreen({ onExit, founder = false }: Props) {
                   })}
                 </div>
               )}
+              {academyCup ? (
+                <div className="aca-cup">
+                  <div className="aca-cup-head">
+                    <div className="section-label" style={{ marginTop: 0 }}>🏆 {ct('Copa Academy')} · Split {save.split}</div>
+                    <div className="aca-cup-rec">
+                      <span className="aca-cup-place">{academyCup.place}º <span className="muted">{ct('de')} {academyCup.total}</span></span>
+                      <span className="muted small">{academyCup.wins}V · {academyCup.losses}D</span>
+                    </div>
+                  </div>
+                  <p className="muted small" style={{ margin: '2px 0 10px', maxWidth: 600 }}>
+                    {ct('Seu time academy (os 5 melhores prospectos) disputa uma copa contra outras academias. Quem joga')} <b>{ct('evolui mais rápido')}</b>. {ct('Assista às partidas:')}
+                  </p>
+                  <div className="aca-cup-lineup">
+                    {academyCup.mine.players.map((p) => (
+                      <span key={p.id} className="aca-cup-pl"><Flag cc={p.country} /> {p.nick} <span className="muted">{p.ovr}</span></span>
+                    ))}
+                  </div>
+                  <div className="aca-cup-matches">
+                    {academyCup.myMatches.map((m, i) => {
+                      const won = m.series.winner === m.userIdx;
+                      const me = m.userIdx === 0 ? m.series.mapScore[0] : m.series.mapScore[1];
+                      const op = m.userIdx === 0 ? m.series.mapScore[1] : m.series.mapScore[0];
+                      return (
+                        <div key={i} className={`aca-cup-match ${won ? 'win' : 'loss'}`}>
+                          <span className="aca-cup-vs">vs <b>{m.opp.tag}</b></span>
+                          <span className="aca-cup-score">{me}<span className="muted">:</span>{op}</span>
+                          <span className="spacer" />
+                          <button className="btn small ghost" onClick={() => setSelSeries({ series: m.series, teams: m.teams })}>{ct('Ver placar')}</button>
+                          <button className="btn small" onClick={() => setQuickSim({ series: m.series, teams: m.teams, userIdx: m.userIdx, label: `${ct('Copa Academy')} · vs ${m.opp.tag}`, onDone: () => setQuickSim(null) })}>▶ {ct('Assistir')}</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : aca.length > 0 ? (
+                <p className="muted small" style={{ marginTop: 14 }}>
+                  {ct('Tenha ao menos')} <b>5 {ct('prospectos')}</b> {ct('na academia pra formar o time academy e disputar a Copa Academy — eles jogam de verdade e evoluem mais rápido.')}
+                </p>
+              ) : null}
           </Panel>
         );
       })()}
