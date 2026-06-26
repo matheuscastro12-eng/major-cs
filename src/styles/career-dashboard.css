@@ -5166,3 +5166,115 @@ body.career-dash.career-dash--light {
   --rtm-panel-3: #e8e8e8;
   --rtm-gold-glow: color-mix(in srgb, var(--em-gold) 18%, transparent);
 }
+
+/* ============================================================
+   Cartinhas (FutCard + .ut-card) — re-skin no padrão em-*
+   --------------------------------------------------------------
+   .ut-card.elite usava AZUL (#567fc0 / #17335a) — fonte clara do
+   "elite azul" no online. Trocado por charcoal/silver neutro.
+   .ut-card default ganha brilho dourado mais sutil em-*.
+   FutCard ja foi reescrito no .tsx; aqui sao tweaks finos.
+   ============================================================ */
+
+/* ---- ut-card: variantes harmonizadas ---- */
+body.career-dash .ut-card {
+  background: linear-gradient(155deg, #2b2208, #181410 58%, #0e0e10);
+  border-color: color-mix(in srgb, var(--em-gold) 60%, transparent);
+  color: #f8edca;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42), inset 0 0 22px color-mix(in srgb, var(--em-gold) 10%, transparent);
+  border-radius: 10px 10px 6px 6px;
+}
+body.career-dash .ut-card:hover:not(:disabled) {
+  border-color: var(--em-gold);
+  box-shadow: 0 13px 28px rgba(0, 0, 0, 0.5), 0 0 18px color-mix(in srgb, var(--em-gold) 24%, transparent);
+}
+body.career-dash .ut-card.elite {
+  /* NEUTRO em vez de azul */
+  border-color: #c8ccd4;
+  background: linear-gradient(155deg, #3a3a3a, #1c1c1c 58%, #0d0d0d);
+  color: #f4f5f7;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42), inset 0 0 18px rgba(255, 255, 255, 0.04);
+}
+body.career-dash .ut-card.elite:hover:not(:disabled) {
+  border-color: #ffffff;
+  box-shadow: 0 13px 30px rgba(0, 0, 0, 0.52), 0 0 18px rgba(255, 255, 255, 0.12);
+}
+body.career-dash .ut-card.legendary {
+  border-color: #d96e51;
+  background: linear-gradient(155deg, #4a1e16, #1f1311 58%, #0d0a09);
+}
+body.career-dash .ut-card.legendary:hover:not(:disabled) {
+  border-color: #ff8a6e;
+  box-shadow: 0 13px 28px rgba(0, 0, 0, 0.5), 0 0 18px rgba(255, 122, 92, 0.18);
+}
+body.career-dash .ut-card.icon {
+  border-color: #e6e1cb;
+  background: linear-gradient(155deg, #58543f, #21201a 55%, #0e0f0c);
+  color: #fffdf1;
+  box-shadow: 0 10px 28px rgba(230, 220, 175, 0.22);
+}
+
+/* Tipografia sem font-cond hard-coded (herdada via rebind) */
+body.career-dash .ut-card-rating,
+body.career-dash .ut-card-tier,
+body.career-dash .ut-card-era,
+body.career-dash .ut-card-name,
+body.career-dash .ut-card-stats span,
+body.career-dash .ut-card-pick {
+  font-family: inherit;
+}
+body.career-dash .ut-card-rating { font-weight: 800; }
+body.career-dash .ut-card-tier { font-weight: 700; opacity: 0.78; letter-spacing: 0.6px; }
+body.career-dash .ut-card-name { font-weight: 800; letter-spacing: 0.3px; }
+body.career-dash .ut-card-era.current { color: #29c47a; border-color: color-mix(in srgb, #29c47a 35%, transparent); }
+body.career-dash .ut-card-stats { border-top-color: rgba(255, 255, 255, 0.1); border-bottom-color: rgba(255, 255, 255, 0.1); }
+
+/* ut-pack-reveal (pack opening) — manter glow dourado, mas em-* ring */
+body.career-dash .ut-pack-reveal button {
+  border: 2px solid var(--em-gold);
+  color: #f7df9b;
+  background: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--em-gold) 22%, transparent), transparent 25%), linear-gradient(145deg, #3a2b0c, #11151d 70%);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5), 0 0 30px color-mix(in srgb, var(--em-gold) 24%, transparent);
+}
+
+/* ---- FutCard: ajustes complementares (estilo é inline; aqui só animação) ---- */
+body.career-dash .em-futcard {
+  animation: em-futcard-in 0.32s ease both;
+}
+@keyframes em-futcard-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+body.career-dash .em-futcard:focus-visible {
+  outline: none;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), 0 0 0 3px var(--em-gold) !important;
+}
+
+/* Cartinhas neutras: pcard genérico (modo almanaque do Draft) já reskinado */
+body.career-dash .pcard {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  color: var(--em-text);
+}
+body.career-dash .pcard:hover { border-color: var(--em-gold); }
+body.career-dash .pcard.fills-need { border-color: var(--em-gold); box-shadow: 0 0 0 1px var(--em-gold); }
+body.career-dash .pcard .nick { color: var(--em-text); font-weight: 700; }
+body.career-dash .pcard .meta,
+body.career-dash .pcard .from,
+body.career-dash .pcard .honors { color: var(--em-muted); }
+
+/* Roleta de cartinhas (DraftRoulette) */
+body.career-dash .roulette-card {
+  border-color: var(--em-border);
+  background-color: var(--em-panel-2);
+  color: var(--em-text);
+}
+body.career-dash .roulette-card.is-target {
+  border-color: var(--em-gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--em-gold) 35%, transparent);
+}
+body.career-dash .roulette-marker {
+  background: var(--em-gold);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--em-gold) 50%, transparent);
+}
