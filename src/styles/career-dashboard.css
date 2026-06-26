@@ -3658,3 +3658,229 @@ body.career-dash .major-match-status {
   border-radius: 6px;
   color: var(--em-text);
 }
+
+/* ============================================================
+   FASE 5 — Admin / CRM (Admin, AccountsCRM, CareerCRM,
+   LabScreen, BetaAccessCRM, AdminNav)
+   --------------------------------------------------------------
+   .panel/.panel-head/.panel-body ja sao cobertos pela Fase 0.
+   Aqui re-skinamos as classes proprias do CRM (crm-*, acct-*,
+   lab-*, access-*) pra tudo bater com o em-*.
+   ============================================================ */
+
+/* ---- AdminNav (barra de navegacao do admin) ---- */
+body.career-dash .admin-nav {
+  background: var(--em-panel-2);
+  border-bottom: 1px solid var(--em-border);
+  color: var(--em-text);
+}
+body.career-dash .admin-nav a,
+body.career-dash .admin-nav button {
+  color: var(--em-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+body.career-dash .admin-nav a:hover,
+body.career-dash .admin-nav button:hover {
+  color: var(--em-gold);
+  border-color: var(--em-border);
+}
+body.career-dash .admin-nav a.active,
+body.career-dash .admin-nav button.active {
+  background: var(--em-panel);
+  border-color: var(--em-gold);
+  color: var(--em-gold);
+}
+body.career-dash .admin-nav-brand { color: var(--em-text); font-weight: 700; }
+
+/* ---- CRM (Admin + CareerCRM): layouts ---- */
+body.career-dash .crm-layout,
+body.career-dash .crm-editor,
+body.career-dash .crm-teams,
+body.career-dash .crm-team-list,
+body.career-dash .crm-players,
+body.career-dash .crm-grid,
+body.career-dash .crm-fields,
+body.career-dash .crm-pinfo,
+body.career-dash .crm-stats {
+  background: transparent;
+  color: var(--em-text);
+}
+body.career-dash .crm-editor-head {
+  background: var(--em-panel-2);
+  border-bottom: 1px solid var(--em-border);
+  padding: 10px 14px;
+  color: var(--em-text);
+  font-weight: 700;
+}
+body.career-dash .crm-team-name { color: var(--em-text); font-weight: 600; }
+body.career-dash .crm-player {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  padding: 8px 10px;
+}
+body.career-dash .crm-player:hover { border-color: var(--em-gold); }
+body.career-dash .crm-player.selected,
+body.career-dash .crm-player.active {
+  border-color: var(--em-gold);
+  background: color-mix(in srgb, var(--em-gold) 8%, var(--em-panel));
+}
+body.career-dash .crm-ctrl {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  color: var(--em-text);
+}
+body.career-dash .crm-filters {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+/* CRM stats (cards) */
+body.career-dash .crm-stat {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+body.career-dash .crm-stat .cs-lbl,
+body.career-dash .crm-stat .cs-val { color: var(--em-text); }
+body.career-dash .crm-stat .cs-lbl {
+  color: var(--em-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+body.career-dash .crm-stat .cs-val { font-weight: 800; font-size: 1.2rem; color: var(--em-gold); }
+
+/* ---- AccountsCRM tabela ---- */
+body.career-dash .acct-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--em-text);
+}
+body.career-dash .acct-table thead th {
+  background: var(--em-panel-2);
+  color: var(--em-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--em-border);
+}
+body.career-dash .acct-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--em-border);
+}
+body.career-dash .acct-table tbody tr:hover { background: var(--em-panel-2); }
+body.career-dash .access-row {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  padding: 8px 10px;
+}
+body.career-dash .access-list { display: flex; flex-direction: column; gap: 6px; }
+body.career-dash .access-nick { color: var(--em-text); font-weight: 600; }
+
+/* ---- Lab screen ---- */
+body.career-dash .lab-bar {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--em-text);
+}
+
+/* ---- Admin: edicao de mapas / upload ---- */
+body.career-dash .map-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+body.career-dash .map-upload-card {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--em-text);
+}
+body.career-dash .map-upload-card:hover { border-color: var(--em-gold); }
+body.career-dash .upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+body.career-dash .img-wrap {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+body.career-dash .icon-btn {
+  background: transparent;
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  color: var(--em-text);
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: background 0.12s, border-color 0.12s;
+}
+body.career-dash .icon-btn:hover { border-color: var(--em-gold); background: var(--em-panel-2); }
+
+/* ---- Banners de status (pending/preview) ---- */
+body.career-dash .pending-banner {
+  background: color-mix(in srgb, var(--em-gold) 12%, var(--em-panel-2));
+  border: 1px solid var(--em-gold);
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: var(--em-text);
+}
+body.career-dash .pending-tag {
+  background: var(--em-gold);
+  color: #1a1205;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+body.career-dash .preview {
+  background: var(--em-panel-2);
+  border: 1px dashed var(--em-border-strong);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--em-muted);
+}
+
+/* ---- Form generico (Admin/CRM) ---- */
+body.career-dash .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+body.career-dash .form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+body.career-dash .field,
+body.career-dash .field label {
+  color: var(--em-text);
+}
+body.career-dash .field > label,
+body.career-dash .form-row > label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--em-muted);
+}
