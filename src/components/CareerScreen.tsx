@@ -40,11 +40,15 @@ import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits
 import { isAdminUnlocked } from './AdminGate';
 import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
+import { captureError } from '../state/errlog';
+import { cloudOnLocalSave, cloudEnabled, pushCloud } from '../state/cloud';
 import { getManager } from '../state/manager';
-import { getActiveSlot } from '../state/careerSaves';
-import { useGame, type Hydrator } from '../state/gameStore';
-import type { VersionedSave } from '../state/saveMigrations';
+import { getActiveSlot, slotKey, cloudSlot } from '../state/careerSaves';
 import bo3Ages from '../data/bo3-ages.json';
+
+// chave do save = slot ativo (conta vitalícia escolhe; grátis fica no slot 1).
+// Lida dinamicamente a cada load/persist pra trocar de slot sem recarregar a página.
+const curKey = () => slotKey(getActiveSlot());
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
@@ -1538,16 +1542,11 @@ function stripEraDeep(node: unknown, depth = 0): void {
   }
 }
 
-// Hidratador do save: merge com defaults + cura de dados antigos. Recebe o save
-// já PARSEADO e MIGRADO pelo gameStore (saveMigrations). Antes esta lógica vivia
-// dentro de `hydrate(raw: string)` aqui, mas a parte de localStorage / JSON parse
-// / migrations / backup / cloud foi centralizada em src/state/gameStore.ts (T1.1).
-// Continua aqui porque depende de `emptySave()`/`stripEraDeep`/`healProspect`/
-// `healYouthPlayer` que são internos do CareerScreen — vão pra src/state/
-// careerDefaults.ts em T1.4 quando quebrar este monolito.
-const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerSave => {
-  const s = parsed as unknown as CareerSave;
-  const merged = { ...emptySave(), ...s, ...hydrateCareerDepth(parsed as unknown as Record<string, unknown>) };
+// transforma o JSON cru num save válido (merge com defaults + cura de dados antigos).
+// Lança se o JSON estiver corrompido — quem chama trata o fallback.
+function hydrate(raw: string): CareerSave {
+  const s = JSON.parse(raw) as CareerSave;
+  const merged = { ...emptySave(), ...s, ...hydrateCareerDepth(s as unknown as Record<string, unknown>) };
   stripEraDeep(merged.league);
   stripEraDeep(merged.playoff);
   stripEraDeep(merged.majorT);
@@ -1560,34 +1559,80 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     merged.youth = y;
   }
   return merged;
-};
+}
 
-// Carrega o save do slot ativo via gameStore. O store cuida de:
-//   - localStorage.getItem do slotKey ativo
-//   - JSON.parse + migrations (saveMigrations.migrateSave) + hidratação custom
-//   - fallback pro .bak quando o save principal está ilegível
-//   - preserva o cru em .corrupt pra diagnóstico
-//   - re-persiste no formato novo quando uma migration rodou
-// Devolve emptySave() quando não há save no slot (mantém o contrato externo).
 function loadSave(): CareerSave {
-  // double-cast: CareerSave é interface fechada, Hydrator espera retornar
-  // VersionedSave-compatible (com index signature). Em runtime são o mesmo objeto.
-  const fromStore = useGame.getState().loadFromSlot(getActiveSlot(), hydrateCareerSave as unknown as Hydrator);
-  return (fromStore as unknown as CareerSave | null) ?? emptySave();
+  const SAVE_KEY = curKey();
+  const SAVE_BAK = SAVE_KEY + '.bak';
+  const SAVE_CORRUPT = SAVE_KEY + '.corrupt';
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(SAVE_KEY);
+  } catch {
+    return emptySave(); // storage indisponível
+  }
+  if (!raw) return emptySave();
+  try {
+    return hydrate(raw);
+  } catch (e) {
+    // save principal ilegível: NÃO descarta em silêncio. Preserva o cru pra
+    // diagnóstico e tenta o backup de um passo antes de cair no save vazio.
+    captureError(e, 'save-load');
+    try {
+      localStorage.setItem(SAVE_CORRUPT, raw);
+    } catch {
+      /* sem espaço pro diagnóstico */
+    }
+    try {
+      const bak = localStorage.getItem(SAVE_BAK);
+      if (bak) return hydrate(bak);
+    } catch {
+      /* backup também ilegível */
+    }
+    return emptySave();
+  }
 }
 
-// RESET de verdade: apaga TODO rastro do save do slot ativo (principal, backup
-// de um passo e cópia de diagnóstico) e marca a nuvem como vazia (tombstone).
-// Sem isso, "Recomeçar" deixava o save antigo no .bak/nuvem e ele voltava depois.
+// RESET de verdade: apaga TODO rastro do save do slot ativo (principal, backup de
+// um passo e cópia de diagnóstico) e marca a nuvem como vazia (tombstone). Sem
+// isso, "Recomeçar" deixava o save antigo no .bak/nuvem e ele voltava depois.
 function wipeActiveSlot(): void {
-  useGame.getState().wipeActiveSlot();
+  const KEY = curKey();
+  for (const k of [KEY, KEY + '.bak', KEY + '.corrupt']) {
+    try { localStorage.removeItem(k); } catch { /* sem storage */ }
+  }
+  try { if (cloudEnabled()) void pushCloud(cloudSlot(getActiveSlot()), '', Date.now()); } catch { /* offline */ }
 }
 
-// Persiste o save no localStorage do slot ativo + espelha na nuvem (debounced)
-// + mantém backup .bak. Toda a logística vive no gameStore agora.
+let persistWarned = false;
 function persist(s: CareerSave): void {
-  // double-cast: idem loadSave — CareerSave não declara index signature.
-  useGame.getState().setSave(s as unknown as VersionedSave);
+  const SAVE_KEY = curKey();
+  const SAVE_BAK = SAVE_KEY + '.bak';
+  try {
+    const json = JSON.stringify(s);
+    let prev: string | null = null;
+    try {
+      prev = localStorage.getItem(SAVE_KEY);
+    } catch {
+      /* segue */
+    }
+    localStorage.setItem(SAVE_KEY, json);
+    cloudOnLocalSave(cloudSlot(getActiveSlot()), SAVE_KEY, () => json); // espelha na nuvem (conta paga)
+    // backup de um passo: se o save novo ficar ilegível, dá pra voltar ao anterior
+    if (prev && prev !== json) {
+      try {
+        localStorage.setItem(SAVE_BAK, prev);
+      } catch {
+        /* backup é best-effort; quota não pode derrubar o save principal */
+      }
+    }
+  } catch (e) {
+    // QuotaExceeded ou storage indisponível: avisa uma vez e não derruba o jogo
+    if (!persistWarned) {
+      persistWarned = true;
+      captureError(e, 'save-persist');
+    }
+  }
 }
 
 // preço do técnico: curva acelerada (não linear). Iniciante é barato, mas técnico
