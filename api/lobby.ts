@@ -3,6 +3,7 @@
 // então o servidor guarda o estado do lobby, os picks e a barreira coletiva de
 // cada etapa do Major (todos prontos antes de avançar).
 import { neon } from '@neondatabase/serverless';
+import { createHash } from 'node:crypto';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
@@ -180,7 +181,7 @@ async function migrateHostIfStale(sql: ReturnType<typeof neon>, code: string): P
 }
 
 interface Res {
-  status: (code: number) => { json: (body: unknown) => void };
+  status: (code: number) => { json: (body: unknown) => void; end: () => void };
   setHeader: (k: string, v: string) => void;
 }
 
@@ -259,10 +260,23 @@ export default async function handler(
           lobby[0].status = nextStatus;
         }
       }
-      res.status(200).json({
+      const payload = {
         lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage), stage_started_at: Number(lobby[0].stage_started_at), playback_speed: Number(lobby[0].playback_speed) },
         players: players.map((p) => ({ ...p, ready_stage: Number(p.ready_stage) })),
-      });
+      };
+      // resposta condicional: o poll repetido (estado idêntico) volta 304 sem
+      // corpo, cortando Fast Origin Transfer. O ETag é o hash do conteúdo real,
+      // então qualquer mudança (status, picks, done, host, veto) reenvia o corpo.
+      const json = JSON.stringify(payload);
+      const etag = 'W/"' + createHash('sha1').update(json).digest('base64') + '"';
+      res.setHeader('ETag', etag);
+      res.setHeader('Access-Control-Expose-Headers', 'ETag');
+      const inm = req.headers?.['if-none-match'];
+      if (inm && (Array.isArray(inm) ? inm.includes(etag) : inm === etag)) {
+        res.status(304).end();
+        return;
+      }
+      res.status(200).json(payload);
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }

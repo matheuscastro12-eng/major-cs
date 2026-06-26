@@ -426,6 +426,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   const refresh = useCallback(async () => {
     if (!code || localDemo || document.hidden) return; // demo local não chama backend
     const s = await fetchLobby(code);
+    if (s === 'unchanged') { goneRef.current = 0; return; } // 304: estado igual, mantém
     if (s === 'gone') {
       // tolera UM 404 transitório (corrida logo após criar / réplica atrasada):
       // só dropa de verdade após 2 seguidos, pra não chutar o jogador à toa.
