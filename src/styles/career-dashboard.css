@@ -5054,3 +5054,115 @@ body.career-dash .section-label {
   font-weight: 700;
   margin: 18px 0 8px;
 }
+
+/* ============================================================
+   REBIND GLOBAL: redefine todos os tokens legados (do tema antigo,
+   azul-acinzentado) dentro do body.career-dash pros equivalentes
+   --em-* neutros. Como body.career-dash agora envolve TODO o app
+   (Fase 0), isso re-skina automaticamente as ~273 regras de
+   index.css que ainda usam --panel-2, --border, --blue, --rtm-blue
+   etc. sem precisar tocar regra a regra.
+   ============================================================ */
+body.career-dash {
+  /* ---- Superfícies (cinza neutro em vez de azulado) ---- */
+  --bg: var(--em-bg, #121212);
+  --bg-deep: #0e0e0e;
+  --panel: var(--em-panel);
+  --panel-2: var(--em-panel-2);
+  --panel-3: #2a2a2a;
+  --header: var(--em-panel-2);
+  --row-a: var(--em-panel);
+  --row-b: var(--em-panel-2);
+
+  /* ---- Bordas (sem azul-cinza) ---- */
+  --border: var(--em-border-strong);
+  --border-soft: var(--em-border);
+
+  /* ---- Texto ---- */
+  --text: var(--em-text);
+  --text-strong: var(--em-text);
+  --muted: var(--em-muted);
+  --dim: var(--em-muted);
+  --faint: color-mix(in srgb, var(--em-muted) 60%, transparent);
+  --link: var(--em-gold);
+
+  /* ---- BLUE -> GOLD (o acento azul vira o dourado em-*) ---- */
+  --blue: var(--em-gold);
+  --blue-bright: var(--em-gold);
+
+  /* ---- Ouro/vermelho/verde alinhados com em-* ---- */
+  --gold: var(--em-gold);
+  --gold-2: #b8860b;
+  --gold-soft: color-mix(in srgb, var(--em-gold) 70%, transparent);
+  --gold-glow: color-mix(in srgb, var(--em-gold) 25%, transparent);
+  --red: #c0392b;
+  --red-bright: #e2574c;
+  --green: #1f9d5a;
+  --green-bright: #29c47a;
+  --pos: #29c47a;
+  --pos-soft: color-mix(in srgb, #29c47a 16%, transparent);
+  --neg: #e2574c;
+  --neg-soft: color-mix(in srgb, #e2574c 16%, transparent);
+
+  /* ---- Radius/elev ---- */
+  --r: 6px;
+  --r-sm: 5px;
+  --r-lg: 8px;
+  --radius: 6px;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --elev-2: 0 6px 18px rgba(0, 0, 0, 0.45);
+
+  /* ---- Família --rtm-* (todos rebindados) ---- */
+  --rtm-bg: var(--em-bg, #121212);
+  --rtm-bg-deep: #0e0e0e;
+  --rtm-panel: var(--em-panel);
+  --rtm-panel-2: var(--em-panel-2);
+  --rtm-panel-3: #2a2a2a;
+  --rtm-header: var(--em-panel-2);
+  --rtm-row-a: var(--em-panel);
+  --rtm-row-b: var(--em-panel-2);
+  --rtm-border: var(--em-border-strong);
+  --rtm-border-soft: var(--em-border);
+  --rtm-text: var(--em-text);
+  --rtm-text-strong: var(--em-text);
+  --rtm-dim: var(--em-muted);
+  --rtm-faint: color-mix(in srgb, var(--em-muted) 60%, transparent);
+  --rtm-link: var(--em-gold);
+  --rtm-blue: var(--em-gold);
+  --rtm-blue-bright: var(--em-gold);
+  --rtm-gold: var(--em-gold);
+  --rtm-gold-soft: color-mix(in srgb, var(--em-gold) 70%, transparent);
+  --rtm-gold-bright: var(--em-gold);
+  --rtm-gold-glow: color-mix(in srgb, var(--em-gold) 25%, transparent);
+  --rtm-green: #1f9d5a;
+  --rtm-green-bright: #29c47a;
+  --rtm-red: #c0392b;
+  --rtm-red-bright: #e2574c;
+  --rtm-radius: 6px;
+  --rtm-accent-inset: var(--em-gold);
+  --rtm-role-awp: var(--em-gold);
+  --rtm-role-support: #29c47a;
+
+  /* Gradientes legados → cor sólida em-* (gradient com tons azuis some) */
+  --rtm-grad-btn: var(--em-gold);
+  --rtm-grad-btn-hover: var(--em-gold);
+  --rtm-grad-header: var(--em-panel-2);
+  --rtm-grad-panel-head: var(--em-panel-2);
+
+  /* Sombras: sem brilho azul */
+  --rtm-shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --rtm-shadow-card-hover: 0 8px 22px rgba(0, 0, 0, 0.42);
+  --rtm-shadow-banner: 0 6px 22px rgba(0, 0, 0, 0.4);
+  --rtm-shadow-header: 0 1px 0 var(--em-border);
+  --rtm-shadow-btn: none;
+}
+
+/* Light mode: ajusta tons quando .career-dash--light está ativo */
+body.career-dash.career-dash--light {
+  --bg-deep: #f4f4f4;
+  --panel-3: #e8e8e8;
+  --gold-glow: color-mix(in srgb, var(--em-gold) 18%, transparent);
+  --rtm-bg-deep: #f4f4f4;
+  --rtm-panel-3: #e8e8e8;
+  --rtm-gold-glow: color-mix(in srgb, var(--em-gold) 18%, transparent);
+}
