@@ -1,0 +1,80 @@
+{
+  "_note": "Academies reais (identidade de org). Rosters com `players` foram extraidos do Liquipedia; clubes sem `players` tem o elenco gerado proceduralmente pela nacionalidade (country). Roles atribuidas para o jogo.",
+  "clubs": [
+    {
+      "id": "navi-junior",
+      "name": "NAVI Junior",
+      "tag": "NAVIJ",
+      "country": "ua",
+      "colors": ["#1a1a1a", "#ffe600"],
+      "players": [
+        { "nick": "kodak", "name": "Nazar Buchma", "country": "ua", "role": "IGL" },
+        { "nick": "Yoki", "name": "Danylo Istomin", "country": "ua", "role": "Rifler" },
+        { "nick": "FAZERY", "name": "David Prochazka", "country": "cz", "role": "AWP" },
+        { "nick": "MahaR", "name": "Samuel Horacek", "country": "cz", "role": "Entry" },
+        { "nick": "skizzyee", "name": "Novica Novkovikj", "country": "mk", "role": "Support" }
+      ]
+    },
+    {
+      "id": "eternal-fire-academy",
+      "name": "Eternal Fire Academy",
+      "tag": "EFA",
+      "country": "tr",
+      "colors": ["#0a0a0a", "#e23b2e"],
+      "players": [
+        { "nick": "preiz", "name": "Cagan Orman", "country": "tr", "role": "IGL" },
+        { "nick": "Hydro2K", "name": "Emirhan Deniz", "country": "tr", "role": "Rifler" },
+        { "nick": "GAYEW", "name": "Emirhan Tasdemir", "country": "tr", "role": "AWP" },
+        { "nick": "Swexsy", "name": "Huseyin Celik", "country": "tr", "role": "Entry" },
+        { "nick": "Y4G1Z", "name": "Yagiz Cinar", "country": "tr", "role": "Support" }
+      ]
+    },
+    {
+      "id": "mouz-nxt",
+      "name": "MOUZ NXT",
+      "tag": "NXT",
+      "country": "de",
+      "colors": ["#1b1b1b", "#e2002a"],
+      "players": [
+        { "nick": "opdust", "name": "Tiago Simao", "country": "pt", "role": "IGL" },
+        { "nick": "ay0k", "name": "Maksims Beloglazovs", "country": "lv", "role": "Rifler" },
+        { "nick": "Nikodeon", "name": "Nikolai Sorensen", "country": "dk", "role": "AWP" }
+      ]
+    },
+    {
+      "id": "big-academy",
+      "name": "BIG Academy",
+      "tag": "BIGA",
+      "country": "de",
+      "colors": ["#101820", "#ffd200"]
+    },
+    {
+      "id": "fnatic-rising",
+      "name": "fnatic Rising",
+      "tag": "FNR",
+      "country": "se",
+      "colors": ["#0a0a0a", "#ff5800"]
+    },
+    {
+      "id": "heroic-academy",
+      "name": "Heroic Academy",
+      "tag": "HRA",
+      "country": "dk",
+      "colors": ["#0a0a0a", "#00e0a0"]
+    },
+    {
+      "id": "pain-academy",
+      "name": "paiN Academy",
+      "tag": "PNA",
+      "country": "br",
+      "colors": ["#0a0a0a", "#ff2d55"]
+    },
+    {
+      "id": "9ine-academy",
+      "name": "9INE Academy",
+      "tag": "9NA",
+      "country": "pl",
+      "colors": ["#0a0a0a", "#c8ff00"]
+    }
+  ]
+}

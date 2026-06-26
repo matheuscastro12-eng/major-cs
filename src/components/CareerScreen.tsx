@@ -25,6 +25,7 @@ import { personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBo
 import { hydrateCareerDepth } from '../engine/career/save';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { matchesNegotiationFilters } from '../engine/career/market';
+import { academyLeague } from '../engine/career/academyLeague';
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
@@ -494,6 +495,28 @@ function makeProspect(seed: string, region: MacroRegion, split: number): Academy
   return e;
 }
 
+// prospecto com PAÍS e FUNÇÃO forçados — base do time academy, pra que os
+// jovens sejam condizentes com a nacionalidade do time (e cubram as 5 funções).
+function makeAcademyTeamPlayer(seed: string, country: string, role: Role, split: number): AcademyEntry {
+  const region = macroRegionOf(country) ?? 'europe';
+  const p = makeProspect(seed, region, split);
+  return {
+    ...p,
+    id: `acateam__${seed.replace(/[^a-z0-9]/gi, '')}`,
+    country,
+    role,
+    awp: role === 'AWP' ? Math.max(p.awp, p.aim - 2) : Math.min(p.awp, p.aim - 6),
+    igl: role === 'IGL' ? Math.max(p.igl, p.aim - 2) : Math.min(p.igl, p.aim - 5),
+  };
+}
+
+// monta o time academy do usuário: 5 jovens (um por função), todos com a
+// nacionalidade da org. Determinístico por org+split.
+function buildUserAcademyTeam(orgCountry: string, orgTag: string, split: number): AcademyEntry[] {
+  return FILL_ROLES.map((role, i) =>
+    makeAcademyTeamPlayer(`acateam:${orgTag}:${role}:${i}:${split}`, orgCountry, role, split));
+}
+
 // reposição da base: quando você TIRA um jogador de um time (contratação), ele
 // não pode ficar nos dois lugares. O time perde o titular e promove um jovem da
 // base (OVR baixo, determinístico) pra manter 5 — o time fica realmente mais fraco.
@@ -725,6 +748,7 @@ interface CareerSave {
   playbookMem?: Partial<Record<Playbook, number>>; // entrosamento guardado por esquema (restaura ao voltar)
   gamePlan?: GamePlan; // plano de jogo pré-partida (buff real na simulação)
   academy?: AcademyEntry[]; // prospectos em formação na academia
+  academyTeam?: AcademyEntry[]; // time academy (5 jovens, um por função) que disputa a Liga Academy
   academyFocus?: string | null; // id do prospecto em foco de treino (cresce mais rápido)
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
@@ -4495,7 +4519,98 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
         const aca = save.academy ?? [];
         const full = aca.length >= ACADEMY_MAX;
         const squadFull = save.squad.length >= 5;
+        // nacionalidade da org = país predominante no elenco (fallback: 1º país da região)
+        const orgCountry = (() => {
+          const counts = new Map<string, number>();
+          for (const s of save.squad) {
+            const c = findSigning(s)?.player.country;
+            if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
+          }
+          let best = ''; let bestN = 0;
+          for (const [c, n] of counts) if (n > bestN) { best = c; bestN = n; }
+          return best || (REGION_CC[save.region ?? 'europe'] ?? REGION_CC.europe)[0];
+        })();
+        const acaTeam = save.academyTeam ?? [];
+        const teamOvr = acaTeam.length ? Math.round(acaTeam.reduce((a, p) => a + playerOvr(p), 0) / acaTeam.length) : 0;
+        const league = acaTeam.length
+          ? academyLeague(
+              { name: `${save.org?.name ?? 'Org'} Academy`, tag: `${save.org?.tag ?? 'ORG'}A`, colors: save.org?.colors ?? ['#101820', '#61a8dd'], strength: teamOvr },
+              `${save.org?.tag ?? 'org'}:${save.split}`,
+            )
+          : null;
         return (
+          <div className="em-tab">
+            {/* ===== TIME ACADEMY (joga a Liga Academy) ===== */}
+            <DashCard title={ct('Time Academy')} actions={acaTeam.length ? <span className="em-ovr-badge">{teamOvr} OVR</span> : undefined}>
+              {acaTeam.length === 0 ? (
+                <div className="aca-create">
+                  <p className="muted small" style={{ maxWidth: 620, margin: '0 0 12px' }}>
+                    {ct('Sua org ainda não tem um time academy. Monte um agora — entram')} <b>{ct('5 jovens')}</b> {ct('(um por função: Rifler, Entry, Support, AWP e IGL), todos da nacionalidade do seu time. Eles disputam a')} <b>{ct('Liga Academy')}</b> {ct('contra as principais academies do mundo a cada split.')}
+                  </p>
+                  <button className="btn gold" onClick={() => update({ academyTeam: buildUserAcademyTeam(orgCountry, save.org?.tag ?? 'ORG', save.split) })}>
+                    <CareerIcon name="search" size={14} /> {ct('Criar time academy')} <Flag cc={orgCountry} />
+                  </button>
+                </div>
+              ) : (
+                <div className="aca-team-grid">
+                  {acaTeam.map((p) => {
+                    const ovr = playerOvr(p);
+                    const potPct = Math.max(6, Math.min(100, ((p.potential - 60) / 33) * 100));
+                    return (
+                      <div key={p.id} className="aca-team-card">
+                        <div className="aca-top">
+                          <PlayerAvatar nick={p.nick} size={42} />
+                          <OvrBadge ovr={ovr} />
+                        </div>
+                        <div className="aca-nick"><Flag cc={p.country} /> {p.nick}</div>
+                        <div className="aca-meta">
+                          <span className={`role-pill ${p.role}`}>{p.role}</span>
+                          <span className="muted small">{p.age} {ct('anos')}</span>
+                        </div>
+                        <div className="aca-potbar" title={`${ct('Potencial')} ${p.potential}`}><div style={{ width: `${potPct}%` }} /></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </DashCard>
+
+            {/* ===== LIGA ACADEMY (tabela com as principais academies do mundo) ===== */}
+            {league && (
+              <DashCard title={`${ct('Liga Academy')} · Split ${save.split}`} actions={<span className="muted small">{ct('Você está em')} {league.userPlace}º</span>}>
+                <div className="aca-league-wrap">
+                  <table className="aca-league">
+                    <thead>
+                      <tr><th>#</th><th>{ct('Academia')}</th><th>V</th><th>D</th><th>+/-</th><th>Pts</th></tr>
+                    </thead>
+                    <tbody>
+                      {league.table.map((r, i) => (
+                        <tr key={r.id} className={r.isUser ? 'mine' : ''}>
+                          <td>{i + 1}</td>
+                          <td><span className="aca-league-team"><TeamBadge tag={r.tag} colors={r.colors} size={18} /> {r.name}</span></td>
+                          <td>{r.w}</td><td>{r.l}</td>
+                          <td className={r.diff > 0 ? 'pos' : r.diff < 0 ? 'neg' : ''}>{r.diff > 0 ? '+' : ''}{r.diff}</td>
+                          <td><b>{r.pts}</b></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="aca-league-matches">
+                    <div className="em-section-label">{ct('Seus jogos no split')}</div>
+                    {league.userMatches.map((m) => (
+                      <div key={m.oppId} className={`aca-match${m.won ? ' won' : ' lost'}`}>
+                        <span className="aca-match-opp"><TeamBadge tag={m.oppTag} colors={m.oppColors} size={16} /> {m.oppName}</span>
+                        <span className="aca-match-score">{m.userScore}–{m.oppScore}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="muted small" style={{ margin: '10px 0 0' }}>
+                  {ct('Academies reais (NAVI Junior, MOUZ NXT, Eternal Fire Academy e mais) — rosters extraídos do bo3.gg/Liquipedia. A tabela é definida pela força do seu time academy a cada split.')}
+                </p>
+              </DashCard>
+            )}
+
           <DashCard title={ct('Academia')}>
               <div className="aca-head">
                 <div>
@@ -4593,6 +4708,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                 </div>
               )}
           </DashCard>
+          </div>
         );
       })()}
 

@@ -2273,3 +2273,125 @@ body:has(main.page-career .career-dash--light) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ============================================================
+   Liga Academy + Time Academy
+   ============================================================ */
+.career-dash .aca-create {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.career-dash .aca-team-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.career-dash .aca-team-card {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+}
+.career-dash .aca-team-card .aca-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.career-dash .aca-team-card .aca-nick {
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.career-dash .aca-team-card .aca-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.career-dash .aca-team-card .aca-potbar {
+  width: 100%;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--em-border);
+  overflow: hidden;
+}
+.career-dash .aca-team-card .aca-potbar > div {
+  height: 100%;
+  background: var(--em-gold);
+}
+
+/* Tabela da liga */
+.career-dash .aca-league-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 16px;
+  align-items: start;
+}
+.career-dash .aca-league {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.career-dash .aca-league th,
+.career-dash .aca-league td {
+  padding: 6px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--em-border);
+}
+.career-dash .aca-league th {
+  color: var(--em-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.career-dash .aca-league td:nth-child(2),
+.career-dash .aca-league th:nth-child(2) {
+  text-align: left;
+}
+.career-dash .aca-league tr.mine {
+  background: color-mix(in srgb, var(--em-gold) 14%, transparent);
+}
+.career-dash .aca-league tr.mine td { font-weight: 700; }
+.career-dash .aca-league-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.career-dash .aca-league td.pos { color: #29c47a; }
+.career-dash .aca-league td.neg { color: #e2574c; }
+.career-dash .aca-league-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.career-dash .aca-match {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  background: var(--em-panel-2);
+  border-left: 3px solid var(--em-border-strong);
+  font-size: 0.82rem;
+}
+.career-dash .aca-match.won { border-left-color: #29c47a; }
+.career-dash .aca-match.lost { border-left-color: #e2574c; }
+.career-dash .aca-match-opp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.career-dash .aca-match-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 760px) {
+  .career-dash .aca-team-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .career-dash .aca-league-wrap { grid-template-columns: minmax(0, 1fr); }
+}
