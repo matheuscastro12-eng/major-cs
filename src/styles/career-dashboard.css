@@ -3212,3 +3212,257 @@ body.career-dash .legal-document {
 }
 body.career-dash .legal-section h2 { color: var(--em-text); }
 body.career-dash .legal-lead { color: var(--em-muted); }
+
+/* ============================================================
+   FASE 3 — Fluxo de partida (Resultados, Veto, Draft, Match, Final)
+   --------------------------------------------------------------
+   Bulk overrides scoped pras classes proprias de cada tela. Tudo
+   harmonizado com tokens em-*; markup intacto.
+   ============================================================ */
+
+/* ====== .matchline (aba Resultados + listas afins) ====== */
+body.career-dash .matchline {
+  background: var(--em-panel);
+  border-bottom: 1px solid var(--em-border);
+  padding: 10px 14px;
+}
+body.career-dash .matchline:nth-child(odd) { background: var(--em-panel); }
+body.career-dash .matchline:nth-child(even) { background: color-mix(in srgb, var(--em-panel-2) 50%, var(--em-panel)); }
+body.career-dash .matchline.clickable { cursor: pointer; transition: background 0.12s; }
+body.career-dash .matchline.clickable:hover { background: var(--em-panel-2); }
+body.career-dash .matchline.user-match { box-shadow: inset 3px 0 0 var(--em-gold); }
+body.career-dash .matchline .tname { color: var(--em-text); font-weight: 600; }
+body.career-dash .matchline .tname.loser { color: var(--em-muted); font-weight: 500; }
+body.career-dash .matchline .side.human .tname { color: var(--em-gold); font-weight: 700; }
+body.career-dash .matchline .score {
+  font-family: inherit; font-size: 0.95rem; font-weight: 700; letter-spacing: 0;
+  color: var(--em-text); min-width: 52px;
+}
+body.career-dash .matchline .score .w { color: #29c47a; }
+body.career-dash .matchline .score .l { color: var(--em-muted); }
+body.career-dash .matchline .score.muted { color: var(--em-muted); font-weight: 500; }
+
+/* ====== Draft: pcards (cartas de jogador) ====== */
+body.career-dash .pcard {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+}
+body.career-dash .pcard:hover { border-color: var(--em-gold); }
+body.career-dash .pcard.selected { border-color: var(--em-gold); box-shadow: 0 0 0 1px var(--em-gold); }
+body.career-dash .pcard .nick { color: var(--em-text); }
+body.career-dash .pcard .meta,
+body.career-dash .pcard .from,
+body.career-dash .pcard .honors { color: var(--em-muted); }
+body.career-dash .ovr-inline { color: var(--em-gold); font-weight: 700; }
+body.career-dash .rc-era,
+body.career-dash .rc-name { color: var(--em-text); }
+body.career-dash .role-needs {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-left: 3px solid var(--em-gold);
+  color: var(--em-text);
+}
+body.career-dash .role-needs-ok { color: #29c47a; }
+body.career-dash .role-needs-hint { color: var(--em-muted); }
+body.career-dash .player-cards,
+body.career-dash .draft-source { background: transparent; }
+
+/* ====== Veto: insight items, mapcards, picks/bans ====== */
+body.career-dash .insight-item,
+body.career-dash .insight-list {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  color: var(--em-text);
+}
+body.career-dash .pb-chip {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  color: var(--em-text);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+body.career-dash .pb-chip.pick { border-color: #29c47a; color: #29c47a; }
+body.career-dash .pb-chip.ban { border-color: #e2574c; color: #e2574c; }
+body.career-dash .pb-analysis {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
+body.career-dash .mapcard-img {
+  border-radius: 6px;
+  border: 1px solid var(--em-border);
+}
+body.career-dash .map-hover-action {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  color: var(--em-text);
+}
+body.career-dash .map-hover-action:hover { border-color: var(--em-gold); }
+body.career-dash .mn,
+body.career-dash .mname,
+body.career-dash .mid { color: var(--em-text); }
+
+/* ====== MatchScreen ao vivo: call bar, killfeed, caster ====== */
+body.career-dash .call-bar {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--em-text);
+}
+body.career-dash .call-label { color: var(--em-muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.5px; }
+body.career-dash .call-money { color: var(--em-gold); font-weight: 700; }
+body.career-dash .call-armed-tag {
+  background: color-mix(in srgb, var(--em-gold) 18%, var(--em-panel-2));
+  color: var(--em-gold);
+  border: 1px solid var(--em-gold);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+body.career-dash .calls-hint { color: var(--em-muted); font-size: 0.78rem; }
+body.career-dash .calls-hint-x { color: var(--em-text); }
+body.career-dash .caster-cursor { color: var(--em-gold); }
+body.career-dash .caster-mic { color: var(--em-text); }
+body.career-dash .caster-text { color: var(--em-text); }
+body.career-dash .freeze-count {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-gold);
+  color: var(--em-gold);
+  border-radius: 6px;
+  font-weight: 700;
+}
+body.career-dash .kf-head { color: var(--em-muted); font-size: 0.74rem; letter-spacing: 0.5px; }
+body.career-dash .kf-round { color: var(--em-text); }
+body.career-dash .kf2-list { background: var(--em-panel); border-radius: 6px; }
+body.career-dash .hs { color: var(--em-gold); font-weight: 700; }
+body.career-dash .digits {
+  font-family: inherit; font-variant-numeric: tabular-nums;
+  color: var(--em-text);
+}
+
+/* ====== MatchDetail: pills de mapa ====== */
+body.career-dash .map-pill {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--em-text);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+body.career-dash .map-pill.win { border-color: #29c47a; color: #29c47a; }
+body.career-dash .map-pill.loss { border-color: #e2574c; color: #e2574c; }
+body.career-dash .map-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ====== FinalScreen ====== */
+body.career-dash .finale {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  color: var(--em-text);
+  padding: 24px;
+}
+body.career-dash .finale h2 { color: var(--em-text); }
+body.career-dash .finale .label,
+body.career-dash .finale .sub { color: var(--em-muted); }
+body.career-dash .finale .gold-text { color: var(--em-gold); font-weight: 700; }
+body.career-dash .finale .neg { color: #e2574c; }
+body.career-dash .finale .pos { color: #29c47a; }
+body.career-dash .mvp-card {
+  background: color-mix(in srgb, var(--em-gold) 10%, var(--em-panel-2));
+  border: 1px solid var(--em-gold);
+  border-radius: 8px;
+  padding: 14px 18px;
+  color: var(--em-text);
+}
+body.career-dash .mvp-card .nick { color: var(--em-text); font-weight: 700; }
+body.career-dash .pcell {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+body.career-dash .pcell .nick { color: var(--em-text); }
+body.career-dash .hall-register {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+body.career-dash .hall-register-row { color: var(--em-text); }
+body.career-dash .donate-cta {
+  background: var(--em-gold);
+  color: #1a1205;
+  border: 1px solid var(--em-gold);
+  border-radius: 5px;
+  font-weight: 700;
+}
+body.career-dash .donate-cta:hover { filter: brightness(1.06); }
+
+/* ====== Chips semanticos de resultado (reusaveis) ====== */
+body.career-dash .em-result-win,
+body.career-dash .em-result-loss,
+body.career-dash .em-result-draw {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border: 1px solid var(--em-border);
+}
+body.career-dash .em-result-win {
+  color: #29c47a;
+  border-color: color-mix(in srgb, #29c47a 45%, var(--em-border));
+  background: color-mix(in srgb, #29c47a 12%, var(--em-panel-2));
+}
+body.career-dash .em-result-loss {
+  color: #e2574c;
+  border-color: color-mix(in srgb, #e2574c 45%, var(--em-border));
+  background: color-mix(in srgb, #e2574c 12%, var(--em-panel-2));
+}
+body.career-dash .em-result-draw { color: var(--em-muted); background: var(--em-panel-2); }
+
+/* ====== em-stage-header (placar persistente no fluxo de partida) ====== */
+body.career-dash .em-stage-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--em-panel-2);
+  border-bottom: 1px solid var(--em-border);
+  padding: 10px 16px;
+  font-size: 0.92rem;
+  color: var(--em-text);
+}
+body.career-dash .em-stage-header .em-stage-score {
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--em-gold);
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+}
+body.career-dash .em-stage-header .em-stage-ctx { color: var(--em-muted); font-size: 0.82rem; }
+
+/* ====== Action bar bottom-fixed (alcance pro polegar) ====== */
+body.career-dash .em-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: var(--em-panel-2);
+  border-top: 1px solid var(--em-border);
+  padding: 10px 16px;
+  margin-top: 12px;
+}
