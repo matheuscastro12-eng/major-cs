@@ -2883,3 +2883,308 @@ body.career-dash {
   background: var(--em-bg, #121212);
   color: var(--em-text);
 }
+
+/* ============================================================
+   FASE 1 — Primitivos faltantes (form controls, table, modal,
+   toast, badge, checkbox, tooltip). Escopados em body.career-dash
+   pra ficarem disponíveis em qualquer tela.
+   ============================================================ */
+
+/* ---- Inputs/Selects/Textarea com classe explicita .em-input* ---- */
+body.career-dash .em-input,
+body.career-dash .em-select,
+body.career-dash .em-textarea {
+  background: var(--em-panel);
+  color: var(--em-text);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.86rem;
+  line-height: 1.3;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  width: 100%;
+  box-sizing: border-box;
+}
+body.career-dash .em-input::placeholder,
+body.career-dash .em-textarea::placeholder { color: var(--em-muted); }
+body.career-dash .em-input:focus,
+body.career-dash .em-select:focus,
+body.career-dash .em-textarea:focus {
+  border-color: var(--em-gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--em-gold) 28%, transparent);
+}
+body.career-dash .em-textarea { min-height: 80px; resize: vertical; }
+
+body.career-dash .em-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+body.career-dash .em-field-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--em-muted);
+  font-weight: 700;
+}
+body.career-dash .em-field-help {
+  font-size: 0.74rem;
+  color: var(--em-muted);
+}
+body.career-dash .em-field.error .em-input,
+body.career-dash .em-field.error .em-select { border-color: var(--em-red, #c0392b); }
+body.career-dash .em-field-error {
+  font-size: 0.74rem;
+  color: var(--em-red, #c0392b);
+}
+
+/* ---- Checkbox custom (com label) ---- */
+body.career-dash .em-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  color: var(--em-text);
+  user-select: none;
+}
+body.career-dash .em-checkbox input[type="checkbox"] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--em-border-strong);
+  border-radius: 3px;
+  background: var(--em-panel);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  margin: 0;
+  flex-shrink: 0;
+}
+body.career-dash .em-checkbox input[type="checkbox"]:checked {
+  background: var(--em-gold);
+  border-color: var(--em-gold);
+}
+body.career-dash .em-checkbox input[type="checkbox"]:checked::after {
+  content: "";
+  width: 4px;
+  height: 8px;
+  border: solid #1a1205;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+body.career-dash .em-checkbox input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--em-gold);
+  outline-offset: 2px;
+}
+
+/* ---- Badge (chips de status/contagem) ---- */
+body.career-dash .em-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  color: var(--em-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+}
+body.career-dash .em-badge--gold {
+  background: color-mix(in srgb, var(--em-gold) 18%, var(--em-panel-2));
+  border-color: var(--em-gold);
+  color: var(--em-gold);
+}
+body.career-dash .em-badge--green {
+  background: color-mix(in srgb, #29c47a 15%, var(--em-panel-2));
+  border-color: color-mix(in srgb, #29c47a 50%, var(--em-border));
+  color: #29c47a;
+}
+body.career-dash .em-badge--red {
+  background: color-mix(in srgb, #e2574c 14%, var(--em-panel-2));
+  border-color: color-mix(in srgb, #e2574c 50%, var(--em-border));
+  color: #e2574c;
+}
+body.career-dash .em-badge--muted { color: var(--em-muted); }
+
+/* ---- Tabela ---- */
+body.career-dash .em-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  color: var(--em-text);
+}
+body.career-dash .em-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--em-panel-2);
+  color: var(--em-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--em-border);
+}
+body.career-dash .em-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--em-border);
+}
+body.career-dash .em-table tbody tr:hover { background: var(--em-panel-2); }
+body.career-dash .em-table tbody tr.mine {
+  background: color-mix(in srgb, var(--em-gold) 12%, transparent);
+}
+body.career-dash .em-table tbody tr.mine td { font-weight: 700; }
+body.career-dash .em-table.zebra tbody tr:nth-child(odd) { background: color-mix(in srgb, var(--em-panel-2) 60%, transparent); }
+body.career-dash .em-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+body.career-dash .em-table .pos { color: #29c47a; }
+body.career-dash .em-table .neg { color: #e2574c; }
+
+/* ---- Modal (Modal.tsx) ---- */
+body.career-dash .em-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+  animation: em-modal-fade 0.16s ease;
+}
+body.career-dash .em-modal {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  color: var(--em-text);
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: em-modal-pop 0.18s ease;
+}
+body.career-dash .em-modal--sm { width: min(420px, 100%); }
+body.career-dash .em-modal--md { width: min(640px, 100%); }
+body.career-dash .em-modal--lg { width: min(880px, 100%); }
+body.career-dash .em-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--em-border);
+  background: var(--em-panel-2);
+}
+body.career-dash .em-modal-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  flex: 1;
+  color: var(--em-text);
+}
+body.career-dash .em-modal-x {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--em-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+}
+body.career-dash .em-modal-x:hover { background: var(--em-panel); border-color: var(--em-border); color: var(--em-text); }
+body.career-dash .em-modal-body { padding: 16px; overflow: auto; flex: 1; }
+body.career-dash .em-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--em-border);
+  background: var(--em-panel-2);
+}
+@keyframes em-modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes em-modal-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Toast (Toast.tsx) ---- */
+body.career-dash .em-toast-stack {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 360px;
+}
+body.career-dash .em-toast {
+  pointer-events: auto;
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-left: 3px solid var(--em-gold);
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: var(--em-text);
+  font-size: 0.86rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: em-toast-in 0.22s ease;
+}
+body.career-dash .em-toast--success { border-left-color: #29c47a; }
+body.career-dash .em-toast--error { border-left-color: #e2574c; }
+body.career-dash .em-toast--info { border-left-color: var(--em-gold); }
+body.career-dash .em-toast-msg { flex: 1; }
+body.career-dash .em-toast-x {
+  background: transparent;
+  border: none;
+  color: var(--em-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+body.career-dash .em-toast-x:hover { background: var(--em-panel-2); color: var(--em-text); }
+@keyframes em-toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ---- Tooltip (atributo data-tooltip) ---- */
+body.career-dash [data-tooltip] { position: relative; }
+body.career-dash [data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  color: var(--em-text);
+  font-size: 0.74rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}

@@ -1,6 +1,13 @@
 // Componentes do "Road to Major — Design System", portados literalmente do
 // design kit (componente a componente) para uso no app real. Mantêm os tokens
 // --rtm-* e o visual exatos do design. Reutilizados em todas as telas re-skinadas.
+//
+// PROMOÇÃO (Fase 0/1 do em-*): os primitivos novos vivem em ./ds/ e são re-
+// exportados aqui, de forma que qualquer consumidor que já importa de './ds'
+// consiga puxar `DashCard`, `AppShell`, `Modal`, `useToast`, etc. sem mudar
+// path. Os primitivos legados (Panel/Button) continuam aqui por compat.
+export { DashCard, AppShell, AppFrame, appDashClass, useAppTheme, Modal, ToastProvider, useToast } from './ds/index';
+export type { ModalSize, ToastVariant, ToastItem } from './ds/index';
 import { useState, type CSSProperties, type ReactNode } from 'react';
 
 type BtnVariant = 'primary' | 'gold' | 'danger' | 'ghost';
