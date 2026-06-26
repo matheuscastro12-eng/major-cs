@@ -5278,3 +5278,304 @@ body.career-dash .roulette-marker {
   background: var(--em-gold);
   box-shadow: 0 0 12px color-mix(in srgb, var(--em-gold) 50%, transparent);
 }
+
+/* ============================================================
+   LiveCanvasGame — replay/broadcast 2D (canvas pós-partida)
+   Chrome em-* mantendo a estética broadcast (dark sobre dark).
+   ============================================================ */
+body.career-dash .em-live-canvas {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--em-panel) 92%, #000), color-mix(in srgb, var(--em-bg, #121212) 96%, #000));
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  overflow: hidden;
+  color: #fff;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+  font-family: inherit;
+}
+
+/* Corpo: sidebar + minimap + feed */
+body.career-dash .em-live-body {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 280px;
+  min-height: 460px;
+  background: rgba(0, 0, 0, 0.22);
+}
+@media (max-width: 960px) {
+  body.career-dash .em-live-body { grid-template-columns: 44px minmax(0, 1fr); }
+  body.career-dash .em-live-feed-col { display: none; }
+}
+
+body.career-dash .em-live-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-right: 1px solid color-mix(in srgb, var(--em-border) 70%, transparent);
+  background: rgba(0, 0, 0, 0.28);
+  padding: 4px 0;
+}
+
+body.career-dash .em-live-tab {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  padding: 14px 6px;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  text-align: center;
+  text-transform: uppercase;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  width: 44px;
+}
+body.career-dash .em-live-tab:hover {
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.03);
+}
+body.career-dash .em-live-tab.is-active {
+  color: #fff;
+  border-left-color: var(--em-gold);
+  background: rgba(0, 0, 0, 0.4);
+}
+body.career-dash .em-live-tab:focus-visible {
+  outline: 2px solid var(--em-gold);
+  outline-offset: -2px;
+}
+
+/* Minimap col */
+body.career-dash .em-live-minimap-col {
+  position: relative;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.career-dash .em-live-minimap-box {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--em-border-strong) 80%, transparent);
+  background: #06080c;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+}
+
+/* Feed (narração) */
+body.career-dash .em-live-feed-col {
+  padding: 12px 12px 12px 0;
+  border-left: 1px solid color-mix(in srgb, var(--em-border) 70%, transparent);
+  background: rgba(0, 0, 0, 0.18);
+}
+body.career-dash .em-live-feed-box {
+  height: 100%;
+  max-height: calc(100vh - 360px);
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--em-border-strong) transparent;
+}
+body.career-dash .em-live-feed-box::-webkit-scrollbar { width: 6px; }
+body.career-dash .em-live-feed-box::-webkit-scrollbar-thumb { background: var(--em-border-strong); border-radius: 3px; }
+body.career-dash .em-live-feed-box::-webkit-scrollbar-track { background: transparent; }
+
+/* Player cards row */
+body.career-dash .em-live-cards-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.42);
+  border-top: 1px solid color-mix(in srgb, var(--em-border) 70%, transparent);
+}
+body.career-dash .em-live-cards-side {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+body.career-dash .em-live-cards-side--left { flex-direction: row; }
+body.career-dash .em-live-cards-side--right { flex-direction: row-reverse; }
+body.career-dash .em-live-card-wrap {
+  animation: em-livecard-in 0.34s ease both;
+  opacity: 0;
+}
+@keyframes em-livecard-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Controles */
+body.career-dash .em-live-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.55);
+  border-top: 1px solid color-mix(in srgb, var(--em-border) 70%, transparent);
+}
+
+/* Progresso (barra fina + label) */
+body.career-dash .em-live-progress {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 130px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+body.career-dash .em-live-progress-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--em-gold) 32%, transparent), var(--em-gold));
+  transition: width 0.25s ease;
+}
+body.career-dash .em-live-progress-label {
+  position: relative;
+  z-index: 1;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  margin: 0 auto;
+  letter-spacing: 0.4px;
+}
+
+/* Dots de round */
+body.career-dash .em-live-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  max-width: 280px;
+}
+body.career-dash .em-live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+body.career-dash .em-live-dot.is-past { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.28); }
+body.career-dash .em-live-dot.is-current {
+  background: var(--em-gold);
+  border-color: var(--em-gold);
+  transform: scale(1.18);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--em-gold) 60%, transparent);
+  animation: em-live-dot-pulse 1.4s ease-in-out infinite;
+}
+@keyframes em-live-dot-pulse {
+  0%, 100% { box-shadow: 0 0 8px color-mix(in srgb, var(--em-gold) 60%, transparent); }
+  50% { box-shadow: 0 0 12px color-mix(in srgb, var(--em-gold) 80%, transparent); }
+}
+
+/* Speed picker (segmented) */
+body.career-dash .em-live-speed {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px;
+  gap: 1px;
+}
+body.career-dash .em-live-speed-btn {
+  padding: 4px 11px;
+  font-size: 0.72rem;
+  font-family: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  border: none;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  transition: background 0.12s, color 0.12s;
+  font-variant-numeric: tabular-nums;
+}
+body.career-dash .em-live-speed-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+body.career-dash .em-live-speed-btn.is-on {
+  background: var(--em-gold);
+  color: #1a1205;
+}
+body.career-dash .em-live-speed-btn:focus-visible { outline: 2px solid var(--em-gold); outline-offset: 1px; }
+
+/* Action buttons (Pular / Pause / Fechar) */
+body.career-dash .em-live-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+body.career-dash .em-live-action:hover {
+  color: #fff;
+  border-color: var(--em-gold);
+  background: color-mix(in srgb, var(--em-gold) 10%, transparent);
+}
+body.career-dash .em-live-action.is-paused {
+  border-color: var(--em-gold);
+  color: var(--em-gold);
+  background: color-mix(in srgb, var(--em-gold) 14%, transparent);
+}
+body.career-dash .em-live-action--close:hover {
+  border-color: #e2574c;
+  color: #e2574c;
+  background: color-mix(in srgb, #e2574c 10%, transparent);
+}
+body.career-dash .em-live-action:focus-visible { outline: 2px solid var(--em-gold); outline-offset: 1px; }
+
+/* Mini-ícones de play/pause (sem dep externa) */
+body.career-dash .em-live-play-icon {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 7px solid currentColor;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+body.career-dash .em-live-pause-icon {
+  display: inline-flex;
+  gap: 2px;
+}
+body.career-dash .em-live-pause-icon span {
+  display: inline-block;
+  width: 3px;
+  height: 10px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+/* Player cards do broadcast — outline mais polido pro user */
+body.career-dash .em-live-card-wrap > div {
+  /* hover subtle lift */
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+body.career-dash .em-live-card-wrap > div:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+}
