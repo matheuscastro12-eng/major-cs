@@ -195,7 +195,7 @@ function Faq() {
     ['O que a conta me dá?', 'Save na nuvem pra jogar de qualquer aparelho, ranking e MMR persistentes no modo online, histórico de partidas e um selo de apoiador. Nenhum modo ou vantagem de gameplay é vendido.'],
     ['Por que o ranking online pede conta?', 'O ranking precisa guardar o seu histórico em servidor pra ser justo e não dar pra burlar. Sem conta você ainda joga partidas online, mas elas não contam pontos salvos.'],
     ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
-    ['Como pago os R$20?', 'Via Pix ou cartão, pelo Stripe. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
+    ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
     ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, cobrindo as cinco eras do Counter-Strike.'],
   ];
   const [open, setOpen] = useState(0);
@@ -245,6 +245,10 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
   );
 }
 
+// link de checkout Pix do Woovi (estático). O acesso é liberado pelo webhook
+// /api/woovi-webhook casando o E-MAIL do pagador com a conta.
+const WOOVI_CHECKOUT_URL = 'https://woovi.com/pay/2246011b-9cb1-481f-88d2-a081d7dd0fce';
+
 export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
   const [mode, setMode] = useState<'signup' | 'login'>(initialMode);
   const [nick, setNick] = useState('');
@@ -253,6 +257,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [accepted, setAccepted] = useState(false);
+  const [pixEmail, setPixEmail] = useState(''); // e-mail pra avisar a pagar com o mesmo no Pix
   const input: CSSProperties = { width: '100%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '11px 13px', fontSize: '14px', fontFamily: 'var(--font)' };
   const lbl: CSSProperties = { fontSize: '11px', fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', display: 'block', marginBottom: '6px' };
   const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6 && (mode === 'login' || accepted);
@@ -263,6 +268,19 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
       if (acct.paid) { onPlay(); return; }           // já tem conta vitalícia: entra direto
       await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento
+    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
+  };
+  // Pix via Woovi: cria/entra na conta (pra existir o e-mail) e abre o checkout.
+  // O webhook libera o acesso ao casar o e-mail do pagador com a conta.
+  const goPix = async () => {
+    if (!valid || busy) return;
+    setBusy(true); setErr('');
+    try {
+      const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
+      if (acct.paid) { onPlay(); return; }
+      window.open(WOOVI_CHECKOUT_URL, '_blank', 'noopener,noreferrer');
+      setPixEmail(acct.email);
+      setBusy(false);
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
   };
   return (
@@ -293,12 +311,23 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             </label>
           )}
           {err && <p style={{ color: 'var(--rtm-red-bright)', fontSize: '12.5px', margin: '12px 0 0' }}>{err}</p>}
-          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : mode === 'signup' ? ct('Ativar save por R$20') : ct('Entrar')}</Button>
+          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : mode === 'signup' ? ct('Ativar com cartão (Stripe)') : ct('Entrar')}</Button>
+          {mode === 'signup' && (
+            <button type="button" disabled={!valid || busy} onClick={goPix}
+              style={{ width: '100%', marginTop: '10px', padding: '11px', borderRadius: 'var(--rtm-radius)', cursor: !valid || busy ? 'default' : 'pointer', opacity: !valid || busy ? 0.5 : 1, background: 'rgba(92,184,92,.12)', border: '1px solid var(--rtm-green, #5cb85c)', color: 'var(--rtm-green-bright, #6fd06f)', fontWeight: 700, fontSize: '13.5px', fontFamily: 'var(--font)' }}>
+              {ct('Pagar com Pix (Woovi)')}
+            </button>
+          )}
+          {pixEmail && (
+            <p style={{ fontSize: '12px', color: 'var(--rtm-text)', background: 'rgba(92,184,92,.10)', border: '1px solid rgba(92,184,92,.3)', borderRadius: 'var(--rtm-radius)', padding: '10px 12px', margin: '12px 0 0', lineHeight: 1.5 }}>
+              {ct('Abrimos o Pix do Woovi numa nova aba. Pague com o e-mail')} <b>{pixEmail}</b> {ct('(o mesmo da conta). Assim que o Pix cair, é só entrar na sua conta que o acesso libera sozinho.')}
+            </p>
+          )}
           <p style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', textAlign: 'center', margin: '14px 0 0' }}>
             {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
             <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); }} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontWeight: 700, fontSize: '12.5px' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
           </p>
-          <p style={{ fontSize: '11.5px', color: 'var(--rtm-faint)', textAlign: 'center', margin: '10px 0 0' }}>{ct('Pagamento via Stripe. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
+          <p style={{ fontSize: '11.5px', color: 'var(--rtm-faint)', textAlign: 'center', margin: '10px 0 0' }}>{ct('Cartão pelo Stripe ou Pix pelo Woovi. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
         </div>
       </div>
     </div>
