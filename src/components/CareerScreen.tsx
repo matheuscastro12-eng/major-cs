@@ -3343,10 +3343,9 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
       swiss: ct('FASE SUÍÇA'),
     };
     return (
-      <div className="fade-in">
-        <div className="panel" style={{ maxWidth: 720, margin: '24px auto' }}>
-          <div className="panel-head">{ct('Major Mundial - resultado')}</div>
-          <div className="panel-body center">
+      <CareerDashFrame title={ct('Major Mundial — resultado')} onExit={onExit}>
+        <div className="em-stage-page">
+          <div className="em-stage-card center">
             <div className="trophy">{mr.champion ? '🏆' : mr.placement === 'runnerup' ? '🥈' : '★'}</div>
             <h2>{save.org?.name}: {PLACE_PT[mr.placement]}</h2>
             <div className="prize-banner">
@@ -3486,7 +3485,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
         {showCeremony && (
           <Top20Ceremony entries={seasonTop20} mine={mySquadOidsM} orgTag={save.org?.tag ?? 'VOCÊ'} split={save.split} circuit={save.circuit?.name ?? ct('Temporada')} onClose={() => setShowCeremony(false)} />
         )}
-      </div>
+      </CareerDashFrame>
     );
   }
 
@@ -3588,14 +3587,9 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
       champion: isChampion,
     });
     return (
-      <div className="fade-in">
-        <div className="panel" style={{ maxWidth: 760, margin: '24px auto' }}>
-          <div className="panel-head">
-            {league.name} — {lastEvent ? ct('split encerrado') : `${ct('etapa')} ${ev}/${EVENTS_PER_SPLIT} ${ct('concluída')}`}
-            <span className="spacer" />
-            <button className="btn" onClick={onExit}>{ct('← Sair')}</button>
-          </div>
-          <div className="panel-body center">
+      <CareerDashFrame title={`${league.name} — ${lastEvent ? ct('split encerrado') : `${ct('etapa')} ${ev}/${EVENTS_PER_SPLIT} ${ct('concluída')}`}`} onExit={onExit}>
+        <div className="em-stage-page">
+          <div className="em-stage-card center">
             <div className="trophy">{isChampion ? '🏆' : poRank === 2 ? '🥈' : poRank === 3 ? '🥉' : pos <= 3 ? '🥉' : '★'}</div>
             <h2>
               {isChampion
@@ -3841,7 +3835,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
         {showCeremony && (
           <Top20Ceremony entries={seasonTop20} mine={new Set(save.squad.map((s) => s.playerId))} orgTag={save.org?.tag ?? ct('VOCÊ')} split={save.split} circuit={save.circuit?.name ?? ct('temporada')} onClose={() => setShowCeremony(false)} />
         )}
-      </div>
+      </CareerDashFrame>
     );
   }
 
@@ -3910,21 +3904,21 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
     const userMatch = poUserMatch(p);
     const userRoundLabel = !userMatch ? '' : p.final === userMatch ? ct('a final') : (p.qf?.includes(userMatch) ? ct('minha quarta') : ct('minha semi'));
     return (
-      <div className="career-major-live">
-        <div className="major-live-bar">
-          <b>PLAYOFFS</b> · {p.circuit} · Split {save.split}
-          <span className="spacer" />
-          <button className="btn ghost" onClick={onExit}>← {ct('Sair')}</button>
-          {userMatch ? (
-            <>
-              <button className="btn ghost" onClick={simPlayoffMine}>⏩ Simular</button>
-              <button className="btn gold" onClick={playPlayoffMine}>▶ Jogar {userRoundLabel}</button>
-            </>
-          ) : p.champion ? (
-            <button className="btn gold" onClick={() => setStage('seasonEnd')}>{ct('Ver resultado do split →')}</button>
-          ) : null}
-        </div>
-        <PlayoffBracket p={p} teamOf={teamOf} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
+      <CareerDashFrame title={`Playoffs · ${p.circuit} · Split ${save.split}`} onExit={onExit}>
+        <DashCard title={`${ct('Playoffs')} · ${p.circuit}`} actions={
+          <span className="em-action-row">
+            {userMatch ? (
+              <>
+                <button type="button" className="em-btn em-btn-ghost" onClick={simPlayoffMine}>⏩ {ct('Simular')}</button>
+                <button type="button" className="em-btn em-btn-primary" onClick={playPlayoffMine}>▶ {ct('Jogar')} {userRoundLabel}</button>
+              </>
+            ) : p.champion ? (
+              <button type="button" className="em-btn em-btn-primary" onClick={() => setStage('seasonEnd')}>{ct('Ver resultado do split →')}</button>
+            ) : null}
+          </span>
+        }>
+          <PlayoffBracket p={p} teamOf={teamOf} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
+        </DashCard>
         {selSeries && (
           <div className="modal-backdrop" onClick={() => setSelSeries(null)}>
             <div className="modal scoreboard-modal" onClick={(e) => e.stopPropagation()}>
@@ -3933,7 +3927,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
             </div>
           </div>
         )}
-      </div>
+      </CareerDashFrame>
     );
   }
 

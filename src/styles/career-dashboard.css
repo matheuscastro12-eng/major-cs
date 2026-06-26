@@ -2573,3 +2573,149 @@ body:has(main.page-career .career-dash--light) {
 .career-dash .gsl-pl { font-family: inherit; color: var(--em-muted); }
 .career-dash .gsl-q { color: #29c47a; font-weight: 700; }
 .career-dash .gsl-stage-label { color: var(--em-muted); }
+
+/* ============================================================
+   Páginas de stage (resultados de major, fim de split, playoff)
+   Wrapper em-stage-page padroniza largura/centro; em-stage-card
+   substitui .panel. Inclui overrides dos banners legados.
+   ============================================================ */
+.career-dash .em-stage-page {
+  max-width: 920px;
+  margin: 24px auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.career-dash .em-stage-card {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  padding: 24px;
+}
+.career-dash .em-stage-card.center {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.career-dash .em-stage-card h2 {
+  margin: 4px 0 6px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--em-text);
+}
+
+/* botões de ação no header do DashCard (Simular/Jogar etc) */
+.career-dash .em-action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ===== overrides dos banners/elements legados ===== */
+.career-dash .prize-banner {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-left: 3px solid var(--em-gold);
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: var(--em-text);
+  font-size: 0.92rem;
+}
+.career-dash .prize-banner b { color: var(--em-gold); }
+
+.career-dash .tier-banner {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--em-text);
+}
+.career-dash .tier-banner.up {
+  border-left: 3px solid #29c47a;
+  background: color-mix(in srgb, #29c47a 10%, var(--em-panel-2));
+}
+.career-dash .tier-banner.down {
+  border-left: 3px solid #e2574c;
+  background: color-mix(in srgb, #e2574c 10%, var(--em-panel-2));
+}
+
+.career-dash .qualify-banner {
+  background: color-mix(in srgb, var(--em-gold) 14%, var(--em-panel-2));
+  border: 1px solid var(--em-gold);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  color: var(--em-text);
+}
+.career-dash .qualify-banner b { color: var(--em-gold); }
+
+.career-dash .trophy {
+  font-size: 4rem;
+  line-height: 1;
+  margin: 6px 0 2px;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
+.career-dash .career-hall-status {
+  color: var(--em-muted);
+  font-size: 0.8rem;
+}
+.career-dash .career-hall-status.saved { color: #29c47a; }
+.career-dash .career-hall-status.error { color: var(--em-gold); }
+
+.career-dash .se-awards {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.career-dash .se-award {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  min-width: 320px;
+}
+.career-dash .se-award-title {
+  font-size: 0.74rem;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--em-muted);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.career-dash .se-top3-row {
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--em-border);
+  font-size: 0.86rem;
+}
+.career-dash .se-top3-row:last-child { border-bottom: none; }
+
+/* ===== legacy .btn → em-* (escopado em .career-dash) ===== */
+.career-dash .em-stage-card .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: 5px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--em-panel-2);
+  color: var(--em-text);
+  border: 1px solid var(--em-border);
+  transition: background 0.12s, border-color 0.12s, transform 0.05s;
+}
+.career-dash .em-stage-card .btn:hover { border-color: var(--em-gold); }
+.career-dash .em-stage-card .btn.gold {
+  background: var(--em-gold);
+  color: #1a1205;
+  border-color: var(--em-gold);
+}
+.career-dash .em-stage-card .btn.gold:hover { filter: brightness(1.05); }
+.career-dash .em-stage-card .btn.big { padding: 12px 26px; font-size: 0.96rem; }
