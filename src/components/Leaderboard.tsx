@@ -7,15 +7,15 @@ import { getLadder, getChampions, fetchMyRank, type RankRow, type MyRank, type C
 import { ct } from '../state/career-i18n';
 
 const DIV_COLOR: Record<string, string> = {
-  Calibrando: 'var(--rtm-dim)',
+  Calibrando: 'var(--em-muted)',
   Prata: '#b9c2cf',
-  'Ouro Nova': 'var(--rtm-gold)',
+  'Ouro Nova': 'var(--em-gold)',
   'Mestre Guardião': 'var(--em-gold)',
   'Águia': '#c792ea',
   'Global Elite': '#e8743b',
 };
 export function DivBadge({ d }: { d: string }) {
-  const c = DIV_COLOR[d] ?? 'var(--rtm-dim)';
+  const c = DIV_COLOR[d] ?? 'var(--em-muted)';
   return <span style={{ display: 'inline-block', fontSize: '10.5px', fontWeight: 800, letterSpacing: '.4px', textTransform: 'uppercase', color: c, background: 'color-mix(in srgb, ' + c + ' 15%, transparent)', border: '1px solid color-mix(in srgb, ' + c + ' 40%, transparent)', padding: '2px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}>{d}</span>;
 }
 
@@ -27,8 +27,8 @@ function countdown(iso: string): string {
   return d > 0 ? `${d}d ${h}h` : `${h}h`;
 }
 
-const th: CSSProperties = { background: 'var(--rtm-header)', color: 'var(--rtm-dim)', fontSize: '11px', padding: '8px 12px', borderBottom: '1px solid var(--rtm-border-soft)', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.5px' };
-const cond: CSSProperties = { fontFamily: 'var(--font-cond)', fontWeight: 800 };
+const th: CSSProperties = { background: 'var(--rtm-header)', color: 'var(--em-muted)', fontSize: '11px', padding: '8px 12px', borderBottom: '1px solid var(--em-border)', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.5px' };
+const cond: CSSProperties = { fontFamily: 'inherit', fontWeight: 800 };
 
 export function Leaderboard({ account, onBack, onUpgrade }: { account: Account | null; onBack: () => void; onUpgrade: () => void }) {
   const paid = !!account?.paid;
@@ -43,15 +43,15 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
   return (
     <div className="rtm-fade-in" style={{ maxWidth: '1180px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* banner da temporada */}
-      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--rtm-border)', boxShadow: 'var(--rtm-shadow-banner)' }}>
+      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--em-border-strong)', boxShadow: 'var(--rtm-shadow-banner)' }}>
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/nuke.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.2 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(216,169,67,.18) 0%, rgba(13,17,22,.92) 60%)' }} />
         <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '22px 26px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '220px' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800 }}>{ct('Ranking competitivo · Online')}</div>
-            <h1 style={{ margin: '4px 0 0', ...cond, fontSize: '34px', color: 'var(--rtm-text-strong)', textTransform: 'uppercase', letterSpacing: '1px' }}>{ct('Temporada')} {data?.season ?? '—'}</h1>
-            <div style={{ fontSize: '13.5px', color: 'var(--rtm-dim)', marginTop: '4px' }}>
-              {data ? <>{ct('Termina em')} <b style={{ color: 'var(--rtm-text-strong)' }}>{countdown(data.endsAt)}</b> · {data.total} {data.total === 1 ? ct('manager') : ct('managers')} {ct('no ladder')}</> : ct('Carregando…')}
+            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>{ct('Ranking competitivo · Online')}</div>
+            <h1 style={{ margin: '4px 0 0', ...cond, fontSize: '34px', color: 'var(--em-text)', textTransform: 'uppercase', letterSpacing: '1px' }}>{ct('Temporada')} {data?.season ?? '—'}</h1>
+            <div style={{ fontSize: '13.5px', color: 'var(--em-muted)', marginTop: '4px' }}>
+              {data ? <>{ct('Termina em')} <b style={{ color: 'var(--em-text)' }}>{countdown(data.endsAt)}</b> · {data.total} {data.total === 1 ? ct('manager') : ct('managers')} {ct('no ladder')}</> : ct('Carregando…')}
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={onBack}>⇤ {ct('Menu')}</Button>
@@ -60,17 +60,17 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
 
       {/* sua posição */}
       {paid && mine && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1px', background: 'var(--rtm-border-soft)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--rtm-border)' }} className="rtm-kpis">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1px', background: 'var(--em-border)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--em-border-strong)' }} className="rtm-kpis">
           {([['Sua posição', mine.placing ? '—' : `#${mine.rank}`], ['MMR', String(mine.mmr)], ['Divisão', mine.division], ['Vitórias', `${mine.wins}-${mine.losses}`], ['Pico', String(mine.peak)]] as [string, string][]).map(([k, v], i) => (
-            <div key={k} style={{ padding: '14px 12px', textAlign: 'center', background: 'var(--rtm-panel)' }}>
-              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct(k)}</div>
-              {k === 'Divisão' ? <div style={{ marginTop: '5px' }}><DivBadge d={v} /></div> : <div style={{ ...cond, fontSize: '22px', color: i === 1 || i === 4 ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{v}</div>}
+            <div key={k} style={{ padding: '14px 12px', textAlign: 'center', background: 'var(--em-panel)' }}>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>{ct(k)}</div>
+              {k === 'Divisão' ? <div style={{ marginTop: '5px' }}><DivBadge d={v} /></div> : <div style={{ ...cond, fontSize: '22px', color: i === 1 || i === 4 ? 'var(--em-gold)' : 'var(--em-text)' }}>{v}</div>}
             </div>
           ))}
         </div>
       )}
       {paid && mine?.placing && (
-        <p className="muted small" style={{ margin: 0, color: 'var(--rtm-gold)' }}>🎯 {ct('Calibrando: faltam')} {mine.placementLeft} {mine.placementLeft === 1 ? ct('partida') : ct('partidas')} {ct('de colocação pra cravar sua divisão.')}</p>
+        <p className="muted small" style={{ margin: 0, color: 'var(--em-gold)' }}>🎯 {ct('Calibrando: faltam')} {mine.placementLeft} {mine.placementLeft === 1 ? ct('partida') : ct('partidas')} {ct('de colocação pra cravar sua divisão.')}</p>
       )}
 
       <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '16px', alignItems: 'start' }}>
@@ -92,12 +92,12 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
                   {data.ladder.map((r, i) => {
                     const isMe = !!myNick && r.nick.toLowerCase() === myNick.toLowerCase();
                     return (
-                      <tr key={r.nick + i} style={{ background: isMe ? 'rgba(67,130,182,.16)' : i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)', boxShadow: isMe ? 'inset 3px 0 0 var(--em-gold)' : 'none' }}>
-                        <td style={{ padding: '10px 12px', ...cond, fontSize: '15px', color: i < 3 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{i < 3 ? ['🥇', '🥈', '🥉'][i] : r.rank}</td>
-                        <td style={{ padding: '10px 12px' }}><b style={{ color: isMe ? 'var(--em-gold)' : 'var(--rtm-text-strong)' }}>{r.nick}</b>{isMe && <span className="muted small"> · {ct('você')}</span>}</td>
+                      <tr key={r.nick + i} style={{ background: isMe ? 'color-mix(in srgb, var(--em-gold) 14%, transparent)' : i % 2 ? 'var(--em-panel-2)' : 'var(--em-panel)', boxShadow: isMe ? 'inset 3px 0 0 var(--em-gold)' : 'none' }}>
+                        <td style={{ padding: '10px 12px', ...cond, fontSize: '15px', color: i < 3 ? 'var(--em-gold)' : 'var(--rtm-faint)' }}>{i < 3 ? ['🥇', '🥈', '🥉'][i] : r.rank}</td>
+                        <td style={{ padding: '10px 12px' }}><b style={{ color: isMe ? 'var(--em-gold)' : 'var(--em-text)' }}>{r.nick}</b>{isMe && <span className="muted small"> · {ct('você')}</span>}</td>
                         <td style={{ padding: '10px 12px' }}><DivBadge d={r.division} /></td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--rtm-text)' }}>{r.wins}-{r.losses}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', ...cond, fontVariantNumeric: 'tabular-nums', color: 'var(--rtm-text-strong)' }}>{r.mmr}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--em-text)' }}>{r.wins}-{r.losses}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', ...cond, fontVariantNumeric: 'tabular-nums', color: 'var(--em-text)' }}>{r.mmr}</td>
                       </tr>
                     );
                   })}
@@ -116,9 +116,9 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {champs.champions.map((c) => (
                   <div key={c.place} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13.5px' }}>
-                    <span style={{ ...cond, width: '22px', color: c.place <= 3 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{c.place <= 3 ? ['🥇', '🥈', '🥉'][c.place - 1] : c.place}</span>
-                    <b style={{ flex: 1, color: 'var(--rtm-text-strong)' }}>{c.nick}</b>
-                    <span style={{ ...cond, color: 'var(--rtm-gold)', fontVariantNumeric: 'tabular-nums' }}>{c.mmr}</span>
+                    <span style={{ ...cond, width: '22px', color: c.place <= 3 ? 'var(--em-gold)' : 'var(--rtm-faint)' }}>{c.place <= 3 ? ['🥇', '🥈', '🥉'][c.place - 1] : c.place}</span>
+                    <b style={{ flex: 1, color: 'var(--em-text)' }}>{c.nick}</b>
+                    <span style={{ ...cond, color: 'var(--em-gold)', fontVariantNumeric: 'tabular-nums' }}>{c.mmr}</span>
                   </div>
                 ))}
               </div>
@@ -127,13 +127,13 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
 
           {!paid && (
             <Panel title={ct('Entre no ranking')} accent="gold">
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>{ct('Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.')}</p>
+              <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{ct('Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.')}</p>
               <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{ct('Ativar ranking persistente (R$20)')}</Button>
             </Panel>
           )}
 
           <Panel title={ct('Como funciona')}>
-            <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12.5px', color: 'var(--rtm-dim)', lineHeight: 1.7 }}>
+            <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12.5px', color: 'var(--em-muted)', lineHeight: 1.7 }}>
               <li>{ct('Vitória rende')} <b>+25</b> {ct('de MMR, derrota tira até')} <b>20</b>.</li>
               <li>{ct('As')} <b>{ct('5 primeiras')}</b> {ct('partidas da temporada são de colocação (valem mais).')}</li>
               <li>{ct('Divisões: Prata → Ouro Nova → Mestre Guardião → Águia → Global Elite.')}</li>

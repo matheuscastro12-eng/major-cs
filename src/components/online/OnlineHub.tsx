@@ -28,8 +28,8 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
 
   const MODES = [
     { id: '1v1' as const, icon: '⚔', tone: 'var(--em-gold)', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
-    { id: 'major' as const, icon: '🏆', tone: 'var(--rtm-gold)', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'] },
-    { id: 'gauntlet' as const, icon: '🔥', tone: 'var(--rtm-green-bright)', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
+    { id: 'major' as const, icon: '🏆', tone: 'var(--em-gold)', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'] },
+    { id: 'gauntlet' as const, icon: '🔥', tone: '#29c47a', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
   ];
 
   type LbRow = { nick: string; country: string; val: number; you: boolean; sub: string; subColor: string; fmt: string };
@@ -45,7 +45,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       const pl = majorPlace(stats.majorPts >= 100 ? 'champion' : 'semi');
       return [{ nick: me.nick, country: me.country, val: stats.majorPts, you: true, sub: ct('Melhor:') + ' ' + ct(pl.label), subColor: pl.color, fmt: stats.majorPts + ' ' + ct('pts') }];
     }
-    return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: ct('Sequência recorde'), subColor: 'var(--rtm-green-bright)', fmt: stats.bestStreak + ' ' + ct('seguidas') }];
+    return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: ct('Sequência recorde'), subColor: '#29c47a', fmt: stats.bestStreak + ' ' + ct('seguidas') }];
   }
   const LB_NOTE: Record<OnlineModeId, string> = {
     '1v1': 'Ranking real por MMR (contas com ranking salvo). Ganhar sobe, perder desce.',
@@ -60,29 +60,29 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       </div>
 
       {/* banner do jogador */}
-      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--rtm-border)', boxShadow: 'var(--rtm-shadow-banner)' }}>
+      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--em-border-strong)', boxShadow: 'var(--rtm-shadow-banner)' }}>
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/dust2.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.24 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(111,208,111,.14), rgba(13,17,22,.92) 60%)' }} />
         <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>
-          <span style={{ width: '70px', height: '70px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '24px', color: '#fff', background: `linear-gradient(160deg, ${me.accent || '#4382b6'}, #20303f)`, boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.12)', flexShrink: 0 }}>{me.nick.slice(0, 2).toUpperCase()}</span>
+          <span style={{ width: '70px', height: '70px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', fontWeight: 800, fontSize: '24px', color: '#fff', background: `linear-gradient(160deg, ${me.accent || 'var(--em-gold)'}, #20303f)`, boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.12)', flexShrink: 0 }}>{me.nick.slice(0, 2).toUpperCase()}</span>
           <div style={{ flex: 1, minWidth: '180px' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-green-bright)', fontWeight: 800 }}>{ct('Modo online')}</div>
-            <h1 style={{ margin: '2px 0', fontFamily: 'var(--font-cond)', fontSize: '30px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{me.nick}</h1>
-            <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={me.country} /> <b style={{ color: rk.color }}>{ct(rk.name)}</b> · {stats.mmr} MMR</div>
+            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: '#29c47a', fontWeight: 800 }}>{ct('Modo online')}</div>
+            <h1 style={{ margin: '2px 0', fontFamily: 'inherit', fontSize: '30px', fontWeight: 800, color: 'var(--em-text)' }}>{me.nick}</h1>
+            <div style={{ fontSize: '13px', color: 'var(--em-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={me.country} /> <b style={{ color: rk.color }}>{ct(rk.name)}</b> · {stats.mmr} MMR</div>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {([['1v1', stats.w + 'W ' + stats.l + 'L', 'var(--rtm-green-bright)'], ['Major', stats.majorPts + ' pts', 'var(--rtm-gold)'], ['Gauntlet', stats.bestStreak + ' rec', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
-              <div key={k} style={{ textAlign: 'center', padding: '8px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.55)', border: '1px solid var(--rtm-border-soft)' }}>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{k}</div>
-                <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '17px', color: c }}>{v}</div>
+            {([['1v1', stats.w + 'W ' + stats.l + 'L', '#29c47a'], ['Major', stats.majorPts + ' pts', 'var(--em-gold)'], ['Gauntlet', stats.bestStreak + ' rec', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
+              <div key={k} style={{ textAlign: 'center', padding: '8px 14px', borderRadius: '6px', background: 'rgba(18,22,27,.55)', border: '1px solid var(--em-border)' }}>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>{k}</div>
+                <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '17px', color: c }}>{v}</div>
               </div>
             ))}
           </div>
         </div>
         {!paid && (
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 26px', background: 'rgba(216,169,67,.1)', borderTop: '1px solid var(--rtm-gold-soft)', fontSize: '12.5px', color: 'var(--rtm-dim)', flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>★</span>
-            {ct('Todo o online é gratuito. Para manter seu rank no')} <b style={{ color: 'var(--rtm-text)' }}>{ct('ranking persistente')}</b> {ct('entre sessões, ative a conta com save na nuvem.')}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 26px', background: 'rgba(216,169,67,.1)', borderTop: '1px solid var(--em-gold)', fontSize: '12.5px', color: 'var(--em-muted)', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--em-gold)', fontWeight: 800 }}>★</span>
+            {ct('Todo o online é gratuito. Para manter seu rank no')} <b style={{ color: 'var(--em-text)' }}>{ct('ranking persistente')}</b> {ct('entre sessões, ative a conta com save na nuvem.')}
             <a href="/" style={{ marginLeft: 'auto', color: 'var(--rtm-link)', fontWeight: 700, whiteSpace: 'nowrap' }}>{ct('Ativar conta →')}</a>
           </div>
         )}
@@ -91,24 +91,24 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       {/* grid de modos */}
       <div className="rtm-online-modes" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
         {MODES.map((m) => (
-          <div key={m.id} style={{ display: 'flex', flexDirection: 'column', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', overflow: 'hidden' }}>
-            <div style={{ position: 'relative', padding: '18px 20px', borderBottom: '1px solid var(--rtm-border-soft)' }}>
+          <div key={m.id} style={{ display: 'flex', flexDirection: 'column', background: 'var(--em-panel)', border: '1px solid var(--em-border)', borderRadius: '12px', overflow: 'hidden' }}>
+            <div style={{ position: 'relative', padding: '18px 20px', borderBottom: '1px solid var(--em-border)' }}>
               <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: m.tone }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '26px', width: '46px', height: '46px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>{m.icon}</span>
+                <span style={{ fontSize: '26px', width: '46px', height: '46px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>{m.icon}</span>
                 <div>
-                  <h2 style={{ margin: 0, fontFamily: 'var(--font-cond)', fontSize: '21px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct(m.name)}</h2>
+                  <h2 style={{ margin: 0, fontFamily: 'inherit', fontSize: '21px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)' }}>{ct(m.name)}</h2>
                   <div style={{ fontSize: '11.5px', color: m.tone, fontWeight: 700 }}>{ct(m.players)}</div>
                 </div>
               </div>
-              <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--rtm-text)', lineHeight: 1.5 }}>{ct(m.pitch)}</p>
+              <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--em-text)', lineHeight: 1.5 }}>{ct(m.pitch)}</p>
             </div>
             <div style={{ padding: '16px 20px', flex: 1 }}>
-              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '10px' }}>{ct('Como funciona')}</div>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700, marginBottom: '10px' }}>{ct('Como funciona')}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
                 {m.how.map((h, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '10px', fontSize: '12.5px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>
-                    <span style={{ flexShrink: 0, width: '18px', height: '18px', borderRadius: '50%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', color: m.tone, fontSize: '10px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
+                  <div key={i} style={{ display: 'flex', gap: '10px', fontSize: '12.5px', color: 'var(--em-muted)', lineHeight: 1.45 }}>
+                    <span style={{ flexShrink: 0, width: '18px', height: '18px', borderRadius: '50%', background: 'var(--em-panel)', border: '1px solid var(--em-border)', color: m.tone, fontSize: '10px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
                     {ct(h)}
                   </div>
                 ))}
@@ -116,7 +116,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
             </div>
             <div style={{ padding: '0 20px 18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--rtm-faint)', marginBottom: '12px' }}>
-                <span style={{ color: 'var(--rtm-dim)' }}>{ct('Vale para:')}</span> <b style={{ color: m.tone }}>{ct(m.ranked)}</b>
+                <span style={{ color: 'var(--em-muted)' }}>{ct('Vale para:')}</span> <b style={{ color: m.tone }}>{ct(m.ranked)}</b>
               </div>
               <Button variant={m.id === 'major' ? 'gold' : 'primary'} style={{ width: '100%' }} onClick={() => onPlay(m.id)}>{ct('Jogar')} {ct(m.name)}</Button>
             </div>
@@ -125,11 +125,11 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       </div>
 
       {/* casual com amigos (salas reais, sem ranking) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', padding: '16px 20px' }}>
-        <span style={{ fontSize: '28px', width: '50px', height: '50px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', flexShrink: 0 }}>👥</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', background: 'var(--em-panel)', border: '1px solid var(--em-border)', borderRadius: '12px', padding: '16px 20px' }}>
+        <span style={{ fontSize: '28px', width: '50px', height: '50px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--em-panel)', border: '1px solid var(--em-border)', flexShrink: 0 }}>👥</span>
         <div style={{ flex: 1, minWidth: '220px' }}>
-          <b style={{ fontFamily: 'var(--font-cond)', fontSize: '19px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Casual · jogar com amigos')}</b>
-          <div style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', marginTop: '2px' }}>{ct('Crie uma sala')} <b style={{ color: 'var(--rtm-text)' }}>{ct('aberta')}</b> {ct('(qualquer um entra) ou')} <b style={{ color: 'var(--rtm-text)' }}>{ct('fechada')}</b> {ct('(só com o código que você manda pros amigos). Duelo 1v1 ou Major em grupo, ao vivo. Não conta pro ranking.')}</div>
+          <b style={{ fontFamily: 'inherit', fontSize: '19px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)' }}>{ct('Casual · jogar com amigos')}</b>
+          <div style={{ fontSize: '12.5px', color: 'var(--em-muted)', marginTop: '2px' }}>{ct('Crie uma sala')} <b style={{ color: 'var(--em-text)' }}>{ct('aberta')}</b> {ct('(qualquer um entra) ou')} <b style={{ color: 'var(--em-text)' }}>{ct('fechada')}</b> {ct('(só com o código que você manda pros amigos). Duelo 1v1 ou Major em grupo, ao vivo. Não conta pro ranking.')}</div>
         </div>
         <Button variant="ghost" onClick={onCasual} style={{ whiteSpace: 'nowrap' }}>{ct('Criar / entrar em sala')}</Button>
       </div>
@@ -138,25 +138,25 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       <Panel title={ct('Ranking')} accent="gold" flush actions={
         <span style={{ display: 'flex', gap: '6px' }}>
           {([['1v1', 'Ranked 1v1'], ['major', 'Ranked Major'], ['gauntlet', 'Gauntlet']] as [OnlineModeId, string][]).map(([id, lbl]) => (
-            <button key={id} type="button" onClick={() => setLb(id)} style={{ cursor: 'pointer', borderRadius: '999px', padding: '5px 13px', fontSize: '12px', fontWeight: 700, border: `1px solid ${lb === id ? 'var(--rtm-gold)' : 'var(--rtm-border)'}`, background: lb === id ? 'var(--rtm-gold)' : 'transparent', color: lb === id ? '#06121d' : 'var(--rtm-dim)' }}>{ct(lbl)}</button>
+            <button key={id} type="button" onClick={() => setLb(id)} style={{ cursor: 'pointer', borderRadius: '999px', padding: '5px 13px', fontSize: '12px', fontWeight: 700, border: `1px solid ${lb === id ? 'var(--em-gold)' : 'var(--em-border-strong)'}`, background: lb === id ? 'var(--em-gold)' : 'transparent', color: lb === id ? '#06121d' : 'var(--em-muted)' }}>{ct(lbl)}</button>
           ))}
         </span>
       }>
-        <div style={{ padding: '10px 16px', fontSize: '12px', color: 'var(--rtm-faint)', borderBottom: '1px solid var(--rtm-border-soft)' }}>{ct(LB_NOTE[lb])}{!paid && ' ' + ct('(no casual seu rank não é salvo)')}</div>
+        <div style={{ padding: '10px 16px', fontSize: '12px', color: 'var(--rtm-faint)', borderBottom: '1px solid var(--em-border)' }}>{ct(LB_NOTE[lb])}{!paid && ' ' + ct('(no casual seu rank não é salvo)')}</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <tbody>
             {rows().map((r, i) => (
-              <tr key={r.nick + i} style={{ background: r.you ? 'rgba(216,169,67,.1)' : (i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)'), boxShadow: r.you ? 'inset 3px 0 0 var(--rtm-gold)' : 'none' }}>
-                <td style={{ padding: '10px 14px', width: '44px', textAlign: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '16px', color: i === 0 ? 'var(--rtm-gold)' : i < 3 ? 'var(--rtm-text-strong)' : 'var(--rtm-faint)' }}>{i + 1}</td>
+              <tr key={r.nick + i} style={{ background: r.you ? 'rgba(216,169,67,.1)' : (i % 2 ? 'var(--em-panel-2)' : 'var(--em-panel)'), boxShadow: r.you ? 'inset 3px 0 0 var(--em-gold)' : 'none' }}>
+                <td style={{ padding: '10px 14px', width: '44px', textAlign: 'center', fontFamily: 'inherit', fontWeight: 800, fontSize: '16px', color: i === 0 ? 'var(--em-gold)' : i < 3 ? 'var(--em-text)' : 'var(--rtm-faint)' }}>{i + 1}</td>
                 <td style={{ padding: '10px 14px' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
                     {r.country && <Flag cc={r.country} />}
-                    <b style={{ fontFamily: 'var(--font-cond)', fontSize: '15px', color: r.you ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{r.nick}</b>
-                    {r.you && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase', color: '#06121d', background: 'var(--rtm-gold)', padding: '2px 7px', borderRadius: '999px' }}>{ct('Você')}</span>}
+                    <b style={{ fontFamily: 'inherit', fontSize: '15px', color: r.you ? 'var(--em-gold)' : 'var(--em-text)' }}>{r.nick}</b>
+                    {r.you && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase', color: '#06121d', background: 'var(--em-gold)', padding: '2px 7px', borderRadius: '999px' }}>{ct('Você')}</span>}
                   </span>
                 </td>
                 <td style={{ padding: '10px 14px', color: r.subColor, fontSize: '11.5px', fontWeight: 700 }}>{r.sub}</td>
-                <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '15px', color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{r.fmt}</td>
+                <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, fontSize: '15px', color: 'var(--em-text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{r.fmt}</td>
               </tr>
             ))}
           </tbody>

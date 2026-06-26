@@ -24,7 +24,7 @@ export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string;
         fontSize: size * 0.36,
         background: coach
           ? 'linear-gradient(160deg, #6a4f9e 0%, #3a2c5c 100%)'
-          : 'linear-gradient(160deg, var(--blue) 0%, #25405c 100%)',
+          : 'linear-gradient(160deg, var(--em-panel-2) 0%, var(--em-panel) 100%)',
       }}
     >
       {safeNick.slice(0, 2).toUpperCase()}

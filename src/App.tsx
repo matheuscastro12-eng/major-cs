@@ -4,6 +4,7 @@ import { BrandMark } from './components/brand';
 import { DonateButton, DonateModal } from './components/Donate';
 import { AdBanner } from './components/AdBanner';
 import { Draft } from './components/Draft';
+import { AppFrame } from './components/ds';
 import { Home } from './components/Home';
 import { Hub } from './components/Hub';
 import { MatchScreen } from './components/MatchScreen';
@@ -987,7 +988,9 @@ export default function App() {
       )}
 
       {screen === 'draft' && draft && (
-        <Draft draft={draft} dataset={dataset} onPick={pickPlayer} onPickCoach={pickCoach} onReroll={rerollDraft} />
+        <AppFrame title={`Draft · ${draft.current < 5 ? `Pick ${draft.current + 1}/5` : 'Coach'}`} onExit={() => setScreen('home')}>
+          <Draft draft={draft} dataset={dataset} onPick={pickPlayer} onPickCoach={pickCoach} onReroll={rerollDraft} />
+        </AppFrame>
       )}
 
       {screen === 'hub' && tournament && (

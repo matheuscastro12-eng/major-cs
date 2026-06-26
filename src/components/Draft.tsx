@@ -7,6 +7,7 @@ import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { FutCard } from './FutCard';
 import { hashStr } from '../state/hash';
 import { makeRng } from '../engine/rng';
+import { CareerIcon } from './career/CareerIcon';
 
 const teamLogo = (t: TeamSeason) => t.logoUrl ?? logoForTeam(t);
 
@@ -64,11 +65,9 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
 
   const classic = draft.mode === 'classic';
 
-  // animação de roleta: gira ao sortear um novo elenco (e em cada reroll)
   const [revealedTeam, setRevealedTeam] = useState<string | null>(null);
   const spinning = !coachPhase && !!source && revealedTeam !== source.id;
 
-  // jogadores já escolhidos (objetos completos) para diagnosticar lacunas de função
   const pickedPlayers = draft.rounds
     .slice(0, draft.current)
     .map((r) => {
@@ -77,10 +76,8 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
     })
     .filter(Boolean) as Player[];
 
-  // funções-chave que ainda faltam (impactam MUITO a simulação)
   const needs = useMemo(() => rosterNeeds(pickedPlayers), [pickedPlayers]);
 
-  // o que ESTE jogador preencheria (para destacar nas cartas)
   const fillsFor = (p: Player): RoleNeed | null => {
     if (needs.some((n) => n.key === 'IGL') && p.igl >= 80) return NEED_DEFS.IGL;
     if (needs.some((n) => n.key === 'AWP') && p.awp >= 80) return NEED_DEFS.AWP;
@@ -89,158 +86,197 @@ export function Draft({ draft, dataset, onPick, onPickCoach, onReroll }: Props) 
     return null;
   };
 
+  // Progresso (5 picks + coach)
+  const STEPS = 6;
+  const currentStep = Math.min(draft.current, STEPS - 1);
+
   return (
-    <div className="fade-in">
-      {!coachPhase && source && (
-        <div className="panel">
-          <div className="panel-head">
-            {tr('draft.title')} {draft.current + 1} {tr('common.of')} 5
-            <span className="spacer" />
-            <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              {spinning ? tr('draft.spinning') : tr('draft.spinDone')}
-            </span>
-          </div>
-
-          {spinning && (
-            <DraftRoulette
-              key={source.id}
-              pool={dataset}
-              target={source}
-              onDone={() => setRevealedTeam(source.id)}
-            />
-          )}
-
-          {!spinning && (
-            <>
-              <div className="draft-source draft-reveal" style={{ background: `linear-gradient(120deg, ${source.colors[0]}33 0%, var(--header) 70%)` }}>
-                <TeamBadge tag={source.tag} colors={source.colors} size={64} logoUrl={teamLogo(source)} />
-                <div style={{ flex: 1 }}>
-                  <div className="era-game">
-                    {source.game} · {source.era}
-                  </div>
-                  <h2>
-                    {source.team} <Flag cc={source.country} />
-                  </h2>
-                  <div className="honors">{source.honors}</div>
-                </div>
-                <button className="btn ghost" onClick={onReroll} disabled={draft.rerollsLeft <= 0}>
-                  {tr('draft.reroll')} ({draft.rerollsLeft})
-                </button>
-              </div>
-
-          <div className="role-needs">
-            {needs.length === 0 ? (
-              <span className="role-needs-ok">{tr('draft.needsOk')}</span>
-            ) : (
-              <>
-                <span className="role-needs-title">{tr('draft.needsTitle')}</span>
-                {needs.map((n) => (
-                  <span key={n.key} className={`need-chip${n.critical ? ' critical' : ''}`} title={tr(`draft.need${n.key}Why`)}>
-                    {n.critical ? '⚠ ' : ''}
-                    {tr(`draft.need${n.key}`)}
-                  </span>
-                ))}
-                <span className="role-needs-hint">{tr('draft.needsHint')}</span>
-              </>
+    <div className="fade-in em-draft-layout">
+      <div className="em-stage-card em-draft-card" style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Header sticky */}
+        <div className="em-draft-head">
+          <div className="em-draft-head-row">
+            <div className="em-draft-head-title">
+              <span className="em-draft-kicker">
+                {coachPhase ? tr('draft.coachTitle') : `${tr('draft.title')} ${draft.current + 1} ${tr('common.of')} 5`}
+              </span>
+              <span className="em-draft-title">
+                {coachPhase ? tr('draft.coachSub') : spinning ? tr('draft.spinning') : tr('draft.spinDone')}
+              </span>
+            </div>
+            {!coachPhase && source && !spinning && (
+              <button type="button" className="em-btn em-btn-ghost" onClick={onReroll} disabled={draft.rerollsLeft <= 0}>
+                <CareerIcon name="refresh" size={13} /> {tr('draft.reroll')} ({draft.rerollsLeft})
+              </button>
             )}
           </div>
 
-              <div className="player-cards">
-                {source.players.map((p) => (
-                  <PlayerCard
-                    key={p.id}
-                    p={p}
-                    classic={classic}
-                    taken={pickedIds.has(p.id) || pickedNicks.has(p.nick.toLowerCase())}
-                    fills={fillsFor(p)}
-                    onPick={() => onPick(p.id)}
-                  />
-                ))}
-              </div>
+          {/* Barra de progresso (5 picks + coach) */}
+          <div className="em-draft-steps" aria-label="Progresso do draft">
+            {[0, 1, 2, 3, 4, 5].map((i) => {
+              const isCoach = i === 5;
+              const done = i < draft.current;
+              const current = i === currentStep;
+              return (
+                <span key={i} className={`em-draft-step${done ? ' is-done' : ''}${current ? ' is-current' : ''}${isCoach ? ' is-coach' : ''}`}>
+                  <span className="em-draft-step-tag">{isCoach ? 'C' : i + 1}</span>
+                  <span className="em-draft-step-act">
+                    {isCoach ? tr('draft.coachTitle') : `Pick ${i + 1}`}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="em-draft-body">
+          {/* Fase de jogadores */}
+          {!coachPhase && source && (
+            <>
+              {spinning && (
+                <DraftRoulette
+                  key={source.id}
+                  pool={dataset}
+                  target={source}
+                  onDone={() => setRevealedTeam(source.id)}
+                />
+              )}
+
+              {!spinning && (
+                <>
+                  <div className="em-draft-source" style={{ background: `linear-gradient(120deg, ${source.colors[0]}33 0%, var(--em-panel-2) 70%)` }}>
+                    <TeamBadge tag={source.tag} colors={source.colors} size={64} logoUrl={teamLogo(source)} />
+                    <div className="em-draft-source-info">
+                      <div className="em-draft-source-era">
+                        {source.game} · {source.era}
+                      </div>
+                      <h2>
+                        {source.team} <Flag cc={source.country} />
+                      </h2>
+                      <div className="em-draft-source-honors">{source.honors}</div>
+                    </div>
+                  </div>
+
+                  {/* Banner de necessidades */}
+                  {needs.length === 0 ? (
+                    <div className="em-draft-needs is-ok">
+                      <CareerIcon name="check" size={14} /> {tr('draft.needsOk')}
+                    </div>
+                  ) : (
+                    <div className="em-draft-needs">
+                      <span className="em-draft-needs-title">{tr('draft.needsTitle')}</span>
+                      {needs.map((n) => (
+                        <span key={n.key} className={`em-draft-need-chip${n.critical ? ' is-critical' : ''}`} title={tr(`draft.need${n.key}Why`)}>
+                          {n.critical && <CareerIcon name="warning" size={11} />}
+                          {tr(`draft.need${n.key}`)}
+                        </span>
+                      ))}
+                      <span className="em-draft-needs-hint">{tr('draft.needsHint')}</span>
+                    </div>
+                  )}
+
+                  <div className="em-draft-players">
+                    {source.players.map((p, i) => (
+                      <div key={p.id} className="em-draft-player-wrap" style={{ animationDelay: `${i * 36}ms` }}>
+                        <PlayerCard
+                          p={p}
+                          classic={classic}
+                          taken={pickedIds.has(p.id) || pickedNicks.has(p.nick.toLowerCase())}
+                          fills={fillsFor(p)}
+                          onPick={() => onPick(p.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
-        </div>
-      )}
 
-      {coachPhase && (
-        <div className="panel">
-          <div className="panel-head">
-            {tr('draft.coachTitle')}
-            <span className="spacer" />
-            <span className="muted small" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              {tr('draft.coachSub')}
-            </span>
-          </div>
-          <div className="player-cards">
-            {draft.coachOptions.map((tid) => {
-              const t = dataset.find((x) => x.id === tid);
-              if (!t) return null;
-              const c = t.coach;
-              return (
-                <button key={tid} className="pcard" onClick={() => onPickCoach(tid)}>
-                  <PlayerAvatar nick={c.nick} size={52} coach />
-                  {classic && <OvrBadge ovr={c.rating} label="COACH" />}
-                  <div className="nick">{c.nick}</div>
-                  <div className="meta">
-                    <Flag cc={c.country} />
-                    <span>{c.name}</span>
-                  </div>
-                  <div className="meta">
-                    <span className="role-pill IGL">{tr(`coach.${c.style}`)}</span>
-                  </div>
-                  <div className="meta muted small" style={{ marginTop: 6, lineHeight: 1.3 }}>
-                    {tr(`coach.${c.style}Desc`)}
-                  </div>
-                  <div className="meta muted small">
-                    <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={teamLogo(t)} /> {t.team} {t.era}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="panel">
-        <div className="panel-head">{tr('draft.yourRoster')}</div>
-        <div className="panel-body">
-          <div className="roster-slots">
-            {[0, 1, 2, 3, 4].map((i) => {
-              const r = draft.rounds[i];
-              const t = r && dataset.find((x) => x.id === r.teamSeasonId);
-              const p = t?.players.find((x) => x.id === r.pickedPlayerId);
-              if (p && t) {
+          {/* Fase de coach */}
+          {coachPhase && (
+            <div className="em-draft-coaches">
+              {draft.coachOptions.map((tid, i) => {
+                const t = dataset.find((x) => x.id === tid);
+                if (!t) return null;
+                const c = t.coach;
                 return (
-                  <div key={i} className="slot filled">
-                    <div className="nick">
-                      <Flag cc={p.country} /> {p.nick}{' '}
-                      <span className="ovr-inline">{playerOvr(p)}</span>
+                  <button
+                    key={tid}
+                    type="button"
+                    className="em-coach-card"
+                    onClick={() => onPickCoach(tid)}
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  >
+                    <PlayerAvatar nick={c.nick} size={56} coach />
+                    {classic && <OvrBadge ovr={c.rating} label="COACH" />}
+                    <div className="em-coach-nick">{c.nick}</div>
+                    <div className="em-coach-meta">
+                      <Flag cc={c.country} />
+                      <span>{c.name}</span>
                     </div>
-                    <span className={`role-pill ${p.role}`}>{p.role}</span>
-                    <div className="from">
-                      {t.team} {t.era}
+                    <div className="em-coach-style">
+                      <span className={`role-pill IGL`}>{tr(`coach.${c.style}`)}</span>
+                    </div>
+                    <div className="em-coach-desc">{tr(`coach.${c.style}Desc`)}</div>
+                    <div className="em-coach-from">
+                      <TeamBadge tag={t.tag} colors={t.colors} size={16} logoUrl={teamLogo(t)} />
+                      <span>{t.team} {t.era}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Roster (sidebar) */}
+      <div className="em-stage-card em-draft-roster">
+        <div className="em-draft-section-head">
+          <CareerIcon name="star" size={13} /> {tr('draft.yourRoster')}
+        </div>
+        <div className="em-draft-slots">
+          {[0, 1, 2, 3, 4].map((i) => {
+            const r = draft.rounds[i];
+            const t = r && dataset.find((x) => x.id === r.teamSeasonId);
+            const p = t?.players.find((x) => x.id === r.pickedPlayerId);
+            if (p && t) {
+              return (
+                <div key={i} className="em-draft-slot is-filled">
+                  <PlayerAvatar nick={p.nick} size={36} />
+                  <div className="em-draft-slot-info">
+                    <div className="em-draft-slot-nick">
+                      <Flag cc={p.country} /> {p.nick} <span className="em-draft-slot-ovr">{playerOvr(p)}</span>
+                    </div>
+                    <div className="em-draft-slot-meta">
+                      <span className={`role-pill ${p.role}`}>{p.role}</span>
+                      <span className="em-draft-slot-from">{t.team} {t.era}</span>
                     </div>
                   </div>
-                );
-              }
-              return (
-                <div key={i} className="slot">
-                  {i === draft.current ? `… ${tr('draft.choosing')}` : `${tr('draft.pickN')} ${i + 1}`}
                 </div>
               );
-            })}
-          </div>
+            }
+            const isNext = i === draft.current;
+            return (
+              <div key={i} className={`em-draft-slot${isNext ? ' is-next' : ' is-empty'}`}>
+                <span className="em-draft-slot-num">{i + 1}</span>
+                <span className="em-draft-slot-placeholder">
+                  {isNext ? tr('draft.choosing') : tr('draft.pickN')}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
   );
 }
 
-// Roleta horizontal (estilo abertura de caixa): gira passando por vários
-// elencos e desacelera parando no time sorteado, dando aquela tensão gostosa.
-const REEL_ITEM_W = 168; // largura do card + gap (precisa casar com o CSS)
-const REEL_LEN = 44; // quantos cards passam até parar
-const REEL_TARGET = REEL_LEN - 5; // posição final do time sorteado
+const REEL_ITEM_W = 168;
+const REEL_LEN = 44;
+const REEL_TARGET = REEL_LEN - 5;
 
 function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: TeamSeason; onDone: () => void }) {
   const { t: tr } = useLang();
@@ -262,12 +298,10 @@ function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: T
   const onDoneRef = useRef(onDone);
   useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
 
-  // mede a largura da janela da roleta para centralizar o card alvo
   useEffect(() => {
     if (windowRef.current) setWinW(windowRef.current.offsetWidth);
   }, []);
 
-  // dispara a animação uma única vez (não depende de onDone, que muda a cada render)
   useEffect(() => {
     if (!winW) return;
     const raf = requestAnimationFrame(() => setRolling(true));
@@ -283,19 +317,18 @@ function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: T
     };
   }, [winW]);
 
-  // centro do card alvo (a partir da borda esquerda da tira) e centro da janela
   const center = winW / 2;
-  const startX = center - (REEL_ITEM_W * 2 + REEL_ITEM_W / 2); // 3º card centralizado no início
+  const startX = center - (REEL_ITEM_W * 2 + REEL_ITEM_W / 2);
   const endX = center - (REEL_TARGET * REEL_ITEM_W + REEL_ITEM_W / 2);
 
   return (
-    <div className="roulette">
-      <div className="roulette-window" ref={windowRef}>
-        <div className="roulette-marker" />
-        <div className="roulette-fade left" />
-        <div className="roulette-fade right" />
+    <div className="em-roulette">
+      <div className="em-roulette-window" ref={windowRef}>
+        <div className="em-roulette-marker" />
+        <div className="em-roulette-fade left" />
+        <div className="em-roulette-fade right" />
         <div
-          className="roulette-strip"
+          className="em-roulette-strip"
           style={{
             transform: `translateX(${rolling ? endX : startX}px)`,
             transition: rolling ? 'transform 3.8s cubic-bezier(0.12, 0.7, 0.12, 1)' : 'none',
@@ -310,17 +343,17 @@ function DraftRoulette({ pool, target, onDone }: { pool: TeamSeason[]; target: T
           {reel.map((t, i) => (
             <div
               key={i}
-              className={`roulette-card${i === REEL_TARGET ? ' is-target' : ''}`}
-              style={{ background: `linear-gradient(150deg, ${t.colors[0]}55 0%, var(--header) 75%)` }}
+              className={`em-roulette-card${i === REEL_TARGET ? ' is-target' : ''}`}
+              style={{ background: `linear-gradient(150deg, ${t.colors[0]}55 0%, var(--em-panel-2) 75%)` }}
             >
               <TeamBadge tag={t.tag} colors={t.colors} size={44} logoUrl={teamLogo(t)} />
-              <div className="rc-name">{t.team}</div>
-              <div className="rc-era">{t.era}</div>
+              <div className="em-roulette-card-name">{t.team}</div>
+              <div className="em-roulette-card-era">{t.era}</div>
             </div>
           ))}
         </div>
       </div>
-      <div className="roulette-hint">{tr('draft.rouletteHint')}</div>
+      <div className="em-roulette-hint">{tr('draft.rouletteHint')}</div>
     </div>
   );
 }
@@ -340,35 +373,37 @@ function PlayerCard({
 }) {
   const { t: tr } = useLang();
   const flag = fills ? (
-    <span className={`fills-flag${fills.critical ? ' critical' : ''}`} style={{ position: 'absolute', top: '-9px', left: '50%', transform: 'translateX(-50%)', zIndex: 3, whiteSpace: 'nowrap' }}>
-      {fills.critical ? `⚠ ${tr('draft.fills')} ` : '+ '}
-      {tr(`draft.need${fills.key}Short`)}
+    <span className={`em-fills-flag${fills.critical ? ' is-critical' : ''}`}>
+      {fills.critical && <CareerIcon name="warning" size={11} />}
+      {fills.critical ? tr('draft.fills') : '+'} {tr(`draft.need${fills.key}Short`)}
     </span>
   ) : null;
-  // modo clássico: cards FUT do design (info completa). Almanaque mantém o card com
-  // info oculta (o jogo é adivinhar a era), só com a função visível.
   if (classic) {
     return (
       <div style={{ position: 'relative', opacity: taken ? 0.5 : 1, pointerEvents: taken ? 'none' : 'auto' }}>
         {flag}
         <FutCard player={p} onClick={taken ? undefined : onPick} />
-        {taken && <span style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--rtm-faint)', zIndex: 3 }}>{tr('draft.alreadyPicked')}</span>}
+        {taken && (
+          <span className="em-draft-taken-tag">
+            {tr('draft.alreadyPicked')}
+          </span>
+        )}
       </div>
     );
   }
   return (
-    <button className={`pcard${taken ? ' taken' : ''}${fills ? ' fills-need' : ''}`} onClick={onPick} style={{ position: 'relative' }}>
+    <button className={`em-pcard${taken ? ' is-taken' : ''}${fills ? ' fills-need' : ''}`} onClick={onPick}>
       {flag}
       <PlayerAvatar nick={p.nick} size={56} />
-      <div className="nick">{p.nick}</div>
-      <div className="meta">
+      <div className="em-pcard-nick">{p.nick}</div>
+      <div className="em-pcard-meta">
         <Flag cc={p.country} />
         <span>{p.name}</span>
       </div>
-      <div className="meta">
+      <div className="em-pcard-meta">
         <span className={`role-pill ${p.role}`}>{p.role}</span>
       </div>
-      {taken && <div className="meta muted small">{tr('draft.alreadyPicked')}</div>}
+      {taken && <div className="em-pcard-meta em-muted">{tr('draft.alreadyPicked')}</div>}
     </button>
   );
 }

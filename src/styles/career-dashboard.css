@@ -4437,3 +4437,476 @@ body.career-dash .em-veto-alert {
   font-size: 0.82rem;
   color: var(--em-text);
 }
+
+/* ============================================================
+   Draft — UI/UX nova (mesmo padrão Veto)
+   ============================================================ */
+body.career-dash .em-draft-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+  padding: 16px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  body.career-dash .em-draft-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+body.career-dash .em-draft-card {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+}
+
+/* Header sticky */
+body.career-dash .em-draft-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--em-panel-2);
+  border-bottom: 1px solid var(--em-border);
+  padding: 14px 18px;
+}
+body.career-dash .em-draft-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+body.career-dash .em-draft-head-title { display: flex; flex-direction: column; gap: 2px; }
+body.career-dash .em-draft-kicker {
+  font-size: 0.7rem;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--em-muted);
+  font-weight: 700;
+}
+body.career-dash .em-draft-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--em-text);
+  letter-spacing: 0.3px;
+}
+
+/* Steps */
+body.career-dash .em-draft-steps {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+body.career-dash .em-draft-step {
+  flex-shrink: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  opacity: 0.55;
+  min-width: 64px;
+  transition: opacity 0.18s, border-color 0.18s, background 0.18s;
+}
+body.career-dash .em-draft-step.is-done { opacity: 1; border-color: color-mix(in srgb, #29c47a 50%, var(--em-border)); }
+body.career-dash .em-draft-step.is-current {
+  opacity: 1;
+  background: var(--em-panel-2);
+  border-color: var(--em-gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--em-gold) 28%, transparent);
+}
+body.career-dash .em-draft-step.is-coach.is-current { box-shadow: 0 0 0 2px color-mix(in srgb, var(--em-gold) 42%, transparent); }
+body.career-dash .em-draft-step-tag {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--em-text);
+}
+body.career-dash .em-draft-step-act {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--em-muted);
+}
+body.career-dash .em-draft-step.is-done .em-draft-step-act { color: #29c47a; }
+body.career-dash .em-draft-step.is-current .em-draft-step-act { color: var(--em-gold); }
+
+/* Body */
+body.career-dash .em-draft-body {
+  padding: 16px 18px;
+}
+
+/* Source banner (time revelado) */
+body.career-dash .em-draft-source {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--em-border);
+  margin-bottom: 14px;
+  animation: em-source-in 0.4s ease;
+}
+@keyframes em-source-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+body.career-dash .em-draft-source-info { flex: 1; min-width: 0; }
+body.career-dash .em-draft-source-era {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--em-muted);
+  font-weight: 700;
+}
+body.career-dash .em-draft-source-info h2 {
+  margin: 4px 0 4px;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--em-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+body.career-dash .em-draft-source-honors {
+  font-size: 0.82rem;
+  color: var(--em-muted);
+  font-style: italic;
+}
+
+/* Needs banner */
+body.career-dash .em-draft-needs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-left: 3px solid var(--em-gold);
+  border-radius: 6px;
+  margin-bottom: 14px;
+}
+body.career-dash .em-draft-needs.is-ok {
+  border-left-color: #29c47a;
+  color: #29c47a;
+  font-weight: 700;
+}
+body.career-dash .em-draft-needs-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--em-text);
+}
+body.career-dash .em-draft-need-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--em-text);
+}
+body.career-dash .em-draft-need-chip.is-critical {
+  border-color: #e2574c;
+  color: #e2574c;
+  background: color-mix(in srgb, #e2574c 12%, var(--em-panel));
+}
+body.career-dash .em-draft-needs-hint {
+  font-size: 0.74rem;
+  color: var(--em-muted);
+}
+
+/* Player grid */
+body.career-dash .em-draft-players {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+body.career-dash .em-draft-player-wrap {
+  animation: em-player-in 0.32s ease both;
+  opacity: 0;
+}
+@keyframes em-player-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Pcard (modo almanaque) */
+body.career-dash .em-pcard {
+  position: relative;
+  width: 100%;
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--em-text);
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+body.career-dash .em-pcard:hover:not(.is-taken) {
+  border-color: var(--em-gold);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+body.career-dash .em-pcard.is-taken { opacity: 0.45; cursor: default; }
+body.career-dash .em-pcard.fills-need { border-color: var(--em-gold); }
+body.career-dash .em-pcard-nick { font-weight: 800; font-size: 0.95rem; }
+body.career-dash .em-pcard-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--em-muted);
+}
+body.career-dash .em-pcard-meta.em-muted { font-size: 0.7rem; }
+
+/* Flag de "preenche função" sobre o card */
+body.career-dash .em-fills-flag {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--em-panel);
+  border: 1px solid var(--em-gold);
+  color: var(--em-gold);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+body.career-dash .em-fills-flag.is-critical {
+  border-color: #e2574c;
+  color: #e2574c;
+  background: color-mix(in srgb, #e2574c 14%, var(--em-panel));
+}
+
+body.career-dash .em-draft-taken-tag {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--em-muted);
+  z-index: 3;
+}
+
+/* Coach grid */
+body.career-dash .em-draft-coaches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+body.career-dash .em-coach-card {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--em-text);
+  text-align: center;
+  transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+  animation: em-player-in 0.4s ease both;
+  opacity: 0;
+}
+body.career-dash .em-coach-card:hover {
+  border-color: var(--em-gold);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+body.career-dash .em-coach-nick { font-weight: 800; font-size: 1.05rem; }
+body.career-dash .em-coach-meta { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--em-muted); }
+body.career-dash .em-coach-style { margin-top: 4px; }
+body.career-dash .em-coach-desc {
+  font-size: 0.78rem;
+  color: var(--em-muted);
+  line-height: 1.4;
+  margin-top: 4px;
+}
+body.career-dash .em-coach-from {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--em-muted);
+  margin-top: auto;
+}
+
+/* Roleta refeita com tokens em-* */
+body.career-dash .em-roulette { padding: 20px 0; }
+body.career-dash .em-roulette-window {
+  position: relative;
+  width: 100%;
+  height: 124px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+}
+body.career-dash .em-roulette-marker {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--em-gold);
+  z-index: 3;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--em-gold) 50%, transparent);
+}
+body.career-dash .em-roulette-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  z-index: 2;
+  pointer-events: none;
+}
+body.career-dash .em-roulette-fade.left { left: 0; background: linear-gradient(90deg, var(--em-panel-2), transparent); }
+body.career-dash .em-roulette-fade.right { right: 0; background: linear-gradient(-90deg, var(--em-panel-2), transparent); }
+body.career-dash .em-roulette-strip {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+  height: 100%;
+  align-items: center;
+}
+body.career-dash .em-roulette-card {
+  flex: 0 0 160px;
+  height: 100px;
+  border-radius: 6px;
+  border: 1px solid var(--em-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--em-text);
+}
+body.career-dash .em-roulette-card.is-target { border-color: var(--em-gold); }
+body.career-dash .em-roulette-card-name { font-weight: 700; font-size: 0.82rem; }
+body.career-dash .em-roulette-card-era { font-size: 0.7rem; color: var(--em-muted); }
+body.career-dash .em-roulette-hint {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: var(--em-muted);
+}
+
+/* Roster sidebar */
+body.career-dash .em-draft-roster {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  position: sticky;
+  top: 16px;
+}
+body.career-dash .em-draft-section-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--em-text);
+  margin-bottom: 12px;
+}
+body.career-dash .em-draft-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+body.career-dash .em-draft-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+body.career-dash .em-draft-slot.is-empty {
+  border-style: dashed;
+  color: var(--em-muted);
+}
+body.career-dash .em-draft-slot.is-next {
+  border-color: var(--em-gold);
+  border-style: solid;
+  color: var(--em-gold);
+  font-weight: 700;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--em-gold) 22%, transparent);
+}
+body.career-dash .em-draft-slot.is-filled { border-color: color-mix(in srgb, #29c47a 32%, var(--em-border)); }
+body.career-dash .em-draft-slot-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.74rem;
+  color: var(--em-muted);
+}
+body.career-dash .em-draft-slot.is-next .em-draft-slot-num {
+  background: var(--em-gold);
+  color: #1a1205;
+  border-color: var(--em-gold);
+}
+body.career-dash .em-draft-slot-placeholder { flex: 1; }
+body.career-dash .em-draft-slot-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+body.career-dash .em-draft-slot-nick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--em-text);
+}
+body.career-dash .em-draft-slot-ovr {
+  color: var(--em-gold);
+  font-weight: 800;
+  font-size: 0.86rem;
+}
+body.career-dash .em-draft-slot-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+}
+body.career-dash .em-draft-slot-from { color: var(--em-muted); }

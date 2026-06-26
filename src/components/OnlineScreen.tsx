@@ -963,8 +963,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           <BackBar onExit={onBack} />
           <div style={{ textAlign: 'center', marginBottom: '18px' }}>
             <div style={{ fontSize: '34px' }}>👥</div>
-            <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '30px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Jogar com amigos')}</h1>
-            <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '460px', margin: '8px auto 0', lineHeight: 1.5 }}>{ct('Crie uma sala e mande o código pros amigos, ou entre numa sala aberta. Casual não conta pro ranking.')}</p>
+            <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '30px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)' }}>{ct('Jogar com amigos')}</h1>
+            <p style={{ color: 'var(--em-muted)', fontSize: '14px', maxWidth: '460px', margin: '8px auto 0', lineHeight: 1.5 }}>{ct('Crie uma sala e mande o código pros amigos, ou entre numa sala aberta. Casual não conta pro ranking.')}</p>
           </div>
 
           <Field label={tr('online.yourNick')} style={{ marginBottom: 16 }}>
@@ -994,20 +994,20 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
           <Panel title={OL.openRooms} accent="blue" actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}>
             {visibleRooms.length === 0 ? (
-              <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{OL.noRooms}</div>
+              <div style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{OL.noRooms}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {visibleRooms.map((r) => {
                   const full = r.players >= r.max;
                   return (
-                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.7 : 1 }}>
+                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', opacity: full ? 0.7 : 1 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', boxShadow: full ? 'none' : '0 0 7px var(--rtm-green-bright)' }} />
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'} · {r.players}/{r.max}</div>
+                        <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--em-muted)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {r.pool === 'br' ? '🇧🇷 GC' : '🌍 Mundial'} · {r.players}/{r.max}</div>
                       </div>
                       <Button variant={full ? 'ghost' : 'primary'} size="sm" disabled={busy || full} onClick={() => doJoin(r.code, false)}>{full ? ct('Cheia') : OL.enter}</Button>
                     </div>
@@ -1017,7 +1017,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             )}
           </Panel>
           {error && (
-            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
           )}
         </div>
       );
@@ -1035,51 +1035,51 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           <BackBar onHub={onBack} onExit={onBack} />
 
           {/* HERO */}
-          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--rtm-border)', padding: '26px 24px', marginBottom: '16px' }}>
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--em-border-strong)', padding: '26px 24px', marginBottom: '16px' }}>
             <img src="/maps/dust2.jpg" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22 }} />
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(13,17,22,.92), rgba(13,17,22,.6))' }} />
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
               <span style={{ width: '64px', height: '64px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '22px', color: '#fff', background: 'linear-gradient(160deg, var(--em-gold), #20303f)' }}>{initials}</span>
               <div style={{ flex: 1, minWidth: '160px' }}>
-                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800 }}>{myRank?.division ?? (paidRank ? ct('Sem ranking ainda') : ct('Conta grátis'))}</div>
-                <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '28px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{displayNick}</h1>
-                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{myRank ? `${myRank.mmr} MMR · #${myRank.rank} ${ct('no mundo')}` : (paidRank ? ct('Jogue uma ranqueada pra entrar no ladder') : ct('No grátis o MMR não persiste'))}</div>
+                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>{myRank?.division ?? (paidRank ? ct('Sem ranking ainda') : ct('Conta grátis'))}</div>
+                <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '28px', fontWeight: 800, color: 'var(--em-text)' }}>{displayNick}</h1>
+                <div style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{myRank ? `${myRank.mmr} MMR · #${myRank.rank} ${ct('no mundo')}` : (paidRank ? ct('Jogue uma ranqueada pra entrar no ladder') : ct('No grátis o MMR não persiste'))}</div>
               </div>
-              <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.6)', border: '1px solid var(--rtm-border-soft)' }}>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Temporada')}</div>
-                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--rtm-green-bright)' }}>{myRank ? `${myRank.wins}W · ${myRank.losses}L` : '0W · 0L'}</div>
+              <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '6px', background: 'rgba(18,22,27,.6)', border: '1px solid var(--em-border)' }}>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>{ct('Temporada')}</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: '#29c47a' }}>{myRank ? `${myRank.wins}W · ${myRank.losses}L` : '0W · 0L'}</div>
               </div>
             </div>
           </div>
 
           {/* rank fantasma: conta grátis vê a divisão que TERIA + CTA pra valer no ladder */}
           {!paidRank && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', margin: '0 0 16px', padding: '14px 16px', borderRadius: 'var(--rtm-radius)', background: 'linear-gradient(120deg, rgba(216,169,67,.14), rgba(13,17,22,.5))', border: '1px solid var(--rtm-gold-soft)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', margin: '0 0 16px', padding: '14px 16px', borderRadius: '6px', background: 'linear-gradient(120deg, rgba(216,169,67,.14), rgba(13,17,22,.5))', border: '1px solid var(--em-gold)' }}>
               <span style={{ fontSize: '24px' }} aria-hidden>🏆</span>
               <div style={{ flex: 1, minWidth: '200px' }}>
-                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '15px', color: 'var(--rtm-text-strong)', textTransform: 'uppercase', letterSpacing: '.5px' }}>{ct('Sua ranqueada não está contando')}</div>
-                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>{ct('Nesta sessão você jogaria como')} <b style={{ color: 'var(--rtm-gold)' }}>{sessionDivision(sessionProfile.points)}</b> · {sessionProfile.wins}V · {sessionProfile.losses}D. {ct('No grátis o MMR zera ao fechar a aba e não entra no ladder mundial.')}</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '15px', color: 'var(--em-text)', textTransform: 'uppercase', letterSpacing: '.5px' }}>{ct('Sua ranqueada não está contando')}</div>
+                <div style={{ fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.45 }}>{ct('Nesta sessão você jogaria como')} <b style={{ color: 'var(--em-gold)' }}>{sessionDivision(sessionProfile.points)}</b> · {sessionProfile.wins}V · {sessionProfile.losses}D. {ct('No grátis o MMR zera ao fechar a aba e não entra no ladder mundial.')}</div>
               </div>
               <Button variant="gold" onClick={() => window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'ranked-free', force: true } }))}>★ {ct('Valer no ladder')}</Button>
             </div>
           )}
 
           {!nick.trim() && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 16px', padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>{ct('Escolha um nick para jogar:')}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 16px', padding: '10px 14px', borderRadius: '6px', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--em-muted)', fontWeight: 600 }}>{ct('Escolha um nick para jogar:')}</span>
               <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={{ ...onlineInputStyle, width: 'auto', flex: 1, minWidth: '160px' }} />
             </div>
           )}
 
           <Panel title="Ranked 1v1" accent="blue" style={{ marginBottom: '16px' }}>
-            <p style={{ margin: '0 0 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.5 }}>
+            <p style={{ margin: '0 0 16px', color: 'var(--em-muted)', fontSize: '14px', lineHeight: 1.5 }}>
               {ct('O matchmaking busca um rival perto do seu MMR. Vocês montam os times em draft e jogam uma melhor de três. Vitória sobe o MMR, derrota desce')}{paidRank ? '' : ` ${ct('(no grátis não persiste)')}`}.
             </p>
             <Button variant="primary" size="big" style={{ width: '100%' }} onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : `🔍 ${ct('Procurar partida')}`}</Button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '12px 0' }}>
-              <span style={{ flex: 1, height: 1, background: 'var(--rtm-border-soft)' }} />
+              <span style={{ flex: 1, height: 1, background: 'var(--em-border)' }} />
               <span style={{ fontSize: 11, color: 'var(--rtm-faint)', textTransform: 'uppercase', letterSpacing: '.6px' }}>{ct('ou')}</span>
-              <span style={{ flex: 1, height: 1, background: 'var(--rtm-border-soft)' }} />
+              <span style={{ flex: 1, height: 1, background: 'var(--em-border)' }} />
             </div>
             <Button variant="gold" style={{ width: '100%' }} onClick={create} disabled={!nick.trim() || busy}>{busy ? '…' : `➕ ${ct('Criar minha sala e esperar um rival')}`}</Button>
             <p style={{ margin: '10px 0 0', color: 'var(--rtm-faint)', fontSize: '12px', lineHeight: 1.45 }}>{ct('Criar sala te dá um código pra chamar um amigo direto. Procurar partida acha um rival aleatório no seu nível.')}</p>
@@ -1092,18 +1092,18 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             style={{ marginBottom: '16px' }}
           >
             {duelRooms.length === 0 ? (
-              <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('Nenhuma sala 1v1 aberta agora. Use “Procurar partida” que eu crio uma e espero um rival.')}</div>
+              <div style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{ct('Nenhuma sala 1v1 aberta agora. Use “Procurar partida” que eu crio uma e espero um rival.')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {duelRooms.map((r) => (
-                  <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)' }}>
+                  <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 7px var(--rtm-green-bright)' }} />
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{ct('Aguardando')}</span>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 7px #29c47a' }} />
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{ct('Aguardando')}</span>
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>host <b style={{ color: 'var(--rtm-text)' }}>{r.host}</b>{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
+                      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--em-muted)' }}>host <b style={{ color: 'var(--em-text)' }}>{r.host}</b>{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
                     </div>
                     <Button variant="primary" size="sm" disabled={busy || !nick.trim()} onClick={() => doJoin(r.code, false)}>{OL.enter}</Button>
                   </div>
@@ -1119,7 +1119,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
           </Panel>
           {error && (
-            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
           )}
         </div>
       );
@@ -1127,7 +1127,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     // Ranked Major: tela dedicada de salas (browse) + passo de criar sala, no layout do design.
     if (preset === 'party' && !casualOnly) {
       const openCount = openRooms.filter((r) => r.players < r.max).length;
-      const poolColor = (p: TournamentPool) => (p === 'br' ? 'var(--rtm-gold)' : 'var(--em-gold)');
+      const poolColor = (p: TournamentPool) => (p === 'br' ? 'var(--em-gold)' : 'var(--em-gold)');
       const poolLabel = (p: TournamentPool) => tr(p === 'br' ? 'home.poolBr' : 'home.poolWorld');
 
       if (!majorCreate) {
@@ -1136,16 +1136,16 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <BackBar onHub={onBack} onExit={onBack} />
             <div style={{ textAlign: 'center', marginBottom: '18px' }}>
               <div style={{ fontSize: '34px' }}>🏆</div>
-              <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Ranked Major</h1>
-              <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '500px', margin: '8px auto 0', lineHeight: 1.55 }}>
+              <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)' }}>Ranked Major</h1>
+              <p style={{ color: 'var(--em-muted)', fontSize: '14px', maxWidth: '500px', margin: '8px auto 0', lineHeight: 1.55 }}>
                 {ct('Entre numa sala aberta ou crie a sua. Todos na mesma sala disputam o Major; o ranking é por quem chega mais longe.')}
               </p>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--rtm-dim)' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright)', boxShadow: '0 0 8px var(--rtm-green-bright)' }} />
-                <b style={{ color: 'var(--rtm-text-strong)' }}>{openCount} {ct('salas abertas')}</b> {ct('agora')} · {visibleRooms.length} {ct('no total')}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--em-muted)' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 8px #29c47a' }} />
+                <b style={{ color: 'var(--em-text)' }}>{openCount} {ct('salas abertas')}</b> {ct('agora')} · {visibleRooms.length} {ct('no total')}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>⟳ {ct('Atualizar')}</Button>
@@ -1154,31 +1154,31 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
 
             {!nick.trim() && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 12px', padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
-                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', fontWeight: 600 }}>{ct('Escolha um nick para entrar ou criar:')}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 12px', padding: '10px 14px', borderRadius: '6px', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--em-muted)', fontWeight: 600 }}>{ct('Escolha um nick para entrar ou criar:')}</span>
                 <input value={nick} maxLength={20} placeholder="ex: fallenzera" onChange={(e) => saveNick(e.target.value)} style={{ ...onlineInputStyle, width: 'auto', flex: 1, minWidth: '160px' }} />
               </div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {visibleRooms.length === 0 ? (
-                <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '13px', color: 'var(--rtm-dim)', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)' }}>{OL.noRooms}</div>
+                <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '13px', color: 'var(--em-muted)', borderRadius: '6px', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>{OL.noRooms}</div>
               ) : visibleRooms.map((r) => {
                 const full = r.players >= r.max;
                 const pc = poolColor(r.pool);
                 return (
-                  <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.7 : 1 }}>
+                  <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--em-panel)', border: '1px solid var(--em-border)', opacity: full ? 0.7 : 1 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '96px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', boxShadow: full ? 'none' : '0 0 7px var(--rtm-green-bright)' }} />
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>host <b style={{ color: 'var(--rtm-text)' }}>{r.host}</b> · {ct('grupo até')} {r.max}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--em-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--em-gold)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--em-muted)' }}>host <b style={{ color: 'var(--em-text)' }}>{r.host}</b> · {ct('grupo até')} {r.max}</div>
                     </div>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: pc, padding: '3px 9px', borderRadius: '999px', border: '1px solid var(--rtm-border)', whiteSpace: 'nowrap' }}>{poolLabel(r.pool)}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: pc, padding: '3px 9px', borderRadius: '999px', border: '1px solid var(--em-border-strong)', whiteSpace: 'nowrap' }}>{poolLabel(r.pool)}</span>
                     <div style={{ textAlign: 'center', minWidth: '64px' }}>
-                      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: full ? 'var(--rtm-faint)' : 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{r.players}/{r.max}</div>
+                      <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: full ? 'var(--rtm-faint)' : 'var(--em-text)', fontVariantNumeric: 'tabular-nums' }}>{r.players}/{r.max}</div>
                       <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '2px' }}>
                         {Array.from({ length: r.max }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.players ? pc : 'var(--rtm-panel-3)' }} />)}
                       </div>
@@ -1193,7 +1193,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               <Button variant="gold" size="big" onClick={() => setMajorCreate(true)}>+ {ct('Criar minha sala')}</Button>
             </div>
             {error && (
-              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
             )}
           </div>
         );
@@ -1208,8 +1208,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           </div>
           <div style={{ textAlign: 'center', marginBottom: '20px' }}>
             <div style={{ fontSize: '34px' }}>🏆</div>
-            <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{ct('Criar sala')}</h1>
-            <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '480px', margin: '8px auto 0', lineHeight: 1.55 }}>
+            <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)' }}>{ct('Criar sala')}</h1>
+            <p style={{ color: 'var(--em-muted)', fontSize: '14px', maxWidth: '480px', margin: '8px auto 0', lineHeight: 1.55 }}>
               {ct('Cada manager monta o seu time e joga a própria campanha. No fim, o ranking é por quem foi mais longe.')}
             </p>
           </div>
@@ -1232,9 +1232,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 {RULESET_OPTIONS.map((option) => {
                   const on = ruleset === option.id;
                   return (
-                    <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '10px 12px', borderRadius: 'var(--rtm-radius)', border: `1px solid ${on ? 'var(--rtm-gold)' : 'var(--rtm-border-soft)'}`, background: on ? 'rgba(216,169,67,.14)' : 'var(--rtm-bg-deep)' }}>
-                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 700, color: on ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)' }}>{ct(option.label)}</b>
-                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', lineHeight: 1.4 }}>{ct(option.desc)}</span>
+                    <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '10px 12px', borderRadius: '6px', border: `1px solid ${on ? 'var(--em-gold)' : 'var(--em-border)'}`, background: on ? 'rgba(216,169,67,.14)' : 'var(--em-panel)' }}>
+                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 700, color: on ? 'var(--em-gold)' : 'var(--em-text)' }}>{ct(option.label)}</b>
+                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--em-muted)', marginTop: '3px', lineHeight: 1.4 }}>{ct(option.desc)}</span>
                     </button>
                   );
                 })}
@@ -1262,10 +1262,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginTop: '16px' }}>
             <Button variant="ghost" onClick={startLocalDemo}>▶ {OL.demo}</Button>
-            <span style={{ flex: 1, minWidth: '180px', fontSize: '12px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>{OL.demoNote}</span>
+            <span style={{ flex: 1, minWidth: '180px', fontSize: '12px', color: 'var(--em-muted)', lineHeight: 1.45 }}>{OL.demoNote}</span>
           </div>
           {error && (
-            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
           )}
         </div>
       );
@@ -1275,11 +1275,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         <BackBar onExit={onBack} />
         <div style={{ textAlign: 'center', marginBottom: '18px' }}>
           <span style={{ fontSize: '11px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>ROAD TO MAJOR</span>
-          <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{OL.title}</h1>
-          <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '520px', margin: '8px auto 0', lineHeight: 1.55 }}>{OL.lead}</p>
+          <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)' }}>{OL.title}</h1>
+          <p style={{ color: 'var(--em-muted)', fontSize: '14px', maxWidth: '520px', margin: '8px auto 0', lineHeight: 1.55 }}>{OL.lead}</p>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '14px' }}>
             {[ct('✦ 2026 + HISTÓRIA'), ct('5 CARTAS + COACH'), ct('MD3 ROUND A ROUND')].map((feat) => (
-              <span key={feat} style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', color: 'var(--rtm-dim)', padding: '4px 11px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--rtm-border)' }}>{feat}</span>
+              <span key={feat} style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '.6px', color: 'var(--em-muted)', padding: '4px 11px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--em-border-strong)' }}>{feat}</span>
             ))}
           </div>
         </div>
@@ -1290,26 +1290,26 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           </Field>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '14px', flexWrap: 'wrap' }}>
             <Button variant="gold" size="big" onClick={startLocalDemo}>▶ {OL.demo}</Button>
-            <span style={{ flex: 1, minWidth: '180px', fontSize: '12px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>{OL.demoNote}</span>
+            <span style={{ flex: 1, minWidth: '180px', fontSize: '12px', color: 'var(--em-muted)', lineHeight: 1.45 }}>{OL.demoNote}</span>
           </div>
         </Panel>
 
             {!casualOnly && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 14px', padding: '14px 16px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 14px', padding: '14px 16px', borderRadius: '6px', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>
               <div>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Divisão da sessão')}</div>
-                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--rtm-gold)' }}>{sessionDivision(sessionProfile.points)}</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700 }}>{ct('Divisão da sessão')}</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--em-gold)' }}>{sessionDivision(sessionProfile.points)}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '22px', color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{sessionProfile.points}</div>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>pts</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '22px', color: 'var(--em-text)', fontVariantNumeric: 'tabular-nums' }}>{sessionProfile.points}</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>pts</div>
               </div>
-              <div style={{ flex: 1, minWidth: '150px', fontSize: '12px', color: 'var(--rtm-dim)' }}>
+              <div style={{ flex: 1, minWidth: '150px', fontSize: '12px', color: 'var(--em-muted)' }}>
                 {sessionProfile.wins} {ct('vitórias')} · {sessionProfile.losses} {ct('derrotas')} · {sessionProfile.titles} {ct('títulos')}
                 {sessionProfile.history.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
                     {sessionProfile.history.slice(0, 3).map((entry) => (
-                      <span key={`${entry.label}-${entry.result}`} style={{ fontSize: '11px', color: 'var(--rtm-faint)', padding: '2px 8px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--rtm-border-soft)' }}>{entry.label}: {entry.result} (+{entry.points})</span>
+                      <span key={`${entry.label}-${entry.result}`} style={{ fontSize: '11px', color: 'var(--rtm-faint)', padding: '2px 8px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--em-border)' }}>{entry.label}: {entry.result} (+{entry.points})</span>
                     ))}
                   </div>
                 )}
@@ -1328,24 +1328,24 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               {paidRank ? (
                 myRank ? (
                   <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'baseline' }}>
-                    <span><b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', color: 'var(--rtm-gold)' }}>{myRank.mmr}</b> <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>MMR</span></span>
-                    <span style={{ color: 'var(--rtm-text-strong)', fontWeight: 700 }}>{myRank.division}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>#{myRank.rank} {ct('no mundo')}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{myRank.wins}V · {myRank.losses}D · {ct('pico')} {myRank.peak}</span>
+                    <span><b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', color: 'var(--em-gold)' }}>{myRank.mmr}</b> <span style={{ fontSize: '12px', color: 'var(--em-muted)' }}>MMR</span></span>
+                    <span style={{ color: 'var(--em-text)', fontWeight: 700 }}>{myRank.division}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--em-muted)' }}>#{myRank.rank} {ct('no mundo')}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--em-muted)' }}>{myRank.wins}V · {myRank.losses}D · {ct('pico')} {myRank.peak}</span>
                   </div>
-                ) : <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('Jogue uma partida online pra entrar no ranking.')}</span>
+                ) : <span style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{ct('Jogue uma partida online pra entrar no ranking.')}</span>
               ) : (
-                <span style={{ fontSize: '13px', color: 'var(--rtm-dim)', lineHeight: 1.5 }}>{ct('Todo o online é gratuito. A')} <b style={{ color: 'var(--rtm-text)' }}>{ct('persistência do ranking')}</b> {ct('faz parte da conta com save na nuvem, que cobre a infraestrutura.')}</span>
+                <span style={{ fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{ct('Todo o online é gratuito. A')} <b style={{ color: 'var(--em-text)' }}>{ct('persistência do ranking')}</b> {ct('faz parte da conta com save na nuvem, que cobre a infraestrutura.')}</span>
               )}
               {ladder && (
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {ladder.length === 0 && <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('Ladder ainda vazio. Seja o primeiro.')}</span>}
+                  {ladder.length === 0 && <span style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{ct('Ladder ainda vazio. Seja o primeiro.')}</span>}
                   {ladder.slice(0, 10).map((r) => (
-                    <div key={r.rank} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 8px', borderRadius: '5px', background: r.nick === (nick || account?.nick) ? 'rgba(67,130,182,.14)' : (r.rank % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)') }}>
-                      <span style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, width: 22, color: r.rank <= 3 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{r.rank}</span>
-                      <b style={{ flex: 1, fontSize: '13px', color: 'var(--rtm-text-strong)' }}>{r.nick}</b>
-                      <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.division}</span>
-                      <b style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--rtm-gold)' }}>{r.mmr}</b>
+                    <div key={r.rank} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 8px', borderRadius: '5px', background: r.nick === (nick || account?.nick) ? 'color-mix(in srgb, var(--em-gold) 14%, transparent)' : (r.rank % 2 ? 'var(--em-panel-2)' : 'var(--em-panel)') }}>
+                      <span style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, width: 22, color: r.rank <= 3 ? 'var(--em-gold)' : 'var(--rtm-faint)' }}>{r.rank}</span>
+                      <b style={{ flex: 1, fontSize: '13px', color: 'var(--em-text)' }}>{r.nick}</b>
+                      <span style={{ fontSize: '12px', color: 'var(--em-muted)' }}>{r.division}</span>
+                      <b style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--em-gold)' }}>{r.mmr}</b>
                     </div>
                   ))}
                 </div>
@@ -1358,9 +1358,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 {RULESET_OPTIONS.map((option) => {
                   const on = ruleset === option.id;
                   return (
-                    <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '11px 13px', borderRadius: 'var(--rtm-radius)', border: `1px solid ${on ? 'var(--em-gold)' : 'var(--rtm-border-soft)'}`, background: on ? 'rgba(67,130,182,.14)' : 'var(--rtm-bg-deep)' }}>
-                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '15px', fontWeight: 700, color: on ? 'var(--em-gold)' : 'var(--rtm-text-strong)' }}>{ct(option.label)}</b>
-                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', lineHeight: 1.4 }}>{ct(option.desc)}</span>
+                    <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '11px 13px', borderRadius: '6px', border: `1px solid ${on ? 'var(--em-gold)' : 'var(--em-border)'}`, background: on ? 'color-mix(in srgb, var(--em-gold) 14%, transparent)' : 'var(--em-panel)' }}>
+                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '15px', fontWeight: 700, color: on ? 'var(--em-gold)' : 'var(--em-text)' }}>{ct(option.label)}</b>
+                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--em-muted)', marginTop: '3px', lineHeight: 1.4 }}>{ct(option.desc)}</span>
                     </button>
                   );
                 })}
@@ -1368,10 +1368,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </Panel>
 
             {!casualOnly && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 16px', padding: '16px 18px', borderRadius: 'var(--rtm-radius)', background: 'linear-gradient(120deg, rgba(216,169,67,.16), rgba(13,17,22,.4))', border: '1px solid var(--rtm-gold-soft)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 16px', padding: '16px 18px', borderRadius: '6px', background: 'linear-gradient(120deg, rgba(216,169,67,.16), rgba(13,17,22,.4))', border: '1px solid var(--em-gold)' }}>
               <div style={{ flex: 1, minWidth: '200px' }}>
-                <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '17px', fontWeight: 800, color: 'var(--rtm-gold)' }}>⚔️ {ct('Partida ranqueada')}</b>
-                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)', lineHeight: 1.45 }}>{ct('Acha um rival de MMR parecido e vale pro ladder da temporada')}{account?.paid ? '' : ` ${ct('(no grátis o MMR não persiste)')}`}.</span>
+                <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '17px', fontWeight: 800, color: 'var(--em-gold)' }}>⚔️ {ct('Partida ranqueada')}</b>
+                <span style={{ fontSize: '12px', color: 'var(--em-muted)', lineHeight: 1.45 }}>{ct('Acha um rival de MMR parecido e vale pro ladder da temporada')}{account?.paid ? '' : ` ${ct('(no grátis o MMR não persiste)')}`}.</span>
               </div>
               <Button variant="gold" onClick={matchmake} disabled={!nick.trim() || busy}>{busy ? '…' : ct('Jogar ranqueada')}</Button>
             </div>
@@ -1428,23 +1428,23 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}
             >
               {visibleRooms.length === 0 ? (
-                <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{OL.noRooms}</div>
+                <div style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{OL.noRooms}</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {visibleRooms.map((r) => {
                     const full = r.players >= r.max;
                     return (
-                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)', opacity: full ? 0.75 : 1 }}>
+                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', opacity: full ? 0.75 : 1 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '94px' }}>
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', boxShadow: full ? 'none' : '0 0 7px var(--rtm-green-bright)' }} />
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--rtm-green-bright)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {tr(r.pool === 'br' ? 'home.poolBr' : 'home.poolWorld')}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--em-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--em-gold)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--em-muted)' }}>{r.mode === 'duel' ? tr('online.modeDuel') : tr('online.modeParty')} · {tr(r.pool === 'br' ? 'home.poolBr' : 'home.poolWorld')}{r.ranked && r.host_mmr != null ? ` · ${r.host_mmr} MMR` : ''}</div>
                       </div>
                       <div style={{ textAlign: 'center', minWidth: '64px' }}>
-                        <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: full ? 'var(--rtm-faint)' : 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{r.players}/{r.max}</div>
+                        <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: full ? 'var(--rtm-faint)' : 'var(--em-text)', fontVariantNumeric: 'tabular-nums' }}>{r.players}/{r.max}</div>
                         <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '2px' }}>
                           {Array.from({ length: r.max }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.players ? 'var(--em-gold)' : 'var(--rtm-panel-3)' }} />)}
                         </div>
@@ -1458,7 +1458,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               )}
             </Panel>
             {error && (
-              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">
+              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">
                 {error}
               </div>
             )}
@@ -1520,11 +1520,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         >
           {/* código grande e clicável */}
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{tr('online.shareCode')}</div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700 }}>{tr('online.shareCode')}</div>
             <div
               onClick={() => navigator.clipboard?.writeText(code)}
               title={tr('online.clickToCopy')}
-              style={{ cursor: 'pointer', display: 'inline-block', margin: '8px 0 2px', padding: '10px 26px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-gold-soft)', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '40px', letterSpacing: '8px', color: 'var(--rtm-gold)', textShadow: '0 0 24px rgba(216,169,67,.35)' }}
+              style={{ cursor: 'pointer', display: 'inline-block', margin: '8px 0 2px', padding: '10px 26px', borderRadius: '6px', background: 'var(--em-panel)', border: '1px solid var(--em-gold)', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '40px', letterSpacing: '8px', color: 'var(--em-gold)', textShadow: '0 0 24px rgba(216,169,67,.35)' }}
             >
               {code}
             </div>
@@ -1542,21 +1542,21 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 }}
               >🔗 {tr('online.copyLink')}</Button>
             </div>
-            {shareStatus && <div style={{ fontSize: '12px', color: 'var(--rtm-green-bright)', marginTop: 6 }}>{shareStatus}</div>}
-            <div style={{ fontSize: '12px', color: 'var(--rtm-dim)', margin: '12px auto 0', maxWidth: 420, lineHeight: 1.5 }}>
+            {shareStatus && <div style={{ fontSize: '12px', color: '#29c47a', marginTop: 6 }}>{shareStatus}</div>}
+            <div style={{ fontSize: '12px', color: 'var(--em-muted)', margin: '12px auto 0', maxWidth: 420, lineHeight: 1.5 }}>
               {tr(state.lobby.pool === 'br' ? 'online.poolBrLong' : 'online.poolWorldLong')} · {state.lobby.draft_rollouts ?? 2} rerolls por rodada · {tr('online.clickCodeToCopy')}
             </div>
           </div>
 
           {/* jogadores na sala */}
-          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, margin: '18px 0 10px' }}>{ct('Jogadores na sala')} ({activePlayers.length})</div>
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700, margin: '18px 0 10px' }}>{ct('Jogadores na sala')} ({activePlayers.length})</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '8px' }}>
             {activePlayers.map((p) => {
               const host = p.nick === state.lobby.host;
               return (
-                <div key={p.nick} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: 'var(--rtm-radius)', background: host ? 'rgba(216,169,67,.1)' : 'var(--rtm-panel-2)', border: `1px solid ${host ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}` }}>
-                  <span style={{ width: '30px', height: '30px', flexShrink: 0, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '12px', color: host ? '#1a1205' : '#fff', background: host ? 'linear-gradient(160deg, var(--rtm-gold-glow), var(--rtm-gold-soft))' : 'linear-gradient(160deg, var(--em-gold), #20303f)' }}>{p.nick.slice(0, 2).toUpperCase()}</span>
-                  <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: host ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{host ? '★ ' : ''}{p.nick}</b>
+                <div key={p.nick} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: '6px', background: host ? 'rgba(216,169,67,.1)' : 'var(--em-panel-2)', border: `1px solid ${host ? 'var(--em-gold)' : 'var(--em-border)'}` }}>
+                  <span style={{ width: '30px', height: '30px', flexShrink: 0, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '12px', color: host ? '#1a1205' : '#fff', background: host ? 'linear-gradient(160deg, var(--rtm-gold-glow), var(--em-gold))' : 'linear-gradient(160deg, var(--em-gold), #20303f)' }}>{p.nick.slice(0, 2).toUpperCase()}</span>
+                  <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: host ? 'var(--em-gold)' : 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{host ? '★ ' : ''}{p.nick}</b>
                   {isHost && !host && (
                     <button type="button" title={OL.kick} disabled={busy} onClick={() => kick(p.nick)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--rtm-faint)', fontSize: '14px', lineHeight: 1, padding: 0 }}>✕</button>
                   )}
@@ -1567,8 +1567,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
           {spectators.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
-              <b style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)' }}>{ct('Espectadores')}</b>
-              {spectators.map((viewer) => <span key={viewer.nick} style={{ fontSize: '11px', color: 'var(--rtm-dim)', padding: '2px 8px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--rtm-border-soft)' }}>◉ {viewer.nick}</span>)}
+              <b style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)' }}>{ct('Espectadores')}</b>
+              {spectators.map((viewer) => <span key={viewer.nick} style={{ fontSize: '11px', color: 'var(--em-muted)', padding: '2px 8px', borderRadius: 'var(--rtm-radius-pill)', border: '1px solid var(--em-border)' }}>◉ {viewer.nick}</span>)}
             </div>
           )}
 
@@ -1577,7 +1577,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               <Button variant={state.lobby.locked ? 'gold' : 'ghost'} size="sm" onClick={toggleLock} disabled={busy}>
                 {state.lobby.locked ? OL.unlock : OL.lock}
               </Button>
-              {state.lobby.locked && <div style={{ fontSize: '12px', color: 'var(--rtm-dim)', marginTop: 4 }}>{OL.locked}</div>}
+              {state.lobby.locked && <div style={{ fontSize: '12px', color: 'var(--em-muted)', marginTop: 4 }}>{OL.locked}</div>}
             </div>
           )}
 
@@ -1586,7 +1586,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               {activePlayers.length < 2 ? tr('online.waitingPlayers') : tr('online.startDraft')}
             </Button>
           ) : (
-            <div style={{ textAlign: 'center', color: 'var(--rtm-dim)', fontSize: '14px', marginTop: '18px' }}>
+            <div style={{ textAlign: 'center', color: 'var(--em-muted)', fontSize: '14px', marginTop: '18px' }}>
               {tr('online.waitingHost')} {state.lobby.host} {tr('online.waitingHostTail')}
             </div>
           )}
@@ -1648,21 +1648,21 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         <BackBar onExit={onBack} />
         <Panel
           accent="gold"
-          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>{OL.duelLive} · {code}{state?.lobby.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--rtm-gold-soft)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</span>}
+          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>{OL.duelLive} · {code}{state?.lobby.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--em-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--em-gold)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</span>}
           actions={<Button variant="ghost" size="sm" onClick={onBack}>{tr('online.exitOnline')}</Button>}
         >
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
             {duel.teams.map((team, idx) => (
-                <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border-soft)' }}>
+                <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '6px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)' }}>
                   <TeamBadge tag={team.tag} colors={team.colors} size={54} logoUrl={team.logoUrl} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{duel.nicks[idx]}</span>
-                    <h2 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{team.name}</h2>
-                    <div style={{ fontSize: '11px', color: 'var(--rtm-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.players.map((p) => p.nick).join(' · ')}</div>
+                    <span style={{ fontSize: '11px', color: 'var(--em-muted)' }}>{duel.nicks[idx]}</span>
+                    <h2 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, color: 'var(--em-text)' }}>{team.name}</h2>
+                    <div style={{ fontSize: '11px', color: 'var(--em-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.players.map((p) => p.nick).join(' · ')}</div>
                     <div style={{ fontSize: '11px', color: 'var(--rtm-faint)', marginTop: '2px' }}>C {team.onlinePlan?.captainNick} · R {team.onlinePlan?.reserveNick ?? '—'}</div>
                   </div>
                   {/* força só APÓS o fim: mostrá-la antes entregava quem ia ganhar */}
-                  <strong style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, color: 'var(--rtm-gold)' }}>{duelFinished ? Math.round(team.strength) : '—'}</strong>
+                  <strong style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, color: 'var(--em-gold)' }}>{duelFinished ? Math.round(team.strength) : '—'}</strong>
                 </div>
               ))}
             </div>
@@ -1681,7 +1681,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               />
             )}
 
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, margin: '4px 0 8px' }}>{OL.collection}</div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700, margin: '4px 0 8px' }}>{OL.collection}</div>
             <div className="ut-lineups">
               {duel.teams.map((team) => (
                 <div key={team.id} className="ut-lineup">
@@ -1706,11 +1706,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             )}
             {duelFinished && (
               <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '18px 28px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-gold-soft)' }}>
-                  <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '24px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', textShadow: '0 0 28px rgba(216,169,67,.35)' }}>{duel.nicks[duel.series.winner]} {ct('venceu')}</b>
-                  <span style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '18px', fontWeight: 800, color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{duel.series.mapScore[0]} : {duel.series.mapScore[1]} · MD3</span>
+                <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '18px 28px', borderRadius: '6px', background: 'var(--em-panel-2)', border: '1px solid var(--em-gold)' }}>
+                  <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '24px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-gold)', textShadow: '0 0 28px rgba(216,169,67,.35)' }}>{duel.nicks[duel.series.winner]} {ct('venceu')}</b>
+                  <span style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '18px', fontWeight: 800, color: 'var(--em-text)', fontVariantNumeric: 'tabular-nums' }}>{duel.series.mapScore[0]} : {duel.series.mapScore[1]} · MD3</span>
                   <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${duel.nicks[duel.series.winner]} ${ct('venceu')} ${duel.nicks[duel.series.winner === 0 ? 1 : 0]} ${ct('por')} ${duel.series.mapScore[0]}:${duel.series.mapScore[1]}. ${ct('Monte seu time em roadtomajor.com.br/online')}`)}>{ct('Compartilhar resultado')}</Button>
-                  {shareStatus && <small style={{ fontSize: '11px', color: 'var(--rtm-green-bright)' }}>{shareStatus}</small>}
+                  {shareStatus && <small style={{ fontSize: '11px', color: '#29c47a' }}>{shareStatus}</small>}
                 </div>
                 {isHost ? (
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: 14 }}>
@@ -1718,7 +1718,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     <Button variant="ghost" onClick={() => nextSeason(false)} disabled={busy}>{ct('Novas cartas')}</Button>
                   </div>
                 ) : (
-                  <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', marginTop: 12 }}>{OL.seasonWait}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--em-muted)', marginTop: 12 }}>{OL.seasonWait}</div>
                 )}
               </div>
             )}
@@ -2180,17 +2180,17 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         >
             <div style={{ textAlign: 'center', padding: '6px 0 18px' }}>
               <div style={{ fontSize: '48px', lineHeight: 1 }}>🏆</div>
-              <h1 style={{ margin: '8px 0 4px', fontFamily: 'var(--rtm-font-cond)', fontSize: '30px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)', textShadow: '0 0 36px rgba(216,169,67,.35)' }}>
+              <h1 style={{ margin: '8px 0 4px', fontFamily: 'var(--rtm-font-cond)', fontSize: '30px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-gold)', textShadow: '0 0 36px rgba(216,169,67,.35)' }}>
                 {champNick ? `${champNick} ${tr('online.champTitleHuman')}` : `${champ?.name} ${tr('online.champTitleAi')}`}
               </h1>
-              <div style={{ color: 'var(--rtm-dim)', fontSize: '13px' }}>
+              <div style={{ color: 'var(--em-muted)', fontSize: '13px' }}>
                 {champNick ? `${tr('online.champRoster')} ${champ?.players.map((p) => p.nick).join(', ')}` : tr('online.noHumanFinal')}
               </div>
-              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', margin: '16px auto 0', padding: '16px 26px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-panel-2)', border: '1px solid var(--rtm-gold-soft)' }}>
-                <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-gold)' }}>{champNick ?? champ?.name} {ct('campeão')}</b>
-                <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>Major Ultimate Team · {ct('Temporada')} {state.lobby.season ?? 1}</span>
+              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '6px', margin: '16px auto 0', padding: '16px 26px', borderRadius: '6px', background: 'var(--em-panel-2)', border: '1px solid var(--em-gold)' }}>
+                <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-gold)' }}>{champNick ?? champ?.name} {ct('campeão')}</b>
+                <span style={{ fontSize: '12px', color: 'var(--em-muted)' }}>Major Ultimate Team · {ct('Temporada')} {state.lobby.season ?? 1}</span>
                 <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${champNick ?? champ?.name} ${ct('foi campeão do Major. Teste com seus amigos em roadtomajor.com.br/online')}`)}>{ct('Compartilhar resultado')}</Button>
-                {shareStatus && <small style={{ fontSize: '11px', color: 'var(--rtm-green-bright)' }}>{shareStatus}</small>}
+                {shareStatus && <small style={{ fontSize: '11px', color: '#29c47a' }}>{shareStatus}</small>}
               </div>
               {/* continuar a sala: nova temporada com novo draft (transferências) */}
               <div style={{ marginTop: 16 }}>
@@ -2200,22 +2200,22 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     <Button variant="ghost" size="big" onClick={() => nextSeason(false)} disabled={busy}>{ct('Redraft completo')}</Button>
                   </div>
                 ) : (
-                  <div style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{OL.seasonWait}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{OL.seasonWait}</div>
                 )}
               </div>
             </div>
 
             <div className="muted small section-label">{ct('PRÊMIOS DO MAJOR')}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 14px', padding: '12px 16px', borderRadius: 'var(--rtm-radius)', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', margin: '0 0 14px', padding: '12px 16px', borderRadius: '6px', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>
               <div>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Divisão da sessão')}</div>
-                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--rtm-gold)' }}>{sessionDivision(sessionProfile.points)}</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700 }}>{ct('Divisão da sessão')}</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--em-gold)' }}>{sessionDivision(sessionProfile.points)}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{sessionProfile.points}</div>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>pts</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--em-text)', fontVariantNumeric: 'tabular-nums' }}>{sessionProfile.points}</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>pts</div>
               </div>
-              <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{sessionProfile.wins}V · {sessionProfile.losses}D · {sessionProfile.titles} {ct('títulos')}</span>
+              <span style={{ fontSize: '12px', color: 'var(--em-muted)' }}>{sessionProfile.wins}V · {sessionProfile.losses}D · {sessionProfile.titles} {ct('títulos')}</span>
             </div>
             <div className="ut-awards">
               {awards.map(({ label, row }) => row && (
@@ -2328,11 +2328,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
         <BackBar onExit={onBack} />
         <Panel title={`${ct('Modo espectador')} · ${code}`} accent="blue">
           <div style={{ textAlign: 'center' }}>
-            <h2 style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', fontWeight: 800, color: 'var(--rtm-text-strong)', margin: '0 0 6px' }}>{ct('Os jogadores estão montando os elencos')}</h2>
-            <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', margin: '0 0 14px' }}>{ct('Você entrará automaticamente no veto e poderá acompanhar todas as partidas.')}</p>
+            <h2 style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '22px', fontWeight: 800, color: 'var(--em-text)', margin: '0 0 6px' }}>{ct('Os jogadores estão montando os elencos')}</h2>
+            <p style={{ color: 'var(--em-muted)', fontSize: '14px', margin: '0 0 14px' }}>{ct('Você entrará automaticamente no veto e poderá acompanhar todas as partidas.')}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
               {activePlayers.map((player) => (
-                <span key={player.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: player.done ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)', background: player.done ? 'rgba(111,208,111,.12)' : 'var(--rtm-panel-2)', border: `1px solid ${player.done ? 'var(--rtm-green)' : 'var(--rtm-border-soft)'}` }}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>
+                <span key={player.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: player.done ? '#29c47a' : 'var(--em-muted)', background: player.done ? 'rgba(111,208,111,.12)' : 'var(--em-panel-2)', border: `1px solid ${player.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>
               ))}
             </div>
           </div>
@@ -2366,10 +2366,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       <div>
         {myDone ? (
           <Panel title={tr('online.draftSent')} accent="blue">
-            <p style={{ textAlign: 'center', color: 'var(--rtm-dim)', fontSize: '14px', marginTop: 0 }}>{tr('online.waitingOthers')}</p>
+            <p style={{ textAlign: 'center', color: 'var(--em-muted)', fontSize: '14px', marginTop: 0 }}>{tr('online.waitingOthers')}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
               {activePlayers.map((p) => (
-                <span key={p.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: p.done ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)', background: p.done ? 'rgba(111,208,111,.12)' : 'var(--rtm-panel-2)', border: `1px solid ${p.done ? 'var(--rtm-green)' : 'var(--rtm-border-soft)'}` }}>
+                <span key={p.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: p.done ? '#29c47a' : 'var(--em-muted)', background: p.done ? 'rgba(111,208,111,.12)' : 'var(--em-panel-2)', border: `1px solid ${p.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>
                   {p.done ? '✔' : '·'} {p.nick}
                 </span>
               ))}
@@ -2461,7 +2461,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             accent="gold"
             actions={<Button variant="ghost" size="sm" disabled={(myRollouts[myPicks.length] ?? 0) >= (state.lobby.draft_rollouts ?? 2)} onClick={rerollCurrentPack}>↻ REROLL {(state.lobby.draft_rollouts ?? 2) - (myRollouts[myPicks.length] ?? 0)}</Button>}
           >
-            <div style={{ fontSize: '11px', color: 'var(--rtm-dim)', marginBottom: '10px' }}>
+            <div style={{ fontSize: '11px', color: 'var(--em-muted)', marginBottom: '10px' }}>
               {tr('online.sameRosters')} {tr('online.roomLabel')} {code}
             </div>
             <div className="draft-source">
@@ -2530,17 +2530,17 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               ];
               return (
                 <div style={{ marginTop: '14px' }}>
-                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700, marginBottom: '8px' }}>
+                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700, marginBottom: '8px' }}>
                     {OL.yourTeam} ({myPicks.length}/5)
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: '8px' }}>
                     {roster.map((p, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: 'var(--rtm-radius)', background: p ? 'var(--rtm-panel-2)' : 'var(--rtm-bg-deep)', border: `1px solid ${p ? 'var(--rtm-border-soft)' : 'var(--rtm-border-soft)'}`, borderStyle: p ? 'solid' : 'dashed', minHeight: '46px' }}>
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '6px', background: p ? 'var(--em-panel-2)' : 'var(--em-panel)', border: `1px solid ${p ? 'var(--em-border)' : 'var(--em-border)'}`, borderStyle: p ? 'solid' : 'dashed', minHeight: '46px' }}>
                         {p ? (
                           <>
                             <PlayerAvatar nick={p.nick} size={32} />
                             <span style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '13px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><Flag cc={p.country} /> {p.nick} <span style={{ color: 'var(--rtm-gold)', fontVariantNumeric: 'tabular-nums' }}>{playerOvr(p)}</span></span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '13px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><Flag cc={p.country} /> {p.nick} <span style={{ color: 'var(--em-gold)', fontVariantNumeric: 'tabular-nums' }}>{playerOvr(p)}</span></span>
                               <RoleTag role={p.role} />
                             </span>
                           </>
@@ -2551,11 +2551,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     ))}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{OL.rolesLabel}:</span>
+                    <span style={{ fontSize: '11px', color: 'var(--em-muted)' }}>{OL.rolesLabel}:</span>
                     {KEY.map((k) => {
                       const ok = present.has(k.role);
                       return (
-                        <span key={k.role} style={{ fontSize: '11px', fontWeight: 700, color: ok ? 'var(--rtm-green-bright)' : 'var(--rtm-faint)' }}>
+                        <span key={k.role} style={{ fontSize: '11px', fontWeight: 700, color: ok ? '#29c47a' : 'var(--rtm-faint)' }}>
                           {ok ? '✓' : '✗'} {k.label}
                         </span>
                       );
@@ -2569,7 +2569,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       </div>
 
       <Panel title={`${tr('online.roomLabel')} ${code}`} accent="blue" style={{ alignSelf: 'start' }}>
-        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', fontWeight: 700, color: 'var(--rtm-dim)', marginBottom: '10px' }}>
+        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', fontWeight: 700, color: 'var(--em-muted)', marginBottom: '10px' }}>
           {tr('online.liveProgress')}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -2580,12 +2580,12 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             // cada jogador tem o próprio sorteio: resolve os nicks pelo setup dele
             const pSetup = mine ? setup : buildDraftForPlayer(state.lobby.seed, state.lobby.pool, p.nick, state.lobby.ruleset ?? 'open', p.rollouts);
             return (
-              <div key={p.nick} style={{ padding: '10px 12px', borderRadius: 'var(--rtm-radius)', background: mine ? 'rgba(67,130,182,.1)' : 'var(--rtm-panel-2)', border: `1px solid ${mine ? 'var(--rtm-border)' : 'var(--rtm-border-soft)'}` }}>
+              <div key={p.nick} style={{ padding: '10px 12px', borderRadius: '6px', background: mine ? 'color-mix(in srgb, var(--em-gold) 14%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${mine ? 'var(--em-border-strong)' : 'var(--em-border)'}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: mine ? 'var(--em-gold)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: mine ? 'var(--em-gold)' : 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {p.nick === state.lobby.host ? '★ ' : ''}{p.nick}{mine ? ` (${tr('common.you')})` : ''}
                   </b>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: ready ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: ready ? '#29c47a' : 'var(--em-muted)' }}>
                     {ready ? tr('online.ready') : `${livePicks.length}/5 ${tr('online.picks')}`}
                   </span>
                   {isHost && !mine && p.nick !== state.lobby.host && !ready && (
@@ -2597,7 +2597,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     const pid = livePicks[i];
                     const player = pid ? pSetup.sources[i]?.players.find((x) => x.id === pid) : undefined;
                     return (
-                      <span key={i} title={player ? player.nick : undefined} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderRadius: 'var(--rtm-radius-sm)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: player ? 'var(--rtm-text-strong)' : 'var(--rtm-faint)', background: player ? 'var(--em-gold)' : 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
+                      <span key={i} title={player ? player.nick : undefined} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderRadius: 'var(--rtm-radius-sm)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: player ? 'var(--em-text)' : 'var(--rtm-faint)', background: player ? 'var(--em-gold)' : 'var(--em-panel)', border: '1px solid var(--em-border)' }}>
                         {player ? player.nick : '·'}
                       </span>
                     );
@@ -2607,7 +2607,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             );
           })}
         </div>
-        <p style={{ fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '12px', lineHeight: 1.45 }}>
+        <p style={{ fontSize: '11px', color: 'var(--em-muted)', marginTop: '12px', lineHeight: 1.45 }}>
           {tr('online.sideExplain')}
         </p>
       </Panel>

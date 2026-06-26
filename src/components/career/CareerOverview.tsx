@@ -131,7 +131,7 @@ export function CareerOverview({
             {opp && myMatch ? (
               <div className="em-nextup-teams">
                 <div className="em-nextup-team">
-                  <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#61a8dd']} size={52} logoUrl={save.org?.logo} />
+                  <TeamBadge tag={save.org?.tag ?? ''} colors={save.org?.colors ?? ['#101820', '#3a3a3a']} size={52} logoUrl={save.org?.logo} />
                   <span>{save.org?.tag}</span>
                 </div>
                 <span className="em-vs">vs</span>
