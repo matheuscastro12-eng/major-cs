@@ -4647,7 +4647,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                           <span className="muted small">{p.age} anos</span>
                         </div>
                         <div className="aca-pot">
-                          <span className="muted small">{ct('OVR atual')} <b style={{ color: 'var(--rtm-text-strong)' }}>{ovr}</b> · {ct('Potencial')}</span>
+                          <span className="muted small">{ct('OVR atual')} <b style={{ color: 'var(--em-text)' }}>{ovr}</b> · {ct('Potencial')}</span>
                           <div className="aca-potbar"><div style={{ width: `${potPct}%` }} /></div>
                           <span className="aca-potval">{p.potential}</span>
                         </div>
@@ -4965,7 +4965,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
             <div className="t20-head">
               <div className="muted small section-label" style={{ marginTop: 0 }}>
                 {vrsMode === 'geral' ? ct('Ranking mundial de VRS · geral') : ct('Ranking mundial de VRS · por região')}
-                {myVrsRank > 0 && <span className="muted small"> {ct('· você é')} <b style={{ color: 'var(--blue-bright)' }}>#{myVrsRank}</b> {ct('no mundo')}</span>}
+                {myVrsRank > 0 && <span className="muted small"> {ct('· você é')} <b style={{ color: 'var(--em-gold)' }}>#{myVrsRank}</b> {ct('no mundo')}</span>}
               </div>
               <div className="t20-toggle">
                 <button className={`btn small${vrsMode === 'geral' ? ' gold' : ' ghost'}`} onClick={() => setVrsMode('geral')}>{ct('Geral')}</button>
@@ -4982,7 +4982,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                         <span className="pcell">
                           <TeamBadge tag={t.tag} colors={t.colors} size={20} logoUrl={t.logoUrl} />
                           <OrgFlag players={t.players} />
-                          <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--blue-bright)' : undefined }}>{t.name}</span>
+                          <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--em-gold)' : undefined }}>{t.name}</span>
                           <span className="muted small vrs-reg">{CAREER_REGION_LABELS[t.region]}</span>
                         </span>
                       </td>
@@ -5005,7 +5005,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                             <span className="pcell">
                               <TeamBadge tag={t.tag} colors={t.colors} size={20} logoUrl={t.logoUrl} />
                               <OrgFlag players={t.players} />
-                              <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--blue-bright)' : undefined }}>{t.name}</span>
+                              <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--em-gold)' : undefined }}>{t.name}</span>
                             </span>
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700 }}>{t.vrs}</td>
@@ -5140,10 +5140,10 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
               {table.map((tm) => {
                 const mine = tm.id === 'user';
                 return (
-                  <button key={tm.id} onClick={() => setSelTeam(tm)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: 'var(--rtm-radius)', background: mine ? 'rgba(67,130,182,.12)' : 'var(--rtm-panel-2)', border: `1px solid ${mine ? 'var(--rtm-blue-bright)' : 'var(--rtm-border-soft)'}`, cursor: 'pointer', textAlign: 'left' }}>
+                  <button key={tm.id} onClick={() => setSelTeam(tm)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '6px', background: mine ? 'color-mix(in srgb, var(--em-gold) 14%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${mine ? 'var(--em-gold)' : 'var(--em-border)'}`, cursor: 'pointer', textAlign: 'left' }}>
                     <TeamBadge tag={tm.tag} colors={tm.colors} logoUrl={tm.logoUrl} size={30} />
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '14px', color: mine ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tm.name}</div>
+                      <div style={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '14px', color: mine ? 'var(--em-gold)' : 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tm.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--rtm-faint)' }}><Flag cc={tm.country} />{tm.tag}</div>
                     </div>
                   </button>
@@ -5518,7 +5518,7 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
               <TeamBadge tag={team.tag} colors={team.colors} logoUrl={team.logoUrl} size={64} />
               <div style={{ flex: 1, minWidth: 180 }}>
                 <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>{team.wins}-{team.losses} · {ct('saldo')} {team.roundDiff >= 0 ? '+' : ''}{team.roundDiff} · {ct('força')} {team.strength.toFixed(1)}</div>
-                <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '34px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 1 }}>{team.name}</h1>
+                <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '34px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)', lineHeight: 1 }}>{team.name}</h1>
                 <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={team.country} /> {team.tag}{team.coach && <> · {ct('Técnico:')} <b style={{ color: 'var(--rtm-text)' }}>{team.coach.nick}</b> ({team.coach.rating})</>}</div>
               </div>
             </div>
@@ -5528,7 +5528,7 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
               {team.players.map((p, i) => (
                 <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)', padding: '9px 14px' }}>
                   <PlayerAvatar nick={p.nick} size={30} />
-                  <b style={{ fontFamily: 'var(--rtm-font-cond)', color: 'var(--rtm-text-strong)', fontSize: '15px', flex: 1, display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Flag cc={p.country} /> {p.nick}</b>
+                  <b style={{ fontFamily: 'var(--rtm-font-cond)', color: 'var(--em-text)', fontSize: '15px', flex: 1, display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Flag cc={p.country} /> {p.nick}</b>
                   <span className={`role-pill ${p.role}`}>{p.role}</span>
                   <span className="cs-ovr">{p.ovr}</span>
                 </div>
@@ -5672,7 +5672,7 @@ function CareerTable({ table, highlightTop = 0, onPick, detailed }: {
             className={`${t.id === 'user' ? 'human-row' : ''}${highlightTop && i < highlightTop ? ' qualify-row' : ''}${onPick ? ' clickable' : ''}`}
             onClick={() => onPick?.(t)}
           >
-            <td style={{ textAlign: 'left', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: 15, color: i < Math.max(highlightTop, 3) && i < 3 ? 'var(--gold)' : undefined }}>{i + 1}</td>
+            <td style={{ textAlign: 'left', fontFamily: 'inherit', fontWeight: 800, fontSize: 15, color: i < Math.max(highlightTop, 3) && i < 3 ? 'var(--gold)' : undefined }}>{i + 1}</td>
             <td style={{ textAlign: 'left', fontWeight: t.id === 'user' ? 700 : 500 }}>
               <span className="ct-team">
                 <TeamBadge tag={t.tag} colors={t.colors} size={18} logoUrl={t.logoUrl} />
@@ -6613,7 +6613,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
         <div className="muted small" style={{ marginBottom: 12 }}>
           {ct('🤝 Negociações · você fecha agora, o jogador entra na')} <b>{ct('próxima janela')}</b> (fim do split)
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', padding: '12px 16px', borderRadius: 'var(--rtm-radius)', background: 'linear-gradient(120deg, var(--rtm-panel-2), var(--rtm-header))', border: '1px solid var(--rtm-border-soft)', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', padding: '12px 16px', borderRadius: '6px', background: 'linear-gradient(120deg, var(--em-panel-2), var(--rtm-header))', border: '1px solid var(--em-border)', marginBottom: '14px' }}>
           <div>
             <div style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{ct('Caixa pra acordos')}</div>
             <div style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '26px', fontWeight: 800, color: dealBudget < 0 ? 'var(--rtm-red-bright)' : 'var(--rtm-gold)', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(dealBudget)}</div>

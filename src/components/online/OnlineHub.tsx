@@ -27,7 +27,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
   useEffect(() => { void getLadder().then((d) => setLadder(d.ladder)); }, []);
 
   const MODES = [
-    { id: '1v1' as const, icon: '⚔', tone: 'var(--rtm-blue-bright)', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
+    { id: '1v1' as const, icon: '⚔', tone: 'var(--em-gold)', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
     { id: 'major' as const, icon: '🏆', tone: 'var(--rtm-gold)', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'] },
     { id: 'gauntlet' as const, icon: '🔥', tone: 'var(--rtm-green-bright)', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
   ];
@@ -71,7 +71,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
             <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={me.country} /> <b style={{ color: rk.color }}>{ct(rk.name)}</b> · {stats.mmr} MMR</div>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {([['1v1', stats.w + 'W ' + stats.l + 'L', 'var(--rtm-green-bright)'], ['Major', stats.majorPts + ' pts', 'var(--rtm-gold)'], ['Gauntlet', stats.bestStreak + ' rec', 'var(--rtm-blue-bright)']] as [string, string, string][]).map(([k, v, c]) => (
+            {([['1v1', stats.w + 'W ' + stats.l + 'L', 'var(--rtm-green-bright)'], ['Major', stats.majorPts + ' pts', 'var(--rtm-gold)'], ['Gauntlet', stats.bestStreak + ' rec', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
               <div key={k} style={{ textAlign: 'center', padding: '8px 14px', borderRadius: 'var(--rtm-radius)', background: 'rgba(18,22,27,.55)', border: '1px solid var(--rtm-border-soft)' }}>
                 <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--rtm-dim)', fontWeight: 700 }}>{k}</div>
                 <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '17px', color: c }}>{v}</div>

@@ -140,7 +140,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
   if (phase === 'search') {
     return (
       <div style={{ maxWidth: '560px', margin: '60px auto 0', textAlign: 'center' }}>
-        <div style={{ width: '80px', height: '80px', margin: '0 auto 20px', borderRadius: '50%', border: '3px solid var(--rtm-border)', borderTopColor: 'var(--rtm-blue-bright)', animation: 'rtmSpin 0.9s linear infinite' }} />
+        <div style={{ width: '80px', height: '80px', margin: '0 auto 20px', borderRadius: '50%', border: '3px solid var(--rtm-border)', borderTopColor: 'var(--em-gold)', animation: 'rtmSpin 0.9s linear infinite' }} />
         <h1 style={{ fontFamily: 'var(--font-cond)', fontSize: '26px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', margin: 0 }}>{ct('Procurando rival')}{'.'.repeat(dots)}</h1>
         <p style={{ color: 'var(--rtm-dim)', marginTop: '8px' }}>{ct('Buscando perto de')} {mmr} MMR · {rk.name}</p>
         <Button variant="ghost" size="sm" onClick={() => setPhase('lobby')} style={{ marginTop: '18px' }}>{ct('Cancelar')}</Button>
@@ -193,7 +193,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '14px', padding: '14px 20px', borderRadius: '10px', background: 'linear-gradient(120deg, rgba(67,130,182,.16), rgba(13,17,22,.4))', border: '1px solid var(--rtm-border-soft)', marginBottom: '14px' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ width: '38px', height: '38px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, color: '#fff', background: `linear-gradient(160deg, ${me.accent || '#4382b6'}, #20303f)` }}>{me.nick.slice(0, 2).toUpperCase()}</span>
-          <span><b style={{ color: 'var(--rtm-blue-bright)', fontFamily: 'var(--font-cond)', fontSize: '16px' }}>{me.nick}</b><div style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{myCount}/5 {ct('escolhidos')}</div></span>
+          <span><b style={{ color: 'var(--em-gold)', fontFamily: 'var(--font-cond)', fontSize: '16px' }}>{me.nick}</b><div style={{ fontSize: '11px', color: 'var(--rtm-dim)' }}>{myCount}/5 {ct('escolhidos')}</div></span>
         </span>
         <span style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, color: 'var(--rtm-gold)', fontSize: '18px' }}>{ct('DRAFT')}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
@@ -201,19 +201,19 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
           <span style={{ width: '38px', height: '38px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontWeight: 800, color: '#06121d', background: 'linear-gradient(160deg, var(--rtm-gold), var(--rtm-gold-soft))' }}>{rival ? rival.nick.slice(0, 2).toUpperCase() : '??'}</span>
         </span>
       </div>
-      <div style={{ textAlign: 'center', marginBottom: '12px', fontFamily: 'var(--font-cond)', fontSize: '15px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: pickN >= ORDER.length ? 'var(--rtm-green-bright)' : myTurn ? 'var(--rtm-blue-bright)' : 'var(--rtm-gold)' }}>
+      <div style={{ textAlign: 'center', marginBottom: '12px', fontFamily: 'var(--font-cond)', fontSize: '15px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: pickN >= ORDER.length ? 'var(--rtm-green-bright)' : myTurn ? 'var(--em-gold)' : 'var(--rtm-gold)' }}>
         {pickN >= ORDER.length ? ct('Draft completo — resolvendo…') : myTurn ? `● ${ct('Sua escolha')}` : `${rival ? rival.nick : 'rival'} ${ct('está escolhendo…')}`}
       </div>
       <div className="rtm-pcards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', opacity: myTurn ? 1 : 0.75 }}>
         {draftPool.map((p) => {
           const owner = taken[p.nick];
           return (
-            <button key={p.nick} type="button" disabled={!!owner || !myTurn} onClick={() => myPick(p)} style={{ position: 'relative', textAlign: 'center', cursor: owner || !myTurn ? 'default' : 'pointer', background: owner === 'me' ? 'rgba(67,130,182,.16)' : owner === 'rival' ? 'rgba(216,169,67,.14)' : 'var(--rtm-panel-2)', border: `1px solid ${owner === 'me' ? 'var(--rtm-blue-bright)' : owner === 'rival' ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}`, borderRadius: 'var(--rtm-radius)', padding: '12px 8px', opacity: owner ? 0.6 : 1 }}>
+            <button key={p.nick} type="button" disabled={!!owner || !myTurn} onClick={() => myPick(p)} style={{ position: 'relative', textAlign: 'center', cursor: owner || !myTurn ? 'default' : 'pointer', background: owner === 'me' ? 'rgba(67,130,182,.16)' : owner === 'rival' ? 'rgba(216,169,67,.14)' : 'var(--rtm-panel-2)', border: `1px solid ${owner === 'me' ? 'var(--em-gold)' : owner === 'rival' ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}`, borderRadius: 'var(--rtm-radius)', padding: '12px 8px', opacity: owner ? 0.6 : 1 }}>
               <OvrBadge ovr={p.ovr} />
               <PlayerAvatar nick={p.nick} size={44} />
               <div style={{ fontFamily: 'var(--font-cond)', fontSize: '14px', fontWeight: 700, color: 'var(--rtm-text-strong)', marginTop: '6px' }}>{p.nick}</div>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', marginTop: '4px' }}><Flag cc={p.country} /><RoleTag role={p.role} /></div>
-              {owner && <div style={{ marginTop: '6px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: owner === 'me' ? 'var(--rtm-blue-bright)' : 'var(--rtm-gold)' }}>{owner === 'me' ? me.nick : (rival ? rival.nick : 'rival')}</div>}
+              {owner && <div style={{ marginTop: '6px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.5px', color: owner === 'me' ? 'var(--em-gold)' : 'var(--rtm-gold)' }}>{owner === 'me' ? me.nick : (rival ? rival.nick : 'rival')}</div>}
             </button>
           );
         })}

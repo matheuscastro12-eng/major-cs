@@ -55,7 +55,7 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
         <div style={{ position: 'relative' }}>
           <BrandMark size={64} />
           <div style={{ fontSize: '12px', letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '18px' }}>{ct('Crie seu perfil')}</div>
-          <h1 style={{ fontFamily: 'var(--font-cond)', fontSize: '52px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--rtm-text-strong)', margin: '6px 0 14px', lineHeight: 1 }}>{ct('Vire um')}<br /><span style={{ color: 'var(--rtm-blue-bright)' }}>{ct('manager de Major')}</span></h1>
+          <h1 style={{ fontFamily: 'var(--font-cond)', fontSize: '52px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--rtm-text-strong)', margin: '6px 0 14px', lineHeight: 1 }}>{ct('Vire um')}<br /><span style={{ color: 'var(--em-gold)' }}>{ct('manager de Major')}</span></h1>
           <p style={{ color: 'var(--rtm-dim)', fontSize: '15px', maxWidth: '440px', lineHeight: 1.6 }}>
             {ct('Assuma o comando de uma organização. Seu nome e idade te seguem na bio, nos contratos e nas notícias. Monte lendas de cada era e brigue pelo título.')}
           </p>
@@ -82,7 +82,7 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
           <div style={{ gridColumn: '1 / -1' }}><label style={label}>{ct('Nome completo')}</label><input style={input} value={name} maxLength={40} placeholder={ct('ex: Caio Ferreira')} onChange={(e) => setName(e.target.value)} /></div>
           <div>
             <label style={label}>{ct('Idade')} · {age}</label>
-            <input type="range" min={18} max={70} value={age} onChange={(e) => setAge(+e.target.value)} style={{ width: '100%', accentColor: 'var(--rtm-blue-bright)' }} />
+            <input type="range" min={18} max={70} value={age} onChange={(e) => setAge(+e.target.value)} style={{ width: '100%', accentColor: 'var(--em-gold)' }} />
           </div>
           <div><label style={label}>{ct('País')}</label>
             <select style={input} value={cc} onChange={(e) => setCc(e.target.value)}>

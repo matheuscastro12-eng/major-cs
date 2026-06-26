@@ -73,7 +73,7 @@ export function CareerSaves({ paid, onPlay, onBack }: { paid: boolean; onPlay: (
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '18px', color: 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {s.org ?? `${ct('Carreira')} ${s.slot}`}
-                  {s.fromCloud && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.4px', color: 'var(--rtm-blue-bright)', border: '1px solid var(--rtm-border)', padding: '1px 6px', borderRadius: '4px' }}>☁ {ct('NUVEM')}</span>}
+                  {s.fromCloud && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.4px', color: 'var(--em-gold)', border: '1px solid var(--rtm-border)', padding: '1px 6px', borderRadius: '4px' }}>☁ {ct('NUVEM')}</span>}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>
                   {ct('Slot')} {s.slot} · {ct('Split')} {s.split ?? 1}{s.tier ? ` · ${ct('Tier')} ${s.tier}` : ''} · {s.titles ?? 0}× {ct('título')} · {money(s.budget)}

@@ -10,7 +10,7 @@ const DIV_COLOR: Record<string, string> = {
   Calibrando: 'var(--rtm-dim)',
   Prata: '#b9c2cf',
   'Ouro Nova': 'var(--rtm-gold)',
-  'Mestre Guardião': 'var(--rtm-blue-bright)',
+  'Mestre Guardião': 'var(--em-gold)',
   'Águia': '#c792ea',
   'Global Elite': '#e8743b',
 };
@@ -92,9 +92,9 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
                   {data.ladder.map((r, i) => {
                     const isMe = !!myNick && r.nick.toLowerCase() === myNick.toLowerCase();
                     return (
-                      <tr key={r.nick + i} style={{ background: isMe ? 'rgba(67,130,182,.16)' : i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)', boxShadow: isMe ? 'inset 3px 0 0 var(--rtm-blue-bright)' : 'none' }}>
+                      <tr key={r.nick + i} style={{ background: isMe ? 'rgba(67,130,182,.16)' : i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)', boxShadow: isMe ? 'inset 3px 0 0 var(--em-gold)' : 'none' }}>
                         <td style={{ padding: '10px 12px', ...cond, fontSize: '15px', color: i < 3 ? 'var(--rtm-gold)' : 'var(--rtm-faint)' }}>{i < 3 ? ['🥇', '🥈', '🥉'][i] : r.rank}</td>
-                        <td style={{ padding: '10px 12px' }}><b style={{ color: isMe ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)' }}>{r.nick}</b>{isMe && <span className="muted small"> · {ct('você')}</span>}</td>
+                        <td style={{ padding: '10px 12px' }}><b style={{ color: isMe ? 'var(--em-gold)' : 'var(--rtm-text-strong)' }}>{r.nick}</b>{isMe && <span className="muted small"> · {ct('você')}</span>}</td>
                         <td style={{ padding: '10px 12px' }}><DivBadge d={r.division} /></td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--rtm-text)' }}>{r.wins}-{r.losses}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', ...cond, fontVariantNumeric: 'tabular-nums', color: 'var(--rtm-text-strong)' }}>{r.mmr}</td>

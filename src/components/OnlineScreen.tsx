@@ -1039,7 +1039,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <img src="/maps/dust2.jpg" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22 }} />
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(13,17,22,.92), rgba(13,17,22,.6))' }} />
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
-              <span style={{ width: '64px', height: '64px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '22px', color: '#fff', background: 'linear-gradient(160deg, var(--rtm-blue-bright), #20303f)' }}>{initials}</span>
+              <span style={{ width: '64px', height: '64px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '22px', color: '#fff', background: 'linear-gradient(160deg, var(--em-gold), #20303f)' }}>{initials}</span>
               <div style={{ flex: 1, minWidth: '160px' }}>
                 <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 800 }}>{myRank?.division ?? (paidRank ? ct('Sem ranking ainda') : ct('Conta grátis'))}</div>
                 <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '28px', fontWeight: 800, color: 'var(--rtm-text-strong)' }}>{displayNick}</h1>
@@ -1127,7 +1127,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     // Ranked Major: tela dedicada de salas (browse) + passo de criar sala, no layout do design.
     if (preset === 'party' && !casualOnly) {
       const openCount = openRooms.filter((r) => r.players < r.max).length;
-      const poolColor = (p: TournamentPool) => (p === 'br' ? 'var(--rtm-gold)' : 'var(--rtm-blue-bright)');
+      const poolColor = (p: TournamentPool) => (p === 'br' ? 'var(--rtm-gold)' : 'var(--em-gold)');
       const poolLabel = (p: TournamentPool) => tr(p === 'br' ? 'home.poolBr' : 'home.poolWorld');
 
       if (!majorCreate) {
@@ -1274,7 +1274,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       <div className="fade-in" style={{ maxWidth: 760, margin: '0 auto' }}>
         <BackBar onExit={onBack} />
         <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-          <span style={{ fontSize: '11px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--rtm-blue-bright)', fontWeight: 800 }}>ROAD TO MAJOR</span>
+          <span style={{ fontSize: '11px', letterSpacing: '1.6px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>ROAD TO MAJOR</span>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>{OL.title}</h1>
           <p style={{ color: 'var(--rtm-dim)', fontSize: '14px', maxWidth: '520px', margin: '8px auto 0', lineHeight: 1.55 }}>{OL.lead}</p>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '14px' }}>
@@ -1358,8 +1358,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 {RULESET_OPTIONS.map((option) => {
                   const on = ruleset === option.id;
                   return (
-                    <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '11px 13px', borderRadius: 'var(--rtm-radius)', border: `1px solid ${on ? 'var(--rtm-blue-bright)' : 'var(--rtm-border-soft)'}`, background: on ? 'rgba(67,130,182,.14)' : 'var(--rtm-bg-deep)' }}>
-                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '15px', fontWeight: 700, color: on ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)' }}>{ct(option.label)}</b>
+                    <button key={option.id} type="button" onClick={() => setRuleset(option.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: '11px 13px', borderRadius: 'var(--rtm-radius)', border: `1px solid ${on ? 'var(--em-gold)' : 'var(--rtm-border-soft)'}`, background: on ? 'rgba(67,130,182,.14)' : 'var(--rtm-bg-deep)' }}>
+                      <b style={{ display: 'block', fontFamily: 'var(--rtm-font-cond)', fontSize: '15px', fontWeight: 700, color: on ? 'var(--em-gold)' : 'var(--rtm-text-strong)' }}>{ct(option.label)}</b>
                       <span style={{ display: 'block', fontSize: '11px', color: 'var(--rtm-dim)', marginTop: '3px', lineHeight: 1.4 }}>{ct(option.desc)}</span>
                     </button>
                   );
@@ -1446,7 +1446,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                       <div style={{ textAlign: 'center', minWidth: '64px' }}>
                         <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: full ? 'var(--rtm-faint)' : 'var(--rtm-text-strong)', fontVariantNumeric: 'tabular-nums' }}>{r.players}/{r.max}</div>
                         <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '2px' }}>
-                          {Array.from({ length: r.max }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.players ? 'var(--rtm-blue-bright)' : 'var(--rtm-panel-3)' }} />)}
+                          {Array.from({ length: r.max }).map((_, i) => <span key={i} style={{ width: '7px', height: '7px', borderRadius: '2px', background: i < r.players ? 'var(--em-gold)' : 'var(--rtm-panel-3)' }} />)}
                         </div>
                       </div>
                       <Button variant="ghost" size="sm" disabled={busy} onClick={() => doJoin(r.code, true)}>{ct("Assistir")}</Button>
@@ -1555,7 +1555,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               const host = p.nick === state.lobby.host;
               return (
                 <div key={p.nick} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: 'var(--rtm-radius)', background: host ? 'rgba(216,169,67,.1)' : 'var(--rtm-panel-2)', border: `1px solid ${host ? 'var(--rtm-gold-soft)' : 'var(--rtm-border-soft)'}` }}>
-                  <span style={{ width: '30px', height: '30px', flexShrink: 0, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '12px', color: host ? '#1a1205' : '#fff', background: host ? 'linear-gradient(160deg, var(--rtm-gold-glow), var(--rtm-gold-soft))' : 'linear-gradient(160deg, var(--rtm-blue-bright), #20303f)' }}>{p.nick.slice(0, 2).toUpperCase()}</span>
+                  <span style={{ width: '30px', height: '30px', flexShrink: 0, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '12px', color: host ? '#1a1205' : '#fff', background: host ? 'linear-gradient(160deg, var(--rtm-gold-glow), var(--rtm-gold-soft))' : 'linear-gradient(160deg, var(--em-gold), #20303f)' }}>{p.nick.slice(0, 2).toUpperCase()}</span>
                   <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: host ? 'var(--rtm-gold)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{host ? '★ ' : ''}{p.nick}</b>
                   {isHost && !host && (
                     <button type="button" title={OL.kick} disabled={busy} onClick={() => kick(p.nick)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--rtm-faint)', fontSize: '14px', lineHeight: 1, padding: 0 }}>✕</button>
@@ -2582,7 +2582,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             return (
               <div key={p.nick} style={{ padding: '10px 12px', borderRadius: 'var(--rtm-radius)', background: mine ? 'rgba(67,130,182,.1)' : 'var(--rtm-panel-2)', border: `1px solid ${mine ? 'var(--rtm-border)' : 'var(--rtm-border-soft)'}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: mine ? 'var(--rtm-blue-bright)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: mine ? 'var(--em-gold)' : 'var(--rtm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {p.nick === state.lobby.host ? '★ ' : ''}{p.nick}{mine ? ` (${tr('common.you')})` : ''}
                   </b>
                   <span style={{ fontSize: '11px', fontWeight: 700, color: ready ? 'var(--rtm-green-bright)' : 'var(--rtm-dim)' }}>
@@ -2597,7 +2597,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     const pid = livePicks[i];
                     const player = pid ? pSetup.sources[i]?.players.find((x) => x.id === pid) : undefined;
                     return (
-                      <span key={i} title={player ? player.nick : undefined} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderRadius: 'var(--rtm-radius-sm)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: player ? 'var(--rtm-text-strong)' : 'var(--rtm-faint)', background: player ? 'var(--rtm-blue)' : 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
+                      <span key={i} title={player ? player.nick : undefined} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderRadius: 'var(--rtm-radius-sm)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: player ? 'var(--rtm-text-strong)' : 'var(--rtm-faint)', background: player ? 'var(--em-gold)' : 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)' }}>
                         {player ? player.nick : '·'}
                       </span>
                     );

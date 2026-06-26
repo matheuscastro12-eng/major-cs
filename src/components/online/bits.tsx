@@ -42,7 +42,7 @@ export function Check({ checked, onChange, children }: { checked: boolean; onCha
   const [hover, setHover] = useState(false);
   return (
     <label onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer', padding: '8px 10px', borderRadius: 'var(--rtm-radius)', border: `1px solid ${checked || hover ? 'var(--rtm-border)' : 'var(--rtm-border-soft)'}`, background: checked ? 'rgba(67,130,182,.1)' : 'transparent', fontSize: '13px', color: checked ? 'var(--rtm-text-strong)' : 'var(--rtm-dim)', transition: 'background .12s, color .12s, border-color .12s' }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--rtm-blue-bright)', width: 15, height: 15, flexShrink: 0 }} />
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--em-gold)', width: 15, height: 15, flexShrink: 0 }} />
       {children}
     </label>
   );

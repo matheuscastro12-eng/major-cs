@@ -48,7 +48,7 @@ function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: (
       <div className="lp-wrap" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 22px' }}>
         <a href="#topo" style={{ display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
           <BrandMark size={30} />
-          <span style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Road to <span style={{ color: 'var(--rtm-blue-bright)' }}>Major</span></span>
+          <span style={{ fontFamily: 'var(--font-cond)', fontSize: '20px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>Road to <span style={{ color: 'var(--em-gold)' }}>Major</span></span>
         </a>
         <nav className="l-nav-links" style={{ display: 'flex', gap: '6px', flex: 1, justifyContent: 'center' }}>
           {links.map(([id, lbl]) => <a key={id} href={'#' + id} style={{ color: 'var(--rtm-dim)', fontSize: '13px', fontWeight: 600, padding: '8px 12px' }}>{ct(lbl)}</a>)}
@@ -73,7 +73,7 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
           <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--rtm-green-bright)' }} /> {ct('Beta aberto, joga de graça no navegador')}
         </span>
         <h1 className="l-hero-h1" style={{ fontFamily: 'var(--font-cond)', fontSize: '74px', fontWeight: 700, letterSpacing: '4px', margin: '18px 0 0', textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 0.98, textShadow: '0 0 40px rgba(97,168,221,.35)' }}>
-          {ct('Monte o time dos sonhos')}<br /><span style={{ color: 'var(--rtm-blue-bright)' }}>{ct('de todas as eras do CS')}</span>
+          {ct('Monte o time dos sonhos')}<br /><span style={{ color: 'var(--em-gold)' }}>{ct('de todas as eras do CS')}</span>
         </h1>
         <p style={{ color: 'var(--rtm-dim)', fontSize: '17px', maxWidth: '620px', margin: '18px auto 0', lineHeight: 1.55 }}>
           {ct('Sorteie lendas de 1.6, Source, CS:GO e CS2. Escolha cinco, contrate o coach e leve o seu elenco até o título do Major. Fase suíça, playoffs, veto de mapa e scoreboard no estilo HLTV.')}
@@ -97,7 +97,7 @@ function Modes({ onPlay }: { onPlay: () => void }) {
   const [tab, setTab] = useState(0);
   const MODES = [
     { id: 'career', tone: 'var(--rtm-gold)', kicker: 'Campanha longa', title: 'Carreira', img: M + 'nuke.jpg', desc: 'Funde a sua organização, monte o elenco, gerencie transferências e dispute uma temporada inteira rumo ao título.', bullets: ['Hub da organização com química do time', 'Mercado de transferências com orçamento', 'Perfis de jogador e de time clicáveis', 'Killfeed ao vivo na partida'] },
-    { id: 'draft', tone: 'var(--rtm-blue-bright)', kicker: 'Partida rápida', title: 'Draft', img: M + 'mirage.jpg', desc: 'Gire a roleta, pegue uma lenda de cada elenco histórico e jogue um Major de uma sentada só. Rápido e diferente toda vez.', bullets: ['Roleta de sorteio estilo abertura de caixa', 'Cinco escolhas mais o coach', 'Pick Em nas outras partidas da chave', 'Fase suíça completa com playoffs'] },
+    { id: 'draft', tone: 'var(--em-gold)', kicker: 'Partida rápida', title: 'Draft', img: M + 'mirage.jpg', desc: 'Gire a roleta, pegue uma lenda de cada elenco histórico e jogue um Major de uma sentada só. Rápido e diferente toda vez.', bullets: ['Roleta de sorteio estilo abertura de caixa', 'Cinco escolhas mais o coach', 'Pick Em nas outras partidas da chave', 'Fase suíça completa com playoffs'] },
     { id: 'online', tone: 'var(--rtm-green-bright)', kicker: 'Competitivo', title: 'Online', img: M + 'dust2.jpg', desc: 'Snake draft contra um rival de verdade e melhor de três pra valer pontos. Suba no ranking e prove que conhece CS.', bullets: ['Matchmaking por MMR', 'Draft alternado contra o rival', 'Ranking e ladder da temporada', 'Histórico salvo (precisa de conta)'] },
   ];
   const m = MODES[tab];
@@ -141,7 +141,7 @@ function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => v
           <div style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, color: 'var(--rtm-text-strong)', margin: '6px 0 2px' }}>R$0</div>
           <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '18px' }}>{ct('Joga agora, save só neste navegador')}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
-            {FREE.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--rtm-dim)' }}><span style={{ color: 'var(--rtm-blue-bright)', fontWeight: 800 }}>✓</span>{ct(f)}</span>)}
+            {FREE.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--rtm-dim)' }}><span style={{ color: 'var(--em-gold)', fontWeight: 800 }}>✓</span>{ct(f)}</span>)}
           </div>
           <Button variant="ghost" style={{ marginTop: '22px', width: '100%' }} onClick={onPlay}>{ct('Jogar de graça')}</Button>
         </div>
@@ -179,7 +179,7 @@ function How() {
       <div className="rtm-reveal l-grid3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
         {STEPS.map(([n, t, d]) => (
           <div key={n} style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', padding: '22px 18px' }}>
-            <div style={{ fontFamily: 'var(--font-cond)', fontSize: '36px', fontWeight: 800, color: 'var(--rtm-blue-bright)', lineHeight: 1 }}>{n}</div>
+            <div style={{ fontFamily: 'var(--font-cond)', fontSize: '36px', fontWeight: 800, color: 'var(--em-gold)', lineHeight: 1 }}>{n}</div>
             <h3 style={{ fontFamily: 'var(--font-cond)', fontSize: '19px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--rtm-text-strong)', margin: '12px 0 6px' }}>{ct(t)}</h3>
             <p style={{ color: 'var(--rtm-dim)', fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>{ct(d)}</p>
           </div>
@@ -206,10 +206,10 @@ function Faq() {
         {Q.map(([q, a], i) => {
           const on = open === i;
           return (
-            <div key={i} style={{ background: 'var(--rtm-panel)', border: `1px solid ${on ? 'var(--rtm-blue-bright)' : 'var(--rtm-border-soft)'}`, borderRadius: 'var(--rtm-radius)', overflow: 'hidden' }}>
+            <div key={i} style={{ background: 'var(--rtm-panel)', border: `1px solid ${on ? 'var(--em-gold)' : 'var(--rtm-border-soft)'}`, borderRadius: 'var(--rtm-radius)', overflow: 'hidden' }}>
               <button type="button" onClick={() => setOpen(on ? -1 : i)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', background: 'none', border: 'none', cursor: 'pointer', padding: '16px 18px', textAlign: 'left' }}>
                 <span style={{ fontFamily: 'var(--font-cond)', fontSize: '17px', fontWeight: 700, color: 'var(--rtm-text-strong)' }}>{ct(q)}</span>
-                <span style={{ color: 'var(--rtm-blue-bright)', fontSize: '20px', fontWeight: 700, transform: on ? 'rotate(45deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>+</span>
+                <span style={{ color: 'var(--em-gold)', fontSize: '20px', fontWeight: 700, transform: on ? 'rotate(45deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>+</span>
               </button>
               {on && <div style={{ padding: '0 18px 16px', color: 'var(--rtm-dim)', fontSize: '14px', lineHeight: 1.6 }}>{ct(a)}</div>}
             </div>

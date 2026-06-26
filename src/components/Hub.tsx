@@ -147,7 +147,7 @@ export function Hub({ t, career, pickem, onPick, onPlay, onSimRound, onStats, on
                       <span className="pcell">
                         <TeamBadge tag={team.tag} colors={team.colors} size={22} logoUrl={team.logoUrl} />
                         <Flag cc={team.country} />
-                        <span style={{ color: team.isUser ? 'var(--blue-bright)' : undefined, fontWeight: team.isUser ? 700 : 500 }}>
+                        <span style={{ color: team.isUser ? 'var(--em-gold)' : undefined, fontWeight: team.isUser ? 700 : 500 }}>
                           {team.name}
                         </span>
                         <span className="muted small">{team.game === 'MIX' ? tr('hub.dreamTeam') : team.game}</span>
