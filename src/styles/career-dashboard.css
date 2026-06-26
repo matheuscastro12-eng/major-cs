@@ -3466,3 +3466,195 @@ body.career-dash .em-action-bar {
   padding: 10px 16px;
   margin-top: 12px;
 }
+
+/* ============================================================
+   FASE 4 — Online modes (Hub, Ranked, PackDraft, Major,
+   Gauntlet, MatchCenter, Replay)
+   --------------------------------------------------------------
+   Overrides scoped pras superficies/chrome dos modos online.
+   IMPORTANTE: preserva os ut-card (FUT-style com raridades) que
+   sao identidade visual do modo. So harmoniza os containers,
+   panels, banners e chrome ao redor.
+   ============================================================ */
+
+/* ---- Banners/hubs ---- */
+body.career-dash .hub-banner-body,
+body.career-dash .rtm-online-modes,
+body.career-dash .hub-fab {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
+body.career-dash .hub-fab:hover { border-color: var(--em-gold); }
+
+/* ---- Ranking online (rtm-rank-*) ---- */
+body.career-dash .rtm-rank-body {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
+body.career-dash .rtm-rank-delta { font-weight: 700; }
+body.career-dash .rtm-rank-toast {
+  background: var(--em-panel);
+  border-left: 3px solid var(--em-gold);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
+
+/* ---- UT containers (panels, layouts, sessoes) ---- */
+body.career-dash .ut-major-page,
+body.career-dash .ut-major-squad,
+body.career-dash .ut-major-five,
+body.career-dash .ut-major-player,
+body.career-dash .ut-mc-grid,
+body.career-dash .ut-mc-head,
+body.career-dash .ut-mc-card,
+body.career-dash .ut-mc-team,
+body.career-dash .ut-lineup,
+body.career-dash .ut-lineup-builder,
+body.career-dash .ut-lineup-choices,
+body.career-dash .ut-strategy-panel,
+body.career-dash .ut-tactic-grid,
+body.career-dash .ut-tactical-event,
+body.career-dash .ut-qualification-board,
+body.career-dash .ut-q-group,
+body.career-dash .ut-q-teams,
+body.career-dash .ut-session-points,
+body.career-dash .ut-session-leaders,
+body.career-dash .ut-reserve-grid,
+body.career-dash .ut-revealed-cards,
+body.career-dash .ut-match-center,
+body.career-dash .ut-match-events,
+body.career-dash .ut-pack-reveal,
+body.career-dash .ut-live-overlay,
+body.career-dash .ut-live-dialog,
+body.career-dash .ut-live-objective,
+body.career-dash .ut-live-veto,
+body.career-dash .ut-stage-ready,
+body.career-dash .ut-veto-plan,
+body.career-dash .ut-veto-dialog,
+body.career-dash .ut-broadcast-status,
+body.career-dash .ut-chem-summary,
+body.career-dash .ut-duel-page,
+body.career-dash .ut-awards,
+body.career-dash .ut-award-card,
+body.career-dash .ut-mini-cards,
+body.career-dash .ut-mini-card,
+body.career-dash .ut-next-match-cta {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
+
+/* Variantes especiais */
+body.career-dash .ut-major-bye {
+  background: var(--em-panel-2);
+  border: 1px dashed var(--em-border-strong);
+  color: var(--em-muted);
+}
+body.career-dash .ut-online-alert {
+  background: color-mix(in srgb, #e2574c 12%, var(--em-panel-2));
+  border-left: 3px solid #e2574c;
+  border: 1px solid color-mix(in srgb, #e2574c 38%, var(--em-border));
+  border-radius: 6px;
+  color: var(--em-text);
+}
+body.career-dash .ut-round-winner {
+  background: color-mix(in srgb, var(--em-gold) 14%, var(--em-panel-2));
+  border: 1px solid var(--em-gold);
+  color: var(--em-text);
+}
+
+/* Filtros e chips */
+body.career-dash .ut-mc-filters,
+body.career-dash .ut-mc-status,
+body.career-dash .ut-mc-progress {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  color: var(--em-text);
+  border-radius: 6px;
+}
+body.career-dash .ut-mc-empty { color: var(--em-muted); font-style: italic; }
+
+/* Textos auxiliares */
+body.career-dash .ut-kicker,
+body.career-dash .ut-q-title,
+body.career-dash .ut-major-squad-copy { color: var(--em-muted); }
+
+/* Players cards do online (cartas FUT — preserva visual proprio) ---- */
+/* (deixa .ut-card e variantes elite/legendary/icon como estao por design) */
+
+/* Tactics/strategy chips */
+body.career-dash .ut-tactic-grid > * {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  color: var(--em-text);
+}
+body.career-dash .ut-tactic-grid > *.active,
+body.career-dash .ut-tactic-grid > *.selected {
+  border-color: var(--em-gold);
+  background: color-mix(in srgb, var(--em-gold) 12%, var(--em-panel-2));
+}
+
+/* Velocidade de playback (controles) */
+body.career-dash .ut-playback-speed,
+body.career-dash .ut-prestage-speed {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  color: var(--em-text);
+}
+
+/* Chemistry live (ut-chem-live + track) */
+body.career-dash .ut-chem-live,
+body.career-dash .ut-chem-track {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
+
+/* Veto banner e log (online veto) */
+body.career-dash .veto-banner-wrap,
+body.career-dash .veto-log {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
+body.career-dash .veto-action {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 5px;
+  color: var(--em-text);
+  padding: 6px 10px;
+}
+body.career-dash .va-text { color: var(--em-text); }
+body.career-dash .va-icon { color: var(--em-gold); }
+
+/* Replay feed */
+body.career-dash .replay-feed {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
+
+/* Draft online layout */
+body.career-dash .online-draft-layout {
+  background: transparent;
+  color: var(--em-text);
+}
+
+/* Major match status header */
+body.career-dash .major-match-status {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  color: var(--em-text);
+}
