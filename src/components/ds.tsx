@@ -1,11 +1,10 @@
-// Componentes do "Road to Major — Design System", portados literalmente do
-// design kit (componente a componente) para uso no app real. Mantêm os tokens
-// --rtm-* e o visual exatos do design. Reutilizados em todas as telas re-skinadas.
+// Primitivos legados <Panel> e <Button> — reescritos pra usar tokens --em-*
+// na Fase 2 do rollout. Mesma API e mesmas props: qualquer consumidor que
+// importava de './ds' (Landing, Hall, Leaderboard, ManagerProfile, OnlineScreen
+// etc.) recebe o visual em-* automaticamente, sem alterar markup.
 //
-// PROMOÇÃO (Fase 0/1 do em-*): os primitivos novos vivem em ./ds/ e são re-
-// exportados aqui, de forma que qualquer consumidor que já importa de './ds'
-// consiga puxar `DashCard`, `AppShell`, `Modal`, `useToast`, etc. sem mudar
-// path. Os primitivos legados (Panel/Button) continuam aqui por compat.
+// O barrel ./ds/ (DashCard, AppShell, Modal, ToastProvider, useToast, etc.)
+// é re-exportado abaixo, mantendo a entrada estável.
 export { DashCard, AppShell, AppFrame, appDashClass, useAppTheme, Modal, ToastProvider, useToast } from './ds/index';
 export type { ModalSize, ToastVariant, ToastItem } from './ds/index';
 import { useState, type CSSProperties, type ReactNode } from 'react';
@@ -14,27 +13,40 @@ type BtnVariant = 'primary' | 'gold' | 'danger' | 'ghost';
 type BtnSize = 'sm' | 'md' | 'big';
 
 const VARIANTS: Record<BtnVariant, { base: CSSProperties; hover: CSSProperties }> = {
-  primary: { base: { background: 'var(--rtm-grad-btn)', color: '#fff', border: 'none', boxShadow: 'var(--rtm-shadow-btn)' }, hover: { background: 'var(--rtm-grad-btn-hover)' } },
-  gold: { base: { background: 'var(--rtm-gold-soft)', color: '#1a1205', border: 'none', boxShadow: 'var(--rtm-shadow-btn)' }, hover: { background: 'var(--rtm-gold)' } },
-  danger: { base: { background: '#7d2f2f', color: '#fff', border: 'none', boxShadow: 'var(--rtm-shadow-btn)' }, hover: { background: 'var(--rtm-red)' } },
-  ghost: { base: { background: 'transparent', color: 'var(--rtm-dim)', border: '1px solid var(--rtm-border)' }, hover: { color: 'var(--rtm-text-strong)', borderColor: 'var(--rtm-blue-bright)' } },
+  // primary = ação dominante: usa o accent dourado do em-* (alinhado com
+  // .em-btn-primary do CSS e .btn.primary dos overrides do body).
+  primary: { base: { background: 'var(--em-gold)', color: '#1a1205', border: '1px solid var(--em-gold)' }, hover: { filter: 'brightness(1.06)' } },
+  gold:    { base: { background: 'var(--em-gold)', color: '#1a1205', border: '1px solid var(--em-gold)' }, hover: { filter: 'brightness(1.06)' } },
+  danger:  { base: { background: 'var(--em-red, #c0392b)', color: '#fff', border: '1px solid var(--em-red, #c0392b)' }, hover: { filter: 'brightness(1.06)' } },
+  ghost:   { base: { background: 'transparent', color: 'var(--em-muted)', border: '1px solid var(--em-border)' }, hover: { color: 'var(--em-text)', borderColor: 'var(--em-gold)', background: 'var(--em-panel-2)' } },
 };
 const SIZES: Record<BtnSize, CSSProperties> = {
-  sm: { padding: '6px 14px', fontSize: '12px' },
-  md: { padding: '9px 20px', fontSize: '14px' },
-  big: { padding: '13px 34px', fontSize: '16px' },
+  sm:  { padding: '6px 12px', fontSize: '0.76rem' },
+  md:  { padding: '9px 18px', fontSize: '0.86rem' },
+  big: { padding: '12px 26px', fontSize: '0.96rem' },
 };
 
-// Painel: a superfície base do design com a faixa de accent (azul/ouro) no header.
+// Painel: agora um wrapper fino em torno do DashCard estético — superfície
+// .em-panel, header com label muted (sem caps forçado), accent dourado quando
+// destacado.
 export function Panel({ title, actions = null, accent = 'blue', flush = false, children, style = {}, dash = false, className = '' }: {
   title?: ReactNode; actions?: ReactNode; accent?: 'blue' | 'gold' | 'none'; flush?: boolean; children?: ReactNode; style?: CSSProperties; dash?: boolean; className?: string;
 }) {
-  const accentColor = accent === 'gold' ? 'var(--rtm-gold)' : accent === 'none' ? 'transparent' : 'var(--rtm-blue)';
+  const accentColor = accent === 'gold' ? 'var(--em-gold)' : accent === 'none' ? 'transparent' : 'var(--em-border-strong)';
+  // dash mantém a classe pra compatibilidade com CSS legado que tem .dash-panel
+  const cls = `${dash ? 'dash-panel' : ''} ${className}`.trim();
   return (
-    <section className={`${dash ? 'dash-panel' : ''} ${className}`.trim()} style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', overflow: 'hidden', boxShadow: 'var(--rtm-shadow-panel)', ...style }}>
+    <section className={cls} style={{ background: 'var(--em-panel)', border: '1px solid var(--em-border)', borderRadius: '6px', overflow: 'hidden', boxShadow: 'none', color: 'var(--em-text)', ...style }}>
       {title != null && (
-        <header style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--rtm-grad-panel-head)', padding: '10px 14px', borderBottom: '1px solid var(--rtm-border-soft)', boxShadow: `inset 3px 0 0 ${accentColor}`, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--rtm-text-strong)' }}>
-          <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{title}</span>
+        <header style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          background: 'var(--em-panel-2)', padding: '10px 14px',
+          borderBottom: '1px solid var(--em-border)',
+          boxShadow: `inset 3px 0 0 ${accentColor}`,
+          fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
+          letterSpacing: '0.6px', textTransform: 'uppercase', color: 'var(--em-muted)',
+        }}>
+          <span style={{ whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--em-text)' }}>{title}</span>
           <span style={{ flex: 1 }} />
           {actions}
         </header>
@@ -59,10 +71,11 @@ export function Button({ variant = 'primary', size = 'md', disabled = false, ico
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-        fontFamily: 'var(--rtm-font-cond)', fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase',
-        borderRadius: 'var(--rtm-radius)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1,
-        transition: 'background .12s, box-shadow .12s, transform .05s, color .12s, border-color .12s',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+        fontFamily: 'inherit', fontWeight: 600, letterSpacing: 0, textTransform: 'none',
+        borderRadius: '5px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1,
+        transition: 'background .12s, filter .12s, transform .05s, color .12s, border-color .12s',
+        boxShadow: 'none',
         ...v.base, ...s, ...(hover && !disabled ? v.hover : null), ...style,
       }}
     >

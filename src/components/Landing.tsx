@@ -3,7 +3,7 @@
 // FAQ, CTA e o modal de conta (que dispara o checkout real via Stripe).
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { BrandMark } from './brand';
-import { Button } from './ds';
+import { Button, Modal } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
@@ -253,8 +253,10 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [accepted, setAccepted] = useState(false);
-  const input: CSSProperties = { width: '100%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '11px 13px', fontSize: '14px', fontFamily: 'var(--font)' };
-  const lbl: CSSProperties = { fontSize: '11px', fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', display: 'block', marginBottom: '6px' };
+  // Input/label nativos puxam os overrides em-* via body.career-dash (Fase 0/1),
+  // então não precisamos mais de inline style nos campos.
+  const input: CSSProperties = { width: '100%' };
+  const lbl: CSSProperties = { fontSize: '0.72rem', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--em-muted)', display: 'block', marginBottom: '6px' };
   const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6 && (mode === 'login' || accepted);
   const go = async () => {
     if (!valid || busy) return;
@@ -265,43 +267,39 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
   };
+  const title = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <BrandMark size={22} />
+      <span>{mode === 'signup' ? ct('Criar conta') : ct('Entrar')}</span>
+    </span>
+  );
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(8,11,15,.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '440px', maxWidth: '100%', background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 24px 70px rgba(0,0,0,.6)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', borderBottom: '1px solid var(--rtm-border-soft)', background: 'var(--rtm-grad-panel-head)' }}>
-          <BrandMark size={26} />
-          <b style={{ fontFamily: 'var(--font-cond)', fontSize: '17px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)' }}>{mode === 'signup' ? ct('Criar conta') : ct('Entrar')}</b>
-          <span style={{ flex: 1 }} />
-          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--rtm-dim)', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
+    <Modal open onClose={onClose} title={title} size="sm">
+      {mode === 'signup' && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
+          <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>R$20</span>
+          <span style={{ fontSize: '0.82rem', color: 'var(--em-muted)' }}>{ct('pagamento único pelo save em nuvem')}</span>
         </div>
-        <div style={{ padding: '20px' }}>
-          {mode === 'signup' && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-              <span style={{ fontFamily: 'var(--font-cond)', fontSize: '34px', fontWeight: 800, color: 'var(--rtm-gold)' }}>R$20</span>
-              <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('pagamento único pelo save em nuvem')}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
-            <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
-            <div><label style={lbl}>{ct('Senha')}</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} /></div>
-          </div>
-          {mode === 'signup' && (
-            <label className="checkout-legal-accept">
-              <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
-              <span>{ct('Li e aceito os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirmo ser maior de 18 anos ou responsável legal pela compra.')}</span>
-            </label>
-          )}
-          {err && <p style={{ color: 'var(--rtm-red-bright)', fontSize: '12.5px', margin: '12px 0 0' }}>{err}</p>}
-          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : mode === 'signup' ? ct('Ativar save por R$20') : ct('Entrar')}</Button>
-          <p style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', textAlign: 'center', margin: '14px 0 0' }}>
-            {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
-            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); }} style={{ background: 'none', border: 'none', color: 'var(--rtm-link)', cursor: 'pointer', fontWeight: 700, fontSize: '12.5px' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
-          </p>
-          <p style={{ fontSize: '11.5px', color: 'var(--rtm-faint)', textAlign: 'center', margin: '10px 0 0' }}>{ct('Pagamento via Stripe. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
-        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
+        <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
+        <div><label style={lbl}>{ct('Senha')}</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} /></div>
       </div>
-    </div>
+      {mode === 'signup' && (
+        <label className="checkout-legal-accept">
+          <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
+          <span>{ct('Li e aceito os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirmo ser maior de 18 anos ou responsável legal pela compra.')}</span>
+        </label>
+      )}
+      {err && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
+      <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : mode === 'signup' ? ct('Ativar save por R$20') : ct('Entrar')}</Button>
+      <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
+        {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
+        <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
+      </p>
+      <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', opacity: 0.75, textAlign: 'center', margin: '10px 0 0' }}>{ct('Pagamento via Stripe. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
+    </Modal>
   );
 }
 

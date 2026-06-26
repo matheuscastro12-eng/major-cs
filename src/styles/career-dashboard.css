@@ -3188,3 +3188,27 @@ body.career-dash [data-tooltip]:hover::after {
   z-index: 100;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
+
+/* ============================================================
+   FASE 2 — Overrides leves pra Home (menu de modos)
+   Preserva as artes e o hover lift; só harmoniza com tokens em-*
+   ============================================================ */
+body.career-dash .rtm-modecard {
+  background: var(--em-panel);
+  border-color: var(--em-border);
+}
+body.career-dash .rtm-modecard:hover {
+  border-color: var(--em-gold);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+body.career-dash .rtm-modecard[data-tone="gold"] { border-color: var(--em-gold); }
+body.career-dash .rtm-modecard[data-tone="gold"] .rtm-modecard-bar { background: var(--em-gold); }
+
+/* Página legal: usa CSS própria, só harmoniza o link Voltar e o frame */
+body.career-dash .legal-page,
+body.career-dash .legal-document {
+  background: transparent;
+  color: var(--em-text);
+}
+body.career-dash .legal-section h2 { color: var(--em-text); }
+body.career-dash .legal-lead { color: var(--em-muted); }
