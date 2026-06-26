@@ -4910,3 +4910,147 @@ body.career-dash .em-draft-slot-meta {
   font-size: 0.72rem;
 }
 body.career-dash .em-draft-slot-from { color: var(--em-muted); }
+
+/* ============================================================
+   Finanças — fix do azul residual nos cards (.fin-*) e
+   alinhamento de Infraestrutura/Contratos com em-*
+   ============================================================ */
+body.career-dash .fin-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+@media (max-width: 760px) {
+  body.career-dash .fin-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+body.career-dash .fin-card {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: none;
+}
+body.career-dash .fin-card .fin-k {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--em-muted);
+  font-weight: 700;
+}
+body.career-dash .fin-card b {
+  font-family: inherit;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--em-text);
+}
+body.career-dash .fin-card b.pos { color: #29c47a; }
+body.career-dash .fin-card b.neg { color: #e2574c; }
+
+/* Infraestrutura & Staff */
+body.career-dash .career-facilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+@media (max-width: 760px) {
+  body.career-dash .career-facilities { grid-template-columns: 1fr; }
+}
+body.career-dash .career-facility-card {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 14px;
+}
+body.career-dash .career-facility-card > span {
+  color: var(--em-gold);
+}
+body.career-dash .career-facility-card b {
+  color: var(--em-text);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+body.career-dash .career-facility-card small {
+  color: var(--em-muted);
+  line-height: 1.4;
+}
+body.career-dash .career-facility-card i {
+  color: var(--em-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  font-style: normal;
+}
+body.career-dash .career-facility-card button.btn.gold {
+  background: var(--em-gold);
+  color: #1a1205;
+  border: 1px solid var(--em-gold);
+  font-weight: 700;
+  border-radius: 5px;
+}
+
+/* Tabela de contratos */
+body.career-dash .fin-table-wrap {
+  border-radius: 6px;
+  overflow: hidden;
+}
+body.career-dash table.stats.fin-contracts {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--em-text);
+  background: transparent;
+}
+body.career-dash table.stats.fin-contracts thead th {
+  background: var(--em-panel-2);
+  color: var(--em-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  text-align: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--em-border);
+}
+body.career-dash table.stats.fin-contracts tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--em-border);
+  text-align: center;
+}
+body.career-dash table.stats.fin-contracts tbody tr:hover {
+  background: var(--em-panel-2);
+}
+body.career-dash table.stats.fin-contracts tbody tr.fin-expiring {
+  background: color-mix(in srgb, var(--em-gold) 10%, transparent);
+}
+body.career-dash table.stats.fin-contracts tbody td.neg { color: #e2574c; }
+body.career-dash table.stats.fin-contracts tbody td.pos { color: #29c47a; }
+body.career-dash .pot-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+body.career-dash .pot-badge.pot-S { background: var(--em-gold); color: #1a1205; }
+body.career-dash .pot-badge.pot-A { background: color-mix(in srgb, #29c47a 26%, var(--em-panel-2)); color: #29c47a; border: 1px solid color-mix(in srgb, #29c47a 50%, var(--em-border)); }
+body.career-dash .pot-badge.pot-B { background: var(--em-panel-2); color: var(--em-text); border: 1px solid var(--em-border-strong); }
+body.career-dash .pot-badge.pot-C { background: var(--em-panel); color: var(--em-muted); border: 1px solid var(--em-border); }
+
+/* Section labels — alinhar com em-* */
+body.career-dash .section-label {
+  font-size: 0.74rem;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--em-muted);
+  font-weight: 700;
+  margin: 18px 0 8px;
+}
