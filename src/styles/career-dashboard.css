@@ -2237,3 +2237,39 @@ body:has(main.page-career .career-dash--light) {
     display: none;
   }
 }
+
+/* ============================================================
+   Re-skin de abas legadas → linguagem em-* (padronização)
+   ============================================================ */
+.career-dash .em-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Aba Elenco */
+.career-dash .em-squad-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+  align-items: start;
+}
+.career-dash .em-fut-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.career-dash .em-ovr-badge {
+  font-family: var(--rtm-font-cond, inherit);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--em-gold, #d4a017);
+  letter-spacing: 0.4px;
+}
+
+@media (max-width: 900px) {
+  .career-dash .em-squad-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

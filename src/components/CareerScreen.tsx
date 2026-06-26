@@ -29,7 +29,7 @@ import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 import { FutCard } from './FutCard';
-import { Panel } from './ds';
+import { DashCard } from './career/DashCard';
 import { CareerShell, CareerDashFrame } from './career/CareerShell';
 import { CareerPlayerPage } from './career/CareerPlayerPage';
 import { CareerTeamPage } from './career/CareerTeamPage';
@@ -4229,7 +4229,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
         const all = save.news ?? [];
         const shown = newsCat === 'all' ? all : all.filter((n) => (n.cat ?? 'scene') === newsCat);
         return (
-        <Panel dash title={ct('Caixa de entrada')} accent="gold">
+        <DashCard title={ct('Caixa de entrada')}>
             {all.length === 0 ? (
               <p className="muted small">{ct('Sem novidades por enquanto. As manchetes aparecem ao longo da carreira (resultados, diretoria, mercado, cenário e social).')}</p>
             ) : (
@@ -4269,7 +4269,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                 </div>
               </>
             )}
-          </Panel>
+          </DashCard>
         );
       })()}
 
@@ -4439,7 +4439,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
       {hubTab === 'results' && (
-        <Panel dash title={ct('Resultados')}>
+        <DashCard title={ct('Resultados')}>
             {league.rounds.map((round, r) => (
               <div key={r} className="results-round">
                 <div className="muted small section-label" style={{ marginTop: r === 0 ? 0 : 14 }}>
@@ -4449,23 +4449,23 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
               </div>
             ))}
             <p className="muted small" style={{ marginTop: 12 }}>{ct('Clique em qualquer partida finalizada para ver o placar mapa a mapa.')}</p>
-        </Panel>
+        </DashCard>
       )}
 
       {/* ===== CLASSIFICAÇÃO (detalhada) ===== */}
       {hubTab === 'standings' && (
-        <Panel dash title={ct('Classificação')} accent="gold">
+        <DashCard title={ct('Classificação')}>
             <div className="muted small" style={{ marginBottom: 12 }}>{save.circuit?.name ?? 'Circuito'} · fase de grupos (GSL) · top 2 de cada grupo vão ao mata-mata</div>
             {league.gsl
               ? <GSLGroups league={league} onOpen={setSelSeries} />
               : <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} detailed />}
             <p className="muted small" style={{ marginTop: 10 }}>{league.gsl ? ct('Clique num jogo concluído pra ver o placar.') : ct('Clique em um time para ver elenco, técnico e força.')}</p>
-        </Panel>
+        </DashCard>
       )}
 
       {/* ===== CHAVE (BRACKET DEDICADO) ===== */}
       {hubTab === 'bracket' && (
-        <Panel dash title={ct('Chave')} accent="gold">
+        <DashCard title={ct('Chave')}>
             <div className="muted small" style={{ marginBottom: 12 }}>
               {save.circuit?.name ?? 'Circuito'} · chave da fase de grupos (GSL · dupla eliminação) — top 2 de cada grupo vão ao mata-mata
             </div>
@@ -4487,7 +4487,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
               </div>
             )}
             <p className="muted small" style={{ marginTop: 10 }}>{ct('Clique num confronto concluído pra ver o placar completo da série.')}</p>
-        </Panel>
+        </DashCard>
       )}
 
       {/* ===== ACADEMIA (prospectos: revelar, treinar, promover) ===== */}
@@ -4496,7 +4496,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
         const full = aca.length >= ACADEMY_MAX;
         const squadFull = save.squad.length >= 5;
         return (
-          <Panel dash title={ct('Academia')} accent="gold">
+          <DashCard title={ct('Academia')}>
               <div className="aca-head">
                 <div>
                   <div className="muted small section-label" style={{ marginTop: 0 }}>Academia · {aca.length}/{ACADEMY_MAX} prospectos</div>
@@ -4592,7 +4592,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                   })}
                 </div>
               )}
-          </Panel>
+          </DashCard>
         );
       })()}
 
@@ -4617,7 +4617,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
           update({ budget: save.budget - cost, facilities: { ...facilities, [key]: level + 1 } });
         };
         return (
-          <Panel dash title={`${ct('Finanças')} · ${save.org?.name ?? ''}`} accent="gold">
+          <DashCard title={`${ct('Finanças')} · ${save.org?.name ?? ''}`}>
               <div className="fin-cards">
                 <div className="fin-card"><span className="fin-k">{ct('Caixa')}</span><b>{formatMoney(save.budget)}</b></div>
                 <div className="fin-card"><span className="fin-k">{ct('Fãs')}</span><b>{formatFans(careerFans(save))}</b></div>
@@ -4666,7 +4666,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
               </table>
               </div>
               <p className="muted small">Contratos vencem no fim do prazo: <b>{ct('renove (custa 1 salário)')}</b> {ct('ou o jogador sai')} <b>{ct('de graça')}</b> {ct('no próximo split.')}</p>
-          </Panel>
+          </DashCard>
         );
       })()}
 
@@ -4699,14 +4699,14 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
         };
         const fam = save.playbookXp ?? 0;
         return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Panel dash title={ct('Cinco titular')} accent="gold" actions={<span style={{ fontFamily: 'var(--rtm-font-cond)', color: 'var(--rtm-gold)', fontSize: '15px' }}>{rows.length ? Math.round(rows.reduce((a, p) => a + playerOvr(p), 0) / rows.length) : 0} OVR</span>}>
-            <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <div className="em-tab em-squad">
+          <DashCard title={ct('Cinco titular')} actions={<span className="em-ovr-badge">{rows.length ? Math.round(rows.reduce((a, p) => a + playerOvr(p), 0) / rows.length) : 0} OVR</span>}>
+            <div className="em-fut-row">
               {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => openPlayerProfile(p)} />)}
             </div>
-          </Panel>
-          <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '16px', alignItems: 'start' }}>
-            <Panel dash title={ct('Gestão do elenco')}>
+          </DashCard>
+          <div className="em-squad-grid">
+            <DashCard title={ct('Gestão do elenco')}>
               {(!hasAwp || !hasIgl) && (
                 <div className="role-warn">
                   ⚠️ {ct('Seu time está sem')} {!hasAwp && !hasIgl ? ct('AWP e IGL') : !hasAwp ? 'AWPer' : 'IGL'}.
@@ -4761,9 +4761,9 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                 <b> {ct('foco de treino')}</b> do split (esse jogador evolui mais rápido). Você não edita os atributos: eles
                 <b> sobem sozinhos</b> conforme o jogador se desenvolve e joga. A <b>{ct('carga reduzida')}</b> recupera fadiga, mas tira um pouco de ritmo na próxima série.
               </p>
-            </Panel>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <Panel dash title={ct('Playbook tático')}>
+            </DashCard>
+            <div className="em-col">
+              <DashCard title={ct('Playbook tático')}>
                 <div className="pb-fam">
                   <span className="muted small">{ct('Entrosamento')}</span>
                   <span className="pb-bar"><i className={fam >= 70 ? 'good' : fam >= 40 ? 'warn' : 'bad'} style={{ width: `${fam}%` }} /></span>
@@ -4778,8 +4778,8 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                   ))}
                 </div>
                 <p className="muted small" style={{ margin: '8px 0 0' }}>O entrosamento sobe a cada split mantendo o esquema; <b>trocar volta pra {PLAYBOOK_SWITCH_TO}%</b>{ct('. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.')}</p>
-              </Panel>
-              <Panel dash title={<>{ct('Treino de mapa')} <span className="muted small" style={{ fontWeight: 400 }}>({mapFocusList(save).length}/{MAP_FOCUS_MAX} em foco)</span></>}>
+              </DashCard>
+              <DashCard title={<>{ct('Treino de mapa')} <span className="muted small" style={{ fontWeight: 400 }}>({mapFocusList(save).length}/{MAP_FOCUS_MAX} em foco)</span></>}>
                 <div className="map-train">
                   {MAP_POOL.map((m) => {
                     const lvl = mapLevel(save, m);
@@ -4797,10 +4797,10 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                   })}
                 </div>
                 <p className="muted small" style={{ margin: '8px 0 0' }}>{ct('Treine até')} <b>{MAP_FOCUS_MAX} mapas</b> {ct('por split; os outros decaem um pouco. É de propósito: ninguém é forte em todos, mas dá pra montar um pool sólido.')}</p>
-              </Panel>
-              <Panel dash title={`${ct('Melhores do')} ${save.circuit?.name ?? ct('circuito')}`}>
+              </DashCard>
+              <DashCard title={`${ct('Melhores do')} ${save.circuit?.name ?? ct('circuito')}`}>
                 <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
-              </Panel>
+              </DashCard>
             </div>
           </div>
         </div>
@@ -4811,7 +4811,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
       {hubTab === 'world' && (() => {
         const scene = worldScene(oppEra, save.split);
         return (
-          <Panel dash title={ct('Cena mundial')} accent="gold">
+          <DashCard title={ct('Cena mundial')}>
               <div className="muted small section-label" style={{ marginTop: 0 }}>Cena mundial · Split {save.split} — campeonatos regionais acontecendo em paralelo</div>
               <div className="world-grid">
                 {scene.map((s) => (
@@ -4845,13 +4845,13 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                 ))}
               </div>
               <p className="muted small" style={{ marginTop: 10 }}>{ct('O cenário evolui a cada split — os campeões e a ordem mudam. Clique num time pra ver elenco e mapas. Você sobe de região mudando o core do elenco (nas Finanças/Mercado).')}</p>
-          </Panel>
+          </DashCard>
         );
       })()}
 
       {/* ===== RANKING VRS POR REGIÃO ===== */}
       {hubTab === 'vrs' && (
-        <Panel dash title={ct('Ranking VRS')} accent="gold">
+        <DashCard title={ct('Ranking VRS')}>
             <div className="t20-head">
               <div className="muted small section-label" style={{ marginTop: 0 }}>
                 {vrsMode === 'geral' ? ct('Ranking mundial de VRS · geral') : ct('Ranking mundial de VRS · por região')}
@@ -4907,12 +4907,12 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
               ))}
             </div>
             )}
-        </Panel>
+        </DashCard>
       )}
 
       {/* ===== TOP 20 HLTV DA TEMPORADA ===== */}
       {hubTab === 'top20' && (
-        <Panel dash title={ct('HLTV Top 20')} accent="gold">
+        <DashCard title={ct('HLTV Top 20')}>
             <div className="t20-head">
               <div className="muted small section-label" style={{ marginTop: 0 }}>
                 {t20Mode === 'season'
@@ -4977,7 +4977,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                 ))}
               </div>
             )}
-        </Panel>
+        </DashCard>
       )}
 
       {/* ===== HISTÓRIA DA ORGANIZAÇÃO ===== */}
@@ -4996,7 +4996,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
         // próximos splits (mini-calendário do cadenciamento dos Majors)
         const upcoming = Array.from({ length: 6 }, (_, i) => save.split + i).map((sp) => ({ sp, major: isMajorSplit(sp) }));
         return (
-        <Panel dash title={ct('Calendário')} accent="gold">
+        <DashCard title={ct('Calendário')}>
             <div className={`cal-major-banner ${splitsToMajor === 0 ? 'now' : ''}`}>
               {splitsToMajor === 0
                 ? <><CareerIcon name="globe" size={16} /> <b>{ct('É split de Major!')}</b> {ct('Os')} <b>{ct('top')} {MAJOR_VRS_CUT} {ct('do ranking VRS mundial')}</b> {ct('garantem a vaga. Você está em')} <b>#{myVrsRank}</b>.</>
@@ -5043,12 +5043,12 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
             <p className="muted small" style={{ marginTop: 12 }}>
               Cada split tem um <b>{ct('circuito')}</b> {ct('(fase de grupos + mata-mata) que vale prêmio e')} <b>VRS</b>. A cada {MAJOR_EVERY} splits acontece o <b>{ct('Major Mundial')}</b>: o clímax da temporada, com a maior premiação. Seu VRS e seu tier definem se você chega lá.
             </p>
-        </Panel>
+        </DashCard>
         );
       })()}
 
       {hubTab === 'history' && (
-        <Panel dash title={ct('Histórico da carreira')} accent="gold">
+        <DashCard title={ct('Histórico da carreira')}>
             <div className="career-statgrid">
               <div className="cstat"><b>{save.split - 1}</b><span>{ct('Splits disputados')}</span></div>
               <div className="cstat"><b className="pos">{org.circuitTitles}</b><span>{ct('Títulos de circuito')}</span></div>
@@ -5081,7 +5081,7 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                 </tbody>
               </table>
             )}
-        </Panel>
+        </DashCard>
       )}
       </>
       )}
@@ -5414,7 +5414,7 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
             </div>
           </div>
           <div className="rtm-career-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: '14px', alignItems: 'start' }}>
-            <Panel dash title={ct('Elenco')} flush>
+            <DashCard title={ct('Elenco')} flush>
               {team.players.map((p, i) => (
                 <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: i % 2 ? 'var(--rtm-row-b)' : 'var(--rtm-row-a)', padding: '9px 14px' }}>
                   <PlayerAvatar nick={p.nick} size={30} />
@@ -5423,8 +5423,8 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
                   <span className="cs-ovr">{p.ovr}</span>
                 </div>
               ))}
-            </Panel>
-            <Panel dash title={ct('Mapas na temporada')}>
+            </DashCard>
+            <DashCard title={ct('Mapas na temporada')}>
               {mapStats.length === 0 ? (
                 <p className="muted small" style={{ margin: 0 }}>{ct('Sem partidas jogadas ainda nesta temporada.')}</p>
               ) : (
@@ -5446,7 +5446,7 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
                   </tbody>
                 </table>
               )}
-            </Panel>
+            </DashCard>
           </div>
         </div>
       </div>
@@ -6499,7 +6499,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   const list = filteredMarket.slice(0, 60);
   const filtersActive = !!(q.trim() || roleFilter || countryFilter);
   return (
-    <Panel dash title={ct('Mercado')} accent="gold">
+    <DashCard title={ct('Mercado')}>
         <div className="muted small" style={{ marginBottom: 12 }}>
           {ct('🤝 Negociações · você fecha agora, o jogador entra na')} <b>{ct('próxima janela')}</b> (fim do split)
         </div>
@@ -6603,7 +6603,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
           }}
         />
       )}
-    </Panel>
+    </DashCard>
   );
 }
 
