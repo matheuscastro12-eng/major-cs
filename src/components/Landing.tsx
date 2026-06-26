@@ -7,7 +7,7 @@ import { Button } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
-import { login, signup } from '../state/account';
+import { login, signup, beginPix, fetchMe, type PixCharge } from '../state/account';
 import { ct } from '../state/career-i18n';
 
 const M = '/maps/';
@@ -245,10 +245,6 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
   );
 }
 
-// link de checkout Pix do Woovi (estático). O acesso é liberado pelo webhook
-// /api/woovi-webhook casando o E-MAIL do pagador com a conta.
-const WOOVI_CHECKOUT_URL = 'https://woovi.com/pay/2246011b-9cb1-481f-88d2-a081d7dd0fce';
-
 export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
   const [mode, setMode] = useState<'signup' | 'login'>(initialMode);
   const [nick, setNick] = useState('');
@@ -257,7 +253,17 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [accepted, setAccepted] = useState(false);
-  const [pixEmail, setPixEmail] = useState(''); // e-mail pra avisar a pagar com o mesmo no Pix
+  const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  // polling: confere a cada 4s se a conta já virou paga (webhook do Woovi).
+  useEffect(() => {
+    if (!pix) return;
+    let alive = true;
+    const t = setInterval(async () => {
+      try { const me = await fetchMe(); if (alive && me?.paid) { setPix(null); onPlay(); } } catch { /* ignora */ }
+    }, 4000);
+    return () => { alive = false; clearInterval(t); };
+  }, [pix, onPlay]);
   const input: CSSProperties = { width: '100%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '11px 13px', fontSize: '14px', fontFamily: 'var(--font)' };
   const lbl: CSSProperties = { fontSize: '11px', fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--rtm-dim)', display: 'block', marginBottom: '6px' };
   const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6 && (mode === 'login' || accepted);
@@ -270,18 +276,24 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
   };
-  // Pix via Woovi: cria/entra na conta (pra existir o e-mail) e abre o checkout.
-  // O webhook libera o acesso ao casar o e-mail do pagador com a conta.
+  // Pix via Woovi (API): cria/entra na conta, gera a cobrança e mostra QR + copia-e-cola
+  // INLINE. O webhook (/api/woovi-webhook) marca a conta como paga e o polling acima
+  // detecta na mesma tela e libera o acesso. Sem precisar trocar de aba.
   const goPix = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
     try {
       const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
       if (acct.paid) { onPlay(); return; }
-      window.open(WOOVI_CHECKOUT_URL, '_blank', 'noopener,noreferrer');
-      setPixEmail(acct.email);
+      const charge = await beginPix();
+      if (!charge) { onPlay(); return; } // já estava paga
+      setPix({ charge, email: acct.email });
       setBusy(false);
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
+  };
+  const copyBr = async () => {
+    if (!pix?.charge.brCode) return;
+    try { await navigator.clipboard.writeText(pix.charge.brCode); setCopied(true); setTimeout(() => setCopied(false), 2200); } catch { /* sem permissão */ }
   };
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(8,11,15,.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -318,10 +330,32 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
               {ct('Pagar com Pix (Woovi)')}
             </button>
           )}
-          {pixEmail && (
-            <p style={{ fontSize: '12px', color: 'var(--rtm-text)', background: 'rgba(92,184,92,.10)', border: '1px solid rgba(92,184,92,.3)', borderRadius: 'var(--rtm-radius)', padding: '10px 12px', margin: '12px 0 0', lineHeight: 1.5 }}>
-              {ct('Abrimos o Pix do Woovi numa nova aba. Pague com o e-mail')} <b>{pixEmail}</b> {ct('(o mesmo da conta). Assim que o Pix cair, é só entrar na sua conta que o acesso libera sozinho.')}
-            </p>
+          {pix && (
+            <div style={{ marginTop: '14px', background: 'rgba(92,184,92,.08)', border: '1px solid rgba(92,184,92,.35)', borderRadius: 'var(--rtm-radius)', padding: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--rtm-green-bright, #6fd06f)', boxShadow: '0 0 8px var(--rtm-green-bright, #6fd06f)', animation: 'pulse 1.4s infinite' }} />
+                <b style={{ fontSize: '13px', color: 'var(--rtm-text-strong)', fontFamily: 'var(--font-cond)', letterSpacing: '.6px', textTransform: 'uppercase' }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
+              </div>
+              {pix.charge.qrCodeImage && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                  <img src={pix.charge.qrCodeImage} alt="QR Pix" style={{ width: '200px', height: '200px', background: '#fff', padding: '8px', borderRadius: '8px' }} />
+                </div>
+              )}
+              {pix.charge.brCode && (
+                <>
+                  <label style={lbl}>{ct('Pix copia e cola')}</label>
+                  <textarea readOnly value={pix.charge.brCode} rows={3} onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                    style={{ ...input, fontFamily: 'monospace', fontSize: '11px', resize: 'none', wordBreak: 'break-all' }} />
+                  <button type="button" onClick={copyBr}
+                    style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: 'var(--rtm-radius)', cursor: 'pointer', background: copied ? 'rgba(92,184,92,.2)' : 'var(--rtm-panel-2)', border: '1px solid var(--rtm-border)', color: 'var(--rtm-text-strong)', fontWeight: 700, fontSize: '12.5px', fontFamily: 'var(--font)' }}>
+                    {copied ? ct('Copiado!') : ct('Copiar código Pix')}
+                  </button>
+                </>
+              )}
+              <p style={{ fontSize: '11.5px', color: 'var(--rtm-dim)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
+                {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
+              </p>
+            </div>
           )}
           <p style={{ fontSize: '12.5px', color: 'var(--rtm-dim)', textAlign: 'center', margin: '14px 0 0' }}>
             {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
