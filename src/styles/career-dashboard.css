@@ -2395,3 +2395,181 @@ body:has(main.page-career .career-dash--light) {
   .career-dash .aca-team-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .career-dash .aca-league-wrap { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ============================================================
+   Re-skin do Bracket (Chave) — GSL + Playoff + match cards
+   Sobrescreve as classes legadas (.hb-*, .gsl-*, .po-*,
+   .bracket-play) dentro do dashboard novo. Markup intacto;
+   só visual + tokens --em-*.
+   ============================================================ */
+
+/* Barra "Sua próxima partida" no topo */
+.career-dash .bracket-play {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-left: 3px solid var(--em-gold);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+/* Container das colunas (rolagem horizontal) */
+.career-dash .gsl-bracket { gap: 14px; }
+.career-dash .gsl-br-group {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.career-dash .gsl-br-title {
+  font-family: inherit;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--em-text);
+  margin-bottom: 12px;
+}
+.career-dash .gsl-br-sub {
+  font-size: 0.72rem;
+  letter-spacing: 0.6px;
+  color: var(--em-muted);
+}
+.career-dash .gsl-br-sub.adv { color: #29c47a; }
+.career-dash .gsl-br-sub.elim { color: #e2574c; }
+.career-dash .gsl-br-seed {
+  font-family: inherit;
+  font-weight: 700;
+  color: var(--em-muted);
+}
+.career-dash .hb-reclabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--em-muted);
+}
+
+/* ===== Match cards (cartinhas) — GSL e Playoff ===== */
+.career-dash .hb-match,
+.career-dash .po-match {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  box-shadow: none;
+  width: 150px;
+}
+.career-dash .hb-match.current {
+  border-color: var(--em-gold);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--em-gold) 35%, transparent);
+}
+.career-dash .hb-match.clickable:hover,
+.career-dash .po-match.clickable:hover {
+  border-color: var(--em-gold);
+  transform: none;
+}
+.career-dash .po-label {
+  background: var(--em-panel-2);
+  color: var(--em-muted);
+  border-bottom: 1px solid var(--em-border);
+}
+
+/* Linhas internas do card (time + score) */
+.career-dash .hb-row,
+.career-dash .po-side {
+  padding: 7px 10px;
+  font-size: 0.82rem;
+}
+.career-dash .hb-row + .hb-row {
+  border-top: 1px solid var(--em-border);
+}
+.career-dash .hb-row .hb-tag,
+.career-dash .po-tname { color: var(--em-text); font-weight: 600; }
+.career-dash .hb-row .hb-score,
+.career-dash .po-score {
+  color: var(--em-text);
+  font-family: inherit;
+  font-weight: 700;
+}
+
+/* destaques nas cartinhas */
+.career-dash .hb-row.winner,
+.career-dash .po-side.win {
+  background: color-mix(in srgb, var(--em-gold) 12%, transparent);
+}
+.career-dash .hb-row.winner .hb-score,
+.career-dash .po-side.win .po-tname { color: var(--em-gold); font-weight: 700; }
+.career-dash .hb-row.loser { opacity: 0.55; }
+.career-dash .hb-row.is-user {
+  box-shadow: inset 3px 0 0 var(--em-gold);
+}
+.career-dash .hb-row.is-user .hb-tag { color: var(--em-gold); }
+.career-dash .po-side.mine .po-tname { color: var(--em-gold); }
+
+/* Caixas de Classificados / Eliminados */
+.career-dash .hb-resultbox {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+  padding: 9px 10px;
+}
+.career-dash .hb-resultbox.adv {
+  border-color: color-mix(in srgb, #29c47a 40%, var(--em-border));
+  background: color-mix(in srgb, #29c47a 10%, var(--em-panel-2));
+}
+.career-dash .hb-resultbox.elim {
+  border-color: color-mix(in srgb, #e2574c 38%, var(--em-border));
+  background: color-mix(in srgb, #e2574c 9%, var(--em-panel-2));
+}
+.career-dash .hb-resultbox-title {
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+}
+.career-dash .hb-resultbox.adv .hb-resultbox-title { color: #29c47a; }
+.career-dash .hb-resultbox.elim .hb-resultbox-title { color: #e2574c; }
+
+/* Token de time dentro da resultbox (NAVI, LGC, ...) */
+.career-dash .hb-token {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: var(--em-panel);
+  border: 1px solid var(--em-border);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--em-text);
+}
+.career-dash .hb-token + .hb-token { margin-top: 5px; }
+.career-dash .hb-token.is-user { border-color: var(--em-gold); }
+.career-dash .hb-token .gsl-br-seed { margin-left: auto; }
+
+/* Campeão (playoff) */
+.career-dash .po-champ {
+  background: color-mix(in srgb, var(--em-gold) 10%, var(--em-panel-2));
+  border: 1px solid var(--em-gold);
+  border-radius: 6px;
+}
+
+/* ===== Lista da fase de grupos (.gsl-group) — abas Classificação ===== */
+.career-dash .gsl-group {
+  background: var(--em-panel-2);
+  border: 1px solid var(--em-border);
+  border-radius: 6px;
+}
+.career-dash .gsl-group-head {
+  font-family: inherit;
+  font-weight: 700;
+  color: var(--em-text);
+}
+.career-dash .gsl-st-row {
+  background: var(--em-panel);
+  border-left: 3px solid var(--em-border);
+  font-size: 0.82rem;
+}
+.career-dash .gsl-st-row.adv { border-left-color: #29c47a; }
+.career-dash .gsl-st-row.me { box-shadow: inset 0 0 0 1px var(--em-gold); }
+.career-dash .gsl-pl { font-family: inherit; color: var(--em-muted); }
+.career-dash .gsl-q { color: #29c47a; font-weight: 700; }
+.career-dash .gsl-stage-label { color: var(--em-muted); }
