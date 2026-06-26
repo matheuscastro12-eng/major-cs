@@ -14,6 +14,18 @@ function read(): CareerTheme {
   return 'dark';
 }
 
+// Aplica o tema no <body> pra que tokens --em-* e overrides scoped em
+// .career-dash valham em TODO o app (incluindo modais com position: fixed
+// que renderizam fora do tree do componente).
+function applyBodyClass(theme: CareerTheme): void {
+  if (typeof document === 'undefined') return;
+  const body = document.body;
+  if (!body) return;
+  body.classList.add('career-dash');
+  body.classList.toggle('career-dash--light', theme === 'light');
+}
+applyBodyClass(current);
+
 export function getCareerTheme(): CareerTheme {
   return current;
 }
@@ -21,6 +33,7 @@ export function getCareerTheme(): CareerTheme {
 export function setCareerTheme(theme: CareerTheme): void {
   current = theme;
   try { localStorage.setItem(KEY, theme); } catch { /* sem storage */ }
+  applyBodyClass(theme);
   listeners.forEach((fn) => fn());
 }
 
@@ -43,3 +56,8 @@ export function useCareerTheme(): [CareerTheme, (t: CareerTheme) => void, () => 
 export function careerDashClass(theme: CareerTheme): string {
   return `career-dash${theme === 'light' ? ' career-dash--light' : ''}`;
 }
+
+// Alias semântico: o "tema do dashboard de carreira" foi promovido a tema do
+// app inteiro. Componentes fora de carreira devem usar este nome.
+export const appDashClass = careerDashClass;
+export const useAppTheme = useCareerTheme;
