@@ -6381,56 +6381,227 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
   budget: number;
   onConfirm: (renewIds: string[]) => void;
 }) {
-  // NADA pré-selecionado: você decide cada jogador (renovar/liberar). Sem isso, o
-  // default "renovar todos" fazia clicar em Renovar parecer que não fazia nada.
+  // Redesenhada no padrão em-*: header banner + DashCard com rows limpas
+  // + sticky bottom com hud de cost/budget e CTA. API preservada.
   const [decided, setDecided] = useState<Record<string, 'keep' | 'drop'>>({});
   const set = (id: string, v: 'keep' | 'drop') => setDecided((d) => ({ ...d, [id]: v }));
   const setAll = (v: 'keep' | 'drop') => setDecided(Object.fromEntries(renewals.map((r) => [r.playerId, v])));
   const kept = renewals.filter((r) => decided[r.playerId] === 'keep');
+  const dropped = renewals.filter((r) => decided[r.playerId] === 'drop');
   const cost = kept.reduce((a, r) => a + r.wage, 0);
   const overBudget = cost > budget;
   const allDecided = renewals.every((r) => decided[r.playerId]);
+
   return (
-    <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 720, margin: '24px auto' }}>
-        <div className="panel-head">{ct('📝 Renovação de contratos')}</div>
-        <div className="panel-body">
-          <p className="muted small" style={{ marginTop: 0 }}>
-            {ct('Estes contratos venceram. Decida cada um:')} <b>{ct('Renovar')}</b> (mantém no elenco, custa 1 salário)
-            ou <b>{ct('Liberar')}</b> (sai de graça agora).
-          </p>
-          <div className="renew-bulk">
-            <button className="btn small ghost" onClick={() => setAll('keep')}>{ct('Renovar todos')}</button>
-            <button className="btn small ghost" onClick={() => setAll('drop')}>{ct('Liberar todos')}</button>
+    <div className="em-renewals fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 20px 24px', maxWidth: 880, margin: '0 auto' }}>
+      {/* Header banner */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 18px',
+          background: 'linear-gradient(135deg, rgba(232,193,112,0.12) 0%, transparent 60%)',
+          border: '1px solid var(--em-border)',
+          borderRadius: 6,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 800 }}>
+            📝 {ct('Janela de renovação')}
           </div>
-          <div className="renew-list">
-            {renewals.map((r) => {
-              const v = decided[r.playerId];
-              return (
-                <div key={r.playerId} className={`renew-row${v === 'keep' ? ' keep' : v === 'drop' ? ' drop' : ''}`}>
-                  <PlayerAvatar nick={r.nick} size={40} />
-                  <div className="renew-id">
-                    <div className="renew-nick"><Flag cc={r.country} /> {r.nick} <span className={`role-pill ${r.role}`}>{r.role}</span></div>
-                    <div className="muted small">OVR {r.ovr} · salário {formatMoney(r.wage)}</div>
+          <h2 style={{ margin: '2px 0 0', fontSize: '1.4rem', fontWeight: 900, color: 'var(--em-text)', letterSpacing: '-0.3px' }}>
+            {renewals.length} {ct('contratos venceram')}
+          </h2>
+          <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--em-muted)', maxWidth: 580, lineHeight: 1.45 }}>
+            {ct('Decida cada um:')} <b style={{ color: 'var(--em-text)' }}>{ct('Renovar')}</b> {ct('mantém no elenco e custa 1 salário · ')}<b style={{ color: 'var(--em-text)' }}>{ct('Liberar')}</b> {ct('libera o jogador agora (de graça).')}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setAll('keep')}
+            style={{
+              padding: '6px 12px',
+              background: 'rgba(94,216,138,0.12)',
+              color: '#5ed88a',
+              border: '1px solid rgba(94,216,138,0.45)',
+              borderRadius: 4,
+              fontFamily: 'inherit',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            ✓ {ct('Renovar todos')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAll('drop')}
+            style={{
+              padding: '6px 12px',
+              background: 'rgba(229,138,138,0.10)',
+              color: '#e58a8a',
+              border: '1px solid rgba(229,138,138,0.45)',
+              borderRadius: 4,
+              fontFamily: 'inherit',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            ✕ {ct('Liberar todos')}
+          </button>
+        </div>
+      </header>
+
+      {/* Lista de renovações */}
+      <DashCard
+        title={ct('Decisões')}
+        info={`${kept.length} ${ct('renovar')} · ${dropped.length} ${ct('liberar')} · ${renewals.length - kept.length - dropped.length} ${ct('pendente')}`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {renewals.map((r) => {
+            const v = decided[r.playerId];
+            const isKeep = v === 'keep';
+            const isDrop = v === 'drop';
+            const accent = isKeep ? '#5ed88a' : isDrop ? '#e58a8a' : 'var(--em-border)';
+            return (
+              <div
+                key={r.playerId}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '10px 12px',
+                  background: 'var(--em-panel-2)',
+                  border: `1px solid ${accent}`,
+                  borderLeft: `3px solid ${accent}`,
+                  borderRadius: 4,
+                  opacity: isDrop ? 0.7 : 1,
+                  transition: 'border-color .15s, opacity .15s',
+                }}
+              >
+                <PlayerAvatar nick={r.nick} size={40} />
+                <div style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.92rem', fontWeight: 800, color: 'var(--em-text)' }}>
+                    <Flag cc={r.country} /> {r.nick}
+                    <span className={`role-pill ${r.role}`}>{r.role}</span>
                   </div>
-                  <div className="renew-actions">
-                    <button className={`btn small${v === 'keep' ? ' gold' : ' ghost'}`} onClick={() => set(r.playerId, 'keep')}>{v === 'keep' ? ct('✓ Renovar') : ct('Renovar')}</button>
-                    <button className={`btn small${v === 'drop' ? ' armed' : ' ghost'}`} onClick={() => set(r.playerId, 'drop')}>{v === 'drop' ? ct('✓ Liberar') : ct('Liberar')}</button>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 3, fontSize: '0.74rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                    <span>OVR <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{r.ovr}</b></span>
+                    <span>{ct('salário')} <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{formatMoney(r.wage)}</b></span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-          <div className="renew-foot">
-            <span>{ct('Custo das renovações:')} <b className={overBudget ? 'neg' : ''}>{formatMoney(cost)}</b> · caixa {formatMoney(budget)}</span>
-            <button className="btn gold" disabled={overBudget || !allDecided}
-              onClick={() => onConfirm(kept.map((r) => r.playerId))}>
-              {ct('Confirmar e abrir o mercado')}
-            </button>
-          </div>
-          {!allDecided && <p className="muted small" style={{ marginTop: 8 }}>{ct('Escolha')} <b>{ct('Renovar')}</b> {ct('ou')} <b>{ct('Liberar')}</b> {ct('para cada jogador antes de confirmar.')}</p>}
-          {overBudget && <p className="neg small" style={{ marginTop: 8 }}>{ct('Sem caixa pra renovar todos. Libere alguém pra caber no orçamento.')}</p>}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => set(r.playerId, 'keep')}
+                    style={{
+                      padding: '7px 14px',
+                      background: isKeep ? '#5ed88a' : 'transparent',
+                      color: isKeep ? '#0a1a0c' : '#5ed88a',
+                      border: `1px solid ${isKeep ? '#5ed88a' : 'rgba(94,216,138,0.45)'}`,
+                      borderRadius: 4,
+                      fontFamily: 'inherit',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      minWidth: 90,
+                    }}
+                  >
+                    {isKeep ? `✓ ${ct('Renovar')}` : ct('Renovar')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => set(r.playerId, 'drop')}
+                    style={{
+                      padding: '7px 14px',
+                      background: isDrop ? '#c0392b' : 'transparent',
+                      color: isDrop ? '#fff' : '#e58a8a',
+                      border: `1px solid ${isDrop ? '#c0392b' : 'rgba(229,138,138,0.45)'}`,
+                      borderRadius: 4,
+                      fontFamily: 'inherit',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      minWidth: 90,
+                    }}
+                  >
+                    {isDrop ? `✕ ${ct('Liberar')}` : ct('Liberar')}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
+      </DashCard>
+
+      {/* Sticky bottom hud + CTA */}
+      <div
+        style={{
+          position: 'sticky',
+          bottom: 12,
+          padding: '12px 18px',
+          background: 'var(--em-panel)',
+          border: '1px solid var(--em-border)',
+          borderRadius: 6,
+          boxShadow: '0 -4px 16px rgba(0,0,0,0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          zIndex: 20,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.84rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+            <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {ct('Custo renovações')}
+            </span>
+            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? '#e58a8a' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
+              {formatMoney(cost)}
+            </b>
+          </div>
+          <span style={{ color: 'var(--em-muted)' }}>·</span>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+            <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {ct('Caixa')}
+            </span>
+            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '1.05rem', fontWeight: 900 }}>
+              {formatMoney(budget)}
+            </b>
+          </div>
+          {!allDecided && (
+            <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem', marginLeft: 8 }}>
+              ⚠ {ct('Faltam')} <b style={{ color: 'var(--em-text)' }}>{renewals.length - kept.length - dropped.length}</b> {ct('decisões')}
+            </span>
+          )}
+          {overBudget && (
+            <span style={{ color: '#e58a8a', fontSize: '0.78rem', marginLeft: 8 }}>
+              ⚠ {ct('Estourou')} {formatMoney(cost - budget)}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          disabled={overBudget || !allDecided}
+          onClick={() => onConfirm(kept.map((r) => r.playerId))}
+          style={{
+            padding: '10px 22px',
+            background: (overBudget || !allDecided) ? 'var(--em-panel-2)' : 'var(--em-gold)',
+            color: (overBudget || !allDecided) ? 'var(--em-muted)' : '#1a1205',
+            border: (overBudget || !allDecided) ? '1px solid var(--em-border)' : 'none',
+            borderRadius: 4,
+            fontFamily: 'inherit',
+            fontWeight: 900,
+            fontSize: '0.9rem',
+            cursor: (overBudget || !allDecided) ? 'not-allowed' : 'pointer',
+            letterSpacing: '0.3px',
+          }}
+        >
+          ✔ {ct('Confirmar e abrir o mercado')}
+        </button>
       </div>
     </div>
   );
