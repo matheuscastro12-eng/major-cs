@@ -122,9 +122,15 @@ export function CareerShell({
   useEffect(() => {
     if (!openMenu) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenu(null); };
+    // BUG MOBILE: antes verificava `.em-nav-item.open` — mas em touch o mesmo
+    // tap que ABRE o menu dispara este listener ANTES do React aplicar a classe
+    // `.open`, fechando o menu na hora. Agora verifica só `.em-nav-item` (sem
+    // .open): se clicou DENTRO de qualquer nav-item, não fecha (o próprio
+    // handler do botão decide trocar de item ou alternar dropdown). Só fecha
+    // se clicou de fato FORA do nav.
     const onPointer = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
-      if (!t.closest('.em-nav-item.open')) setOpenMenu(null);
+      if (!t.closest('.em-nav-item')) setOpenMenu(null);
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('mousedown', onPointer);
