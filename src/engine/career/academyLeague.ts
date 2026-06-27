@@ -20,6 +20,9 @@ export interface AcademyClub {
   country: string;
   colors: [string, string];
   players?: AcademyClubPlayer[]; // roster real (parcial ou completo); resto é procedural
+  parentId?: string;    // id no dataset bo3 — pra resolver logoUrl do time pai
+  parentTag?: string;   // sigla do time pai (NAVI, MOUZ, etc.)
+  parentName?: string;  // nome do time pai
 }
 
 export const ACADEMY_CLUBS: AcademyClub[] = (clubsData.clubs as AcademyClub[]).map((c) => ({
@@ -56,6 +59,9 @@ export interface AcademyStanding {
   l: number;
   pts: number;
   diff: number; // saldo de mapas
+  parentId?: string;
+  parentTag?: string;
+  parentName?: string;
 }
 
 export interface AcademyMatch {
@@ -66,6 +72,9 @@ export interface AcademyMatch {
   userScore: number;
   oppScore: number;
   won: boolean;
+  parentId?: string;
+  parentTag?: string;
+  parentName?: string;
 }
 
 export interface AcademyLeagueResult {
@@ -91,14 +100,14 @@ export function academyLeague(
   splitSeed: string | number,
 ): AcademyLeagueResult {
   const seedBase = String(splitSeed);
-  const entries: { id: string; name: string; tag: string; colors: [string, string]; isUser: boolean; strength: number }[] = [
-    ...ACADEMY_CLUBS.map((c) => ({ id: c.id, name: c.name, tag: c.tag, colors: c.colors, isUser: false, strength: clubStrength(c) })),
+  const entries: { id: string; name: string; tag: string; colors: [string, string]; isUser: boolean; strength: number; parentId?: string; parentTag?: string; parentName?: string }[] = [
+    ...ACADEMY_CLUBS.map((c) => ({ id: c.id, name: c.name, tag: c.tag, colors: c.colors, isUser: false, strength: clubStrength(c), parentId: c.parentId, parentTag: c.parentTag, parentName: c.parentName })),
     { id: USER_ID, name: userTeam.name, tag: userTeam.tag, colors: userTeam.colors, isUser: true, strength: userTeam.strength },
   ];
 
   const stats = new Map<string, AcademyStanding>();
   for (const e of entries) {
-    stats.set(e.id, { id: e.id, name: e.name, tag: e.tag, colors: e.colors, isUser: e.isUser, strength: e.strength, w: 0, l: 0, pts: 0, diff: 0 });
+    stats.set(e.id, { id: e.id, name: e.name, tag: e.tag, colors: e.colors, isUser: e.isUser, strength: e.strength, w: 0, l: 0, pts: 0, diff: 0, parentId: e.parentId, parentTag: e.parentTag, parentName: e.parentName });
   }
   const userMatches: AcademyMatch[] = [];
 
@@ -116,7 +125,11 @@ export function academyLeague(
         const opp = a.isUser ? b : a;
         const us = a.isUser ? sa : sb;
         const them = a.isUser ? sb : sa;
-        userMatches.push({ oppId: opp.id, oppName: opp.name, oppTag: opp.tag, oppColors: opp.colors, userScore: us, oppScore: them, won: us > them });
+        userMatches.push({
+          oppId: opp.id, oppName: opp.name, oppTag: opp.tag, oppColors: opp.colors,
+          userScore: us, oppScore: them, won: us > them,
+          parentId: opp.parentId, parentTag: opp.parentTag, parentName: opp.parentName,
+        });
       }
     }
   }

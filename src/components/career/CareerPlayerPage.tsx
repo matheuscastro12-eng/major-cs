@@ -7,6 +7,7 @@ import { Flag, PlayerAvatar, TeamBadge } from '../ui';
 import { CareerIcon, type CareerIconName } from './CareerIcon';
 import { IconChevronLeft } from './DashIcons';
 import { AttributeColumn } from './AttributeColumn';
+import { SubRoleStars } from './SubRoleStars';
 
 type PlayerTab = 'card' | 'overview' | 'personal' | 'performance' | 'career';
 
@@ -604,6 +605,11 @@ export function CareerPlayerPage({
           <AttributeColumn attributes={attributes as Parameters<typeof AttributeColumn>[0]['attributes']} />
         </div>
       )}
+
+      {/* T3.3: sub-roles derivadas (entry/lurker/awper/etc) */}
+      <div style={{ marginTop: 14 }}>
+        <SubRoleStars player={player} />
+      </div>
 
       {coachFooter}
     </div>

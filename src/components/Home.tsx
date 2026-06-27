@@ -4,7 +4,7 @@ import { useLang } from '../state/i18n';
 import { getManager } from '../state/manager';
 import { ct } from '../state/career-i18n';
 import { BrandMark } from './brand';
-import { PlayShaderBackground } from './PlayShaderBackground';
+import { PlayStaticBackground } from './PlayStaticBackground';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
@@ -51,7 +51,7 @@ export function Home({
 
   return (
     <div className="play-hub fade-in">
-      <PlayShaderBackground />
+      <PlayStaticBackground />
 
       <div className="play-hub-content">
         {view === 'menu' ? (

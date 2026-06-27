@@ -1,5 +1,5 @@
 {
-  "_note": "Academies reais (identidade de org). Rosters com `players` foram extraidos do Liquipedia; clubes sem `players` tem o elenco gerado proceduralmente pela nacionalidade (country). Roles atribuidas para o jogo.",
+  "_note": "Academies reais (identidade de org). Rosters com `players` foram extraidos do Liquipedia; clubes sem `players` tem o elenco gerado proceduralmente pela nacionalidade (country). Roles atribuidas para o jogo. `parentId` aponta pro time pai no bo3-2026 — usado pelo AcademyBadge pra mostrar o logo do parent + 'ACADEMY' embaixo.",
   "clubs": [
     {
       "id": "navi-junior",
@@ -7,6 +7,9 @@
       "tag": "NAVIJ",
       "country": "ua",
       "colors": ["#1a1a1a", "#ffe600"],
+      "parentId": "bo3_team_787",
+      "parentTag": "NAVI",
+      "parentName": "Natus Vincere",
       "players": [
         { "nick": "kodak", "name": "Nazar Buchma", "country": "ua", "role": "IGL" },
         { "nick": "Yoki", "name": "Danylo Istomin", "country": "ua", "role": "Rifler" },
@@ -21,6 +24,9 @@
       "tag": "EFA",
       "country": "tr",
       "colors": ["#0a0a0a", "#e23b2e"],
+      "parentId": "bo3_team_1527",
+      "parentTag": "EF",
+      "parentName": "Eternal Fire",
       "players": [
         { "nick": "preiz", "name": "Cagan Orman", "country": "tr", "role": "IGL" },
         { "nick": "Hydro2K", "name": "Emirhan Deniz", "country": "tr", "role": "Rifler" },
@@ -35,6 +41,9 @@
       "tag": "NXT",
       "country": "de",
       "colors": ["#1b1b1b", "#e2002a"],
+      "parentId": "bo3_team_765",
+      "parentTag": "MOUZ",
+      "parentName": "MOUZ",
       "players": [
         { "nick": "opdust", "name": "Tiago Simao", "country": "pt", "role": "IGL" },
         { "nick": "ay0k", "name": "Maksims Beloglazovs", "country": "lv", "role": "Rifler" },
@@ -46,28 +55,40 @@
       "name": "BIG Academy",
       "tag": "BIGA",
       "country": "de",
-      "colors": ["#101820", "#ffd200"]
+      "colors": ["#101820", "#ffd200"],
+      "parentId": "bo3_team_756",
+      "parentTag": "BIG",
+      "parentName": "BIG"
     },
     {
       "id": "fnatic-rising",
       "name": "fnatic Rising",
       "tag": "FNR",
       "country": "se",
-      "colors": ["#0a0a0a", "#ff5800"]
+      "colors": ["#0a0a0a", "#ff5800"],
+      "parentId": "bo3_team_786",
+      "parentTag": "FNC",
+      "parentName": "fnatic"
     },
     {
       "id": "heroic-academy",
       "name": "Heroic Academy",
       "tag": "HRA",
       "country": "dk",
-      "colors": ["#0a0a0a", "#00e0a0"]
+      "colors": ["#0a0a0a", "#00e0a0"],
+      "parentId": "bo3_team_759",
+      "parentTag": "HERO",
+      "parentName": "HEROIC"
     },
     {
       "id": "pain-academy",
       "name": "paiN Academy",
       "tag": "PNA",
       "country": "br",
-      "colors": ["#0a0a0a", "#ff2d55"]
+      "colors": ["#0a0a0a", "#ff2d55"],
+      "parentId": "bo3_team_637",
+      "parentTag": "PAIN",
+      "parentName": "paiN"
     },
     {
       "id": "9ine-academy",

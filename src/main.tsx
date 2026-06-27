@@ -13,6 +13,13 @@ import { ToastProvider } from './components/ds'
 import { ConfirmDialogHost } from './components/ConfirmDialog'
 import { KeyboardHelpHost } from './components/KeyboardHelpOverlay'
 import { PatchNotesHost } from './components/PatchNotesModal'
+import { HowToPlayHost } from './components/HowToPlayHost'
+import { CompareHost } from './components/CompareHost'
+import { MetaPageHost } from './components/MetaPageHost'
+import { FiredModalHost } from './components/FiredModalHost'
+import { InfrastructurePageHost } from './components/InfrastructurePageHost'
+import { LockerRoomPageHost } from './components/LockerRoomPageHost'
+import { LogoBuilderHost } from './components/LogoBuilderHost'
 
 installErrorLogging() // captura crash de runtime em producao (fire-and-forget)
 
@@ -33,6 +40,13 @@ createRoot(document.getElementById('root')!).render(
     <ConfirmDialogHost />
     <KeyboardHelpHost />
     <PatchNotesHost />
+    <HowToPlayHost />
+    <CompareHost />
+    <MetaPageHost />
+    <FiredModalHost />
+    <InfrastructurePageHost />
+    <LockerRoomPageHost />
+    <LogoBuilderHost />
     <ErrorBoundary>
       <BrowserRouter>
         <ToastProvider>

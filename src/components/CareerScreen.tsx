@@ -3,7 +3,7 @@
 // disputar circuitos regionais, subir no VRS e buscar o Major Mundial completo
 // em três stages suíços mais Champions Stage. A interface usa PT como fonte e
 // traduz as strings da carreira com ct().
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
@@ -11,30 +11,30 @@ import { teamSeasonToTTeam } from '../engine/ratings';
 import { simulateSeries } from '../engine/match';
 import { autoVeto } from '../engine/veto';
 import { createSwissStage, createPlayoffStage, stageAdvancers, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
-import { Hub } from './Hub';
+// Hub: usado pela MajorTab; import movido pra page.
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
 import type { Coach, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
-import { MAP_LABELS, MAP_POOL, PLAYBOOK_DESC, PLAYBOOK_LABELS } from '../types';
+import { MAP_LABELS, MAP_POOL } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
-import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore } from '../engine/career/rivalries';
-import { applyFatigueForm, fatigueBand, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
-import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, FACILITY_MAX_LEVEL, facilityUpkeep, facilityUpgradeCost, normalizeFacilities, stabilizeMorale, type FacilityKey } from '../engine/career/facilities';
+import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career/rivalries';
+import { applyFatigueForm, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
+import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { matchesNegotiationFilters } from '../engine/career/market';
-import { academyLeague } from '../engine/career/academyLeague';
+// academyLeague: usado pela AcademyTab; import movido pra page.
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
-import { FutCard } from './FutCard';
+// FutCard: usado pela SquadTab; import movido pra page.
 import { DashCard } from './career/DashCard';
 import { CareerShell, CareerDashFrame } from './career/CareerShell';
 import { CareerPlayerPage } from './career/CareerPlayerPage';
 import { CareerTeamPage } from './career/CareerTeamPage';
-import { PlayerLink } from './career/PlayerLink';
+// PlayerLink: usado pela SquadTab; import movido pra page.
 import { playerOrgId, playerRuntimeId } from '../state/career-player-route';
 import {
   canCareerGoBack,
@@ -47,11 +47,10 @@ import {
   parseCareerPlayerId,
   parseCareerTeamId,
 } from '../state/career-nav';
-import { buildDashboardTasks } from '../state/career-tasks';
-import { CareerOverview, type RecentMatchRow } from './career/CareerOverview';
-import { CareerIcon, CareerIconLegacy, type CareerIconName } from './career/CareerIcon';
+// buildDashboardTasks + CareerOverview + RecentMatchRow: usados pela OverviewTab; imports movidos pra page.
+import { CareerIcon, type CareerIconName } from './career/CareerIcon';
 import { CareerConfirmProvider, useCareerConfirm } from './career/ConfirmModal';
-import { OrgFlag } from './flags';
+// OrgFlag: usado pelas pages (WorldTab/VrsTab); import removido daqui.
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
@@ -76,7 +75,7 @@ const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
 const VRS_DECAY = 0.6;
 // PLANO DE JOGO: a decisão pré-partida do usuário. Cada plano dá um buff REAL na
 // simulação (some você do "modo espectador": sua escolha muda a partida).
-type GamePlan = 'disciplined' | 'antistrat' | 'mapfocus' | 'aggressive';
+export type GamePlan = 'disciplined' | 'antistrat' | 'mapfocus' | 'aggressive';
 const GAME_PLANS: { id: GamePlan; icon: CareerIconName; label: string; desc: string }[] = [
   { id: 'disciplined', icon: 'brain', label: ct('Disciplinado'), desc: ct('Jogo seguro e constante. Baixa variância, base sólida.') },
   { id: 'antistrat', icon: 'search', label: 'Anti-strat', desc: ct('Estuda o adversário: defesa mais sólida. Bom contra times melhores.') },
@@ -97,16 +96,16 @@ function applyGamePlanBuff(t: TTeam, plan: GamePlan): TTeam {
 }
 const LEAGUE_BO: 1 | 3 = 3;
 const MAJOR_SPOTS = 2; // top 2 do Circuit X garantem vaga no Major
-const MAJOR_VRS_CUT = 32; // os 32 melhores do ranking VRS vão ao Major (3 stages)
+export const MAJOR_VRS_CUT = 32; // os 32 melhores do ranking VRS vão ao Major (3 stages)
 // o Major Mundial fecha a TEMPORADA: a cada N campeonatos/splits acontece um Major.
 // 4 = a temporada tem 3 campeonatos tier-1 + o Major encerrando o ano.
-const MAJOR_EVERY = 4;
+export const MAJOR_EVERY = 4;
 // CADA SPLIT TEM VÁRIOS CAMPEONATOS (etapas). O "relógio do mundo" — idade dos
 // jogadores, mercado/transferências, renovações, decaimento de VRS, Major — só
 // avança ao FECHAR o split (a última etapa). As etapas intermediárias você joga
 // com o MESMO elenco, sem offseason: mais campeonatos antes do mundo mexer.
 const EVENTS_PER_SPLIT = 3;
-const isMajorSplit = (split: number) => split % MAJOR_EVERY === 0;
+export const isMajorSplit = (split: number) => split % MAJOR_EVERY === 0;
 // VRS do Major por colocação (o prêmio em $ vem do pool real × fatia, ver eventPrize)
 const MAJOR_VRS: Record<PlacementCode, number> = {
   champion: 600,
@@ -204,7 +203,7 @@ const TIER_DEFAULT_POOL: Record<number, { prize: number; venue: string }> = {
   2: { prize: 100_000, venue: 'circuito internacional 🌐' },
   3: { prize: 15_000, venue: 'circuito de acesso 🌐' },
 };
-const eventMeta = (name: string, tier: number) => EVENT_META[name] ?? TIER_DEFAULT_POOL[tier] ?? TIER_DEFAULT_POOL[3];
+export const eventMeta = (name: string, tier: number) => EVENT_META[name] ?? TIER_DEFAULT_POOL[tier] ?? TIER_DEFAULT_POOL[3];
 // prize pool compacto em USD: $1.25M / $850k
 const fmtPool = (usd: number) => (usd >= 1_000_000 ? `$${(usd / 1_000_000).toFixed(usd % 1_000_000 === 0 ? 0 : 2)}M` : `$${Math.round(usd / 1000)}k`);
 // PRÊMIO por colocação (caixa). Equilibrado pra não enriquecer fácil: o Major é o
@@ -222,7 +221,7 @@ const MAJOR_PRIZE: Record<PlacementCode, number> = {
   swiss: 35_000,
 };
 
-interface Signing {
+export interface Signing {
   playerId: string;
   fromId: string;
   fee?: number; // valor negociado da transferência (se ausente, usa o de tabela)
@@ -343,10 +342,7 @@ import { type TalkResult } from '../engine/playerTalks';
 import { TeamEventModal } from './TeamEventModal';
 import { YearAwardsModal } from './YearAwardsModal';
 import { PlayerTalkModal } from './PlayerTalkModal';
-import { ChemistryMatrix } from './career/ChemistryMatrix';
-import { CoachStintsCard } from './career/CoachStintsCard';
-import { ScrimCard } from './career/ScrimCard';
-import { ScoutingCard } from './career/ScoutingCard';
+// ChemistryMatrix/CoachStintsCard/ScrimCard/ScoutingCard: usados pela SquadTab; imports movidos pra page.
 // chemistry engine — usado em advanceSplit (decay) e após série jogada (tick).
 // O modifier no match strength fica aplicado dentro do ChemistryMatrix (avg
 // visível). Integração no engine de match (multiplicar strength) é PR
@@ -370,6 +366,33 @@ import {
 } from '../engine/scouting';
 import { useToast } from './ds';
 import { confirm as confirmDialog } from './ConfirmDialog';
+// T8.1 — abrir tutorial HowToPlay (host global montado no main.tsx)
+import { openHowToPlay } from './HowToPlayHost';
+import { openMeta } from './MetaPageHost';
+import { openFiredModal } from './FiredModalHost';
+import { openInfrastructure } from './InfrastructurePageHost';
+import { openLockerRoom } from './LockerRoomPageHost';
+import { openLogoBuilder } from './LogoBuilderHost';
+// T11 — modais cinematográficos
+import { ChampionCelebrationModal, type ChampionCelebrationData } from './ChampionCelebrationModal';
+import { PlayerRetirementModal, type PlayerRetirementData } from './PlayerRetirementModal';
+import { TournamentEliminationModal, type TournamentEliminationData } from './TournamentEliminationModal';
+// T1.4: abas extraídas em src/pages/career/. CareerScreen segue orquestrando
+// state/handlers — só o JSX da aba saiu pra arquivo próprio.
+import { StandingsTab } from '../pages/career/StandingsTab';
+import { ResultsTab } from '../pages/career/ResultsTab';
+import { VrsTab } from '../pages/career/VrsTab';
+import { Top20Tab } from '../pages/career/Top20Tab';
+import { HistoryTab } from '../pages/career/HistoryTab';
+import { BracketTab } from '../pages/career/BracketTab';
+import { InboxTab } from '../pages/career/InboxTab';
+import { CalendarTab } from '../pages/career/CalendarTab';
+import { WorldTab } from '../pages/career/WorldTab';
+import { AcademyTab } from '../pages/career/AcademyTab';
+import { MajorTab } from '../pages/career/MajorTab';
+import { FinanceTab } from '../pages/career/FinanceTab';
+import { SquadTab } from '../pages/career/SquadTab';
+import { OverviewTab } from '../pages/career/OverviewTab';
 
 // ----- prestígio + fãs da org (estilo Brasval) -----
 // Derivados de conquistas (sem campo novo no save: não quebram saves e sobem ao
@@ -379,12 +402,12 @@ function careerPrestige(save: CareerSave): number {
   const v = 22 + save.titles * 7 + h.majorApps * 4 + h.circuitTitles * 3 + (3 - (save.tier ?? 3)) * 6 + (save.vrs ?? 0) / 40;
   return Math.max(5, Math.min(99, Math.round(v)));
 }
-function careerFans(save: CareerSave): number {
+export function careerFans(save: CareerSave): number {
   const p = careerPrestige(save);
   return Math.round(Math.pow(p, 1.6) * 1100 + aggregateHistory(save.history).totalPrize / 120);
 }
 // patrocínio efetivo: prestígio atrai marcas melhores (até +33% no topo).
-function effSponsorIncome(save: CareerSave): number {
+export function effSponsorIncome(save: CareerSave): number {
   return Math.round(sponsorIncome(save.sponsors) * (1 + careerPrestige(save) / 300));
 }
 
@@ -574,7 +597,7 @@ function applySponsorSplitTick(save: CareerSave, newSplit: number, rng: Rng): Pa
     sponsorCooldown: state.sponsorCooldown,
   };
 }
-function formatFans(n: number): string {
+export function formatFans(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return `${n}`;
@@ -641,7 +664,7 @@ const PROSPECT_NAMES: Record<MacroRegion, string[]> = {
   oceania: ['Jack Wilson', 'Liam Taylor', 'Ethan Brown', 'Noah Smith', 'Cooper Jones', 'Jayden Lee', 'Mason Clark', 'Riley Evans', 'Lachlan Hall', 'Hayden Ross'],
   africa: ['Thabo Nkosi', 'Youssef Haddad', 'Karim Saidi', 'Sipho Dlamini', 'Omar Farouk', 'Tunde Adeyemi', 'Ayoub Benali', 'Liam van der Merwe', 'Kwame Mensah', 'Hassan Toure'],
 };
-const REGION_CC: Record<MacroRegion, string[]> = {
+export const REGION_CC: Record<MacroRegion, string[]> = {
   americas: ['br', 'us', 'ar', 'cl', 'mx', 'ca', 'pe', 'uy'],
   europe: ['se', 'dk', 'fr', 'de', 'pl', 'fi', 'pt', 'es', 'nl', 'cz'],
   cis: ['ru', 'ua', 'kz', 'by'],
@@ -669,9 +692,9 @@ function prospectIdentity(seed: string, region: MacroRegion): { nick: string; na
 }
 
 // ----- ACADEMIA: prospectos que você forma e promove quando quiser -----
-const ACADEMY_MAX = 6;       // teto de prospectos na academia
-const ACADEMY_SCOUT_COST = 250_000; // custo de revelar um prospecto
-interface AcademyEntry {
+export const ACADEMY_MAX = 6;       // teto de prospectos na academia
+export const ACADEMY_SCOUT_COST = 250_000; // custo de revelar um prospecto
+export interface AcademyEntry {
   id: string;
   nick: string;
   name: string;
@@ -683,7 +706,7 @@ interface AcademyEntry {
   potential: number;  // OVR teto que pode atingir treinando
 }
 // gera um prospecto jovem (determinístico pelo seed) com potencial de evolução
-function makeProspect(seed: string, region: MacroRegion, split: number): AcademyEntry {
+export function makeProspect(seed: string, region: MacroRegion, split: number): AcademyEntry {
   const h = hashStr(seed);
   const ident = prospectIdentity(seed, region);
   const role: Role = FILL_ROLES[(h >>> 2) % FILL_ROLES.length]; // >>> (sem sinal): evita índice negativo
@@ -725,7 +748,7 @@ function makeAcademyTeamPlayer(seed: string, country: string, role: Role, split:
 
 // monta o time academy do usuário: 5 jovens (um por função), todos com a
 // nacionalidade da org. Determinístico por org+split.
-function buildUserAcademyTeam(orgCountry: string, orgTag: string, split: number): AcademyEntry[] {
+export function buildUserAcademyTeam(orgCountry: string, orgTag: string, split: number): AcademyEntry[] {
   return FILL_ROLES.map((role, i) =>
     makeAcademyTeamPlayer(`acateam:${orgTag}:${role}:${i}:${split}`, orgCountry, role, split));
 }
@@ -874,7 +897,7 @@ function applyScenarioProgress(scenario: CareerSave['scenario'], ctx: ScenarioCt
 }
 
 // registro de um split encerrado (história da organização)
-interface SplitRecord {
+export interface SplitRecord {
   split: number;
   circuit: string;
   position: number;
@@ -890,7 +913,7 @@ interface SplitRecord {
 // Playoff (mata-mata) do circuito: os 4 melhores da fase de pontos corridos
 // disputam um bracket que decide o campeão e as vagas no Major.
 interface PlayoffMatch { a: string; b: string; result?: SeriesResult; }
-interface Playoff {
+export interface Playoff {
   circuit: string;
   seeds: string[];   // classificados (ordem de seed) ao entrar nos playoffs
   qf: [PlayoffMatch, PlayoffMatch, PlayoffMatch, PlayoffMatch] | null; // quartas (8 times) ou null (4 times)
@@ -1012,9 +1035,9 @@ interface CareerSave {
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
-type NewsCat = 'result' | 'transfer' | 'board' | 'scene' | 'social' | 'scout';
-interface NewsItem { id: string; split: number; icon: string; tone: 'good' | 'bad' | 'info'; title: string; body: string; cat?: NewsCat; handle?: string; }
-const NEWS_CATS: { key: NewsCat | 'all'; label: string }[] = [
+export type NewsCat = 'result' | 'transfer' | 'board' | 'scene' | 'social' | 'scout';
+export interface NewsItem { id: string; split: number; icon: string; tone: 'good' | 'bad' | 'info'; title: string; body: string; cat?: NewsCat; handle?: string; }
+export const NEWS_CATS: { key: NewsCat | 'all'; label: string }[] = [
   { key: 'all', label: 'Todas' },
   { key: 'result', label: ct('Resultados') },
   { key: 'transfer', label: ct('Mercado') },
@@ -1029,10 +1052,10 @@ const NEWS_CATS: { key: NewsCat | 'all'; label: string }[] = [
 // conforme o jogador evolui e joga); quem edita atributo é o admin no CRM.
 interface CareerStatLine { k: number; d: number; a: number; dmg: number; kast: number; rounds: number; maps: number; splits: number; }
 
-const CONTRACT_TERM = 3; // splits de contrato ao assinar/renovar
+export const CONTRACT_TERM = 3; // splits de contrato ao assinar/renovar
 
 // funções que o técnico pode atribuir a um jogador (gerenciamento estilo Brasval)
-const ROLE_OPTS: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
+export const ROLE_OPTS: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
 
 // proposta de uma org de elite (tier 1) por um jogador do seu elenco
 interface PoachOffer { orgId: string; orgName: string; orgTag: string; playerId: string; nick: string; ovr: number; fee: number }
@@ -1103,15 +1126,15 @@ const emptySave = (): CareerSave => ({
 });
 
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
-const MAP_TRAIN_MAX = 2.6; // teto de domínio de um mapa
-const MAP_TRAIN_MIN = -1.6; // piso (mapa abandonado vira fraqueza leve, não catástrofe)
+export const MAP_TRAIN_MAX = 2.6; // teto de domínio de um mapa
+export const MAP_TRAIN_MIN = -1.6; // piso (mapa abandonado vira fraqueza leve, não catástrofe)
 const MAP_TRAIN_GAIN = 1.3; // ganho no mapa em foco por split
 const MAP_TRAIN_DECAY = 0.3; // todo mapa decai por split (o não-treinado escorrega devagar)
-const MAP_FOCUS_MAX = 3; // até 3 mapas em treino por split
+export const MAP_FOCUS_MAX = 3; // até 3 mapas em treino por split
 // nível de domínio de um mapa (0 = neutro se nunca treinado)
-const mapLevel = (s: CareerSave, m: MapId) => s.mapTraining?.[m] ?? 0;
+export const mapLevel = (s: CareerSave, m: MapId) => s.mapTraining?.[m] ?? 0;
 // lista de mapas em foco (compat: aceita formato antigo de mapa único)
-const mapFocusList = (s: CareerSave): MapId[] =>
+export const mapFocusList = (s: CareerSave): MapId[] =>
   Array.isArray(s.mapFocus) ? s.mapFocus : s.mapFocus ? [s.mapFocus as unknown as MapId] : [];
 function applyMapTraining(s: CareerSave): Partial<Record<MapId, number>> {
   const out: Partial<Record<MapId, number>> = {};
@@ -1125,12 +1148,12 @@ function applyMapTraining(s: CareerSave): Partial<Record<MapId, number>> {
 }
 // entrosamento do playbook: treinar/manter sobe; trocar de esquema derruba
 const PLAYBOOK_FAM_GAIN = 14; // por split mantendo o mesmo esquema
-const PLAYBOOK_SWITCH_TO = 25; // entrosamento ao adotar um esquema novo
+export const PLAYBOOK_SWITCH_TO = 25; // entrosamento ao adotar um esquema novo
 
 // ----- moral / satisfação do jogador -----
-const MORALE_DEFAULT = 70;
+export const MORALE_DEFAULT = 70;
 const clampMorale = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
-function moraleInfo(v: number): { label: string; cls: 'good' | 'warn' | 'bad'; icon: CareerIconName } {
+export function moraleInfo(v: number): { label: string; cls: 'good' | 'warn' | 'bad'; icon: CareerIconName } {
   if (v >= 78) return { label: ct('Motivado'), cls: 'good', icon: 'mood-5' };
   if (v >= 55) return { label: ct('Contente'), cls: 'good', icon: 'mood-4' };
   if (v >= 38) return { label: ct('Indiferente'), cls: 'warn', icon: 'mood-3' };
@@ -1585,8 +1608,8 @@ const REGION_LEAGUE: Record<CareerRegion, string> = {
 };
 // "cena mundial": o que rola nas OUTRAS regiões enquanto você joga a sua. Campeão
 // determinístico por split (estável no F5) sorteado entre os 4 melhores da região.
-interface RegionScene { reg: CareerRegion; league: string; champ: TeamSeason; runnerUp: TeamSeason | null; top: TeamSeason[]; }
-function worldScene(teams: TeamSeason[], split: number): RegionScene[] {
+export interface RegionScene { reg: CareerRegion; league: string; champ: TeamSeason; runnerUp: TeamSeason | null; top: TeamSeason[]; }
+export function worldScene(teams: TeamSeason[], split: number): RegionScene[] {
   const byRegion = new Map<CareerRegion, TeamSeason[]>();
   for (const t of teams) {
     const r = teamRegion(t);
@@ -1648,7 +1671,7 @@ function hltvStatline(p: Player, role: Role, split: number): HltvStat {
   const adr = Math.round(68 + (aim - 70) / 1.5 + (rating - 1.05) * 32 + u('d') * 8);
   return { rating, kast, adr, entry, awpKills, impact };
 }
-function scoutOppPlayerStats(
+export function scoutOppPlayerStats(
   p: { id: string; sourcePlayerId?: string; nick: string; name: string; country: string; role: Role; role2?: Role; aim: number; clutch: number; consistency: number; awp: number; igl: number },
   split: number,
   seasonStats: { id: string; nick: string; rating: number; adr: number }[],
@@ -1991,10 +2014,25 @@ export function CareerScreen(props: Props) {
 function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const { lang } = useLang();
   setCareerLang(lang); // idioma a nivel de modulo: ct() funciona em todos os subcomponentes
-  const [save, setSave] = useState<CareerSave>(() => loadSave());
+  // T1.1 5b: save vive no gameStore. Componente lê via useGame (subscribe a
+  // mudanças) e expõe `setSave` com a MESMA assinatura do useState antigo
+  // (React.Dispatch<SetStateAction<CareerSave>>) — aceita CareerSave OU
+  // callback `(prev) => CareerSave`. Callback lê o valor ATUAL via
+  // `useGame.getState()` pra evitar stale closure entre renders.
+  const storeSave = useGame((s) => s.save) as CareerSave | null;
+  const save = storeSave ?? (loadSave() as CareerSave);
+  const setSave: Dispatch<SetStateAction<CareerSave>> = useCallback((next) => {
+    const cur = (useGame.getState().save ?? loadSave()) as CareerSave;
+    const value = typeof next === 'function'
+      ? (next as (s: CareerSave) => CareerSave)(cur)
+      : next;
+    useGame.getState().setSave(value as unknown as VersionedSave);
+  }, []);
   // ativação (upsell) de conta grátis: marcos da carreira abrem o card (que decide se mostra).
   const upsellSplitRef = useRef(0);
   const upsellTitleRef = useRef<number | null>(null);
+  // T11.5: guarda pra evitar reabrir FiredModal a cada re-render
+  const firedShownRef = useRef(false);
   const upsellTierRef = useRef<number | null>(null);
   useEffect(() => {
     // mais momentos de ativação ao longo da carreira (o card respeita cooldown de 45min)
@@ -2080,6 +2118,41 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // T3.5: ref pra evitar abrir o ConfirmDialog 2x pra mesma oferta (React 19
   // dispara useEffect 2x em dev). Guarda o id da oferta processada.
   const sponsorOfferShownRef = useRef<string | null>(null);
+  // T11.1/T11.3/T11.4 — modais cinematográficos. State local (não estampa
+  // no save) porque cada um deve aparecer UMA VEZ na sessão em que rolou.
+  const [championModal, setChampionModal] = useState<ChampionCelebrationData | null>(null);
+  const [eliminationModal, setEliminationModal] = useState<TournamentEliminationData | null>(null);
+  // PlayerRetirement: queue (pode haver várias aposentadorias no mesmo split)
+  const [retirementQueue, setRetirementQueue] = useState<PlayerRetirementData[]>([]);
+  // Ref pra detectar mudança no save.lastRetirees sem disparar cíclico
+  const lastRetireesHandledRef = useRef<string>('');
+
+  // T11.3: enfileira retirees novos quando o engine de aging (T3.9) popula
+  // save.lastRetirees. Usa fingerprint do array pra evitar re-trigger em
+  // re-renders. Mostra 1 modal por vez (fila); user fecha → próximo abre.
+  useEffect(() => {
+    const list = save.lastRetirees ?? [];
+    if (list.length === 0) return;
+    const fingerprint = `${save.split}:${list.map((r) => `${r.nick}@${r.age}`).join('|')}`;
+    if (lastRetireesHandledRef.current === fingerprint) return;
+    lastRetireesHandledRef.current = fingerprint;
+    const queued: PlayerRetirementData[] = list.map((r) => {
+      // Busca extras do save (peakOvr, titles totais — aproximação por share da carreira)
+      const oid = r.nick.toLowerCase();
+      const peak = save.peakOvr?.[oid];
+      return {
+        nick: r.nick,
+        age: r.age,
+        peakOvr: peak,
+        // Aproxima titulos da carreira pelos do save (manager-share) — não dá
+        // pra atribuir títulos individuais sem track per-player. Mostramos só
+        // os totais do MANAGER (cosmético).
+        titles: save.titles,
+        splitsPlayed: save.split,
+      };
+    });
+    setRetirementQueue((q) => [...q, ...queued]);
+  }, [save.lastRetirees, save.split, save.peakOvr, save.titles]);
   // T3.14: split anterior pra disparar recordSaveTick na virada
   const lastSplitTickedRef = useRef<number>(save.split);
   // T3.7: player com modal de conversa aberto. null = nenhum.
@@ -2984,18 +3057,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     return { orgId: org.id, orgName: org.team, orgTag: org.tag, playerId: best.id, nick: best.nick, ovr: playerOvr(best), fee };
   };
 
-  // forma do clube no split (resultados das partidas do usuário já jogadas)
-  const clubForm = (l: League): ('W' | 'L')[] => {
-    const out: ('W' | 'L')[] = [];
-    for (let r = 0; r < l.current; r++) {
-      const m = l.rounds[r]?.find((x) => x.a === 'user' || x.b === 'user');
-      if (m?.result) {
-        const userWon = (m.result.winner === 0 ? m.a : m.b) === 'user';
-        out.push(userWon ? 'W' : 'L');
-      }
-    }
-    return out;
-  };
+  // clubForm: usado pela OverviewTab; helper movido pra page.
+
 
   const userPosition = (l: League): number => leagueTable(l).findIndex((t) => t.id === 'user') + 1;
 
@@ -3465,29 +3528,45 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   }
 
   // ---------- demitido pela diretoria ----------
+  // T11.5: dispara FiredModal cinematográfico via host global em vez do
+  // panel inline antigo. Só dispara uma vez (controla via _firedShown).
   if (save.fired) {
+    if (!firedShownRef.current) {
+      firedShownRef.current = true;
+      const orgAg = aggregateHistory(save.history);
+      const quotes = [
+        'Investimos confiando que viria uma virada. Não veio.',
+        'A torcida pediu mudanças. A gente ouviu.',
+        'Esse projeto não é mais sustentável com você no comando.',
+        'A diretoria agradece o trabalho, mas decidiu mudar de rumo.',
+      ];
+      const quoteIdx = (save.split * 17 + (save.history.length * 3)) % quotes.length;
+      openFiredModal(
+        {
+          orgName: save.org?.name ?? 'sua organização',
+          splitsManaged: save.split,
+          circuitTitles: orgAg.circuitTitles,
+          majorTitles: orgAg.majorTitles,
+          sponsorsLost: (save.sponsors ?? []).length,
+          reason: 'Confiança da diretoria chegou ao fundo após resultados consecutivos abaixo do esperado.',
+          quote: quotes[quoteIdx],
+        },
+        () => {
+          wipeActiveSlot();
+          const fresh = emptySave();
+          persist(fresh);
+          setSave(fresh);
+          setOrgChoice('select');
+          setStage('found');
+        },
+      );
+    }
+    // Render mínimo enquanto o modal está aberto — visual neutro pra não
+    // competir com o modal cinematográfico.
     return (
-      <div className="fade-in">
-        <div className="panel" style={{ maxWidth: 520, margin: '40px auto' }}>
-          <div className="panel-head">{ct('Fim de ciclo')}</div>
-          <div className="panel-body center">
-            <div className="trophy" style={{ fontSize: 44 }}>📉</div>
-            <h2>A diretoria da {save.org?.name} te demitiu</h2>
-            <p className="muted" style={{ maxWidth: 420, margin: '10px auto 16px' }}>
-              {ct('Os resultados ficaram abaixo do esperado e a confiança da diretoria chegou ao fundo. Sua passagem termina aqui — mas toda lenda recomeça.')}
-            </p>
-            <button className="btn gold big" onClick={() => {
-              wipeActiveSlot();
-              const fresh = emptySave();
-              persist(fresh);
-              setSave(fresh);
-              setOrgChoice('select');
-              setStage('found');
-            }}>{ct('Começar uma nova carreira')}</button>
-            <div style={{ marginTop: 10 }}>
-              <button className="btn ghost" onClick={onExit}>{ct('← Voltar ao início')}</button>
-            </div>
-          </div>
+      <div className="fade-in" style={{ minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: 'var(--em-muted)', fontSize: '0.86rem' }}>
+          {ct('Aguardando decisão…')}
         </div>
       </div>
     );
@@ -3711,6 +3790,20 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
   const league = save.league;
 
+  // T7.3: streak W/L do split atual (alimenta o StreakBadge no header)
+  const formStreak: ('W' | 'L')[] = (() => {
+    if (!league) return [];
+    const out: ('W' | 'L')[] = [];
+    for (const round of league.rounds) {
+      for (const m of round) {
+        if (!m.result || (m.a !== 'user' && m.b !== 'user')) continue;
+        const userWon = (m.result.winner === 0 ? m.a : m.b) === 'user';
+        out.push(userWon ? 'W' : 'L');
+      }
+    }
+    return out;
+  })();
+
   // ---------- resultado do Major ----------
   if (stage === 'major' && majorResult) {
     const mr = majorResult;
@@ -3824,6 +3917,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     ? 'top4' as const
                     : 'top8' as const;
                 const sponsorMajorBonus = sponsorPlacementBonusTotal(save, save.split, majorPlacementKind);
+                // T11.1/T11.4: dispara modal cinematográfico conforme resultado
+                if (mr.champion) {
+                  setChampionModal({
+                    tournamentName: mr.tournament.name,
+                    orgName: save.org?.name ?? 'Sua org',
+                    tier: 'major',
+                    prize: mr.prize + sponsorMajorBonus,
+                    flavor: `${save.org?.name ?? 'A org'} agora é campeã mundial. O caixa fica com ${formatMoney(mr.prize + sponsorMajorBonus)} e o legado começa a ser escrito.`,
+                  });
+                } else {
+                  setEliminationModal({
+                    tournamentName: mr.tournament.name,
+                    placement: mr.placement,
+                    prize: mr.prize,
+                  });
+                }
                 const sponsorTick = applySponsorSplitTick(save, save.split + 1, rngRef.current);
                 const teamEventTick = applyTeamEventSplitTick(save, save.split + 1, rngRef.current);
                 // T3.4: decay leve de química no fim do split (pares ociosos perdem 1)
@@ -4201,6 +4310,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     ? 'top4'
                     : 'top8';
                   const sponsorCircuitBonus = sponsorPlacementBonusTotal(save, save.split, circuitPlacementKind);
+                  // T11.1: champion modal cinematográfico se ganhou o circuito.
+                  // (Eliminação em circuito é trivial e não vale modal — só Major)
+                  if (isChampion) {
+                    setChampionModal({
+                      tournamentName: save.circuit?.name ?? 'Circuito',
+                      orgName: save.org?.name ?? 'Sua org',
+                      tier: 'circuit',
+                      prize: prize + sponsorCircuitBonus,
+                    });
+                  }
                   const sponsorTick = applySponsorSplitTick(save, save.split + 1, rngRef.current);
                   const teamEventTick = applyTeamEventSplitTick(save, save.split + 1, rngRef.current);
                   // T3.4: decay leve de química no fim do split
@@ -4585,6 +4704,122 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       onHistoryBack={careerHistoryBack}
       onHistoryForward={careerHistoryForward}
       canGoBack={canNavBack}
+      budgetLabel={formatMoney(save.budget)}
+      unreadCount={save.unread ?? 0}
+      onOpenInbox={() => {
+        setHubTab('inbox');
+        setSelSeries(null);
+        if ((save.unread ?? 0) > 0) update({ unread: 0 });
+      }}
+      onHowToPlay={openHowToPlay}
+      onOpenLogoBuilder={save.org ? () => {
+        // T7.2: abre o LogoBuilder pré-povoado com cores e tag da org atual.
+        // Ao salvar, persiste no save.org.logo (data URL SVG).
+        const orgNow = save.org!;
+        openLogoBuilder({
+          initial: {
+            primary: orgNow.colors[0],
+            secondary: orgNow.colors[1],
+            initials: orgNow.tag,
+          },
+          onSave: (dataUrl) => {
+            update({ org: { ...orgNow, logo: dataUrl } });
+          },
+        });
+      } : undefined}
+      onOpenLockerRoom={(() => {
+        // T10.2: só plugamos o handler se de fato existe próxima partida não-jogada
+        // do user no split atual. Sem ela, o botão nem aparece (CareerShell omite
+        // o ícone quando o prop é undefined).
+        if (!league) return undefined;
+        let nextMatch: { oppKey: string; mapIdx: number } | null = null;
+        outer: for (const round of league.rounds) {
+          for (const m of round) {
+            if (m.result) continue;
+            if (m.a === 'user' || m.b === 'user') {
+              const oppKey = m.a === 'user' ? m.b : m.a;
+              nextMatch = { oppKey, mapIdx: 0 };
+              break outer;
+            }
+          }
+        }
+        if (!nextMatch) return undefined;
+        const opp = oppEra.find((t) => t.id === nextMatch!.oppKey);
+        if (!opp) return undefined;
+        const oppOvr = Math.round(opp.players.reduce((s, p) => s + playerOvr(p), 0) / opp.players.length);
+        const lineup = save.squad.map((sig) => findSigning(sig)?.player).filter(Boolean) as Player[];
+        const PLAN_LABELS: Record<string, string> = {
+          disciplined: 'Disciplinado',
+          antistrat: 'Antistrat',
+          mapfocus: 'Foco de mapa',
+          aggressive: 'Agressivo',
+        };
+        // Briefing curto derivado do scout do oponente
+        const mapPickFav = Object.entries(opp.mapPrefs).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'Mirage';
+        const briefing = `${opp.tag} chega com ${opp.coach.nick} no banco e ${oppOvr} OVR médio. O grupo prefere ${mapPickFav} no mapa-jogo, então prepara um veto agressivo. Manter o foco do playbook é fundamental pra não dar espaço de leitura pro coach deles.`;
+        return () => {
+          openLockerRoom({
+            lineup,
+            morale: save.morale ?? {},
+            opponent: { tag: opp.tag, name: opp.team, ovr: oppOvr },
+            gamePlan: PLAN_LABELS[save.gamePlan ?? 'disciplined'] ?? 'Disciplinado',
+            briefing,
+            mapName: mapPickFav,
+          });
+        };
+      })()}
+      onOpenInfrastructure={() => {
+        // T10.1: abre modal de infraestrutura. Handler `onUpgrade` debita custo
+        // e aplica o nível. Reusa engine `facilityUpgradeCost` + `normalizeFacilities`.
+        const openWithCurrent = () => {
+          const cur = (useGame.getState().save ?? loadSave()) as CareerSave;
+          openInfrastructure({
+            facilities: normalizeFacilities(cur.facilities),
+            budget: cur.budget,
+            onUpgrade: (key) => {
+              const facilities = normalizeFacilities(cur.facilities);
+              const level = facilities[key];
+              const cost = facilityUpgradeCost(key, level);
+              if (!cost || cur.budget < cost) return;
+              update({
+                budget: cur.budget - cost,
+                facilities: { ...facilities, [key]: level + 1 },
+              });
+              // Re-abre com state atualizado pro modal refletir o upgrade na hora
+              setTimeout(openWithCurrent, 0);
+            },
+          });
+        };
+        openWithCurrent();
+      }}
+      onOpenMeta={() => {
+        // T9.2: monta agregados on-demand. top20 já é memo do CareerScreen;
+        // worldScene roda em cima de oppEra; mapPicks deriva do league.rounds.
+        const scene = worldScene(oppEra, save.split);
+        const orgAg = aggregateHistory(save.history);
+        const mapCounts = new Map<MapId, number>();
+        for (const round of league?.rounds ?? []) {
+          for (const m of round) {
+            if (!m.result) continue;
+            for (const mp of m.result.maps) {
+              mapCounts.set(mp.map, (mapCounts.get(mp.map) ?? 0) + 1);
+            }
+          }
+        }
+        openMeta({
+          topPlayers: top20.map((e) => ({ nick: e.p.nick, country: e.p.country, role: e.p.role })),
+          regionChamps: scene.map((s) => ({
+            reg: s.reg,
+            champTag: s.champ.tag,
+            champName: s.champ.team,
+            champColors: s.champ.colors,
+          })),
+          mapPicks: Array.from(mapCounts.entries()).map(([map, count]) => ({ map, count })),
+          userTrophies: { circuits: orgAg.circuitTitles, majors: orgAg.majorTitles },
+          currentSplit: save.split,
+        });
+      }}
+      formStreak={formStreak}
     >
       {playerRouteId && (() => {
         const p = resolvePlayerById(playerRouteId);
@@ -4726,199 +4961,53 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       {!playerRouteId && !teamRouteId && (
       <>
       {/* ===== INBOX (manchetes da imprensa + diretoria) ===== */}
-      {hubTab === 'inbox' && (() => {
-        const all = save.news ?? [];
-        const shown = newsCat === 'all' ? all : all.filter((n) => (n.cat ?? 'scene') === newsCat);
-        return (
-        <DashCard title={ct('Caixa de entrada')}>
-            {all.length === 0 ? (
-              <p className="muted small">{ct('Sem novidades por enquanto. As manchetes aparecem ao longo da carreira (resultados, diretoria, mercado, cenário e social).')}</p>
-            ) : (
-              <>
-                <div className="news-cats">
-                  {NEWS_CATS.map((c) => {
-                    const n = c.key === 'all' ? all.length : all.filter((x) => (x.cat ?? 'scene') === c.key).length;
-                    if (c.key !== 'all' && n === 0) return null;
-                    return (
-                      <button key={c.key} className={`nc-chip${newsCat === c.key ? ' on' : ''}`} onClick={() => setNewsCat(c.key)}>
-                        {ct(c.label)} <span className="nc-n">{n}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="news-list">
-                  {shown.map((n) => (
-                    n.cat === 'social' ? (
-                      <div key={n.id} className="news-item social">
-                        <span className="news-ic"><CareerIcon name="chat" size={18} /></span>
-                        <div className="news-body">
-                          <div className="news-title"><span className="news-handle">{n.handle}</span> <span className="news-split">Split {n.split}</span></div>
-                          <div className="news-text">{n.body}</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div key={n.id} className={`news-item ${n.tone}`}>
-                        <span className="news-ic"><CareerIconLegacy icon={n.icon} size={18} /></span>
-                        <div className="news-body">
-                          <div className="news-title">{n.title} <span className="news-split">Split {n.split}</span></div>
-                          <div className="news-text muted small">{n.body}</div>
-                        </div>
-                      </div>
-                    )
-                  ))}
-                  {shown.length === 0 && <p className="muted small">{ct('Nada nessa categoria ainda.')}</p>}
-                </div>
-              </>
-            )}
-          </DashCard>
-        );
-      })()}
+      {/* T1.4: aba Inbox extraída em src/pages/career/InboxTab.tsx */}
+      {hubTab === 'inbox' && (
+        <InboxTab
+          news={save.news ?? []}
+          newsCat={newsCat}
+          setNewsCat={setNewsCat}
+          unread={save.unread ?? 0}
+          onMarkAllRead={() => update({ unread: 0 })}
+        />
+      )}
 
       {/* ===== VISÃO GERAL (dashboard estilo análise pós-partida) ===== */}
-      {hubTab === 'overview' && (() => {
-        const squadPlayers = buildTeam(save)?.players ?? [];
-        const avg = squadPlayers.length ? Math.round(squadPlayers.reduce((a, p) => a + playerOvr(p), 0) / squadPlayers.length) : 0;
-        const form = clubForm(league);
-        const moraleVals = squadPlayers.map((p) => save.morale?.[p.id] ?? MORALE_DEFAULT);
-        const avgMorale = moraleVals.length ? Math.round(moraleVals.reduce((a, b) => a + b, 0) / moraleVals.length) : 70;
-        const fam = save.playbookXp ?? 0;
-        const hasAwp = squadPlayers.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
-        const hasIgl = squadPlayers.some((p) => p.role === 'IGL' || p.role2 === 'IGL');
-        const roleOk = (hasAwp ? 1 : 0) + (hasIgl ? 1 : 0);
-        const chem = Math.round(0.45 * avgMorale + 0.35 * fam + 0.2 * (roleOk / 2) * 100);
-        const nextRivalryScore = opp ? rivalryScore(save.rivalries, opp.id) : 0;
-        const nextRivalry = rivalryLabel(nextRivalryScore);
-        const roundLabel = league.gsl ? ct(GSL_ROUND_LABELS[league.current] ?? 'Fase de grupos') : `${ct('Rodada')} ${league.current + 1}`;
-        const boLabel = (myMatch?.bo ?? 3) === 1 ? 'MD1' : (myMatch?.bo ?? 3) === 5 ? 'MD5' : 'MD3';
-        const venueMeta_ = eventMeta(save.circuit?.name ?? '', save.tier ?? 3);
-        const wageTotal = save.squad.reduce((acc, sig) => {
-          const f = findSigning(sig);
-          return acc + (f ? playerWage(f.player) : 0);
-        }, 0);
-        const tasks = buildDashboardTasks(save, squadPlayers, expiringCount);
-        const recentMatches: RecentMatchRow[] = [];
-        for (const mt of league.rounds.flat()) {
-          if (!mt.result || (mt.a !== 'user' && mt.b !== 'user')) continue;
-          const userWon = (mt.result.winner === 0 ? mt.a : mt.b) === 'user';
-          const oppId = mt.a === 'user' ? mt.b : mt.a;
-          const oppTeam = leagueTeam(league, oppId);
-          recentMatches.push({
-            key: `${mt.a}-${mt.b}-${recentMatches.length}`,
-            label: save.circuit?.name ?? ct('Circuito'),
-            opponent: oppTeam.name,
-            score: `${mt.result.mapScore[0]}:${mt.result.mapScore[1]}`,
-            won: userWon,
-            maps: mt.result.maps.map((mp) => `${MAP_LABELS[mp.map]} ${mp.score[0]}-${mp.score[1]}`),
-          });
-        }
-        const oppRank = opp ? vrsAll.findIndex((t) => t.id === opp.id) + 1 : 0;
-        const potentialMap: Record<string, number> = {};
-        const ages: Record<string, number> = {};
-        for (const p of squadPlayers) {
-          const age = effectiveAge(p, save.split, save.youthAge);
-          ages[p.id] = age;
-          potentialMap[p.id] = playerPotentialOvr(p, age);
-        }
-        const oppScoutStats: Record<string, { rating: number; adr: number }> = {};
-        if (opp) {
-          for (const p of opp.players) {
-            oppScoutStats[p.id] = scoutOppPlayerStats(p, save.split, seasonStats);
-          }
-        }
-        return (
-          <CareerOverview
-            save={{
-              org: save.org ?? undefined,
-              circuit: save.circuit ?? undefined,
-              split: save.split,
-              titles: save.titles,
-              budget: save.budget,
-              tier: save.tier,
-            }}
-            league={league}
-            opp={opp}
-            myMatch={myMatch ?? null}
-            squadPlayers={squadPlayers}
-            seasonStats={seasonStats}
-            form={form}
-            myVrsRank={myVrsRank}
-            vrsPoints={userVrs}
-            avgOvr={avg}
-            budgetLabel={formatMoney(save.budget)}
-            wageLabel={formatMoney(wageTotal)}
-            chem={chem}
-            fam={fam}
-            tasks={tasks}
-            vrsRanking={vrsAll}
-            recentMatches={recentMatches.reverse().slice(0, 6)}
-            oppRank={oppRank}
-            contracts={save.contracts ?? {}}
-            moraleMap={save.morale ?? {}}
-            potentialMap={potentialMap}
-            ages={ages}
-            roundLabel={roundLabel}
-            boLabel={boLabel}
-            venueLabel={venueMeta_.venue}
-            nextRivalry={nextRivalry}
-            nextRivalryScore={nextRivalryScore}
-            onPlay={playMine}
-            onSim={simMine}
-            onSimSplit={simWholeSplit}
-            onOpenTasks={() => setHubTab('inbox')}
-            onOpenCalendar={() => setHubTab('calendar')}
-            onOpenVrs={() => setHubTab('vrs')}
-            onOpenResults={() => setHubTab('results')}
-            onSquad={() => setHubTab('squad')}
-            onPickTeam={openTeamProfile}
-            onPickPlayer={openPlayerProfile}
-            oppScoutStats={oppScoutStats}
-            gamePlanPicker={<GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} />}
-          />
-        );
-      })()}
+      {/* T1.4: aba Overview extraída em src/pages/career/OverviewTab.tsx */}
+      {hubTab === 'overview' && (
+        <OverviewTab
+          save={save as unknown as Parameters<typeof OverviewTab>[0]['save']}
+          league={league}
+          opp={opp}
+          myMatch={myMatch}
+          findSigning={findSigning}
+          seasonStats={seasonStats}
+          myVrsRank={myVrsRank}
+          userVrs={userVrs}
+          vrsAll={vrsAll}
+          expiringCount={expiringCount}
+          playMine={playMine}
+          simMine={simMine}
+          simWholeSplit={simWholeSplit}
+          setHubTab={setHubTab as unknown as (t: string) => void}
+          openTeamProfile={openTeamProfile}
+          openPlayerProfile={openPlayerProfile}
+          update={update as unknown as Parameters<typeof OverviewTab>[0]['update']}
+          buildTeam={buildTeam as unknown as Parameters<typeof OverviewTab>[0]['buildTeam']}
+        />
+      )}
 
       {/* ===== MAJOR AO VIVO (dentro do hub) ===== */}
-      {hubTab === 'major' && majorT && (() => {
-        const st = save.majorStage ?? 1;
-        const entered = save.majorUserStage ?? 1;
-        const stLabel = st >= 4 ? ct('Champions Stage (playoffs)') : `Stage ${st} ${ct('de 3 · fase Suíça')}`;
-        const enterTop = entered === 3 ? 8 : entered === 2 ? 16 : 32;
-        const path = [1, 2, 3, 4];
-        return (
-          <>
-            <div className="cal-major-banner now" style={{ marginBottom: 12 }}>
-              <b><CareerIcon name="globe" size={14} /> {majorT.name.split(' · ')[0]}</b> · <b>{st >= 4 && <CareerIcon name="trophy" size={14} />} {stLabel}</b>
-              <div className="career-major-path" aria-label={ct('Seu caminho restante')}>
-                {path.map((stageNumber) => {
-                  const auto = stageNumber < entered;
-                  const current = stageNumber === st;
-                  const done = stageNumber < st;
-                  return <span key={stageNumber} className={`${auto ? 'auto ' : ''}${current ? 'current ' : ''}${done ? 'done' : ''}`.trim()}><i>{done ? '✓' : stageNumber}</i><b>{stageNumber === 4 ? 'Champions' : `Stage ${stageNumber}`}</b><small>{auto ? ct('auto-simulado') : current ? ct('agora') : ct('pela frente')}</small></span>;
-                })}
-              </div>
-              <p className="career-major-copy">{ct('Você entrou direto no')} <b>Stage {entered}</b> (top {enterTop} VRS). {st < 4 ? ct('Top 8 avançam ao próximo stage.') : ct('Mata-mata MD3 (final MD5).')}</p>
-              {(save.majorPre?.length ?? 0) > 0 && (
-                <div className="career-major-pre">
-                  <b>{ct('Stages decididos antes da sua entrada')}</b>
-                  {save.majorPre!.map((p) => (
-                    <div key={p.stage}>Stage {p.stage}: {ct('classificados')} {p.advancers.map((a) => a.tag).join(', ')}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <Hub
-              t={majorT}
-              career={{ season: save.split, titles: save.titles, budget: save.budget }}
-              pickem={{ picks: {}, score: 0, total: 0 }}
-              onPick={() => {}}
-              onPlay={playMajorMine}
-              onSimRound={simMajorRound}
-              onStats={() => {}}
-              onOpenSeries={(p) => p.result && setSelSeries({ series: p.result, teams: [getTeam(majorT, p.a), getTeam(majorT, p.b)] })}
-            />
-          </>
-        );
-      })()}
+      {/* T1.4: aba Major extraída em src/pages/career/MajorTab.tsx */}
+      {hubTab === 'major' && majorT && (
+        <MajorTab
+          majorT={majorT}
+          save={save}
+          playMajorMine={playMajorMine}
+          simMajorRound={simMajorRound}
+          setSelSeries={setSelSeries}
+        />
+      )}
 
       {/* ===== MERCADO: janela FECHADA durante a temporada ===== */}
       {hubTab === 'market' && (
@@ -4939,770 +5028,122 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       )}
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
+      {/* T1.4: abas Results e Standings extraídas em src/pages/career/ */}
       {hubTab === 'results' && (
-        <DashCard title={ct('Resultados')}>
-            {league.rounds.map((round, r) => (
-              <div key={r} className="results-round">
-                <div className="muted small section-label" style={{ marginTop: r === 0 ? 0 : 14 }}>
-                  {ct('Rodada')} {r + 1}{r === league.current && ` ${ct('(atual)')}`}
-                </div>
-                {round.map((m, i) => <MatchLine key={i} league={league} m={m} onOpen={setSelSeries} />)}
-              </div>
-            ))}
-            <p className="muted small" style={{ marginTop: 12 }}>{ct('Clique em qualquer partida finalizada para ver o placar mapa a mapa.')}</p>
-        </DashCard>
+        <ResultsTab league={league} setSelSeries={setSelSeries} />
       )}
 
       {/* ===== CLASSIFICAÇÃO (detalhada) ===== */}
       {hubTab === 'standings' && (
-        <DashCard title={ct('Classificação')}>
-            <div className="muted small" style={{ marginBottom: 12 }}>{save.circuit?.name ?? 'Circuito'} · fase de grupos (GSL) · top 2 de cada grupo vão ao mata-mata</div>
-            {league.gsl
-              ? <GSLGroups league={league} onOpen={setSelSeries} />
-              : <CareerTable table={table} highlightTop={spots} onPick={setSelTeam} detailed />}
-            <p className="muted small" style={{ marginTop: 10 }}>{league.gsl ? ct('Clique num jogo concluído pra ver o placar.') : ct('Clique em um time para ver elenco, técnico e força.')}</p>
-        </DashCard>
+        <StandingsTab save={save} league={league} table={table} spots={spots} setSelSeries={setSelSeries} setSelTeam={setSelTeam} />
       )}
 
       {/* ===== CHAVE (BRACKET DEDICADO) ===== */}
+      {/* T1.4: aba Bracket extraída em src/pages/career/BracketTab.tsx */}
       {hubTab === 'bracket' && (
-        <DashCard title={ct('Chave')}>
-            <div className="muted small" style={{ marginBottom: 12 }}>
-              {save.circuit?.name ?? 'Circuito'} · chave da fase de grupos (GSL · dupla eliminação) — top 2 de cada grupo vão ao mata-mata
-            </div>
-            {opp && myMatch && (
-              <div className="bracket-play">
-                <span className="muted small">{ct('Sua próxima partida:')} <b>{opp.name}</b> · {(myMatch.bo ?? 3) === 1 ? 'MD1' : (myMatch.bo ?? 3) === 5 ? 'MD5' : 'MD3'}</span>
-                <GamePlanPicker plan={save.gamePlan ?? 'disciplined'} onPick={(p) => update({ gamePlan: p })} />
-                <span className="spacer" />
-                <button className="btn gold" onClick={playMine}>▶ JOGAR</button>
-                <button className="btn ghost small" onClick={simMine}>⏩ Simular</button>
-              </div>
-            )}
-            {league.gsl
-              ? <GSLBracket league={league} onOpen={setSelSeries} />
-              : <p className="muted small">{ct('Este circuito não usa fase de grupos GSL.')}</p>}
-            {save.playoff && (
-              <div style={{ marginTop: 18 }}>
-                <PlayoffBracket p={save.playoff} teamOf={(id) => leagueTeam(league, id)} onOpen={(s, ts) => setSelSeries({ series: s, teams: ts })} />
-              </div>
-            )}
-            <p className="muted small" style={{ marginTop: 10 }}>{ct('Clique num confronto concluído pra ver o placar completo da série.')}</p>
-        </DashCard>
+        <BracketTab
+          save={save}
+          league={league}
+          opp={opp}
+          myMatch={myMatch}
+          update={update}
+          playMine={playMine}
+          simMine={simMine}
+          setSelSeries={setSelSeries}
+        />
       )}
 
       {/* ===== ACADEMIA (prospectos: revelar, treinar, promover) ===== */}
-      {hubTab === 'academy' && (() => {
-        const aca = save.academy ?? [];
-        const full = aca.length >= ACADEMY_MAX;
-        const squadFull = save.squad.length >= 5;
-        // nacionalidade da org = país predominante no elenco (fallback: 1º país da região)
-        const orgCountry = (() => {
-          const counts = new Map<string, number>();
-          for (const s of save.squad) {
-            const c = findSigning(s)?.player.country;
-            if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
-          }
-          let best = ''; let bestN = 0;
-          for (const [c, n] of counts) if (n > bestN) { best = c; bestN = n; }
-          return best || (REGION_CC[save.region ?? 'europe'] ?? REGION_CC.europe)[0];
-        })();
-        const acaTeam = save.academyTeam ?? [];
-        const teamOvr = acaTeam.length ? Math.round(acaTeam.reduce((a, p) => a + playerOvr(p), 0) / acaTeam.length) : 0;
-        const league = acaTeam.length
-          ? academyLeague(
-              { name: `${save.org?.name ?? 'Org'} Academy`, tag: `${save.org?.tag ?? 'ORG'}A`, colors: save.org?.colors ?? ['#101820', '#3a3a3a'], strength: teamOvr },
-              `${save.org?.tag ?? 'org'}:${save.split}`,
-            )
-          : null;
-        return (
-          <div className="em-tab">
-            {/* ===== TIME ACADEMY (joga a Liga Academy) ===== */}
-            <DashCard title={ct('Time Academy')} actions={acaTeam.length ? <span className="em-ovr-badge">{teamOvr} OVR</span> : undefined}>
-              {acaTeam.length === 0 ? (
-                <div className="aca-create">
-                  <p className="muted small" style={{ maxWidth: 620, margin: '0 0 12px' }}>
-                    {ct('Sua org ainda não tem um time academy. Monte um agora — entram')} <b>{ct('5 jovens')}</b> {ct('(um por função: Rifler, Entry, Support, AWP e IGL), todos da nacionalidade do seu time. Eles disputam a')} <b>{ct('Liga Academy')}</b> {ct('contra as principais academies do mundo a cada split.')}
-                  </p>
-                  <button className="btn gold" onClick={() => update({ academyTeam: buildUserAcademyTeam(orgCountry, save.org?.tag ?? 'ORG', save.split) })}>
-                    <CareerIcon name="search" size={14} /> {ct('Criar time academy')} <Flag cc={orgCountry} />
-                  </button>
-                </div>
-              ) : (
-                <div className="aca-team-grid">
-                  {acaTeam.map((p) => {
-                    const ovr = playerOvr(p);
-                    const potPct = Math.max(6, Math.min(100, ((p.potential - 60) / 33) * 100));
-                    return (
-                      <div key={p.id} className="aca-team-card">
-                        <div className="aca-top">
-                          <PlayerAvatar nick={p.nick} size={42} />
-                          <OvrBadge ovr={ovr} />
-                        </div>
-                        <div className="aca-nick"><Flag cc={p.country} /> {p.nick}</div>
-                        <div className="aca-meta">
-                          <span className={`role-pill ${p.role}`}>{p.role}</span>
-                          <span className="muted small">{p.age} {ct('anos')}</span>
-                        </div>
-                        <div className="aca-potbar" title={`${ct('Potencial')} ${p.potential}`}><div style={{ width: `${potPct}%` }} /></div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </DashCard>
-
-            {/* ===== LIGA ACADEMY (tabela com as principais academies do mundo) ===== */}
-            {league && (
-              <DashCard title={`${ct('Liga Academy')} · Split ${save.split}`} actions={<span className="muted small">{ct('Você está em')} {league.userPlace}º</span>}>
-                <div className="aca-league-wrap">
-                  <table className="aca-league">
-                    <thead>
-                      <tr><th>#</th><th>{ct('Academia')}</th><th>V</th><th>D</th><th>+/-</th><th>Pts</th></tr>
-                    </thead>
-                    <tbody>
-                      {league.table.map((r, i) => (
-                        <tr key={r.id} className={r.isUser ? 'mine' : ''}>
-                          <td>{i + 1}</td>
-                          <td><span className="aca-league-team"><TeamBadge tag={r.tag} colors={r.colors} size={18} /> {r.name}</span></td>
-                          <td>{r.w}</td><td>{r.l}</td>
-                          <td className={r.diff > 0 ? 'pos' : r.diff < 0 ? 'neg' : ''}>{r.diff > 0 ? '+' : ''}{r.diff}</td>
-                          <td><b>{r.pts}</b></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="aca-league-matches">
-                    <div className="em-section-label">{ct('Seus jogos no split')}</div>
-                    {league.userMatches.map((m) => (
-                      <div key={m.oppId} className={`aca-match${m.won ? ' won' : ' lost'}`}>
-                        <span className="aca-match-opp"><TeamBadge tag={m.oppTag} colors={m.oppColors} size={16} /> {m.oppName}</span>
-                        <span className="aca-match-score">{m.userScore}–{m.oppScore}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <p className="muted small" style={{ margin: '10px 0 0' }}>
-                  {ct('Academies reais (NAVI Junior, MOUZ NXT, Eternal Fire Academy e mais) — rosters extraídos do bo3.gg/Liquipedia. A tabela é definida pela força do seu time academy a cada split.')}
-                </p>
-              </DashCard>
-            )}
-
-          <DashCard title={ct('Academia')}>
-              <div className="aca-head">
-                <div>
-                  <div className="muted small section-label" style={{ marginTop: 0 }}>Academia · {aca.length}/{ACADEMY_MAX} prospectos</div>
-                  <p className="muted small" style={{ maxWidth: 600 }}>
-                    {ct('Revele jovens talentos, deixe um em')} <b>{ct('foco')}</b> {ct('(cresce mais rápido a cada split rumo ao seu')} <b>{ct('potencial')}</b>) e <b>{ct('promova ao elenco')}</b> quando quiser. É a próxima geração da sua org.
-                  </p>
-                </div>
-                <button className="btn gold" disabled={full || save.budget < ACADEMY_SCOUT_COST}
-                  title={full ? ct('Academia cheia') : save.budget < ACADEMY_SCOUT_COST ? ct('Caixa insuficiente') : ''}
-                  onClick={() => {
-                    const region = save.region ?? 'europe';
-                    const seed = `aca:${save.org?.tag ?? 'org'}:${save.split}:${aca.length}:${save.budget}`;
-                    const p = makeProspect(seed, region, save.split);
-                    update({ academy: [...aca, p], budget: save.budget - ACADEMY_SCOUT_COST });
-                  }}>
-                  <CareerIcon name="search" size={14} /> {ct('Revelar prospecto')} ({formatMoney(ACADEMY_SCOUT_COST)})
-                </button>
-              </div>
-              {aca.length === 0 ? (
-                <p className="muted small" style={{ padding: '14px 0' }}>
-                  {ct('Sua academia está vazia. Revele um prospecto pra começar a formar a próxima geração — eles começam crus (OVR baixo) mas evoluem treinando.')}
-                </p>
-              ) : (
-                <div className="aca-grid">
-                  {aca.map((p) => {
-                    const ovr = playerOvr(p);
-                    const focused = save.academyFocus === p.id;
-                    const potPct = Math.max(6, Math.min(100, ((p.potential - 60) / 33) * 100));
-                    return (
-                      <div key={p.id} className={`aca-card${focused ? ' focused' : ''}`}>
-                        <div className="aca-top">
-                          <PlayerAvatar nick={p.nick} size={46} />
-                          <OvrBadge ovr={ovr} />
-                        </div>
-                        <div className="aca-nick"><Flag cc={p.country} /> {p.nick}</div>
-                        <div className="muted small aca-name">{p.name}</div>
-                        <div className="aca-meta">
-                          <span className={`role-pill ${p.role}`}>{p.role}</span>
-                          <span className="muted small">{p.age} anos</span>
-                        </div>
-                        <div className="aca-pot">
-                          <span className="muted small">{ct('OVR atual')} <b style={{ color: 'var(--em-text)' }}>{ovr}</b> · {ct('Potencial')}</span>
-                          <div className="aca-potbar"><div style={{ width: `${potPct}%` }} /></div>
-                          <span className="aca-potval">{p.potential}</span>
-                        </div>
-                        <div className="aca-actions">
-                          <button className="btn small gold aca-promote"
-                            onClick={() => (squadFull ? setPromoting(promoting === p.id ? null : p.id) : promoteProspect(p.id))}>
-                            {ct('Promover ao elenco')}
-                          </button>
-                          <div className="aca-actions-row">
-                            <button className={`btn small aca-train${focused ? ' gold' : ' ghost'}`}
-                              onClick={() => update({ academyFocus: focused ? null : p.id })}>
-                              {focused ? ct('Em foco') : ct('Treinar')}
-                            </button>
-                            <button className="btn small ghost aca-drop" title={ct('Dispensar o prospecto da academia')}
-                              onClick={() => askConfirm({
-                                title: ct('Dispensar prospecto'),
-                                message: `${ct('Dispensar')} ${p.nick} ${ct('da academia? Não dá pra desfazer.')}`,
-                                confirmLabel: ct('Dispensar'),
-                                danger: true,
-                                onConfirm: () => {
-                                  update({
-                                    academy: aca.filter((x) => x.id !== p.id),
-                                    academyFocus: save.academyFocus === p.id ? null : save.academyFocus,
-                                  });
-                                  if (promoting === p.id) setPromoting(null);
-                                },
-                              })}>
-                              <CareerIcon name="trash" size={14} />
-                            </button>
-                          </div>
-                        </div>
-                        {promoting === p.id && squadFull && (
-                          <div className="aca-replace">
-                            <div className="muted small">{ct('Elenco cheio — sai do time:')}</div>
-                            <div className="aca-replace-list">
-                              {save.squad.map((sg) => {
-                                const f = findSigning(sg);
-                                return (
-                                  <button key={sg.playerId} className="btn small ghost"
-                                    onClick={() => promoteProspect(p.id, sg.playerId)}>
-                                    {f?.player.nick ?? sg.playerId}
-                                  </button>
-                                );
-                              })}
-                              <button className="btn small" onClick={() => setPromoting(null)}>cancelar</button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-          </DashCard>
-          </div>
-        );
-      })()}
+      {/* T1.4: aba Academy extraída em src/pages/career/AcademyTab.tsx */}
+      {hubTab === 'academy' && (
+        <AcademyTab
+          save={save}
+          update={update}
+          promoting={promoting}
+          setPromoting={setPromoting}
+          promoteProspect={promoteProspect}
+          findSigning={findSigning}
+          askConfirm={askConfirm}
+        />
+      )}
 
       {/* ===== ELENCO + RANKING DE JOGADORES ===== */}
-      {hubTab === 'finance' && (() => {
-        const picks = save.squad.map((s) => ({ sig: s, f: findSigning(s) })).filter((x) => x.f) as { sig: Signing; f: { player: Player } }[];
-        const wages = picks.map((x) => ({ ...x, wage: playerWage(x.f.player), until: save.contracts?.[x.sig.playerId] }));
-        const folha = wages.reduce((a, w) => a + w.wage, 0);
-        const sponsorInc = effSponsorIncome(save);
-        const facilities = normalizeFacilities(save.facilities);
-        const upkeep = facilityUpkeep(facilities);
-        const net = sponsorInc - folha - upkeep;
-        const facilityCards: { key: FacilityKey; icon: CareerIconName; name: string; effect: string }[] = [
-          { key: 'training', icon: 'dumbbell', name: ct('Centro de treino'), effect: ct('Acelera a evolução do elenco e da academia.') },
-          { key: 'analyst', icon: 'chart-bar', name: ct('Departamento de análise'), effect: ct('Melhora a preparação e o veto nos mapas fortes.') },
-          { key: 'psychologist', icon: 'brain', name: ct('Psicologia esportiva'), effect: ct('Reduz fadiga e estabiliza a moral do elenco.') },
-        ];
-        const upgradeFacility = (key: FacilityKey) => {
-          const level = facilities[key];
-          const cost = facilityUpgradeCost(key, level);
-          if (!cost || save.budget < cost) return;
-          update({ budget: save.budget - cost, facilities: { ...facilities, [key]: level + 1 } });
-        };
-        return (
-          <DashCard title={`${ct('Finanças')} · ${save.org?.name ?? ''}`}>
-              <div className="fin-cards">
-                <div className="fin-card"><span className="fin-k">{ct('Caixa')}</span><b>{formatMoney(save.budget)}</b></div>
-                <div className="fin-card"><span className="fin-k">{ct('Fãs')}</span><b>{formatFans(careerFans(save))}</b></div>
-                <div className="fin-card"><span className="fin-k">{ct('Patrocínio / split')}</span><b className="pos">+{formatMoney(sponsorInc)}</b></div>
-                <div className="fin-card"><span className="fin-k">{ct('Folha / split')}</span><b className="neg">-{formatMoney(folha)}</b></div>
-                <div className="fin-card"><span className="fin-k">{ct('Infraestrutura / split')}</span><b className="neg">-{formatMoney(upkeep)}</b></div>
-                <div className="fin-card"><span className="fin-k">{ct('Saldo fixo / split')}</span><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b></div>
-              </div>
-              <p className="muted small">{ct('A premiação entra conforme sua colocação. O "saldo fixo" é patrocínio − folha (antes do prêmio); se ficar negativo, você queima caixa todo split.')}</p>
-              <div className="muted small section-label">{ct('Infraestrutura & staff')}</div>
-              <div className="career-facilities">
-                {facilityCards.map((facility) => {
-                  const level = facilities[facility.key];
-                  const cost = facilityUpgradeCost(facility.key, level);
-                  return <div key={facility.key} className="career-facility-card"><span><CareerIcon name={facility.icon} size={24} /></span><div><b>{facility.name}</b><small>{facility.effect}</small><i>{ct('Nível')} {level}/{FACILITY_MAX_LEVEL}</i></div><button className="btn small gold" disabled={!cost || save.budget < cost} onClick={() => upgradeFacility(facility.key)}>{level >= FACILITY_MAX_LEVEL ? ct('MÁXIMO') : `${ct('Melhorar')} · ${formatMoney(cost)}`}</button></div>;
-                })}
-              </div>
-              <div className="muted small section-label">{ct('Contratos do elenco')}</div>
-              <div className="fin-table-wrap">
-              <table className="stats fin-contracts">
-                <thead><tr><th style={{ textAlign: 'left' }}>{ct('Jogador')}</th><th>{ct('Idade')}</th><th>OVR</th><th>POT</th><th>{ct('Salário/split')}</th><th>{ct('Contrato')}</th><th></th></tr></thead>
-                <tbody>
-                  {wages.map((w) => {
-                    const left = w.until != null ? w.until - save.split + 1 : 0;
-                    const expiring = left <= 1;
-                    const age = effectiveAge(w.f.player, save.split, save.youthAge);
-                    const pot = potentialTier(playerPotentialOvr(w.f.player, age));
-                    return (
-                      <tr key={w.sig.playerId} className={expiring ? 'fin-expiring' : ''}>
-                        <td style={{ textAlign: 'left' }}><Flag cc={w.f.player.country} /> {w.f.player.nick}</td>
-                        <td>{age}</td>
-                        <td>{playerOvr(w.f.player)}</td>
-                        <td><span className={`pot-badge pot-${pot}`}>{pot}</span></td>
-                        <td className="neg">{formatMoney(w.wage)}</td>
-                        <td>{left <= 0 ? 'vencido' : `${left} split${left > 1 ? 's' : ''}`}{expiring && left > 0 ? ' ⚠️' : ''}</td>
-                        <td>{expiring && (
-                          <button className="btn small" disabled={save.budget < w.wage}
-                            onClick={() => update({ budget: save.budget - w.wage, contracts: { ...(save.contracts ?? {}), [w.sig.playerId]: save.split + CONTRACT_TERM - 1 } })}>
-                            🔁 Renovar
-                          </button>
-                        )}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </div>
-              <p className="muted small">Contratos vencem no fim do prazo: <b>{ct('renove (custa 1 salário)')}</b> {ct('ou o jogador sai')} <b>{ct('de graça')}</b> {ct('no próximo split.')}</p>
-          </DashCard>
-        );
-      })()}
+      {/* T1.4: aba Finance extraída em src/pages/career/FinanceTab.tsx */}
+      {hubTab === 'finance' && (
+        // CareerSave é interface fechada (sem index signature); FinanceTab usa
+        // shape broad — cast via unknown pra reconciliar.
+        <FinanceTab
+          save={save as unknown as Parameters<typeof FinanceTab>[0]['save']}
+          findSigning={findSigning}
+          update={update as unknown as Parameters<typeof FinanceTab>[0]['update']}
+        />
+      )}
 
-      {hubTab === 'squad' && (() => {
-        // itera as contratações (findSigning resolve o jogador pelo id ORIGINAL,
-        // já com evolução e função aplicadas). rid = id de runtime nas partidas.
-        const rows = save.squad.map((sig) => findSigning(sig)?.player).filter(Boolean) as Player[];
-        const hasAwp = rows.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
-        const hasIgl = rows.some((p) => p.role === 'IGL' || p.role2 === 'IGL');
-        const setRole = (pid: string, role: Role) =>
-          update({ roles: { ...(save.roles ?? {}), [pid]: role } });
-        const setFocus = (pid: string) =>
-          update({ trainingFocus: save.trainingFocus === pid ? null : pid });
-        const setMapFocus = (m: MapId) => {
-          const cur = mapFocusList(save);
-          if (cur.includes(m)) {
-            update({ mapFocus: cur.filter((x) => x !== m) });
-          } else if (cur.length < MAP_FOCUS_MAX) {
-            update({ mapFocus: [...cur, m] });
-          }
-        };
-        const setPlaybook = (pb: Playbook) => {
-          if (pb === save.playbook) return;
-          // guarda o entrosamento do esquema atual e restaura o do esquema alvo
-          // (voltar a um esquema já treinado não zera tudo de novo)
-          const mem = { ...(save.playbookMem ?? {}) };
-          if (save.playbook) mem[save.playbook] = save.playbookXp ?? 0;
-          const restored = mem[pb] ?? PLAYBOOK_SWITCH_TO;
-          update({ playbook: pb, playbookXp: restored, playbookMem: mem });
-        };
-        const fam = save.playbookXp ?? 0;
-        return (
-        <div className="em-tab em-squad">
-          <DashCard title={ct('Cinco titular')} actions={<span className="em-ovr-badge">{rows.length ? Math.round(rows.reduce((a, p) => a + playerOvr(p), 0) / rows.length) : 0} OVR</span>}>
-            <div className="em-fut-row">
-              {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => openPlayerProfile(p)} />)}
-            </div>
-          </DashCard>
-          {/* T3.4: matriz de química do elenco. Usa playerOrgId pra casar com
-              o pairChem (que indexa por id ORIGINAL, não runtime). */}
-          {rows.length >= 2 && (
-            <ChemistryMatrix
-              state={{ pairChem: save.pairChem }}
-              players={rows.map((p) => ({ id: playerOrgId(p.id), nick: p.nick }))}
-              title={ct('Química do elenco')}
-            />
-          )}
-          {/* T3.11: carreira do coach (stints + troféus + reputação) */}
-          <CoachStintsCard
-            stints={save.coachStints ?? []}
-            coachNick={activeCoachStint(save.coachStints ?? [])?.coachNick}
-          />
-          {/* T3.8: scrim semanal — custo $5k, sobe química, reduz fadiga */}
-          <ScrimCard
-            scrimsThisSplit={save.scrimsThisSplit ?? 0}
-            budget={save.budget}
-            onScrim={doScrim}
-          />
-          {/* T3.12: scouting — contrata scout, gera relatórios de prospects */}
-          <ScoutingCard
-            hiredScoutId={save.hiredScoutId}
-            scoutReports={save.scoutReports ?? []}
-            budget={save.budget}
-            onHire={hireScout}
-            onFire={fireScout}
-          />
-          <div className="em-squad-grid">
-            <DashCard title={ct('Gestão do elenco')}>
-              {(!hasAwp || !hasIgl) && (
-                <div className="role-warn">
-                  ⚠️ {ct('Seu time está sem')} {!hasAwp && !hasIgl ? ct('AWP e IGL') : !hasAwp ? 'AWPer' : 'IGL'}.
-                  {ct('Ajuste a função de um jogador abaixo para cobrir.')}
-                </div>
-              )}
-              <div className="career-squad big">
-                {rows.map((p) => {
-                  const rid = `user__${p.id}`;
-                  const st = seasonStats.find((s) => s.id === rid);
-                  const focused = save.trainingFocus === p.id;
-                  const grew = save.evo?.[p.id] ?? 0;
-                  const mor = save.morale?.[p.id] ?? MORALE_DEFAULT;
-                  const mi = moraleInfo(mor);
-                  const fatigue = save.fatigue?.[p.id] ?? 0;
-                  const reduced = save.restingPlayers?.includes(p.id) ?? false;
-                  const age = effectiveAge(p, save.split, save.youthAge);
-                  const potential = playerPotentialOvr(p, age);
-                  const phase = playerPhase(p.id, age);
-                  return (
-                    <div key={p.id} className={`cs-row${focused ? ' cs-focused' : ''}`}>
-                      <PlayerLink player={p} onOpen={openPlayerProfile} className="cs-open" avatarSize={32}>
-                        <span className="cs-nick"><Flag cc={p.country} /> {p.nick}
-                          {grew > 0 && <span className="cs-grew" title={`+${grew} ${ct('de evolução na carreira')}`}> ▲{grew}</span>}
-                        </span>
-                      </PlayerLink>
-                      <span className={`cs-morale ${mi.cls}`} title={`${ct('Moral:')} ${mi.label} (${mor}/100)`}><CareerIcon name={mi.icon} size={14} /> {mor}</span>
-                      <span className={`cs-fatigue ${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}><CareerIcon name="battery" size={14} /> {fatigue}</span>
-                      <span className={`cs-development ${phase}`} title={`${ct('Potencial (teto de OVR)')}: ${potential} · ${ct(PHASE_LABEL[phase])}`}>POT {potential} {phase === 'rising' ? '↗' : phase === 'declining' ? '↘' : '→'}</span>
-                      <select className={`role-select ${p.role}`} value={p.role}
-                        onChange={(e) => setRole(p.id, e.target.value as Role)}
-                        title={ct('Definir a função deste jogador')}>
-                        {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <button className={`cs-train${focused ? ' on' : ''}`} onClick={() => setFocus(p.id)}
-                        title={focused ? ct('Em foco de treino neste split') : ct('Pôr em foco de treino (desenvolve mais rápido)')}>
-                        <CareerIcon name="focus" size={14} />
-                      </button>
-                      <button className={`cs-rest${reduced ? ' on' : ''}`} disabled={!reduced && (save.restingPlayers?.length ?? 0) >= 2}
-                        onClick={() => update({ restingPlayers: reduced ? (save.restingPlayers ?? []).filter((id) => id !== p.id) : [...(save.restingPlayers ?? []), p.id] })}
-                        title={reduced ? ct('Remover carga reduzida') : ct('Aplicar carga reduzida na próxima série')}>
-                        <CareerIcon name="bed" size={14} />
-                      </button>
-                      <span className="cs-stat">{st ? `rat ${st.rating.toFixed(2)}` : '-'}</span>
-                      <span className="cs-ovr">{playerOvr(p)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="muted small" style={{ marginTop: 8 }}>
-                Clique no jogador pra ver o <b>perfil completo</b>. Defina a <b>{ct('função')}</b> (no CS são flexíveis: tenha 1 AWP e 1 IGL) e o
-                <b> {ct('foco de treino')}</b> do split (esse jogador evolui mais rápido). Você não edita os atributos: eles
-                <b> sobem sozinhos</b> conforme o jogador se desenvolve e joga. A <b>{ct('carga reduzida')}</b> recupera fadiga, mas tira um pouco de ritmo na próxima série.
-              </p>
-            </DashCard>
-            <div className="em-col">
-              <DashCard title={ct('Playbook tático')}>
-                <div className="pb-fam">
-                  <span className="muted small">{ct('Entrosamento')}</span>
-                  <span className="pb-bar"><i className={fam >= 70 ? 'good' : fam >= 40 ? 'warn' : 'bad'} style={{ width: `${fam}%` }} /></span>
-                  <b className="small">{fam}%</b>
-                </div>
-                <div className="pb-list">
-                  {(Object.keys(PLAYBOOK_LABELS) as Playbook[]).map((pb) => (
-                    <button key={pb} className={`pb-opt${save.playbook === pb ? ' on' : ''}`} onClick={() => setPlaybook(pb)}>
-                      <span className="pb-name">{ct(PLAYBOOK_LABELS[pb])}{save.playbook === pb ? ' ✓' : ''}</span>
-                      <span className="pb-desc muted small">{ct(PLAYBOOK_DESC[pb])}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="muted small" style={{ margin: '8px 0 0' }}>O entrosamento sobe a cada split mantendo o esquema; <b>trocar volta pra {PLAYBOOK_SWITCH_TO}%</b>{ct('. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.')}</p>
-              </DashCard>
-              <DashCard title={<>{ct('Treino de mapa')} <span className="muted small" style={{ fontWeight: 400 }}>({mapFocusList(save).length}/{MAP_FOCUS_MAX} em foco)</span></>}>
-                <div className="map-train">
-                  {MAP_POOL.map((m) => {
-                    const lvl = mapLevel(save, m);
-                    const pct = Math.round(((lvl - MAP_TRAIN_MIN) / (MAP_TRAIN_MAX - MAP_TRAIN_MIN)) * 100);
-                    const foc = mapFocusList(save).includes(m);
-                    const full = !foc && mapFocusList(save).length >= MAP_FOCUS_MAX;
-                    const cls = lvl >= 1 ? 'good' : lvl <= -1 ? 'bad' : 'warn';
-                    return (
-                      <button key={m} className={`mt-row${foc ? ' on' : ''}`} onClick={() => setMapFocus(m)} disabled={full} title={foc ? 'Em treino neste split (clique pra tirar)' : full ? `${ct('Máximo de')} ${MAP_FOCUS_MAX} ${ct('mapas em treino')}` : 'Treinar este mapa neste split'}>
-                        <span className="mt-name">{foc && <CareerIcon name="focus" size={12} />} {MAP_LABELS[m]}</span>
-                        <span className="mt-bar"><i className={cls} style={{ width: `${pct}%` }} /></span>
-                        <span className={`mt-lvl ${cls}`}>{lvl > 0 ? '+' : ''}{lvl.toFixed(1)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="muted small" style={{ margin: '8px 0 0' }}>{ct('Treine até')} <b>{MAP_FOCUS_MAX} mapas</b> {ct('por split; os outros decaem um pouco. É de propósito: ninguém é forte em todos, mas dá pra montar um pool sólido.')}</p>
-              </DashCard>
-              <DashCard title={`${ct('Melhores do')} ${save.circuit?.name ?? ct('circuito')}`}>
-                <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
-              </DashCard>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {/* T1.4: aba Squad extraída em src/pages/career/SquadTab.tsx */}
+      {hubTab === 'squad' && (
+        <SquadTab
+          save={save as unknown as Parameters<typeof SquadTab>[0]['save']}
+          findSigning={findSigning}
+          update={update as unknown as Parameters<typeof SquadTab>[0]['update']}
+          openPlayerProfile={openPlayerProfile}
+          doScrim={doScrim}
+          hireScout={hireScout}
+          fireScout={fireScout}
+          seasonStats={seasonStats}
+          mySquadIds={mySquadIds}
+        />
+      )}
 
       {/* ===== CENA MUNDIAL: o que rola nas outras regiões ===== */}
-      {hubTab === 'world' && (() => {
-        const scene = worldScene(oppEra, save.split);
-        return (
-          <DashCard title={ct('Cena mundial')}>
-              <div className="muted small section-label" style={{ marginTop: 0 }}>Cena mundial · Split {save.split} — campeonatos regionais acontecendo em paralelo</div>
-              <div className="world-grid">
-                {scene.map((s) => (
-                  <div key={s.reg} className={`world-card${s.reg === save.region ? ' mine' : ''}`}>
-                    <div className="world-head">
-                      <OrgFlag players={s.champ.players} />
-                      <span className="world-region">{CAREER_REGION_LABELS[s.reg]}</span>
-                      {s.reg === save.region && <span className="world-you">{ct('você joga aqui')}</span>}
-                    </div>
-                    <div className="world-league muted small">{s.league}</div>
-                    <button type="button" className="world-champ em-btn-reset clickable" onClick={() => openTeamProfile(s.champ.id)}>
-                      <span className="wc-tag"><CareerIcon name="trophy" size={12} /> {ct('Campeão')}</span>
-                      <TeamBadge tag={s.champ.tag} colors={s.champ.colors} size={22} logoUrl={s.champ.logoUrl ?? logoForTeam(s.champ)} />
-                      <span className="wc-name">{s.champ.team}</span>
-                    </button>
-                    {s.runnerUp && (
-                      <button type="button" className="world-runner em-btn-reset clickable muted small" onClick={() => openTeamProfile(s.runnerUp!.id)}>
-                        vice: {s.runnerUp.team}
-                      </button>
-                    )}
-                    <div className="world-top">
-                      {s.top.map((t, i) => (
-                        <button key={t.id} className="world-row" onClick={() => openTeamProfile(t.id)}>
-                          <span className="wr-rank">{i + 1}</span>
-                          <TeamBadge tag={t.tag} colors={t.colors} size={16} logoUrl={t.logoUrl ?? logoForTeam(t)} />
-                          <span className="wr-name">{t.team}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="muted small" style={{ marginTop: 10 }}>{ct('O cenário evolui a cada split — os campeões e a ordem mudam. Clique num time pra ver elenco e mapas. Você sobe de região mudando o core do elenco (nas Finanças/Mercado).')}</p>
-          </DashCard>
-        );
-      })()}
+      {/* T1.4: aba World extraída em src/pages/career/WorldTab.tsx */}
+      {hubTab === 'world' && (
+        <WorldTab oppEra={oppEra} save={save} openTeamProfile={openTeamProfile} />
+      )}
 
       {/* ===== RANKING VRS POR REGIÃO ===== */}
+      {/* T1.4: aba VRS extraída em src/pages/career/VrsTab.tsx */}
       {hubTab === 'vrs' && (
-        <DashCard title={ct('Ranking VRS')}>
-            <div className="t20-head">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>
-                {vrsMode === 'geral' ? ct('Ranking mundial de VRS · geral') : ct('Ranking mundial de VRS · por região')}
-                {myVrsRank > 0 && <span className="muted small"> {ct('· você é')} <b style={{ color: 'var(--em-gold)' }}>#{myVrsRank}</b> {ct('no mundo')}</span>}
-              </div>
-              <div className="t20-toggle">
-                <button className={`btn small${vrsMode === 'geral' ? ' gold' : ' ghost'}`} onClick={() => setVrsMode('geral')}>{ct('Geral')}</button>
-                <button className={`btn small${vrsMode === 'regiao' ? ' gold' : ' ghost'}`} onClick={() => setVrsMode('regiao')}>{ct('Por região')}</button>
-              </div>
-            </div>
-            {vrsMode === 'geral' ? (
-              <table className="stats vrs-geral">
-                <tbody>
-                  {vrsAll.map((t, i) => (
-                    <tr key={t.id} className={`${t.isUser ? 'human-row' : ''} clickable-row`} onClick={() => openTeamProfile(t.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openTeamProfile(t.id); }}>
-                      <td style={{ width: 30, textAlign: 'left', fontWeight: 800, color: i < 3 ? 'var(--gold)' : undefined }}>{i + 1}</td>
-                      <td style={{ textAlign: 'left' }}>
-                        <span className="pcell">
-                          <TeamBadge tag={t.tag} colors={t.colors} size={20} logoUrl={t.logoUrl} />
-                          <OrgFlag players={t.players} />
-                          <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--em-gold)' : undefined }}>{t.name}</span>
-                          <span className="muted small vrs-reg">{CAREER_REGION_LABELS[t.region]}</span>
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{t.vrs}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-            <div className="vrs-regions">
-              {vrsByRegion.map((g) => (
-                <div key={g.key} className="vrs-region">
-                  <div className="vrs-region-head">{g.label} <span className="muted small">({g.teams.length})</span></div>
-                  <table className="stats">
-                    <tbody>
-                      {g.teams.map((t, i) => (
-                        <tr key={t.id} className={`${t.isUser ? 'human-row' : ''} clickable-row`} onClick={() => openTeamProfile(t.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openTeamProfile(t.id); }}>
-                          <td style={{ width: 24, textAlign: 'left' }}>{i + 1}</td>
-                          <td style={{ textAlign: 'left' }}>
-                            <span className="pcell">
-                              <TeamBadge tag={t.tag} colors={t.colors} size={20} logoUrl={t.logoUrl} />
-                              <OrgFlag players={t.players} />
-                              <span style={{ fontWeight: t.isUser ? 700 : 500, color: t.isUser ? 'var(--em-gold)' : undefined }}>{t.name}</span>
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'right', fontWeight: 700 }}>{t.vrs}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-            </div>
-            )}
-        </DashCard>
+        <VrsTab
+          vrsMode={vrsMode}
+          setVrsMode={setVrsMode}
+          myVrsRank={myVrsRank}
+          vrsAll={vrsAll}
+          vrsByRegion={vrsByRegion}
+          openTeamProfile={openTeamProfile}
+        />
       )}
 
       {/* ===== TOP 20 HLTV DA TEMPORADA ===== */}
+      {/* T1.4: aba Top20 extraída em src/pages/career/Top20Tab.tsx */}
       {hubTab === 'top20' && (
-        <DashCard title={ct('HLTV Top 20')}>
-            <div className="t20-head">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>
-                {t20Mode === 'season'
-                  ? `${ct('Top 20 HLTV · melhores da temporada')} ${save.split}`
-                  : ct('Ranking de carreira · maiores ratings acumulados')}
-              </div>
-              <div className="t20-toggle">
-                <button className={`btn small${t20Mode === 'season' ? ' gold' : ' ghost'}`} onClick={() => setT20Mode('season')}>{ct('Temporada')}</button>
-                <button className={`btn small${t20Mode === 'career' ? ' gold' : ' ghost'}`} onClick={() => setT20Mode('career')}>{ct('Carreira')}</button>
-              </div>
-            </div>
-            {t20Mode === 'season' ? (
-              <div className="top20-list">
-                {top20.map((e, i) => {
-                  // jogador do SEU elenco aparece pela SUA org, não pelo clube de origem
-                  const isMine = mySquadOids.has(e.p.id);
-                  const tag = isMine ? (save.org?.tag ?? ct('VOCÊ')) : e.team.tag;
-                  const colors = isMine ? (save.org?.colors ?? e.team.colors) : e.team.colors;
-                  const logo = isMine ? save.org?.logo : (e.team.logoUrl ?? logoForTeam(e.team));
-                  return (
-                  <button
-                    key={e.p.id}
-                    type="button"
-                    className={`t20-row em-btn-reset clickable${i === 0 ? ' first' : ''}`}
-                    onClick={() => openPlayerProfile(e.p)}
-                  >
-                    <span className="t20-rank">{i + 1}</span>
-                    <PlayerAvatar nick={e.p.nick} size={32} />
-                    <span className="t20-nick"><Flag cc={e.p.country} /> {e.p.nick}</span>
-                    <span className="muted small t20-team">
-                      <TeamBadge tag={tag} colors={colors} size={16} logoUrl={logo} /> {tag}
-                    </span>
-                    <span className={`role-pill ${e.p.role}`}>{e.p.role}</span>
-                    <span className="muted small t20-extra">
-                      {e.mvps > 0 && <b className="t20-mvp">{e.mvps}× MVP</b>}
-                      {e.sl.kast} KAST · {e.role === 'AWP' ? `${e.sl.awpKills} AWP/m` : `${e.sl.entry} entry/m`} · {e.sl.impact.toFixed(2)} imp
-                    </span>
-                    <span className="t20-rating">{e.rating.toFixed(2)}</span>
-                  </button>
-                  );
-                })}
-              </div>
-            ) : careerTop20.length === 0 ? (
-              <p className="muted small">{ct('As estatísticas de carreira aparecem aqui depois de jogar o primeiro split. Elas sobem conforme os jogadores evoluem.')}</p>
-            ) : (
-              <div className="top20-list">
-                {careerTop20.map((e, i) => (
-                  <button
-                    key={e.rid}
-                    type="button"
-                    className={`t20-row em-btn-reset clickable${i === 0 ? ' first' : ''}${e.isMine ? ' human-row' : ''}`}
-                    onClick={() => { const pl = resolvePlayerById(e.rid); if (pl) openPlayerProfile(pl); }}
-                  >
-                    <span className="t20-rank">{i + 1}</span>
-                    <PlayerAvatar nick={e.nick} size={32} />
-                    <span className="t20-nick"><Flag cc={e.country} /> {e.nick}{e.isMine ? ' ★' : ''}</span>
-                    <span className="muted small t20-team">{e.teamTag}</span>
-                    <span className={`role-pill ${e.role}`}>{e.role}</span>
-                    <span className="muted small t20-extra">{e.kd.toFixed(2)} K/D · {e.adr.toFixed(0)} ADR · {e.maps}m</span>
-                    <span className="t20-rating">{e.rating.toFixed(2)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-        </DashCard>
+        <Top20Tab
+          t20Mode={t20Mode}
+          setT20Mode={setT20Mode}
+          save={save}
+          top20={top20}
+          careerTop20={careerTop20}
+          mySquadOids={mySquadOids}
+          openPlayerProfile={openPlayerProfile}
+          resolvePlayerById={resolvePlayerById}
+        />
       )}
 
       {/* ===== HISTÓRIA DA ORGANIZAÇÃO ===== */}
-      {hubTab === 'calendar' && (() => {
-        const groupDone = league.current >= league.rounds.length;
-        const nextMajor = isMajorSplit(save.split) ? save.split : save.split + (MAJOR_EVERY - (save.split % MAJOR_EVERY));
-        const splitsToMajor = nextMajor - save.split;
-        const majorSplitNow = isMajorSplit(save.split);
-        type StStatus = 'done' | 'live' | 'locked' | 'na';
-        const stages: { ic: CareerIconName; name: string; status: StStatus; detail: string }[] = [
-          { ic: 'focus', name: `${ct('Fase de grupos ·')} ${save.circuit?.name ?? ct('Circuito')}`, status: groupDone ? 'done' : 'live', detail: groupDone ? ct('Concluída') : `${ct('Rodada')} ${league.current + 1} de ${league.rounds.length} ${ct('· você em')} ${myPos}º` },
-          { ic: 'trophy', name: ct('Mata-mata do circuito'), status: save.playoff ? (save.playoff.champion ? 'done' : 'live') : 'locked', detail: save.playoff ? (save.playoff.champion ? ct('Encerrado') : ct('Semis (MD3) + final (MD5)')) : ct('Os 4 melhores do grupo avançam') },
-          { ic: 'globe', name: ct('Major Mundial'), status: majorSplitNow ? (save.majorT ? 'live' : 'locked') : 'na', detail: majorSplitNow ? `Top ${MAJOR_VRS_CUT} ${ct('do ranking VRS mundial garantem a vaga')}` : `${ct('Só em split de Major · próximo no Split')} ${nextMajor}` },
-        ];
-        const STLABEL: Record<StStatus, string> = { done: ct('concluído'), live: ct('em andamento'), locked: ct('a seguir'), na: ct('fora deste split') };
-        // próximos splits (mini-calendário do cadenciamento dos Majors)
-        const upcoming = Array.from({ length: 6 }, (_, i) => save.split + i).map((sp) => ({ sp, major: isMajorSplit(sp) }));
-        return (
-        <DashCard title={ct('Calendário')}>
-            <div className={`cal-major-banner ${splitsToMajor === 0 ? 'now' : ''}`}>
-              {splitsToMajor === 0
-                ? <><CareerIcon name="globe" size={16} /> <b>{ct('É split de Major!')}</b> {ct('Os')} <b>{ct('top')} {MAJOR_VRS_CUT} {ct('do ranking VRS mundial')}</b> {ct('garantem a vaga. Você está em')} <b>#{myVrsRank}</b>.</>
-                : <><CareerIcon name="globe" size={16} /> <b>{ct('Major Mundial no Split')} {nextMajor}</b> · {splitsToMajor === 1 ? ct('falta 1 split') : `${ct('faltam')} ${splitsToMajor} splits`}. {ct('Suba no')} <b>{ct('ranking VRS')}</b> ({ct('você está em')} #{myVrsRank}) {ct('vencendo partidas e campeonatos — os top')} {MAJOR_VRS_CUT} {ct('vão ao Major.')}</>}
-            </div>
+      {/* T1.4: aba Calendar extraída em src/pages/career/CalendarTab.tsx */}
+      {hubTab === 'calendar' && (
+        <CalendarTab
+          save={save}
+          league={league}
+          table={table}
+          myPos={myPos}
+          myVrsRank={myVrsRank}
+          setSelTeam={setSelTeam}
+        />
+      )}
 
-            <div className="muted small section-label">{ct('Temporada atual · Split')} {save.split}</div>
-            <div className="cal-stages">
-              {stages.map((st, i) => (
-                <div key={i} className={`cal-stage ${st.status}`}>
-                  <span className="cal-ic"><CareerIcon name={st.ic} size={18} /></span>
-                  <div className="cal-st-body">
-                    <div className="cal-st-name">{st.name} <span className={`cal-st-pill ${st.status}`}>{STLABEL[st.status]}</span></div>
-                    <div className="cal-st-detail muted small">{st.detail}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="muted small section-label">{ct('Próximos splits')}</div>
-            <div className="cal-upcoming">
-              {upcoming.map(({ sp, major }) => (
-                <div key={sp} className={`cal-up${sp === save.split ? ' current' : ''}${major ? ' major' : ''}`}>
-                  <div className="cal-up-n">Split {sp}</div>
-                  <div className="cal-up-t">{major ? <><CareerIcon name="globe" size={12} /> Major</> : <><CareerIcon name="focus" size={12} /> {ct('Circuito')}</>}</div>
-                </div>
-              ))}
-            </div>
-            <div className="muted small section-label">{ct('Times no circuito')} ({table.length})</div>
-            <div className="rtm-field" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-              {table.map((tm) => {
-                const mine = tm.id === 'user';
-                return (
-                  <button key={tm.id} onClick={() => setSelTeam(tm)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '6px', background: mine ? 'color-mix(in srgb, var(--em-gold) 14%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${mine ? 'var(--em-gold)' : 'var(--em-border)'}`, cursor: 'pointer', textAlign: 'left' }}>
-                    <TeamBadge tag={tm.tag} colors={tm.colors} logoUrl={tm.logoUrl} size={30} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '14px', color: mine ? 'var(--em-gold)' : 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tm.name}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--rtm-faint)' }}><Flag cc={tm.country} />{tm.tag}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="muted small" style={{ marginTop: 12 }}>
-              Cada split tem um <b>{ct('circuito')}</b> {ct('(fase de grupos + mata-mata) que vale prêmio e')} <b>VRS</b>. A cada {MAJOR_EVERY} splits acontece o <b>{ct('Major Mundial')}</b>: o clímax da temporada, com a maior premiação. Seu VRS e seu tier definem se você chega lá.
-            </p>
-        </DashCard>
-        );
-      })()}
-
+      {/* T1.4: aba History extraída em src/pages/career/HistoryTab.tsx */}
       {hubTab === 'history' && (
-        <DashCard title={ct('Histórico da carreira')}>
-            <div className="career-statgrid">
-              <div className="cstat"><b>{save.split - 1}</b><span>{ct('Splits disputados')}</span></div>
-              <div className="cstat"><b className="pos">{org.circuitTitles}</b><span>{ct('Títulos de circuito')}</span></div>
-              <div className="cstat"><b className="gold-text">{org.majorTitles}</b><span>{ct('Majors vencidos')}</span></div>
-              <div className="cstat"><b>{org.majorApps}</b><span>{ct('Majors disputados')}</span></div>
-              <div className="cstat"><b>{formatMoney(org.totalPrize)}</b><span>{ct('Prêmios na história')}</span></div>
-              <div className="cstat"><b>{org.bestPlacement}</b><span>{ct('Melhor campanha')}</span></div>
-            </div>
-            <div className="muted small section-label">{ct('Linha do tempo')}</div>
-            {save.history.length === 0 ? (
-              <p className="muted small">{ct('Sua organização ainda não encerrou nenhum split. A história começa agora.')}</p>
-            ) : (
-              <table className="stats">
-                <thead>
-                  <tr><th style={{ textAlign: 'left' }}>Split</th><th style={{ textAlign: 'left' }}>{ct('Campeonato')}</th><th>Pos</th><th>V-D</th><th>Major</th><th>{ct('Prêmio')}</th></tr>
-                </thead>
-                <tbody>
-                  {[...save.history].reverse().map((h, i) => (
-                    <tr key={i}>
-                      <td style={{ textAlign: 'left' }}>{h.split}</td>
-                      <td style={{ textAlign: 'left' }}>{h.circuit}{h.champion && ' 🏆'}</td>
-                      <td>{h.position || '-'}º</td>
-                      <td>{h.wins}-{h.losses}</td>
-                      <td className={h.major?.champion ? 'gold-text' : undefined}>
-                        {h.major ? `${PLACE_SHORT[h.major.placement]}${h.major.champion ? ' 🌍🏆' : ''}` : '-'}
-                      </td>
-                      <td>{formatMoney(h.prize)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-        </DashCard>
+        <HistoryTab save={save} org={org} />
       )}
       </>
       )}
@@ -5763,6 +5204,28 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           }}
         />
       )}
+      {/* T11.1: champion celebration (Major ou circuito) */}
+      {championModal && (
+        <ChampionCelebrationModal
+          data={championModal}
+          onClose={() => setChampionModal(null)}
+        />
+      )}
+      {/* T11.4: eliminação em torneio (Major only — circuito é trivial) */}
+      {eliminationModal && (
+        <TournamentEliminationModal
+          data={eliminationModal}
+          onClose={() => setEliminationModal(null)}
+        />
+      )}
+      {/* T11.3: aposentadoria do player (queue: mostra 1 por vez). Trigger:
+          useEffect detecta save.lastRetirees novo e enfileira. */}
+      {retirementQueue.length > 0 && (
+        <PlayerRetirementModal
+          data={retirementQueue[0]}
+          onClose={() => setRetirementQueue((q) => q.slice(1))}
+        />
+      )}
       {save.pendingTeamEvent && (
         <TeamEventModal
           eventId={save.pendingTeamEvent.eventId}
@@ -5810,7 +5273,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 }
 
 // seletor do plano de jogo pré-partida (decisão do usuário, com buff real)
-function GamePlanPicker({ plan, onPick }: { plan: GamePlan; onPick: (p: GamePlan) => void }) {
+export function GamePlanPicker({ plan, onPick }: { plan: GamePlan; onPick: (p: GamePlan) => void }) {
   return (
     <div className="gameplan-picker">
       <span className="muted small gp-title"><CareerIcon name="focus" size={13} /> {ct('Plano de jogo')}</span>
@@ -5826,7 +5289,7 @@ function GamePlanPicker({ plan, onPick }: { plan: GamePlan; onPick: (p: GamePlan
 }
 
 // linha de confronto reaproveitada (overview e resultados)
-function MatchLine({ league, m, onOpen }: {
+export function MatchLine({ league, m, onOpen }: {
   league: League;
   m: { a: string; b: string; result?: SeriesResult };
   onOpen: (s: { series: SeriesResult; teams: [TTeam, TTeam] }) => void;
@@ -5858,13 +5321,13 @@ function MatchLine({ league, m, onOpen }: {
   );
 }
 
-const PLACE_SHORT: Record<PlacementCode, string> = {
+export const PLACE_SHORT: Record<PlacementCode, string> = {
   champion: ct('Campeão'), runnerup: ct('Vice'), semi: ct('Semi'), quarters: ct('Quartas'), playoffs: ct('Playoffs'), swiss: ct('Suíça'),
 };
 
 // fase de grupos GSL: 2 grupos com classificação (1-4) e os jogos por estágio.
 // compact = só a classificação (cabe no card lateral). full = + jogos clicáveis.
-function GSLGroups({ league, onOpen, compact }: {
+export function GSLGroups({ league, onOpen, compact }: {
   league: League;
   onOpen: (s: { series: SeriesResult; teams: [TTeam, TTeam] }) => void;
   compact?: boolean;
@@ -5945,7 +5408,7 @@ function GslBrCell({ league, m, onOpen }: {
 
 // CHAVE DEDICADA do GSL (dupla eliminação por grupo), no mesmo visual do Major:
 // Abertura (MD1) → Vencedores/Eliminação (MD3) → Decisão (MD3) → Classificados.
-function GSLBracket({ league, onOpen }: {
+export function GSLBracket({ league, onOpen }: {
   league: League;
   onOpen: (s: { series: SeriesResult; teams: [TTeam, TTeam] }) => void;
 }) {
@@ -6012,7 +5475,7 @@ function GSLBracket({ league, onOpen }: {
 }
 
 // ranking de jogadores (destaques da temporada)
-function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<string>; ranked?: boolean }) {
+export function BestPlayers({ stats, mine, ranked }: { stats: SeasonStat[]; mine: Set<string>; ranked?: boolean }) {
   if (stats.length === 0) return <p className="muted small">{ct('Os destaques aparecem após as primeiras partidas.')}</p>;
   return (
     <div className="best-players">
@@ -6164,7 +5627,7 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
 }
 
 // ----- agregações para a aba de história / destaques -----
-interface SeasonStat { id: string; nick: string; teamTag: string; country: string; role: string; rating: number; kd: number; adr: number; maps: number; }
+export interface SeasonStat { id: string; nick: string; teamTag: string; country: string; role: string; rating: number; kd: number; adr: number; maps: number; }
 
 function seasonPlayerStats(l: League): SeasonStat[] {
   const meta = new Map<string, { nick: string; teamTag: string; country: string; role: string }>();
@@ -6231,7 +5694,7 @@ export function deriveCareer(s: CareerStatLine | undefined) {
   return { rating, kd: s.d ? s.k / s.d : s.k, adr, kastPct: kast * 100, maps: s.maps, kills: s.k, splits: s.splits };
 }
 
-function aggregateHistory(h: SplitRecord[]) {
+export function aggregateHistory(h: SplitRecord[]) {
   let circuitTitles = 0, majorApps = 0, majorTitles = 0, totalPrize = 0, bestPos = 99;
   for (const r of h) {
     if (r.champion) circuitTitles++;
@@ -6246,7 +5709,7 @@ function aggregateHistory(h: SplitRecord[]) {
   };
 }
 
-function CareerTable({ table, highlightTop = 0, onPick, detailed }: {
+export function CareerTable({ table, highlightTop = 0, onPick, detailed }: {
   table: TTeam[];
   highlightTop?: number;
   onPick?: (t: TTeam) => void;
@@ -6394,7 +5857,7 @@ function TransferFeed({ items, compact }: { items: TransferItem[]; compact?: boo
 }
 
 // ---------- bracket do playoff do circuito ----------
-function PlayoffBracket({ p, teamOf, onOpen }: {
+export function PlayoffBracket({ p, teamOf, onOpen }: {
   p: Playoff;
   teamOf: (id: string) => TTeam;
   onOpen: (s: SeriesResult, ts: [TTeam, TTeam]) => void;
@@ -6738,8 +6201,9 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
   );
 }
 
-// escolha da org: assumir um time real (com elenco e contexto) ou uma org sem
-// line pra montar do zero. Substitui o "inventar do nada" como entrada padrão.
+// escolha da org: assumir QUALQUER time real do dataset (com elenco e contexto)
+// ou uma org sem line pra montar do zero. Substitui o "inventar do nada".
+// Tela redesenhada no padrão em-* (DashCard, filtros, grid 3-col).
 function OrgSelect({ teams, onStart, onFictional, onScenarios, onExit }: {
   teams: TeamSeason[];
   onStart: (s: OrgStart) => void;
@@ -6747,16 +6211,43 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onExit }: {
   onScenarios: () => void;
   onExit: () => void;
 }) {
-  // candidatos a ASSUMIR: times reais de tier 2/3 (ninguém começa na elite).
-  const takeovers = useMemo(
+  const [search, setSearch] = useState('');
+  const [tierFilter, setTierFilter] = useState<0 | 1 | 2 | 3>(0); // 0 = todos
+  const [regionFilter, setRegionFilter] = useState<MacroRegion | ''>('');
+
+  // TODOS os times com 5+ jogadores ficam disponíveis pra assumir. O usuário
+  // pode escolher qualquer um — incluindo elite (tier 1) — mas o caixa é
+  // proporcional ao tier (elite ganha menos verba pra balancear).
+  const allTakeovers = useMemo(
     () =>
       teams
-        .filter((t) => t.players.length >= 5 && teamTier(t) >= 2)
-        .map((t) => ({ t, tier: teamTier(t), ovr: Math.round(t.players.reduce((a, p) => a + playerOvr(p), 0) / t.players.length) }))
-        .sort((a, b) => a.tier - b.tier || b.ovr - a.ovr)
-        .slice(0, 9),
+        .filter((t) => t.players.length >= 5)
+        .map((t) => {
+          const tier = teamTier(t);
+          const ovr = Math.round(t.players.reduce((a, p) => a + playerOvr(p), 0) / t.players.length);
+          const region = macroRegionPlurality(t.players.slice(0, 5).map((p) => p.country));
+          return { t, tier, ovr, region };
+        })
+        .sort((a, b) => b.ovr - a.ovr),
     [teams],
   );
+
+  const visible = useMemo(
+    () =>
+      allTakeovers.filter((x) => {
+        if (tierFilter && x.tier !== tierFilter) return false;
+        if (regionFilter && x.region !== regionFilter) return false;
+        if (search) {
+          const q = search.toLowerCase();
+          if (!x.t.team.toLowerCase().includes(q) && !x.t.tag.toLowerCase().includes(q)) return false;
+        }
+        return true;
+      }),
+    [allTakeovers, tierFilter, regionFilter, search],
+  );
+
+  const tierCounts: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
+  for (const x of allTakeovers) tierCounts[x.tier as 1 | 2 | 3]++;
 
   const takeOver = (t: TeamSeason) => {
     const tier = teamTier(t);
@@ -6767,7 +6258,6 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onExit }: {
       budget: takeoverBudget(tier),
       tier,
       takeoverId: t.id,
-      // região de competição = core do elenco assumido (Astralis → Europa, etc.)
       region: macroRegionPlurality(t.players.slice(0, 5).map((p) => p.country)),
     });
   };
@@ -6783,64 +6273,404 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onExit }: {
   };
 
   return (
-    <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 980, margin: '24px auto' }}>
-        <div className="panel-head">
-          {ct('Assuma uma organização (modo carreira)')}
-          <span className="spacer" />
-          <button className="btn" onClick={onExit}>{ct('← Sair')}</button>
-        </div>
-        <div className="panel-body">
-          <p className="muted small" style={{ marginTop: 0 }}>
-            {ct('Escolha uma')} <b>{ct('org real')}</b> para comandar. Cada uma tem um contexto:
-            times melhores costumam ter <b>{ct('menos caixa')}</b> (folha pesada); orgs sem
-            elenco te dão <b>{ct('mais verba')}</b> pra montar do zero. Suba de tier até o Major.
+    <div className="em-org-select fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 20px 24px', maxWidth: 1400, margin: '0 auto' }}>
+      {/* Header banner */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 20px',
+          background: 'linear-gradient(135deg, rgba(232,193,112,0.12) 0%, transparent 60%)',
+          border: '1px solid var(--em-border)',
+          borderRadius: 6,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 800 }}>
+            Modo carreira
+          </div>
+          <h2 style={{ margin: '2px 0 0', fontSize: '1.6rem', fontWeight: 900, color: 'var(--em-text)', letterSpacing: '-0.3px' }}>
+            {ct('Assuma uma organização')}
+          </h2>
+          <p style={{ margin: '6px 0 0', fontSize: '0.82rem', color: 'var(--em-muted)', maxWidth: 620, lineHeight: 1.45 }}>
+            {ct('Qualquer time do dataset CS2 (86+) tá disponível. Tiers maiores ganham menos caixa pra balancear — elite tem folha pesada, tier 3 tem caixa folgado pra reconstruir.')}
           </p>
+        </div>
+        <button
+          type="button"
+          onClick={onExit}
+          style={{
+            padding: '8px 14px',
+            background: 'var(--em-panel-2)',
+            color: 'var(--em-text)',
+            border: '1px solid var(--em-border)',
+            borderRadius: 4,
+            fontFamily: 'inherit',
+            fontWeight: 600,
+            fontSize: '0.84rem',
+            cursor: 'pointer',
+          }}
+        >
+          ← {ct('Sair')}
+        </button>
+      </header>
 
-          <button className="scenario-cta" onClick={onScenarios}>
-            <span className="scenario-cta-ic">🎯</span>
-            <span className="scenario-cta-txt">
-              <b>{ct('Desafios de carreira')}</b>
-              <span className="muted small">{ct('Assuma uma org com contexto e metas: FaZe em reconstrução, lendas como a MIBR 2006, a SAW de Portugal e mais.')}</span>
-            </span>
-            <span className="scenario-cta-arrow">→</span>
-          </button>
+      {/* CTAs secundários: Desafios + Fundar */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <button
+          type="button"
+          onClick={onScenarios}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '14px 18px',
+            background: 'var(--em-panel)',
+            border: '1px solid var(--em-gold)',
+            borderRadius: 6,
+            textAlign: 'left',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            color: 'var(--em-text)',
+            transition: 'background .15s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,193,112,0.08)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--em-panel)')}
+        >
+          <span style={{ fontSize: '1.8rem' }}>🎯</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.92rem', fontWeight: 800 }}>{ct('Desafios de carreira')}</div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--em-muted)', marginTop: 2 }}>
+              {ct('Cenários com contexto e metas: FaZe rebuild, MIBR orgulho, SAW Portugal e mais')}
+            </div>
+          </div>
+          <span style={{ fontSize: '1.2rem', color: 'var(--em-gold)' }}>→</span>
+        </button>
+        <button
+          type="button"
+          onClick={onFictional}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '14px 18px',
+            background: 'var(--em-panel)',
+            border: '1px solid var(--em-border)',
+            borderRadius: 6,
+            textAlign: 'left',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            color: 'var(--em-text)',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--em-gold)')}
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--em-border)')}
+        >
+          <span style={{ fontSize: '1.8rem' }}>✨</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.92rem', fontWeight: 800 }}>{ct('Fundar org fictícia')}</div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--em-muted)', marginTop: 2 }}>
+              {ct('Crie nome, sigla, cores e logo do zero. Sem elenco, caixa cheio.')}
+            </div>
+          </div>
+          <span style={{ fontSize: '1.2rem', color: 'var(--em-muted)' }}>→</span>
+        </button>
+      </div>
 
-          <div className="muted small section-label">{ct('Assumir org com elenco (tier baixo/médio)')}</div>
-          <div className="org-grid">
-            {takeovers.map(({ t, tier, ovr }) => (
-              <button key={t.id} className="org-card" onClick={() => takeOver(t)}>
-                <TeamBadge tag={t.tag} colors={t.colors} size={40} logoUrl={t.logoUrl ?? logoForTeam(t)} />
-                <div className="org-name"><Flag cc={t.country} /> {t.team}</div>
-                <div className="org-meta">
-                  <span className={`tier-badge t${tier}`}>TIER {tier}</span>
-                  <span className="muted small">elenco OVR {ovr}</span>
+      {/* DashCard com filter bar + grid de times */}
+      <DashCard
+        title={`${ct('Times reais')} (${visible.length}/${allTakeovers.length})`}
+        info={ct('Clique pra assumir')}
+        actions={
+          (search || tierFilter || regionFilter) ? (
+            <button
+              type="button"
+              onClick={() => { setSearch(''); setTierFilter(0); setRegionFilter(''); }}
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.72rem',
+                fontFamily: 'inherit',
+                fontWeight: 700,
+                background: 'transparent',
+                color: 'var(--em-text)',
+                border: '1px solid var(--em-border)',
+                borderRadius: 3,
+                cursor: 'pointer',
+              }}
+            >
+              ✕ {ct('Limpar')}
+            </button>
+          ) : undefined
+        }
+      >
+        {/* Filter bar */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            placeholder={ct('Buscar time ou tag…')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              flex: '1 1 220px',
+              padding: '8px 12px',
+              background: 'var(--em-panel-2)',
+              color: 'var(--em-text)',
+              border: '1px solid var(--em-border)',
+              borderRadius: 4,
+              fontFamily: 'inherit',
+              fontSize: '0.86rem',
+            }}
+          />
+          <select
+            value={regionFilter}
+            onChange={(e) => setRegionFilter(e.target.value as MacroRegion | '')}
+            style={{
+              padding: '8px 12px',
+              background: 'var(--em-panel-2)',
+              color: 'var(--em-text)',
+              border: '1px solid var(--em-border)',
+              borderRadius: 4,
+              fontFamily: 'inherit',
+              fontSize: '0.84rem',
+              minWidth: 140,
+            }}
+          >
+            <option value="">🌍 {ct('Região')} ({ct('todas')})</option>
+            {MACRO_REGION_ORDER.map((reg) => (
+              <option key={reg} value={reg}>{MACRO_REGION_LABELS[reg]}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tier chips */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
+          <TierChip label={`${ct('Todos')} (${allTakeovers.length})`} active={tierFilter === 0} onClick={() => setTierFilter(0)} />
+          <TierChip label={`TIER 1 (${tierCounts[1]})`} active={tierFilter === 1} onClick={() => setTierFilter(tierFilter === 1 ? 0 : 1)} tier={1} />
+          <TierChip label={`TIER 2 (${tierCounts[2]})`} active={tierFilter === 2} onClick={() => setTierFilter(tierFilter === 2 ? 0 : 2)} tier={2} />
+          <TierChip label={`TIER 3 (${tierCounts[3]})`} active={tierFilter === 3} onClick={() => setTierFilter(tierFilter === 3 ? 0 : 3)} tier={3} />
+        </div>
+
+        {/* Grid de times */}
+        {visible.length === 0 ? (
+          <div style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--em-muted)', fontSize: '0.88rem', fontStyle: 'italic' }}>
+            {ct('Nenhum time com esses filtros.')}
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+              gap: 10,
+              maxHeight: 'calc(100vh - 380px)',
+              overflowY: 'auto',
+              paddingRight: 4,
+            }}
+          >
+            {visible.map(({ t, tier, ovr, region }) => (
+              <TeamPickCard
+                key={t.id}
+                team={t}
+                tier={tier}
+                ovr={ovr}
+                region={region}
+                budget={takeoverBudget(tier)}
+                onClick={() => takeOver(t)}
+              />
+            ))}
+          </div>
+        )}
+      </DashCard>
+
+      {/* Orgs sem line — começar do zero */}
+      <DashCard title={ct('Começar do zero (org sem line ativa)')} info={ct('Caixa maior pra montar elenco')}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+          {EMPTY_ORGS.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => startEmpty(e)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                padding: 14,
+                background: 'var(--em-panel-2)',
+                border: '1px solid var(--em-border)',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                color: 'var(--em-text)',
+                textAlign: 'left',
+                transition: 'border-color .15s, background .15s',
+              }}
+              onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.borderColor = 'var(--em-gold)'; }}
+              onMouseLeave={(ev) => { (ev.currentTarget as HTMLElement).style.borderColor = 'var(--em-border)'; }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <TeamBadge tag={e.tag} colors={e.colors} size={36} logoUrl={e.logoUrl} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.96rem', fontWeight: 800 }}>{e.name}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--em-muted)' }}>
+                    <span style={{ ...tierBadgeStyle(3), padding: '1px 6px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 800 }}>TIER 3</span>
+                    <span style={{ marginLeft: 6 }}>{ct('sem elenco')}</span>
+                  </div>
                 </div>
-                <div className="org-budget">💰 {formatMoney(takeoverBudget(tier))} {ct('de caixa')}</div>
-                <div className="muted small">{tier === 2 ? ct('Elenco forte, caixa curto') : ct('Elenco mediano, caixa folgado')}</div>
-              </button>
-            ))}
-          </div>
+              </div>
+              <div style={{ fontSize: '0.74rem', color: 'var(--em-muted)', lineHeight: 1.45 }}>
+                {ct(e.blurb)}
+              </div>
+              <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8 }}>
+                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: '#5ed88a', fontWeight: 800 }}>
+                  💰 {formatMoney(e.budget)}
+                </span>
+                <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>{ct('Assumir')} →</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </DashCard>
+    </div>
+  );
+}
 
-          <div className="muted small section-label">{ct('Começar do zero (org sem line ativa)')}</div>
-          <div className="org-grid">
-            {EMPTY_ORGS.map((e) => (
-              <button key={e.id} className="org-card empty" onClick={() => startEmpty(e)}>
-                <TeamBadge tag={e.tag} colors={e.colors} size={40} logoUrl={e.logoUrl} />
-                <div className="org-name">{e.name}</div>
-                <div className="org-meta"><span className="tier-badge t3">TIER 3</span><span className="muted small">{ct('sem elenco')}</span></div>
-                <div className="org-budget">💰 {formatMoney(e.budget)} {ct('de caixa')}</div>
-                <div className="muted small">{ct(e.blurb)}</div>
-              </button>
-            ))}
-          </div>
+function tierBadgeStyle(tier: number): React.CSSProperties {
+  const colors: Record<number, { bg: string; fg: string; border: string }> = {
+    1: { bg: 'rgba(232,193,112,0.18)', fg: '#e8c170', border: 'rgba(232,193,112,0.5)' },
+    2: { bg: 'rgba(155,111,232,0.16)', fg: '#9b6fe8', border: 'rgba(155,111,232,0.5)' },
+    3: { bg: 'rgba(95,164,232,0.14)',  fg: '#5fa4e8', border: 'rgba(95,164,232,0.4)' },
+  };
+  const c = colors[tier] ?? colors[3];
+  return { background: c.bg, color: c.fg, border: `1px solid ${c.border}` };
+}
 
-          <div className="center" style={{ marginTop: 18 }}>
-            <button className="btn ghost" onClick={onFictional}>{ct('ou criar uma org fictícia do zero →')}</button>
+function TierChip({ label, active, tier, onClick }: { label: string; active: boolean; tier?: number; onClick: () => void }) {
+  const tierStyle = tier ? tierBadgeStyle(tier) : { background: 'var(--em-panel-2)', color: 'var(--em-text)', border: '1px solid var(--em-border)' };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '5px 12px',
+        ...(active ? { background: 'var(--em-gold)', color: '#1a1205', border: '1px solid var(--em-gold)' } : tierStyle),
+        borderRadius: 12,
+        fontFamily: 'inherit',
+        fontSize: '0.74rem',
+        fontWeight: 800,
+        cursor: 'pointer',
+        letterSpacing: '0.3px',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function TeamPickCard({
+  team,
+  tier,
+  ovr,
+  region,
+  budget,
+  onClick,
+}: {
+  team: TeamSeason;
+  tier: number;
+  ovr: number;
+  region: MacroRegion;
+  budget: number;
+  onClick: () => void;
+}) {
+  const lineup = team.players.slice(0, 5);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        padding: 12,
+        background: 'var(--em-panel-2)',
+        border: '1px solid var(--em-border)',
+        borderRadius: 6,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        color: 'var(--em-text)',
+        textAlign: 'left',
+        transition: 'border-color .15s, transform .12s',
+      }}
+      onMouseEnter={(ev) => {
+        const el = ev.currentTarget as HTMLElement;
+        el.style.borderColor = 'var(--em-gold)';
+        el.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={(ev) => {
+        const el = ev.currentTarget as HTMLElement;
+        el.style.borderColor = 'var(--em-border)';
+        el.style.transform = 'translateY(0)';
+      }}
+    >
+      {/* Header com badge + nome + flag */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <TeamBadge tag={team.tag} colors={team.colors} size={36} logoUrl={team.logoUrl ?? logoForTeam(team)} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.94rem', fontWeight: 800 }}>
+            <Flag cc={team.country} /> {team.team}
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <span style={{ ...tierBadgeStyle(tier), padding: '1px 6px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.5px' }}>
+              TIER {tier}
+            </span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {MACRO_REGION_LABELS[region]}
+            </span>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', lineHeight: 1.1 }}>
+          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>OVR</div>
+          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.1rem', color: 'var(--em-gold)', fontWeight: 900 }}>
+            {ovr}
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Lineup com 5 avatares pequenos */}
+      <div style={{ display: 'flex', gap: 4, padding: '6px 0' }}>
+        {lineup.map((p) => (
+          <div key={p.id} title={`${p.nick} · ${p.role} · OVR ${playerOvr(p)}`} style={{ position: 'relative', flex: 1 }}>
+            <PlayerAvatar nick={p.nick} size={36} />
+            <span
+              style={{
+                position: 'absolute',
+                bottom: -2,
+                right: -2,
+                background: 'var(--em-panel)',
+                color: 'var(--em-text)',
+                border: '1px solid var(--em-border)',
+                borderRadius: 8,
+                fontFamily: '"JetBrains Mono", monospace',
+                fontSize: '0.62rem',
+                fontWeight: 800,
+                padding: '0 4px',
+                lineHeight: 1.4,
+              }}
+            >
+              {playerOvr(p)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer: budget + CTA */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 2 }}>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.88rem', color: '#5ed88a', fontWeight: 800 }}>
+          💰 {formatMoney(budget)}
+        </span>
+        <span style={{ fontSize: '0.72rem', color: 'var(--em-gold)', fontWeight: 700 }}>
+          {ct('Assumir')} →
+        </span>
+      </div>
+    </button>
   );
 }
 
@@ -6869,56 +6699,162 @@ function ScenarioPicker({ current, onBack, onStart }: {
     });
   };
   return (
-    <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 1000, margin: '24px auto' }}>
-        <div className="panel-head">
-          {ct('🎯 Desafios de carreira')}
-          <span className="spacer" />
-          <button className="btn" onClick={onBack}>{ct('← Voltar')}</button>
-        </div>
-        <div className="panel-body">
-          <p className="muted small" style={{ marginTop: 0 }}>
-            {ct('Assuma uma organização com')} <b>{ct('contexto')}</b> {ct('e')} <b>{ct('metas')}</b> {ct('próprias. O elenco e o técnico já vêm prontos; cumpra os objetivos do desafio ao longo da campanha.')}
+    <div className="em-scenarios fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 20px 24px', maxWidth: 1400, margin: '0 auto' }}>
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 20px',
+          background: 'linear-gradient(135deg, rgba(232,193,112,0.12) 0%, transparent 60%)',
+          border: '1px solid var(--em-border)',
+          borderRadius: 6,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 800 }}>
+            🎯 {ct('Modo carreira')}
+          </div>
+          <h2 style={{ margin: '2px 0 0', fontSize: '1.6rem', fontWeight: 900, color: 'var(--em-text)', letterSpacing: '-0.3px' }}>
+            {ct('Desafios de carreira')}
+          </h2>
+          <p style={{ margin: '6px 0 0', fontSize: '0.82rem', color: 'var(--em-muted)', maxWidth: 620, lineHeight: 1.45 }}>
+            {ct('Assuma uma organização com contexto e metas próprias. O elenco e o técnico já vêm prontos; cumpra os objetivos do desafio ao longo da campanha.')}
           </p>
-          {SCENARIO_CAT_ORDER.map((cat) => {
-            const group = items.filter((x) => x.sc.cat === cat);
-            if (!group.length) return null;
-            return (
-              <div key={cat}>
-                <div className="muted small section-label">{ct(SCENARIO_CAT_LABELS[cat])}</div>
-                <div className="scenario-grid">
-                  {group.map(({ sc, team }) => {
-                    const t = team!;
-                    const tier = teamTier(t);
-                    const ovr = Math.round(t.players.reduce((a, p) => a + playerOvr(p), 0) / Math.max(1, t.players.length));
-                    return (
-                      <button key={sc.id} className="scenario-card" onClick={() => pick(sc, t)}>
-                        <div className="scenario-card-head">
-                          <TeamBadge tag={t.tag} colors={t.colors} size={38} logoUrl={t.logoUrl ?? logoForTeam(t)} />
-                          <div>
-                            <div className="scenario-title"><Flag cc={t.country} /> {ct(sc.title)}</div>
-                            <div className="org-meta">
-                              <span className={`tier-badge t${tier}`}>TIER {tier}</span>
-                              <span className="muted small">OVR {ovr}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="scenario-context muted small">{ct(sc.context)}</div>
-                        <div className="scenario-goals">
-                          {sc.goals.map((g, i) => (
-                            <span key={i} className="scenario-goal">🎯 {ct(g.text)}</span>
-                          ))}
-                        </div>
-                        <div className="org-budget">💰 {formatMoney(sc.budget ?? takeoverBudget(tier))} {ct('de caixa')}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
         </div>
-      </div>
+        <button
+          type="button"
+          onClick={onBack}
+          style={{
+            padding: '8px 14px',
+            background: 'var(--em-panel-2)',
+            color: 'var(--em-text)',
+            border: '1px solid var(--em-border)',
+            borderRadius: 4,
+            fontFamily: 'inherit',
+            fontWeight: 600,
+            fontSize: '0.84rem',
+            cursor: 'pointer',
+          }}
+        >
+          ← {ct('Voltar')}
+        </button>
+      </header>
+
+      {SCENARIO_CAT_ORDER.map((cat) => {
+        const group = items.filter((x) => x.sc.cat === cat);
+        if (!group.length) return null;
+        return (
+          <DashCard key={cat} title={ct(SCENARIO_CAT_LABELS[cat])} info={`${group.length} ${group.length === 1 ? ct('cenário') : ct('cenários')}`}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: 10,
+              }}
+            >
+              {group.map(({ sc, team }) => {
+                const t = team!;
+                const tier = teamTier(t);
+                const ovr = Math.round(t.players.reduce((a, p) => a + playerOvr(p), 0) / Math.max(1, t.players.length));
+                const budget = sc.budget ?? takeoverBudget(tier);
+                return (
+                  <button
+                    key={sc.id}
+                    type="button"
+                    onClick={() => pick(sc, t)}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                      padding: 14,
+                      background: 'var(--em-panel-2)',
+                      border: '1px solid var(--em-border)',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      color: 'var(--em-text)',
+                      textAlign: 'left',
+                      transition: 'border-color .15s, transform .12s',
+                    }}
+                    onMouseEnter={(ev) => {
+                      const el = ev.currentTarget as HTMLElement;
+                      el.style.borderColor = 'var(--em-gold)';
+                      el.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(ev) => {
+                      const el = ev.currentTarget as HTMLElement;
+                      el.style.borderColor = 'var(--em-border)';
+                      el.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    {/* Header com badge + título + tier */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <TeamBadge tag={t.tag} colors={t.colors} size={42} logoUrl={t.logoUrl ?? logoForTeam(t)} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.98rem', fontWeight: 800, lineHeight: 1.2 }}>
+                          <Flag cc={t.country} /> {ct(sc.title)}
+                        </div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <span style={{ ...tierBadgeStyle(tier), padding: '1px 6px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.5px' }}>
+                            TIER {tier}
+                          </span>
+                          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.74rem', color: 'var(--em-muted)' }}>
+                            OVR {ovr}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Contexto narrativo */}
+                    <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', lineHeight: 1.5, fontStyle: 'italic' }}>
+                      {ct(sc.context)}
+                    </div>
+
+                    {/* Goals */}
+                    {sc.goals.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
+                          {ct('Objetivos')}
+                        </div>
+                        {sc.goals.map((g, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '4px 8px',
+                              background: 'rgba(232,193,112,0.08)',
+                              border: '1px solid rgba(232,193,112,0.25)',
+                              borderRadius: 3,
+                              fontSize: '0.76rem',
+                              color: 'var(--em-text)',
+                            }}
+                          >
+                            <span style={{ color: 'var(--em-gold)' }}>🎯</span>
+                            <span>{ct(g.text)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Footer: budget + CTA */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 'auto' }}>
+                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: '#5ed88a', fontWeight: 800 }}>
+                        💰 {formatMoney(budget)}
+                      </span>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>
+                        {ct('Aceitar desafio')} →
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </DashCard>
+        );
+      })}
     </div>
   );
 }
@@ -7416,255 +7352,497 @@ function MarketScreen({
         m.from.team.toLowerCase().includes(filter.toLowerCase())),
   );
 
+  // ── derivações pro redesign ────────────────────────────────────────────────
+  const academyAvail = (save.academy ?? []).filter((a) => !squad.some((s) => s.playerId === a.id));
+  const sponsorVrs = userVrsTotal(save, findSigning, coaches);
+  const filtersActive = !!(filter || roleFilter || ccFilter);
+  const PLAN_LABEL_FOR_BTN = embedded ? ct('Salvar elenco') : ct('Fechar elenco e escolher o campeonato');
+
   return (
-    <div className="fade-in">
-      <div className="panel">
-        <div className="panel-head">
-          Mercado - Split {save.split} ({save.org?.name})
-          <span className="spacer" />
-          <span className={budgetLeft >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 800 }}>
-            💰 {formatMoney(budgetLeft)}
-          </span>
-          <button className="btn" onClick={onExit}>{embedded ? ct('← Voltar ao hub') : ct('← Sair')}</button>
-        </div>
-        <div className="panel-body">
-          <div className="career-note muted small">
-            {ct('Contrate')} <b>{ct('5 jogadores')}</b> {ct('e')} <b>1 coach</b> {ct('dentro do orçamento. Só jogadores dos elencos atuais (CS2). Clique num contratado para dispensar: contratação desta janela tem reembolso integral; jogador do seu elenco é vendido por 85% do valor.')}
+    <div className="em-market fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 20px 24px' }}>
+      {/* ── Header bem visível (resolve tooltip sobrepondo + cliente em destaque) */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 18px',
+          background: 'linear-gradient(135deg, rgba(232,193,112,0.10) 0%, transparent 60%)',
+          border: '1px solid var(--em-border)',
+          borderRadius: 6,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 800 }}>
+            Janela de transferências
           </div>
-          {(save.lastReleases?.length ?? 0) > 0 && (
-            <div className="release-banner">
-              {ct('📄 Contrato vencido:')} <b>{save.lastReleases!.join(', ')}</b> {ct('saiu de graça. Reforce o elenco no mercado.')}
-            </div>
-          )}
-          {recoveredSlots > 0 && (
-            <div className="save-recovery-banner" role="status">
-              <b>{ct('Save reparado:')}</b>{' '}
-              {recoveredSlots === 1
-                ? ct('1 jogador de uma versão antiga não pôde ser recuperado e teve a vaga liberada.')
-                : `${recoveredSlots} ${ct('jogadores de uma versão antiga não puderam ser recuperados e tiveram as vagas liberadas.')}`}{' '}
-              {ct('Contrate substitutos para continuar.')}
-            </div>
-          )}
+          <h2 style={{ margin: '2px 0 0', fontSize: '1.5rem', fontWeight: 900, color: 'var(--em-text)', letterSpacing: '-0.3px' }}>
+            Split {save.split} · {save.org?.name ?? '—'}
+          </h2>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <HudPill label="Orçamento" value={formatMoney(budgetLeft)} tone={budgetLeft >= 0 ? 'green' : 'red'} mono />
+          <HudPill label="Elenco" value={`${squad.length}/5`} tone={squad.length === 5 ? 'green' : 'neutral'} mono />
+          <HudPill label="Coach" value={coachId ? '✓' : '—'} tone={coachId ? 'green' : 'red'} />
+          <button
+            type="button"
+            onClick={onExit}
+            style={{
+              padding: '8px 14px',
+              background: 'var(--em-panel-2)',
+              color: 'var(--em-text)',
+              border: '1px solid var(--em-border)',
+              borderRadius: 4,
+              fontFamily: 'inherit',
+              fontWeight: 600,
+              fontSize: '0.84rem',
+              cursor: 'pointer',
+            }}
+          >
+            ← {embedded ? ct('Voltar') : ct('Sair')}
+          </button>
+        </div>
+      </header>
 
-          {/* evolução do elenco na última janela (explica a mecânica na jornada) */}
-          {(save.lastEvo?.length ?? 0) > 0 && (
-            <div className="evo-panel">
-              <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('Evolução do elenco na janela')}</div>
-              <div className="evo-list">
-                {save.lastEvo.map((e) => (
-                  <span key={e.nick} className={`evo-chip ${e.delta > 0 ? 'up' : e.delta < 0 ? 'down' : 'flat'}`}>
-                    {e.delta > 0 ? '▲' : e.delta < 0 ? '▼' : '▬'} {e.nick}
-                    <i>{e.delta > 0 ? `+${e.delta}` : e.delta} · {ct(PHASE_LABEL[e.phase])}</i>
-                  </span>
-                ))}
-              </div>
-              <p className="muted small" style={{ margin: '8px 0 0' }}>
-                Entre temporadas o elenco evolui: jogador <b>{ct('em ascensão')}</b> melhora,
-                <b> {ct('no auge')}</b> oscila e <b>{ct('veterano em declínio')}</b> cai. O valor e o
-                salário acompanham os atributos: segurar um veterano caro (ou vender
-                no pico) é decisão sua.
-              </p>
-            </div>
-          )}
+      {/* Banners de status (warnings / contratos vencidos / save reparado) */}
+      {(save.lastReleases?.length ?? 0) > 0 && (
+        <div
+          style={{
+            padding: '10px 14px',
+            background: 'rgba(229,138,138,0.10)',
+            border: '1px solid rgba(229,138,138,0.35)',
+            borderRadius: 4,
+            color: 'var(--em-text)',
+            fontSize: '0.86rem',
+          }}
+        >
+          📄 <b>{ct('Contrato vencido:')}</b> <b>{save.lastReleases!.join(', ')}</b> — {ct('saiu de graça. Reforce o elenco no mercado.')}
+        </div>
+      )}
+      {recoveredSlots > 0 && (
+        <div
+          role="status"
+          style={{
+            padding: '10px 14px',
+            background: 'rgba(232,193,112,0.10)',
+            border: '1px solid rgba(232,193,112,0.35)',
+            borderRadius: 4,
+            color: 'var(--em-text)',
+            fontSize: '0.86rem',
+          }}
+        >
+          <b>{ct('Save reparado:')}</b>{' '}
+          {recoveredSlots === 1
+            ? ct('1 jogador de uma versão antiga não pôde ser recuperado e teve a vaga liberada.')
+            : `${recoveredSlots} ${ct('jogadores de uma versão antiga não puderam ser recuperados e tiveram as vagas liberadas.')}`}
+        </div>
+      )}
 
-          <div className="muted small section-label">{ct('Seu elenco')} ({squad.length}/5)</div>
-          <div className="roster-slots">
-            {[0, 1, 2, 3, 4].map((i) => {
-              const s = squad[i];
-              const f = s ? findSigning(s) : null;
-              if (f) {
-                return (
-                  <button key={i} className="slot filled" style={{ cursor: 'pointer' }}
-                    onClick={() => setSquad(squad.filter((x) => x.playerId !== s.playerId))}>
-                    <div className="nick">
-                      <Flag cc={f.player.country} /> {f.player.nick}{' '}
-                      <span className="ovr-inline">{playerOvr(f.player)}</span>
-                    </div>
-                    <span className={`role-pill ${f.player.role}`}>{f.player.role}</span>
-                    <div className="from">{formatMoney(playerValue(f.player))} · clique p/ dispensar</div>
-                  </button>
-                );
-              }
-              return <div key={i} className="slot">Contratação {i + 1}</div>;
+      {/* Evolução do elenco (só quando há mudanças relevantes) */}
+      {(save.lastEvo?.length ?? 0) > 0 && (
+        <DashCard title={ct('Evolução do elenco na janela')}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {save.lastEvo.map((e) => {
+              const isUp = e.delta > 0;
+              const isDown = e.delta < 0;
+              return (
+                <span
+                  key={e.nick}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 10px',
+                    background: isUp ? 'rgba(94,216,138,0.12)' : isDown ? 'rgba(229,138,138,0.12)' : 'var(--em-panel-2)',
+                    border: `1px solid ${isUp ? 'rgba(94,216,138,0.4)' : isDown ? 'rgba(229,138,138,0.4)' : 'var(--em-border)'}`,
+                    borderRadius: 4,
+                    fontSize: '0.78rem',
+                    color: 'var(--em-text)',
+                  }}
+                >
+                  <b style={{ color: isUp ? '#5ed88a' : isDown ? '#e58a8a' : 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                    {isUp ? '▲' : isDown ? '▼' : '▬'} {e.nick}
+                  </b>
+                  <i style={{ color: 'var(--em-muted)', fontSize: '0.72rem', fontStyle: 'normal' }}>
+                    {isUp ? `+${e.delta}` : e.delta} · {ct(PHASE_LABEL[e.phase])}
+                  </i>
+                </span>
+              );
             })}
           </div>
+          <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--em-muted)', lineHeight: 1.5 }}>
+            Entre temporadas o elenco evolui: jogador <b>{ct('em ascensão')}</b> melhora,
+            <b> {ct('no auge')}</b> oscila e <b>{ct('veterano em declínio')}</b> cai.
+            O valor e o salário acompanham os atributos.
+          </p>
+        </DashCard>
+      )}
 
-          {(save.academy ?? []).filter((a) => !squad.some((s) => s.playerId === a.id)).length > 0 && (
-            <>
-              <div className="muted small section-label">{ct('Promover da academia')} <span className="muted">({ct('grátis, sem precisar comprar')})</span></div>
-              <div className="aca-window-list">
-                {(save.academy ?? []).filter((a) => !squad.some((s) => s.playerId === a.id)).map((a) => {
+      {/* ── 3-COL LAYOUT ────────────────────────────────────────────────────── */}
+      <div className="em-market-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 320px) 1fr minmax(280px, 340px)', gap: 14, alignItems: 'start' }}>
+
+        {/* ─── ESQUERDA: Seu time + Academia ───────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+          <DashCard
+            title={`${ct('Seu elenco')} (${squad.length}/5)`}
+            info={ct('Clique pra dispensar (vende a 85% se for jogador atual).')}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[0, 1, 2, 3, 4].map((i) => {
+                const s = squad[i];
+                const f = s ? findSigning(s) : null;
+                if (!f) {
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '14px 10px',
+                        background: 'rgba(255,255,255,0.02)',
+                        border: '1px dashed var(--em-border)',
+                        borderRadius: 4,
+                        color: 'var(--em-muted)',
+                        fontSize: '0.78rem',
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      Vaga {i + 1}
+                    </div>
+                  );
+                }
+                return (
+                  <SquadRow
+                    key={i}
+                    player={f.player}
+                    rightLabel={`${formatMoney(playerValue(f.player))}`}
+                    rightHint={ct('dispensar')}
+                    tone="release"
+                    onClick={() => setSquad(squad.filter((x) => x.playerId !== s!.playerId))}
+                  />
+                );
+              })}
+            </div>
+          </DashCard>
+
+          {academyAvail.length > 0 && (
+            <DashCard
+              title={ct('Promover da academia')}
+              info={ct('Grátis. Cresce com treino.')}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {academyAvail.map((a) => {
                   const full = squad.length >= 5;
                   return (
-                    <button key={a.id} className="aca-window-pick" disabled={full}
-                      title={full ? ct('Elenco cheio — dispense alguém pra promover') : ct('Promover ao elenco (grátis)')}
-                      onClick={() => { if (!full) setSquad([...squad, { playerId: a.id, fromId: '__youth__' }]); }}>
-                      <PlayerAvatar nick={a.nick} size={32} />
-                      <div className="aw-info">
-                        <div className="nick"><Flag cc={a.country} /> {a.nick} <span className="ovr-inline">{playerOvr(a)}</span></div>
-                        <div className="from"><span className={`role-pill ${a.role}`}>{a.role}</span> {a.age} {ct('anos')} · {ct('pot.')} {a.potential}</div>
-                      </div>
-                      <span className="aw-add">⬆ {ct('Promover')}</span>
-                    </button>
+                    <SquadRow
+                      key={a.id}
+                      player={a}
+                      rightLabel={`${a.age}a · pot ${a.potential}`}
+                      rightHint={full ? '' : ct('promover')}
+                      tone="promote"
+                      disabled={full}
+                      disabledHint={full ? ct('Elenco cheio') : undefined}
+                      onClick={() => { if (!full) setSquad([...squad, { playerId: a.id, fromId: '__youth__' }]); }}
+                    />
                   );
                 })}
               </div>
-            </>
+            </DashCard>
           )}
+        </div>
 
-          <div className="muted small section-label">{ct('Coach')}</div>
-          <div className="career-coaches">
-            <button className={`call-btn${coachId === ROOKIE_ID ? ' armed' : ''}`}
-              title={ct('Opção de entrada: barato, mas com rating baixo')}
-              onClick={() => setCoachId(coachId === ROOKIE_ID ? null : ROOKIE_ID)}>
-              {ROOKIE_COACH.nick} · {ROOKIE_COACH.rating} · {formatMoney(coachFee(ROOKIE_COACH))}
-            </button>
-            {coachOptions.slice(0, 24).map((t) => (
-              <button key={t.id} className={`call-btn${coachId === t.id ? ' armed' : ''}`}
-                title={`${t.coach.name} (${t.team})`}
-                onClick={() => setCoachId(coachId === t.id ? null : t.id)}>
-                {t.coach.nick} · {t.coach.rating} · {formatMoney(coachFee(t.coach))}
+        {/* ─── CENTRO: Mercado de jogadores ─────────────────────────────────── */}
+        <DashCard
+          title={`${ct('Mercado')} (${visible.length}/${market.length})`}
+          actions={
+            filtersActive ? (
+              <button
+                type="button"
+                onClick={() => { setRoleFilter(''); setCcFilter(''); setFilter(''); }}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '0.72rem',
+                  fontFamily: 'inherit',
+                  fontWeight: 700,
+                  background: 'transparent',
+                  color: 'var(--em-text)',
+                  border: '1px solid var(--em-border)',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                }}
+              >
+                ✕ {ct('Limpar filtros')}
               </button>
-            ))}
-          </div>
-
-          <div className="muted small section-label">{ct('Mercado')} ({visible.length}/{market.length} {ct('jogadores')})</div>
-          <div className="market-filters">
-            <input className="mf-search" placeholder={ct('Buscar jogador ou time…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <select className="mf-select" value={ccFilter} onChange={(e) => setCcFilter(e.target.value)} title={ct('Filtrar por nacionalidade')}>
-              <option value="">{ct('🌐 País (todos)')}</option>
+            ) : undefined
+          }
+        >
+          {/* Filter bar */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <input
+              type="text"
+              placeholder={ct('Buscar jogador ou time…')}
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                background: 'var(--em-panel-2)',
+                color: 'var(--em-text)',
+                border: '1px solid var(--em-border)',
+                borderRadius: 4,
+                fontFamily: 'inherit',
+                fontSize: '0.86rem',
+              }}
+            />
+            <select
+              value={ccFilter}
+              onChange={(e) => setCcFilter(e.target.value)}
+              title={ct('Filtrar por nacionalidade')}
+              style={{
+                padding: '8px 12px',
+                background: 'var(--em-panel-2)',
+                color: 'var(--em-text)',
+                border: '1px solid var(--em-border)',
+                borderRadius: 4,
+                fontFamily: 'inherit',
+                fontSize: '0.84rem',
+                minWidth: 140,
+              }}
+            >
+              <option value="">🌐 {ct('País')} ({ct('todos')})</option>
               {countries.map((c) => (
                 <option key={c} value={c}>{c.toUpperCase()} ({countryCounts[c]})</option>
               ))}
             </select>
-            {(roleFilter || ccFilter || filter) && (
-              <button className="mf-clear" onClick={() => { setRoleFilter(''); setCcFilter(''); setFilter(''); }} title={ct('Limpar filtros')}>{ct('✕ Limpar')}</button>
-            )}
           </div>
-          <div className="market-roles">
-            <button className={`mr-chip${!roleFilter ? ' on' : ''}`} onClick={() => setRoleFilter('')}>{ct('Todas')}</button>
+
+          {/* Role chips */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+            <RoleChip label={ct('Todas')} active={!roleFilter} onClick={() => setRoleFilter('')} />
             {ROLE_OPTS.map((r) => (
-              <button key={r} className={`mr-chip role-${r}${roleFilter === r ? ' on' : ''}`} onClick={() => setRoleFilter(roleFilter === r ? '' : r)}>{r}</button>
+              <RoleChip
+                key={r}
+                label={r}
+                role={r}
+                active={roleFilter === r}
+                onClick={() => setRoleFilter(roleFilter === r ? '' : r)}
+              />
             ))}
           </div>
-          <div className="career-market scroll">
-            {visible.length === 0 && <div className="muted small" style={{ padding: 12 }}>{ct('Nenhum jogador com esses filtros.')}</div>}
-            {visible.map((m) => {
-              const dup = signedNicks.has(m.player.nick.toLowerCase());
-              const isFA = m.from.id === '__free__';
-              // free agent entra direto (sem clube pra negociar); jogador de clube
-              // abre a NEGOCIAÇÃO (o orçamento é checado lá dentro).
-              const canPick = squad.length < 5 && !dup && (isFA ? m.price <= budgetLeft : true);
-              return (
-                <button key={m.player.id} className={`pcard${!canPick ? ' taken' : ''}`}
-                  disabled={!canPick}
-                  onClick={() => isFA
-                    ? setSquad([...squad, { playerId: m.player.id, fromId: m.from.id, fee: m.price }])
-                    : setNego({ player: m.player, from: m.from })}>
-                  <PlayerAvatar nick={m.player.nick} size={48} />
-                  <OvrBadge ovr={playerOvr(m.player)} />
-                  <div className="nick">{m.player.nick}</div>
-                  <div className="meta">
-                    <span className={`role-pill ${m.player.role}`}>{m.player.role}</span>
-                  </div>
-                  <div className="meta muted small">
-                    <TeamBadge tag={m.from.tag} colors={m.from.colors} size={16} logoUrl={m.from.logoUrl ?? logoForTeam(m.from)} />{' '}
-                    {m.from.team}
-                  </div>
-                  {(() => {
-                    const age = effectiveAge(m.player, save.split, save.youthAge);
-                    const ph = playerPhase(m.player.id, age);
-                    const pot = potentialTier(playerPotentialOvr(m.player, age));
-                    return (
-                      <>
-                        <div className="meta small player-bio">
-                          <span title={ct('Idade')}>🎂 {age}a</span>
-                          <span className={`pot-badge pot-${pot}`} title={ct('Potencial (teto de OVR)')}>POT {pot}</span>
-                        </div>
-                        <div className={`meta small phase-tag ${ph}`} title={ct('Jovem em ascensão melhora entre temporadas; veterano cai')}>
-                          {ph === 'rising' ? '📈' : ph === 'declining' ? '📉' : '▬'} {ct(PHASE_LABEL[ph])}
-                        </div>
-                      </>
-                    );
-                  })()}
-                  <div className="price buy">💰 {formatMoney(m.price)}</div>
-                  {dup && <div className="meta muted small">{ct('já contratado')}</div>}
-                </button>
-              );
-            })}
-          </div>
 
-          {/* patrocinadores: receita fixa por split, marcas reais */}
-          <div className="muted small section-label">
-            Patrocinadores ({sponsors.length}/{SPONSOR_SLOTS}) · receita por split: <b className="pos">+{formatMoney(sponsorIncome(sponsors))}</b>
-          </div>
-          <div className="muted small" style={{ margin: '-4px 0 8px' }}>
-            {ct('Ao assinar você se compromete por X splits (não dá pra rescindir antes). Marcas maiores pedem mais VRS e contratos mais longos.')}
-          </div>
-          <div className="sponsor-grid">
-            {(() => { const sponsorVrs = userVrsTotal(save, findSigning, coaches); return SPONSORS.map((sp) => {
-              const active = sponsors.includes(sp.id);
-              const committed = active && underContract(sp.id);
-              // gate pelo VRS COMPLETO (o mesmo do ranking), não só o save.vrs rolante:
-              // antes as marcas top (Red Bull/Samsung) eram praticamente inalcançáveis.
-              const reqVrs = !active && sp.minVrs > sponsorVrs;
-              const full = !active && sponsors.length >= SPONSOR_SLOTS;
-              const blocked = reqVrs || full;
-              return (
-                <button
-                  key={sp.id}
-                  type="button"
-                  className={`sponsor-card${active ? ' on' : ''}${blocked ? ' locked' : ''}${committed ? ' committed' : ''}`}
-                  disabled={blocked}
-                  onClick={() => !blocked && toggleSponsor(sp.id)}
-                  title={reqVrs ? `${ct('Requer')} ${sp.minVrs} VRS` : full ? ct('Slots cheios') : committed ? `${ct('Contrato até o Split')} ${sponsorUntil[sp.id]}` : active ? ct('Contrato encerrado: clique para sair') : `${ct('Compromisso de')} ${sp.term} splits`}
-                >
-                  <span className="sp-logo" style={{ background: sp.color }}>{sp.name.slice(0, 1)}</span>
-                  <span className="sp-name">{sp.name}</span>
-                  <span className="sp-pay pos">+{formatMoney(sp.perSplit)}</span>
-                  {reqVrs && <span className="sp-lock muted small">{sp.minVrs} VRS</span>}
-                  {!active && !reqVrs && <span className="sp-lock muted small">{sp.term} splits</span>}
-                  {committed && <span className="sp-lock muted small">🔒 até Split {sponsorUntil[sp.id]}</span>}
-                  {active && !committed && <span className="sp-lock muted small">{ct('renovável')}</span>}
-                  {active && <span className="sp-check">✔</span>}
-                </button>
-              );
-            }); })()}
-          </div>
+          {/* Grid de jogadores (mantém pcard pra reuso do CSS existente) */}
+          {visible.length === 0 ? (
+            <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--em-muted)', fontSize: '0.86rem', fontStyle: 'italic' }}>
+              {ct('Nenhum jogador com esses filtros.')}
+            </div>
+          ) : (
+            <div
+              className="career-market scroll"
+              style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto' }}
+            >
+              {visible.slice(0, 60).map((m) => {
+                const dup = signedNicks.has(m.player.nick.toLowerCase());
+                const isFA = m.from.id === '__free__';
+                const canPick = squad.length < 5 && !dup && (isFA ? m.price <= budgetLeft : true);
+                return (
+                  <button
+                    key={m.player.id}
+                    className={`pcard${!canPick ? ' taken' : ''}`}
+                    disabled={!canPick}
+                    onClick={() =>
+                      isFA
+                        ? setSquad([...squad, { playerId: m.player.id, fromId: m.from.id, fee: m.price }])
+                        : setNego({ player: m.player, from: m.from })
+                    }
+                  >
+                    <PlayerAvatar nick={m.player.nick} size={48} />
+                    <OvrBadge ovr={playerOvr(m.player)} />
+                    <div className="nick">{m.player.nick}</div>
+                    <div className="meta">
+                      <span className={`role-pill ${m.player.role}`}>{m.player.role}</span>
+                    </div>
+                    <div className="meta muted small">
+                      <TeamBadge tag={m.from.tag} colors={m.from.colors} size={16} logoUrl={m.from.logoUrl ?? logoForTeam(m.from)} />{' '}
+                      {m.from.team}
+                    </div>
+                    {(() => {
+                      const age = effectiveAge(m.player, save.split, save.youthAge);
+                      const ph = playerPhase(m.player.id, age);
+                      const pot = potentialTier(playerPotentialOvr(m.player, age));
+                      return (
+                        <>
+                          <div className="meta small player-bio">
+                            <span title={ct('Idade')}>🎂 {age}a</span>
+                            <span className={`pot-badge pot-${pot}`} title={ct('Potencial (teto de OVR)')}>POT {pot}</span>
+                          </div>
+                          <div className={`meta small phase-tag ${ph}`} title={ct('Jovem em ascensão melhora entre temporadas; veterano cai')}>
+                            {ph === 'rising' ? '📈' : ph === 'declining' ? '📉' : '▬'} {ct(PHASE_LABEL[ph])}
+                          </div>
+                        </>
+                      );
+                    })()}
+                    <div className="price buy">💰 {formatMoney(m.price)}</div>
+                    {dup && <div className="meta muted small">{ct('já contratado')}</div>}
+                  </button>
+                );
+              })}
+              {visible.length > 60 && (
+                <div style={{ gridColumn: '1 / -1', padding: 10, textAlign: 'center', color: 'var(--em-muted)', fontSize: '0.78rem' }}>
+                  {ct('Mostrando 60 de')} {visible.length}. {ct('Refine os filtros pra ver mais.')}
+                </div>
+              )}
+            </div>
+          )}
+        </DashCard>
 
-          {/* transferências que já se concretizaram (jogadores agora nos novos times) */}
+        {/* ─── DIREITA: Coach + Sponsors + Rumores ──────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+          <DashCard
+            title={ct('Coach')}
+            info={`${coachOptions.length + 1} ${ct('disponíveis')}`}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 360, overflowY: 'auto' }}>
+              <CoachRow
+                nick={ROOKIE_COACH.nick}
+                name={ROOKIE_COACH.name}
+                country={ROOKIE_COACH.country ?? '??'}
+                rating={ROOKIE_COACH.rating}
+                fee={coachFee(ROOKIE_COACH)}
+                selected={coachId === ROOKIE_ID}
+                tag={ct('Estreante')}
+                onClick={() => setCoachId(coachId === ROOKIE_ID ? null : ROOKIE_ID)}
+              />
+              {coachOptions.slice(0, 24).map((t) => (
+                <CoachRow
+                  key={t.id}
+                  nick={t.coach.nick}
+                  name={t.coach.name}
+                  country={t.coach.country ?? '??'}
+                  rating={t.coach.rating}
+                  fee={coachFee(t.coach)}
+                  selected={coachId === t.id}
+                  tag={t.tag}
+                  onClick={() => setCoachId(coachId === t.id ? null : t.id)}
+                />
+              ))}
+            </div>
+          </DashCard>
+
+          <DashCard
+            title={`${ct('Patrocínios')} (${sponsors.length}/${SPONSOR_SLOTS})`}
+            info={`+${formatMoney(sponsorIncome(sponsors))}/split`}
+          >
+            <div className="sponsor-grid">
+              {SPONSORS.map((sp) => {
+                const active = sponsors.includes(sp.id);
+                const committed = active && underContract(sp.id);
+                const reqVrs = !active && sp.minVrs > sponsorVrs;
+                const full = !active && sponsors.length >= SPONSOR_SLOTS;
+                const blocked = reqVrs || full;
+                return (
+                  <button
+                    key={sp.id}
+                    type="button"
+                    className={`sponsor-card${active ? ' on' : ''}${blocked ? ' locked' : ''}${committed ? ' committed' : ''}`}
+                    disabled={blocked}
+                    onClick={() => !blocked && toggleSponsor(sp.id)}
+                    title={
+                      reqVrs ? `${ct('Requer')} ${sp.minVrs} VRS`
+                      : full ? ct('Slots cheios')
+                      : committed ? `${ct('Contrato até o Split')} ${sponsorUntil[sp.id]}`
+                      : active ? ct('Contrato encerrado: clique para sair')
+                      : `${ct('Compromisso de')} ${sp.term} splits`
+                    }
+                  >
+                    <span className="sp-logo" style={{ background: sp.color }}>{sp.name.slice(0, 1)}</span>
+                    <span className="sp-name">{sp.name}</span>
+                    <span className="sp-pay pos">+{formatMoney(sp.perSplit)}</span>
+                    {reqVrs && <span className="sp-lock muted small">{sp.minVrs} VRS</span>}
+                    {!active && !reqVrs && <span className="sp-lock muted small">{sp.term} splits</span>}
+                    {committed && <span className="sp-lock muted small">🔒 até Split {sponsorUntil[sp.id]}</span>}
+                    {active && !committed && <span className="sp-lock muted small">{ct('renovável')}</span>}
+                    {active && <span className="sp-check">✔</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </DashCard>
+
           {(save.lastMoves?.length ?? 0) > 0 && (
-            <>
-              <div className="muted small section-label">{ct('✅ Transferências confirmadas (já valem nos elencos)')}</div>
-              <div className="moves-done">
+            <DashCard title={ct('Confirmadas na janela anterior')}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {save.lastMoves.map((mv, i) => (
-                  <span key={i} className="move-chip">
-                    <b>{mv.nick}</b> {mv.from} → <b>{mv.to}</b>
-                  </span>
+                  <div
+                    key={i}
+                    style={{
+                      padding: '6px 10px',
+                      background: 'var(--em-panel-2)',
+                      borderRadius: 4,
+                      fontSize: '0.78rem',
+                      color: 'var(--em-text)',
+                    }}
+                  >
+                    <b>{mv.nick}</b>{' '}
+                    <span style={{ color: 'var(--em-muted)' }}>{mv.from} →</span>{' '}
+                    <b>{mv.to}</b>
+                  </div>
                 ))}
               </div>
-            </>
+            </DashCard>
           )}
 
-          {/* janela de transferências: o que os outros times andam fazendo */}
-          <div className="muted small section-label">{ct('Rumores da próxima janela')}</div>
-          <TransferFeed items={marketFeed} />
-
-          <div className="center" style={{ marginTop: 16 }}>
-            <button className="btn gold big" disabled={!ready}
-              onClick={() => coachId && onConfirm(squad, coachId, budgetLeft, sponsors, sponsorUntil)}>
-              ✔ {embedded ? ct('Salvar elenco') : ct('Fechar elenco e escolher o campeonato')}
-            </button>
-            {!ready && (
-              <div className="muted small" style={{ marginTop: 8 }}>
-                {squad.length < 5 ? `${ct('Faltam')} ${5 - squad.length} ${ct('jogador(es).')} ` : ''}
-                {!coachId ? 'Escolha um coach. ' : ''}
-                {budgetLeft < 0 ? ct('Orçamento estourado.') : ''}
-              </div>
-            )}
-          </div>
+          <DashCard title={ct('Rumores da próxima janela')}>
+            <TransferFeed items={marketFeed} />
+          </DashCard>
         </div>
       </div>
+
+      {/* Sticky bottom: confirmar */}
+      <div
+        style={{
+          position: 'sticky',
+          bottom: 12,
+          marginTop: 4,
+          padding: '12px 18px',
+          background: 'var(--em-panel)',
+          border: '1px solid var(--em-border)',
+          borderRadius: 6,
+          boxShadow: '0 -4px 16px rgba(0,0,0,0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          zIndex: 20,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.82rem', color: 'var(--em-muted)' }}>
+          {squad.length < 5 && <span>⚠ {ct('Faltam')} <b style={{ color: 'var(--em-text)' }}>{5 - squad.length}</b> {ct('jogador(es)')}</span>}
+          {squad.length === 5 && !coachId && <span>⚠ {ct('Escolha um coach')}</span>}
+          {budgetLeft < 0 && <span style={{ color: '#e58a8a' }}>⚠ {ct('Orçamento estourado')}</span>}
+          {ready && <span style={{ color: '#5ed88a', fontWeight: 700 }}>✓ {ct('Pronto pra fechar')}</span>}
+        </div>
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => coachId && onConfirm(squad, coachId, budgetLeft, sponsors, sponsorUntil)}
+          style={{
+            padding: '10px 24px',
+            background: ready ? 'var(--em-gold)' : 'var(--em-panel-2)',
+            color: ready ? '#1a1205' : 'var(--em-muted)',
+            border: ready ? 'none' : '1px solid var(--em-border)',
+            borderRadius: 4,
+            fontFamily: 'inherit',
+            fontWeight: 900,
+            fontSize: '0.92rem',
+            letterSpacing: '0.3px',
+            cursor: ready ? 'pointer' : 'not-allowed',
+          }}
+        >
+          ✔ {PLAN_LABEL_FOR_BTN}
+        </button>
+      </div>
+
       {nego && (
         <NegotiationModal
           player={nego.player}
@@ -7678,5 +7856,191 @@ function MarketScreen({
         />
       )}
     </div>
+  );
+}
+
+// ─── Sub-componentes locais do MarketScreen ────────────────────────────────
+
+function HudPill({ label, value, tone, mono }: { label: string; value: string; tone: 'green' | 'red' | 'neutral'; mono?: boolean }) {
+  const colors: Record<string, { fg: string; bg: string; border: string }> = {
+    green:   { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
+    red:     { fg: '#e58a8a', bg: 'rgba(229,138,138,0.12)', border: 'rgba(229,138,138,0.4)' },
+    neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
+  };
+  const c = colors[tone];
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        padding: '5px 12px',
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        borderRadius: 4,
+        lineHeight: 1.1,
+        minWidth: 70,
+      }}
+    >
+      <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        {label}
+      </span>
+      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: mono ? '"JetBrains Mono", monospace' : 'inherit' }}>
+        {value}
+      </b>
+    </div>
+  );
+}
+
+function SquadRow({
+  player,
+  rightLabel,
+  rightHint,
+  tone,
+  disabled,
+  disabledHint,
+  onClick,
+}: {
+  player: Player;
+  rightLabel: string;
+  rightHint?: string;
+  tone: 'release' | 'promote';
+  disabled?: boolean;
+  disabledHint?: string;
+  onClick: () => void;
+}) {
+  const accent = tone === 'promote' ? '#5ed88a' : '#e8a93b';
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled ? disabledHint : undefined}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 10px',
+        background: 'var(--em-panel-2)',
+        border: '1px solid var(--em-border)',
+        borderRadius: 4,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
+        textAlign: 'left',
+        fontFamily: 'inherit',
+        color: 'var(--em-text)',
+        transition: 'border-color .12s, background .12s',
+      }}
+      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.borderColor = accent; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--em-border)'; }}
+    >
+      <PlayerAvatar nick={player.nick} size={36} />
+      <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.86rem', fontWeight: 700 }}>
+          <Flag cc={player.country} /> {player.nick}
+          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem', color: accent, fontWeight: 800 }}>
+            {playerOvr(player)}
+          </span>
+        </div>
+        <div style={{ marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span className={`role-pill ${player.role}`}>{player.role}</span>
+        </div>
+      </div>
+      <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
+        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem', color: 'var(--em-text)', fontWeight: 700 }}>
+          {rightLabel}
+        </div>
+        {rightHint && (
+          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            {rightHint}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function CoachRow({
+  nick,
+  name,
+  country,
+  rating,
+  fee,
+  selected,
+  tag,
+  onClick,
+}: {
+  nick: string;
+  name: string;
+  country: string;
+  rating: number;
+  fee: number;
+  selected: boolean;
+  tag?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`${name}${tag ? ` (${tag})` : ''}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 10px',
+        background: selected ? 'rgba(232,193,112,0.14)' : 'var(--em-panel-2)',
+        border: `1px solid ${selected ? 'var(--em-gold)' : 'var(--em-border)'}`,
+        borderRadius: 4,
+        cursor: 'pointer',
+        textAlign: 'left',
+        fontFamily: 'inherit',
+        color: 'var(--em-text)',
+        transition: 'border-color .12s, background .12s',
+      }}
+    >
+      <PlayerAvatar nick={nick} size={30} />
+      <div style={{ flex: 1, minWidth: 0, lineHeight: 1.15 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.86rem', fontWeight: 700 }}>
+          <Flag cc={country} /> {nick}
+        </div>
+        <div style={{ fontSize: '0.68rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          {tag ? tag : name}
+        </div>
+      </div>
+      <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
+        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.92rem', color: selected ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>
+          {rating}
+        </div>
+        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem', color: 'var(--em-muted)' }}>
+          {formatMoney(fee)}
+        </div>
+      </div>
+      {selected && (
+        <span style={{ color: 'var(--em-gold)', fontWeight: 900, fontSize: '0.86rem', marginLeft: 4 }}>✓</span>
+      )}
+    </button>
+  );
+}
+
+function RoleChip({ label, role, active, onClick }: { label: string; role?: Role; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '4px 10px',
+        background: active ? 'var(--em-gold)' : 'var(--em-panel-2)',
+        color: active ? '#1a1205' : 'var(--em-text)',
+        border: `1px solid ${active ? 'var(--em-gold)' : 'var(--em-border)'}`,
+        borderRadius: 12,
+        fontFamily: 'inherit',
+        fontSize: '0.74rem',
+        fontWeight: 700,
+        cursor: 'pointer',
+      }}
+      className={role ? `role-${role}` : undefined}
+    >
+      {label}
+    </button>
   );
 }

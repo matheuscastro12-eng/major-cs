@@ -1,9 +1,45 @@
 import { useState } from 'react';
 import { MAP_IMAGES, photoForNick } from '../data/media';
 import { loadMapImages } from '../state/crm';
+import { hashStr } from '../state/hash';
 import { MAP_LABELS, type MapId, type TTeam } from '../types';
 
-// Avatar do jogador: foto real da Liquipedia (via proxy) com fallback de iniciais
+// ─── T7.1: paleta procedural pro fallback de avatar ────────────────────────
+// Players têm 8 paletas dark/saturated rotacionadas por hash(nick); coaches
+// ficam num grupo roxo distinto pra serem reconhecíveis num glance. Mesmo
+// nick → mesmo avatar sempre (determinístico).
+const PLAYER_PALETTES: { from: string; to: string; fg: string; accent: string }[] = [
+  { from: '#1e3a5f', to: '#0d1b2e', fg: '#7cb3e8', accent: '#5fa4e8' }, // azul
+  { from: '#3d1e5f', to: '#1d0d2e', fg: '#b389e8', accent: '#9b6fe8' }, // roxo claro
+  { from: '#5f1e3a', to: '#2e0d1b', fg: '#e89bc7', accent: '#e8709f' }, // rosa profundo
+  { from: '#5f3a1e', to: '#2e1b0d', fg: '#e8c170', accent: '#d8a93b' }, // âmbar
+  { from: '#1e5f3a', to: '#0d2e1b', fg: '#7ce8a3', accent: '#5ed88a' }, // verde
+  { from: '#3a5f1e', to: '#1b2e0d', fg: '#bce870', accent: '#a3d83b' }, // verde-amarelado
+  { from: '#5f1e1e', to: '#2e0d0d', fg: '#e89b9b', accent: '#e87070' }, // vermelho
+  { from: '#1e5f5f', to: '#0d2e2e', fg: '#7ce8e8', accent: '#5ed8d8' }, // teal
+];
+const COACH_PALETTES: { from: string; to: string; fg: string; accent: string }[] = [
+  { from: '#4a2c7a', to: '#2a1745', fg: '#c8a4ff', accent: '#9b6fe8' },
+  { from: '#5a3a8a', to: '#2c1d4a', fg: '#d4b8ff', accent: '#a87fff' },
+  { from: '#3d2a6a', to: '#211538', fg: '#b894ee', accent: '#8a6fd8' },
+];
+
+function paletteFromNick(nick: string, coach: boolean): { from: string; to: string; fg: string; accent: string } {
+  const h = hashStr(nick.toLowerCase());
+  const pool = coach ? COACH_PALETTES : PLAYER_PALETTES;
+  return pool[h % pool.length];
+}
+
+// Iniciais: 2 letras pra nicks normais, 3 pra nicks 1-2 char pra ter mais
+// densidade visual (e separar "K" do "KZ" do "KZY" no glance).
+function initialsFromNick(nick: string): string {
+  const clean = nick.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || nick.toUpperCase();
+  return clean.slice(0, clean.length <= 2 ? 3 : 2);
+}
+
+// Avatar do jogador: foto real da Liquipedia (via proxy) com fallback procedural.
+// Quando não tem foto, gera um gradient único + iniciais (mesmo seed = mesmo
+// avatar sempre, então o reconhecimento visual fica estável entre re-renders).
 export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string; size?: number; coach?: boolean }) {
   const [failedUrl, setFailedUrl] = useState('');
   const safeNick = nick || '?'; // protege contra nick indefinido (não quebra o render)
@@ -15,19 +51,63 @@ export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string;
       </span>
     );
   }
+  // Fallback procedural: paleta determinada por hash(nick); shape sutil de fundo
+  // pra diferenciar de placeholders genéricos. Iniciais em cor de contraste alta.
+  const p = paletteFromNick(safeNick, coach);
+  const initials = initialsFromNick(safeNick);
+  const h = hashStr(safeNick.toLowerCase());
+  // 4 shapes de fundo decorativo (varia por seed): círculo, triângulo, losango, none
+  const shapeIdx = h % 4;
+  const decoR = size * 0.42;
+  const decoCx = h % 2 === 0 ? size * 0.78 : size * 0.22;
+  const decoCy = (h >> 3) % 2 === 0 ? size * 0.22 : size * 0.78;
   return (
     <span
       className="pavatar text"
       style={{
         width: size,
         height: size,
-        fontSize: size * 0.36,
-        background: coach
-          ? 'linear-gradient(160deg, #6a4f9e 0%, #3a2c5c 100%)'
-          : 'linear-gradient(160deg, var(--em-panel-2) 0%, var(--em-panel) 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+        background: `linear-gradient(160deg, ${p.from} 0%, ${p.to} 100%)`,
       }}
     >
-      {safeNick.slice(0, 2).toUpperCase()}
+      {/* Decoração sutil: shape no canto com cor de accent translucent */}
+      <svg
+        aria-hidden
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ position: 'absolute', inset: 0, opacity: 0.18 }}
+      >
+        {shapeIdx === 0 && <circle cx={decoCx} cy={decoCy} r={decoR} fill={p.accent} />}
+        {shapeIdx === 1 && (
+          <polygon
+            points={`${decoCx},${decoCy - decoR} ${decoCx + decoR},${decoCy + decoR * 0.6} ${decoCx - decoR},${decoCy + decoR * 0.6}`}
+            fill={p.accent}
+          />
+        )}
+        {shapeIdx === 2 && (
+          <polygon
+            points={`${decoCx},${decoCy - decoR} ${decoCx + decoR * 0.7},${decoCy} ${decoCx},${decoCy + decoR} ${decoCx - decoR * 0.7},${decoCy}`}
+            fill={p.accent}
+          />
+        )}
+        {/* shapeIdx === 3: sem decoração (só gradient) */}
+      </svg>
+      <span
+        style={{
+          position: 'relative',
+          color: p.fg,
+          fontSize: size * (initials.length === 3 ? 0.32 : 0.38),
+          fontWeight: 800,
+          letterSpacing: '0.04em',
+          textShadow: '0 1px 2px rgba(0,0,0,0.35)',
+          fontFamily: '"JetBrains Mono", monospace',
+        }}
+      >
+        {initials}
+      </span>
     </span>
   );
 }
