@@ -3,6 +3,7 @@
 // então o servidor guarda o estado do lobby, os picks e a barreira coletiva de
 // cada etapa do Major (todos prontos antes de avançar).
 import { neon } from '@neondatabase/serverless';
+import { createHash } from 'node:crypto';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
@@ -182,7 +183,7 @@ async function migrateHostIfStale(sql: ReturnType<typeof neon>, code: string): P
 }
 
 interface Res {
-  status: (code: number) => { json: (body: unknown) => void };
+  status: (code: number) => { json: (body: unknown) => void; end: () => void };
   setHeader: (k: string, v: string) => void;
 }
 
@@ -261,14 +262,24 @@ export default async function handler(
           lobby[0].status = nextStatus;
         }
       }
-      res.status(200).json({
+      const stateForEtag = {
         lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage), stage_started_at: Number(lobby[0].stage_started_at), playback_speed: Number(lobby[0].playback_speed) },
         players: players.map((p) => ({ ...p, ready_stage: Number(p.ready_stage) })),
-        // hora do SERVIDOR: o relógio da sala (stage_started_at) é gravado em tempo
-        // de servidor; o cliente corrige a diferença pro seu Date.now() não travar o
-        // replay quando o relógio do PC está adiantado/atrasado.
-        serverNow: Date.now(),
-      });
+      };
+      // resposta condicional: o poll repetido (estado idêntico) volta 304 sem
+      // corpo, cortando Fast Origin Transfer. O ETag é o hash do conteúdo REAL
+      // da sala (sem o serverNow, que muda a cada request); qualquer mudança real
+      // (status, picks, done, host, veto) reenvia o corpo. O serverNow vai no
+      // payload pra cliente corrigir o skew do relógio (mantém a correção HEAD).
+      const etag = 'W/"' + createHash('sha1').update(JSON.stringify(stateForEtag)).digest('base64') + '"';
+      res.setHeader('ETag', etag);
+      res.setHeader('Access-Control-Expose-Headers', 'ETag');
+      const inm = req.headers?.['if-none-match'];
+      if (inm && (Array.isArray(inm) ? inm.includes(etag) : inm === etag)) {
+        res.status(304).end();
+        return;
+      }
+      res.status(200).json({ ...stateForEtag, serverNow: Date.now() });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }

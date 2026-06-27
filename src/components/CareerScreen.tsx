@@ -2909,6 +2909,25 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     };
   };
 
+  // AUTO-CURA: garante que todo jogador do elenco que AINDA resolve tenha um
+  // snapshot gravado. Assim, se a base do bo3 for reimportada (troca de ids) num
+  // deploy futuro, o passo 8 do findSigning recupera o atleta pela cópia em vez de
+  // "perder" e liberar a vaga (o bug do mzinho/Techno4K/zweih). Roda uma vez por
+  // save: depois que todos têm snapshot, nada muda e não re-persiste.
+  useEffect(() => {
+    if (!save.squad.length) return;
+    let changed = false;
+    const healed = save.squad.map((sig) => {
+      if (sig.playerSnapshot) return sig;
+      const r = findSigning(sig);
+      if (!r) return sig;
+      changed = true;
+      return signingWithSnapshot(sig, r);
+    });
+    if (changed) { const next = { ...save, squad: healed }; persist(next); setSave(next); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.squad]);
+
   const buildTeam = (s: CareerSave): TTeam | null => {
     if (!s.org || s.squad.length < 5 || !s.coachFromId) return null;
     const picks = s.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
@@ -8551,7 +8570,6 @@ function MarketScreen({
               />
             ))}
           </div>
-
           {/* Grid de jogadores (mantém pcard pra reuso do CSS existente) */}
           {visible.length === 0 ? (
             <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--em-muted)', fontSize: '0.86rem', fontStyle: 'italic' }}>
@@ -8573,7 +8591,7 @@ function MarketScreen({
                     disabled={!canPick}
                     onClick={() =>
                       isFA
-                        ? setSquad([...squad, { playerId: m.player.id, fromId: m.from.id, fee: m.price }])
+                        ? setSquad([...squad, signingWithSnapshot({ playerId: m.player.id, fromId: m.from.id, fee: m.price }, { player: m.player, from: m.from, basePlayer: m.player })])
                         : setNego({ player: m.player, from: m.from })
                     }
                   >
@@ -8771,7 +8789,7 @@ function MarketScreen({
           budget={budgetLeft}
           onClose={() => setNego(null)}
           onAgree={(fee) => {
-            setSquad([...squad, { playerId: nego.player.id, fromId: nego.from.id, fee }]);
+            setSquad([...squad, signingWithSnapshot({ playerId: nego.player.id, fromId: nego.from.id, fee }, { player: nego.player, from: nego.from, basePlayer: nego.player })]);
             setNego(null);
           }}
         />

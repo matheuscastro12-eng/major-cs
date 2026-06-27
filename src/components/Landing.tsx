@@ -7,7 +7,7 @@ import { Button, Modal } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
-import { login, signup } from '../state/account';
+import { login, signup, beginPix, fetchMe, type PixCharge } from '../state/account';
 import { ct } from '../state/career-i18n';
 
 const M = '/maps/';
@@ -195,7 +195,7 @@ function Faq() {
     ['O que a conta me dá?', 'Save na nuvem pra jogar de qualquer aparelho, ranking e MMR persistentes no modo online, histórico de partidas e um selo de apoiador. Nenhum modo ou vantagem de gameplay é vendido.'],
     ['Por que o ranking online pede conta?', 'O ranking precisa guardar o seu histórico em servidor pra ser justo e não dar pra burlar. Sem conta você ainda joga partidas online, mas elas não contam pontos salvos.'],
     ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
-    ['Como pago os R$20?', 'Via Pix ou cartão, pelo Stripe. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
+    ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
     ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, cobrindo as cinco eras do Counter-Strike.'],
   ];
   const [open, setOpen] = useState(0);
@@ -253,6 +253,18 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [accepted, setAccepted] = useState(false);
+  // Pix Woovi (merge origin/master) + visual em-* (HEAD)
+  const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  // polling: confere a cada 4s se a conta já virou paga (webhook do Woovi).
+  useEffect(() => {
+    if (!pix) return;
+    let alive = true;
+    const t = setInterval(async () => {
+      try { const me = await fetchMe(); if (alive && me?.paid) { setPix(null); onPlay(); } } catch { /* ignora */ }
+    }, 4000);
+    return () => { alive = false; clearInterval(t); };
+  }, [pix, onPlay]);
   // Input/label nativos puxam os overrides em-* via body.career-dash (Fase 0/1),
   // então não precisamos mais de inline style nos campos.
   const input: CSSProperties = { width: '100%' };
@@ -266,6 +278,25 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       if (acct.paid) { onPlay(); return; }           // já tem conta vitalícia: entra direto
       await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
+  };
+  // Pix via Woovi (merged de origin/master): cria/entra na conta, gera a cobrança
+  // e mostra QR + copia-e-cola INLINE. O webhook (/api/woovi-webhook) marca a conta
+  // como paga e o polling acima detecta na mesma tela e libera o acesso.
+  const goPix = async () => {
+    if (!valid || busy) return;
+    setBusy(true); setErr('');
+    try {
+      const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
+      if (acct.paid) { onPlay(); return; }
+      const charge = await beginPix();
+      if (!charge) { onPlay(); return; } // já estava paga
+      setPix({ charge, email: acct.email });
+      setBusy(false);
+    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
+  };
+  const copyBr = async () => {
+    if (!pix?.charge.brCode) return;
+    try { await navigator.clipboard.writeText(pix.charge.brCode); setCopied(true); setTimeout(() => setCopied(false), 2200); } catch { /* sem permissão */ }
   };
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
@@ -293,12 +324,45 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         </label>
       )}
       {err && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
-      <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : mode === 'signup' ? ct('Ativar save por R$20') : ct('Entrar')}</Button>
+      <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : mode === 'signup' ? ct('Ativar com cartão (Stripe)') : ct('Entrar')}</Button>
+      {mode === 'signup' && (
+        <button type="button" disabled={!valid || busy} onClick={goPix}
+          style={{ width: '100%', marginTop: '10px', padding: '11px', borderRadius: '6px', cursor: !valid || busy ? 'default' : 'pointer', opacity: !valid || busy ? 0.5 : 1, background: 'rgba(94,216,138,.12)', border: '1px solid rgba(94,216,138,.55)', color: '#5ed88a', fontWeight: 700, fontSize: '0.84rem', fontFamily: 'inherit' }}>
+          {ct('Pagar com Pix (Woovi)')}
+        </button>
+      )}
+      {pix && (
+        <div style={{ marginTop: '14px', background: 'rgba(94,216,138,.08)', border: '1px solid rgba(94,216,138,.35)', borderRadius: '6px', padding: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#5ed88a', boxShadow: '0 0 8px #5ed88a', animation: 'pulse 1.4s infinite' }} />
+            <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
+          </div>
+          {pix.charge.qrCodeImage && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+              <img src={pix.charge.qrCodeImage} alt="QR Pix" style={{ width: '200px', height: '200px', background: '#fff', padding: '8px', borderRadius: '8px' }} />
+            </div>
+          )}
+          {pix.charge.brCode && (
+            <>
+              <label style={lbl}>{ct('Pix copia e cola')}</label>
+              <textarea readOnly value={pix.charge.brCode} rows={3} onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                style={{ ...input, fontFamily: 'monospace', fontSize: '0.72rem', resize: 'none', wordBreak: 'break-all' }} />
+              <button type="button" onClick={copyBr}
+                style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'rgba(94,216,138,.2)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                {copied ? ct('Copiado!') : ct('Copiar código Pix')}
+              </button>
+            </>
+          )}
+          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
+            {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
+          </p>
+        </div>
+      )}
       <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
         {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
         <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
       </p>
-      <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', opacity: 0.75, textAlign: 'center', margin: '10px 0 0' }}>{ct('Pagamento via Stripe. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
+      <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', opacity: 0.75, textAlign: 'center', margin: '10px 0 0' }}>{ct('Cartão pelo Stripe ou Pix pelo Woovi. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
     </Modal>
   );
 }

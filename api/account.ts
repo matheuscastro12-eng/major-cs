@@ -252,6 +252,44 @@ export default async function handler(
     return;
   }
 
+  // pix: gera uma cobrança Pix no Woovi pra esta conta (correlationID = email).
+  // O webhook (/api/woovi-webhook) marca pago quando o Pix cai. Retorna o QR e
+  // o BR Code (copia-e-cola) pra mostrar inline no jogo. Requer env OPENPIX_APP_ID.
+  if (action === 'pix') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login antes de pagar.' }); return; }
+    if (await resolvePaid(em, false, true)) { res.status(200).json({ paid: true }); return; }
+    const appId = cleanEnv(process.env.OPENPIX_APP_ID);
+    if (!appId) { res.status(500).json({ error: 'Pix indisponível: OPENPIX_APP_ID não configurada.' }); return; }
+    // valor em CENTAVOS (R$20 = 2000). Editável via PIX_PRICE_CENTS (mesma régua do Stripe).
+    const value = Number(cleanEnv(process.env.PIX_PRICE_CENTS) || '2000') || 2000;
+    const nick = String(((await sql`SELECT nick FROM rtm_accounts WHERE email=${em}`)[0]?.nick) ?? '').slice(0, 80) || em;
+    try {
+      const r = await fetch('https://api.openpix.com.br/api/v1/charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: appId },
+        body: JSON.stringify({
+          correlationID: `rtm-${em}-${Math.floor(Date.now() / 1000)}`,
+          value,
+          comment: 'Road to Major · conta vitalícia',
+          customer: { name: nick, email: em },
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!r.ok) { res.status(502).json({ error: 'Falha ao gerar Pix. Tente de novo.' }); return; }
+      const j = (await r.json()) as { charge?: Record<string, unknown> };
+      const c = j?.charge ?? {};
+      res.status(200).json({
+        paid: false,
+        qrCodeImage: c.qrCodeImage ?? null,
+        brCode: c.brCode ?? null,
+        paymentLinkUrl: c.paymentLinkUrl ?? null,
+        expiresIn: c.expiresIn ?? null,
+      });
+    } catch { res.status(502).json({ error: 'Falha ao falar com o Woovi.' }); }
+    return;
+  }
+
   // claim: confirma o pagamento pela sessão do Stripe e marca a conta como paga.
   if (action === 'claim') {
     const em = verifyToken(String(body.token ?? ''));

@@ -42,6 +42,21 @@ export async function beginCheckout(): Promise<string | null> {
   return d.url;
 }
 
+// Gera uma cobrança Pix no Woovi pra esta conta. O webhook libera o acesso
+// automaticamente quando o Pix cair (casado por correlationID/e-mail).
+export interface PixCharge { qrCodeImage: string | null; brCode: string | null; paymentLinkUrl: string | null; expiresIn: number | null }
+export async function beginPix(): Promise<PixCharge | null> {
+  const token = getToken(); if (!token) throw new Error(ct('Faça login antes de pagar.'));
+  const d = await post({ action: 'pix', token });
+  if (d.paid) return null;
+  return {
+    qrCodeImage: (d.qrCodeImage as string) ?? null,
+    brCode: (d.brCode as string) ?? null,
+    paymentLinkUrl: (d.paymentLinkUrl as string) ?? null,
+    expiresIn: (d.expiresIn as number) ?? null,
+  };
+}
+
 export async function exportAccountData(): Promise<Record<string, unknown>> {
   const token = getToken();
   if (!token) throw new Error(ct('Entre novamente na conta para exportar seus dados.'));

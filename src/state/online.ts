@@ -454,12 +454,25 @@ export async function listOpenLobbies(): Promise<OpenRoom[]> {
   }
 }
 
-// 'gone' = a sala não existe mais (expirou/foi encerrada); null = erro transitório
-export async function fetchLobby(code: string): Promise<LobbyState | null | 'gone'> {
+// ETag por sala: mandamos If-None-Match no poll pra receber 304 quando nada mudou
+// (corta a banda de origem do estado repetido). Como a resposta é no-store, o
+// cache HTTP do browser não guarda — gerenciamos o ETag aqui no app.
+const lobbyEtags = new Map<string, string>();
+
+// 'gone' = a sala não existe mais (expirou/foi encerrada); 'unchanged' = 304 (sem
+// mudança, mantém o estado atual); null = erro transitório
+export async function fetchLobby(code: string): Promise<LobbyState | null | 'gone' | 'unchanged'> {
   try {
-    const res = await fetch(`/api/lobby?code=${encodeURIComponent(code)}`, { signal: AbortSignal.timeout(9000) });
-    if (res.status === 404) return 'gone';
+    const prev = lobbyEtags.get(code);
+    const res = await fetch(`/api/lobby?code=${encodeURIComponent(code)}`, {
+      headers: prev ? { 'If-None-Match': prev } : undefined,
+      signal: AbortSignal.timeout(9000),
+    });
+    if (res.status === 304) return 'unchanged';
+    if (res.status === 404) { lobbyEtags.delete(code); return 'gone'; }
     if (!res.ok) return null;
+    const tag = res.headers.get('ETag');
+    if (tag) lobbyEtags.set(code, tag); else lobbyEtags.delete(code);
     return (await res.json()) as LobbyState;
   } catch {
     return null;
