@@ -1957,28 +1957,11 @@ const ACADEMY_FROM: TeamSeason = {
 
 // ----- FREE AGENTS: profissionais reais e conhecidos atualmente sem time, à
 // disposição no mercado por um preço camarada (não estão em nenhum elenco) -----
-const FREE_AGENT_PLAYERS: Player[] = [
-  { id: 'fa__coldzera', nick: 'coldzera', name: 'Marcelo David', country: 'br', role: 'Rifler', aim: 85, consistency: 82, clutch: 81, awp: 60, igl: 58 },
-  { id: 'fa__chelo', nick: 'chelo', name: 'Marcelo Cespedes', country: 'br', role: 'Rifler', aim: 82, consistency: 79, clutch: 77, awp: 60, igl: 56 },
-  { id: 'fa__felps', nick: 'felps', name: 'João Vasconcellos', country: 'br', role: 'Entry', aim: 80, consistency: 77, clutch: 76, awp: 58, igl: 55 },
-  { id: 'fa__exit', nick: 'exit', name: 'Lucas Nogueira', country: 'br', role: 'Entry', aim: 78, consistency: 74, clutch: 72, awp: 55, igl: 52 },
-  { id: 'fa__taco', nick: 'TACO', name: 'Epitácio de Melo', country: 'br', role: 'Support', aim: 72, consistency: 77, clutch: 71, awp: 50, igl: 71 },
-  { id: 'fa__junior', nick: 'JOTA', name: 'João Pedro', country: 'br', role: 'AWP', aim: 77, consistency: 75, clutch: 73, awp: 81, igl: 47 },
-  { id: 'fa__nqz', nick: 'nqz', name: 'Lucas Soares', country: 'br', role: 'AWP', aim: 86, consistency: 82, clutch: 82, awp: 88, igl: 52 },
-  { id: 'fa__lux', nick: 'lux', name: 'Lucas Meneghini', country: 'br', role: 'Rifler', aim: 81, consistency: 78, clutch: 77, awp: 56, igl: 54 },
-  { id: 'fa__shox', nick: 'shox', name: 'Richard Papillon', country: 'fr', role: 'Rifler', aim: 81, consistency: 76, clutch: 80, awp: 70, igl: 62 },
-  { id: 'fa__amanek', nick: 'AmaNEk', name: 'Ali Saouli', country: 'fr', role: 'Rifler', aim: 77, consistency: 77, clutch: 74, awp: 60, igl: 74 },
-  { id: 'fa__kioshima', nick: 'kioShiMa', name: 'Fabien Fiey', country: 'fr', role: 'Support', aim: 75, consistency: 76, clutch: 74, awp: 58, igl: 58 },
-  { id: 'fa__bodyy', nick: 'bodyy', name: 'Alexandre Pianaro', country: 'fr', role: 'Support', aim: 74, consistency: 75, clutch: 70, awp: 55, igl: 60 },
-  { id: 'fa__smooya', nick: 'smooya', name: 'Owen Butterfield', country: 'gb', role: 'AWP', aim: 80, consistency: 74, clutch: 77, awp: 85, igl: 45 },
-  { id: 'fa__nawwk', nick: 'nawwk', name: 'Tim Jonasson', country: 'se', role: 'AWP', aim: 78, consistency: 77, clutch: 75, awp: 82, igl: 48 },
-  { id: 'fa__maden', nick: 'Maden', name: 'Mathias Madsen', country: 'se', role: 'Rifler', aim: 79, consistency: 76, clutch: 74, awp: 58, igl: 52 },
-  { id: 'fa__hobbit', nick: 'HObbit', name: 'Abay Khassenov', country: 'kz', role: 'Rifler', aim: 80, consistency: 79, clutch: 78, awp: 60, igl: 62 },
-  { id: 'fa__osee', nick: 'oSee', name: 'Josh Ohm', country: 'us', role: 'AWP', aim: 79, consistency: 78, clutch: 76, awp: 83, igl: 46 },
-  { id: 'fa__grim', nick: 'Grim', name: 'Michael Wince', country: 'us', role: 'Rifler', aim: 80, consistency: 77, clutch: 75, awp: 58, igl: 55 },
-  { id: 'fa__daps', nick: 'daps', name: 'Damian Steele', country: 'ca', role: 'IGL', aim: 68, consistency: 74, clutch: 66, awp: 48, igl: 80 },
-  { id: 'fa__mou', nick: 'mou', name: 'Dexter Mou', country: 'au', role: 'AWP', aim: 76, consistency: 74, clutch: 72, awp: 80, igl: 46 },
-];
+// Free Agents: derivado do "time virtual" id='__free__' em bo3-2026.json
+// (50 jogadores importados da planilha + qualquer adição manual via CRM).
+// Antes era um array hardcoded de 20 entradas; agora a fonte é o JSON.
+const FREE_AGENT_PLAYERS: Player[] =
+  CS2_REAL_2026.find((t) => t.id === '__free__')?.players ?? [];
 // pseudo-time ct('sem time') usado como origem de um free agent contratado
 const FREE_AGENTS_FROM: TeamSeason = {
   id: '__free__', team: 'Free Agent', tag: 'FA', era: ct('sem time'), game: 'CS2',
@@ -2541,7 +2524,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     () => {
       const skip = new Set(save.squad.map((s) => s.playerId));
       return applyAiAging(applyMoves(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves), save.split, skip)
-        .filter((t) => t.players.length >= 5);
+        .filter((t) => t.players.length >= 5 && t.id !== '__free__');
     },
     [save.moves, bo3Edits, save.split, save.squad],
   );

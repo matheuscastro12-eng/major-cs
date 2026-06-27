@@ -6140,7 +6140,8 @@
         "consistency": 77,
         "clutch": 75,
         "awp": 48,
-        "igl": 45
+        "igl": 45,
+        "age": 19
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_oddik_p1",
@@ -6152,7 +6153,8 @@
         "consistency": 77,
         "clutch": 78,
         "awp": 80,
-        "igl": 46
+        "igl": 46,
+        "age": 23
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_oddik_p2",
@@ -6164,7 +6166,8 @@
         "consistency": 72,
         "clutch": 71,
         "awp": 45,
-        "igl": 78
+        "igl": 78,
+        "age": 21
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_oddik_p3",
@@ -6176,7 +6179,8 @@
         "consistency": 70,
         "clutch": 70,
         "awp": 44,
-        "igl": 41
+        "igl": 41,
+        "age": 20
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_oddik_p4",
@@ -6188,7 +6192,8 @@
         "consistency": 74,
         "clutch": 75,
         "awp": 49,
-        "igl": 48
+        "igl": 48,
+        "age": 23
       }
     ]
   },
@@ -6847,7 +6852,8 @@
         "consistency": 70,
         "clutch": 69,
         "awp": 46,
-        "igl": 42
+        "igl": 42,
+        "age": 19
       }
     ]
   },
@@ -7067,7 +7073,8 @@
         "consistency": 78,
         "clutch": 77,
         "awp": 49,
-        "igl": 50
+        "igl": 50,
+        "age": 29
       }
     ]
   },
@@ -7189,7 +7196,8 @@
         "consistency": 70,
         "clutch": 69,
         "awp": 41,
-        "igl": 40
+        "igl": 40,
+        "age": 19
       },
       {
         "id": "bo3_xlsx_bo3_team_21412_p1",
@@ -7201,7 +7209,8 @@
         "consistency": 70,
         "clutch": 70,
         "awp": 42,
-        "igl": 41
+        "igl": 41,
+        "age": 18
       },
       {
         "id": "bo3_20368",
@@ -7225,7 +7234,8 @@
         "consistency": 67,
         "clutch": 68,
         "awp": 38,
-        "igl": 39
+        "igl": 39,
+        "age": 28
       },
       {
         "id": "bo3_49752",
@@ -7273,7 +7283,8 @@
         "consistency": 74,
         "clutch": 73,
         "awp": 45,
-        "igl": 78
+        "igl": 78,
+        "age": 28
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_isurus_p1",
@@ -7285,7 +7296,8 @@
         "consistency": 79,
         "clutch": 79,
         "awp": 82,
-        "igl": 45
+        "igl": 45,
+        "age": 24
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_isurus_p2",
@@ -7297,7 +7309,8 @@
         "consistency": 76,
         "clutch": 76,
         "awp": 45,
-        "igl": 43
+        "igl": 43,
+        "age": 25
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_isurus_p3",
@@ -7309,7 +7322,8 @@
         "consistency": 75,
         "clutch": 74,
         "awp": 45,
-        "igl": 44
+        "igl": 44,
+        "age": 22
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_isurus_p4",
@@ -7321,7 +7335,8 @@
         "consistency": 73,
         "clutch": 72,
         "awp": 44,
-        "igl": 44
+        "igl": 44,
+        "age": 27
       }
     ]
   },
@@ -7357,7 +7372,8 @@
         "consistency": 77,
         "clutch": 79,
         "awp": 48,
-        "igl": 49
+        "igl": 49,
+        "age": 28
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_uno_mille_p1",
@@ -7369,7 +7385,8 @@
         "consistency": 77,
         "clutch": 75,
         "awp": 47,
-        "igl": 48
+        "igl": 48,
+        "age": 28
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_uno_mille_p2",
@@ -7381,7 +7398,8 @@
         "consistency": 76,
         "clutch": 76,
         "awp": 47,
-        "igl": 47
+        "igl": 47,
+        "age": 24
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_uno_mille_p3",
@@ -7393,7 +7411,8 @@
         "consistency": 72,
         "clutch": 71,
         "awp": 75,
-        "igl": 60
+        "igl": 60,
+        "age": 27
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_uno_mille_p4",
@@ -7405,7 +7424,8 @@
         "consistency": 72,
         "clutch": 72,
         "awp": 65,
-        "igl": 75
+        "igl": 75,
+        "age": 32
       }
     ]
   },
@@ -7441,7 +7461,8 @@
         "consistency": 78,
         "clutch": 76,
         "awp": 81,
-        "igl": 70
+        "igl": 70,
+        "age": 26
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_fake_do_biru_p1",
@@ -7453,7 +7474,8 @@
         "consistency": 78,
         "clutch": 79,
         "awp": 45,
-        "igl": 45
+        "igl": 45,
+        "age": 27
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_fake_do_biru_p2",
@@ -7465,7 +7487,8 @@
         "consistency": 75,
         "clutch": 77,
         "awp": 46,
-        "igl": 45
+        "igl": 45,
+        "age": 25
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_fake_do_biru_p3",
@@ -7477,7 +7500,8 @@
         "consistency": 74,
         "clutch": 75,
         "awp": 43,
-        "igl": 80
+        "igl": 80,
+        "age": 31
       }
     ]
   },
@@ -7513,7 +7537,8 @@
         "consistency": 75,
         "clutch": 75,
         "awp": 45,
-        "igl": 77
+        "igl": 77,
+        "age": 27
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_game_hunters_p1",
@@ -7525,7 +7550,8 @@
         "consistency": 74,
         "clutch": 74,
         "awp": 77,
-        "igl": 44
+        "igl": 44,
+        "age": 24
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_game_hunters_p2",
@@ -7537,7 +7563,8 @@
         "consistency": 71,
         "clutch": 73,
         "awp": 42,
-        "igl": 42
+        "igl": 42,
+        "age": 22
       }
     ]
   },
@@ -7573,7 +7600,8 @@
         "consistency": 78,
         "clutch": 76,
         "awp": 79,
-        "igl": 48
+        "igl": 48,
+        "age": 28
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_alka_p1",
@@ -7585,7 +7613,8 @@
         "consistency": 75,
         "clutch": 76,
         "awp": 44,
-        "igl": 44
+        "igl": 44,
+        "age": 24
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_alka_p2",
@@ -7597,7 +7626,8 @@
         "consistency": 72,
         "clutch": 72,
         "awp": 41,
-        "igl": 42
+        "igl": 42,
+        "age": 22
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_alka_p3",
@@ -7609,7 +7639,8 @@
         "consistency": 75,
         "clutch": 77,
         "awp": 45,
-        "igl": 45
+        "igl": 45,
+        "age": 26
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_alka_p4",
@@ -7621,7 +7652,8 @@
         "consistency": 65,
         "clutch": 67,
         "awp": 33,
-        "igl": 70
+        "igl": 70,
+        "age": 26
       }
     ]
   },
@@ -7657,7 +7689,8 @@
         "consistency": 78,
         "clutch": 77,
         "awp": 45,
-        "igl": 80
+        "igl": 80,
+        "age": 19
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_vexa_p1",
@@ -7669,7 +7702,8 @@
         "consistency": 75,
         "clutch": 75,
         "awp": 44,
-        "igl": 43
+        "igl": 43,
+        "age": 26
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_vexa_p2",
@@ -7681,7 +7715,8 @@
         "consistency": 75,
         "clutch": 76,
         "awp": 43,
-        "igl": 43
+        "igl": 43,
+        "age": 23
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_vexa_p3",
@@ -7693,7 +7728,8 @@
         "consistency": 73,
         "clutch": 73,
         "awp": 77,
-        "igl": 40
+        "igl": 40,
+        "age": 22
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_vexa_p4",
@@ -7705,7 +7741,8 @@
         "consistency": 72,
         "clutch": 73,
         "awp": 40,
-        "igl": 39
+        "igl": 39,
+        "age": 20
       }
     ]
   },
@@ -7741,7 +7778,8 @@
         "consistency": 77,
         "clutch": 76,
         "awp": 45,
-        "igl": 45
+        "igl": 45,
+        "age": 23
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_alzon_p1",
@@ -7753,7 +7791,8 @@
         "consistency": 70,
         "clutch": 72,
         "awp": 38,
-        "igl": 39
+        "igl": 39,
+        "age": 22
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_alzon_p2",
@@ -7765,7 +7804,8 @@
         "consistency": 73,
         "clutch": 74,
         "awp": 43,
-        "igl": 76
+        "igl": 76,
+        "age": 27
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_alzon_p3",
@@ -7777,7 +7817,8 @@
         "consistency": 74,
         "clutch": 74,
         "awp": 42,
-        "igl": 42
+        "igl": 42,
+        "age": 21
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_alzon_p4",
@@ -7789,7 +7830,8 @@
         "consistency": 72,
         "clutch": 72,
         "awp": 75,
-        "igl": 41
+        "igl": 41,
+        "age": 25
       }
     ]
   },
@@ -7825,7 +7867,8 @@
         "consistency": 76,
         "clutch": 76,
         "awp": 50,
-        "igl": 52
+        "igl": 52,
+        "age": 26
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_procyon_p1",
@@ -7837,7 +7880,8 @@
         "consistency": 75,
         "clutch": 74,
         "awp": 49,
-        "igl": 50
+        "igl": 50,
+        "age": 21
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_procyon_p2",
@@ -7849,7 +7893,8 @@
         "consistency": 73,
         "clutch": 73,
         "awp": 46,
-        "igl": 45
+        "igl": 45,
+        "age": 20
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_procyon_p3",
@@ -7862,7 +7907,8 @@
         "clutch": 72,
         "awp": 74,
         "igl": 75,
-        "role2": "AWP"
+        "role2": "AWP",
+        "age": 24
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_procyon_p4",
@@ -7874,7 +7920,8 @@
         "consistency": 70,
         "clutch": 70,
         "awp": 48,
-        "igl": 48
+        "igl": 48,
+        "age": 29
       }
     ]
   },
@@ -7910,7 +7957,8 @@
         "consistency": 75,
         "clutch": 73,
         "awp": 77,
-        "igl": 49
+        "igl": 49,
+        "age": 24
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_metanoia_p1",
@@ -7922,7 +7970,8 @@
         "consistency": 73,
         "clutch": 74,
         "awp": 49,
-        "igl": 48
+        "igl": 48,
+        "age": 24
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_metanoia_p2",
@@ -7934,7 +7983,8 @@
         "consistency": 70,
         "clutch": 70,
         "awp": 47,
-        "igl": 45
+        "igl": 45,
+        "age": 25
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_metanoia_p3",
@@ -7946,7 +7996,8 @@
         "consistency": 68,
         "clutch": 68,
         "awp": 43,
-        "igl": 42
+        "igl": 42,
+        "age": 25
       },
       {
         "id": "bo3_xlsx_bo3_team_xlsx_metanoia_p4",
@@ -7958,7 +8009,673 @@
         "consistency": 68,
         "clutch": 67,
         "awp": 35,
+        "igl": 70,
+        "age": 23
+      }
+    ]
+  },
+  {
+    "id": "__free__",
+    "team": "Free Agents",
+    "tag": "FA",
+    "era": "2026",
+    "game": "CS2",
+    "country": "us",
+    "teamwork": 50,
+    "honors": "Jogadores sem time",
+    "colors": [
+      "#202020",
+      "#888888"
+    ],
+    "mapPrefs": {},
+    "coach": {
+      "nick": "agent",
+      "name": "agent",
+      "country": "us",
+      "rating": 55,
+      "style": "tactical"
+    },
+    "players": [
+      {
+        "id": "bo3_fa_0",
+        "nick": "Lux",
+        "name": "Lucas Meneghini",
+        "country": "br",
+        "role": "IGL",
+        "aim": 80,
+        "consistency": 78,
+        "clutch": 78,
+        "awp": 50,
+        "igl": 81,
+        "role2": "Entry",
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_1",
+        "nick": "n1ssim",
+        "name": "Vinicius Pereira",
+        "country": "br",
+        "role": "Lurker",
+        "aim": 80,
+        "consistency": 80,
+        "clutch": 79,
+        "awp": 55,
+        "igl": 51,
+        "age": 25
+      },
+      {
+        "id": "bo3_fa_2",
+        "nick": "Coldzera",
+        "name": "Marcelo David",
+        "country": "br",
+        "role": "Rifler",
+        "aim": 78,
+        "consistency": 78,
+        "clutch": 78,
+        "awp": 60,
+        "igl": 55,
+        "age": 31
+      },
+      {
+        "id": "bo3_fa_3",
+        "nick": "wallz1k",
+        "name": "Walasy Silva",
+        "country": "br",
+        "role": "AWP",
+        "aim": 66,
+        "consistency": 67,
+        "clutch": 65,
+        "awp": 32,
+        "igl": 33,
+        "age": 26
+      },
+      {
+        "id": "bo3_fa_4",
+        "nick": "ianzin",
+        "name": "Ian Faria",
+        "country": "br",
+        "role": "IGL",
+        "aim": 61,
+        "consistency": 62,
+        "clutch": 62,
+        "awp": 28,
+        "igl": 63,
+        "age": 21
+      },
+      {
+        "id": "bo3_fa_5",
+        "nick": "TACO",
+        "name": "Epitácio de Melo",
+        "country": "br",
+        "role": "IGL",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 31
+      },
+      {
+        "id": "bo3_fa_6",
+        "nick": "felps",
+        "name": "João Vasconcellos",
+        "country": "br",
+        "role": "Entry",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 29
+      },
+      {
+        "id": "bo3_fa_7",
+        "nick": "b4rtiN",
+        "name": "Bruno Câmara",
+        "country": "br",
+        "role": "Rifler",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_8",
+        "nick": "LUCAS1",
+        "name": "Lucas Teles",
+        "country": "br",
+        "role": "Entry",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 30
+      },
+      {
+        "id": "bo3_fa_9",
+        "nick": "pesadelo",
+        "name": "Matheus Panisset",
+        "country": "br",
+        "role": "Entry",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 26
+      },
+      {
+        "id": "bo3_fa_10",
+        "nick": "naitte",
+        "name": "João Maia",
+        "country": "br",
+        "role": "Entry",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 28
+      },
+      {
+        "id": "bo3_fa_11",
+        "nick": "WOOD7",
+        "name": "Adriano Cerato",
+        "country": "br",
+        "role": "IGL",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "role2": "AWP",
+        "age": 31
+      },
+      {
+        "id": "bo3_fa_12",
+        "nick": "ksloks",
+        "name": "Italo Meinberg",
+        "country": "br",
+        "role": "Rifler",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 21
+      },
+      {
+        "id": "bo3_fa_13",
+        "nick": "togs",
+        "name": "Victor Rapassi",
+        "country": "br",
+        "role": "Rifler",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_14",
+        "nick": "danoco",
+        "name": "Daniel Leonardo",
+        "country": "br",
+        "role": "Entry",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 30
+      },
+      {
+        "id": "bo3_fa_15",
+        "nick": "t9rnay",
+        "name": "Henrique Gabriel",
+        "country": "br",
+        "role": "Lurker",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_16",
+        "nick": "desh",
+        "name": "Emerson Enrique",
+        "country": "br",
+        "role": "AWP",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "age": 27
+      },
+      {
+        "id": "bo3_fa_17",
+        "nick": "Noktse",
+        "name": "Nicolás Mariano",
+        "country": "ar",
+        "role": "IGL",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 70,
+        "awp": 50,
+        "igl": 50,
+        "role2": "Rifler",
+        "age": 33
+      },
+      {
+        "id": "bo3_fa_18",
+        "nick": "Lucaozy",
+        "name": "Lucas Neves",
+        "country": "br",
+        "role": "Entry",
+        "aim": 75,
+        "consistency": 75,
+        "clutch": 73,
+        "awp": 49,
+        "igl": 49,
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_19",
+        "nick": "kl1m",
+        "name": "Klimentiy Krivosheev",
+        "country": "ru",
+        "role": "AWP",
+        "aim": 84,
+        "consistency": 84,
+        "clutch": 81,
+        "awp": 84,
+        "igl": 53
+      },
+      {
+        "id": "bo3_fa_20",
+        "nick": "DeStiNy",
+        "name": "Lucas Bullo",
+        "country": "br",
+        "role": "Entry",
+        "aim": 76,
+        "consistency": 76,
+        "clutch": 74,
+        "awp": 49,
+        "igl": 45
+      },
+      {
+        "id": "bo3_fa_21",
+        "nick": "nython",
+        "name": "Gabriel Lino",
+        "country": "br",
+        "role": "IGL",
+        "aim": 73,
+        "consistency": 73,
+        "clutch": 71,
+        "awp": 65,
+        "igl": 73
+      },
+      {
+        "id": "bo3_fa_22",
+        "nick": "perez",
+        "name": "Henrique Perez",
+        "country": "br",
+        "role": "Lurker",
+        "aim": 75,
+        "consistency": 75,
+        "clutch": 72,
+        "awp": 40,
+        "igl": 43
+      },
+      {
+        "id": "bo3_fa_23",
+        "nick": "mawth",
+        "name": "Matheus Gonçalves",
+        "country": "br",
+        "role": "Rifler",
+        "aim": 72,
+        "consistency": 72,
+        "clutch": 70,
+        "awp": 46,
+        "igl": 72
+      },
+      {
+        "id": "bo3_fa_24",
+        "nick": "phc",
+        "name": "Phelippe Cousseau",
+        "country": "br",
+        "role": "Entry",
+        "aim": 67,
+        "consistency": 67,
+        "clutch": 65,
+        "awp": 41,
+        "igl": 37,
+        "age": 18
+      },
+      {
+        "id": "bo3_fa_25",
+        "nick": "CutzMeretz",
+        "name": "Lucas Freitas",
+        "country": "br",
+        "role": "IGL",
+        "aim": 68,
+        "consistency": 68,
+        "clutch": 66,
+        "awp": 42,
+        "igl": 72
+      },
+      {
+        "id": "bo3_fa_26",
+        "nick": "Badran",
+        "name": "Nicollas Badran",
+        "country": "br",
+        "role": "Entry",
+        "aim": 70,
+        "consistency": 68,
+        "clutch": 68,
+        "awp": 38,
+        "igl": 38,
+        "age": 22
+      },
+      {
+        "id": "bo3_fa_27",
+        "nick": "HEN1",
+        "name": "Henrique Teles",
+        "country": "br",
+        "role": "AWP",
+        "aim": 79,
+        "consistency": 79,
+        "clutch": 77,
+        "awp": 79,
+        "igl": 49
+      },
+      {
+        "id": "bo3_fa_28",
+        "nick": "JOTA",
+        "name": "Jhonatan Willian",
+        "country": "br",
+        "role": "Lurker",
+        "aim": 79,
+        "consistency": 79,
+        "clutch": 77,
+        "awp": 53,
+        "igl": 49
+      },
+      {
+        "id": "bo3_fa_29",
+        "nick": "Luken",
+        "name": "Luca Nadotti",
+        "country": "ar",
+        "role": "Rifler",
+        "aim": 84,
+        "consistency": 84,
+        "clutch": 82,
+        "awp": 65,
+        "igl": 48
+      },
+      {
+        "id": "bo3_fa_30",
+        "nick": "fer",
+        "name": "Fernando Alvarenga",
+        "country": "br",
+        "role": "Entry",
+        "aim": 75,
+        "consistency": 75,
+        "clutch": 73,
+        "awp": 49,
+        "igl": 45
+      },
+      {
+        "id": "bo3_fa_31",
+        "nick": "NEKIZ",
+        "name": "Gabriel Schenato",
+        "country": "br",
+        "role": "IGL",
+        "aim": 70,
+        "consistency": 70,
+        "clutch": 69,
+        "awp": 47,
         "igl": 70
+      },
+      {
+        "id": "bo3_fa_32",
+        "nick": "urban0",
+        "name": "Lucas Urbano",
+        "country": "br",
+        "role": "Entry",
+        "aim": 78,
+        "consistency": 76,
+        "clutch": 76,
+        "awp": 50,
+        "igl": 50,
+        "age": 21
+      },
+      {
+        "id": "bo3_fa_33",
+        "nick": "history",
+        "name": "Allan Lawrenz",
+        "country": "br",
+        "role": "AWP",
+        "aim": 76,
+        "consistency": 74,
+        "clutch": 74,
+        "awp": 79,
+        "igl": 52,
+        "age": 22
+      },
+      {
+        "id": "bo3_fa_34",
+        "nick": "drop",
+        "name": "André Abreu",
+        "country": "br",
+        "role": "IGL",
+        "aim": 79,
+        "consistency": 79,
+        "clutch": 77,
+        "awp": 53,
+        "igl": 79,
+        "age": 26
+      },
+      {
+        "id": "bo3_fa_35",
+        "nick": "kauez",
+        "name": "Kaue Kaschuk",
+        "country": "br",
+        "role": "Support",
+        "aim": 78,
+        "consistency": 78,
+        "clutch": 76,
+        "awp": 52,
+        "igl": 46,
+        "age": 23
+      },
+      {
+        "id": "bo3_fa_36",
+        "nick": "Lcs",
+        "name": "Lucas Martins",
+        "country": "br",
+        "role": "AWP",
+        "aim": 75,
+        "consistency": 74,
+        "clutch": 74,
+        "awp": 78,
+        "igl": 46,
+        "age": 22
+      },
+      {
+        "id": "bo3_fa_37",
+        "nick": "shz",
+        "name": "Bruno Martinelli",
+        "country": "br",
+        "role": "Rifler",
+        "aim": 75,
+        "consistency": 75,
+        "clutch": 76,
+        "awp": 48,
+        "igl": 49,
+        "age": 28
+      },
+      {
+        "id": "bo3_fa_38",
+        "nick": "mlhzin",
+        "name": "Matheus Marçola",
+        "country": "br",
+        "role": "Support",
+        "aim": 75,
+        "consistency": 75,
+        "clutch": 73,
+        "awp": 49,
+        "igl": 75
+      },
+      {
+        "id": "bo3_fa_39",
+        "nick": "skullz",
+        "name": "Felipe Medeiros",
+        "country": "br",
+        "role": "Support",
+        "aim": 77,
+        "consistency": 76,
+        "clutch": 77,
+        "awp": 50,
+        "igl": 50,
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_40",
+        "nick": "bacc",
+        "name": "João Pedro",
+        "country": "br",
+        "role": "Lurker",
+        "aim": 76,
+        "consistency": 75,
+        "clutch": 77,
+        "awp": 49,
+        "igl": 44,
+        "age": 18
+      },
+      {
+        "id": "bo3_fa_41",
+        "nick": "brn$",
+        "name": "Bruno de Araújo",
+        "country": "br",
+        "role": "AWP",
+        "aim": 74,
+        "consistency": 74,
+        "clutch": 73,
+        "awp": 77,
+        "igl": 45,
+        "age": 20
+      },
+      {
+        "id": "bo3_fa_42",
+        "nick": "Machado",
+        "name": "Henrique Amaral",
+        "country": "br",
+        "role": "AWP",
+        "aim": 75,
+        "consistency": 75,
+        "clutch": 74,
+        "awp": 78,
+        "igl": 46,
+        "age": 21
+      },
+      {
+        "id": "bo3_fa_43",
+        "nick": "lukiz",
+        "name": "Lucas Rodrigues",
+        "country": "br",
+        "role": "Entry",
+        "aim": 76,
+        "consistency": 74,
+        "clutch": 74,
+        "awp": 51,
+        "igl": 49,
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_44",
+        "nick": "clon7",
+        "name": "Victor Mackieviez",
+        "country": "br",
+        "role": "Rifler",
+        "aim": 77,
+        "consistency": 76,
+        "clutch": 73,
+        "awp": 53,
+        "igl": 51,
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_45",
+        "nick": "Rivo",
+        "name": "Iván Tobías",
+        "country": "ar",
+        "role": "Rifler",
+        "aim": 71,
+        "consistency": 70,
+        "clutch": 71,
+        "awp": 49,
+        "igl": 45,
+        "age": 21
+      },
+      {
+        "id": "bo3_fa_46",
+        "nick": "ABM",
+        "name": "Leonardo Acuña",
+        "country": "ar",
+        "role": "Entry",
+        "aim": 77,
+        "consistency": 76,
+        "clutch": 74,
+        "awp": 50,
+        "igl": 50,
+        "age": 30
+      },
+      {
+        "id": "bo3_fa_47",
+        "nick": "fakzwall",
+        "name": "Facundo Guzma",
+        "country": "ar",
+        "role": "AWP",
+        "aim": 76,
+        "consistency": 76,
+        "clutch": 75,
+        "awp": 79,
+        "igl": 50,
+        "age": 26
+      },
+      {
+        "id": "bo3_fa_48",
+        "nick": "maaxg1",
+        "name": "Maximiliano Gimene",
+        "country": "ar",
+        "role": "Lurker",
+        "aim": 77,
+        "consistency": 76,
+        "clutch": 78,
+        "awp": 52,
+        "igl": 49,
+        "age": 24
+      },
+      {
+        "id": "bo3_fa_49",
+        "nick": "guidimon",
+        "name": "Guido Romano",
+        "country": "ar",
+        "role": "AWP",
+        "aim": 77,
+        "consistency": 78,
+        "clutch": 74,
+        "awp": 79,
+        "igl": 53,
+        "age": 29
       }
     ]
   }

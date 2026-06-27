@@ -99,7 +99,7 @@ export interface LobbyState {
 // bases vêm do build (nunca do localStorage), então todos os clientes reconstroem
 // exatamente o mesmo sorteio a partir do seed do lobby.
 export function onlineDataset(pool: TournamentPool, ruleset: UltimateRuleset = 'open'): TeamSeason[] {
-  let eligible = [...CS2_REAL_2026, ...BASE_TEAMS].filter((t) => t.players.length >= 5 && !t.pending);
+  let eligible = [...CS2_REAL_2026, ...BASE_TEAMS].filter((t) => t.players.length >= 5 && !t.pending && t.id !== '__free__');
   if (ruleset === 'current') eligible = eligible.filter((t) => t.id.startsWith('bo3_team_'));
   if (ruleset === 'legends') eligible = eligible.filter((t) => !t.id.startsWith('bo3_team_'));
   return pool === 'br' ? eligible.filter((t) => t.country === 'br') : eligible;
