@@ -1949,16 +1949,23 @@ body:has(main.page-career .career-dash--light) {
     font-size: 0.76rem;
   }
 
+  /* BUG MOBILE: .em-main-nav tem overflow-y:hidden (pra esconder scrollbar do
+     scroll horizontal). Isso CORTA o dropdown que é position:absolute tentando
+     vazar abaixo do nav — clicar abria o estado (chevron girava) mas o menu
+     não aparecia visualmente. Fix: position:fixed escapa do clipping do nav,
+     posicionado abaixo do header (top:60px). Full-width-ish pra parecer aba
+     modal de sub-navegação (estilo iOS/Android). */
   .em-nav-dropdown {
-    position: absolute;
-    top: calc(100% + 2px);
-    left: 0;
-    right: auto;
+    position: fixed;
+    top: 60px;
+    left: 8px;
+    right: 8px;
     transform: none;
-    min-width: 200px;
-    max-width: min(280px, calc(100vw - 24px));
+    min-width: 0;
+    max-width: 320px;
+    margin: 0 auto;
     border-radius: 8px;
-    z-index: 200;
+    z-index: 9999;
   }
 
   .em-nav-item.open {
