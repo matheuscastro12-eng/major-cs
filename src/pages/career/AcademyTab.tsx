@@ -12,7 +12,7 @@
 //     por seed (split + prospectId), 35% chance pra prospect com OVR >= 72.
 //     Aceitar adiciona caixa + remove prospect. Recusar mantém na Academia.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashCard } from '../../components/ds';
 import { CareerIcon } from '../../components/career/CareerIcon';
 import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from '../../components/ui';
@@ -31,12 +31,27 @@ import {
   ACADEMY_CLUBS,
   type AcademyMatch,
 } from '../../engine/career/academyLeague';
+import {
+  buildAcademyUserTeam,
+  buildAcademyOpponentTeam,
+  seriesToAcademyScore,
+  buildAcademyPlayoff,
+  autoPlayoffResult,
+  applyOverridesToStandings,
+  academyPrize,
+  type AcademyPlayoffSeed,
+  type AcademyPlayoffMatch,
+  type AcademyPlayoffState,
+} from '../../engine/career/academyMatch';
+import { VetoScreen } from '../../components/VetoScreen';
+import { MatchScreen } from '../../components/MatchScreen';
+import { makeRng } from '../../engine/rng';
 import { hashStr } from '../../state/hash';
 import { ct } from '../../state/career-i18n';
 import { formatMoney, playerOvr } from '../../engine/ratings';
 import { type MacroRegion } from '../../data/regions';
 import type { Signing } from '../../components/CareerScreen';
-import type { Player } from '../../types';
+import type { MapId, Player, SeriesResult, TTeam } from '../../types';
 
 interface ResolvedSigning {
   player: { id: string; nick: string; country: string };
@@ -62,6 +77,14 @@ interface AcademyTabSave {
   budget: number;
   split: number;
   facilities?: Record<string, number>;
+  /** Resultados jogados pelo user (vetando ou RNG vivo). Chave: `${split}:${oppId}`. */
+  academyPlayed?: Record<string, [number, number]>;
+  /** Total de títulos do campeonato Academy ao longo da carreira. */
+  academyTrophies?: number;
+  /** Splits cujo fechamento já pagou prize money (evita double-pay). */
+  academyPaidSplits?: number[];
+  /** Estado do playoff Academy do split atual (top 4 mata-mata). */
+  academyPlayoff?: AcademyPlayoffState | null;
 }
 
 interface Props {
@@ -133,6 +156,12 @@ function simulateAcademyMatch(userStrength: number, oppStrength: number): [numbe
   return Math.random() < 0.5 ? [2, 1] : [1, 2];
 }
 
+// fallback pra ambientes sem structuredClone (jsdom, navegadores antigos)
+function structuredCloneSafe<T>(v: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(v);
+  return JSON.parse(JSON.stringify(v));
+}
+
 export function AcademyTab({
   save,
   update,
@@ -143,7 +172,7 @@ export function AcademyTab({
   askConfirm,
   openPlayerProfile,
 }: Props) {
-  const aca = save.academy ?? [];
+  const aca = useMemo(() => save.academy ?? [], [save.academy]);
   const full = aca.length >= ACADEMY_MAX;
   const squadFull = save.squad.length >= 5;
   // Nível atual da facility de treino (0-3) — influencia evolução esperada.
@@ -182,10 +211,27 @@ export function AcademyTab({
     [acaTeam.length, teamOvr, save.org?.name, save.org?.tag, save.org?.colors, save.split],
   );
 
-  // Resultados que o usuário JOGOU (override do determinístico).
-  // Local-state only — reset por aba; aceitável pra MVP visto que avanço de split
-  // já regenera tabela. Key = oppId.
-  const [playedOverride, setPlayedOverride] = useState<Record<string, [number, number]>>({});
+  // Resultados que o usuário JOGOU (override do determinístico) — persistidos
+  // no save em `academyPlayed`. Chave: `${split}:${oppId}` pra reset natural
+  // a cada virada de split.
+  const playedAll = useMemo(() => save.academyPlayed ?? {}, [save.academyPlayed]);
+  const splitPrefix = `${save.split}:`;
+  const playedOverride = useMemo(() => {
+    const out: Record<string, [number, number]> = {};
+    for (const [k, v] of Object.entries(playedAll)) {
+      if (k.startsWith(splitPrefix)) out[k.slice(splitPrefix.length)] = v;
+    }
+    return out;
+  }, [playedAll, splitPrefix]);
+
+  const writeOverride = (oppId: string, score: [number, number]) => {
+    update({
+      academyPlayed: {
+        ...playedAll,
+        [`${save.split}:${oppId}`]: score,
+      },
+    });
+  };
 
   const matchesView: AcademyMatch[] = useMemo(() => {
     if (!league) return [];
@@ -197,6 +243,16 @@ export function AcademyTab({
     });
   }, [league, playedOverride]);
 
+  // Tabela final com overrides aplicados (vitória do user altera classificação)
+  const tableFinal = useMemo(() => {
+    if (!league) return [];
+    return applyOverridesToStandings(league.table, league.userMatches, playedOverride);
+  }, [league, playedOverride]);
+  const userPlaceFinal = useMemo(
+    () => tableFinal.findIndex((t) => t.isUser) + 1,
+    [tableFinal],
+  );
+
   // Match "próximo" pra botão "Jogar agora": primeiro do split que NÃO foi
   // jogado pelo user (playedOverride[oppId] undefined).
   const nextPlayable = useMemo(() => {
@@ -204,13 +260,178 @@ export function AcademyTab({
     return league.userMatches.find((m) => !playedOverride[m.oppId]) ?? null;
   }, [league, playedOverride]);
 
+  const allMatchesPlayed = league ? league.userMatches.every((m) => playedOverride[m.oppId]) : false;
+
   const playNext = () => {
     if (!nextPlayable) return;
     const oppClub = ACADEMY_CLUBS.find((c) => c.id === nextPlayable.oppId);
     const oppStr = oppClub ? 62 + (hashStr(`str:${oppClub.id}`) % 13) + (oppClub.players && oppClub.players.length >= 4 ? 2 : 0) : 68;
     const [us, them] = simulateAcademyMatch(teamOvr, oppStr);
-    setPlayedOverride((prev) => ({ ...prev, [nextPlayable.oppId]: [us, them] }));
+    writeOverride(nextPlayable.oppId, [us, them]);
   };
+
+  // ─── FULL MATCH: veto + MatchScreen real ───────────────────────────────────
+  // stage 'veto' → 'match' → null. Quando termina, persiste override do match.
+  const [fullStage, setFullStage] = useState<null | 'veto' | 'match'>(null);
+  const [fullCtx, setFullCtx] = useState<null | {
+    oppId: string;
+    teams: [TTeam, TTeam];
+    userIdx: 0 | 1;
+    maps?: { map: MapId; pickedBy: 0 | 1 | -1 }[];
+    phaseLabel: string;
+    /** Quando vier de uma fase de playoff, ao finalizar o match grava nas semis/final. */
+    playoffSlot?: 'semi0' | 'semi1' | 'final';
+  }>(null);
+  // RNG criado lazy (não durante render — evita regra de pureza). Reseta a cada
+  // novo veto pra garantir variabilidade entre matches.
+  const rngRef = useRef<ReturnType<typeof makeRng> | null>(null);
+  const getRng = (): ReturnType<typeof makeRng> => {
+    if (!rngRef.current) {
+      rngRef.current = makeRng(Math.floor(Math.random() * 2_000_000_000) + 1);
+    }
+    return rngRef.current;
+  };
+
+  const startFullVeto = (
+    oppId: string,
+    phaseLabel: string,
+    playoffSlot?: 'semi0' | 'semi1' | 'final',
+  ) => {
+    if (!acaTeam.length) return;
+    const oppClub = ACADEMY_CLUBS.find((c) => c.id === oppId);
+    if (!oppClub) return;
+    const userTeam = buildAcademyUserTeam(acaTeam, save.org, orgCountry);
+    const oppTeam = buildAcademyOpponentTeam(oppClub, save.split);
+    rngRef.current = makeRng(Math.floor(Math.random() * 2_000_000_000) + 1);
+    setFullCtx({ oppId, teams: [userTeam, oppTeam], userIdx: 0, phaseLabel, playoffSlot });
+    setFullStage('veto');
+  };
+
+  const onVetoDone = (maps: { map: MapId; pickedBy: 0 | 1 | -1 }[]) => {
+    if (!fullCtx) return;
+    setFullCtx({ ...fullCtx, maps });
+    setFullStage('match');
+  };
+
+  const onFullMatchFinish = (series: SeriesResult) => {
+    if (!fullCtx) return;
+    const [winsA, winsB] = series.mapScore;
+    const score = seriesToAcademyScore(fullCtx.userIdx, winsA, winsB);
+    if (fullCtx.playoffSlot) {
+      // grava em playoff
+      const po = save.academyPlayoff;
+      if (po) {
+        const next = structuredCloneSafe(po);
+        const winnerId = series.winner === fullCtx.userIdx ? fullCtx.teams[fullCtx.userIdx].id : fullCtx.teams[fullCtx.userIdx === 0 ? 1 : 0].id;
+        const result = { winnerId, score: score as [number, number] };
+        if (fullCtx.playoffSlot === 'semi0') next.semis[0].result = result;
+        else if (fullCtx.playoffSlot === 'semi1') next.semis[1].result = result;
+        else if (fullCtx.playoffSlot === 'final' && next.final) {
+          next.final.result = result;
+          next.champion = winnerId === next.final.a.id ? next.final.a : next.final.b;
+        }
+        // Promove vencedores das semis pra final automaticamente
+        if (next.semis[0].result && next.semis[1].result && !next.final) {
+          const w0 = next.semis[0].result.winnerId === next.semis[0].a.id ? next.semis[0].a : next.semis[0].b;
+          const w1 = next.semis[1].result.winnerId === next.semis[1].a.id ? next.semis[1].a : next.semis[1].b;
+          next.final = { a: w0, b: w1 };
+        }
+        update({ academyPlayoff: next });
+      }
+    } else {
+      writeOverride(fullCtx.oppId, score);
+    }
+    setFullStage(null);
+    setFullCtx(null);
+  };
+
+  // ─── Disparar playoff quando o round-robin termina ─────────────────────────
+  // Ao concluir todos os matches do split, monta-se o bracket com o tableFinal.
+  // O usuário decide quando JOGAR cada semi/final.
+  const startPlayoff = () => {
+    if (!league || !allMatchesPlayed) return;
+    const bracket = buildAcademyPlayoff(tableFinal, save.split);
+    update({ academyPlayoff: bracket });
+  };
+
+  // se mudou de split (avanço da carreira), limpa o playoff
+  useEffect(() => {
+    if (save.academyPlayoff && save.academyPlayoff.split !== save.split) {
+      update({ academyPlayoff: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.split]);
+
+  // Para auto-simular um match de playoff onde o user NÃO está envolvido
+  const autoSimSlot = (slot: 'semi0' | 'semi1' | 'final') => {
+    const po = save.academyPlayoff;
+    if (!po) return;
+    const next = structuredCloneSafe(po);
+    const m =
+      slot === 'semi0' ? next.semis[0]
+      : slot === 'semi1' ? next.semis[1]
+      : next.final;
+    if (!m) return;
+    m.result = autoPlayoffResult(m.a, m.b);
+    if (slot === 'final' && next.final?.result) {
+      next.champion = next.final.result.winnerId === next.final.a.id ? next.final.a : next.final.b;
+    }
+    if (next.semis[0].result && next.semis[1].result && !next.final) {
+      const w0 = next.semis[0].result.winnerId === next.semis[0].a.id ? next.semis[0].a : next.semis[0].b;
+      const w1 = next.semis[1].result.winnerId === next.semis[1].a.id ? next.semis[1].a : next.semis[1].b;
+      next.final = { a: w0, b: w1 };
+    }
+    update({ academyPlayoff: next });
+  };
+
+  // ─── Prize money: paga quando o split fecha (round-robin OU playoff) ───────
+  // O pagamento usa o placement final: campeão do playoff > vice > etc.
+  // Quando NÃO há playoff (user em 5º+), considera-se o lugar do round-robin.
+  useEffect(() => {
+    const po = save.academyPlayoff;
+    const closedRR = league && allMatchesPlayed;
+    if (!closedRR) return;
+    const paidSplits = save.academyPaidSplits ?? [];
+    if (paidSplits.includes(save.split)) return;
+
+    let place = userPlaceFinal;
+    if (po?.champion) {
+      const userId = league?.table.find((t) => t.isUser)?.id;
+      const champion = po.champion.id === userId;
+      // Se o user chegou na final, vira 1º ou 2º
+      if (po.final) {
+        const inFinal = po.final.a.isUser || po.final.b.isUser;
+        if (inFinal) place = champion ? 1 : 2;
+        else {
+          // semi: 3º ou 4º
+          const inSemi = po.semis.some((s) => s.a.isUser || s.b.isUser);
+          if (inSemi) place = 3;
+        }
+      }
+      // Só paga DEPOIS do playoff fechar (campeão definido)
+      const prize = academyPrize(place);
+      const nextPaid = [...paidSplits, save.split];
+      update({
+        budget: save.budget + prize,
+        academyPaidSplits: nextPaid,
+        academyTrophies: (save.academyTrophies ?? 0) + (champion ? 1 : 0),
+      });
+    } else if (!po) {
+      // Sem playoff disponível (user fora do top 4 e nem disparou): paga só pelo
+      // round-robin. Place mantém o userPlaceFinal.
+      const prize = academyPrize(place);
+      if (prize > 0) {
+        update({
+          budget: save.budget + prize,
+          academyPaidSplits: [...paidSplits, save.split],
+        });
+      } else {
+        // mesmo zero, marca como pago pra não tentar de novo
+        update({ academyPaidSplits: [...paidSplits, save.split] });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.academyPlayoff?.champion, allMatchesPlayed, save.split]);
 
   // ofertas pra prospects (calculadas na renderização)
   const offersByProspect = useMemo(() => {
@@ -262,8 +483,11 @@ export function AcademyTab({
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <HudPill label={ct('Time')} value={acaTeam.length ? `OVR ${teamOvr}` : '—'} tone={acaTeam.length ? 'gold' : 'neutral'} />
-          <HudPill label={ct('Liga')} value={league ? `${league.userPlace}º` : '—'} tone={league && league.userPlace <= 3 ? 'green' : 'neutral'} />
+          <HudPill label={ct('Liga')} value={league ? `${userPlaceFinal}º` : '—'} tone={league && userPlaceFinal <= 3 ? 'green' : 'neutral'} />
           <HudPill label={ct('Prospects')} value={`${aca.length}/${ACADEMY_MAX}`} tone="neutral" />
+          {(save.academyTrophies ?? 0) > 0 && (
+            <HudPill label={ct('Títulos')} value={`🏆 ${save.academyTrophies}`} tone="gold" />
+          )}
         </div>
       </header>
 
@@ -366,27 +590,48 @@ export function AcademyTab({
       {league && (
         <DashCard
           title={`${ct('Liga Academy')} · Split ${save.split}`}
-          info={`${ct('Você está em')} ${league.userPlace}º`}
+          info={`${ct('Você está em')} ${userPlaceFinal}º`}
           actions={
             nextPlayable ? (
-              <button
-                type="button"
-                onClick={playNext}
-                style={{
-                  padding: '6px 14px',
-                  background: 'var(--em-gold)',
-                  color: '#1a1205',
-                  border: 'none',
-                  borderRadius: 4,
-                  fontFamily: 'inherit',
-                  fontWeight: 800,
-                  fontSize: '0.78rem',
-                  cursor: 'pointer',
-                  letterSpacing: '0.3px',
-                }}
-              >
-                ▸ {ct('Jogar')} {nextPlayable.oppTag}
-              </button>
+              <span style={{ display: 'inline-flex', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => startFullVeto(nextPlayable.oppId, `${ct('Liga Academy')} · Split ${save.split}`)}
+                  title={ct('Veta, joga round-a-round e controla o ritmo — vale o resultado real')}
+                  style={{
+                    padding: '6px 14px',
+                    background: 'var(--em-gold)',
+                    color: '#1a1205',
+                    border: 'none',
+                    borderRadius: 4,
+                    fontFamily: 'inherit',
+                    fontWeight: 800,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                    letterSpacing: '0.3px',
+                  }}
+                >
+                  🎮 {ct('Jogar')} {nextPlayable.oppTag}
+                </button>
+                <button
+                  type="button"
+                  onClick={playNext}
+                  title={ct('Resultado rápido por RNG (sem veto)')}
+                  style={{
+                    padding: '6px 10px',
+                    background: 'transparent',
+                    color: 'var(--em-text)',
+                    border: '1px solid var(--em-border)',
+                    borderRadius: 4,
+                    fontFamily: 'inherit',
+                    fontWeight: 700,
+                    fontSize: '0.74rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ⏩ {ct('Simular')}
+                </button>
+              </span>
             ) : (
               <span style={{ fontSize: '0.72rem', color: '#5ed88a', fontWeight: 700 }}>
                 ✓ {ct('Todos jogados')}
@@ -409,7 +654,7 @@ export function AcademyTab({
                   </tr>
                 </thead>
                 <tbody>
-                  {league.table.map((r, i) => {
+                  {tableFinal.map((r, i) => {
                     const club = ACADEMY_CLUBS.find((c) => c.id === r.id);
                     const parentLogo = club ? academyParentLogoUrl(club) : undefined;
                     return (
@@ -506,9 +751,55 @@ export function AcademyTab({
             </div>
           </div>
           <p style={{ margin: '10px 0 0', fontSize: '0.74rem', color: 'var(--em-muted)', lineHeight: 1.5 }}>
-            {ct('Academies reais (NAVI Junior, MOUZ NXT, Eternal Fire Academy e mais).')} <b style={{ color: 'var(--em-text)' }}>{ct('Clique "Jogar"')}</b> {ct('pra disputar o próximo confronto com RNG vivo — o resultado entra na tabela.')}
+            {ct('Academies reais (NAVI Junior, MOUZ NXT, Eternal Fire Academy e mais).')} <b style={{ color: 'var(--em-text)' }}>{ct('🎮 Jogar')}</b> {ct('abre VETO de mapas e MD3 round-a-round; ⏩ Simular fecha rápido.')}
           </p>
         </DashCard>
+      )}
+
+      {/* ===== PLAYOFFS DA LIGA ACADEMY ===== */}
+      {league && allMatchesPlayed && !save.academyPlayoff && (
+        <DashCard
+          title={`${ct('Playoffs Academy')} · Split ${save.split}`}
+          info={ct('Round-robin fechado — top 4 disputa o título')}
+          actions={
+            userPlaceFinal <= 4 ? (
+              <button
+                type="button"
+                onClick={startPlayoff}
+                style={{
+                  padding: '6px 14px',
+                  background: 'var(--em-gold)',
+                  color: '#1a1205',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontFamily: 'inherit',
+                  fontWeight: 800,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🏆 {ct('Disputar playoffs')}
+              </button>
+            ) : (
+              <span style={{ fontSize: '0.72rem', color: 'var(--em-muted)', fontStyle: 'italic' }}>
+                {ct('Fora do top 4 — fim do split')}
+              </span>
+            )
+          }
+        >
+          <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--em-muted)', lineHeight: 1.5 }}>
+            {userPlaceFinal <= 4
+              ? ct('Você se classificou para as semifinais. Semis: 1º × 4º e 2º × 3º (MD3). Vencedores fazem a final pelo título.')
+              : ct('Não chegou aos playoffs neste split. Mesmo assim a premiação por colocação é paga ao fechar.')}
+          </p>
+        </DashCard>
+      )}
+      {save.academyPlayoff && (
+        <PlayoffCard
+          po={save.academyPlayoff}
+          onPlay={(slot, oppId) => startFullVeto(oppId, `${ct('Playoffs')} · ${slot === 'final' ? ct('Final') : ct('Semi')} · Split ${save.split}`, slot)}
+          onSim={autoSimSlot}
+        />
       )}
 
       {/* ===== ACADEMIA (PROSPECTOS) ===== */}
@@ -841,11 +1132,286 @@ export function AcademyTab({
           </div>
         )}
       </DashCard>
+
+      {/* ===== OVERLAY: VETO + MATCH REAL ===== */}
+      {fullStage && fullCtx && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(8,10,14,0.96)',
+            zIndex: 1000,
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 18px',
+              borderBottom: '1px solid var(--em-border)',
+              background: 'var(--em-panel)',
+              position: 'sticky',
+              top: 0,
+              zIndex: 5,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+              <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
+                {fullStage === 'veto' ? ct('Veto de mapas') : ct('Partida ao vivo')}
+              </span>
+              <b style={{ fontSize: '0.92rem', color: 'var(--em-text)' }}>{fullCtx.phaseLabel}</b>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setFullStage(null); setFullCtx(null); }}
+              title={ct('Fechar')}
+              style={{
+                padding: '6px 12px',
+                background: 'transparent',
+                color: 'var(--em-muted)',
+                border: '1px solid var(--em-border)',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+              }}
+            >
+              ✕ {ct('Sair')}
+            </button>
+          </div>
+          <div style={{ flex: 1, padding: '14px 18px' }}>
+            {fullStage === 'veto' && (
+              <VetoScreen
+                teams={fullCtx.teams}
+                userIdx={fullCtx.userIdx}
+                rng={() => getRng()()}
+                phaseLabel={fullCtx.phaseLabel}
+                bestOf={3}
+                onDone={onVetoDone}
+              />
+            )}
+            {fullStage === 'match' && fullCtx.maps && (
+              <MatchScreen
+                teams={fullCtx.teams}
+                maps={fullCtx.maps}
+                userIdx={fullCtx.userIdx}
+                rng={() => getRng()()}
+                phaseLabel={fullCtx.phaseLabel}
+                bestOf={3}
+                onFinish={onFullMatchFinish}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Sub-componentes ────────────────────────────────────────────────────────
+
+// ─── Card de Playoffs Academy ────────────────────────────────────────────────
+function PlayoffCard({
+  po,
+  onPlay,
+  onSim,
+}: {
+  po: AcademyPlayoffState;
+  onPlay: (slot: 'semi0' | 'semi1' | 'final', oppId: string) => void;
+  onSim: (slot: 'semi0' | 'semi1' | 'final') => void;
+}) {
+  const finalReady = !!(po.semis[0].result && po.semis[1].result);
+  return (
+    <DashCard
+      title={`${ct('Playoffs Academy')} · Split ${po.split}`}
+      info={po.champion ? `🏆 ${ct('Campeão')}: ${po.champion.name}` : ct('Mata-mata em andamento')}
+      actions={
+        po.champion ? (
+          <span style={{ fontSize: '0.74rem', color: '#e8c170', fontWeight: 800 }}>
+            🏆 {po.champion.tag}
+          </span>
+        ) : undefined
+      }
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, alignItems: 'center' }}>
+        <PlayoffColumn title={ct('Semifinais')}>
+          <PlayoffMatchRow m={po.semis[0]} onPlay={(oppId) => onPlay('semi0', oppId)} onSim={() => onSim('semi0')} />
+          <PlayoffMatchRow m={po.semis[1]} onPlay={(oppId) => onPlay('semi1', oppId)} onSim={() => onSim('semi1')} />
+        </PlayoffColumn>
+        <PlayoffColumn title={ct('Final')}>
+          {po.final ? (
+            <PlayoffMatchRow m={po.final} onPlay={(oppId) => onPlay('final', oppId)} onSim={() => onSim('final')} />
+          ) : (
+            <p style={{ margin: '8px 0', fontSize: '0.78rem', color: 'var(--em-muted)', fontStyle: 'italic', textAlign: 'center' }}>
+              {finalReady ? ct('Preparando final…') : ct('Aguardando vencedores das semis')}
+            </p>
+          )}
+        </PlayoffColumn>
+        <PlayoffColumn title={ct('Campeão')}>
+          {po.champion ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 12, background: 'rgba(232,193,112,0.10)', border: '1px solid rgba(232,193,112,0.45)', borderRadius: 6 }}>
+              <div style={{ fontSize: '1.6rem' }}>🏆</div>
+              <TeamBadge tag={po.champion.tag} colors={po.champion.colors} size={36} />
+              <b style={{ fontSize: '0.92rem', color: 'var(--em-gold)', fontWeight: 900, textAlign: 'center' }}>
+                {po.champion.name}
+              </b>
+              {po.champion.isUser && (
+                <span style={{ fontSize: '0.7rem', color: '#5ed88a', fontWeight: 800, letterSpacing: '0.5px' }}>
+                  ★ {ct('Você venceu o split!')}
+                </span>
+              )}
+            </div>
+          ) : (
+            <p style={{ margin: '8px 0', fontSize: '0.78rem', color: 'var(--em-muted)', fontStyle: 'italic', textAlign: 'center' }}>
+              {ct('Aguardando final')}
+            </p>
+          )}
+        </PlayoffColumn>
+      </div>
+    </DashCard>
+  );
+}
+
+function PlayoffColumn({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 800, textAlign: 'center' }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function PlayoffMatchRow({
+  m,
+  onPlay,
+  onSim,
+}: {
+  m: AcademyPlayoffMatch;
+  onPlay: (oppId: string) => void;
+  onSim: () => void;
+}) {
+  const done = !!m.result;
+  const winnerId = m.result?.winnerId;
+  const userInvolved = m.a.isUser || m.b.isUser;
+  const oppId = m.a.isUser ? m.b.id : m.a.id;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        padding: 10,
+        background: 'var(--em-panel-2)',
+        border: '1px solid var(--em-border)',
+        borderRadius: 6,
+      }}
+    >
+      <PlayoffSide seed={m.a} winner={winnerId === m.a.id} score={m.result?.score[0]} />
+      <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textAlign: 'center', fontWeight: 700, letterSpacing: '1px' }}>VS</div>
+      <PlayoffSide seed={m.b} winner={winnerId === m.b.id} score={m.result?.score[1]} />
+      {!done && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          {userInvolved ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onPlay(oppId)}
+                style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  background: 'var(--em-gold)',
+                  color: '#1a1205',
+                  border: 'none',
+                  borderRadius: 3,
+                  fontFamily: 'inherit',
+                  fontWeight: 800,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🎮 {ct('Jogar')}
+              </button>
+              <button
+                type="button"
+                onClick={onSim}
+                style={{
+                  padding: '6px 8px',
+                  background: 'transparent',
+                  color: 'var(--em-text)',
+                  border: '1px solid var(--em-border)',
+                  borderRadius: 3,
+                  fontFamily: 'inherit',
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                }}
+              >
+                ⏩
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onSim}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                background: 'var(--em-panel-2)',
+                color: 'var(--em-text)',
+                border: '1px solid var(--em-border)',
+                borderRadius: 3,
+                fontFamily: 'inherit',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              ⏩ {ct('Simular')}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner: boolean; score?: number }) {
+  const accent = winner ? '#5ed88a' : seed.isUser ? '#e8c170' : 'var(--em-text)';
+  const club = ACADEMY_CLUBS.find((c) => c.id === seed.id);
+  const parentLogo = club ? academyParentLogoUrl(club) : undefined;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {seed.isUser ? (
+        <TeamBadge tag={seed.tag} colors={seed.colors} size={20} />
+      ) : (
+        <AcademyBadge
+          parentLogoUrl={parentLogo}
+          colors={seed.colors}
+          fallbackTag={seed.tag}
+          fallbackColors={seed.colors}
+          size={20}
+          showLabel={false}
+        />
+      )}
+      <span style={{ flex: 1, fontSize: '0.78rem', color: accent, fontWeight: winner || seed.isUser ? 800 : 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {seed.name}
+      </span>
+      {typeof score === 'number' && (
+        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', color: accent, fontWeight: 800 }}>
+          {score}
+        </b>
+      )}
+    </div>
+  );
+}
+
 
 function HudPill({ label, value, tone }: { label: string; value: string; tone: 'gold' | 'green' | 'neutral' }) {
   const colors: Record<typeof tone, { fg: string; bg: string; border: string }> = {

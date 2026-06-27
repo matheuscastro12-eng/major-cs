@@ -1140,7 +1140,7 @@ interface CareerSave {
   academyTrophies?: number; // títulos do campeonato Academy
   academyPaidSplits?: number[]; // splits cujo prize money já foi pago (evita double-pay)
   // playoff Academy (top 4 → semis + final) do split atual. Limpa ao avançar split.
-  academyPlayoff?: import('../pages/career/AcademyTab').AcademyPlayoffState | null;
+  academyPlayoff?: import('../engine/career/academyMatch').AcademyPlayoffState | null;
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
   scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
