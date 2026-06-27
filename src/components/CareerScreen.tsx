@@ -471,7 +471,7 @@ import {
   type ProspectCandidate,
   type ScoutReport,
 } from '../engine/scouting';
-import { useToast } from './ds';
+import { useToast, Modal } from './ds';
 import { confirm as confirmDialog } from './ConfirmDialog';
 // T8.1 — abrir tutorial HowToPlay (host global montado no main.tsx)
 import { openHowToPlay } from './HowToPlayHost';
@@ -7466,75 +7466,275 @@ function NegotiationModal({ player, from, budget, swapPool, onClose, onAgree }: 
   // ao aceitar a contraproposta (valor TOTAL que o clube quer), o dinheiro que você
   // paga é o total menos o valor dos jogadores da troca (nunca negativo).
   const counterCash = reply?.kind === 'counter' ? Math.max(0, reply.value - swapValue) : 0;
+  // Redesenhada no padrão em-* — Modal + DashCard-style sections + sliders/chips
+  // legíveis. API + estados internos preservados.
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="nego-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose}>✕</button>
-        <div className="nego-head">
-          <PlayerAvatar nick={player.nick} size={48} />
-          <div>
-            <div className="nego-nick"><Flag cc={player.country} /> {player.nick} <span className={`role-pill ${player.role}`}>{player.role}</span></div>
-            <div className="muted small">{ct('Negociando com')} <b>{from.team}</b> · OVR {playerOvr(player)}</div>
-          </div>
-        </div>
-        <div className="nego-figures">
-          <div><span className="muted small">{ct('Valor de mercado')}</span><b>{formatMoney(mkt)}</b></div>
-          <div><span className="muted small">{ct('Pedida do clube')}</span><b>{formatMoney(ask)}</b></div>
-          <div><span className="muted small">{ct('Salário / split')}</span><b>{formatMoney(wage)}</b></div>
-        </div>
-        {swapPool && swapPool.length > 0 && (
-          <div className="nego-swap">
-            <div className="muted small section-label" style={{ marginTop: 0 }}>{ct('Incluir na troca (abate o valor em dinheiro)')}</div>
-            <div className="nego-swap-list">
-              {swapPool.map((p) => (
-                <button key={p.id} className={`nego-swap-chip${swapOut.includes(p.id) ? ' on' : ''}`} onClick={() => toggleSwap(p.id)}>
-                  <Flag cc={p.country} /> {p.nick} <span className="muted small">{formatMoney(playerValue(p))}</span>
-                </button>
-              ))}
+    <Modal open onClose={onClose} title="" size="md">
+      <div className="em-nego" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Header com player + clube */}
+        <header
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '12px 14px',
+            background: 'linear-gradient(135deg, rgba(232,193,112,0.10) 0%, transparent 60%)',
+            border: '1px solid var(--em-border)',
+            borderRadius: 6,
+          }}
+        >
+          <PlayerAvatar nick={player.nick} size={52} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '1.05rem', fontWeight: 800, color: 'var(--em-text)' }}>
+              <Flag cc={player.country} /> {player.nick}
+              <span className={`role-pill ${player.role}`}>{player.role}</span>
             </div>
-            {swapValue > 0 && <div className="muted small">{ct('Valor da troca:')} <b className="pos">{formatMoney(swapValue)}</b></div>}
+            <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', marginTop: 2 }}>
+              {ct('Negociando com')} <b style={{ color: 'var(--em-text)' }}>{from.team}</b> · OVR <b style={{ color: 'var(--em-gold)', fontFamily: '"JetBrains Mono", monospace' }}>{playerOvr(player)}</b>
+            </div>
+          </div>
+        </header>
+
+        {/* Figures: 3 cards inline */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <NegoFigure label={ct('Valor mercado')} value={formatMoney(mkt)} />
+          <NegoFigure label={ct('Pedida do clube')} value={formatMoney(ask)} accent="#e8c170" />
+          <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="#e58a8a" />
+        </div>
+
+        {/* Swap pool (só se habilitado) */}
+        {swapPool && swapPool.length > 0 && (
+          <div>
+            <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 800, marginBottom: 6 }}>
+              {ct('Incluir na troca (abate o valor em dinheiro)')}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {swapPool.map((p) => {
+                const on = swapOut.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => toggleSwap(p.id)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '5px 10px',
+                      background: on ? 'rgba(232,193,112,0.18)' : 'var(--em-panel-2)',
+                      color: on ? 'var(--em-gold)' : 'var(--em-text)',
+                      border: `1px solid ${on ? 'var(--em-gold)' : 'var(--em-border)'}`,
+                      borderRadius: 14,
+                      fontFamily: 'inherit',
+                      fontSize: '0.76rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Flag cc={p.country} /> {p.nick}
+                    <span style={{ color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem' }}>
+                      {formatMoney(playerValue(p))}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {swapValue > 0 && (
+              <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--em-muted)' }}>
+                {ct('Valor da troca:')} <b style={{ color: '#5ed88a', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b>
+              </div>
+            )}
           </div>
         )}
-        <div className="nego-offer">
-          <div className="nego-presets">
-            <button className="btn small ghost" onClick={() => { setOffer(Math.max(0, Math.round(ask * 0.7) - swapValue)); reset(); }}>{ct('Baixa')}</button>
-            <button className="btn small ghost" onClick={() => { setOffer(Math.max(0, ask - swapValue)); reset(); }}>{ct('Justa')}</button>
-            <button className="btn small ghost" onClick={() => { setOffer(Math.max(0, Math.round(ask * 1.1) - swapValue)); reset(); }}>{ct('Generosa')}</button>
+
+        {/* Offer + slider */}
+        <div
+          style={{
+            padding: 12,
+            background: 'var(--em-panel-2)',
+            border: '1px solid var(--em-border)',
+            borderRadius: 6,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <div style={{ display: 'flex', gap: 6 }}>
+            <PresetBtn label={ct('Baixa')} onClick={() => { setOffer(Math.max(0, Math.round(ask * 0.7) - swapValue)); reset(); }} />
+            <PresetBtn label={ct('Justa')} onClick={() => { setOffer(Math.max(0, ask - swapValue)); reset(); }} primary />
+            <PresetBtn label={ct('Generosa')} onClick={() => { setOffer(Math.max(0, Math.round(ask * 1.1) - swapValue)); reset(); }} />
           </div>
-          <input type="range" min={0} max={Math.round(ask * 1.4)} step={10000}
-            value={offer} onChange={(e) => { setOffer(Number(e.target.value)); reset(); }} />
-          <div className={`nego-amount${overBudget ? ' neg' : ''}`}>
-            {ct('Dinheiro:')} <b>{formatMoney(offer)}</b>
-            {swapValue > 0 && <span className="muted small"> + troca {formatMoney(swapValue)} = oferta de {formatMoney(effectiveOffer)}</span>}
-            {overBudget && <span className="neg"> {ct('· sem caixa')}</span>}
+          <input
+            type="range"
+            min={0}
+            max={Math.round(ask * 1.4)}
+            step={10000}
+            value={offer}
+            onChange={(e) => { setOffer(Number(e.target.value)); reset(); }}
+            style={{ width: '100%', accentColor: 'var(--em-gold)' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, fontSize: '0.86rem', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--em-muted)' }}>{ct('Dinheiro:')}</span>
+            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? '#e58a8a' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
+              {formatMoney(offer)}
+            </b>
+            {swapValue > 0 && (
+              <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem' }}>
+                + troca <b style={{ color: '#5ed88a', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(effectiveOffer)}</b>
+              </span>
+            )}
+            {overBudget && (
+              <span style={{ color: '#e58a8a', fontSize: '0.76rem', fontWeight: 700 }}>· {ct('sem caixa')}</span>
+            )}
           </div>
         </div>
+
+        {/* Reply do clube */}
         {reply && (
-          <div className={`nego-reply ${reply.kind}`}>
-            {reply.kind === 'accept' && <span>✅ {from.team} aceitou a oferta de <b>{formatMoney(effectiveOffer)}</b>.</span>}
-            {reply.kind === 'counter' && <span>↔️ {from.team} quer <b>{formatMoney(reply.value)}</b> no total{swapValue > 0 ? ` (${formatMoney(counterCash)} em dinheiro + sua troca)` : ''}.</span>}
+          <div
+            style={{
+              padding: '10px 14px',
+              background:
+                reply.kind === 'accept' ? 'rgba(94,216,138,0.12)' :
+                reply.kind === 'counter' ? 'rgba(232,193,112,0.12)' :
+                'rgba(229,138,138,0.12)',
+              border: `1px solid ${
+                reply.kind === 'accept' ? 'rgba(94,216,138,0.45)' :
+                reply.kind === 'counter' ? 'rgba(232,193,112,0.45)' :
+                'rgba(229,138,138,0.45)'
+              }`,
+              borderLeft: `3px solid ${
+                reply.kind === 'accept' ? '#5ed88a' :
+                reply.kind === 'counter' ? '#e8c170' :
+                '#e58a8a'
+              }`,
+              borderRadius: 4,
+              fontSize: '0.84rem',
+              color: 'var(--em-text)',
+              lineHeight: 1.5,
+            }}
+          >
+            {reply.kind === 'accept' && <span>✅ {from.team} {ct('aceitou a oferta de')} <b>{formatMoney(effectiveOffer)}</b>.</span>}
+            {reply.kind === 'counter' && <span>↔️ {from.team} {ct('quer')} <b>{formatMoney(reply.value)}</b> {ct('no total')}{swapValue > 0 ? ` (${formatMoney(counterCash)} ${ct('em dinheiro + sua troca')})` : ''}.</span>}
             {reply.kind === 'reject' && <span>❌ {reply.msg}</span>}
           </div>
         )}
-        <div className="nego-actions">
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--em-border)', paddingTop: 14 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '8px 16px',
+              background: 'transparent',
+              color: 'var(--em-text)',
+              border: '1px solid var(--em-border)',
+              borderRadius: 4,
+              fontFamily: 'inherit',
+              fontWeight: 600,
+              fontSize: '0.84rem',
+              cursor: 'pointer',
+            }}
+          >
+            {ct('Desistir')}
+          </button>
           {reply?.kind === 'accept' ? (
-            <button className="btn gold" onClick={() => onAgree(offer, swapOut)}>{ct('Fechar acordo')}</button>
+            <ActionGold label={ct('Fechar acordo')} onClick={() => onAgree(offer, swapOut)} />
           ) : reply?.kind === 'counter' ? (
             <>
-              <button className="btn gold" disabled={counterCash > budget} onClick={() => onAgree(counterCash, swapOut)}>
-                Aceitar ({formatMoney(counterCash)})
+              <button
+                type="button"
+                disabled={overBudget}
+                onClick={submit}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--em-panel-2)',
+                  color: overBudget ? 'var(--em-muted)' : 'var(--em-text)',
+                  border: '1px solid var(--em-border)',
+                  borderRadius: 4,
+                  fontFamily: 'inherit',
+                  fontWeight: 700,
+                  fontSize: '0.84rem',
+                  cursor: overBudget ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {ct('Insistir')}
               </button>
-              <button className="btn" disabled={overBudget} onClick={submit}>{ct('Insistir')}</button>
+              <ActionGold
+                label={`${ct('Aceitar')} (${formatMoney(counterCash)})`}
+                disabled={counterCash > budget}
+                onClick={() => onAgree(counterCash, swapOut)}
+              />
             </>
           ) : reply?.kind === 'reject' && reply.firm ? (
-            <button className="btn" onClick={onClose}>{ct('Sair')}</button>
+            <ActionGold label={ct('Sair')} onClick={onClose} />
           ) : (
-            <button className="btn gold" disabled={overBudget} onClick={submit}>{ct('Fazer proposta')}</button>
+            <ActionGold label={ct('Fazer proposta')} disabled={overBudget} onClick={submit} />
           )}
-          <button className="btn ghost" onClick={onClose}>{ct('Desistir')}</button>
         </div>
       </div>
+    </Modal>
+  );
+}
+
+function NegoFigure({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div style={{ padding: '8px 10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', borderRadius: 4, lineHeight: 1.2 }}>
+      <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
+        {label}
+      </div>
+      <b style={{ fontFamily: '"JetBrains Mono", monospace', color: accent ?? 'var(--em-text)', fontSize: '0.96rem', fontWeight: 800 }}>
+        {value}
+      </b>
     </div>
+  );
+}
+
+function PresetBtn({ label, onClick, primary }: { label: string; onClick: () => void; primary?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        flex: 1,
+        padding: '5px 10px',
+        background: primary ? 'rgba(232,193,112,0.14)' : 'transparent',
+        color: primary ? 'var(--em-gold)' : 'var(--em-text)',
+        border: `1px solid ${primary ? 'rgba(232,193,112,0.45)' : 'var(--em-border)'}`,
+        borderRadius: 4,
+        fontFamily: 'inherit',
+        fontWeight: 700,
+        fontSize: '0.76rem',
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ActionGold({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: '8px 18px',
+        background: disabled ? 'var(--em-panel-2)' : 'var(--em-gold)',
+        color: disabled ? 'var(--em-muted)' : '#1a1205',
+        border: disabled ? '1px solid var(--em-border)' : 'none',
+        borderRadius: 4,
+        fontFamily: 'inherit',
+        fontWeight: 900,
+        fontSize: '0.84rem',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        letterSpacing: '0.3px',
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
