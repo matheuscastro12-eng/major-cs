@@ -78,8 +78,10 @@ export default async function handler(
 
   // ---- leitura pública ----
   if (req.method === 'GET' || !req.method) {
-    // cache curto: edições salvas pelo admin propagam a todos em ~30s
-    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=600');
+    // cache de edge: o dataset muda raro (só no "Salvar no banco" do admin), e o
+    // app já traz a base embutida no build. TTL maior + SWR de 1 dia cortam a
+    // banda de origem por visita; edições do admin propagam em ~10min (s-maxage).
+    res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=86400');
     res.setHeader('Access-Control-Expose-Headers', 'X-Dataset-Rev');
     try {
       // rev do build com que esta base foi salva (vazio se nunca foi gravado).

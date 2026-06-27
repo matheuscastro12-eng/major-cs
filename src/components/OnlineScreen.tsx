@@ -433,6 +433,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   const refresh = useCallback(async () => {
     if (!code || localDemo || document.hidden) return; // demo local não chama backend
     const s = await fetchLobby(code);
+    if (s === 'unchanged') { goneRef.current = 0; return; } // 304: estado igual, mantém
     if (s === 'gone') {
       // tolera UM 404 transitório (corrida logo após criar / réplica atrasada):
       // só dropa de verdade após 2 seguidos, pra não chutar o jogador à toa.
@@ -546,7 +547,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     // aparecem em ~2s em vez de 5s); 'done' lento (resultado imutável, só detecta
     // a próxima temporada). A partida ao vivo sincroniza pelo relógio da sala.
     const st = state?.lobby.status;
-    const syncMs = st === 'veto' ? 1000 : st === 'waiting' || st === 'drafting' ? 2000 : lobbyDone ? 1500 : POLL_MS;
+    // corte de custo: no 'done' o resultado é IMUTÁVEL (só detecta a próxima
+    // temporada), então poll lento; veto segue rápido, draft/espera um pouco menos.
+    const syncMs = st === 'veto' ? 1000 : st === 'waiting' || st === 'drafting' ? 2500 : lobbyDone ? 7000 : POLL_MS;
     pollRef.current = window.setInterval(refresh, syncMs);
     return () => { window.clearTimeout(initial); window.clearInterval(pollRef.current); };
   }, [code, refresh, lobbyDone, localDemo, state?.lobby.mode, state?.lobby.status]);
