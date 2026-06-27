@@ -22,6 +22,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createLiveCanvasSim, type LiveCanvasSim, type LiveState } from '../lib/liveCanvasSim';
+import { getMaskSync } from '../lib/walkableMask';
+import { geometryFor } from '../data/mapGeometry';
 import { LiveScoreboard } from './live/LiveScoreboard';
 import { LivePlayerCard } from './live/LivePlayerCard';
 import { LiveMinimap } from './live/LiveMinimap';
@@ -66,7 +68,12 @@ export function LiveCanvasGame({
   const [activeTab, setActiveTab] = useState<SideTabKey>('scoreboard');
 
   useEffect(() => {
-    simRef.current = createLiveCanvasSim({ mapResult, teams, userIdx });
+    // getMask: a sim consulta a cada tick. Walkable mask carrega async no
+    // LiveMinimap; enquanto null, agents andam em linha reta (fallback).
+    // Quando carrega, agents passam a respeitar paredes do radar PNG.
+    const radarUrl = geometryFor(mapResult.map).radarImage;
+    const getMask = radarUrl ? () => getMaskSync(radarUrl) : undefined;
+    simRef.current = createLiveCanvasSim({ mapResult, teams, userIdx, getMask });
     setSnap(simRef.current.getState());
     lastTsRef.current = 0;
   }, [mapResult, teams, userIdx]);

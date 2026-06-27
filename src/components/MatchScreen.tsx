@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { LiveCanvasGame } from './LiveCanvasGame';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import { narrateRound, type RoundNarration } from '../engine/narration';
@@ -102,6 +103,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [timeoutsLeft, setTimeoutsLeft] = useState(TIMEOUTS_PER_MAP);
   const [boostRounds, setBoostRounds] = useState(0);
   const [pausedMsg, setPausedMsg] = useState('');
+  // T2.5: broadcast 2D do mapa selecionado após o fim da série. Abre overlay
+  // com o LiveCanvasGame em modo autoplay; não substitui o MatchScreen atual.
+  const [broadcastMapIdx, setBroadcastMapIdx] = useState<number | null>(null);
   const [caster, setCaster] = useState<RoundNarration | null>(null); // narração do último momento-chave
   const [reveal, setReveal] = useState(0); // quantos beats da fala já apareceram (suspense)
   const lastNarrated = useRef('');
@@ -679,6 +683,43 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       {finished && series && (
         <>
           <Scoreboard series={series} teams={teams} />
+          {/* Botões de broadcast 2D por mapa — T2.5. Abre o LiveCanvasGame em
+              modo autoplay com o radar/agentes do mapa selecionado. */}
+          <div className="center" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', margin: '12px 0' }}>
+            {series.maps.map((m, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setBroadcastMapIdx(i)}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '0.78rem',
+                  fontFamily: 'inherit',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: broadcastMapIdx === i ? 'var(--em-gold)' : 'transparent',
+                  color: broadcastMapIdx === i ? '#1a1205' : 'var(--em-text)',
+                  border: '1px solid var(--em-border)',
+                  borderRadius: 3,
+                }}
+              >
+                ▶ Broadcast 2D · {m.map}
+              </button>
+            ))}
+          </div>
+          {broadcastMapIdx != null && series.maps[broadcastMapIdx] && (
+            <div style={{ margin: '16px 0' }}>
+              <LiveCanvasGame
+                mapResult={series.maps[broadcastMapIdx]}
+                teams={teams}
+                userIdx={userIdx}
+                series={series}
+                event={phaseLabel}
+                autoplay
+                onClose={() => setBroadcastMapIdx(null)}
+              />
+            </div>
+          )}
           <div className="center" style={{ margin: '18px 0' }}>
             <button className="btn big" onClick={() => onFinish(series)}>
               {t('common.continue')}

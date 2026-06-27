@@ -261,6 +261,17 @@ export default function App() {
   }, [refreshAccount]);
   const [achToast, setAchToast] = useState<AchDef[]>([]); // conquistas recém-desbloqueadas
   const [achOpen, setAchOpen] = useState(false);
+  // T3.14: captura conquistas disparadas via custom event (recordSaveTick na carreira)
+  useEffect(() => {
+    const onAch = (e: Event) => {
+      const ce = e as CustomEvent<AchDef[]>;
+      if (Array.isArray(ce.detail) && ce.detail.length > 0) {
+        setAchToast((prev) => [...prev, ...ce.detail]);
+      }
+    };
+    window.addEventListener('rtm:achievements', onAch);
+    return () => window.removeEventListener('rtm:achievements', onAch);
+  }, []);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [matchCtx, setMatchCtx] = useState<MatchCtx | null>(null);

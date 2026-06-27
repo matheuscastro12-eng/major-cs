@@ -21,7 +21,7 @@ import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryLabel, rivalryScore } from '../engine/career/rivalries';
 import { applyFatigueForm, fatigueBand, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, FACILITY_MAX_LEVEL, facilityUpkeep, facilityUpgradeCost, normalizeFacilities, stabilizeMorale, type FacilityKey } from '../engine/career/facilities';
-import { personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
+import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { matchesNegotiationFilters } from '../engine/career/market';
@@ -317,29 +317,59 @@ function clubReply(offer: number, asking: number, player: Player, fromTeamwork: 
   return { kind: 'counter', value: counter };
 }
 
-// Patrocinadores: marcas reais que pagam por split. Os de maior tier exigem
-// prestígio (VRS acumulado) pra liberar o contrato. Até 3 slots ativos.
-interface Sponsor {
-  id: string;
-  name: string;
-  perSplit: number;
-  minVrs: number;
-  color: string;
-  term: number; // splits de compromisso ao assinar (não dá pra sair antes)
-}
-const SPONSORS: Sponsor[] = [
-  { id: 'logitech', name: 'Logitech G', perSplit: 200_000, minVrs: 0, color: '#00b8fc', term: 2 },
-  { id: 'hyperx', name: 'HyperX', perSplit: 280_000, minVrs: 0, color: '#e21b22', term: 2 },
-  { id: 'razer', name: 'Razer', perSplit: 320_000, minVrs: 220, color: '#44d62c', term: 2 },
-  { id: 'secretlab', name: 'Secretlab', perSplit: 360_000, minVrs: 320, color: '#d9a441', term: 3 },
-  { id: 'monster', name: 'Monster Energy', perSplit: 400_000, minVrs: 460, color: '#7ed957', term: 3 },
-  { id: 'intel', name: 'Intel', perSplit: 520_000, minVrs: 700, color: '#0071c5', term: 3 },
-  { id: 'redbull', name: 'Red Bull', perSplit: 650_000, minVrs: 1000, color: '#cc0033', term: 4 },
-  { id: 'samsung', name: 'Samsung', perSplit: 800_000, minVrs: 1400, color: '#1428a0', term: 4 },
-];
-const SPONSOR_SLOTS = 3;
-const sponsorById = (id: string) => SPONSORS.find((s) => s.id === id);
-const sponsorIncome = (ids: string[]) => ids.reduce((a, id) => a + (sponsorById(id)?.perSplit ?? 0), 0);
+// Patrocinadores movidos pra src/data/sponsors.ts (T3.5). O catálogo legacy
+// (Logitech, HyperX, Razer, Secretlab, Monster, Intel, Red Bull, Samsung) e a
+// interface Sponsor são preservados idênticos — saves antigos continuam ok.
+// O engine novo (src/engine/sponsors.ts) adiciona OFERTAS DINÂMICAS por split,
+// COOLDOWN pós-recusa e BÔNUS POR PLACEMENT — sem mexer no income legacy.
+import { SPONSORS, SPONSOR_SLOTS, sponsorById, sponsorIncome } from '../data/sponsors';
+import {
+  tryGenerateOffer as trySponsorOffer,
+  acceptOffer as acceptSponsorOffer,
+  rejectOffer as rejectSponsorOffer,
+  cleanupExpired as cleanupExpiredSponsors,
+  placementBonusTotal as sponsorPlacementBonusTotal,
+  type SponsorOffer,
+  type SponsorState,
+} from '../engine/sponsors';
+import {
+  tryGenerateTeamEvent,
+  resolveTeamEvent as resolveTeamEventEngine,
+  type PendingTeamEvent,
+  type TeamEventState,
+} from '../engine/teamEvents';
+import { detectYearAwards, type YearAwards } from '../engine/awards';
+import { type TalkResult } from '../engine/playerTalks';
+import { TeamEventModal } from './TeamEventModal';
+import { YearAwardsModal } from './YearAwardsModal';
+import { PlayerTalkModal } from './PlayerTalkModal';
+import { ChemistryMatrix } from './career/ChemistryMatrix';
+import { CoachStintsCard } from './career/CoachStintsCard';
+import { ScrimCard } from './career/ScrimCard';
+import { ScoutingCard } from './career/ScoutingCard';
+// chemistry engine — usado em advanceSplit (decay) e após série jogada (tick).
+// O modifier no match strength fica aplicado dentro do ChemistryMatrix (avg
+// visível). Integração no engine de match (multiplicar strength) é PR
+// separado — não muda o sigmoid do simulateSeries por enquanto.
+import { tickPairChemAfterMatch, decayPairChemOnSplitChange, averageStarterChemistry } from '../engine/chemistry';
+import { recordSaveTick, type SaveSnapshot } from '../state/achievements';
+import {
+  activeStint as activeCoachStint,
+  startStint as startCoachStint,
+  appendTrophy as appendCoachTrophy,
+  type CoachStint,
+} from '../engine/coachCareer';
+import { tickAging, type AgingState } from '../engine/aging';
+import { canScrimNow, runScrim } from '../engine/scrim';
+import { playerAttributes } from '../engine/attributes';
+import {
+  generateScoutReports,
+  scoutById,
+  type ProspectCandidate,
+  type ScoutReport,
+} from '../engine/scouting';
+import { useToast } from './ds';
+import { confirm as confirmDialog } from './ConfirmDialog';
 
 // ----- prestígio + fãs da org (estilo Brasval) -----
 // Derivados de conquistas (sem campo novo no save: não quebram saves e sobem ao
@@ -356,6 +386,193 @@ function careerFans(save: CareerSave): number {
 // patrocínio efetivo: prestígio atrai marcas melhores (até +33% no topo).
 function effSponsorIncome(save: CareerSave): number {
   return Math.round(sponsorIncome(save.sponsors) * (1 + careerPrestige(save) / 300));
+}
+
+// T3.11: garante que existe stint ATIVO pra o coach atual. Se não, abre um
+// novo (caso típico de save migrado pra v8: tinha coachFromId mas array vazio).
+// Não muta o save — devolve patch parcial.
+function ensureActiveCoachStint(save: CareerSave): Partial<CareerSave> {
+  if (!save.coachFromId || !save.org) return {};
+  const stints = save.coachStints ?? [];
+  const cur = activeCoachStint(stints);
+  if (cur && cur.coachId === save.coachFromId) return {}; // já está ok
+  // Tenta resolver o nick do coach. Pra simplicidade pegamos o ROOKIE como
+  // fallback de label — não impacta a engine.
+  const coachNick = save.coachFromId === ROOKIE_ID ? ROOKIE_COACH.nick : save.coachFromId;
+  return {
+    coachStints: startCoachStint(stints, {
+      coachId: save.coachFromId,
+      coachNick,
+      orgName: save.org.name,
+      orgTag: save.org.tag,
+      tier: save.tier ?? 3,
+      startSplit: save.split,
+    }),
+  };
+}
+
+// T3.12: tick de scouting na virada de split.
+//   - Subtrai o salário do scout contratado do budget
+//   - Gera 1-2 relatórios novos sobre prospects da região-foco
+// Pool de prospects: jovens (idade ≤24, OVR 50-84) do bo3 oppEra resolvido.
+function applyScoutingSplitTick(
+  save: CareerSave,
+  oppEra: TeamSeason[],
+  rng: Rng,
+): Partial<CareerSave> {
+  const patch: Partial<CareerSave> = {};
+  if (!save.hiredScoutId) return patch;
+  const scout = scoutById(save.hiredScoutId);
+  if (!scout) {
+    patch.hiredScoutId = null;
+    return patch;
+  }
+
+  // Salário pago no split (subtraído do budget pelo consumer)
+  // Pra simplicidade aqui só geramos relatórios; o consumer aplica salário
+  // diretamente no spread (vide chamada em advanceSplit).
+
+  // Monta pool de prospects a partir do oppEra (times reais com elenco jovem)
+  const pool: ProspectCandidate[] = [];
+  for (const team of oppEra) {
+    for (const p of team.players) {
+      pool.push({
+        id: p.id,
+        nick: p.nick,
+        country: p.country,
+        age: p.age ?? 22,
+        role: p.role,
+        ovr: playerOvr(p),
+        region: macroRegionOf(team.country) ?? 'global',
+      });
+    }
+  }
+
+  const newReports = generateScoutReports(
+    {
+      split: save.split,
+      hiredScoutId: save.hiredScoutId,
+      scoutReports: save.scoutReports,
+    },
+    pool,
+    rng,
+  );
+  if (newReports.length > 0) {
+    patch.scoutReports = [...(save.scoutReports ?? []), ...newReports];
+  }
+  return patch;
+}
+
+// T3.9: tick de aging do squad próprio. Devolve patch parcial com:
+//   - `evo`: somado aos deltas existentes (negativo = decline)
+//   - `retired`: novos ids appended ao array
+//   - `lastRetirees`: nicks/idades dos novos aposentados (pra notícia)
+// Não muta o save. O `findSigning`/`effectiveAge` resolvem o player como
+// fonte de verdade dos dados (idade dinâmica via split count).
+function applyAgingTick(save: CareerSave, findSigning: (sig: Signing) => ResolvedSigning | null): Partial<CareerSave> {
+  const players: AgingState['players'] = [];
+  for (const sig of save.squad) {
+    const f = findSigning(sig);
+    if (!f) continue;
+    const p = f.player;
+    const age = effectiveAge(p, save.split, save.youthAge);
+    if (age <= 0) continue;
+    players.push({ id: sig.playerId, nick: p.nick, ovr: playerOvr(p), age, role: p.role });
+  }
+  if (players.length === 0) return {};
+  const result = tickAging({ split: save.split, retired: save.retired ?? [], players });
+  if (Object.keys(result.ovrDeltas).length === 0 && result.newRetirees.length === 0) return {};
+
+  // Aplica deltas ao evo (somados — engine de evo já trata acumulado)
+  const evo = { ...(save.evo ?? {}) };
+  for (const [id, d] of Object.entries(result.ovrDeltas)) {
+    evo[id] = (evo[id] ?? 0) + d;
+  }
+  const retired = [...(save.retired ?? []), ...result.newRetirees.map((r) => r.id)];
+  const lastRetirees = result.newRetirees.map((r) => ({ nick: r.nick, age: r.age }));
+
+  return { evo, retired, lastRetirees };
+}
+
+// T3.14: monta snapshot pra avaliar conquistas baseadas no save.
+// Chamado após a mutação principal (no save NOVO, pós-update).
+function buildAchievementSnapshot(save: CareerSave, starterIds: string[]): SaveSnapshot {
+  const avgChem = starterIds.length >= 2
+    ? averageStarterChemistry({ pairChem: save.pairChem }, starterIds)
+    : 0;
+  // Sponsor global = qualquer sponsor ativo cujo perSplit é >= 600k (tier global)
+  const hasGlobalSponsor = (save.sponsors ?? []).some((id) => {
+    const def = sponsorById(id);
+    return def != null && def.perSplit >= 600_000;
+  });
+  // POY proxy: histórico tem algum MVP atribuído. Refinamento futuro: checar
+  // se o `playerNick` do MVP bate com algum jogador que JÁ ESTEVE no squad
+  // (precisa de squadHistory que ainda não temos).
+  const poyEver = (save.yearAwardsHistory ?? []).some((y) =>
+    y.winners?.some((w) => w.kind === 'mvp'),
+  );
+  return {
+    split: save.split,
+    budget: save.budget,
+    tier: save.tier ?? 3,
+    board: save.board ?? 60,
+    sponsors: save.sponsors ?? [],
+    avgChemistryStarters: avgChem,
+    resolvedTeamEventsCount: (save.resolvedTeamEvents ?? []).length,
+    distinctPlayersTalkedCount: Object.keys(save.lastTalkAt ?? {}).length,
+    yearAwardsHistoryCount: (save.yearAwardsHistory ?? []).length,
+    poyInOwnSquadEver: poyEver,
+    hasGlobalSponsor,
+    splitsAlive: save.fired ? 0 : save.split,
+  };
+}
+
+// T3.6: tick de team events na virada de split. Tenta gerar evento contextual
+// se o save não tem evento pendente. Não muta o save. Devolve patch parcial.
+function applyTeamEventSplitTick(save: CareerSave, newSplit: number, rng: Rng): Partial<CareerSave> {
+  // Se já tem evento pendente de split anterior, é fail-safe — limpa
+  // (UI deveria ter forçado a escolha, mas se F5 travou o estado, libera).
+  const stillPending = save.pendingTeamEvent && save.pendingTeamEvent.splitWhen >= newSplit
+    ? save.pendingTeamEvent
+    : null;
+  if (stillPending) return { pendingTeamEvent: stillPending };
+
+  const state: TeamEventState = {
+    split: newSplit,
+    tier: save.tier ?? 3,
+    pendingTeamEvent: null,
+    resolvedTeamEvents: save.resolvedTeamEvents ?? [],
+  };
+  const ev = tryGenerateTeamEvent(state, rng);
+  return { pendingTeamEvent: ev };
+}
+
+// T3.5: tick de sponsors na virada de split. Limpa contratos expirados +
+// gera oferta nova com chance modulada. Devolve patch parcial pra mergear
+// no `next` save. PURO — não mexe no `save`.
+function applySponsorSplitTick(save: CareerSave, newSplit: number, rng: Rng): Partial<CareerSave> {
+  // copia o estado dos sponsors pra não mutar o save
+  const state: SponsorState = {
+    sponsors: [...save.sponsors],
+    sponsorUntil: { ...save.sponsorUntil },
+    pendingSponsorOffer: save.pendingSponsorOffer ?? null,
+    sponsorCooldown: { ...(save.sponsorCooldown ?? {}) },
+  };
+  // 1) expira oferta pendente se já está estampada num split anterior
+  if (state.pendingSponsorOffer && state.pendingSponsorOffer.splitOffered < newSplit) {
+    state.pendingSponsorOffer = null;
+  }
+  // 2) limpa expirados (contrato terminou)
+  cleanupExpiredSponsors(state, newSplit);
+  // 3) tenta gerar nova oferta
+  const offer = trySponsorOffer(state, { split: newSplit, vrs: save.vrs ?? 0, clubeTier: save.tier ?? 3 }, rng);
+  if (offer) state.pendingSponsorOffer = offer;
+  return {
+    sponsors: state.sponsors,
+    sponsorUntil: state.sponsorUntil,
+    pendingSponsorOffer: state.pendingSponsorOffer,
+    sponsorCooldown: state.sponsorCooldown,
+  };
 }
 function formatFans(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -712,6 +929,45 @@ interface CareerSave {
   evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
   lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
   sponsorUntil: Record<string, number>; // patrocinador id -> split até onde o contrato vale
+  // T3.5: oferta dinâmica gerada pelo engine na virada de split. Quando != null,
+  // a UI dispara confirmDialog pra user aceitar/recusar. Expira na próxima virada.
+  pendingSponsorOffer?: SponsorOffer | null;
+  // T3.5: sponsor.id → split a partir do qual pode tentar oferecer de novo
+  sponsorCooldown?: Record<string, number>;
+  // T3.6: evento de time pendente (briga, scandal, oferta de bootcamp...).
+  // Aparece via <TeamEventModal>. Resolvido aplica deltas em budget/board/morale.
+  pendingTeamEvent?: PendingTeamEvent | null;
+  // T3.6: histórico de eventos resolvidos (evita repetir o mesmo)
+  resolvedTeamEvents?: string[];
+  // T3.10: awards do ano que acaba (a cada 4 splits). Quando != null, modal
+  // cinematográfico abre. Após user fechar, vai pro yearAwardsHistory.
+  pendingYearAwards?: YearAwards | null;
+  // T3.10: histórico de awards por ano (consultado pra evitar redetect)
+  yearAwardsHistory?: YearAwards[];
+  // T3.7: último split em que houve conversa com cada player (cooldown
+  // de PlayerTalk — 1 conversa a cada 2 splits por player).
+  lastTalkAt?: Record<string, number>;
+  // T3.4: química entre pares (key canonical sortedA|sortedB → valor 0-100).
+  // Ausência = 30 default (engine trata lazy). Sobe quando players jogam
+  // juntos, decai ao fim do split. Avg dos 5 starters vira modifier 0.95-1.05.
+  pairChem?: Record<string, number>;
+  // T3.11: histórico de stints do coach. Cada item: período numa org com
+  // wins/losses/troféus. Reputação 0-100 derivada do array inteiro.
+  coachStints?: CoachStint[];
+  // T3.9: ids de players já aposentados. Player aposentado pode continuar no
+  // squad (user decide quando liberar/renovar) mas recebe chip "Aposentado"
+  // no profile. Engine de aging NÃO força saída — sinaliza.
+  retired?: string[];
+  // T3.9: lista dos últimos players a se aposentar (mostrar como news no split).
+  lastRetirees?: { nick: string; age: number }[];
+  // T3.8: contador de scrims usadas no split atual (limite 2 por split).
+  // Resetado pra 0 a cada virada de split.
+  scrimsThisSplit?: number;
+  // T3.12: scout contratado (1 por vez). null = sem scout. Salário pago no
+  // fim de cada split como subtração do budget.
+  hiredScoutId?: string | null;
+  // T3.12: histórico de relatórios gerados pelo scout ativo.
+  scoutReports?: ScoutReport[];
   moves: Record<string, string>; // transferências aplicadas: playerId -> teamId atual
   lastMoves: { nick: string; from: string; to: string }[]; // transferências do último split
   tier: number; // tier atual da organização (1 = elite). Começa em 3.
@@ -1732,7 +1988,7 @@ export function CareerScreen(props: Props) {
   );
 }
 
-function CareerScreenInner({ onExit, founder = false }: Props) {
+function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const { lang } = useLang();
   setCareerLang(lang); // idioma a nivel de modulo: ct() funciona em todos os subcomponentes
   const [save, setSave] = useState<CareerSave>(() => loadSave());
@@ -1821,6 +2077,15 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
   const { askConfirm } = useCareerConfirm();
   // registro parcial do split, finalizado após o Major (se houver)
   const pendingSplit = useRef<SplitRecord | null>(null);
+  // T3.5: ref pra evitar abrir o ConfirmDialog 2x pra mesma oferta (React 19
+  // dispara useEffect 2x em dev). Guarda o id da oferta processada.
+  const sponsorOfferShownRef = useRef<string | null>(null);
+  // T3.14: split anterior pra disparar recordSaveTick na virada
+  const lastSplitTickedRef = useRef<number>(save.split);
+  // T3.7: player com modal de conversa aberto. null = nenhum.
+  const [talkPlayer, setTalkPlayer] = useState<{ oid: string; nick: string; age?: number } | null>(null);
+  // T3.8: toast pra resultado de scrim (e outros eventos pontuais)
+  const toast = useToast();
 
   const update = (patch: Partial<CareerSave>) => {
     setSave((s) => {
@@ -1829,6 +2094,172 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
       return next;
     });
   };
+
+  // T3.10: detecção de year-end awards. Roda quando split passa de múltiplo
+  // de 4 (5, 9, 13...) e ainda não temos award detectado pra esse ano.
+  useEffect(() => {
+    // Já tem pending? Skip — modal vai mostrar.
+    if (save.pendingYearAwards) return;
+    // Primeiro ano ainda não acabou (precisa split >= 5).
+    if (save.split < 5) return;
+    // Já detectou este ano?
+    const yearJustEnded = Math.floor((save.split - 1) / 4);
+    if ((save.yearAwardsHistory ?? []).some((y) => y.year === yearJustEnded)) return;
+
+    // Lookups: nick + age + joinedThisYear
+    const startSplit = (yearJustEnded - 1) * 4 + 1;
+    const nickById = (id: string): string | undefined => {
+      // youth gerada na academia
+      if (save.youth?.[id]) return save.youth[id].nick;
+      // signing real → busca no dataset
+      const sg = save.squad.find((x) => x.playerId === id);
+      if (sg) {
+        for (const ts of dataset) {
+          const p = ts.players.find((pp: Player) => pp.id === sg.playerId);
+          if (p) return p.nick;
+        }
+      }
+      return undefined;
+    };
+    const ageById = (id: string): number | undefined => {
+      const ya = save.youthAge?.[id];
+      if (ya != null) return ya + Math.floor((save.split - 1) / 4); // envelhece
+      // dataset
+      for (const ts of dataset) {
+        const p = ts.players.find((pp: Player) => pp.id === id);
+        if (p) {
+          const r = REAL_AGES[p.nick]?.age;
+          if (r) return r;
+        }
+      }
+      return undefined;
+    };
+    // joinedThisYear: não temos signedAtSplit no shape — placeholder false (breakout fica off)
+    const joinedThisYear = (_id: string): boolean => false;
+
+    const awards = detectYearAwards(
+      {
+        split: save.split,
+        titles: save.titles,
+        squad: save.squad,
+        evo: save.evo,
+        peakOvr: save.peakOvr,
+        youth: save.youth as Record<string, { age?: number; nick?: string; ovr?: number }> | undefined,
+        yearAwardsHistory: save.yearAwardsHistory,
+        pendingYearAwards: save.pendingYearAwards,
+        coach: save.coachFromId ? { nick: undefined } : undefined,
+      },
+      { nickById, ageById, joinedThisYear },
+    );
+    if (!awards) return;
+
+    setSave((s) => {
+      const next: CareerSave = { ...s, pendingYearAwards: awards };
+      persist(next);
+      return next;
+    });
+    void startSplit; // referenciado pra TS não reclamar de unused
+  }, [save.split]);
+
+  // T3.11: no mount, garante que existe stint ativo do coach atual.
+  // Cobre o caso de save migrado pra v8 (coachStints: [] mas coachFromId já existe).
+  useEffect(() => {
+    const patch = ensureActiveCoachStint(save);
+    if (Object.keys(patch).length > 0) update(patch);
+    // intencional: só roda 1x no mount (mudanças de coach durante o jogo já são
+    // tratadas onde o coachFromId é setado — no caso, é simples e raro).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // T3.14: avalia conquistas baseadas no save a cada virada de split + uma vez
+  // no mount (pra estampar conquistas antigas que o save já satisfaz mas nunca
+  // foram detectadas — ex.: tier1 promo num save importado).
+  useEffect(() => {
+    const starterIds = save.squad.map((s) => s.playerId);
+    const snap = buildAchievementSnapshot(save, starterIds);
+    recordSaveTick(snap);
+    lastSplitTickedRef.current = save.split;
+  }, [save.split, save.tier, save.budget, save.board, save.sponsors.length,
+      save.resolvedTeamEvents?.length, save.lastTalkAt, save.yearAwardsHistory?.length, save.pairChem, save.squad]);
+
+  // T3.12: contrata/troca scout. Substitui o anterior (sem multa).
+  const hireScout = (scoutId: string) => {
+    const def = scoutById(scoutId);
+    if (!def) return;
+    update({ hiredScoutId: scoutId });
+    toast.success(`Contratou ${def.name}`);
+  };
+  const fireScout = () => {
+    update({ hiredScoutId: null });
+    toast.info('Scout dispensado');
+  };
+
+  // T3.8: roda 1 scrim. Valida, aplica patch (custo + chem + fadiga) + toast.
+  const doScrim = () => {
+    const starterIds = save.squad.map((s) => s.playerId);
+    const stateArg = {
+      split: save.split,
+      budget: save.budget,
+      scrimsThisSplit: save.scrimsThisSplit ?? 0,
+      starterIds,
+      pairChem: save.pairChem,
+      fatigue: save.fatigue,
+    };
+    const check = canScrimNow(stateArg);
+    if (!check.ok) {
+      toast.error(check.reason ?? 'Scrim indisponível');
+      return;
+    }
+    const result = runScrim(stateArg, rngRef.current);
+    update({
+      budget: save.budget + result.patch.budgetDelta,
+      scrimsThisSplit: result.patch.scrimsThisSplitNext,
+      pairChem: result.patch.pairChem,
+      fatigue: result.patch.fatigue,
+    });
+    toast.success(`Scrim vs ${result.opponentName}: ${result.outcome}`);
+  };
+
+  // T3.5: prompt automático quando uma oferta de patrocínio é gerada na virada
+  // de split. Mostra modal global (ConfirmDialog) com termos + 2 opções. A
+  // ref `sponsorOfferShownRef` impede re-prompt da mesma oferta em re-renders.
+  useEffect(() => {
+    const offer = save.pendingSponsorOffer;
+    if (!offer) return;
+    if (sponsorOfferShownRef.current === offer.id) return;
+    sponsorOfferShownRef.current = offer.id;
+    const def = sponsorById(offer.sponsorId);
+    if (!def) return;
+    const splits = def.term;
+    const totalProj = def.perSplit * splits;
+    void confirmDialog({
+      title: ct('Oferta de patrocínio'),
+      message: `${def.name} ${ct('quer fechar contrato de')} ${splits} ${ct('splits a')} ${formatMoney(def.perSplit)}/${ct('split')} (${ct('total estimado')} ${formatMoney(totalProj)}). ${ct('Aceitar?')}`,
+      confirmLabel: ct('Aceitar'),
+      cancelLabel: ct('Recusar'),
+    }).then((ok) => {
+      // Aplica mutação no save (mantém o pattern de update()/persist)
+      setSave((s) => {
+        const nextState: SponsorState = {
+          sponsors: [...s.sponsors],
+          sponsorUntil: { ...s.sponsorUntil },
+          pendingSponsorOffer: s.pendingSponsorOffer,
+          sponsorCooldown: { ...(s.sponsorCooldown ?? {}) },
+        };
+        if (ok) acceptSponsorOffer(nextState, offer, s.split);
+        else rejectSponsorOffer(nextState, offer, s.split);
+        const next: CareerSave = {
+          ...s,
+          sponsors: nextState.sponsors,
+          sponsorUntil: nextState.sponsorUntil,
+          pendingSponsorOffer: nextState.pendingSponsorOffer,
+          sponsorCooldown: nextState.sponsorCooldown,
+        };
+        persist(next);
+        return next;
+      });
+    });
+  }, [save.pendingSponsorOffer]);
 
   useEffect(() => {
     initCareerNav(window.location.pathname);
@@ -3384,14 +3815,43 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                   major: { placement: mr.placement, champion: mr.champion },
                   boardConfidence: majBoard,
                 });
+                // T3.5: bônus de placement dos sponsors no Major. PlacementCode é
+                // 'champion'|'runnerup'|'semi'|'quarters'|'playoffs'|'swiss'.
+                const majorPlacementKind =
+                  mr.champion
+                    ? 'major' as const
+                    : mr.placement === 'runnerup' || mr.placement === 'semi'
+                    ? 'top4' as const
+                    : 'top8' as const;
+                const sponsorMajorBonus = sponsorPlacementBonusTotal(save, save.split, majorPlacementKind);
+                const sponsorTick = applySponsorSplitTick(save, save.split + 1, rngRef.current);
+                const teamEventTick = applyTeamEventSplitTick(save, save.split + 1, rngRef.current);
+                // T3.4: decay leve de química no fim do split (pares ociosos perdem 1)
+                const decayedPairChem = decayPairChemOnSplitChange({ pairChem: save.pairChem });
+                // T3.11: registra troféu de Major no stint do coach se foi campeão
+                const coachStintsAfterMajor = mr.champion
+                  ? appendCoachTrophy(save.coachStints ?? [], `Major ${save.split}`)
+                  : (save.coachStints ?? []);
+                // T3.9: aging — decline pós-peak + aposentadorias (mesmo no fechamento via Major)
+                const agingPatchMajor = applyAgingTick(save, findSigning);
+                // T3.12: scouting tick — salário + relatórios
+                const scoutingPatchMajor = applyScoutingSplitTick(save, oppEra, rngRef.current);
+                const scoutSalaryMajor = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
                 const next = {
                   ...save,
-                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) + effSponsorIncome(save) + majBonus),
+                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
                   vrs: Math.round(save.vrs * VRS_DECAY) + mr.vrs, // VRS rolante (decai e soma o do Major)
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
                   eventInSplit: 1, // o Major fecha o split: próximo split começa na etapa 1
                   inviteAccepted: false, // convite é consumido ao fechar o split
+                  pairChem: decayedPairChem,
+                  coachStints: coachStintsAfterMajor,
+                  scrimsThisSplit: 0, // T3.8: reset por split
+                  ...sponsorTick,
+                  ...teamEventTick,
+                  ...agingPatchMajor,
+                  ...scoutingPatchMajor,
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
                   majorResult: null, // limpa o resultado reidratável (já consumido)
                   majorStage: undefined, majorUserStage: undefined,
@@ -3731,16 +4191,46 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                     unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                     boardConfidence: newBoard,
                   });
+                  // T3.5: bônus de placement do circuito + tick de sponsors.
+                  // Usa a mesma lógica de posição que vai pro SplitRecord
+                  // (save.playoff? min(pos,poRank) : pos).
+                  const finalPosForSponsors = save.playoff ? Math.min(pos, poRank) : pos;
+                  const circuitPlacementKind: 'title' | 'top4' | 'top8' = isChampion
+                    ? 'title'
+                    : finalPosForSponsors <= 4
+                    ? 'top4'
+                    : 'top8';
+                  const sponsorCircuitBonus = sponsorPlacementBonusTotal(save, save.split, circuitPlacementKind);
+                  const sponsorTick = applySponsorSplitTick(save, save.split + 1, rngRef.current);
+                  const teamEventTick = applyTeamEventSplitTick(save, save.split + 1, rngRef.current);
+                  // T3.4: decay leve de química no fim do split
+                  const decayedPairChem = decayPairChemOnSplitChange({ pairChem: save.pairChem });
+                  // T3.11: registra troféu de circuito no stint do coach se foi campeão
+                  const coachStintsAfterCircuit = isChampion
+                    ? appendCoachTrophy(save.coachStints ?? [], `${save.circuit?.name ?? 'Circuito'} S${save.split}`)
+                    : (save.coachStints ?? []);
+                  // T3.9: aging — decline pós-peak + aposentadorias
+                  const agingPatch = applyAgingTick(save, findSigning);
+                  // T3.12: scouting tick — salário + relatórios
+                  const scoutingPatch = applyScoutingSplitTick(save, oppEra, rngRef.current);
+                  const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
                   const next = {
                     ...save,
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
-                    budget: Math.max(0, save.budget + prize - payroll - facilityUpkeep(save.facilities) + effSponsorIncome(save) + objBonus),
+                    budget: Math.max(0, save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus),
                     vrs: Math.round(save.vrs * VRS_DECAY) + vrsGain, // VRS rolante (decai e soma o ganho do split)
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
                     eventInSplit: 1, // fecha o split: volta pra etapa 1 do próximo
                     inviteAccepted: false, // convite é consumido ao fechar o split
+                    pairChem: decayedPairChem,
+                    coachStints: coachStintsAfterCircuit,
+                    scrimsThisSplit: 0, // T3.8: reset por split
+                    ...sponsorTick,
+                    ...teamEventTick,
+                    ...agingPatch,
+                    ...scoutingPatch,
                     league: null,
                     circuit: null,
                     playoff: null,
@@ -3801,6 +4291,24 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
       else if (matchCtx.mode === 'playoff') finishPlayoffRound(series, matchCtx.playoffIds);
       else if (league) finishUserRound(league, series);
       recordCareerMatch(series, matchCtx.teams, matchCtx.userIdx, matchCtx.phaseLabel);
+      // T3.4: chemistry sobe entre os starters do user team após série.
+      // Convertemos runtime ids pra org-ids (playerOrgId) pra bater com o
+      // pairChem que é indexado pelo id ORIGINAL.
+      const userStarters = matchCtx.teams[matchCtx.userIdx].players.map((p) => playerOrgId(p.id));
+      const won = series.winner === matchCtx.userIdx;
+      // T3.2: passa personalityChemBonus pra que líderes puxem química mais
+      // rápido e hotheads/mercenários atrapalhem.
+      const newPairChem = tickPairChemAfterMatch(
+        { pairChem: save.pairChem },
+        userStarters,
+        won,
+        personalityChemBonus,
+      );
+      setSave((s) => {
+        const next = { ...s, pairChem: newPairChem };
+        persist(next);
+        return next;
+      });
     };
     // TRAVA o resultado assim que a série é decidida (antes do "Continuar"). Sem isso,
     // sair da carreira na tela de resultado deixava re-rolar a partida ao reentrar.
@@ -4152,6 +4660,22 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
                 : (save.restingPlayers?.length ?? 0) < 2 ? [...(save.restingPlayers ?? []), oid] : save.restingPlayers,
             })}
             onBack={closePlayerProfile}
+            onTalk={
+              // só permite "Conversar" pra player do squad próprio
+              save.squad.some((sig) => sig.playerId === oid)
+                ? () => setTalkPlayer({ oid, nick: p.nick, age })
+                : undefined
+            }
+            retired={(save.retired ?? []).includes(oid)}
+            attributes={playerAttributes({
+              id: oid,
+              aim: p.aim,
+              clutch: p.clutch,
+              consistency: p.consistency,
+              awp: p.awp,
+              igl: p.igl,
+              role: (save.roles?.[oid] ?? p.role) as Role,
+            })}
           />
         );
       })()}
@@ -4774,6 +5298,34 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
               {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => openPlayerProfile(p)} />)}
             </div>
           </DashCard>
+          {/* T3.4: matriz de química do elenco. Usa playerOrgId pra casar com
+              o pairChem (que indexa por id ORIGINAL, não runtime). */}
+          {rows.length >= 2 && (
+            <ChemistryMatrix
+              state={{ pairChem: save.pairChem }}
+              players={rows.map((p) => ({ id: playerOrgId(p.id), nick: p.nick }))}
+              title={ct('Química do elenco')}
+            />
+          )}
+          {/* T3.11: carreira do coach (stints + troféus + reputação) */}
+          <CoachStintsCard
+            stints={save.coachStints ?? []}
+            coachNick={activeCoachStint(save.coachStints ?? [])?.coachNick}
+          />
+          {/* T3.8: scrim semanal — custo $5k, sobe química, reduz fadiga */}
+          <ScrimCard
+            scrimsThisSplit={save.scrimsThisSplit ?? 0}
+            budget={save.budget}
+            onScrim={doScrim}
+          />
+          {/* T3.12: scouting — contrata scout, gera relatórios de prospects */}
+          <ScoutingCard
+            hiredScoutId={save.hiredScoutId}
+            scoutReports={save.scoutReports ?? []}
+            budget={save.budget}
+            onHire={hireScout}
+            onFire={fireScout}
+          />
           <div className="em-squad-grid">
             <DashCard title={ct('Gestão do elenco')}>
               {(!hasAwp || !hasIgl) && (
@@ -5165,6 +5717,94 @@ function CareerScreenInner({ onExit, founder = false }: Props) {
         </div>
       )}
       {selTeam && <TeamDetail team={selTeam} league={league} onClose={() => setSelTeam(null)} />}
+      {talkPlayer && (
+        <PlayerTalkModal
+          playerNick={talkPlayer.nick}
+          playerState={{
+            split: save.split,
+            currentMorale: save.morale?.[talkPlayer.oid] ?? MORALE_DEFAULT,
+            age: talkPlayer.age,
+            lastTalkAtSplit: save.lastTalkAt?.[talkPlayer.oid],
+            playerId: talkPlayer.oid, // T3.2 — personalityTalkResponse precisa do id
+          }}
+          onResolve={(result: TalkResult) => {
+            // Aplica delta no morale específico + estampa lastTalkAt
+            setSave((s) => {
+              const oid = talkPlayer.oid;
+              const cur = s.morale?.[oid] ?? MORALE_DEFAULT;
+              const next: CareerSave = {
+                ...s,
+                morale: {
+                  ...(s.morale ?? {}),
+                  [oid]: Math.max(0, Math.min(100, cur + result.outcome.moraleDelta)),
+                },
+                lastTalkAt: { ...(s.lastTalkAt ?? {}), [oid]: s.split },
+              };
+              persist(next);
+              return next;
+            });
+          }}
+          onClose={() => setTalkPlayer(null)}
+        />
+      )}
+      {save.pendingYearAwards && (
+        <YearAwardsModal
+          awards={save.pendingYearAwards}
+          onClose={() => {
+            setSave((s) => {
+              const next: CareerSave = {
+                ...s,
+                pendingYearAwards: null,
+                yearAwardsHistory: [...(s.yearAwardsHistory ?? []), s.pendingYearAwards!],
+              };
+              persist(next);
+              return next;
+            });
+          }}
+        />
+      )}
+      {save.pendingTeamEvent && (
+        <TeamEventModal
+          eventId={save.pendingTeamEvent.eventId}
+          onChoose={(choiceId) => {
+            const result = resolveTeamEventEngine(
+              {
+                split: save.split,
+                tier: save.tier ?? 3,
+                pendingTeamEvent: save.pendingTeamEvent ?? null,
+                resolvedTeamEvents: save.resolvedTeamEvents ?? [],
+              },
+              choiceId,
+            );
+            if (!result) return null;
+            // Aplica patch no save
+            const { patch } = result;
+            const moraleNext = patch.moraleDelta
+              ? Object.fromEntries(
+                  Object.entries(save.morale ?? {}).map(([id, m]) => [
+                    id,
+                    Math.max(0, Math.min(100, (m ?? MORALE_DEFAULT) + patch.moraleDelta!)),
+                  ]),
+                )
+              : save.morale;
+            const next: CareerSave = {
+              ...save,
+              budget: Math.max(0, save.budget + (patch.budgetDelta ?? 0)),
+              board: Math.max(0, Math.min(100, save.board + (patch.boardDelta ?? 0))),
+              morale: moraleNext,
+              fired: save.fired || !!patch.triggersFire,
+              pendingTeamEvent: null,
+              resolvedTeamEvents: [...(save.resolvedTeamEvents ?? []), patch.newResolvedId],
+            };
+            persist(next);
+            setSave(next);
+            return { outcome: result.outcome, deltas: { budget: patch.budgetDelta, board: patch.boardDelta, morale: patch.moraleDelta } };
+          }}
+          onClose={() => {
+            // Já resolveu no onChoose. Só fecha.
+          }}
+        />
+      )}
     </>
   );
 }

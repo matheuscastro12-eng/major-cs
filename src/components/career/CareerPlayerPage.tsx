@@ -6,6 +6,7 @@ import { FutCard } from '../FutCard';
 import { Flag, PlayerAvatar, TeamBadge } from '../ui';
 import { CareerIcon, type CareerIconName } from './CareerIcon';
 import { IconChevronLeft } from './DashIcons';
+import { AttributeColumn } from './AttributeColumn';
 
 type PlayerTab = 'card' | 'overview' | 'personal' | 'performance' | 'career';
 
@@ -207,6 +208,9 @@ export function CareerPlayerPage({
   onToggleFocus,
   onToggleRest,
   onBack,
+  onTalk,
+  retired = false,
+  attributes,
 }: {
   player: Player;
   orgName: string;
@@ -241,6 +245,12 @@ export function CareerPlayerPage({
   titles: number;
   onToggleFocus: () => void;
   onToggleRest: () => void;
+  /** T3.7 — abre PlayerTalkModal pra conversar com o jogador. */
+  onTalk?: () => void;
+  /** T3.9 — flag indicando que o jogador já se aposentou. Renderiza chip. */
+  retired?: boolean;
+  /** T3.1 — 28 atributos FM-style. Se passado, renderiza section. */
+  attributes?: Record<string, number>;
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<PlayerTab>('card');
@@ -285,6 +295,21 @@ export function CareerPlayerPage({
         <span className={`pp-coach-status${notesSaved ? ' saved' : ''}`}>{notesSaved ? ct('Salvo') : '…'}</span>
       </div>
       <div className="pp-coach-actions">
+        {retired && (
+          <span
+            className="pp-coach-tag"
+            style={{
+              background: 'rgba(229, 138, 138, 0.14)',
+              border: '1px solid rgba(229, 138, 138, 0.55)',
+              color: '#e58a8a',
+              fontWeight: 700,
+              cursor: 'default',
+            }}
+            title={ct('Este jogador anunciou aposentadoria — pode continuar no elenco mas perde OVR a cada split.')}
+          >
+            {ct('Aposentado')}
+          </span>
+        )}
         <button type="button" className="pp-coach-tag">{ct('Alvo de transferência')}</button>
         <button type="button" className="pp-coach-tag">{ct('Renovar')}</button>
         <button type="button" className="pp-coach-tag">{ct('Vender')}</button>
@@ -295,6 +320,11 @@ export function CareerPlayerPage({
         <button type="button" className={`pp-coach-tag${reducedLoad ? ' on' : ''}`} onClick={onToggleRest}>
           {reducedLoad ? ct('Carga reduzida') : ct('Dar carga reduzida')}
         </button>
+        {onTalk && (
+          <button type="button" className="pp-coach-tag" onClick={onTalk}>
+            {ct('Conversar')}
+          </button>
+        )}
       </div>
       <textarea
         className="pp-coach-notes"
@@ -567,6 +597,13 @@ export function CareerPlayerPage({
           </div>
         )}
       </div>
+
+      {/* T3.1: 28 atributos FM-style (mostrado quando prop attributes é passada) */}
+      {attributes && (
+        <div style={{ marginTop: 14 }}>
+          <AttributeColumn attributes={attributes as Parameters<typeof AttributeColumn>[0]['attributes']} />
+        </div>
+      )}
 
       {coachFooter}
     </div>

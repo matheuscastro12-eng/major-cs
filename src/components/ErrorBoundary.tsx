@@ -5,6 +5,7 @@
 import { Component, type ReactNode } from 'react';
 import { captureError } from '../state/errlog';
 import { getLang } from '../state/i18n';
+import { confirm } from './ConfirmDialog';
 
 const SAVE_KEYS = ['rtm-career-v1', 'rtm-career-v1.bak'];
 
@@ -39,8 +40,18 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
     captureError(error, 'react');
   }
 
-  resetCareer = () => {
-    if (!confirm(tr('confirm'))) return;
+  resetCareer = async () => {
+    // antes usava window.confirm() nativo (texto do browser, fora do tema).
+    // O novo confirm() do design system retorna Promise<boolean> e usa o Modal
+    // em-* com botão danger no destrutivo.
+    const ok = await confirm({
+      title: tr('reset'),
+      message: tr('confirm'),
+      confirmLabel: tr('reset'),
+      cancelLabel: tr('reload'),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       for (const k of SAVE_KEYS) localStorage.removeItem(k);
     } catch {

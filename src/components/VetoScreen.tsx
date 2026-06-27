@@ -2,12 +2,14 @@ import { ct } from '../state/career-i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { draftSynergy } from '../engine/ratings';
 import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, vetoOrder, type VetoState } from '../engine/veto';
+import { generateAnalystReport } from '../engine/analystReport';
 import type { Rng } from '../engine/rng';
 import type { MapId, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL, PLAYBOOK_LABELS } from '../types';
 import { MapThumb } from './ui';
 import { MatchBanner } from './flags';
 import { TeamLineups } from './lineups';
+import { AnalystReportCard } from './AnalystReportCard';
 import { useLang } from '../state/i18n';
 import { CareerIcon } from './career/CareerIcon';
 
@@ -115,8 +117,11 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
           {/* Barra de progresso dos passos */}
           <div className="em-veto-steps" aria-label="Progresso do veto">
             {progress.map((p) => {
-              const teamTag = teams[p.team as 0 | 1].tag;
-              const isUser = p.team === userIdx;
+              // o decider tem team === -1 (mapa automatico): teams[-1] é undefined
+              // e quebrava com "Cannot read properties of undefined (reading 'tag')".
+              const isDecider = p.team === -1;
+              const teamTag = isDecider ? '★' : teams[p.team as 0 | 1].tag;
+              const isUser = !isDecider && p.team === userIdx;
               const cls = `em-veto-step ${p.action}${p.done ? ' is-done' : ''}${p.current ? ' is-current' : ''}${isUser ? ' is-user' : ''}`;
               return (
                 <span key={p.index} className={cls} title={`${teamTag} ${p.action}`}>
@@ -216,6 +221,9 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
         </div>
       </div>
 
+      {/* T3.13: relatório do analista sobre o adversário, com narrativa + bans/picks recomendados */}
+      <AnalystReportCardLazy teams={teams} userIdx={userIdx} />
+
       <VetoAnalysis teams={teams} userIdx={userIdx} dead={mapState} mapRecord={mapRecord} />
 
       <div className="veto-lineups-wrap">
@@ -223,6 +231,15 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
       </div>
     </div>
   );
+}
+
+// Wrapper que memoiza o relatório (não recalcula a cada veto step). O report
+// é estável durante todo o veto — só muda se trocar os times.
+function AnalystReportCardLazy({ teams, userIdx }: { teams: [TTeam, TTeam]; userIdx: 0 | 1 }) {
+  const opp = teams[userIdx === 0 ? 1 : 0];
+  const me = teams[userIdx];
+  const report = useMemo(() => generateAnalystReport(opp, me), [opp, me]);
+  return <AnalystReportCard report={report} oppName={opp.name} oppTag={opp.tag} />;
 }
 
 // Painel de inteligência pré-partida: força, composição e vantagem por mapa
