@@ -1134,6 +1134,13 @@ interface CareerSave {
   academy?: AcademyEntry[]; // prospectos em formação na academia
   academyTeam?: AcademyEntry[]; // time academy (5 jovens, um por função) que disputa a Liga Academy
   academyFocus?: string | null; // id do prospecto em foco de treino (cresce mais rápido)
+  // resultados de jogos da Liga Academy que o user JOGOU (override do determinístico).
+  // Chave: `${split}:${oppId}` — o split garante reset natural a cada virada.
+  academyPlayed?: Record<string, [number, number]>;
+  academyTrophies?: number; // títulos do campeonato Academy
+  academyPaidSplits?: number[]; // splits cujo prize money já foi pago (evita double-pay)
+  // playoff Academy (top 4 → semis + final) do split atual. Limpa ao avançar split.
+  academyPlayoff?: import('../pages/career/AcademyTab').AcademyPlayoffState | null;
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
   scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
@@ -7459,101 +7466,258 @@ function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNull
     try { setCustomLogo(await resizeLogoToDataUrl(file)); } catch { setLogoErr(ct('Não foi possível ler a imagem.')); }
   };
 
+  const canFound = name.trim() && tag.trim();
+
   return (
-    <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 760, margin: '24px auto' }}>
-        <div className="panel-head">
-          {ct('Fundar organização (modo carreira)')}
-          <span className="spacer" />
-          <button className="btn" onClick={onExit}>{ct('← Sair')}</button>
-        </div>
-        <div className="panel-body">
-          <p className="muted small" style={{ marginTop: 0 }}>
-            {ct('Crie sua org nos')} <b>{ct('tempos atuais')}</b> (só elencos CS2). Você começa com{' '}
-            <b>{formatMoney(STARTING_BUDGET)}</b> para montar 5 jogadores + coach,
-            fechar patrocínios e disputar os circuitos rumo ao Major. Sem lendas do
-            passado: o desafio é construir do zero.
+    <div className="em-found fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 20px 24px', maxWidth: 960, margin: '0 auto' }}>
+      {/* Header banner */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 20px',
+          background: 'linear-gradient(135deg, rgba(232,193,112,0.12) 0%, transparent 60%)',
+          border: '1px solid var(--em-border)',
+          borderRadius: 6,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 800 }}>
+            ✨ {ct('Modo carreira · fundar do zero')}
+          </div>
+          <h2 style={{ margin: '2px 0 0', fontSize: '1.5rem', fontWeight: 900, color: 'var(--em-text)' }}>
+            {ct('Fundar organização')}
+          </h2>
+          <p style={{ margin: '6px 0 0', fontSize: '0.82rem', color: 'var(--em-muted)', maxWidth: 580, lineHeight: 1.45 }}>
+            {ct('Crie sua org nos tempos atuais (CS2). Começa com')} <b style={{ color: 'var(--em-text)' }}>{formatMoney(STARTING_BUDGET)}</b> {ct('pra montar 5 + coach, fechar patrocínios e brigar pelo Major. Sem lendas do passado: construa do zero.')}
           </p>
+        </div>
+        <button
+          type="button"
+          onClick={onExit}
+          style={{
+            padding: '8px 14px',
+            background: 'var(--em-panel-2)',
+            color: 'var(--em-text)',
+            border: '1px solid var(--em-border)',
+            borderRadius: 4,
+            fontFamily: 'inherit',
+            fontWeight: 600,
+            fontSize: '0.84rem',
+            cursor: 'pointer',
+          }}
+        >
+          ← {ct('Sair')}
+        </button>
+      </header>
 
-          <div className="found-grid">
-            {/* coluna esquerda: identidade */}
-            <div className="found-form">
-              <div className="field" style={{ marginBottom: 10 }}>
-                <label>{ct('Nome da organização')}</label>
-                <input value={name} maxLength={24} placeholder={ct('ex: Astro Esports')} onChange={(e) => setName(e.target.value)} />
+      {/* Grid 2 colunas: identidade | preview */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(260px, 320px)', gap: 14 }}>
+        {/* IDENTIDADE */}
+        <DashCard title={ct('Identidade da org')}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <FoundField label={ct('Nome da organização')}>
+              <FoundInput value={name} maxLength={24} placeholder={ct('ex: Astro Esports')} onChange={setName} />
+            </FoundField>
+            <FoundField label={ct('Tag (até 4 letras)')}>
+              <FoundInput value={tag} maxLength={4} placeholder="ASTR" upper onChange={(v) => setTag(v.toUpperCase())} />
+            </FoundField>
+            <FoundField label={ct('Cores (primária / secundária)')}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <ColorSwatch value={c1} onChange={setC1} label={ct('Primária')} />
+                <ColorSwatch value={c2} onChange={setC2} label={ct('Texto / emblema')} />
+                <span style={{ fontSize: '0.72rem', color: 'var(--em-muted)' }}>
+                  {ct('a secundária colore o texto/emblema')}
+                </span>
               </div>
-              <div className="field" style={{ marginBottom: 10 }}>
-                <label>{ct('Tag (até 4 letras)')}</label>
-                <input value={tag} maxLength={4} placeholder={ct('ex: ASTR')} style={{ textTransform: 'uppercase' }} onChange={(e) => setTag(e.target.value.toUpperCase())} />
+            </FoundField>
+            <FoundField label={ct('Emblema')}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 1fr))', gap: 6 }}>
+                {EMBLEMS.map((em) => (
+                  <button
+                    key={em.id}
+                    type="button"
+                    onClick={() => setEmblem(em.id)}
+                    title={em.label}
+                    style={{
+                      padding: 4,
+                      background: emblem === em.id ? 'var(--em-gold)' : 'var(--em-panel-2)',
+                      border: `1px solid ${emblem === em.id ? 'var(--em-gold)' : 'var(--em-border)'}`,
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <img src={buildLogoDataUrl(em.id, c1, c2, tag || name)} alt={em.label} width={36} height={36} />
+                  </button>
+                ))}
               </div>
-              <div className="field" style={{ marginBottom: 14 }}>
-                <label>{ct('Cores (primária / secundária)')}</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="color" value={c1} onChange={(e) => setC1(e.target.value)} />
-                  <input type="color" value={c2} onChange={(e) => setC2(e.target.value)} />
-                  <span className="muted small">{ct('a secundária colore o texto/emblema')}</span>
-                </div>
-              </div>
+            </FoundField>
 
-              <div className="field">
-                <label>{ct('Emblema')}</label>
-                <div className="emblem-grid">
-                  {EMBLEMS.map((em) => (
+            {/* Founder upload */}
+            {founder ? (
+              <FoundField label={`👑 ${ct('Logo própria')} (${ct('vantagem de Fundador')})`}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => { void onUpload(e.target.files?.[0]); e.target.value = ''; }}
+                    style={{ color: 'var(--em-text)', fontSize: '0.78rem' }}
+                  />
+                  {customLogo && (
                     <button
-                      key={em.id}
                       type="button"
-                      className={`emblem-opt${emblem === em.id ? ' on' : ''}`}
-                      title={em.label}
-                      onClick={() => setEmblem(em.id)}
+                      onClick={() => setCustomLogo(null)}
+                      style={{
+                        padding: '4px 10px',
+                        background: 'transparent',
+                        color: 'var(--em-text)',
+                        border: '1px solid var(--em-border)',
+                        borderRadius: 3,
+                        fontFamily: 'inherit',
+                        fontSize: '0.74rem',
+                        cursor: 'pointer',
+                      }}
                     >
-                      <img src={buildLogoDataUrl(em.id, c1, c2, tag || name)} alt={em.label} width={40} height={40} />
+                      {ct('Usar emblema')}
                     </button>
-                  ))}
+                  )}
                 </div>
+                {logoErr && <div style={{ marginTop: 4, fontSize: '0.74rem', color: '#e58a8a' }}>{logoErr}</div>}
+                {customLogo && <div style={{ marginTop: 4, fontSize: '0.72rem', color: 'var(--em-muted)' }}>{ct('Logo enviada — redimensionada pra 128px.')}</div>}
+              </FoundField>
+            ) : (
+              <div
+                style={{
+                  padding: '8px 12px',
+                  background: 'var(--em-panel-2)',
+                  border: '1px dashed var(--em-border)',
+                  borderRadius: 4,
+                  fontSize: '0.74rem',
+                  color: 'var(--em-muted)',
+                }}
+              >
+                👑 {ct('Subir a própria logo é vantagem de Fundador.')}
               </div>
+            )}
+          </div>
+        </DashCard>
 
-              {/* VANTAGEM DE FUNDADOR: subir a própria logo (PNG/JPG) */}
-              {founder ? (
-                <div className="field" style={{ marginTop: 12 }}>
-                  <label>👑 {ct('Logo própria')} <span className="muted small">({ct('vantagem de Fundador')})</span></label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input type="file" accept="image/*" onChange={(e) => { void onUpload(e.target.files?.[0]); e.target.value = ''; }} />
-                    {customLogo && <button type="button" className="btn small" onClick={() => setCustomLogo(null)}>{ct('Usar emblema')}</button>}
-                  </div>
-                  {logoErr && <div className="muted small" style={{ color: 'var(--rtm-red-bright)' }}>{logoErr}</div>}
-                  {customLogo && <div className="muted small">{ct('Logo enviada — redimensionada pra 128px.')}</div>}
-                </div>
-              ) : (
-                <div className="muted small" style={{ marginTop: 12 }}>👑 {ct('Subir a própria logo é vantagem de Fundador.')}</div>
-              )}
+        {/* PREVIEW */}
+        <DashCard title={ct('Pré-visualização')} info={ct('como aparece in-game')}>
+          <div
+            style={{
+              padding: '20px 16px',
+              background: `linear-gradient(150deg, ${c1} 0%, #0c0f14 80%)`,
+              border: '1px solid var(--em-border)',
+              borderRadius: 6,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <img src={logo} alt="logo" style={{ width: 96, height: 96, objectFit: 'contain' }} />
+            <div style={{ fontSize: '1rem', fontWeight: 900, color: '#fff', textAlign: 'center' }}>
+              {name || ct('Sua Organização')}
             </div>
-
-            {/* coluna direita: preview do clube */}
-            <div className="found-preview">
-              <div className="fp-card" style={{ background: `linear-gradient(150deg, ${c1} 0%, #0c0f14 80%)` }}>
-                <img className="fp-logo" src={logo} alt="logo" />
-                <div className="fp-name" style={{ color: '#fff' }}>{name || ct('Sua Organização')}</div>
-                <div className="fp-tag" style={{ color: c2 }}>{(tag || 'ORG').toUpperCase()}</div>
-              </div>
-              <div className="fp-badges">
-                <TeamBadge tag={tag || 'ORG'} colors={[c1, c2]} size={40} logoUrl={logo} />
-                <TeamBadge tag={tag || 'ORG'} colors={[c1, c2]} size={28} logoUrl={logo} />
-                <span className="muted small">{ct('como aparece nos campeonatos')}</span>
-              </div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '1px', color: c2, fontFamily: '"JetBrains Mono", monospace' }}>
+              {(tag || 'ORG').toUpperCase()}
             </div>
           </div>
-
-          <button
-            className="btn gold big"
-            style={{ width: '100%', marginTop: 16 }}
-            disabled={!name.trim() || !tag.trim()}
-            onClick={() => onFound({ name: name.trim(), tag: tag.trim() || 'ORG', colors: [c1, c2], logo })}
-          >
-            {ct('✔ Fundar e abrir o mercado')}
-          </button>
-        </div>
+          {/* Mini-thumbs em vários tamanhos */}
+          <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <TeamBadge tag={tag || 'ORG'} colors={[c1, c2]} size={40} logoUrl={logo} />
+            <TeamBadge tag={tag || 'ORG'} colors={[c1, c2]} size={28} logoUrl={logo} />
+            <TeamBadge tag={tag || 'ORG'} colors={[c1, c2]} size={18} logoUrl={logo} />
+            <span style={{ fontSize: '0.7rem', color: 'var(--em-muted)' }}>
+              {ct('lista · bracket · header')}
+            </span>
+          </div>
+        </DashCard>
       </div>
+
+      {/* CTA fundar */}
+      <button
+        type="button"
+        disabled={!canFound}
+        onClick={() => onFound({ name: name.trim(), tag: tag.trim() || 'ORG', colors: [c1, c2], logo })}
+        style={{
+          padding: '14px 22px',
+          background: canFound ? 'var(--em-gold)' : 'var(--em-panel-2)',
+          color: canFound ? '#1a1205' : 'var(--em-muted)',
+          border: canFound ? 'none' : '1px solid var(--em-border)',
+          borderRadius: 6,
+          fontFamily: 'inherit',
+          fontWeight: 900,
+          fontSize: '0.96rem',
+          cursor: canFound ? 'pointer' : 'not-allowed',
+          letterSpacing: '0.5px',
+          marginTop: 4,
+        }}
+      >
+        ✔ {ct('Fundar e abrir o mercado')}
+      </button>
+      {!canFound && (
+        <p style={{ margin: 0, textAlign: 'center', fontSize: '0.74rem', color: 'var(--em-muted)' }}>
+          {ct('Preencha nome e tag pra liberar.')}
+        </p>
+      )}
     </div>
+  );
+}
+
+function FoundField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4, display: 'block' }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function FoundInput({ value, maxLength, placeholder, upper, onChange }: { value: string; maxLength?: number; placeholder?: string; upper?: boolean; onChange: (v: string) => void }) {
+  return (
+    <input
+      type="text"
+      value={value}
+      maxLength={maxLength}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        width: '100%',
+        padding: '8px 12px',
+        background: 'var(--em-panel-2)',
+        color: 'var(--em-text)',
+        border: '1px solid var(--em-border)',
+        borderRadius: 4,
+        fontFamily: 'inherit',
+        fontSize: '0.92rem',
+        textTransform: upper ? 'uppercase' : undefined,
+      }}
+    />
+  );
+}
+
+function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  return (
+    <label style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+      />
+      <span style={{ width: 40, height: 40, background: value, border: '1px solid var(--em-border)', borderRadius: 4, boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.06)' }} />
+      <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+        {label}
+      </span>
+    </label>
   );
 }
 
