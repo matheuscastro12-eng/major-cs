@@ -61,6 +61,7 @@ interface AcademyTabSave {
   org?: { name?: string; tag?: string; colors?: [string, string]; logo?: string } | null;
   budget: number;
   split: number;
+  facilities?: Record<string, number>;
 }
 
 interface Props {
@@ -105,6 +106,21 @@ function prospectOffer(prospectId: string, split: number, ovr: number): Prospect
   return { orgTag: org.tag, orgName: org.name, orgColors: org.colors, fee };
 }
 
+// ─── Evolução de prospect ────────────────────────────────────────────────────
+// Espelha a lógica de evolveAcademy() em CareerScreen.tsx:
+//   - Roll 0-99 determinístico por (id, split): 35% +3, 40% +2, 25% +1 → média 2.1
+//   - +1 fixo se em foco (academyFocus)
+//   - +trainingLv/3 esperado da facility de treino (0% / 33% / 67% / 100% chance de +1)
+//   - Capped pelo potencial
+// Usado pra mostrar "próx esperado: +X" e "~Y splits até potencial" na UI.
+function expectedEvoPerSplit(focused: boolean, trainingLv: number): number {
+  // média do roll base
+  const base = 0.35 * 3 + 0.40 * 2 + 0.25 * 1; // = 2.1
+  const focusBonus = focused ? 1 : 0;
+  const trainingBonus = trainingLv / 3; // chance de +1 (0..1)
+  return base + focusBonus + trainingBonus;
+}
+
 // ─── Simulação ao vivo de match academy (RNG não-determinístico) ─────────────
 // Bypassa a tabela determinística do academyLeague quando o user clica "Jogar".
 // Resultado bate em mapas (0-2 / 1-2 / 2-0 / 2-1).
@@ -130,6 +146,8 @@ export function AcademyTab({
   const aca = save.academy ?? [];
   const full = aca.length >= ACADEMY_MAX;
   const squadFull = save.squad.length >= 5;
+  // Nível atual da facility de treino (0-3) — influencia evolução esperada.
+  const trainingLv = Math.max(0, Math.min(3, Math.floor(save.facilities?.training ?? 0)));
   const acaTeam = save.academyTeam ?? [];
   const teamOvr = acaTeam.length
     ? Math.round(acaTeam.reduce((a, p) => a + playerOvr(p), 0) / acaTeam.length)
@@ -530,6 +548,9 @@ export function AcademyTab({
           </button>
         }
       >
+        {/* Banner explicativo: como evoluem + multiplicadores */}
+        <EvoExplainer trainingLv={trainingLv} />
+
         {aca.length === 0 ? (
           <p style={{ margin: '8px 0', fontSize: '0.82rem', color: 'var(--em-muted)', fontStyle: 'italic' }}>
             {ct('Academia vazia. Revele um prospecto pra começar a formar a próxima geração.')}
@@ -541,6 +562,9 @@ export function AcademyTab({
               const focused = save.academyFocus === p.id;
               const potPct = Math.max(6, Math.min(100, ((p.potential - 60) / 33) * 100));
               const offer = offersByProspect.get(p.id);
+              const atMax = ovr >= p.potential;
+              const expEvo = atMax ? 0 : expectedEvoPerSplit(focused, trainingLv);
+              const splitsToMax = atMax ? 0 : Math.ceil((p.potential - ovr) / Math.max(0.1, expEvo));
               return (
                 <div
                   key={p.id}
@@ -597,6 +621,50 @@ export function AcademyTab({
                       <div style={{ width: `${potPct}%`, height: '100%', background: 'var(--em-gold)' }} />
                     </div>
                   </div>
+
+                  {/* Evolução esperada — explicita o ganho por split + ETA até POT */}
+                  {atMax ? (
+                    <div
+                      style={{
+                        padding: '5px 8px',
+                        background: 'rgba(232,193,112,0.10)',
+                        border: '1px solid rgba(232,193,112,0.35)',
+                        borderRadius: 3,
+                        fontSize: '0.68rem',
+                        color: 'var(--em-gold)',
+                        fontWeight: 700,
+                        textAlign: 'center',
+                      }}
+                      title={ct('Esse prospect chegou no teto de potencial — não evolui mais (só envelhece).')}
+                    >
+                      ★ {ct('No potencial máximo')}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '5px 8px',
+                        background: focused ? 'rgba(94,216,138,0.10)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${focused ? 'rgba(94,216,138,0.35)' : 'var(--em-border)'}`,
+                        borderRadius: 3,
+                        fontSize: '0.68rem',
+                      }}
+                      title={`${ct('Base 2.1 + foco')} ${focused ? '+1' : '+0'} + ${ct('treino')} +${(trainingLv / 3).toFixed(2)} = +${expEvo.toFixed(1)} ${ct('por split (média)')}`}
+                    >
+                      <span style={{ color: 'var(--em-muted)' }}>
+                        {ct('Próx split')}
+                      </span>
+                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, color: focused ? '#5ed88a' : 'var(--em-text)' }}>
+                        +{expEvo.toFixed(1)} OVR
+                      </span>
+                      <span style={{ color: 'var(--em-muted)' }}>
+                        ~{splitsToMax}s {ct('p/ pot')}
+                      </span>
+                    </div>
+                  )}
 
                   {/* OFERTA pendente — destaque */}
                   {offer && (
@@ -670,7 +738,9 @@ export function AcademyTab({
                     <button
                       type="button"
                       onClick={() => update({ academyFocus: focused ? null : p.id })}
-                      title={focused ? ct('Tirar do foco') : ct('Treinar (cresce mais rápido)')}
+                      title={focused
+                        ? ct('Tirar do foco de treino (volta a evoluir na média)')
+                        : ct('Marcar como foco de treino: +1 OVR garantido por split. Só 1 prospect pode estar em foco por vez.')}
                       style={{
                         padding: '6px 10px',
                         background: focused ? 'rgba(232,193,112,0.18)' : 'transparent',
@@ -809,3 +879,79 @@ function HudPill({ label, value, tone }: { label: string; value: string; tone: '
 
 const th: React.CSSProperties = { padding: '6px 8px', fontWeight: 800 };
 const td: React.CSSProperties = { padding: '8px', textAlign: 'center' };
+
+// Banner explicativo no DashCard Academia — explica como a evolução funciona.
+// Mostra o que cada bônus contribui em OVR/split, e o estado atual da facility.
+function EvoExplainer({ trainingLv }: { trainingLv: number }) {
+  const trainingBonus = (trainingLv / 3).toFixed(2);
+  const base = 2.1;
+  const focusedMax = base + 1 + trainingLv / 3;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        padding: '10px 12px',
+        background: 'rgba(95,164,232,0.06)',
+        border: '1px solid rgba(95,164,232,0.25)',
+        borderRadius: 4,
+        marginBottom: 10,
+        fontSize: '0.78rem',
+        color: 'var(--em-text)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: '0.72rem', color: '#5fa4e8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        💡 {ct('Como evoluem')}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+        <EvoLine
+          icon="📊"
+          label={ct('Base por split')}
+          value={`+${base.toFixed(1)} OVR`}
+          hint={ct('média (35% +3, 40% +2, 25% +1)')}
+        />
+        <EvoLine
+          icon="★"
+          label={ct('Em foco (★)')}
+          value="+1 OVR"
+          hint={ct('1 prospect por vez')}
+          accent="#5ed88a"
+        />
+        <EvoLine
+          icon="🏋️"
+          label={`${ct('Centro de treino')} nv ${trainingLv}`}
+          value={trainingLv === 0 ? '+0.00' : `+${trainingBonus} OVR`}
+          hint={trainingLv === 0
+            ? ct('Invista pra acelerar tudo')
+            : trainingLv === 3 ? ct('MAX — sempre +1') : `${Math.round((trainingLv / 3) * 100)}% ${ct('chance de +1')}`}
+          accent={trainingLv > 0 ? '#e8c170' : undefined}
+        />
+      </div>
+      <div style={{ fontSize: '0.7rem', color: 'var(--em-muted)', borderTop: '1px solid rgba(95,164,232,0.18)', paddingTop: 6, marginTop: 2 }}>
+        <b style={{ color: 'var(--em-text)' }}>{ct('Máximo possível')}</b>: {ct('foco + treino max')} = <b style={{ color: '#5ed88a' }}>+{focusedMax.toFixed(1)} OVR/split</b> · {ct('cresce até o')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('individual e para.')} {ct('Envelhecem 1 ano a cada 3 splits.')}
+      </div>
+    </div>
+  );
+}
+
+function EvoLine({ icon, label, value, hint, accent }: { icon: string; label: string; value: string; hint?: string; accent?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: '0.92rem' }}>{icon}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, minWidth: 0 }}>
+        <span style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+          {label}
+        </span>
+        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.84rem', color: accent ?? 'var(--em-text)', fontWeight: 800 }}>
+          {value}
+        </b>
+        {hint && (
+          <span style={{ fontSize: '0.66rem', color: 'var(--em-muted)', fontStyle: 'italic' }}>
+            {hint}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
