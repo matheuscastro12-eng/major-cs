@@ -1,225 +1,45 @@
 # Road to Major — SUPER ATUALIZAÇÃO
 
-> Branch `feat/new-visual-ui-ux` · **+51.332 linhas líquidas** (61.717 inseridas / 10.385 removidas) · **268 commits** · 271 arquivos tocados.
-
-Esta é a maior atualização desde o lançamento. O jogo foi **reconstruído visualmente do zero** com um padrão de design coeso (`em-*` tokens), o engine ganhou **profundidade FM-style** (sub-roles, sponsors dinâmicos, team events, ofertas pra prospects), e o conteúdo do CS2 foi **atualizado pra 2026** com 95+ times reais, 12 academies e 50 free agents.
+Esta é a maior atualização do Road to Major desde o lançamento. O jogo foi reconstruído quase inteiro — visual, mecânica, conteúdo. Em vez de listar feature por feature, segue uma volta completa pelo que mudou.
 
 ---
 
-## 🎨 IDENTIDADE VISUAL — Reskin completo no padrão `em-*`
+A começar pela **identidade visual**: todo o modo carreira ganhou um padrão único de design (tokens `em-*`, banners gold padronizados, DashCards consistentes, monospace pra números, accent colors por estado). O Hub foi reconstruído do zero em duas camadas de navegação — Dashboard, Meu Time, Em Jogo, Transferências, Notícias HLTV, Estatísticas, cada grupo com suas sub-abas. O Elenco virou cards FUT com OVR badge, atributos, role pill, foto e flag. O perfil do jogador virou um cartão FUT grande, e o perfil do time ganhou layout cinematográfico. Calendário, Chave, Resultados, Classificação, Mundo, Histórico, Academia, Mercado, Finanças e Caixa de entrada foram migrados pro padrão DashCard. O Hall da Fama foi reconstruído fiel ao design. A landing e a página /jogar ganharam o menu de 3 modos no estilo cinematográfico (Carreira / Draft / Online), e a animação pesada de WebGL do fundo foi removida pra melhorar performance em mobile.
 
-Praticamente toda tela do modo carreira foi refeita do zero. O resultado: hierarquia visual clara, banners gold padronizados, DashCards consistentes, monospace pra números, accent colors por estado (verde=ganho, vermelho=perda, gold=destaque, azul=meta).
+O **mercado de transferências** foi redesenhado em três colunas: Elenco + Promover Academia à esquerda, mercado filtrável (search, país, role chips, sort) no centro, Coach em rows + Patrocínios + Confirmadas + Rumores à direita, com sticky bottom mostrando warnings e o botão Fechar Elenco. A negociação com clubes ganhou modal completo com slider de oferta, presets (Baixa/Justa/Generosa), troca de jogadores (swap pool), contra-oferta colorida por tipo e botão Insistir. As propostas tier-1 pelos seus jogadores (FaZe quer seu astro) viram tela cinematográfica gold com dois cards lado a lado (player + fee) e narrativa contextual. A renovação obrigatória de contratos ficou com header banner, decisões coloridas por escolha (verde=renovar, vermelho=liberar), sticky bottom com hud de cost/budget e warnings inline. A tela de fundar org fictícia ganhou DashCard duas colunas com preview ao vivo, ColorSwatch grande, grid de emblemas, mini-thumbs em vários tamanhos e Logo Builder reusável com 6 shapes, 2 cores customizáveis, iniciais, layout centralizado/embaixo e contorno opcional. O modo Fundador subiu de patamar: pode subir a própria logo (PNG/JPG redimensionada pra 128px) e tem número de série gravado por ordem de pagamento (#001 = primeiro).
 
-| Tela | Antes | Depois |
-|---|---|---|
-| **Mercado** | Lista vertical compacta | Layout **3 colunas**: Elenco / Mercado / Coach+Sponsors+Rumores · sticky bottom com warnings |
-| **Escolher time** | 9 times tier 2/3 fixos | **Qualquer time** do dataset (95+) · filtros tier/região/busca · 5 avatares por card |
-| **Cenários** | Cards básicos | DashCards por categoria · TeamBadge real · objetivos em chips gold |
-| **Renovação** | Lista chata | Header banner · borders coloridas por decisão · sticky bottom com hud cost/budget |
-| **Negociação** | Modal antigo `nego-*` | `<Modal>` padrão · slider gold · presets · 3 figures inline · reply colorido por tipo |
-| **Proposta tier 1** | Panel básico | Banner gold cinematográfico · 2 cards (player + fee) · narrativa contextual |
-| **Fundar org** | Form panel | DashCard 2-col · ColorSwatch · grid emblems · preview mini-thumbs |
-| **Gerenciador saves** | Inline styles `rtm-*` | DashCards · SlotHudPill colorida · SlotMeta accent por valor |
-| **Academia** | 2 DashCards basicos | Banner header · 5 cards clicáveis · ofertas pendentes · "Como evoluem" explainer com fórmula |
-| **/jogar landing** | Animação WebGL pesada | Estática (3 orbs sem animation, vignette) · zero GPU continuo |
+A **tela de começar carreira** agora permite assumir QUALQUER time do dataset — não mais 9 fixos. Grid 3-col com 95+ times reais, filtros por tier (com badge colorido — gold/roxo/azul), por região (Américas/EMEA/AP/CN) e busca por nome/tag. Cada card mostra TeamBadge real, 5 PlayerAvatars do lineup com OVR badge cada, tier, região, OVR médio e budget proporcional (T1 = $600k, T2 = $1.3M, T3 = $2.3M — elites têm folha pesada). Os Desafios de carreira (cenários narrativos com contexto e metas próprias — FaZe rebuild, MIBR orgulho, paiN tradição, SAW Portugal e mais) viraram DashCards por categoria com objetivos em chips gold. E pra quem quer começar do zero, fundar org fictícia segue como opção.
 
-### Tela de mercado (highlight)
-**Antes:** 263 linhas empilhadas verticalmente com tooltip preto sobrepondo título.
-**Depois:** 463 linhas em 3 colunas com:
-- Header com 3 HudPills (Orçamento, Elenco X/5, Coach ✓)
-- Coluna esquerda: Seu Elenco + Promover Academia (FutCards clicáveis com hover accent)
-- Coluna centro: Mercado filtrável (search + país select + role chips + sort)
-- Coluna direita: Coach em rows + Patrocínios + Confirmadas + Rumores
-- Sticky bottom: warnings inline + "✔ Fechar elenco e escolher o campeonato" gold
+O **calendário de campeonatos** foi reescrito: agora você joga até 3 etapas por split (não mais 1), cada uma com nome de evento real e rotação diferente do field, então a 1ª rodada nunca repete. O CircuitPicker mostra até 8 opções por split (era 3): T1 + variante alternativa, T2 + variante, T3 global + T3-SA + T3-EU + T3-Ásia. T1 expandido pra 35 nomes (IEM Katowice/Cologne/Dallas/Berlin/Beijing/Atlanta, BLAST Premier Spring/Fall/World, PGL Wallachia/Cluj-Napoca/Belgrade/Astana, EPL S20/S21, BetBoom Dacha, Roobet, etc), T2 pra 30 (CCT Global Finals + regionais Asia/NA/EU, Elisa Masters, Skyesports Champions, BetBoom Cup, etc), e T3 regionais com 16 SA (Gamers Club Liga, BB Masters BR, CazéTV Cup, Aorus League, NSG Brasileirão, etc), 15 EU (CCT Europe Series, A1 League, Polskie Mistrzostwa, eXTREMESLAND, etc) e 8 Ásia (Perfect World Asia League, TIGER Asia, Mongolian Premier League, etc). Cada opção mostra prize pool real, sede com bandeira, vagas pro Major, prêmio ×N, peso de VRS, BO format, online/LAN e badge regional.
 
----
+**Region routing** virou regra. Times BR fracos (Vasco, Yawara, ALKA, Walczaki — country BR com teamwork ≤ 65) não aparecem mais em circuitos europeus; só entram em T3-SA. User BR no T3 só vê T3-SA por padrão e tem que subir de tier pra ter acesso global. Funciona pra EU, Ásia e Américas — cada região respeita seu próprio calendário. FURIA, MIBR, paiN, FaZe e cia continuam globais porque o ranking deles é alto.
 
-## 🎬 MODAIS CINEMATOGRÁFICOS — Beats narrativos pros momentos altos
+O **Major** virou um evento real em 3 stages (Suíço 1 → 2 → 3) + Champions Stage com ranking pelo VRS — não só "Mata-mata aleatório". O bracket ganhou layout cinematográfico (mesmo dos circuitos) e o histórico do Major é preservado pro Hall. A premiação foi calibrada pra ser proporcional ao pool real do evento × fatia da colocação (campeão Major ~$1.2M, runner-up $550k, etc). O VRS decai por jogo (não por split), pesa pela força dos adversários (Opponent Network — bater elite rende muito, bater regional rende pouco), e a promoção/rebaixamento por tier acontece pelo ranking final. Convite pra jogar um tier acima sem estar classificado ainda virou possível, e descer um tier por opção (T1→T2, T2→T3) também — útil pra acelerar evolução de jovens ou farmar pra próxima janela.
 
-Antes, eventos importantes eram um modal genérico. Agora são **sequências cinematográficas** que dão peso ao momento.
+A **transição entre splits e temporadas** ganhou peso narrativo. Depois de um circuito ou Major termina, em vez de cair direto no mercado, dispara uma sequência cinematográfica de 4 slides: posição final (badge colorido por outcome — campeão gold, top 4 verde, mid azul, bottom vermelho, troféu se ganhou), MVP do split (top OVR do squad com avatar 88px, OVR gold, role pill e citação contextual), recap financeiro (grid 2×2 com premiação, sponsors, folha e infraestrutura + saldo do split + caixa atual) e próximos passos (CTA pro mercado). ESC pula, Enter avança, ← volta. Plus modais cinematográficos novos: ChampionCelebration quando levanta troféu, PlayerRetirement quando veterano pendura as armas, TournamentElimination com beat dramático de eliminação, FiredModal quando a diretoria demite (quote do chairman + stats da run + opção continuar/reiniciar). YearAwardsModal segue como cerimônia de fim de temporada (MVP/Rookie/Coach/Surpresa). Tudo skippable, tudo com pacing de quem foi feito pra ser sentido.
 
-- **ChampionCelebrationModal** — quando você levanta o troféu de um circuito ou Major
-- **PlayerRetirementModal** — quando um veterano pendura as armas
-- **TournamentEliminationModal** — eliminação dramática (estilo "fim de jornada")
-- **FiredModal** — diretoria te demite com quote do chairman + stats da run + opção continuar/reiniciar
-- **SeasonRecapModal** *(novo)* — 4 slides pós-split: posição final → MVP do split → recap financeiro → próximos passos
-- **YearAwardsModal** — cerimônia de fim de temporada (MVP/Rookie/Coach/Surpresa)
+O **engine ganhou profundidade FM-style**. Cada jogador tem agora **28 atributos** (aim, consistency, clutch, awp, igl + os internos), e **sub-roles emergem das stats** — 6 sub-roles derivados (AWPer / IGL / Entry Fragger / Lurker / Support / Rifler genérico), com `subRoleStars` (0-5 em cada) e `compositionPenalty` que pune time com 3+ AWPers ou 4+ Entries. A IA da liga oscila atributos entre temporadas (forma do dia, pico, declínio pós-peak) e tem aposentadorias reais. **Sponsors dinâmicos** com marcas reais (Red Bull, Samsung, HyperX, Logitech, Razer) propõem contratos por X splits, com compromisso (não rescinde antes), cooldown pós-recusa e gate por VRS — marcas top só pra orgs grandes, e o placement bonus paga melhor quando você vai bem. **12+ team events narrativos** podem acontecer por split: briga interna, proposta de boot camp, oferta de fundos, drama do coach, evento de marketing, cada um com 2-3 escolhas e tradeoffs reais (morale, budget, board confidence). **Personalidades** dos jogadores afetam ofertas, moral e química — calmo aceita pior salário, profissional ignora drama, etc. **Rivalidades** entre você e times específicos podem nascer organicamente e influenciar boost de prêmio + bônus de sponsor em mata-mata contra eles. **Fadiga** acumula por evento jogado e dá pra distribuir descanso entre jogadores (com carga reduzida em vez de bench seco). **Química** entre pares evolui com tempo juntos e decai quando alguém sai. **Infraestrutura** tem 3 facilities (Centro de Treino, Sala de Analista, Sala de Psicólogo, 0-3 níveis cada) com benefit transparente: training acelera evolução, analyst boosta map prefs, psychologist estabiliza moral e fadiga. **Coach** tem stints com troféus registrados (pra história), styles próprios (tactical/aggressive/discipline) e rating que reflete em buff de partida. **Scouting** com olheiro contratável que entrega relatórios pré-jogo e revela jovens promissores. **Plano de jogo** pré-partida (Disciplinado / Antistrat / Foco de mapa / Agressivo) dá buff REAL na simulação.
 
-Pacing: ESC pula tudo, ←/→ navega, accent gold consistente.
+O **dataset CS2 foi atualizado pra 2026**. Importação completa via planilha: 95+ times reais (de FaZe/Vitality/Spirit/MOUZ/NAVI no topo a regionais sulamericanos no fundo), cada um com 5 atributos por player, roles primária e secundária, país, idade real (parcial — coletada da Liquipedia onde disponível), coach próprio e teamwork calibrado. As idades reais de 196 jogadores foram trazidas da Liquipedia (acabou o "25-26" padrão). As roles foram corrigidas via API cs2.cam (29 times reajustados — Twistzz não é IGL, etc). **12 academies** com logo do TIME PAI + "ACADEMY" embaixo (MOUZ NXT mostra logo da MOUZ + escrito Academy, exatamente como você queria) — NAVI Junior, MOUZ NXT, Eternal Fire Academy, fnatic Rising, Heroic Academy, 9INE Academy, BIG Academy, e os 5 novos da planilha: MIBR Academy, paiN Academy, Bestia Academy, Oddik Academy, Red Canids AC. **50 free agents** reais entraram como time virtual `__free__`, aparecem no mercado pra contratar (25% mais barato que clube) e ficam filtrados das ligas oficiais. ODDIK 2025 foi adicionada com ksloks, coldzera, naitte, pancc, wood. SAW (Portugal) e mais 4 times BR (Bounty Hunters, Keyd Stars, Yawara, Vasco) também entraram.
+
+A **Academy** virou um sistema funcional de verdade. Banner "Como evoluem" no topo explica a fórmula completa: base 2.1 OVR/split + foco (+1) + treino (+N/3 conforme nível da facility) = até +4.1 OVR/split, com cap pelo potencial individual. Cada card de prospect mostra "Próx split: +X.X OVR · ~Y splits p/ pot" calculado no momento — verde se em foco, neutro se não, gold se já no potencial máximo. O time academy (5 jovens, um por função, todos da nacionalidade do seu time) disputa a Liga Academy contra os 8 academies reais a cada split, com tabela ranqueada e seus matches do split listados (com AcademyBadge mostrando o logo do pai + ACADEMY). Players do time academy + da academia são clicáveis pra abrir o modal de perfil. Prospects da academia que chegam a OVR ≥ 72 recebem **ofertas de orgs maiores** (Astralis, Vitality, NIP, G2, Liquid, EG — 35% de chance por split, seed determinístico), com fee proporcional ao OVR — aceitar adiciona caixa e libera o slot. Matches do Liga Academy ganharam botão "▸ Jogar" no primeiro confronto não-jogado (simulação com RNG vivo sobrescreve a tabela determinística), e a estrutura de playoff top-4 (semis + final + champion) tá em andamento.
+
+O **mercado de jovens** ficou mais inteligente: a Academia tem upgrade pra Centro de Treino (acelera evolução), promover prospects da academia direto na janela (sem precisar comprar), dispensar jovens da academia, e os nicks gerados têm muito mais variedade agora (acabou a repetição).
+
+O **modo online competitivo** foi reescrito do zero. Ranked 1v1 ficou em lobby dedicado com matchmaking ranqueado, MMR salvo na conta vitalícia, sistema de temporadas com placement, leaderboard online, arquivo de campeões e progressão com recompensas. Major online virou ranqueado de verdade com 3 stages + Champions, congelando o elenco da corrida (run_roster) — fim da inversão de resultado. Casual com salas reais (públicas ou fechadas com código), F5 reconecta na sala (não perde mais a sala ao atualizar), criar sala com nome real, deep link `/online/<código>`. Veto do Ranked 1v1 padronizado no mesmo layout dos outros modos. Gauntlet ganhou draft estilo Major (pacotes/cartas), rivais virando esquadrões de IA montados com lendas do pool, partida MD3 real, dificuldade que escala sem teto (acabou o streak infinito). Resultados (duelo e Major) re-skinados. Sala viva com poll por fase, host migration, force-advance, validação de elenco, host pode remover AFK no draft, rate-limit, salas filtradas por modo+ranked. Narração ganhou camada nova: callouts de mapa, suspense em etapas, replay no fim com manchete pra carreira, momentos-chave ao vivo (caster). Velocidade da simulação online vai até 8×.
+
+**Stripe e Account**: conta vitalícia por R$20 via Stripe Payment Link integrada — só pago tem conta (nasce só quando o pagamento confirma, com selo Fundador #001 pra primeiros apoiadores). Cloud sync por slot (até 5 carreiras pra apoiador), tombstones que persistem delete entre devices, gerenciador de saves dedicado com SlotHudPill colorida por % uso. **AccountChip no /jogar**: pill fixo no canto superior direito sempre visível, mostra status (Fundador / Vitalícia / Grátis) com dropdown pra Meu Perfil, Upgrade Vitalício (se grátis) e Sair. Click em Carreira aguarda a conta carregar antes de decidir o caminho — antes podia cair no slot 1 direto se clicasse rápido demais. Painel de admin com CRM de contas pagas integrado ao Stripe, dashboard de métricas e filtros. Banner G4 Skins fixo no rodapé pra patrocínio, com registro de cliques.
+
+**i18n PT/EN/ES** completo: idioma automático pelo navegador (gringo cai no inglês), 566+ traduções novas, tudo do engine (insights/ratings/match/swiss/gsl), telas da carreira, admin, online, atributos, regras, modos, objetivos, ranks. Sem residuais PT em interface não-PT.
+
+**Polish e qualidade de vida**: tour interativo de boas-vindas com spotlight nos elementos reais do DOM (5 steps: welcome → topbar → nav → ferramentas → bora — ESC pula, Enter avança, ←/→ navega). Avatares procedurais — quando o player não tem foto real, gera avatar único determinístico pelo nick (8 paletas dark/saturated × 4 shapes decorativos × iniciais em monospace), então cada jogador é visualmente distinto. ComparePage pra comparar 2-4 players side-by-side com accent no maior de cada stat, acessível do SquadTab. MetaPage com snapshot agregado da temporada (distribuição de roles no top, países mais fortes, mapas mais picados, campeões regionais), acessível via menu Ferramentas. InfrastructurePage dedicada pras 3 facilities (descrição clara do benefit por nível, custo do upgrade, upkeep por split, auto-refresh ao investir). LockerRoomPage com snapshot pre-match (5 jogadores com mood, briefing tático do oponente, plano de jogo selecionado). HowToPlay como tutorial in-game consultável (6 seções). Menu ⋯ Ferramentas no topbar consolida Como Jogar, Meta, Infraestrutura, Vestiário e Editor de Logo num único dropdown — antes eram 8 ícones soltos. StreakBadge no topbar mostra W/L do split atual. Camada de motion no site (aurora no hero, brand flutuando, cards e botões). Review mobile com grids do design colapsando no celular. Setup do manager refeito ("Vire um manager de Major") com fluxo limpo. Modal de perfil do manager (Conta vitalícia) fiel ao design.
+
+**Bracket e visualização**: bracket do playoff do circuito no estilo do Major, hb-* shared, conector tracejado, cell clicável pra ver série, coluna do troféu no fim com TeamBadge do campeão. Replay 2D ao vivo (LiveCanvasGame estilo broadcast Mongolz vs Falcons) implementado mas escondido atrás de flag opt-in por enquanto — feature ainda não tem pathfinding/LOS reais, fica pra reativar quando estiver maduro. Killfeed ganhou ícones SVG oficiais do CS calibrados por arma e round. Top 20 HLTV por currículo composto (sem duplicatas), MVP de torneio, lista de títulos do ano por jogador, seus jogadores entrando no MVP/Top20 + OVR atual na academia.
+
+**Sistemas de carga**: save migrations v1→v11 com backfill obrigatório — saves antigos NUNCA quebram em update. Novo store Zustand centralizado (loadFromSlot com migration chain, cloud sync por slot, tombstones). 23 testes automatizados rodando em cada commit (save migrations, sponsor engine, sub-roles). Monolito quebrado: CareerScreen.tsx encolheu de 7660 → ~6900 linhas, 14 abas extraídas pra src/pages/career/ com props tipadas e lógica isolada. Monitoramento de erro em produção + ErrorBoundary. Saves protegidos contra corrupção, recuperação automática de vagas fantasma, free agent custo 0 fixado.
+
+**Bugs corrigidos** (alguns dos principais): VetoScreen crash com decider, agentes do canvas não se moviam, rounds longos demais, modal de player academy "não encontrado" (resolver agora olha academyTeam), cards de time academy com OvrBadge sobreposto, navbar lotada (8 ícones consolidados), save reparado pra slots inválidos, 1v5 inflado na narração, elite caindo em tier-3, OVR/função do contratado (queda dupla + morph), free agent custo 0, soft-lock do Major em grupo, série empatada dando vitória no escuro, mapas/táticas voltando ao padrão no draft, ranqueado dropando por 404 transitório, replay travado em 0×0, idioma residual PT em EN/ES, mercado com vagas fantasma, edições do admin não propagando, insistir derrubando preço pra perto de zero, balance de IA, curva força→vitória mais rasa, forma do dia por mapa, troféu de Major, conta de Majors correta, IA renovando elenco com a base, prospecto/jovem salvo sem nick/name/role agora curado no load, crash do PlayerAvatar por nick indefinido, 6+ bugs de feedback dos usuários endereçados em batch, fim do farm de tier, e mais.
 
 ---
 
-## 🌍 NOVO CONTEÚDO — Dataset CS2 2026 + Academies + Free Agents
-
-### 95+ times reais atualizados via planilha
-Importação completa dos elencos CS2 atualizados (top mundial até regionais). Cada player com:
-- 5 atributos numéricos (aim/consistency/clutch/awp/igl)
-- Roles primária + secundária
-- País (ISO 2)
-- Idade real (parcial — em progresso via Liquipedia)
-- Coach + estilo tático
-- Teamwork do time
-
-### 12 academies com **logo do time pai + "ACADEMY"** embaixo
-Pedido visual: "mouz nxt → logo da mouz + escrito academy embaixo". Implementado.
-
-Academies com roster real:
-- NAVI Junior, MOUZ NXT, Eternal Fire Academy, fnatic Rising, Heroic Academy, 9INE Academy, BIG Academy
-- **+5 novos da planilha**: MIBR Academy, paiN Academy, Bestia Academy, Oddik Academy, Red Canids AC
-
-### 50 Free Agents jogáveis
-"Free Agents" virou um time virtual `__free__` no dataset — aparece no Mercado pra contratar (25% mais barato que clube), filtrado das ligas online.
-
----
-
-## 🏆 ENGINE PROFUNDO — Mecânicas FM-style
-
-### Sub-roles derivados (T3.3)
-6 sub-roles emergem das stats: **AWPer**, **IGL**, **Entry Fragger**, **Lurker**, **Support**, **Rifler genérico**. Cada player tem `subRoleStars` (0-5 em cada). `compositionPenalty` penaliza time com 3+ AWPers ou 4+ Entries.
-
-### Sponsors dinâmicos (T3.5)
-Marcas reais (Red Bull, Samsung, HyperX, Logitech, etc) propõem contratos por split. Compromisso por X splits (não rescinde). Filtragem por VRS — top marcas só pra orgs grandes. Cooldown pós-recusa.
-
-### Team events (T3.6)
-12+ eventos narrativos por split: brigas internas, propostas de boot camp, drama de coach, ofertas de fundos, etc. Cada evento tem 2-3 escolhas com tradeoffs reais (morale/budget/board).
-
-### Region routing (Frente 3)
-Times BR fracos (Vasco, Yawara, ALKA, etc — country=br + teamwork≤65) **NÃO** aparecem mais em circuitos europeus. Pool segmentado: SA (Brasil/Argentina/etc), EU, Ásia. User BR no T3 só vê T3-SA por padrão; tier-up libera global.
-
-### Mais campeonatos no CircuitPicker (Frente 2)
-De 3 opções por split → **8 opções**:
-- T1 + T1-Alt (variante com field rotativo)
-- T2 + T2-Alt
-- T3 Global + T3-SA + T3-EU + T3-Ásia
-T1_EVENTS de 20 → 35 nomes (BLAST Spring/Fall, PGL Wallachia, IEM Berlin/Beijing/Atlanta, BetBoom Dacha, etc). T2: 30. T3 regionais: 16 SA + 15 EU + 8 Asia.
-
-### Sistema de Academy expandido
-- Times jogáveis com playoff top-4 (semis + final) — em andamento
-- Treino dos prospects com fórmula transparente: **base 2.1 + foco +1 + treino +N/3 = até +4.1 OVR/split**
-- Ofertas determinísticas pra prospects (35% chance se OVR≥72 · seed prospectId+split)
-- Modal de player abre da Academy também (resolvePlayerById ampliado)
-
-### Save migrations v1→v11
-Backfill obrigatório em toda atualização — saves antigos **nunca quebram**. Adicionados campos: facilities, sponsors, sponsorUntil, scenarios, academy, academyTeam, academyFocus, pendingTeamEvent, coachStints, hiredScoutId, etc.
-
----
-
-## 🛠️ ARQUITETURA
-
-### Monolito quebrado: 14 abas extraídas
-`CareerScreen.tsx` foi de 7660 linhas → ~6900, com 14 abas migradas pra `src/pages/career/`:
-- StandingsTab, ResultsTab, VrsTab, Top20Tab, HistoryTab
-- BracketTab, InboxTab, CalendarTab, WorldTab
-- AcademyTab, MajorTab, FinanceTab, SquadTab, OverviewTab
-
-Cada uma com props tipadas, state local, lógica de derive isolada.
-
-### Store Zustand centralizado
-`useState<CareerSave>` migrado pra `useGame` (T1.1) — saves persistem automaticamente via gameStore com:
-- `loadFromSlot(n, hydrate)` com migration chain
-- Cloud sync por slot (apoiador)
-- Tombstones pra delete persistir entre devices
-
-### 23 testes automatizados
-Engine coberto via `npm run test:sim`:
-- Save migrations (6 testes)
-- Sponsor engine (8 testes)
-- Sub-roles (9 testes)
-Todos verdes em cada commit.
-
----
-
-## ✨ POLISH & QUALIDADE DE VIDA
-
-### Onboarding interativo (T8.2)
-Modal slideshow estático virou **tour com spotlight nos elementos reais do DOM**. 5 steps: welcome → topbar → nav principal → ferramentas → ready. ESC pula, Enter avança, ←/→ navega.
-
-### Avatares procedurais (T7.1)
-Quando player não tem foto real, agora gera avatar único determinístico pelo nick: 8 paletas dark/saturated + 4 shapes decorativos + iniciais em monospace. **Cada jogador é visualmente distinto**, mesmo na fallback.
-
-### Logo Builder
-Editor de logo da org reusável: 6 shapes (escudo/círculo/hex/raio/estrela/losango) × 2 cores × iniciais customizáveis × layout (centralizado/embaixo) × contorno. Preview ao vivo + mini-thumbs.
-
-### Compare Page
-Comparação side-by-side de 2-4 players: atributos lado a lado, role pills, accent no maior de cada stat. Acessível do SquadTab.
-
-### Meta Page
-Snapshot agregado da temporada: distribuição de roles no top, países mais fortes, mapas mais picados, campeões regionais atuais. Acessível via menu Ferramentas.
-
-### Infrastructure Page
-3 facilities (Centro de Treino · Sala de Analista · Sala de Psicólogo) com descrição clara do benefit por nível, custo do upgrade, upkeep por split. Auto-refresh ao investir.
-
-### LockerRoom Page
-Snapshot pre-match: 5 jogadores com mood, briefing tático do oponente, plano de jogo selecionado. Acessível via menu Ferramentas (só se há próxima partida).
-
-### How To Play
-Tutorial in-game consultável: 6 seções explicando carreira, mercado, circuitos, sub-roles, academy, sponsors. Acessível via ❔.
-
-### Account management
-**AccountChip no top-right do /jogar** sempre visível: status (Fundador / Vitalícia / Grátis) + email + dropdown com Meu perfil / Upgrade / Sair.
-
-Click em "Carreira" no /jogar agora aguarda `account.ready` antes de decidir caminho — antes podia cair no slot 1 direto se clicava rápido demais.
-
-### Save manager
-Tela de "Suas carreiras" (conta vitalícia, até 5 slots) refeita: SlotHudPill colorida por % uso, slot rows com TeamBadge + meta em monospace, confirmação de delete inline com border vermelho, sync nuvem visível.
-
-### CircuitPicker
-Cada opção mostra: prize pool real ($), sede com bandeira, vagas pro Major, prêmio ×N, VRS ×N, badge de região (🌎 SA / 🇪🇺 EU / 🌏 Ásia) quando regional.
-
----
-
-## 🐛 BUGS CORRIGIDOS NESSA BRANCH
-
-- VetoScreen crash com decider (`p.team === -1`)
-- Live canvas agents não se moviam (walkable mask) — feature posteriormente escondida
-- Rounds longos demais (IDLE_FAST_FORWARD ×6)
-- Modal de player academy "não encontrado" (resolver não olhava academyTeam)
-- Cards de time academy com OvrBadge sobreposto ao texto
-- Navbar lotada com 8 ícones (consolidado em menu ⋯ Ferramentas)
-- Save reparado banner pra slots inválidos
-- Coach stints + trophies não persistiam corretamente
-
----
-
-## ⚙️ DEPRECATED / ESCONDIDO
-
-- **LiveCanvasGame Replay 2D** — feature beta escondida atrás de `?broadcast=1`. Canvas ainda sem pathfinding/LOS reais. Código mantido pra reativar quando estiver maduro.
-- **Animação WebGL do /jogar** — removida. Performance significativamente melhor em mobile/laptops mais simples.
-
----
-
-## 📊 NÚMEROS DA BRANCH
-
-| Métrica | Valor |
-|---|---|
-| Commits | **268** |
-| Linhas adicionadas | **+61.717** |
-| Linhas removidas | **−10.385** |
-| Líquido | **+51.332** |
-| Arquivos tocados | **271** |
-| Tempo de desenvolvimento | Várias semanas |
-| Testes automatizados | **23 passing** |
-
----
-
-## 🎮 EXPERIÊNCIA NO TODO
-
-Antes desta branch, o jogo era funcional mas tinha:
-- UI inconsistente (mix de padrões `panel-*`, `rtm-*`, inline)
-- Times BR irrealistas batendo em europeus
-- 3 campeonatos por split
-- Transição entre splits seca (pagou folha → mercado)
-- Free agents hardcoded (20 jogadores fictícios)
-- Academy decorativa (não interativa)
-- Modal de player academy quebrado
-
-Agora:
-- **Padrão visual único** em todo o modo carreira
-- **Cada região respeita seu calendário** (BR não joga ESL EU)
-- **8 campeonatos por split** com variedade real
-- **Sequência cinematográfica** ao fim de cada split/temporada
-- **50 free agents reais** + 5 academies novos
-- **Academy funcional** com matches jogáveis (em andamento), ofertas pra prospects, treino transparente
-- **Account management fácil** com chip no canto
-
-Bem-vindo à nova era do **Road to Major**. 🏆
+Em resumo: o Road to Major saiu de um simulador funcional pra uma experiência de **gerenciamento de carreira completa** — visual coeso, mecânica profunda no nível de Football Manager (mas pra CS), dataset CS2 atualizado, conteúdo até nas pontas (academies regionais, free agents, sponsors reais), online competitivo real com ranking salvo na conta, e um fluxo narrativo que dá peso aos momentos altos (campeão, fim de carreira, demissão, MVP do split). Bem-vindo à nova era. 🏆
