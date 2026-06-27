@@ -123,31 +123,69 @@ const MAJOR_NAME = (split: number) => MAJOR_NAMES[(split - 1) % MAJOR_NAMES.leng
 // mesmos melhores times disputam todos — sem "jogar dois ao mesmo tempo". O ciclo
 // é contínuo entre temporadas, então cada split traz um evento diferente.
 const T1_EVENTS = [
-  'IEM Katowice', 'ESL Pro League', 'IEM Cologne', 'IEM Dallas',
+  // Calendário expandido: ~35 eventos T1 do ano (rotação por split×etapa)
+  'IEM Katowice', 'ESL Pro League S20', 'IEM Cologne', 'IEM Dallas',
   'PGL Cluj-Napoca', 'BLAST Premier World Final', 'IEM Chengdu', 'Esports World Cup',
   'BLAST Open Lisboa', 'IEM Melbourne', 'PGL Astana', 'Thunderpick World Championship',
   'IEM Rio', 'BLAST Spring Final', 'BLAST Fall Final', 'IEM Sydney',
   'PGL Bucharest', 'IEM Fortaleza', 'BLAST Bounty', 'Gamers8 Riyadh',
+  'BLAST Open Spring', 'BLAST Premier Spring Final', 'PGL Wallachia', 'IEM World Champ',
+  'EPL Conference', 'ESL Pro League S21', 'BLAST Premier Fall', 'IEM Beijing',
+  'PGL Belgrade', 'IEM Atlanta', 'BetBoom Dacha Belgrade', 'BetBoom Dacha Dubai',
+  'Roobet Masters', 'YaLLa Compass Riyadh', 'IEM Berlin',
 ];
 // Cada ETAPA do split é um evento distinto do calendário (não só por split).
 const evIndex = (split: number, ev: number, len: number) => ((((split - 1) * EVENTS_PER_SPLIT + (ev - 1)) % len) + len) % len;
 const t1EventName = (split: number, ev = 1) => T1_EVENTS[evIndex(split, ev, T1_EVENTS.length)];
+
 // Tier 2 mundial: circuitos de segundo escalão reais (sem trava de região).
 const T2_EVENTS = [
   'ESL Challenger League', 'CCT Global Finals', 'Elisa Masters Espoo', 'YaLLa Compass',
   'Thunderpick World Champ', 'Pinnacle Cup', 'CCT Season Finals', 'Skyesports Masters',
   'ESL Challenger Valencia', 'CCT South America', 'CCT Europe', 'European Pro League S2',
   'Roobet Cup', 'Snow Sweet Snow', 'Pinnacle Cup Championship', 'Fragadelphia',
+  'CCT Asia', 'CCT North America', 'Elisa Invitational', 'Esports Charts Cup',
+  'ESL Impact Finals', 'Skyesports Champions', 'United Masters League', 'Pinnacle Champ Cup',
+  'BLAST Bounty Spring', 'Akros Showmatch', 'GG.Bet Showdown', 'BetBoom Cup',
+  'CCT Online Finals', 'IceCold Cup',
 ];
 const t2EventName = (split: number, ev = 1) => T2_EVENTS[evIndex(split, ev, T2_EVENTS.length)];
+
 // Tier 3: circuitos de acesso/qualificatórias (onde toda org começa).
+// AGORA segmentado por região — funções regionEventName() devolvem o nome do
+// evento certo pra região do user. Mantém T3_EVENTS como pool global default.
 const T3_EVENTS = [
-  'ESEA Advanced Season', 'CCT Open Series', 'Gamers Club Liga Pro', 'European Pro League',
+  'ESEA Advanced Season', 'CCT Open Series', 'European Pro League',
   'Pinnacle Winter Series', 'Elisa Invitational Qual', 'ESL Challenger Open', 'CCT Series',
-  'ESEA Cash Cup', 'Gamers Club Masters', 'Aorus League', 'CBCS Series',
-  'ESEA Open Season', 'Pinnacle Summer Series', 'CCT Open Qualifier', 'Liga Gamers Club',
+  'ESEA Cash Cup', 'Aorus League', 'CBCS Series',
+  'ESEA Open Season', 'Pinnacle Summer Series', 'CCT Open Qualifier',
+  'ESL Open Cup', 'CCT Closed Qualifier', 'Esports Spring League',
+  'Akros League', 'GG.Bet Tide',
+];
+// Sub-arrays REGIONAIS pra T3 — usado quando region routing determina escopo.
+const T3_SA_EVENTS = [
+  'Gamers Club Liga Pro', 'Gamers Club Masters', 'CCT South America', 'CBCS Series',
+  'BB Masters Brasil', 'Aorus League BR', 'CazéTV Cup', 'Liga Gamers Club',
+  'Esportes da Sorte Cup', 'NSG Brasileirão CS', 'Aorus League SA', 'Loud Park BR',
+  'CCT South America S2', 'BB Masters Andinos', 'Liga Furiosa', 'Brasileirão CS',
+];
+const T3_EU_EVENTS = [
+  'European Pro League', 'ESEA Advanced Season', 'CCT Europe Series', 'Esportal Spring',
+  'Pinnacle Winter Series', 'Elisa Invitational Qual', 'ESL Challenger Open',
+  'GamersOrigin League', 'eXTREMESLAND EU', 'EVC EU Open', 'CCT Closed Qualifier',
+  'A1 League', 'Polskie Mistrzostwa', 'United Kingdom Open', 'Akros League EU',
+];
+const T3_ASIA_EVENTS = [
+  'Perfect World Asia League', 'Asia Championship', 'CCT Asia Series', 'Esports Charts Asia',
+  'Skyesports Stage', 'TIGER Asia League', 'Akros Asia', 'Mongolian Premier League',
 ];
 const t3EventName = (split: number, ev = 1) => T3_EVENTS[evIndex(split, ev, T3_EVENTS.length)];
+// Picker por região: cai num pool regional específico (default = global).
+// Exportado pra ser usado pelo CircuitPicker (Frente 3 — region routing).
+export const t3RegionalEventName = (split: number, ev: number, region: 'sa' | 'eu' | 'asia' | 'global') => {
+  const pool = region === 'sa' ? T3_SA_EVENTS : region === 'eu' ? T3_EU_EVENTS : region === 'asia' ? T3_ASIA_EVENTS : T3_EVENTS;
+  return pool[evIndex(split, ev, pool.length)];
+};
 
 // IMERSÃO: prize pool real (USD) e sede de cada evento do calendário (fonte:
 // Liquipedia/HLTV). Só FLAVOR — o prêmio que entra no caixa segue a fórmula
@@ -191,12 +229,81 @@ const EVENT_META: Record<string, { prize: number; venue: string }> = {
   'ESL Challenger Valencia': { prize: 100_000, venue: 'Valência 🇪🇸' },
   'Pinnacle Cup Championship': { prize: 200_000, venue: 'online 🌐' },
   'Fragadelphia': { prize: 30_000, venue: 'Filadélfia 🇺🇸' },
+  // Tier 1 expandido
+  'BLAST Open Spring': { prize: 200_000, venue: 'Londres 🇬🇧' },
+  'BLAST Premier Spring Final': { prize: 400_000, venue: 'Singapura 🇸🇬' },
+  'PGL Wallachia': { prize: 600_000, venue: 'Bucareste 🇷🇴' },
+  'IEM World Champ': { prize: 1_000_000, venue: 'Katowice 🇵🇱' },
+  'EPL Conference': { prize: 100_000, venue: 'Malta 🇲🇹' },
+  'ESL Pro League S20': { prize: 850_000, venue: 'Malta 🇲🇹' },
+  'ESL Pro League S21': { prize: 850_000, venue: 'Malta 🇲🇹' },
+  'BLAST Premier Fall': { prize: 425_000, venue: 'Estocolmo 🇸🇪' },
+  'IEM Beijing': { prize: 500_000, venue: 'Pequim 🇨🇳' },
+  'PGL Belgrade': { prize: 1_250_000, venue: 'Belgrado 🇷🇸' },
+  'IEM Atlanta': { prize: 250_000, venue: 'Atlanta 🇺🇸' },
+  'BetBoom Dacha Belgrade': { prize: 300_000, venue: 'Belgrado 🇷🇸' },
+  'BetBoom Dacha Dubai': { prize: 300_000, venue: 'Dubai 🇦🇪' },
+  'Roobet Masters': { prize: 300_000, venue: 'online 🌐' },
+  'YaLLa Compass Riyadh': { prize: 200_000, venue: 'Riade 🇸🇦' },
+  'IEM Berlin': { prize: 750_000, venue: 'Berlim 🇩🇪' },
+  // Tier 2 expandido
+  'CCT Asia': { prize: 80_000, venue: 'online 🌐' },
+  'CCT North America': { prize: 80_000, venue: 'online 🌐' },
+  'Elisa Invitational': { prize: 60_000, venue: 'Helsinki 🇫🇮' },
+  'Esports Charts Cup': { prize: 50_000, venue: 'online 🌐' },
+  'ESL Impact Finals': { prize: 100_000, venue: 'Malta 🇲🇹' },
+  'Skyesports Champions': { prize: 100_000, venue: 'Bangalore 🇮🇳' },
+  'United Masters League': { prize: 75_000, venue: 'online 🌐' },
+  'Pinnacle Champ Cup': { prize: 150_000, venue: 'online 🌐' },
+  'BLAST Bounty Spring': { prize: 300_000, venue: 'Copenhague 🇩🇰' },
+  'Akros Showmatch': { prize: 50_000, venue: 'online 🌐' },
+  'GG.Bet Showdown': { prize: 60_000, venue: 'online 🌐' },
+  'BetBoom Cup': { prize: 80_000, venue: 'online 🌐' },
+  'CCT Online Finals': { prize: 100_000, venue: 'online 🌐' },
+  'IceCold Cup': { prize: 40_000, venue: 'online 🌐' },
   // Tier 3 / locais
   'Gamers Club Liga Pro': { prize: 15_000, venue: 'São Paulo 🇧🇷' },
   'Gamers Club Masters': { prize: 25_000, venue: 'São Paulo 🇧🇷' },
   'Aorus League': { prize: 15_000, venue: 'Buenos Aires 🇦🇷' },
   'CBCS Series': { prize: 10_000, venue: 'Brasil 🇧🇷' },
   'Liga Gamers Club': { prize: 10_000, venue: 'São Paulo 🇧🇷' },
+  // Tier 3 SA expandido
+  'BB Masters Brasil': { prize: 20_000, venue: 'São Paulo 🇧🇷' },
+  'Aorus League BR': { prize: 18_000, venue: 'São Paulo 🇧🇷' },
+  'CazéTV Cup': { prize: 15_000, venue: 'online 🇧🇷' },
+  'Esportes da Sorte Cup': { prize: 12_000, venue: 'online 🇧🇷' },
+  'NSG Brasileirão CS': { prize: 18_000, venue: 'online 🇧🇷' },
+  'Aorus League SA': { prize: 20_000, venue: 'Buenos Aires 🇦🇷' },
+  'Loud Park BR': { prize: 15_000, venue: 'São Paulo 🇧🇷' },
+  'CCT South America S2': { prize: 25_000, venue: 'online 🇧🇷' },
+  'BB Masters Andinos': { prize: 18_000, venue: 'Lima 🇵🇪' },
+  'Liga Furiosa': { prize: 15_000, venue: 'online 🇧🇷' },
+  'Brasileirão CS': { prize: 20_000, venue: 'São Paulo 🇧🇷' },
+  // Tier 3 EU expandido
+  'CCT Europe Series': { prize: 25_000, venue: 'online 🌐' },
+  'Esportal Spring': { prize: 15_000, venue: 'Estocolmo 🇸🇪' },
+  'GamersOrigin League': { prize: 20_000, venue: 'Paris 🇫🇷' },
+  'eXTREMESLAND EU': { prize: 25_000, venue: 'Bratislava 🇸🇰' },
+  'EVC EU Open': { prize: 18_000, venue: 'online 🌐' },
+  'A1 League': { prize: 15_000, venue: 'Viena 🇦🇹' },
+  'Polskie Mistrzostwa': { prize: 18_000, venue: 'Varsóvia 🇵🇱' },
+  'United Kingdom Open': { prize: 15_000, venue: 'Londres 🇬🇧' },
+  'Akros League EU': { prize: 18_000, venue: 'online 🌐' },
+  // Tier 3 Asia
+  'Perfect World Asia League': { prize: 50_000, venue: 'Xangai 🇨🇳' },
+  'Asia Championship': { prize: 60_000, venue: 'Seul 🇰🇷' },
+  'CCT Asia Series': { prize: 30_000, venue: 'online 🌐' },
+  'Esports Charts Asia': { prize: 25_000, venue: 'online 🌐' },
+  'Skyesports Stage': { prize: 30_000, venue: 'Mumbai 🇮🇳' },
+  'TIGER Asia League': { prize: 25_000, venue: 'Tóquio 🇯🇵' },
+  'Akros Asia': { prize: 20_000, venue: 'online 🌐' },
+  'Mongolian Premier League': { prize: 18_000, venue: 'Ulaanbaatar 🇲🇳' },
+  // Tier 3 fallbacks novos
+  'ESL Open Cup': { prize: 12_000, venue: 'online 🌐' },
+  'CCT Closed Qualifier': { prize: 8_000, venue: 'online 🌐' },
+  'Esports Spring League': { prize: 15_000, venue: 'online 🌐' },
+  'Akros League': { prize: 15_000, venue: 'online 🌐' },
+  'GG.Bet Tide': { prize: 12_000, venue: 'online 🌐' },
 };
 const TIER_DEFAULT_POOL: Record<number, { prize: number; venue: string }> = {
   1: { prize: 500_000, venue: 'circuito mundial 🌐' },
@@ -2584,6 +2691,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const t1Teams = bandField(0, 24, 9, 15, save.split * 101 + 1 + evSeed, evRot);       // elite (ranking ~top 24)
     const t2Teams = bandField(15, 42, 9, 15, save.split * 101 + 2 + evSeed, evRot + 1);  // segundo escalão (~15-42)
     const t3Teams = bandField(34, 80, 9, 15, save.split * 101 + 3 + evSeed, evRot + 2);  // acesso (~34+)
+    // FRENTE 2/3: VARIANTES + REGIONAIS
+    // bandFieldRegional: aceita filtro de país (filtra dentro da banda + skip já-usados).
+    // Permite criar circuitos T3 regionais (SA/EU/Ásia) que cobrem os times "regionais"
+    // — geralmente country BR/AR/etc com teamwork baixo, que não devem cair em pools EU.
+    const bandFieldRegional = (lo: number, hi: number, n: number, seed: number, countrySet: Set<string>): TeamSeason[] => {
+      const band = byStrength.slice(lo, hi).filter((t) => !used.has(t.id) && countrySet.has(t.country.toLowerCase()));
+      const picked = seededShuffle(band, seed).slice(0, n);
+      for (const t of picked) used.add(t.id);
+      return picked;
+    };
+    // Sets de países por macro-região (cobertura ampla pra não excluir times válidos).
+    const SA_COUNTRIES = new Set(['br','ar','cl','pe','uy','co','ec','bo','py','ve','mx']);
+    const EU_COUNTRIES = new Set(['de','fr','gb','es','it','pl','dk','se','fi','no','nl','be','at','cz','ro','hu','bg','pt','ie','ch','sk','rs','hr','si','ba','mk','al','gr','md','is','lu','mt','ee','lv','lt']);
+    const ASIA_COUNTRIES = new Set(['cn','jp','kr','mn','vn','th','id','ph','my','sg','in','pk','tw','hk','kz','uz','tr']);
+
     const mk = (
       id: string,
       name: string,
@@ -2592,22 +2714,43 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       spots: number,
       prizeMult: number,
       tier: number,
+      region?: 'global' | 'sa' | 'eu' | 'asia',
     ) => {
       const ai = teams.slice(0, 15);
-      // peso de VRS do evento = força média dos adversários (Opponent Network):
-      // campo forte rende muito, campo fraco rende pouco. Calculado do field real.
       const favg = ai.length ? ai.reduce((a, t) => a + vrsCore(t.teamwork), 0) / ai.length : 400;
-      return { id, name, desc, teams: ai, spots, prizeMult, vrsWeight: opponentMult(favg), tier };
+      return { id, name, desc, teams: ai, spots, prizeMult, vrsWeight: opponentMult(favg), tier, region: region ?? 'global' };
     };
     const t1Name = t1EventName(save.split, ev);
+    const t1AltName = t1EventName(save.split, ev + 7);   // 2ª opção T1 (deslocada)
     const t2Name = t2EventName(save.split, ev);
+    const t2AltName = t2EventName(save.split, ev + 5);   // 2ª opção T2
     const t3Name = t3EventName(save.split, ev);
-    // Cada split é um evento real distinto do calendário (nomes rotativos).
-    return [
-      mk('t1', t1Name, `${ct('Tier 1 mundial ·')} ${t1Name}${ct(': fase de grupos (GSL, dupla eliminação) + playoffs com a elite do ranking. Principal caminho de pontos pro Major; paga muito.')}`, t1Teams, 2, 1.8, 1),
-      mk('t2', t2Name, `${ct('Tier 2 mundial ·')} ${t2Name}${ct(': o segundo escalão do ranking (Astralis, paiN, FaZe, MIBR, TYLOO e cia), grupos GSL + playoffs. Vença pra subir ao Tier 1 e brigar pelo Major.')}`, t2Teams, 2, 1, 2),
-      mk('t3', t3Name, `Tier 3 · ${t3Name}${ct(': circuito de acesso, times em ascensão. Grupos + playoffs. Onde toda org começa.')}`, t3Teams, 1, 0.6, 3),
-    ].filter((c) => c.teams.length >= 5);
+    const t3SaName = t3RegionalEventName(save.split, ev, 'sa');
+    const t3EuName = t3RegionalEventName(save.split, ev, 'eu');
+    const t3AsiaName = t3RegionalEventName(save.split, ev, 'asia');
+
+    // Variante T1/T2 paralela: pega vagas mais profundas da banda (com seed diferente).
+    // Times em comum são removidos via `used` set (bandField é destrutivo).
+    const t1AltTeams = bandField(8, 28, 4, 15, save.split * 101 + 21 + evSeed, evRot + 3);
+    const t2AltTeams = bandField(20, 50, 4, 15, save.split * 101 + 22 + evSeed, evRot + 5);
+
+    // Pools regionais (T3): puxam de 30-95 pra incluir os times mais fracos (BR
+    // pequenos, regional only). Cada um filtrado pelos países da região.
+    const t3SaTeams = bandFieldRegional(30, 95, 15, save.split * 101 + 31, SA_COUNTRIES);
+    const t3EuTeams = bandFieldRegional(30, 95, 15, save.split * 101 + 32, EU_COUNTRIES);
+    const t3AsiaTeams = bandFieldRegional(30, 95, 15, save.split * 101 + 33, ASIA_COUNTRIES);
+
+    const out: CircuitOption[] = [
+      mk('t1', t1Name, `${ct('Tier 1 mundial ·')} ${t1Name}${ct(': fase de grupos (GSL) + playoffs com a elite. Principal caminho pro Major; paga muito.')}`, t1Teams, 2, 1.8, 1),
+      mk('t1-alt', t1AltName, `${ct('Tier 1 alt ·')} ${t1AltName}${ct(': field diferente da elite (vagas mais profundas, mesmas regras).')}`, t1AltTeams, 1, 1.6, 1),
+      mk('t2', t2Name, `${ct('Tier 2 mundial ·')} ${t2Name}${ct(': segundo escalão do ranking, grupos GSL + playoffs. Vença pra subir ao Tier 1.')}`, t2Teams, 2, 1, 2),
+      mk('t2-alt', t2AltName, `${ct('Tier 2 alt ·')} ${t2AltName}${ct(': segundo escalão com field rotativo (mais regional).')}`, t2AltTeams, 1, 0.9, 2),
+      mk('t3', t3Name, `Tier 3 · ${t3Name}${ct(': circuito de acesso mundial. Onde toda org começa.')}`, t3Teams, 1, 0.6, 3),
+      mk('t3-sa', t3SaName, `${ct('Tier 3 SA ·')} ${t3SaName}${ct(': circuito regional sulamericano (Brasil, Argentina, Chile, etc).')}`, t3SaTeams, 1, 0.55, 3, 'sa'),
+      mk('t3-eu', t3EuName, `${ct('Tier 3 EU ·')} ${t3EuName}${ct(': circuito regional europeu (Alemanha, França, Polônia, Nórdicos).')}`, t3EuTeams, 1, 0.55, 3, 'eu'),
+      mk('t3-asia', t3AsiaName, `${ct('Tier 3 Ásia ·')} ${t3AsiaName}${ct(': circuito regional asiático (China, Mongólia, Coreia, Sudeste).')}`, t3AsiaTeams, 1, 0.5, 3, 'asia'),
+    ];
+    return out.filter((c) => c.teams.length >= 5);
   }, [oppEra, save.split, save.eventInSplit]);
 
   // mercado: jogadores reais dos elencos atuais (CS2) + FREE AGENTS (pros sem
@@ -3765,6 +3908,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         split={save.split}
         playerTier={save.tier}
         inviteTier={inviteTier}
+        userRegion={save.region ?? null}
         relocate={relocate}
         onRelocate={() => coreReg && update({ region: coreReg })}
         onBack={() => setStage('market')}
@@ -5978,23 +6122,41 @@ interface CircuitOption {
   prizeMult: number;
   vrsWeight: number;
   tier: number;
+  /** FRENTE 3: 'global' = aberto a todos; 'sa'/'eu'/'asia' = só user da macro-região
+   *  ou que tenha core lá. Default = global. */
+  region?: 'global' | 'sa' | 'eu' | 'asia';
 }
-function CircuitPicker({ circuits, split, playerTier, inviteTier, relocate, onRelocate, onPick, onBack }: {
+function CircuitPicker({ circuits, split, playerTier, inviteTier, userRegion, relocate, onRelocate, onPick, onBack }: {
   circuits: CircuitOption[];
   split: number;
   playerTier: number;
   inviteTier: number | null;
+  userRegion: MacroRegion | null;
   relocate: { from: MacroRegion; to: MacroRegion } | null;
   onRelocate: () => void;
   onPick: (c: CircuitOption) => void;
   onBack: () => void;
 }) {
+  // FRENTE 3 — REGION ROUTING:
+  // - circuitos 'global' são abertos a todos
+  // - circuitos regionais ('sa'/'eu'/'asia') só pra user cuja MacroRegion bate
+  // - mapeia macroRegion → conjunto de region tags aceitas
+  const userRegionTags: Set<'global' | 'sa' | 'eu' | 'asia'> = (() => {
+    const set = new Set<'global' | 'sa' | 'eu' | 'asia'>(['global']);
+    if (userRegion === 'americas') set.add('sa');
+    if (userRegion === 'europe' || userRegion === 'cis') set.add('eu');
+    if (userRegion === 'asia' || userRegion === 'oceania') set.add('asia');
+    return set;
+  })();
+  const regionOk = (opt: CircuitOption) => userRegionTags.has(opt.region ?? 'global');
   // você disputa: o circuito do SEU tier; o tier de CIMA se recebeu CONVITE; e UM
-  // tier ABAIXO por opção (T1→T2, T2→T3). Descer rende menos VRS/prêmio (pool
-  // menor), então é escolha estratégica, não farm. Dois tiers abaixo segue bloqueado.
-  const canEnter = (opt: CircuitOption) => opt.tier === playerTier || opt.tier === inviteTier || opt.tier === playerTier + 1;
+  // tier ABAIXO por opção. Acrescido do filtro de região pra regionais.
+  const tierOk = (opt: CircuitOption) => opt.tier === playerTier || opt.tier === inviteTier || opt.tier === playerTier + 1;
+  const canEnter = (opt: CircuitOption) => tierOk(opt) && regionOk(opt);
   const isInvite = (opt: CircuitOption) => opt.tier === inviteTier && opt.tier !== playerTier;
   const isBelow = (opt: CircuitOption) => opt.tier === playerTier + 1;
+  const isRegional = (opt: CircuitOption) => opt.region && opt.region !== 'global';
+  const REGION_LABEL: Record<string, string> = { sa: '🌎 SA', eu: '🇪🇺 EU', asia: '🌏 Ásia' };
   const firstAvailable = circuits.find(canEnter) ?? circuits[0];
   const [selectedId, setSelectedId] = useState(firstAvailable?.id ?? '');
   const selected = circuits.find((option) => option.id === selectedId);
@@ -6025,6 +6187,11 @@ function CircuitPicker({ circuits, split, playerTier, inviteTier, relocate, onRe
                   <div className="cc-name">
                     <span className={`tier-badge t${opt.tier}`}>TIER {opt.tier}</span> {opt.name}
                     {isInvite(opt) && <span className="tier-badge" style={{ background: 'var(--rtm-gold)', color: '#06121d', marginLeft: 6 }}>✉ {ct('CONVITE')}</span>}
+                    {isRegional(opt) && (
+                      <span className="tier-badge" style={{ background: 'rgba(95,164,232,0.18)', color: '#5fa4e8', border: '1px solid rgba(95,164,232,0.45)', marginLeft: 6 }}>
+                        {REGION_LABEL[opt.region ?? '']}
+                      </span>
+                    )}
                   </div>
                   <div className="cc-desc muted small">{opt.desc}</div>
                   <div className="cc-meta">
@@ -6036,7 +6203,10 @@ function CircuitPicker({ circuits, split, playerTier, inviteTier, relocate, onRe
                   </div>
                   {isInvite(opt) && <div className="cc-lock small" style={{ color: 'var(--rtm-gold)' }}>✉ {ct('Convite: jogar aqui acelera a evolução dos seus jogadores mais jovens.')}</div>}
                   {isBelow(opt) && <div className="cc-lock muted small">↓ {ct('Opcional: um tier abaixo (menos VRS e prêmio).')}</div>}
-                  {locked && (opt.tier < playerTier
+                  {locked && !regionOk(opt) && (
+                    <div className="cc-lock muted small">🔒 {ct('Circuito regional —')} {REGION_LABEL[opt.region ?? '']} {ct('exclusivo (sua org não compete nessa região)')}</div>
+                  )}
+                  {locked && regionOk(opt) && (opt.tier < playerTier
                     ? <div className="cc-lock muted small">🔒 {ct('Acima da sua divisão — suba pelo ranking VRS')}</div>
                     : <div className="cc-lock muted small">🔒 {ct('Fora da sua divisão (você joga o seu tier)')}</div>)}
                 </button>
