@@ -373,6 +373,7 @@ import { openFiredModal } from './FiredModalHost';
 import { openInfrastructure } from './InfrastructurePageHost';
 import { openLockerRoom } from './LockerRoomPageHost';
 import { openLogoBuilder } from './LogoBuilderHost';
+import { InteractiveTour } from './InteractiveTour';
 // T11 — modais cinematográficos
 import { ChampionCelebrationModal, type ChampionCelebrationData } from './ChampionCelebrationModal';
 import { PlayerRetirementModal, type PlayerRetirementData } from './PlayerRetirementModal';
@@ -3573,8 +3574,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   }
 
   // ---------- fundação ----------
-  // tutorial de primeira vez (ou reaberto pelo botão ❔): mostra antes de tudo
-  if (showOnb) return <CareerOnboarding onClose={dismissOnb} />;
+  // T8.2: removido o `if (showOnb) return <CareerOnboarding />` early-return.
+  // Agora o tour é INTERATIVO (com spotlight nos elementos reais), renderizado
+  // como overlay no fim do JSX. Steps com target ausente fazem fallback pro
+  // tooltip centralizado — funciona mesmo se a app ainda não tá no hub.
 
   if (stage === 'found') {
     // espera os elencos editados (global) antes de deixar fundar: senão a carreira
@@ -5272,6 +5275,43 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           }}
         />
       )}
+
+      {/* T8.2: Tour interativo de boas-vindas — substitui o slideshow estático. */}
+      {showOnb && (
+        <InteractiveTour
+          steps={[
+            {
+              title: ct('Bem-vindo ao Modo Carreira'),
+              body: ct('Você comanda uma organização de Counter-Strike do zero até o Major. Esse tour rápido te mostra onde tudo fica.'),
+              placement: 'center',
+            },
+            {
+              target: '.em-brand',
+              title: ct('Sua identidade'),
+              body: ct('Aqui você vê o nome da sua org. O topo é sua central de comando — todas as áreas estão sempre acessíveis daqui.'),
+              placement: 'bottom',
+            },
+            {
+              target: '.em-main-nav',
+              title: ct('Navegação principal'),
+              body: ct('Dashboard, Meu time, Em jogo, Transferências, Notícias e Estatísticas. Cada grupo abre um menu com sub-abas. Use a barra superior pra navegar entre tudo.'),
+              placement: 'bottom',
+            },
+            {
+              target: '.em-header-right',
+              title: ct('Topo direito'),
+              body: ct('Orçamento, slots, contagem de inbox e o botão CONTINUAR (avança o calendário). O menu ⋯ Ferramentas tem Como jogar, Meta, Infraestrutura, Vestiário e o editor de logo.'),
+              placement: 'bottom',
+            },
+            {
+              title: ct('Bora começar'),
+              body: ct('Você pode reabrir esse tour a qualquer momento pelo botão ❔. Boa sorte na sua jornada rumo ao Major.'),
+              placement: 'center',
+            },
+          ]}
+          onClose={dismissOnb}
+        />
+      )}
     </>
   );
 }
@@ -6083,37 +6123,8 @@ function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string
 // ---------- fundação da organização ----------
 // proposta de uma org de elite por um jogador seu (assédio do topo). Vender dá
 // um caixa gordo mas abre um buraco no elenco; recusar mantém a base.
-// tutorial de primeira vez: slides explicando o loop do modo carreira.
-const ONB_SLIDES: { icon: CareerIconName; title: string; body: string }[] = [
-  { icon: 'trophy', title: ct('Bem-vindo ao Modo Carreira'), body: ct('Você assume uma organização de Counter-Strike e leva ela do zero até o Major. Monta o elenco, joga os campeonatos e gerencia tudo entre as temporadas.') },
-  { icon: 'focus', title: ct('Comece por um desafio'), body: ct('Escolha um desafio (uma org pronta, com contexto e metas próprias) ou funde a sua do zero. Cada desafio traz objetivos pra cumprir ao longo da campanha.') },
-  { icon: 'calendar', title: ct('Escolha o campeonato'), body: ct('A cada split você entra num circuito. O Tier 3 é o acesso (onde toda org começa) e o Tier 1 é a elite mundial. Vencer promove; só o Tier 1 dá vaga no Major.') },
-  { icon: 'handshake', title: ct('Gerencie entre os splits'), body: ct('Na janela você negocia reforços (até com troca de jogadores), renova contratos, treina mapas e o playbook, e forma jovens na academia. Suas decisões pesam no time.') },
-  { icon: 'chart', title: ct('Suba no ranking e vá ao Major'), body: ct('Você ganha pontos de VRS vencendo eventos fortes — ganhar de time fraco rende pouco. Os melhores do ranking mundial vão ao Major, que fecha a temporada.') },
-  { icon: 'rocket', title: ct('Tá pronto!'), body: ct('Boa sorte na estrada até o Major. Dá pra rever este guia quando quiser no botão de ajuda lá no topo. Bora.') },
-];
-function CareerOnboarding({ onClose }: { onClose: () => void }) {
-  const [i, setI] = useState(0);
-  const last = i === ONB_SLIDES.length - 1;
-  const s = ONB_SLIDES[i];
-  return (
-    <div className="modal-backdrop onb-backdrop" onClick={onClose}>
-      <div className="onb-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose} title={ct('Pular')}><CareerIcon name="x" size={16} /></button>
-        <div className="onb-icon"><CareerIcon name={s.icon} size={48} /></div>
-        <h2 className="onb-title">{s.title}</h2>
-        <p className="onb-body">{s.body}</p>
-        <div className="onb-dots">{ONB_SLIDES.map((_, k) => <i key={k} className={k === i ? 'on' : ''} onClick={() => setI(k)} />)}</div>
-        <div className="onb-actions">
-          <button className="btn ghost" onClick={onClose}>{last ? '' : 'Pular'}</button>
-          <span className="spacer" />
-          {i > 0 && <button className="btn" onClick={() => setI(i - 1)}>{ct('Voltar')}</button>}
-          <button className="btn gold" onClick={() => (last ? onClose() : setI(i + 1))}>{last ? ct('Começar') : ct('Próximo')}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// T8.2: CareerOnboarding (modal slideshow estático) + ONB_SLIDES removidos —
+// substituídos pelo InteractiveTour (tour com spotlight nos elementos reais).
 
 // tela OBRIGATÓRIA de renovação: aparece na janela quando há contratos vencendo.
 // O usuário decide quem fica (paga 1 salário) e quem sai. Sem perder jogador "do nada".
