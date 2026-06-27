@@ -40,7 +40,7 @@ import { LegalPage } from './components/Legal';
 import { ManagerSetup } from './components/ManagerSetup';
 import { ManagerProfile } from './components/ManagerProfile';
 import { Leaderboard } from './components/Leaderboard';
-import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
+import { beginCheckout, claim as claimAccount, fetchMe, useAccount } from './state/account';
 import { getActiveSlot, setActiveSlot, slotKey, cloudSlot } from './state/careerSaves';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
@@ -197,7 +197,7 @@ export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
-  const { account, refresh: refreshAccount, logout } = useAccount();
+  const { account, ready: accountReady, refresh: refreshAccount, logout } = useAccount();
   const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
@@ -847,7 +847,13 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
           onLeaderboard={() => setScreen('leaderboard')}
-          onCareer={() => { if (account?.paid) { setScreen('careerSaves'); } else { setActiveSlot(1); setScreen('career'); } }}
+          onCareer={async () => {
+            // conta carrega async; sem esperar, um toque rápido (comum no mobile)
+            // caía no ramo "free" e entrava direto na carreira em vez do gerenciador
+            let paid = !!account?.paid;
+            if (!accountReady) { const a = await fetchMe(); paid = !!a?.paid; }
+            if (paid) { setScreen('careerSaves'); } else { setActiveSlot(1); setScreen('career'); }
+          }}
           onAchievements={() => setAchOpen(true)}
           teamCount={dataset.length}
           playerCount={playerCount}
