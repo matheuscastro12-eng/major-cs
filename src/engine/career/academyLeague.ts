@@ -3,6 +3,7 @@
 // turno único (round-robin) por split. Simulação determinística: mesmo split +
 // mesma força do usuário => mesma tabela. Não infla o save (derivado).
 import clubsData from '../../data/academy-clubs.json';
+import { CS2_REAL_2026 } from '../../data/bo3';
 
 export type AcademyRole = 'Rifler' | 'Entry' | 'Support' | 'AWP' | 'IGL';
 
@@ -29,6 +30,22 @@ export const ACADEMY_CLUBS: AcademyClub[] = (clubsData.clubs as AcademyClub[]).m
   ...c,
   colors: (c.colors ?? ['#101820', '#61a8dd']) as [string, string],
 }));
+
+// Map parentId → logoUrl do time pai (derivado uma vez do dataset bo3).
+// Usado pelo AcademyBadge pra renderizar "logo MOUZ + ACADEMY" em vez do
+// genérico "NXT" do academy isolado.
+const PARENT_LOGO_MAP: Record<string, string> = (() => {
+  const out: Record<string, string> = {};
+  for (const t of CS2_REAL_2026 as Array<{ id: string; logoUrl?: string }>) {
+    if (t.id && t.logoUrl) out[t.id] = t.logoUrl;
+  }
+  return out;
+})();
+
+/** Devolve a logoUrl do time pai do academy (ou undefined se não mapeado). */
+export function academyParentLogoUrl(club: AcademyClub | { parentId?: string }): string | undefined {
+  return club.parentId ? PARENT_LOGO_MAP[club.parentId] : undefined;
+}
 
 function hash(str: string): number {
   let h = 2166136261 >>> 0;

@@ -5064,6 +5064,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           promoteProspect={promoteProspect}
           findSigning={findSigning}
           askConfirm={askConfirm}
+          openPlayerProfile={openPlayerProfile}
         />
       )}
 
