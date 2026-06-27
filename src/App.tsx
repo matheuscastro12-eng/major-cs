@@ -244,7 +244,7 @@ export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
-  const { account, refresh: refreshAccount, logout } = useAccount();
+  const { account, ready: accountReady, refresh: refreshAccount, logout } = useAccount();
   const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
@@ -929,7 +929,20 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
           onLeaderboard={() => setScreen('leaderboard')}
-          onCareer={() => { if (account?.paid) { setScreen('careerSaves'); } else { setActiveSlot(1); setScreen('career'); } }}
+          onCareer={() => {
+            // Aguarda account terminar de carregar antes de decidir o caminho —
+            // antes podia cair no else se o usuário clicava muito rápido
+            // (account === null durante o fetch /me) e perder o redirect pro
+            // gerenciador de saves.
+            if (!accountReady) return;
+            if (account?.paid) { setScreen('careerSaves'); }
+            else { setActiveSlot(1); setScreen('career'); }
+          }}
+          account={account}
+          accountReady={accountReady}
+          onAccount={() => setScreen(manager ? 'profile' : 'setup')}
+          onCreateAccount={() => setScreen('landing')}
+          onLogout={() => { logout(); setCloudEnabled(false); }}
           onAchievements={() => setAchOpen(true)}
           teamCount={dataset.length}
           playerCount={playerCount}

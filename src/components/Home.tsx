@@ -5,6 +5,7 @@ import { getManager } from '../state/manager';
 import { ct } from '../state/career-i18n';
 import { BrandMark } from './brand';
 import { PlayStaticBackground } from './PlayStaticBackground';
+import type { Account } from '../state/account';
 
 interface Props {
   onStart: (mode: 'classic' | 'almanac', teamName: string, pool: TournamentPool, difficulty: Difficulty) => void;
@@ -19,6 +20,16 @@ interface Props {
   onOnline?: () => void;
   onLeaderboard?: () => void;
   onCareer?: () => void;
+  /** Conta atual (null = não logado, undefined = carregando) */
+  account?: Account | null;
+  /** Carregamento da conta concluído */
+  accountReady?: boolean;
+  /** Abre a tela de perfil/setup */
+  onAccount?: () => void;
+  /** Abre a landing/checkout pra criar conta vitalícia */
+  onCreateAccount?: () => void;
+  /** Logout (só faz sentido se account != null) */
+  onLogout?: () => void;
 }
 
 const DIFFICULTIES: Difficulty[] = ['normal', 'hard', 'legend'];
@@ -35,10 +46,16 @@ export function Home({
   teamCount,
   onOnline,
   onCareer,
+  account,
+  accountReady,
+  onAccount,
+  onCreateAccount,
+  onLogout,
 }: Props) {
   const { t, lang } = useLang();
   const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
   const [view, setView] = useState<'menu' | 'draft'>('menu');
+  const [acctOpen, setAcctOpen] = useState(false);
   const managerNick = getManager()?.nick;
   const hasBeta = true;
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
@@ -52,6 +69,27 @@ export function Home({
   return (
     <div className="play-hub fade-in">
       <PlayStaticBackground />
+
+      {/* Account chip — top-right, sempre visível. Gerencia conta facilmente. */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 16,
+          right: 16,
+          zIndex: 50,
+        }}
+      >
+        <AccountChip
+          account={account}
+          ready={accountReady ?? false}
+          open={acctOpen}
+          onToggle={() => setAcctOpen((v) => !v)}
+          onClose={() => setAcctOpen(false)}
+          onAccount={onAccount}
+          onCreate={onCreateAccount}
+          onLogout={onLogout}
+        />
+      </div>
 
       <div className="play-hub-content">
         {view === 'menu' ? (
@@ -181,5 +219,273 @@ export function Home({
         bg · <a href="https://fragcoord.xyz/s/bp27qjk1" target="_blank" rel="noopener noreferrer">Anneal</a> @Xor
       </p>
     </div>
+  );
+}
+
+// ─── AccountChip ────────────────────────────────────────────────────────────
+// Pill no canto superior direito do Home. Estado:
+//   - account == null && !ready  → "Carregando…"
+//   - account == null && ready   → "Entrar" (não logado)
+//   - account != null            → email/nick + ★ se paid; click abre dropdown
+//
+// Dropdown:
+//   - Conta vitalícia? mostra "Meu perfil" + "Sair"
+//   - Conta grátis?    mostra "Meu perfil" + "✨ Upgrade vitalício" + "Sair"
+//   - Não logado?      mostra "Criar conta vitalícia"
+
+function AccountChip({
+  account,
+  ready,
+  open,
+  onToggle,
+  onClose,
+  onAccount,
+  onCreate,
+  onLogout,
+}: {
+  account?: Account | null;
+  ready: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onAccount?: () => void;
+  onCreate?: () => void;
+  onLogout?: () => void;
+}) {
+  // Loading state
+  if (!ready) {
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '6px 12px',
+          background: 'rgba(0,0,0,0.45)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 999,
+          fontSize: '0.78rem',
+          color: 'rgba(255,255,255,0.55)',
+          fontFamily: 'inherit',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        ⏳ Carregando…
+      </span>
+    );
+  }
+
+  // Não logado
+  if (!account) {
+    return (
+      <button
+        type="button"
+        onClick={onCreate}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 16px',
+          background: 'var(--em-gold)',
+          color: '#1a1205',
+          border: 'none',
+          borderRadius: 999,
+          fontFamily: 'inherit',
+          fontSize: '0.82rem',
+          fontWeight: 800,
+          cursor: 'pointer',
+          boxShadow: '0 4px 14px rgba(232,193,112,0.35)',
+          letterSpacing: '0.3px',
+        }}
+      >
+        ★ Criar conta
+      </button>
+    );
+  }
+
+  // Logado
+  const isPaid = account.paid;
+  const isFounder = account.founder;
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        title={
+          isFounder
+            ? `Fundador${account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''} · apoiador desde o lançamento`
+            : isPaid
+            ? 'Conta vitalícia · gerenciar perfil, saves e conta'
+            : 'Conta grátis · ver perfil ou fazer upgrade'
+        }
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '6px 14px 6px 8px',
+          background: 'rgba(0,0,0,0.55)',
+          border: `1px solid ${isPaid ? 'var(--em-gold)' : 'rgba(255,255,255,0.18)'}`,
+          borderRadius: 999,
+          fontFamily: 'inherit',
+          fontSize: '0.84rem',
+          fontWeight: 700,
+          color: '#fff',
+          cursor: 'pointer',
+          backdropFilter: 'blur(8px)',
+          boxShadow: isPaid ? '0 4px 14px rgba(232,193,112,0.2)' : '0 4px 14px rgba(0,0,0,0.4)',
+        }}
+      >
+        {isPaid && (
+          <span
+            style={{
+              width: 22,
+              height: 22,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--em-gold)',
+              color: '#1a1205',
+              borderRadius: '50%',
+              fontSize: '0.74rem',
+              fontWeight: 900,
+            }}
+          >
+            ★
+          </span>
+        )}
+        <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {account.nick || account.email}
+        </span>
+        {isFounder && (
+          <span
+            style={{
+              padding: '1px 6px',
+              fontSize: '0.6rem',
+              fontWeight: 900,
+              letterSpacing: '0.5px',
+              color: 'var(--em-gold)',
+              background: 'rgba(232,193,112,0.18)',
+              border: '1px solid rgba(232,193,112,0.45)',
+              borderRadius: 3,
+            }}
+          >
+            FUNDADOR{account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''}
+          </span>
+        )}
+        <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
+      </button>
+      {open && (
+        <>
+          {/* Backdrop pra fechar ao clicar fora */}
+          <div
+            onClick={onClose}
+            style={{ position: 'fixed', inset: 0, zIndex: 49 }}
+          />
+          <div
+            role="menu"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              right: 0,
+              minWidth: 220,
+              padding: 6,
+              background: 'rgba(18, 22, 30, 0.96)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 6,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(12px)',
+              zIndex: 50,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            {/* Header info */}
+            <div style={{ padding: '8px 10px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
+              <div style={{ fontSize: '0.66rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
+                Status
+              </div>
+              <div style={{ fontSize: '0.84rem', fontWeight: 800, color: isPaid ? 'var(--em-gold)' : '#fff', marginTop: 2 }}>
+                {isFounder ? '👑 Fundador' : isPaid ? '★ Conta vitalícia' : 'Conta grátis'}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.55)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {account.email}
+              </div>
+            </div>
+            <DropItem
+              label="Meu perfil"
+              hint="Editar nick, ver carreiras, etc."
+              icon="👤"
+              onClick={() => { onClose(); onAccount?.(); }}
+            />
+            {!isPaid && (
+              <DropItem
+                label="✨ Upgrade vitalício"
+                hint="Até 5 saves + sincronização nuvem"
+                icon=""
+                accent="gold"
+                onClick={() => { onClose(); onCreate?.(); }}
+              />
+            )}
+            <DropItem
+              label="Sair"
+              hint="Volta pro modo grátis"
+              icon="↪"
+              accent="red"
+              onClick={() => { onClose(); onLogout?.(); }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function DropItem({
+  label,
+  hint,
+  icon,
+  accent,
+  onClick,
+}: {
+  label: string;
+  hint?: string;
+  icon?: string;
+  accent?: 'gold' | 'red';
+  onClick: () => void;
+}) {
+  const fg = accent === 'gold' ? 'var(--em-gold)' : accent === 'red' ? '#e58a8a' : '#fff';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: '8px 10px',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 4,
+        cursor: 'pointer',
+        textAlign: 'left',
+        fontFamily: 'inherit',
+        color: fg,
+        fontSize: '0.82rem',
+        fontWeight: 700,
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+    >
+      {icon && <span style={{ width: 18, textAlign: 'center', flexShrink: 0 }}>{icon}</span>}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div>{label}</div>
+        {hint && (
+          <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.45)', fontWeight: 500, marginTop: 1 }}>
+            {hint}
+          </div>
+        )}
+      </div>
+    </button>
   );
 }
