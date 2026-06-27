@@ -6,16 +6,44 @@
       "name": "NAVI Junior",
       "tag": "NAVIJ",
       "country": "ua",
-      "colors": ["#1a1a1a", "#ffe600"],
+      "colors": [
+        "#1a1a1a",
+        "#ffe600"
+      ],
       "parentId": "bo3_team_787",
       "parentTag": "NAVI",
       "parentName": "Natus Vincere",
       "players": [
-        { "nick": "kodak", "name": "Nazar Buchma", "country": "ua", "role": "IGL" },
-        { "nick": "Yoki", "name": "Danylo Istomin", "country": "ua", "role": "Rifler" },
-        { "nick": "FAZERY", "name": "David Prochazka", "country": "cz", "role": "AWP" },
-        { "nick": "MahaR", "name": "Samuel Horacek", "country": "cz", "role": "Entry" },
-        { "nick": "skizzyee", "name": "Novica Novkovikj", "country": "mk", "role": "Support" }
+        {
+          "nick": "kodak",
+          "name": "Nazar Buchma",
+          "country": "ua",
+          "role": "IGL"
+        },
+        {
+          "nick": "Yoki",
+          "name": "Danylo Istomin",
+          "country": "ua",
+          "role": "Rifler"
+        },
+        {
+          "nick": "FAZERY",
+          "name": "David Prochazka",
+          "country": "cz",
+          "role": "AWP"
+        },
+        {
+          "nick": "MahaR",
+          "name": "Samuel Horacek",
+          "country": "cz",
+          "role": "Entry"
+        },
+        {
+          "nick": "skizzyee",
+          "name": "Novica Novkovikj",
+          "country": "mk",
+          "role": "Support"
+        }
       ]
     },
     {
@@ -23,16 +51,44 @@
       "name": "Eternal Fire Academy",
       "tag": "EFA",
       "country": "tr",
-      "colors": ["#0a0a0a", "#e23b2e"],
+      "colors": [
+        "#0a0a0a",
+        "#e23b2e"
+      ],
       "parentId": "bo3_team_1527",
       "parentTag": "EF",
       "parentName": "Eternal Fire",
       "players": [
-        { "nick": "preiz", "name": "Cagan Orman", "country": "tr", "role": "IGL" },
-        { "nick": "Hydro2K", "name": "Emirhan Deniz", "country": "tr", "role": "Rifler" },
-        { "nick": "GAYEW", "name": "Emirhan Tasdemir", "country": "tr", "role": "AWP" },
-        { "nick": "Swexsy", "name": "Huseyin Celik", "country": "tr", "role": "Entry" },
-        { "nick": "Y4G1Z", "name": "Yagiz Cinar", "country": "tr", "role": "Support" }
+        {
+          "nick": "preiz",
+          "name": "Cagan Orman",
+          "country": "tr",
+          "role": "IGL"
+        },
+        {
+          "nick": "Hydro2K",
+          "name": "Emirhan Deniz",
+          "country": "tr",
+          "role": "Rifler"
+        },
+        {
+          "nick": "GAYEW",
+          "name": "Emirhan Tasdemir",
+          "country": "tr",
+          "role": "AWP"
+        },
+        {
+          "nick": "Swexsy",
+          "name": "Huseyin Celik",
+          "country": "tr",
+          "role": "Entry"
+        },
+        {
+          "nick": "Y4G1Z",
+          "name": "Yagiz Cinar",
+          "country": "tr",
+          "role": "Support"
+        }
       ]
     },
     {
@@ -40,14 +96,32 @@
       "name": "MOUZ NXT",
       "tag": "NXT",
       "country": "de",
-      "colors": ["#1b1b1b", "#e2002a"],
+      "colors": [
+        "#1b1b1b",
+        "#e2002a"
+      ],
       "parentId": "bo3_team_765",
       "parentTag": "MOUZ",
       "parentName": "MOUZ",
       "players": [
-        { "nick": "opdust", "name": "Tiago Simao", "country": "pt", "role": "IGL" },
-        { "nick": "ay0k", "name": "Maksims Beloglazovs", "country": "lv", "role": "Rifler" },
-        { "nick": "Nikodeon", "name": "Nikolai Sorensen", "country": "dk", "role": "AWP" }
+        {
+          "nick": "opdust",
+          "name": "Tiago Simao",
+          "country": "pt",
+          "role": "IGL"
+        },
+        {
+          "nick": "ay0k",
+          "name": "Maksims Beloglazovs",
+          "country": "lv",
+          "role": "Rifler"
+        },
+        {
+          "nick": "Nikodeon",
+          "name": "Nikolai Sorensen",
+          "country": "dk",
+          "role": "AWP"
+        }
       ]
     },
     {
@@ -55,7 +129,10 @@
       "name": "BIG Academy",
       "tag": "BIGA",
       "country": "de",
-      "colors": ["#101820", "#ffd200"],
+      "colors": [
+        "#101820",
+        "#ffd200"
+      ],
       "parentId": "bo3_team_756",
       "parentTag": "BIG",
       "parentName": "BIG"
@@ -65,7 +142,10 @@
       "name": "fnatic Rising",
       "tag": "FNR",
       "country": "se",
-      "colors": ["#0a0a0a", "#ff5800"],
+      "colors": [
+        "#0a0a0a",
+        "#ff5800"
+      ],
       "parentId": "bo3_team_786",
       "parentTag": "FNC",
       "parentName": "fnatic"
@@ -75,7 +155,10 @@
       "name": "Heroic Academy",
       "tag": "HRA",
       "country": "dk",
-      "colors": ["#0a0a0a", "#00e0a0"],
+      "colors": [
+        "#0a0a0a",
+        "#00e0a0"
+      ],
       "parentId": "bo3_team_759",
       "parentTag": "HERO",
       "parentName": "HEROIC"
@@ -85,17 +168,235 @@
       "name": "paiN Academy",
       "tag": "PNA",
       "country": "br",
-      "colors": ["#0a0a0a", "#ff2d55"],
+      "colors": [
+        "#0a0a0a",
+        "#ff2d55"
+      ],
       "parentId": "bo3_team_637",
       "parentTag": "PAIN",
-      "parentName": "paiN"
+      "parentName": "paiN",
+      "players": [
+        {
+          "nick": "Rkzinho",
+          "name": "Rickson Ribeiro Dias",
+          "country": "br",
+          "role": "Lurker"
+        },
+        {
+          "nick": "Tatu",
+          "name": "Lucas Santana",
+          "country": "br",
+          "role": "Entry"
+        },
+        {
+          "nick": "k9izer",
+          "name": "Pedro Martinez",
+          "country": "br",
+          "role": "Rifler"
+        },
+        {
+          "nick": "Markz",
+          "name": "Marco Antonio",
+          "country": "br",
+          "role": "AWP"
+        },
+        {
+          "nick": "tsug",
+          "name": "Gustavo Lima",
+          "country": "br",
+          "role": "IGL"
+        }
+      ]
     },
     {
       "id": "9ine-academy",
       "name": "9INE Academy",
       "tag": "9NA",
       "country": "pl",
-      "colors": ["#0a0a0a", "#c8ff00"]
+      "colors": [
+        "#0a0a0a",
+        "#c8ff00"
+      ]
+    },
+    {
+      "id": "mibr-academy",
+      "name": "MIBR Academy",
+      "tag": "MIBA",
+      "country": "br",
+      "colors": [
+        "#0a0a0a",
+        "#ffd200"
+      ],
+      "parentId": "bo3_team_755",
+      "parentTag": "MIBR",
+      "parentName": "MIBR",
+      "players": [
+        {
+          "nick": "stormzyn",
+          "name": "Vitor Ferreira",
+          "country": "br",
+          "role": "IGL"
+        },
+        {
+          "nick": "lkz",
+          "name": "Lucas Vicente",
+          "country": "br",
+          "role": "AWP"
+        },
+        {
+          "nick": "fl4sh",
+          "name": "Felipe Porfirio",
+          "country": "br",
+          "role": "Entry"
+        },
+        {
+          "nick": "Jerr1",
+          "name": "Marcos Maier ",
+          "country": "br",
+          "role": "Rifler"
+        },
+        {
+          "nick": "revoltz",
+          "name": "Caio Okada",
+          "country": "br",
+          "role": "Lurker"
+        }
+      ]
+    },
+    {
+      "id": "bestia-academy",
+      "name": "Bestia Academy",
+      "tag": "BSAC",
+      "country": "ar",
+      "colors": [
+        "#0a0a0a",
+        "#ff6e1c"
+      ],
+      "parentId": "bo3_team_5701",
+      "parentTag": "BST",
+      "parentName": "BESTIA",
+      "players": [
+        {
+          "nick": "Jotag3",
+          "name": "João Gabriel",
+          "country": "br",
+          "role": "Lurker"
+        },
+        {
+          "nick": "Lekzi",
+          "name": "Fellipe Geraldi",
+          "country": "br",
+          "role": "Rifler"
+        },
+        {
+          "nick": "lezy",
+          "name": "Lucas da Silva",
+          "country": "br",
+          "role": "Entry"
+        },
+        {
+          "nick": "F4QQ",
+          "name": "Facundo Rivas",
+          "country": "ar",
+          "role": "AWP"
+        },
+        {
+          "nick": "agt",
+          "name": "Agustín Gonzalez",
+          "country": "ar",
+          "role": "IGL"
+        }
+      ]
+    },
+    {
+      "id": "oddik-academy",
+      "name": "Oddik Academy",
+      "tag": "ODAC",
+      "country": "br",
+      "colors": [
+        "#0a0a0a",
+        "#7f56d9"
+      ],
+      "parentId": "bo3_team_xlsx_oddik",
+      "parentTag": "ODD",
+      "parentName": "Oddik",
+      "players": [
+        {
+          "nick": "mello",
+          "name": "Leonardo Melo",
+          "country": "br",
+          "role": "AWP"
+        },
+        {
+          "nick": "ghosT1",
+          "name": "Caio Batista",
+          "country": "br",
+          "role": "Rifler"
+        },
+        {
+          "nick": "jvZ",
+          "name": "João Ramos",
+          "country": "br",
+          "role": "AWP"
+        },
+        {
+          "nick": "Fegu0",
+          "name": "Felipe Fernandes ",
+          "country": "br",
+          "role": "Rifler"
+        },
+        {
+          "nick": "lipshawty",
+          "name": "Felipe Caldeira",
+          "country": "br",
+          "role": "Rifler"
+        }
+      ]
+    },
+    {
+      "id": "red-canids-ac",
+      "name": "Red Canids AC",
+      "tag": "REDA",
+      "country": "br",
+      "colors": [
+        "#0a0a0a",
+        "#e62b1e"
+      ],
+      "parentId": "bo3_team_554",
+      "parentTag": "RED",
+      "parentName": "RED Canids",
+      "players": [
+        {
+          "nick": "FasteR",
+          "name": "Pedro Carriel",
+          "country": "br",
+          "role": "Rifler"
+        },
+        {
+          "nick": "Nk",
+          "name": "Nickolas Rezende",
+          "country": "br",
+          "role": "Entry"
+        },
+        {
+          "nick": "sanc",
+          "name": "Bruno Musa",
+          "country": "br",
+          "role": "IGL"
+        },
+        {
+          "nick": "n0page",
+          "name": "João Vasconcelos",
+          "country": "br",
+          "role": "Support"
+        },
+        {
+          "nick": "gtw",
+          "name": "Gustavo Porfirio",
+          "country": "br",
+          "role": "Lurker"
+        }
+      ]
     }
   ]
 }
