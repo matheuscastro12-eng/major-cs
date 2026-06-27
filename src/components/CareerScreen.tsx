@@ -6613,23 +6613,146 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
   onAccept: () => void;
   onRefuse: () => void;
 }) {
+  // Redesenhada no padrão em-* — banner gold cinematográfico + decisão clara.
   return (
-    <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 540, margin: '40px auto' }}>
-        <div className="panel-head">📨 {ct('Proposta recebida')}</div>
-        <div className="panel-body center">
-          <div className="trophy" style={{ fontSize: 40 }}>💸</div>
-          <h2 style={{ marginBottom: 4 }}>
-            <span className="tier-badge t1">TIER 1</span> {offer.orgName} {ct('quer o seu')} {offer.nick}
+    <div
+      className="em-offer fade-in"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        padding: '12px 20px 24px',
+        maxWidth: 640,
+        margin: '40px auto 0',
+      }}
+    >
+      {/* Header banner dramático */}
+      <header
+        style={{
+          padding: '24px 20px',
+          background: 'linear-gradient(135deg, rgba(232,193,112,0.18) 0%, transparent 80%)',
+          border: '1px solid rgba(232,193,112,0.5)',
+          borderRadius: 8,
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: '0.66rem', color: 'var(--em-gold)', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: 900 }}>
+          📨 {ct('Proposta recebida')}
+        </div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+          <span style={{ padding: '3px 10px', background: 'rgba(232,193,112,0.18)', color: '#e8c170', border: '1px solid rgba(232,193,112,0.55)', borderRadius: 3, fontSize: '0.66rem', fontWeight: 900, letterSpacing: '0.5px' }}>
+            TIER 1
+          </span>
+          <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: 'var(--em-text)', letterSpacing: '-0.3px' }}>
+            {offer.orgName}
           </h2>
-          <p className="muted" style={{ maxWidth: 440, margin: '8px auto 14px' }}>
-            {ct('A')} {offer.orgName} {ct('(org de elite) ofereceu')} <b className="pos">{formatMoney(offer.fee)}</b> {ct('pelo seu')} <b>{offer.nick}</b> (OVR {offer.ovr}). {ct('Vender enche o caixa, mas você fica com 4 e precisa repor no mercado. Segurar mantém a')} {orgName} {ct('forte.')}
-          </p>
-          <div className="offer-actions">
-            <button className="btn gold big" onClick={onAccept}>✔ {ct('Vender por')} {formatMoney(offer.fee)}</button>
-            <button className="btn ghost big" onClick={onRefuse}>{ct('✕ Recusar e segurar o jogador')}</button>
+        </div>
+        <div style={{ fontSize: '0.95rem', color: 'var(--em-text)', marginTop: 8 }}>
+          {ct('quer o seu')} <b style={{ color: 'var(--em-gold)' }}>{offer.nick}</b>
+        </div>
+      </header>
+
+      {/* Detalhes da oferta — 2 cards lado a lado: player + fee */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '14px 16px',
+            background: 'var(--em-panel-2)',
+            border: '1px solid var(--em-border)',
+            borderRadius: 6,
+          }}
+        >
+          <PlayerAvatar nick={offer.nick} size={52} />
+          <div style={{ lineHeight: 1.3 }}>
+            <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
+              {ct('Jogador alvo')}
+            </div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--em-text)' }}>
+              {offer.nick}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+              OVR <b style={{ color: 'var(--em-gold)', fontWeight: 900 }}>{offer.ovr}</b>
+            </div>
           </div>
         </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            padding: '14px 16px',
+            background: 'rgba(94,216,138,0.10)',
+            border: '1px solid rgba(94,216,138,0.45)',
+            borderRadius: 6,
+          }}
+        >
+          <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
+            {ct('Valor da proposta')}
+          </div>
+          <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
+            {formatMoney(offer.fee)}
+          </b>
+        </div>
+      </div>
+
+      {/* Narrativa */}
+      <div
+        style={{
+          padding: '14px 16px',
+          background: 'var(--em-panel)',
+          border: '1px solid var(--em-border)',
+          borderLeft: '3px solid var(--em-gold)',
+          borderRadius: '0 6px 6px 0',
+          color: 'var(--em-text)',
+          fontSize: '0.86rem',
+          lineHeight: 1.55,
+        }}
+      >
+        <b>{offer.orgName}</b> {ct('(org de elite) ofereceu')} <b style={{ color: '#5ed88a' }}>{formatMoney(offer.fee)}</b> {ct('pelo seu')} <b>{offer.nick}</b>.
+        {' '}
+        {ct('Vender enche o caixa, mas você fica com 4 e precisa repor no mercado. Segurar mantém a')} <b>{orgName}</b> {ct('forte.')}
+      </div>
+
+      {/* Ações */}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid var(--em-border)', paddingTop: 16 }}>
+        <button
+          type="button"
+          onClick={onRefuse}
+          style={{
+            padding: '12px 20px',
+            background: 'transparent',
+            color: 'var(--em-text)',
+            border: '1px solid var(--em-border)',
+            borderRadius: 4,
+            fontFamily: 'inherit',
+            fontWeight: 700,
+            fontSize: '0.86rem',
+            cursor: 'pointer',
+          }}
+        >
+          ✕ {ct('Recusar e segurar o jogador')}
+        </button>
+        <button
+          type="button"
+          onClick={onAccept}
+          style={{
+            padding: '12px 22px',
+            background: 'var(--em-gold)',
+            color: '#1a1205',
+            border: 'none',
+            borderRadius: 4,
+            fontFamily: 'inherit',
+            fontWeight: 900,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            letterSpacing: '0.3px',
+          }}
+        >
+          ✔ {ct('Vender por')} {formatMoney(offer.fee)}
+        </button>
       </div>
     </div>
   );
