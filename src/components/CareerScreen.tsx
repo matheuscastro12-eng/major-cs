@@ -4619,7 +4619,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         return { ...f.player, id: playerRuntimeId(f.player.id) };
       }
     }
-    const fromSave = save.youth?.[baseId] ?? save.academy?.find((a) => a.id === baseId);
+    const fromSave =
+      save.youth?.[baseId] ??
+      save.academy?.find((a) => a.id === baseId) ??
+      save.academyTeam?.find((a) => a.id === baseId);
     if (fromSave) return fromSave;
     if (save.league) {
       for (const t of save.league.teams) {

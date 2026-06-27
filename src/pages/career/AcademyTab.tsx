@@ -303,8 +303,8 @@ export function AcademyTab({
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: 4,
-                    padding: 10,
+                    gap: 6,
+                    padding: '12px 8px 10px',
                     background: 'var(--em-panel-2)',
                     border: '1px solid var(--em-border)',
                     borderRadius: 6,
@@ -312,24 +312,26 @@ export function AcademyTab({
                     fontFamily: 'inherit',
                     color: 'var(--em-text)',
                     transition: 'border-color .12s, transform .12s',
+                    textAlign: 'center',
                   }}
                   onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--em-gold)'; el.style.transform = 'translateY(-1px)'; }}
                   onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--em-border)'; el.style.transform = 'translateY(0)'; }}
                 >
-                  <div style={{ position: 'relative' }}>
-                    <PlayerAvatar nick={p.nick} size={48} />
-                    <span style={{ position: 'absolute', bottom: -4, right: -4 }}>
-                      <OvrBadge ovr={ovr} />
+                  <PlayerAvatar nick={p.nick} size={48} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <Flag cc={p.country} />
+                    <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-text)' }}>
+                      {p.nick}
                     </span>
+                    <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>
+                      {ovr}
+                    </b>
                   </div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.82rem', fontWeight: 700, marginTop: 4 }}>
-                    <Flag cc={p.country} /> {p.nick}
-                  </div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: 'var(--em-muted)' }}>
                     <span className={`role-pill ${p.role}`}>{p.role}</span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--em-muted)' }}>{p.age}a</span>
+                    <span>{p.age}a</span>
                   </div>
-                  <div title={`${ct('Potencial')} ${p.potential}`} style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
+                  <div title={`${ct('Potencial')} ${p.potential}`} style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 2 }}>
                     <div style={{ width: `${potPct}%`, height: '100%', background: 'var(--em-gold)' }} />
                   </div>
                 </button>
