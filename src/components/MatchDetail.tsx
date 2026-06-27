@@ -12,11 +12,13 @@ interface Props {
   onBack: () => void;
 }
 
+// Replay 2D (broadcast LiveCanvasGame) — feature em beta, escondida do user
+// final por enquanto. Reativa via `?broadcast=1` na URL (opt-in pra dev/preview).
+// Quando o canvas tiver pathfinding/LOS reais, vira a visualização padrão.
+const SHOW_REPLAY_2D = typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).get('broadcast') === '1';
+
 export function MatchDetail({ series, teams, event, onBack }: Props) {
-  // T2.5 piloto: replay 2D do mapa selecionado. Beta — fica atrás de um toggle
-  // pra não substituir o Scoreboard textual atual (que segue como fonte da
-  // verdade dos dados). Quando o canvas tiver pathfinding/LOS reais, vira
-  // a visualização padrão. Ver .claude/plans/faca-um-planejamento-para-piped-quilt.md
   const [broadcastMapIdx, setBroadcastMapIdx] = useState<number | null>(null);
 
   return (
@@ -50,34 +52,38 @@ export function MatchDetail({ series, teams, event, onBack }: Props) {
               </span>
             ))}
           </div>
-          {/* Botões pra abrir o broadcast 2D de cada mapa */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 14 }}>
-            {series.maps.map((m, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setBroadcastMapIdx(i)}
-                title="Replay 2D do mapa (beta)"
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '0.78rem',
-                  fontFamily: 'inherit',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  background: broadcastMapIdx === i ? 'var(--em-gold)' : 'transparent',
-                  color: broadcastMapIdx === i ? '#1a1205' : 'var(--em-text)',
-                  border: '1px solid var(--em-border)',
-                  borderRadius: 3,
-                }}
-              >
-                ▶ Replay 2D · {MAP_LABELS[m.map]}
-              </button>
-            ))}
-          </div>
+          {/* Replay 2D (broadcast LiveCanvasGame) escondido — feature em beta,
+             ainda não está pronta. Pra reativar, defina `?broadcast=1` na URL ou
+             remova a flag SHOW_REPLAY_2D abaixo. */}
+          {SHOW_REPLAY_2D && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 14 }}>
+              {series.maps.map((m, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setBroadcastMapIdx(i)}
+                  title="Replay 2D do mapa (beta)"
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '0.78rem',
+                    fontFamily: 'inherit',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: broadcastMapIdx === i ? 'var(--em-gold)' : 'transparent',
+                    color: broadcastMapIdx === i ? '#1a1205' : 'var(--em-text)',
+                    border: '1px solid var(--em-border)',
+                    borderRadius: 3,
+                  }}
+                >
+                  ▶ Replay 2D · {MAP_LABELS[m.map]}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {broadcastMapIdx != null && series.maps[broadcastMapIdx] && (
+      {SHOW_REPLAY_2D && broadcastMapIdx != null && series.maps[broadcastMapIdx] && (
         <div style={{ paddingTop: 14 }}>
           <LiveCanvasGame
             mapResult={series.maps[broadcastMapIdx]}
