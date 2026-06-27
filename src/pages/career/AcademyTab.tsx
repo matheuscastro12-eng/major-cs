@@ -267,6 +267,9 @@ export function AcademyTab({
         </div>
       </header>
 
+      {/* Banner "Como evoluem" — antes do time academy pra ficar bem visível no topo */}
+      <EvoExplainer trainingLv={trainingLv} />
+
       {/* ===== TIME ACADEMY ===== */}
       <DashCard
         title={ct('Seu time Academy')}
@@ -548,9 +551,6 @@ export function AcademyTab({
           </button>
         }
       >
-        {/* Banner explicativo: como evoluem + multiplicadores */}
-        <EvoExplainer trainingLv={trainingLv} />
-
         {aca.length === 0 ? (
           <p style={{ margin: '8px 0', fontSize: '0.82rem', color: 'var(--em-muted)', fontStyle: 'italic' }}>
             {ct('Academia vazia. Revele um prospecto pra começar a formar a próxima geração.')}
