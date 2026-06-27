@@ -20,6 +20,7 @@ import { FiredModalHost } from './components/FiredModalHost'
 import { InfrastructurePageHost } from './components/InfrastructurePageHost'
 import { LockerRoomPageHost } from './components/LockerRoomPageHost'
 import { LogoBuilderHost } from './components/LogoBuilderHost'
+import { SeasonRecapModalHost } from './components/SeasonRecapModalHost'
 
 installErrorLogging() // captura crash de runtime em producao (fire-and-forget)
 
@@ -47,6 +48,7 @@ createRoot(document.getElementById('root')!).render(
     <InfrastructurePageHost />
     <LockerRoomPageHost />
     <LogoBuilderHost />
+    <SeasonRecapModalHost />
     <ErrorBoundary>
       <BrowserRouter>
         <ToastProvider>

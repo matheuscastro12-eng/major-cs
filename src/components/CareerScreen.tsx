@@ -481,6 +481,7 @@ import { openInfrastructure } from './InfrastructurePageHost';
 import { openLockerRoom } from './LockerRoomPageHost';
 import { openLogoBuilder } from './LogoBuilderHost';
 import { InteractiveTour } from './InteractiveTour';
+import { openSeasonRecap, type SeasonRecapData } from './SeasonRecapModalHost';
 // T11 — modais cinematográficos
 import { ChampionCelebrationModal, type ChampionCelebrationData } from './ChampionCelebrationModal';
 import { PlayerRetirementModal, type PlayerRetirementData } from './PlayerRetirementModal';
@@ -4129,7 +4130,52 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 persist(fin);
                 setSave(fin);
                 setMajorResult(null);
-                setStage('market');
+                // FRENTE 1 — beats narrativos pós-Major: dispara SeasonRecap cinematográfico
+                // antes de cair no mercado. Slides: posição final → MVP → finanças → próximos passos.
+                const topUser = save.squad
+                  .map((s) => findSigning(s))
+                  .filter(Boolean)
+                  .sort((a, b) => playerOvr(b!.player) - playerOvr(a!.player))[0];
+                const upkeepNow = facilityUpkeep(save.facilities);
+                const recap: SeasonRecapData = {
+                  split: save.split,
+                  circuitName: `Major · ${MAJOR_NAME(save.split)}`,
+                  placementLabel: mr.champion
+                    ? '1º · CAMPEÃO DO MAJOR'
+                    : mr.placement === 'runnerup' ? '2º · VICE-CAMPEÃO'
+                    : mr.placement === 'semi' ? 'TOP 4 · semifinal'
+                    : mr.placement === 'quarters' ? 'TOP 8 · quartas'
+                    : mr.placement === 'playoffs' ? 'PLAYOFFS · 1ª rodada'
+                    : 'FASE SUÍÇA',
+                  outcome: mr.champion
+                    ? 'champion'
+                    : mr.placement === 'runnerup' || mr.placement === 'semi' ? 'top4'
+                    : mr.placement === 'quarters' || mr.placement === 'playoffs' ? 'mid'
+                    : 'bottom',
+                  trophy: mr.champion,
+                  mvp: topUser
+                    ? {
+                        nick: topUser.player.nick,
+                        name: topUser.player.name,
+                        country: topUser.player.country,
+                        role: topUser.player.role,
+                        ovr: playerOvr(topUser.player),
+                        highlight: mr.champion
+                          ? 'Levantou o time nos mapas decisivos do Major.'
+                          : 'Carregou o time na campanha mesmo sem o título.',
+                      }
+                    : null,
+                  finance: {
+                    prize: mr.prize + (majBonus || 0),
+                    sponsors: effSponsorIncome(save) + (sponsorMajorBonus || 0),
+                    payroll,
+                    upkeep: upkeepNow,
+                    net: mr.prize + (majBonus || 0) + effSponsorIncome(save) + (sponsorMajorBonus || 0) - payroll - upkeepNow,
+                    cashAfter: fin.budget,
+                  },
+                  nextStepHint: 'Major fechado. Próxima janela: pré-temporada longa — renovar contratos, planejar reforços e treinar mapas.',
+                };
+                openSeasonRecap(recap, () => setStage('market'));
               }}
             >
               Pagar folha ({formatMoney(payroll)}) e ir pro Split {save.split + 1}
@@ -4508,7 +4554,56 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const fin = consummateDeals(next);
                   persist(fin);
                   setSave(fin);
-                  setStage('market'); // se foi demitido, o render mostra a tela de demissão
+                  // FRENTE 1 — recap cinematográfico só no FIM do split (não em etapas
+                  // intermediárias). Dispara SeasonRecap antes do mercado pra dar peso.
+                  if (lastEvent && !save.fired) {
+                    const topUser = save.squad
+                      .map((s) => findSigning(s))
+                      .filter(Boolean)
+                      .sort((a, b) => playerOvr(b!.player) - playerOvr(a!.player))[0];
+                    const upkeepNow = facilityUpkeep(save.facilities);
+                    const sponsorsNow = effSponsorIncome(save) + (sponsorCircuitBonus || 0);
+                    const totalIn = prize + sponsorsNow + (objBonus || 0);
+                    const recap: SeasonRecapData = {
+                      split: save.split,
+                      circuitName: save.circuit?.name ?? 'Circuito',
+                      placementLabel: isChampion
+                        ? `1º · CAMPEÃO`
+                        : finalPosForSponsors <= 4
+                        ? `${finalPosForSponsors}º · TOP 4`
+                        : finalPosForSponsors <= 8
+                        ? `${finalPosForSponsors}º · TOP 8`
+                        : `${finalPosForSponsors}º`,
+                      outcome: isChampion ? 'champion' : finalPosForSponsors <= 4 ? 'top4' : finalPosForSponsors <= 8 ? 'mid' : 'bottom',
+                      trophy: isChampion,
+                      mvp: topUser
+                        ? {
+                            nick: topUser.player.nick,
+                            name: topUser.player.name,
+                            country: topUser.player.country,
+                            role: topUser.player.role,
+                            ovr: playerOvr(topUser.player),
+                            highlight: isChampion
+                              ? 'Carregou o time pro troféu do split.'
+                              : finalPosForSponsors <= 4
+                              ? 'Foi o destaque na campanha que terminou no TOP 4.'
+                              : 'Manteve o nível mesmo num split difícil.',
+                          }
+                        : null,
+                      finance: {
+                        prize,
+                        sponsors: sponsorsNow,
+                        payroll,
+                        upkeep: upkeepNow,
+                        net: totalIn - payroll - upkeepNow,
+                        cashAfter: fin.budget,
+                      },
+                      nextStepHint: 'Pagou a folha. Próxima janela: renovar contratos vencidos, contratar reforços e treinar mapas.',
+                    };
+                    openSeasonRecap(recap, () => setStage('market'));
+                  } else {
+                    setStage('market'); // etapa intermediária OU demitido: vai direto
+                  }
                 }}
               >
                 {lastEvent
