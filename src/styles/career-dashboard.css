@@ -5669,3 +5669,19 @@ body:has(main.page-career).has-ad-footer .em-market-sticky-bottom {
     padding-right: 10px !important;
   }
 }
+
+/* ============================================================
+   FoundOrg — 'Fundar org fictícia' (Identidade · Preview).
+   Era 2-col com minmax(280px,1fr)+minmax(260px,320px) inline,
+   total 540px mínimo, estourava no celular.
+   ============================================================ */
+body.career-dash .em-found-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(260px, 320px);
+  gap: 14px;
+}
+@media (max-width: 760px) {
+  body.career-dash .em-found-grid {
+    grid-template-columns: 1fr;
+  }
+}

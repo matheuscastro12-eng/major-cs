@@ -6666,11 +6666,13 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
         </div>
       </DashCard>
 
-      {/* Sticky bottom hud + CTA */}
+      {/* Sticky bottom hud + CTA — `em-market-sticky-bottom` reaproveitada da
+         MarketScreen: respeita o banner G4 (sobe 126/92px quando has-ad-footer)
+         e ganha flex-wrap no mobile. */}
       <div
+        className="em-market-sticky-bottom"
         style={{
           position: 'sticky',
-          bottom: 12,
           padding: '12px 18px',
           background: 'var(--em-panel)',
           border: '1px solid var(--em-border)',
@@ -7634,8 +7636,10 @@ function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNull
         </button>
       </header>
 
-      {/* Grid 2 colunas: identidade | preview */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(260px, 320px)', gap: 14 }}>
+      {/* Grid 2 colunas: identidade | preview. CSS responsivo no .em-found-grid:
+         desktop 2 cols, mobile 1 col (preview embaixo da edição). Antes era inline
+         com minmax(280px,1fr)+minmax(260px,320px) = 540px mínimo, estourava no celular. */}
+      <div className="em-found-grid">
         {/* IDENTIDADE */}
         <DashCard title={ct('Identidade da org')}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
