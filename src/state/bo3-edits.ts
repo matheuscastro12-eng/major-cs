@@ -59,9 +59,8 @@ export function attrsFromOvr(ovr: number, role: Role, role2?: Role | null): Pick
 // applyBo3Edits, isolada pra quando o `findSigning` precisa garantir que o
 // jogador da squad reflete as edições — antes resolvia do CS2_REAL_2026 cru e
 // o user via 79 enquanto o mercado mostrava 84 (bug do saffee).
-export function applyBo3PlayerEdit(p: Player, edits: Bo3Edits['players'] | Bo3Edits | undefined): Player {
-  const map = edits && 'players' in edits ? edits.players : edits;
-  const pe = map?.[p.id];
+export function applyBo3PlayerEdit(p: Player, edits: Bo3Edits | undefined): Player {
+  const pe = edits?.players[p.id];
   if (!pe) return p;
   const role = pe.role ?? p.role;
   const role2 = pe.role2 === null ? undefined : (pe.role2 ?? p.role2);
