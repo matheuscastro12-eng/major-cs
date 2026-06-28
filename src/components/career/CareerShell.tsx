@@ -128,15 +128,19 @@ export function CareerShell({
     // .open): se clicou DENTRO de qualquer nav-item, não fecha (o próprio
     // handler do botão decide trocar de item ou alternar dropdown). Só fecha
     // se clicou de fato FORA do nav.
-    const onPointer = (e: MouseEvent) => {
+    // BUG REPORTADO PELO BRUNO: 'interface bugada, não consigo arrastar pro
+    // lado'. O dropdown ficava preso porque escutávamos só `mousedown` — em
+    // touch puro (sem mouse sintetizado) o evento não disparava e o menu nunca
+    // fechava ao toque fora. `pointerdown` unifica mouse, touch e pen.
+    const onPointer = (e: PointerEvent | MouseEvent) => {
       const t = e.target as HTMLElement;
       if (!t.closest('.em-nav-item')) setOpenMenu(null);
     };
     document.addEventListener('keydown', onKey);
-    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('pointerdown', onPointer);
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('pointerdown', onPointer);
     };
   }, [openMenu]);
 
