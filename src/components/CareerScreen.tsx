@@ -2625,7 +2625,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     () => {
       const skip = new Set(save.squad.map((s) => s.playerId));
       return applyAiAging(applyMoves(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves), save.split, skip)
-        .filter((t) => t.players.length >= 5 && t.id !== '__free__');
+        .filter((t) => t.id !== '__free__')
+        // times com <5 jogadores (Legacy/Galorys/RED Canids no dataset atual) somem
+        // do circuito porque a UI/engine assume 5 titulares. Antes a gente filtrava
+        // (= 'legacy sumiu'); agora completa o line com prospects sintéticos do
+        // mesmo país via backfillPlayers — o time fica vivo e mantém o resto do
+        // elenco intacto (ninguém troca de função, atributos preservados).
+        .map((t) => t.players.length >= 5 ? t : ({ ...t, players: [...t.players, ...backfillPlayers(t, 5 - t.players.length)] }));
     },
     [save.moves, bo3Edits, save.split, save.squad],
   );
