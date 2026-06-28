@@ -1873,4 +1873,34 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'CONVITE': { en: 'INVITE', es: 'INVITACIÓN' },
   'Convite: jogar aqui acelera a evolução dos seus jogadores mais jovens.': { en: 'Invite: playing here speeds up the development of your youngest players.', es: 'Invitación: jugar aquí acelera la evolución de tus jugadores más jóvenes.' },
   'Opcional: um tier abaixo (menos VRS e prêmio).': { en: 'Optional: one tier below (less VRS and prize).', es: 'Opcional: un tier por debajo (menos VRS y premio).' },
+  // ----- adicionados no batch de fixes (transferências, ativação, mobile) -----
+  // UpsellCard novos triggers (major-stage / world-1 / return)
+  'Você se classificou pro MAJOR! Esse momento é histórico — garante ele na nuvem.': { en: 'You qualified for the MAJOR! This moment is historic — lock it in on the cloud.', es: '¡Te clasificaste al MAJOR! Este momento es histórico — guárdalo en la nube.' },
+  'TOPO DO MUNDO! Você é o #1 do VRS. Apoiadores eternizam essa marca no ladder vitalício.': { en: 'TOP OF THE WORLD! You\'re #1 in VRS. Supporters immortalize this mark on the lifetime ladder.', es: '¡CIMA DEL MUNDO! Eres el #1 del VRS. Los patrocinadores inmortalizan esta marca en el ladder vitalicio.' },
+  'Que bom te ver de volta! Apoiadores nunca perdem progresso — a conta sincroniza tudo.': { en: 'Great to see you back! Supporters never lose progress — the account syncs everything.', es: '¡Qué bueno verte de vuelta! Los patrocinadores nunca pierden progreso — la cuenta sincroniza todo.' },
+  // Home pill "Vire Fundador" (free user logado)
+  'Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras': { en: 'Support the project · Founder badge + cloud sync + 5 careers', es: 'Apoya el proyecto · insignia de Fundador + sync en nube + 5 carreras' },
+  'Vire Fundador': { en: 'Become a Founder', es: 'Conviértete en Fundador' },
+  '· selo #001–#500, cloud sync e 5 carreiras': { en: '· badge #001–#500, cloud sync and 5 careers', es: '· insignia #001–#500, sync en nube y 5 carreras' },
+  // News do consummateDeals (acordo cai sem caixa)
+  'Acordos cancelados (sem caixa)': { en: 'Deals cancelled (no cash)', es: 'Acuerdos cancelados (sin caja)' },
+  'A diretoria não fechou esses reforços por falta de caixa na janela:': { en: 'The board didn\'t close these signings due to lack of cash in the window:', es: 'La directiva no cerró estos refuerzos por falta de caja en la ventana:' },
+  'Tente de novo no próximo mercado.': { en: 'Try again in the next market.', es: 'Intenta de nuevo en el próximo mercado.' },
+  // MarketScreen ready gate (slot vazio impede fechar elenco)
+  'jogador(es) com vaga vazia — remova e escolha outro': { en: 'player(s) with empty slot — remove and pick another', es: 'jugador(es) con plaza vacía — quítalo y elige otro' },
+  // FiredModal — quote da diretoria + reason + fallback de nome
+  'Investimos confiando que viria uma virada. Não veio.': { en: 'We invested trusting a turnaround would come. It didn\'t.', es: 'Invertimos confiando en que vendría una vuelta. No vino.' },
+  'A torcida pediu mudanças. A gente ouviu.': { en: 'The fans asked for changes. We listened.', es: 'La afición pidió cambios. Los escuchamos.' },
+  'Esse projeto não é mais sustentável com você no comando.': { en: 'This project isn\'t sustainable anymore with you in charge.', es: 'Este proyecto ya no es sostenible contigo al mando.' },
+  'A diretoria agradece o trabalho, mas decidiu mudar de rumo.': { en: 'The board thanks you for your work but decided to change course.', es: 'La directiva agradece tu trabajo, pero decidió cambiar de rumbo.' },
+  'sua organização': { en: 'your organization', es: 'tu organización' },
+  'Confiança da diretoria chegou ao fundo após resultados consecutivos abaixo do esperado.': { en: 'The board\'s confidence hit bottom after consecutive below-expected results.', es: 'La confianza de la directiva tocó fondo tras resultados consecutivos por debajo de lo esperado.' },
+  // SeasonRecap MVP highlights
+  'Levantou o time nos mapas decisivos do Major.': { en: 'Lifted the team in the decisive maps of the Major.', es: 'Llevó al equipo en los mapas decisivos del Major.' },
+  'Carregou o time na campanha mesmo sem o título.': { en: 'Carried the team in the run even without the title.', es: 'Cargó al equipo en la campaña incluso sin el título.' },
+  'Carregou o time pro troféu do split.': { en: 'Carried the team to the split trophy.', es: 'Cargó al equipo al trofeo del split.' },
+  'Foi o destaque na campanha que terminou no TOP 4.': { en: 'Was the standout in the run that ended in the TOP 4.', es: 'Fue el destacado en la campaña que terminó en el TOP 4.' },
+  'Manteve o nível mesmo num split difícil.': { en: 'Kept the level even in a tough split.', es: 'Mantuvo el nivel incluso en un split difícil.' },
+  // SeasonRecap nextStepHint
+  'Pagou a folha. Próxima janela: renovar contratos vencidos, contratar reforços e treinar mapas.': { en: 'Paid payroll. Next window: renew expired contracts, sign reinforcements and train maps.', es: 'Pagaste la nómina. Próxima ventana: renovar contratos vencidos, fichar refuerzos y entrenar mapas.' },
 };

@@ -3792,20 +3792,20 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       firedShownRef.current = true;
       const orgAg = aggregateHistory(save.history);
       const quotes = [
-        'Investimos confiando que viria uma virada. Não veio.',
-        'A torcida pediu mudanças. A gente ouviu.',
-        'Esse projeto não é mais sustentável com você no comando.',
-        'A diretoria agradece o trabalho, mas decidiu mudar de rumo.',
+        ct('Investimos confiando que viria uma virada. Não veio.'),
+        ct('A torcida pediu mudanças. A gente ouviu.'),
+        ct('Esse projeto não é mais sustentável com você no comando.'),
+        ct('A diretoria agradece o trabalho, mas decidiu mudar de rumo.'),
       ];
       const quoteIdx = (save.split * 17 + (save.history.length * 3)) % quotes.length;
       openFiredModal(
         {
-          orgName: save.org?.name ?? 'sua organização',
+          orgName: save.org?.name ?? ct('sua organização'),
           splitsManaged: save.split,
           circuitTitles: orgAg.circuitTitles,
           majorTitles: orgAg.majorTitles,
           sponsorsLost: (save.sponsors ?? []).length,
-          reason: 'Confiança da diretoria chegou ao fundo após resultados consecutivos abaixo do esperado.',
+          reason: ct('Confiança da diretoria chegou ao fundo após resultados consecutivos abaixo do esperado.'),
           quote: quotes[quoteIdx],
         },
         () => {
@@ -4290,8 +4290,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                         role: topUser.player.role,
                         ovr: playerOvr(topUser.player),
                         highlight: mr.champion
-                          ? 'Levantou o time nos mapas decisivos do Major.'
-                          : 'Carregou o time na campanha mesmo sem o título.',
+                          ? ct('Levantou o time nos mapas decisivos do Major.')
+                          : ct('Carregou o time na campanha mesmo sem o título.'),
                       }
                     : null,
                   finance: {
@@ -4713,10 +4713,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                             role: topUser.player.role,
                             ovr: playerOvr(topUser.player),
                             highlight: isChampion
-                              ? 'Carregou o time pro troféu do split.'
+                              ? ct('Carregou o time pro troféu do split.')
                               : finalPosForSponsors <= 4
-                              ? 'Foi o destaque na campanha que terminou no TOP 4.'
-                              : 'Manteve o nível mesmo num split difícil.',
+                              ? ct('Foi o destaque na campanha que terminou no TOP 4.')
+                              : ct('Manteve o nível mesmo num split difícil.'),
                           }
                         : null,
                       finance: {
@@ -4727,7 +4727,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                         net: totalIn - payroll - upkeepNow,
                         cashAfter: fin.budget,
                       },
-                      nextStepHint: 'Pagou a folha. Próxima janela: renovar contratos vencidos, contratar reforços e treinar mapas.',
+                      nextStepHint: ct('Pagou a folha. Próxima janela: renovar contratos vencidos, contratar reforços e treinar mapas.'),
                     };
                     openSeasonRecap(recap, () => setStage('market'));
                   } else {
