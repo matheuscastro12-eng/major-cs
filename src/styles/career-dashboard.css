@@ -1953,19 +1953,27 @@ body:has(main.page-career .career-dash--light) {
      scroll horizontal). Isso CORTA o dropdown que é position:absolute tentando
      vazar abaixo do nav — clicar abria o estado (chevron girava) mas o menu
      não aparecia visualmente. Fix: position:fixed escapa do clipping do nav,
-     posicionado abaixo do header (top:60px). Full-width-ish pra parecer aba
-     modal de sub-navegação (estilo iOS/Android). */
+     posicionado abaixo do header. Full-width-ish pra parecer aba modal de
+     sub-navegação (estilo iOS/Android).
+     BUG REPORTADO PELO BRUNO ('sub menu tudo bugado'): o top:60px caía DENTRO
+     da row da nav. No mobile o em-header-row vira grid com 2 rows ('left right'
+     + 'nav nav' = ~100px total), então top:60 caía no MEIO da row da nav e o
+     dropdown sobrepunha as labels 'Dash...' '...ews'. Empurrei pra top:115px
+     (limpa as 2 rows do header com folga) e centralizei via transform pra ficar
+     mais óbvio que é um sub-menu modal. */
   .em-nav-dropdown {
     position: fixed;
-    top: 60px;
-    left: 8px;
-    right: 8px;
-    transform: none;
+    top: 115px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
     min-width: 0;
+    width: min(320px, calc(100vw - 24px));
     max-width: 320px;
-    margin: 0 auto;
+    margin: 0;
     border-radius: 8px;
     z-index: 9999;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.7);
   }
 
   .em-nav-item.open {
