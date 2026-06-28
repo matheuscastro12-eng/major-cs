@@ -55,7 +55,7 @@ import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
-import { applyBo3Edits, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
+import { applyBo3Edits, applyBo3PlayerEdit, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
 import { isAdminUnlocked } from './AdminGate';
 import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
@@ -2892,6 +2892,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // temporadas; valor e salário acompanham automaticamente). Jogador recém-contratado
     // ainda sem evo registrado HERDA o drift que a IA tinha aplicado nele (senão ele
     // "cai" do OVR mostrado no mercado pro OVR base ao ser contratado).
+    // aplica as edições do admin (bo3Edits) no BASE — sem isso, o mercado mostrava
+    // o jogador editado (saffee 84) mas a squad do user mostrava o cru (saffee 79).
+    // Bug do "vendi saffe 79, mercado mostra 84 — me senti tapeado": signingDrift
+    // e o evo ficam calculados em cima da MESMA base que o `currentEra` enxerga.
+    player = applyBo3PlayerEdit(player, bo3Edits);
     const basePlayer = player;
     const d = save.evo?.[player.id] ?? signingDrift(player, save.split);
     if (!d) return { player, from, basePlayer };

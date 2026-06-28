@@ -55,6 +55,23 @@ export function attrsFromOvr(ovr: number, role: Role, role2?: Role | null): Pick
   };
 }
 
+// aplica a edição (override do admin) em UM jogador. Mesma lógica usada por
+// applyBo3Edits, isolada pra quando o `findSigning` precisa garantir que o
+// jogador da squad reflete as edições — antes resolvia do CS2_REAL_2026 cru e
+// o user via 79 enquanto o mercado mostrava 84 (bug do saffee).
+export function applyBo3PlayerEdit(p: Player, edits: Bo3Edits['players'] | Bo3Edits | undefined): Player {
+  const map = edits && 'players' in edits ? edits.players : edits;
+  const pe = map?.[p.id];
+  if (!pe) return p;
+  const role = pe.role ?? p.role;
+  const role2 = pe.role2 === null ? undefined : (pe.role2 ?? p.role2);
+  let np: Player = { ...p, role, role2, nick: pe.nick ?? p.nick };
+  if (pe.age != null) np.age = pe.age;
+  if (pe.ovr != null) np = { ...np, ...attrsFromOvr(pe.ovr, role, role2) };
+  for (const k of STAT_KEYS) if (pe[k] != null) np[k] = Math.max(40, Math.min(99, pe[k]!));
+  return np;
+}
+
 // aplica os overrides sobre a lista de times reais
 export function applyBo3Edits(teams: TeamSeason[], e: Bo3Edits = loadBo3Edits()): TeamSeason[] {
   return teams.map((t) => {
