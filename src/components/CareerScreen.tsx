@@ -8474,7 +8474,11 @@ function MarketScreen({
       )}
 
       {/* ── 3-COL LAYOUT ────────────────────────────────────────────────────── */}
-      <div className="em-market-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 320px) 1fr minmax(280px, 340px)', gap: 14, alignItems: 'start' }}>
+      {/* grid-template-columns vive no CSS (.em-market-grid) — responsivo: 3 cols
+         no desktop, 2 cols no tablet (mercado + elenco em cima, coach embaixo
+         full-width), 1 col no mobile com mercado em primeiro pra resolver o
+         'não aparece o mercado' reportado. */}
+      <div className="em-market-grid">
 
         {/* ─── ESQUERDA: Seu time + Academia ───────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
@@ -8631,10 +8635,11 @@ function MarketScreen({
               {ct('Nenhum jogador com esses filtros.')}
             </div>
           ) : (
-            <div
-              className="career-market scroll"
-              style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto' }}
-            >
+            // maxHeight só no desktop (col-mid limitado pra não crescer demais).
+            // No mobile vira 1-col e a lista flui no scroll natural da página
+            // — sem isso, calc(100vh - 360px) virava negativo no celular e
+            // 'nenhum jogador aparecia'. Slice(0,60) já bounded a renderização.
+            <div className="career-market scroll em-market-list">
               {visible.slice(0, 60).map((m) => {
                 const dup = signedNicks.has(m.player.nick.toLowerCase());
                 const isFA = m.from.id === '__free__';
@@ -8792,11 +8797,13 @@ function MarketScreen({
         </div>
       </div>
 
-      {/* Sticky bottom: confirmar */}
+      {/* Sticky bottom: confirmar. `bottom` é controlado por CSS (em-market-sticky-bottom)
+         pra reagir ao body.has-ad-footer (sobe 126px no desktop / 92px no mobile,
+         senão o banner G4 engole o botão). flex/wrap pro mobile não quebrar layout. */}
       <div
+        className="em-market-sticky-bottom"
         style={{
           position: 'sticky',
-          bottom: 12,
           marginTop: 4,
           padding: '12px 18px',
           background: 'var(--em-panel)',

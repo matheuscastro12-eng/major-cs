@@ -5598,3 +5598,74 @@ body.career-dash .em-live-card-wrap > div:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
 }
+
+/* ============================================================
+   MarketScreen mobile — 3-col layout que quebrava no celular
+   (jogadores reportaram: "Ta injogavel pelo celular, não aparece
+    os layouts" / "Nao aparece o mercado").
+   ============================================================ */
+
+/* desktop: 3 colunas (Elenco · Mercado · Coach) */
+body.career-dash .em-market-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(280px, 340px);
+  gap: 14px;
+  align-items: start;
+}
+
+/* lista do mercado: maxHeight só no DESKTOP. No mobile vira 1-col e flui
+   no scroll natural — sem isso, calc(100vh - 360px) virava negativo no
+   celular (header come 360px+) e a lista renderizava com 0 de altura. */
+body.career-dash .em-market-list {
+  max-height: calc(100vh - 360px);
+  overflow-y: auto;
+}
+
+/* sticky bottom (CTA Fechar Elenco). bottom dinâmico pra não ser engolido
+   pelo banner G4 (126px no desktop / 92px no mobile). z-index abaixo do
+   banner (z=40) mas acima do conteúdo. */
+body.career-dash .em-market-sticky-bottom { bottom: 12px; }
+body.career-dash.has-ad-footer .em-market-sticky-bottom,
+body:has(main.page-career).has-ad-footer .em-market-sticky-bottom {
+  bottom: calc(12px + 126px);
+}
+
+/* TABLET — 2 colunas (elenco em cima, mercado ao lado, coach embaixo full) */
+@media (max-width: 1180px) {
+  body.career-dash .em-market-grid {
+    grid-template-columns: minmax(260px, 1fr) minmax(0, 1.4fr);
+  }
+  body.career-dash .em-market-grid > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* MOBILE — 1 coluna. Mercado em PRIMEIRO porque era o que sumia. */
+@media (max-width: 860px) {
+  body.career-dash .em-market-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  body.career-dash .em-market-grid > :nth-child(2) {
+    order: -1;
+  }
+  body.career-dash .em-market-list {
+    max-height: none; /* flui no scroll natural; slice(0,60) já bounded */
+  }
+  body.career-dash .em-market-sticky-bottom {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  body.career-dash.has-ad-footer .em-market-sticky-bottom,
+  body:has(main.page-career).has-ad-footer .em-market-sticky-bottom {
+    bottom: calc(12px + 92px);
+  }
+}
+
+/* MUITO PEQUENO — reduz o padding do contêiner pra não desperdiçar espaço */
+@media (max-width: 480px) {
+  body.career-dash .em-market {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
