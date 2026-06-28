@@ -8463,6 +8463,12 @@ function MarketScreen({
   const [squad, setSquad] = useState<Signing[]>(initialSquad.resolved);
   const recoveredSlots = initialSquad.unresolved.length;
   const [nego, setNego] = useState<{ player: Player; from: TeamSeason } | null>(null);
+  // Limite de jogadores visíveis (paginação 'load more'). Antes era 60 fixo
+  // com mensagem 'Refine filtros'. User reportou (Fundador #103) que o resto
+  // ficava inalcançável mesmo filtrando. Agora botão carrega +60 por clique.
+  const [marketLimit, setMarketLimit] = useState(60);
+  // Reset do limite quando filtros mudam: ao aplicar um filtro novo o user
+  // espera começar do zero, não continuar de onde parou na paginação anterior.
   const [coachId, setCoachId] = useState<string | null>(save.coachFromId);
   const [filter, setFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>(''); // filtro por função
@@ -8548,6 +8554,8 @@ function MarketScreen({
   const academyAvail = (save.academy ?? []).filter((a) => !squad.some((s) => s.playerId === a.id));
   const sponsorVrs = userVrsTotal(save, findSigning, coaches);
   const filtersActive = !!(filter || roleFilter || ccFilter);
+  // reset do paginador quando filtros mudam (cada novo filtro = começar do zero)
+  useEffect(() => { setMarketLimit(60); }, [filter, roleFilter, ccFilter]);
   const PLAN_LABEL_FOR_BTN = embedded ? ct('Salvar elenco') : ct('Fechar elenco e escolher o campeonato');
 
   return (
@@ -8837,7 +8845,7 @@ function MarketScreen({
             // — sem isso, calc(100vh - 360px) virava negativo no celular e
             // 'nenhum jogador aparecia'. Slice(0,60) já bounded a renderização.
             <div className="career-market scroll em-market-list">
-              {visible.slice(0, 60).map((m) => {
+              {visible.slice(0, marketLimit).map((m) => {
                 const dup = signedNicks.has(m.player.nick.toLowerCase());
                 const isFA = m.from.id === '__free__';
                 const canPick = squad.length < 5 && !dup && (isFA ? m.price <= budgetLeft : true);
@@ -8883,9 +8891,27 @@ function MarketScreen({
                   </button>
                 );
               })}
-              {visible.length > 60 && (
-                <div style={{ gridColumn: '1 / -1', padding: 10, textAlign: 'center', color: 'var(--em-muted)', fontSize: '0.78rem' }}>
-                  {ct('Mostrando 60 de')} {visible.length}. {ct('Refine os filtros pra ver mais.')}
+              {visible.length > marketLimit && (
+                <div style={{ gridColumn: '1 / -1', padding: 10, textAlign: 'center', color: 'var(--em-muted)', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <span>{ct('Mostrando')} {marketLimit} {ct('de')} {visible.length}</span>
+                  <button
+                    type="button"
+                    onClick={() => setMarketLimit((n) => n + 60)}
+                    style={{
+                      padding: '6px 16px',
+                      background: 'var(--em-gold)',
+                      color: '#1a1205',
+                      border: 'none',
+                      borderRadius: 4,
+                      fontFamily: 'inherit',
+                      fontWeight: 800,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      letterSpacing: '0.3px',
+                    }}
+                  >
+                    ⬇ {ct('Carregar mais')} (+60)
+                  </button>
                 </div>
               )}
             </div>

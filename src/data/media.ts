@@ -1,7 +1,12 @@
 import type { MapId, TeamSeason } from '../types';
 import teamLogos from './team-logos.json';
 
-const commonsFile = (file: string) => `https://liquipedia.net/commons/Special:FilePath/${encodeURIComponent(file)}`;
+// Rota pelo proxy Photon (i0.wp.com): Liquipedia bloqueia hotlink direto +
+// não envia headers CORS permissivos. As imagens carregavam mas o TeamBadge
+// (que usa crossOrigin='anonymous' pra detectar tom da logo via canvas) batia
+// em CORS error no console. Fundador #103 reportou: 'imensos erros por causa
+// do cors, ao tentar ir buscar imagens da liquipedia'.
+const commonsFile = (file: string) => `https://i0.wp.com/liquipedia.net/commons/Special:FilePath/${encodeURIComponent(file)}?w=220&ssl=1`;
 
 // logos resolvidos da Liquipedia (build-time), servidos via proxy Photon que
 // aceita hotlink e redimensiona preservando o aspecto (a Liquipedia bloqueia
