@@ -503,6 +503,31 @@ body:has(main.page-career .career-dash--light) {
 
 .em-main-nav::-webkit-scrollbar { display: none; }
 
+/* Dropdown da nav renderizado via PORTAL (document.body) — escapa do
+   mask-image / overflow:hidden do .em-main-nav que invisibilizava o menu
+   ('só a setinha mexe' quando clicava em Meu Time / Em Jogo / etc).
+   Posição (top/left) é setada inline pelo React via getBoundingClientRect
+   do botão da nav. Aqui só visual (cores, borda, sombra, max-width). */
+.em-nav-dropdown--portal {
+  background: var(--em-panel);
+  border: 1px solid var(--em-border-strong);
+  border-radius: 8px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+  padding: 6px 0;
+  min-width: 180px;
+  max-width: min(280px, calc(100vw - 24px));
+  animation: em-nav-drop-in 0.12s ease-out;
+}
+@keyframes em-nav-drop-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.career-dash--light .em-nav-dropdown--portal {
+  background: var(--em-panel);
+  border-color: var(--em-border-strong);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.15);
+}
+
 .em-main-tab {
   display: inline-flex;
   align-items: center;
@@ -1949,32 +1974,12 @@ body:has(main.page-career .career-dash--light) {
     font-size: 0.76rem;
   }
 
-  /* BUG MOBILE: .em-main-nav tem overflow-y:hidden (pra esconder scrollbar do
-     scroll horizontal). Isso CORTA o dropdown que é position:absolute tentando
-     vazar abaixo do nav — clicar abria o estado (chevron girava) mas o menu
-     não aparecia visualmente. Fix: position:fixed escapa do clipping do nav,
-     posicionado abaixo do header. Full-width-ish pra parecer aba modal de
-     sub-navegação (estilo iOS/Android).
-     BUG REPORTADO PELO BRUNO ('sub menu tudo bugado'): o top:60px caía DENTRO
-     da row da nav. No mobile o em-header-row vira grid com 2 rows ('left right'
-     + 'nav nav' = ~100px total), então top:60 caía no MEIO da row da nav e o
-     dropdown sobrepunha as labels 'Dash...' '...ews'. Empurrei pra top:115px
-     (limpa as 2 rows do header com folga) e centralizei via transform pra ficar
-     mais óbvio que é um sub-menu modal. */
-  .em-nav-dropdown {
-    position: fixed;
-    top: 115px;
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    min-width: 0;
-    width: min(320px, calc(100vw - 24px));
-    max-width: 320px;
-    margin: 0;
-    border-radius: 8px;
-    z-index: 9999;
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.7);
-  }
+  /* Mobile: dropdown da nav agora é renderizado via React Portal pra
+     document.body, com top/left calculados em JS pelo botão da nav
+     (ver .em-nav-dropdown--portal abaixo, FORA do media query). Era
+     necessário porque .em-main-nav tem `mask-image` pro fade do scroll
+     horizontal — mask aplica em TODA a subtree, INCLUSIVE filhos
+     position:fixed, invisibilizando o dropdown. */
 
   .em-nav-item.open {
     z-index: 150;

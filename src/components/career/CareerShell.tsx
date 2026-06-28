@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { LangSwitcher } from '../social';
 import { TeamBadge } from '../ui';
 import { ct } from '../../state/career-i18n';
@@ -92,6 +93,33 @@ export function CareerShell({
   const [theme, , toggleTheme] = useCareerTheme();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // refs dos botões da nav (pra calcular onde renderizar o dropdown via portal).
+  // Antes o dropdown era filho do .em-main-nav, que tem `mask-image` no mobile.
+  // Mask aplica em TODA a subtree — incluindo descendentes `position: fixed`.
+  // Por isso o user via 'só a setinha mexer' quando clicava no Meu Time: o
+  // dropdown renderizava mas as faixas transparentes da mask o invisibilizavam.
+  // Portal pra document.body escapa de overflow:hidden + mask.
+  const navBtnRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!openMenu) { setDropdownRect(null); return; }
+    const btn = navBtnRefs.current.get(openMenu);
+    if (!btn) { setDropdownRect(null); return; }
+    const compute = () => {
+      const b = navBtnRefs.current.get(openMenu);
+      if (!b) return;
+      const r = b.getBoundingClientRect();
+      setDropdownRect({ top: r.bottom + 4, left: r.left + r.width / 2, width: r.width });
+    };
+    compute();
+    // recalcula em resize (rotação, redimensionar janela) e scroll
+    window.addEventListener('resize', compute);
+    window.addEventListener('scroll', compute, true);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('scroll', compute, true);
+    };
+  }, [openMenu]);
 
   const clearCloseTimer = useCallback(() => {
     if (closeTimer.current) {
@@ -149,8 +177,39 @@ export function CareerShell({
     .map((id) => groups.find((g) => g.id === id))
     .filter(Boolean) as DashNavGroup[];
 
+  // Dropdown renderizado VIA PORTAL em document.body — escapa do mask-image
+  // do .em-main-nav (e de qualquer overflow:hidden de ancestral).
+  const openGroup = openMenu ? orderedGroups.find((g) => g.id === openMenu) : null;
+  const dropdownNode = openGroup && dropdownRect && openGroup.tabs.length > 1 ? createPortal(
+    <div
+      className="em-nav-dropdown em-nav-dropdown--portal"
+      role="menu"
+      style={{
+        position: 'fixed',
+        top: dropdownRect.top,
+        left: dropdownRect.left,
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+      }}
+    >
+      {openGroup.tabs.map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="menuitem"
+          className={`em-nav-drop-item${activeTab === id ? ' on' : ''}${tabAlert(id) ? ' alert' : ''}`}
+          onClick={() => pickTab(openGroup.id, id)}
+        >
+          {tabLabel(id)}
+        </button>
+      ))}
+    </div>,
+    document.body,
+  ) : null;
+
   return (
     <div className={careerDashClass(theme)}>
+      {dropdownNode}
       <header className="em-header">
         <div className="em-header-row">
           <div className="em-header-left">
@@ -191,6 +250,7 @@ export function CareerShell({
                 >
                   <button
                     type="button"
+                    ref={(el) => { navBtnRefs.current.set(g.id, el); }}
                     className={`em-main-tab${activeGroupId === g.id ? ' on' : ''}${g.tabs.some(tabAlert) ? ' alert' : ''}`}
                     aria-expanded={hasMenu ? isOpen : undefined}
                     aria-haspopup={hasMenu ? 'menu' : undefined}
@@ -212,21 +272,7 @@ export function CareerShell({
                     {g.label}
                     {hasMenu && <IconChevronDown size={11} className="em-main-tab-chevron" />}
                   </button>
-                  {hasMenu && isOpen && (
-                    <div className="em-nav-dropdown" role="menu">
-                      {g.tabs.map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          role="menuitem"
-                          className={`em-nav-drop-item${activeTab === id ? ' on' : ''}${tabAlert(id) ? ' alert' : ''}`}
-                          onClick={() => pickTab(g.id, id)}
-                        >
-                          {tabLabel(id)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {/* Dropdown renderizado via PORTAL no fim do componente — ver dropdownNode */}
                 </div>
               );
             })}
