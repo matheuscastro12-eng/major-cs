@@ -4265,6 +4265,18 @@ body.career-dash .em-veto-analysis {
   padding: 14px 16px;
   position: sticky;
   top: 16px;
+  /* z-index + bg garantem que o sticky fique POR CIMA dos lineups que rolam
+     embaixo (sem isso, em viewports médias a sobreposição mostrava os avatares
+     e barras do TeamLineups atravessando a composição/análise). */
+  z-index: 2;
+  background: var(--em-panel);
+}
+@media (max-width: 960px) {
+  /* mobile colapsa pra 1 coluna; sticky não faz sentido (o card é alto e
+     cobriria o jogo do veto). Volta pro fluxo normal de scroll. */
+  body.career-dash .em-veto-analysis {
+    position: static;
+  }
 }
 body.career-dash .em-veto-section-head {
   display: inline-flex;

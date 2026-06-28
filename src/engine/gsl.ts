@@ -28,7 +28,21 @@ function seedGroups(teams: TTeam[], nGroups: number): TTeam[][] {
     const gi = cycle % 2 === 0 ? pos : nGroups - 1 - pos; // serpentina entre os grupos
     groups[gi].push(t);
   });
-  return groups.map((g) => g.slice(0, 4));
+  // Mantém o 'user' SEMPRE no grupo (4 primeiros). Sem isso, circuitos com
+  // menos de 4*N times (T1-alt, T3 regionais) descartam quem ficou no 5º+ do
+  // serpentina — se o user for o mais fraco, ele some, `userLeagueMatch` vira
+  // undefined e a UI mostra 'Rodada concluída' antes de qualquer partida.
+  // Bug do 'escolhi tier-1 e n da pra iniciar'.
+  return groups.map((g) => {
+    if (g.length <= 4) return g;
+    const userIdx = g.findIndex((t) => t.id === 'user');
+    if (userIdx >= 4) {
+      const swapped = [...g];
+      [swapped[3], swapped[userIdx]] = [swapped[userIdx], swapped[3]];
+      return swapped.slice(0, 4);
+    }
+    return g.slice(0, 4);
+  });
 }
 
 const mWinner = (m: LeagueMatch): string => (m.result!.winner === 0 ? m.a : m.b);
