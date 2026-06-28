@@ -3192,6 +3192,61 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setPromoting(null);
   };
 
+  // promove um prospecto da academia (revelado por 250k) pro TIME ACADEMY
+  // (5 jovens que disputam a Liga Academy). Se o time tem vaga (<5), entra
+  // direto. Se cheio, exige replaceAcaId pra trocar com um titular. O prospecto
+  // sai do save.academy. (Pedido do user pra controlar o time academy.)
+  const promoteToAcaTeam = (prospectId: string, replaceAcaId?: string) => {
+    const a = (save.academy ?? []).find((x) => x.id === prospectId);
+    if (!a) return;
+    const acaTeam = save.academyTeam ?? [];
+    let newTeam: AcademyEntry[];
+    if (replaceAcaId) {
+      if (!acaTeam.some((x) => x.id === replaceAcaId)) return;
+      newTeam = acaTeam.map((x) => (x.id === replaceAcaId ? a : x));
+    } else if (acaTeam.length < 5) {
+      newTeam = [...acaTeam, a];
+    } else {
+      return; // time cheio, UI deve forçar replaceAcaId
+    }
+    const academy = (save.academy ?? []).filter((x) => x.id !== prospectId);
+    const academyFocus = save.academyFocus === prospectId ? null : save.academyFocus;
+    const next = { ...save, academy, academyTeam: newTeam, academyFocus };
+    persist(next);
+    setSave(next);
+  };
+
+  // dispensa um jogador do time academy (sai do squad de 5 que disputa a Liga
+  // Academy; o slot fica vazio até o user encaixar outro prospect).
+  const releaseAcaTeamPlayer = (acaId: string) => {
+    const acaTeam = (save.academyTeam ?? []).filter((x) => x.id !== acaId);
+    const next = { ...save, academyTeam: acaTeam };
+    persist(next);
+    setSave(next);
+  };
+
+  // promove um jogador do time academy direto pro elenco principal (mesma
+  // lógica do promoteProspect, mas lê do academyTeam em vez do academy).
+  const promoteAcaTeamToSquad = (acaId: string, replaceOid?: string) => {
+    const a = (save.academyTeam ?? []).find((x) => x.id === acaId);
+    if (!a) return;
+    if (save.squad.length >= 5 && !replaceOid) return; // UI decide
+    const player: Player = {
+      id: a.id, nick: a.nick, name: a.name, country: a.country, role: a.role,
+      aim: a.aim, consistency: a.consistency, clutch: a.clutch, awp: a.awp, igl: a.igl,
+    };
+    const youth = { ...(save.youth ?? {}), [a.id]: player };
+    const youthAge = { ...(save.youthAge ?? {}), [a.id]: a.age - Math.floor((save.split - 1) / 3) };
+    const acaTeam = (save.academyTeam ?? []).filter((x) => x.id !== acaId);
+    let squad = save.squad;
+    if (squad.length >= 5 && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
+    squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
+    const contracts = { ...(save.contracts ?? {}), [a.id]: save.split + CONTRACT_TERM - 1 };
+    const next = { ...save, academyTeam: acaTeam, youth, youthAge, squad, contracts };
+    persist(next);
+    setSave(next);
+  };
+
   // contabiliza as stats do split na carreira UMA vez só. Idempotente: se o
   // split já foi contado (careerStatsThru >= split), não conta de novo — protege
   // contra F5 na tela de fim de temporada / resultado do Major (evita dobrar).
@@ -5503,6 +5558,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           promoting={promoting}
           setPromoting={setPromoting}
           promoteProspect={promoteProspect}
+          promoteToAcaTeam={promoteToAcaTeam}
+          releaseAcaTeamPlayer={releaseAcaTeamPlayer}
+          promoteAcaTeamToSquad={promoteAcaTeamToSquad}
           findSigning={findSigning}
           askConfirm={askConfirm}
           openPlayerProfile={openPlayerProfile}

@@ -93,6 +93,12 @@ interface Props {
   promoting: string | null;
   setPromoting: (id: string | null) => void;
   promoteProspect: (prospectId: string, replaceOid?: string) => void;
+  /** Promove um prospect da academia (250k) pro TIME ACADEMY (5 jovens que jogam Liga Academy). */
+  promoteToAcaTeam: (prospectId: string, replaceAcaId?: string) => void;
+  /** Dispensa um jogador do time academy (libera o slot). */
+  releaseAcaTeamPlayer: (acaId: string) => void;
+  /** Promove um jogador do time academy direto pro elenco principal. */
+  promoteAcaTeamToSquad: (acaId: string, replaceOid?: string) => void;
   findSigning: (s: Signing) => ResolvedSigning | null;
   askConfirm: AskConfirmFn;
   /** Abre o modal de perfil do player (mesmo handler do SquadTab). */
@@ -168,6 +174,9 @@ export function AcademyTab({
   promoting,
   setPromoting,
   promoteProspect,
+  promoteToAcaTeam,
+  releaseAcaTeamPlayer,
+  promoteAcaTeamToSquad,
   findSigning,
   askConfirm,
   openPlayerProfile,
@@ -178,6 +187,13 @@ export function AcademyTab({
   // Nível atual da facility de treino (0-3) — influencia evolução esperada.
   const trainingLv = Math.max(0, Math.min(3, Math.floor(save.facilities?.training ?? 0)));
   const acaTeam = save.academyTeam ?? [];
+  // Estado pro gerenciamento dos jogadores do time academy (subir/trocar/dispensar).
+  // acaTeamManageId = id do jogador sendo gerenciado; acaTeamManageMode = qual ação.
+  const [acaTeamManageId, setAcaTeamManageId] = useState<string | null>(null);
+  const [acaTeamManageMode, setAcaTeamManageMode] = useState<'promote' | 'sub'>('promote');
+  // Estado pro botão 'Pro Academy' nos cards de prospect (só quando o time tá cheio).
+  const [acaPromoting, setAcaPromoting] = useState<string | null>(null);
+  const acaTeamFull = acaTeam.length >= 5;
   const teamOvr = acaTeam.length
     ? Math.round(acaTeam.reduce((a, p) => a + playerOvr(p), 0) / acaTeam.length)
     : 0;
@@ -534,52 +550,137 @@ export function AcademyTab({
             </button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
             {acaTeam.map((p) => {
               const ovr = playerOvr(p);
               const potPct = Math.max(6, Math.min(100, ((p.potential - 60) / 33) * 100));
+              const isManaging = acaTeamManageId === p.id;
               return (
-                <button
+                <div
                   key={p.id}
-                  type="button"
-                  onClick={() => openPlayerProfile(p as unknown as Player)}
-                  title={ct('Ver perfil do jogador')}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
+                    alignItems: 'stretch',
                     gap: 6,
-                    padding: '12px 8px 10px',
+                    padding: '12px 8px 8px',
                     background: 'var(--em-panel-2)',
-                    border: '1px solid var(--em-border)',
+                    border: `1px solid ${isManaging ? 'var(--em-gold)' : 'var(--em-border)'}`,
                     borderRadius: 6,
-                    cursor: 'pointer',
                     fontFamily: 'inherit',
                     color: 'var(--em-text)',
-                    transition: 'border-color .12s, transform .12s',
                     textAlign: 'center',
                   }}
-                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--em-gold)'; el.style.transform = 'translateY(-1px)'; }}
-                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--em-border)'; el.style.transform = 'translateY(0)'; }}
                 >
-                  <PlayerAvatar nick={p.nick} size={48} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                    <Flag cc={p.country} />
-                    <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-text)' }}>
-                      {p.nick}
-                    </span>
-                    <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>
-                      {ovr}
-                    </b>
+                  <button
+                    type="button"
+                    onClick={() => openPlayerProfile(p as unknown as Player)}
+                    title={ct('Ver perfil do jogador')}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      color: 'var(--em-text)',
+                    }}
+                  >
+                    <PlayerAvatar nick={p.nick} size={48} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <Flag cc={p.country} />
+                      <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-text)' }}>{p.nick}</span>
+                      <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>{ovr}</b>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: 'var(--em-muted)' }}>
+                      <span className={`role-pill ${p.role}`}>{p.role}</span>
+                      <span>{p.age}a</span>
+                    </div>
+                    <div title={`${ct('Potencial')} ${p.potential}`} style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 2 }}>
+                      <div style={{ width: `${potPct}%`, height: '100%', background: 'var(--em-gold)' }} />
+                    </div>
+                  </button>
+                  {/* Ações: Subir / Trocar / Dispensar (gerenciar time academy) */}
+                  <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (squadFull) setAcaTeamManageId(isManaging && acaTeamManageMode === 'promote' ? null : p.id);
+                        else { promoteAcaTeamToSquad(p.id); setAcaTeamManageId(null); }
+                        setAcaTeamManageMode('promote');
+                      }}
+                      title={ct('Subir pro elenco principal')}
+                      style={{ flex: 1, padding: '4px 6px', background: 'var(--em-gold)', color: '#1a1205', border: 'none', borderRadius: 3, fontFamily: 'inherit', fontWeight: 800, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      ⬆ {ct('Subir')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAcaTeamManageId(isManaging && acaTeamManageMode === 'sub' ? null : p.id); setAcaTeamManageMode('sub'); }}
+                      title={ct('Trocar por um prospect da academia')}
+                      disabled={aca.length === 0}
+                      style={{ flex: 1, padding: '4px 6px', background: 'transparent', color: aca.length === 0 ? 'var(--em-muted)' : 'var(--em-text)', border: '1px solid var(--em-border)', borderRadius: 3, fontFamily: 'inherit', fontWeight: 700, fontSize: '0.68rem', cursor: aca.length === 0 ? 'not-allowed' : 'pointer' }}
+                    >
+                      ⇄ {ct('Trocar')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => askConfirm({
+                        title: ct('Dispensar do time academy'),
+                        message: `${ct('Dispensar')} ${p.nick} ${ct('do time academy? O slot fica vazio até você encaixar outro prospect.')}`,
+                        confirmLabel: ct('Dispensar'),
+                        danger: true,
+                        onConfirm: () => releaseAcaTeamPlayer(p.id),
+                      })}
+                      title={ct('Dispensar do time academy')}
+                      style={{ padding: '4px 6px', background: 'transparent', color: 'var(--em-muted)', border: '1px solid var(--em-border)', borderRadius: 3, fontFamily: 'inherit', fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      <CareerIcon name="trash" size={11} />
+                    </button>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: 'var(--em-muted)' }}>
-                    <span className={`role-pill ${p.role}`}>{p.role}</span>
-                    <span>{p.age}a</span>
-                  </div>
-                  <div title={`${ct('Potencial')} ${p.potential}`} style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 2 }}>
-                    <div style={{ width: `${potPct}%`, height: '100%', background: 'var(--em-gold)' }} />
-                  </div>
-                </button>
+                  {/* Painel inline: substituir por prospect (mode='sub') */}
+                  {isManaging && acaTeamManageMode === 'sub' && aca.length > 0 && (
+                    <div style={{ marginTop: 4, padding: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
+                      <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', marginBottom: 4 }}>{ct('Entra no lugar:')}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                        {aca.map((pr) => (
+                          <button
+                            key={pr.id}
+                            type="button"
+                            onClick={() => { promoteToAcaTeam(pr.id, p.id); setAcaTeamManageId(null); }}
+                            style={{ padding: '3px 6px', background: 'var(--em-panel-2)', color: 'var(--em-text)', border: '1px solid var(--em-border)', borderRadius: 3, fontFamily: 'inherit', fontSize: '0.68rem', cursor: 'pointer' }}
+                          >
+                            {pr.nick} <span className={`role-pill ${pr.role}`} style={{ marginLeft: 2 }}>{pr.role}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Painel inline: escolher quem sai do elenco principal pra subir (mode='promote' + squad cheio) */}
+                  {isManaging && acaTeamManageMode === 'promote' && squadFull && (
+                    <div style={{ marginTop: 4, padding: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
+                      <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', marginBottom: 4 }}>{ct('Elenco cheio — sai do time:')}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                        {save.squad.map((sg) => {
+                          const f = findSigning(sg);
+                          return (
+                            <button
+                              key={sg.playerId}
+                              type="button"
+                              onClick={() => { promoteAcaTeamToSquad(p.id, sg.playerId); setAcaTeamManageId(null); }}
+                              style={{ padding: '3px 6px', background: 'var(--em-panel-2)', color: 'var(--em-text)', border: '1px solid var(--em-border)', borderRadius: 3, fontFamily: 'inherit', fontSize: '0.68rem', cursor: 'pointer' }}
+                            >
+                              {f?.player.nick ?? sg.playerId}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -1026,6 +1127,32 @@ export function AcademyTab({
                     >
                       ⬆ {ct('Promover')}
                     </button>
+                    {/* Botão extra: 'Pro Academy' = move o prospect pro TIME ACADEMY
+                       (5 jovens que disputam Liga Academy). Só aparece se o user
+                       já criou o time academy. Se tá cheio, abre painel de troca. */}
+                    {acaTeam.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (acaTeamFull) setAcaPromoting(acaPromoting === p.id ? null : p.id);
+                          else { promoteToAcaTeam(p.id); setAcaPromoting(null); }
+                        }}
+                        title={ct('Mover pro time academy (5 jovens da Liga Academy)')}
+                        style={{
+                          padding: '6px 10px',
+                          background: 'transparent',
+                          color: 'var(--em-text)',
+                          border: '1px solid var(--em-border)',
+                          borderRadius: 3,
+                          fontFamily: 'inherit',
+                          fontWeight: 700,
+                          fontSize: '0.74rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        🏫
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => update({ academyFocus: focused ? null : p.id })}
@@ -1120,6 +1247,33 @@ export function AcademyTab({
                             fontSize: '0.72rem',
                             cursor: 'pointer',
                           }}
+                        >
+                          cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Painel: time academy cheio → escolher quem sai pra dar lugar */}
+                  {acaPromoting === p.id && acaTeamFull && (
+                    <div style={{ marginTop: 6, padding: 8, background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--em-muted)', marginBottom: 4 }}>
+                        {ct('Time academy cheio — sai:')}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {acaTeam.map((ap) => (
+                          <button
+                            key={ap.id}
+                            type="button"
+                            onClick={() => { promoteToAcaTeam(p.id, ap.id); setAcaPromoting(null); }}
+                            style={{ padding: '4px 8px', background: 'var(--em-panel-2)', color: 'var(--em-text)', border: '1px solid var(--em-border)', borderRadius: 3, fontFamily: 'inherit', fontSize: '0.72rem', cursor: 'pointer' }}
+                          >
+                            {ap.nick} <span className={`role-pill ${ap.role}`} style={{ marginLeft: 2 }}>{ap.role}</span>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setAcaPromoting(null)}
+                          style={{ padding: '4px 8px', background: 'transparent', color: 'var(--em-muted)', border: '1px solid var(--em-border)', borderRadius: 3, fontFamily: 'inherit', fontSize: '0.72rem', cursor: 'pointer' }}
                         >
                           cancelar
                         </button>
