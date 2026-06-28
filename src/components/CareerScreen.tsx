@@ -1465,22 +1465,6 @@ function evoDelta(pid: string, split: number, age: number, atCeiling: boolean): 
   return r < 55 ? -2 : -1;                              // declínio tardio, mais firme (mas nunca -3)
 }
 
-// envelhecimento da IA: aplica a MESMA evolução por idade do seu elenco (evoDelta),
-// acumulada até o split atual. Jovem da IA sobe rumo ao potencial, veterano cai e o
-// auge oscila — o cenário fica VIVO entre temporadas (o field não congela) e o
-// usuário não passa a IA estática só treinando o próprio time.
-function aiAttrDrift(p: Player, split: number): number {
-  if (split <= 1) return 0;
-  const base = playerOvr(p);
-  const a0 = baseAge(p);
-  const pot = playerPotentialOvr(p, a0);
-  let cur = base;
-  for (let s = 1; s < split; s++) {
-    const age = a0 + Math.floor((s - 1) / 3);
-    cur = Math.max(40, Math.min(99, cur + evoDelta(p.id, s, age, cur >= pot)));
-  }
-  return Math.round(Math.max(-10, Math.min(10, cur - base)));
-}
 // idade em que um jogador da IA se aposenta (determinístico, mesmo eixo de
 // longevidade do evoDelta): a maioria sai por volta de 35-38.
 function aiRetireAge(pid: string): number {
@@ -1504,15 +1488,17 @@ function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, spli
 
 // drift de envelhecimento que reproduz o OVR de MERCADO ao contratar (do BASE até o
 // split atual). Regen usa o relógio próprio (estreia gravada no id) com o MESMO teto
-// do aiSlotPlayer; os demais usam aiAttrDrift. Assim o contratado entra no MESMO OVR
-// que aparecia no mercado (sem "cair" 86 -> 78) e não muda de função entre splits.
+// do aiSlotPlayer; os demais usam o MESMO driftFrom que aiSlotPlayer aplica pra IA
+// (debut=1, sem teto extra). Assim o contratado entra no MESMO OVR que aparecia no
+// mercado — antes aiAttrDrift clampava ±10 e driftFrom ±12, causando "contrata 86
+// chega 84" pra jogadores no extremo da escala.
 function signingDrift(player: Player, split: number): number {
   const r = parseRegenPlayerId(player.id);
   if (r) {
     const orig = CS2_REAL_2026.find((t) => t.id === r.teamId)?.players[r.slot];
     return driftFrom(player.id, playerOvr(player), r.ageAtDebut, r.debut, split, orig ? playerOvr(orig) + 2 : undefined);
   }
-  return aiAttrDrift(player, split);
+  return driftFrom(player.id, playerOvr(player), baseAge(player), 1, split);
 }
 
 // jovem da base que assume a vaga de um titular aposentado. OVR de estreia abaixo
@@ -2799,6 +2785,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // currentEra (já envelhecido) e ainda aplicar drift causava queda dupla de OVR
     // (86 -> 78) e, com a base regenerada, troca de função entre splits.
     let from = currentEra.find((t) => t.id === s.fromId);
+    // currentEra filtra alguns times (__free__, __youth__, times de <5). Quando
+    // for um desses, garante o pseudo-time correto pra `from` não ficar undefined
+    // — senão o player é encontrado mas a função retorna null lá no fim e o
+    // jogador some do elenco (bug do urban0/n1ssim, ambos free agents).
+    if (!from) {
+      if (s.fromId === FREE_AGENTS_FROM.id) from = FREE_AGENTS_FROM;
+      else if (s.fromId === ACADEMY_FROM.id) from = ACADEMY_FROM;
+      else from = CS2_REAL_2026.find((t) => t.id === s.fromId);
+    }
     let player = CS2_REAL_2026.find((t) => t.id === s.fromId)?.players.find((p) => p.id === s.playerId);
     if (!player) {
       for (const t of CS2_REAL_2026) {
@@ -3021,7 +3016,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const prev = s.evo?.[sig.playerId] ?? signingDrift(f.basePlayer, s.split);
       const ovr = playerOvr(f.basePlayer) + prev; // OVR efetivo atual (base + evolução)
       const age = effectiveAge(f.basePlayer, s.split, s.youthAge);
-      const pot = playerPotentialOvr(f.basePlayer, age);
+      // teto é calculado pela idade-BASE (igual aiAttrDrift faz pra IA). Usar a idade
+      // CORRENTE encolhia o teto a cada virada de bloco etário (21→22, 22→23...) e
+      // travava o jogador "no teto" pra sempre — sem nunca crescer mais (bug do
+      // "jogadores não evoluem dps de um certo tempo").
+      const baseAgeForPot = baseAge(f.basePlayer, s.youthAge);
+      const pot = playerPotentialOvr(f.basePlayer, baseAgeForPot);
       const atCeiling = ovr >= pot;
       let d = evoDelta(sig.playerId, s.split, age, atCeiling);
       // foco de treino: o jogador escolhido desenvolve mais rápido. Jovem/auge
@@ -3137,6 +3137,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const evo = { ...(s.evo ?? {}) };
     const arrivals: string[] = [];
     const departures: string[] = [];
+    const failedDeals: string[] = []; // acordos que caíram (sem caixa) — vão pro feed
     // VENDAS: jogador seu sai (proposta aceita na temporada) e entra a grana
     for (const sale of sales) {
       if (!squad.some((x) => x.playerId === sale.playerId)) continue; // já não está
@@ -3147,13 +3148,25 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     }
     // ACORDOS DE COMPRA: tira a troca, traz o alvo e desconta o dinheiro
     for (const d of deals) {
-      if (budget < d.fee) continue; // sem caixa agora: acordo cai
       if (squad.some((x) => x.playerId === d.inPlayerId)) continue; // já está no elenco
+      if (budget < d.fee) {
+        // sem caixa agora: acordo cai, mas o usuário precisa SABER (antes era silencioso
+        // e o jogador "sumia" sem aviso). NÃO mexe no elenco: kye continua, n1ssim não vem.
+        failedDeals.push(d.inNick);
+        continue;
+      }
       for (const out of d.outPlayerIds) {
         squad = squad.filter((x) => x.playerId !== out);
         delete contracts[out]; delete morale[out]; delete peakOvr[out]; delete evo[out];
       }
-      squad.push({ playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee });
+      // anexa snapshot do jogador que chega: se a base regenerar / mudar de ID antes
+      // do próximo render, o findSigning ainda recupera o atleta pelo snapshot
+      // (sem snapshot, o slot vira ct('vaga vazia') e a contratação some).
+      const resolved = findSigning({ playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee });
+      const newSig: Signing = resolved
+        ? signingWithSnapshot({ playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee }, resolved)
+        : { playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee };
+      squad.push(newSig);
       contracts[d.inPlayerId] = s.split + CONTRACT_TERM - 1;
       budget -= d.fee;
       arrivals.push(d.inNick);
@@ -3162,6 +3175,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const news: NewsItem[] = [];
     if (arrivals.length) news.push({ id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board', title: ct('Reforços confirmados na janela'), body: `${ct('Acordos fechados na temporada passada entraram em vigor:')} ${arrivals.join(', ')}.` });
     if (departures.length) news.push({ id: `${s.split}:sales`, split: s.split, icon: '💸', tone: 'info', cat: 'transfer', title: ct('Vendas confirmadas na janela'), body: `${ct('Saíram por proposta aceita:')} ${departures.join(', ')}.` });
+    if (failedDeals.length) news.push({ id: `${s.split}:dealsFail`, split: s.split, icon: '⚠️', tone: 'bad', cat: 'board', title: ct('Acordos cancelados (sem caixa)'), body: `${ct('A diretoria não fechou esses reforços por falta de caixa na janela:')} ${failedDeals.join(', ')}. ${ct('Tente de novo no próximo mercado.')}` });
     if (news.length) next = { ...next, ...pushNews(next, news) };
     return next;
   };
@@ -8272,7 +8286,10 @@ function MarketScreen({
       return true;
     });
   const budgetLeft = save.budget - spentPlayers - spentCoach + soldPlayers;
-  const ready = squad.length === 5 && !!coachId && budgetLeft >= 0;
+  // todos os signings precisam RESOLVER (findSigning != null) — senão o slot fica
+  // vazio na hora de buildTeam e a carreira não avança apesar do contador mostrar 5/5.
+  const unresolvedCount = squad.filter((s) => !findSigning(s)).length;
+  const ready = squad.length === 5 && unresolvedCount === 0 && !!coachId && budgetLeft >= 0;
 
   // países presentes no mercado (com contagem) pro filtro de nacionalidade
   const countryCounts = market.reduce<Record<string, number>>((acc, m) => {
@@ -8757,6 +8774,7 @@ function MarketScreen({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.82rem', color: 'var(--em-muted)' }}>
           {squad.length < 5 && <span>⚠ {ct('Faltam')} <b style={{ color: 'var(--em-text)' }}>{5 - squad.length}</b> {ct('jogador(es)')}</span>}
+          {squad.length === 5 && unresolvedCount > 0 && <span style={{ color: '#e58a8a' }}>⚠ {unresolvedCount} {ct('jogador(es) com vaga vazia — remova e escolha outro')}</span>}
           {squad.length === 5 && !coachId && <span>⚠ {ct('Escolha um coach')}</span>}
           {budgetLeft < 0 && <span style={{ color: '#e58a8a' }}>⚠ {ct('Orçamento estourado')}</span>}
           {ready && <span style={{ color: '#5ed88a', fontWeight: 700 }}>✓ {ct('Pronto pra fechar')}</span>}
