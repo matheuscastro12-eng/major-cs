@@ -3704,6 +3704,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     () => vrsByRegionMemo.flatMap((g) => g.teams).sort((a, b) => b.vrs - a.vrs),
     [vrsByRegionMemo],
   );
+  // ativação: PRIMEIRA vez chegando ao #1 do VRS mundial (uma vez por carreira).
+  // Tem que ficar ANTES dos early returns do componente (`if (quickSim) return`,
+  // `if (!league) return null` etc.) — senão o número de hooks chamados varia
+  // entre renders e dispara o erro React #310 ("rendered more hooks than during
+  // the previous render"). Bug do "Ta dando bug em alguns clicks ao selecionar
+  // campeonato": passar pra um estado SEM league pulava o hook.
+  const myVrsRankEarly = useMemo(
+    () => vrsAllMemo.findIndex((t) => t.isUser) + 1,
+    [vrsAllMemo],
+  );
+  useEffect(() => {
+    if (myVrsRankEarly !== 1 || upsellWorld1Ref.current) return;
+    upsellWorld1Ref.current = true;
+    window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'world-1' } }));
+  }, [myVrsRankEarly]);
 
   // overlay de simulação rápida (mini partida acelerada), sobrepõe qualquer tela
   if (quickSim) {
@@ -4874,12 +4889,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const vrsByRegion = vrsByRegionMemo;
   const vrsAll = vrsAllMemo;
   const myVrsRank = vrsAll.findIndex((t) => t.isUser) + 1; // posição global (0 = sem time)
-  // ativação: PRIMEIRA vez chegando ao #1 do VRS mundial (uma vez por carreira).
-  useEffect(() => {
-    if (myVrsRank !== 1 || upsellWorld1Ref.current) return;
-    upsellWorld1Ref.current = true;
-    window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'world-1' } }));
-  }, [myVrsRank]);
 
   const top20 = top20Memo;
   const careerTop20 = careerTop20Memo;
