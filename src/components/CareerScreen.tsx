@@ -8312,6 +8312,11 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>('');
   const [countryFilter, setCountryFilter] = useState('');
+  // Paginação 'load more' (mesma lógica do MarketScreen). Antes era cap fixo de
+  // 60 e o resto sumia. Fundador #103 reportou que a aba transferências também
+  // não mostrava tudo.
+  const [negoLimit, setNegoLimit] = useState(60);
+  useEffect(() => { setNegoLimit(60); }, [q, roleFilter, countryFilter]);
   const marketRoles = ROLE_OPTS.filter((role) => market.some((item) => item.player.role === role));
   const marketCountries = [...new Set(market.map((m) => m.player.country).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
@@ -8330,7 +8335,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
       country: countryFilter,
     }))
     .sort((a, b) => playerOvr(b.player) - playerOvr(a.player));
-  const list = filteredMarket.slice(0, 60);
+  const list = filteredMarket.slice(0, negoLimit);
   const filtersActive = !!(q.trim() || roleFilter || countryFilter);
   return (
     <DashCard title={ct('Mercado')}>
@@ -8413,6 +8418,18 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               <div className="meta small"><span className="muted">{ct('pedida')}</span> {formatMoney(askingPrice(m.player, m.from.teamwork))}</div>
             </button>
           ))}
+          {filteredMarket.length > negoLimit && (
+            <div style={{ gridColumn: '1 / -1', padding: 10, textAlign: 'center', color: 'var(--em-muted)', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <span>{ct('Mostrando')} {negoLimit} {ct('de')} {filteredMarket.length}</span>
+              <button
+                type="button"
+                onClick={() => setNegoLimit((n) => n + 60)}
+                style={{ padding: '6px 16px', background: 'var(--em-gold)', color: '#1a1205', border: 'none', borderRadius: 4, fontFamily: 'inherit', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', letterSpacing: '0.3px' }}
+              >
+                ⬇ {ct('Carregar mais')} (+60)
+              </button>
+            </div>
+          )}
         </div>
         <div className="muted small section-label">{ct('Rumores da janela')}</div>
         <TransferFeed items={feed} compact />

@@ -21,7 +21,19 @@ import { recordGameEnd, type AchDef } from './state/achievements';
 const CHUNK_RELOAD_KEY = 'rtm-chunk-reload';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function lazyWithReload<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
-  return lazy<T>(() => factory().then((m) => { try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch { /* ok */ } return m; }).catch((err): Promise<{ default: T }> => {
+  return lazy<T>(() => factory().then((m) => {
+    // chunk LOADED mas sem o export esperado (cache antigo, deploy mid-fetch,
+    // build inconsistente). Sem essa checagem, React.lazy recebia
+    // { default: undefined } e crashava com 'Cannot read properties of
+    // undefined (reading "default")' direto no ErrorBoundary, sem o catch
+    // do reload ser acionado (porque o then resolveu OK). Bug reportado:
+    // 'comecei o modo carreira de boa, ai eu sai e fica nesse loop'.
+    if (!m || (m as { default?: unknown }).default == null) {
+      throw new Error('chunk_missing_default_export');
+    }
+    try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch { /* ok */ }
+    return m;
+  }).catch((err): Promise<{ default: T }> => {
     let already = false;
     try { already = sessionStorage.getItem(CHUNK_RELOAD_KEY) === '1'; } catch { /* ok */ }
     if (!already) {

@@ -8,6 +8,11 @@ import { getLang } from '../state/i18n';
 import { confirm } from './ConfirmDialog';
 
 const SAVE_KEYS = ['rtm-career-v1', 'rtm-career-v1.bak'];
+// guard do lazyWithReload (App.tsx): se `1`, o lazyWithReload já tentou
+// recarregar uma vez e parou de retentar pra não virar loop infinito. Quando
+// o user clica Recarregar manualmente, queremos LIMPAR esse guard pra dar
+// nova chance ao chunk loader (ex.: cache antigo limpa após reload).
+const CHUNK_RELOAD_KEY = 'rtm-chunk-reload';
 
 const STR = {
   title: { pt: 'Ops, algo quebrou aqui', en: 'Oops, something broke', es: 'Ups, algo se rompió' },
@@ -69,7 +74,14 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
           <p style={{ color: '#97a3b2', marginBottom: 16 }}>{tr('body')}</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
-              onClick={() => location.reload()}
+              onClick={() => {
+                // limpa o guard do lazyWithReload pra dar nova chance ao
+                // chunk loader (mesma sessão). Sem isso o user ficava
+                // travado: reload → guard '1' → catch joga ErrorBoundary
+                // imediatamente → mesmo loop.
+                try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch { /* ok */ }
+                location.reload();
+              }}
               style={{ background: 'linear-gradient(150deg,#e8c170,#b08a3e)', color: '#1a1408', border: 'none', borderRadius: 10, padding: '10px 22px', fontWeight: 800, cursor: 'pointer' }}
             >
               {tr('reload')}
