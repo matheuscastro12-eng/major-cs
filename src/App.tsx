@@ -1129,8 +1129,12 @@ export default function App() {
       </main>
 
       {/* patrocinador sempre visível no rodapé (G4 Skins). Some sozinho se o asset
-          ainda não estiver no ar. Não aparece no modo de preview de banners. */}
-      {!bannerPreview && screen !== 'career' && <AdBanner />}
+          ainda não estiver no ar. Não aparece no modo de preview de banners.
+          Antes era escondido na carreira (screen !== 'career'), mas é onde o user
+          passa 95% do tempo — sem isso o banner 'sumia' do dia-a-dia. O
+          body.has-ad-footer já reserva o padding-bottom necessário pro UI da
+          carreira não ser engolido pelo banner fixed. */}
+      {!bannerPreview && <AdBanner />}
     </>
   );
 }
