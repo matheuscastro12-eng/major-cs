@@ -2562,7 +2562,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // PLANO DE JOGO da partida: buff real escolhido pelo usuário antes de jogar
     return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined'), normalizeFacilities(save.facilities).analyst);
   };
-  const prepareTeams = (rawA: TTeam, rawB: TTeam): [TTeam, TTeam] => {
+  const prepareTeams = (rawA: TTeam | undefined, rawB: TTeam | undefined): [TTeam, TTeam] | null => {
+    // `leagueTeam(l, id)` mente sobre o tipo (non-null assertion) e devolve
+    // undefined silenciosamente se o id não estiver em `l.teams`. Acontece com
+    // saves antigos (criados antes do fix do seedGroups) onde o match referencia
+    // um time que sumiu do grupo. Bug 'isUser' undefined no Continue.
+    if (!rawA || !rawB) return null;
     let a = applyFatigueForm(syncUser(rawA), save.fatigue, save.restingPlayers);
     let b = applyFatigueForm(syncUser(rawB), save.fatigue, save.restingPlayers);
     if (a.isUser) a = applyRivalryFocus(a, rivalryScore(save.rivalries, b.id));
@@ -3349,7 +3354,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const m = poUserMatch(p);
     if (!m) return;
     rngRef.current = makeRng(randomSeed());
-    const [a, b] = prepareTeams(leagueTeam(save.league, m.a), leagueTeam(save.league, m.b));
+    const pair = prepareTeams(leagueTeam(save.league, m.a), leagueTeam(save.league, m.b));
+    if (!pair) return; // save corrompido (team id no match não está em league.teams)
+    const [a, b] = pair;
     const isFinal = p.final === m;
     setMatchCtx({
       teams: [a, b],
@@ -3389,7 +3396,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const live = poUserMatch(p);
     if (!live) { applyPlayoff(structuredClone(p)); return; }
     rngRef.current = makeRng(randomSeed());
-    const [a, b] = prepareTeams(leagueTeam(save.league, live.a), leagueTeam(save.league, live.b));
+    const pair = prepareTeams(leagueTeam(save.league, live.a), leagueTeam(save.league, live.b));
+    if (!pair) { applyPlayoff(structuredClone(p)); return; }
+    const [a, b] = pair;
     const isFinal = p.final === live;
     const bo = isFinal ? PO_FINAL_BO : PO_SF_BO;
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
@@ -3414,7 +3423,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const m = userLeagueMatch(l);
     if (!m) return;
     rngRef.current = makeRng(randomSeed());
-    const [a, b] = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
+    const pair = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
+    if (!pair) return;
+    const [a, b] = pair;
     const bo = m.bo ?? LEAGUE_BO; // GSL: abertura Bo1, resto Bo3
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
     setQuickSim({
@@ -3437,10 +3448,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       while (!gslDone(l) && guard++ < 12) {
         const m = userLeagueMatch(l);
         if (m && !m.result) {
-          const [a, b] = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
-          const bo = m.bo ?? 3;
-          m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
-          simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct(GSL_ROUND_LABELS[l.current])}` });
+          const pair = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
+          if (pair) {
+            const [a, b] = pair;
+            const bo = m.bo ?? 3;
+            m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
+            simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct(GSL_ROUND_LABELS[l.current])}` });
+          }
         }
         resolveGSLRound(l, rngRef.current);
       }
@@ -3451,9 +3465,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     while (!leagueDone(l) && guard++ < 80) {
       const m = userLeagueMatch(l);
       if (m && !m.result) {
-        const [a, b] = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
-        m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
-        simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct('Rodada')} ${l.current + 1}` });
+        const pair = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
+        if (pair) {
+          const [a, b] = pair;
+          m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, LEAGUE_BO), LEAGUE_BO);
+          simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct('Rodada')} ${l.current + 1}` });
+        }
       }
       resolveLeagueRound(l, rngRef.current, LEAGUE_BO);
     }
@@ -3568,7 +3585,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!majorT) return;
     const up = tournamentUserPairing(majorT);
     if (!up) return;
-    const [a, b] = prepareTeams(getTeam(majorT, up.a), getTeam(majorT, up.b));
+    const pair = prepareTeams(getTeam(majorT, up.a), getTeam(majorT, up.b));
+    if (!pair) return;
+    const [a, b] = pair;
     setMatchCtx({
       teams: [a, b],
       userIdx: up.a === 'user' ? 0 : 1,
@@ -3605,7 +3624,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       advanceMajor(clone);
       return;
     }
-    const [a, b] = prepareTeams(getTeam(majorT, up.a), getTeam(majorT, up.b));
+    const pair = prepareTeams(getTeam(majorT, up.a), getTeam(majorT, up.b));
+    if (!pair) return;
+    const [a, b] = pair;
     const bo = up.bestOf ?? 3;
     rngRef.current = makeRng(randomSeed());
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
@@ -4880,7 +4901,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const playMine = () => {
     if (!myMatch) return;
     rngRef.current = makeRng(randomSeed());
-    const [a, b] = prepareTeams(leagueTeam(league, myMatch.a), leagueTeam(league, myMatch.b));
+    const pair = prepareTeams(leagueTeam(league, myMatch.a), leagueTeam(league, myMatch.b));
+    if (!pair) {
+      // save com referência morta a um team que não está em league.teams.
+      // Sem dado pra jogar — não trava o jogo, só avisa no console.
+      console.warn('playMine: time do match não encontrado em league.teams', { a: myMatch.a, b: myMatch.b });
+      return;
+    }
+    const [a, b] = pair;
     setMatchCtx({
       teams: [a, b],
       userIdx: myMatch.a === 'user' ? 0 : 1,
