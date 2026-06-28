@@ -150,19 +150,21 @@ export function CareerShell({
   useEffect(() => {
     if (!openMenu) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenu(null); };
-    // BUG MOBILE: antes verificava `.em-nav-item.open` — mas em touch o mesmo
-    // tap que ABRE o menu dispara este listener ANTES do React aplicar a classe
-    // `.open`, fechando o menu na hora. Agora verifica só `.em-nav-item` (sem
-    // .open): se clicou DENTRO de qualquer nav-item, não fecha (o próprio
-    // handler do botão decide trocar de item ou alternar dropdown). Só fecha
-    // se clicou de fato FORA do nav.
-    // BUG REPORTADO PELO BRUNO: 'interface bugada, não consigo arrastar pro
-    // lado'. O dropdown ficava preso porque escutávamos só `mousedown` — em
-    // touch puro (sem mouse sintetizado) o evento não disparava e o menu nunca
-    // fechava ao toque fora. `pointerdown` unifica mouse, touch e pen.
+    // Verificação dupla pra decidir se fecha o dropdown:
+    // - `.em-nav-item`: toque no próprio botão da nav (abre/troca/fecha pelo handler)
+    // - `.em-nav-dropdown--portal`: toque no dropdown ou seus itens (portal renderiza
+    //   FORA da árvore do nav-item, então `closest('.em-nav-item')` é false). Sem
+    //   essa exceção, o pointerdown no item do dropdown disparava setOpenMenu(null),
+    //   React desmontava o dropdown ANTES do click chegar — bug 'clico no item do
+    //   sub menu e não acontece nada' reportado depois do portal refactor (7e910a5).
+    // Histórico: `.em-nav-item.open` (com .open) falhava em touch porque o tap que
+    // ABRE dispara o listener antes do React aplicar a classe; `pointerdown` (vs
+    // mousedown) garante dispatch em touch puro sem mouse sintetizado.
     const onPointer = (e: PointerEvent | MouseEvent) => {
       const t = e.target as HTMLElement;
-      if (!t.closest('.em-nav-item')) setOpenMenu(null);
+      if (!t.closest('.em-nav-item') && !t.closest('.em-nav-dropdown--portal')) {
+        setOpenMenu(null);
+      }
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onPointer);
