@@ -2968,6 +2968,42 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.squad]);
 
+  // AUTO-CURA da LIGA: saves criados ANTES do fix do padding podem ter grupos
+  // com menos de 4 times — o opening match referencia s[3] = undefined e o user
+  // não consegue jogar nem avançar (bug reportado pelo Maicon na PGL Bucharest).
+  // Detecta e reconstrói o bracket via createGSLStage com PADDING, mas SÓ se
+  // ainda não rolou nenhuma partida (current === 0, todos os matches sem
+  // result). Senão arrisca derrubar progresso real.
+  useEffect(() => {
+    const l = save.league;
+    if (!l || l.current !== 0) return;
+    const teamIds = new Set(l.teams.map((t) => t.id));
+    const round = l.rounds[0] ?? [];
+    const hasBroken = round.some((m) => !teamIds.has(m.a) || !teamIds.has(m.b));
+    const noneStarted = round.every((m) => !m.result);
+    if (!hasBroken || !noneStarted) return;
+    // Repõe o bracket: junta os times existentes + filler dos mais fracos do
+    // oppEra (mesma lógica do padding do startSplit) até dar múltiplo de 4.
+    const ai = l.teams.filter((t) => t.id !== 'user');
+    if (ai.length < 15) {
+      const inLeague = new Set([...ai.map((t) => t.id), 'user']);
+      if (save.takeoverId) inLeague.add(save.takeoverId);
+      const filler = oppEra
+        .filter((t) => !inLeague.has(t.id) && t.players.length >= 5)
+        .sort((a, b) => a.teamwork - b.teamwork)
+        .slice(0, 15 - ai.length)
+        .map((t) => teamSeasonToTTeam(t));
+      ai.push(...filler);
+    }
+    const user = l.teams.find((t) => t.id === 'user');
+    if (!user) return; // sem user no bracket, abandona — outro problema
+    const rebuilt = createGSLStage(l.name, [user, ...ai]);
+    const next = { ...save, league: rebuilt };
+    persist(next);
+    setSave(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.league?.name]);
+
   const buildTeam = (s: CareerSave): TTeam | null => {
     if (!s.org || s.squad.length < 5 || !s.coachFromId) return null;
     const picks = s.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
@@ -3001,6 +3037,26 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       tt.strength += aiBoost;
       return tt;
     });
+    // PAD: garante que [user, ...ai] tenha 16 times (= 4 grupos de 4 perfeitos
+    // no GSL). Sem isso, circuitos com field curto (T1-alt, T3 regionais)
+    // geram grupos incompletos — o opening match referencia s[3] undefined,
+    // e o user não consegue jogar nem avançar (bug reportado pelo Maicon na
+    // PGL Bucharest). Padding usa os times mais FRACOS do oppEra que ainda
+    // não estão no circuito, mantém balanceamento e não infla a competição.
+    if (ai.length < 15) {
+      const inCircuit = new Set([...ai.map((t) => t.id), 'user']);
+      if (s.takeoverId) inCircuit.add(s.takeoverId);
+      const filler = oppEra
+        .filter((t) => !inCircuit.has(t.id) && t.players.length >= 5)
+        .sort((a, b) => a.teamwork - b.teamwork) // mais fracos primeiro
+        .slice(0, 15 - ai.length)
+        .map((t) => {
+          const tt = teamSeasonToTTeam(t);
+          tt.strength += aiBoost;
+          return tt;
+        });
+      ai.push(...filler);
+    }
     // formato real do CS: 2 grupos GSL (dupla eliminação, 4 times, top 2
     // avançam) → playoffs mata-mata. Nada de pontos corridos (isso é futebol).
     const ev = s.eventInSplit ?? 1;
