@@ -98,6 +98,24 @@ export function Home({
             <h1>ROAD TO <span>MAJOR</span></h1>
             <p>{t('hero.tagline')}</p>
 
+            {/* Pill de ativação inline: free user logado vê a oportunidade de virar
+               Fundador sem precisar abrir modal. Sticky no Home, clica e cai no fluxo.
+               Cosmético/conveniência — zero pay-to-win. */}
+            {accountReady && account && !account.paid && (
+              <button
+                type="button"
+                onClick={onCreateAccount}
+                className="rtm-supporter-pill"
+                title={ct('Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras')}
+              >
+                <span className="rtm-supporter-pill-badge">★</span>
+                <span className="rtm-supporter-pill-text">
+                  <b>{ct('Vire Fundador')}</b> {ct('· selo #001–#500, cloud sync e 5 carreiras')}
+                </span>
+                <span className="rtm-supporter-pill-cta">R$20 →</span>
+              </button>
+            )}
+
             <div className="rtm-modemenu">
               <button className="rtm-modecard" data-tone="gold" onClick={() => (hasBeta ? onCareer?.() : onDonate())}>
                 <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/nuke.jpg)' }} />

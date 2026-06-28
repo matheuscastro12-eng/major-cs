@@ -2141,6 +2141,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'major' } }));
     }
   }, [save.titles]);
+  // momento histórico: PRIMEIRA vez classificando pro Major (save.majorT vira !null).
+  // Persistente entre sessões (ref por save), só dispara uma vez na carreira.
+  const upsellMajorStageRef = useRef(false);
+  useEffect(() => {
+    if (!save.majorT || upsellMajorStageRef.current) return;
+    upsellMajorStageRef.current = true;
+    window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'major-stage' } }));
+  }, [save.majorT]);
+  // refs auxiliares dos novos triggers (declaradas aqui pra ficarem visíveis em
+  // outros useEffect deste componente; o de #1 do VRS roda quando vrsAll estiver
+  // em escopo lá embaixo).
+  const upsellWorld1Ref = useRef(false);
   const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
@@ -4862,6 +4874,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const vrsByRegion = vrsByRegionMemo;
   const vrsAll = vrsAllMemo;
   const myVrsRank = vrsAll.findIndex((t) => t.isUser) + 1; // posição global (0 = sem time)
+  // ativação: PRIMEIRA vez chegando ao #1 do VRS mundial (uma vez por carreira).
+  useEffect(() => {
+    if (myVrsRank !== 1 || upsellWorld1Ref.current) return;
+    upsellWorld1Ref.current = true;
+    window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'world-1' } }));
+  }, [myVrsRank]);
 
   const top20 = top20Memo;
   const careerTop20 = careerTop20Memo;

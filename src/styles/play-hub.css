@@ -139,6 +139,69 @@ body:has(.page-play) .app-header {
   text-shadow: 0 1px 16px rgba(0,0,0,0.90), 0 0 40px rgba(0,0,0,0.70);
 }
 
+/* ---------- pill de ativação (Vire Fundador) — visível só pra free users ---------- */
+.play-hub .rtm-supporter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px auto 0;
+  padding: 10px 16px 10px 12px;
+  background: linear-gradient(120deg, rgba(232,193,112,0.18), rgba(232,193,112,0.06) 60%, rgba(0,0,0,0.4));
+  border: 1px solid rgba(232,193,112,0.55);
+  border-radius: 999px;
+  color: var(--em-text, #f0f0f0);
+  font-family: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(232,193,112,0.18);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.play-hub .rtm-supporter-pill:hover {
+  transform: translateY(-1px);
+  border-color: var(--em-gold, #e8c170);
+  box-shadow: 0 6px 22px rgba(232,193,112,0.28);
+}
+.play-hub .rtm-supporter-pill-badge {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--em-gold, #e8c170);
+  color: #1a1205;
+  border-radius: 50%;
+  font-weight: 900;
+  font-size: 0.84rem;
+  flex-shrink: 0;
+}
+.play-hub .rtm-supporter-pill-text {
+  letter-spacing: 0.2px;
+}
+.play-hub .rtm-supporter-pill-text b {
+  color: var(--em-gold, #e8c170);
+  font-weight: 800;
+}
+.play-hub .rtm-supporter-pill-cta {
+  margin-left: 4px;
+  padding: 2px 10px;
+  background: var(--em-gold, #e8c170);
+  color: #1a1205;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 0.84rem;
+  letter-spacing: 0.3px;
+}
+@media (max-width: 640px) {
+  /* mobile: encurta o texto, mantém o CTA visível */
+  .play-hub .rtm-supporter-pill {
+    font-size: 0.78rem;
+    padding: 8px 12px 8px 10px;
+    gap: 8px;
+    max-width: 92vw;
+    text-align: left;
+  }
+}
+
 /* ---------- mode cards: sólidos ---------- */
 .play-hub .rtm-modemenu {
   max-width: 1060px;

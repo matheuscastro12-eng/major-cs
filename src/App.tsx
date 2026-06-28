@@ -390,6 +390,23 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [cloudToast]);
 
+  // ativação: usuário grátis voltando após 7+ dias ganha um nudge (1× por visita).
+  // Marca a data de hoje no localStorage e compara com a anterior. Cooldown próprio
+  // do UpsellCard (45min) ainda vale, então se ele acabou de ver outro upsell hoje,
+  // este não duplica.
+  useEffect(() => {
+    if (!accountReady || account?.paid) return;
+    try {
+      const LAST_KEY = 'rtm_last_visit';
+      const now = Date.now();
+      const last = Number(localStorage.getItem(LAST_KEY) || 0);
+      localStorage.setItem(LAST_KEY, String(now));
+      if (last > 0 && now - last > 1000 * 60 * 60 * 24 * 7) {
+        window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'return' } }));
+      }
+    } catch { /* sem storage */ }
+  }, [accountReady, account?.paid]);
+
   const resumeSession = () => {
     if (!savedSession?.tournament) return;
     setDraft(savedSession.draft);
@@ -886,8 +903,12 @@ export default function App() {
       )}
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
-      {/* card de ativação (upsell) global: abre via evento rtm:upsell de qualquer tela */}
-      {!account?.paid && screen !== 'career' && <UpsellCard onUpgrade={startCheckout} />}
+      {/* card de ativação (upsell) global: abre via evento rtm:upsell de qualquer tela.
+         Antes era excluído da carreira (screen !== 'career'), mas é nela que os
+         momentos emocionais acontecem (split, promoção, título) — os 3 dispatches
+         do CareerScreen iam pro vazio. O overlay já é dismissível (clique fora ou
+         ✕), então não bloqueia o jogo. */}
+      {!account?.paid && <UpsellCard onUpgrade={startCheckout} />}
       {authOpen && !account && (
         <AccountModal
           initialMode={authMode}
