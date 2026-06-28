@@ -1108,8 +1108,13 @@ interface CareerSave {
   pendingOffer?: PoachOffer | null; // proposta de uma org maior por um jogador seu
   pendingDeals?: PendingDeal[]; // acordos fechados DURANTE a temporada; entram em vigor na janela (próximo split)
   renewals?: Renewal[]; // contratos vencendo: forçam a tela de renovação na abertura da janela
-  pendingSales?: { playerId: string; nick: string; fee: number; toTag: string }[]; // propostas aceitas por jogadores SEUS: o jogador sai (e entra a grana) na janela
+  pendingSales?: { playerId: string; nick: string; fee: number; toTag: string; toId: string }[]; // propostas aceitas por jogadores SEUS: o jogador sai (e entra a grana) na janela. toId = id do clube COMPRADOR (pro applyMoves / extraOnTeam)
   rejectedOffers?: string[]; // ids de jogadores cuja proposta você recusou neste split (some até a virada)
+  // jogadores VENDIDOS que NÃO existem no CS2_REAL_2026 (academy, FA, youth
+  // promovido). applyMoves só move ids da base — pros customizados a gente
+  // precisa de uma rota alternativa, senão somem. teamId -> jogadores apensos
+  // no roster do comprador, com snapshot dos atributos no momento da venda.
+  extraOnTeam?: Record<string, { player: Player; arrival: number }[]>;
   board: number; // confiança da diretoria (0-100). Cai se você falha os objetivos.
   objective?: BoardObjective | null; // meta da diretoria pro split atual
   lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
@@ -2643,9 +2648,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         // (= 'legacy sumiu'); agora completa o line com prospects sintéticos do
         // mesmo país via backfillPlayers — o time fica vivo e mantém o resto do
         // elenco intacto (ninguém troca de função, atributos preservados).
-        .map((t) => t.players.length >= 5 ? t : ({ ...t, players: [...t.players, ...backfillPlayers(t, 5 - t.players.length)] }));
+        .map((t) => t.players.length >= 5 ? t : ({ ...t, players: [...t.players, ...backfillPlayers(t, 5 - t.players.length)] }))
+        // INJETA os jogadores vendidos pelo user que NÃO existem no CS2_REAL_2026
+        // (academy/youth/FA): apêndice no roster do clube comprador. Antes esses
+        // somiam do mundo após a venda — bug do 'jogador academy não aparece no
+        // time que comprou'. Snapshot é congelado no momento da venda.
+        .map((t) => {
+          const extras = save.extraOnTeam?.[t.id];
+          if (!extras || extras.length === 0) return t;
+          // evita duplicar com quem já está no roster (regen colidir com snapshot)
+          const have = new Set(t.players.map((p) => p.id));
+          const fresh = extras.filter((e) => !have.has(e.player.id)).map((e) => e.player);
+          return fresh.length === 0 ? t : { ...t, players: [...t.players, ...fresh] };
+        });
     },
-    [save.moves, bo3Edits, save.split, save.squad],
+    [save.moves, save.extraOnTeam, bo3Edits, save.split, save.squad],
   );
   // pool de ADVERSÁRIOS: tira o time que você assumiu E remove qualquer jogador
   // que está no SEU elenco do time de origem (sem duplicar ninguém), repondo com
@@ -3158,15 +3175,45 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const morale = { ...(s.morale ?? {}) };
     const peakOvr = { ...(s.peakOvr ?? {}) };
     const evo = { ...(s.evo ?? {}) };
+    // moves/extraOnTeam recebem as VENDAS pra o jogador realmente ir pro
+    // clube comprador. Antes a venda só removia do squad sem atualizar
+    // moves — real player voltava pro time original e academy/youth sumia.
+    const moves = { ...(s.moves ?? {}) };
+    const extraOnTeam = { ...(s.extraOnTeam ?? {}) };
     const arrivals: string[] = [];
     const departures: string[] = [];
     const failedDeals: string[] = []; // acordos que caíram (sem caixa) — vão pro feed
-    // VENDAS: jogador seu sai (proposta aceita na temporada) e entra a grana
+    // checa se o id existe na base real (pra decidir se applyMoves cobre,
+    // ou se precisa ir pro extraOnTeam). Roda 1x antes do loop.
+    const baseHasPlayer = (pid: string): boolean => {
+      for (const t of CS2_REAL_2026) {
+        if (t.players.some((p) => p.id === pid)) return true;
+      }
+      return false;
+    };
+    // VENDAS: jogador seu sai (proposta aceita na temporada), entra a grana e
+    // ele REALMENTE migra pro time comprador (não some, não volta pro antigo).
     for (const sale of sales) {
-      if (!squad.some((x) => x.playerId === sale.playerId)) continue; // já não está
+      const sig = squad.find((x) => x.playerId === sale.playerId);
+      if (!sig) continue; // já não está
+      // captura snapshot do jogador no momento da venda — atributos atuais,
+      // pós-evo. Esse é o estado que vai pro extraOnTeam (academy/youth).
+      const resolved = findSigning(sig);
       squad = squad.filter((x) => x.playerId !== sale.playerId);
       delete contracts[sale.playerId]; delete morale[sale.playerId]; delete peakOvr[sale.playerId]; delete evo[sale.playerId];
       budget += sale.fee;
+      // ROTA 1: jogador real da base → applyMoves resolve por id.
+      if (baseHasPlayer(sale.playerId)) {
+        moves[sale.playerId] = sale.toId;
+      } else if (resolved?.player) {
+        // ROTA 2: academy / youth / FA / regen — não existe em CS2_REAL_2026,
+        // então `moves` sozinho não move. Apêndice no roster do comprador
+        // via extraOnTeam (currentEra injeta esses no merge).
+        const list = extraOnTeam[sale.toId] ?? [];
+        if (!list.some((e) => e.player.id === sale.playerId)) {
+          extraOnTeam[sale.toId] = [...list, { player: resolved.player, arrival: s.split }];
+        }
+      }
       departures.push(`${sale.nick} (${sale.toTag})`);
     }
     // ACORDOS DE COMPRA: tira a troca, traz o alvo e desconta o dinheiro
@@ -3194,7 +3241,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       budget -= d.fee;
       arrivals.push(d.inNick);
     }
-    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
+    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, moves, extraOnTeam, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
     const news: NewsItem[] = [];
     if (arrivals.length) news.push({ id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board', title: ct('Reforços confirmados na janela'), body: `${ct('Acordos fechados na temporada passada entraram em vigor:')} ${arrivals.join(', ')}.` });
     if (departures.length) news.push({ id: `${s.split}:sales`, split: s.split, icon: '💸', tone: 'info', cat: 'transfer', title: ct('Vendas confirmadas na janela'), body: `${ct('Saíram por proposta aceita:')} ${departures.join(', ')}.` });
@@ -3653,7 +3700,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     ]);
     const buyers = currentEra.filter((t) => t.id !== save.takeoverId).sort((a, b) => b.teamwork - a.teamwork);
     if (!buyers.length) return [];
-    const out: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toName: string }[] = [];
+    // toId = id do clube comprador. ANTES era guardado só toTag/toName (string),
+    // então na hora de consumar a venda a gente não sabia pra onde o jogador
+    // ia REALMENTE — `moves` ficava sem entrada e o atleta voltava pro time
+    // original via applyMoves (bug do 'vende real, vai pro time antigo').
+    const out: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toId: string; toName: string }[] = [];
     for (const sig of save.squad) {
       if (sold.has(sig.playerId)) continue;
       const p = findSigning(sig)?.player;
@@ -3666,7 +3717,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       if (h % 100 >= chance) continue;
       const buyer = buyers[h % Math.min(14, buyers.length)];
       const fee = Math.round(playerValue(p) * (1.05 + (h % 35) / 100)); // 1.05x..1.39x do valor
-      out.push({ playerId: p.id, nick: p.nick, ovr, country: p.country, fee, toTag: buyer.tag, toName: buyer.team });
+      out.push({ playerId: p.id, nick: p.nick, ovr, country: p.country, fee, toTag: buyer.tag, toId: buyer.id, toName: buyer.team });
     }
     return out;
   })();
@@ -8102,11 +8153,11 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   squadPlayers: Player[];
   budget: number;
   pendingDeals: PendingDeal[];
-  pendingSales: { playerId: string; nick: string; fee: number; toTag: string }[];
-  offers: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toName: string }[];
+  pendingSales: { playerId: string; nick: string; fee: number; toTag: string; toId: string }[];
+  offers: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toId: string; toName: string }[];
   onAddDeal: (d: PendingDeal) => void;
   onCancelDeal: (id: string) => void;
-  onAcceptOffer: (o: { playerId: string; nick: string; fee: number; toTag: string }) => void;
+  onAcceptOffer: (o: { playerId: string; nick: string; fee: number; toTag: string; toId: string }) => void;
   onRejectOffer: (playerId: string) => void;
   onCancelSale: (playerId: string) => void;
   feed: TransferItem[];
@@ -8164,7 +8215,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               <div key={o.playerId} className="nego-offer-row">
                 <span className="nego-offer-who"><Flag cc={o.country} /> <b>{o.nick}</b> <span className="muted small">OVR {o.ovr} · {o.toName} quer</span></span>
                 <span className="nego-offer-fee">{formatMoney(o.fee)}</span>
-                <button className="btn gold small" onClick={() => onAcceptOffer({ playerId: o.playerId, nick: o.nick, fee: o.fee, toTag: o.toTag })}>{ct('Vender')}</button>
+                <button className="btn gold small" onClick={() => onAcceptOffer({ playerId: o.playerId, nick: o.nick, fee: o.fee, toTag: o.toTag, toId: o.toId })}>{ct('Vender')}</button>
                 <button className="btn ghost small" onClick={() => onRejectOffer(o.playerId)}>{ct('Recusar')}</button>
               </div>
             ))}
