@@ -24,7 +24,15 @@ import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCo
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
-import { isPlayerCommittedForExit, matchesNegotiationFilters } from '../engine/career/market';
+import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries, type MarketSort } from '../engine/career/market';
+import {
+  academyAgeAfterSplit,
+  ageFromCareerStart,
+  ageFromDebut,
+  legacyYouthBaseAgeAtPromotion,
+  youthDebutAtPromotion,
+  type YouthDebut,
+} from '../engine/career/playerAge';
 import { applyCareerVrsDecay, careerEventKey } from '../engine/career/progress';
 // academyLeague: usado pela AcademyTab; import movido pra page.
 import { VetoScreen } from './VetoScreen';
@@ -595,8 +603,9 @@ function applyScoutingSplitTick(
   return patch;
 }
 
-// T3.9: tick de aging do squad próprio. Devolve patch parcial com:
-//   - `evo`: somado aos deltas existentes (negativo = decline)
+// T3.9: tick de aposentadoria do squad próprio. O decline de OVR já é aplicado
+// pelo evolveSquad; este tick não pode aplicar uma segunda queda na mesma virada.
+// Devolve patch parcial com:
 //   - `retired`: novos ids appended ao array
 //   - `lastRetirees`: nicks/idades dos novos aposentados (pra notícia)
 // Não muta o save. O `findSigning`/`effectiveAge` resolvem o player como
@@ -607,23 +616,17 @@ function applyAgingTick(save: CareerSave, findSigning: (sig: Signing) => Resolve
     const f = findSigning(sig);
     if (!f) continue;
     const p = f.player;
-    const age = effectiveAge(p, save.split, save.youthAge);
+    const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
     if (age <= 0) continue;
     players.push({ id: sig.playerId, nick: p.nick, ovr: playerOvr(p), age, role: p.role });
   }
   if (players.length === 0) return {};
-  const result = tickAging({ split: save.split, retired: save.retired ?? [], players });
-  if (Object.keys(result.ovrDeltas).length === 0 && result.newRetirees.length === 0) return {};
-
-  // Aplica deltas ao evo (somados — engine de evo já trata acumulado)
-  const evo = { ...(save.evo ?? {}) };
-  for (const [id, d] of Object.entries(result.ovrDeltas)) {
-    evo[id] = (evo[id] ?? 0) + d;
-  }
+  const result = tickAging({ split: save.split, retired: save.retired ?? [], players, applyDecline: false });
+  if (result.newRetirees.length === 0) return {};
   const retired = [...(save.retired ?? []), ...result.newRetirees.map((r) => r.id)];
   const lastRetirees = result.newRetirees.map((r) => ({ nick: r.nick, age: r.age }));
 
-  return { evo, retired, lastRetirees };
+  return { retired, lastRetirees };
 }
 
 // T3.14: monta snapshot pra avaliar conquistas baseadas no save.
@@ -1150,6 +1153,7 @@ interface CareerSave {
   academyPlayoff?: import('../engine/career/academyMatch').AcademyPlayoffState | null;
   youth?: Record<string, Player>; // prospectos já promovidos (resolvidos pelo findSigning)
   youthAge?: Record<string, number>; // idade-base (no split 1) de cada prospecto promovido
+  youthDebut?: Record<string, YouthDebut>; // idade + split exatos da promoção
   scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
   rivalries?: Record<string, number>; // intensidade por adversario; 4+ vira classico e gera foco extra
   fatigue?: Record<string, number>; // carga acumulada 0-100 por jogador
@@ -1242,6 +1246,7 @@ const emptySave = (): CareerSave => ({
   academyFocus: null,
   youth: {},
   youthAge: {},
+  youthDebut: {},
   scenario: null,
   rivalries: {},
   fatigue: {},
@@ -1427,10 +1432,17 @@ function regenInfo(id: string): { debut: number; a0: number } | null {
   const parsed = parseRegenPlayerId(id);
   return parsed ? { debut: parsed.debut, a0: parsed.ageAtDebut } : null;
 }
-export function effectiveAge(p: Pick<Player, 'id' | 'nick'>, split: number, youthAge?: Record<string, number>): number {
+export function effectiveAge(
+  p: Pick<Player, 'id' | 'nick'>,
+  split: number,
+  youthAge?: Record<string, number>,
+  youthDebut?: Record<string, YouthDebut>,
+): number {
   const rg = regenInfo(p.id);
   if (rg) return rg.a0 + Math.floor(Math.max(0, split - rg.debut) / 3);
-  return baseAge(p, youthAge) + Math.floor((split - 1) / 3);
+  const debut = youthDebut?.[p.id];
+  if (debut) return ageFromDebut(debut, split);
+  return ageFromCareerStart(baseAge(p, youthAge), split);
 }
 // potencial = teto de OVR. Jovem bom tem espaço pra crescer (S/A); veterano já
 // está no teto (sem crescimento). Determinístico por jogador.
@@ -2008,6 +2020,9 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
   const defaultInvalidArray = (key: string) => {
     if (key in record && !Array.isArray(record[key])) delete record[key];
   };
+  const defaultInvalidNullableArray = (key: string) => {
+    if (key in record && record[key] !== null && !Array.isArray(record[key])) delete record[key];
+  };
   const defaultInvalidRecord = (key: string) => {
     const value = record[key];
     if (key in record && (value === null || typeof value !== 'object' || Array.isArray(value))) {
@@ -2026,13 +2041,27 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
   [
     'squad', 'history', 'sponsors', 'lastEvo', 'lastMoves', 'pendingDeals',
     'renewals', 'pendingSales', 'rejectedOffers', 'news', 'academy',
+    'academyTeam', 'academyPaidSplits', 'restingPlayers', 'retired',
+    'lastRetirees', 'lastReleases', 'scoutReports', 'coachStints',
+    'yearAwardsHistory',
   ].forEach(defaultInvalidArray);
+  ['mapFocus'].forEach(defaultInvalidNullableArray);
   [
     'evo', 'sponsorUntil', 'moves', 'contracts', 'roles', 'careerStats',
-    'morale', 'peakOvr', 'mapTraining', 'playbookMem', 'youth', 'youthAge',
+    'morale', 'peakOvr', 'mapTraining', 'playbookMem', 'youth', 'youthAge', 'youthDebut',
+    'lastTalkAt', 'pairChem', 'extraOnTeam', 'academyPlayed', 'rivalries',
+    'fatigue', 'facilities',
   ].forEach(defaultInvalidRecord);
-  ['org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult', 'pendingSplit', 'scenario'].forEach(defaultInvalidNullableRecord);
-  ['budget', 'vrs', 'split', 'titles', 'tier', 'board'].forEach(defaultInvalidNumber);
+  [
+    'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
+    'pendingSplit', 'scenario', 'pendingOffer', 'objective', 'lastObjective',
+    'academyPlayoff', 'pendingYearAwards',
+  ].forEach(defaultInvalidNullableRecord);
+  [
+    'budget', 'vrs', 'split', 'eventInSplit', 'titles', 'tier', 'board',
+    'careerStatsThru', 'unread', 'playbookXp', 'academyTrophies',
+    'scrimsThisSplit',
+  ].forEach(defaultInvalidNumber);
 
   const s = record as unknown as CareerSave;
   const merged = { ...emptySave(), ...s, ...hydrateCareerDepth(record) };
@@ -2056,6 +2085,34 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     for (const [k, v] of Object.entries(merged.youth)) y[k] = healYouthPlayer(v);
     merged.youth = y;
   }
+  // Saves novos usam um relógio ancorado no momento da promoção, eliminando a
+  // ambiguidade do youthAge legado. Para saves antigos, preservamos exatamente
+  // a idade que já era exibida no carregamento e passamos a contar dali em
+  // diante. Se o snapshot traz a idade de promoção, ela é a fonte preferida.
+  const youthDebut = { ...(merged.youthDebut ?? {}) };
+  for (const [id, player] of Object.entries(merged.youth ?? {})) {
+    if (youthDebut[id]) continue;
+    const legacyBase = merged.youthAge?.[id];
+    const legacyCurrent = legacyBase == null
+      ? undefined
+      : ageFromCareerStart(legacyBase, merged.split);
+    const snapshotAge = player.age != null && player.age >= 15 && player.age <= 30
+      ? player.age
+      : undefined;
+    const activeSplits = Math.max(0, merged.careerStats?.[id]?.splits ?? 0);
+    // Relato real: jovem recém-promovido em save antigo aparecia com 34 anos
+    // porque "18" foi tratado como idade-base do split 1. Se ele tem pouco
+    // histórico, ancora nos 18 da promoção; veteranos de base com histórico
+    // longo mantêm a idade calculada, evitando rejuvenescimento indevido.
+    const looksLikeLegacyJump = legacyBase != null
+      && legacyBase >= 15
+      && legacyBase <= 22
+      && (legacyCurrent ?? 0) >= 30
+      && activeSplits <= 6;
+    const age = snapshotAge ?? (looksLikeLegacyJump ? legacyBase : legacyCurrent);
+    if (age != null) youthDebut[id] = youthDebutAtPromotion(age, merged.split);
+  }
+  merged.youthDebut = youthDebut;
   return merged;
 };
 
@@ -3168,7 +3225,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       // então somar prev de novo contava o envelhecimento em dobro.
       const prev = s.evo?.[sig.playerId] ?? signingDrift(f.basePlayer, s.split);
       const ovr = playerOvr(f.basePlayer) + prev; // OVR efetivo atual (base + evolução)
-      const age = effectiveAge(f.basePlayer, s.split, s.youthAge);
+      const age = effectiveAge(f.basePlayer, s.split, s.youthAge, s.youthDebut);
       // teto é calculado pela idade-BASE (igual aiAttrDrift faz pra IA). Usar a idade
       // CORRENTE encolhia o teto a cada virada de bloco etário (21→22, 22→23...) e
       // travava o jogador "no teto" pra sempre — sem nunca crescer mais (bug do
@@ -3199,9 +3256,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // evolui os prospectos da academia ao virar o split: jovens sobem rumo ao
   // potencial; o que está em foco 🎯 desenvolve mais rápido. Cresce nos atributos
   // base guardados (eles não vêm do dataset, então a evolução fica neles mesmos).
-  const evolveAcademy = (s: CareerSave): AcademyEntry[] =>
-    (s.academy ?? []).map((a) => {
-      const aged = a.age + ((s.split + 1) % 3 === 0 ? 1 : 0); // envelhece ~1 a cada 3 splits
+  const evolveAcademyEntries = (entries: AcademyEntry[], s: CareerSave): AcademyEntry[] =>
+    entries.map((a) => {
+      // A idade exibida no split N representa o começo daquele split. Portanto
+      // o aniversário acontece ao fechar 3, 6, 9... (antes acontecia em 2, 5,
+      // 8..., um split adiantado).
+      const aged = academyAgeAfterSplit(a.age, s.split);
       const ovr = playerOvr(a);
       if (ovr >= a.potential) return { ...a, age: aged }; // teto atingido: só envelhece
       const r = hashStr(`acaevo:${a.id}:${s.split}`) % 100;
@@ -3217,6 +3277,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       };
     });
 
+  const evolveAcademy = (s: CareerSave): Pick<CareerSave, 'academy' | 'academyTeam'> => ({
+    academy: evolveAcademyEntries(s.academy ?? [], s),
+    // O time Academy também participa da formação. Antes ficava congelado para
+    // sempre enquanto apenas a lista de prospectos evoluía.
+    academyTeam: evolveAcademyEntries(s.academyTeam ?? [], s),
+  });
+
   // promove um prospecto da academia ao elenco principal. Se o elenco estiver
   // cheio (5), troca pelo jogador escolhido (replaceOid). O prospecto vira um
   // Signing resolvido pelo save.youth e passa a evoluir/envelhecer como qualquer um.
@@ -3226,19 +3293,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (save.squad.length >= 5 && !replaceOid) { setPromoting(prospectId); return; }
     const player: Player = {
       id: a.id, nick: a.nick, name: a.name, country: a.country, role: a.role,
+      age: a.age,
       aim: a.aim, consistency: a.consistency, clutch: a.clutch, awp: a.awp, igl: a.igl,
     };
     const youth = { ...(save.youth ?? {}), [a.id]: player };
     // guarda a idade-base (equivalente ao split 1) pra ele continuar JOVEM e evoluindo
     // após a promoção, em vez de o findSigning re-derivar 20-25 (ou colidir por nick)
-    const youthAge = { ...(save.youthAge ?? {}), [a.id]: a.age - Math.floor((save.split - 1) / 3) };
+    const youthAge = { ...(save.youthAge ?? {}), [a.id]: legacyYouthBaseAgeAtPromotion(a.age, save.split) };
+    const youthDebut = { ...(save.youthDebut ?? {}), [a.id]: youthDebutAtPromotion(a.age, save.split) };
     const academy = (save.academy ?? []).filter((x) => x.id !== prospectId);
     let squad = save.squad;
     if (squad.length >= 5 && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
     squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
     const contracts = { ...(save.contracts ?? {}), [a.id]: save.split + CONTRACT_TERM - 1 };
     const academyFocus = save.academyFocus === prospectId ? null : save.academyFocus;
-    const next = { ...save, academy, youth, youthAge, squad, contracts, academyFocus };
+    const next = { ...save, academy, youth, youthAge, youthDebut, squad, contracts, academyFocus };
     persist(next);
     setSave(next);
     setPromoting(null);
@@ -3285,16 +3354,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (save.squad.length >= 5 && !replaceOid) return; // UI decide
     const player: Player = {
       id: a.id, nick: a.nick, name: a.name, country: a.country, role: a.role,
+      age: a.age,
       aim: a.aim, consistency: a.consistency, clutch: a.clutch, awp: a.awp, igl: a.igl,
     };
     const youth = { ...(save.youth ?? {}), [a.id]: player };
-    const youthAge = { ...(save.youthAge ?? {}), [a.id]: a.age - Math.floor((save.split - 1) / 3) };
+    const youthAge = { ...(save.youthAge ?? {}), [a.id]: legacyYouthBaseAgeAtPromotion(a.age, save.split) };
+    const youthDebut = { ...(save.youthDebut ?? {}), [a.id]: youthDebutAtPromotion(a.age, save.split) };
     const acaTeam = (save.academyTeam ?? []).filter((x) => x.id !== acaId);
     let squad = save.squad;
     if (squad.length >= 5 && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
     squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
     const contracts = { ...(save.contracts ?? {}), [a.id]: save.split + CONTRACT_TERM - 1 };
-    const next = { ...save, academyTeam: acaTeam, youth, youthAge, squad, contracts };
+    const next = { ...save, academyTeam: acaTeam, youth, youthAge, youthDebut, squad, contracts };
     persist(next);
     setSave(next);
   };
@@ -4215,20 +4286,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           // (mesma conta do promoteProspect) pra eles persistirem e seguirem evoluindo.
           const youth = { ...(save.youth ?? {}) };
           const youthAge = { ...(save.youthAge ?? {}) };
+          const youthDebut = { ...(save.youthDebut ?? {}) };
           let academy = save.academy ?? [];
           let academyFocus = save.academyFocus;
           for (const sig of stableSquad) {
             const ac = (save.academy ?? []).find((a) => a.id === sig.playerId);
             if (ac && !youth[ac.id]) {
-              youth[ac.id] = { id: ac.id, nick: ac.nick, name: ac.name, country: ac.country, role: ac.role, aim: ac.aim, consistency: ac.consistency, clutch: ac.clutch, awp: ac.awp, igl: ac.igl };
-              youthAge[ac.id] = ac.age - Math.floor((save.split - 1) / 3);
+              youth[ac.id] = { id: ac.id, nick: ac.nick, name: ac.name, country: ac.country, role: ac.role, age: ac.age, aim: ac.aim, consistency: ac.consistency, clutch: ac.clutch, awp: ac.awp, igl: ac.igl };
+              youthAge[ac.id] = legacyYouthBaseAgeAtPromotion(ac.age, save.split);
+              youthDebut[ac.id] = youthDebutAtPromotion(ac.age, save.split);
               academy = academy.filter((x) => x.id !== ac.id);
               if (academyFocus === ac.id) academyFocus = null;
             }
           }
           // org do zero (sem região ainda): define a região pelo core do 1º elenco
           const region = save.region ?? macroRegionPlurality(stableSquad.map((s) => findSigning(s)?.player.country ?? '').filter(Boolean));
-          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region, youth, youthAge, academy, academyFocus };
+          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -4451,7 +4524,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   circuit: null,
                   playoff: null,
                   history: [...save.history, finished],
-                  academy: evolveAcademy(save),
+                  ...evolveAcademy(save),
                   scenario: applyScenarioProgress(save.scenario, {
                     // resultado real do circuito deste split vem do pendingSplit (rec),
                     // pra creditar winCircuit/top4 mesmo num split que vai pro Major
@@ -4891,7 +4964,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     circuit: null,
                     playoff: null,
                     history: [...save.history, baseRecord()],
-                    academy: evolveAcademy(save),
+                    ...evolveAcademy(save),
                     scenario: applyScenarioProgress(save.scenario, {
                       isChampion, circuitTier, finalPos, qualified, endTier: tierResult.tier, wonMajor: false,
                     }),
@@ -5438,7 +5511,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         }
         const rid = playerRuntimeId(p.id);
         const oid = playerOrgId(p.id);
-        const age = effectiveAge(p, save.split, save.youthAge);
+        const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
         const pot = playerPotentialOvr(p, age);
         const tier = potentialTier(pot);
         const phase = playerPhase(oid, age);
@@ -5540,7 +5613,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             id: pid, nick: p.nick, name: p.name, country: p.country, role: p.role, role2: p.role2,
             aim: p.aim, clutch: p.clutch, consistency: p.consistency, awp: p.awp, igl: p.igl,
           };
-          const age = effectiveAge(pl, save.split, save.youthAge);
+          const age = effectiveAge(pl, save.split, save.youthAge, save.youthDebut);
           teamAges[pid] = age;
           teamPotentialMap[pid] = playerPotentialOvr(pl, age);
         }
@@ -8428,11 +8501,12 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>('');
   const [countryFilter, setCountryFilter] = useState('');
+  const [marketSort, setMarketSort] = useState<MarketSort>('ovr-desc');
   // Paginação 'load more' (mesma lógica do MarketScreen). Antes era cap fixo de
   // 60 e o resto sumia. Fundador #103 reportou que a aba transferências também
   // não mostrava tudo.
   const [negoLimit, setNegoLimit] = useState(60);
-  useEffect(() => { setNegoLimit(60); }, [q, roleFilter, countryFilter]);
+  useEffect(() => { setNegoLimit(60); }, [q, roleFilter, countryFilter, marketSort]);
   const marketRoles = ROLE_OPTS.filter((role) => market.some((item) => item.player.role === role));
   const marketCountries = [...new Set(market.map((m) => m.player.country).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
@@ -8441,17 +8515,21 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   const targeted = new Set(pendingDeals.map((d) => d.inPlayerId));
   const squadIds = new Set(squadPlayers.map((p) => p.id));
   const swapPool = squadPlayers.filter((p) => !isPlayerCommittedForExit(p.id, pendingDeals, pendingSales));
-  const filteredMarket = market
+  const filteredMarket = sortMarketEntries(
+    market
     // free agents (sem time) também entram: negociam direto a pedida, sem clube
-    .filter((m) => !targeted.has(m.player.id) && !squadIds.has(m.player.id))
-    .filter((m) => matchesNegotiationFilters(m.player, m.from.team, {
-      query: q,
-      role: roleFilter,
-      country: countryFilter,
-    }))
-    .sort((a, b) => playerOvr(b.player) - playerOvr(a.player));
+      .filter((m) => !targeted.has(m.player.id) && !squadIds.has(m.player.id))
+      .filter((m) => matchesNegotiationFilters(m.player, m.from.team, {
+        query: q,
+        role: roleFilter,
+        country: countryFilter,
+      })),
+    marketSort,
+    (m) => playerOvr(m.player),
+    (m) => m.player.nick,
+  );
   const list = filteredMarket.slice(0, negoLimit);
-  const filtersActive = !!(q.trim() || roleFilter || countryFilter);
+  const filtersActive = !!(q.trim() || roleFilter || countryFilter || marketSort !== 'ovr-desc');
   return (
     <DashCard title={ct('Mercado')}>
         <div className="muted small" style={{ marginBottom: 12 }}>
@@ -8513,8 +8591,12 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
             <option value="">{ct('Todos os países')}</option>
             {marketCountries.map((country) => <option key={country} value={country}>{country.toUpperCase()}</option>)}
           </select>
+          <select className="mf-select" aria-label={ct('Ordenar por OVR')} value={marketSort} onChange={(e) => setMarketSort(e.target.value as MarketSort)}>
+            <option value="ovr-desc">{ct('OVR maior primeiro')}</option>
+            <option value="ovr-asc">{ct('OVR menor primeiro')}</option>
+          </select>
           {filtersActive && (
-            <button className="mf-clear" type="button" onClick={() => { setQ(''); setRoleFilter(''); setCountryFilter(''); }}>
+            <button className="mf-clear" type="button" onClick={() => { setQ(''); setRoleFilter(''); setCountryFilter(''); setMarketSort('ovr-desc'); }}>
               {ct('✕ Limpar')}
             </button>
           )}
@@ -8605,6 +8687,7 @@ function MarketScreen({
   const [filter, setFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>(''); // filtro por função
   const [ccFilter, setCcFilter] = useState(''); // filtro por nacionalidade (código ISO)
+  const [marketSort, setMarketSort] = useState<MarketSort>('ovr-desc');
   const [sponsors, setSponsors] = useState<string[]>(save.sponsors);
   const [sponsorUntil, setSponsorUntil] = useState<Record<string, number>>(save.sponsorUntil ?? {});
   const marketFeed = useMemo(() => transferFeed(save.split, coaches), [save.split, coaches]);
@@ -8672,28 +8755,34 @@ function MarketScreen({
   }, {});
   const countries = Object.keys(countryCounts).sort();
 
-  const visible = market.filter(
-    (m) =>
-      !squad.some((s) => s.playerId === m.player.id) &&
-      (!roleFilter || m.player.role === roleFilter) &&
-      (!ccFilter || m.player.country === ccFilter) &&
-      (!filter ||
-        m.player.nick.toLowerCase().includes(filter.toLowerCase()) ||
-        m.from.team.toLowerCase().includes(filter.toLowerCase())),
+  const visible = sortMarketEntries(
+    market.filter(
+      (m) =>
+        !squad.some((s) => s.playerId === m.player.id) &&
+        (!roleFilter || m.player.role === roleFilter) &&
+        (!ccFilter || m.player.country === ccFilter) &&
+        (!filter ||
+          m.player.nick.toLowerCase().includes(filter.toLowerCase()) ||
+          m.from.team.toLowerCase().includes(filter.toLowerCase())),
+    ),
+    marketSort,
+    (m) => playerOvr(m.player),
+    (m) => m.player.nick,
   );
 
   // ── derivações pro redesign ────────────────────────────────────────────────
   const academyAvail = (save.academy ?? []).filter((a) => !squad.some((s) => s.playerId === a.id));
   const sponsorVrs = userVrsTotal(save, findSigning, coaches);
-  const filtersActive = !!(filter || roleFilter || ccFilter);
+  const filtersActive = !!(filter || roleFilter || ccFilter || marketSort !== 'ovr-desc');
   // reset do paginador quando filtros mudam (cada novo filtro = começar do zero)
-  useEffect(() => { setMarketLimit(60); }, [filter, roleFilter, ccFilter]);
+  useEffect(() => { setMarketLimit(60); }, [filter, roleFilter, ccFilter, marketSort]);
   const PLAN_LABEL_FOR_BTN = embedded ? ct('Salvar elenco') : ct('Fechar elenco e escolher o campeonato');
 
   return (
     <div className="em-market fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 20px 24px' }}>
       {/* ── Header bem visível (resolve tooltip sobrepondo + cliente em destaque) */}
       <header
+        className="em-market-header"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -8712,7 +8801,7 @@ function MarketScreen({
             Split {save.split} · {save.org?.name ?? '—'}
           </h2>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="em-market-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <HudPill label="Orçamento" value={formatMoney(budgetLeft)} tone={budgetLeft >= 0 ? 'green' : 'red'} mono />
           <HudPill label="Elenco" value={`${squad.length}/5`} tone={squad.length === 5 ? 'green' : 'neutral'} mono />
           <HudPill label="Coach" value={coachId ? '✓' : '—'} tone={coachId ? 'green' : 'red'} />
@@ -8895,7 +8984,7 @@ function MarketScreen({
             filtersActive ? (
               <button
                 type="button"
-                onClick={() => { setRoleFilter(''); setCcFilter(''); setFilter(''); }}
+                onClick={() => { setRoleFilter(''); setCcFilter(''); setFilter(''); setMarketSort('ovr-desc'); }}
                 style={{
                   padding: '4px 10px',
                   fontSize: '0.72rem',
@@ -8914,7 +9003,7 @@ function MarketScreen({
           }
         >
           {/* Filter bar */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <div className="em-market-filter-row" style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
             <input
               type="text"
               placeholder={ct('Buscar jogador ou time…')}
@@ -8931,6 +9020,25 @@ function MarketScreen({
                 fontSize: '0.86rem',
               }}
             />
+            <select
+              aria-label={ct('Ordenar por OVR')}
+              value={marketSort}
+              onChange={(e) => setMarketSort(e.target.value as MarketSort)}
+              title={ct('Ordenar por OVR')}
+              style={{
+                padding: '8px 12px',
+                background: 'var(--em-panel-2)',
+                color: 'var(--em-text)',
+                border: '1px solid var(--em-border)',
+                borderRadius: 4,
+                fontFamily: 'inherit',
+                fontSize: '0.84rem',
+                minWidth: 160,
+              }}
+            >
+              <option value="ovr-desc">{ct('OVR ↓ maior')}</option>
+              <option value="ovr-asc">{ct('OVR ↑ menor')}</option>
+            </select>
             <select
               value={ccFilter}
               onChange={(e) => setCcFilter(e.target.value)}
@@ -9003,7 +9111,7 @@ function MarketScreen({
                       {m.from.team}
                     </div>
                     {(() => {
-                      const age = effectiveAge(m.player, save.split, save.youthAge);
+                      const age = effectiveAge(m.player, save.split, save.youthAge, save.youthDebut);
                       const ph = playerPhase(m.player.id, age);
                       const pot = potentialTier(playerPotentialOvr(m.player, age));
                       return (

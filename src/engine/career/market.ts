@@ -6,6 +6,21 @@ export interface NegotiationFilters {
   country: string;
 }
 
+export type MarketSort = 'ovr-desc' | 'ovr-asc';
+
+export function sortMarketEntries<T>(
+  entries: readonly T[],
+  sort: MarketSort,
+  getOvr: (entry: T) => number,
+  getName: (entry: T) => string,
+): T[] {
+  const direction = sort === 'ovr-asc' ? 1 : -1;
+  return [...entries].sort((a, b) => {
+    const byOvr = (getOvr(a) - getOvr(b)) * direction;
+    return byOvr || getName(a).localeCompare(getName(b), undefined, { sensitivity: 'base' });
+  });
+}
+
 export function isPlayerCommittedForExit(
   playerId: string,
   deals: { outPlayerIds: string[] }[],

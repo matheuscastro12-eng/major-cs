@@ -1921,7 +1921,7 @@ body:has(main.page-career .career-dash--light) {
   gap: 5px;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 960px) {
   .em-header-row {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -5634,6 +5634,11 @@ body.career-dash .em-market-list {
   overflow-y: auto;
 }
 
+body.career-dash .em-market-filter-row > input,
+body.career-dash .em-market-filter-row > select {
+  min-width: 0;
+}
+
 /* sticky bottom (CTA Fechar Elenco). bottom dinâmico pra não ser engolido
    pelo banner G4 (126px no desktop / 92px no mobile). z-index abaixo do
    banner (z=40) mas acima do conteúdo. */
@@ -5654,7 +5659,18 @@ body:has(main.page-career).has-ad-footer .em-market-sticky-bottom {
 }
 
 /* MOBILE — 1 coluna. Mercado em PRIMEIRO porque era o que sumia. */
-@media (max-width: 860px) {
+@media (max-width: 960px) {
+  body.career-dash .em-market-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  body.career-dash .em-market-header > div:first-child {
+    min-width: 0;
+  }
+  body.career-dash .em-market-header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
   body.career-dash .em-market-grid {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -5671,7 +5687,7 @@ body:has(main.page-career).has-ad-footer .em-market-sticky-bottom {
   }
   body.career-dash.has-ad-footer .em-market-sticky-bottom,
   body:has(main.page-career).has-ad-footer .em-market-sticky-bottom {
-    bottom: calc(12px + 92px);
+    bottom: calc(12px + 126px);
   }
 }
 
@@ -5702,13 +5718,13 @@ body.career-dash .em-found-grid {
 /* ============================================================
    Mobile hardening — dashboard e abas da carreira
    ============================================================ */
-@media (max-width: 860px) {
+@media (max-width: 960px) {
   body.has-ad-footer:has(main.page-career) {
     padding-bottom: 0;
   }
 
   body.has-ad-footer:has(main.page-career) .career-dash {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(126px + env(safe-area-inset-bottom, 0px));
   }
 
   .career-dash,
@@ -5844,6 +5860,88 @@ body.career-dash .em-found-grid {
   }
 }
 
+@media (max-width: 760px) {
+  body.career-dash .em-market-filter-row {
+    flex-wrap: wrap;
+  }
+  body.career-dash .em-market-filter-row > input,
+  body.career-dash .em-market-filter-row > select {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  /* Em telas tipo Galaxy/Chrome custom tab, a tabela desktop ficava miúda e
+     empurrava o card. Abaixo de 760px vira lista legível. */
+  .career-dash .em-roster-scroll {
+    overflow: visible;
+  }
+
+  .career-dash .em-roster-table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .career-dash .em-roster-table thead {
+    display: none;
+  }
+
+  .career-dash .em-roster-table tbody,
+  .career-dash .em-roster-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .career-dash .em-roster-table tr {
+    padding: 10px;
+    border-bottom: 1px solid var(--em-border);
+  }
+
+  .career-dash .em-roster-table td {
+    display: inline-flex !important;
+    width: auto;
+    min-width: 0;
+    padding: 4px 10px 4px 0;
+    border: 0;
+    vertical-align: middle;
+  }
+
+  .career-dash .em-roster-table td:first-child {
+    display: flex !important;
+    width: 100%;
+    padding: 0 0 7px;
+  }
+
+  .career-dash .em-roster-table td:nth-child(2),
+  .career-dash .em-roster-table td:nth-child(5) {
+    display: none !important;
+  }
+
+  .career-dash .em-roster-table td:nth-child(3)::before { content: "OVR "; }
+  .career-dash .em-roster-table td:nth-child(4)::before { content: "POT "; }
+  .career-dash .em-roster-table td:nth-child(6)::before { content: "Humor "; }
+  .career-dash .em-roster-table td:nth-child(7)::before { content: "Rating "; }
+
+  .career-dash .em-roster-table td:not(:first-child)::before {
+    margin-right: 5px;
+    color: var(--em-muted);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+}
+
+@media (max-width: 640px) {
+  body.has-ad-footer:has(main.page-career) .career-dash {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.career-dash.has-ad-footer .em-market-sticky-bottom,
+  body:has(main.page-career).has-ad-footer .em-market-sticky-bottom {
+    bottom: calc(12px + 92px);
+  }
+}
+
 @media (max-width: 480px) {
   .career-dash .em-header-left {
     gap: 5px;
@@ -5915,66 +6013,6 @@ body.career-dash .em-found-grid {
 
   .career-dash .cs-row .cs-ovr {
     flex: 0 0 auto;
-  }
-
-  /* No telefone, a tabela vira uma lista legível em vez de ficar
-     parcialmente escondida além da borda do card. */
-  .career-dash .em-roster-scroll {
-    overflow: visible;
-  }
-
-  .career-dash .em-roster-table {
-    display: block;
-    min-width: 0;
-    width: 100%;
-  }
-
-  .career-dash .em-roster-table thead {
-    display: none;
-  }
-
-  .career-dash .em-roster-table tbody,
-  .career-dash .em-roster-table tr {
-    display: block;
-    width: 100%;
-  }
-
-  .career-dash .em-roster-table tr {
-    padding: 10px;
-    border-bottom: 1px solid var(--em-border);
-  }
-
-  .career-dash .em-roster-table td {
-    display: inline-flex !important;
-    width: auto;
-    min-width: 0;
-    padding: 4px 10px 4px 0;
-    border: 0;
-    vertical-align: middle;
-  }
-
-  .career-dash .em-roster-table td:first-child {
-    display: flex !important;
-    width: 100%;
-    padding: 0 0 7px;
-  }
-
-  .career-dash .em-roster-table td:nth-child(2),
-  .career-dash .em-roster-table td:nth-child(5) {
-    display: none !important;
-  }
-
-  .career-dash .em-roster-table td:nth-child(3)::before { content: "OVR "; }
-  .career-dash .em-roster-table td:nth-child(4)::before { content: "POT "; }
-  .career-dash .em-roster-table td:nth-child(6)::before { content: "Humor "; }
-  .career-dash .em-roster-table td:nth-child(7)::before { content: "Rating "; }
-
-  .career-dash .em-roster-table td:not(:first-child)::before {
-    margin-right: 5px;
-    color: var(--em-muted);
-    font-size: 0.66rem;
-    font-weight: 700;
-    text-transform: uppercase;
   }
 
   .career-dash .em-fin-split,

@@ -49,7 +49,7 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
   return (
     <div className="rtm-setup" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', alignItems: 'stretch' }}>
       {/* esquerda cinematográfica */}
-      <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '48px 56px' }}>
+      <div className="rtm-setup-hero" style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '48px 56px' }}>
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/mirage.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.28 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(13,17,22,.92), rgba(13,17,22,.65))' }} />
         <div style={{ position: 'relative' }}>
@@ -72,12 +72,12 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
       </div>
 
       {/* direita: form */}
-      <div style={{ background: 'var(--rtm-panel)', borderLeft: '1px solid var(--rtm-border-soft)', padding: '48px 44px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
+      <div className="rtm-setup-form" style={{ background: 'var(--rtm-panel)', borderLeft: '1px solid var(--rtm-border-soft)', padding: '48px 44px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div className="rtm-setup-form-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-cond)', fontSize: '22px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--rtm-text-strong)' }}>{ct('Crie seu manager')}</h2>
           <Button variant="ghost" size="sm" onClick={randomize}>⟳ {ct('Aleatório')}</Button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div className="rtm-setup-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div style={{ gridColumn: '1 / -1' }}><label style={label}>{ct('Nick de manager')}</label><input style={input} value={nick} maxLength={24} onChange={(e) => { nickEdited.current = true; setNick(e.target.value); }} /></div>
           <div style={{ gridColumn: '1 / -1' }}><label style={label}>{ct('Nome completo')}</label><input style={input} value={name} maxLength={40} placeholder={ct('ex: Caio Ferreira')} onChange={(e) => setName(e.target.value)} /></div>
           <div>
@@ -92,7 +92,7 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
           <div style={{ gridColumn: '1 / -1' }}><label style={label}>{ct('Organização')}</label><input style={input} value={org} maxLength={30} onChange={(e) => setOrg(e.target.value)} /></div>
           <div style={{ gridColumn: '1 / -1' }}>
             <label style={label}>{ct('Cor do time')}</label>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div className="rtm-setup-colors" style={{ display: 'flex', gap: '10px' }}>
               {ACCENTS.map((c) => (
                 <button key={c} type="button" onClick={() => setAccent(c)} style={{ width: '38px', height: '38px', borderRadius: '50%', background: c, cursor: 'pointer', border: accent === c ? '2px solid var(--rtm-text-strong)' : '2px solid transparent', boxShadow: accent === c ? `0 0 0 2px ${c}` : 'none' }} />
               ))}

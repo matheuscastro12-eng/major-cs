@@ -26,6 +26,8 @@ export interface AgingState {
   retired?: string[];
   /** Snapshot dos OVR atuais dos players (calculado em runtime) */
   players: { id: string; nick: string; ovr: number; age: number; role: Role }[];
+  /** Desliga o declínio quando o consumidor já possui um motor de evolução. */
+  applyDecline?: boolean;
 }
 
 export interface AgingResult {
@@ -114,8 +116,10 @@ export function tickAging(state: AgingState): AgingResult {
   for (const p of state.players) {
     if (retiredSet.has(p.id)) continue;
 
-    const delta = ovrDeltaForSplit(p.role, p.age, p.ovr);
-    if (delta !== 0) ovrDeltas[p.id] = delta;
+    if (state.applyDecline !== false) {
+      const delta = ovrDeltaForSplit(p.role, p.age, p.ovr);
+      if (delta !== 0) ovrDeltas[p.id] = delta;
+    }
 
     if (shouldRetire(p.age, p.ovr)) {
       newRetirees.push({ id: p.id, nick: p.nick, age: p.age });
