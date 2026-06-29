@@ -239,7 +239,7 @@ export function CareerShell({
             </button>
           </div>
 
-          <nav className="em-main-nav" aria-label={ct('Navegação principal')}>
+          <nav className="em-main-nav" aria-label={ct('Navegação principal')} tabIndex={0}>
             {orderedGroups.map((g) => {
               const hasMenu = g.tabs.length > 1;
               const isOpen = openMenu === g.id;
@@ -392,7 +392,7 @@ export function CareerShell({
         {activeGroup.tabs.length > 1 && (
           <div className="em-subnav-row">
             <div className="em-subnav-spacer" aria-hidden />
-            <div className="em-subnav">
+            <div className="em-subnav" role="navigation" aria-label={ct('Navegação secundária')} tabIndex={0}>
               {activeGroup.tabs.map((id) => (
                 <button
                   key={id}

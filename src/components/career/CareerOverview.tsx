@@ -152,7 +152,7 @@ export function CareerOverview({
                 {nextRivalry !== 'none' && (
                   <div className="em-rivalry"><IconSwords size={13} /> {ct('Clássico')} {nextRivalryScore}/12</div>
                 )}
-                <div className="em-plan-row">{gamePlanPicker}</div>
+                <div className="em-plan-row" aria-label={ct('Plano de jogo')}>{gamePlanPicker}</div>
                 <div className="em-nextup-actions">
                   <button type="button" className="em-btn em-btn-primary" onClick={onPlay}>
                     <IconPlay size={13} /> {ct('Jogar')}
@@ -310,7 +310,12 @@ export function CareerOverview({
           flush
           actions={<button type="button" className="em-link-btn" onClick={onSquad}>{ct('Gerenciar')} <IconExternal size={11} /></button>}
         >
-          <div className="em-roster-scroll">
+          <div
+            className="em-roster-scroll"
+            role="region"
+            aria-label={ct('Visão do elenco')}
+            tabIndex={0}
+          >
             <table className="em-roster-table">
               <thead>
                 <tr>

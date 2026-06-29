@@ -98,6 +98,7 @@ export function PatchNotesHost() {
       {/* Botão flutuante canto inferior esquerdo */}
       <button
         type="button"
+        className="patch-notes-trigger"
         onClick={() => setOpen(true)}
         title="Novidades"
         style={{

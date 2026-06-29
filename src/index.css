@@ -5770,11 +5770,21 @@ tr.fin-expiring { background: rgba(212,164,65,0.1); }
 }
 /* reserva espaço no rodapé só quando o banner está no ar (classe ligada pelo React) */
 body.has-ad-footer { padding-bottom: 126px; }
+body.has-ad-footer .patch-notes-trigger {
+  bottom: calc(140px + env(safe-area-inset-bottom, 0px)) !important;
+}
 @media (max-width: 640px) {
-  .ad-footer-link img { width: 320px; }
+  .ad-footer { padding-top: 4px; gap: 1px; }
+  .ad-footer-link img { width: min(300px, calc(100vw - 20px)); }
   .ad-footer-meta { align-items: flex-start; }
-  .ad-footer-age { font-size: .52rem; max-width: 245px; text-align: right; line-height: 1.15; }
-  body.has-ad-footer { padding-bottom: 92px; }
+  .ad-footer-age { font-size: .5rem; max-width: 220px; text-align: right; line-height: 1.1; }
+  body.has-ad-footer { padding-bottom: 84px; }
+  body.has-ad-footer .patch-notes-trigger {
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 8px !important;
+    min-height: 40px;
+    padding: 7px 10px !important;
+  }
   .landing-legal-footer { justify-content: center; text-align: center; }
   .landing-legal-footer > span:nth-child(2) { text-align: center; }
   .legal-document { padding: 24px 18px; }

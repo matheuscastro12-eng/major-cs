@@ -5698,3 +5698,302 @@ body.career-dash .em-found-grid {
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   Mobile hardening — dashboard e abas da carreira
+   ============================================================ */
+@media (max-width: 860px) {
+  body.has-ad-footer:has(main.page-career) {
+    padding-bottom: 0;
+  }
+
+  body.has-ad-footer:has(main.page-career) .career-dash {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .career-dash,
+  .career-dash *,
+  .career-dash *::before,
+  .career-dash *::after {
+    box-sizing: border-box;
+  }
+
+  .career-dash .em-header-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .career-dash .em-header-left,
+  .career-dash .em-header-right,
+  .career-dash .em-tool-group {
+    min-width: 0;
+  }
+
+  .career-dash .em-main-nav,
+  .career-dash .em-subnav {
+    scroll-snap-type: x proximity;
+    overscroll-behavior-inline: contain;
+    touch-action: pan-x;
+  }
+
+  .career-dash .em-main-tab,
+  .career-dash .em-subtab {
+    min-height: 44px;
+    scroll-snap-align: start;
+  }
+
+  .career-dash .em-main-nav:focus-visible,
+  .career-dash .em-subnav:focus-visible,
+  .career-dash .em-roster-scroll:focus-visible {
+    outline: 2px solid var(--em-gold);
+    outline-offset: -2px;
+  }
+
+  .career-dash .em-body,
+  .career-dash .em-layout,
+  .career-dash .em-col,
+  .career-dash .dash-card,
+  .career-dash .dash-card-body {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .career-dash .em-nextup-event,
+  .career-dash .em-nextup-meta,
+  .career-dash .em-task-main,
+  .career-dash .em-task-main b,
+  .career-dash .em-task-main p {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .career-dash .em-nextup-meta {
+    flex-wrap: wrap;
+    row-gap: 3px;
+  }
+
+  .career-dash .em-plan-row,
+  .career-dash .gameplan-picker,
+  .career-dash .gp-chips {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .career-dash .gp-chips {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .career-dash .gp-chip {
+    min-height: 38px;
+    flex: 1 1 105px;
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .career-dash .em-btn,
+  .career-dash .em-task-open,
+  .career-dash .em-link-btn,
+  .career-dash .btn,
+  .career-dash button.gp-chip {
+    min-height: 44px;
+  }
+
+  .career-dash .em-task {
+    align-items: stretch;
+  }
+
+  .career-dash .em-task-open {
+    align-self: center;
+    padding-inline: 12px;
+  }
+
+  .career-dash .em-modal-backdrop {
+    align-items: flex-end;
+    padding: max(8px, env(safe-area-inset-top, 0px)) 8px 0;
+  }
+
+  .career-dash .em-modal {
+    width: 100%;
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top, 0px)));
+    border-radius: 12px 12px 0 0;
+  }
+
+  .career-dash .em-modal-x {
+    width: 44px;
+    height: 44px;
+  }
+
+  .career-dash .em-modal-foot {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .career-dash .em-table-wrap,
+  .career-dash .em-roster-scroll,
+  .career-dash .gsl-bracket,
+  .career-dash .po-bracket {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .career-dash .rtm-field {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .career-dash .em-header-left {
+    gap: 5px;
+  }
+
+  .career-dash .em-nav-pill {
+    display: none;
+  }
+
+  .career-dash .em-header-right > .em-budget,
+  .career-dash .em-header-right > .streak-badge {
+    display: none !important;
+  }
+
+  .career-dash .em-tool-btn,
+  .career-dash .em-continue-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .career-dash .em-main-nav {
+    margin-inline: -8px;
+    padding-inline: 8px 28px;
+    mask-image: linear-gradient(90deg, #000 calc(100% - 30px), transparent);
+  }
+
+  .career-dash .em-main-tab {
+    padding-inline: 12px;
+    font-size: 0.75rem;
+  }
+
+  .career-dash .em-nextup-teams {
+    justify-content: space-around;
+  }
+
+  .career-dash .em-nextup-team {
+    min-width: 82px;
+  }
+
+  .career-dash .em-nextup-actions .em-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .career-dash .em-task {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .career-dash .em-task-open {
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  .career-dash .cs-row {
+    min-width: 0;
+  }
+
+  .career-dash .cs-row .cs-nick {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .career-dash .cs-row .cs-stat {
+    display: none;
+  }
+
+  .career-dash .cs-row .cs-ovr {
+    flex: 0 0 auto;
+  }
+
+  /* No telefone, a tabela vira uma lista legível em vez de ficar
+     parcialmente escondida além da borda do card. */
+  .career-dash .em-roster-scroll {
+    overflow: visible;
+  }
+
+  .career-dash .em-roster-table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .career-dash .em-roster-table thead {
+    display: none;
+  }
+
+  .career-dash .em-roster-table tbody,
+  .career-dash .em-roster-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .career-dash .em-roster-table tr {
+    padding: 10px;
+    border-bottom: 1px solid var(--em-border);
+  }
+
+  .career-dash .em-roster-table td {
+    display: inline-flex !important;
+    width: auto;
+    min-width: 0;
+    padding: 4px 10px 4px 0;
+    border: 0;
+    vertical-align: middle;
+  }
+
+  .career-dash .em-roster-table td:first-child {
+    display: flex !important;
+    width: 100%;
+    padding: 0 0 7px;
+  }
+
+  .career-dash .em-roster-table td:nth-child(2),
+  .career-dash .em-roster-table td:nth-child(5) {
+    display: none !important;
+  }
+
+  .career-dash .em-roster-table td:nth-child(3)::before { content: "OVR "; }
+  .career-dash .em-roster-table td:nth-child(4)::before { content: "POT "; }
+  .career-dash .em-roster-table td:nth-child(6)::before { content: "Humor "; }
+  .career-dash .em-roster-table td:nth-child(7)::before { content: "Rating "; }
+
+  .career-dash .em-roster-table td:not(:first-child)::before {
+    margin-right: 5px;
+    color: var(--em-muted);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .career-dash .em-fin-split,
+  .career-dash .em-scout-stats,
+  .career-dash .rtm-field {
+    grid-template-columns: 1fr !important;
+  }
+
+  .career-dash .em-modal-body {
+    padding: 12px;
+  }
+
+  .career-dash .em-modal-foot {
+    flex-direction: column-reverse;
+  }
+
+  .career-dash .em-modal-foot .em-btn,
+  .career-dash .em-modal-foot .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
