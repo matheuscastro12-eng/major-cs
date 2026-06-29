@@ -244,7 +244,7 @@ export function CareerOverview({
                 <div className="em-section-label">{ct('Melhores mapas')}</div>
                 {oppMaps.length ? oppMaps.map(([map, pref]) => (
                   <div key={map} className="em-map-row">
-                    <img src={MAP_IMAGES[map]} alt="" className="em-map-thumb" />
+                    <img src={MAP_IMAGES[map]} alt="" className="em-map-thumb" loading="lazy" decoding="async" />
                     <span>{MAP_LABELS[map]}</span>
                     <div className="em-map-bar"><i style={{ width: `${Math.min(100, pref * 20)}%` }} /></div>
                     <span className="em-map-pct">{Math.round(pref * 20)}%</span>

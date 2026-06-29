@@ -115,35 +115,48 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   if (schemaReady) return;
   // rtm_ranking é de api/ranking.ts; garante a base aqui (mesma definição) pra o
   // matchmaking poder ler o MMR do host sem quebrar a listagem se a tabela faltar.
-  await sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS name text`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS ranked boolean DEFAULT false`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage int DEFAULT 0`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage_started_at bigint DEFAULT 0`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS ruleset text DEFAULT 'open'`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_seed bigint DEFAULT 0`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS playback_speed real DEFAULT 1`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS draft_rollouts int DEFAULT 2`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS veto_state jsonb DEFAULT '{}'::jsonb`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS major_vetos jsonb DEFAULT '{}'::jsonb`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_roster jsonb DEFAULT NULL`;
-  await sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage_results jsonb DEFAULT '{}'::jsonb`;
-  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS ready_stage int DEFAULT -1`;
-  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS strategy jsonb DEFAULT '{}'::jsonb`;
-  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS lineup jsonb DEFAULT '{}'::jsonb`;
-  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS rollouts jsonb DEFAULT '[]'::jsonb`;
-  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS spectator boolean DEFAULT false`;
-  await sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS last_seen timestamptz DEFAULT now()`;
+  // Um único batch HTTP no Neon em vez de mais de vinte chamadas por cold start.
+  await sql.transaction([
+    sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS name text`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT false`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS ranked boolean DEFAULT false`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS locked boolean DEFAULT false`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS season int DEFAULT 1`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS last_ping timestamptz DEFAULT now()`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage int DEFAULT 0`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage_started_at bigint DEFAULT 0`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS ruleset text DEFAULT 'open'`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_seed bigint DEFAULT 0`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS playback_speed real DEFAULT 1`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS draft_rollouts int DEFAULT 2`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS veto_state jsonb DEFAULT '{}'::jsonb`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS major_vetos jsonb DEFAULT '{}'::jsonb`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_roster jsonb DEFAULT NULL`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage_results jsonb DEFAULT '{}'::jsonb`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS ready_stage int DEFAULT -1`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS strategy jsonb DEFAULT '{}'::jsonb`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS lineup jsonb DEFAULT '{}'::jsonb`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS rollouts jsonb DEFAULT '[]'::jsonb`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS spectator boolean DEFAULT false`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS last_seen timestamptz DEFAULT now()`,
+  ]);
   schemaReady = true;
 }
 
 // janela em que um jogador é considerado "presente" (heartbeat recente). Quem
 // passa disso não conta na barreira coletiva e pode ter o host migrado.
-const PRESENT_MS = 70_000; // host só é considerado ausente após ~70s (cliente pinga a cada 25s: tolera pings perdidos)
+const PRESENT_MS = 150_000;
+const hostHealthCheckedAt = new Map<string, number>();
+
+function shouldCheckHostHealth(code: string): boolean {
+  const now = Date.now();
+  const previous = hostHealthCheckedAt.get(code) ?? 0;
+  if (now - previous < 30_000) return false;
+  if (hostHealthCheckedAt.size > 1000) hostHealthCheckedAt.clear();
+  hostHealthCheckedAt.set(code, now);
+  return true;
+}
 
 // rate-limit best-effort POR INSTÂNCIA (não cobre flood distribuído; pra isso,
 // usar o Firewall/rate-limit da Vercel). Protege o Neon do flood casual.
@@ -169,7 +182,7 @@ async function migrateHostIfStale(sql: ReturnType<typeof neon>, code: string): P
     SELECT host,
            (SELECT nick FROM lobby_players p
             WHERE p.code = l.code AND COALESCE(p.spectator, false) = false
-              AND COALESCE(p.last_seen, p.joined_at) > now() - interval '70 seconds'
+              AND COALESCE(p.last_seen, p.joined_at) > now() - interval '150 seconds'
             ORDER BY p.joined_at ASC LIMIT 1) AS oldest_active,
            (SELECT COALESCE(last_seen, joined_at) FROM lobby_players p
             WHERE p.code = l.code AND lower(p.nick) = lower(l.host)) AS host_seen
@@ -180,6 +193,35 @@ async function migrateHostIfStale(sql: ReturnType<typeof neon>, code: string): P
   const stale = !host_seen || Date.now() - new Date(host_seen as string).getTime() > PRESENT_MS;
   if (!stale) return;
   await sql`UPDATE lobbies SET host = ${oldest_active}, updated_at = now() WHERE code = ${code} AND lower(host) = lower(${host})`;
+}
+
+// Reavalia a barreira do draft depois de pick, kick ou saída voluntária. Sem
+// isso, quando o único jogador ainda não pronto saía, os restantes ficavam
+// presos em "drafting" para sempre.
+async function finishDraftIfReady(sql: ReturnType<typeof neon>, code: string, mode: string): Promise<void> {
+  const actives = await sql`
+    SELECT nick, done FROM lobby_players
+    WHERE code = ${code} AND COALESCE(spectator, false) = false
+    ORDER BY joined_at ASC`;
+  if (actives.length === 0 || !actives.every((player) => player.done === true)) return;
+  if (mode === 'duel') {
+    if (actives.length < 2) return;
+    const participants = actives.map((player) => String(player.nick));
+    await sql`
+      UPDATE lobbies
+      SET status = 'veto', veto_state = ${JSON.stringify(initialVeto(participants))}::jsonb, updated_at = now()
+      WHERE code = ${code} AND status = 'drafting'`;
+    return;
+  }
+  await sql`
+    UPDATE lobbies SET status = 'done', run_roster = (
+      SELECT COALESCE(jsonb_agg(jsonb_build_object(
+        'nick', nick, 'picks', COALESCE(picks, '[]'::jsonb), 'coach_pick', COALESCE(coach_pick, ''),
+        'strategy', COALESCE(strategy, '{}'::jsonb), 'lineup', COALESCE(lineup, '{}'::jsonb), 'rollouts', COALESCE(rollouts, '[]'::jsonb)
+      ) ORDER BY joined_at ASC), '[]'::jsonb)
+      FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false
+    ), updated_at = now()
+    WHERE code = ${code} AND status = 'drafting'`;
 }
 
 interface Res {
@@ -206,6 +248,9 @@ export default async function handler(
 
   // GET ?list=1 -> salas abertas (públicas) esperando jogadores
   if ((req.method === 'GET' || !req.method) && req.query?.list != null) {
+    // A lista é igual para todos e tolera alguns segundos de atraso. Compartilhar
+    // a resposta no CDN elimina milhares de invocações e consultas idênticas.
+    res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=20');
     try {
       // aproveita pra fechar salas inativas (sem heartbeat há mais de 2min)
       await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes'`;
@@ -216,7 +261,7 @@ export default async function handler(
                (SELECT mmr FROM rtm_ranking rr WHERE lower(rr.nick) = lower(l.host) ORDER BY mmr DESC LIMIT 1) AS host_mmr
         FROM lobbies l
         WHERE l.is_public = true AND l.status = 'waiting'
-              AND COALESCE(l.last_ping, l.created_at) > now() - interval '90 seconds'
+              AND COALESCE(l.last_ping, l.created_at) > now() - interval '180 seconds'
         ORDER BY l.created_at DESC LIMIT 30`;
       const rooms = rows
         .map((r) => ({ ...r, players: Number(r.players), max: MAX_PLAYERS[r.mode as string] ?? 8, ranked: !!r.ranked, host_mmr: r.host_mmr == null ? null : Number(r.host_mmr) }))
@@ -235,10 +280,15 @@ export default async function handler(
       res.status(400).json({ error: 'código obrigatório' });
       return;
     }
-    try {
-      await migrateHostIfStale(sql, code); // auto-cura: host que sumiu cede o controle
-    } catch {
-      /* migração é best-effort, nunca bloqueia o poll */
+    // Jogadores da mesma sala pedem o mesmo snapshot. Uma janela curta absorve
+    // rajadas simultâneas no CDN; o ETag continua sendo o fallback condicional.
+    res.setHeader('Cache-Control', 'public, s-maxage=2, stale-while-revalidate=2');
+    if (shouldCheckHostHealth(code)) {
+      try {
+        await migrateHostIfStale(sql, code); // auto-cura: host que sumiu cede o controle
+      } catch {
+        /* migração é best-effort, nunca bloqueia o poll */
+      }
     }
     try {
       const lobby = await sql`SELECT code, mode, host, status, seed, COALESCE(NULLIF(run_seed, 0), seed) AS run_seed, pool, COALESCE(name, '') AS name, created_at, COALESCE(locked, false) AS locked, COALESCE(ranked, false) AS ranked, COALESCE(season, 1) AS season, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(ruleset, 'open') AS ruleset, COALESCE(playback_speed, 1) AS playback_speed, COALESCE(draft_rollouts, 2) AS draft_rollouts, COALESCE(veto_state, '{}'::jsonb) AS veto, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos, run_roster, COALESCE(stage_results, '{}'::jsonb) AS stage_results FROM lobbies WHERE code = ${code}`;
@@ -415,7 +465,7 @@ export default async function handler(
 
     if (action === 'start') {
       const lobby = await sql`SELECT host, status, mode FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0 || lobby[0].host !== nick) {
+      if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
         res.status(403).json({ error: 'só o host inicia o draft' });
         return;
       }
@@ -435,7 +485,7 @@ export default async function handler(
 
     if (action === 'lock') {
       const lobby = await sql`SELECT host FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0 || lobby[0].host !== nick) {
+      if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
         res.status(403).json({ error: 'só o host tranca a sala' });
         return;
       }
@@ -448,7 +498,7 @@ export default async function handler(
     if (action === 'kick') {
       const target = String(body.target ?? '').trim().slice(0, 20);
       const lobby = await sql`SELECT host, status, mode FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0 || lobby[0].host !== nick) {
+      if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
         res.status(403).json({ error: 'só o host expulsa' });
         return;
       }
@@ -465,22 +515,7 @@ export default async function handler(
       // se estava no draft, reavalia a barreira: remover um AFK que não terminou
       // pode liberar o avanço dos que já estão prontos (não trava mais).
       if (lobby[0].status === 'drafting') {
-        const actives = await sql`SELECT nick, done FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false ORDER BY joined_at ASC`;
-        const allDone = actives.length > 0 && actives.every((p) => p.done === true);
-        if (allDone) {
-          if (lobby[0].mode === 'duel' && actives.length >= 2) {
-            const participants = actives.map((p) => String(p.nick));
-            await sql`UPDATE lobbies SET status = 'veto', veto_state = ${JSON.stringify(initialVeto(participants))}::jsonb, updated_at = now() WHERE code = ${code}`;
-          } else if (lobby[0].mode !== 'duel') {
-            await sql`UPDATE lobbies SET status = 'done', run_roster = (
-              SELECT COALESCE(jsonb_agg(jsonb_build_object(
-                'nick', nick, 'picks', COALESCE(picks, '[]'::jsonb), 'coach_pick', COALESCE(coach_pick, ''),
-                'strategy', COALESCE(strategy, '{}'::jsonb), 'lineup', COALESCE(lineup, '{}'::jsonb), 'rollouts', COALESCE(rollouts, '[]'::jsonb)
-              ) ORDER BY joined_at ASC), '[]'::jsonb)
-              FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false
-            ), updated_at = now() WHERE code = ${code}`;
-          }
-        }
+        await finishDraftIfReady(sql, code, String(lobby[0].mode));
       }
       res.status(200).json({ ok: true });
       return;
@@ -489,8 +524,14 @@ export default async function handler(
     if (action === 'ping') {
       // heartbeat: mantém a sala viva e marca a presença individual do jogador
       if (!code) { res.status(200).json({ ok: false }); return; }
-      await sql`UPDATE lobbies SET last_ping = now() WHERE code = ${code}`;
-      if (nick) await sql`UPDATE lobby_players SET last_seen = now() WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`;
+      if (nick) {
+        await sql.transaction([
+          sql`UPDATE lobbies SET last_ping = now() WHERE code = ${code}`,
+          sql`UPDATE lobby_players SET last_seen = now() WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`,
+        ]);
+      } else {
+        await sql`UPDATE lobbies SET last_ping = now() WHERE code = ${code}`;
+      }
       res.status(200).json({ ok: true });
       return;
     }
@@ -498,6 +539,7 @@ export default async function handler(
     if (action === 'leave') {
       // saída limpa: remove o jogador e migra o host se quem saiu era o host
       if (!code || !nick) { res.status(200).json({ ok: false }); return; }
+      const room = await sql`SELECT mode, status FROM lobbies WHERE code = ${code}`;
       const wasHost = await sql`SELECT 1 FROM lobbies WHERE code = ${code} AND lower(host) = ${nick.toLowerCase()}`;
       await sql`DELETE FROM lobby_players WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`;
       if (wasHost.length > 0) {
@@ -507,6 +549,9 @@ export default async function handler(
           ORDER BY joined_at ASC LIMIT 1`;
         if (next.length > 0) await sql`UPDATE lobbies SET host = ${next[0].nick}, updated_at = now() WHERE code = ${code}`;
         else await sql`DELETE FROM lobbies WHERE code = ${code}`; // ninguém sobrou
+      }
+      if (room[0]?.status === 'drafting') {
+        await finishDraftIfReady(sql, code, String(room[0].mode));
       }
       res.status(200).json({ ok: true });
       return;
@@ -559,7 +604,7 @@ export default async function handler(
       // host reinicia a sala numa nova temporada: novo sorteio (transferências),
       // todos draftam de novo e disputam outro Major. Mantém os mesmos jogadores.
       const lobby = await sql`SELECT host, status, mode FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0 || lobby[0].host !== nick) {
+      if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
         res.status(403).json({ error: 'só o host inicia a próxima temporada' });
         return;
       }
@@ -650,6 +695,14 @@ export default async function handler(
         return;
       }
       const lobbyPlayers = await sql`SELECT nick FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false`;
+      const canonicalPlayer = lobbyPlayers.find((player) => String(player.nick).toLowerCase() === nick.toLowerCase());
+      const pairingKey = matchKey.slice(`${stage}:`.length);
+      const requesterTeamId = `online_${String(canonicalPlayer?.nick ?? nick)}`;
+      const ownsMatch = pairingKey.startsWith(`${requesterTeamId}|`) || pairingKey.endsWith(`|${requesterTeamId}`);
+      if (!canonicalPlayer || !ownsMatch) {
+        res.status(403).json({ error: 'este confronto não pertence ao jogador' });
+        return;
+      }
       const validPlayers = new Set(lobbyPlayers.map((player) => String(player.nick).toLowerCase()));
       if (!validPlayers.has(nick.toLowerCase()) || !requestedParticipants.some((participant) => participant?.toLowerCase() === nick.toLowerCase())) {
         res.status(403).json({ error: 'somente jogadores podem vetar mapas' });
@@ -711,7 +764,17 @@ export default async function handler(
         return;
       }
       const stage = Number(lobby[0].stage);
-      if (!matchKey.startsWith(`${stage}:`) || (winner !== 0 && winner !== 1) || !ms || ms.length !== 2) {
+      const pairingKey = matchKey.startsWith(`${stage}:`) ? matchKey.slice(`${stage}:`.length) : '';
+      const member = await sql`
+        SELECT nick FROM lobby_players
+        WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()} AND COALESCE(spectator, false) = false`;
+      const requesterTeamId = `online_${String(member[0]?.nick ?? nick)}`;
+      const ownsMatch = pairingKey.startsWith(`${requesterTeamId}|`) || pairingKey.endsWith(`|${requesterTeamId}`);
+      if (
+        !pairingKey || !ownsMatch || member.length === 0 ||
+        (winner !== 0 && winner !== 1) || !ms || ms.length !== 2 ||
+        ms.some((score) => score > 3) || ms[winner] <= ms[winner === 0 ? 1 : 0]
+      ) {
         res.status(400).json({ error: 'resultado inválido' });
         return;
       }
@@ -740,7 +803,7 @@ export default async function handler(
           SELECT COUNT(*) AS n FROM lobby_players
           WHERE code = ${code} AND COALESCE(spectator, false) = false
             AND COALESCE(ready_stage, -1) < ${currentStage}
-            AND COALESCE(last_seen, joined_at) > now() - interval '70 seconds'`;
+            AND COALESCE(last_seen, joined_at) > now() - interval '150 seconds'`;
         if (Number(pending[0].n) > 0) {
           res.status(409).json({ error: 'ainda há jogadores assistindo suas partidas' });
           return;
@@ -789,33 +852,15 @@ export default async function handler(
       });
       const updated = await sql`
         UPDATE lobby_players SET picks = ${picks}::jsonb, coach_pick = ${coachPick}, strategy = ${strategy}::jsonb, lineup = ${lineup}::jsonb, rollouts = ${rollouts}::jsonb, done = ${done}
-        WHERE code = ${code} AND nick = ${nick} AND COALESCE(spectator, false) = false
+        WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()} AND COALESCE(spectator, false) = false
         RETURNING id`;
       if (updated.length === 0) {
         res.status(404).json({ error: 'jogador não está neste lobby' });
         return;
       }
       if (done) {
-        const pending = await sql`SELECT COUNT(*) AS n FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false AND done = false`;
-        if (Number(pending[0].n) === 0) {
-          const room = await sql`SELECT mode FROM lobbies WHERE code = ${code}`;
-          if (room[0]?.mode === 'duel') {
-            const participantRows = await sql`SELECT nick FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false ORDER BY joined_at ASC`;
-            const participants = participantRows.map((player) => String(player.nick));
-            await sql`UPDATE lobbies SET status = 'veto', veto_state = ${JSON.stringify(initialVeto(participants))}::jsonb, updated_at = now() WHERE code = ${code}`;
-          } else {
-            // Major começou: CONGELA o elenco da corrida (snapshot). A partir daqui
-            // o bracket é simulado do snapshot, não dos players ao vivo — entrar/sair
-            // da sala não re-embaralha mais resultados já jogados.
-            await sql`UPDATE lobbies SET status = 'done', run_roster = (
-              SELECT COALESCE(jsonb_agg(jsonb_build_object(
-                'nick', nick, 'picks', COALESCE(picks, '[]'::jsonb), 'coach_pick', COALESCE(coach_pick, ''),
-                'strategy', COALESCE(strategy, '{}'::jsonb), 'lineup', COALESCE(lineup, '{}'::jsonb), 'rollouts', COALESCE(rollouts, '[]'::jsonb)
-              ) ORDER BY joined_at ASC), '[]'::jsonb)
-              FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false
-            ), updated_at = now() WHERE code = ${code}`;
-          }
-        }
+        const room = await sql`SELECT mode FROM lobbies WHERE code = ${code}`;
+        if (room.length) await finishDraftIfReady(sql, code, String(room[0].mode));
       }
       res.status(200).json({ ok: true });
       return;

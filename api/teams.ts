@@ -64,7 +64,7 @@ const num = (v: unknown, def = 0) => {
 };
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -78,22 +78,32 @@ export default async function handler(
 
   // ---- leitura pública ----
   if (req.method === 'GET' || !req.method) {
-    // cache de edge: o dataset muda raro (só no "Salvar no banco" do admin), e o
-    // app já traz a base embutida no build. TTL maior + SWR de 1 dia cortam a
-    // banda de origem por visita; edições do admin propagam em ~10min (s-maxage).
-    res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=86400');
-    res.setHeader('Access-Control-Expose-Headers', 'X-Dataset-Rev');
     try {
-      // rev do build com que esta base foi salva (vazio se nunca foi gravado).
-      // O cliente compara com o rev do seu build pra saber se o banco está atrás.
       let rev = '';
+      let version = '';
       try {
-        const meta = (await sql`SELECT value FROM meta WHERE key = 'dataset_rev'`) as { value: string }[];
-        rev = meta[0]?.value ?? '';
+        const meta = (await sql`SELECT key, value FROM meta WHERE key IN ('dataset_rev', 'dataset_version')`) as { key: string; value: string }[];
+        rev = meta.find((row) => row.key === 'dataset_rev')?.value ?? '';
+        version = meta.find((row) => row.key === 'dataset_version')?.value ?? '';
       } catch {
-        /* tabela meta ainda não existe: rev vazio = banco mais antigo que o build */
+        /* banco legado sem tabela meta */
       }
+      const datasetVersion = version || rev || 'legacy';
+
+      // Checagem pequena e compartilhada: o cliente só baixa os ~150 KB quando
+      // a versão realmente muda.
+      if (req.query?.meta != null) {
+        res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+        res.status(200).json({ rev, version: datasetVersion });
+        return;
+      }
+
+      // A URL do payload leva a versão como query, então cada edição gera uma
+      // chave nova e a base imutável pode ficar uma hora no CDN com segurança.
+      res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+      res.setHeader('Access-Control-Expose-Headers', 'X-Dataset-Rev, X-Dataset-Version');
       res.setHeader('X-Dataset-Rev', rev);
+      res.setHeader('X-Dataset-Version', datasetVersion);
       const rows = (await sql`SELECT data FROM teams ORDER BY id`) as { data: unknown }[];
       res.status(200).json(rows.map((r) => r.data));
     } catch (e) {
@@ -155,14 +165,17 @@ export default async function handler(
       // carimba o rev do build em que o admin salvou: clientes nesse mesmo build
       // adotam o banco; builds mais novos (deploy de att) vencem o banco.
       const rev = String(body.rev ?? '').slice(0, 64);
+      const version = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
       try {
         await sql`CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text)`;
         await sql`INSERT INTO meta (key, value) VALUES ('dataset_rev', ${rev})
                   ON CONFLICT (key) DO UPDATE SET value = ${rev}`;
+        await sql`INSERT INTO meta (key, value) VALUES ('dataset_version', ${version})
+                  ON CONFLICT (key) DO UPDATE SET value = ${version}`;
       } catch {
         /* não bloqueia o save se o meta falhar */
       }
-      res.status(200).json({ ok: true, teams: teams.length });
+      res.status(200).json({ ok: true, teams: teams.length, version });
     } catch (e) {
       res.status(500).json({ ok: false, error: String(e) });
     }

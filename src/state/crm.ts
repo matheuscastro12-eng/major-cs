@@ -8,6 +8,9 @@ const STORAGE_KEY = 'major-cs-dataset-v3';
 // rev do build com que o cache local foi gravado. Se o build novo tem um rev
 // diferente (qualquer att de elenco), o cache antigo é descartado sozinho.
 const REV_KEY = 'major-cs-dataset-rev';
+// Última combinação build + versão remota sincronizada. Evita baixar a base
+// completa em cada F5; uma consulta pequena de versão decide se houve mudança.
+const REMOTE_SYNC_KEY = 'major-cs-dataset-remote-sync-v1';
 // marca quando há edições LOCAIS ainda não enviadas ao banco. Só nesse caso o
 // app mantém a cópia local; senão sempre adota a base do servidor (verdade
 // compartilhada), garantindo que o "Salvar no banco" do admin chegue a todos.
@@ -86,6 +89,7 @@ export function saveDataset(teams: TeamSeason[]): void {
 
 export function resetDataset(): TeamSeason[] {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(REMOTE_SYNC_KEY);
   clearDirty();
   return structuredClone(BASE_TEAMS);
 }
@@ -195,8 +199,17 @@ export async function saveDatasetToServer(
       body: JSON.stringify({ password, teams, deleteIds: getDeletedTeamIds(), rev: BASE_REV }),
       signal: AbortSignal.timeout(30000),
     });
-    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (res.ok && data.ok) return { ok: true };
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; version?: string };
+    if (res.ok && data.ok) {
+      if (data.version) {
+        try {
+          localStorage.setItem(REMOTE_SYNC_KEY, `${BASE_REV}:${data.version}`);
+        } catch {
+          /* armazenamento indisponível */
+        }
+      }
+      return { ok: true };
+    }
     return { ok: false, error: data.error ?? `HTTP ${res.status}` };
   } catch (e) {
     return { ok: false, error: String(e) };
@@ -244,11 +257,35 @@ export function mergePendingBaseTeams(teams: TeamSeason[]): TeamSeason[] {
 // X-Dataset-Rev). O rev permite saber se o banco está atrás do build atual.
 export async function fetchRemoteDataset(): Promise<{ teams: TeamSeason[]; rev: string } | null> {
   try {
-    const res = await fetch('/api/teams', { signal: AbortSignal.timeout(6000) });
+    let version = '';
+    try {
+      const metaRes = await fetch('/api/teams?meta=1', { signal: AbortSignal.timeout(4000) });
+      if (metaRes.ok) {
+        const meta = (await metaRes.json()) as { version?: string };
+        version = String(meta.version ?? '').slice(0, 96);
+        const token = version ? `${BASE_REV}:${version}` : '';
+        if (token && localStorage.getItem(STORAGE_KEY) && localStorage.getItem(REMOTE_SYNC_KEY) === token) {
+          return null;
+        }
+      }
+    } catch {
+      // Backend antigo/indisponível: tenta a rota completa para manter compatibilidade.
+    }
+
+    const query = version ? `?version=${encodeURIComponent(version)}` : '';
+    const res = await fetch(`/api/teams${query}`, { signal: AbortSignal.timeout(6000) });
     if (!res.ok) return null;
     const data = (await res.json()) as TeamSeason[];
     if (!Array.isArray(data) || data.length < 16) return null;
     if (!data.every((t) => t && Array.isArray(t.players) && t.players.length >= 5)) return null;
+    const responseVersion = res.headers.get('X-Dataset-Version') ?? version;
+    if (responseVersion) {
+      try {
+        localStorage.setItem(REMOTE_SYNC_KEY, `${BASE_REV}:${responseVersion}`);
+      } catch {
+        /* armazenamento indisponível */
+      }
+    }
     return { teams: normalizeTeams(data), rev: res.headers.get('X-Dataset-Rev') ?? '' };
   } catch {
     return null;

@@ -250,7 +250,7 @@ function LogoChip({ tag, colors, logoUrl }: { tag: string; colors: [string, stri
   if (logoUrl && failedUrl !== logoUrl) {
     return (
       <span className="mb-logo">
-        <img src={logoUrl} alt={tag} onError={() => setFailedUrl(logoUrl)} />
+        <img src={logoUrl} alt={tag} loading="lazy" decoding="async" onError={() => setFailedUrl(logoUrl)} />
       </span>
     );
   }

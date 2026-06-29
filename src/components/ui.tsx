@@ -121,6 +121,8 @@ export function Flag({ cc, title }: { cc: string; title?: string }) {
       src={`https://flagcdn.com/w20/${cc.toLowerCase()}.png`}
       alt={cc}
       title={title ?? cc.toUpperCase()}
+      loading="lazy"
+      decoding="async"
       onError={() => setFailedCountry(cc)}
     />
   );
@@ -194,6 +196,8 @@ export function TeamBadge({
           src={logoUrl}
           alt={tag}
           title={tag}
+          loading="lazy"
+          decoding="async"
           crossOrigin={logoUrl.startsWith('http') ? 'anonymous' : undefined}
           onLoad={(e) => setTone(detectTone(e.currentTarget, logoUrl))}
           onError={() => setErr(true)}
@@ -242,6 +246,8 @@ export function MapThumb({ map, className = '' }: { map: MapId; className?: stri
       className={`map-thumb ${className}`}
       src={custom ?? MAP_IMAGES[map]}
       alt={map}
+      loading="lazy"
+      decoding="async"
       onError={() => setErr(true)}
     />
   );

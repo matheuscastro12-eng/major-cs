@@ -59,7 +59,7 @@ interface Props {
 }
 
 const NICK_KEY = 'rtm-nick';
-const POLL_MS = 5000; // corte de custo: mais lento = menos invocações de função
+const POLL_MS = 10_000;
 const DEFAULT_STRATEGY: OnlineStrategy = {
   tactic: 'balanced', favoriteMap: 'mirage', banMap: 'nuke', pace: 'default', timeoutMap: 0, substituteAfterMap: false,
 };
@@ -357,6 +357,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   );
   const [code, setCode] = useState('');
   const [state, setState] = useState<LobbyState | null>(null);
+  const stateRef = useRef<LobbyState | null>(null);
   const [myPicks, setMyPicks] = useState<string[]>([]);
   const [myRollouts, setMyRollouts] = useState<number[]>([0, 0, 0, 0, 0]);
   const [coachPick, setCoachPick] = useState('');
@@ -393,6 +394,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   const playbackSpeedRef = useRef<PlaybackSpeed | null>(null);
   const progressRef = useRef<string | null>(null);
   const recordedSeasonsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // reveal por temporada: a chave inclui o seed, então cada Major tem o seu
   const seasonSeed = state?.lobby.seed ?? 0;
@@ -432,7 +437,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // polling do estado do lobby
   const refresh = useCallback(async () => {
     if (!code || localDemo || document.hidden) return; // demo local não chama backend
-    const s = await fetchLobby(code);
+    const s = await fetchLobby(code, stateRef.current?.lobby.code === code);
     if (s === 'unchanged') { goneRef.current = 0; return; } // 304: estado igual, mantém
     if (s === 'gone') {
       // tolera UM 404 transitório (corrida logo após criar / réplica atrasada):
@@ -547,9 +552,10 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     // aparecem em ~2s em vez de 5s); 'done' lento (resultado imutável, só detecta
     // a próxima temporada). A partida ao vivo sincroniza pelo relógio da sala.
     const st = state?.lobby.status;
-    // corte de custo: no 'done' o resultado é IMUTÁVEL (só detecta a próxima
-    // temporada), então poll lento; veto segue rápido, draft/espera um pouco menos.
-    const syncMs = st === 'veto' ? 1000 : st === 'waiting' || st === 'drafting' ? 2500 : lobbyDone ? 7000 : POLL_MS;
+    // Evita milhões de invocações por polling sem deixar a UX lenta: o veto ainda
+    // atualiza rápido, espera/draft em poucos segundos e resultado concluído só
+    // verifica ocasionalmente se o host iniciou uma nova temporada.
+    const syncMs = st === 'veto' ? 2_000 : st === 'waiting' || st === 'drafting' ? 5_000 : lobbyDone ? 30_000 : POLL_MS;
     pollRef.current = window.setInterval(refresh, syncMs);
     return () => { window.clearTimeout(initial); window.clearInterval(pollRef.current); };
   }, [code, refresh, lobbyDone, localDemo, state?.lobby.mode, state?.lobby.status]);
@@ -573,11 +579,11 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   useEffect(() => {
     if (!code || localDemo) return;
     const me = nick.trim();
-    // pinga MESMO com a aba em segundo plano (senão a sala "some" quando o jogador
-    // troca de aba); cadência < janela de presença do servidor (70s) com folga.
+    // Pinga mesmo em segundo plano para a sala não sumir ao trocar de aba. A
+    // janela do servidor tolera dois pings perdidos sem multiplicar invocações.
     const ping = () => { if (me) lobbyApi({ action: 'ping', code, nick: me }).catch(() => {}); };
     ping();
-    const id = window.setInterval(ping, 25000);
+    const id = window.setInterval(ping, 60_000);
     // ao voltar pra aba, pinga e ressincroniza na hora (não espera o próximo poll)
     const onVis = () => { if (!document.hidden) { ping(); void refresh(); } };
     document.addEventListener('visibilitychange', onVis);
@@ -687,14 +693,24 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   // lista de salas abertas (públicas) enquanto o jogador ainda não entrou numa.
   // Aba em segundo plano não consome API à toa (document.hidden).
   const loadRooms = useCallback(async () => {
-    if (!nick.trim() || document.hidden) { return; }
+    if (document.hidden) return;
     setOpenRooms(await listOpenLobbies());
-  }, [nick]);
+  }, []);
   useEffect(() => {
     if (code) return; // já está numa sala
     const initial = window.setTimeout(() => void loadRooms(), 0);
-    const id = window.setInterval(loadRooms, 20000); // corte de custo
-    return () => { window.clearTimeout(initial); window.clearInterval(id); };
+    const id = window.setInterval(loadRooms, 60_000);
+    const onVisible = () => {
+      if (!document.hidden) void loadRooms();
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(id);
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [code, loadRooms]);
 
   const doJoin = async (raw: string, spectator = false) => {
@@ -995,7 +1011,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </Panel>
           </div>
 
-          <Panel title={OL.openRooms} accent="blue" actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}>
+          <Panel title={OL.openRooms} accent="blue" actions={<Button variant="ghost" size="sm" onClick={loadRooms}>↻ {OL.refresh}</Button>}>
             {visibleRooms.length === 0 ? (
               <div style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{OL.noRooms}</div>
             ) : (
@@ -1003,7 +1019,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 {visibleRooms.map((r) => {
                   const full = r.players >= r.max;
                   return (
-                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', opacity: full ? 0.7 : 1 }}>
+                    <div key={r.code} className="ut-room-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', opacity: full ? 0.7 : 1 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
                         <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
@@ -1091,7 +1107,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
           <Panel
             title={ct('Salas ranqueadas abertas')}
             accent="blue"
-            actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}
+            actions={<Button variant="ghost" size="sm" onClick={loadRooms}>↻ {OL.refresh}</Button>}
             style={{ marginBottom: '16px' }}
           >
             {duelRooms.length === 0 ? (
@@ -1099,7 +1115,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {duelRooms.map((r) => (
-                  <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)' }}>
+                  <div key={r.code} className="ut-room-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 7px #29c47a' }} />
                       <span style={{ fontSize: '11px', fontWeight: 700, color: '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{ct('Aguardando')}</span>
@@ -1129,8 +1145,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     }
     // Ranked Major: tela dedicada de salas (browse) + passo de criar sala, no layout do design.
     if (preset === 'party' && !casualOnly) {
-      const openCount = openRooms.filter((r) => r.players < r.max).length;
-      const poolColor = (p: TournamentPool) => (p === 'br' ? 'var(--em-gold)' : 'var(--em-gold)');
+      const openCount = visibleRooms.filter((r) => r.players < r.max).length;
+      const poolColor = 'var(--em-gold)';
       const poolLabel = (p: TournamentPool) => tr(p === 'br' ? 'home.poolBr' : 'home.poolWorld');
 
       if (!majorCreate) {
@@ -1151,7 +1167,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 <b style={{ color: 'var(--em-text)' }}>{openCount} {ct('salas abertas')}</b> {ct('agora')} · {visibleRooms.length} {ct('no total')}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>⟳ {ct('Atualizar')}</Button>
+                <Button variant="ghost" size="sm" onClick={loadRooms}>⟳ {ct('Atualizar')}</Button>
                 <Button variant="gold" size="sm" onClick={() => setMajorCreate(true)}>+ {ct('Criar sala')}</Button>
               </div>
             </div>
@@ -1168,9 +1184,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '13px', color: 'var(--em-muted)', borderRadius: '6px', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>{OL.noRooms}</div>
               ) : visibleRooms.map((r) => {
                 const full = r.players >= r.max;
-                const pc = poolColor(r.pool);
+                const pc = poolColor;
                 return (
-                  <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--em-panel)', border: '1px solid var(--em-border)', opacity: full ? 0.7 : 1 }}>
+                  <div key={r.code} className="ut-room-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--em-panel)', border: '1px solid var(--em-border)', opacity: full ? 0.7 : 1 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '96px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
                       <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
@@ -1428,7 +1444,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <Panel
               title={OL.openRooms}
               accent="blue"
-              actions={<Button variant="ghost" size="sm" onClick={loadRooms} disabled={!nick.trim()}>↻ {OL.refresh}</Button>}
+              actions={<Button variant="ghost" size="sm" onClick={loadRooms}>↻ {OL.refresh}</Button>}
             >
               {visibleRooms.length === 0 ? (
                 <div style={{ fontSize: '13px', color: 'var(--em-muted)' }}>{OL.noRooms}</div>
@@ -1437,7 +1453,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   {visibleRooms.map((r) => {
                     const full = r.players >= r.max;
                     return (
-                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', opacity: full ? 0.75 : 1 }}>
+                    <div key={r.code} className="ut-room-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', opacity: full ? 0.75 : 1 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '94px' }}>
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
                         <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>

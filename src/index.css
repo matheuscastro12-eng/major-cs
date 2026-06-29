@@ -5468,6 +5468,8 @@ button.world-champ:focus-visible, button.world-runner:focus-visible { outline: 2
 .rf-row .kf-round { color: var(--muted); font-size: 0.72rem; margin-right: 6px; }
 
 @media (max-width: 680px) {
+  .ut-room-row { flex-wrap: wrap; gap: 8px !important; }
+  .ut-room-row > button { flex: 1 1 92px; }
   .match-replay .panel-head { flex-wrap: wrap; }
   .ut-playback-speed { order: 3; width: 100%; justify-content: center; }
   .ut-veto-live-grid { grid-template-columns: repeat(2,1fr); }

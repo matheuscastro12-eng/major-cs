@@ -56,7 +56,7 @@ async function fetchHandler(request: Request): Promise<Response> {
   if (!signature || raw.length < 2) return Response.json({ received: true, test: true });
   if (!verifyWoovi(raw, signature)) return Response.json({ error: 'assinatura inválida' }, { status: 401 });
 
-  let body: Record<string, unknown> = {};
+  let body: Record<string, unknown>;
   try { body = JSON.parse(raw) as Record<string, unknown>; } catch { return Response.json({ received: true, processed: false }); }
   if (!isPaidEvent(body)) return Response.json({ received: true, processed: false });
 

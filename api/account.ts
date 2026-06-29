@@ -4,7 +4,7 @@
 // - token: HMAC-SHA256 stateless ("body.sig", body = email|exp), env APP_SECRET.
 // - checkout: cria a URL do Payment Link ligada à conta autenticada.
 // - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
-import { neon } from '@neondatabase/serverless';
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { scryptSync, randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
 import {
   accountReference,
@@ -24,6 +24,46 @@ const APP_SECRET = () => cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEn
 const TTL = 60 * 60 * 24 * 180; // 180 dias
 // Edição Fundador: selo numerado vitalício pros primeiros que pagam (teto configurável).
 const FOUNDER_LIMIT = Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
+let accountSchemaPromise: Promise<void> | null = null;
+let founderAuditAt = 0;
+type AccountSql = NeonQueryFunction<false, false>;
+
+async function ensureAccountSchema(sql: AccountSql): Promise<void> {
+  if (!accountSchemaPromise) {
+    accountSchemaPromise = sql.transaction([
+      sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
+      sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
+      sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
+      sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
+      sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
+      sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
+      sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
+      sql`CREATE TABLE IF NOT EXISTS rtm_saves (email TEXT, slot TEXT, data TEXT, updated_at BIGINT DEFAULT 0, PRIMARY KEY (email, slot))`,
+      sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`,
+      sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`,
+    ]).then(() => undefined).catch((error) => {
+      accountSchemaPromise = null;
+      throw error;
+    });
+  }
+  await accountSchemaPromise;
+}
+
+async function auditFounderNumbers(sql: AccountSql): Promise<void> {
+  const now = Date.now();
+  if (now - founderAuditAt < 5 * 60_000) return;
+  founderAuditAt = now;
+  try {
+    const g = await sql`SELECT
+        (SELECT count(*) FILTER (WHERE is_founder) FROM rtm_accounts)::int AS have,
+        LEAST((SELECT count(*) FILTER (WHERE paid) FROM rtm_accounts)::int, ${FOUNDER_LIMIT})::int AS want`;
+    if (Number(g[0]?.have ?? 0) !== Number(g[0]?.want ?? 0)) await renumberFounders(sql, FOUNDER_LIMIT);
+  } catch (error) {
+    founderAuditAt = 0;
+    throw error;
+  }
+}
 
 function hashPw(pw: string): string {
   const salt = randomBytes(16).toString('hex');
@@ -62,31 +102,12 @@ export default async function handler(
   const dbUrl = cleanEnv(process.env.DATABASE_URL);
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
-  await sql.transaction([
-    sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
-    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
-    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
-    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
-    sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
-    sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
-    sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
-    // cadastro pendente: credenciais de quem iniciou o signup mas ainda NÃO pagou.
-    // Vira conta de verdade só quando o pagamento confirma (regra: só pago tem conta).
-    sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
-    sql`CREATE TABLE IF NOT EXISTS rtm_saves (email TEXT, slot TEXT, data TEXT, updated_at BIGINT DEFAULT 0, PRIMARY KEY (email, slot))`,
-    sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`,
-    sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`,
-  ]);
+  await ensureAccountSchema(sql);
 
   // Backfill de fundador: numera os pagantes antigos (que pagaram antes do selo
   // existir / pelo webhook) por ordem de pagamento. Guardado por um SELECT barato
   // pra rodar só quando há divergência — depois de numerar, fica quieto.
-  {
-    const g = await sql`SELECT
-        (SELECT count(*) FILTER (WHERE is_founder) FROM rtm_accounts)::int AS have,
-        LEAST((SELECT count(*) FILTER (WHERE paid) FROM rtm_accounts)::int, ${FOUNDER_LIMIT})::int AS want`;
-    if (Number(g[0]?.have ?? 0) !== Number(g[0]?.want ?? 0)) await renumberFounders(sql, FOUNDER_LIMIT);
-  }
+  await auditFounderNumbers(sql);
 
   let body: Record<string, unknown> = {};
   try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {}); } catch { /* vazio */ }
@@ -159,13 +180,14 @@ export default async function handler(
     ];
     if (sessionId) stmts.push(sql`INSERT INTO rtm_payment_sessions (session_id, email) VALUES (${sessionId}, ${em}) ON CONFLICT (session_id) DO NOTHING`);
     await sql.transaction(stmts);
-    await claimFounder(em);
+    await claimFounder();
   };
   // Edição Fundador: renumera TODOS os pagantes por ordem de pagamento (#001 = o
   // primeiro do Stripe). Idempotente e determinístico (só toca o que muda), então
   // serve tanto pra novo pagamento quanto pra backfill dos antigos.
-  const claimFounder = async (_em?: string): Promise<void> => {
+  const claimFounder = async (): Promise<void> => {
     await renumberFounders(sql, FOUNDER_LIMIT);
+    founderAuditAt = Date.now();
   };
   const founderOf = async (em: string): Promise<{ founder: boolean; founderNo: number | null }> => {
     const r = await sql`SELECT is_founder, founder_no FROM rtm_accounts WHERE email=${em}`;
@@ -202,7 +224,7 @@ export default async function handler(
       await sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref) VALUES (${email}, ${nick}, ${passHash}, true, ${accountReference(email)})
                 ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, paid=true`;
       await sql`DELETE FROM rtm_pending_signups WHERE email=${email}`;
-      await claimFounder(email);
+      await claimFounder();
       res.status(200).json({ token: sign(email), email, nick, paid: true, ...(await founderOf(email)) });
       return;
     }
@@ -218,7 +240,6 @@ export default async function handler(
     await ensureReference(email);
     const paid = await resolvePaid(email, Boolean(r[0].paid), true);
     if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: checkoutUrl(email) }); return; }
-    await claimFounder(email);
     res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: true, ...(await founderOf(email)) });
     return;
   }
@@ -235,7 +256,6 @@ export default async function handler(
     }
     if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
     await ensureReference(em);
-    if (paid) await claimFounder(em);
     res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)) });
     return;
   }

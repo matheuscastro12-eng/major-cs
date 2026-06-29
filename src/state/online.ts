@@ -460,12 +460,15 @@ export async function listOpenLobbies(): Promise<OpenRoom[]> {
 const lobbyEtags = new Map<string, string>();
 
 // 'gone' = a sala não existe mais (expirou/foi encerrada); 'unchanged' = 304 (sem
-// mudança, mantém o estado atual); null = erro transitório
-export async function fetchLobby(code: string): Promise<LobbyState | null | 'gone' | 'unchanged'> {
+// mudança, mantém o estado atual); null = erro transitório.
+// Só fazemos a requisição condicional quando a tela confirma que já tem um
+// snapshot. O Map sobrevive a remounts; mandar o ETag com uma tela vazia faria o
+// servidor responder 304 e deixaria o jogador preso no loading ao voltar à sala.
+export async function fetchLobby(code: string, hasSnapshot = false): Promise<LobbyState | null | 'gone' | 'unchanged'> {
   try {
     const prev = lobbyEtags.get(code);
     const res = await fetch(`/api/lobby?code=${encodeURIComponent(code)}`, {
-      headers: prev ? { 'If-None-Match': prev } : undefined,
+      headers: prev && hasSnapshot ? { 'If-None-Match': prev } : undefined,
       signal: AbortSignal.timeout(9000),
     });
     if (res.status === 304) return 'unchanged';
