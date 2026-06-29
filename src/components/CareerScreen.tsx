@@ -73,6 +73,8 @@ import { getActiveSlot } from '../state/careerSaves';
 import { useGame, type Hydrator } from '../state/gameStore';
 import type { VersionedSave } from '../state/saveMigrations';
 import bo3Ages from '../data/bo3-ages.json';
+import { useAccount } from '../state/account';
+import { CustomRosterBuilder } from './CustomRosterBuilder';
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
 // premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
@@ -1157,6 +1159,13 @@ interface CareerSave {
   scenario?: { id: string; cat: ScenarioCat; title: string; context: string; goals: { type: ScenarioGoalType; text: string; done: boolean }[] } | null; // desafio de carreira em curso
   rivalries?: Record<string, number>; // intensidade por adversario; 4+ vira classico e gera foco extra
   fatigue?: Record<string, number>; // carga acumulada 0-100 por jogador
+  // ----- MODO CUSTOM (Vitalícia) -----
+  // Jogadores criados manualmente no Custom Roster Builder. O `findSigning`
+  // resolve `fromId === '__custom__'` lendo daqui em vez do CS2_REAL_2026.
+  // Atributos são arbitrários (user define) — sem cap, conforme decisão do design.
+  customPlayers?: Record<string, Player>;
+  // Coach criado manualmente. Usado quando `coachFromId === '__custom__'`.
+  customCoach?: { nick: string; name: string; country: string; rating: number; style: 'tactical' | 'aggressive' | 'discipline' } | null;
   restingPlayers?: string[]; // ate dois jogadores em carga reduzida na proxima serie
   facilities?: Record<string, number>; // centro de treino, analista e psicologo (nivel 0-3)
 }
@@ -2206,6 +2215,8 @@ export function CareerScreen(props: Props) {
 function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const { lang } = useLang();
   setCareerLang(lang); // idioma a nivel de modulo: ct() funciona em todos os subcomponentes
+  const { account } = useAccount();
+  const isPaid = !!account?.paid; // vitalícia desbloqueia Custom Builder + edit de nick academy
   // T1.1 5b: save vive no gameStore. Componente lê via useGame (subscribe a
   // mudanças) e expõe `setSave` com a MESMA assinatura do useState antigo
   // (React.Dispatch<SetStateAction<CareerSave>>) — aceita CareerSave OU
@@ -2260,7 +2271,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // outros useEffect deste componente; o de #1 do VRS roda quando vrsAll estiver
   // em escopo lá embaixo).
   const upsellWorld1Ref = useRef(false);
-  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
+  const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario' | 'custom'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
     if (!s.org) return 'found';
@@ -2961,6 +2972,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       player = save.youth[s.playerId];
       from = ACADEMY_FROM;
     }
+    // 5c) jogador CUSTOM (criado pelo user no Custom Roster Builder — Vitalícia):
+    // resolve do save.customPlayers. fromId no signing é '__custom__'.
+    if (!player && save.customPlayers?.[s.playerId]) {
+      player = save.customPlayers[s.playerId];
+      from = ACADEMY_FROM; // reusa pseudo-time pra não infectar applyMoves; UI mostra a org do user
+    }
     // 5b) prospecto AINDA na academia (promovido direto na janela de transferências,
     // antes de virar youth): resolve da lista save.academy pra entrar no elenco.
     if (!player) {
@@ -3118,7 +3135,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const picks = s.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
     if (picks.length < 5) return null;
     // '__rookie__' = técnico iniciante barato (opção de entrada da carreira)
-    const coach = currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
+    // '__custom__' = coach criado no Custom Roster Builder (Vitalícia)
+    const coach = s.coachFromId === '__custom__' && s.customCoach
+      ? s.customCoach
+      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
     const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach);
     return {
       ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo,
@@ -4150,6 +4170,27 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         setStage('market');
       }} />;
     }
+    if (orgChoice === 'custom') {
+      // Custom Builder (Vitalícia): cria org fictícia + monta os 5 jogadores
+      // manualmente + coach custom. Pula a "compra" no mercado, entra direto
+      // com o elenco montado em save.customPlayers.
+      return <CustomOrgFlow
+        founder={founder}
+        onExit={() => setOrgChoice('select')}
+        onConfirm={(data) => {
+          update({
+            org: data.org,
+            squad: data.squad,
+            coachFromId: data.coachFromId,
+            customPlayers: data.customPlayers,
+            customCoach: data.customCoach,
+            takeoverId: null,
+            scenario: null,
+          });
+          setStage('market');
+        }}
+      />;
+    }
     if (orgChoice === 'scenario') {
       return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} />;
     }
@@ -4160,6 +4201,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           onExit={onExit}
           onFictional={() => setOrgChoice('fictional')}
           onScenarios={() => setOrgChoice('scenario')}
+          onCustom={() => {
+            if (isPaid) setOrgChoice('custom');
+            else window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'custom-builder', force: true } }));
+          }}
+          isPaid={isPaid}
           onStart={startFromOrg}
         />
       </CareerDashFrame>
@@ -5746,6 +5792,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           findSigning={findSigning}
           askConfirm={askConfirm}
           openPlayerProfile={openPlayerProfile}
+          isPaid={isPaid}
         />
       )}
 
@@ -7223,11 +7270,13 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
 // escolha da org: assumir QUALQUER time real do dataset (com elenco e contexto)
 // ou uma org sem line pra montar do zero. Substitui o "inventar do nada".
 // Tela redesenhada no padrão em-* (DashCard, filtros, grid 3-col).
-function OrgSelect({ teams, onStart, onFictional, onScenarios, onExit }: {
+function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid, onExit }: {
   teams: TeamSeason[];
   onStart: (s: OrgStart) => void;
   onFictional: () => void;
   onScenarios: () => void;
+  onCustom: () => void;
+  isPaid: boolean;
   onExit: () => void;
 }) {
   const [search, setSearch] = useState('');
@@ -7393,6 +7442,39 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onExit }: {
             </div>
           </div>
           <span style={{ fontSize: '1.2rem', color: 'var(--em-muted)' }}>→</span>
+        </button>
+        <button
+          type="button"
+          onClick={onCustom}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '14px 18px',
+            background: 'linear-gradient(135deg, rgba(232,193,112,0.12), transparent 70%)',
+            border: '1px solid rgba(232,193,112,0.4)',
+            borderRadius: 6,
+            textAlign: 'left',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            color: 'var(--em-text)',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--em-gold)')}
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(232,193,112,0.4)')}
+        >
+          <span style={{ fontSize: '1.8rem' }}>⭐</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.92rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {ct('Modo Custom · monte tudo do zero')}
+              <span style={{ fontSize: '0.62rem', padding: '1px 6px', background: 'var(--em-gold)', color: '#1a1205', borderRadius: 999, fontWeight: 900, letterSpacing: '0.5px' }}>
+                {ct('VITALÍCIA')}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--em-muted)', marginTop: 2 }}>
+              {ct('Crie a org E os 5 jogadores manualmente (nick, role, atributos) + coach próprio.')}
+            </div>
+          </div>
+          <span style={{ fontSize: '1.2rem', color: isPaid ? 'var(--em-gold)' : 'var(--em-muted)' }}>{isPaid ? '→' : '🔒'}</span>
         </button>
       </div>
 
@@ -7901,6 +7983,33 @@ function resizeLogoToDataUrl(file: File, size = 128): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+// Custom Builder Flow (Vitalícia): 2 etapas — identidade da org (reusa FoundOrg)
+// e roster manual (CustomRosterBuilder). No fim, devolve TUDO ao CareerScreen.
+function CustomOrgFlow({ founder, onConfirm, onExit }: {
+  founder: boolean;
+  onConfirm: (data: {
+    org: NonNullable<CareerSave['org']>;
+    squad: Signing[];
+    coachFromId: string;
+    customPlayers: Record<string, Player>;
+    customCoach: NonNullable<CareerSave['customCoach']>;
+  }) => void;
+  onExit: () => void;
+}) {
+  const [org, setOrg] = useState<NonNullable<CareerSave['org']> | null>(null);
+  if (!org) {
+    return <FoundOrg founder={founder} onExit={onExit} onFound={(o) => setOrg(o)} />;
+  }
+  return (
+    <CustomRosterBuilder
+      orgName={org.name}
+      orgTag={org.tag}
+      onCancel={() => setOrg(null)}
+      onConfirm={(data) => onConfirm({ org, ...data })}
+    />
+  );
 }
 
 function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNullable<CareerSave['org']>) => void; onExit: () => void; founder?: boolean }) {

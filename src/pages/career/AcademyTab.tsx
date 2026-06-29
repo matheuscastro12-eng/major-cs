@@ -85,6 +85,8 @@ interface AcademyTabSave {
   academyPaidSplits?: number[];
   /** Estado do playoff Academy do split atual (top 4 mata-mata). */
   academyPlayoff?: AcademyPlayoffState | null;
+  /** Prospects promovidos da academia, indexados por id (Vitalícia: rename propaga aqui). */
+  youth?: Record<string, Player>;
 }
 
 interface Props {
@@ -103,6 +105,8 @@ interface Props {
   askConfirm: AskConfirmFn;
   /** Abre o modal de perfil do player (mesmo handler do SquadTab). */
   openPlayerProfile: (p: Player) => void;
+  /** Vitalícia: pode renomear o nick de prospects da academia e jogadores do time academy. */
+  isPaid: boolean;
 }
 
 // ─── Ofertas determinísticas pra prospects da academia ───────────────────────
@@ -180,8 +184,28 @@ export function AcademyTab({
   findSigning,
   askConfirm,
   openPlayerProfile,
+  isPaid,
 }: Props) {
   const aca = useMemo(() => save.academy ?? [], [save.academy]);
+
+  // Rename de nick (Vitalícia). Pra free user, abre o pop-up de ativação.
+  // Atualiza tanto save.academy quanto save.academyTeam pra cobrir os dois lugares.
+  const renameAcademyPlayer = (id: string, currentNick: string) => {
+    if (!isPaid) {
+      window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'academy-rename', force: true } }));
+      return;
+    }
+    // eslint-disable-next-line no-alert
+    const next = window.prompt(ct('Novo nick (max 12 chars):'), currentNick)?.trim();
+    if (!next || next === currentNick) return;
+    const nick = next.slice(0, 12);
+    const academy = (save.academy ?? []).map((p) => p.id === id ? { ...p, nick } : p);
+    const academyTeam = (save.academyTeam ?? []).map((p) => p.id === id ? { ...p, nick } : p);
+    // Quando o prospect já foi promovido pra youth, atualiza lá tb (mantém consistente).
+    const youth = save.youth ? { ...save.youth } : undefined;
+    if (youth && youth[id]) youth[id] = { ...youth[id], nick };
+    update({ academy, academyTeam, ...(youth ? { youth } : {}) });
+  };
   const full = aca.length >= ACADEMY_MAX;
   const squadFull = save.squad.length >= 5;
   // Nível atual da facility de treino (0-3) — influencia evolução esperada.
@@ -593,6 +617,16 @@ export function AcademyTab({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                       <Flag cc={p.country} />
                       <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-text)' }}>{p.nick}</span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); renameAcademyPlayer(p.id, p.nick); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); renameAcademyPlayer(p.id, p.nick); } }}
+                        title={isPaid ? ct('Renomear (Vitalícia)') : ct('Renomear é exclusivo Vitalícia')}
+                        style={{ cursor: 'pointer', fontSize: '0.7rem', opacity: 0.6, padding: '0 2px' }}
+                      >
+                        ✏️
+                      </span>
                       <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>{ovr}</b>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: 'var(--em-muted)' }}>
@@ -992,6 +1026,16 @@ export function AcademyTab({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.92rem', fontWeight: 800 }}>
                         <Flag cc={p.country} /> {p.nick}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); renameAcademyPlayer(p.id, p.nick); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); renameAcademyPlayer(p.id, p.nick); } }}
+                          title={isPaid ? ct('Renomear (Vitalícia)') : ct('Renomear é exclusivo Vitalícia')}
+                          style={{ cursor: 'pointer', fontSize: '0.7rem', opacity: 0.55, padding: '0 2px' }}
+                        >
+                          ✏️
+                        </span>
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--em-muted)' }}>{p.name}</div>
                     </div>
