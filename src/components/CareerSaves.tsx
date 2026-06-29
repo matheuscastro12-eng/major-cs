@@ -44,9 +44,9 @@ export function CareerSaves({ paid, onPlay, onBack }: { paid: boolean; onPlay: (
   const doDelete = (n: number) => { deleteSlot(n); setConfirmSlot(null); refresh(); };
 
   // entra no slot: se o save está só na nuvem, baixa antes (reconcilia local<-nuvem)
-  const go = async (slot: number, fromCloud?: boolean) => {
+  const go = async (slot: number) => {
     if (busySlot != null) return;
-    if (paid && fromCloud) {
+    if (paid) {
       setBusySlot(slot);
       try { await syncSlot(cloudSlot(slot), slotKey(slot)); } catch { /* segue com o que tiver */ }
     }
@@ -125,7 +125,7 @@ export function CareerSaves({ paid, onPlay, onBack }: { paid: boolean; onPlay: (
               busy={busySlot === s.slot}
               busyLocked={busySlot != null && busySlot !== s.slot}
               confirming={confirmSlot === s.slot}
-              onPlay={() => void go(s.slot, s.fromCloud)}
+              onPlay={() => void go(s.slot)}
               onAskDelete={() => setConfirmSlot(s.slot)}
               onConfirmDelete={() => doDelete(s.slot)}
               onCancelDelete={() => setConfirmSlot(null)}

@@ -24,7 +24,8 @@ import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCo
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
-import { matchesNegotiationFilters } from '../engine/career/market';
+import { isPlayerCommittedForExit, matchesNegotiationFilters } from '../engine/career/market';
+import { applyCareerVrsDecay, careerEventKey } from '../engine/career/progress';
 // academyLeague: usado pela AcademyTab; import movido pra page.
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
@@ -69,10 +70,9 @@ const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto 
 // premiação mais enxuta: montar o time dos sonhos leva várias temporadas (antes
 // dava pra ter o melhor elenco com grana sobrando já no split 3)
 const VRS_BY_POS = [150, 105, 75, 52, 36, 26, 18, 11];
-// VRS é ROLANTE (como o Valve ranking real): a cada split os pontos antigos
+// VRS é ROLANTE (como o Valve ranking real): a cada evento os pontos antigos
 // decaem, então não acumulam pra sempre (acabou o usuário com 3000 e a IA com
 // 1200). No equilíbrio o VRS ganho ~ ganho/(1-decay), comparável ao field.
-const VRS_DECAY = 0.6;
 // PLANO DE JOGO: a decisão pré-partida do usuário. Cada plano dá um buff REAL na
 // simulação (some você do "modo espectador": sua escolha muda a partida).
 export type GamePlan = 'disciplined' | 'antistrat' | 'mapfocus' | 'aggressive';
@@ -1058,6 +1058,7 @@ interface CareerSave {
   majorPre?: { stage: number; advancers: { tag: string; name: string }[] }[]; // stages auto-simulados antes do usuário
   majorHistory?: Tournament['history']; // partidas do usuario acumuladas entre os stages do Major
   majorResult?: MajorResult | null; // resultado do Major persistido: reidrata a tela de resultado no F5 (evita re-simular a final)
+  pendingSplit?: SplitRecord | null; // circuito concluído antes do Major; precisa sobreviver a F5 durante o torneio
   evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
   lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
   sponsorUntil: Record<string, number>; // patrocinador id -> split até onde o contrato vale
@@ -1124,6 +1125,7 @@ interface CareerSave {
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
+  careerStatsEvent?: string; // último evento contabilizado, no formato split:event
   trainingFocus?: string | null; // id do jogador em foco de treino no split atual (acelera a evolução)
   morale?: Record<string, number>; // moral/satisfação por jogador (id original) 0-100
   news?: NewsItem[]; // caixa de entrada (manchetes), mais recente primeiro
@@ -1215,6 +1217,7 @@ const emptySave = (): CareerSave => ({
   sponsors: [],
   playoff: null,
   majorT: null,
+  pendingSplit: null,
   evo: {},
   lastEvo: [],
   sponsorUntil: {},
@@ -1998,8 +2001,50 @@ function stripEraDeep(node: unknown, depth = 0): void {
 // `healYouthPlayer` que são internos do CareerScreen — vão pra src/state/
 // careerDefaults.ts em T1.4 quando quebrar este monolito.
 const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerSave => {
-  const s = parsed as unknown as CareerSave;
-  const merged = { ...emptySave(), ...s, ...hydrateCareerDepth(parsed as unknown as Record<string, unknown>) };
+  // Campos estruturalmente inválidos não podem sobrescrever os defaults e
+  // provocar um crash permanente na renderização. O JSON/backup/migrations já
+  // foram tratados pelo gameStore; aqui fazemos a cura sem descartar o save todo.
+  const record = { ...(parsed as Record<string, unknown>) };
+  const defaultInvalidArray = (key: string) => {
+    if (key in record && !Array.isArray(record[key])) delete record[key];
+  };
+  const defaultInvalidRecord = (key: string) => {
+    const value = record[key];
+    if (key in record && (value === null || typeof value !== 'object' || Array.isArray(value))) {
+      delete record[key];
+    }
+  };
+  const defaultInvalidNullableRecord = (key: string) => {
+    const value = record[key];
+    if (key in record && value !== null && (typeof value !== 'object' || Array.isArray(value))) {
+      delete record[key];
+    }
+  };
+  const defaultInvalidNumber = (key: string) => {
+    if (key in record && (typeof record[key] !== 'number' || !Number.isFinite(record[key]))) delete record[key];
+  };
+  [
+    'squad', 'history', 'sponsors', 'lastEvo', 'lastMoves', 'pendingDeals',
+    'renewals', 'pendingSales', 'rejectedOffers', 'news', 'academy',
+  ].forEach(defaultInvalidArray);
+  [
+    'evo', 'sponsorUntil', 'moves', 'contracts', 'roles', 'careerStats',
+    'morale', 'peakOvr', 'mapTraining', 'playbookMem', 'youth', 'youthAge',
+  ].forEach(defaultInvalidRecord);
+  ['org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult', 'pendingSplit', 'scenario'].forEach(defaultInvalidNullableRecord);
+  ['budget', 'vrs', 'split', 'titles', 'tier', 'board'].forEach(defaultInvalidNumber);
+
+  const s = record as unknown as CareerSave;
+  const merged = { ...emptySave(), ...s, ...hydrateCareerDepth(record) };
+  merged.split = Math.max(1, Math.floor(merged.split));
+  merged.eventInSplit = Math.max(1, Math.min(EVENTS_PER_SPLIT, Math.floor(merged.eventInSplit ?? 1)));
+  merged.tier = Math.max(1, Math.min(3, Math.floor(merged.tier)));
+  merged.board = Math.max(0, Math.min(100, merged.board));
+  if (!merged.careerStatsEvent && (merged.careerStatsThru ?? 0) > 0) {
+    // Saves anteriores só conseguiam contabilizar a primeira etapa de cada split.
+    // Marca essa etapa como já processada para o deploy não duplicá-la.
+    merged.careerStatsEvent = careerEventKey(merged.careerStatsThru!, 1);
+  }
   stripEraDeep(merged.league);
   stripEraDeep(merged.playoff);
   stripEraDeep(merged.majorT);
@@ -2215,8 +2260,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const [quickSim, setQuickSim] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string; onDone: () => void } | null>(null);
   const rngRef = useRef(makeRng(randomSeed()));
   const { askConfirm } = useCareerConfirm();
-  // registro parcial do split, finalizado após o Major (se houver)
-  const pendingSplit = useRef<SplitRecord | null>(null);
   // T3.5: ref pra evitar abrir o ConfirmDialog 2x pra mesma oferta (React 19
   // dispara useEffect 2x em dev). Guarda o id da oferta processada.
   const sponsorOfferShownRef = useRef<string | null>(null);
@@ -2968,7 +3011,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       changed = true;
       return signingWithSnapshot(sig, r);
     });
-    if (changed) { const next = { ...save, squad: healed }; persist(next); setSave(next); }
+    if (changed) {
+      const next = { ...save, squad: healed };
+      persist(next);
+      const timer = window.setTimeout(() => setSave(next), 0);
+      return () => window.clearTimeout(timer);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.squad]);
 
@@ -3251,14 +3299,23 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setSave(next);
   };
 
-  // contabiliza as stats do split na carreira UMA vez só. Idempotente: se o
-  // split já foi contado (careerStatsThru >= split), não conta de novo — protege
-  // contra F5 na tela de fim de temporada / resultado do Major (evita dobrar).
-  const bankStats = (s: CareerSave): Pick<CareerSave, 'careerStats' | 'careerStatsThru'> => {
-    if (!s.league || (s.careerStatsThru ?? 0) >= s.split) {
-      return { careerStats: s.careerStats ?? {}, careerStatsThru: s.careerStatsThru ?? 0 };
+  // contabiliza as stats de cada evento UMA vez só. A chave split:event protege
+  // contra F5 na tela de resultado sem descartar as etapas 2 e 3.
+  const bankStats = (s: CareerSave): Pick<CareerSave, 'careerStats' | 'careerStatsThru' | 'careerStatsEvent'> => {
+    const eventKey = careerEventKey(s.split, s.eventInSplit);
+    if (!s.league || s.careerStatsEvent === eventKey) {
+      return {
+        careerStats: s.careerStats ?? {},
+        careerStatsThru: s.careerStatsThru ?? 0,
+        careerStatsEvent: s.careerStatsEvent,
+      };
     }
-    return { careerStats: accumulateCareerStats(s.careerStats, s.league), careerStatsThru: s.split };
+    const firstEventInSplit = (s.eventInSplit ?? 1) === 1;
+    return {
+      careerStats: accumulateCareerStats(s.careerStats, s.league, firstEventInSplit),
+      careerStatsThru: s.split,
+      careerStatsEvent: eventKey,
+    };
   };
 
   // aplica a janela de transferências do split que está fechando: os swaps viram
@@ -3445,9 +3502,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setStage('hub');
   };
 
+  // Se a página foi recarregada depois de a série terminar, onDecided já deixou
+  // o placar salvo, mas a rodada ainda não avançou para preservar a tela de
+  // resultado até o clique em Continuar. Finaliza essa transição ao reidratar.
+  useEffect(() => {
+    if (stage !== 'hub' || !save.league) return;
+    const committed = userLeagueMatch(save.league);
+    if (!committed?.result) return;
+    const clone = structuredClone(save.league);
+    const timer = window.setTimeout(() => finishUserRound(clone), 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, save.league]);
+
   // entra no mata-mata: GSL = 4 classificados com cross-seed (1A x 2B, 1B x 2A);
   // round-robin antigo = top 4 da tabela. SF + final pelo título e vagas.
-  const enterPlayoffs = (l: League) => {
+  function enterPlayoffs(l: League) {
     let seedTable: TTeam[];
     if (l.gsl) {
       seedTable = gslQualifiers(l).map((id) => leagueTeam(l, id)); // 8 classificados (4 grupos)
@@ -3460,7 +3530,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     persist(next);
     setSave(next);
     setStage('playoffHub');
-  };
+  }
 
   // abre o veto/partida da rodada do usuário no playoff
   const playPlayoffMine = () => {
@@ -3725,6 +3795,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setMatchCtx(null);
     progressMajor(clone);
   };
+
+  // Mesmo contrato do circuito: um resultado decidido é persistido antes do
+  // botão Continuar. Após F5, consome o placar salvo em vez de sortear outra série.
+  useEffect(() => {
+    if (stage !== 'hub' || !majorT) return;
+    const committed = tournamentUserPairing(majorT);
+    if (!committed?.result) return;
+    const timer = window.setTimeout(() => finishMajorRound(), 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, majorT]);
 
   const advanceMajor = (clone: Tournament) => {
     progressMajor(clone);
@@ -4263,15 +4344,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             <button
               className="btn gold big"
               onClick={() => {
-                const rec = pendingSplit.current;
+                const rec = save.pendingSplit ?? null;
                 const finished: SplitRecord = rec
-                  ? { ...rec, major: { placement: mr.placement, champion: mr.champion } }
+                  ? {
+                      ...rec,
+                      prize: rec.prize + mr.prize,
+                      vrs: rec.vrs + mr.vrs,
+                      major: { placement: mr.placement, champion: mr.champion },
+                    }
                   : {
                       split: save.split, circuit: save.circuit?.name ?? 'Major', position: 0,
-                      wins: 0, losses: 0, roundDiff: 0, prize: 0, vrs: 0, champion: false,
+                      wins: 0, losses: 0, roundDiff: 0, prize: mr.prize, vrs: mr.vrs, champion: false,
                       major: { placement: mr.placement, champion: mr.champion },
                     };
-                pendingSplit.current = null;
                 setMajorT(null);
                 // chegar ao Major já cumpriu o objetivo da diretoria do split;
                 // ganhar o Major dá um respeito extra
@@ -4345,7 +4430,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 const next = {
                   ...save,
                   budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
-                  vrs: Math.round(save.vrs * VRS_DECAY) + mr.vrs, // VRS rolante (decai e soma o do Major)
+                  vrs: applyCareerVrsDecay(save.vrs, mr.vrs), // Major também é um evento do ranking rolante
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
                   eventInSplit: 1, // o Major fecha o split: próximo split começa na etapa 1
@@ -4359,6 +4444,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   ...scoutingPatchMajor,
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
                   majorResult: null, // limpa o resultado reidratável (já consumido)
+                  pendingSplit: null,
                   majorStage: undefined, majorUserStage: undefined,
                   majorSeed2: undefined, majorSeed3: undefined, majorPre: undefined, majorHistory: undefined,
                   league: null,
@@ -4493,7 +4579,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // CLASSIFICAÇÃO AO MAJOR = TOP 16 DO RANKING VRS MUNDIAL (como na vida real).
     // Some VRS vencendo partidas e indo longe; sua posição é base do elenco + ganhos.
     // Projeta o VRS já com o ganho DESTE split pra decidir a vaga no fim da temporada.
-    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? 78) + save.vrs + vrsGain + userLegacyVrs(save);
+    const projectedEventVrs = applyCareerVrsDecay(save.vrs, vrsGain);
+    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? 78) + projectedEventVrs + userLegacyVrs(save);
     const worldRank = oppEra.filter((t) => aiTeamVrs(t) > userProjVrs).length + 1; // posição mundial projetada
     const rankQualified = worldRank <= MAJOR_VRS_CUT;
     const majorNow = isMajorSplit(save.split) && lastEvent; // Major só na última etapa do split de Major
@@ -4668,12 +4755,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   onClick={() => {
                     // aplica prêmio+VRS do split antes de ir pro Major;
                     // o registro do split é finalizado após o resultado do Major
-                    pendingSplit.current = baseRecord();
+                    const circuitRecord = baseRecord();
                     const next = {
                       ...save,
                       budget: save.budget + prize,
-                      vrs: save.vrs + vrsGain,
+                      vrs: applyCareerVrsDecay(save.vrs, vrsGain),
                       titles: save.titles + (isChampion ? 1 : 0),
+                      pendingSplit: circuitRecord,
                       // acumula as stats da liga já aqui (o split do Major fecha
                       // depois, mas a liga regular terminou); evita perder o split
                       ...bankStats(save),
@@ -4698,13 +4786,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                       budget: save.budget + prize,
                       // VRS é POR JOGO: decai e soma o ganho a cada campeonato
                       // (independente do envelhecimento, que é por split).
-                      vrs: Math.round(save.vrs * VRS_DECAY) + vrsGain,
+                      vrs: applyCareerVrsDecay(save.vrs, vrsGain),
                       titles: save.titles + (isChampion ? 1 : 0),
                       eventInSplit: ev + 1,
                       league: null,
                       circuit: null,
                       playoff: null,
                       history: [...save.history, baseRecord()],
+                      scenario: applyScenarioProgress(save.scenario, {
+                        isChampion,
+                        circuitTier,
+                        finalPos,
+                        qualified: false,
+                        endTier: save.tier,
+                        wonMajor: false,
+                      }),
                       ...bankStats(save),
                       // folga curta entre etapas: compensa ~um campeonato jogado
                       fatigue: recoverFatigue(save.fatigue, 16, normalizeFacilities(save.facilities).psychologist * 2),
@@ -4779,7 +4875,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
                     budget: Math.max(0, save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus),
-                    vrs: Math.round(save.vrs * VRS_DECAY) + vrsGain, // VRS rolante (decai e soma o ganho do split)
+                    vrs: applyCareerVrsDecay(save.vrs, vrsGain), // VRS rolante (decai e soma o ganho do evento)
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
                     eventInSplit: 1, // fecha o split: volta pra etapa 1 do próximo
@@ -4899,29 +4995,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       if (matchCtx.mode === 'major') finishMajorRound(series);
       else if (matchCtx.mode === 'playoff') finishPlayoffRound(series, matchCtx.playoffIds);
       else if (league) finishUserRound(league, series);
-      recordCareerMatch(series, matchCtx.teams, matchCtx.userIdx, matchCtx.phaseLabel);
-      // T3.4: chemistry sobe entre os starters do user team após série.
-      // Convertemos runtime ids pra org-ids (playerOrgId) pra bater com o
-      // pairChem que é indexado pelo id ORIGINAL.
-      const userStarters = matchCtx.teams[matchCtx.userIdx].players.map((p) => playerOrgId(p.id));
-      const won = series.winner === matchCtx.userIdx;
-      // T3.2: passa personalityChemBonus pra que líderes puxem química mais
-      // rápido e hotheads/mercenários atrapalhem.
-      const newPairChem = tickPairChemAfterMatch(
-        { pairChem: save.pairChem },
-        userStarters,
-        won,
-        personalityChemBonus,
-      );
-      setSave((s) => {
-        const next = { ...s, pairChem: newPairChem };
-        persist(next);
-        return next;
-      });
     };
     // TRAVA o resultado assim que a série é decidida (antes do "Continuar"). Sem isso,
     // sair da carreira na tela de resultado deixava re-rolar a partida ao reentrar.
     const commitDecided = (series: SeriesResult) => {
+      let committed = false;
       if (matchCtx.mode === 'playoff') {
         if (!save.playoff || !save.league) return;
         const clone: Playoff = structuredClone(save.playoff);
@@ -4931,6 +5009,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         poRunAI(clone, (id) => leagueTeam(save.league!, id), rngRef.current);
         const next = { ...save, playoff: clone };
         persist(next); setSave(next);
+        committed = true;
+      } else if (matchCtx.mode === 'major' && majorT) {
+        const clone: Tournament = structuredClone(majorT);
+        const pairing = clone.pairings.find((p) => p.a === 'user' || p.b === 'user');
+        if (!pairing) return;
+        pairing.result = series;
+        setMajorState(clone);
+        committed = true;
       } else if (matchCtx.mode !== 'major' && league) {
         const clone: League = structuredClone(league);
         const m = userLeagueMatch(clone);
@@ -4938,6 +5024,25 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         m.result = series;
         const next = { ...save, league: clone };
         persist(next); setSave(next);
+        committed = true;
+      }
+      if (committed) {
+        recordCareerMatch(series, matchCtx.teams, matchCtx.userIdx, matchCtx.phaseLabel);
+        // A química também é gravada no momento em que a série é decidida.
+        // Assim um F5 antes de Continuar não perde nem duplica esse progresso.
+        const userStarters = matchCtx.teams[matchCtx.userIdx].players.map((p) => playerOrgId(p.id));
+        const won = series.winner === matchCtx.userIdx;
+        setSave((s) => {
+          const pairChem = tickPairChemAfterMatch(
+            { pairChem: s.pairChem },
+            userStarters,
+            won,
+            personalityChemBonus,
+          );
+          const next = { ...s, pairChem };
+          persist(next);
+          return next;
+        });
       }
     };
     if (stage === 'veto') {
@@ -6204,7 +6309,11 @@ function seasonPlayerStats(l: League): SeasonStat[] {
 // soma as stats brutas do split (todas as partidas da liga) na carreira de cada
 // jogador. Roda ao fechar o split. As stats sobem sozinhas conforme o jogador
 // evolui (atributos melhores => melhor desempenho nas partidas => rating maior).
-function accumulateCareerStats(prev: Record<string, CareerStatLine> | undefined, l: League): Record<string, CareerStatLine> {
+function accumulateCareerStats(
+  prev: Record<string, CareerStatLine> | undefined,
+  l: League,
+  countAsNewSplit = true,
+): Record<string, CareerStatLine> {
   const out: Record<string, CareerStatLine> = { ...(prev ?? {}) };
   const seenThisSplit = new Set<string>();
   for (const round of l.rounds) {
@@ -6216,7 +6325,10 @@ function accumulateCareerStats(prev: Record<string, CareerStatLine> | undefined,
           cur.k += st.both.kills; cur.d += st.both.deaths; cur.a += st.both.assists;
           cur.dmg += st.both.dmg; cur.kast += st.both.kastRounds; cur.rounds += st.both.rounds;
           cur.maps += 1;
-          if (!seenThisSplit.has(id)) { cur.splits += 1; seenThisSplit.add(id); }
+          if (!seenThisSplit.has(id)) {
+            if (countAsNewSplit) cur.splits += 1;
+            seenThisSplit.add(id);
+          }
           out[id] = cur;
         }
       }
@@ -8326,10 +8438,9 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
     .sort((a, b) => a.localeCompare(b));
   const committedCash = pendingDeals.reduce((a, d) => a + d.fee, 0);
   const dealBudget = budget - committedCash;
-  const committedOut = new Set(pendingDeals.flatMap((d) => d.outPlayerIds));
   const targeted = new Set(pendingDeals.map((d) => d.inPlayerId));
   const squadIds = new Set(squadPlayers.map((p) => p.id));
-  const swapPool = squadPlayers.filter((p) => !committedOut.has(p.id));
+  const swapPool = squadPlayers.filter((p) => !isPlayerCommittedForExit(p.id, pendingDeals, pendingSales));
   const filteredMarket = market
     // free agents (sem time) também entram: negociam direto a pedida, sem clube
     .filter((m) => !targeted.has(m.player.id) && !squadIds.has(m.player.id))

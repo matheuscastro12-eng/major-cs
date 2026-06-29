@@ -6,8 +6,8 @@ import { Component, type ReactNode } from 'react';
 import { captureError } from '../state/errlog';
 import { getLang } from '../state/i18n';
 import { confirm } from './ConfirmDialog';
+import { deleteSlot, getActiveSlot } from '../state/careerSaves';
 
-const SAVE_KEYS = ['rtm-career-v1', 'rtm-career-v1.bak'];
 // guard do lazyWithReload (App.tsx): se `1`, o lazyWithReload já tentou
 // recarregar uma vez e parou de retentar pra não virar loop infinito. Quando
 // o user clica Recarregar manualmente, queremos LIMPAR esse guard pra dar
@@ -57,11 +57,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
       danger: true,
     });
     if (!ok) return;
-    try {
-      for (const k of SAVE_KEYS) localStorage.removeItem(k);
-    } catch {
-      /* sem storage */
-    }
+    // O slot 1 usa a chave legada, mas os slots 2..5 têm chaves próprias.
+    // Apagar nomes fixos mantinha o save quebrado no slot ativo e criava um
+    // loop de crash/reload. deleteSlot também remove backup, diagnóstico e nuvem.
+    deleteSlot(getActiveSlot());
     location.reload();
   };
 

@@ -6,6 +6,15 @@ export interface NegotiationFilters {
   country: string;
 }
 
+export function isPlayerCommittedForExit(
+  playerId: string,
+  deals: { outPlayerIds: string[] }[],
+  sales: { playerId: string }[],
+): boolean {
+  return deals.some((deal) => deal.outPlayerIds.includes(playerId))
+    || sales.some((sale) => sale.playerId === playerId);
+}
+
 export function matchesNegotiationFilters(
   player: Pick<Player, 'nick' | 'role' | 'country'>,
   teamName: string,
