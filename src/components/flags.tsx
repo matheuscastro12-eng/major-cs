@@ -28,10 +28,17 @@ export function RegionFlagSvg({ region }: { region: RegionKey }) {
         </svg>
       );
     case 'cis':
+      // Bandeira CIS: tricolor russo (branco/azul/vermelho horizontal) — antes
+      // era vermelho com estrela amarela, quase idêntico à bandeira do Vietnã
+      // (user Vitu/Guilherme reportou: 'bandeira do cis é a do vietnã'). CIS
+      // não tem bandeira oficial; no cenário do CS o termo é dominado por
+      // jogadores russos/ucranianos/bielorussos, então o tricolor russo é a
+      // representação visual mais reconhecível.
       return (
         <svg viewBox="0 0 60 40" preserveAspectRatio="xMidYMid slice" className="region-svg">
-          <rect width="60" height="40" fill="#b01020" />
-          <polygon points={starPoints(30, 20, 12)} fill="#ffd84d" />
+          <rect width="60" height="13.33" fill="#ffffff" />
+          <rect y="13.33" width="60" height="13.34" fill="#0039a6" />
+          <rect y="26.67" width="60" height="13.33" fill="#d52b1e" />
         </svg>
       );
     case 'samerica':

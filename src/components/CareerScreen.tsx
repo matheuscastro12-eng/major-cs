@@ -2807,7 +2807,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const fromTeams = currentEra.flatMap((t) => t.players.map((p) => { const pl = withDecline(p); return { player: pl, from: t, price: playerValue(pl) }; }));
       const freeAgents = FREE_AGENT_PLAYERS
         .filter((p) => !squadIds.has(p.id)) // some do mercado quando já contratado
-        .map((p) => ({ player: p, from: FREE_AGENTS_FROM, price: Math.round(playerValue(p) * 0.75) }));
+        // FREE agents são free — em CS real você assina sem taxa de transferência,
+        // só salário. User Guilherme reportou: '"free agents" é considerado um
+        // time, para contratar voce precisa comprá-lo'. Antes era 0.75x do valor,
+        // agora é 0 (sem fee). O salário ainda pesa via folha.
+        .map((p) => ({ player: p, from: FREE_AGENTS_FROM, price: 0 }));
       // rookies GRÁTIS (preço 0) sempre disponíveis: garantem que dá pra montar um
       // cinco mesmo sem grana — sem isso, liberar todos e ficar sem caixa travava a
       // carreira (não dava pra fechar 5 jogadores dentro do orçamento).
