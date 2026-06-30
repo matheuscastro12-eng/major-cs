@@ -135,6 +135,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   // placar das suas calls NESTE mapa (reseta a cada mapa): mostra o impacto
   // acumulado das suas decisões, não só do round atual.
   const [callRecord, setCallRecord] = useState<{ made: number; won: number }>({ made: 0, won: 0 });
+  // log de TODAS as suas calls na série (sobrevive à troca de mapa) — alimenta o
+  // RESUMO TÁTICO no fim: taxa de acerto, maior aposta que pegou, sequência etc.
+  const decisionLog = useRef<{ mapIdx: number; call: RoundCall; stance: Stance; won: boolean; round: number; odds: number }[]>([]);
   const endedMapsRef = useRef<Set<number>>(new Set());
   const mapTransitionRef = useRef<number | null>(null);
 
@@ -246,6 +249,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           const won = log[log.length - 1] === userIdx;
           setLastCall({ call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
           setCallRecord((r) => ({ made: r.made + 1, won: r.won + (won ? 1 : 0) }));
+          decisionLog.current.push({ mapIdx, call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
           callRef.current = null;
           setPendingCall(null);
         }
@@ -281,6 +285,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       const won = log[log.length - 1] === userIdx;
       setLastCall({ call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
       setCallRecord((r) => ({ made: r.made + 1, won: r.won + (won ? 1 : 0) }));
+      decisionLog.current.push({ mapIdx, call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
       callRef.current = null;
       setPendingCall(null);
     }
@@ -769,6 +774,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         </div>
       )}
 
+      {finished && series && (
+        <DecisionRecapPanel decisions={decisionLog.current} series={series} maps={maps} teams={teams} userIdx={userIdx} />
+      )}
+
       {finished && series && <InsightPanel series={series} teams={teams} userIdx={userIdx} />}
 
       {finished && series && (
@@ -1011,6 +1020,105 @@ function KillFeed({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// RESUMO TÁTICO DA SÉRIE: payoff das decisões do jogador. Taxa de acerto das
+// calls, maior aposta que pegou (vitória com a menor chance), tropeço (derrota
+// sendo favorito), maior sequência que VOCÊ engatou e quebra por mapa. É o
+// "ver o impacto acumulado" — fecha o ciclo do sistema de decisões.
+function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
+  decisions: { mapIdx: number; call: RoundCall; stance: Stance; won: boolean; round: number; odds: number }[];
+  series: SeriesResult;
+  maps: { map: MapId; pickedBy: 0 | 1 | -1 }[];
+  teams: [TTeam, TTeam];
+  userIdx: 0 | 1;
+}) {
+  // maior sequência de rounds seguidos que VOCÊ engatou na série
+  let bestRun = 0;
+  for (const m of series.maps) {
+    let run = 0;
+    for (const w of m.roundLog) {
+      if (w === userIdx) { run++; if (run > bestRun) bestRun = run; }
+      else run = 0;
+    }
+  }
+
+  const made = decisions.length;
+  if (made === 0) {
+    return (
+      <div className="panel fade-in">
+        <div className="panel-head">🎯 {ct('Resumo tático')}</div>
+        <div className="panel-body">
+          <div className="muted" style={{ fontSize: '0.84rem', lineHeight: 1.5 }}>
+            {ct('Você não deu nenhuma call nesta série — assistiu no automático.')}{' '}
+            {ct('Ligue o')} <b>🎯 {ct('Tático')}</b> {ct('no topo da próxima partida pra comandar round a round: postura, timeouts e chamadas mudam o resultado de verdade.')}
+          </div>
+          {bestRun >= 3 && (
+            <div style={{ marginTop: 10, fontSize: '0.82rem' }}>🔥 {ct('Maior sequência da série')}: <b style={{ color: '#5ed88a' }}>{bestRun} {ct('rounds seguidos')}</b></div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const won = decisions.filter((d) => d.won).length;
+  const rate = won / made;
+  const rateColor = rate >= 0.6 ? '#5ed88a' : rate >= 0.4 ? '#e8c170' : '#e58a8a';
+  const bestCall = decisions.filter((d) => d.won).sort((a, b) => a.odds - b.odds)[0]; // maior upset chamado
+  const worstCall = decisions.filter((d) => !d.won).sort((a, b) => b.odds - a.odds)[0]; // favorito que tropeçou
+  const perMap = series.maps.map((m, i) => {
+    const ds = decisions.filter((d) => d.mapIdx === i);
+    return { i, map: maps[Math.min(i, maps.length - 1)].map, made: ds.length, won: ds.filter((d) => d.won).length, score: m.score };
+  }).filter((r) => r.made > 0);
+  const icon = (k: RoundCall) => CALLS.find((x) => x.key === k)!.icon;
+  const verdict = rate >= 0.65 ? ct('Leitura de jogo afiada — suas calls decidiram.')
+    : rate >= 0.45 ? ct('Calls equilibradas: acertou tanto quanto errou.')
+    : ct('As apostas não pegaram dessa vez — ajuste a leitura.');
+
+  return (
+    <div className="panel fade-in">
+      <div className="panel-head">🎯 {ct('Resumo tático')} — {ct('suas decisões')}</div>
+      <div className="panel-body">
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+          <span style={{ fontSize: '2rem', fontWeight: 900, color: rateColor, fontFamily: '"JetBrains Mono", monospace', lineHeight: 1 }}>{won}/{made}</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: rateColor }}>{Math.round(rate * 100)}% {ct('das calls deram certo')}</span>
+          <span className="spacer" />
+          {bestRun >= 3 && <span style={{ fontSize: '0.82rem' }}>🔥 {ct('maior sequência')}: <b style={{ color: '#5ed88a' }}>{bestRun}</b></span>}
+        </div>
+        <div style={{ fontSize: '0.82rem', fontStyle: 'italic', color: 'var(--em-text,#d6deea)', marginBottom: 12 }}>{verdict}</div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8, marginBottom: 12 }}>
+          {bestCall && bestCall.odds < 0.55 && (
+            <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(94,216,138,0.08)', border: '1px solid rgba(94,216,138,0.3)' }}>
+              <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>{ct('Melhor aposta')}</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, marginTop: 2 }}>{icon(bestCall.call)} R{bestCall.round} · {ct('tinha')} {Math.round(bestCall.odds * 100)}% → <span style={{ color: '#5ed88a' }}>{ct('PEGOU')}</span></div>
+            </div>
+          )}
+          {worstCall && worstCall.odds >= 0.5 && (
+            <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(229,138,138,0.08)', border: '1px solid rgba(229,138,138,0.3)' }}>
+              <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>{ct('Tropeço')}</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, marginTop: 2 }}>{icon(worstCall.call)} R{worstCall.round} · {ct('era favorito')} ({Math.round(worstCall.odds * 100)}%) → <span style={{ color: '#e58a8a' }}>{ct('perdeu')}</span></div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {perMap.map((r) => {
+            const mr = r.won / r.made;
+            const c = mr >= 0.6 ? '#5ed88a' : mr >= 0.4 ? '#e8c170' : '#e58a8a';
+            return (
+              <div key={r.i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.8rem' }}>
+                <span style={{ minWidth: 90, fontWeight: 700 }}>{MAP_LABELS[r.map]}</span>
+                <span style={{ color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{r.score[0]}:{r.score[1]}</span>
+                <span className="spacer" />
+                <span style={{ color: c, fontWeight: 800, fontFamily: '"JetBrains Mono", monospace' }}>{r.won}/{r.made} ✓</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
