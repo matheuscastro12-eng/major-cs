@@ -323,6 +323,9 @@ export interface MapSim {
   // estimativa read-only da prob de vitória do round ATUAL pra `forTeam`, com
   // stance/call hipotéticos. Pro HUD de decisão (mostra impacto ao vivo).
   peekWinProb: (forTeam: 0 | 1, stance?: { team: 0 | 1; mode: Stance }, call?: Call) => number;
+  // momentum atual: qual time está embalado e o tamanho da sequência. Pro HUD
+  // de momento da partida (medidor visual). -1 = ninguém embalado.
+  momentum: () => { team: 0 | 1 | -1; len: number };
   done: () => boolean;
   score: () => [number, number];
   money: () => [number, number]; // dinheiro de cada time (para decidir force/save)
@@ -366,6 +369,19 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
 
   let round = 0;
   let nextBuys: [BuyTier, BuyTier] = ['pistol', 'pistol'];
+
+  // momentum: quem está embalado e há quantos rounds. Zera no intervalo (pistol
+  // do 2º half) — o "reset mental" do half. Alimenta o medidor de momento na UI
+  // e dá um empurrão de confiança crescente/limitado no roundEffect.
+  let streakTeam: 0 | 1 | -1 = -1;
+  let streakLen = 0;
+  // boost por tamanho de sequência: 0/1 round = nada; 2 = +0.7; 3 = +1.3; 4+ = +1.8
+  // (cap). Relativo a ROUND_DIV=28, o teto vale ~+1.6% de win-prob por round — o
+  // bastante pra criar "runs" realistas sem virar bola de neve nem mexer no
+  // win-rate agregado (é simétrico entre os dois times).
+  const MOMENTUM_BY_LEN = [0, 0, 0.7, 1.3, 1.8];
+  const momentumDelta = (): number =>
+    streakTeam < 0 || streakLen < 2 ? 0 : MOMENTUM_BY_LEN[Math.min(streakLen, 4)];
 
   // lado (CT/T) de cada time num dado round, considerando halves e OT
   const sideOf = (r: number): ['ct' | 't', 'ct' | 't'] => {
@@ -432,6 +448,12 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       if (call.team === 0) effA += cd;
       else effB += cd;
     }
+    // momentum: o time embalado leva o empurrão de confiança (read-only aqui —
+    // a sequência é atualizada no step). Entra na MESMA fórmula do round real,
+    // então o HUD de probabilidade já reflete o efeito do embalo.
+    const mo = momentumDelta();
+    if (streakTeam === 0) effA += mo;
+    else if (streakTeam === 1) effB += mo;
     const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
     return { pA: sigmoid(diff / ROUND_DIV), buys, aSide, bSide };
   };
@@ -457,6 +479,9 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     if (isPistol) {
       eco[0] = { money: 800, lossStreak: 0 };
       eco[1] = { money: 800, lossStreak: 0 };
+      // intervalo zera o embalo: o 2º half começa em pé de igualdade mental
+      streakTeam = -1;
+      streakLen = 0;
     }
     const { pA, buys, aSide, bSide } = roundEffect(stance, call, boostTeam);
     buyLog.push(buys);
@@ -622,6 +647,9 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     else scoreB++;
     roundLog.push(winner);
     lastWinner = winner;
+    // atualiza o embalo: vitória seguida estende a sequência; troca de mão reseta
+    if (winner === streakTeam) streakLen++;
+    else { streakTeam = winner; streakLen = 1; }
     round++;
 
     if (round === 12) halfScore = `${scoreA}:${scoreB}`;
@@ -647,6 +675,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   return {
     step,
     peekWinProb,
+    momentum: () => ({ team: streakTeam, len: streakLen }),
     done: () => finished,
     score: () => [scoreA, scoreB],
     money: () => [eco[0].money, eco[1].money],

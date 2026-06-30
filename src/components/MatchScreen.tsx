@@ -129,7 +129,12 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   // modo Tático: freezetime de 5s antes de cada round pra escolher a chamada
   const [tactical, setTactical] = useState(false);
   const [freeze, setFreeze] = useState(0);
-  const [lastCall, setLastCall] = useState<{ call: RoundCall; won: boolean; round: number } | null>(null);
+  // impacto da última chamada: a call, a postura ativa, a chance que ENFRENTAVA
+  // (odds antes do round) e se deu certo — pro card "decisão → resultado".
+  const [lastCall, setLastCall] = useState<{ call: RoundCall; stance: Stance; won: boolean; round: number; odds: number } | null>(null);
+  // placar das suas calls NESTE mapa (reseta a cada mapa): mostra o impacto
+  // acumulado das suas decisões, não só do round atual.
+  const [callRecord, setCallRecord] = useState<{ made: number; won: number }>({ made: 0, won: 0 });
   const endedMapsRef = useRef<Set<number>>(new Set());
   const mapTransitionRef = useRef<number | null>(null);
 
@@ -197,6 +202,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         setBoostRounds(0);
         setFreeze(0);
         setPausedMsg('');
+        setLastCall(null);
+        setCallRecord({ made: 0, won: 0 });
         mapTransitionRef.current = null;
       }, 3500);
     }
@@ -224,17 +231,21 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       let mapEnded = false;
       for (let i = 0; i < due && !mapEnded; i++) {
         // chamada de round (rush/retake/force/save) vale para 1 round e some
-        const c = callRef.current ? ({ team: userIdx, kind: callRef.current } as const) : undefined;
+        const callKind = callRef.current;
+        const c = callKind ? ({ team: userIdx, kind: callKind } as const) : undefined;
         buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
+        const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
         if (boostRounds - boostsUsed > 0) {
           sim.step(userIdx, stanceMod, c);
           boostsUsed++;
         } else {
           sim.step(null, stanceMod, c);
         }
-        if (c) {
+        if (c && callKind) {
           const log = sim.roundLog();
-          setLastCall({ call: callRef.current!, won: log[log.length - 1] === userIdx, round: sim.round() });
+          const won = log[log.length - 1] === userIdx;
+          setLastCall({ call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
+          setCallRecord((r) => ({ made: r.made + 1, won: r.won + (won ? 1 : 0) }));
           callRef.current = null;
           setPendingCall(null);
         }
@@ -258,14 +269,18 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     // freezetime acabou: joga exatamente um round
     const sim = getSim(mapIdx);
     const stanceMod = stanceRef.current !== 'default' ? { team: userIdx, mode: stanceRef.current } : undefined;
-    const c = callRef.current ? ({ team: userIdx, kind: callRef.current } as const) : undefined;
+    const callKind = callRef.current;
+    const c = callKind ? ({ team: userIdx, kind: callKind } as const) : undefined;
     const boost = boostRounds > 0;
     buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
+    const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
     sim.step(boost ? userIdx : null, stanceMod, c);
     if (boost) setBoostRounds((b) => Math.max(0, b - 1));
-    if (c) {
+    if (c && callKind) {
       const log = sim.roundLog();
-      setLastCall({ call: callRef.current!, won: log[log.length - 1] === userIdx, round: sim.round() });
+      const won = log[log.length - 1] === userIdx;
+      setLastCall({ call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
+      setCallRecord((r) => ({ made: r.made + 1, won: r.won + (won ? 1 : 0) }));
       callRef.current = null;
       setPendingCall(null);
     }
@@ -385,6 +400,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     : enemyBuy === 'force' ? { txt: ct('Inimigo em FORCE BUY — cuidado com agressão'), tone: '#e8c170' }
     : enemyBuy === 'pistol' ? { txt: ct('Round pistola — economia zerada'), tone: '#9fb4c8' }
     : { txt: ct('Inimigo em FULL BUY — round equilibrado'), tone: '#e58a8a' };
+  // momentum atual: quem está embalado e o tamanho da sequência (medidor visual)
+  const mom = finished ? { team: -1 as 0 | 1 | -1, len: 0 } : sim.momentum();
 
   const playerById = useMemo(() => {
     const players = new Map<string, TPlayer>();
@@ -542,6 +559,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
               </span>
             </div>
           </div>
+          {!finished && mom.team >= 0 && mom.len >= 2 && (
+            <MomentumMeter team={mom.team as 0 | 1} len={mom.len} teams={teams} userIdx={userIdx} />
+          )}
           {pbLive && (
             <div className="center" style={{ marginTop: 4 }}>
               <span className="mm-playbook">
@@ -662,18 +682,25 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 </div>
               </div>
             )}
-            {lastCall && (() => {
-              const cc = CALLS.find((c) => c.key === lastCall.call)!;
-              return (
-                <div className={`last-call ${lastCall.won ? 'won' : 'lost'}`}>
-                  {L.lastCall}: {cc.icon} {t(cc.labelKey)} (R{lastCall.round}) → {lastCall.won ? `✓ ${L.worked}` : `✗ ${L.failed}`}
-                </div>
-              );
-            })()}
+            {lastCall && (
+              <DecisionImpactCard
+                key={`${lastCall.round}-${lastCall.call}`}
+                lastCall={lastCall}
+                t={t}
+              />
+            )}
             <div className="call-bar">
               <span className="call-label">
                 <span className={`side-pill ${mySide}`}>{mySide.toUpperCase()}</span>{' '}
                 {t('match.roundCall')} <span className="call-money">💵 ${myMoney.toLocaleString()}</span>
+                {callRecord.made > 0 && (
+                  <span style={{ marginLeft: 8, fontSize: '0.7rem', color: 'var(--em-muted, #8a99ab)' }}>
+                    · {ct('calls')}:{' '}
+                    <b style={{ color: callRecord.won * 2 >= callRecord.made ? '#5ed88a' : '#e8c170' }}>
+                      {callRecord.won}/{callRecord.made} ✓
+                    </b>
+                  </span>
+                )}
               </span>
               {CALLS.map((c) => (
                 <button
@@ -791,6 +818,93 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// MEDIDOR DE MOMENTO: barra que pende para o time embalado, com intensidade
+// proporcional à sequência. Torna VISÍVEL como suas decisões viram "runs".
+function MomentumMeter({ team, len, teams, userIdx }: {
+  team: 0 | 1; len: number; teams: [TTeam, TTeam]; userIdx: 0 | 1;
+}) {
+  const mine = team === userIdx;
+  const accent = mine ? '#5ed88a' : '#e58a8a';
+  const grad = mine ? 'linear-gradient(90deg,#3a8f5a,#5ed88a)' : 'linear-gradient(90deg,#8f5a3a,#e58a8a)';
+  const fillPct = Math.min(48, len * 9); // cada lado ocupa no máx. metade da barra
+  const fires = '🔥'.repeat(Math.min(3, len - 1));
+  return (
+    <div className="center" style={{ marginTop: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 360, margin: '0 auto' }}>
+        <span style={{ fontSize: '0.66rem', fontWeight: 800, opacity: team === 0 ? 1 : 0.4, fontFamily: '"JetBrains Mono", monospace' }}>{teams[0].tag}</span>
+        <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.06)', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, background: 'rgba(255,255,255,0.18)' }} />
+          <div style={{
+            position: 'absolute', top: 0, bottom: 0,
+            ...(team === 0 ? { right: '50%' } : { left: '50%' }),
+            width: `${fillPct}%`, background: grad, transition: 'width .3s ease',
+          }} />
+        </div>
+        <span style={{ fontSize: '0.66rem', fontWeight: 800, opacity: team === 1 ? 1 : 0.4, fontFamily: '"JetBrains Mono", monospace' }}>{teams[1].tag}</span>
+      </div>
+      <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.5px', color: accent, marginTop: 2 }}>
+        {fires} {ct('EMBALO')} {teams[team].tag} · {len} {ct('rounds seguidos')}
+      </div>
+    </div>
+  );
+}
+
+// CARD DE IMPACTO DA DECISÃO: cruza a chamada + postura + a CHANCE que enfrentava
+// com o resultado real. É o "ver o impacto da decisão" — não só deu/não deu certo,
+// mas se foi aposta corajosa, favoritismo confirmado ou tropeço.
+function DecisionImpactCard({ lastCall, t }: {
+  lastCall: { call: RoundCall; stance: Stance; won: boolean; round: number; odds: number };
+  t: (k: string) => string;
+}) {
+  const cc = CALLS.find((c) => c.key === lastCall.call)!;
+  const st = STANCES.find((s) => s.key === lastCall.stance);
+  const pct = Math.round(lastCall.odds * 100);
+  const won = lastCall.won;
+  const verdict = won
+    ? lastCall.odds < 0.4 ? ct('Aposta arriscada que PEGOU! 🎯')
+      : lastCall.odds >= 0.62 ? ct('Favoritismo confirmado.')
+      : ct('Boa leitura — deu certo.')
+    : lastCall.odds >= 0.62 ? ct('Você era favorito e tropeçou.')
+      : lastCall.odds < 0.4 ? ct('Aposta difícil — não pegou.')
+      : ct('Não foi dessa vez.');
+  const accent = won ? '#5ed88a' : '#e58a8a';
+  return (
+    <div
+      className="fade-in"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', margin: '8px 0',
+        borderRadius: 8, background: won ? 'rgba(94,216,138,0.08)' : 'rgba(229,138,138,0.08)',
+        border: `1px solid ${won ? 'rgba(94,216,138,0.35)' : 'rgba(229,138,138,0.35)'}`,
+        borderLeft: `4px solid ${accent}`,
+      }}
+    >
+      <div style={{ fontSize: '1.8rem', lineHeight: 1, color: accent }}>{won ? '✓' : '✗'}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>
+            {ct('SUA DECISÃO')} · R{lastCall.round}
+          </span>
+          <span style={{ fontSize: '0.78rem', fontWeight: 800 }}>{cc.icon} {t(cc.labelKey)}</span>
+          {st && lastCall.stance !== 'default' && (
+            <span style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', fontWeight: 700 }}>
+              {st.icon} {t(st.labelKey)}
+            </span>
+          )}
+          <span style={{ fontSize: '0.7rem', color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>
+            ({ct('tinha')} {pct}%)
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.82rem', fontWeight: 900, color: accent }}>
+            {won ? ct('ROUND VENCIDO') : ct('ROUND PERDIDO')}
+          </span>
+          <span style={{ fontSize: '0.74rem', color: 'var(--em-text,#d6deea)', fontStyle: 'italic' }}>— {verdict}</span>
+        </div>
+      </div>
     </div>
   );
 }
