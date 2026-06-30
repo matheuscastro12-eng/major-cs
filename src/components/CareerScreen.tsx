@@ -455,7 +455,7 @@ import {
   type PendingTeamEvent,
   type TeamEventState,
 } from '../engine/teamEvents';
-import { detectYearAwards, type YearAwards } from '../engine/awards';
+import { detectYearAwards, type YearAwards, type PlayerYearLine } from '../engine/awards';
 import { type TalkResult } from '../engine/playerTalks';
 import { TeamEventModal } from './TeamEventModal';
 import { YearAwardsModal } from './YearAwardsModal';
@@ -650,7 +650,7 @@ function buildAchievementSnapshot(save: CareerSave, starterIds: string[]): SaveS
   // se o `playerNick` do MVP bate com algum jogador que JÁ ESTEVE no squad
   // (precisa de squadHistory que ainda não temos).
   const poyEver = (save.yearAwardsHistory ?? []).some((y) =>
-    y.winners?.some((w) => w.kind === 'mvp'),
+    y?.winners?.some((w) => w.kind === 'mvp'),
   );
   return {
     split: save.split,
@@ -1192,6 +1192,9 @@ interface CareerSave {
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
+  // snapshot de careerStats no início do ano corrente — o delta vs careerStats
+  // dá o DESEMPENHO do ano (rating real) que decide os prêmios por desempenho.
+  careerStatsYearStart?: Record<string, CareerStatLine>;
   trainingFocus?: string | null; // id do jogador em foco de treino no split atual (acelera a evolução)
   morale?: Record<string, number>; // moral/satisfação por jogador (id original) 0-100
   news?: NewsItem[]; // caixa de entrada (manchetes), mais recente primeiro
@@ -2158,7 +2161,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     'evo', 'sponsorUntil', 'moves', 'contracts', 'roles', 'careerStats',
     'morale', 'peakOvr', 'mapTraining', 'playbookMem', 'youth', 'youthAge', 'youthDebut',
     'lastTalkAt', 'pairChem', 'extraOnTeam', 'academyPlayed', 'rivalries',
-    'fatigue', 'facilities', 'mapStats', 'aiDrift',
+    'fatigue', 'facilities', 'mapStats', 'aiDrift', 'careerStatsYearStart',
   ].forEach(defaultInvalidRecord);
   [
     'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
@@ -2525,6 +2528,56 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // joinedThisYear: não temos signedAtSplit no shape — placeholder false (breakout fica off)
     const joinedThisYear = (_id: string): boolean => false;
 
+    // nick + função por id (cobre o dataset inteiro + jovens) — pros prêmios
+    // por DESEMPENHO precisarem da função do jogador (Time da Temporada).
+    const metaById = (id: string): { nick: string; role: string } | null => {
+      for (const ts of dataset) {
+        const p = ts.players.find((pp: Player) => pp.id === id);
+        if (p) return { nick: p.nick, role: p.role };
+      }
+      const y = save.youth?.[id];
+      if (y) return { nick: y.nick ?? '—', role: (y as { role?: string }).role ?? 'Rifler' };
+      return null;
+    };
+
+    // DESEMPENHO DO ANO: delta de careerStats vs o snapshot do início do ano →
+    // rating/kd/adr REAIS de cada jogador no período. Base do POTY/Revelação/Time
+    // da Temporada (premia quem JOGOU melhor, não quem tem OVR alto).
+    const cs = save.careerStats ?? {};
+    const ys = save.careerStatsYearStart ?? {};
+    const squadIds = new Set(save.squad.map((sg) => sg.playerId));
+    const yearLines: PlayerYearLine[] = [];
+    for (const [id, line] of Object.entries(cs)) {
+      const st = ys[id];
+      const d: CareerStatLine = {
+        k: line.k - (st?.k ?? 0),
+        d: line.d - (st?.d ?? 0),
+        a: line.a - (st?.a ?? 0),
+        dmg: line.dmg - (st?.dmg ?? 0),
+        kast: line.kast - (st?.kast ?? 0),
+        rounds: line.rounds - (st?.rounds ?? 0),
+        maps: line.maps - (st?.maps ?? 0),
+        splits: 0,
+      };
+      if (d.rounds < 1 || d.maps < 1) continue;
+      const dc = deriveCareer(d);
+      const meta = metaById(id);
+      if (!dc || !meta) continue;
+      const kpr = d.k / d.rounds, apr = d.a / d.rounds;
+      yearLines.push({
+        playerId: id,
+        nick: meta.nick,
+        role: meta.role,
+        age: ageById(id),
+        mine: squadIds.has(id),
+        rating: dc.rating,
+        kd: dc.kd,
+        adr: dc.adr,
+        impact: Math.max(0, 2.13 * kpr + 0.42 * apr - 0.41),
+        maps: dc.maps,
+      });
+    }
+
     const awards = detectYearAwards(
       {
         split: save.split,
@@ -2535,14 +2588,26 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         youth: save.youth as Record<string, { age?: number; nick?: string; ovr?: number }> | undefined,
         yearAwardsHistory: save.yearAwardsHistory,
         pendingYearAwards: save.pendingYearAwards,
-        coach: save.coachFromId ? { nick: undefined } : undefined,
+        // resolve o NICK real do coach (antes ia undefined → Técnico do Ano nunca
+        // saía): rookie, custom, ou o coach herdado do time assumido no dataset.
+        coach: (() => {
+          const id = save.coachFromId;
+          if (!id) return undefined;
+          const nick =
+            id === ROOKIE_ID ? ROOKIE_COACH.nick
+            : id === '__custom__' ? save.customCoach?.nick
+            : dataset.find((t) => t.id === id)?.coach?.nick;
+          return nick ? { nick } : undefined;
+        })(),
       },
       { nickById, ageById, joinedThisYear },
+      yearLines,
     );
     if (!awards) return;
 
     setSave((s) => {
-      const next: CareerSave = { ...s, pendingYearAwards: awards };
+      // snapshot do careerStats atual = baseline do PRÓXIMO ano
+      const next: CareerSave = { ...s, pendingYearAwards: awards, careerStatsYearStart: { ...(s.careerStats ?? {}) } };
       persist(next);
       return next;
     });
@@ -6151,10 +6216,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           awards={save.pendingYearAwards}
           onClose={() => {
             setSave((s) => {
+              // guarda contra dupla-invocação (duplo-clique / Enter repetido no
+              // botão): sem isso a 2ª chamada empurrava `null` no histórico e
+              // bricava a carreira. Se já foi fechado, no-op.
+              if (!s.pendingYearAwards) return s;
               const next: CareerSave = {
                 ...s,
                 pendingYearAwards: null,
-                yearAwardsHistory: [...(s.yearAwardsHistory ?? []), s.pendingYearAwards!],
+                yearAwardsHistory: [...(s.yearAwardsHistory ?? []), s.pendingYearAwards],
               };
               persist(next);
               return next;

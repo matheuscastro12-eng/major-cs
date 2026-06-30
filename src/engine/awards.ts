@@ -21,11 +21,20 @@ export type AwardKind =
   | 'rookie'
   | 'mostImproved'
   | 'coachOfYear'
-  | 'breakout';
+  | 'breakout'
+  | 'teamOfSeason';
+
+/** Uma linha do Time da Temporada (1 dos 5 jogadores). */
+export interface TeamOfSeasonSlot {
+  nick: string;
+  role: string;
+  rating: number;
+  mine: boolean;
+}
 
 export interface AwardWinner {
   kind: AwardKind;
-  /** Nick do jogador vencedor (não preenchido pra coachOfYear) */
+  /** Nick do jogador vencedor (não preenchido pra coachOfYear/teamOfSeason) */
   playerNick?: string;
   /** Nick do coach vencedor (só pra coachOfYear) */
   coachNick?: string;
@@ -33,6 +42,73 @@ export interface AwardWinner {
   label: string;
   /** Narrativa de 1 linha: "Subiu OVR de 78 → 85 e foi campeão do circuito tier 2" */
   reason: string;
+  /** Só pra teamOfSeason: os 5 jogadores escolhidos por desempenho. */
+  lineup?: TeamOfSeasonSlot[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Performance do ano (prêmios por DESEMPENHO, não por OVR)
+//
+// Uma linha por jogador com o que ele REALMENTE produziu no ano (rating/kd/adr
+// derivados do delta de careerStats no período). É a base do POTY, da Revelação
+// e do Time da Temporada — quem JOGOU melhor, não quem tem OVR alto.
+
+export interface PlayerYearLine {
+  playerId: string;
+  nick: string;
+  role: string;        // AWP | Entry | Rifler | Lurker | Support | IGL
+  age?: number;
+  mine: boolean;       // está no SEU elenco
+  rating: number;
+  kd: number;
+  adr: number;
+  impact: number;
+  maps: number;        // mapas jogados no ano (volume)
+}
+
+/** Amostra mínima de mapas no ano pra concorrer a prêmio (evita 1 mapa de sorte). */
+export const AWARD_MIN_MAPS = 6;
+
+/**
+ * Score de desempenho do ano. Rating manda; kd/adr/impact refinam; o volume de
+ * mapas dá um leve bônus com retorno decrescente (mais jogos = mais credível),
+ * com piso pra não zerar quem jogou pouco mas muito bem.
+ */
+export function scorePlayerYear(l: PlayerYearLine): number {
+  const perf = l.rating * 100 + l.kd * 6 + l.adr * 0.12 + l.impact * 18;
+  const volume = Math.max(0.5, Math.min(1.15, l.maps / 20));
+  return perf * volume;
+}
+
+// ordena por score, com desempate: score → rating → kd → mapas
+function byPerf(a: PlayerYearLine, b: PlayerYearLine): number {
+  return (
+    scorePlayerYear(b) - scorePlayerYear(a) ||
+    b.rating - a.rating ||
+    b.kd - a.kd ||
+    b.maps - a.maps
+  );
+}
+
+// Time da Temporada: 5 jogadores por DESEMPENHO, cobrindo AWP + IGL quando
+// possível e completando pelos melhores restantes (modelo "melhor por função +
+// melhor restante"). Retorna [] se não houver 5 elegíveis.
+function pickTeamOfSeason(eligible: PlayerYearLine[]): PlayerYearLine[] {
+  if (eligible.length < 5) return [];
+  const sorted = [...eligible].sort(byPerf);
+  const picked = new Set<string>();
+  const lineup: PlayerYearLine[] = [];
+  const takeRole = (role: string) => {
+    const c = sorted.find((l) => !picked.has(l.playerId) && l.role === role);
+    if (c) { picked.add(c.playerId); lineup.push(c); }
+  };
+  takeRole('AWP');
+  takeRole('IGL');
+  for (const l of sorted) {
+    if (lineup.length >= 5) break;
+    if (!picked.has(l.playerId)) { picked.add(l.playerId); lineup.push(l); }
+  }
+  return lineup.sort(byPerf);
 }
 
 export interface YearAwards {
@@ -89,6 +165,7 @@ const BREAKOUT_MIN_PEAK = 78;
 export function detectYearAwards(
   s: AwardsState,
   lookups: AwardsLookups,
+  yearLines?: PlayerYearLine[],
 ): YearAwards | null {
   // Ano corrente: 1, 2, 3, ... — começa em 1, vira 2 quando split=5, etc.
   const yearJustEnded = Math.floor((s.split - 1) / 4);
@@ -105,15 +182,44 @@ export function detectYearAwards(
 
   const winners: AwardWinner[] = [];
 
-  // ───── MVP ───── squad player com maior peakOvr
-  const mvp = pickBestBy(s.squad, (sg) => s.peakOvr?.[sg.playerId] ?? 0);
-  if (mvp.best && mvp.bestValue >= 75) {
-    const nick = lookups.nickById(mvp.best.playerId) ?? '—';
+  // pool de DESEMPENHO do ano (quem realmente jogou bem), com amostra mínima
+  const perfEligible = (yearLines ?? []).filter((l) => l.maps >= AWARD_MIN_MAPS);
+  const perfRanked = [...perfEligible].sort(byPerf);
+
+  // ───── Jogador do Ano (POTY) ───── melhor DESEMPENHO do ano (rating real).
+  // Fallback no proxy de peakOvr só quando não há nenhuma partida contabilizada.
+  // `potyId` guarda o vencedor (perf OU proxy) pra nenhum outro prêmio repetir.
+  let potyId: string | undefined;
+  if (perfRanked.length > 0) {
+    const top = perfRanked[0];
+    potyId = top.playerId;
     winners.push({
       kind: 'mvp',
-      playerNick: nick,
-      label: 'MVP do Ano',
-      reason: `Alcançou pico de OVR ${mvp.bestValue} e foi a referência do elenco.`,
+      playerNick: top.nick,
+      label: 'Jogador do Ano',
+      reason: `Rating ${top.rating.toFixed(2)} em ${top.maps} mapas — o melhor desempenho da temporada${top.mine ? ' (e é do SEU elenco!)' : ''}.`,
+    });
+  } else {
+    const mvp = pickBestBy(s.squad, (sg) => s.peakOvr?.[sg.playerId] ?? 0);
+    if (mvp.best && mvp.bestValue >= 75) {
+      potyId = mvp.best.playerId;
+      winners.push({
+        kind: 'mvp',
+        playerNick: lookups.nickById(mvp.best.playerId) ?? '—',
+        label: 'Jogador do Ano',
+        reason: `Alcançou pico de OVR ${mvp.bestValue} e foi a referência do elenco.`,
+      });
+    }
+  }
+
+  // ───── Time da Temporada ───── 5 melhores por desempenho (POTY-style por função)
+  const tos = pickTeamOfSeason(perfEligible);
+  if (tos.length === 5) {
+    winners.push({
+      kind: 'teamOfSeason',
+      label: 'Time da Temporada',
+      reason: 'Os cinco melhores desempenhos do ano, escolhidos por função.',
+      lineup: tos.map((l) => ({ nick: l.nick, role: l.role, rating: l.rating, mine: l.mine })),
     });
   }
 
@@ -135,22 +241,36 @@ export function detectYearAwards(
     }
   }
 
-  // ───── Rookie ───── jovem (<22) com maior peakOvr
-  const rookies = s.squad.filter((sg) => {
-    const age = lookups.ageById(sg.playerId);
-    return age != null && age < ROOKIE_MAX_AGE;
-  });
-  if (rookies.length > 0) {
-    const rk = pickBestBy(rookies, (sg) => s.peakOvr?.[sg.playerId] ?? 0);
-    if (rk.best) {
-      const nick = lookups.nickById(rk.best.playerId) ?? '—';
-      const age = lookups.ageById(rk.best.playerId);
-      winners.push({
-        kind: 'rookie',
-        playerNick: nick,
-        label: 'Revelação do Ano',
-        reason: `Aos ${age ?? '?'} anos, atingiu pico de OVR ${rk.bestValue} no elenco.`,
-      });
+  // ───── Revelação do Ano ───── melhor DESEMPENHO entre os jovens (<22),
+  // excluindo o POTY pra não premiar o mesmo jogador duas vezes. Fallback proxy.
+  const rookiePerf = perfRanked.filter(
+    (l) => l.age != null && l.age < ROOKIE_MAX_AGE && l.playerId !== potyId,
+  );
+  if (rookiePerf.length > 0) {
+    const rk = rookiePerf[0];
+    winners.push({
+      kind: 'rookie',
+      playerNick: rk.nick,
+      label: 'Revelação do Ano',
+      reason: `Aos ${rk.age} anos, rating ${rk.rating.toFixed(2)} em ${rk.maps} mapas — o melhor jovem do ano.`,
+    });
+  } else {
+    const rookies = s.squad.filter((sg) => {
+      const age = lookups.ageById(sg.playerId);
+      return age != null && age < ROOKIE_MAX_AGE && sg.playerId !== potyId;
+    });
+    if (rookies.length > 0) {
+      const rk = pickBestBy(rookies, (sg) => s.peakOvr?.[sg.playerId] ?? 0);
+      if (rk.best) {
+        const nick = lookups.nickById(rk.best.playerId) ?? '—';
+        const age = lookups.ageById(rk.best.playerId);
+        winners.push({
+          kind: 'rookie',
+          playerNick: nick,
+          label: 'Revelação do Ano',
+          reason: `Aos ${age ?? '?'} anos, atingiu pico de OVR ${rk.bestValue} no elenco.`,
+        });
+      }
     }
   }
 
@@ -160,8 +280,8 @@ export function detectYearAwards(
   );
   if (breakouts.length > 0) {
     const br = pickBestBy(breakouts, (sg) => s.peakOvr?.[sg.playerId] ?? 0);
-    if (br.best && br.best.playerId !== mvp.best?.playerId) {
-      // não duplica com MVP
+    if (br.best && br.best.playerId !== potyId) {
+      // não duplica com o Jogador do Ano
       const nick = lookups.nickById(br.best.playerId) ?? '—';
       winners.push({
         kind: 'breakout',
@@ -188,6 +308,18 @@ export function detectYearAwards(
   }
 
   if (winners.length === 0) return null;
+
+  // ordem da cerimônia: prêmios menores primeiro, clímax no Time da Temporada e
+  // no Jogador do Ano (o último slide).
+  const CEREMONY_ORDER: Record<AwardKind, number> = {
+    breakout: 1,
+    mostImproved: 2,
+    coachOfYear: 3,
+    rookie: 4,
+    teamOfSeason: 5,
+    mvp: 6,
+  };
+  winners.sort((a, b) => CEREMONY_ORDER[a.kind] - CEREMONY_ORDER[b.kind]);
 
   return {
     year: yearJustEnded,

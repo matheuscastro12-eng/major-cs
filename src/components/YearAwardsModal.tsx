@@ -23,14 +23,16 @@ const KIND_ACCENT: Record<AwardKind, string> = {
   mostImproved: '#9b6fe8', // roxo
   coachOfYear: '#e8a93b',  // âmbar
   breakout: '#5ed88a',     // verde (surpresa)
+  teamOfSeason: '#6f9ce8', // azul (time)
 };
 
 const KIND_HEADER: Record<AwardKind, string> = {
-  mvp: 'MVP DO ANO',
+  mvp: 'JOGADOR DO ANO',
   rookie: 'REVELAÇÃO',
   mostImproved: 'MAIOR EVOLUÇÃO',
   coachOfYear: 'TÉCNICO DO ANO',
   breakout: 'SURPRESA',
+  teamOfSeason: 'TIME DA TEMPORADA',
 };
 
 export function YearAwardsModal({ awards, onClose }: Props) {
@@ -117,38 +119,68 @@ export function YearAwardsModal({ awards, onClose }: Props) {
             {headerLabel}
           </div>
 
-          {/* Trophy emoji-free — uso de border + cor */}
-          <div
-            style={{
-              width: 76,
-              height: 76,
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2.2rem',
-              fontWeight: 800,
-              color: accent,
-              background: 'var(--em-panel-2)',
-              border: `3px solid ${accent}`,
-              boxShadow: `0 0 30px ${accent}66`,
-            }}
-          >
-            {winner.kind === 'coachOfYear' ? 'C' : winner.kind === 'rookie' ? 'R' : winner.kind === 'mostImproved' ? '↑' : winner.kind === 'breakout' ? '!' : '★'}
-          </div>
+          {winner.kind === 'teamOfSeason' && winner.lineup ? (
+            /* Time da Temporada — lista dos 5 melhores por função */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', maxWidth: 360 }}>
+              {winner.lineup.map((slot, i) => (
+                <div
+                  key={`${slot.nick}-${i}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '7px 12px',
+                    borderRadius: 6,
+                    background: slot.mine ? `${accent}22` : 'var(--em-panel-2)',
+                    border: `1px solid ${slot.mine ? accent : 'var(--em-border)'}`,
+                  }}
+                >
+                  <span style={{ fontSize: '0.66rem', fontWeight: 800, color: accent, minWidth: 52, letterSpacing: '0.5px' }}>{slot.role}</span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--em-text)', flex: 1 }}>
+                    {slot.nick}{slot.mine ? ' ⭐' : ''}
+                  </span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: accent, fontFamily: '"JetBrains Mono", monospace' }}>
+                    {slot.rating.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Trophy emoji-free — uso de border + cor */}
+              <div
+                style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '2.2rem',
+                  fontWeight: 800,
+                  color: accent,
+                  background: 'var(--em-panel-2)',
+                  border: `3px solid ${accent}`,
+                  boxShadow: `0 0 30px ${accent}66`,
+                }}
+              >
+                {winner.kind === 'coachOfYear' ? 'C' : winner.kind === 'rookie' ? 'R' : winner.kind === 'mostImproved' ? '↑' : winner.kind === 'breakout' ? '!' : '★'}
+              </div>
 
-          {/* Recipient */}
-          <div
-            style={{
-              fontSize: '1.6rem',
-              fontWeight: 800,
-              color: 'var(--em-text)',
-              letterSpacing: '0.5px',
-              textAlign: 'center',
-            }}
-          >
-            {recipient}
-          </div>
+              {/* Recipient */}
+              <div
+                style={{
+                  fontSize: '1.6rem',
+                  fontWeight: 800,
+                  color: 'var(--em-text)',
+                  letterSpacing: '0.5px',
+                  textAlign: 'center',
+                }}
+              >
+                {recipient}
+              </div>
+            </>
+          )}
 
           {/* Label completo */}
           <div

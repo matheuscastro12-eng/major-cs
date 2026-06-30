@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -152,6 +152,17 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     difficulty: save.difficulty === 'hard' || save.difficulty === 'legend' ? save.difficulty : 'normal',
     _v: 14,
+  }),
+  // v14 → v15 (prêmios por desempenho): adiciona careerStatsYearStart, o snapshot
+  // de careerStats no início do ano. Backfill {} = o 1º ano após migrar mede o
+  // desempenho desde o começo da carreira (delta vs zero) — sem quebrar nada.
+  14: (save) => ({
+    ...save,
+    careerStatsYearStart:
+      save.careerStatsYearStart && typeof save.careerStatsYearStart === 'object'
+        ? save.careerStatsYearStart
+        : {},
+    _v: 15,
   }),
 };
 
