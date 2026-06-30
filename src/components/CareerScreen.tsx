@@ -505,6 +505,7 @@ import { StandingsTab } from '../pages/career/StandingsTab';
 import { ResultsTab } from '../pages/career/ResultsTab';
 import { VrsTab } from '../pages/career/VrsTab';
 import { Top20Tab } from '../pages/career/Top20Tab';
+import { StatsTab } from '../pages/career/StatsTab';
 import { HistoryTab } from '../pages/career/HistoryTab';
 import { BracketTab } from '../pages/career/BracketTab';
 import { InboxTab } from '../pages/career/InboxTab';
@@ -2210,7 +2211,7 @@ const ROOKIE_COACH: Coach = { nick: 'rook1e', name: ct('Técnico Iniciante'), co
 const ROOKIE_ID = '__rookie__';
 
 type Stage = 'found' | 'market' | 'circuit' | 'hub' | 'veto' | 'match' | 'playoffHub' | 'seasonEnd' | 'majorHub' | 'major';
-type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar';
+type HubTab = 'overview' | 'major' | 'market' | 'finance' | 'results' | 'standings' | 'bracket' | 'squad' | 'academy' | 'vrs' | 'top20' | 'history' | 'inbox' | 'world' | 'calendar' | 'stats';
 
 // time sintético ct('Academia') usado como origem de um prospecto promovido ao elenco
 const ACADEMY_FROM: TeamSeason = {
@@ -5420,6 +5421,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     standings: ct('Classificação'), bracket: ct('Chave'), squad: ct('Elenco'), academy: ct('Academia'),
     market: ct('Negociações'), finance: ct('Finanças'), vrs: ct('Ranking VRS'), top20: 'Top 20 HLTV',
     world: ct('Cena mundial'), inbox: ct('Tarefas'), history: ct('História da org'),
+    stats: ct('Geral'),
   };
   const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
     { id: 'dashboard', label: 'Dashboard', tabs: ['overview', 'inbox'] },
@@ -5427,7 +5429,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     { id: 'ingame', label: ct('Em jogo'), tabs: [...(majorActive ? ['major' as HubTab] : []), 'bracket', 'results', 'standings'] },
     { id: 'transfers', label: ct('Transferências'), tabs: ['market', 'finance'] },
     { id: 'news', label: ct('Notícias HLTV'), tabs: ['inbox'] },
-    { id: 'stats', label: ct('Estatísticas'), tabs: ['vrs', 'top20', 'world', 'history'] },
+    { id: 'stats', label: ct('Estatísticas'), tabs: ['stats', 'vrs', 'top20', 'world', 'history'] },
   ];
   const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);
   const tabLabelFull = (id: HubTab) =>
@@ -5980,6 +5982,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       {/* T1.4: aba World extraída em src/pages/career/WorldTab.tsx */}
       {hubTab === 'world' && (
         <WorldTab oppEra={oppEra} save={save} openTeamProfile={openTeamProfile} />
+      )}
+
+      {/* ===== ESTATÍSTICAS DA TEMPORADA (página dedicada) ===== */}
+      {hubTab === 'stats' && (
+        <StatsTab
+          save={save}
+          seasonStats={seasonStats}
+          mySquadOids={mySquadOids}
+          openPlayerProfile={openPlayerProfile}
+          resolvePlayerById={resolvePlayerById}
+        />
       )}
 
       {/* ===== RANKING VRS POR REGIÃO ===== */}
