@@ -10,6 +10,7 @@ import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, 
 import { teamSeasonToTTeam } from '../engine/ratings';
 import { simulateSeries } from '../engine/match';
 import { autoVeto } from '../engine/veto';
+import { mapRecordFromStats } from '../engine/teamMapStats';
 import { createSwissStage, createPlayoffStage, stageAdvancers, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 // Hub: usado pela MajorTab; import movido pra page.
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
@@ -1054,6 +1055,9 @@ interface CareerSave {
   circuit: CircuitChoice | null;
   inviteAccepted?: boolean; // jogou um circuito acima do tier por convite neste split (boost dos jovens)
   history: SplitRecord[];
+  // desempenho REAL por mapa do time do usuário, acumulado na carreira (w/l +
+  // rounds pró/contra). Alimenta a tabela "Desempenho por mapa" e o veto da IA.
+  mapStats?: Record<string, { w: number; l: number; rf: number; ra: number }>;
   sponsors: string[];
   playoff: Playoff | null;
   majorT: Tournament | null;
@@ -1233,6 +1237,7 @@ const emptySave = (): CareerSave => ({
   league: null,
   circuit: null,
   history: [],
+  mapStats: {},
   sponsors: [],
   playoff: null,
   majorT: null,
@@ -2101,7 +2106,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     'evo', 'sponsorUntil', 'moves', 'contracts', 'roles', 'careerStats',
     'morale', 'peakOvr', 'mapTraining', 'playbookMem', 'youth', 'youthAge', 'youthDebut',
     'lastTalkAt', 'pairChem', 'extraOnTeam', 'academyPlayed', 'rivalries',
-    'fatigue', 'facilities',
+    'fatigue', 'facilities', 'mapStats', 'aiDrift',
   ].forEach(defaultInvalidRecord);
   [
     'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
@@ -2764,7 +2769,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         title: `${ct('Risco de burnout:')} ${load.newBurnouts.join(', ')}`,
         body: ct('A sequência de partidas pesou. Use carga reduzida ou invista em psicologia para recuperar o elenco.'),
       });
-      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], ...pushNews(current, items) };
+      // acumula desempenho por mapa (w/l + rounds pró/contra) do ponto de vista
+      // do usuário — alimenta a tabela "Desempenho por mapa" e o veto da IA.
+      const mapStats = { ...(current.mapStats ?? {}) };
+      const oppI = userIdx === 0 ? 1 : 0;
+      for (const m of series.maps) {
+        const prev = mapStats[m.map] ?? { w: 0, l: 0, rf: 0, ra: 0 };
+        const wonMap = m.winner === userIdx;
+        mapStats[m.map] = {
+          w: prev.w + (wonMap ? 1 : 0),
+          l: prev.l + (wonMap ? 0 : 1),
+          rf: prev.rf + (m.score[userIdx] ?? 0),
+          ra: prev.ra + (m.score[oppI] ?? 0),
+        };
+      }
+      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, ...pushNews(current, items) };
       persist(next);
       return next;
     });
@@ -5287,6 +5306,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             rng={() => rngRef.current()}
             phaseLabel={matchCtx.phaseLabel}
             bestOf={matchCtx.bestOf}
+            mapRecord={mapRecordFromStats(save.mapStats)}
             onDone={(maps) => {
               setMatchCtx({ ...matchCtx, maps });
               setStage('match');

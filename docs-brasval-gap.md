@@ -5,6 +5,8 @@ Comparação major-cs vs Brasval (referência). 57 features single-player identi
 ## Implementado nesta rodada
 - ✅ Sala de Troféus (TrophyRoomPage) — vitrine de conquistas lendo save.history
 - ✅ Perfil do Treinador (CoachProfilePage) — carreira do coach via coachStints
+- ✅ Stats de mapa por time + engine reutilizável (#1/#3) — src/engine/teamMapStats.ts (computeMapPerformance, mapRecordFromStats); save.mapStats acumulado em recordCareerMatch (migração v13, backfill {})
+- ✅ Veto AI guiado por win-rate real (#5) — aiChoice(v, teams, rng, statsCtx?) bane seus mapas fortes / te dá de pick os fracos (VETO_MIN_GAMES=2, fallback mapPrefs); VetoScreen mostra seu W-L real + veredito por mapa
 
 ## Backlog rankeado
 

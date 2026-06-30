@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -135,6 +135,15 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     aiDrift: save.aiDrift && typeof save.aiDrift === 'object' ? save.aiDrift : {},
     _v: 12,
+  }),
+  // v12 → v13 (map pool inteligente): adiciona mapStats (mapId → {w,l,rf,ra}),
+  // o desempenho REAL por mapa do time do usuário acumulado na carreira. Backfill
+  // {} = sem histórico (acumula a partir das próximas partidas). Alimenta a
+  // tabela "Desempenho por mapa" e o veto da IA (banir seus mapas fortes).
+  12: (save) => ({
+    ...save,
+    mapStats: save.mapStats && typeof save.mapStats === 'object' ? save.mapStats : {},
+    _v: 13,
   }),
 };
 

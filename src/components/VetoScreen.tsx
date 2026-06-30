@@ -1,7 +1,7 @@
 import { ct } from '../state/career-i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { draftSynergy } from '../engine/ratings';
-import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, vetoOrder, type VetoState } from '../engine/veto';
+import { aiChoice, applyVeto, currentStep, newVeto, vetoDone, vetoMaps, vetoOrder, type VetoState, type VetoStatsCtx } from '../engine/veto';
 import { generateAnalystReport } from '../engine/analystReport';
 import type { Rng } from '../engine/rng';
 import type { MapId, TTeam } from '../types';
@@ -33,14 +33,26 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
   const step = done ? null : currentStep(veto);
   const isUserTurn = step !== null && step.team === userIdx;
 
+  // contexto de win-rate real da SUA carreira por mapa → a IA usa pra banir os
+  // seus mapas fortes e te dar de pick os fracos (veto com memória da run).
+  const statsCtx = useMemo<VetoStatsCtx>(() => {
+    const byMap: Record<string, { winRate: number; games: number }> = {};
+    for (const m of MAP_POOL) {
+      const rec = mapRecord[m];
+      const g = rec ? rec.w + rec.l : 0;
+      if (g > 0) byMap[m] = { winRate: (rec!.w / g) * 100, games: g };
+    }
+    return { byTeam: { [userIdx]: byMap } };
+  }, [mapRecord, userIdx]);
+
   // IA joga sozinha com um pequeno delay
   useEffect(() => {
     if (done || isUserTurn || step === null) return;
     timer.current = window.setTimeout(() => {
-      setVeto((v) => (vetoDone(v) || currentStep(v).team === userIdx ? v : applyVeto(v, aiChoice(v, teams, rng))));
+      setVeto((v) => (vetoDone(v) || currentStep(v).team === userIdx ? v : applyVeto(v, aiChoice(v, teams, rng, statsCtx))));
     }, 700);
     return () => window.clearTimeout(timer.current);
-  }, [veto, done, isUserTurn, step, teams, rng, userIdx]);
+  }, [veto, done, isUserTurn, step, teams, rng, userIdx, statsCtx]);
 
   // recomendação por mapa do SEU ponto de vista
   const tendency = useMemo(() => {

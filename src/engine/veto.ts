@@ -83,14 +83,37 @@ export function applyVeto(v: VetoState, map: MapId): VetoState {
   return next;
 }
 
-// IA escolhe: ban no mapa onde está pior em relação ao oponente; pick onde está melhor
-export function aiChoice(v: VetoState, teams: [TTeam, TTeam], rng: Rng): MapId {
+// Contexto de win-rate REAL por mapa (saída de teamMapStats), por índice de time.
+// Em geral só temos o do usuário — a IA usa isso como "scouting" da sua run.
+export interface VetoStatsCtx {
+  byTeam: Partial<Record<0 | 1, Record<string, { winRate: number; games: number }>>>;
+  minGames?: number; // amostra mínima pra pesar (default 2)
+}
+
+// IA escolhe: ban no mapa onde está pior em relação ao oponente; pick onde está
+// melhor. Quando recebe `statsCtx` (histórico real da carreira), incorpora o
+// win-rate por mapa: a IA passa a BANIR os SEUS mapas fortes e te dar de pick os
+// fracos — o veto ganha memória da run, em vez de seguir só os mapPrefs estáticos.
+export function aiChoice(v: VetoState, teams: [TTeam, TTeam], rng: Rng, statsCtx?: VetoStatsCtx): MapId {
   const step = currentStep(v);
-  const me = teams[step.team === 1 ? 1 : 0];
-  const opp = teams[step.team === 1 ? 0 : 1];
+  const meIdx: 0 | 1 = step.team === 1 ? 1 : 0;
+  const oppIdx: 0 | 1 = meIdx === 0 ? 1 : 0;
+  const me = teams[meIdx];
+  const opp = teams[oppIdx];
+  const minGames = statsCtx?.minGames ?? 2;
+  // win-rate normalizado -1..+1 (50% = 0), só com amostra suficiente
+  const wr = (idx: 0 | 1, m: MapId): number => {
+    const rec = statsCtx?.byTeam?.[idx]?.[m];
+    if (!rec || rec.games < minGames) return 0;
+    return (rec.winRate - 50) / 50;
+  };
+  const K = 1.6; // peso do histórico real frente aos mapPrefs base
   const scored = v.remaining.map((m) => ({
     m,
-    edge: (me.mapPrefs[m] ?? 0) - (opp.mapPrefs[m] ?? 0) + (rng() - 0.5) * 0.8,
+    edge:
+      (me.mapPrefs[m] ?? 0) - (opp.mapPrefs[m] ?? 0) +
+      (wr(meIdx, m) - wr(oppIdx, m)) * K +
+      (rng() - 0.5) * 0.8,
   }));
   scored.sort((a, b) => (step.action === 'pick' ? b.edge - a.edge : a.edge - b.edge));
   return scored[0].m;
