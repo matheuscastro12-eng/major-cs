@@ -369,6 +369,23 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const mapsWon: [number, number] = [0, 0];
   for (const r of resultsRef.current) if (r) mapsWon[r.winner]++;
 
+  // ── HUD DE DECISÃO (impacto AO VIVO) ──────────────────────────────────────
+  // win-prob do round atual com/sem suas escolhas → o user VÊ o efeito antes de
+  // jogar. peekWinProb é read-only e usa a MESMA fórmula do round real (sem drift).
+  const oppIdx: 0 | 1 = userIdx === 0 ? 1 : 0;
+  const myStanceArg = stance !== 'default' ? ({ team: userIdx, mode: stance } as const) : undefined;
+  const myCallArg = pendingCall ? ({ team: userIdx, kind: pendingCall } as const) : undefined;
+  const baseProb = finished ? 0 : sim.peekWinProb(userIdx);
+  const decisionProb = finished ? 0 : sim.peekWinProb(userIdx, myStanceArg, myCallArg);
+  const probDelta = decisionProb - baseProb;
+  const enemyBuy = buys[oppIdx]; // leitura: compra provável do inimigo no round
+  // leitura de eco do inimigo em texto (freezetime read estilo CS)
+  const enemyRead =
+    enemyBuy === 'eco' ? { txt: ct('Inimigo em ECO — force compensa'), tone: '#5ed88a' }
+    : enemyBuy === 'force' ? { txt: ct('Inimigo em FORCE BUY — cuidado com agressão'), tone: '#e8c170' }
+    : enemyBuy === 'pistol' ? { txt: ct('Round pistola — economia zerada'), tone: '#9fb4c8' }
+    : { txt: ct('Inimigo em FULL BUY — round equilibrado'), tone: '#e58a8a' };
+
   const playerById = useMemo(() => {
     const players = new Map<string, TPlayer>();
     for (const team of teams) {
@@ -596,6 +613,53 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 ) : (
                   <span className="muted small">{ct('simulando round…')}</span>
                 )}
+              </div>
+            )}
+            {/* HUD DE DECISÃO — win-prob ao vivo + impacto da escolha + leitura do inimigo */}
+            {tactical && !finished && (
+              <div
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 14px',
+                  background: 'var(--em-panel, #12161e)', border: '1px solid var(--em-border, #2a3340)',
+                  borderRadius: 8, margin: '8px 0',
+                }}
+              >
+                {/* barra de probabilidade do round */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '0.66rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--em-muted, #8a99ab)', minWidth: 96 }}>
+                    {ct('Chance do round')}
+                  </span>
+                  <div style={{ flex: 1, height: 14, borderRadius: 7, overflow: 'hidden', position: 'relative', background: 'rgba(229,138,138,0.25)' }}>
+                    <div style={{
+                      position: 'absolute', inset: 0, width: `${Math.round(decisionProb * 100)}%`,
+                      background: decisionProb >= 0.5 ? 'linear-gradient(90deg,#3a8f5a,#5ed88a)' : 'linear-gradient(90deg,#8f5a3a,#e8a93b)',
+                      transition: 'width .25s ease',
+                    }} />
+                    <span style={{
+                      position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.7rem', fontWeight: 900, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                      fontFamily: '"JetBrains Mono", monospace',
+                    }}>
+                      {Math.round(decisionProb * 100)}%
+                    </span>
+                  </div>
+                  {/* delta da decisão */}
+                  {Math.abs(probDelta) >= 0.005 && (
+                    <span style={{
+                      fontSize: '0.74rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace',
+                      color: probDelta > 0 ? '#5ed88a' : '#e58a8a', minWidth: 52, textAlign: 'right',
+                    }}>
+                      {probDelta > 0 ? '▲ +' : '▼ '}{Math.round(probDelta * 100)}%
+                    </span>
+                  )}
+                </div>
+                {/* leitura do inimigo (freezetime read) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.72rem' }}>
+                  <span style={{ padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: enemyRead.tone, fontWeight: 700, fontFamily: '"JetBrains Mono", monospace' }}>
+                    📡 {BUY_LABEL[enemyBuy]}
+                  </span>
+                  <span style={{ color: enemyRead.tone, fontStyle: 'italic' }}>{enemyRead.txt}</span>
+                </div>
               </div>
             )}
             {lastCall && (() => {

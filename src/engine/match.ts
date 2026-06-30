@@ -320,6 +320,9 @@ export interface StepMods {
 
 export interface MapSim {
   step: (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call) => boolean; // joga 1 round; true quando o mapa terminou
+  // estimativa read-only da prob de vitória do round ATUAL pra `forTeam`, com
+  // stance/call hipotéticos. Pro HUD de decisão (mostra impacto ao vivo).
+  peekWinProb: (forTeam: 0 | 1, stance?: { team: 0 | 1; mode: Stance }, call?: Call) => number;
   done: () => boolean;
   score: () => [number, number];
   money: () => [number, number]; // dinheiro de cada time (para decidir force/save)
@@ -385,25 +388,18 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   };
   nextBuys = computeBuys();
 
-  const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call): boolean => {
-    if (finished) return true;
-
-    let aSide: 'ct' | 't';
-    if (round < 12) aSide = aStartsCt ? 'ct' : 't';
-    else if (round < 24) aSide = aStartsCt ? 't' : 'ct';
-    else {
-      const block = Math.floor((round - 24) / 3);
-      aSide = block % 2 === 0 ? (aStartsCt ? 'ct' : 't') : aStartsCt ? 't' : 'ct';
-    }
-    const bSide: 'ct' | 't' = aSide === 'ct' ? 't' : 'ct';
+  // READ-ONLY: efeito do round ATUAL (buys hipotéticos + effA/effB + pA) dado
+  // stance/call/boost, SEM mutar estado. Fonte ÚNICA usada por step() e por
+  // peekWinProb() — garante que o HUD de probabilidade do freezetime bate
+  // exatamente com o que o round real vai usar (sem drift de fórmula).
+  const roundEffect = (
+    stance?: { team: 0 | 1; mode: Stance },
+    call?: Call,
+    boostTeam?: 0 | 1 | null,
+  ): { pA: number; buys: [BuyTier, BuyTier]; aSide: 'ct' | 't'; bSide: 'ct' | 't' } => {
+    const [aSide, bSide] = sideOf(round);
     const isPistol = round === 0 || round === 12;
     const secondHalf = round >= 12;
-
-    // economia: reseta nos pistols
-    if (isPistol) {
-      eco[0] = { money: 800, lossStreak: 0 };
-      eco[1] = { money: 800, lossStreak: 0 };
-    }
     const buys = computeBuys();
     // chamada de economia (force/save) sobrescreve a compra do time que chamou.
     // Force exige dinheiro de verdade: sem caixa para um force real, a chamada
@@ -416,17 +412,11 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       }
       if (call.kind === 'save') buys[call.team] = 'eco';
     }
-    buyLog.push(buys);
-    eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]));
-    eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]));
-
     let effA = effStrength(a, flags[0], map, aSide, buys[0], lastWinner === 1, isPistol, secondHalf, pickedBy === 0) + formA + mapFormA;
     let effB = effStrength(b, flags[1], map, bSide, buys[1], lastWinner === 0, isPistol, secondHalf, pickedBy === 1) + formB + mapFormB;
-    if (boostTeam === 0) effA += 2.0; // timeout tático (reduzido de 3.5: a vantagem ao vivo era exclusiva do usuário)
+    if (boostTeam === 0) effA += 2.0; // timeout tático
     if (boostTeam === 1) effB += 2.0;
-
     // postura tática escolhida ao vivo: valoriza quem combina com a tática.
-    // O delta depende do lado E de quantos jogadores têm o estilo certo.
     if (stance && stance.mode !== 'default') {
       const sSide = stance.team === 0 ? aSide : bSide;
       const delta = stanceFitDelta(teams[stance.team], sSide, stance.mode);
@@ -442,6 +432,37 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       if (call.team === 0) effA += cd;
       else effB += cd;
     }
+    const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
+    return { pA: sigmoid(diff / ROUND_DIV), buys, aSide, bSide };
+  };
+
+  // Estimativa read-only da prob de vitória do round ATUAL pra `forTeam`, dado um
+  // stance/call hipotético. Alimenta o HUD de decisão (mostra o impacto AO VIVO
+  // da escolha, antes de jogar o round). Não muta nada.
+  const peekWinProb = (
+    forTeam: 0 | 1,
+    stance?: { team: 0 | 1; mode: Stance },
+    call?: Call,
+  ): number => {
+    if (finished) return forTeam === 0 ? (scoreA >= scoreB ? 1 : 0) : (scoreB > scoreA ? 1 : 0);
+    const { pA } = roundEffect(stance, call);
+    return forTeam === 0 ? pA : 1 - pA;
+  };
+
+  const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call): boolean => {
+    if (finished) return true;
+
+    const isPistol = round === 0 || round === 12;
+    // economia: reseta nos pistols (mutação — fica fora do roundEffect read-only)
+    if (isPistol) {
+      eco[0] = { money: 800, lossStreak: 0 };
+      eco[1] = { money: 800, lossStreak: 0 };
+    }
+    const { pA, buys, aSide, bSide } = roundEffect(stance, call, boostTeam);
+    buyLog.push(buys);
+    eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]));
+    eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]));
+
     // estilo de frag por jogador conforme o lado, a postura E a chamada do round
     const callMode = (teamIdx: 0 | 1): Stance | undefined => {
       if (!call || call.team !== teamIdx) return undefined;
@@ -453,8 +474,6 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       callMode(teamIdx) ?? (stance && stance.team === teamIdx ? stance.mode : undefined);
     const sideFor = (teamIdx: 0 | 1): 'ct' | 't' => (teamIdx === 0 ? aSide : bSide);
 
-    const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
-    const pA = sigmoid(diff / ROUND_DIV);
     const winner: 0 | 1 = rng() < pA ? 0 : 1;
 
     const closeness = 1 - Math.abs(pA - 0.5) * 2;
@@ -627,6 +646,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
 
   return {
     step,
+    peekWinProb,
     done: () => finished,
     score: () => [scoreA, scoreB],
     money: () => [eco[0].money, eco[1].money],
