@@ -407,6 +407,20 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     : { txt: ct('Inimigo em FULL BUY — round equilibrado'), tone: '#e58a8a' };
   // momentum atual: quem está embalado e o tamanho da sequência (medidor visual)
   const mom = finished ? { team: -1 as 0 | 1 | -1, len: 0 } : sim.momentum();
+  // impacto de CADA chamada (rush/retake/force/save) sobre a chance do round,
+  // relativo à postura atual sem call. Mostra TODAS as opções quantificadas no
+  // freezetime + marca a melhor (💡). Só no Tático, onde há tempo de deliberar.
+  const stanceBaseProb = finished ? 0 : sim.peekWinProb(userIdx, myStanceArg);
+  const callDeltas: Record<RoundCall, number> | null =
+    tactical && !finished
+      ? (CALLS.reduce((acc, c) => {
+          acc[c.key] = sim.peekWinProb(userIdx, myStanceArg, { team: userIdx, kind: c.key }) - stanceBaseProb;
+          return acc;
+        }, {} as Record<RoundCall, number>))
+      : null;
+  const bestCallKey: RoundCall | null = callDeltas
+    ? (Object.entries(callDeltas).sort((a, b) => b[1] - a[1])[0]?.[0] as RoundCall)
+    : null;
 
   const playerById = useMemo(() => {
     const players = new Map<string, TPlayer>();
@@ -707,17 +721,32 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                   </span>
                 )}
               </span>
-              {CALLS.map((c) => (
-                <button
-                  key={c.key}
-                  className={`call-btn${pendingCall === c.key ? ' armed' : ''}`}
-                  title={t(c.hintKey)}
-                  disabled={!!pausedMsg}
-                  onClick={() => setPendingCall(pendingCall === c.key ? null : c.key)}
-                >
-                  {c.icon} {t(c.labelKey)}
-                </button>
-              ))}
+              {CALLS.map((c) => {
+                const d = callDeltas ? callDeltas[c.key] : null;
+                const best = callDeltas && c.key === bestCallKey && (callDeltas[c.key] ?? 0) > 0.003;
+                return (
+                  <button
+                    key={c.key}
+                    className={`call-btn${pendingCall === c.key ? ' armed' : ''}`}
+                    title={t(c.hintKey)}
+                    disabled={!!pausedMsg}
+                    onClick={() => setPendingCall(pendingCall === c.key ? null : c.key)}
+                    style={best ? { boxShadow: '0 0 0 1px rgba(94,216,138,0.6)', borderColor: 'rgba(94,216,138,0.6)' } : undefined}
+                  >
+                    {best && <span title={ct('melhor opção')}>💡 </span>}
+                    {c.icon} {t(c.labelKey)}
+                    {d != null && Math.abs(d) >= 0.003 && (
+                      <span style={{
+                        marginLeft: 5, fontSize: '0.66rem', fontWeight: 800,
+                        fontFamily: '"JetBrains Mono", monospace',
+                        color: d > 0 ? '#5ed88a' : '#e58a8a',
+                      }}>
+                        {d > 0 ? '+' : ''}{Math.round(d * 100)}%
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
               {pendingCall && <span className="call-armed-tag">{t('match.callArmed')}</span>}
             </div>
           </>
