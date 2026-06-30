@@ -44,6 +44,8 @@ export function CareerShell({
   onOpenInfrastructure,
   onOpenLockerRoom,
   onOpenLogoBuilder,
+  onOpenTrophies,
+  onOpenCoach,
   formStreak,
   children,
 }: {
@@ -85,6 +87,10 @@ export function CareerShell({
   onOpenLockerRoom?: () => void;
   /** T7.2: abre LogoBuilder pra editar a logo da org após fundação */
   onOpenLogoBuilder?: () => void;
+  /** Brasval gap: abre a Sala de Troféus (vitrine de conquistas) */
+  onOpenTrophies?: () => void;
+  /** Brasval gap: abre o Perfil de carreira do treinador */
+  onOpenCoach?: () => void;
   /** T7.3: histórico W/L ordenado (mais antigo primeiro) pra StreakBadge.
    *  Vazio = não mostra. */
   formStreak?: ('W' | 'L')[];
@@ -313,6 +319,8 @@ export function CareerShell({
                 onOpenInfrastructure={onOpenInfrastructure}
                 onOpenLockerRoom={onOpenLockerRoom}
                 onOpenLogoBuilder={onOpenLogoBuilder}
+                onOpenTrophies={onOpenTrophies}
+                onOpenCoach={onOpenCoach}
               />
               <button
                 type="button"
@@ -439,12 +447,16 @@ function ToolsMenu({
   onOpenInfrastructure,
   onOpenLockerRoom,
   onOpenLogoBuilder,
+  onOpenTrophies,
+  onOpenCoach,
 }: {
   onHowToPlay?: () => void;
   onOpenMeta?: () => void;
   onOpenInfrastructure?: () => void;
   onOpenLockerRoom?: () => void;
   onOpenLogoBuilder?: () => void;
+  onOpenTrophies?: () => void;
+  onOpenCoach?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -463,10 +475,12 @@ function ToolsMenu({
     };
   }, [open]);
 
-  type Item = { label: string; icon: 'document' | 'chart' | 'dumbbell' | 'target' | 'star'; handler: () => void };
+  type Item = { label: string; icon: 'document' | 'chart' | 'dumbbell' | 'target' | 'star' | 'trophy' | 'medal'; handler: () => void };
   const items: Item[] = [];
   if (onHowToPlay) items.push({ label: ct('Como jogar'), icon: 'document', handler: onHowToPlay });
   if (onOpenMeta) items.push({ label: ct('Meta da temporada'), icon: 'chart', handler: onOpenMeta });
+  if (onOpenTrophies) items.push({ label: ct('Sala de troféus'), icon: 'trophy', handler: onOpenTrophies });
+  if (onOpenCoach) items.push({ label: ct('Perfil do treinador'), icon: 'medal', handler: onOpenCoach });
   if (onOpenInfrastructure) items.push({ label: ct('Infraestrutura'), icon: 'dumbbell', handler: onOpenInfrastructure });
   if (onOpenLockerRoom) items.push({ label: ct('Vestiário'), icon: 'target', handler: onOpenLockerRoom });
   if (onOpenLogoBuilder) items.push({ label: ct('Editar logo'), icon: 'star', handler: onOpenLogoBuilder });

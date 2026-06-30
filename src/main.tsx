@@ -21,6 +21,8 @@ import { InfrastructurePageHost } from './components/InfrastructurePageHost'
 import { LockerRoomPageHost } from './components/LockerRoomPageHost'
 import { LogoBuilderHost } from './components/LogoBuilderHost'
 import { SeasonRecapModalHost } from './components/SeasonRecapModalHost'
+import { TrophyRoomHost } from './components/TrophyRoomHost'
+import { CoachProfileHost } from './components/CoachProfileHost'
 
 installErrorLogging() // captura crash de runtime em producao (fire-and-forget)
 
@@ -49,6 +51,8 @@ createRoot(document.getElementById('root')!).render(
     <LockerRoomPageHost />
     <LogoBuilderHost />
     <SeasonRecapModalHost />
+    <TrophyRoomHost />
+    <CoachProfileHost />
     <ErrorBoundary>
       <BrowserRouter>
         <ToastProvider>

@@ -486,6 +486,8 @@ import { confirm as confirmDialog } from './ConfirmDialog';
 // T8.1 — abrir tutorial HowToPlay (host global montado no main.tsx)
 import { openHowToPlay } from './HowToPlayHost';
 import { openMeta } from './MetaPageHost';
+import { openTrophyRoom } from './TrophyRoomHost';
+import { openCoachProfile } from './CoachProfileHost';
 import { openFiredModal } from './FiredModalHost';
 import { openInfrastructure } from './InfrastructurePageHost';
 import { openLockerRoom } from './LockerRoomPageHost';
@@ -5541,6 +5543,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           mapPicks: Array.from(mapCounts.entries()).map(([map, count]) => ({ map, count })),
           userTrophies: { circuits: orgAg.circuitTitles, majors: orgAg.majorTitles },
           currentSplit: save.split,
+        });
+      }}
+      onOpenTrophies={() => {
+        // Brasval gap: Sala de Troféus — lê save.history (pure-read, sem migração).
+        openTrophyRoom({
+          history: save.history as unknown as Parameters<typeof openTrophyRoom>[0]['history'],
+          orgName: save.org?.name ?? 'Sua org',
+          currentSplit: save.split,
+        });
+      }}
+      onOpenCoach={() => {
+        // Brasval gap: Perfil de carreira do treinador — lê save.coachStints.
+        const active = activeCoachStint(save.coachStints ?? []);
+        openCoachProfile({
+          stints: save.coachStints ?? [],
+          activeCoachNick: active?.coachNick,
         });
       }}
       formStreak={formStreak}
