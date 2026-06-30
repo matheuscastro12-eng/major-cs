@@ -68,6 +68,12 @@ export function SeasonRecapModal({ data, onClose }: Props) {
   const [slideIdx, setSlideIdx] = useState(0);
   const [animKey, setAnimKey] = useState(0);
 
+  // BUG FIX (caça-bugs): o host mantém este modal SEMPRE montado (só troca a
+  // prop `data`), então slideIdx persistia entre aberturas. Abrir um recap com
+  // menos slides (ex.: sem MVP = 3 slides) com slideIdx=3 stale → slides[3] é
+  // undefined → crash. Reseta o slide a cada novo `data`.
+  useEffect(() => { setSlideIdx(0); }, [data]);
+
   useEffect(() => { setAnimKey((k) => k + 1); }, [slideIdx]);
 
   useEffect(() => {

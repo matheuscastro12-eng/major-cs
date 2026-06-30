@@ -186,8 +186,22 @@ function makeSwissPairings(t: Tournament, rng: Rng): Pairing[] {
   // pareia as sobras entre si (records vizinhos, pois leftovers já vem em ordem).
   // Sem isso, um time de grupo ímpar ficava SEM PAR e congelava 'alive' pra sempre,
   // deixando < 8 classificados e travando o Major no fim do stage.
-  for (let i = 0; i + 1 < leftovers.length; i += 2) {
-    const a = leftovers[i], b = leftovers[i + 1];
+  // BUG FIX (caça-bugs): o pareamento sequencial das sobras não checava rematch —
+  // dois times que já se enfrentaram podiam cair no mesmo confronto. Tenta uma
+  // ordenação livre de rematch (shuffle), com fallback pro sequencial atual.
+  let leftoverOrder = leftovers;
+  if (leftovers.length >= 4) {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const cand = shuffle(rng, leftovers);
+      let ok = true;
+      for (let i = 0; i + 1 < cand.length; i += 2) {
+        if (pastOpponents(t, cand[i].id).has(cand[i + 1].id)) { ok = false; break; }
+      }
+      if (ok) { leftoverOrder = cand; break; }
+    }
+  }
+  for (let i = 0; i + 1 < leftoverOrder.length; i += 2) {
+    const a = leftoverOrder[i], b = leftoverOrder[i + 1];
     pairings.push({ a: a.id, b: b.id, label: `${a.wins}-${a.losses}`, bestOf: bestOfForRecord(a.wins, a.losses) });
   }
   return pairings;

@@ -11,6 +11,11 @@ import { useCallback, useEffect, useRef, type KeyboardEvent, type MouseEvent, ty
 
 export type ModalSize = 'sm' | 'md' | 'lg';
 
+// BUG FIX (caça-bugs): pilha module-level de modais abertos. Cada Modal tinha
+// seu próprio listener global de ESC, então abrir um modal sobre outro e apertar
+// ESC fechava TODOS de uma vez. Agora só o modal no TOPO da pilha responde ao ESC.
+const modalStack: symbol[] = [];
+
 export function Modal({
   open,
   onClose,
@@ -37,7 +42,12 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     returnFocusTo.current = (document.activeElement as HTMLElement) ?? null;
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // entra na pilha; só o topo responde ao ESC (evita fechar modais empilhados)
+    const id = Symbol('modal');
+    modalStack.push(id);
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && modalStack[modalStack.length - 1] === id) onClose();
+    };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -48,7 +58,10 @@ export function Modal({
     });
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
+      const idx = modalStack.lastIndexOf(id);
+      if (idx >= 0) modalStack.splice(idx, 1);
+      // só libera o scroll do body quando NENHUM modal continua aberto
+      if (modalStack.length === 0) document.body.style.overflow = prevOverflow;
       returnFocusTo.current?.focus?.();
     };
   }, [open, onClose]);

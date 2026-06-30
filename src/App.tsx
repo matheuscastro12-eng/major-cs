@@ -392,7 +392,14 @@ export default function App() {
     if (!account?.paid) return;
     let alive = true;
     void syncSlot(cloudSlot(getActiveSlot()), slotKey(getActiveSlot())).then((r) => {
-      if (alive && r === 'restored') { setCloudToast(ct('☁ Save da carreira carregado da nuvem')); setSessionStamp((s) => s + 1); }
+      if (alive && r === 'restored') {
+        setCloudToast(ct('☁ Save da carreira carregado da nuvem'));
+        setSessionStamp((s) => s + 1);
+        // BUG FIX (caça-bugs): syncSlot só grava no localStorage; o gameStore em
+        // memória continua com o save velho e o próximo autosave SOBRESCREVE o da
+        // nuvem. Avisa a carreira (se montada) pra re-hidratar do disco já atualizado.
+        window.dispatchEvent(new Event('rtm:cloud-restored'));
+      }
     });
     return () => { alive = false; };
   }, [account?.paid]);

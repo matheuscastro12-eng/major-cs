@@ -456,9 +456,12 @@ export function AcademyTab({
         academyPaidSplits: nextPaid,
         academyTrophies: (save.academyTrophies ?? 0) + (champion ? 1 : 0),
       });
-    } else if (!po) {
-      // Sem playoff disponível (user fora do top 4 e nem disparou): paga só pelo
-      // round-robin. Place mantém o userPlaceFinal.
+    } else if (!po && userPlaceFinal > 4) {
+      // BUG FIX (caça-bugs): só paga por colocação de round-robin quem NÃO tem
+      // playoff a disputar (5º+). Antes, terminar o RR em 1º-4º pagava o prêmio
+      // de campeão (300k) ANTES de jogar o mata-mata e marcava o split como pago
+      // → o playoff perdia prêmio e nunca dava troféu. Top-4 sem playoff iniciado
+      // não paga nada aqui; o split só fecha no ramo do po.champion acima.
       const prize = academyPrize(place);
       if (prize > 0) {
         update({

@@ -2090,6 +2090,11 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     'academyTeam', 'academyPaidSplits', 'restingPlayers', 'retired',
     'lastRetirees', 'lastReleases', 'scoutReports', 'coachStints',
     'yearAwardsHistory',
+    // BUG FIX (caça-bugs): campos da orquestração do Major também precisam ser
+    // saneados — save parcial/antigo com shape errado causava TypeError no
+    // fluxo de stages do Major (majorSeed2/3 são arrays de TTeam, majorPre/
+    // majorHistory também). Backfill = remove o lixo, deixa o default assumir.
+    'majorSeed2', 'majorSeed3', 'majorPre', 'majorHistory',
   ].forEach(defaultInvalidArray);
   ['mapFocus'].forEach(defaultInvalidNullableArray);
   [
@@ -2101,7 +2106,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
   [
     'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
     'pendingSplit', 'scenario', 'pendingOffer', 'objective', 'lastObjective',
-    'academyPlayoff', 'pendingYearAwards',
+    'academyPlayoff', 'pendingYearAwards', 'customCoach',
   ].forEach(defaultInvalidNullableRecord);
   [
     'budget', 'vrs', 'split', 'eventInSplit', 'titles', 'tier', 'board',
@@ -2789,6 +2794,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     });
     return () => { alive = false; };
   }, []);
+  // BUG FIX (caça-bugs): quando o App restaura o save da nuvem (login pago com a
+  // carreira já aberta), re-hidrata o store a partir do disco já atualizado —
+  // senão o próximo autosave sobrescreve o save da nuvem com o estado velho.
+  useEffect(() => {
+    const onRestored = () => setSave(loadSave());
+    window.addEventListener('rtm:cloud-restored', onRestored);
+    return () => window.removeEventListener('rtm:cloud-restored', onRestored);
+  }, []);
   const currentEra = useMemo(
     // aplica as transferências já realizadas (save.moves) por cima da base, e o
     // ENVELHECIMENTO da IA por split (pulando seus jogadores, que evoluem pelo evo).
@@ -3465,10 +3478,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const tr = computeTransfers(s.split, pool);
     const squadIds = new Set(s.squad.map((x) => x.playerId));
     const moves = { ...(s.moves ?? {}) };
-    for (const sw of tr.swaps) {
-      if (squadIds.has(sw.pid)) continue; // nunca move um jogador SEU
-      if (s.takeoverId && sw.toId === s.takeoverId) continue; // nunca empurra ninguém pro seu org
-      moves[sw.pid] = sw.toId;
+    // BUG FIX (caça-bugs): computeTransfers emite swaps em PARES (i, i+1). Aplicar
+    // só uma ponta (quando a outra é jogador seu / vai pro seu org) deixava o time
+    // da IA com 6 ou 4 jogadores (drift de roster). Aplica o par atomicamente: só
+    // se AMBAS as pontas forem válidas.
+    for (let i = 0; i < tr.swaps.length; i += 2) {
+      const a = tr.swaps[i];
+      const b = tr.swaps[i + 1];
+      if (!a || !b) continue;
+      const invalid = (sw: { pid: string; toId: string }) =>
+        squadIds.has(sw.pid) || (!!s.takeoverId && sw.toId === s.takeoverId);
+      if (invalid(a) || invalid(b)) continue; // descarta o par inteiro
+      moves[a.pid] = a.toId;
+      moves[b.pid] = b.toId;
     }
     const lastMoves = tr.feed.slice(0, 8).map((f) => ({ nick: f.nick, from: f.from, to: f.to }));
     // MERCADO VIVO — drift de força: cada time da IA move o teamwork conforme a
@@ -3531,7 +3553,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const resolved = findSigning(sig);
       squad = squad.filter((x) => x.playerId !== sale.playerId);
       delete contracts[sale.playerId]; delete morale[sale.playerId]; delete peakOvr[sale.playerId]; delete evo[sale.playerId];
-      budget += sale.fee;
+      // BUG FIX (caça-bugs): fee não-finito (save antigo/parcial/cloud-merge)
+      // tornava budget = NaN, que era persistido e no reload caía pra
+      // STARTING_BUDGET — perda silenciosa e irreversível do caixa.
+      budget += Number.isFinite(sale.fee) ? sale.fee : 0;
       // ROTA 1: jogador real da base → applyMoves resolve por id.
       if (baseHasPlayer(sale.playerId)) {
         moves[sale.playerId] = sale.toId;
@@ -3549,15 +3574,30 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // ACORDOS DE COMPRA: tira a troca, traz o alvo e desconta o dinheiro
     for (const d of deals) {
       if (squad.some((x) => x.playerId === d.inPlayerId)) continue; // já está no elenco
-      if (budget < d.fee) {
+      const dealFee = Number.isFinite(d.fee) ? d.fee : 0; // BUG FIX: fee não-finito → NaN no budget
+      if (budget < dealFee) {
         // sem caixa agora: acordo cai, mas o usuário precisa SABER (antes era silencioso
         // e o jogador "sumia" sem aviso). NÃO mexe no elenco: kye continua, n1ssim não vem.
         failedDeals.push(d.inNick);
         continue;
       }
       for (const out of d.outPlayerIds) {
+        // BUG FIX (caça-bugs): jogador cedido na troca precisa MIGRAR pro clube
+        // vendedor (d.inFromId), igual à rota de pendingSales — senão ele somia do
+        // mundo (saía do seu squad sem entrar em lugar nenhum). Real → moves;
+        // academy/youth/FA → extraOnTeam com snapshot.
+        const outSig = squad.find((x) => x.playerId === out);
+        const outResolved = outSig ? findSigning(outSig) : null;
         squad = squad.filter((x) => x.playerId !== out);
         delete contracts[out]; delete morale[out]; delete peakOvr[out]; delete evo[out];
+        if (baseHasPlayer(out)) {
+          moves[out] = d.inFromId;
+        } else if (outResolved?.player) {
+          const list = extraOnTeam[d.inFromId] ?? [];
+          if (!list.some((e) => e.player.id === out)) {
+            extraOnTeam[d.inFromId] = [...list, { player: outResolved.player, arrival: s.split }];
+          }
+        }
       }
       // anexa snapshot do jogador que chega: se a base regenerar / mudar de ID antes
       // do próximo render, o findSigning ainda recupera o atleta pelo snapshot
@@ -3568,7 +3608,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         : { playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee };
       squad.push(newSig);
       contracts[d.inPlayerId] = s.split + CONTRACT_TERM - 1;
-      budget -= d.fee;
+      budget -= dealFee;
       arrivals.push(d.inNick);
     }
     let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, moves, extraOnTeam, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
@@ -4336,11 +4376,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             // de mercado (base), não com o declínio antigo grudado
             const evo = { ...(save.evo ?? {}) };
             delete evo[off.playerId];
+            // BUG FIX (caça-bugs): registrar o MOVE pro clube comprador e tirar o
+            // contrato. Antes só removia do squad → o jogador real reaparecia no
+            // time original no próximo render (currentEra) como se a venda nunca
+            // tivesse acontecido. off.orgId é o id do clube assediante (makeOffer).
+            const moves = { ...(save.moves ?? {}) };
+            moves[off.playerId] = off.orgId;
+            const contracts = { ...(save.contracts ?? {}) };
+            delete contracts[off.playerId];
             const next: CareerSave = {
               ...save,
               squad: save.squad.filter((s) => s.playerId !== off.playerId),
               budget: save.budget + off.fee,
               pendingOffer: null,
+              moves,
+              contracts,
               morale,
               peakOvr,
               evo,
@@ -5563,12 +5613,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             facilities: normalizeFacilities(cur.facilities),
             budget: cur.budget,
             onUpgrade: (key) => {
-              const facilities = normalizeFacilities(cur.facilities);
+              // BUG FIX (caça-bugs): ler o estado VIVO no momento do clique, não o
+              // snapshot `cur` (capturado quando o modal abriu). Cliques rápidos
+              // usavam o mesmo budget/facilities velhos → upgrade perdido ou débito
+              // errado (lost update). Lê useGame.getState() fresco a cada clique.
+              const live = (useGame.getState().save ?? loadSave()) as CareerSave;
+              const facilities = normalizeFacilities(live.facilities);
               const level = facilities[key];
               const cost = facilityUpgradeCost(key, level);
-              if (!cost || cur.budget < cost) return;
+              if (!cost || live.budget < cost) return;
               update({
-                budget: cur.budget - cost,
+                budget: live.budget - cost,
                 facilities: { ...facilities, [key]: level + 1 },
               });
               // Re-abre com state atualizado pro modal refletir o upgrade na hora
@@ -8796,7 +8851,14 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
         <div className="career-market scroll">
           {list.length === 0 && <div className="muted small" style={{ padding: 12 }}>{ct('Nenhum jogador com esse filtro.')}</div>}
           {list.map((m) => (
-            <button key={m.player.id} className="pcard" onClick={() => setTarget({ player: m.player, from: m.from })}>
+            <button key={m.player.id} className="pcard" onClick={() =>
+              // BUG FIX (caça-bugs): free agent não tem clube → contrata de graça
+              // (só salário), igual à fundação. Antes abria o modal de negociação e
+              // cobrava `askingPrice`, divergindo do mercado da fundação onde FA = fee 0.
+              m.from.id === '__free__'
+                ? onAddDeal({ id: m.player.id, inPlayerId: m.player.id, inFromId: m.from.id, inNick: m.player.nick, fee: 0, outPlayerIds: [], outNicks: [] })
+                : setTarget({ player: m.player, from: m.from })
+            }>
               <PlayerAvatar nick={m.player.nick} size={48} />
               <OvrBadge ovr={playerOvr(m.player)} />
               <div className="nick">{m.player.nick}</div>
@@ -8804,7 +8866,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               <div className="meta muted small">
                 <TeamBadge tag={m.from.tag} colors={m.from.colors} size={16} logoUrl={m.from.logoUrl ?? logoForTeam(m.from)} /> {m.from.team}
               </div>
-              <div className="meta small"><span className="muted">{ct('pedida')}</span> {formatMoney(askingPrice(m.player, m.from.teamwork))}</div>
+              <div className="meta small"><span className="muted">{ct('pedida')}</span> {m.from.id === '__free__' ? ct('Livre (só salário)') : formatMoney(askingPrice(m.player, m.from.teamwork))}</div>
             </button>
           ))}
           {filteredMarket.length > negoLimit && (

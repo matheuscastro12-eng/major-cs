@@ -187,6 +187,10 @@ export function readAndMigrate<T = VersionedSave>(
 // Marca um save em memória como já-versionado (usado por quem cria save NOVO via
 // emptySave/setup — o save nasce no SAVE_VERSION atual, não precisa migrar).
 export function stampVersion<T extends VersionedSave>(save: T): T {
-  if (saveVersion(save) === SAVE_VERSION) return save;
+  // BUG FIX (caça-bugs): usar >= em vez de ===. Um save de versão FUTURA (ex.:
+  // sincronizado de um device com client mais novo) não pode ter o _v rebaixado
+  // — senão, ao voltar pro client novo, migrateSave re-roda migrations já
+  // aplicadas sobre dados no shape novo (dupla aplicação / corrupção).
+  if (saveVersion(save) >= SAVE_VERSION) return save;
   return { ...save, _v: SAVE_VERSION };
 }
