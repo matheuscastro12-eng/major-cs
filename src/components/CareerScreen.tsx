@@ -1918,7 +1918,20 @@ function seasonTopPlayersYear(pool: TeamSeason[], endSplit: number, n: number): 
 }
 
 // janela de transferências: feed determinístico de movimentações por split
-interface TransferItem { nick: string; cc: string; from: string; to: string; fee: number; }
+interface TransferItem { nick: string; cc: string; from: string; to: string; fee: number; reason?: string; }
+
+// Mercado VIVO da IA (Brasval gap #1): cada time tem uma "forma" por split —
+// expectativa pela força (teamwork) + variância determinística por split. Essa
+// forma É o resultado da temporada da IA (jogos AI-vs-AI não são simulados, mas
+// o roll seeded faz o papel). Times em MÁ fase se movimentam mais e buscam
+// reforço; times em boa fase ficam parados. Determinístico (mesmo split = mesmo
+// mercado), então o feed mostrado é o que de fato se aplica.
+function aiTeamForm(t: TeamSeason, split: number): number {
+  // teamwork 60..92 -> expectativa ~12..89
+  const expected = Math.max(12, Math.min(90, Math.round((t.teamwork - 55) * 2.4)));
+  const noise = (hashStr(`form:${t.id}:${split}`) % 51) - 25; // -25..+25
+  return Math.max(0, Math.min(100, expected + noise));
+}
 // Feed determinístico de transferências REALISTAS: um jogador só troca por um
 // time de tier parecido (teamwork +-8), evitando movimentos absurdos como um
 // jogador de time fraco indo direto pra um top mundial.
@@ -1936,9 +1949,18 @@ function computeTransfers(split: number, teams: TeamSeason[]): { feed: TransferI
   const feed: TransferItem[] = [];
   const swaps: { pid: string; toId: string }[] = [];
   const seen = new Set<string>(); // playerIds já envolvidos nesta janela
-  for (let i = 0; feed.length < 9 && i < 400; i++) {
+  // forma por time neste split — dirige QUEM se movimenta (Brasval computeTeamForm).
+  const formOf = new Map<string, number>(pool.map((t) => [t.id, aiTeamForm(t, split)]));
+  // ORIGENS: enviesa pra times em má fase (eles reformulam). Ordena por forma asc
+  // e amostra dos piores 60% — os times em boa fase quase não vendem.
+  const movers = [...pool].sort((a, b) => (formOf.get(a.id) ?? 50) - (formOf.get(b.id) ?? 50));
+  const srcBias = movers.slice(0, Math.max(4, Math.ceil(movers.length * 0.6)));
+  for (let i = 0; feed.length < 11 && i < 600; i++) {
     const h = hashStr(`tf${split}:${i}`);
-    const src = pool[h % pool.length];
+    const src = srcBias[h % srcBias.length];
+    const srcForm = formOf.get(src.id) ?? 50;
+    // time em boa fase raramente mexe no elenco (1 em 5 ainda mexe pra ter ruído)
+    if (srcForm >= 60 && h % 5 !== 0) continue;
     const pl = src.players[(h >>> 3) % src.players.length];
     if (!pl || seen.has(pl.id)) continue;
     const ovr = playerOvr(pl);
@@ -1952,14 +1974,22 @@ function computeTransfers(split: number, teams: TeamSeason[]): { feed: TransferI
       return dr <= sr + maxFall && dr >= sr - 12 && t.teamwork >= ovr - 12;
     });
     if (cands.length === 0) continue;
-    const dest = cands[(h >>> 7) % cands.length];
+    // DESTINOS: enviesa pra times em má fase (eles são os que BUSCAM reforço).
+    cands.sort((a, b) => (formOf.get(a.id) ?? 50) - (formOf.get(b.id) ?? 50));
+    const dest = cands[(h >>> 7) % Math.max(1, Math.ceil(cands.length * 0.5))];
     // contrapartida: o reserva mais fraco do destino (ainda não movido) vai pro src
     const back = [...dest.players].filter((p) => !seen.has(p.id)).sort((a, b) => playerOvr(a) - playerOvr(b))[0];
     if (!back || back.id === pl.id) continue;
     seen.add(pl.id);
     seen.add(back.id);
     swaps.push({ pid: pl.id, toId: dest.id }, { pid: back.id, toId: src.id });
-    feed.push({ nick: pl.nick, cc: pl.country, from: src.tag, to: dest.tag, fee: playerValue(pl) });
+    const destForm = formOf.get(dest.id) ?? 50;
+    // motivo legível pro feed (sabor de "mundo reagindo a resultado")
+    const reason = destForm < 38 ? 'reforço após campanha fraca'
+      : srcForm < 38 ? 'reformulação pós-eliminação'
+      : ovr >= 85 ? 'movimento de elite'
+      : undefined;
+    feed.push({ nick: pl.nick, cc: pl.country, from: src.tag, to: dest.tag, fee: playerValue(pl), reason });
   }
   return { feed, swaps };
 }
@@ -6640,6 +6670,11 @@ function TransferFeed({ items, compact }: { items: TransferItem[]; compact?: boo
           <Flag cc={tr.cc} />
           <span className="tf-nick">{tr.nick}</span>
           <span className="tf-move"><b>{tr.from}</b> <span className="muted">→</span> <b className="pos">{tr.to}</b></span>
+          {tr.reason && (
+            <span className="tf-reason muted small" style={{ fontStyle: 'italic', fontSize: '0.66rem', opacity: 0.85 }}>
+              {ct(tr.reason)}
+            </span>
+          )}
           <span className="tf-fee muted small">{formatMoney(tr.fee)}</span>
         </div>
       ))}
