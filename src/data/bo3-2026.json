@@ -580,6 +580,18 @@
         "clutch": 78,
         "awp": 56,
         "igl": 82
+      },
+      {
+        "id": "bo3_xlsx_legacy_p4",
+        "nick": "KauezeraR",
+        "name": "Kaue Mendes",
+        "country": "br",
+        "role": "Support",
+        "aim": 82,
+        "consistency": 82,
+        "clutch": 80,
+        "awp": 57,
+        "igl": 52
       }
     ]
   },
@@ -1815,10 +1827,10 @@
         "name": "Lucas Soares",
         "country": "br",
         "role": "AWP",
-        "aim": 84,
-        "consistency": 82,
-        "clutch": 80,
-        "awp": 84,
+        "aim": 88,
+        "consistency": 86,
+        "clutch": 86,
+        "awp": 90,
         "igl": 55
       },
       {

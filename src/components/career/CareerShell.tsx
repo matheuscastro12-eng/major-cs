@@ -109,7 +109,18 @@ export function CareerShell({
       const b = navBtnRefs.current.get(openMenu);
       if (!b) return;
       const r = b.getBoundingClientRect();
-      setDropdownRect({ top: r.bottom + 4, left: r.left + r.width / 2, width: r.width });
+      // BUG MOBILE: `translateX(-50%)` no dropdown jogava o conteúdo pra
+      // fora da viewport quando o botão da nav estava perto da borda
+      // (ex.: 'Meu time' é o 1º tab, r.left ~20px → dropdown -90px). User
+      // tocava e dropdown abria fora da tela, parecendo que 'não abre nada'.
+      // Clampa o center pra ficar dentro da viewport com padding mínimo.
+      const ASSUMED_HALF = 110; // 220px / 2 (width média do dropdown)
+      const PAD = 12;
+      let center = r.left + r.width / 2;
+      if (window.innerWidth <= 960) {
+        center = Math.max(ASSUMED_HALF + PAD, Math.min(window.innerWidth - ASSUMED_HALF - PAD, center));
+      }
+      setDropdownRect({ top: r.bottom + 4, left: center, width: r.width });
     };
     compute();
     // recalcula em resize (rotação, redimensionar janela) e scroll
