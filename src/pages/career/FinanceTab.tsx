@@ -15,6 +15,7 @@ import {
   type Signing,
 } from '../../components/CareerScreen';
 import { ct } from '../../state/career-i18n';
+import { DIFFICULTY_ECON, DIFFICULTY_LABELS, type Difficulty } from '../../types';
 import { formatMoney, playerWage, playerOvr } from '../../engine/ratings';
 import {
   facilityUpgradeCost,
@@ -32,6 +33,7 @@ interface FinanceTabSave {
   budget: number;
   facilities?: Record<string, number>;
   split: number;
+  difficulty?: Difficulty;
   youthAge?: Record<string, number>;
   // pass-through pros helpers effSponsorIncome/careerFans (que esperam CareerSave)
   // não exigem mais que isso visível aqui.
@@ -58,12 +60,17 @@ export function FinanceTab({ save, findSigning, update }: Props) {
     until: save.contracts?.[x.sig.playerId],
   }));
   const folha = wages.reduce((a, w) => a + w.wage, 0);
+  // dificuldade de gestão: hard/legend cobram encargos por cima da folha base
+  // (a folha-base bate com a soma das linhas de contrato; os encargos são uma
+  // linha à parte, e folha+encargos = a folha REAL paga na virada de split).
+  const diff: Difficulty = save.difficulty === 'hard' || save.difficulty === 'legend' ? save.difficulty : 'normal';
+  const encargos = Math.round(folha * (DIFFICULTY_ECON[diff].salaryMul - 1));
   // helpers do CareerScreen esperam CareerSave; passamos o save broad via cast.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sponsorInc = effSponsorIncome(save as any);
   const facilities = normalizeFacilities(save.facilities);
   const upkeep = facilityUpkeep(facilities);
-  const net = sponsorInc - folha - upkeep;
+  const net = sponsorInc - folha - encargos - upkeep;
 
   const facilityCards: { key: FacilityKey; icon: CareerIconName; name: string; effect: string }[] = [
     { key: 'training', icon: 'dumbbell', name: ct('Centro de treino'), effect: ct('Acelera a evolução do elenco e da academia.') },
@@ -79,13 +86,23 @@ export function FinanceTab({ save, findSigning, update }: Props) {
   };
 
   return (
-    <DashCard title={`${ct('Finanças')} · ${save.org?.name ?? ''}`}>
+    <DashCard
+      title={`${ct('Finanças')} · ${save.org?.name ?? ''}`}
+      actions={diff !== 'normal' ? (
+        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 10px', borderRadius: 12, border: `1px solid ${diff === 'hard' ? '#e8c170' : '#e58a8a'}`, color: diff === 'hard' ? '#e8c170' : '#e58a8a' }}>
+          🎚️ {ct(DIFFICULTY_LABELS[diff])}
+        </span>
+      ) : undefined}
+    >
       <div className="fin-cards">
         <div className="fin-card"><span className="fin-k">{ct('Caixa')}</span><b>{formatMoney(save.budget)}</b></div>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <div className="fin-card"><span className="fin-k">{ct('Fãs')}</span><b>{formatFans(careerFans(save as any))}</b></div>
         <div className="fin-card"><span className="fin-k">{ct('Patrocínio / split')}</span><b className="pos">+{formatMoney(sponsorInc)}</b></div>
         <div className="fin-card"><span className="fin-k">{ct('Folha / split')}</span><b className="neg">-{formatMoney(folha)}</b></div>
+        {encargos > 0 && (
+          <div className="fin-card"><span className="fin-k">{ct('Encargos (dificuldade)')}</span><b className="neg">-{formatMoney(encargos)}</b></div>
+        )}
         <div className="fin-card"><span className="fin-k">{ct('Infraestrutura / split')}</span><b className="neg">-{formatMoney(upkeep)}</b></div>
         <div className="fin-card"><span className="fin-k">{ct('Saldo fixo / split')}</span><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b></div>
       </div>

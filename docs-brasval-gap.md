@@ -8,6 +8,7 @@ Comparação major-cs vs Brasval (referência). 57 features single-player identi
 - ✅ Stats de mapa por time + engine reutilizável (#1/#3) — src/engine/teamMapStats.ts (computeMapPerformance, mapRecordFromStats); save.mapStats acumulado em recordCareerMatch (migração v13, backfill {})
 - ✅ Veto AI guiado por win-rate real (#5) — aiChoice(v, teams, rng, statsCtx?) bane seus mapas fortes / te dá de pick os fracos (VETO_MIN_GAMES=2, fallback mapPrefs); VetoScreen mostra seu W-L real + veredito por mapa
 - ✅ Página Stats dedicada (#11) — src/pages/career/StatsTab.tsx: toggle Liga/Meu time, top rating, top dano (ADR), distribuição de funções, desempenho por mapa (mine) e tabela rankeada (30). Reusa seasonPlayerStats + computeMapPerformance; barras CSS no padrão em-*
+- ✅ Dificuldade muda a GESTÃO (#4, eixo econômico) — DIFFICULTY_ECON em types.ts (startBudgetMul/salaryMul/sponsorChanceMul); aplicado em caixa inicial (startFromOrg), folha (payroll), encargos (FinanceTab) e frequência de patrocínios (sponsors.ts). DifficultyPicker na fundação (OrgSelect + ScenarioPicker), save.difficulty (migração v14), chip na FinanceTab. NÃO toca força dos rivais (AI_EDGE intacto)
 
 ## Backlog rankeado
 

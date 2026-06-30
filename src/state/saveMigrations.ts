@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -144,6 +144,14 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     mapStats: save.mapStats && typeof save.mapStats === 'object' ? save.mapStats : {},
     _v: 13,
+  }),
+  // v13 → v14 (dificuldade de gestão): adiciona difficulty. Saves antigos abrem
+  // como 'normal' (mundo idêntico ao de hoje) — a dificuldade só vale pra
+  // carreiras novas que escolherem hard/legend na fundação.
+  13: (save) => ({
+    ...save,
+    difficulty: save.difficulty === 'hard' || save.difficulty === 'legend' ? save.difficulty : 'normal',
+    _v: 14,
   }),
 };
 

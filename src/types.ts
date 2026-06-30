@@ -272,6 +272,21 @@ export const DIFFICULTY_OPP_BOOST: Record<Difficulty, number> = {
   legend: 11,
 };
 
+// Eixo de GESTÃO da dificuldade (modo carreira): remodela a economia do SEU time
+// — caixa inicial, folha salarial e frequência de patrocínios — sem tocar na
+// força dos rivais (essa já existe via AI_EDGE no match). É o que faz hard/legend
+// ser uma carreira mais difícil de ADMINISTRAR, não só de jogar.
+export interface DifficultyEcon {
+  startBudgetMul: number;   // caixa inicial ao começar a carreira
+  salaryMul: number;        // peso da folha salarial (encargos por split)
+  sponsorChanceMul: number; // frequência de ofertas de patrocínio
+}
+export const DIFFICULTY_ECON: Record<Difficulty, DifficultyEcon> = {
+  normal: { startBudgetMul: 1, salaryMul: 1, sponsorChanceMul: 1 },
+  hard: { startBudgetMul: 0.75, salaryMul: 1.18, sponsorChanceMul: 0.72 },
+  legend: { startBudgetMul: 0.55, salaryMul: 1.32, sponsorChanceMul: 0.55 },
+};
+
 export interface DraftState {
   mode: 'classic' | 'almanac';
   pool: TournamentPool;

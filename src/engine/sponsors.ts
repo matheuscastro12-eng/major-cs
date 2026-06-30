@@ -54,6 +54,8 @@ export interface OfferGenContext {
   clubeTier?: number;
   /** Slot máximo (default SPONSOR_SLOTS) */
   maxSlots?: number;
+  /** Multiplicador de chance por DIFICULDADE (hard/legend → menos ofertas). Default 1. */
+  chanceMul?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,7 +91,7 @@ export function tryGenerateOffer(
   const tier = ctx.clubeTier ?? 3;
   const tierBoost = tier <= 1 ? 1.35 : tier === 2 ? 1.1 : 0.85;
   const slotBoost = (maxSlots - s.sponsors.length) / maxSlots;
-  const chance = BASE_OFFER_CHANCE * tierBoost * (0.5 + slotBoost * 0.6);
+  const chance = BASE_OFFER_CHANCE * tierBoost * (0.5 + slotBoost * 0.6) * (ctx.chanceMul ?? 1);
   if (rng() > chance) return null;
 
   // Pool: VRS-elegível, não-contratado, fora de cooldown

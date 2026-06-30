@@ -14,8 +14,8 @@ import { mapRecordFromStats } from '../engine/teamMapStats';
 import { createSwissStage, createPlayoffStage, stageAdvancers, placementCode, resolveRound, userPairing as tournamentUserPairing, getTeam, type PlacementCode } from '../engine/swiss';
 // Hub: usado pela MajorTab; import movido pra page.
 import { makeRng, randomSeed, type Rng } from '../engine/rng';
-import type { Coach, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
-import { MAP_LABELS, MAP_POOL } from '../types';
+import type { Coach, Difficulty, MapId, Player, Playbook, Role, SeriesResult, TeamSeason, Tournament, TTeam } from '../types';
+import { DIFFICULTY_ECON, DIFFICULTY_LABELS, MAP_LABELS, MAP_POOL } from '../types';
 import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
@@ -706,7 +706,7 @@ function applySponsorSplitTick(save: CareerSave, newSplit: number, rng: Rng): Pa
   // 2) limpa expirados (contrato terminou)
   cleanupExpiredSponsors(state, newSplit);
   // 3) tenta gerar nova oferta
-  const offer = trySponsorOffer(state, { split: newSplit, vrs: save.vrs ?? 0, clubeTier: save.tier ?? 3 }, rng);
+  const offer = trySponsorOffer(state, { split: newSplit, vrs: save.vrs ?? 0, clubeTier: save.tier ?? 3, chanceMul: DIFFICULTY_ECON[careerDiff(save.difficulty)].sponsorChanceMul }, rng);
   if (offer) state.pendingSponsorOffer = offer;
   return {
     sponsors: state.sponsors,
@@ -910,6 +910,53 @@ interface OrgStart {
 // caixa; tier baixo = mais caixa. É a troca "elenco bom x dinheiro" que o user pediu.
 const takeoverBudget = (tier: number) => (tier === 1 ? 600_000 : tier === 2 ? 1_300_000 : 2_300_000);
 
+// guarda contra valor corrompido no save (ex.: string fora do enum) — cai em 'normal'
+const careerDiff = (d: Difficulty | undefined): Difficulty => (d === 'hard' || d === 'legend' ? d : 'normal');
+
+// Seletor de dificuldade (eixo de gestão) reusado na fundação — Desafios e
+// "Assumir organização". Mostra o impacto econômico de cada nível em chips.
+const DIFF_HINTS: Record<Difficulty, string> = {
+  normal: ct('Caixa cheio, folha normal, patrocínios fartos.'),
+  hard: ct('Caixa −25%, folha +18%, menos patrocínios. Gestão aperta.'),
+  legend: ct('Caixa −45%, folha +32%, patrocínios raros. Só pros corajosos.'),
+};
+function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d: Difficulty) => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '0 0 14px' }}>
+      <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>
+        🎚️ {ct('Dificuldade de gestão')}
+      </span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {(['normal', 'hard', 'legend'] as Difficulty[]).map((d) => {
+          const on = value === d;
+          const tone = d === 'normal' ? '#5ed88a' : d === 'hard' ? '#e8c170' : '#e58a8a';
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onChange(d)}
+              style={{
+                flex: '1 1 180px', textAlign: 'left', cursor: 'pointer', padding: '8px 12px',
+                borderRadius: 8, fontFamily: 'inherit',
+                border: `1px solid ${on ? tone : 'var(--em-border,#2a3340)'}`,
+                background: on ? `${tone}1f` : 'transparent',
+                boxShadow: on ? `0 0 0 1px ${tone}` : 'none',
+              }}
+            >
+              <div style={{ fontSize: '0.86rem', fontWeight: 800, color: on ? tone : 'var(--em-text,#d6deea)' }}>
+                {ct(DIFFICULTY_LABELS[d])}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--em-muted,#8a99ab)', marginTop: 2, lineHeight: 1.35 }}>
+                {DIFF_HINTS[d]}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ----- CENÁRIOS DE DESAFIO: assuma uma org real (atual / BR / PT / lenda) com
 // contexto e metas, no espírito do modo Draft (cada time tem seu "porquê"). -----
 type ScenarioCat = 'atual' | 'br' | 'pt';
@@ -1056,6 +1103,9 @@ interface CareerSave {
   circuit: CircuitChoice | null;
   inviteAccepted?: boolean; // jogou um circuito acima do tier por convite neste split (boost dos jovens)
   history: SplitRecord[];
+  // dificuldade de GESTÃO da carreira (escolhida na fundação): remodela caixa
+  // inicial, folha salarial e frequência de patrocínios via DIFFICULTY_ECON.
+  difficulty?: Difficulty;
   // desempenho REAL por mapa do time do usuário, acumulado na carreira (w/l +
   // rounds pró/contra). Alimenta a tabela "Desempenho por mapa" e o veto da IA.
   mapStats?: Record<string, { w: number; l: number; rf: number; ra: number }>;
@@ -1238,6 +1288,7 @@ const emptySave = (): CareerSave => ({
   league: null,
   circuit: null,
   history: [],
+  difficulty: 'normal',
   mapStats: {},
   sponsors: [],
   playoff: null,
@@ -2320,6 +2371,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // em escopo lá embaixo).
   const upsellWorld1Ref = useRef(false);
   const [orgChoice, setOrgChoice] = useState<'select' | 'fictional' | 'scenario' | 'custom'>('scenario'); // a fundação abre nos DESAFIOS (entrada principal da carreira)
+  // dificuldade da carreira (eixo de GESTÃO): escolhida na fundação, grava no save
+  // e remodela caixa inicial / folha / patrocínios. Default 'normal'.
+  const [careerDifficulty, setCareerDifficulty] = useState<Difficulty>('normal');
   const [stage, setStage] = useState<Stage>(() => {
     const s = loadSave();
     if (!s.org) return 'found';
@@ -3302,12 +3356,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setStage('hub');
   };
 
-  // folha salarial do split (soma dos salários do elenco contratado)
+  // folha salarial do split (soma dos salários do elenco contratado). Na
+  // dificuldade hard/legend a folha pesa mais (encargos de operação) — eixo de
+  // gestão da dificuldade, sem mexer no salário base de cada jogador.
   const payroll = useMemo(() => {
     const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player }[];
-    return picks.reduce((acc, p) => acc + playerWage(p.player), 0);
+    const base = picks.reduce((acc, p) => acc + playerWage(p.player), 0);
+    return Math.round(base * DIFFICULTY_ECON[careerDiff(save.difficulty)].salaryMul);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [save.squad, save.evo]);
+  }, [save.squad, save.evo, save.difficulty]);
 
   // evolução da janela: cada jogador do elenco sobe/cai conforme a fase da
   // carreira (em ascensão / no auge / em declínio). Roda ao fechar o split.
@@ -4279,16 +4336,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       );
     }
     const startFromOrg = (s: OrgStart) => {
+      // dificuldade remodela o caixa INICIAL (hard/legend começam mais pobres)
+      const startBudget = Math.round(s.budget * DIFFICULTY_ECON[careerDifficulty].startBudgetMul);
       update({
-        org: s.org, squad: s.squad, coachFromId: s.coachFromId, budget: s.budget,
+        org: s.org, squad: s.squad, coachFromId: s.coachFromId, budget: startBudget,
         tier: s.tier, takeoverId: s.takeoverId, region: s.region,
         board: s.board ?? 60, scenario: s.scenario ?? null,
+        difficulty: careerDifficulty,
       });
       setStage('market');
     };
     if (orgChoice === 'fictional') {
       return <FoundOrg founder={founder} onExit={() => setOrgChoice('select')} onFound={(org) => {
-        update({ org, takeoverId: null, scenario: null });
+        update({ org, takeoverId: null, scenario: null, difficulty: careerDifficulty });
         setStage('market');
       }} />;
     }
@@ -4308,13 +4368,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             customCoach: data.customCoach,
             takeoverId: null,
             scenario: null,
+            difficulty: careerDifficulty,
           });
           setStage('market');
         }}
       />;
     }
     if (orgChoice === 'scenario') {
-      return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} />;
+      return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} difficulty={careerDifficulty} onDifficulty={setCareerDifficulty} />;
     }
     return (
       <CareerDashFrame onExit={onExit} title={ct('Assumir organização')}>
@@ -4329,6 +4390,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           }}
           isPaid={isPaid}
           onStart={startFromOrg}
+          difficulty={careerDifficulty}
+          onDifficulty={setCareerDifficulty}
         />
       </CareerDashFrame>
     );
@@ -7441,7 +7504,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
 // escolha da org: assumir QUALQUER time real do dataset (com elenco e contexto)
 // ou uma org sem line pra montar do zero. Substitui o "inventar do nada".
 // Tela redesenhada no padrão em-* (DashCard, filtros, grid 3-col).
-function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid, onExit }: {
+function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid, onExit, difficulty, onDifficulty }: {
   teams: TeamSeason[];
   onStart: (s: OrgStart) => void;
   onFictional: () => void;
@@ -7449,6 +7512,8 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
   onCustom: () => void;
   isPaid: boolean;
   onExit: () => void;
+  difficulty: Difficulty;
+  onDifficulty: (d: Difficulty) => void;
 }) {
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState<0 | 1 | 2 | 3>(0); // 0 = todos
@@ -7554,6 +7619,8 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
           ← {ct('Sair')}
         </button>
       </header>
+
+      <DifficultyPicker value={difficulty} onChange={onDifficulty} />
 
       {/* CTAs secundários: Desafios + Fundar */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -7947,10 +8014,12 @@ function TeamPickCard({
 }
 
 // ----- DESAFIOS: assumir uma org real com contexto + metas (estilo Draft) -----
-function ScenarioPicker({ current, onBack, onStart }: {
+function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: {
   current: TeamSeason[];
   onBack: () => void;
   onStart: (s: OrgStart) => void;
+  difficulty: Difficulty;
+  onDifficulty: (d: Difficulty) => void;
 }) {
   const items = useMemo(
     () => CAREER_SCENARIOS.map((sc) => ({ sc, team: scenarioTeam(sc, current) })).filter((x) => x.team),
@@ -8012,6 +8081,8 @@ function ScenarioPicker({ current, onBack, onStart }: {
           ← {ct('Voltar')}
         </button>
       </header>
+
+      <DifficultyPicker value={difficulty} onChange={onDifficulty} />
 
       {SCENARIO_CAT_ORDER.map((cat) => {
         const group = items.filter((x) => x.sc.cat === cat);
