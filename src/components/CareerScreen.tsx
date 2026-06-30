@@ -1109,6 +1109,10 @@ interface CareerSave {
   // T3.12: histórico de relatórios gerados pelo scout ativo.
   scoutReports?: ScoutReport[];
   moves: Record<string, string>; // transferências aplicadas: playerId -> teamId atual
+  // Mercado vivo: delta de teamwork ACUMULADO por time da IA (clampado ±6).
+  // Times em forma sustentada SOBEM de força ao longo dos anos; em má fase CAEM.
+  // Aplicado sobre o teamwork base no currentEra. {} = mundo idêntico ao atual.
+  aiDrift?: Record<string, number>;
   lastMoves: { nick: string; from: string; to: string }[]; // transferências do último split
   tier: number; // tier atual da organização (1 = elite). Começa em 3.
   tierChange?: 'up' | 'down' | null; // resultado da última temporada (promoção/rebaixamento)
@@ -1237,6 +1241,7 @@ const emptySave = (): CareerSave => ({
   lastEvo: [],
   sponsorUntil: {},
   moves: {},
+  aiDrift: {},
   lastMoves: [],
   tier: 3,
   tierChange: null,
@@ -2808,9 +2813,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           const have = new Set(t.players.map((p) => p.id));
           const fresh = extras.filter((e) => !have.has(e.player.id)).map((e) => e.player);
           return fresh.length === 0 ? t : { ...t, players: [...t.players, ...fresh] };
+        })
+        // MERCADO VIVO: aplica o drift de força acumulado (save.aiDrift) sobre o
+        // teamwork base. Times em ascensão sustentada ficam mais fortes (e podem
+        // subir de tier), os em queda enfraquecem. Não toca o time do user.
+        .map((t) => {
+          const d = save.aiDrift?.[t.id];
+          if (!d || t.id === save.takeoverId) return t;
+          const tw = Math.max(40, Math.min(95, t.teamwork + d));
+          return tw === t.teamwork ? t : { ...t, teamwork: tw };
         });
     },
-    [save.moves, save.extraOnTeam, bo3Edits, save.split, save.squad],
+    [save.moves, save.extraOnTeam, save.aiDrift, save.takeoverId, bo3Edits, save.split, save.squad],
   );
   // pool de ADVERSÁRIOS: tira o time que você assumiu E remove qualquer jogador
   // que está no SEU elenco do time de origem (sem duplicar ninguém), repondo com
@@ -3444,7 +3458,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // aplica a janela de transferências do split que está fechando: os swaps viram
   // movimentos persistentes (save.moves) e o resumo vai pra lastMoves (exibido
   // no próximo split). Não move jogadores do elenco do usuário.
-  const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves'> => {
+  const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves' | 'aiDrift'> => {
     // o SEU org não participa do mercado da IA (não perde nem ganha jogador
     // por transferência) — evita seu elenco ser bagunçado entre splits.
     const pool = currentEra.filter((t) => t.id !== s.takeoverId);
@@ -3457,7 +3471,23 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       moves[sw.pid] = sw.toId;
     }
     const lastMoves = tr.feed.slice(0, 8).map((f) => ({ nick: f.nick, from: f.from, to: f.to }));
-    return { moves, lastMoves };
+    // MERCADO VIVO — drift de força: cada time da IA move o teamwork conforme a
+    // forma sustentada do split. Forma alta empurra +1 (até +6), baixa -1 (até
+    // -6), neutra decai 1 rumo a 0. currentEra JÁ aplica o drift no teamwork, então
+    // o form roll usa a força ATUAL → feedback auto-corretivo (quem subiu fica mais
+    // difícil de cair). Mantém o mundo competitivo se reorganizando ao longo dos anos.
+    const aiDrift = { ...(s.aiDrift ?? {}) };
+    for (const t of pool) {
+      const form = aiTeamForm(t, s.split);
+      const prev = aiDrift[t.id] ?? 0;
+      let next = prev;
+      if (form >= 62) next = Math.min(6, prev + 1);
+      else if (form <= 38) next = Math.max(-6, prev - 1);
+      else next = prev > 0 ? prev - 1 : prev < 0 ? prev + 1 : 0; // decai rumo a 0
+      if (next === 0) delete aiDrift[t.id];
+      else aiDrift[t.id] = next;
+    }
+    return { moves, lastMoves, aiDrift };
   };
 
   // janela aberta: consuma os acordos fechados durante a temporada (pendingDeals).

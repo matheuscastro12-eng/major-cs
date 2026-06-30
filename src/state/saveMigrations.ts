@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -126,6 +126,15 @@ const MIGRATIONS: Record<number, Migration> = {
     hiredScoutId: typeof save.hiredScoutId === 'string' ? save.hiredScoutId : null,
     scoutReports: Array.isArray(save.scoutReports) ? save.scoutReports : [],
     _v: 11,
+  }),
+  // v11 → v12 (mercado vivo): adiciona aiDrift (teamId → delta de teamwork
+  // acumulado, clampado ±6). Faz os times da IA SUBIREM/CAÍREM de força ao
+  // longo dos anos conforme a forma sustentada. Backfill {} = nenhum drift
+  // (mundo idêntico ao de hoje pra saves existentes; o drift começa do zero).
+  11: (save) => ({
+    ...save,
+    aiDrift: save.aiDrift && typeof save.aiDrift === 'object' ? save.aiDrift : {},
+    _v: 12,
   }),
 };
 
