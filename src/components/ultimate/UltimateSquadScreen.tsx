@@ -194,6 +194,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [seasonRoll, setSeasonRoll] = useState<{ credits: number; newElo: number } | null>(null);
   const [toast, setToast] = useState<string>('');
   const [navMenu, setNavMenu] = useState<'clube' | 'mercado' | 'more' | null>(null);
+  const [clubFilter, setClubFilter] = useState<'all' | 'bronze' | 'silver' | 'gold' | 'special'>('all');
   const { account } = useAccount();
 
   const credits = state.profile.credits;
@@ -823,38 +824,55 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           right={dupCount > 0 ? <button className="ut-btn ut-btn--ghost" style={{ padding: '5px 12px', fontSize: '0.76rem' }} onClick={sellAllDuplicates}>{ct('Vender duplicatas')} ({dupCount})</button> : undefined}
         >
           {uniqueCards === 0 ? (
-            <p className="muted small">{ct('Sua coleção está vazia. Abra um pacote na Loja pra começar.')}</p>
-          ) : (
-            <>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>
-                <span>{ct('Cartas')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{totalCards}</b></span>
-                <span>{ct('Únicas')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{uniqueCards}</b></span>
-                <span>{ct('Duplicatas')}: <b style={{ color: dupCount ? '#92600a' : 'var(--em-text,#e6edf5)' }}>{dupCount}</b></span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, justifyItems: 'center' }}>
-                {club.map((row) => {
-                  const canEvo = row.evo < EVO_MAX;
-                  const evoCost = canEvo ? EVO_COSTS[row.evo] : 0;
-                  return (
-                    <div key={`${row.card.key}#${row.evo}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                      <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(row.card.rarity, row.card.ovr, row.count > 1)} evo={row.evo} />
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
-                          {row.count > 1 ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
-                        </button>
-                        {canEvo && (
-                          <button onClick={() => doEvolve(row)} disabled={credits < evoCost} title={`${ct('Evoluir')} → +${row.evo + 1} OVR`}
-                            style={{ ...sellBtn, display: 'inline-flex', alignItems: 'center', gap: 3, borderColor: credits >= evoCost ? 'rgba(34,197,94,0.5)' : 'var(--em-border,#2a3340)', color: credits >= evoCost ? '#16a34a' : 'var(--em-muted,#8a99ab)', cursor: credits >= evoCost ? 'pointer' : 'default' }}>
-                            ✦ {fmtChip(evoCost)}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+              <UtEmpty icon={<Layers size={30} />} title={ct('Coleção vazia')} sub={ct('Abra um pacote na Loja pra começar a colecionar os jogadores reais de 2026.')} />
+              <button className="ut-btn ut-btn--gold" onClick={() => go('store')}><Package size={15} /> {ct('Ir à Loja')}</button>
+            </div>
+          ) : (() => {
+            const buckets: Record<string, number> = { all: club.length, bronze: 0, silver: 0, gold: 0, special: 0 };
+            for (const r of club) { const b = rarityInfo(r.card.rarity).bucket; buckets[b] = (buckets[b] ?? 0) + 1; }
+            const filtered = clubFilter === 'all' ? club : club.filter((r) => rarityInfo(r.card.rarity).bucket === clubFilter);
+            return (
+              <>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <div className="ut-cstat"><div className="ut-cstat__k"><Layers size={12} /> {ct('CARTAS')}</div><div className="ut-cstat__v">{totalCards}</div></div>
+                  <div className="ut-cstat"><div className="ut-cstat__k"><Sparkles size={12} /> {ct('ÚNICAS')}</div><div className="ut-cstat__v">{uniqueCards}</div></div>
+                  <div className="ut-cstat"><div className="ut-cstat__k"><Coins size={12} /> {ct('DUPLICATAS')}</div><div className="ut-cstat__v" style={dupCount > 0 ? { color: '#92600a' } : undefined}>{dupCount}</div></div>
+                </div>
+                <div className="ut-tabs" style={{ marginBottom: 12 }}>
+                  {([['all', ct('Todas')], ['bronze', ct('Bronze')], ['silver', ct('Prata')], ['gold', ct('Ouro')], ['special', ct('Especiais')]] as const).map(([id, label]) => (
+                    <button key={id} onClick={() => setClubFilter(id)} style={{ ...tabBtn(clubFilter === id), padding: '6px 13px', fontSize: '0.78rem' }}>{label} <span style={{ opacity: 0.65 }}>({buckets[id] ?? 0})</span></button>
+                  ))}
+                </div>
+                {filtered.length === 0 ? (
+                  <p className="muted small" style={{ textAlign: 'center', padding: '10px 0' }}>{ct('Nenhuma carta nesse filtro.')}</p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, justifyItems: 'center' }}>
+                    {filtered.map((row) => {
+                      const canEvo = row.evo < EVO_MAX;
+                      const evoCost = canEvo ? EVO_COSTS[row.evo] : 0;
+                      return (
+                        <div key={`${row.card.key}#${row.evo}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                          <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(row.card.rarity, row.card.ovr, row.count > 1)} evo={row.evo} />
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
+                              {row.count > 1 ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
+                            </button>
+                            {canEvo && (
+                              <button onClick={() => doEvolve(row)} disabled={credits < evoCost} title={`${ct('Evoluir')} → +${row.evo + 1} OVR`}
+                                style={{ ...sellBtn, display: 'inline-flex', alignItems: 'center', gap: 3, borderColor: credits >= evoCost ? 'rgba(34,197,94,0.5)' : 'var(--em-border,#2a3340)', color: credits >= evoCost ? '#16a34a' : 'var(--em-muted,#8a99ab)', cursor: credits >= evoCost ? 'pointer' : 'default' }}>
+                                ✦ {fmtChip(evoCost)}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </UtPanel>
       )}
 

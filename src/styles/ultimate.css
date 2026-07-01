@@ -368,6 +368,12 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-rank-row__wl { color: var(--ut-muted); font-size: 0.76rem; }
 .ut-rank-row__elo { font-family: var(--ut-font-mono); font-weight: 800; color: var(--ut-ink); }
 
+/* ---------------- COLEÇÃO (stats) ---------------- */
+.ut-cstat { background: var(--em-panel-2); border: 1px solid var(--ut-line); border-radius: 10px; padding: 8px 13px; min-width: 82px; }
+.ut-cstat__k { display: inline-flex; align-items: center; gap: 4px; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ut-muted); }
+.ut-cstat__k svg { color: var(--ut-muted); }
+.ut-cstat__v { font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.1rem; color: var(--ut-ink); margin-top: 1px; }
+
 /* ---------------- DESAFIOS (SBC) ---------------- */
 .ut-sbc { position: relative; border: 1px solid var(--ut-line); border-radius: 12px; padding: 13px 14px; background: #fff; box-shadow: var(--ut-shadow); display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
 .ut-sbc::before { content: ''; position: absolute; top: 0; left: 14px; width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: var(--ut-purple); }
