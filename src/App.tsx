@@ -960,7 +960,7 @@ export default function App() {
       )}
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
-      <main className={screen === 'career' ? 'page page-career' : screen === 'home' ? 'page page-play' : 'page'}>
+      <main className={screen === 'career' ? 'page page-career' : screen === 'home' ? 'page page-play' : screen === 'ultimate' ? 'page page-ultimate' : 'page'}>
       <Suspense fallback={<Loader text="…" />}>
       {bannerPreview && screen === 'home' && (
         <>
