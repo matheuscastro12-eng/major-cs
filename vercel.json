@@ -1,6 +1,9 @@
 {
   "functions": {
-    "api/*.ts": { "memory": 256, "maxDuration": 10 }
+    "api/lobby.ts": { "memory": 256, "maxDuration": 10 },
+    "api/cloud-save.ts": { "memory": 256, "maxDuration": 10 },
+    "api/bo3-edits.ts": { "memory": 256, "maxDuration": 10 },
+    "api/*.ts": { "memory": 128, "maxDuration": 10 }
   },
   "rewrites": [
     { "source": "/jogar", "destination": "/" },
@@ -37,6 +40,10 @@
     {
       "source": "/(favicon.png|icons.svg|og.png)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=2592000" }]
+    },
+    {
+      "source": "/ads/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800, s-maxage=2592000, stale-while-revalidate=86400" }]
     }
   ]
 }

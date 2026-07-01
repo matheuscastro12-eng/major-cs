@@ -40,6 +40,22 @@ function seasonNow() {
   return { no, endsAt, startsAt };
 }
 
+// schema garantido 1x por instância (não em toda invocação): os 4 DDL rodavam em
+// CADA request — inclusive nos polls públicos de ladder — gastando round-trips ao
+// Neon (Fluid Active CPU) à toa. Agora roda uma vez por cold start, num único
+// transaction. `CREATE/ALTER ... IF NOT EXISTS` seguem idempotentes.
+let schemaReady = false;
+async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
+  if (schemaReady) return;
+  await sql.transaction([
+    sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`,
+    sql`ALTER TABLE rtm_ranking ADD COLUMN IF NOT EXISTS season INT`,
+    sql`ALTER TABLE rtm_ranking ADD COLUMN IF NOT EXISTS season_games INT DEFAULT 0`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`,
+  ]);
+  schemaReady = true;
+}
+
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[] | undefined> },
   res: Res,
@@ -50,11 +66,7 @@ export default async function handler(
   const dbUrl = clean(process.env.DATABASE_URL);
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
-  await sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`;
-  // colunas de temporada (idempotente)
-  await sql`ALTER TABLE rtm_ranking ADD COLUMN IF NOT EXISTS season INT`;
-  await sql`ALTER TABLE rtm_ranking ADD COLUMN IF NOT EXISTS season_games INT DEFAULT 0`;
-  await sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`;
+  await ensureSchema(sql);
 
   const season = seasonNow();
   const seasonInfo = { season: season.no, endsAt: season.endsAt, startsAt: season.startsAt };

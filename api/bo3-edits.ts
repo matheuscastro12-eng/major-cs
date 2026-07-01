@@ -11,6 +11,15 @@ interface Res {
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
+// cria a tabela 1x por instância, não em TODA carga de Carreira (o GET roda a cada
+// abertura do carreira). Corta 1 round-trip ao Neon por request. Idempotente.
+let schemaReady = false;
+async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
+  if (schemaReady) return;
+  await sql`CREATE TABLE IF NOT EXISTS bo3_edits (id int PRIMARY KEY, data jsonb NOT NULL, updated_at timestamptz DEFAULT now())`;
+  schemaReady = true;
+}
+
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
@@ -21,8 +30,7 @@ export default async function handler(
     return;
   }
   const sql = neon(url);
-  // cria a tabela na primeira chamada (uma linha única id=1 com o JSON)
-  await sql`CREATE TABLE IF NOT EXISTS bo3_edits (id int PRIMARY KEY, data jsonb NOT NULL, updated_at timestamptz DEFAULT now())`;
+  await ensureSchema(sql);
 
   if (req.method === 'GET' || !req.method) {
     // no-cache (NAO no-store): o cliente/edge REVALIDAM sempre (edicao do admin

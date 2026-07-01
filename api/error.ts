@@ -10,6 +10,18 @@ interface Res {
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 const cut = (v: unknown, n: number) => String(v ?? '').slice(0, n);
 
+// cria a tabela 1x por instância, não em todo POST de telemetria (evita 1 round-trip
+// ao Neon por erro reportado). CREATE ... IF NOT EXISTS segue idempotente.
+let schemaReady = false;
+async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
+  if (schemaReady) return;
+  await sql`CREATE TABLE IF NOT EXISTS client_errors (
+    id serial PRIMARY KEY, ts timestamptz DEFAULT now(),
+    sid text, kind text, message text, stack text, page text, ua text, country text
+  )`;
+  schemaReady = true;
+}
+
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined> },
   res: Res,
@@ -21,10 +33,7 @@ export default async function handler(
     return;
   }
   const sql = neon(url);
-  await sql`CREATE TABLE IF NOT EXISTS client_errors (
-    id serial PRIMARY KEY, ts timestamptz DEFAULT now(),
-    sid text, kind text, message text, stack text, page text, ua text, country text
-  )`;
+  await ensureSchema(sql);
 
   if (req.method === 'POST') {
     const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as Record<string, unknown>;
