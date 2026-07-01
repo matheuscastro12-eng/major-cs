@@ -329,26 +329,34 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // primeira vez: onboarding (escolhe esquema → 5 cartas iniciais → onboarded=true).
   if (!state.profile.onboarded) {
     return (
-      <div className="ut-root" style={{ maxWidth: 620, margin: '0 auto', padding: '24px 16px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>MAJOR//CS · Ultimate Squad</div>
-          <h1 style={{ margin: '6px 0 0', fontSize: '1.8rem', fontWeight: 900, color: 'var(--em-text,#e6edf5)' }}>{ct('Monte sua coleção')}</h1>
-          <p className="muted" style={{ maxWidth: 470, margin: '8px auto 0', lineHeight: 1.5, fontSize: '0.9rem' }}>{ct('Escolha um esquema inicial e receba 5 cartas dos jogadores reais de 2026. Depois abra pacotes, monte o time com química e suba no ranking.')}</p>
+      <div className="ut-root">
+        <div className="ut-onboard__hero">
+          <div className="ut-onboard__herobox">
+            <div className="ut-onboard__lockup">
+              <span className="ut-brand__logo" style={{ fontSize: '1.5rem' }}>MAJOR<span className="ut-brand__slash">//</span>CS</span>
+              <span className="ut-brand__mode"><Sparkles size={13} /> ULTIMATE</span>
+            </div>
+            <div className="ut-onboard__kicker">{ct('Ultimate Squad')}</div>
+            <h1 className="ut-onboard__title">{ct('Monte sua coleção')}</h1>
+            <p className="ut-onboard__sub">{ct('Escolha um esquema inicial e receba 5 cartas dos jogadores reais de 2026. Depois abra pacotes, monte o time com química e suba no ranking.')}</p>
+          </div>
         </div>
-        <UtPanel label={ct('Escolha seu esquema')} icon={<Shirt size={15} className="ut-panel__lead" />}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
-            {FORMATIONS.map((f) => (
-              <button key={f.id} onClick={() => setOnbForm(f.id)} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${onbForm === f.id ? 'var(--em-gold,#92600a)' : 'var(--em-border,#2a3340)'}`, background: onbForm === f.id ? 'rgba(232,193,112,0.1)' : 'transparent' }}>
-                <div style={{ fontWeight: 900, fontSize: '0.95rem', color: onbForm === f.id ? '#92600a' : 'var(--em-text,#e6edf5)' }}>{f.name}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', marginTop: 3, lineHeight: 1.35 }}>{f.desc}</div>
-              </button>
-            ))}
-          </div>
-          <div style={{ marginTop: 14, textAlign: 'center' }}>
-            <Button variant="primary" icon={<Gift size={16} />} onClick={() => { const cards = claimStarter(onbForm); setReveal([...cards].sort((a, b) => b.ovr - a.ovr)); }}>{ct('Receber meu time inicial')}</Button>
-          </div>
-        </UtPanel>
-        <div style={{ textAlign: 'center' }}><button onClick={onBack} style={backBtn}>← {ct('Voltar')}</button></div>
+        <div className="ut-onboard__body">
+          <UtPanel label={ct('Escolha seu esquema')} icon={<Shirt size={15} className="ut-panel__lead" />}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
+              {FORMATIONS.map((f) => (
+                <button key={f.id} onClick={() => setOnbForm(f.id)} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${onbForm === f.id ? 'var(--ut-gold-2)' : 'var(--em-border)'}`, background: onbForm === f.id ? 'rgba(201,166,60,0.12)' : '#fff', boxShadow: onbForm === f.id ? '0 2px 10px rgba(201,166,60,0.18)' : 'none' }}>
+                  <div style={{ fontWeight: 900, fontSize: '0.95rem', color: onbForm === f.id ? '#92600a' : 'var(--em-text)' }}>{f.name}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--em-muted)', marginTop: 3, lineHeight: 1.35 }}>{f.desc}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{ marginTop: 16, textAlign: 'center' }}>
+              <button className="ut-jogar" style={{ padding: '12px 26px', fontSize: '1rem' }} onClick={() => { const cards = claimStarter(onbForm); setReveal([...cards].sort((a, b) => b.ovr - a.ovr)); }}><Gift size={17} /> {ct('Receber meu time inicial')}</button>
+            </div>
+          </UtPanel>
+          <div style={{ textAlign: 'center' }}><button onClick={onBack} className="ut-btn ut-btn--ghost">← {ct('Voltar')}</button></div>
+        </div>
       </div>
     );
   }
@@ -492,13 +500,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', textAlign: 'center', padding: '8px 0' }}>
                   <div className="ut-empty__accent">{ct('PRONTO PRA SUBIR NO RANKING?')}</div>
                   <div style={{ fontSize: '0.86rem', color: 'var(--ut-muted)' }}>{ct('Squad pronto. Entre na fila ranqueada.')}</div>
-                  <button className="ut-btn ut-btn--green" onClick={playMatch} style={{ width: '100%' }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
+                  <button className="ut-btn ut-btn--gold" onClick={playMatch} style={{ width: '100%' }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
                 </div>
               ) : (
                 <>
                   <UtEmpty accent={ct('PRONTO PRA SUBIR NO RANKING?')} icon={<AlertCircle size={30} />} title={ct('Você não tem squad ativo')} sub={ct('Monte e ative uma formação no Squad Builder pra entrar na fila.')} />
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="ut-btn ut-btn--green" onClick={() => go('squad')} style={{ flex: 1 }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
+                    <button className="ut-btn ut-btn--gold" onClick={() => go('squad')} style={{ flex: 1 }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
                     <button className="ut-btn ut-btn--ghost" onClick={() => go('squad')} style={{ flex: 1 }}>{ct('Montar squad')}</button>
                   </div>
                 </>
@@ -702,11 +710,11 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             <span>{ct('Multiplicador')}: <b style={{ fontFamily: '"JetBrains Mono", monospace', color: chem.multiplier >= 1 ? '#16a34a' : '#dc2626' }}>{chem.multiplier.toFixed(2)}×</b></span>
             <span>{ct('OVR médio')}: <b style={{ fontFamily: '"JetBrains Mono", monospace' }}>{avgOvr || '—'}</b></span>
           </div>
-          <div style={{ position: 'relative', width: '100%', maxWidth: 520, margin: '0 auto', aspectRatio: '4 / 5', background: 'radial-gradient(ellipse at 50% 34%, rgba(22,163,74,0.16), rgba(22,163,74,0.04) 60%), linear-gradient(180deg, #eef8f1, #f4faf6)', border: '1px solid var(--em-border,#2a3340)', borderRadius: 12 }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: 520, margin: '0 auto', aspectRatio: '4 / 5', background: 'radial-gradient(ellipse at 50% 32%, rgba(201,166,60,0.14), transparent 58%), linear-gradient(180deg, #1c2029 0%, #14161c 100%)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, boxShadow: 'inset 0 0 44px rgba(0,0,0,0.35)' }}>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
               {chem.edges.map((e, i) => {
                 const a = form.slots[e.a], b = form.slots[e.b];
-                const stroke = e.score >= 1.5 ? '#16a34a' : e.score >= 0.5 ? '#92600a' : e.score > 0 ? '#dc2626' : 'rgba(15,23,42,0.10)';
+                const stroke = e.score >= 1.5 ? '#22c55e' : e.score >= 0.5 ? '#ecc75f' : e.score > 0 ? '#f04438' : 'rgba(255,255,255,0.09)';
                 return <line key={i} x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100} stroke={stroke} strokeWidth={e.score >= 1.5 ? 0.9 : 0.6} strokeDasharray={e.score > 0 && e.score < 0.5 ? '2 2' : undefined} />;
               })}
             </svg>
@@ -917,6 +925,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       {reveal && (
         <Modal open onClose={() => setReveal(null)} title={ct('Pacote aberto')} size="lg"
           footer={<Button variant="primary" onClick={() => { setReveal(null); setTab('club'); }}>{ct('Ver coleção')}</Button>}>
+          <div style={{ textAlign: 'center', marginBottom: 10, fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.72rem', letterSpacing: '1.6px', textTransform: 'uppercase', color: '#92600a' }}>
+            {reveal.length} {reveal.length === 1 ? ct('carta') : ct('cartas')} · {ct('melhor')} {Math.max(...reveal.map((c) => c.ovr))} OVR
+          </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', padding: '6px 0' }}>
             {reveal.map((c, i) => (
               <div key={`${c.key}-${i}`} className="ult-reveal-card" style={{ animationDelay: `${i * 120}ms` }}>
@@ -943,5 +954,5 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
 const backBtn: CSSProperties = { padding: '7px 13px', background: 'var(--em-panel-2,#12161e)', color: 'var(--em-text,#e6edf5)', border: '1px solid var(--em-border,#2a3340)', borderRadius: 6, fontFamily: 'inherit', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' };
 const sellBtn: CSSProperties = { padding: '4px 10px', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', borderRadius: 5, border: '1px solid var(--em-border,#2a3340)', background: 'transparent', color: 'var(--em-muted,#8a99ab)', fontFamily: 'inherit' };
-const emptySlot: CSSProperties = { width: 78, height: 94, borderRadius: 10, border: '1.5px dashed var(--em-border-strong,#3a4553)', background: 'rgba(15,23,42,0.035)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'var(--em-muted,#8a99ab)', fontFamily: 'inherit' };
+const emptySlot: CSSProperties = { width: 78, height: 94, borderRadius: 10, border: '1.5px dashed rgba(236,199,95,0.45)', background: 'rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'rgba(255,255,255,0.65)', fontFamily: 'inherit' };
 const tabBtn = (on: boolean): CSSProperties => ({ padding: '8px 16px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer', borderRadius: 999, border: `1px solid ${on ? '#c9a63c' : 'var(--em-border,#2a3340)'}`, background: on ? 'linear-gradient(180deg,#ecc75f,#c9a63c)' : 'var(--em-panel,#fff)', color: on ? '#241a06' : 'var(--em-text,#e6edf5)', fontFamily: 'inherit', boxShadow: on ? '0 2px 10px rgba(201,166,60,0.32)' : 'var(--ut-shadow-sm, none)', transition: 'all .15s' });
