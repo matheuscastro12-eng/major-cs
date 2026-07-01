@@ -26,6 +26,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import type { SeriesResult, TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
+import '../../styles/ultimate.css';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 
@@ -98,7 +99,7 @@ function UltCardView({ card, size = 132, count, qs }: { card: UltCard; size?: nu
         </div>
       </div>
       {qs != null && (
-        <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(232,193,112,0.4)', color: '#e8c170' }}>🪙 +{qs.toLocaleString('pt-BR')}</span>
+        <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(232,193,112,0.4)', color: '#b8860b' }}>🪙 +{qs.toLocaleString('pt-BR')}</span>
       )}
     </div>
   );
@@ -284,7 +285,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // primeira vez: onboarding (escolhe esquema → 5 cartas iniciais → onboarded=true).
   if (!state.profile.onboarded) {
     return (
-      <div className="fade-in" style={{ maxWidth: 620, margin: '0 auto', padding: '24px 16px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="ut-root fade-in" style={{ maxWidth: 620, margin: '0 auto', padding: '24px 16px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>MAJOR//CS · Ultimate Squad</div>
           <h1 style={{ margin: '6px 0 0', fontSize: '1.8rem', fontWeight: 900, color: 'var(--em-text,#e6edf5)' }}>{ct('Monte sua coleção')}</h1>
@@ -293,8 +294,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         <DashCard title={`🧩 ${ct('Escolha seu esquema')}`}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
             {FORMATIONS.map((f) => (
-              <button key={f.id} onClick={() => setOnbForm(f.id)} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${onbForm === f.id ? 'var(--em-gold,#e8c170)' : 'var(--em-border,#2a3340)'}`, background: onbForm === f.id ? 'rgba(232,193,112,0.1)' : 'transparent' }}>
-                <div style={{ fontWeight: 900, fontSize: '0.95rem', color: onbForm === f.id ? '#e8c170' : 'var(--em-text,#e6edf5)' }}>{f.name}</div>
+              <button key={f.id} onClick={() => setOnbForm(f.id)} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${onbForm === f.id ? 'var(--em-gold,#b8860b)' : 'var(--em-border,#2a3340)'}`, background: onbForm === f.id ? 'rgba(232,193,112,0.1)' : 'transparent' }}>
+                <div style={{ fontWeight: 900, fontSize: '0.95rem', color: onbForm === f.id ? '#b8860b' : 'var(--em-text,#e6edf5)' }}>{f.name}</div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', marginTop: 3, lineHeight: 1.35 }}>{f.desc}</div>
               </button>
             ))}
@@ -311,7 +312,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // partida rolando: substitui a tela pelo replay round-a-round (reusa MatchReplay).
   if (live) {
     return (
-      <div className="fade-in" style={{ maxWidth: 960, margin: '0 auto', padding: '14px 16px 40px' }}>
+      <div className="ut-root fade-in" style={{ maxWidth: 960, margin: '0 auto', padding: '14px 16px 40px' }}>
         <button onClick={finishMatch} style={backBtn}>← {ct('Encerrar')}</button>
         <div style={{ margin: '10px 0', textAlign: 'center', fontWeight: 800, fontSize: '0.8rem', color: 'var(--em-muted,#8a99ab)' }}>
           {live.teams[0].name} vs {live.teams[1].name}
@@ -322,31 +323,48 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="fade-in" style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 16px 40px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div className="ut-root fade-in" style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 16px 40px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <style>{`
         .ult-foil { background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.35) 48%, rgba(255,255,255,0.05) 55%, transparent 70%); background-size: 250% 250%; animation: ult-shimmer 3.2s linear infinite; mix-blend-mode: screen; }
         @keyframes ult-shimmer { 0% { background-position: 120% 0; } 100% { background-position: -60% 0; } }
         .ult-reveal-card { animation: ult-pop .45s cubic-bezier(0.2,0.8,0.2,1) both; }
         @keyframes ult-pop { from { opacity:0; transform: translateY(14px) scale(.82) rotateY(35deg); } to { opacity:1; transform:none; } }
       `}</style>
-      {/* header */}
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <button onClick={onBack} style={backBtn}>← {ct('Voltar')}</button>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>MAJOR//CS</span>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, letterSpacing: '-0.3px', color: 'var(--em-text,#e6edf5)' }}>Ultimate Squad</h1>
+      {/* nav */}
+      <header className="ut-nav">
+        <button onClick={onBack} className="ut-back">← {ct('Voltar')}</button>
+        <div>
+          <div className="ut-kicker">MAJOR//CS · Ultimate Team</div>
+          <h1 className="ut-title">Ultimate Squad</h1>
         </div>
         <span style={{ flex: 1 }} />
-        {equipped && <span style={{ padding: '4px 10px', borderRadius: 12, fontSize: '0.7rem', fontWeight: 800, border: `1px solid ${equipped.color}`, color: equipped.color }}>{equipped.label}</span>}
-        <button onClick={() => setDailyOpen(true)} style={{ ...iconBtn, ...(daily.canClaim ? { borderColor: '#e8c170', color: '#e8c170' } : {}) }} title={ct('Recompensa diária')}>🎁{daily.canClaim ? ' •' : ''}</button>
-        <button onClick={() => setTitlesOpen(true)} style={iconBtn} title={ct('Títulos')}>🏷️</button>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: 'rgba(232,193,112,0.12)', border: '1px solid rgba(232,193,112,0.4)', fontWeight: 900, color: '#e8c170', fontFamily: '"JetBrains Mono", monospace' }}>
-          🪙 {fmt(credits)}
-        </span>
+        {equipped && <span className="ut-title-pill" style={{ borderColor: equipped.color, color: equipped.color }}>{equipped.label}</span>}
+        <button onClick={() => setDailyOpen(true)} className={`ut-icon-btn${daily.canClaim ? ' is-hot' : ''}`} title={ct('Recompensa diária')}>🎁{daily.canClaim && <span className="dot" />}</button>
+        <button onClick={() => setTitlesOpen(true)} className="ut-icon-btn" title={ct('Títulos')}>🏷️</button>
+        <span className="ut-chip ut-chip--gold">🪙 {fmt(credits)}</span>
       </header>
 
+      {/* season strip */}
+      {(() => {
+        const s = state.profile.season;
+        const daysLeft = s ? Math.max(0, Math.ceil((s.endsAt - Date.now()) / 86_400_000)) : null;
+        const pct = s && s.endsAt > s.startedAt ? Math.min(100, Math.max(0, ((Date.now() - s.startedAt) / (s.endsAt - s.startedAt)) * 100)) : 0;
+        return (
+          <div className="ut-season">
+            <span className="ut-season__badge">◆ {ct('TEMPORADA')}</span>
+            <div className="ut-season__body">
+              <div className="ut-season__row">
+                <b>Season 1 · {rank.name} · {state.profile.elo} RP</b>
+                <span>{daysLeft != null ? `${ct('termina em')} ${daysLeft}d` : ct('em andamento')}</span>
+              </div>
+              <div className="ut-season__bar"><div style={{ width: `${pct}%` }} /></div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* tabs */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div className="ut-tabs">
         {([
           ['hub', ct('Hub')],
           ['club', `${ct('Coleção')} (${totalCards})`],
@@ -374,10 +392,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 const done = daily.canClaim ? e.day < daily.day : e.day <= state.profile.daily.streakDay;
                 const isCur = daily.canClaim && e.day === daily.day;
                 return (
-                  <div key={e.day} style={{ padding: '8px 4px', borderRadius: 8, textAlign: 'center', border: `1px solid ${isCur ? '#e8c170' : 'var(--em-border,#2a3340)'}`, background: isCur ? 'rgba(232,193,112,0.14)' : done ? 'rgba(94,216,138,0.08)' : 'transparent', opacity: done ? 0.75 : 1 }}>
+                  <div key={e.day} style={{ padding: '8px 4px', borderRadius: 8, textAlign: 'center', border: `1px solid ${isCur ? '#b8860b' : 'var(--em-border,#2a3340)'}`, background: isCur ? 'rgba(232,193,112,0.14)' : done ? 'rgba(94,216,138,0.08)' : 'transparent', opacity: done ? 0.75 : 1 }}>
                     <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--em-muted,#8a99ab)' }}>D{e.day}</div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 900, color: isCur ? '#e8c170' : 'var(--em-text,#e6edf5)' }}>🪙{e.credits >= 1000 ? `${e.credits / 1000}k` : e.credits}</div>
-                    {done && <div style={{ fontSize: '0.66rem', color: '#5ed88a' }}>✓</div>}
+                    <div style={{ fontSize: '0.72rem', fontWeight: 900, color: isCur ? '#b8860b' : 'var(--em-text,#e6edf5)' }}>🪙{e.credits >= 1000 ? `${e.credits / 1000}k` : e.credits}</div>
+                    {done && <div style={{ fontSize: '0.66rem', color: '#16a34a' }}>✓</div>}
                   </div>
                 );
               })}
@@ -404,13 +422,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             </DashCard>
             <DashCard title={`💰 ${ct('Economia')}`}>
               <div style={{ display: 'flex', gap: 18, fontSize: '0.82rem' }}>
-                {([['CREDITS', fmt(credits), '#e8c170'], [ct('CARTAS'), String(totalCards), 'var(--em-text,#e6edf5)'], [ct('ÚNICAS'), String(uniqueCards), 'var(--em-text,#e6edf5)']] as const).map(([lab, val, col]) => (
+                {([['CREDITS', fmt(credits), '#b8860b'], [ct('CARTAS'), String(totalCards), 'var(--em-text,#e6edf5)'], [ct('ÚNICAS'), String(uniqueCards), 'var(--em-text,#e6edf5)']] as const).map(([lab, val, col]) => (
                   <div key={lab}><div style={{ fontSize: '0.58rem', color: 'var(--em-muted,#8a99ab)', fontWeight: 800 }}>{lab}</div><b style={{ fontFamily: '"JetBrains Mono", monospace', color: col }}>{val}</b></div>
                 ))}
               </div>
             </DashCard>
             <DashCard title={`🔥 ${ct('Streak & forma')}`}>
-              <div style={{ fontSize: '1.6rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: state.profile.streak > 0 ? '#5ed88a' : 'var(--em-text,#e6edf5)' }}>{state.profile.streak}</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: state.profile.streak > 0 ? '#16a34a' : 'var(--em-text,#e6edf5)' }}>{state.profile.streak}</div>
               <div style={{ fontSize: '0.74rem', color: 'var(--em-muted,#8a99ab)' }}>{ct('vitórias seguidas')}</div>
             </DashCard>
           </div>
@@ -438,7 +456,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   <div key={l.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     <UltCardView card={c} size={128} />
                     <div style={{ fontSize: '0.6rem', color: 'var(--em-muted,#8a99ab)' }}>{ct('por')} {l.sellerNick}</div>
-                    <button onClick={() => buyFromBazaar(l)} disabled={!afford} style={{ ...sellBtn, borderColor: afford ? '#e8c170' : 'var(--em-border,#2a3340)', color: afford ? '#e8c170' : 'var(--em-muted,#8a99ab)', cursor: afford ? 'pointer' : 'default', fontWeight: 900 }}>🪙 {fmt(l.price)}</button>
+                    <button onClick={() => buyFromBazaar(l)} disabled={!afford} style={{ ...sellBtn, borderColor: afford ? '#b8860b' : 'var(--em-border,#2a3340)', color: afford ? '#b8860b' : 'var(--em-muted,#8a99ab)', cursor: afford ? 'pointer' : 'default', fontWeight: 900 }}>🪙 {fmt(l.price)}</button>
                   </div>
                 );
               })}
@@ -451,7 +469,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         <DashCard title={`🏆 ${ct('Ranking global')}`}>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, fontSize: '0.8rem', color: 'var(--em-muted,#8a99ab)' }}>
             <span>{ct('Jogadores')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{rankedList.length}</b></span>
-            <span>{ct('Sua posição')}: <b style={{ color: '#e8c170' }}>#{myRankPos}</b></span>
+            <span>{ct('Sua posição')}: <b style={{ color: '#b8860b' }}>#{myRankPos}</b></span>
             <span>{ct('Líder')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{rankedList[0]?.nick}</b> ({rankedList[0]?.elo} RP)</span>
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14, alignItems: 'flex-end' }}>
@@ -473,15 +491,15 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             {rankedList.slice(0, 30).map((p, i) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 6, fontSize: '0.8rem', background: p.id === 'you' ? 'rgba(232,193,112,0.12)' : 'transparent' }}>
                 <span style={{ minWidth: 28, color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>#{i + 1}</span>
-                <Flag cc={p.country} /> <b style={{ flex: 1, color: p.id === 'you' ? '#e8c170' : 'var(--em-text,#e6edf5)' }}>{p.nick}</b>
+                <Flag cc={p.country} /> <b style={{ flex: 1, color: p.id === 'you' ? '#b8860b' : 'var(--em-text,#e6edf5)' }}>{p.nick}</b>
                 <span style={{ color: 'var(--em-muted,#8a99ab)' }}>{p.w}V-{p.l}D</span>
                 <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800 }}>{p.elo}</span>
               </div>
             ))}
             {myRankPos > 30 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 6, fontSize: '0.8rem', background: 'rgba(232,193,112,0.12)', marginTop: 6 }}>
-                <span style={{ minWidth: 28, color: '#e8c170', fontFamily: '"JetBrains Mono", monospace' }}>#{myRankPos}</span>
-                <Flag cc="br" /> <b style={{ flex: 1, color: '#e8c170' }}>{ct('Você')}</b>
+                <span style={{ minWidth: 28, color: '#b8860b', fontFamily: '"JetBrains Mono", monospace' }}>#{myRankPos}</span>
+                <Flag cc="br" /> <b style={{ flex: 1, color: '#b8860b' }}>{ct('Você')}</b>
                 <span style={{ color: 'var(--em-muted,#8a99ab)' }}>{state.profile.w}V-{state.profile.l}D</span>
                 <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800 }}>{state.profile.elo}</span>
               </div>
@@ -499,13 +517,14 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             {PACK_DEFS.map((pack) => {
               const afford = credits >= pack.cost;
               return (
-                <div key={pack.id} style={{ borderRadius: 10, padding: 14, border: `1px solid ${pack.color}55`, background: `linear-gradient(160deg, ${pack.color}18 0%, var(--em-panel,#0f131a) 70%)`, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ fontSize: '2rem', textAlign: 'center' }}>📦</div>
-                  <div style={{ fontSize: '1rem', fontWeight: 900, color: pack.color, textAlign: 'center' }}>{pack.name}</div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--em-muted,#8a99ab)', textAlign: 'center', minHeight: 32 }}>{pack.desc}</div>
-                  <Button variant={afford ? 'primary' : 'ghost'} onClick={() => buy(pack)} disabled={!afford} style={{ width: '100%', justifyContent: 'center' }}>
-                    🪙 {fmt(pack.cost)}
-                  </Button>
+                <div key={pack.id} className="ut-pack" style={{ background: `linear-gradient(155deg, ${pack.color} 0%, ${pack.color}dd 55%, ${pack.color}aa 100%)` }}>
+                  <div className="ut-pack__shine" />
+                  <div className="ut-pack__art">📦</div>
+                  <div className="ut-pack__name">{pack.name}</div>
+                  <div className="ut-pack__desc">{pack.desc}</div>
+                  <button className="ut-pack__buy" onClick={() => buy(pack)} disabled={!afford} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                    🪙 {fmt(pack.cost)}{!afford ? ' 🔒' : ''}
+                  </button>
                 </div>
               );
             })}
@@ -525,7 +544,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>
                 <span>{ct('Cartas')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{totalCards}</b></span>
                 <span>{ct('Únicas')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{uniqueCards}</b></span>
-                <span>{ct('Duplicatas')}: <b style={{ color: dupCount ? '#e8c170' : 'var(--em-text,#e6edf5)' }}>{dupCount}</b></span>
+                <span>{ct('Duplicatas')}: <b style={{ color: dupCount ? '#b8860b' : 'var(--em-text,#e6edf5)' }}>{dupCount}</b></span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, justifyItems: 'center' }}>
                 {club.map((row) => (
@@ -551,14 +570,14 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           </div>
           <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', fontSize: '0.82rem' }}>
             <span>{ct('Química')}: <b style={{ color: cl.color, fontFamily: '"JetBrains Mono", monospace' }}>{chem.total}/15</b> <span style={{ color: cl.color, fontWeight: 800 }}>{cl.label}</span></span>
-            <span>{ct('Multiplicador')}: <b style={{ fontFamily: '"JetBrains Mono", monospace', color: chem.multiplier >= 1 ? '#5ed88a' : '#e58a8a' }}>{chem.multiplier.toFixed(2)}×</b></span>
+            <span>{ct('Multiplicador')}: <b style={{ fontFamily: '"JetBrains Mono", monospace', color: chem.multiplier >= 1 ? '#16a34a' : '#dc2626' }}>{chem.multiplier.toFixed(2)}×</b></span>
             <span>{ct('OVR médio')}: <b style={{ fontFamily: '"JetBrains Mono", monospace' }}>{avgOvr || '—'}</b></span>
           </div>
-          <div style={{ position: 'relative', width: '100%', maxWidth: 520, margin: '0 auto', aspectRatio: '4 / 5', background: 'radial-gradient(ellipse at 50% 34%, rgba(94,216,138,0.06), transparent 62%)', border: '1px solid var(--em-border,#2a3340)', borderRadius: 12 }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: 520, margin: '0 auto', aspectRatio: '4 / 5', background: 'radial-gradient(ellipse at 50% 34%, rgba(22,163,74,0.16), rgba(22,163,74,0.04) 60%), linear-gradient(180deg, #eef8f1, #f4faf6)', border: '1px solid var(--em-border,#2a3340)', borderRadius: 12 }}>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
               {chem.edges.map((e, i) => {
                 const a = form.slots[e.a], b = form.slots[e.b];
-                const stroke = e.score >= 1.5 ? '#5ed88a' : e.score >= 0.5 ? '#e8c170' : e.score > 0 ? '#e58a8a' : 'rgba(255,255,255,0.08)';
+                const stroke = e.score >= 1.5 ? '#16a34a' : e.score >= 0.5 ? '#b8860b' : e.score > 0 ? '#dc2626' : 'rgba(15,23,42,0.10)';
                 return <line key={i} x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100} stroke={stroke} strokeWidth={e.score >= 1.5 ? 0.9 : 0.6} strokeDasharray={e.score > 0 && e.score < 0.5 ? '2 2' : undefined} />;
               })}
             </svg>
@@ -595,7 +614,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <span style={{ fontSize: '0.8rem', fontFamily: '"JetBrains Mono", monospace', color: 'var(--em-text,#e6edf5)' }}>{state.profile.elo} RP</span>
             </div>
             <div style={{ fontSize: '0.82rem', color: 'var(--em-muted,#8a99ab)', display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span>{ct('Vitórias')}: <b style={{ color: '#5ed88a' }}>{state.profile.w}</b> · {ct('Derrotas')}: <b style={{ color: '#e58a8a' }}>{state.profile.l}</b></span>
+              <span>{ct('Vitórias')}: <b style={{ color: '#16a34a' }}>{state.profile.w}</b> · {ct('Derrotas')}: <b style={{ color: '#dc2626' }}>{state.profile.l}</b></span>
               <span>{ct('Sequência')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{state.profile.streak}</b> · {ct('Pico')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{state.profile.peakElo} RP</b></span>
               <span>{ct('Seu squad')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{avgOvr || '—'} OVR</b> · {ct('química')} <b style={{ color: cl.color }}>{chem.total}/15</b> ({chem.multiplier.toFixed(2)}×)</span>
             </div>
@@ -616,10 +635,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         <Modal open onClose={() => setResult(null)} title={result.won ? `✅ ${ct('Vitória!')}` : `❌ ${ct('Derrota')}`} size="sm"
           footer={<><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { setResult(null); playMatch(); }} disabled={!squadComplete}>{ct('Jogar de novo')}</Button></>}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-            <div style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#5ed88a' : '#e58a8a' }}>{result.score}</div>
+            <div style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
             <div style={{ display: 'flex', gap: 16, fontSize: '0.9rem', fontWeight: 800 }}>
-              <span style={{ color: result.outcome.eloDelta >= 0 ? '#5ed88a' : '#e58a8a' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>
-              {result.outcome.credits > 0 && <span style={{ color: '#e8c170' }}>🪙 +{fmt(result.outcome.credits)}</span>}
+              <span style={{ color: result.outcome.eloDelta >= 0 ? '#16a34a' : '#dc2626' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>
+              {result.outcome.credits > 0 && <span style={{ color: '#b8860b' }}>🪙 +{fmt(result.outcome.credits)}</span>}
             </div>
             <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{rank.name} · {state.profile.elo} RP</span>
           </div>
@@ -668,7 +687,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--em-text,#e6edf5)' }}>{s.name}</div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--em-muted,#8a99ab)', minHeight: 34 }}>{s.desc}</div>
                 <div style={{ fontSize: '0.74rem', fontWeight: 700 }}>
-                  {ct('Recompensa')}: {s.reward.credits ? <span style={{ color: '#e8c170' }}>🪙 {fmt(s.reward.credits)}</span> : null}
+                  {ct('Recompensa')}: {s.reward.credits ? <span style={{ color: '#b8860b' }}>🪙 {fmt(s.reward.credits)}</span> : null}
                   {s.reward.card ? <span style={{ color: rarityInfo(s.reward.card).color, marginLeft: s.reward.credits ? 8 : 0 }}> {ct('carta')} {rarityInfo(s.reward.card).label}</span> : null}
                 </div>
                 <Button variant="primary" onClick={() => { setSbcDef(s); setSbcSel([]); }}>{ct('Fazer desafio')}</Button>
@@ -690,7 +709,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             footer={<Button variant="primary" disabled={!chk.ok} onClick={submit}>{ct('Enviar')} ({sbcSel.length}/{sbcDef.req.count})</Button>}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
               {chk.items.map((it, i) => (
-                <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 12, border: `1px solid ${it.ok ? '#5ed88a' : '#e58a8a'}`, color: it.ok ? '#5ed88a' : '#e58a8a' }}>{it.ok ? '✓' : '✗'} {it.label}</span>
+                <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 12, border: `1px solid ${it.ok ? '#16a34a' : '#dc2626'}`, color: it.ok ? '#16a34a' : '#dc2626' }}>{it.ok ? '✓' : '✗'} {it.label}</span>
               ))}
             </div>
             {eligible.length === 0 ? (
@@ -700,9 +719,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 {eligible.map(({ o, card }) => {
                   const on = sbcSel.includes(o.id);
                   return (
-                    <button key={o.id} onClick={() => toggle(o.id)} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, outline: on ? '2px solid #5ed88a' : 'none', borderRadius: 10, opacity: on || sbcSel.length < sbcDef.req.count ? 1 : 0.5 }}>
+                    <button key={o.id} onClick={() => toggle(o.id)} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, outline: on ? '2px solid #16a34a' : 'none', borderRadius: 10, opacity: on || sbcSel.length < sbcDef.req.count ? 1 : 0.5 }}>
                       <UltCardView card={card} size={104} />
-                      {on && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: '0.7rem', fontWeight: 900, width: 18, height: 18, borderRadius: '50%', background: '#5ed88a', color: '#04120a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</span>}
+                      {on && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: '0.7rem', fontWeight: 900, width: 18, height: 18, borderRadius: '50%', background: '#16a34a', color: '#04120a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</span>}
                     </button>
                   );
                 })}
@@ -719,7 +738,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0' }}>
             <p className="muted small" style={{ margin: 0 }}>{ct('A temporada virou. Seu RP foi suavizado pra manter a disputa acirrada e você levou um bônus de fim de temporada.')}</p>
             <div style={{ fontSize: '0.95rem', fontWeight: 900 }}>{ct('Novo RP')}: <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{seasonRoll.newElo}</span></div>
-            {seasonRoll.credits > 0 && <div style={{ color: '#e8c170', fontWeight: 900 }}>🪙 +{fmt(seasonRoll.credits)}</div>}
+            {seasonRoll.credits > 0 && <div style={{ color: '#b8860b', fontWeight: 900 }}>🪙 +{fmt(seasonRoll.credits)}</div>}
           </div>
         </Modal>
       )}
@@ -734,10 +753,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               const done = daily.canClaim ? e.day < daily.day : e.day <= state.profile.daily.streakDay;
               const isCur = daily.canClaim && e.day === daily.day;
               return (
-                <div key={e.day} style={{ padding: '8px 4px', borderRadius: 8, textAlign: 'center', border: `1px solid ${isCur ? '#e8c170' : 'var(--em-border,#2a3340)'}`, background: isCur ? 'rgba(232,193,112,0.14)' : done ? 'rgba(94,216,138,0.08)' : 'transparent', opacity: done ? 0.75 : 1 }}>
+                <div key={e.day} style={{ padding: '8px 4px', borderRadius: 8, textAlign: 'center', border: `1px solid ${isCur ? '#b8860b' : 'var(--em-border,#2a3340)'}`, background: isCur ? 'rgba(232,193,112,0.14)' : done ? 'rgba(94,216,138,0.08)' : 'transparent', opacity: done ? 0.75 : 1 }}>
                   <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--em-muted,#8a99ab)' }}>{ct('Dia')} {e.day}</div>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 900, color: isCur ? '#e8c170' : 'var(--em-text,#e6edf5)' }}>🪙{e.credits >= 1000 ? `${e.credits / 1000}k` : e.credits}</div>
-                  {done && <div style={{ fontSize: '0.68rem', color: '#5ed88a' }}>✓</div>}
+                  <div style={{ fontSize: '0.72rem', fontWeight: 900, color: isCur ? '#b8860b' : 'var(--em-text,#e6edf5)' }}>🪙{e.credits >= 1000 ? `${e.credits / 1000}k` : e.credits}</div>
+                  {done && <div style={{ fontSize: '0.68rem', color: '#16a34a' }}>✓</div>}
                 </div>
               );
             })}
@@ -794,6 +813,5 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
 const backBtn: CSSProperties = { padding: '7px 13px', background: 'var(--em-panel-2,#12161e)', color: 'var(--em-text,#e6edf5)', border: '1px solid var(--em-border,#2a3340)', borderRadius: 6, fontFamily: 'inherit', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' };
 const sellBtn: CSSProperties = { padding: '4px 10px', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', borderRadius: 5, border: '1px solid var(--em-border,#2a3340)', background: 'transparent', color: 'var(--em-muted,#8a99ab)', fontFamily: 'inherit' };
-const emptySlot: CSSProperties = { width: 78, height: 94, borderRadius: 10, border: '1.5px dashed var(--em-border,#3a4553)', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'var(--em-muted,#8a99ab)', fontFamily: 'inherit' };
-const iconBtn: CSSProperties = { padding: '6px 10px', borderRadius: 8, border: '1px solid var(--em-border,#2a3340)', background: 'transparent', color: 'var(--em-text,#e6edf5)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.9rem' };
-const tabBtn = (on: boolean): CSSProperties => ({ padding: '7px 16px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer', borderRadius: 6, border: '1px solid var(--em-border,#2a3340)', background: on ? 'var(--em-gold,#e8c170)' : 'transparent', color: on ? '#1a1205' : 'var(--em-text,#e6edf5)', fontFamily: 'inherit' });
+const emptySlot: CSSProperties = { width: 78, height: 94, borderRadius: 10, border: '1.5px dashed var(--em-border-strong,#3a4553)', background: 'rgba(15,23,42,0.035)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'var(--em-muted,#8a99ab)', fontFamily: 'inherit' };
+const tabBtn = (on: boolean): CSSProperties => ({ padding: '8px 16px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer', borderRadius: 999, border: `1px solid ${on ? 'var(--ut-green,#16a34a)' : 'var(--em-border,#2a3340)'}`, background: on ? 'var(--ut-green,#16a34a)' : 'var(--em-panel,#fff)', color: on ? '#fff' : 'var(--em-text,#e6edf5)', fontFamily: 'inherit', boxShadow: on ? '0 2px 10px rgba(22,163,74,0.30)' : 'var(--ut-shadow-sm, none)', transition: 'all .15s' });
