@@ -91,8 +91,19 @@ export interface LobbyState {
     lineup?: OnlineLineup;
     rollouts?: number[];
     spectator?: boolean;
+    squad?: UltimatePvpSquad | null; // Ultimate PvP: snapshot do squad persistente
   }[];
   serverNow?: number; // Date.now() do servidor no momento da resposta (correção de skew)
+}
+
+// snapshot compacto do squad no Ultimate PvP (mode 'ultimate'): os pids referem
+// o MESMO dataset em todos os clientes — cada lado reconstrói o time do rival
+// via buildPool e aplica o OVR (já com evolução) que veio no snapshot.
+export interface UltimatePvpSquad {
+  name: string;
+  elo: number;
+  chem: number; // multiplicador de química (0.8–1.2)
+  cards: { pid: string; ovr: number }[];
 }
 
 // O Ultimate Team mistura cartas históricas com o elenco atual de 2026. As duas
@@ -442,7 +453,7 @@ export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: bo
   return (await res.json()) as { ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState };
 }
 
-export interface OpenRoom { code: string; mode: 'duel' | 'party'; pool: TournamentPool; host: string; name?: string | null; players: number; max: number; ranked?: boolean; host_mmr?: number | null; }
+export interface OpenRoom { code: string; mode: 'duel' | 'party' | 'ultimate'; pool: TournamentPool; host: string; name?: string | null; players: number; max: number; ranked?: boolean; host_mmr?: number | null; }
 export async function listOpenLobbies(): Promise<OpenRoom[]> {
   try {
     const res = await fetch('/api/lobby?list=1', { signal: AbortSignal.timeout(9000) });

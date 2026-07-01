@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sem 0/O/1/I/L
-const MAX_PLAYERS: Record<string, number> = { duel: 2, party: 8 };
+const MAX_PLAYERS: Record<string, number> = { duel: 2, party: 8, ultimate: 2 }; // ultimate = PvP 1v1 do Road to Major Ultimate (squads persistentes)
 const RULESETS = new Set(['open', 'current', 'legends', 'brworld', 'era', 'ovrcap', 'unique_country', 'gauntlet']);
 const TACTICS = new Set(['balanced', 'aggressive', 'tactical', 'controlled']);
 const MAPS = new Set(['mirage', 'inferno', 'nuke', 'ancient', 'anubis', 'dust2', 'train']);
@@ -140,6 +140,7 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS rollouts jsonb DEFAULT '[]'::jsonb`,
     sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS spectator boolean DEFAULT false`,
     sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS last_seen timestamptz DEFAULT now()`,
+    sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS squad jsonb DEFAULT NULL`,
   ]);
   schemaReady = true;
 }
@@ -299,7 +300,7 @@ export default async function handler(
       const players = await sql`
         SELECT nick, picks, coach_pick, done, joined_at, COALESCE(ready_stage, -1) AS ready_stage,
                COALESCE(strategy, '{}'::jsonb) AS strategy, COALESCE(lineup, '{}'::jsonb) AS lineup, COALESCE(rollouts, '[]'::jsonb) AS rollouts,
-               COALESCE(spectator, false) AS spectator FROM lobby_players
+               COALESCE(spectator, false) AS spectator, squad FROM lobby_players
         WHERE code = ${code} ORDER BY joined_at ASC`;
       if (lobby[0].status === 'veto') {
         const participants = players.filter((player) => !player.spectator).map((player) => String(player.nick));
@@ -392,7 +393,7 @@ export default async function handler(
         res.status(400).json({ error: 'nick obrigatório' });
         return;
       }
-      const mode = body.mode === 'party' ? 'party' : 'duel';
+      const mode = body.mode === 'party' ? 'party' : body.mode === 'ultimate' ? 'ultimate' : 'duel';
       const pool = body.pool === 'br' ? 'br' : 'world';
       const ruleset = RULESETS.has(String(body.ruleset)) ? String(body.ruleset) : 'open';
       const name = (typeof body.name === 'string' ? body.name : '').trim().slice(0, 40) || null;
@@ -850,8 +851,24 @@ export default async function handler(
         captainId: String(rawLineup.captainId ?? '').slice(0, 80),
         reserveId: String(rawLineup.reserveId ?? '').slice(0, 80),
       });
+      // squad do Ultimate PvP: snapshot compacto {name, elo, chem, cards[{pid,ovr}]}.
+      // COALESCE no UPDATE: pick sem squad (modos antigos) NÃO apaga o existente.
+      const rawSquad = body.squad && typeof body.squad === 'object' ? body.squad as Record<string, unknown> : null;
+      const squad = rawSquad
+        ? JSON.stringify({
+            name: String(rawSquad.name ?? '').slice(0, 24),
+            elo: Math.max(0, Math.min(5000, Math.round(Number(rawSquad.elo) || 0))),
+            chem: Math.max(0.8, Math.min(1.2, Number(rawSquad.chem) || 1)),
+            cards: Array.isArray(rawSquad.cards)
+              ? rawSquad.cards.slice(0, 5).map((entry) => {
+                  const c = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+                  return { pid: String(c.pid ?? '').slice(0, 80), ovr: Math.max(1, Math.min(99, Math.round(Number(c.ovr) || 60))) };
+                })
+              : [],
+          })
+        : null;
       const updated = await sql`
-        UPDATE lobby_players SET picks = ${picks}::jsonb, coach_pick = ${coachPick}, strategy = ${strategy}::jsonb, lineup = ${lineup}::jsonb, rollouts = ${rollouts}::jsonb, done = ${done}
+        UPDATE lobby_players SET picks = ${picks}::jsonb, coach_pick = ${coachPick}, strategy = ${strategy}::jsonb, lineup = ${lineup}::jsonb, rollouts = ${rollouts}::jsonb, done = ${done}, squad = COALESCE(${squad}::jsonb, squad)
         WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()} AND COALESCE(spectator, false) = false
         RETURNING id`;
       if (updated.length === 0) {

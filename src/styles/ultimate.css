@@ -641,6 +641,33 @@ body:has(.ut-live) {
 .ut-live .btn.ghost { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #e9edf3; }
 .ut-live .btn.ghost.active { background: rgba(236, 199, 95, 0.18); border-color: rgba(236, 199, 95, 0.5); color: var(--ut-gold-1); }
 
+/* ---------------- DUELO ONLINE (PvP) ---------------- */
+.ut-duel { display: flex; flex-direction: column; gap: 12px; }
+.ut-duel__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.ut-duel__box { border: 1px solid var(--ut-line); border-radius: 12px; padding: 13px 14px; background: #fff; box-shadow: var(--ut-shadow); display: flex; flex-direction: column; gap: 9px; }
+.ut-duel__boxtitle { display: flex; align-items: center; gap: 7px; font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.78rem; letter-spacing: 0.9px; text-transform: uppercase; color: var(--ut-ink-2); }
+.ut-duel__input { padding: 9px 12px; border-radius: 9px; border: 1px solid var(--ut-line); background: var(--em-panel-2); color: var(--ut-ink); font-family: inherit; font-size: 0.86rem; outline: none; }
+.ut-duel__input:focus { border-color: var(--ut-gold-2); box-shadow: 0 0 0 3px rgba(201, 166, 60, 0.14); }
+.ut-duel__chk { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: var(--ut-ink-2); cursor: pointer; }
+.ut-duel__err { padding: 9px 13px; border-radius: 10px; background: rgba(220, 38, 38, 0.07); border: 1px solid rgba(220, 38, 38, 0.3); color: #b42318; font-size: 0.8rem; font-weight: 600; }
+.ut-duel__rooms { display: flex; flex-direction: column; gap: 6px; }
+.ut-duel__room { display: flex; align-items: center; gap: 10px; padding: 9px 13px; border: 1px solid var(--ut-line); border-radius: 10px; background: #fff; font-size: 0.82rem; }
+.ut-duel__room b { color: var(--ut-ink); }
+.ut-duel__room span { flex: 1; color: var(--ut-muted); font-size: 0.76rem; }
+.ut-duel__head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ut-duel__code { display: inline-flex; align-items: center; gap: 7px; font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.15rem; letter-spacing: 4px; color: var(--ut-ink); padding: 7px 14px; border: 1.5px dashed rgba(201, 166, 60, 0.55); border-radius: 10px; background: rgba(201, 166, 60, 0.07); }
+.ut-duel__copy { border: none; background: transparent; color: var(--ut-muted); cursor: pointer; padding: 2px; display: inline-flex; }
+.ut-duel__copy:hover { color: var(--ut-ink); }
+.ut-duel__status { flex: 1; font-size: 0.82rem; font-weight: 700; color: var(--ut-ink-2); }
+.ut-duel__players { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 9px; }
+.ut-duel__pl { display: flex; align-items: center; gap: 10px; padding: 10px 13px; border: 1px solid var(--ut-line); border-radius: 11px; background: #fff; }
+.ut-duel__pl.me { border-color: rgba(201, 166, 60, 0.5); background: #fffdf5; }
+.ut-duel__pl.empty { border-style: dashed; }
+.ut-duel__pl svg { color: var(--ut-muted); flex: none; }
+.ut-duel__plname { font-weight: 800; font-size: 0.85rem; color: var(--ut-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ut-duel__plmeta { font-size: 0.72rem; color: var(--ut-muted); font-family: var(--ut-font-mono); }
+.ut-duel__ok { color: var(--ut-green); font-weight: 900; }
+
 /* ---------------- MOMENTUM AO VIVO ---------------- */
 .ut-mom { max-width: 980px; margin: 0 auto; padding: 2px 16px 10px; display: flex; align-items: center; gap: 14px; }
 .ut-mom__dots { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }

@@ -2,7 +2,7 @@
 // cartas do dataset real, moeda `credits`. Padrão em-*/DashCard/Modal/Button.
 // Ver docs-but-map.md. Sub-fases futuras: Squad Builder (P2), partida vs IA (P3).
 
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
 import { ultimateCatalog, ultimateIndex, useUltimate } from '../../state/ultimate';
@@ -32,11 +32,13 @@ import {
   LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
   Swords, ListOrdered, ChevronDown, Coins, Trophy, Zap, Menu, CalendarDays, Lock,
   Check, Gift, Star, Gem, Crown, Wallet, TrendingUp, Medal, Flame, AlertCircle,
-  Tag, ArrowLeft, Sparkles, Plus, X, Target,
+  Tag, ArrowLeft, Sparkles, Plus, X, Target, Globe,
 } from 'lucide-react';
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
+import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
+import type { UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import '../../styles/ultimate.css';
 
@@ -196,13 +198,13 @@ interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: numbe
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'sbc' | 'ranking'>('hub');
+  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   const [pickSlot, setPickSlot] = useState<number | null>(null);
-  type MatchMode = 'rivals' | 'casual' | 'gauntlet';
-  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string };
-  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean } | null>(null);
+  type MatchMode = 'rivals' | 'casual' | 'gauntlet' | 'pvp';
+  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean };
+  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1 } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
   const [liveRound, setLiveRound] = useState(0); // rounds já exibidos no replay (barra de momentum)
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
@@ -488,8 +490,80 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     }
     setResult(null);
     setLiveRound(0);
-    setLive({ series, teams: [userTeam, oppTeam], result: resultData, opp: oppFive, intro: true });
+    setLive({ series, teams: [userTeam, oppTeam], result: resultData, opp: oppFive, intro: true, myIdx: 0 });
   };
+
+  // ── Duelo Online (PvP): identidade + snapshot + partida determinística ──
+  // nick único: displayName + sufixo persistente (dois "Manager" não colidem).
+  const pvpNick = useMemo(() => {
+    let suf = '';
+    try {
+      suf = localStorage.getItem('rtm-ult-pvp-suffix') ?? '';
+      if (!suf) { suf = Math.random().toString(36).slice(2, 6).toUpperCase(); localStorage.setItem('rtm-ult-pvp-suffix', suf); }
+    } catch { suf = 'XXXX'; }
+    return `${displayName.slice(0, 14)}#${suf}`;
+  }, [displayName]);
+  const pvpSquad = useMemo<UltimatePvpSquad>(() => ({
+    name: displayName.slice(0, 24),
+    elo: state.profile.elo,
+    chem: chem.multiplier,
+    cards: form.slots.map((fs) => slotCard(fs.slot)).filter((sc): sc is NonNullable<typeof sc> => !!sc).map((sc) => ({ pid: sc.card.playerId, ovr: sc.card.ovr })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [displayName, state.profile.elo, chem.multiplier, state.squads, state.inventory]);
+
+  const startPvpMatch = useCallback((args: DuelPlayArgs) => {
+    // reconstrói os DOIS times do dataset (pids compartilhados) com o OVR do
+    // snapshot; ordem CANÔNICA (nick menor primeiro) → série idêntica nos 2 lados.
+    const buildFive = (sq: UltimatePvpSquad): PoolPlayer[] =>
+      sq.cards.map((c) => { const base = poolById.get(c.pid); return base ? { ...base, ovr: c.ovr } : null; }).filter((p): p is PoolPlayer => !!p);
+    const mineFive = buildFive(args.mySquad);
+    const oppFive = buildFive(args.oppSquad);
+    if (mineFive.length < 5 || oppFive.length < 5) { flash(ct('Squad do rival incompatível com esta versão.')); return; }
+    const firstSq = args.myFirst ? args.mySquad : args.oppSquad;
+    const secondSq = args.myFirst ? args.oppSquad : args.mySquad;
+    const tA = buildOnlineTeam(firstSq.name || 'A', args.myFirst ? mineFive : oppFive, 'ut-pvp-a');
+    const tB = buildOnlineTeam(secondSq.name || 'B', args.myFirst ? oppFive : mineFive, 'ut-pvp-b');
+    tA.strength *= firstSq.chem;
+    tB.strength *= secondSq.chem;
+    const rng = makeRng(((args.runSeed ^ 0x554c54) >>> 0) || 1);
+    const maps = autoVeto([tA, tB], rng, 1);
+    const series = simulateSeries(rng, tA, tB, maps, 1);
+    const myIdx: 0 | 1 = args.myFirst ? 0 : 1;
+    // transforma pra PERSPECTIVA DO USUÁRIO (placar/rounds/vitória) — o resto
+    // do fluxo (momentum, resultado, história) fica idêntico ao single-player.
+    const won = series.winner === myIdx;
+    const m0 = series.maps[0];
+    const score = m0 ? `${m0.score[myIdx]}-${m0.score[1 - myIdx]}` : '0-0';
+    const roundLog = (m0?.roundLog ?? []).map((w) => (w === myIdx ? 0 : 1)) as (0 | 1)[];
+    const mapName = m0 ? (MAP_LABELS[m0.map] ?? m0.map) : '';
+    const mapStats = m0?.stats ?? {};
+    let mvp: LiveResult['mvp'];
+    for (const fs of form.slots) {
+      const sc = slotCard(fs.slot);
+      const line = sc ? mapStats[sc.card.playerId]?.both : undefined;
+      if (!sc || !line) continue;
+      if (!mvp || line.kills > mvp.kills || (line.kills === mvp.kills && line.deaths < mvp.deaths)) mvp = { card: sc.card, kills: line.kills, deaths: line.deaths };
+    }
+    // dedupe: F5/reassistir não recontabiliza (ledger fora do save, cap 40)
+    const ledgerKey = 'rtm-ult-pvp-rec';
+    const recKey = `${args.code}:${args.runSeed}`;
+    let already = false;
+    try {
+      const led: string[] = JSON.parse(localStorage.getItem(ledgerKey) ?? '[]');
+      already = led.includes(recKey);
+      if (!already) localStorage.setItem(ledgerKey, JSON.stringify([recKey, ...led].slice(0, 40)));
+    } catch { /* storage indisponível — registra mesmo assim */ }
+    const eloBefore = state.profile.elo;
+    const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, true, score);
+    const eloAfter = eloBefore + outcome.eloDelta;
+    setResult(null);
+    setLiveRound(0);
+    setLive({
+      series, teams: [tA, tB], opp: oppFive, intro: true, myIdx,
+      result: { won, score, outcome, mode: 'pvp', divChange: already ? 'same' : divisionChange(eloBefore, eloAfter), divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName, oppName: args.oppNick, repeat: already },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poolById, state.profile.elo, state.squads, state.inventory]);
 
   // o resultado já foi registrado no playMatch — aqui só troca replay → modal.
   const finishMatch = () => {
@@ -581,10 +655,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       return (
         <div className="ut-root ut-live">
           <div className="ut-vs">
-            <div className="ut-vs__kicker">{ct('MATCH DAY')} · {live.result.mode === 'rivals' ? 'DIVISÃO RIVALS' : live.result.mode === 'gauntlet' ? 'ELITE GAUNTLET' : ct('AMISTOSO')}</div>
+            <div className="ut-vs__kicker">{ct('MATCH DAY')} · {live.result.mode === 'rivals' ? 'DIVISÃO RIVALS' : live.result.mode === 'gauntlet' ? 'ELITE GAUNTLET' : live.result.mode === 'pvp' ? `${ct('DUELO ONLINE')} · PVP` : ct('AMISTOSO')}</div>
             <div className="ut-vs__grid">
               <div className="ut-vs__side">
-                <div className="ut-vs__team">{live.teams[0].name}</div>
+                <div className="ut-vs__team">{live.teams[live.myIdx].name}</div>
                 <div className="ut-vs__meta">{avgOvr} OVR · {ct('química')} {chem.total}/15</div>
                 <div className="ut-vs__cards">
                   {form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? <UltCardView key={fs.slot} card={sc.card} size={82} evo={sc.owned.boost ?? 0} /> : null; })}
@@ -598,7 +672,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <button className="ut-vs__skip" onClick={finishMatch}>{ct('Pular direto pro resultado')}</button>
               </div>
               <div className="ut-vs__side">
-                <div className="ut-vs__team">{live.teams[1].name}</div>
+                <div className="ut-vs__team">{live.teams[1 - live.myIdx].name}</div>
                 <div className="ut-vs__meta">{oppOvr} OVR · {ct('adversário')}</div>
                 <div className="ut-vs__roster">
                   {live.opp.map((p) => (
@@ -686,6 +760,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               )}
             </div>
             <button className={`ut-nav__item${tab === 'ranked' ? ' is-active' : ''}`} onClick={() => go('ranked')}><Swords size={16} /> {ct('Ranqueada')}</button>
+            <button className={`ut-nav__item${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo Online')}</button>
             <button className={`ut-nav__item${tab === 'ranking' ? ' is-active' : ''}`} onClick={() => go('ranking')}><ListOrdered size={16} /> {ct('Ranking')}</button>
             {/* itens DIRETOS: visíveis só em telas estreitas — os dropdowns ficavam
                 recortados dentro do scroller da nav (<=1160px) e sumiam no clique */}
@@ -694,6 +769,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             <button className={`ut-nav__item ut-nav__item--direct${tab === 'sbc' ? ' is-active' : ''}`} onClick={() => go('sbc')}><FlaskConical size={16} /> {ct('Desafios')}</button>
             <button className={`ut-nav__item ut-nav__item--direct${tab === 'store' ? ' is-active' : ''}`} onClick={() => go('store')}><Package size={16} /> {ct('Loja')}</button>
             <button className={`ut-nav__item ut-nav__item--direct${tab === 'mercado' ? ' is-active' : ''}`} onClick={() => go('mercado')}><ArrowLeftRight size={16} /> {ct('Mercado')}</button>
+            <button className={`ut-nav__item ut-nav__item--direct${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo')}</button>
           </div>
           <span style={{ flex: 1 }} />
           <div className="ut-res">
@@ -1231,12 +1307,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         );
       })()}
 
+      {tab === 'duelo' && (
+        <UtPanel label={<>{ct('Duelo Online')} <em>· {ct('PvP 1v1')}</em></>} icon={<Globe size={15} className="ut-panel__lead" />}
+          right={<span style={{ fontFamily: 'var(--ut-font-mono)' }}>{pvpNick}</span>}
+          info={ct('Enfrente o squad de outro jogador de verdade. Vale RP: seu elo vs o elo do rival.')}>
+          <UltimateDuel nick={pvpNick} squad={pvpSquad} ready={squadComplete} onPlay={startPvpMatch} />
+        </UtPanel>
+      )}
+
       {/* resultado da partida */}
       {result && (
         <Modal open onClose={() => setResult(null)} title={result.won ? ct('Vitória!') : ct('Derrota')} size="sm"
           footer={result.gaunt?.completed && result.gaunt.card
             ? <Button variant="primary" onClick={() => { const card = result.gaunt!.card!; setResult(null); setReveal([card]); }}>✦ {ct('Revelar carta Elite')}</Button>
-            : result.mode === 'gauntlet' && result.gaunt?.over
+            : result.mode === 'pvp' || (result.mode === 'gauntlet' && result.gaunt?.over)
               ? <Button variant="primary" onClick={() => setResult(null)}>{ct('Fechar')}</Button>
               : <><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { const md = result.mode; setResult(null); startMatch(md); }} disabled={!squadComplete}>{result.mode === 'gauntlet' ? ct('Continuar') : ct('Jogar de novo')}</Button></>}>
           <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
@@ -1275,14 +1359,16 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               </div>
             )}
             <div style={{ display: 'flex', gap: 16, fontSize: '0.9rem', fontWeight: 800 }}>
-              {result.mode === 'rivals'
-                ? <span style={{ color: result.outcome.eloDelta >= 0 ? '#16a34a' : '#dc2626' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>
+              {result.mode === 'rivals' || result.mode === 'pvp'
+                ? (result.repeat
+                    ? <span style={{ color: 'var(--ut-muted)' }}>{ct('resultado já contabilizado')}</span>
+                    : <span style={{ color: result.outcome.eloDelta >= 0 ? '#16a34a' : '#dc2626' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>)
                 : result.mode === 'gauntlet'
                   ? <span style={{ color: result.won ? '#0e9d5b' : '#b42318', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flame size={14} /> {result.gaunt?.wins ?? 0}/{GAUNTLET_TARGET}{result.won ? '' : ` · ${ct('run encerrado')}`}</span>
                   : <span style={{ color: 'var(--ut-muted)' }}>{ct('Amistoso · sem RP')}</span>}
               {result.outcome.credits > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#92600a' }}><Coins size={13} /> +{fmt(result.outcome.credits)}</span>}
             </div>
-            <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{result.mode === 'rivals' ? `${div.def.name} · ${state.profile.elo} RP` : result.mode === 'gauntlet' ? `${ct('Elite Gauntlet')} · ${ct('recorde')} ${state.profile.gauntlet.best}` : ct('Treino amistoso')}</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{result.mode === 'pvp' ? `${ct('Duelo vs')} ${result.oppName ?? '?'} · ${div.def.name} · ${state.profile.elo} RP` : result.mode === 'rivals' ? `${div.def.name} · ${state.profile.elo} RP` : result.mode === 'gauntlet' ? `${ct('Elite Gauntlet')} · ${ct('recorde')} ${state.profile.gauntlet.best}` : ct('Treino amistoso')}</span>
           </div>
         </Modal>
       )}
