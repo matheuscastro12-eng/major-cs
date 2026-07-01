@@ -641,6 +641,53 @@ body:has(.ut-live) {
 .ut-live .btn.ghost { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #e9edf3; }
 .ut-live .btn.ghost.active { background: rgba(236, 199, 95, 0.18); border-color: rgba(236, 199, 95, 0.5); color: var(--ut-gold-1); }
 
+/* ---------------- MOMENTUM AO VIVO ---------------- */
+.ut-mom { max-width: 980px; margin: 0 auto; padding: 2px 16px 10px; display: flex; align-items: center; gap: 14px; }
+.ut-mom__dots { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
+.ut-mom__dot {
+  width: 11px; height: 11px; border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background .25s, border-color .25s;
+}
+.ut-mom__dot.half { margin-left: 10px; }
+.ut-mom__dot.win { background: #22c55e; border-color: #16a34a; box-shadow: 0 0 8px rgba(34, 197, 94, 0.45); }
+.ut-mom__dot.loss { background: rgba(226, 59, 46, 0.75); border-color: rgba(226, 59, 46, 0.9); }
+.ut-mom__streak {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.7rem; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--ut-bar-dim); padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ut-mom__streak.fire-you { color: #22c55e; border-color: rgba(34, 197, 94, 0.5); background: rgba(34, 197, 94, 0.1); animation: ut-fire 1s ease-in-out infinite; }
+.ut-mom__streak.fire-opp { color: #ff6b5e; border-color: rgba(226, 59, 46, 0.5); background: rgba(226, 59, 46, 0.1); animation: ut-fire 1s ease-in-out infinite; }
+@keyframes ut-fire { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+/* killfeed rico (arma + selo HS) — só o Ultimate passa richFeed */
+.ut-live .kf-wpn { color: #8a93a2; font-size: 0.72rem; margin: 0 6px; letter-spacing: 0.3px; }
+.ut-live .kf-hs {
+  font-style: normal; font-weight: 900; font-size: 0.58rem; letter-spacing: 0.5px;
+  color: #ffd166; border: 1px solid rgba(255, 209, 102, 0.55); border-radius: 4px;
+  padding: 0 3px; margin-left: 4px; vertical-align: 1px;
+}
+
+/* ---------------- CONFETE (vitória) + SHAKE (derrota) ---------------- */
+.ut-confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.ut-confetti i {
+  position: absolute; top: -12px; display: block; border-radius: 2px; opacity: 0;
+  animation-name: ut-confetti-fall; animation-timing-function: ease-in; animation-iteration-count: 2;
+}
+@keyframes ut-confetti-fall {
+  0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(340px) rotate(var(--spin, 540deg)); opacity: 0.25; }
+}
+.ut-score-pop { animation: ut-score-pop .5s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+@keyframes ut-score-pop { 0% { transform: scale(0.4); opacity: 0; } 70% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+.ut-score-shake { animation: ut-score-shake .45s ease-in-out both; }
+@keyframes ut-score-shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-7px); } 30% { transform: translateX(6px); }
+  45% { transform: translateX(-4px); } 60% { transform: translateX(3px); } 75% { transform: translateX(-2px); }
+}
+
 /* ---------------- responsivo ---------------- */
 .ut-res { min-width: 0; }
 /* telas médias (tablet landscape / laptop 11-13"): a nav vai pra própria linha

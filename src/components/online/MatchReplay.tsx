@@ -48,6 +48,8 @@ export function MatchReplay({
   nowOffset = 0,
   lockedLive = false,
   initialDone = false,
+  onRound,
+  richFeed = false,
 }: {
   series: SeriesResult;
   teams: [TTeam, TTeam];
@@ -61,6 +63,8 @@ export function MatchReplay({
   nowOffset?: number; // skew servidor−cliente: relógio da sala = Date.now() + nowOffset
   lockedLive?: boolean;
   initialDone?: boolean;
+  onRound?: (roundsPlayed: number) => void; // progresso do mapa atual (Ultimate: barra de momentum)
+  richFeed?: boolean;                       // killfeed com arma + selo HS (opt-in)
 }) {
   const [mapIdx, setMapIdx] = useState(0);
   const [round, setRound] = useState(0);
@@ -72,6 +76,9 @@ export function MatchReplay({
     finishNotified.current = true;
     onFinish?.();
   }, [done, onFinish]);
+
+  // notifica o host a cada round exibido (opt-in; não muda nada nos outros modos)
+  useEffect(() => { onRound?.(round); }, [round, onRound]);
 
   useEffect(() => {
     if (done || startedAt) return;
@@ -197,7 +204,9 @@ export function MatchReplay({
                 <div key={i} className="rf-row">
                   <span className="kf-round">R{e.round}</span>
                   <span style={{ color: e.killerTeam === 0 ? '#6fb6ec' : '#f0b35c' }}>{idIndex.get(e.killerId)?.nick ?? '?'}</span>
-                  {e.headshot ? ' ◉ ' : ' ▸ '}
+                  {richFeed
+                    ? <span className="kf-wpn">[{e.weapon}{e.headshot ? <i className="kf-hs">HS</i> : null}]</span>
+                    : (e.headshot ? ' ◉ ' : ' ▸ ')}
                   <span style={{ color: e.victimTeam === 0 ? '#6fb6ec' : '#f0b35c' }}>{idIndex.get(e.victimId)?.nick ?? '?'}</span>
                 </div>
               ))}

@@ -43,6 +43,17 @@ import '../../styles/ultimate.css';
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 // codinomes das temporadas (cicla pela lista conforme season.n cresce)
 const SEASON_NAMES = ['Inception', 'Ascension', 'Dynasty', 'Legacy', 'Overtime', 'Eternal'];
+
+// confete da vitória: configs FIXAS (nada de Math.random no render — re-render
+// não pode reembaralhar as peças no meio da animação).
+const CONFETTI = Array.from({ length: 18 }, (_, i) => ({
+  left: (i * 53 + 11) % 100,
+  delay: ((i * 37) % 10) / 12,
+  dur: 1.6 + ((i * 29) % 10) / 9,
+  color: ['#ecc75f', '#c9a63c', '#22c55e', '#ffffff', '#e6b84c'][i % 5],
+  size: 5 + (i % 3) * 2,
+  spin: i % 2 === 0 ? 1 : -1,
+}));
 // chip de recurso: abrevia valores gigantes pra não estourar a nav.
 const fmtChip = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : fmt(n));
 
@@ -193,6 +204,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string };
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
+  const [liveRound, setLiveRound] = useState(0); // rounds já exibidos no replay (barra de momentum)
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
   const [onbForm, setOnbForm] = useState('standard');
   const [dailyOpen, setDailyOpen] = useState(false);
@@ -475,6 +487,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       resultData = { won, score, outcome, mode, divChange: ranked ? divisionChange(eloBefore, eloAfter) : 'same', divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName };
     }
     setResult(null);
+    setLiveRound(0);
     setLive({ series, teams: [userTeam, oppTeam], result: resultData, opp: oppFive, intro: true });
   };
 
@@ -602,6 +615,12 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         </div>
       );
     }
+    // momentum: sequência de rounds seguidos do mesmo lado (só o já exibido)
+    const shown = live.result.roundLog.slice(0, liveRound);
+    let streakLen = 0;
+    const streakSide = shown.length ? shown[shown.length - 1] : null;
+    for (let i = shown.length - 1; i >= 0 && shown[i] === streakSide; i--) streakLen++;
+    const onFire = streakSide !== null && streakLen >= 3;
     return (
       <div className="ut-root ut-live">
         <div className="ut-live__bar">
@@ -609,8 +628,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           <span className="ut-live__vs">{live.teams[0].name} <span style={{ color: 'var(--ut-gold-1)' }}>vs</span> {live.teams[1].name}</span>
           <span className="ut-live__badge"><span className="ut-live__dot" /> {ct('AO VIVO')} · {live.result.mapName}</span>
         </div>
+        <div className="ut-mom">
+          <div className="ut-mom__dots">
+            {live.result.roundLog.map((w, i) => (
+              <span key={i} className={`ut-mom__dot${i < liveRound ? (w === 0 ? ' win' : ' loss') : ''}${i === 12 ? ' half' : ''}`} />
+            ))}
+          </div>
+          <div className={`ut-mom__streak${onFire ? (streakSide === 0 ? ' fire-you' : ' fire-opp') : ''}`}>
+            {onFire
+              ? <><Flame size={13} strokeWidth={2.5} /> {streakSide === 0 ? live.teams[0].name : live.teams[1].name} · {streakLen} {ct('rounds seguidos')}</>
+              : <span style={{ opacity: 0.55 }}>{ct('MOMENTUM')}</span>}
+          </div>
+        </div>
         <div className="ut-live__stage">
-          <MatchReplay series={live.series} teams={live.teams} playbackSpeed={speed} canControlSpeed onPlaybackSpeedChange={setSpeed} onFinish={finishMatch} onClose={finishMatch} />
+          <MatchReplay series={live.series} teams={live.teams} playbackSpeed={speed} canControlSpeed onPlaybackSpeedChange={setSpeed} onFinish={finishMatch} onClose={finishMatch} onRound={setLiveRound} richFeed />
         </div>
       </div>
     );
@@ -1208,7 +1239,14 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             : result.mode === 'gauntlet' && result.gaunt?.over
               ? <Button variant="primary" onClick={() => setResult(null)}>{ct('Fechar')}</Button>
               : <><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { const md = result.mode; setResult(null); startMatch(md); }} disabled={!squadComplete}>{result.mode === 'gauntlet' ? ct('Continuar') : ct('Jogar de novo')}</Button></>}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+          <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+            {result.won && (
+              <div className="ut-confetti" aria-hidden>
+                {CONFETTI.map((c, i) => (
+                  <i key={i} style={{ left: `${c.left}%`, width: c.size, height: c.size * 1.6, background: c.color, animationDelay: `${c.delay}s`, animationDuration: `${c.dur}s`, ['--spin' as string]: `${c.spin * 540}deg` }} />
+                ))}
+              </div>
+            )}
             {result.divChange !== 'same' && (
               <div className={`ut-divchange ${result.divChange}`}>
                 {result.divChange === 'promoted' ? <><TrendingUp size={15} strokeWidth={2.5} /> {ct('PROMOVIDO')} · {result.divName}</> : <><TrendingUp size={15} strokeWidth={2.5} style={{ transform: 'scaleY(-1)' }} /> {ct('rebaixado')} · {result.divName}</>}
@@ -1217,7 +1255,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             {result.gaunt?.completed && (
               <div className="ut-divchange promoted"><Flame size={15} strokeWidth={2.5} /> {ct('GAUNTLET COMPLETO')} · 5/5</div>
             )}
-            <div style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
+            <div className={result.won ? 'ut-score-pop' : 'ut-score-shake'} style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
             {result.mapName && <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--ut-muted)', marginTop: -6 }}>{result.mapName}</div>}
             {result.roundLog.length > 0 && (
               <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 320 }}>
