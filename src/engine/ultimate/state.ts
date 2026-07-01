@@ -411,7 +411,7 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
   const wlNow = p.w + p.l;
   if (!s) {
     // 1ª vez: abre a season marcando o baseline de jogos (não paga nada).
-    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow, p.elo) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
+    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
   }
   if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: p.elo } };
   // só paga bônus se JOGOU nesta season (conta dormente não vira fonte de credits).
@@ -424,7 +424,10 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
     elo: newElo,
     streak: 0,
     credits: p.credits + credits,
-    season: startSeason(nowMs, wlNow, newElo), // novo baseline
+    // pico da nova season começa em STARTING_ELO (não em newElo) — senão o
+    // soft-reset já nasceria acima dos thresholds e liberaria re-resgate das
+    // faixas SEM jogar. O jogador precisa re-escalar na temporada nova.
+    season: startSeason(nowMs, wlNow), // novo baseline (peak = STARTING_ELO)
   };
   return { state: { ...state, profile }, result: { rolled: true, credits, newElo } };
 }

@@ -339,7 +339,7 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-tier.claimed { background: #f5f5f3; }
 .ut-tier__rp { font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.05rem; color: var(--ut-ink); }
 .ut-tier__rp span { font-size: 0.6rem; color: var(--ut-muted); }
-.ut-tier__name { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.8rem; letter-spacing: 0.5px; text-transform: uppercase; color: var(--ut-green-deep); }
+.ut-tier__name { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.8rem; letter-spacing: 0.5px; text-transform: uppercase; color: var(--ut-ink-2); }
 .ut-tier__reward { display: inline-flex; align-items: center; gap: 4px; font-family: var(--ut-font-mono); font-weight: 800; font-size: 0.7rem; color: #92600a; }
 .ut-tier__reward svg { color: var(--ut-amber); }
 .ut-tier__done { display: inline-flex; align-items: center; gap: 4px; color: var(--ut-green); font-weight: 800; font-size: 0.72rem; }
@@ -366,8 +366,8 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
   display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center;
   border: 1px solid rgba(255, 255, 255, 0.35); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
 }
-.ut-pack::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 12, 20, 0.02) 0%, rgba(10, 12, 20, 0.34) 100%); pointer-events: none; }
-.ut-pack__shine { position: absolute; inset: 0; background: radial-gradient(140px 90px at 50% -10px, rgba(255, 255, 255, 0.5), transparent 70%); pointer-events: none; }
+.ut-pack::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 10, 16, 0.34) 0%, rgba(8, 10, 16, 0.20) 42%, rgba(8, 10, 16, 0.48) 100%); pointer-events: none; }
+.ut-pack__shine { position: absolute; inset: 0; background: radial-gradient(140px 90px at 50% -10px, rgba(255, 255, 255, 0.28), transparent 70%); pointer-events: none; }
 .ut-pack__art { position: relative; z-index: 1; color: #fff; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3)); }
 .ut-pack__name { position: relative; z-index: 1; font-size: 1.05rem; font-weight: 900; color: #fff; letter-spacing: 0.3px; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
 .ut-pack__desc { position: relative; z-index: 1; font-size: 0.72rem; line-height: 1.35; color: rgba(255, 255, 255, 0.92); min-height: 32px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }

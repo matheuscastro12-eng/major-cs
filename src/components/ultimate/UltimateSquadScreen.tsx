@@ -299,9 +299,12 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     for (const k of uniq) if (index.get(k)?.rarity === 'icon') n++;
     return n;
   }, [state.inventory, index]);
+  // "únicas" p/ objetivos = JOGADORES distintos (por cardKey) — não os grupos
+  // carta+boost do club (senão evoluir uma duplicata inflaria a métrica).
+  const uniquePlayers = new Set(state.inventory.map((o) => o.cardKey)).size;
   const objectives = evaluateObjectives({
     wins: state.profile.w, packsOpened: state.profile.packSeedCounter,
-    uniqueCards, totalCards, squadOvr: avgOvr, chem: chem.total,
+    uniqueCards: uniquePlayers, totalCards, squadOvr: avgOvr, chem: chem.total,
     streak: state.profile.streak, iconsOwned, sbcDone: state.profile.sbcDone.length,
     peakElo: state.profile.peakElo,
   });
@@ -756,10 +759,11 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             {[1, 0, 2].map((idx) => {
               const p = rankedList[idx];
               if (!p) return null;
-              const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+              const MedalIcon = idx === 0 ? Crown : Medal;
+              const medalColor = idx === 0 ? '#caa53a' : idx === 1 ? '#9aa3ad' : '#cd7f32';
               return (
                 <div key={idx} style={{ textAlign: 'center', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--em-border,#2a3340)', background: idx === 0 ? 'rgba(232,193,112,0.1)' : 'var(--em-panel,#0f131a)', minWidth: 108, transform: idx === 0 ? 'scale(1.06)' : 'none' }}>
-                  <div style={{ fontSize: '1.4rem' }}>{medal}</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 2 }}><MedalIcon size={24} color={medalColor} /></div>
                   <PlayerAvatar nick={p.nick} size={40} />
                   <div style={{ fontWeight: 900, fontSize: '0.82rem', marginTop: 4 }}>{p.nick}</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{p.elo} RP</div>

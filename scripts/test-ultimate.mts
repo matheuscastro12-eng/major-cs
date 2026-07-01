@@ -526,6 +526,18 @@ test('claimSeasonReward: idempotente e imutável', () => {
   assert.ok(seasonTierById('s-ouro') && !seasonTierById('nope'));
 });
 
+test('applySeasonRollover: nova season nasce com peak=STARTING_ELO (sem re-resgate grátis)', () => {
+  const base = defaultUltimateState();
+  const started = { ...base, profile: { ...base.profile, elo: 1600, w: 5, l: 2, season: { startedAt: 0, endsAt: 1000, wl0: 0, peak: 1600, claimed: ['s-bronze', 's-prata', 's-ouro'] } } };
+  const r = applySeasonRollover(started, 2000); // nowMs > endsAt → rola
+  assert.ok(r.result.rolled);
+  assert.equal(r.state.profile.season!.peak, STARTING_ELO); // NÃO herda o newElo do soft-reset
+  assert.deepEqual(r.state.profile.season!.claimed, []);
+  // com peak=1000 nenhuma faixa (>=1050) fica reached → nada re-resgatável na hora
+  const tiers = evaluateSeasonTiers(r.state.profile.season!.peak!, r.state.profile.season!.claimed!);
+  assert.ok(tiers.every((t) => !t.reached));
+});
+
 test('migrateUltimate preenche season.peak/claimed', () => {
   const m = migrateUltimate({ profile: { season: { startedAt: 1, endsAt: 2 } } });
   assert.equal(m.profile.season!.peak, STARTING_ELO);
