@@ -314,3 +314,46 @@ export function equipTitle(state: UltimateState, slug: string | null): UltimateS
   if (slug !== null && !state.profile.titles.includes(slug)) return state;
   return { ...state, profile: { ...state.profile, equippedTitle: slug } };
 }
+
+// remove cartas do inventário (SBC/consumo) e limpa qualquer slot de squad que
+// as referenciava. Não mexe no lock das demais (que seguem corretas).
+export function removeOwnedCards(state: UltimateState, ids: string[]): UltimateState {
+  const set = new Set(ids);
+  const inventory = state.inventory.filter((o) => !set.has(o.id));
+  const squads = state.squads.map((sq) => ({
+    ...sq,
+    slots: sq.slots.map((s) => (s.ownedId && set.has(s.ownedId) ? { ...s, ownedId: null } : s)),
+  }));
+  return { ...state, inventory, squads };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Season (P5): janelas de 30 dias, rollover por RELÓGIO local no load. Soft-reset
+// do ELO (1000 + (elo-1000)*0.5), zera a sequência, paga bônus por pico. Puro.
+
+export const SEASON_DAYS = 30;
+
+export function startSeason(nowMs: number): { startedAt: number; endsAt: number } {
+  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000 };
+}
+
+export interface SeasonRollover { rolled: boolean; credits: number; newElo: number }
+
+export function applySeasonRollover(state: UltimateState, nowMs: number): { state: UltimateState; result: SeasonRollover } {
+  const s = state.profile.season;
+  if (!s) {
+    return { state: { ...state, profile: { ...state.profile, season: startSeason(nowMs) } }, result: { rolled: false, credits: 0, newElo: state.profile.elo } };
+  }
+  if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: state.profile.elo } };
+  const played = state.profile.w + state.profile.l > 0;
+  const credits = played ? 2000 + Math.max(0, Math.round((state.profile.peakElo - 1000) / 2)) : 0;
+  const newElo = Math.round(1000 + (state.profile.elo - 1000) * 0.5);
+  const profile: UltimateProfile = {
+    ...state.profile,
+    elo: newElo,
+    streak: 0,
+    credits: state.profile.credits + credits,
+    season: startSeason(nowMs),
+  };
+  return { state: { ...state, profile }, result: { rolled: true, credits, newElo } };
+}

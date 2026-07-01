@@ -14,6 +14,7 @@ import { activeSquad, type MatchOutcome, type OwnedCard } from '../../engine/ult
 import type { UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
+import { SBCS, checkSbc, type SbcDef } from '../../engine/ultimate/sbc';
 import { MatchReplay } from '../online/MatchReplay';
 import { buildOnlineTeam, buildPool, rankFor, type PoolPlayer } from '../online/onlineData';
 import { makeRng } from '../../engine/rng';
@@ -59,9 +60,9 @@ function UltCardView({ card, size = 132, count }: { card: UltCard; size?: number
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; dupSellValue: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter } = useUltimate();
+  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'store' | 'club' | 'squad' | 'ranked'>('store');
+  const [tab, setTab] = useState<'store' | 'club' | 'squad' | 'ranked' | 'sbc'>('store');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number } | null>(null);
@@ -70,6 +71,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [onbForm, setOnbForm] = useState('standard');
   const [dailyOpen, setDailyOpen] = useState(false);
   const [titlesOpen, setTitlesOpen] = useState(false);
+  const [sbcDef, setSbcDef] = useState<SbcDef | null>(null);
+  const [sbcSel, setSbcSel] = useState<string[]>([]);
+  const [seasonRoll, setSeasonRoll] = useState<{ credits: number; newElo: number } | null>(null);
   const [toast, setToast] = useState<string>('');
 
   const credits = state.profile.credits;
@@ -78,6 +82,12 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
   // garante um squad ativo ao abrir a aba Squad
   useEffect(() => { if (tab === 'squad') ensureSquad(); }, [tab, ensureSquad]);
+  // season: no mount, inicia/rola por relógio local; se rolou, mostra o modal
+  useEffect(() => {
+    const r = tickSeason();
+    if (r.rolled) setSeasonRoll({ credits: r.credits, newElo: r.newElo });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // reavalia títulos quando algum fato muda (vitórias, coleção, pico, sequência)
   useEffect(() => {
     const newly = syncTitles();
@@ -252,7 +262,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
       {/* tabs */}
       <div style={{ display: 'flex', gap: 6 }}>
-        {([['store', ct('Loja')], ['squad', ct('Squad')], ['ranked', ct('Ranqueada')], ['club', `${ct('Coleção')} (${totalCards})`]] as const).map(([id, label]) => (
+        {([['store', ct('Loja')], ['squad', ct('Squad')], ['ranked', ct('Ranqueada')], ['sbc', ct('Desafios')], ['club', `${ct('Coleção')} (${totalCards})`]] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} style={tabBtn(tab === id)}>{label}</button>
         ))}
       </div>
@@ -423,6 +433,73 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           </Modal>
         );
       })()}
+
+      {tab === 'sbc' && (
+        <DashCard title={`🧪 ${ct('Desafios (SBC)')}`}>
+          <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>
+            {ct('Monte times que cumpram os requisitos e troque cartas (inclusive duplicatas) por recompensas. As cartas usadas são consumidas.')}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
+            {SBCS.map((s) => (
+              <div key={s.id} style={{ borderRadius: 10, padding: 14, border: '1px solid var(--em-border,#2a3340)', background: 'var(--em-panel,#0f131a)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--em-text,#e6edf5)' }}>{s.name}</div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--em-muted,#8a99ab)', minHeight: 34 }}>{s.desc}</div>
+                <div style={{ fontSize: '0.74rem', fontWeight: 700 }}>
+                  {ct('Recompensa')}: {s.reward.credits ? <span style={{ color: '#e8c170' }}>🪙 {fmt(s.reward.credits)}</span> : null}
+                  {s.reward.card ? <span style={{ color: rarityInfo(s.reward.card).color, marginLeft: s.reward.credits ? 8 : 0 }}> {ct('carta')} {rarityInfo(s.reward.card).label}</span> : null}
+                </div>
+                <Button variant="primary" onClick={() => { setSbcDef(s); setSbcSel([]); }}>{ct('Fazer desafio')}</Button>
+              </div>
+            ))}
+          </div>
+        </DashCard>
+      )}
+
+      {/* submeter SBC */}
+      {sbcDef && (() => {
+        const sel = sbcSel.map((id) => { const o = state.inventory.find((x) => x.id === id); return o ? index.get(o.cardKey) : undefined; }).filter((c): c is UltCard => !!c);
+        const chk = checkSbc(sel, sbcDef.req);
+        const eligible = state.inventory.filter((o) => o.locked !== 'squad').map((o) => ({ o, card: index.get(o.cardKey) })).filter((x): x is { o: OwnedCard; card: UltCard } => !!x.card).sort((a, b) => b.card.ovr - a.card.ovr);
+        const toggle = (id: string) => setSbcSel((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : (cur.length < sbcDef.req.count ? [...cur, id] : cur));
+        const submit = () => { const r = submitSbc(sbcDef.id, sbcSel); if (r.ok) { setSbcDef(null); setSbcSel([]); if (r.grantedCard) setReveal([r.grantedCard]); flash(`✅ ${ct('Desafio concluído!')}${r.reward?.credits ? ` +${fmt(r.reward.credits)} 🪙` : ''}`); } else { flash(ct('Requisitos não cumpridos.')); } };
+        return (
+          <Modal open onClose={() => { setSbcDef(null); setSbcSel([]); }} title={`🧪 ${sbcDef.name}`} size="lg"
+            footer={<Button variant="primary" disabled={!chk.ok} onClick={submit}>{ct('Enviar')} ({sbcSel.length}/{sbcDef.req.count})</Button>}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              {chk.items.map((it, i) => (
+                <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 12, border: `1px solid ${it.ok ? '#5ed88a' : '#e58a8a'}`, color: it.ok ? '#5ed88a' : '#e58a8a' }}>{it.ok ? '✓' : '✗'} {it.label}</span>
+              ))}
+            </div>
+            {eligible.length === 0 ? (
+              <p className="muted small">{ct('Sem cartas livres. Abra pacotes ou tire cartas do squad.')}</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(108px,1fr))', gap: 8, maxHeight: 420, overflowY: 'auto', justifyItems: 'center' }}>
+                {eligible.map(({ o, card }) => {
+                  const on = sbcSel.includes(o.id);
+                  return (
+                    <button key={o.id} onClick={() => toggle(o.id)} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, outline: on ? '2px solid #5ed88a' : 'none', borderRadius: 10, opacity: on || sbcSel.length < sbcDef.req.count ? 1 : 0.5 }}>
+                      <UltCardView card={card} size={104} />
+                      {on && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: '0.7rem', fontWeight: 900, width: 18, height: 18, borderRadius: '50%', background: '#5ed88a', color: '#04120a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Modal>
+        );
+      })()}
+
+      {/* nova temporada */}
+      {seasonRoll && (
+        <Modal open onClose={() => setSeasonRoll(null)} title={`🗓️ ${ct('Nova temporada!')}`} size="sm"
+          footer={<Button variant="primary" onClick={() => setSeasonRoll(null)}>{ct('Continuar')}</Button>}>
+          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0' }}>
+            <p className="muted small" style={{ margin: 0 }}>{ct('A temporada virou. Seu RP foi suavizado pra manter a disputa acirrada e você levou um bônus de fim de temporada.')}</p>
+            <div style={{ fontSize: '0.95rem', fontWeight: 900 }}>{ct('Novo RP')}: <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{seasonRoll.newElo}</span></div>
+            {seasonRoll.credits > 0 && <div style={{ color: '#e8c170', fontWeight: 900 }}>🪙 +{fmt(seasonRoll.credits)}</div>}
+          </div>
+        </Modal>
+      )}
 
       {/* recompensa diária */}
       {dailyOpen && (

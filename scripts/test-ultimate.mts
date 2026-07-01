@@ -23,6 +23,8 @@ import { computeNextDaily } from '../src/engine/ultimate/daily.ts';
 import { evaluateTitles } from '../src/engine/ultimate/titles.ts';
 import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
 import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
+import { checkSbc } from '../src/engine/ultimate/sbc.ts';
+import { applySeasonRollover, removeOwnedCards } from '../src/engine/ultimate/state.ts';
 import {
   defaultUltimateState,
   grantCard,
@@ -324,6 +326,65 @@ test('pickStarterCards devolve 5 jogadores distintos', () => {
   const cards = pickStarterCards(cat, slotRoles('standard'), 76);
   assert.equal(cards.length, 5);
   assert.equal(new Set(cards.map((c) => c.playerId)).size, 5);
+});
+
+// ---------- SBC ----------
+function mkCard(o: Partial<UltCard> & { playerId: string }): UltCard {
+  return {
+    key: `${o.playerId}:${o.rarity ?? 'gold'}`, playerId: o.playerId, nick: o.playerId,
+    country: 'br', region: 'samerica', role: 'Rifler', teamOrigin: 'furia', teamOriginName: 'FURIA',
+    rarity: 'gold', ovr: 80, stats: { tiro: 80, mira: 80, reflexo: 80, visao: 80, clutch: 80, util: 80 }, ...o,
+  };
+}
+
+test('checkSbc valida count, mesma org, OVR médio e tier mínimo', () => {
+  // 3 mesma org → ok
+  const org = [mkCard({ playerId: 'a' }), mkCard({ playerId: 'b' }), mkCard({ playerId: 'c' })];
+  assert.equal(checkSbc(org, { count: 3, sameOrg: true }).ok, true);
+  // uma de org diferente → falha
+  const mixed = [mkCard({ playerId: 'a' }), mkCard({ playerId: 'b', teamOrigin: 'navi' }), mkCard({ playerId: 'c' })];
+  assert.equal(checkSbc(mixed, { count: 3, sameOrg: true }).ok, false);
+  // count errado → falha
+  assert.equal(checkSbc(org, { count: 5, sameOrg: true }).ok, false);
+  // OVR médio
+  const hi = [mkCard({ playerId: 'a', ovr: 90 }), mkCard({ playerId: 'b', ovr: 88 })];
+  assert.equal(checkSbc(hi, { count: 2, minOvrAvg: 85 }).ok, true);
+  assert.equal(checkSbc(hi, { count: 2, minOvrAvg: 95 }).ok, false);
+  // tier mínimo (elite=5); gold=3 falha
+  assert.equal(checkSbc([mkCard({ playerId: 'a', rarity: 'elite', ovr: 85 })], { count: 1, minTier: 5 }).ok, true);
+  assert.equal(checkSbc([mkCard({ playerId: 'a', rarity: 'gold' })], { count: 1, minTier: 5 }).ok, false);
+});
+
+// ---------- season ----------
+test('applySeasonRollover: inicia season; não rola antes do fim; rola e soft-reseta depois', () => {
+  const t0 = 1_000_000_000_000;
+  let st = defaultUltimateState();
+  // sem season → inicia
+  const a = applySeasonRollover(st, t0);
+  assert.equal(a.result.rolled, false);
+  assert.ok(a.state.profile.season && a.state.profile.season.endsAt > t0);
+  st = a.state;
+  // antes do fim → nada
+  assert.equal(applySeasonRollover(st, t0 + 1000).result.rolled, false);
+  // sobe ELO e joga, depois estoura o prazo → soft-reset 1000+(elo-1000)*0.5
+  st = { ...st, profile: { ...st.profile, elo: 1600, peakElo: 1600, w: 3 } };
+  const past = st.profile.season!.endsAt + 1000;
+  const b = applySeasonRollover(st, past);
+  assert.equal(b.result.rolled, true);
+  assert.equal(b.state.profile.elo, 1300); // 1000 + 600*0.5
+  assert.equal(b.state.profile.streak, 0);
+  assert.ok(b.result.credits > 0);
+  assert.ok(b.state.profile.season!.endsAt > past); // nova season
+});
+
+test('removeOwnedCards remove do inventário e limpa slot do squad', () => {
+  let st = defaultUltimateState();
+  st = grantCard(st, 'p1:gold', 'pack', { id: 'o1', at: 1 });
+  st = ensureSquad(st, 'standard', slotRoles('standard'));
+  st = setSlot(st, 0, 'o1');
+  st = removeOwnedCards(st, ['o1']);
+  assert.equal(st.inventory.length, 0);
+  assert.equal(activeSquad(st)!.slots[0].ownedId, null);
 });
 
 test('migrateUltimate: lixo vira default; parcial é preenchido; inventário válido preservado', () => {

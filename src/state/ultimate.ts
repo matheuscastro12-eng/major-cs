@@ -12,9 +12,11 @@ import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/format
 import { pickStarterCards } from '../engine/ultimate/cards';
 import { dateKey } from '../engine/ultimate/daily';
 import { evaluateTitles } from '../engine/ultimate/titles';
+import { checkSbc, sbcById, type SbcReward } from '../engine/ultimate/sbc';
 import {
   addCredits as _addCredits,
   applyMatchResult as _applyMatchResult,
+  applySeasonRollover as _applySeasonRollover,
   claimDaily as _claimDaily,
   defaultUltimateState,
   ensureSquad as _ensureSquad,
@@ -22,6 +24,7 @@ import {
   grantCard as _grantCard,
   mergeTitles as _mergeTitles,
   migrateUltimate,
+  removeOwnedCards as _removeOwnedCards,
   sellCard as _sellCard,
   setFormation as _setFormation,
   setSlot as _setSlot,
@@ -29,6 +32,7 @@ import {
   type AcquiredVia,
   type DailyClaim,
   type MatchOutcome,
+  type SeasonRollover,
   type UltimateState,
 } from '../engine/ultimate/state';
 
@@ -83,6 +87,9 @@ interface UltimateStore {
   syncTitles: () => string[]; // slugs recém-conquistados
   equipTitle: (slug: string | null) => void;
   claimStarter: (formationId: string) => UltCard[];
+  // SBC + season (P5)
+  submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
+  tickSeason: () => SeasonRollover;
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -200,6 +207,39 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     persist(s);
     set({ state: s });
     return cards;
+  },
+  submitSbc: (sbcId, ownedIds) => {
+    const def = sbcById(sbcId);
+    if (!def) return { ok: false, reason: 'unknown_sbc' };
+    const st = get().state;
+    const idx = ultimateIndex();
+    const owned = ownedIds.map((id) => st.inventory.find((o) => o.id === id)).filter((o): o is NonNullable<typeof o> => !!o);
+    if (owned.length !== ownedIds.length) return { ok: false, reason: 'missing' };
+    if (owned.some((o) => o.locked === 'squad')) return { ok: false, reason: 'locked' };
+    const cards = owned.map((o) => idx.get(o.cardKey)).filter((c): c is UltCard => !!c);
+    if (!checkSbc(cards, def.req).ok) return { ok: false, reason: 'requirements' };
+    // consome as cartas + paga a recompensa
+    let s = _removeOwnedCards(st, ownedIds);
+    if (def.reward.credits) s = _addCredits(s, def.reward.credits);
+    let grantedCard: UltCard | undefined;
+    if (def.reward.card) {
+      const pool = ultimateCatalog().filter((c) => c.rarity === def.reward.card);
+      if (pool.length) {
+        grantedCard = pool[Math.floor(Math.random() * pool.length)];
+        const id = `sbc_${Math.random().toString(36).slice(2, 9)}`;
+        s = _grantCard(s, grantedCard.key, 'sbc', { id });
+      }
+    }
+    s = { ...s, profile: { ...s.profile, sbcDone: [...s.profile.sbcDone, def.id] } };
+    persist(s);
+    set({ state: s });
+    return { ok: true, reward: def.reward, grantedCard };
+  },
+  tickSeason: () => {
+    const r = _applySeasonRollover(get().state, Date.now());
+    persist(r.state);
+    set({ state: r.state });
+    return r.result;
   },
   setState: (s) => {
     persist(s);
