@@ -35,6 +35,7 @@ import {
   Tag, ArrowLeft, Sparkles, Plus, X, Target,
 } from 'lucide-react';
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
+import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
 import '../../styles/ultimate.css';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
@@ -176,7 +177,7 @@ function UltCardView({ card, size = 132, count, qs, evo = 0 }: { card: UltCard; 
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard } = useUltimate();
+  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -318,6 +319,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     if (r.ok) {
       if (r.grantedCard) setReveal([r.grantedCard]);
       flash(`✅ ${ct('Objetivo concluído')}: ${o.def.name}${r.reward?.credits ? ` · +${fmt(r.reward.credits)} 🪙` : ''}`, 2400);
+      syncTitles();
+    }
+  };
+
+  // ── recompensas de temporada (ladder de RP) ──
+  const seasonPeak = state.profile.season?.peak ?? state.profile.elo;
+  const seasonClaimedIds = state.profile.season?.claimed ?? [];
+  const seasonTiers = evaluateSeasonTiers(seasonPeak, seasonClaimedIds);
+  const seasonClaimable = seasonTiers.filter((t) => t.reached && !t.claimed);
+  const claimSeason = (t: (typeof seasonTiers)[number]) => {
+    const r = claimSeasonReward(t.tier.id);
+    if (r.ok) {
+      if (r.grantedCard) setReveal([r.grantedCard]);
+      flash(`🏆 ${ct('Recompensa de temporada')}: ${t.tier.name}${r.reward?.credits ? ` · +${fmt(r.reward.credits)} 🪙` : ''}`, 2400);
       syncTitles();
     }
   };
@@ -671,6 +686,26 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                         : claimable ? <button className="ut-obj__claim" onClick={() => claimObj(o)}>{ct('Resgatar')}</button>
                         : <span className="ut-obj__count">{o.value}/{o.def.target}</span>}
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </UtPanel>
+
+          <UtPanel label={ct('Recompensas da Temporada')} icon={<Trophy size={15} className="ut-panel__lead" />} accent="green"
+            right={seasonClaimable.length > 0 ? <span style={{ color: 'var(--ut-green-deep)' }}>{seasonClaimable.length} {ct('pra resgatar')}</span> : `${ct('pico')} ${seasonPeak} RP`}
+            info={ct('Alcance faixas de RP na temporada pra liberar prêmios. Reseta a cada temporada.')}>
+            <div className="ut-ladder">
+              {seasonTiers.map((t) => {
+                const claimable = t.reached && !t.claimed;
+                return (
+                  <div key={t.tier.id} className={`ut-tier${t.reached ? ' reached' : ''}${t.claimed ? ' claimed' : ''}${claimable ? ' claimable' : ''}`}>
+                    <div className="ut-tier__rp">{t.tier.rp} <span>RP</span></div>
+                    <div className="ut-tier__name">{t.tier.name}</div>
+                    <div className="ut-tier__reward"><Coins size={12} /> {fmt(t.tier.reward.credits ?? 0)}{t.tier.reward.card ? ` +${rarityInfo(t.tier.reward.card).label}` : ''}</div>
+                    {t.claimed ? <span className="ut-tier__done"><Check size={12} strokeWidth={3} /> {ct('resgatado')}</span>
+                      : claimable ? <button className="ut-obj__claim" onClick={() => claimSeason(t)}>{ct('Resgatar')}</button>
+                      : <span className="ut-tier__lock"><Lock size={11} /> {seasonPeak}/{t.tier.rp}</span>}
                   </div>
                 );
               })}

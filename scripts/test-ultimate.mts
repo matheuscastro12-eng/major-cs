@@ -25,7 +25,8 @@ import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
 import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
 import { checkSbc } from '../src/engine/ultimate/sbc.ts';
 import { buildAiLadder, buildBazaar } from '../src/engine/ultimate/bazaar.ts';
-import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS } from '../src/engine/ultimate/state.ts';
+import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS, claimSeasonReward, startSeason, STARTING_ELO } from '../src/engine/ultimate/state.ts';
+import { evaluateSeasonTiers, seasonTierById } from '../src/engine/ultimate/seasonRewards.ts';
 import { evaluateObjectives, objectiveById, OBJECTIVES } from '../src/engine/ultimate/objectives.ts';
 import {
   defaultUltimateState,
@@ -499,6 +500,39 @@ test('evolveCard: sobe boost gastando EVO_COSTS, respeita teto e saldo', () => {
   const broke = grantCard(spendCredits(defaultUltimateState(), STARTING_CREDITS).state, 'p2:gold', 'pack', { id: 'c2' });
   assert.equal(evolveCard(broke, 'c2').reason, 'insufficient');
   assert.equal(evolveCard(s0, 'nope').reason, 'missing');
+});
+
+test('evaluateSeasonTiers: reached pelo pico, claimed pela lista', () => {
+  const tiers = evaluateSeasonTiers(1300, ['s-bronze']);
+  assert.ok(tiers.find((t) => t.tier.id === 's-bronze')!.reached);
+  assert.ok(tiers.find((t) => t.tier.id === 's-bronze')!.claimed);
+  assert.ok(tiers.find((t) => t.tier.id === 's-ouro')!.reached && !tiers.find((t) => t.tier.id === 's-ouro')!.claimed); // rp 1300
+  assert.ok(!tiers.find((t) => t.tier.id === 's-platina')!.reached); // rp 1500
+});
+
+test('applyMatchResult atualiza o pico da season (season.peak)', () => {
+  const s = { ...defaultUltimateState(), profile: { ...defaultUltimateState().profile, season: startSeason(0, 0, 1000) } };
+  const r = applyMatchResult(s, true, 1400); // vitória vs elo alto → sobe
+  assert.ok(r.state.profile.season!.peak! > 1000);
+  assert.ok(r.state.profile.season!.peak! >= r.state.profile.elo);
+});
+
+test('claimSeasonReward: idempotente e imutável', () => {
+  const s = { ...defaultUltimateState(), profile: { ...defaultUltimateState().profile, season: startSeason(0, 0, 1000) } };
+  const s1 = claimSeasonReward(s, 's-bronze');
+  assert.deepEqual(s1.profile.season!.claimed, ['s-bronze']);
+  assert.deepEqual(s.profile.season!.claimed, []);
+  assert.equal(claimSeasonReward(s1, 's-bronze'), s1); // no-op
+  assert.ok(seasonTierById('s-ouro') && !seasonTierById('nope'));
+});
+
+test('migrateUltimate preenche season.peak/claimed', () => {
+  const m = migrateUltimate({ profile: { season: { startedAt: 1, endsAt: 2 } } });
+  assert.equal(m.profile.season!.peak, STARTING_ELO);
+  assert.deepEqual(m.profile.season!.claimed, []);
+  const kept = migrateUltimate({ profile: { season: { startedAt: 1, endsAt: 2, peak: 1234, claimed: ['s-bronze', 7] } } });
+  assert.equal(kept.profile.season!.peak, 1234);
+  assert.deepEqual(kept.profile.season!.claimed, ['s-bronze']);
 });
 
 test('migrateUltimate sanitiza boost do inventário (clamp + descarta inválido)', () => {

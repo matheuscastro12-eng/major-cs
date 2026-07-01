@@ -328,6 +328,24 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 }
 .ut-obj__claim:hover { filter: brightness(1.05); }
 
+/* ---------------- LADDER DE TEMPORADA ---------------- */
+.ut-ladder { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.ut-tier {
+  border: 1px solid var(--ut-line); border-radius: 12px; padding: 11px 12px; background: #fdfdfc;
+  display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; opacity: 0.72;
+}
+.ut-tier.reached { opacity: 1; }
+.ut-tier.claimable { border-color: rgba(18, 183, 106, 0.5); background: #f1fbf6; box-shadow: 0 2px 12px rgba(18, 183, 106, 0.16); }
+.ut-tier.claimed { background: #f5f5f3; }
+.ut-tier__rp { font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.05rem; color: var(--ut-ink); }
+.ut-tier__rp span { font-size: 0.6rem; color: var(--ut-muted); }
+.ut-tier__name { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.8rem; letter-spacing: 0.5px; text-transform: uppercase; color: var(--ut-green-deep); }
+.ut-tier__reward { display: inline-flex; align-items: center; gap: 4px; font-family: var(--ut-font-mono); font-weight: 800; font-size: 0.7rem; color: #92600a; }
+.ut-tier__reward svg { color: var(--ut-amber); }
+.ut-tier__done { display: inline-flex; align-items: center; gap: 4px; color: var(--ut-green); font-weight: 800; font-size: 0.72rem; }
+.ut-tier__lock { display: inline-flex; align-items: center; gap: 3px; color: var(--ut-muted); font-family: var(--ut-font-mono); font-weight: 700; font-size: 0.7rem; }
+.ut-tier__lock svg { color: var(--ut-muted); }
+
 /* botões utilitários */
 .ut-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;

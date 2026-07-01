@@ -41,7 +41,7 @@ export interface UltimateProfile {
   equippedTitle: string | null;
   // wl0 = w+l no INÍCIO da season (pra saber se jogou nela e não pagar bônus
   // de fim de temporada a uma conta dormente — ver applySeasonRollover).
-  season: { startedAt: number; endsAt: number; wl0?: number } | null;
+  season: { startedAt: number; endsAt: number; wl0?: number; peak?: number; claimed?: string[] } | null;
   sbcDone: string[];
   objectivesClaimed: string[]; // ids de objetivos/missões já resgatados (profundidade)
 }
@@ -106,6 +106,14 @@ export function evolveCard(
   if (!spent.ok) return { ok: false, state, reason: 'insufficient' };
   const inventory = spent.state.inventory.map((o) => (o.id === ownedId ? { ...o, boost: boost + 1 } : o));
   return { ok: true, state: { ...spent.state, inventory }, cost, newBoost: boost + 1 };
+}
+
+// marca uma faixa da ladder de temporada como resgatada (idempotente). A
+// validação de "pico atingido" + recompensa ficam na store (que tem catálogo).
+export function claimSeasonReward(state: UltimateState, id: string): UltimateState {
+  const s = state.profile.season;
+  if (!s || (s.claimed ?? []).includes(id)) return state;
+  return { ...state, profile: { ...state.profile, season: { ...s, claimed: [...(s.claimed ?? []), id] } } };
 }
 
 // gerador de id — usa crypto.randomUUID no runtime; tests passam id explícito.
@@ -217,7 +225,7 @@ export function migrateUltimate(raw: unknown): UltimateState {
     titles: Array.isArray(p.titles) ? p.titles.filter((x): x is string => typeof x === 'string') : [],
     equippedTitle: typeof p.equippedTitle === 'string' ? p.equippedTitle : null,
     season: p.season && typeof p.season === 'object' && typeof p.season.startedAt === 'number'
-      ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0) }
+      ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [] }
       : null,
     sbcDone: Array.isArray(p.sbcDone) ? p.sbcDone.filter((x): x is string => typeof x === 'string') : [],
     objectivesClaimed: Array.isArray(p.objectivesClaimed) ? p.objectivesClaimed.filter((x): x is string => typeof x === 'string') : [],
@@ -335,6 +343,8 @@ export function applyMatchResult(state: UltimateState, won: boolean, oppElo: num
     l: p.l + (won ? 0 : 1),
     streak: won ? p.streak + 1 : 0,
     credits: p.credits + outcome.credits,
+    // pico da TEMPORADA (p/ ladder de recompensas) — distinto do peakElo all-time
+    season: p.season ? { ...p.season, peak: Math.max(p.season.peak ?? p.elo, elo) } : p.season,
   };
   return { state: { ...state, profile }, outcome };
 }
@@ -389,8 +399,8 @@ export function removeOwnedCards(state: UltimateState, ids: string[]): UltimateS
 
 export const SEASON_DAYS = 30;
 
-export function startSeason(nowMs: number, wl0 = 0): { startedAt: number; endsAt: number; wl0: number } {
-  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0 };
+export function startSeason(nowMs: number, wl0 = 0, peak = STARTING_ELO): { startedAt: number; endsAt: number; wl0: number; peak: number; claimed: string[] } {
+  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0, peak, claimed: [] };
 }
 
 export interface SeasonRollover { rolled: boolean; credits: number; newElo: number }
@@ -401,7 +411,7 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
   const wlNow = p.w + p.l;
   if (!s) {
     // 1ª vez: abre a season marcando o baseline de jogos (não paga nada).
-    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
+    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow, p.elo) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
   }
   if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: p.elo } };
   // só paga bônus se JOGOU nesta season (conta dormente não vira fonte de credits).
@@ -414,7 +424,7 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
     elo: newElo,
     streak: 0,
     credits: p.credits + credits,
-    season: startSeason(nowMs, wlNow), // novo baseline
+    season: startSeason(nowMs, wlNow, newElo), // novo baseline
   };
   return { state: { ...state, profile }, result: { rolled: true, credits, newElo } };
 }

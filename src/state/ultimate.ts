@@ -14,10 +14,13 @@ import { dateKey } from '../engine/ultimate/daily';
 import { evaluateTitles } from '../engine/ultimate/titles';
 import { checkSbc, sbcById, type SbcReward } from '../engine/ultimate/sbc';
 import { objectiveById } from '../engine/ultimate/objectives';
+import { seasonTierById } from '../engine/ultimate/seasonRewards';
 import {
   addCredits as _addCredits,
   markObjectiveClaimed as _markObjectiveClaimed,
+  claimSeasonReward as _claimSeasonReward,
   evolveCard as _evolveCard,
+  STARTING_ELO,
   applyMatchResult as _applyMatchResult,
   applySeasonRollover as _applySeasonRollover,
   claimDaily as _claimDaily,
@@ -99,6 +102,8 @@ interface UltimateStore {
   claimObjective: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
   // evolução de cartas
   evolveCard: (ownedId: string) => { ok: boolean; cost?: number; newBoost?: number; reason?: string };
+  // recompensas de temporada (ladder de RP)
+  claimSeasonReward: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -283,6 +288,27 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     const r = _evolveCard(get().state, ownedId);
     if (r.ok) { persist(r.state); set({ state: r.state }); }
     return { ok: r.ok, cost: r.cost, newBoost: r.newBoost, reason: r.reason };
+  },
+  claimSeasonReward: (id) => {
+    const def = seasonTierById(id);
+    if (!def) return { ok: false };
+    const st = get().state;
+    const s = st.profile.season;
+    if (!s || (s.peak ?? STARTING_ELO) < def.rp || (s.claimed ?? []).includes(id)) return { ok: false };
+    let ns = _claimSeasonReward(st, id);
+    if (def.reward.credits) ns = _addCredits(ns, def.reward.credits);
+    let grantedCard: UltCard | undefined;
+    if (def.reward.card) {
+      const pool = ultimateCatalog().filter((c) => c.rarity === def.reward.card);
+      if (pool.length) {
+        grantedCard = pool[Math.floor(Math.random() * pool.length)];
+        const gid = `season_${Math.random().toString(36).slice(2, 9)}`;
+        ns = _grantCard(ns, grantedCard.key, 'reward', { id: gid });
+      }
+    }
+    persist(ns);
+    set({ state: ns });
+    return { ok: true, reward: def.reward, grantedCard };
   },
   setState: (s) => {
     persist(s);
