@@ -1014,7 +1014,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             footer={<Button variant="primary" disabled={!chk.ok} onClick={submit}>{ct('Enviar')} ({sbcSel.length}/{sbcDef.req.count})</Button>}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
               {chk.items.map((it, i) => (
-                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 12, border: `1px solid ${it.ok ? '#16a34a' : '#dc2626'}`, color: it.ok ? '#16a34a' : '#dc2626' }}>{it.ok ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />} {it.label}</span>
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999, background: it.ok ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.08)', border: `1px solid ${it.ok ? 'rgba(22,163,74,0.4)' : 'rgba(220,38,38,0.4)'}`, color: it.ok ? '#0e9d5b' : '#b42318' }}>{it.ok ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />} {it.label}</span>
               ))}
             </div>
             {eligible.length === 0 ? (
@@ -1052,16 +1052,17 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       {dailyOpen && (
         <Modal open onClose={() => setDailyOpen(false)} title={ct('Recompensa diária')} size="md"
           footer={<Button variant="primary" disabled={!daily.canClaim} onClick={() => { const r = claimDaily(); if (r.claimed) flash(`${ct('Dia')} ${r.day} · +${fmt(r.credits)} 🪙`); setDailyOpen(false); }}>{daily.canClaim ? `${ct('Resgatar dia')} ${daily.day}` : ct('Volte amanhã')}</Button>}>
-          <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>{ct('Volte todo dia pra manter a sequência. Faltar um dia reseta pro dia 1.')}</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
-            {DAILY_TABLE.map((e) => {
+          <p className="muted small" style={{ marginTop: -2, marginBottom: 12 }}>{ct('Volte todo dia pra manter a sequência. Faltar um dia reseta pro dia 1.')}</p>
+          <div className="ut-daily__grid" style={{ padding: 0 }}>
+            {DAILY_TABLE.map((e, i) => {
               const done = daily.canClaim ? e.day < daily.day : e.day <= state.profile.daily.streakDay;
               const isCur = daily.canClaim && e.day === daily.day;
+              const DayIcon = [Coins, Wallet, Gift, Star, Gem, Trophy, Crown][i] ?? Coins;
               return (
-                <div key={e.day} style={{ padding: '8px 4px', borderRadius: 8, textAlign: 'center', border: `1px solid ${isCur ? '#92600a' : 'var(--em-border,#2a3340)'}`, background: isCur ? 'rgba(232,193,112,0.14)' : done ? 'rgba(94,216,138,0.08)' : 'transparent', opacity: done ? 0.75 : 1 }}>
-                  <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--em-muted,#8a99ab)' }}>{ct('Dia')} {e.day}</div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.72rem', fontWeight: 900, color: isCur ? '#92600a' : 'var(--em-text,#e6edf5)' }}><Coins size={11} /> {fmt(e.credits)}</div>
-                  {done && <div style={{ color: '#16a34a', display: 'flex', justifyContent: 'center' }}><Check size={12} strokeWidth={3} /></div>}
+                <div key={e.day} className={`ut-day${isCur ? ' is-current' : ''}${done ? ' is-done' : ''}`}>
+                  <div className="ut-day__top"><span>D{e.day}</span>{done ? <Check size={13} strokeWidth={3} /> : <Lock size={12} />}</div>
+                  <span className="ut-day__icon"><DayIcon size={22} strokeWidth={1.6} /></span>
+                  <div className="ut-day__reward"><Coins size={12} /> {fmt(e.credits)}</div>
                 </div>
               );
             })}
@@ -1080,11 +1081,14 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div key={t.slug} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: `1px solid ${owned ? `${t.color}55` : 'var(--em-border,#2a3340)'}`, background: owned ? `${t.color}10` : 'transparent', opacity: owned ? 1 : 0.55 }}>
                   <span style={{ fontWeight: 900, color: owned ? inkOnLight(t.color) : 'var(--em-muted,#8a99ab)', fontSize: '0.88rem', minWidth: 150 }}>{t.label}</span>
                   <span style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', flex: 1 }}>{t.desc}</span>
-                  {owned ? (isEq ? <span style={{ fontSize: '0.68rem', fontWeight: 800, color: inkOnLight(t.color) }}>{ct('equipado')}</span> : <button onClick={() => equipTitle(t.slug)} style={sellBtn}>{ct('equipar')}</button>) : <Lock size={13} style={{ color: 'var(--ut-muted)' }} />}
+                  {owned ? (isEq
+                    ? <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '3px 11px', borderRadius: 999, background: 'rgba(201,166,60,0.16)', border: '1px solid rgba(201,166,60,0.4)', color: '#92600a' }}>{ct('equipado')}</span>
+                    : <button onClick={() => equipTitle(t.slug)} className="ut-btn ut-btn--ghost" style={{ padding: '4px 12px', fontSize: '0.72rem' }}>{ct('equipar')}</button>)
+                    : <Lock size={13} style={{ color: 'var(--ut-muted)' }} />}
                 </div>
               );
             })}
-            {state.profile.equippedTitle && <button onClick={() => equipTitle(null)} style={{ ...sellBtn, alignSelf: 'flex-start' }}>{ct('desequipar')}</button>}
+            {state.profile.equippedTitle && <button onClick={() => equipTitle(null)} className="ut-btn ut-btn--ghost" style={{ alignSelf: 'flex-start', padding: '5px 13px', fontSize: '0.74rem' }}>{ct('desequipar')}</button>}
           </div>
         </Modal>
       )}
