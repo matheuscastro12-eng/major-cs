@@ -3,6 +3,7 @@
 // 100% testável. Ver docs-but-map.md §4/§6.
 
 import { quickSellValue } from './quicksell';
+import { computeNextDaily, dailyCredits } from './daily';
 import type { UltCard } from './cards';
 import type { Role } from '../../types';
 
@@ -280,4 +281,36 @@ export function applyMatchResult(state: UltimateState, won: boolean, oppElo: num
     credits: p.credits + outcome.credits,
   };
   return { state: { ...state, profile }, outcome };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily reward + títulos (P4). Puros.
+
+export interface DailyClaim { claimed: boolean; day: number; credits: number; wasReset: boolean }
+
+export function claimDaily(state: UltimateState, todayKey: string): { state: UltimateState; result: DailyClaim } {
+  const st = computeNextDaily(state.profile.daily.streakDay, state.profile.daily.lastClaim, todayKey);
+  if (!st.canClaim) return { state, result: { claimed: false, day: st.day, credits: 0, wasReset: false } };
+  const credits = dailyCredits(st.day);
+  const profile: UltimateProfile = {
+    ...state.profile,
+    credits: state.profile.credits + credits,
+    daily: { lastClaim: todayKey, streakDay: st.day },
+  };
+  return { state: { ...state, profile }, result: { claimed: true, day: st.day, credits, wasReset: st.wasReset } };
+}
+
+// funde os títulos conquistados (união); auto-equipa o 1º título de todos.
+export function mergeTitles(state: UltimateState, earned: string[]): { state: UltimateState; newly: string[] } {
+  const have = new Set(state.profile.titles);
+  const newly = earned.filter((s) => !have.has(s));
+  if (!newly.length) return { state, newly: [] };
+  const titles = [...state.profile.titles, ...newly];
+  const equippedTitle = state.profile.equippedTitle ?? newly[0];
+  return { state: { ...state, profile: { ...state.profile, titles, equippedTitle } }, newly };
+}
+
+export function equipTitle(state: UltimateState, slug: string | null): UltimateState {
+  if (slug !== null && !state.profile.titles.includes(slug)) return state;
+  return { ...state, profile: { ...state.profile, equippedTitle: slug } };
 }

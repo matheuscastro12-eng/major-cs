@@ -123,3 +123,18 @@ function niceRound(n: number): number {
   if (n < 100000) return Math.round(n / 2500) * 2500;
   return Math.round(n / 25000) * 25000;
 }
+
+// 5 cartas iniciais (onboarding): uma por função da formação, OVR modesto e
+// jogadores distintos. Fallback pra qualquer não-usado se faltar da função.
+export function pickStarterCards(catalog: UltCard[], roles: Role[], targetOvr = 76): UltCard[] {
+  const used = new Set<string>();
+  const out: UltCard[] = [];
+  const closeness = (c: UltCard) => Math.abs(c.ovr - targetOvr);
+  for (const role of roles) {
+    const fits = catalog.filter((c) => !used.has(c.playerId) && (c.role === role || role === 'Rifler' || c.role === 'Rifler'));
+    const pool = fits.length ? fits : catalog.filter((c) => !used.has(c.playerId));
+    const cand = pool.slice().sort((a, b) => closeness(a) - closeness(b))[0];
+    if (cand) { used.add(cand.playerId); out.push(cand); }
+  }
+  return out;
+}

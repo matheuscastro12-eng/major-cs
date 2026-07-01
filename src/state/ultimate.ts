@@ -9,18 +9,25 @@ import { makeRng } from '../engine/rng';
 import { buildCatalog, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { packById, rollPack } from '../engine/ultimate/packs';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
+import { pickStarterCards } from '../engine/ultimate/cards';
+import { dateKey } from '../engine/ultimate/daily';
+import { evaluateTitles } from '../engine/ultimate/titles';
 import {
   addCredits as _addCredits,
   applyMatchResult as _applyMatchResult,
+  claimDaily as _claimDaily,
   defaultUltimateState,
   ensureSquad as _ensureSquad,
+  equipTitle as _equipTitle,
   grantCard as _grantCard,
+  mergeTitles as _mergeTitles,
   migrateUltimate,
   sellCard as _sellCard,
   setFormation as _setFormation,
   setSlot as _setSlot,
   spendCredits as _spendCredits,
   type AcquiredVia,
+  type DailyClaim,
   type MatchOutcome,
   type UltimateState,
 } from '../engine/ultimate/state';
@@ -71,6 +78,11 @@ interface UltimateStore {
   setFormation: (formationId: string) => void;
   // ranqueada vs IA (P3)
   recordMatch: (won: boolean, oppElo: number) => MatchOutcome;
+  // daily + títulos + onboarding (P4)
+  claimDaily: () => DailyClaim;
+  syncTitles: () => string[]; // slugs recém-conquistados
+  equipTitle: (slug: string | null) => void;
+  claimStarter: (formationId: string) => UltCard[];
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -144,6 +156,50 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     persist(r.state);
     set({ state: r.state });
     return r.outcome;
+  },
+  claimDaily: () => {
+    const r = _claimDaily(get().state, dateKey(new Date()));
+    if (r.result.claimed) { persist(r.state); set({ state: r.state }); }
+    return r.result;
+  },
+  syncTitles: () => {
+    const st = get().state;
+    const idx = ultimateIndex();
+    const uniq = new Set(st.inventory.map((o) => o.cardKey));
+    let icons = 0;
+    for (const key of uniq) if (idx.get(key)?.rarity === 'icon') icons++;
+    const earned = evaluateTitles({
+      wins: st.profile.w,
+      peakElo: st.profile.peakElo,
+      streak: st.profile.streak,
+      uniqueCards: uniq.size,
+      iconsOwned: icons,
+      onboarded: st.profile.onboarded,
+    });
+    const r = _mergeTitles(st, earned);
+    if (r.newly.length) { persist(r.state); set({ state: r.state }); }
+    return r.newly;
+  },
+  equipTitle: (slug) =>
+    set((st) => {
+      const s = _equipTitle(st.state, slug);
+      persist(s);
+      return { state: s };
+    }),
+  claimStarter: (formationId) => {
+    const roles = formationSlotRoles(formationId);
+    const cards = pickStarterCards(ultimateCatalog(), roles, 76);
+    let s = _ensureSquad(get().state, formationId, roles);
+    cards.forEach((c, i) => {
+      const id = `starter_${i}_${Math.random().toString(36).slice(2, 9)}`;
+      s = _grantCard(s, c.key, 'starter', { id });
+      s = _setSlot(s, i, id);
+    });
+    s = { ...s, profile: { ...s.profile, onboarded: true } };
+    s = _mergeTitles(s, ['rookie']).state;
+    persist(s);
+    set({ state: s });
+    return cards;
   },
   setState: (s) => {
     persist(s);

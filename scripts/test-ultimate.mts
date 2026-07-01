@@ -18,7 +18,11 @@ import { makeRng } from '../src/engine/rng.ts';
 import { rarityMatchesBucket } from '../src/engine/ultimate/rarities.ts';
 import { computeChemistry, roleFitsSlot, type ChemNode } from '../src/engine/ultimate/chemistry.ts';
 import { formationById, formationSlotRoles } from '../src/engine/ultimate/formations.ts';
-import { ensureSquad, setSlot, setFormation, activeSquad, computeMatchOutcome, applyMatchResult } from '../src/engine/ultimate/state.ts';
+import { ensureSquad, setSlot, setFormation, activeSquad, computeMatchOutcome, applyMatchResult, claimDaily, mergeTitles, equipTitle } from '../src/engine/ultimate/state.ts';
+import { computeNextDaily } from '../src/engine/ultimate/daily.ts';
+import { evaluateTitles } from '../src/engine/ultimate/titles.ts';
+import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
+import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
 import {
   defaultUltimateState,
   grantCard,
@@ -271,6 +275,55 @@ test('applyMatchResult atualiza perfil (elo/peak/w-l/streak/credits)', () => {
   assert.equal(r2.state.profile.l, 1);
   assert.ok(r2.state.profile.elo >= 0);
   assert.ok(r2.state.profile.peakElo >= r2.state.profile.elo); // peak preservado
+});
+
+// ---------- daily ----------
+test('computeNextDaily: 1º claim, mesmo dia, ontem (+1) e gap (reset)', () => {
+  assert.deepEqual(computeNextDaily(0, null, '2026-06-30'), { canClaim: true, day: 1, wasReset: false });
+  assert.equal(computeNextDaily(3, '2026-06-30', '2026-06-30').canClaim, false); // já pegou hoje
+  assert.deepEqual(computeNextDaily(3, '2026-06-29', '2026-06-30'), { canClaim: true, day: 4, wasReset: false });
+  assert.deepEqual(computeNextDaily(7, '2026-06-29', '2026-06-30'), { canClaim: true, day: 1, wasReset: false }); // wrap 7→1
+  assert.deepEqual(computeNextDaily(4, '2026-06-25', '2026-06-30'), { canClaim: true, day: 1, wasReset: true }); // gap
+});
+
+test('claimDaily credita e trava no mesmo dia', () => {
+  let st = defaultUltimateState();
+  const before = st.profile.credits;
+  const r1 = claimDaily(st, '2026-06-30');
+  assert.ok(r1.result.claimed && r1.result.day === 1 && r1.result.credits > 0);
+  st = r1.state;
+  assert.equal(st.profile.credits, before + r1.result.credits);
+  assert.equal(st.profile.daily.lastClaim, '2026-06-30');
+  const r2 = claimDaily(st, '2026-06-30');
+  assert.equal(r2.result.claimed, false); // 1x por dia
+});
+
+// ---------- titles ----------
+test('evaluateTitles concede por conquista absoluta', () => {
+  assert.deepEqual(evaluateTitles({ wins: 0, peakElo: 1000, streak: 0, uniqueCards: 0, iconsOwned: 0, onboarded: false }), []);
+  const t = evaluateTitles({ wins: 30, peakElo: 2300, streak: 6, uniqueCards: 30, iconsOwned: 1, onboarded: true });
+  for (const s of ['rookie', 'first-win', 'collector', 'streaker', 'veteran', 'elite', 'icon-owner']) assert.ok(t.includes(s), s);
+});
+
+test('mergeTitles faz união + auto-equipa o 1º; equipTitle só se possui', () => {
+  let st = defaultUltimateState();
+  st = mergeTitles(st, ['rookie', 'first-win']).state;
+  assert.deepEqual(st.profile.titles.sort(), ['first-win', 'rookie']);
+  assert.equal(st.profile.equippedTitle, 'rookie'); // auto-equip 1º
+  const dup = mergeTitles(st, ['rookie']);
+  assert.equal(dup.newly.length, 0);
+  st = equipTitle(st, 'first-win');
+  assert.equal(st.profile.equippedTitle, 'first-win');
+  st = equipTitle(st, 'nao-possui');
+  assert.equal(st.profile.equippedTitle, 'first-win'); // ignorado
+});
+
+// ---------- starter ----------
+test('pickStarterCards devolve 5 jogadores distintos', () => {
+  const cat = buildCatalog(CS2_REAL_2026);
+  const cards = pickStarterCards(cat, slotRoles('standard'), 76);
+  assert.equal(cards.length, 5);
+  assert.equal(new Set(cards.map((c) => c.playerId)).size, 5);
 });
 
 test('migrateUltimate: lixo vira default; parcial é preenchido; inventário válido preservado', () => {
