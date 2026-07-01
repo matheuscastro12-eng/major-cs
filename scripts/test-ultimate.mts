@@ -16,6 +16,9 @@ import { quickSellValue } from '../src/engine/ultimate/quicksell.ts';
 import { PACK_DEFS, rollPack, packById } from '../src/engine/ultimate/packs.ts';
 import { makeRng } from '../src/engine/rng.ts';
 import { rarityMatchesBucket } from '../src/engine/ultimate/rarities.ts';
+import { computeChemistry, roleFitsSlot, type ChemNode } from '../src/engine/ultimate/chemistry.ts';
+import { formationById, formationSlotRoles } from '../src/engine/ultimate/formations.ts';
+import { ensureSquad, setSlot, setFormation, activeSquad } from '../src/engine/ultimate/state.ts';
 import {
   defaultUltimateState,
   grantCard,
@@ -173,6 +176,71 @@ test('spendCredits debita se houver saldo; senão no-op', () => {
 test('addCredits nunca deixa saldo negativo', () => {
   const st = defaultUltimateState();
   assert.equal(addCredits(st, -999999).profile.credits, 0);
+});
+
+// ---------- chemistry ----------
+test('roleFitsSlot: Rifler é coringa; role2 conta', () => {
+  assert.ok(roleFitsSlot('AWP', 'AWP'));
+  assert.ok(roleFitsSlot('Rifler', 'AWP')); // rifler encaixa em qualquer
+  assert.ok(roleFitsSlot('AWP', 'Rifler')); // qualquer encaixa em rifler
+  assert.ok(roleFitsSlot('Entry', 'IGL', 'IGL')); // via role2
+  assert.equal(roleFitsSlot('Entry', 'AWP'), false);
+});
+
+test('computeChemistry: time todo da mesma org/país bate perto do máximo; vazio = 0', () => {
+  const form = formationById('standard');
+  const roles = form.slots.map((s) => s.role);
+  const sameOrg = (role: 'AWP' | 'Entry' | 'Rifler' | 'Lurker' | 'Support' | 'IGL') =>
+    ({ teamOrigin: 'furia', region: 'samerica' as const, country: 'br', role });
+  const nodes: ChemNode[] = roles.map((role, i) => ({ slot: i, slotRole: role, card: sameOrg(role) }));
+  const res = computeChemistry(form.adjacency, nodes);
+  assert.equal(res.total, 15, 'org+região+país+role-fit satura em 15');
+  assert.ok(Math.abs(res.multiplier - 1.1) < 1e-9);
+  // squad vazio
+  const empty: ChemNode[] = roles.map((role, i) => ({ slot: i, slotRole: role, card: null }));
+  const r0 = computeChemistry(form.adjacency, empty);
+  assert.equal(r0.total, 0);
+  assert.ok(Math.abs(r0.multiplier - 0.9) < 1e-9);
+});
+
+test('computeChemistry: sem nenhuma conexão (times/regiões/países distintos) fica baixa', () => {
+  const form = formationById('standard');
+  const roles = form.slots.map((s) => s.role);
+  const nodes: ChemNode[] = roles.map((role, i) => ({
+    slot: i, slotRole: role,
+    card: { teamOrigin: `team${i}`, region: (['europe', 'cis', 'asia', 'namerica', 'oceania'] as const)[i], country: `c${i}`, role },
+  }));
+  const res = computeChemistry(form.adjacency, nodes);
+  // só ganha o +1 de role-fit por slot (5 slots) → 5
+  assert.equal(res.total, 5);
+});
+
+// ---------- squad reducers ----------
+test('setSlot coloca/limpa e sincroniza o lock; não deixa carta em 2 slots', () => {
+  let st = defaultUltimateState();
+  st = grantCard(st, 'p1:gold', 'pack', { id: 'o1', at: 1 });
+  st = ensureSquad(st, 'standard', formationSlotRoles('standard'));
+  st = setSlot(st, 0, 'o1');
+  assert.equal(activeSquad(st)!.slots[0].ownedId, 'o1');
+  assert.equal(st.inventory.find((o) => o.id === 'o1')!.locked, 'squad'); // travou
+  // move pro slot 2 → sai do slot 0
+  st = setSlot(st, 2, 'o1');
+  assert.equal(activeSquad(st)!.slots[0].ownedId, null);
+  assert.equal(activeSquad(st)!.slots[2].ownedId, 'o1');
+  // limpa → destrava
+  st = setSlot(st, 2, null);
+  assert.equal(st.inventory.find((o) => o.id === 'o1')!.locked, null);
+});
+
+test('setFormation mantém cartas por índice e re-rotula as funções', () => {
+  let st = defaultUltimateState();
+  st = grantCard(st, 'p1:gold', 'pack', { id: 'o1', at: 1 });
+  st = ensureSquad(st, 'standard', formationSlotRoles('standard'));
+  st = setSlot(st, 1, 'o1');
+  st = setFormation(st, 'aggressive', formationSlotRoles('aggressive'));
+  assert.equal(activeSquad(st)!.formation, 'aggressive');
+  assert.equal(activeSquad(st)!.slots[1].ownedId, 'o1'); // carta preservada
+  assert.equal(activeSquad(st)!.slots[1].role, formationSlotRoles('aggressive')[1]); // função nova
 });
 
 test('migrateUltimate: lixo vira default; parcial é preenchido; inventário válido preservado', () => {

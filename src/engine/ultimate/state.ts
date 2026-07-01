@@ -4,6 +4,7 @@
 
 import { quickSellValue } from './quicksell';
 import type { UltCard } from './cards';
+import type { Role } from '../../types';
 
 export type AcquiredVia = 'pack' | 'daily' | 'sbc' | 'reward' | 'starter' | 'initial';
 
@@ -186,4 +187,63 @@ export function migrateUltimate(raw: unknown): UltimateState {
     ? r.squads.filter((s): s is UltimateSquad => !!s && typeof s === 'object' && typeof (s as UltimateSquad).id === 'string')
     : [];
   return { version: ULTIMATE_VERSION, profile, inventory, squads };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Squad building (P2). Um único squad ativo (id 'main'). Toda mutação re-sincroniza
+// os locks: OwnedCard.locked = 'squad' sse referenciado no squad, senão null.
+
+export function activeSquad(state: UltimateState): UltimateSquad | undefined {
+  return state.squads[0];
+}
+
+function recomputeLocks(state: UltimateState): UltimateState {
+  const inSquad = new Set<string>();
+  for (const sq of state.squads) for (const s of sq.slots) if (s.ownedId) inSquad.add(s.ownedId);
+  let changed = false;
+  const inventory = state.inventory.map((o) => {
+    const shouldLock = inSquad.has(o.id);
+    if (shouldLock && o.locked !== 'squad') { changed = true; return { ...o, locked: 'squad' as const }; }
+    if (!shouldLock && o.locked === 'squad') { changed = true; return { ...o, locked: null }; }
+    return o;
+  });
+  return changed ? { ...state, inventory } : state;
+}
+
+export function makeSquad(formationId: string, slotRoles: Role[]): UltimateSquad {
+  return {
+    id: 'main',
+    name: 'Meu Squad',
+    formation: formationId,
+    slots: slotRoles.map((role, i) => ({ slot: i, ownedId: null, role })),
+    active: true,
+  };
+}
+
+// garante que existe um squad ativo (cria vazio se não houver).
+export function ensureSquad(state: UltimateState, formationId: string, slotRoles: Role[]): UltimateState {
+  if (state.squads.length) return state;
+  return { ...state, squads: [makeSquad(formationId, slotRoles)] };
+}
+
+// coloca (ownedId) num slot — ou limpa (null). Garante que a carta não fica em
+// dois slots ao mesmo tempo. Re-sincroniza locks.
+export function setSlot(state: UltimateState, slot: number, ownedId: string | null): UltimateState {
+  const sq = state.squads[0];
+  if (!sq) return state;
+  const slots = sq.slots.map((s) => {
+    if (ownedId && s.ownedId === ownedId && s.slot !== slot) return { ...s, ownedId: null };
+    if (s.slot === slot) return { ...s, ownedId };
+    return s;
+  });
+  return recomputeLocks({ ...state, squads: [{ ...sq, slots }, ...state.squads.slice(1)] });
+}
+
+// troca a formação, mantendo as cartas por índice (as que não encaixarem na nova
+// função apenas não dão bônus de role — a química cuida disso).
+export function setFormation(state: UltimateState, formationId: string, slotRoles: Role[]): UltimateState {
+  const sq = state.squads[0];
+  if (!sq) return ensureSquad(state, formationId, slotRoles);
+  const slots = slotRoles.map((role, i) => ({ slot: i, role, ownedId: sq.slots[i]?.ownedId ?? null }));
+  return recomputeLocks({ ...state, squads: [{ ...sq, formation: formationId, slots }, ...state.squads.slice(1)] });
 }

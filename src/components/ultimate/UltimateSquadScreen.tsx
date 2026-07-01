@@ -2,12 +2,15 @@
 // cartas do dataset real, moeda `credits`. Padrão em-*/DashCard/Modal/Button.
 // Ver docs-but-map.md. Sub-fases futuras: Squad Builder (P2), partida vs IA (P3).
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Button, DashCard, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
 import { ultimateIndex, useUltimate } from '../../state/ultimate';
 import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
+import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
+import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
+import { activeSquad, type OwnedCard } from '../../engine/ultimate/state';
 import type { UltCard } from '../../engine/ultimate/cards';
 import { ct } from '../../state/career-i18n';
 
@@ -46,13 +49,17 @@ function UltCardView({ card, size = 132, count }: { card: UltCard; size?: number
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; dupSellValue: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell } = useUltimate();
+  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'store' | 'club'>('store');
+  const [tab, setTab] = useState<'store' | 'club' | 'squad'>('store');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
+  const [pickSlot, setPickSlot] = useState<number | null>(null);
   const [toast, setToast] = useState<string>('');
 
   const credits = state.profile.credits;
+
+  // garante um squad ativo ao abrir a aba Squad
+  useEffect(() => { if (tab === 'squad') ensureSquad(); }, [tab, ensureSquad]);
 
   const club = useMemo<ClubRow[]>(() => {
     const byKey = new Map<string, { card: UltCard; ownedIds: string[] }>();
@@ -73,6 +80,26 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const totalCards = state.inventory.length;
   const uniqueCards = club.length;
   const dupCount = totalCards - uniqueCards;
+
+  // ── squad building ──
+  const ownedById = useMemo(() => new Map(state.inventory.map((o) => [o.id, o] as const)), [state.inventory]);
+  const squad = activeSquad(state);
+  const form = formationById(squad?.formation ?? 'standard');
+  const slotCard = (slotIdx: number): { owned: OwnedCard; card: UltCard } | null => {
+    const entry = squad?.slots.find((s) => s.slot === slotIdx);
+    if (!entry?.ownedId) return null;
+    const owned = ownedById.get(entry.ownedId);
+    const card = owned ? index.get(owned.cardKey) : undefined;
+    return owned && card ? { owned, card } : null;
+  };
+  const nodes: ChemNode[] = form.slots.map((fs) => {
+    const sc = slotCard(fs.slot);
+    return { slot: fs.slot, slotRole: fs.role, card: sc ? { teamOrigin: sc.card.teamOrigin, region: sc.card.region, country: sc.card.country, role: sc.card.role } : null };
+  });
+  const chem = computeChemistry(form.adjacency, nodes);
+  const placed = form.slots.map((fs) => slotCard(fs.slot)?.card).filter((c): c is UltCard => !!c);
+  const avgOvr = placed.length ? Math.round(placed.reduce((a, c) => a + c.ovr, 0) / placed.length) : 0;
+  const cl = chemLabel(chem.total);
 
   const flash = (msg: string) => { setToast(msg); window.setTimeout(() => setToast(''), 1800); };
 
@@ -121,7 +148,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
       {/* tabs */}
       <div style={{ display: 'flex', gap: 6 }}>
-        {([['store', ct('Loja')], ['club', `${ct('Coleção')} (${totalCards})`]] as const).map(([id, label]) => (
+        {([['store', ct('Loja')], ['squad', ct('Squad')], ['club', `${ct('Coleção')} (${totalCards})`]] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} style={tabBtn(tab === id)}>{label}</button>
         ))}
       </div>
@@ -178,6 +205,81 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         </DashCard>
       )}
 
+      {tab === 'squad' && (
+        <DashCard title={`🧩 ${ct('Montar squad')}`}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            {FORMATIONS.map((f) => (
+              <button key={f.id} onClick={() => setFormation(f.id)} title={f.desc} style={tabBtn(form.id === f.id)}>{f.name}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', fontSize: '0.82rem' }}>
+            <span>{ct('Química')}: <b style={{ color: cl.color, fontFamily: '"JetBrains Mono", monospace' }}>{chem.total}/15</b> <span style={{ color: cl.color, fontWeight: 800 }}>{cl.label}</span></span>
+            <span>{ct('Multiplicador')}: <b style={{ fontFamily: '"JetBrains Mono", monospace', color: chem.multiplier >= 1 ? '#5ed88a' : '#e58a8a' }}>{chem.multiplier.toFixed(2)}×</b></span>
+            <span>{ct('OVR médio')}: <b style={{ fontFamily: '"JetBrains Mono", monospace' }}>{avgOvr || '—'}</b></span>
+          </div>
+          <div style={{ position: 'relative', width: '100%', maxWidth: 520, margin: '0 auto', aspectRatio: '4 / 5', background: 'radial-gradient(ellipse at 50% 34%, rgba(94,216,138,0.06), transparent 62%)', border: '1px solid var(--em-border,#2a3340)', borderRadius: 12 }}>
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+              {chem.edges.map((e, i) => {
+                const a = form.slots[e.a], b = form.slots[e.b];
+                const stroke = e.score >= 1.5 ? '#5ed88a' : e.score >= 0.5 ? '#e8c170' : e.score > 0 ? '#e58a8a' : 'rgba(255,255,255,0.08)';
+                return <line key={i} x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100} stroke={stroke} strokeWidth={e.score >= 1.5 ? 0.9 : 0.6} strokeDasharray={e.score > 0 && e.score < 0.5 ? '2 2' : undefined} />;
+              })}
+            </svg>
+            {form.slots.map((fs) => {
+              const sc = slotCard(fs.slot);
+              return (
+                <div key={fs.slot} style={{ position: 'absolute', left: `${fs.x * 100}%`, top: `${fs.y * 100}%`, transform: 'translate(-50%,-50%)' }}>
+                  {sc ? (
+                    <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
+                      <UltCardView card={sc.card} size={92} />
+                    </button>
+                  ) : (
+                    <button onClick={() => setPickSlot(fs.slot)} style={emptySlot}>
+                      <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>＋</span>
+                      <span style={{ fontSize: '0.6rem', fontWeight: 800 }}>{fs.role}</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="muted small" style={{ textAlign: 'center', marginTop: 10 }}>
+            {ct('Mesma org (+1), mesma região (+0.5) e mesmo país (+0.5) entre jogadores conectados dão química. Encaixe as funções pra somar mais.')}
+          </p>
+        </DashCard>
+      )}
+
+      {/* seletor de carta pro slot */}
+      {pickSlot != null && (() => {
+        const slotRole = form.slots[pickSlot].role;
+        const cands = state.inventory
+          .map((o) => ({ o, card: index.get(o.cardKey) }))
+          .filter((x): x is { o: OwnedCard; card: UltCard } => !!x.card)
+          .sort((a, b) => (Number(roleFitsSlot(b.card.role, slotRole)) - Number(roleFitsSlot(a.card.role, slotRole))) || b.card.ovr - a.card.ovr);
+        const current = slotCard(pickSlot);
+        return (
+          <Modal open onClose={() => setPickSlot(null)} title={`${ct('Escolher')} · ${slotRole}`} size="lg"
+            footer={current ? <Button variant="ghost" onClick={() => { placeInSquad(pickSlot, null); setPickSlot(null); }}>{ct('Remover do slot')}</Button> : undefined}>
+            {cands.length === 0 ? (
+              <p className="muted small">{ct('Sem cartas. Abra pacotes na Loja.')}</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10, maxHeight: 440, overflowY: 'auto', justifyItems: 'center' }}>
+                {cands.map(({ o, card }) => {
+                  const fits = roleFitsSlot(card.role, slotRole);
+                  return (
+                    <button key={o.id} onClick={() => { placeInSquad(pickSlot, o.id); setPickSlot(null); }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: fits ? 1 : 0.72 }}>
+                      <UltCardView card={card} size={116} />
+                      {!fits && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(229,138,138,0.85)', color: '#fff' }}>{ct('fora')}</span>}
+                      {o.locked === 'squad' && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Modal>
+        );
+      })()}
+
       {/* reveal do pack */}
       {reveal && (
         <Modal open onClose={() => setReveal(null)} title={`✨ ${ct('Pacote aberto')}`} size="lg"
@@ -207,4 +309,5 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
 const backBtn: CSSProperties = { padding: '7px 13px', background: 'var(--em-panel-2,#12161e)', color: 'var(--em-text,#e6edf5)', border: '1px solid var(--em-border,#2a3340)', borderRadius: 6, fontFamily: 'inherit', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' };
 const sellBtn: CSSProperties = { padding: '4px 10px', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', borderRadius: 5, border: '1px solid var(--em-border,#2a3340)', background: 'transparent', color: 'var(--em-muted,#8a99ab)', fontFamily: 'inherit' };
+const emptySlot: CSSProperties = { width: 78, height: 94, borderRadius: 10, border: '1.5px dashed var(--em-border,#3a4553)', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'var(--em-muted,#8a99ab)', fontFamily: 'inherit' };
 const tabBtn = (on: boolean): CSSProperties => ({ padding: '7px 16px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer', borderRadius: 6, border: '1px solid var(--em-border,#2a3340)', background: on ? 'var(--em-gold,#e8c170)' : 'transparent', color: on ? '#1a1205' : 'var(--em-text,#e6edf5)', fontFamily: 'inherit' });

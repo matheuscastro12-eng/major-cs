@@ -8,12 +8,16 @@ import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
 import { buildCatalog, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { packById, rollPack } from '../engine/ultimate/packs';
+import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import {
   addCredits as _addCredits,
   defaultUltimateState,
+  ensureSquad as _ensureSquad,
   grantCard as _grantCard,
   migrateUltimate,
   sellCard as _sellCard,
+  setFormation as _setFormation,
+  setSlot as _setSlot,
   spendCredits as _spendCredits,
   type AcquiredVia,
   type UltimateState,
@@ -59,6 +63,10 @@ interface UltimateStore {
   sell: (ownedId: string) => { ok: boolean; credited: number };
   spend: (n: number) => boolean;
   addCredits: (n: number) => void;
+  // squad building (P2)
+  ensureSquad: () => void;
+  placeInSquad: (slot: number, ownedId: string | null) => void;
+  setFormation: (formationId: string) => void;
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -105,6 +113,25 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
   addCredits: (n) =>
     set((st) => {
       const s = _addCredits(st.state, n);
+      persist(s);
+      return { state: s };
+    }),
+  ensureSquad: () =>
+    set((st) => {
+      const s = _ensureSquad(st.state, DEFAULT_FORMATION, formationSlotRoles(DEFAULT_FORMATION));
+      if (s === st.state) return {};
+      persist(s);
+      return { state: s };
+    }),
+  placeInSquad: (slot, ownedId) =>
+    set((st) => {
+      const s = _setSlot(st.state, slot, ownedId);
+      persist(s);
+      return { state: s };
+    }),
+  setFormation: (formationId) =>
+    set((st) => {
+      const s = _setFormation(st.state, formationId, formationSlotRoles(formationId));
       persist(s);
       return { state: s };
     }),
