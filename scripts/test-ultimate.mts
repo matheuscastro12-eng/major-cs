@@ -27,6 +27,7 @@ import { checkSbc } from '../src/engine/ultimate/sbc.ts';
 import { buildAiLadder, buildBazaar } from '../src/engine/ultimate/bazaar.ts';
 import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS, claimSeasonReward, startSeason, STARTING_ELO } from '../src/engine/ultimate/state.ts';
 import { evaluateSeasonTiers, seasonTierById } from '../src/engine/ultimate/seasonRewards.ts';
+import { divisionFor, divisionChange, DIVISIONS, DIV_TIERS } from '../src/engine/ultimate/divisions.ts';
 import { evaluateObjectives, objectiveById, OBJECTIVES } from '../src/engine/ultimate/objectives.ts';
 import {
   defaultUltimateState,
@@ -500,6 +501,29 @@ test('evolveCard: sobe boost gastando EVO_COSTS, respeita teto e saldo', () => {
   const broke = grantCard(spendCredits(defaultUltimateState(), STARTING_CREDITS).state, 'p2:gold', 'pack', { id: 'c2' });
   assert.equal(evolveCard(broke, 'c2').reason, 'insufficient');
   assert.equal(evolveCard(s0, 'nope').reason, 'missing');
+});
+
+test('divisionFor: mapeia elo → divisão, progress 0..100, toNext correto', () => {
+  const b2 = divisionFor(1075); // Bronze II (1050-1099)
+  assert.equal(b2.def.name, 'Bronze II');
+  assert.ok(b2.progress >= 0 && b2.progress <= 100);
+  assert.ok(b2.next && b2.next.name === 'Bronze I');
+  assert.equal(b2.toNext, 25); // 1100 - 1075
+  const elite = divisionFor(3000);
+  assert.equal(elite.def.tier, 'elite');
+  assert.equal(elite.next, null);
+  assert.equal(elite.toNext, 0);
+  assert.equal(elite.progress, 100);
+  assert.equal(divisionFor(-50).def.name, 'Bronze III'); // clamp inferior
+  assert.equal(divisionFor(1000).def.name, 'Bronze III'); // STARTING_ELO cai em Bronze III (0-1049)
+});
+
+test('divisionChange: promove/rebaixa/mantém pela faixa', () => {
+  assert.equal(divisionChange(1049, 1050), 'promoted'); // Bronze III → Bronze II
+  assert.equal(divisionChange(1050, 1049), 'relegated');
+  assert.equal(divisionChange(1060, 1070), 'same');
+  assert.equal(DIVISIONS.length, 12);
+  assert.equal(DIV_TIERS.length, 6);
 });
 
 test('evaluateSeasonTiers: reached pelo pico, claimed pela lista', () => {

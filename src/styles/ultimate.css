@@ -368,6 +368,25 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-rank-row__wl { color: var(--ut-muted); font-size: 0.76rem; }
 .ut-rank-row__elo { font-family: var(--ut-font-mono); font-weight: 800; color: var(--ut-ink); }
 
+/* ---------------- DIVISÕES (Ranqueada) ---------------- */
+.ut-div { display: flex; gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid var(--ut-line); border-radius: 14px; background: var(--em-panel-2); }
+.ut-div__badge { width: 60px; height: 68px; border-radius: 12px; border: 1.5px solid; display: flex; align-items: center; justify-content: center; flex: none; }
+.ut-div__body { flex: 1; min-width: 0; }
+.ut-div__name { font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.15rem; letter-spacing: 0.3px; }
+.ut-div__rp { font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.35rem; color: var(--ut-ink); line-height: 1.1; }
+.ut-div__rp span { font-size: 0.5em; color: var(--ut-muted); }
+.ut-div__bar { height: 7px; border-radius: 999px; background: #e6e4dd; overflow: hidden; margin: 7px 0 5px; }
+.ut-div__bar > div { height: 100%; border-radius: 999px; transition: width .4s; }
+.ut-div__next { font-size: 0.76rem; color: var(--ut-muted); }
+.ut-div__next b { font-family: var(--ut-font-mono); }
+.ut-divladder { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.ut-divtier { flex: 1; min-width: 76px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 4px; border: 1px solid var(--ut-line); border-radius: 10px; background: #fff; }
+.ut-divtier span { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.72rem; letter-spacing: 0.4px; text-transform: uppercase; }
+.ut-divtier.is-current { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07); }
+.ut-divchange { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; font-family: var(--ut-font-cond); font-weight: 800; font-size: 0.82rem; letter-spacing: 0.8px; text-transform: uppercase; }
+.ut-divchange.promoted { background: rgba(18, 183, 106, 0.14); border: 1px solid rgba(18, 183, 106, 0.45); color: #0e9d5b; }
+.ut-divchange.relegated { background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.4); color: #b42318; }
+
 /* ---------------- COLEÇÃO (stats) ---------------- */
 .ut-cstat { background: var(--em-panel-2); border: 1px solid var(--ut-line); border-radius: 10px; padding: 8px 13px; min-width: 82px; }
 .ut-cstat__k { display: inline-flex; align-items: center; gap: 4px; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ut-muted); }

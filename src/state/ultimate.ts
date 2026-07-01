@@ -87,7 +87,7 @@ interface UltimateStore {
   placeInSquad: (slot: number, ownedId: string | null) => void;
   setFormation: (formationId: string) => void;
   // ranqueada vs IA (P3)
-  recordMatch: (won: boolean, oppElo: number) => MatchOutcome;
+  recordMatch: (won: boolean, oppElo: number, ranked?: boolean) => MatchOutcome;
   // daily + títulos + onboarding (P4)
   claimDaily: () => DailyClaim;
   syncTitles: () => string[]; // slugs recém-conquistados
@@ -172,7 +172,15 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       persist(s);
       return { state: s };
     }),
-  recordMatch: (won, oppElo) => {
+  recordMatch: (won, oppElo, ranked = true) => {
+    if (!ranked) {
+      // amistoso (sem risco): não mexe em elo/w-l/streak/season; só paga credits.
+      const credits = won ? 500 : 150;
+      const s = _addCredits(get().state, credits);
+      persist(s);
+      set({ state: s });
+      return { eloDelta: 0, credits };
+    }
     const r = _applyMatchResult(get().state, won, oppElo);
     persist(r.state);
     set({ state: r.state });

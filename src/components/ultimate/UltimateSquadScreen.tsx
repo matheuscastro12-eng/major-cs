@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
+import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import '../../styles/ultimate.css';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
@@ -183,8 +184,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   const [pickSlot, setPickSlot] = useState<number | null>(null);
-  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number } | null>(null);
-  const [result, setResult] = useState<{ won: boolean; score: string; outcome: MatchOutcome } | null>(null);
+  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number; eloBefore: number; ranked: boolean } | null>(null);
+  const [result, setResult] = useState<{ won: boolean; score: string; outcome: MatchOutcome; ranked: boolean; divChange: DivisionChange; divName: string } | null>(null);
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
   const [onbForm, setOnbForm] = useState('standard');
   const [dailyOpen, setDailyOpen] = useState(false);
@@ -195,6 +196,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [toast, setToast] = useState<string>('');
   const [navMenu, setNavMenu] = useState<'clube' | 'mercado' | 'more' | null>(null);
   const [clubFilter, setClubFilter] = useState<'all' | 'bronze' | 'silver' | 'gold' | 'special'>('all');
+  const [rankedMode, setRankedMode] = useState<'rivals' | 'casual'>('rivals');
   const { account } = useAccount();
 
   const credits = state.profile.credits;
@@ -292,6 +294,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
   const rank = rankFor(state.profile.elo);
+  const div = divisionFor(state.profile.elo);
 
   // ── objetivos/missões (profundidade) ──
   const iconsOwned = useMemo(() => {
@@ -367,14 +370,17 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     else flash(r.reason === 'maxed' ? ct('Já no nível máximo.') : ct('Créditos insuficientes.'));
   };
 
-  const playMatch = () => {
+  const playMatch = (ranked = true) => {
     if (!squadComplete) return;
     const five = squadPool as PoolPlayer[];
     const userTeam = buildOnlineTeam(ct('Seu Squad'), five, 'ut-user');
     userTeam.strength = userTeam.strength * chem.multiplier; // química influencia a força
     const totalBoost = form.slots.reduce((a, fs) => a + (slotCard(fs.slot)?.owned.boost ?? 0), 0);
     if (totalBoost > 0) userTeam.strength *= 1 + totalBoost * 0.01; // evolução: +1% de força por nível
-    const target = Math.max(60, Math.min(96, 68 + (state.profile.elo - 1000) / 25));
+    // ranqueada: rival escala pela divisão (elo); amistoso: rival justo pelo OVR do squad
+    const target = ranked
+      ? Math.max(60, Math.min(96, 68 + (state.profile.elo - 1000) / 25))
+      : Math.max(60, Math.min(96, avgOvr || 75));
     const mineIds = new Set(five.map((p) => p.id));
     const oppFive = pool.filter((p) => !mineIds.has(p.id))
       .sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5)
@@ -389,7 +395,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const maps = autoVeto([userTeam, oppTeam], rng, 1);
     const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
     setResult(null);
-    setLive({ series, teams: [userTeam, oppTeam], oppElo });
+    setLive({ series, teams: [userTeam, oppTeam], oppElo, eloBefore: state.profile.elo, ranked });
   };
 
   const finishMatch = () => {
@@ -397,9 +403,11 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const won = live.series.winner === 0;
     const m = live.series.maps[0];
     const score = m ? `${m.score[0]}-${m.score[1]}` : `${live.series.mapScore[0]}-${live.series.mapScore[1]}`;
-    const outcome = recordMatch(won, live.oppElo);
+    const outcome = recordMatch(won, live.oppElo, live.ranked);
+    const eloAfter = live.eloBefore + (live.ranked ? outcome.eloDelta : 0);
+    const divChange = live.ranked ? divisionChange(live.eloBefore, eloAfter) : 'same';
     setLive(null);
-    setResult({ won, score, outcome });
+    setResult({ won, score, outcome, ranked: live.ranked, divChange, divName: divisionFor(eloAfter).def.name });
   };
 
   const buy = (pack: PackDef) => {
@@ -607,7 +615,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', textAlign: 'center', padding: '8px 0' }}>
                   <div className="ut-empty__accent">{ct('PRONTO PRA SUBIR NO RANKING?')}</div>
                   <div style={{ fontSize: '0.86rem', color: 'var(--ut-muted)' }}>{ct('Squad pronto. Entre na fila ranqueada.')}</div>
-                  <button className="ut-btn ut-btn--gold" onClick={playMatch} style={{ width: '100%' }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
+                  <button className="ut-btn ut-btn--gold" onClick={() => go('ranked')} style={{ width: '100%' }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
                 </div>
               ) : (
                 <>
@@ -923,43 +931,82 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         </UtPanel>
       )}
 
-      {tab === 'ranked' && (
-        <UtPanel label={<>{ct('Ranqueada')} <em>· vs IA</em></>} icon={<Swords size={15} className="ut-panel__lead" />}>
-          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-            <div className="ut-rank">
-              <div className="ut-rank__badge" style={{ color: inkOnLight(rank.color), borderColor: `${rank.color}44` }}><Medal size={28} /></div>
-              <div>
-                <div className="ut-rank__name" style={{ color: inkOnLight(rank.color) }}>{rank.name}</div>
-                <div className="ut-rank__rp">{state.profile.elo} <span style={{ fontSize: '0.5em', color: 'var(--ut-muted)' }}>RP</span></div>
-                <div className="ut-rank__wl">{state.profile.w}V · {state.profile.l}D · {ct('pico')} {state.profile.peakElo}</div>
+      {tab === 'ranked' && (() => {
+        const peakTierIdx = DIV_TIERS.indexOf(divisionFor(state.profile.peakElo).def.tier);
+        return (
+          <UtPanel label={<>{ct('Ranqueada')} <em>· Divisão Rivals</em></>} icon={<Swords size={15} className="ut-panel__lead" />}>
+            {/* seletor de modo */}
+            <div className="ut-tabs" style={{ marginBottom: 14 }}>
+              <button onClick={() => setRankedMode('rivals')} style={tabBtn(rankedMode === 'rivals')}><Swords size={13} style={{ verticalAlign: '-2px' }} /> {ct('Rivals')} <span style={{ opacity: 0.7 }}>· {ct('vale rank')}</span></button>
+              <button onClick={() => setRankedMode('casual')} style={tabBtn(rankedMode === 'casual')}><Shirt size={13} style={{ verticalAlign: '-2px' }} /> {ct('Amistoso')} <span style={{ opacity: 0.7 }}>· {ct('sem risco')}</span></button>
+            </div>
+
+            {/* hero da divisão */}
+            <div className="ut-div">
+              <div className="ut-div__badge" style={{ color: inkOnLight(div.color), borderColor: `${div.color}66`, background: `${div.color}12` }}><Medal size={30} /></div>
+              <div className="ut-div__body">
+                <div className="ut-div__name" style={{ color: inkOnLight(div.color) }}>{div.def.name}</div>
+                <div className="ut-div__rp">{state.profile.elo} <span>RP</span></div>
+                <div className="ut-div__bar"><div style={{ width: `${div.progress}%`, background: div.color }} /></div>
+                <div className="ut-div__next">
+                  {div.next ? <>{ct('faltam')} <b>{div.toNext} RP</b> {ct('pra')} <b style={{ color: inkOnLight(DIV_TIER_COLOR[div.next.tier]) }}>{div.next.name}</b></> : <b style={{ color: inkOnLight(div.color) }}>{ct('Divisão máxima alcançada!')}</b>}
+                </div>
               </div>
             </div>
-            <div style={{ flex: 1, minWidth: 210, display: 'flex', flexDirection: 'column', gap: 5, fontSize: '0.84rem', color: 'var(--ut-ink-2)' }}>
-              <div>{ct('Vitórias')} <b style={{ color: '#16a34a', fontFamily: 'var(--ut-font-mono)' }}>{state.profile.w}</b> · {ct('Derrotas')} <b style={{ color: '#dc2626', fontFamily: 'var(--ut-font-mono)' }}>{state.profile.l}</b> · {ct('sequência')} <b>{state.profile.streak}</b></div>
-              <div>{ct('Seu squad')} <b>{avgOvr || '—'} OVR</b> · {ct('química')} <b style={{ color: inkOnLight(cl.color) }}>{chem.total}/15</b> <span style={{ color: 'var(--ut-muted)' }}>({chem.multiplier.toFixed(2)}×)</span></div>
-              {!squadComplete && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem' }}>{ct('Complete os 5 slots do seu squad (aba Squad) pra entrar na fila.')}</div>}
+
+            {/* escada de tiers */}
+            <div className="ut-divladder">
+              {DIV_TIERS.map((t, i) => {
+                const active = t === div.def.tier;
+                const reached = i <= peakTierIdx;
+                return (
+                  <div key={t} className={`ut-divtier${active ? ' is-current' : ''}`} style={active ? { borderColor: DIV_TIER_COLOR[t], background: `${DIV_TIER_COLOR[t]}14` } : undefined}>
+                    <Medal size={15} color={reached ? DIV_TIER_COLOR[t] : '#c4c9d0'} />
+                    <span style={{ color: active ? inkOnLight(DIV_TIER_COLOR[t]) : reached ? 'var(--ut-ink-2)' : 'var(--ut-muted)' }}>{DIV_TIER_LABEL[t]}</span>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-          {squadComplete && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 14 }}>
-              {form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? <UltCardView key={fs.slot} card={sc.card} size={74} evo={sc.owned.boost ?? 0} /> : null; })}
+
+            {/* stats */}
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', margin: '14px 0 2px', fontSize: '0.82rem', color: 'var(--ut-ink-2)' }}>
+              <span>{ct('Vitórias')} <b style={{ color: '#16a34a', fontFamily: 'var(--ut-font-mono)' }}>{state.profile.w}</b></span>
+              <span>{ct('Derrotas')} <b style={{ color: '#dc2626', fontFamily: 'var(--ut-font-mono)' }}>{state.profile.l}</b></span>
+              <span>{ct('sequência')} <b>{state.profile.streak}</b></span>
+              <span>{ct('pico')} <b style={{ fontFamily: 'var(--ut-font-mono)' }}>{state.profile.peakElo} RP</b></span>
+              <span>{ct('squad')} <b>{avgOvr || '—'} OVR</b> · {ct('química')} <b style={{ color: inkOnLight(cl.color) }}>{chem.total}/15</b></span>
             </div>
-          )}
-          <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', marginTop: 16, padding: '13px' }} onClick={playMatch} disabled={!squadComplete}><Zap size={17} /> {ct('ENTRAR NA FILA')}</button>
-        </UtPanel>
-      )}
+
+            {!squadComplete && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Complete os 5 slots do seu squad (aba Squad) pra jogar.')}</div>}
+
+            <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', marginTop: 12, padding: '13px' }} onClick={() => playMatch(rankedMode === 'rivals')} disabled={!squadComplete}>
+              <Zap size={17} /> {rankedMode === 'rivals' ? ct('ENTRAR NA FILA') : ct('JOGAR AMISTOSO')}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
+              {rankedMode === 'rivals' ? ct('Vitória sobe RP e pode promover de divisão. Derrota tira RP.') : ct('Sem risco de RP — treina e ganha credits (500 vitória / 150 derrota).')}
+            </div>
+          </UtPanel>
+        );
+      })()}
 
       {/* resultado da partida */}
       {result && (
         <Modal open onClose={() => setResult(null)} title={result.won ? ct('Vitória!') : ct('Derrota')} size="sm"
-          footer={<><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { setResult(null); playMatch(); }} disabled={!squadComplete}>{ct('Jogar de novo')}</Button></>}>
+          footer={<><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { const rk = result.ranked; setResult(null); playMatch(rk); }} disabled={!squadComplete}>{ct('Jogar de novo')}</Button></>}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+            {result.divChange !== 'same' && (
+              <div className={`ut-divchange ${result.divChange}`}>
+                {result.divChange === 'promoted' ? <><TrendingUp size={15} strokeWidth={2.5} /> {ct('PROMOVIDO')} · {result.divName}</> : <><TrendingUp size={15} strokeWidth={2.5} style={{ transform: 'scaleY(-1)' }} /> {ct('rebaixado')} · {result.divName}</>}
+              </div>
+            )}
             <div style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
             <div style={{ display: 'flex', gap: 16, fontSize: '0.9rem', fontWeight: 800 }}>
-              <span style={{ color: result.outcome.eloDelta >= 0 ? '#16a34a' : '#dc2626' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>
+              {result.ranked
+                ? <span style={{ color: result.outcome.eloDelta >= 0 ? '#16a34a' : '#dc2626' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>
+                : <span style={{ color: 'var(--ut-muted)' }}>{ct('Amistoso · sem RP')}</span>}
               {result.outcome.credits > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#92600a' }}><Coins size={13} /> +{fmt(result.outcome.credits)}</span>}
             </div>
-            <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{rank.name} · {state.profile.elo} RP</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{result.ranked ? `${div.def.name} · ${state.profile.elo} RP` : ct('Treino amistoso')}</span>
           </div>
         </Modal>
       )}
