@@ -415,6 +415,33 @@ body:has(.ut-root) .em-modal-foot {
   border-top: 1px solid var(--em-border); background: var(--em-panel-2);
 }
 
+/* ---------------- REVEAL / WALKOUT (abertura de pacote) ---------------- */
+.ult-wo {
+  position: relative; overflow: hidden; border-radius: 14px; min-height: 420px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 20px; cursor: pointer; user-select: none;
+  background: radial-gradient(circle at 50% 42%, #23272f 0%, #14161c 68%, #0c0d11 100%);
+}
+.ult-wo__flash {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 42%, var(--wo), transparent 55%);
+  animation: ult-wo-flash 0.7s ease-out;
+}
+@keyframes ult-wo-flash { 0% { opacity: 0; } 14% { opacity: 0.85; } 100% { opacity: 0.14; } }
+.ult-wo__rays {
+  position: absolute; inset: -40%; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255, 255, 255, 0.10) 0deg 5deg, transparent 5deg 16deg);
+  animation: ult-wo-spin 16s linear infinite;
+  -webkit-mask: radial-gradient(circle at 50% 50%, #000 0%, transparent 58%);
+  mask: radial-gradient(circle at 50% 50%, #000 0%, transparent 58%);
+}
+@keyframes ult-wo-spin { to { transform: rotate(360deg); } }
+.ult-wo__label { position: relative; z-index: 1; font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.82rem; letter-spacing: 2px; text-transform: uppercase; color: var(--ut-gold-1); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); }
+.ult-wo__card { position: relative; z-index: 1; filter: drop-shadow(0 12px 34px rgba(0, 0, 0, 0.55)); animation: ult-wo-in 0.5s cubic-bezier(0.2, 0.9, 0.2, 1) both; }
+@keyframes ult-wo-in { from { opacity: 0; transform: translateY(26px) scale(0.7) rotateY(42deg); } to { opacity: 1; transform: none; } }
+.ult-wo__rarity { position: relative; z-index: 1; font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.4rem; letter-spacing: 1px; text-transform: uppercase; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6); }
+.ult-wo__hint { position: relative; z-index: 1; font-size: 0.72rem; color: rgba(255, 255, 255, 0.42); }
+
 /* ---------------- responsivo ---------------- */
 .ut-res { min-width: 0; }
 /* telas médias (tablet landscape / laptop 11-13"): a nav vai pra própria linha

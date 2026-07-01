@@ -164,6 +164,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
+  const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number } | null>(null);
   const [result, setResult] = useState<{ won: boolean; score: string; outcome: MatchOutcome } | null>(null);
@@ -206,6 +207,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
   // garante um squad ativo ao abrir a aba Squad
   useEffect(() => { if (tab === 'squad') ensureSquad(); }, [tab, ensureSquad]);
+  // reveal/walkout: começa a revelação na 1ª carta sempre que abre um novo pacote
+  useEffect(() => { setRevealIdx(0); }, [reveal]);
   // season: no mount, inicia/rola por relógio local; se rolou, mostra o modal
   useEffect(() => {
     const r = tickSeason();
@@ -998,26 +1001,45 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         </Modal>
       )}
 
-      {/* reveal do pack */}
-      {reveal && (
-        <Modal open onClose={() => setReveal(null)} title={ct('Pacote aberto')} size="lg"
-          footer={<Button variant="primary" onClick={() => { setReveal(null); setTab('club'); }}>{ct('Ver coleção')}</Button>}>
-          <div style={{ textAlign: 'center', marginBottom: 10, fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.72rem', letterSpacing: '1.6px', textTransform: 'uppercase', color: '#92600a' }}>
-            {reveal.length} {reveal.length === 1 ? ct('carta') : ct('cartas')} · {ct('melhor')} {Math.max(...reveal.map((c) => c.ovr))} OVR
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', padding: '6px 0' }}>
-            {reveal.map((c, i) => (
-              <div key={`${c.key}-${i}`} className="ult-reveal-card" style={{ animationDelay: `${i * 120}ms` }}>
-                <UltCardView card={c} size={132} />
+      {/* reveal do pack — walkout carta a carta (pior→melhor), clímax na última */}
+      {reveal && (() => {
+        const wo = [...reveal].sort((a, b) => a.ovr - b.ovr); // melhor por último
+        const inWalkout = revealIdx < wo.length;
+        const c = wo[Math.min(revealIdx, wo.length - 1)];
+        const info = rarityInfo(c.rarity);
+        const special = DARK_TIERS.has(c.rarity) || FOIL_RARITIES.has(c.rarity);
+        const isBest = revealIdx === wo.length - 1;
+        return (
+          <Modal open onClose={() => setReveal(null)} title={ct('Pacote aberto')} size="lg"
+            footer={inWalkout
+              ? <><Button variant="ghost" onClick={() => setRevealIdx(wo.length)}>{ct('Pular')}</Button><Button variant="primary" onClick={() => setRevealIdx((i) => i + 1)}>{isBest ? ct('Concluir') : `${ct('Próxima')} (${revealIdx + 1}/${wo.length})`}</Button></>
+              : <Button variant="primary" onClick={() => { setReveal(null); setTab('club'); }}>{ct('Ver coleção')}</Button>}>
+            {inWalkout ? (
+              <div className="ult-wo" style={{ '--wo': info.color } as CSSProperties} onClick={() => setRevealIdx((i) => i + 1)}>
+                <div className="ult-wo__flash" key={`f${revealIdx}`} />
+                {special && <div className="ult-wo__rays" />}
+                <div className="ult-wo__label">{isBest ? `★ ${ct('MELHOR DO PACOTE')} ★` : `${ct('carta')} ${revealIdx + 1}/${wo.length}`}</div>
+                <div className="ult-wo__card" key={`c${revealIdx}`}><UltCardView card={c} size={190} /></div>
+                <div className="ult-wo__rarity" style={{ color: info.color }}>{info.label}</div>
+                <div className="ult-wo__hint">{ct('toque para continuar')}</div>
               </div>
-            ))}
-          </div>
-          <style>{`
-            .ult-reveal-card { animation: ult-pop .45s cubic-bezier(0.2,0.8,0.2,1) both; }
-            @keyframes ult-pop { from { opacity:0; transform: translateY(14px) scale(.82) rotateY(35deg); } to { opacity:1; transform:none; } }
-          `}</style>
-        </Modal>
-      )}
+            ) : (
+              <>
+                <div style={{ textAlign: 'center', marginBottom: 10, fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.72rem', letterSpacing: '1.6px', textTransform: 'uppercase', color: '#92600a' }}>
+                  {reveal.length} {reveal.length === 1 ? ct('carta') : ct('cartas')} · {ct('melhor')} {Math.max(...reveal.map((x) => x.ovr))} OVR
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', padding: '6px 0' }}>
+                  {wo.slice().reverse().map((x, i) => (
+                    <div key={`${x.key}-${i}`} className="ult-reveal-card" style={{ animationDelay: `${i * 70}ms` }}>
+                      <UltCardView card={x} size={132} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </Modal>
+        );
+      })()}
 
       {toast && (
         <div style={{ position: 'fixed', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 60, padding: '10px 20px', borderRadius: 10, background: '#1f2430', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 700, fontSize: '0.84rem', boxShadow: '0 10px 30px rgba(16,24,40,0.3)' }}>
