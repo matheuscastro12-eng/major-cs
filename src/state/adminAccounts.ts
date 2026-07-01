@@ -2,7 +2,8 @@
 import { ct } from './career-i18n';
 export interface AdminAccount { email: string; nick: string | null; paid: boolean; isFounder: boolean; founderNo: number | null; created_at: string; hasRef: boolean; }
 export interface OrphanPaid { email: string; created_at: string; }
-export interface AccountsList { accounts: AdminAccount[]; orphanPaid: OrphanPaid[]; total: number; paidTotal: number; foundersTotal?: number; founderLimit?: number; new7?: number; new30?: number; paid30?: number; orphanTotal?: number; }
+export interface TrendPoint { day: string; signups: number; sales: number; }
+export interface AccountsList { accounts: AdminAccount[]; orphanPaid: OrphanPaid[]; total: number; paidTotal: number; foundersTotal?: number; founderLimit?: number; new7?: number; new30?: number; paid30?: number; orphanTotal?: number; withRefTotal?: number; trend?: TrendPoint[]; }
 export interface StripeLookup { found: boolean; sessionId?: string; amount?: number | null; currency?: string | null; created?: number | null; paymentStatus?: string | null; error?: string; }
 
 async function post(body: Record<string, unknown>): Promise<Record<string, unknown>> {

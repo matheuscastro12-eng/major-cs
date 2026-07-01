@@ -59,17 +59,37 @@ export default async function handler(
         count(*)::int AS total,
         count(*) FILTER (WHERE paid)::int AS paid,
         count(*) FILTER (WHERE is_founder)::int AS founders,
+        count(*) FILTER (WHERE stripe_ref IS NOT NULL)::int AS with_ref,
         count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS new7,
         count(*) FILTER (WHERE created_at > now() - interval '30 days')::int AS new30,
         count(*) FILTER (WHERE paid AND created_at > now() - interval '30 days')::int AS paid30
       FROM rtm_accounts`;
     const orphanCount = await sql`SELECT count(*)::int AS n FROM rtm_paid_emails p WHERE NOT EXISTS (SELECT 1 FROM rtm_accounts a WHERE a.email = p.email)`;
+    // série dos últimos 30 dias (cadastros x vendas) pro gráfico de tendência do CRM.
+    // custo fixo: generate_series de 30 dias contra 2 CTEs já filtradas na mesma janela.
+    const trend = await sql`
+      WITH days AS (
+        SELECT generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day')::date AS day
+      ),
+      signups AS (
+        SELECT date_trunc('day', created_at)::date AS day, count(*)::int AS n
+        FROM rtm_accounts WHERE created_at > now() - interval '30 days' GROUP BY 1
+      ),
+      sales AS (
+        SELECT date_trunc('day', created_at)::date AS day, count(*)::int AS n
+        FROM rtm_paid_emails WHERE created_at > now() - interval '30 days' GROUP BY 1
+      )
+      SELECT d.day, COALESCE(s.n,0)::int AS signups, COALESCE(p.n,0)::int AS sales
+      FROM days d LEFT JOIN signups s ON s.day = d.day LEFT JOIN sales p ON p.day = d.day
+      ORDER BY d.day`;
     res.status(200).json({
       accounts: accounts.map((a) => ({ email: String(a.email), nick: a.nick ? String(a.nick) : null, paid: !!a.paid, isFounder: !!a.is_founder, founderNo: a.founder_no != null ? Number(a.founder_no) : null, created_at: a.created_at, hasRef: !!a.has_ref })),
       orphanPaid: orphanPaid.map((p) => ({ email: String(p.email), created_at: p.created_at })),
       total: counts[0]?.total ?? 0, paidTotal: counts[0]?.paid ?? 0, foundersTotal: counts[0]?.founders ?? 0, founderLimit: FOUNDER_LIMIT,
+      withRefTotal: counts[0]?.with_ref ?? 0,
       new7: counts[0]?.new7 ?? 0, new30: counts[0]?.new30 ?? 0, paid30: counts[0]?.paid30 ?? 0,
       orphanTotal: orphanCount[0]?.n ?? 0,
+      trend: trend.map((r) => ({ day: String(r.day), signups: Number(r.signups), sales: Number(r.sales) })),
     });
     return;
   }
