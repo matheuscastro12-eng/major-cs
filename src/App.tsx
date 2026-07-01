@@ -68,6 +68,14 @@ const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then
 const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
 const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
+
+// Ultimate Squad OCULTO em produção: o modo existe no código mas NÃO aparece no
+// menu nem é acessível por rota, a menos que o flag esteja ligado localmente
+// (localStorage `rtm-ultimate`='1'). Não era pra ter ido pro ar; fica escondido
+// até liberar de propósito.
+const ULTIMATE_ENABLED = (() => {
+  try { return localStorage.getItem('rtm-ultimate') === '1'; } catch { return false; }
+})();
 const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
 const OnlineMode = lazyWithReload(() => import('./components/online/OnlineMode').then((m) => ({ default: m.OnlineMode })));
 const TournamentStats = lazyWithReload(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
@@ -259,6 +267,11 @@ export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
+  // Ultimate Squad oculto: se alguém cair em /ultimate com o flag desligado
+  // (deep link), manda de volta pro menu — o modo não aparece em produção.
+  useEffect(() => {
+    if (!ULTIMATE_ENABLED && screen === 'ultimate') setScreen('home');
+  }, [screen]);
   const { account, ready: accountReady, refresh: refreshAccount, logout } = useAccount();
   const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
@@ -971,7 +984,7 @@ export default function App() {
           }}
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
-          onUltimate={() => setScreen('ultimate')}
+          onUltimate={ULTIMATE_ENABLED ? () => setScreen('ultimate') : undefined}
           onLeaderboard={() => setScreen('leaderboard')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
@@ -1030,7 +1043,7 @@ export default function App() {
 
       {screen === 'online' && <OnlineMode onBack={() => setScreen('home')} account={account} dataset={dataset} />}
 
-      {screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
+      {ULTIMATE_ENABLED && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (
