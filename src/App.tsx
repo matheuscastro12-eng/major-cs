@@ -910,7 +910,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {screen !== 'career' && (
+      {screen !== 'career' && screen !== 'ultimate' && (
         <header className="app-header">
           <div className="topbar">
             <span className="logo" onClick={goHome}>

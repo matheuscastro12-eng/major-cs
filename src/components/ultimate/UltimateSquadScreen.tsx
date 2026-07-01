@@ -437,7 +437,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         <div className="ut-onboard__hero">
           <div className="ut-onboard__herobox">
             <div className="ut-onboard__lockup">
-              <span className="ut-brand__logo" style={{ fontSize: '1.5rem' }}>MAJOR<span className="ut-brand__slash">//</span>CS</span>
+              <span className="ut-brand__logo" style={{ fontSize: '1.5rem' }}>ROAD TO <span className="ut-brand__slash">MAJOR</span></span>
               <span className="ut-brand__mode"><Sparkles size={13} /> ULTIMATE</span>
             </div>
             <div className="ut-onboard__kicker">{ct('Ultimate Squad')}</div>
@@ -491,7 +491,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       <nav className="ut-topbar">
         <div className="ut-topbar__inner">
           <div className="ut-brand">
-            <span className="ut-brand__logo">MAJOR<span className="ut-brand__slash">//</span>CS</span>
+            <span className="ut-brand__logo">ROAD TO <span className="ut-brand__slash">MAJOR</span></span>
             <span className="ut-brand__mode"><Sparkles size={13} /> ULTIMATE</span>
           </div>
           <div className="ut-nav">
@@ -533,7 +533,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <div className="ut-menu ut-ham__menu" onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => { setDailyOpen(true); setNavMenu(null); }}><Gift size={16} /> {ct('Recompensa diária')}{daily.canClaim ? ' •' : ''}</button>
                 <button onClick={() => { setTitlesOpen(true); setNavMenu(null); }}><Tag size={16} /> {ct('Títulos')}{equipped ? ` · ${equipped.label}` : ''}</button>
-                <button onClick={() => { onBack(); setNavMenu(null); }}><ArrowLeft size={16} /> {ct('Voltar ao MAJOR//CS')}</button>
+                <button onClick={() => { onBack(); setNavMenu(null); }}><ArrowLeft size={16} /> {ct('Voltar ao Road to Major')}</button>
               </div>
             )}
           </div>
@@ -560,7 +560,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       <div className="ut-page">
         <header className="ut-greet">
           <div>
-            <div className="ut-greet__kicker">MAJOR//CS ULTIMATE · {ct('HUB ONLINE')}</div>
+            <div className="ut-greet__kicker">ROAD TO MAJOR · {ct('HUB ONLINE')}</div>
             <h1 className="ut-greet__title">{ct('Olá')}, <span>{displayName}</span></h1>
           </div>
           <button className="ut-outbtn" onClick={() => go('ranking')}><ListOrdered size={15} /> {ct('Leaderboard global')}</button>
