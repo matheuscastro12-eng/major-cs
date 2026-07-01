@@ -33,8 +33,43 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
   const [state, setState] = useState<LobbyState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // fila ranqueada: null = fora; senão desde quando + telemetria do servidor
+  const [queue, setQueue] = useState<{ since: number; waiting?: number; window?: number } | null>(null);
   const sentRef = useRef('');    // já enviei meu squad neste ciclo (code:status-run)
   const playedRef = useRef(new Set<string>()); // partidas já entregues ao pai (code:run_seed)
+
+  // ── FILA RANQUEADA: entra → poll 2.5s → pareado → sala (já em 'drafting') ──
+  const enterQueue = async () => {
+    setBusy(true); setError('');
+    try {
+      const r = await lobbyApi({ action: 'queueJoin', nick, elo: squad.elo });
+      if (r.matched && r.code) { setCode(r.code); setView('room'); setState(null); }
+      else if (r.queued) setQueue({ since: Date.now(), window: r.window });
+      else setError(r.error ?? ct('Não foi possível entrar na fila.'));
+    } catch { setError(ct('Sem conexão com o servidor.')); }
+    setBusy(false);
+  };
+  const cancelQueue = useCallback(() => {
+    setQueue(null);
+    void lobbyApi({ action: 'queueLeave', nick }).catch(() => undefined);
+  }, [nick]);
+  useEffect(() => {
+    if (!queue) return;
+    let alive = true;
+    const t = window.setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const r = await lobbyApi({ action: 'queuePoll', nick, elo: squad.elo });
+        if (!alive) return;
+        if (r.matched && r.code) { setQueue(null); setCode(r.code); setView('room'); setState(null); }
+        else if (r.queued) setQueue((q) => (q ? { ...q, waiting: r.waiting, window: r.window } : q));
+        else setQueue(null); // ticket sumiu (limpeza) — usuário re-entra se quiser
+      } catch { /* transiente — próximo tick tenta de novo */ }
+    }, 2500);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [queue !== null, nick, squad.elo]); // eslint-disable-line react-hooks/exhaustive-deps
+  // sai da fila ao desmontar a aba (não deixa ticket fantasma)
+  useEffect(() => () => { if (queue) void lobbyApi({ action: 'queueLeave', nick }).catch(() => undefined); }, [queue !== null, nick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshRooms = useCallback(async () => {
     const all = await listOpenLobbies();
@@ -193,10 +228,34 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
     );
   }
 
-  // ── menu: criar / entrar / salas abertas ──
+  // ── menu: fila ranqueada + criar / entrar / salas abertas ──
   return (
     <div className="ut-duel">
       {!ready && <div className="ut-duel__err">{ct('Complete os 5 slots do seu squad (aba Squad) pra duelar online.')}</div>}
+
+      {queue ? (
+        <div className="ut-queue is-searching">
+          <div className="ut-queue__pulse" />
+          <div className="ut-queue__body">
+            <div className="ut-queue__title">{ct('PROCURANDO RIVAL…')}</div>
+            <div className="ut-queue__meta">
+              {Math.floor((Date.now() - queue.since) / 1000)}s {ct('na fila')}
+              {queue.window != null && <> · {ct('janela')} ±{queue.window} RP</>}
+              {queue.waiting != null && <> · {queue.waiting} {ct('na fila agora')}</>}
+            </div>
+          </div>
+          <button className="ut-btn ut-btn--ghost" onClick={cancelQueue}>{ct('Cancelar')}</button>
+        </div>
+      ) : (
+        <div className="ut-queue">
+          <div className="ut-queue__body">
+            <div className="ut-queue__title">{ct('FILA RANQUEADA')}</div>
+            <div className="ut-queue__meta">{ct('Pareamento automático por RP')} · {ct('seu elo')}: <b>{squad.elo}</b></div>
+          </div>
+          <button className="ut-jogar" style={{ padding: '11px 22px' }} disabled={busy || !ready} onClick={() => void enterQueue()}><Zap size={16} /> {ct('ENTRAR NA FILA')}</button>
+        </div>
+      )}
+
       <div className="ut-duel__grid">
         <div className="ut-duel__box">
           <div className="ut-duel__boxtitle"><Plus size={14} /> {ct('Criar sala')}</div>

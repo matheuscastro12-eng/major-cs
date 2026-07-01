@@ -443,7 +443,7 @@ export function majorStandings(major: OnlineMajor) {
 
 // ---- chamadas de API ----
 
-export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState }> {
+export async function lobbyApi(body: Record<string, unknown>): Promise<{ ok?: boolean; code?: string; error?: string; stage?: number; advanced?: boolean; startedAt?: number; veto?: OnlineMajorVetoState; matched?: boolean; queued?: boolean; waiting?: number; waitedMs?: number; window?: number }> {
   const res = await fetch('/api/lobby', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
