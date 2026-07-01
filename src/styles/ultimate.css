@@ -1,8 +1,8 @@
 /* ============================================================
-   Ultimate Squad — tema "BUT" fiel ao Brasval Ultimate Team.
-   Web-app dashboard claro: nav branca full-width, season strip,
-   cards com acento vermelho no topo, ícones de linha (lucide),
-   empty-states ricos, tiles diários grandes.
+   Ultimate Squad — tema com IDENTIDADE PRÓPRIA (MAJOR//CS), inspirado
+   no BUT mas NÃO idêntico: header ESCURO tático + OURO (o Brasval é
+   claro + verde), conteúdo claro, cards com acento OURO no topo, ícones
+   de linha (lucide), empty-states ricos, tiles diários grandes.
    Tudo escopado em .ut-root / main.page-ultimate — NÃO afeta a carreira.
    ============================================================ */
 
@@ -37,6 +37,17 @@ body:has(.ut-root) {
   --ut-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
   --ut-font-cond: var(--font-cond, 'Oswald', 'Bahnschrift', 'Segoe UI', sans-serif);
   --ut-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Identidade MAJOR//CS Ultimate: header ESCURO tático + OURO (difere do
+     Brasval, que é claro + verde). Ramp de ouro + tokens da barra escura. */
+  --ut-gold-1: #ecc75f;
+  --ut-gold-2: #c9a63c;
+  --ut-gold-ink: #241a06;
+  --ut-bar-1: #1c2029;
+  --ut-bar-2: #14161c;
+  --ut-bar-ink: #e9edf3;
+  --ut-bar-dim: #99a1af;
+  --ut-bar-line: rgba(255, 255, 255, 0.09);
 }
 
 /* full-bleed: libera a tela do max-width do .page (igual à carreira) */
@@ -58,9 +69,9 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
   position: sticky;
   top: 0;
   z-index: 40;
-  background: #fff;
-  border-bottom: 1px solid var(--ut-line);
-  box-shadow: 0 1px 0 rgba(16, 24, 40, 0.02);
+  background: linear-gradient(180deg, var(--ut-bar-1) 0%, var(--ut-bar-2) 100%);
+  border-bottom: 2px solid var(--ut-gold-2);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
 }
 .ut-topbar__inner {
   display: flex;
@@ -69,26 +80,29 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
   max-width: 1440px;
   margin: 0 auto;
   padding: 0 18px;
-  height: 58px;
+  height: 60px;
 }
-.ut-brand { display: flex; align-items: center; gap: 10px; margin-right: 8px; }
+.ut-brand { display: flex; align-items: center; gap: 11px; margin-right: 14px; padding-right: 16px; border-right: 1px solid var(--ut-bar-line); }
 .ut-brand__logo {
   font-family: var(--ut-font-cond);
   font-weight: 800;
-  font-size: 1.15rem;
+  font-size: 1.24rem;
   letter-spacing: 0.5px;
-  color: var(--ut-ink);
+  color: #fff;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 .ut-brand__slash { color: var(--ut-red); }
 .ut-brand__mode {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 8px; cursor: default;
-  border: 1px solid rgba(18, 183, 106, 0.4);
-  background: rgba(18, 183, 106, 0.08);
-  color: var(--ut-green-deep); font-weight: 800; font-size: 0.66rem;
-  letter-spacing: 1px; font-family: inherit;
+  padding: 5px 11px; border-radius: 7px; cursor: default;
+  border: 1px solid rgba(236, 199, 95, 0.55);
+  background: linear-gradient(180deg, var(--ut-gold-1), var(--ut-gold-2));
+  color: var(--ut-gold-ink); font-weight: 800; font-size: 0.66rem;
+  letter-spacing: 1.4px; font-family: var(--ut-font-cond);
+  box-shadow: 0 2px 6px rgba(201, 166, 60, 0.35);
 }
+.ut-brand__mode svg { color: var(--ut-gold-ink); }
 
 .ut-nav { display: flex; align-items: center; gap: 2px; }
 .ut-nav__group { position: relative; }
@@ -96,77 +110,82 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
   display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 12px; border-radius: 9px; cursor: pointer;
   border: none; background: transparent; font-family: inherit;
-  font-weight: 700; font-size: 0.86rem; color: var(--ut-ink-2);
+  font-weight: 700; font-size: 0.85rem; color: var(--ut-bar-dim);
   white-space: nowrap; transition: background .12s, color .12s;
 }
-.ut-nav__item:hover { background: #f2f2ef; color: var(--ut-ink); }
-.ut-nav__item.is-active { background: rgba(18, 183, 106, 0.10); color: var(--ut-green-deep); }
-.ut-nav__item.is-active svg { color: var(--ut-green); }
+.ut-nav__item svg { opacity: 0.85; }
+.ut-nav__item:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.ut-nav__item:hover svg { opacity: 1; }
+.ut-nav__item.is-active { background: rgba(236, 199, 95, 0.14); color: var(--ut-gold-1); box-shadow: inset 0 -2px 0 var(--ut-gold-2); }
+.ut-nav__item.is-active svg { color: var(--ut-gold-1); opacity: 1; }
 
 .ut-menu {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
-  min-width: 190px; padding: 6px; border-radius: 12px;
-  background: #fff; border: 1px solid var(--ut-line);
-  box-shadow: 0 12px 30px rgba(16, 24, 40, 0.14);
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  min-width: 210px; padding: 6px; border-radius: 12px;
+  background: #1e222b; border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.4);
   display: flex; flex-direction: column; gap: 2px;
 }
 .ut-menu button {
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 9px 11px; border-radius: 8px; cursor: pointer; text-align: left;
   border: none; background: transparent; font-family: inherit;
-  font-weight: 600; font-size: 0.84rem; color: var(--ut-ink);
+  font-weight: 600; font-size: 0.84rem; color: var(--ut-bar-ink);
 }
-.ut-menu button:hover { background: #f2f7f4; color: var(--ut-green-deep); }
-.ut-menu button svg { color: var(--ut-muted); }
-.ut-menu button:hover svg { color: var(--ut-green); }
-.ut-menu .ut-menu__count { margin-left: auto; font-size: 0.72rem; color: var(--ut-muted); font-family: var(--ut-font-mono); }
+.ut-menu button:hover { background: rgba(236, 199, 95, 0.14); color: var(--ut-gold-1); }
+.ut-menu button svg { color: var(--ut-bar-dim); }
+.ut-menu button:hover svg { color: var(--ut-gold-1); }
+.ut-menu .ut-menu__count { margin-left: auto; font-size: 0.72rem; color: var(--ut-bar-dim); font-family: var(--ut-font-mono); }
 
 .ut-res { display: flex; align-items: center; gap: 8px; }
 .ut-res__chip {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 11px; border-radius: 999px; font-weight: 800; font-size: 0.82rem;
-  border: 1px solid var(--ut-line); background: #fbfbfa; color: var(--ut-ink);
+  padding: 6px 12px; border-radius: 999px; font-weight: 800; font-size: 0.82rem;
+  border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.05); color: var(--ut-bar-ink);
   font-family: var(--ut-font-mono); white-space: nowrap;
 }
-.ut-res__chip svg { color: var(--ut-muted); }
-.ut-res__chip--coin { border-color: rgba(245, 158, 11, 0.35); background: #fff8ec; color: var(--ut-amber-ink); }
-.ut-res__chip--coin svg { color: var(--ut-amber); }
-.ut-res__chip--rp { border-color: rgba(18, 183, 106, 0.3); background: #eefaf3; color: var(--ut-green-deep); }
-.ut-res__chip--rp svg { color: var(--ut-green); }
+.ut-res__chip svg { color: var(--ut-bar-dim); }
+.ut-res__chip--coin { border-color: rgba(236, 199, 95, 0.4); background: rgba(236, 199, 95, 0.12); color: var(--ut-gold-1); }
+.ut-res__chip--coin svg { color: var(--ut-gold-1); }
+.ut-res__chip--rp { border-color: rgba(236, 199, 95, 0.26); background: rgba(255, 255, 255, 0.05); color: #f0d68a; }
+.ut-res__chip--rp svg { color: var(--ut-gold-1); }
 
 .ut-jogar {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 9px 18px; border-radius: 10px; cursor: pointer;
-  border: none; background: var(--ut-green); color: #fff;
-  font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.92rem; letter-spacing: 0.5px;
-  box-shadow: 0 4px 12px rgba(18, 183, 106, 0.32); transition: filter .12s, transform .05s;
+  padding: 9px 20px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(236, 199, 95, 0.6);
+  background: linear-gradient(180deg, var(--ut-gold-1), var(--ut-gold-2)); color: var(--ut-gold-ink);
+  font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.95rem; letter-spacing: 0.6px;
+  box-shadow: 0 4px 14px rgba(201, 166, 60, 0.4); transition: filter .12s, transform .05s;
 }
-.ut-jogar:hover { filter: brightness(1.05); }
+.ut-jogar svg { color: var(--ut-gold-ink); }
+.ut-jogar:hover { filter: brightness(1.06); }
 .ut-jogar:active { transform: translateY(1px); }
 
 .ut-ham {
   position: relative; width: 40px; height: 40px; display: inline-flex;
   align-items: center; justify-content: center; border-radius: 10px; cursor: pointer;
-  border: 1px solid var(--ut-line); background: #fff; color: var(--ut-ink-2);
+  border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.05); color: var(--ut-bar-ink);
 }
-.ut-ham:hover { background: #f2f2ef; }
-.ut-ham .dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--ut-red); box-shadow: 0 0 0 2px #fff; }
+.ut-ham:hover { background: rgba(255, 255, 255, 0.1); }
+.ut-ham .dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--ut-red); box-shadow: 0 0 0 2px var(--ut-bar-2); }
 .ut-ham__menu { right: 0; left: auto; }
 
-/* ---------------- SEASON STRIP ---------------- */
+/* ---------------- SEASON STRIP (continua o header escuro) ---------------- */
 .ut-season {
-  background: #fff; border-bottom: 1px solid var(--ut-line);
+  background: #191c23; border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .ut-season__inner {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  max-width: 1440px; margin: 0 auto; padding: 9px 18px;
+  max-width: 1440px; margin: 0 auto; padding: 8px 18px;
   font-size: 0.8rem;
 }
-.ut-season__tag { display: inline-flex; align-items: center; gap: 5px; color: var(--ut-green-deep); font-weight: 800; letter-spacing: 0.8px; font-size: 0.68rem; text-transform: uppercase; }
-.ut-season__name { font-weight: 800; color: var(--ut-ink); }
-.ut-season__meta { color: var(--ut-muted); }
-.ut-season__user { margin-left: auto; color: var(--ut-muted); }
-.ut-season__user b { color: var(--ut-ink-2); font-weight: 700; }
+.ut-season__tag { display: inline-flex; align-items: center; gap: 5px; color: var(--ut-gold-1); font-weight: 800; letter-spacing: 0.8px; font-size: 0.68rem; text-transform: uppercase; }
+.ut-season__name { font-weight: 800; color: #fff; }
+.ut-season__meta { color: var(--ut-bar-dim); }
+.ut-season__user { margin-left: auto; color: var(--ut-bar-dim); }
+.ut-season__user b { color: #cfd5df; font-weight: 700; }
 
 /* ---------------- PAGE (centered content) ---------------- */
 .ut-page {
@@ -176,9 +195,9 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 
 /* greeting */
 .ut-greet { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.ut-greet__kicker { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.72rem; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ut-red); }
+.ut-greet__kicker { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.72rem; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ut-amber-ink); }
 .ut-greet__title { font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.9rem; letter-spacing: -0.2px; color: var(--ut-ink); line-height: 1.05; margin-top: 3px; }
-.ut-greet__title span { color: var(--ut-red); }
+.ut-greet__title span { color: var(--ut-amber-ink); }
 .ut-outbtn {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 9px 15px; border-radius: 10px; cursor: pointer;
@@ -233,8 +252,9 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 }
 .ut-panel::before {
   content: ''; position: absolute; top: 0; left: 16px; width: 30px; height: 3px;
-  border-radius: 0 0 3px 3px; background: var(--ut-red);
+  border-radius: 0 0 3px 3px; background: var(--ut-gold-2);
 }
+.ut-panel--red::before { background: var(--ut-red); }
 .ut-panel--green::before { background: var(--ut-green); }
 .ut-panel--amber::before { background: var(--ut-amber); }
 .ut-panel--purple::before { background: var(--ut-purple); }
