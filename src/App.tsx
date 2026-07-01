@@ -69,12 +69,18 @@ const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((
 const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
 const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
 
-// Ultimate Squad OCULTO em produção: o modo existe no código mas NÃO aparece no
-// menu nem é acessível por rota, a menos que o flag esteja ligado localmente
-// (localStorage `rtm-ultimate`='1'). Não era pra ter ido pro ar; fica escondido
-// até liberar de propósito.
+// Ultimate Squad: VISÍVEL em localhost (dev/preview local), OCULTO no site real
+// (roadtomajor.com.br). O código existe no bundle, mas o menu e a rota só ligam
+// quando o host é local — OU quando o flag manual `rtm-ultimate`='1' está setado
+// (pra QA pontual em produção). Não era pra aparecer pro público.
 const ULTIMATE_ENABLED = (() => {
-  try { return localStorage.getItem('rtm-ultimate') === '1'; } catch { return false; }
+  try {
+    const h = window.location.hostname;
+    const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || h === '[::1]' || h.endsWith('.local');
+    return isLocal || localStorage.getItem('rtm-ultimate') === '1';
+  } catch {
+    return false;
+  }
 })();
 const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
 const OnlineMode = lazyWithReload(() => import('./components/online/OnlineMode').then((m) => ({ default: m.OnlineMode })));
