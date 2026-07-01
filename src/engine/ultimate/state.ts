@@ -16,6 +16,7 @@ export interface OwnedCard {
   acquiredVia: AcquiredVia;
   acquiredAt: number;
   locked: 'squad' | null;  // travada num squad → não pode vender
+  boost?: number;          // nível de evolução (+OVR/atributos por nível), 0..EVO_MAX
 }
 
 export interface UltimateSquad {
@@ -48,6 +49,9 @@ export interface UltimateProfile {
 export const ULTIMATE_VERSION = 1;
 export const STARTING_CREDITS = 15000;
 export const STARTING_ELO = 1000;
+// evolução de cartas: teto de níveis + custo (em credits) p/ ir de boost b → b+1.
+export const EVO_MAX = 3;
+export const EVO_COSTS = [4000, 9000, 18000];
 
 export interface UltimateState {
   version: number;
@@ -85,6 +89,23 @@ export function defaultUltimateState(): UltimateState {
 export function markObjectiveClaimed(state: UltimateState, id: string): UltimateState {
   if (state.profile.objectivesClaimed.includes(id)) return state;
   return { ...state, profile: { ...state.profile, objectivesClaimed: [...state.profile.objectivesClaimed, id] } };
+}
+
+// evolui UMA carta possuída: gasta credits e sobe o boost em +1 (até EVO_MAX).
+// O boost soma no OVR/atributos exibidos (aplicado na UI via boostCard).
+export function evolveCard(
+  state: UltimateState,
+  ownedId: string,
+): { ok: boolean; state: UltimateState; cost?: number; newBoost?: number; reason?: 'missing' | 'maxed' | 'insufficient' } {
+  const owned = state.inventory.find((o) => o.id === ownedId);
+  if (!owned) return { ok: false, state, reason: 'missing' };
+  const boost = Math.min(EVO_MAX, Math.max(0, owned.boost ?? 0));
+  if (boost >= EVO_MAX) return { ok: false, state, reason: 'maxed' };
+  const cost = EVO_COSTS[boost];
+  const spent = spendCredits(state, cost);
+  if (!spent.ok) return { ok: false, state, reason: 'insufficient' };
+  const inventory = spent.state.inventory.map((o) => (o.id === ownedId ? { ...o, boost: boost + 1 } : o));
+  return { ok: true, state: { ...spent.state, inventory }, cost, newBoost: boost + 1 };
 }
 
 // gerador de id — usa crypto.randomUUID no runtime; tests passam id explícito.
@@ -202,7 +223,13 @@ export function migrateUltimate(raw: unknown): UltimateState {
     objectivesClaimed: Array.isArray(p.objectivesClaimed) ? p.objectivesClaimed.filter((x): x is string => typeof x === 'string') : [],
   };
   const inventory: OwnedCard[] = Array.isArray(r.inventory)
-    ? r.inventory.filter((o): o is OwnedCard => !!o && typeof o === 'object' && typeof (o as OwnedCard).cardKey === 'string' && typeof (o as OwnedCard).id === 'string')
+    ? r.inventory
+        .filter((o): o is OwnedCard => !!o && typeof o === 'object' && typeof (o as OwnedCard).cardKey === 'string' && typeof (o as OwnedCard).id === 'string')
+        .map((o) => {
+          const b = o.boost;
+          if (typeof b !== 'number' || !Number.isFinite(b) || b <= 0) return { ...o, boost: undefined };
+          return { ...o, boost: Math.min(EVO_MAX, Math.floor(b)) };
+        })
     : [];
   const squads: UltimateSquad[] = Array.isArray(r.squads)
     ? r.squads.filter((s): s is UltimateSquad => !!s && typeof s === 'object' && typeof (s as UltimateSquad).id === 'string')

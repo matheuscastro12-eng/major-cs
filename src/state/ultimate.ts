@@ -17,6 +17,7 @@ import { objectiveById } from '../engine/ultimate/objectives';
 import {
   addCredits as _addCredits,
   markObjectiveClaimed as _markObjectiveClaimed,
+  evolveCard as _evolveCard,
   applyMatchResult as _applyMatchResult,
   applySeasonRollover as _applySeasonRollover,
   claimDaily as _claimDaily,
@@ -96,6 +97,8 @@ interface UltimateStore {
   buyCard: (cardKey: string, price: number) => boolean;
   // objetivos/missões (profundidade)
   claimObjective: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
+  // evolução de cartas
+  evolveCard: (ownedId: string) => { ok: boolean; cost?: number; newBoost?: number; reason?: string };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -275,6 +278,11 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     persist(s);
     set({ state: s });
     return { ok: true, reward: def.reward, grantedCard };
+  },
+  evolveCard: (ownedId) => {
+    const r = _evolveCard(get().state, ownedId);
+    if (r.ok) { persist(r.state); set({ state: r.state }); }
+    return { ok: r.ok, cost: r.cost, newBoost: r.newBoost, reason: r.reason };
   },
   setState: (s) => {
     persist(s);

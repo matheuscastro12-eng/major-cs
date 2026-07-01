@@ -10,7 +10,7 @@ import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
-import { activeSquad, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
+import { activeSquad, EVO_MAX, EVO_COSTS, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
 import type { UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
@@ -94,9 +94,22 @@ function cardSkin(rarity: UltCard['rarity']) {
   };
 }
 
+// aplica o nível de evolução (boost) no OVR e nos 6 atributos (clamp 99).
+// Mantém key/rarity/playerId — só sobe os números. Base intacta se boost=0.
+function boostCard(base: UltCard, boost: number | undefined): UltCard {
+  const b = Math.max(0, Math.min(EVO_MAX, Math.floor(boost ?? 0)));
+  if (!b) return base;
+  const up = (v: number) => Math.min(99, v + b);
+  return {
+    ...base,
+    ovr: Math.min(99, base.ovr + b),
+    stats: { tiro: up(base.stats.tiro), mira: up(base.stats.mira), reflexo: up(base.stats.reflexo), visao: up(base.stats.visao), clutch: up(base.stats.clutch), util: up(base.stats.util) },
+  };
+}
+
 // carta estilo FUT: pele premium por raridade (cardSkin), moldura dupla + sheen,
 // placa do OVR, 6 substats, foil nas especiais e marca M//CS. `qs` = quick-sell.
-function UltCardView({ card, size = 132, count, qs }: { card: UltCard; size?: number; count?: number; qs?: number }) {
+function UltCardView({ card, size = 132, count, qs, evo = 0 }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number }) {
   const info = rarityInfo(card.rarity);
   const compact = size < 116;
   const h = Math.round(size * 1.4);
@@ -105,12 +118,15 @@ function UltCardView({ card, size = 132, count, qs }: { card: UltCard; size?: nu
   const px = Math.round(size * 0.06);
   return (
     <div style={{ width: size, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: qs != null ? 6 : 0 }}>
-      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: s.bg, border: `1.5px solid ${s.frame}`, boxShadow: s.glow }}>
+      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: s.bg, border: `1.5px solid ${evo > 0 ? '#22c55e' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px #22c55e, 0 0 20px rgba(34,197,94,0.4)` : s.glow }}>
         <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${s.inner}`, pointerEvents: 'none' }} />
         {foil && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
+        {evo > 0 && (
+          <span style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, display: 'inline-flex', alignItems: 'center', gap: 1, fontSize: '0.56rem', fontWeight: 900, padding: '1px 6px', borderRadius: 10, background: '#16a34a', color: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>✦{evo}</span>
+        )}
         {count != null && count > 1 && (
-          <span style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, fontSize: '0.6rem', fontWeight: 900, padding: '1px 6px', borderRadius: 10, background: 'rgba(0,0,0,0.55)', color: '#fff' }}>×{count}</span>
+          <span style={{ position: 'absolute', top: evo > 0 ? 25 : 6, right: 6, zIndex: 2, fontSize: '0.6rem', fontWeight: 900, padding: '1px 6px', borderRadius: 10, background: 'rgba(0,0,0,0.55)', color: '#fff' }}>×{count}</span>
         )}
         <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: `${px}px ${px}px ${Math.round(size * 0.05)}px` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
@@ -157,10 +173,10 @@ function UltCardView({ card, size = 132, count, qs }: { card: UltCard; size?: nu
 }
 
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
-interface ClubRow { card: UltCard; count: number; ownedIds: string[]; dupSellValue: number }
+interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective } = useUltimate();
+  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -226,17 +242,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   }, [state.profile.w, state.profile.peakElo, state.profile.streak, state.inventory.length, state.profile.onboarded]);
 
   const club = useMemo<ClubRow[]>(() => {
-    const byKey = new Map<string, { card: UltCard; ownedIds: string[] }>();
+    // agrupa por carta + nível de evolução (uma Prata +2 é distinta da Prata base).
+    const byKey = new Map<string, { card: UltCard; evo: number; ownedIds: string[] }>();
     for (const o of state.inventory) {
-      const card = index.get(o.cardKey);
-      if (!card) continue;
-      const g = byKey.get(o.cardKey);
+      const base = index.get(o.cardKey);
+      if (!base) continue;
+      const evo = Math.min(EVO_MAX, Math.max(0, o.boost ?? 0));
+      const key = `${o.cardKey}#${evo}`;
+      const g = byKey.get(key);
       if (g) g.ownedIds.push(o.id);
-      else byKey.set(o.cardKey, { card, ownedIds: [o.id] });
+      else byKey.set(key, { card: boostCard(base, evo), evo, ownedIds: [o.id] });
     }
     const rows: ClubRow[] = [];
-    for (const { card, ownedIds } of byKey.values()) {
-      rows.push({ card, count: ownedIds.length, ownedIds, dupSellValue: 0 });
+    for (const { card, evo, ownedIds } of byKey.values()) {
+      rows.push({ card, evo, count: ownedIds.length, ownedIds });
     }
     return rows.sort((a, b) => b.card.ovr - a.card.ovr);
   }, [state.inventory, index]);
@@ -253,8 +272,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const entry = squad?.slots.find((s) => s.slot === slotIdx);
     if (!entry?.ownedId) return null;
     const owned = ownedById.get(entry.ownedId);
-    const card = owned ? index.get(owned.cardKey) : undefined;
-    return owned && card ? { owned, card } : null;
+    const base = owned ? index.get(owned.cardKey) : undefined;
+    return owned && base ? { owned, card: boostCard(base, owned.boost) } : null;
   };
   const nodes: ChemNode[] = form.slots.map((fs) => {
     const sc = slotCard(fs.slot);
@@ -321,11 +340,21 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   }, [ladder, state.profile.elo, state.profile.w, state.profile.l]);
   const myRankPos = rankedList.findIndex((p) => p.id === 'you') + 1;
 
+  const doEvolve = (row: ClubRow) => {
+    // prefere evoluir a cópia escalada (fortalece o squad na hora); senão a 1ª.
+    const id = row.ownedIds.find((oid) => ownedById.get(oid)?.locked === 'squad') ?? row.ownedIds[0];
+    const r = evolveCard(id);
+    if (r.ok) flash(`✦ ${ct('Carta evoluída')} → +${r.newBoost} · -${fmt(r.cost ?? 0)} 🪙`, 2200);
+    else flash(r.reason === 'maxed' ? ct('Já no nível máximo.') : ct('Créditos insuficientes.'));
+  };
+
   const playMatch = () => {
     if (!squadComplete) return;
     const five = squadPool as PoolPlayer[];
     const userTeam = buildOnlineTeam(ct('Seu Squad'), five, 'ut-user');
     userTeam.strength = userTeam.strength * chem.multiplier; // química influencia a força
+    const totalBoost = form.slots.reduce((a, fs) => a + (slotCard(fs.slot)?.owned.boost ?? 0), 0);
+    if (totalBoost > 0) userTeam.strength *= 1 + totalBoost * 0.01; // evolução: +1% de força por nível
     const target = Math.max(60, Math.min(96, 68 + (state.profile.elo - 1000) / 25));
     const mineIds = new Set(five.map((p) => p.id));
     const oppFive = pool.filter((p) => !mineIds.has(p.id))
@@ -764,14 +793,26 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <span>{ct('Duplicatas')}: <b style={{ color: dupCount ? '#92600a' : 'var(--em-text,#e6edf5)' }}>{dupCount}</b></span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, justifyItems: 'center' }}>
-                {club.map((row) => (
-                  <div key={row.card.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(row.card.rarity, row.card.ovr, row.count > 1)} />
-                    <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
-                      {row.count > 1 ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
-                    </button>
-                  </div>
-                ))}
+                {club.map((row) => {
+                  const canEvo = row.evo < EVO_MAX;
+                  const evoCost = canEvo ? EVO_COSTS[row.evo] : 0;
+                  return (
+                    <div key={`${row.card.key}#${row.evo}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                      <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(row.card.rarity, row.card.ovr, row.count > 1)} evo={row.evo} />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
+                          {row.count > 1 ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
+                        </button>
+                        {canEvo && (
+                          <button onClick={() => doEvolve(row)} disabled={credits < evoCost} title={`${ct('Evoluir')} → +${row.evo + 1} OVR`}
+                            style={{ ...sellBtn, display: 'inline-flex', alignItems: 'center', gap: 3, borderColor: credits >= evoCost ? 'rgba(34,197,94,0.5)' : 'var(--em-border,#2a3340)', color: credits >= evoCost ? '#16a34a' : 'var(--em-muted,#8a99ab)', cursor: credits >= evoCost ? 'pointer' : 'default' }}>
+                            ✦ {fmtChip(evoCost)}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
@@ -866,7 +907,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       {pickSlot != null && (() => {
         const slotRole = form.slots[pickSlot].role;
         const cands = state.inventory
-          .map((o) => ({ o, card: index.get(o.cardKey) }))
+          .map((o) => { const b = index.get(o.cardKey); return { o, card: b ? boostCard(b, o.boost) : undefined }; })
           .filter((x): x is { o: OwnedCard; card: UltCard } => !!x.card)
           .sort((a, b) => (Number(roleFitsSlot(b.card.role, slotRole)) - Number(roleFitsSlot(a.card.role, slotRole))) || b.card.ovr - a.card.ovr);
         const current = slotCard(pickSlot);
@@ -881,9 +922,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   const fits = roleFitsSlot(card.role, slotRole);
                   return (
                     <button key={o.id} onClick={() => { placeInSquad(pickSlot, o.id); setPickSlot(null); }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: fits ? 1 : 0.72 }}>
-                      <UltCardView card={card} size={116} />
+                      <UltCardView card={card} size={116} evo={o.boost ?? 0} />
                       {!fits && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(229,138,138,0.85)', color: '#fff' }}>{ct('fora')}</span>}
-                      {o.locked === 'squad' && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
+                      {o.locked === 'squad' && <span style={{ position: 'absolute', bottom: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
                     </button>
                   );
                 })}

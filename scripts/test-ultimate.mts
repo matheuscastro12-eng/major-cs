@@ -25,7 +25,7 @@ import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
 import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
 import { checkSbc } from '../src/engine/ultimate/sbc.ts';
 import { buildAiLadder, buildBazaar } from '../src/engine/ultimate/bazaar.ts';
-import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed } from '../src/engine/ultimate/state.ts';
+import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS } from '../src/engine/ultimate/state.ts';
 import { evaluateObjectives, objectiveById, OBJECTIVES } from '../src/engine/ultimate/objectives.ts';
 import {
   defaultUltimateState,
@@ -480,4 +480,37 @@ test('migrateUltimate preenche objectivesClaimed (default [] + preserva válidos
   assert.deepEqual(migrateUltimate({}).profile.objectivesClaimed, []);
   const kept = migrateUltimate({ profile: { objectivesClaimed: ['win-5', 42, 'ovr-80'] } });
   assert.deepEqual(kept.profile.objectivesClaimed, ['win-5', 'ovr-80']); // filtra não-string
+});
+
+test('evolveCard: sobe boost gastando EVO_COSTS, respeita teto e saldo', () => {
+  const s0 = grantCard(defaultUltimateState(), 'p1:gold', 'pack', { id: 'c1' });
+  const r1 = evolveCard(s0, 'c1');
+  assert.ok(r1.ok && r1.newBoost === 1 && r1.cost === EVO_COSTS[0]);
+  assert.equal(r1.state.profile.credits, STARTING_CREDITS - EVO_COSTS[0]);
+  assert.equal(r1.state.inventory.find((o) => o.id === 'c1')!.boost, 1);
+  assert.equal(s0.inventory.find((o) => o.id === 'c1')!.boost, undefined); // original intacto
+  // sobe até o teto (com saldo folgado)
+  let s = addCredits(r1.state, 100000);
+  while ((s.inventory.find((o) => o.id === 'c1')!.boost ?? 0) < EVO_MAX) s = evolveCard(s, 'c1').state;
+  assert.equal(s.inventory.find((o) => o.id === 'c1')!.boost, EVO_MAX);
+  const maxed = evolveCard(s, 'c1');
+  assert.ok(!maxed.ok && maxed.reason === 'maxed');
+  // sem saldo → insufficient; carta inexistente → missing
+  const broke = grantCard(spendCredits(defaultUltimateState(), STARTING_CREDITS).state, 'p2:gold', 'pack', { id: 'c2' });
+  assert.equal(evolveCard(broke, 'c2').reason, 'insufficient');
+  assert.equal(evolveCard(s0, 'nope').reason, 'missing');
+});
+
+test('migrateUltimate sanitiza boost do inventário (clamp + descarta inválido)', () => {
+  const m = migrateUltimate({ inventory: [
+    { id: 'a', cardKey: 'p:gold', boost: 2 },
+    { id: 'b', cardKey: 'p:gold', boost: 9 },
+    { id: 'c', cardKey: 'p:gold', boost: -1 },
+    { id: 'd', cardKey: 'p:gold', boost: 'x' },
+  ] });
+  const by = (id: string) => m.inventory.find((o) => o.id === id)!;
+  assert.equal(by('a').boost, 2);
+  assert.equal(by('b').boost, EVO_MAX);
+  assert.equal(by('c').boost, undefined);
+  assert.equal(by('d').boost, undefined);
 });
