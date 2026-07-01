@@ -32,8 +32,9 @@ import {
   LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
   Swords, ListOrdered, ChevronDown, Coins, Trophy, Zap, Menu, CalendarDays, Lock,
   Check, Gift, Star, Gem, Crown, Wallet, TrendingUp, Medal, Flame, AlertCircle,
-  Tag, ArrowLeft, Sparkles, Plus, X,
+  Tag, ArrowLeft, Sparkles, Plus, X, Target,
 } from 'lucide-react';
+import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import '../../styles/ultimate.css';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
@@ -159,7 +160,7 @@ function UltCardView({ card, size = 132, count, qs }: { card: UltCard; size?: nu
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; dupSellValue: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard } = useUltimate();
+  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -267,6 +268,37 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
   const rank = rankFor(state.profile.elo);
+
+  // ── objetivos/missões (profundidade) ──
+  const iconsOwned = useMemo(() => {
+    const uniq = new Set(state.inventory.map((o) => o.cardKey));
+    let n = 0;
+    for (const k of uniq) if (index.get(k)?.rarity === 'icon') n++;
+    return n;
+  }, [state.inventory, index]);
+  const objectives = evaluateObjectives({
+    wins: state.profile.w, packsOpened: state.profile.packSeedCounter,
+    uniqueCards, totalCards, squadOvr: avgOvr, chem: chem.total,
+    streak: state.profile.streak, iconsOwned, sbcDone: state.profile.sbcDone.length,
+    peakElo: state.profile.peakElo,
+  });
+  const claimedSet = new Set(state.profile.objectivesClaimed);
+  const objClaimable = objectives.filter((o) => o.done && !claimedSet.has(o.def.id));
+  const objSorted = [...objectives].sort((a, b) => {
+    const aC = a.done && !claimedSet.has(a.def.id), bC = b.done && !claimedSet.has(b.def.id);
+    if (aC !== bC) return aC ? -1 : 1;
+    const aD = claimedSet.has(a.def.id), bD = claimedSet.has(b.def.id);
+    if (aD !== bD) return aD ? 1 : -1;
+    return b.pct - a.pct;
+  });
+  const claimObj = (o: (typeof objectives)[number]) => {
+    const r = claimObjective(o.def.id);
+    if (r.ok) {
+      if (r.grantedCard) setReveal([r.grantedCard]);
+      flash(`✅ ${ct('Objetivo concluído')}: ${o.def.name}${r.reward?.credits ? ` · +${fmt(r.reward.credits)} 🪙` : ''}`, 2400);
+      syncTitles();
+    }
+  };
 
   // ── ladder de IA (ranking) + bazar (mercado) — P6 ──
   const ladder = useMemo<AiPlayer[]>(() => buildAiLadder(pool.map((p) => ({ nick: p.nick, country: p.country, ovr: p.ovr })), 20260607), [pool]);
@@ -588,6 +620,30 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               )}
             </UtPanel>
           </div>
+
+          <UtPanel label={ct('Objetivos')} icon={<Target size={15} className="ut-panel__lead" />} accent="amber"
+            right={objClaimable.length > 0 ? <span style={{ color: '#92600a' }}>{objClaimable.length} {ct('pra resgatar')}</span> : `${claimedSet.size}/${objectives.length}`}
+            info={ct('Metas de coleção e competição. Complete pra ganhar credits e cartas.')}>
+            <div className="ut-objs">
+              {objSorted.map((o) => {
+                const claimed = claimedSet.has(o.def.id);
+                const claimable = o.done && !claimed;
+                return (
+                  <div key={o.def.id} className={`ut-obj${claimable ? ' is-claimable' : ''}${claimed ? ' is-claimed' : ''}`}>
+                    <div className="ut-obj__name">{o.def.name}</div>
+                    <div className="ut-obj__desc">{o.def.desc}</div>
+                    <div className="ut-obj__bar"><div className={o.done ? 'done' : ''} style={{ width: `${o.pct}%` }} /></div>
+                    <div className="ut-obj__foot">
+                      <span className="ut-obj__reward"><Coins size={12} /> {fmt(o.def.reward.credits ?? 0)}{o.def.reward.card ? ` +${rarityInfo(o.def.reward.card).label}` : ''}</span>
+                      {claimed ? <span className="ut-obj__done"><Check size={12} strokeWidth={3} /> {ct('resgatado')}</span>
+                        : claimable ? <button className="ut-obj__claim" onClick={() => claimObj(o)}>{ct('Resgatar')}</button>
+                        : <span className="ut-obj__count">{o.value}/{o.def.target}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </UtPanel>
 
           {squadComplete && (
             <UtPanel label={ct('Squad Ativo')} icon={<Shirt size={15} className="ut-panel__lead" />} accent="green"

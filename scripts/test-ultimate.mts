@@ -25,7 +25,8 @@ import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
 import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
 import { checkSbc } from '../src/engine/ultimate/sbc.ts';
 import { buildAiLadder, buildBazaar } from '../src/engine/ultimate/bazaar.ts';
-import { applySeasonRollover, removeOwnedCards } from '../src/engine/ultimate/state.ts';
+import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed } from '../src/engine/ultimate/state.ts';
+import { evaluateObjectives, objectiveById, OBJECTIVES } from '../src/engine/ultimate/objectives.ts';
 import {
   defaultUltimateState,
   grantCard,
@@ -451,4 +452,32 @@ test('migrateUltimate: lixo vira default; parcial é preenchido; inventário vá
   // entrada de inventário inválida é filtrada
   const dirty = migrateUltimate({ inventory: [{ nope: true }, { id: 'y', cardKey: 'p2:gold' }] });
   assert.equal(dirty.inventory.length, 1);
+});
+
+test('evaluateObjectives: pct 0..100, done quando value>=target, cobre todos os defs', () => {
+  const facts = { wins: 5, packsOpened: 2, uniqueCards: 25, totalCards: 40, squadOvr: 79, chem: 12, streak: 0, iconsOwned: 0, sbcDone: 1, peakElo: 1000 };
+  const prog = evaluateObjectives(facts);
+  assert.equal(prog.length, OBJECTIVES.length);
+  const win5 = prog.find((p) => p.def.id === 'win-5')!;
+  assert.ok(win5.done && win5.pct === 100);
+  const ovr80 = prog.find((p) => p.def.id === 'ovr-80')!; // 79 < 80
+  assert.ok(!ovr80.done);
+  assert.equal(prog.find((p) => p.def.id === 'unique-60')!.pct, Math.round((25 / 60) * 100));
+  for (const p of prog) assert.ok(p.pct >= 0 && p.pct <= 100);
+});
+
+test('markObjectiveClaimed: idempotente e não muta o estado original', () => {
+  const s0 = defaultUltimateState();
+  const s1 = markObjectiveClaimed(s0, 'win-5');
+  assert.deepEqual(s0.profile.objectivesClaimed, []); // original intacto
+  assert.deepEqual(s1.profile.objectivesClaimed, ['win-5']);
+  const s2 = markObjectiveClaimed(s1, 'win-5');
+  assert.equal(s2, s1); // já resgatado → mesmo objeto (no-op)
+  assert.ok(objectiveById('win-5') && !objectiveById('nope'));
+});
+
+test('migrateUltimate preenche objectivesClaimed (default [] + preserva válidos)', () => {
+  assert.deepEqual(migrateUltimate({}).profile.objectivesClaimed, []);
+  const kept = migrateUltimate({ profile: { objectivesClaimed: ['win-5', 42, 'ovr-80'] } });
+  assert.deepEqual(kept.profile.objectivesClaimed, ['win-5', 'ovr-80']); // filtra não-string
 });

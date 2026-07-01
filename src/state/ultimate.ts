@@ -13,8 +13,10 @@ import { pickStarterCards } from '../engine/ultimate/cards';
 import { dateKey } from '../engine/ultimate/daily';
 import { evaluateTitles } from '../engine/ultimate/titles';
 import { checkSbc, sbcById, type SbcReward } from '../engine/ultimate/sbc';
+import { objectiveById } from '../engine/ultimate/objectives';
 import {
   addCredits as _addCredits,
+  markObjectiveClaimed as _markObjectiveClaimed,
   applyMatchResult as _applyMatchResult,
   applySeasonRollover as _applySeasonRollover,
   claimDaily as _claimDaily,
@@ -92,6 +94,8 @@ interface UltimateStore {
   tickSeason: () => SeasonRollover;
   // bazar (P6)
   buyCard: (cardKey: string, price: number) => boolean;
+  // objetivos/missões (profundidade)
+  claimObjective: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -251,6 +255,26 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     persist(s);
     set({ state: s });
     return true;
+  },
+  claimObjective: (id) => {
+    const def = objectiveById(id);
+    if (!def) return { ok: false };
+    const st = get().state;
+    if (st.profile.objectivesClaimed.includes(id)) return { ok: false };
+    let s = _markObjectiveClaimed(st, id);
+    if (def.reward.credits) s = _addCredits(s, def.reward.credits);
+    let grantedCard: UltCard | undefined;
+    if (def.reward.card) {
+      const pool = ultimateCatalog().filter((c) => c.rarity === def.reward.card);
+      if (pool.length) {
+        grantedCard = pool[Math.floor(Math.random() * pool.length)];
+        const gid = `obj_${Math.random().toString(36).slice(2, 9)}`;
+        s = _grantCard(s, grantedCard.key, 'reward', { id: gid });
+      }
+    }
+    persist(s);
+    set({ state: s });
+    return { ok: true, reward: def.reward, grantedCard };
   },
   setState: (s) => {
     persist(s);

@@ -42,6 +42,7 @@ export interface UltimateProfile {
   // de fim de temporada a uma conta dormente — ver applySeasonRollover).
   season: { startedAt: number; endsAt: number; wl0?: number } | null;
   sbcDone: string[];
+  objectivesClaimed: string[]; // ids de objetivos/missões já resgatados (profundidade)
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -70,11 +71,20 @@ export function defaultUltimateProfile(): UltimateProfile {
     equippedTitle: null,
     season: null,
     sbcDone: [],
+    objectivesClaimed: [],
   };
 }
 
 export function defaultUltimateState(): UltimateState {
   return { version: ULTIMATE_VERSION, profile: defaultUltimateProfile(), inventory: [], squads: [] };
+}
+
+// marca um objetivo como resgatado (idempotente). A recompensa em credits/carta
+// é aplicada na store (que tem catálogo) — como no submitSbc. O "cumprido" é
+// checado na UI (single-player, sem anti-cheat — igual a daily/season).
+export function markObjectiveClaimed(state: UltimateState, id: string): UltimateState {
+  if (state.profile.objectivesClaimed.includes(id)) return state;
+  return { ...state, profile: { ...state.profile, objectivesClaimed: [...state.profile.objectivesClaimed, id] } };
 }
 
 // gerador de id — usa crypto.randomUUID no runtime; tests passam id explícito.
@@ -189,6 +199,7 @@ export function migrateUltimate(raw: unknown): UltimateState {
       ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0) }
       : null,
     sbcDone: Array.isArray(p.sbcDone) ? p.sbcDone.filter((x): x is string => typeof x === 'string') : [],
+    objectivesClaimed: Array.isArray(p.objectivesClaimed) ? p.objectivesClaimed.filter((x): x is string => typeof x === 'string') : [],
   };
   const inventory: OwnedCard[] = Array.isArray(r.inventory)
     ? r.inventory.filter((o): o is OwnedCard => !!o && typeof o === 'object' && typeof (o as OwnedCard).cardKey === 'string' && typeof (o as OwnedCard).id === 'string')
