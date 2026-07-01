@@ -18,7 +18,7 @@ import { makeRng } from '../src/engine/rng.ts';
 import { rarityMatchesBucket } from '../src/engine/ultimate/rarities.ts';
 import { computeChemistry, roleFitsSlot, type ChemNode } from '../src/engine/ultimate/chemistry.ts';
 import { formationById, formationSlotRoles } from '../src/engine/ultimate/formations.ts';
-import { ensureSquad, setSlot, setFormation, activeSquad, computeMatchOutcome, applyMatchResult, claimDaily, mergeTitles, equipTitle } from '../src/engine/ultimate/state.ts';
+import { ensureSquad, setSlot, setFormation, activeSquad, computeMatchOutcome, applyMatchResult, claimDaily, mergeTitles, equipTitle, sellCard } from '../src/engine/ultimate/state.ts';
 import { computeNextDaily } from '../src/engine/ultimate/daily.ts';
 import { evaluateTitles } from '../src/engine/ultimate/titles.ts';
 import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
@@ -375,6 +375,38 @@ test('applySeasonRollover: inicia season; não rola antes do fim; rola e soft-re
   assert.equal(b.state.profile.streak, 0);
   assert.ok(b.result.credits > 0);
   assert.ok(b.state.profile.season!.endsAt > past); // nova season
+});
+
+test('applySeasonRollover NÃO paga bônus a conta dormente (sem jogos na season)', () => {
+  const t0 = 1_000_000_000_000;
+  let st = defaultUltimateState();
+  st = { ...st, profile: { ...st.profile, elo: 1400, peakElo: 1400, w: 5, l: 2 } }; // jogou em seasons passadas
+  st = applySeasonRollover(st, t0).state; // abre season com baseline wl0 = 7
+  const past = st.profile.season!.endsAt + 1000;
+  const b = applySeasonRollover(st, past); // não jogou NADA nesta season
+  assert.equal(b.result.rolled, true);
+  assert.equal(b.result.credits, 0); // dormente → sem bônus (fecha a fonte de credits)
+});
+
+test('setSlot não deixa o MESMO jogador em dois slots (evita id duplicado no motor)', () => {
+  let st = defaultUltimateState();
+  st = grantCard(st, 'p1:gold', 'pack', { id: 'o1', at: 1 });
+  st = grantCard(st, 'p1:elite', 'pack', { id: 'o2', at: 2 }); // mesma pessoa p1, versão diferente
+  st = ensureSquad(st, 'standard', slotRoles('standard'));
+  st = setSlot(st, 0, 'o1');
+  st = setSlot(st, 1, 'o2'); // mesmo jogador → limpa o slot 0
+  assert.equal(activeSquad(st)!.slots[0].ownedId, null);
+  assert.equal(activeSquad(st)!.slots[1].ownedId, 'o2');
+});
+
+test('grantCard: serial monotônico não colide após venda', () => {
+  let st = defaultUltimateState();
+  st = grantCard(st, 'p1:gold', 'pack', { id: 'a', at: 1 });
+  st = grantCard(st, 'p1:gold', 'pack', { id: 'b', at: 2 });
+  st = sellCard(st, 'a', new Map()).state; // remove 'a' (catalog vazio → 0 credits, ok)
+  st = grantCard(st, 'p1:gold', 'pack', { id: 'c', at: 3 });
+  const serials = st.inventory.filter((o) => o.cardKey === 'p1:gold').map((o) => o.serial).sort();
+  assert.deepEqual(serials, [2, 3]); // b=2, c=3 — sem colisão em 2
 });
 
 test('removeOwnedCards remove do inventário e limpa slot do squad', () => {

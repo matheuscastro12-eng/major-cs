@@ -211,6 +211,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
   submitSbc: (sbcId, ownedIds) => {
     const def = sbcById(sbcId);
     if (!def) return { ok: false, reason: 'unknown_sbc' };
+    if (new Set(ownedIds).size !== ownedIds.length) return { ok: false, reason: 'duplicate_ids' };
     const st = get().state;
     const idx = ultimateIndex();
     const owned = ownedIds.map((id) => st.inventory.find((o) => o.id === id)).filter((o): o is NonNullable<typeof o> => !!o);
@@ -237,8 +238,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
   },
   tickSeason: () => {
     const r = _applySeasonRollover(get().state, Date.now());
-    persist(r.state);
-    set({ state: r.state });
+    // só grava se o estado mudou (evita write no localStorage a cada mount).
+    if (r.state !== get().state) { persist(r.state); set({ state: r.state }); }
     return r.result;
   },
   setState: (s) => {

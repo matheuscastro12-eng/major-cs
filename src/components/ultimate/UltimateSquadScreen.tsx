@@ -2,7 +2,7 @@
 // cartas do dataset real, moeda `credits`. Padrão em-*/DashCard/Modal/Button.
 // Ver docs-but-map.md. Sub-fases futuras: Squad Builder (P2), partida vs IA (P3).
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, DashCard, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
 import { ultimateIndex, useUltimate } from '../../state/ultimate';
@@ -80,6 +80,15 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const equipped = state.profile.equippedTitle ? titleBySlug(state.profile.equippedTitle) : undefined;
   const daily = computeNextDaily(state.profile.daily.streakDay, state.profile.daily.lastClaim, dateKey(new Date()));
 
+  // toast com timer único (cancela o anterior — senão um timer velho apagava um
+  // toast novo antes da hora).
+  const toastTimer = useRef<number | undefined>(undefined);
+  const flash = (msg: string, ms = 1800) => {
+    setToast(msg);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(''), ms);
+  };
+
   // garante um squad ativo ao abrir a aba Squad
   useEffect(() => { if (tab === 'squad') ensureSquad(); }, [tab, ensureSquad]);
   // season: no mount, inicia/rola por relógio local; se rolou, mostra o modal
@@ -91,7 +100,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // reavalia títulos quando algum fato muda (vitórias, coleção, pico, sequência)
   useEffect(() => {
     const newly = syncTitles();
-    if (newly.length) { const d = titleBySlug(newly[0]); if (d) { setToast(`🏷️ ${ct('Título desbloqueado')}: ${d.label}`); window.setTimeout(() => setToast(''), 2400); } }
+    if (newly.length) {
+      const labels = newly.map((s) => titleBySlug(s)?.label).filter(Boolean).join(', ');
+      if (labels) flash(`🏷️ ${ct('Título desbloqueado')}: ${labels}`, 2600);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.profile.w, state.profile.peakElo, state.profile.streak, state.inventory.length, state.profile.onboarded]);
 
@@ -154,7 +166,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       .sort((a, b) => b.ovr - a.ovr);
     const oppTeam = buildOnlineTeam(ct('Esquadrão IA'), oppFive, 'ut-opp');
     const oppOvr = oppFive.length ? Math.round(oppFive.reduce((a, p) => a + p.ovr, 0) / oppFive.length) : Math.round(target);
-    const oppElo = Math.max(300, Math.round(1000 + (oppOvr - 78) * 25));
+    // ELO do rival RELATIVO ao SEU squad: bater um time acima do seu OVR paga mais
+    // e perder pra um mais fraco custa mais — a recompensa acompanha a dificuldade real.
+    const myOvr = avgOvr || oppOvr;
+    const oppElo = Math.max(300, Math.round(state.profile.elo + (oppOvr - myOvr) * 22));
     const rng = makeRng(Math.floor(Math.random() * 2147483647));
     const maps = autoVeto([userTeam, oppTeam], rng, 1);
     const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
@@ -171,8 +186,6 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     setLive(null);
     setResult({ won, score, outcome });
   };
-
-  const flash = (msg: string) => { setToast(msg); window.setTimeout(() => setToast(''), 1800); };
 
   const buy = (pack: PackDef) => {
     const res = openPack(pack.id);

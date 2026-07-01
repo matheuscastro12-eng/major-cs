@@ -38,7 +38,9 @@ export interface UltimateProfile {
   packSeedCounter: number; // semente incremental p/ RNG reproduzível de pack (P1)
   titles: string[];
   equippedTitle: string | null;
-  season: { startedAt: number; endsAt: number } | null;
+  // wl0 = w+l no INÍCIO da season (pra saber se jogou nela e não pagar bônus
+  // de fim de temporada a uma conta dormente — ver applySeasonRollover).
+  season: { startedAt: number; endsAt: number; wl0?: number } | null;
   sbcDone: string[];
 }
 
@@ -93,15 +95,22 @@ export function countCopies(state: UltimateState, cardKey: string): number {
   return n;
 }
 
+// maior serial já emitido pra um cardKey (monotônico — sobrevive a vendas).
+function maxSerialOf(state: UltimateState, cardKey: string): number {
+  let m = 0;
+  for (const o of state.inventory) if (o.cardKey === cardKey && (o.serial ?? 0) > m) m = o.serial ?? 0;
+  return m;
+}
+
 // concede uma carta ao inventário (retorna NOVO estado — imutável).
-// serial = cópia Nª daquele cardKey que você passa a ter.
+// serial = próximo número monotônico daquele cardKey (não colide após vender).
 export function grantCard(
   state: UltimateState,
   cardKey: string,
   via: AcquiredVia,
   opts?: { id?: string; at?: number },
 ): UltimateState {
-  const serial = countCopies(state, cardKey) + 1;
+  const serial = maxSerialOf(state, cardKey) + 1;
   const owned: OwnedCard = {
     id: opts?.id ?? uid(),
     cardKey,
@@ -177,7 +186,7 @@ export function migrateUltimate(raw: unknown): UltimateState {
     titles: Array.isArray(p.titles) ? p.titles.filter((x): x is string => typeof x === 'string') : [],
     equippedTitle: typeof p.equippedTitle === 'string' ? p.equippedTitle : null,
     season: p.season && typeof p.season === 'object' && typeof p.season.startedAt === 'number'
-      ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt) }
+      ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0) }
       : null,
     sbcDone: Array.isArray(p.sbcDone) ? p.sbcDone.filter((x): x is string => typeof x === 'string') : [],
   };
@@ -187,7 +196,10 @@ export function migrateUltimate(raw: unknown): UltimateState {
   const squads: UltimateSquad[] = Array.isArray(r.squads)
     ? r.squads.filter((s): s is UltimateSquad => !!s && typeof s === 'object' && typeof (s as UltimateSquad).id === 'string')
     : [];
-  return { version: ULTIMATE_VERSION, profile, inventory, squads };
+  // re-sincroniza locks no load: um save corrompido pode ter carta locked:'squad'
+  // que não está em slot nenhum (ficaria invendável pra sempre). recomputeLocks
+  // conserta pelos slots reais.
+  return recomputeLocks({ version: ULTIMATE_VERSION, profile, inventory, squads });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -232,9 +244,15 @@ export function ensureSquad(state: UltimateState, formationId: string, slotRoles
 export function setSlot(state: UltimateState, slot: number, ownedId: string | null): UltimateState {
   const sq = state.squads[0];
   if (!sq) return state;
+  // jogador (não só a cópia) que está entrando — o MESMO jogador não pode ocupar
+  // dois slots (viraria id duplicado no motor de partida). cardKey = `${playerId}:${rarity}`.
+  const ownedOf = (id: string | null) => (id ? state.inventory.find((o) => o.id === id) : undefined);
+  const playerOf = (id: string | null): string | undefined => ownedOf(id)?.cardKey.split(':')[0];
+  const incomingPlayer = ownedId ? playerOf(ownedId) : undefined;
   const slots = sq.slots.map((s) => {
-    if (ownedId && s.ownedId === ownedId && s.slot !== slot) return { ...s, ownedId: null };
     if (s.slot === slot) return { ...s, ownedId };
+    // limpa qualquer outro slot com a MESMA cópia ou o MESMO jogador
+    if (ownedId && (s.ownedId === ownedId || (incomingPlayer && playerOf(s.ownedId) === incomingPlayer))) return { ...s, ownedId: null };
     return s;
   });
   return recomputeLocks({ ...state, squads: [{ ...sq, slots }, ...state.squads.slice(1)] });
@@ -333,27 +351,32 @@ export function removeOwnedCards(state: UltimateState, ids: string[]): UltimateS
 
 export const SEASON_DAYS = 30;
 
-export function startSeason(nowMs: number): { startedAt: number; endsAt: number } {
-  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000 };
+export function startSeason(nowMs: number, wl0 = 0): { startedAt: number; endsAt: number; wl0: number } {
+  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0 };
 }
 
 export interface SeasonRollover { rolled: boolean; credits: number; newElo: number }
 
 export function applySeasonRollover(state: UltimateState, nowMs: number): { state: UltimateState; result: SeasonRollover } {
-  const s = state.profile.season;
+  const p = state.profile;
+  const s = p.season;
+  const wlNow = p.w + p.l;
   if (!s) {
-    return { state: { ...state, profile: { ...state.profile, season: startSeason(nowMs) } }, result: { rolled: false, credits: 0, newElo: state.profile.elo } };
+    // 1ª vez: abre a season marcando o baseline de jogos (não paga nada).
+    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
   }
-  if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: state.profile.elo } };
-  const played = state.profile.w + state.profile.l > 0;
-  const credits = played ? 2000 + Math.max(0, Math.round((state.profile.peakElo - 1000) / 2)) : 0;
-  const newElo = Math.round(1000 + (state.profile.elo - 1000) * 0.5);
+  if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: p.elo } };
+  // só paga bônus se JOGOU nesta season (conta dormente não vira fonte de credits).
+  // recompensa proporcional ao RP CONQUISTADO na season (elo atual, não pico eterno).
+  const playedThisSeason = wlNow - (s.wl0 ?? 0) > 0;
+  const credits = playedThisSeason ? 2000 + Math.max(0, Math.round((p.elo - 1000) / 2)) : 0;
+  const newElo = Math.round(1000 + (p.elo - 1000) * 0.5);
   const profile: UltimateProfile = {
-    ...state.profile,
+    ...p,
     elo: newElo,
     streak: 0,
-    credits: state.profile.credits + credits,
-    season: startSeason(nowMs),
+    credits: p.credits + credits,
+    season: startSeason(nowMs, wlNow), // novo baseline
   };
   return { state: { ...state, profile }, result: { rolled: true, credits, newElo } };
 }
