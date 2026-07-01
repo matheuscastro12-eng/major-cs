@@ -18,6 +18,7 @@ interface Props {
   onResume?: () => void;
   onDiscardCampaign?: () => void;
   onOnline?: () => void;
+  onUltimate?: () => void;
   onLeaderboard?: () => void;
   onCareer?: () => void;
   /** Conta atual (null = não logado, undefined = carregando) */
@@ -45,6 +46,7 @@ export function Home({
   onDonate,
   teamCount,
   onOnline,
+  onUltimate,
   onCareer,
   account,
   accountReady,
@@ -159,6 +161,23 @@ export function Home({
                     <span className="rtm-modecard-foot">
                       <span className="rtm-modecard-meta">{ct('1v1 · ranqueada')}</span>
                       <span className="rtm-modecard-go">{ct('Jogar')} →</span>
+                    </span>
+                  </span>
+                </button>
+              )}
+
+              {onUltimate && (
+                <button className="rtm-modecard" data-tone="gold" onClick={onUltimate}>
+                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/ancient.jpg)' }} />
+                  <span className="rtm-modecard-scrim" />
+                  <span className="rtm-modecard-bar" />
+                  <span className="rtm-modecard-body">
+                    <span className="rtm-modecard-kicker">{ct('Coleção')}</span>
+                    <span className="rtm-modecard-title">Ultimate Squad</span>
+                    <span className="rtm-modecard-desc">{ct('Abra pacotes, colecione os jogadores reais de 2026 e monte seu esquadrão dos sonhos.')}</span>
+                    <span className="rtm-modecard-foot">
+                      <span className="rtm-modecard-meta">{ct('1 jogador · cartas')}</span>
+                      <span className="rtm-modecard-go">{ct('Abrir')} →</span>
                     </span>
                   </span>
                 </button>

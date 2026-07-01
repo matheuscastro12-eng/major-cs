@@ -67,6 +67,7 @@ const AccountsCRM = lazyWithReload(() => import('./components/AccountsCRM').then
 const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
 const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
+const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
 const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
 const OnlineMode = lazyWithReload(() => import('./components/online/OnlineMode').then((m) => ({ default: m.OnlineMode })));
 const TournamentStats = lazyWithReload(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
@@ -113,6 +114,7 @@ type Screen =
   | 'transfer'
   | 'matchdetail'
   | 'online'
+  | 'ultimate'
   | 'career'
   | 'careerSaves'
   | 'careerCRM'
@@ -128,6 +130,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   leaderboard: '/ranking',
   home: '/jogar',
   online: '/online',
+  ultimate: '/ultimate',
   career: '/carreira',
   careerSaves: '/carreira/saves',
   hall: '/hall',
@@ -968,6 +971,7 @@ export default function App() {
           }}
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
+          onUltimate={() => setScreen('ultimate')}
           onLeaderboard={() => setScreen('leaderboard')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
@@ -1025,6 +1029,8 @@ export default function App() {
       )}
 
       {screen === 'online' && <OnlineMode onBack={() => setScreen('home')} account={account} dataset={dataset} />}
+
+      {screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (

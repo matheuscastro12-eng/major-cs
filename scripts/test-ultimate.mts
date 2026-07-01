@@ -13,6 +13,9 @@ import {
   type UltCard,
 } from '../src/engine/ultimate/cards.ts';
 import { quickSellValue } from '../src/engine/ultimate/quicksell.ts';
+import { PACK_DEFS, rollPack, packById } from '../src/engine/ultimate/packs.ts';
+import { makeRng } from '../src/engine/rng.ts';
+import { rarityMatchesBucket } from '../src/engine/ultimate/rarities.ts';
 import {
   defaultUltimateState,
   grantCard,
@@ -88,6 +91,37 @@ test('quickSellValue: única vale 70% da duplicata; bônus de OVR limitado a +50
   assert.equal(quickSellValue('gold', 75, true), RARITIES.gold.quickSellBase);
   assert.equal(quickSellValue('gold', 85, true), Math.floor(RARITIES.gold.quickSellBase * 1.5));
   assert.equal(quickSellValue('gold', 99, true), Math.floor(RARITIES.gold.quickSellBase * 1.5)); // cap
+});
+
+// ---------- packs ----------
+test('rollPack devolve exatamente pack.cards cartas e é determinístico por seed', () => {
+  const cat = buildCatalog(CS2_REAL_2026);
+  for (const pack of PACK_DEFS) {
+    const a = rollPack(cat, pack, makeRng(123));
+    const b = rollPack(cat, pack, makeRng(123));
+    assert.equal(a.length, pack.cards, `${pack.id} tem ${pack.cards} cartas`);
+    assert.deepEqual(a.map((c) => c.key), b.map((c) => c.key), `${pack.id} determinístico`);
+  }
+});
+
+test('rollPack honra as garantias de bucket', () => {
+  const cat = buildCatalog(CS2_REAL_2026);
+  for (const pack of PACK_DEFS) {
+    const g = (pack.guaranteed ?? [])[0];
+    if (!g) continue;
+    // roda algumas seeds; toda abertura deve ter >= count cartas do bucket (ou melhor)
+    for (const seed of [1, 2, 7, 99]) {
+      const cards = rollPack(cat, pack, makeRng(seed));
+      const inBucket = cards.filter((c) => rarityMatchesBucket(c.rarity, g.bucket)).length;
+      assert.ok(inBucket >= g.count, `${pack.id} seed ${seed}: ${inBucket} >= ${g.count} do bucket ${g.bucket}`);
+    }
+  }
+});
+
+test('packById resolve e custos são crescentes', () => {
+  assert.ok(packById('bronze'));
+  assert.equal(packById('nope'), undefined);
+  for (let i = 1; i < PACK_DEFS.length; i++) assert.ok(PACK_DEFS[i].cost > PACK_DEFS[i - 1].cost);
 });
 
 // ---------- state reducers ----------

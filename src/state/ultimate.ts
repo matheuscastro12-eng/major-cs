@@ -5,7 +5,9 @@
 
 import { create } from 'zustand';
 import { CS2_REAL_2026 } from '../data/bo3';
+import { makeRng } from '../engine/rng';
 import { buildCatalog, catalogIndex, type UltCard } from '../engine/ultimate/cards';
+import { packById, rollPack } from '../engine/ultimate/packs';
 import {
   addCredits as _addCredits,
   defaultUltimateState,
@@ -53,6 +55,7 @@ export function ultimateIndex(): Map<string, UltCard> {
 interface UltimateStore {
   state: UltimateState;
   grant: (cardKey: string, via: AcquiredVia) => void;
+  openPack: (packId: string) => { ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' };
   sell: (ownedId: string) => { ok: boolean; credited: number };
   spend: (n: number) => boolean;
   addCredits: (n: number) => void;
@@ -68,6 +71,21 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       persist(s);
       return { state: s };
     }),
+  openPack: (packId) => {
+    const pack = packById(packId);
+    if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' };
+    const spent = _spendCredits(get().state, pack.cost);
+    if (!spent.ok) return { ok: false, cards: [], reason: 'insufficient' };
+    // seed incremental gravado ANTES do reveal → reload não re-rola (anti-reroll)
+    const seed = spent.state.profile.packSeedCounter + 1;
+    const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
+    const cards = rollPack(ultimateCatalog(), pack, rng);
+    let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
+    for (const c of cards) s = _grantCard(s, c.key, 'pack');
+    persist(s);
+    set({ state: s });
+    return { ok: true, cards };
+  },
   sell: (ownedId) => {
     const res = _sellCard(get().state, ownedId, ultimateIndex());
     if (res.ok) {
