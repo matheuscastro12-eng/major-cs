@@ -468,12 +468,15 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // partida rolando: substitui a tela pelo replay round-a-round (reusa MatchReplay).
   if (live) {
     return (
-      <div className="ut-root" style={{ maxWidth: 960, margin: '0 auto', padding: '14px 16px 40px' }}>
-        <button onClick={finishMatch} style={backBtn}>← {ct('Encerrar')}</button>
-        <div style={{ margin: '10px 0', textAlign: 'center', fontWeight: 800, fontSize: '0.8rem', color: 'var(--em-muted,#8a99ab)' }}>
-          {live.teams[0].name} vs {live.teams[1].name}
+      <div className="ut-root ut-live">
+        <div className="ut-live__bar">
+          <button onClick={finishMatch} className="ut-live__back"><ArrowLeft size={15} style={{ verticalAlign: '-2px' }} /> {ct('Encerrar')}</button>
+          <span className="ut-live__vs">{live.teams[0].name} <span style={{ color: 'var(--ut-gold-1)' }}>vs</span> {live.teams[1].name}</span>
+          <span className="ut-live__badge"><span className="ut-live__dot" /> {ct('AO VIVO')}</span>
         </div>
-        <MatchReplay series={live.series} teams={live.teams} playbackSpeed={speed} canControlSpeed onPlaybackSpeedChange={setSpeed} onFinish={finishMatch} onClose={finishMatch} />
+        <div className="ut-live__stage">
+          <MatchReplay series={live.series} teams={live.teams} playbackSpeed={speed} canControlSpeed onPlaybackSpeedChange={setSpeed} onFinish={finishMatch} onClose={finishMatch} />
+        </div>
       </div>
     );
   }
@@ -1161,7 +1164,6 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-const backBtn: CSSProperties = { padding: '7px 13px', background: 'var(--em-panel-2,#12161e)', color: 'var(--em-text,#e6edf5)', border: '1px solid var(--em-border,#2a3340)', borderRadius: 6, fontFamily: 'inherit', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' };
 const sellBtn: CSSProperties = { padding: '4px 10px', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', borderRadius: 5, border: '1px solid var(--em-border,#2a3340)', background: 'transparent', color: 'var(--em-muted,#8a99ab)', fontFamily: 'inherit' };
 const emptySlot: CSSProperties = { width: 78, height: 94, borderRadius: 10, border: '1.5px dashed rgba(236,199,95,0.45)', background: 'rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'rgba(255,255,255,0.65)', fontFamily: 'inherit' };
 const tabBtn = (on: boolean): CSSProperties => ({ padding: '8px 16px', fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer', borderRadius: 999, border: `1px solid ${on ? '#c9a63c' : 'var(--em-border,#2a3340)'}`, background: on ? 'linear-gradient(180deg,#ecc75f,#c9a63c)' : 'var(--em-panel,#fff)', color: on ? '#241a06' : 'var(--em-text,#e6edf5)', fontFamily: 'inherit', boxShadow: on ? '0 2px 10px rgba(201,166,60,0.32)' : 'var(--ut-shadow-sm, none)', transition: 'all .15s' });
