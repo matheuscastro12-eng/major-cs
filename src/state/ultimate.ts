@@ -11,6 +11,7 @@ import { packById, rollPack } from '../engine/ultimate/packs';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import {
   addCredits as _addCredits,
+  applyMatchResult as _applyMatchResult,
   defaultUltimateState,
   ensureSquad as _ensureSquad,
   grantCard as _grantCard,
@@ -20,6 +21,7 @@ import {
   setSlot as _setSlot,
   spendCredits as _spendCredits,
   type AcquiredVia,
+  type MatchOutcome,
   type UltimateState,
 } from '../engine/ultimate/state';
 
@@ -67,6 +69,8 @@ interface UltimateStore {
   ensureSquad: () => void;
   placeInSquad: (slot: number, ownedId: string | null) => void;
   setFormation: (formationId: string) => void;
+  // ranqueada vs IA (P3)
+  recordMatch: (won: boolean, oppElo: number) => MatchOutcome;
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -135,6 +139,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       persist(s);
       return { state: s };
     }),
+  recordMatch: (won, oppElo) => {
+    const r = _applyMatchResult(get().state, won, oppElo);
+    persist(r.state);
+    set({ state: r.state });
+    return r.outcome;
+  },
   setState: (s) => {
     persist(s);
     set({ state: s });

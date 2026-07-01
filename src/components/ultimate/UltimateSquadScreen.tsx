@@ -10,8 +10,16 @@ import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
-import { activeSquad, type OwnedCard } from '../../engine/ultimate/state';
+import { activeSquad, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
 import type { UltCard } from '../../engine/ultimate/cards';
+import { MatchReplay } from '../online/MatchReplay';
+import { buildOnlineTeam, buildPool, rankFor, type PoolPlayer } from '../online/onlineData';
+import { makeRng } from '../../engine/rng';
+import { autoVeto } from '../../engine/veto';
+import { simulateSeries } from '../../engine/match';
+import { CS2_REAL_2026 } from '../../data/bo3';
+import type { PlaybackSpeed } from '../../state/online';
+import type { SeriesResult, TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
@@ -49,11 +57,14 @@ function UltCardView({ card, size = 132, count }: { card: UltCard; size?: number
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; dupSellValue: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation } = useUltimate();
+  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'store' | 'club' | 'squad'>('store');
+  const [tab, setTab] = useState<'store' | 'club' | 'squad' | 'ranked'>('store');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [pickSlot, setPickSlot] = useState<number | null>(null);
+  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number } | null>(null);
+  const [result, setResult] = useState<{ won: boolean; score: string; outcome: MatchOutcome } | null>(null);
+  const [speed, setSpeed] = useState<PlaybackSpeed>(2);
   const [toast, setToast] = useState<string>('');
 
   const credits = state.profile.credits;
@@ -101,6 +112,43 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const avgOvr = placed.length ? Math.round(placed.reduce((a, c) => a + c.ovr, 0) / placed.length) : 0;
   const cl = chemLabel(chem.total);
 
+  // ── ranqueada vs IA ──
+  const pool = useMemo(() => buildPool(CS2_REAL_2026), []);
+  const poolById = useMemo(() => new Map(pool.map((p) => [p.id, p] as const)), [pool]);
+  const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
+  const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
+  const rank = rankFor(state.profile.elo);
+
+  const playMatch = () => {
+    if (!squadComplete) return;
+    const five = squadPool as PoolPlayer[];
+    const userTeam = buildOnlineTeam(ct('Seu Squad'), five, 'ut-user');
+    userTeam.strength = userTeam.strength * chem.multiplier; // química influencia a força
+    const target = Math.max(60, Math.min(96, 68 + (state.profile.elo - 1000) / 25));
+    const mineIds = new Set(five.map((p) => p.id));
+    const oppFive = pool.filter((p) => !mineIds.has(p.id))
+      .sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5)
+      .sort((a, b) => b.ovr - a.ovr);
+    const oppTeam = buildOnlineTeam(ct('Esquadrão IA'), oppFive, 'ut-opp');
+    const oppOvr = oppFive.length ? Math.round(oppFive.reduce((a, p) => a + p.ovr, 0) / oppFive.length) : Math.round(target);
+    const oppElo = Math.max(300, Math.round(1000 + (oppOvr - 78) * 25));
+    const rng = makeRng(Math.floor(Math.random() * 2147483647));
+    const maps = autoVeto([userTeam, oppTeam], rng, 1);
+    const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
+    setResult(null);
+    setLive({ series, teams: [userTeam, oppTeam], oppElo });
+  };
+
+  const finishMatch = () => {
+    if (!live) return;
+    const won = live.series.winner === 0;
+    const m = live.series.maps[0];
+    const score = m ? `${m.score[0]}-${m.score[1]}` : `${live.series.mapScore[0]}-${live.series.mapScore[1]}`;
+    const outcome = recordMatch(won, live.oppElo);
+    setLive(null);
+    setResult({ won, score, outcome });
+  };
+
   const flash = (msg: string) => { setToast(msg); window.setTimeout(() => setToast(''), 1800); };
 
   const buy = (pack: PackDef) => {
@@ -131,6 +179,19 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     if (r.ok) flash(`+${fmt(r.credited)} 🪙`);
   };
 
+  // partida rolando: substitui a tela pelo replay round-a-round (reusa MatchReplay).
+  if (live) {
+    return (
+      <div className="fade-in" style={{ maxWidth: 960, margin: '0 auto', padding: '14px 16px 40px' }}>
+        <button onClick={finishMatch} style={backBtn}>← {ct('Encerrar')}</button>
+        <div style={{ margin: '10px 0', textAlign: 'center', fontWeight: 800, fontSize: '0.8rem', color: 'var(--em-muted,#8a99ab)' }}>
+          {live.teams[0].name} vs {live.teams[1].name}
+        </div>
+        <MatchReplay series={live.series} teams={live.teams} playbackSpeed={speed} canControlSpeed onPlaybackSpeedChange={setSpeed} onFinish={finishMatch} onClose={finishMatch} />
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in" style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 16px 40px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* header */}
@@ -148,7 +209,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
       {/* tabs */}
       <div style={{ display: 'flex', gap: 6 }}>
-        {([['store', ct('Loja')], ['squad', ct('Squad')], ['club', `${ct('Coleção')} (${totalCards})`]] as const).map(([id, label]) => (
+        {([['store', ct('Loja')], ['squad', ct('Squad')], ['ranked', ct('Ranqueada')], ['club', `${ct('Coleção')} (${totalCards})`]] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} style={tabBtn(tab === id)}>{label}</button>
         ))}
       </div>
@@ -247,6 +308,46 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             {ct('Mesma org (+1), mesma região (+0.5) e mesmo país (+0.5) entre jogadores conectados dão química. Encaixe as funções pra somar mais.')}
           </p>
         </DashCard>
+      )}
+
+      {tab === 'ranked' && (
+        <DashCard title={`🏆 ${ct('Ranqueada vs IA')}`}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+            <div style={{ display: 'inline-flex', flexDirection: 'column', padding: '10px 16px', borderRadius: 10, border: `1px solid ${rank.color}55`, background: `${rank.color}14`, minWidth: 150 }}>
+              <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>{ct('Seu rank')}</span>
+              <span style={{ fontSize: '1.1rem', fontWeight: 900, color: rank.color }}>{rank.name}</span>
+              <span style={{ fontSize: '0.8rem', fontFamily: '"JetBrains Mono", monospace', color: 'var(--em-text,#e6edf5)' }}>{state.profile.elo} RP</span>
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--em-muted,#8a99ab)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span>{ct('Vitórias')}: <b style={{ color: '#5ed88a' }}>{state.profile.w}</b> · {ct('Derrotas')}: <b style={{ color: '#e58a8a' }}>{state.profile.l}</b></span>
+              <span>{ct('Sequência')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{state.profile.streak}</b> · {ct('Pico')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{state.profile.peakElo} RP</b></span>
+              <span>{ct('Seu squad')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{avgOvr || '—'} OVR</b> · {ct('química')} <b style={{ color: cl.color }}>{chem.total}/15</b> ({chem.multiplier.toFixed(2)}×)</span>
+            </div>
+          </div>
+          {squadComplete ? (
+            <Button variant="primary" onClick={playMatch}>▶ {ct('Jogar partida ranqueada')}</Button>
+          ) : (
+            <div>
+              <Button variant="ghost" disabled>▶ {ct('Jogar partida ranqueada')}</Button>
+              <p className="muted small" style={{ marginTop: 8 }}>{ct('Complete os 5 slots do seu squad (aba Squad) pra jogar. A química do time influencia a força na partida.')}</p>
+            </div>
+          )}
+        </DashCard>
+      )}
+
+      {/* resultado da partida */}
+      {result && (
+        <Modal open onClose={() => setResult(null)} title={result.won ? `✅ ${ct('Vitória!')}` : `❌ ${ct('Derrota')}`} size="sm"
+          footer={<><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { setResult(null); playMatch(); }} disabled={!squadComplete}>{ct('Jogar de novo')}</Button></>}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+            <div style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#5ed88a' : '#e58a8a' }}>{result.score}</div>
+            <div style={{ display: 'flex', gap: 16, fontSize: '0.9rem', fontWeight: 800 }}>
+              <span style={{ color: result.outcome.eloDelta >= 0 ? '#5ed88a' : '#e58a8a' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>
+              {result.outcome.credits > 0 && <span style={{ color: '#e8c170' }}>🪙 +{fmt(result.outcome.credits)}</span>}
+            </div>
+            <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{rank.name} · {state.profile.elo} RP</span>
+          </div>
+        </Modal>
       )}
 
       {/* seletor de carta pro slot */}

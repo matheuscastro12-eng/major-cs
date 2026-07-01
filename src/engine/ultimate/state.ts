@@ -247,3 +247,37 @@ export function setFormation(state: UltimateState, formationId: string, slotRole
   const slots = slotRoles.map((role, i) => ({ slot: i, role, ownedId: sq.slots[i]?.ownedId ?? null }));
   return recomputeLocks({ ...state, squads: [{ ...sq, formation: formationId, slots }, ...state.squads.slice(1)] });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Partida ranqueada vs IA (P3): ELO local + recompensa de credits. Puro.
+
+export interface MatchOutcome { eloDelta: number; credits: number }
+
+// ELO estilo padrão (K=24, expectativa logística, delta clampado ±40). Recompensa
+// de credits só na vitória, com bônus por bater um rival mais forte.
+export function computeMatchOutcome(userElo: number, oppElo: number, won: boolean): MatchOutcome {
+  const K = 24;
+  const expected = 1 / (1 + Math.pow(10, (oppElo - userElo) / 400));
+  const raw = Math.round(K * ((won ? 1 : 0) - expected));
+  const eloDelta = Math.max(-40, Math.min(40, raw));
+  const credits = won ? 300 + Math.max(0, Math.round((oppElo - userElo) / 4)) : 0;
+  return { eloDelta, credits };
+}
+
+// aplica o resultado no perfil (elo/peak/w-l/streak/credits). Retorna o novo
+// estado + o outcome (pra UI mostrar +ELO / +credits).
+export function applyMatchResult(state: UltimateState, won: boolean, oppElo: number): { state: UltimateState; outcome: MatchOutcome } {
+  const p = state.profile;
+  const outcome = computeMatchOutcome(p.elo, oppElo, won);
+  const elo = Math.max(0, p.elo + outcome.eloDelta);
+  const profile: UltimateProfile = {
+    ...p,
+    elo,
+    peakElo: Math.max(p.peakElo, elo),
+    w: p.w + (won ? 1 : 0),
+    l: p.l + (won ? 0 : 1),
+    streak: won ? p.streak + 1 : 0,
+    credits: p.credits + outcome.credits,
+  };
+  return { state: { ...state, profile }, outcome };
+}

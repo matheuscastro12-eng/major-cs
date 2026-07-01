@@ -18,7 +18,7 @@ import { makeRng } from '../src/engine/rng.ts';
 import { rarityMatchesBucket } from '../src/engine/ultimate/rarities.ts';
 import { computeChemistry, roleFitsSlot, type ChemNode } from '../src/engine/ultimate/chemistry.ts';
 import { formationById, formationSlotRoles } from '../src/engine/ultimate/formations.ts';
-import { ensureSquad, setSlot, setFormation, activeSquad } from '../src/engine/ultimate/state.ts';
+import { ensureSquad, setSlot, setFormation, activeSquad, computeMatchOutcome, applyMatchResult } from '../src/engine/ultimate/state.ts';
 import {
   defaultUltimateState,
   grantCard,
@@ -241,6 +241,36 @@ test('setFormation mantém cartas por índice e re-rotula as funções', () => {
   assert.equal(activeSquad(st)!.formation, 'aggressive');
   assert.equal(activeSquad(st)!.slots[1].ownedId, 'o1'); // carta preservada
   assert.equal(activeSquad(st)!.slots[1].role, formationSlotRoles('aggressive')[1]); // função nova
+});
+
+// ---------- ranqueada (elo + reward) ----------
+test('computeMatchOutcome: vitória sobe ELO e paga credits; derrota desce e paga 0', () => {
+  const win = computeMatchOutcome(1000, 1000, true);
+  const loss = computeMatchOutcome(1000, 1000, false);
+  assert.ok(win.eloDelta > 0 && win.credits > 0);
+  assert.ok(loss.eloDelta < 0 && loss.credits === 0);
+  // bater rival mais forte paga mais que rival mais fraco
+  assert.ok(computeMatchOutcome(1000, 1400, true).eloDelta > computeMatchOutcome(1000, 600, true).eloDelta);
+  assert.ok(computeMatchOutcome(1000, 1400, true).credits > computeMatchOutcome(1000, 600, true).credits);
+  // delta clampado em ±40
+  assert.ok(Math.abs(computeMatchOutcome(1, 9999, false).eloDelta) <= 40);
+});
+
+test('applyMatchResult atualiza perfil (elo/peak/w-l/streak/credits)', () => {
+  let st = defaultUltimateState();
+  const before = st.profile.credits;
+  const r1 = applyMatchResult(st, true, 1100);
+  st = r1.state;
+  assert.equal(st.profile.w, 1);
+  assert.equal(st.profile.streak, 1);
+  assert.ok(st.profile.elo > 1000 && st.profile.peakElo === st.profile.elo);
+  assert.equal(st.profile.credits, before + r1.outcome.credits);
+  // derrota zera streak e não deixa elo negativo
+  const r2 = applyMatchResult(st, false, 1100);
+  assert.equal(r2.state.profile.streak, 0);
+  assert.equal(r2.state.profile.l, 1);
+  assert.ok(r2.state.profile.elo >= 0);
+  assert.ok(r2.state.profile.peakElo >= r2.state.profile.elo); // peak preservado
 });
 
 test('migrateUltimate: lixo vira default; parcial é preenchido; inventário válido preservado', () => {
