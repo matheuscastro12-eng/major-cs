@@ -159,8 +159,9 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
   box-shadow: 0 4px 14px rgba(201, 166, 60, 0.4); transition: filter .12s, transform .05s;
 }
 .ut-jogar svg { color: var(--ut-gold-ink); }
-.ut-jogar:hover { filter: brightness(1.06); }
-.ut-jogar:active { transform: translateY(1px); }
+.ut-jogar:hover:not(:disabled) { filter: brightness(1.06); }
+.ut-jogar:active:not(:disabled) { transform: translateY(1px); }
+.ut-jogar:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
 
 .ut-ham {
   position: relative; width: 40px; height: 40px; display: inline-flex;
@@ -345,6 +346,36 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-tier__done { display: inline-flex; align-items: center; gap: 4px; color: var(--ut-green); font-weight: 800; font-size: 0.72rem; }
 .ut-tier__lock { display: inline-flex; align-items: center; gap: 3px; color: var(--ut-muted); font-family: var(--ut-font-mono); font-weight: 700; font-size: 0.7rem; }
 .ut-tier__lock svg { color: var(--ut-muted); }
+
+/* ---------------- MERCADO (bazaar) ---------------- */
+.ut-mkt { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 10px 8px; border: 1px solid var(--ut-line); border-radius: 14px; background: #fff; box-shadow: var(--ut-shadow); }
+.ut-mkt__seller { font-size: 0.62rem; color: var(--ut-muted); }
+.ut-mkt__buy {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid rgba(201, 166, 60, 0.5); background: linear-gradient(180deg, var(--ut-gold-1), var(--ut-gold-2));
+  color: var(--ut-gold-ink); font-weight: 800; font-size: 0.78rem; font-family: var(--ut-font-mono); cursor: pointer;
+}
+.ut-mkt__buy:hover:not(:disabled) { filter: brightness(1.05); }
+.ut-mkt__buy:disabled { opacity: 0.6; cursor: default; background: #f2f2ef; color: var(--ut-muted); border-color: var(--ut-line); }
+
+/* ---------------- RANKING (linhas) ---------------- */
+.ut-rank-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 0.82rem; border-radius: 8px; }
+.ut-rank-row + .ut-rank-row { border-top: 1px solid var(--ut-line); }
+.ut-rank-row.is-you { background: rgba(236, 199, 95, 0.14); border-top-color: transparent; }
+.ut-rank-row__pos { min-width: 30px; color: var(--ut-muted); font-family: var(--ut-font-mono); font-weight: 700; }
+.ut-rank-row__name { flex: 1; font-weight: 800; color: var(--ut-ink); }
+.ut-rank-row.is-you .ut-rank-row__name { color: #92600a; }
+.ut-rank-row__wl { color: var(--ut-muted); font-size: 0.76rem; }
+.ut-rank-row__elo { font-family: var(--ut-font-mono); font-weight: 800; color: var(--ut-ink); }
+
+/* ---------------- DESAFIOS (SBC) ---------------- */
+.ut-sbc { position: relative; border: 1px solid var(--ut-line); border-radius: 12px; padding: 13px 14px; background: #fff; box-shadow: var(--ut-shadow); display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.ut-sbc::before { content: ''; position: absolute; top: 0; left: 14px; width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: var(--ut-purple); }
+.ut-sbc__head { display: flex; align-items: center; gap: 8px; }
+.ut-sbc__name { font-weight: 900; font-size: 0.96rem; color: var(--ut-ink); }
+.ut-sbc__done { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; background: var(--ut-green); color: #fff; align-items: center; justify-content: center; margin-left: auto; flex: none; }
+.ut-sbc__desc { font-size: 0.76rem; color: var(--ut-muted); line-height: 1.35; min-height: 34px; }
+.ut-sbc__reward { display: flex; align-items: center; gap: 8px; font-size: 0.74rem; flex-wrap: wrap; }
 
 /* botões utilitários */
 .ut-btn {
