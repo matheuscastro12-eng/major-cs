@@ -41,10 +41,12 @@ function seasonNow() {
 }
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
-  if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
+  // GET é permitido só pros públicos (ladder/champions) pra o s-maxage valer no
+  // edge (a Vercel NÃO cacheia POST). me/report seguem POST (autenticados).
+  if (req.method !== 'POST' && req.method !== 'GET') { res.status(405).json({ error: 'method' }); return; }
   const dbUrl = clean(process.env.DATABASE_URL);
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
@@ -59,7 +61,8 @@ export default async function handler(
 
   let body: Record<string, unknown> = {};
   try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {}); } catch { /* vazio */ }
-  const action = String(body.action ?? '');
+  const q = (k: string) => { const v = req.query?.[k]; return Array.isArray(v) ? v[0] : v; };
+  const action = String((req.method === 'GET' ? q('action') : body.action) ?? '');
 
   // ladder público da temporada atual (top 50 + total). Não exige token.
   if (action === 'ladder') {

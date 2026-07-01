@@ -18,10 +18,13 @@ async function post(body: Record<string, unknown>): Promise<Record<string, unkno
   } catch { return null; }
 }
 
-export async function pullCloud(slot: string): Promise<{ data: string | null; updatedAt: number } | null> {
+// `since` (opcional): timestamp que o cliente já tem. Se o servidor não tiver nada
+// mais novo (e não for tombstone), devolve unchanged sem o blob — economiza banda.
+export async function pullCloud(slot: string, since = 0): Promise<{ data: string | null; updatedAt: number; unchanged?: boolean } | null> {
   if (!cloudEnabled()) return null;
-  const d = await post({ action: 'pull', token: getToken(), slot });
+  const d = await post({ action: 'pull', token: getToken(), slot, since });
   if (!d) return null;
+  if (d.unchanged) return { data: null, updatedAt: Number(d.updatedAt ?? since), unchanged: true };
   return { data: (d.data as string) ?? null, updatedAt: Number(d.updatedAt ?? 0) };
 }
 
@@ -50,10 +53,18 @@ export function cloudOnLocalSave(slot: string, localKey: string, getData: () => 
 // 'restored' = a nuvem era mais nova e foi gravada no localStorage (recarregar a tela).
 export async function syncSlot(slot: string, localKey: string): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
   if (!cloudEnabled()) return 'none';
-  const cloud = await pullCloud(slot);
   let localData: string | null = null;
   try { localData = localStorage.getItem(localKey); } catch { /* sem storage */ }
   const localTs = localSavedAt(localKey);
+  const cloud = await pullCloud(slot, localTs); // manda o ts local -> pull condicional
+
+  // nuvem sem novidade (tem versão <= a minha e não é tombstone): não restaura.
+  // Só re-sobe se o local for ESTRITAMENTE mais novo (mantém o servidor em dia);
+  // igual = nada. Evita baixar o save inteiro de novo quando já está sincronizado.
+  if (cloud?.unchanged) {
+    if (localData && localTs > cloud.updatedAt) { markSavedAt(localKey, localTs); void pushCloud(slot, localData, localTs); return 'pushed'; }
+    return 'none';
+  }
 
   // tombstone na nuvem (data === '') mais nova/igual que o local: a exclusão venceu.
   // Apaga o local e NÃO re-sobe nada, senão o save ressuscitaria neste aparelho.

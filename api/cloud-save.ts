@@ -45,9 +45,17 @@ export default async function handler(
   const slot = String(body.slot ?? 'career').slice(0, 40);
 
   if (action === 'pull') {
+    const since = Number(body.since) || 0;
     const r = await sql`SELECT data, updated_at FROM rtm_saves WHERE email=${email} AND slot=${slot}`;
     if (!r.length) { res.status(200).json({ data: null, updatedAt: 0 }); return; }
-    res.status(200).json({ data: String(r[0].data ?? ''), updatedAt: Number(r[0].updated_at ?? 0) });
+    const data = String(r[0].data ?? '');
+    const updatedAt = Number(r[0].updated_at ?? 0);
+    // pull condicional: se o cliente já tem esta versão (ou mais nova) e NÃO é um
+    // tombstone (''), devolve só o timestamp — sem o blob de até 2MB. Corta o Fast
+    // Origin Transfer do login/sync quando o aparelho já está sincronizado.
+    // Tombstone SEMPRE vai inteiro (é vazio) pra a exclusão continuar propagando.
+    if (since > 0 && data !== '' && updatedAt <= since) { res.status(200).json({ unchanged: true, updatedAt }); return; }
+    res.status(200).json({ data, updatedAt });
     return;
   }
 

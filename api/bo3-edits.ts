@@ -5,14 +5,14 @@
 import { neon } from '@neondatabase/serverless';
 
 interface Res {
-  status: (code: number) => { json: (body: unknown) => void };
+  status: (code: number) => { json: (body: unknown) => void; end: () => void };
   setHeader: (k: string, v: string) => void;
 }
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   const url = clean(process.env.DATABASE_URL);
@@ -25,10 +25,18 @@ export default async function handler(
   await sql`CREATE TABLE IF NOT EXISTS bo3_edits (id int PRIMARY KEY, data jsonb NOT NULL, updated_at timestamptz DEFAULT now())`;
 
   if (req.method === 'GET' || !req.method) {
-    res.setHeader('Cache-Control', 'no-store'); // sempre fresco: nada de cache sobrepondo a edição
+    // no-cache (NAO no-store): o cliente/edge REVALIDAM sempre (edicao do admin
+    // aparece na hora), mas com ETag o 304 NAO repaga o corpo. Antes era no-store,
+    // que baixava o blob inteiro em toda carga de Carreira -> Fast Origin Transfer.
+    res.setHeader('Cache-Control', 'no-cache');
     try {
-      const rows = await sql`SELECT data FROM bo3_edits WHERE id = 1`;
+      const rows = await sql`SELECT data, EXTRACT(EPOCH FROM updated_at)::bigint AS ts FROM bo3_edits WHERE id = 1`;
       const data = rows[0]?.data ?? { players: {}, teams: {} };
+      const etag = `W/"be-${rows[0]?.ts ?? 0}"`;
+      res.setHeader('ETag', etag);
+      res.setHeader('Access-Control-Expose-Headers', 'ETag');
+      const inm = req.headers?.['if-none-match'];
+      if (inm && (Array.isArray(inm) ? inm.includes(etag) : inm === etag)) { res.status(304).end(); return; }
       res.status(200).json({ edits: data });
     } catch (e) {
       res.status(500).json({ error: String(e) });
@@ -72,7 +80,9 @@ export default async function handler(
       await sql`
         INSERT INTO bo3_edits (id, data, updated_at) VALUES (1, ${json}::jsonb, now())
         ON CONFLICT (id) DO UPDATE SET data = ${json}::jsonb, updated_at = now()`;
-      res.status(200).json({ ok: true, edits: merged });
+      // não ecoa o `merged` inteiro (o cliente só usa o `ok`; ele mescla localmente
+      // e revalida via ETag no próximo GET). Corta Fast Origin Transfer do POST.
+      res.status(200).json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }

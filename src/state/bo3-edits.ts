@@ -103,7 +103,9 @@ const API = '/api/bo3-edits';
 // busca as edições globais do servidor (fonte da verdade). Retorna null offline.
 export async function fetchBo3Edits(): Promise<Bo3Edits | null> {
   try {
-    const r = await fetch(API, { cache: 'no-store', signal: AbortSignal.timeout(9000) });
+    // 'no-cache' (não 'no-store'): o browser guarda a resposta + ETag e REVALIDA
+    // com If-None-Match; no 304 serve do cache local sem baixar da origem de novo.
+    const r = await fetch(API, { cache: 'no-cache', signal: AbortSignal.timeout(9000) });
     if (!r.ok) return null;
     const j = (await r.json()) as { edits?: Bo3Edits };
     const e = j?.edits;
