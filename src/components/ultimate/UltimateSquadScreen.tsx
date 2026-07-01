@@ -68,52 +68,70 @@ const STAT_ROWS: [keyof UltCard['stats'], string][][] = [
 const FOIL_RARITIES = new Set(['legendary', 'icon', 'tots', 'major']);
 const REGION_CODE: Record<string, string> = { samerica: 'SA', namerica: 'NA', europe: 'EU', cis: 'CIS', asia: 'AS', oceania: 'OCE', africa: 'AF', global: 'GLB' };
 
-// carta estilo FUT: moldura por raridade, OVR/função/bandeira no topo, avatar,
-// nome, 6 substats e brilho (foil) nas especiais. `qs` = valor de quick-sell.
+// tiers "especiais" ganham fundo ESCURO com brilho + foil; os comuns viram uma
+// placa metálica CLARA. Dá hierarquia visual (comum → especial) estilo FUT.
+const DARK_TIERS = new Set(['elite', 'legendary', 'icon', 'tots', 'major']);
+function cardSkin(rarity: UltCard['rarity']) {
+  const c = rarityInfo(rarity).color;
+  if (DARK_TIERS.has(rarity)) {
+    return {
+      dark: true, frame: c,
+      bg: `linear-gradient(162deg, ${c}cc 0%, #1d2029 46%, #101118 100%)`,
+      sheen: `radial-gradient(130% 62% at 50% -10%, ${c}66, transparent 60%)`,
+      ink: '#fdf6e6', sub: 'rgba(253,246,230,0.6)', line: `${c}55`,
+      plate: 'rgba(0,0,0,0.30)', label: c, inner: 'rgba(255,255,255,0.10)',
+      glow: `0 8px 24px ${c}55`, mark: 'rgba(253,246,230,0.32)', markSlash: 'rgba(226,59,46,0.6)',
+    };
+  }
+  return {
+    dark: false, frame: c,
+    bg: `linear-gradient(158deg, #ffffff 0%, ${c}26 44%, ${c}44 100%)`,
+    sheen: 'radial-gradient(130% 58% at 50% -8%, rgba(255,255,255,0.9), transparent 55%)',
+    ink: '#20242e', sub: '#6b7280', line: `${c}66`,
+    plate: `${c}26`, label: inkOnLight(c), inner: 'rgba(0,0,0,0.06)',
+    glow: `0 5px 16px ${c}3a`, mark: 'rgba(32,36,46,0.26)', markSlash: 'rgba(226,59,46,0.45)',
+  };
+}
+
+// carta estilo FUT: pele premium por raridade (cardSkin), moldura dupla + sheen,
+// placa do OVR, 6 substats, foil nas especiais e marca M//CS. `qs` = quick-sell.
 function UltCardView({ card, size = 132, count, qs }: { card: UltCard; size?: number; count?: number; qs?: number }) {
   const info = rarityInfo(card.rarity);
   const compact = size < 116;
   const h = Math.round(size * 1.4);
   const foil = FOIL_RARITIES.has(card.rarity);
-  const dark = card.rarity === 'icon' || card.rarity === 'tots' || card.rarity === 'major';
-  const ink = dark ? '#1a1205' : 'var(--em-text,#e6edf5)';
-  const sub = dark ? 'rgba(26,18,5,0.7)' : 'var(--em-muted,#8a99ab)';
+  const s = cardSkin(card.rarity);
+  const px = Math.round(size * 0.06);
   return (
     <div style={{ width: size, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: qs != null ? 6 : 0 }}>
-      <div
-        style={{
-          position: 'relative', width: size, height: h, borderRadius: 12, overflow: 'hidden',
-          background: dark
-            ? `linear-gradient(155deg, ${info.color} 0%, ${info.color}cc 55%, ${info.color}88 100%)`
-            : `linear-gradient(155deg, ${info.color}33 0%, var(--em-panel-2,#12161e) 66%)`,
-          border: `1.5px solid ${info.color}`, boxShadow: `0 4px 18px ${info.color}44`,
-        }}
-      >
+      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: s.bg, border: `1.5px solid ${s.frame}`, boxShadow: s.glow }}>
+        <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${s.inner}`, pointerEvents: 'none' }} />
         {foil && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
         {count != null && count > 1 && (
           <span style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, fontSize: '0.6rem', fontWeight: 900, padding: '1px 6px', borderRadius: 10, background: 'rgba(0,0,0,0.55)', color: '#fff' }}>×{count}</span>
         )}
-        <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: `${Math.round(size * 0.06)}px ${Math.round(size * 0.06)}px ${Math.round(size * 0.05)}px` }}>
+        <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: `${px}px ${px}px ${Math.round(size * 0.05)}px` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, minWidth: Math.round(size * 0.24) }}>
-              <span style={{ fontSize: `${(size / 140) * 1.7}rem`, fontWeight: 900, color: ink, fontFamily: '"JetBrains Mono", monospace' }}>{card.ovr}</span>
-              <span style={{ fontSize: `${(size / 140) * 0.58}rem`, fontWeight: 800, color: ink, opacity: 0.85, marginTop: 1 }}>{ROLE_CODE[card.role] ?? card.role}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, minWidth: Math.round(size * 0.26), padding: `${Math.round(size * 0.028)}px 2px`, borderRadius: 8, background: s.plate }}>
+              <span style={{ fontSize: `${(size / 140) * 1.78}rem`, fontWeight: 900, color: s.ink, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '-0.5px' }}>{card.ovr}</span>
+              <span style={{ fontSize: `${(size / 140) * 0.56}rem`, fontWeight: 800, color: s.ink, opacity: 0.9, marginTop: 1 }}>{ROLE_CODE[card.role] ?? card.role}</span>
               <span style={{ marginTop: 3 }}><Flag cc={card.country} /></span>
             </div>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <PlayerAvatar nick={card.nick} size={Math.round(size * (compact ? 0.42 : 0.5))} />
             </div>
           </div>
-          <div style={{ fontSize: `${(size / 140) * 0.86}rem`, fontWeight: 900, color: ink, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{card.nick}</div>
+          <div style={{ fontSize: `${(size / 140) * 0.88}rem`, fontWeight: 900, color: s.ink, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>{card.nick}</div>
           {!compact && (
             <>
-              <div style={{ height: 1, background: dark ? 'rgba(26,18,5,0.25)' : `${info.color}44`, margin: '3px 6px' }} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, justifyContent: 'center' }}>
+              <div style={{ height: 1, background: s.line, margin: '4px 6px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, justifyContent: 'center' }}>
                 {STAT_ROWS.map((row, ri) => (
                   <div key={ri} style={{ display: 'flex', justifyContent: 'space-around' }}>
                     {row.map(([k, label]) => (
                       <span key={label} style={{ fontSize: `${(size / 140) * 0.6}rem`, fontFamily: '"JetBrains Mono", monospace' }}>
-                        <b style={{ color: ink, fontWeight: 900 }}>{card.stats[k]}</b> <span style={{ color: sub, fontWeight: 700 }}>{label}</span>
+                        <b style={{ color: s.ink, fontWeight: 900 }}>{card.stats[k]}</b> <span style={{ color: s.sub, fontWeight: 700 }}>{label}</span>
                       </span>
                     ))}
                   </div>
@@ -122,10 +140,13 @@ function UltCardView({ card, size = 132, count, qs }: { card: UltCard; size?: nu
             </>
           )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 }}>
-            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: ink, opacity: 0.8 }}>{REGION_CODE[card.region] ?? 'GLB'}</span>
-            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: dark ? 'rgba(26,18,5,0.85)' : inkOnLight(info.color), letterSpacing: '0.2px' }}>· {info.label}</span>
+            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: s.ink, opacity: 0.72 }}>{REGION_CODE[card.region] ?? 'GLB'}</span>
+            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 900, color: s.label, letterSpacing: '0.2px' }}>· {info.label}</span>
           </div>
         </div>
+        {!compact && (
+          <span style={{ position: 'absolute', bottom: 3, right: 6, zIndex: 1, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, color: s.mark, fontFamily: 'var(--ut-font-cond)', letterSpacing: '0.3px', pointerEvents: 'none' }}>M<span style={{ color: s.markSlash }}>//</span>CS</span>
+        )}
       </div>
       {qs != null && (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(184,134,11,0.3)', color: '#92600a' }}><Coins size={11} /> +{qs.toLocaleString('pt-BR')}</span>
