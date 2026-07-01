@@ -90,6 +90,8 @@ interface UltimateStore {
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
   tickSeason: () => SeasonRollover;
+  // bazar (P6)
+  buyCard: (cardKey: string, price: number) => boolean;
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -241,6 +243,14 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     // só grava se o estado mudou (evita write no localStorage a cada mount).
     if (r.state !== get().state) { persist(r.state); set({ state: r.state }); }
     return r.result;
+  },
+  buyCard: (cardKey, price) => {
+    const sp = _spendCredits(get().state, price);
+    if (!sp.ok) return false;
+    const s = _grantCard(sp.state, cardKey, 'market');
+    persist(s);
+    set({ state: s });
+    return true;
   },
   setState: (s) => {
     persist(s);

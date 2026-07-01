@@ -7,7 +7,7 @@ import { computeNextDaily, dailyCredits } from './daily';
 import type { UltCard } from './cards';
 import type { Role } from '../../types';
 
-export type AcquiredVia = 'pack' | 'daily' | 'sbc' | 'reward' | 'starter' | 'initial';
+export type AcquiredVia = 'pack' | 'daily' | 'sbc' | 'reward' | 'starter' | 'initial' | 'market';
 
 export interface OwnedCard {
   id: string;              // uuid da cópia possuída

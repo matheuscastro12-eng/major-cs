@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, DashCard, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
-import { ultimateIndex, useUltimate } from '../../state/ultimate';
+import { ultimateCatalog, ultimateIndex, useUltimate } from '../../state/ultimate';
 import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
@@ -15,6 +15,8 @@ import type { UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
 import { SBCS, checkSbc, type SbcDef } from '../../engine/ultimate/sbc';
+import { quickSellValue } from '../../engine/ultimate/quicksell';
+import { buildAiLadder, buildBazaar, bazaarDayBucket, type AiPlayer, type Listing } from '../../engine/ultimate/bazaar';
 import { MatchReplay } from '../online/MatchReplay';
 import { buildOnlineTeam, buildPool, rankFor, type PoolPlayer } from '../online/onlineData';
 import { makeRng } from '../../engine/rng';
@@ -28,30 +30,76 @@ import { ct } from '../../state/career-i18n';
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 
 // carta visual compacta, moldura/glow pela raridade.
-function UltCardView({ card, size = 132, count }: { card: UltCard; size?: number; count?: number }) {
+const ROLE_CODE: Record<string, string> = { AWP: 'AWP', Entry: 'ENT', Rifler: 'RIF', Lurker: 'LUR', Support: 'SUP', IGL: 'IGL' };
+const STAT_ROWS: [keyof UltCard['stats'], string][][] = [
+  [['tiro', 'TIR'], ['mira', 'MIR'], ['reflexo', 'REF']],
+  [['visao', 'VIS'], ['clutch', 'CLU'], ['util', 'UTI']],
+];
+const FOIL_RARITIES = new Set(['legendary', 'icon', 'tots', 'major']);
+const REGION_CODE: Record<string, string> = { samerica: 'SA', namerica: 'NA', europe: 'EU', cis: 'CIS', asia: 'AS', oceania: 'OCE', africa: 'AF', global: 'GLB' };
+
+// carta estilo FUT: moldura por raridade, OVR/função/bandeira no topo, avatar,
+// nome, 6 substats e brilho (foil) nas especiais. `qs` = valor de quick-sell.
+function UltCardView({ card, size = 132, count, qs }: { card: UltCard; size?: number; count?: number; qs?: number }) {
   const info = rarityInfo(card.rarity);
+  const compact = size < 116;
+  const h = Math.round(size * 1.4);
+  const foil = FOIL_RARITIES.has(card.rarity);
+  const dark = card.rarity === 'icon' || card.rarity === 'tots' || card.rarity === 'major';
+  const ink = dark ? '#1a1205' : 'var(--em-text,#e6edf5)';
+  const sub = dark ? 'rgba(26,18,5,0.7)' : 'var(--em-muted,#8a99ab)';
   return (
-    <div
-      style={{
-        position: 'relative', width: size, borderRadius: 10, padding: '10px 8px 8px',
-        background: `linear-gradient(160deg, ${info.color}22 0%, var(--em-panel-2,#12161e) 62%)`,
-        border: `1.5px solid ${info.color}`, boxShadow: `0 0 16px ${info.color}33`,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-      }}
-    >
-      {count != null && count > 1 && (
-        <span style={{ position: 'absolute', top: 6, right: 6, fontSize: '0.62rem', fontWeight: 900, padding: '1px 6px', borderRadius: 10, background: 'rgba(0,0,0,0.55)', color: '#fff' }}>×{count}</span>
+    <div style={{ width: size, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: qs != null ? 6 : 0 }}>
+      <div
+        style={{
+          position: 'relative', width: size, height: h, borderRadius: 12, overflow: 'hidden',
+          background: dark
+            ? `linear-gradient(155deg, ${info.color} 0%, ${info.color}cc 55%, ${info.color}88 100%)`
+            : `linear-gradient(155deg, ${info.color}33 0%, var(--em-panel-2,#12161e) 66%)`,
+          border: `1.5px solid ${info.color}`, boxShadow: `0 4px 18px ${info.color}44`,
+        }}
+      >
+        {foil && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
+        {count != null && count > 1 && (
+          <span style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, fontSize: '0.6rem', fontWeight: 900, padding: '1px 6px', borderRadius: 10, background: 'rgba(0,0,0,0.55)', color: '#fff' }}>×{count}</span>
+        )}
+        <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: `${Math.round(size * 0.06)}px ${Math.round(size * 0.06)}px ${Math.round(size * 0.05)}px` }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, minWidth: Math.round(size * 0.24) }}>
+              <span style={{ fontSize: `${(size / 140) * 1.7}rem`, fontWeight: 900, color: ink, fontFamily: '"JetBrains Mono", monospace' }}>{card.ovr}</span>
+              <span style={{ fontSize: `${(size / 140) * 0.58}rem`, fontWeight: 800, color: ink, opacity: 0.85, marginTop: 1 }}>{ROLE_CODE[card.role] ?? card.role}</span>
+              <span style={{ marginTop: 3 }}><Flag cc={card.country} /></span>
+            </div>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <PlayerAvatar nick={card.nick} size={Math.round(size * (compact ? 0.42 : 0.5))} />
+            </div>
+          </div>
+          <div style={{ fontSize: `${(size / 140) * 0.86}rem`, fontWeight: 900, color: ink, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{card.nick}</div>
+          {!compact && (
+            <>
+              <div style={{ height: 1, background: dark ? 'rgba(26,18,5,0.25)' : `${info.color}44`, margin: '3px 6px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, justifyContent: 'center' }}>
+                {STAT_ROWS.map((row, ri) => (
+                  <div key={ri} style={{ display: 'flex', justifyContent: 'space-around' }}>
+                    {row.map(([k, label]) => (
+                      <span key={label} style={{ fontSize: `${(size / 140) * 0.6}rem`, fontFamily: '"JetBrains Mono", monospace' }}>
+                        <b style={{ color: ink, fontWeight: 900 }}>{card.stats[k]}</b> <span style={{ color: sub, fontWeight: 700 }}>{label}</span>
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 }}>
+            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: ink, opacity: 0.8 }}>{REGION_CODE[card.region] ?? 'GLB'}</span>
+            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: dark ? 'rgba(26,18,5,0.85)' : info.color, letterSpacing: '0.2px' }}>· {info.label}</span>
+          </div>
+        </div>
+      </div>
+      {qs != null && (
+        <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(232,193,112,0.4)', color: '#e8c170' }}>🪙 +{qs.toLocaleString('pt-BR')}</span>
       )}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, alignSelf: 'flex-start' }}>
-        <span style={{ fontSize: '1.5rem', fontWeight: 900, color: info.color, fontFamily: '"JetBrains Mono", monospace', lineHeight: 1 }}>{card.ovr}</span>
-        <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--em-muted,#8a99ab)', textTransform: 'uppercase' }}>{card.role}</span>
-      </div>
-      <PlayerAvatar nick={card.nick} size={Math.round(size * 0.42)} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--em-text,#e6edf5)', textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.nick}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.62rem' }}>
-        <Flag cc={card.country} /> <span style={{ color: info.color, fontWeight: 800, letterSpacing: '0.3px' }}>{info.label}</span>
-      </div>
-      <div style={{ fontSize: '0.58rem', color: 'var(--em-muted,#8a99ab)', fontWeight: 600 }}>{card.teamOriginName}</div>
     </div>
   );
 }
@@ -60,9 +108,9 @@ function UltCardView({ card, size = 132, count }: { card: UltCard; size?: number
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; dupSellValue: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason } = useUltimate();
+  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'store' | 'club' | 'squad' | 'ranked' | 'sbc'>('store');
+  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number } | null>(null);
@@ -153,6 +201,24 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
   const rank = rankFor(state.profile.elo);
+
+  // ── ladder de IA (ranking) + bazar (mercado) — P6 ──
+  const ladder = useMemo<AiPlayer[]>(() => buildAiLadder(pool.map((p) => ({ nick: p.nick, country: p.country, ovr: p.ovr })), 20260607), [pool]);
+  const [bazaar, setBazaar] = useState<Listing[]>([]);
+  useEffect(() => {
+    setBazaar(buildBazaar(ultimateCatalog(), ladder.slice(0, 60).map((a) => a.nick), bazaarDayBucket(Date.now())));
+  }, [ladder]);
+  const buyFromBazaar = (l: Listing) => {
+    if (buyCard(l.cardKey, l.price)) { setBazaar((b) => b.filter((x) => x.id !== l.id)); flash(`✅ ${ct('Comprado')} · -${fmt(l.price)} 🪙`); }
+    else flash(ct('Créditos insuficientes.'));
+  };
+  // ranking com VOCÊ inserido por elo
+  const rankedList = useMemo(() => {
+    const me: AiPlayer = { id: 'you', nick: ct('Você'), country: 'br', elo: state.profile.elo, w: state.profile.w, l: state.profile.l };
+    const arr = [...ladder, me].sort((a, b) => b.elo - a.elo);
+    return arr;
+  }, [ladder, state.profile.elo, state.profile.w, state.profile.l]);
+  const myRankPos = rankedList.findIndex((p) => p.id === 'you') + 1;
 
   const playMatch = () => {
     if (!squadComplete) return;
@@ -257,6 +323,12 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="fade-in" style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 16px 40px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <style>{`
+        .ult-foil { background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.35) 48%, rgba(255,255,255,0.05) 55%, transparent 70%); background-size: 250% 250%; animation: ult-shimmer 3.2s linear infinite; mix-blend-mode: screen; }
+        @keyframes ult-shimmer { 0% { background-position: 120% 0; } 100% { background-position: -60% 0; } }
+        .ult-reveal-card { animation: ult-pop .45s cubic-bezier(0.2,0.8,0.2,1) both; }
+        @keyframes ult-pop { from { opacity:0; transform: translateY(14px) scale(.82) rotateY(35deg); } to { opacity:1; transform:none; } }
+      `}</style>
       {/* header */}
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <button onClick={onBack} style={backBtn}>← {ct('Voltar')}</button>
@@ -274,11 +346,149 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       </header>
 
       {/* tabs */}
-      <div style={{ display: 'flex', gap: 6 }}>
-        {([['store', ct('Loja')], ['squad', ct('Squad')], ['ranked', ct('Ranqueada')], ['sbc', ct('Desafios')], ['club', `${ct('Coleção')} (${totalCards})`]] as const).map(([id, label]) => (
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {([
+          ['hub', ct('Hub')],
+          ['club', `${ct('Coleção')} (${totalCards})`],
+          ['squad', ct('Squad')],
+          ['store', ct('Loja')],
+          ['mercado', ct('Mercado')],
+          ['ranked', ct('Ranqueada')],
+          ['sbc', ct('Desafios')],
+          ['ranking', ct('Ranking')],
+        ] as const).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} style={tabBtn(tab === id)}>{label}</button>
         ))}
       </div>
+
+      {tab === 'hub' && (
+        <>
+          <DashCard
+            title={`📅 ${ct('Recompensa diária')}`}
+            actions={daily.canClaim
+              ? <Button variant="primary" onClick={() => { const r = claimDaily(); if (r.claimed) flash(`${ct('Dia')} ${r.day} · +${fmt(r.credits)} 🪙`); }}>{ct('Resgatar dia')} {daily.day}</Button>
+              : <span className="muted small">{ct('Volte amanhã')}</span>}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
+              {DAILY_TABLE.map((e) => {
+                const done = daily.canClaim ? e.day < daily.day : e.day <= state.profile.daily.streakDay;
+                const isCur = daily.canClaim && e.day === daily.day;
+                return (
+                  <div key={e.day} style={{ padding: '8px 4px', borderRadius: 8, textAlign: 'center', border: `1px solid ${isCur ? '#e8c170' : 'var(--em-border,#2a3340)'}`, background: isCur ? 'rgba(232,193,112,0.14)' : done ? 'rgba(94,216,138,0.08)' : 'transparent', opacity: done ? 0.75 : 1 }}>
+                    <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--em-muted,#8a99ab)' }}>D{e.day}</div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 900, color: isCur ? '#e8c170' : 'var(--em-text,#e6edf5)' }}>🪙{e.credits >= 1000 ? `${e.credits / 1000}k` : e.credits}</div>
+                    {done && <div style={{ fontSize: '0.66rem', color: '#5ed88a' }}>✓</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </DashCard>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+            <DashCard title={`⚔️ ${ct('Match Day')}`}>
+              {squadComplete ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <p className="muted small" style={{ margin: 0 }}>{ct('Squad pronto. Entre na fila ranqueada.')}</p>
+                  <Button variant="primary" onClick={() => setTab('ranked')}>▶ {ct('Jogar ranqueada')}</Button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <p className="muted small" style={{ margin: 0 }}>{ct('Você não tem squad ativo — monte no Squad Builder.')}</p>
+                  <Button variant="ghost" onClick={() => setTab('squad')}>{ct('Montar squad')}</Button>
+                </div>
+              )}
+            </DashCard>
+            <DashCard title={`🏅 ${ct('Rank atual')}`}>
+              <div style={{ fontSize: '1.3rem', fontWeight: 900, color: rank.color }}>{rank.name}</div>
+              <div style={{ fontSize: '1.4rem', fontFamily: '"JetBrains Mono", monospace', fontWeight: 900, marginTop: 2 }}>{state.profile.elo} <span style={{ fontSize: '0.7rem', color: 'var(--em-muted,#8a99ab)' }}>RP</span></div>
+              <div style={{ fontSize: '0.74rem', color: 'var(--em-muted,#8a99ab)', marginTop: 2 }}>{state.profile.w}V · {state.profile.l}D · {ct('pico')} {state.profile.peakElo}</div>
+            </DashCard>
+            <DashCard title={`💰 ${ct('Economia')}`}>
+              <div style={{ display: 'flex', gap: 18, fontSize: '0.82rem' }}>
+                {([['CREDITS', fmt(credits), '#e8c170'], [ct('CARTAS'), String(totalCards), 'var(--em-text,#e6edf5)'], [ct('ÚNICAS'), String(uniqueCards), 'var(--em-text,#e6edf5)']] as const).map(([lab, val, col]) => (
+                  <div key={lab}><div style={{ fontSize: '0.58rem', color: 'var(--em-muted,#8a99ab)', fontWeight: 800 }}>{lab}</div><b style={{ fontFamily: '"JetBrains Mono", monospace', color: col }}>{val}</b></div>
+                ))}
+              </div>
+            </DashCard>
+            <DashCard title={`🔥 ${ct('Streak & forma')}`}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: state.profile.streak > 0 ? '#5ed88a' : 'var(--em-text,#e6edf5)' }}>{state.profile.streak}</div>
+              <div style={{ fontSize: '0.74rem', color: 'var(--em-muted,#8a99ab)' }}>{ct('vitórias seguidas')}</div>
+            </DashCard>
+          </div>
+          {squadComplete && (
+            <DashCard title={`🧩 ${ct('Squad ativo')}`} actions={<Button variant="ghost" onClick={() => setTab('squad')}>{ct('Editar')}</Button>}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? <UltCardView key={fs.slot} card={sc.card} size={96} /> : null; })}
+              </div>
+              <div style={{ textAlign: 'center', marginTop: 8, fontSize: '0.8rem' }}>{ct('OVR')} <b>{avgOvr}</b> · {ct('química')} <b style={{ color: cl.color }}>{chem.total}/15</b></div>
+            </DashCard>
+          )}
+        </>
+      )}
+
+      {tab === 'mercado' && (
+        <DashCard title={`🛒 ${ct('Mercado (bazar)')}`}>
+          <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>{ct('Cartas à venda por outros jogadores (IA). O mercado renova todo dia. Compre com credits.')}</p>
+          {bazaar.length === 0 ? <p className="muted small">{ct('Sem listagens agora.')}</p> : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 12, justifyItems: 'center' }}>
+              {bazaar.map((l) => {
+                const c = index.get(l.cardKey);
+                if (!c) return null;
+                const afford = credits >= l.price;
+                return (
+                  <div key={l.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <UltCardView card={c} size={128} />
+                    <div style={{ fontSize: '0.6rem', color: 'var(--em-muted,#8a99ab)' }}>{ct('por')} {l.sellerNick}</div>
+                    <button onClick={() => buyFromBazaar(l)} disabled={!afford} style={{ ...sellBtn, borderColor: afford ? '#e8c170' : 'var(--em-border,#2a3340)', color: afford ? '#e8c170' : 'var(--em-muted,#8a99ab)', cursor: afford ? 'pointer' : 'default', fontWeight: 900 }}>🪙 {fmt(l.price)}</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DashCard>
+      )}
+
+      {tab === 'ranking' && (
+        <DashCard title={`🏆 ${ct('Ranking global')}`}>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, fontSize: '0.8rem', color: 'var(--em-muted,#8a99ab)' }}>
+            <span>{ct('Jogadores')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{rankedList.length}</b></span>
+            <span>{ct('Sua posição')}: <b style={{ color: '#e8c170' }}>#{myRankPos}</b></span>
+            <span>{ct('Líder')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{rankedList[0]?.nick}</b> ({rankedList[0]?.elo} RP)</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14, alignItems: 'flex-end' }}>
+            {[1, 0, 2].map((idx) => {
+              const p = rankedList[idx];
+              if (!p) return null;
+              const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+              return (
+                <div key={idx} style={{ textAlign: 'center', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--em-border,#2a3340)', background: idx === 0 ? 'rgba(232,193,112,0.1)' : 'var(--em-panel,#0f131a)', minWidth: 108, transform: idx === 0 ? 'scale(1.06)' : 'none' }}>
+                  <div style={{ fontSize: '1.4rem' }}>{medal}</div>
+                  <PlayerAvatar nick={p.nick} size={40} />
+                  <div style={{ fontWeight: 900, fontSize: '0.82rem', marginTop: 4 }}>{p.nick}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{p.elo} RP</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {rankedList.slice(0, 30).map((p, i) => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 6, fontSize: '0.8rem', background: p.id === 'you' ? 'rgba(232,193,112,0.12)' : 'transparent' }}>
+                <span style={{ minWidth: 28, color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>#{i + 1}</span>
+                <Flag cc={p.country} /> <b style={{ flex: 1, color: p.id === 'you' ? '#e8c170' : 'var(--em-text,#e6edf5)' }}>{p.nick}</b>
+                <span style={{ color: 'var(--em-muted,#8a99ab)' }}>{p.w}V-{p.l}D</span>
+                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800 }}>{p.elo}</span>
+              </div>
+            ))}
+            {myRankPos > 30 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 6, fontSize: '0.8rem', background: 'rgba(232,193,112,0.12)', marginTop: 6 }}>
+                <span style={{ minWidth: 28, color: '#e8c170', fontFamily: '"JetBrains Mono", monospace' }}>#{myRankPos}</span>
+                <Flag cc="br" /> <b style={{ flex: 1, color: '#e8c170' }}>{ct('Você')}</b>
+                <span style={{ color: 'var(--em-muted,#8a99ab)' }}>{state.profile.w}V-{state.profile.l}D</span>
+                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800 }}>{state.profile.elo}</span>
+              </div>
+            )}
+          </div>
+        </DashCard>
+      )}
 
       {tab === 'store' && (
         <DashCard title={`🎁 ${ct('Loja de pacotes')}`}>
@@ -320,7 +530,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, justifyItems: 'center' }}>
                 {club.map((row) => (
                   <div key={row.card.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <UltCardView card={row.card} count={row.count} size={140} />
+                    <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(row.card.rarity, row.card.ovr, row.count > 1)} />
                     <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
                       {row.count > 1 ? ct('vender dup') : ct('vender')} 🪙
                     </button>

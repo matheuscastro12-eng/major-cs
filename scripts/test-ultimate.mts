@@ -24,6 +24,7 @@ import { evaluateTitles } from '../src/engine/ultimate/titles.ts';
 import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
 import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
 import { checkSbc } from '../src/engine/ultimate/sbc.ts';
+import { buildAiLadder, buildBazaar } from '../src/engine/ultimate/bazaar.ts';
 import { applySeasonRollover, removeOwnedCards } from '../src/engine/ultimate/state.ts';
 import {
   defaultUltimateState,
@@ -417,6 +418,27 @@ test('removeOwnedCards remove do inventário e limpa slot do squad', () => {
   st = removeOwnedCards(st, ['o1']);
   assert.equal(st.inventory.length, 0);
   assert.equal(activeSquad(st)!.slots[0].ownedId, null);
+});
+
+// ---------- bazar (P6) ----------
+test('buildAiLadder: determinístico, ordenado por elo, elo cresce com OVR', () => {
+  const pool = [{ nick: 'a', country: 'br', ovr: 95 }, { nick: 'b', country: 'br', ovr: 80 }, { nick: 'c', country: 'br', ovr: 70 }];
+  const l1 = buildAiLadder(pool, 42);
+  const l2 = buildAiLadder(pool, 42);
+  assert.deepEqual(l1.map((p) => p.id), l2.map((p) => p.id));
+  for (let i = 1; i < l1.length; i++) assert.ok(l1[i - 1].elo >= l1[i].elo);
+  assert.equal(l1[0].nick, 'a'); // maior OVR no topo
+  for (const p of l1) { assert.ok(p.w >= 0 && p.l >= 0); }
+});
+
+test('buildBazaar: N listagens, preços positivos e ordenados, determinístico', () => {
+  const cat = buildCatalog(CS2_REAL_2026);
+  const a = buildBazaar(cat, ['x', 'y'], 7, 20);
+  const b = buildBazaar(cat, ['x', 'y'], 7, 20);
+  assert.equal(a.length, 20);
+  assert.deepEqual(a.map((l) => l.cardKey), b.map((l) => l.cardKey));
+  for (let i = 1; i < a.length; i++) assert.ok(a[i - 1].price <= a[i].price);
+  for (const l of a) assert.ok(l.price >= 50);
 });
 
 test('migrateUltimate: lixo vira default; parcial é preenchido; inventário válido preservado', () => {
