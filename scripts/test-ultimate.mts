@@ -25,7 +25,7 @@ import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
 import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
 import { checkSbc } from '../src/engine/ultimate/sbc.ts';
 import { buildAiLadder, buildBazaar } from '../src/engine/ultimate/bazaar.ts';
-import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS, claimSeasonReward, startSeason, STARTING_ELO } from '../src/engine/ultimate/state.ts';
+import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS, claimSeasonReward, startSeason, STARTING_ELO, gauntletStart, gauntletRecord } from '../src/engine/ultimate/state.ts';
 import { evaluateSeasonTiers, seasonTierById } from '../src/engine/ultimate/seasonRewards.ts';
 import { divisionFor, divisionChange, DIVISIONS, DIV_TIERS } from '../src/engine/ultimate/divisions.ts';
 import { evaluateObjectives, objectiveById, OBJECTIVES } from '../src/engine/ultimate/objectives.ts';
@@ -501,6 +501,30 @@ test('evolveCard: sobe boost gastando EVO_COSTS, respeita teto e saldo', () => {
   const broke = grantCard(spendCredits(defaultUltimateState(), STARTING_CREDITS).state, 'p2:gold', 'pack', { id: 'c2' });
   assert.equal(evolveCard(broke, 'c2').reason, 'insufficient');
   assert.equal(evolveCard(s0, 'nope').reason, 'missing');
+});
+
+test('gauntlet: start/record — vitória avança, derrota/5 encerra, best', () => {
+  let s = gauntletStart(defaultUltimateState(), 'D1');
+  assert.ok(s.profile.gauntlet.active && s.profile.gauntlet.wins === 0);
+  assert.equal(gauntletStart(s, 'D1'), s); // no-op no mesmo dia
+  const r1 = gauntletRecord(s, true); assert.equal(r1.wins, 1); assert.ok(!r1.over); s = r1.state;
+  const r2 = gauntletRecord(s, false); assert.ok(r2.over && !r2.completed); s = r2.state;
+  assert.equal(s.profile.gauntlet.active, false);
+  assert.equal(s.profile.gauntlet.best, 1);
+  // run completo (5 vitórias)
+  let t = gauntletStart(defaultUltimateState(), 'D2');
+  let last;
+  for (let i = 0; i < 5; i++) { last = gauntletRecord(t, true); t = last.state; }
+  assert.ok(last!.completed && last!.over);
+  assert.equal(t.profile.gauntlet.wins, 5);
+  assert.equal(t.profile.gauntlet.active, false);
+  assert.equal(t.profile.gauntlet.best, 5);
+  assert.ok(gauntletRecord(t, true).over); // run inativo → no-op
+});
+
+test('migrateUltimate preenche gauntlet (default + preserva)', () => {
+  assert.deepEqual(migrateUltimate({}).profile.gauntlet, { date: null, wins: 0, active: false, best: 0 });
+  assert.deepEqual(migrateUltimate({ profile: { gauntlet: { date: 'X', wins: 3, active: true, best: 4 } } }).profile.gauntlet, { date: 'X', wins: 3, active: true, best: 4 });
 });
 
 test('divisionFor: mapeia elo → divisão, progress 0..100, toNext correto', () => {

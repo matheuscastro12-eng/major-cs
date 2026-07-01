@@ -44,6 +44,7 @@ export interface UltimateProfile {
   season: { startedAt: number; endsAt: number; wl0?: number; peak?: number; claimed?: string[] } | null;
   sbcDone: string[];
   objectivesClaimed: string[]; // ids de objetivos/missões já resgatados (profundidade)
+  gauntlet: { date: string | null; wins: number; active: boolean; best: number }; // Elite Gauntlet (1 run/dia)
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -76,6 +77,7 @@ export function defaultUltimateProfile(): UltimateProfile {
     season: null,
     sbcDone: [],
     objectivesClaimed: [],
+    gauntlet: { date: null, wins: 0, active: false, best: 0 },
   };
 }
 
@@ -114,6 +116,30 @@ export function claimSeasonReward(state: UltimateState, id: string): UltimateSta
   const s = state.profile.season;
   if (!s || (s.claimed ?? []).includes(id)) return state;
   return { ...state, profile: { ...state.profile, season: { ...s, claimed: [...(s.claimed ?? []), id] } } };
+}
+
+// ── Elite Gauntlet: desafio diário de sequência de vitórias ──
+export const GAUNTLET_TARGET = 5;
+export const GAUNTLET_WIN_CREDITS = [800, 1200, 2000, 3500, 6000]; // credits por vitória (index = wins-1)
+
+// inicia um run do Gauntlet (1 por dia). No-op se já iniciou hoje.
+export function gauntletStart(state: UltimateState, today: string): UltimateState {
+  const g = state.profile.gauntlet;
+  if (g.date === today) return state;
+  return { ...state, profile: { ...state.profile, gauntlet: { date: today, wins: 0, active: true, best: g.best } } };
+}
+
+// registra o resultado de uma partida do Gauntlet. Vitória avança; derrota OU
+// completar (GAUNTLET_TARGET) encerra o run. best = maior sequência já feita.
+export function gauntletRecord(state: UltimateState, won: boolean): { state: UltimateState; wins: number; completed: boolean; over: boolean } {
+  const g = state.profile.gauntlet;
+  if (!g.active) return { state, wins: g.wins, completed: false, over: true };
+  const wins = won ? g.wins + 1 : g.wins;
+  const completed = won && wins >= GAUNTLET_TARGET;
+  const over = !won || completed;
+  const best = Math.max(g.best, wins);
+  const gauntlet = { ...g, wins, best, active: !over };
+  return { state: { ...state, profile: { ...state.profile, gauntlet } }, wins, completed, over };
 }
 
 // gerador de id — usa crypto.randomUUID no runtime; tests passam id explícito.
@@ -229,6 +255,9 @@ export function migrateUltimate(raw: unknown): UltimateState {
       : null,
     sbcDone: Array.isArray(p.sbcDone) ? p.sbcDone.filter((x): x is string => typeof x === 'string') : [],
     objectivesClaimed: Array.isArray(p.objectivesClaimed) ? p.objectivesClaimed.filter((x): x is string => typeof x === 'string') : [],
+    gauntlet: p.gauntlet && typeof p.gauntlet === 'object'
+      ? { date: typeof p.gauntlet.date === 'string' ? p.gauntlet.date : null, wins: num(p.gauntlet.wins, 0), active: !!p.gauntlet.active, best: num(p.gauntlet.best, 0) }
+      : { date: null, wins: 0, active: false, best: 0 },
   };
   const inventory: OwnedCard[] = Array.isArray(r.inventory)
     ? r.inventory

@@ -20,6 +20,9 @@ import {
   markObjectiveClaimed as _markObjectiveClaimed,
   claimSeasonReward as _claimSeasonReward,
   evolveCard as _evolveCard,
+  gauntletStart as _gauntletStart,
+  gauntletRecord as _gauntletRecord,
+  GAUNTLET_WIN_CREDITS,
   STARTING_ELO,
   applyMatchResult as _applyMatchResult,
   applySeasonRollover as _applySeasonRollover,
@@ -104,6 +107,9 @@ interface UltimateStore {
   evolveCard: (ownedId: string) => { ok: boolean; cost?: number; newBoost?: number; reason?: string };
   // recompensas de temporada (ladder de RP)
   claimSeasonReward: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
+  // Elite Gauntlet (desafio diário)
+  gauntletStart: (today: string) => void;
+  gauntletRecord: (won: boolean) => { wins: number; completed: boolean; over: boolean; credits: number; grantedCard?: UltCard };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -317,6 +323,30 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     persist(ns);
     set({ state: ns });
     return { ok: true, reward: def.reward, grantedCard };
+  },
+  gauntletStart: (today) =>
+    set((st) => {
+      const s = _gauntletStart(st.state, today);
+      if (s === st.state) return {};
+      persist(s);
+      return { state: s };
+    }),
+  gauntletRecord: (won) => {
+    const r = _gauntletRecord(get().state, won);
+    let s = r.state;
+    const credits = won && r.wins >= 1 ? (GAUNTLET_WIN_CREDITS[r.wins - 1] ?? 0) : 0;
+    if (credits) s = _addCredits(s, credits);
+    let grantedCard: UltCard | undefined;
+    if (r.completed) {
+      const pool = ultimateCatalog().filter((c) => c.rarity === 'elite');
+      if (pool.length) {
+        grantedCard = pool[Math.floor(Math.random() * pool.length)];
+        s = _grantCard(s, grantedCard.key, 'reward', { id: `gaunt_${Math.random().toString(36).slice(2, 9)}` });
+      }
+    }
+    persist(s);
+    set({ state: s });
+    return { wins: r.wins, completed: r.completed, over: r.over, credits, grantedCard };
   },
   setState: (s) => {
     persist(s);

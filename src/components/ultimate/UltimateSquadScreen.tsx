@@ -10,7 +10,7 @@ import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
-import { activeSquad, EVO_MAX, EVO_COSTS, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
+import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
 import type { UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
@@ -18,7 +18,7 @@ import { SBCS, checkSbc, type SbcDef } from '../../engine/ultimate/sbc';
 import { quickSellValue } from '../../engine/ultimate/quicksell';
 import { buildAiLadder, buildBazaar, bazaarDayBucket, type AiPlayer, type Listing } from '../../engine/ultimate/bazaar';
 import { MatchReplay } from '../online/MatchReplay';
-import { buildOnlineTeam, buildPool, rankFor, type PoolPlayer } from '../online/onlineData';
+import { buildOnlineTeam, buildPool, type PoolPlayer } from '../online/onlineData';
 import { makeRng } from '../../engine/rng';
 import { autoVeto } from '../../engine/veto';
 import { simulateSeries } from '../../engine/match';
@@ -178,14 +178,15 @@ function UltCardView({ card, size = 132, count, qs, evo = 0 }: { card: UltCard; 
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward } = useUltimate();
+  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   const [pickSlot, setPickSlot] = useState<number | null>(null);
-  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number; eloBefore: number; ranked: boolean } | null>(null);
-  const [result, setResult] = useState<{ won: boolean; score: string; outcome: MatchOutcome; ranked: boolean; divChange: DivisionChange; divName: string } | null>(null);
+  type MatchMode = 'rivals' | 'casual' | 'gauntlet';
+  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number; eloBefore: number; mode: MatchMode } | null>(null);
+  const [result, setResult] = useState<{ won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean } } | null>(null);
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
   const [onbForm, setOnbForm] = useState('standard');
   const [dailyOpen, setDailyOpen] = useState(false);
@@ -196,7 +197,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [toast, setToast] = useState<string>('');
   const [navMenu, setNavMenu] = useState<'clube' | 'mercado' | 'more' | null>(null);
   const [clubFilter, setClubFilter] = useState<'all' | 'bronze' | 'silver' | 'gold' | 'special'>('all');
-  const [rankedMode, setRankedMode] = useState<'rivals' | 'casual'>('rivals');
+  const [rankedMode, setRankedMode] = useState<'rivals' | 'casual' | 'gauntlet'>('rivals');
   const { account } = useAccount();
 
   const credits = state.profile.credits;
@@ -211,7 +212,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     return () => document.removeEventListener('click', h);
   }, [navMenu]);
   const go = (t: typeof tab) => { setTab(t); setNavMenu(null); };
-  const onJogar = () => { if (squadComplete) playMatch(); else setTab('squad'); };
+  const onJogar = () => { if (squadComplete) playMatch('rivals'); else setTab('squad'); };
   // contagem regressiva até a próxima recompensa (meia-noite local)
   const msToMidnight = (() => { const d = new Date(); const n = new Date(d); n.setHours(24, 0, 0, 0); return n.getTime() - d.getTime(); })();
   const nextIn = daily.canClaim ? ct('disponível') : `${Math.floor(msToMidnight / 3_600_000)}h ${Math.floor((msToMidnight % 3_600_000) / 60_000)}m`;
@@ -293,7 +294,6 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const poolById = useMemo(() => new Map(pool.map((p) => [p.id, p] as const)), [pool]);
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
-  const rank = rankFor(state.profile.elo);
   const div = divisionFor(state.profile.elo);
 
   // ── objetivos/missões (profundidade) ──
@@ -370,17 +370,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     else flash(r.reason === 'maxed' ? ct('Já no nível máximo.') : ct('Créditos insuficientes.'));
   };
 
-  const playMatch = (ranked = true) => {
+  const playMatch = (mode: MatchMode = 'rivals', gauntletWins = 0) => {
     if (!squadComplete) return;
     const five = squadPool as PoolPlayer[];
     const userTeam = buildOnlineTeam(ct('Seu Squad'), five, 'ut-user');
     userTeam.strength = userTeam.strength * chem.multiplier; // química influencia a força
     const totalBoost = form.slots.reduce((a, fs) => a + (slotCard(fs.slot)?.owned.boost ?? 0), 0);
     if (totalBoost > 0) userTeam.strength *= 1 + totalBoost * 0.01; // evolução: +1% de força por nível
-    // ranqueada: rival escala pela divisão (elo); amistoso: rival justo pelo OVR do squad
-    const target = ranked
+    // rivals: rival escala pela divisão (elo); amistoso: justo pelo OVR; gauntlet:
+    // sobe a dificuldade a cada vitória do run.
+    const target = mode === 'rivals'
       ? Math.max(60, Math.min(96, 68 + (state.profile.elo - 1000) / 25))
-      : Math.max(60, Math.min(96, avgOvr || 75));
+      : mode === 'gauntlet'
+        ? Math.max(60, Math.min(97, (avgOvr || 75) + gauntletWins * 3))
+        : Math.max(60, Math.min(96, avgOvr || 75));
     const mineIds = new Set(five.map((p) => p.id));
     const oppFive = pool.filter((p) => !mineIds.has(p.id))
       .sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5)
@@ -395,7 +398,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const maps = autoVeto([userTeam, oppTeam], rng, 1);
     const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
     setResult(null);
-    setLive({ series, teams: [userTeam, oppTeam], oppElo, eloBefore: state.profile.elo, ranked });
+    setLive({ series, teams: [userTeam, oppTeam], oppElo, eloBefore: state.profile.elo, mode });
   };
 
   const finishMatch = () => {
@@ -403,11 +406,33 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const won = live.series.winner === 0;
     const m = live.series.maps[0];
     const score = m ? `${m.score[0]}-${m.score[1]}` : `${live.series.mapScore[0]}-${live.series.mapScore[1]}`;
-    const outcome = recordMatch(won, live.oppElo, live.ranked);
-    const eloAfter = live.eloBefore + (live.ranked ? outcome.eloDelta : 0);
-    const divChange = live.ranked ? divisionChange(live.eloBefore, eloAfter) : 'same';
+    const mode = live.mode;
+    if (mode === 'gauntlet') {
+      const r = gauntletRecord(won);
+      setLive(null);
+      if (r.grantedCard) { setReveal([r.grantedCard]); flash(`🏆 ${ct('Elite Gauntlet completo!')} 5/5`, 2800); }
+      else setResult({ won, score, outcome: { eloDelta: 0, credits: r.credits }, mode: 'gauntlet', divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over } });
+      syncTitles();
+      return;
+    }
+    const ranked = mode === 'rivals';
+    const outcome = recordMatch(won, live.oppElo, ranked);
+    const eloAfter = live.eloBefore + (ranked ? outcome.eloDelta : 0);
+    const divChange = ranked ? divisionChange(live.eloBefore, eloAfter) : 'same';
     setLive(null);
-    setResult({ won, score, outcome, ranked: live.ranked, divChange, divName: divisionFor(eloAfter).def.name });
+    setResult({ won, score, outcome, mode, divChange, divName: divisionFor(eloAfter).def.name });
+  };
+
+  // inicia/continua uma partida por modo. Gauntlet: abre o run se não estiver
+  // ativo (bloqueia se já jogou hoje) e passa a sequência atual pro scaling.
+  const startMatch = (mode: MatchMode) => {
+    if (mode === 'gauntlet') {
+      const g = state.profile.gauntlet;
+      const today = dateKey(new Date());
+      const active = g.active && g.date === today;
+      if (!active) { if (g.date === today) return; gauntletStart(today); }
+      playMatch('gauntlet', active ? g.wins : 0);
+    } else playMatch(mode);
   };
 
   const buy = (pack: PackDef) => {
@@ -628,16 +653,17 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               )}
             </UtPanel>
 
-            <UtPanel label={ct('Rank Atual')} icon={<Medal size={15} className="ut-panel__lead" />} info={ct('Seu elo competitivo na temporada.')}>
+            <UtPanel label={ct('Divisão Atual')} icon={<Medal size={15} className="ut-panel__lead" />} info={ct('Sua divisão na ranqueada.')}>
               <div className="ut-rank">
-                <div className="ut-rank__badge" style={{ color: inkOnLight(rank.color), borderColor: `${rank.color}44` }}><Medal size={26} /></div>
+                <div className="ut-rank__badge" style={{ color: inkOnLight(div.color), borderColor: `${div.color}44` }}><Medal size={26} /></div>
                 <div>
-                  <div className="ut-rank__name" style={{ color: inkOnLight(rank.color) }}>{rank.name}</div>
+                  <div className="ut-rank__name" style={{ color: inkOnLight(div.color) }}>{div.def.name}</div>
                   <div className="ut-rank__rp">{state.profile.elo} <span style={{ fontSize: '0.5em', color: 'var(--ut-muted)' }}>RP</span></div>
                   <div className="ut-rank__wl">{state.profile.w}V · {state.profile.l}D · Peak {state.profile.peakElo}</div>
                 </div>
               </div>
-              <div className="ut-rank__foot">{ct('pico da temporada')} · {state.profile.peakElo} RP</div>
+              <div className="ut-div__bar" style={{ marginTop: 10 }}><div style={{ width: `${div.progress}%`, background: div.color }} /></div>
+              <div className="ut-rank__foot">{div.next ? <>{ct('faltam')} {div.toNext} RP · {div.next.name}</> : ct('Divisão máxima alcançada!')}</div>
             </UtPanel>
 
             <UtPanel label={ct('Economia')} icon={<Wallet size={15} className="ut-panel__lead" />} info={ct('Seus recursos no Ultimate.')}>
@@ -933,12 +959,24 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
       {tab === 'ranked' && (() => {
         const peakTierIdx = DIV_TIERS.indexOf(divisionFor(state.profile.peakElo).def.tier);
+        const g = state.profile.gauntlet;
+        const gToday = dateKey(new Date());
+        const gActive = g.active && g.date === gToday;
+        const gDoneToday = g.date === gToday && !g.active;
+        const gWins = gActive ? g.wins : 0;
+        const ctaDisabled = !squadComplete || (rankedMode === 'gauntlet' && gDoneToday);
+        const ctaLabel = rankedMode === 'rivals' ? ct('ENTRAR NA FILA')
+          : rankedMode === 'casual' ? ct('JOGAR AMISTOSO')
+          : gActive ? `${ct('PRÓXIMA')} · ${gWins}/${GAUNTLET_TARGET}`
+          : gDoneToday ? ct('VOLTE AMANHÃ')
+          : ct('INICIAR GAUNTLET');
         return (
           <UtPanel label={<>{ct('Ranqueada')} <em>· Divisão Rivals</em></>} icon={<Swords size={15} className="ut-panel__lead" />}>
             {/* seletor de modo */}
             <div className="ut-tabs" style={{ marginBottom: 14 }}>
               <button onClick={() => setRankedMode('rivals')} style={tabBtn(rankedMode === 'rivals')}><Swords size={13} style={{ verticalAlign: '-2px' }} /> {ct('Rivals')} <span style={{ opacity: 0.7 }}>· {ct('vale rank')}</span></button>
               <button onClick={() => setRankedMode('casual')} style={tabBtn(rankedMode === 'casual')}><Shirt size={13} style={{ verticalAlign: '-2px' }} /> {ct('Amistoso')} <span style={{ opacity: 0.7 }}>· {ct('sem risco')}</span></button>
+              <button onClick={() => setRankedMode('gauntlet')} style={tabBtn(rankedMode === 'gauntlet')}><Flame size={13} style={{ verticalAlign: '-2px' }} /> {ct('Gauntlet')} <span style={{ opacity: 0.7 }}>· {ct('diário')}</span></button>
             </div>
 
             {/* hero da divisão */}
@@ -977,13 +1015,31 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <span>{ct('squad')} <b>{avgOvr || '—'} OVR</b> · {ct('química')} <b style={{ color: inkOnLight(cl.color) }}>{chem.total}/15</b></span>
             </div>
 
+            {rankedMode === 'gauntlet' && (
+              <div className="ut-gaunt">
+                <div className="ut-gaunt__dots">
+                  {Array.from({ length: GAUNTLET_TARGET }, (_, i) => (
+                    <span key={i} className={`ut-gaunt__dot${i < gWins ? ' on' : ''}`}>{i < gWins ? '✦' : i + 1}</span>
+                  ))}
+                </div>
+                <div className="ut-gaunt__info">
+                  {gActive ? <><b style={{ color: '#0e9d5b' }}>{ct('Run ativo')}</b> · {gWins}/{GAUNTLET_TARGET} — {ct('uma derrota encerra')}</>
+                    : gDoneToday ? ct('Já jogou hoje — volte amanhã.')
+                    : ct('1 tentativa por dia. Vença em sequência; a dificuldade sobe a cada vitória.')}
+                  {' · '}{ct('recorde')} <b>{g.best}</b>
+                </div>
+              </div>
+            )}
+
             {!squadComplete && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Complete os 5 slots do seu squad (aba Squad) pra jogar.')}</div>}
 
-            <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', marginTop: 12, padding: '13px' }} onClick={() => playMatch(rankedMode === 'rivals')} disabled={!squadComplete}>
-              <Zap size={17} /> {rankedMode === 'rivals' ? ct('ENTRAR NA FILA') : ct('JOGAR AMISTOSO')}
+            <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', marginTop: 12, padding: '13px' }} onClick={() => startMatch(rankedMode)} disabled={ctaDisabled}>
+              <Zap size={17} /> {ctaLabel}
             </button>
             <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
-              {rankedMode === 'rivals' ? ct('Vitória sobe RP e pode promover de divisão. Derrota tira RP.') : ct('Sem risco de RP — treina e ganha credits (500 vitória / 150 derrota).')}
+              {rankedMode === 'rivals' ? ct('Vitória sobe RP e pode promover de divisão. Derrota tira RP.')
+                : rankedMode === 'casual' ? ct('Sem risco de RP — treina e ganha credits (500 vitória / 150 derrota).')
+                : ct('Recompensa cresce a cada vitória (800 → 6.000) + carta Elite ao completar 5/5.')}
             </div>
           </UtPanel>
         );
@@ -992,7 +1048,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       {/* resultado da partida */}
       {result && (
         <Modal open onClose={() => setResult(null)} title={result.won ? ct('Vitória!') : ct('Derrota')} size="sm"
-          footer={<><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { const rk = result.ranked; setResult(null); playMatch(rk); }} disabled={!squadComplete}>{ct('Jogar de novo')}</Button></>}>
+          footer={result.mode === 'gauntlet' && result.gaunt?.over
+            ? <Button variant="primary" onClick={() => setResult(null)}>{ct('Fechar')}</Button>
+            : <><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { const md = result.mode; setResult(null); startMatch(md); }} disabled={!squadComplete}>{result.mode === 'gauntlet' ? ct('Continuar') : ct('Jogar de novo')}</Button></>}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
             {result.divChange !== 'same' && (
               <div className={`ut-divchange ${result.divChange}`}>
@@ -1001,12 +1059,14 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             )}
             <div style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
             <div style={{ display: 'flex', gap: 16, fontSize: '0.9rem', fontWeight: 800 }}>
-              {result.ranked
+              {result.mode === 'rivals'
                 ? <span style={{ color: result.outcome.eloDelta >= 0 ? '#16a34a' : '#dc2626' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>
-                : <span style={{ color: 'var(--ut-muted)' }}>{ct('Amistoso · sem RP')}</span>}
+                : result.mode === 'gauntlet'
+                  ? <span style={{ color: result.won ? '#0e9d5b' : '#b42318', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flame size={14} /> {result.gaunt?.wins ?? 0}/{GAUNTLET_TARGET}{result.won ? '' : ` · ${ct('run encerrado')}`}</span>
+                  : <span style={{ color: 'var(--ut-muted)' }}>{ct('Amistoso · sem RP')}</span>}
               {result.outcome.credits > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#92600a' }}><Coins size={13} /> +{fmt(result.outcome.credits)}</span>}
             </div>
-            <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{result.ranked ? `${div.def.name} · ${state.profile.elo} RP` : ct('Treino amistoso')}</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{result.mode === 'rivals' ? `${div.def.name} · ${state.profile.elo} RP` : result.mode === 'gauntlet' ? `${ct('Elite Gauntlet')} · ${ct('recorde')} ${state.profile.gauntlet.best}` : ct('Treino amistoso')}</span>
           </div>
         </Modal>
       )}
