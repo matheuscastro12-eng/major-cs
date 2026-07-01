@@ -24,7 +24,7 @@ import { autoVeto } from '../../engine/veto';
 import { simulateSeries } from '../../engine/match';
 import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
-import type { SeriesResult, TTeam } from '../../types';
+import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { useAccount } from '../../state/account';
 import { UtPanel, UtEmpty } from './UtPanel';
@@ -190,8 +190,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   type MatchMode = 'rivals' | 'casual' | 'gauntlet';
-  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard } };
-  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult } | null>(null);
+  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string };
+  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
   const [onbForm, setOnbForm] = useState('standard');
@@ -453,18 +453,29 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const m0 = series.maps[0];
     const score = m0 ? `${m0.score[0]}-${m0.score[1]}` : `${series.mapScore[0]}-${series.mapScore[1]}`;
     const eloBefore = state.profile.elo;
+    // MVP do SEU squad: mais kills no mapa (desempate: menos mortes)
+    const mapStats = m0?.stats ?? {};
+    let mvp: LiveResult['mvp'];
+    for (const fs of form.slots) {
+      const sc = slotCard(fs.slot);
+      const line = sc ? mapStats[sc.card.playerId]?.both : undefined;
+      if (!sc || !line) continue;
+      if (!mvp || line.kills > mvp.kills || (line.kills === mvp.kills && line.deaths < mvp.deaths)) mvp = { card: sc.card, kills: line.kills, deaths: line.deaths };
+    }
+    const mapName = m0 ? (MAP_LABELS[m0.map] ?? m0.map) : '';
+    const roundLog = m0?.roundLog ?? [];
     let resultData: LiveResult;
     if (mode === 'gauntlet') {
       const r = gauntletRecord(won, score);
-      resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard } };
+      resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard }, mvp, roundLog, mapName };
     } else {
       const ranked = mode === 'rivals';
       const outcome = recordMatch(won, oppElo, ranked, score);
       const eloAfter = eloBefore + (ranked ? outcome.eloDelta : 0);
-      resultData = { won, score, outcome, mode, divChange: ranked ? divisionChange(eloBefore, eloAfter) : 'same', divName: divisionFor(eloAfter).def.name };
+      resultData = { won, score, outcome, mode, divChange: ranked ? divisionChange(eloBefore, eloAfter) : 'same', divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName };
     }
     setResult(null);
-    setLive({ series, teams: [userTeam, oppTeam], result: resultData });
+    setLive({ series, teams: [userTeam, oppTeam], result: resultData, opp: oppFive, intro: true });
   };
 
   // o resultado já foi registrado no playMatch — aqui só troca replay → modal.
@@ -550,12 +561,53 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
   // partida rolando: substitui a tela pelo replay round-a-round (reusa MatchReplay).
   if (live) {
+    // INTRO DE CONFRONTO (pré-jogo estilo transmissão): suas cartas vs o rival,
+    // mapa e química — o replay só começa no "COMEÇAR PARTIDA".
+    if (live.intro) {
+      const oppOvr = live.opp.length ? Math.round(live.opp.reduce((a, p) => a + p.ovr, 0) / live.opp.length) : 0;
+      return (
+        <div className="ut-root ut-live">
+          <div className="ut-vs">
+            <div className="ut-vs__kicker">{ct('MATCH DAY')} · {live.result.mode === 'rivals' ? 'DIVISÃO RIVALS' : live.result.mode === 'gauntlet' ? 'ELITE GAUNTLET' : ct('AMISTOSO')}</div>
+            <div className="ut-vs__grid">
+              <div className="ut-vs__side">
+                <div className="ut-vs__team">{live.teams[0].name}</div>
+                <div className="ut-vs__meta">{avgOvr} OVR · {ct('química')} {chem.total}/15</div>
+                <div className="ut-vs__cards">
+                  {form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? <UltCardView key={fs.slot} card={sc.card} size={82} evo={sc.owned.boost ?? 0} /> : null; })}
+                </div>
+              </div>
+              <div className="ut-vs__mid">
+                <div className="ut-vs__map">{live.result.mapName}</div>
+                <div className="ut-vs__vs">VS</div>
+                <div className="ut-vs__fmt">MD1 · {chem.multiplier.toFixed(2)}× {ct('força')}</div>
+                <button className="ut-jogar" style={{ padding: '13px 26px', fontSize: '1rem' }} onClick={() => setLive({ ...live, intro: false })}><Zap size={17} /> {ct('COMEÇAR PARTIDA')}</button>
+                <button className="ut-vs__skip" onClick={finishMatch}>{ct('Pular direto pro resultado')}</button>
+              </div>
+              <div className="ut-vs__side">
+                <div className="ut-vs__team">{live.teams[1].name}</div>
+                <div className="ut-vs__meta">{oppOvr} OVR · {ct('adversário')}</div>
+                <div className="ut-vs__roster">
+                  {live.opp.map((p) => (
+                    <div key={p.id} className="ut-vs__row">
+                      <PlayerAvatar nick={p.nick} size={26} />
+                      <span className="ut-vs__nick"><Flag cc={p.country} /> {p.nick}</span>
+                      <span className="ut-vs__ovr">{p.ovr}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="ut-root ut-live">
         <div className="ut-live__bar">
           <button onClick={finishMatch} className="ut-live__back"><ArrowLeft size={15} style={{ verticalAlign: '-2px' }} /> {ct('Ver resultado')}</button>
           <span className="ut-live__vs">{live.teams[0].name} <span style={{ color: 'var(--ut-gold-1)' }}>vs</span> {live.teams[1].name}</span>
-          <span className="ut-live__badge"><span className="ut-live__dot" /> {ct('AO VIVO')}</span>
+          <span className="ut-live__badge"><span className="ut-live__dot" /> {ct('AO VIVO')} · {live.result.mapName}</span>
         </div>
         <div className="ut-live__stage">
           <MatchReplay series={live.series} teams={live.teams} playbackSpeed={speed} canControlSpeed onPlaybackSpeedChange={setSpeed} onFinish={finishMatch} onClose={finishMatch} />
@@ -1166,6 +1218,24 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <div className="ut-divchange promoted"><Flame size={15} strokeWidth={2.5} /> {ct('GAUNTLET COMPLETO')} · 5/5</div>
             )}
             <div style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
+            {result.mapName && <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--ut-muted)', marginTop: -6 }}>{result.mapName}</div>}
+            {result.roundLog.length > 0 && (
+              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 320 }}>
+                {result.roundLog.map((w, i) => (
+                  <span key={i} title={`Round ${i + 1}`} style={{ width: 9, height: 9, borderRadius: 3, background: w === 0 ? '#22c55e' : '#e5e2da', border: `1px solid ${w === 0 ? '#16a34a' : '#d3d0c7'}`, marginLeft: i === 12 ? 8 : 0 }} />
+                ))}
+              </div>
+            )}
+            {result.mvp && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, padding: '10px 16px', borderRadius: 12, background: 'rgba(201,166,60,0.1)', border: '1px solid rgba(201,166,60,0.35)' }}>
+                <UltCardView card={result.mvp.card} size={72} />
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.66rem', letterSpacing: '1.4px', color: '#92600a' }}>★ {ct('MVP DA PARTIDA')}</div>
+                  <div style={{ fontWeight: 900, fontSize: '0.95rem', color: 'var(--ut-ink)' }}>{result.mvp.card.nick}</div>
+                  <div style={{ fontFamily: 'var(--ut-font-mono)', fontSize: '0.78rem', color: 'var(--ut-ink-2)' }}>{result.mvp.kills}K · {result.mvp.deaths}D</div>
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 16, fontSize: '0.9rem', fontWeight: 800 }}>
               {result.mode === 'rivals'
                 ? <span style={{ color: result.outcome.eloDelta >= 0 ? '#16a34a' : '#dc2626' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>
