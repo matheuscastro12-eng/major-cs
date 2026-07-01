@@ -25,7 +25,9 @@ import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
 import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
 import { checkSbc } from '../src/engine/ultimate/sbc.ts';
 import { buildAiLadder, buildBazaar } from '../src/engine/ultimate/bazaar.ts';
-import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS, claimSeasonReward, startSeason, STARTING_ELO, gauntletStart, gauntletRecord } from '../src/engine/ultimate/state.ts';
+import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS, claimSeasonReward, startSeason, STARTING_ELO, gauntletStart, gauntletRecord, pushHistory, markBazaarBought, ensureMissions, markMissionClaimed, HISTORY_MAX, type MatchRecord } from '../src/engine/ultimate/state.ts';
+import { missionsForDay, missionProgress, MISSIONS_PER_DAY, MISSION_POOL } from '../src/engine/ultimate/missions.ts';
+import { distinctPlayers } from '../src/engine/ultimate/sbc.ts';
 import { evaluateSeasonTiers, seasonTierById } from '../src/engine/ultimate/seasonRewards.ts';
 import { divisionFor, divisionChange, DIVISIONS, DIV_TIERS } from '../src/engine/ultimate/divisions.ts';
 import { evaluateObjectives, objectiveById, OBJECTIVES } from '../src/engine/ultimate/objectives.ts';
@@ -118,7 +120,10 @@ test('rollPack devolve exatamente pack.cards cartas e é determinístico por see
 });
 
 test('rollPack honra as garantias de bucket', () => {
-  const cat = buildCatalog(CS2_REAL_2026);
+  // espelha o runtime: catálogo COM specials TOTS (o pack 'tots' garante bucket special)
+  const base = buildCatalog(CS2_REAL_2026);
+  const tots = [...base].sort((a, b) => b.ovr - a.ovr).slice(0, 11).map((c) => ({ playerId: c.playerId, rarity: 'tots' as const, ovrBoost: 2 }));
+  const cat = buildCatalog(CS2_REAL_2026, tots);
   for (const pack of PACK_DEFS) {
     const g = (pack.guaranteed ?? [])[0];
     if (!g) continue;
@@ -503,6 +508,108 @@ test('evolveCard: sobe boost gastando EVO_COSTS, respeita teto e saldo', () => {
   assert.equal(evolveCard(s0, 'nope').reason, 'missing');
 });
 
+test('pushHistory: mais novo primeiro, cap em HISTORY_MAX, imutável', () => {
+  let s = defaultUltimateState();
+  const rec = (i: number): MatchRecord => ({ t: i, mode: 'rivals', won: i % 2 === 0, score: `13-${i}`, eloDelta: i, credits: 0 });
+  for (let i = 0; i < HISTORY_MAX + 5; i++) s = pushHistory(s, rec(i));
+  assert.equal(s.profile.history.length, HISTORY_MAX);
+  assert.equal(s.profile.history[0].t, HISTORY_MAX + 4); // mais recente primeiro
+  assert.equal(defaultUltimateState().profile.history.length, 0);
+});
+
+test('markBazaarBought: acumula no mesmo dia, reseta em dia novo', () => {
+  let s = markBazaarBought(defaultUltimateState(), 100, 'a');
+  s = markBazaarBought(s, 100, 'b');
+  assert.deepEqual(s.profile.bazaarBought, { day: 100, ids: ['a', 'b'] });
+  s = markBazaarBought(s, 101, 'c'); // virou o dia → lista zera
+  assert.deepEqual(s.profile.bazaarBought, { day: 101, ids: ['c'] });
+});
+
+test('computeMatchOutcome: multiplicador por divisão + bônus de streak', () => {
+  // mesma diferença de elo: vencer na Elite (1960) paga mais que no Bronze (1000)
+  const bronze = computeMatchOutcome(1000, 1000, true);
+  const elite = computeMatchOutcome(1960, 1960, true);
+  assert.ok(elite.credits > bronze.credits);
+  // streak aumenta o pagamento (cap em 5)
+  const noStreak = computeMatchOutcome(1000, 1000, true, 0);
+  const st3 = computeMatchOutcome(1000, 1000, true, 3);
+  const st5 = computeMatchOutcome(1000, 1000, true, 5);
+  const st9 = computeMatchOutcome(1000, 1000, true, 9);
+  assert.ok(st3.credits > noStreak.credits);
+  assert.equal(st5.credits, st9.credits); // cap
+  assert.equal(computeMatchOutcome(1960, 1960, false, 5).credits, 0); // derrota nunca paga
+});
+
+test('distinctPlayers + checkSbc: 3 cópias da mesma carta REPROVAM', () => {
+  const catalog = buildCatalog(CS2_REAL_2026);
+  const c = catalog[0];
+  assert.ok(!distinctPlayers([c, c, c]));
+  const chk = checkSbc([c, c, c], { count: 3, sameOrg: true });
+  assert.ok(!chk.ok);
+  assert.ok(chk.items.some((i) => i.label === 'jogadores diferentes' && !i.ok));
+  // 3 jogadores distintos da MESMA org passam
+  const org = catalog.filter((x) => x.teamOrigin === c.teamOrigin);
+  if (org.length >= 3) {
+    const trio = org.slice(0, 3);
+    assert.ok(distinctPlayers(trio));
+    assert.ok(checkSbc(trio, { count: 3, sameOrg: true }).ok);
+  }
+});
+
+test('missões: sorteio determinístico por dia, ensure/claim idempotentes', () => {
+  const a = missionsForDay('2026-07-01');
+  const b = missionsForDay('2026-07-01');
+  assert.deepEqual(a.map((m) => m.id), b.map((m) => m.id)); // determinístico
+  assert.equal(a.length, MISSIONS_PER_DAY);
+  assert.equal(new Set(a.map((m) => m.id)).size, MISSIONS_PER_DAY); // sem repetida
+  assert.ok(a.every((m) => MISSION_POOL.some((p) => p.id === m.id)));
+  // progresso
+  const def = MISSION_POOL.find((m) => m.id === 'm-win2')!;
+  assert.ok(!missionProgress(def, { winsToday: 1, matchesToday: 1, packsToday: 0, sbcToday: 0 }).done);
+  assert.ok(missionProgress(def, { winsToday: 2, matchesToday: 2, packsToday: 0, sbcToday: 0 }).done);
+  // ensure captura baseline e não re-reseta no mesmo dia
+  let s = defaultUltimateState();
+  s = { ...s, profile: { ...s.profile, w: 4, l: 2, packSeedCounter: 3 } };
+  s = ensureMissions(s, 'D1');
+  assert.deepEqual(s.profile.missions!.base, { w: 4, l: 2, packs: 3, sbc: 0 });
+  assert.equal(ensureMissions(s, 'D1'), s); // no-op
+  const s2 = markMissionClaimed(s, 'm-win1');
+  assert.deepEqual(s2.profile.missions!.claimed, ['m-win1']);
+  assert.equal(markMissionClaimed(s2, 'm-win1'), s2); // idempotente
+  assert.equal(ensureMissions(s2, 'D2').profile.missions!.claimed.length, 0); // dia novo zera
+});
+
+test('migrateUltimate: squads com slots lixo não explodem; novos campos com default', () => {
+  const m = migrateUltimate({ squads: [{ id: 'main' }, { id: 'x', slots: [null, { slot: 0, role: 'AWP', ownedId: 42 }, 'lixo'] }] });
+  assert.equal(m.squads.length, 2);
+  assert.deepEqual(m.squads[0].slots, []); // sem slots → vazio, não TypeError
+  assert.equal(m.squads[1].slots.length, 1);
+  assert.equal(m.squads[1].slots[0].ownedId, null); // ownedId não-string vira null
+  assert.deepEqual(m.profile.bazaarBought, { day: 0, ids: [] });
+  assert.equal(m.profile.missions, null);
+  assert.deepEqual(m.profile.history, []);
+});
+
+test('applySeasonRollover incrementa season.n', () => {
+  const base = defaultUltimateState();
+  const started = { ...base, profile: { ...base.profile, w: 1, season: { startedAt: 0, endsAt: 10, wl0: 0, peak: 1200, claimed: [], n: 1 } } };
+  const r = applySeasonRollover(started, 20);
+  assert.ok(r.result.rolled);
+  assert.equal(r.state.profile.season!.n, 2);
+});
+
+test('pack TOTS: catálogo com specials garante 1 special no roll', () => {
+  const base = buildCatalog(CS2_REAL_2026);
+  const tots = [...base].sort((a, b) => b.ovr - a.ovr).slice(0, 11).map((c) => ({ playerId: c.playerId, rarity: 'tots' as const, ovrBoost: 2 }));
+  const catalog = buildCatalog(CS2_REAL_2026, tots);
+  assert.ok(catalog.some((c) => c.rarity === 'tots'));
+  const pack = packById('tots')!;
+  assert.ok(pack);
+  const cards = rollPack(catalog, pack, makeRng(42));
+  assert.equal(cards.length, pack.cards);
+  assert.ok(cards.some((c) => c.rarity === 'tots' || c.rarity === 'major')); // garantia do bucket special
+});
+
 test('gauntlet: start/record — vitória avança, derrota/5 encerra, best', () => {
   let s = gauntletStart(defaultUltimateState(), 'D1');
   assert.ok(s.profile.gauntlet.active && s.profile.gauntlet.wins === 0);
@@ -519,7 +626,8 @@ test('gauntlet: start/record — vitória avança, derrota/5 encerra, best', () 
   assert.equal(t.profile.gauntlet.wins, 5);
   assert.equal(t.profile.gauntlet.active, false);
   assert.equal(t.profile.gauntlet.best, 5);
-  assert.ok(gauntletRecord(t, true).over); // run inativo → no-op
+  const idle = gauntletRecord(t, true); // run inativo → no-op
+  assert.ok(idle.over && !idle.advanced); // advanced=false → chamador NÃO paga credits
 });
 
 test('migrateUltimate preenche gauntlet (default + preserva)', () => {

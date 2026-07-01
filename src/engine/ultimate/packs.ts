@@ -45,6 +45,13 @@ export const PACK_DEFS: PackDef[] = [
     guaranteed: [{ bucket: 'gold', count: 2 }],
   },
   {
+    // temático: só existe porque o catálogo agora tem specials TOTS curadas
+    id: 'tots', name: 'Pacote TOTS', desc: '5 cartas · 1 Time da Temporada garantida',
+    cost: 30000, cards: 5, color: '#5ed88a',
+    weights: { rareGold: 42, elite: 36, legendary: 14, icon: 4, tots: 4 },
+    guaranteed: [{ bucket: 'special', count: 1 }],
+  },
+  {
     id: 'premium', name: 'Pacote Premium', desc: '11 cartas · 3 ouros raros garantidos',
     cost: 40000, cards: 11, color: '#c792ea',
     weights: { rareGold: 46, elite: 38, legendary: 13, icon: 3 },
@@ -70,6 +77,10 @@ function groupByRarity(catalog: UltCard[]): Map<UltRarity, UltCard[]> {
 // pesca uma carta de uma raridade; se vazia, desce a cascata de fallback até
 // achar um pool não-vazio (garante que SEMPRE retorna carta).
 function pickCardOfRarity(byRarity: Map<UltRarity, UltCard[]>, rarity: UltRarity, rng: Rng): UltCard | null {
+  // tenta a raridade EXATA primeiro: specials (tots/major) não estão na cascata
+  // RARITY_FALLBACK — sem isso a garantia de bucket 'special' devolvia icon.
+  const exact = byRarity.get(rarity);
+  if (exact && exact.length) return pick(rng, exact);
   const startIdx = Math.max(0, RARITY_FALLBACK.indexOf(rarity));
   for (let i = startIdx; i < RARITY_FALLBACK.length; i++) {
     const pool = byRarity.get(RARITY_FALLBACK[i]);

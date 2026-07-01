@@ -2,7 +2,7 @@
 // cartas do dataset real, moeda `credits`. Padrão em-*/DashCard/Modal/Button.
 // Ver docs-but-map.md. Sub-fases futuras: Squad Builder (P2), partida vs IA (P3).
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
 import { ultimateCatalog, ultimateIndex, useUltimate } from '../../state/ultimate';
@@ -36,10 +36,13 @@ import {
 } from 'lucide-react';
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
+import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import '../../styles/ultimate.css';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
+// codinomes das temporadas (cicla pela lista conforme season.n cresce)
+const SEASON_NAMES = ['Inception', 'Ascension', 'Dynasty', 'Legacy', 'Overtime', 'Eternal'];
 // chip de recurso: abrevia valores gigantes pra não estourar a nav.
 const fmtChip = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : fmt(n));
 
@@ -111,7 +114,9 @@ function boostCard(base: UltCard, boost: number | undefined): UltCard {
 
 // carta estilo FUT: pele premium por raridade (cardSkin), moldura dupla + sheen,
 // placa do OVR, 6 substats, foil nas especiais e marca M//CS. `qs` = quick-sell.
-function UltCardView({ card, size = 132, count, qs, evo = 0 }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number }) {
+// React.memo: as rows do club têm referência estável entre renders → um toast
+// não re-renderiza a grade inteira de cartas (custo real em coleção grande).
+const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0 }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number }) {
   const info = rarityInfo(card.rarity);
   const compact = size < 116;
   const h = Math.round(size * 1.4);
@@ -172,21 +177,22 @@ function UltCardView({ card, size = 132, count, qs, evo = 0 }: { card: UltCard; 
       )}
     </div>
   );
-}
+});
 
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord } = useUltimate();
+  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   type MatchMode = 'rivals' | 'casual' | 'gauntlet';
-  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; oppElo: number; eloBefore: number; mode: MatchMode } | null>(null);
-  const [result, setResult] = useState<{ won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean } } | null>(null);
+  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard } };
+  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult } | null>(null);
+  const [result, setResult] = useState<LiveResult | null>(null);
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
   const [onbForm, setOnbForm] = useState('standard');
   const [dailyOpen, setDailyOpen] = useState(false);
@@ -230,10 +236,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   useEffect(() => { if (tab === 'squad') ensureSquad(); }, [tab, ensureSquad]);
   // reveal/walkout: começa a revelação na 1ª carta sempre que abre um novo pacote
   useEffect(() => { setRevealIdx(0); }, [reveal]);
-  // season: no mount, inicia/rola por relógio local; se rolou, mostra o modal
+  // season: no mount, inicia/rola por relógio local; se rolou, mostra o modal.
+  // Missões diárias abrem o dia no mount também.
   useEffect(() => {
     const r = tickSeason();
     if (r.rolled) setSeasonRoll({ credits: r.credits, newElo: r.newElo });
+    syncMissions(dateKey(new Date()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // tick de baixa frequência: countdown do daily/missões vira na hora certa
+  // (sem isso, "PRÓXIMA EM Xh Ym" e o dia das missões congelavam até um re-render).
+  const [, setClock] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => { setClock((c) => c + 1); syncMissions(dateKey(new Date())); }, 60_000);
+    return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // reavalia títulos quando algum fato muda (vitórias, coleção, pico, sequência)
@@ -268,6 +284,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const totalCards = state.inventory.length;
   const uniqueCards = club.length;
   const dupCount = totalCards - uniqueCards;
+  // cópias por cardKey SOMANDO todos os níveis de evolução (o club separa por
+  // boost — o quick-sell do engine considera duplicata pelo cardKey inteiro).
+  const keyCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const o of state.inventory) m.set(o.cardKey, (m.get(o.cardKey) ?? 0) + 1);
+    return m;
+  }, [state.inventory]);
 
   // ── squad building ──
   const ownedById = useMemo(() => new Map(state.inventory.map((o) => [o.id, o] as const)), [state.inventory]);
@@ -295,6 +318,27 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
   const div = divisionFor(state.profile.elo);
+  const history = state.profile.history;
+  const histDelta = history.reduce((a, h) => a + h.eloDelta, 0); // RP líquido das últimas partidas
+
+  // ── missões diárias rotativas ──
+  const missionsState = state.profile.missions;
+  const todaysMissions = missionsState ? missionsForDay(missionsState.day) : [];
+  const missionFacts = missionsState
+    ? {
+        winsToday: state.profile.w - missionsState.base.w,
+        matchesToday: (state.profile.w + state.profile.l) - (missionsState.base.w + missionsState.base.l),
+        packsToday: state.profile.packSeedCounter - missionsState.base.packs,
+        sbcToday: state.profile.sbcDone.length - missionsState.base.sbc,
+      }
+    : { winsToday: 0, matchesToday: 0, packsToday: 0, sbcToday: 0 };
+  const missionClaimable = missionsState
+    ? todaysMissions.filter((m) => !missionsState.claimed.includes(m.id) && missionProgress(m, missionFacts).done).length
+    : 0;
+  const doClaimMission = (id: string) => {
+    const r = claimMission(id);
+    if (r.ok) flash(`✅ ${ct('Missão concluída')} · +${fmt(r.credits ?? 0)} 🪙`, 2200);
+  };
 
   // ── objetivos/missões (profundidade) ──
   const iconsOwned = useMemo(() => {
@@ -347,11 +391,16 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // ── ladder de IA (ranking) + bazar (mercado) — P6 ──
   const ladder = useMemo<AiPlayer[]>(() => buildAiLadder(pool.map((p) => ({ nick: p.nick, country: p.country, ovr: p.ovr })), 20260607), [pool]);
   const [bazaar, setBazaar] = useState<Listing[]>([]);
+  const bazaarBought = state.profile.bazaarBought;
   useEffect(() => {
-    setBazaar(buildBazaar(ultimateCatalog(), ladder.slice(0, 60).map((a) => a.nick), bazaarDayBucket(Date.now())));
-  }, [ladder]);
+    // filtra as listagens JÁ COMPRADAS hoje (persistidas no save) — o bazar é
+    // determinístico por dia; sem isso, remount/F5 "restocava" a compra.
+    const day = bazaarDayBucket(Date.now());
+    const boughtIds = new Set(bazaarBought.day === day ? bazaarBought.ids : []);
+    setBazaar(buildBazaar(ultimateCatalog(), ladder.slice(0, 60).map((a) => a.nick), day).filter((l) => !boughtIds.has(l.id)));
+  }, [ladder, bazaarBought]);
   const buyFromBazaar = (l: Listing) => {
-    if (buyCard(l.cardKey, l.price)) { setBazaar((b) => b.filter((x) => x.id !== l.id)); flash(`✅ ${ct('Comprado')} · -${fmt(l.price)} 🪙`); }
+    if (buyCard(l.cardKey, l.price, l.id, bazaarDayBucket(Date.now()))) { setBazaar((b) => b.filter((x) => x.id !== l.id)); flash(`✅ ${ct('Comprado')} · -${fmt(l.price)} 🪙`); }
     else flash(ct('Créditos insuficientes.'));
   };
   // ranking com VOCÊ inserido por elo
@@ -397,30 +446,33 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const rng = makeRng(Math.floor(Math.random() * 2147483647));
     const maps = autoVeto([userTeam, oppTeam], rng, 1);
     const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
+    // COMMIT-ON-START (anti loss-dodge): o resultado é registrado e persistido
+    // AGORA — o replay é só exibição. F5 no meio da partida não desfaz derrota
+    // (mesmo padrão anti-reroll do openPack, que grava antes do reveal).
+    const won = series.winner === 0;
+    const m0 = series.maps[0];
+    const score = m0 ? `${m0.score[0]}-${m0.score[1]}` : `${series.mapScore[0]}-${series.mapScore[1]}`;
+    const eloBefore = state.profile.elo;
+    let resultData: LiveResult;
+    if (mode === 'gauntlet') {
+      const r = gauntletRecord(won, score);
+      resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard } };
+    } else {
+      const ranked = mode === 'rivals';
+      const outcome = recordMatch(won, oppElo, ranked, score);
+      const eloAfter = eloBefore + (ranked ? outcome.eloDelta : 0);
+      resultData = { won, score, outcome, mode, divChange: ranked ? divisionChange(eloBefore, eloAfter) : 'same', divName: divisionFor(eloAfter).def.name };
+    }
     setResult(null);
-    setLive({ series, teams: [userTeam, oppTeam], oppElo, eloBefore: state.profile.elo, mode });
+    setLive({ series, teams: [userTeam, oppTeam], result: resultData });
   };
 
+  // o resultado já foi registrado no playMatch — aqui só troca replay → modal.
   const finishMatch = () => {
     if (!live) return;
-    const won = live.series.winner === 0;
-    const m = live.series.maps[0];
-    const score = m ? `${m.score[0]}-${m.score[1]}` : `${live.series.mapScore[0]}-${live.series.mapScore[1]}`;
-    const mode = live.mode;
-    if (mode === 'gauntlet') {
-      const r = gauntletRecord(won);
-      setLive(null);
-      if (r.grantedCard) { setReveal([r.grantedCard]); flash(`🏆 ${ct('Elite Gauntlet completo!')} 5/5`, 2800); }
-      else setResult({ won, score, outcome: { eloDelta: 0, credits: r.credits }, mode: 'gauntlet', divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over } });
-      syncTitles();
-      return;
-    }
-    const ranked = mode === 'rivals';
-    const outcome = recordMatch(won, live.oppElo, ranked);
-    const eloAfter = live.eloBefore + (ranked ? outcome.eloDelta : 0);
-    const divChange = ranked ? divisionChange(live.eloBefore, eloAfter) : 'same';
+    const r = live.result;
     setLive(null);
-    setResult({ won, score, outcome, mode, divChange, divName: divisionFor(eloAfter).def.name });
+    setResult(r);
   };
 
   // inicia/continua uma partida por modo. Gauntlet: abre o run se não estiver
@@ -441,26 +493,24 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
   };
 
-  // vende TODAS as duplicatas (mantém 1 cópia de cada), somando os créditos.
+  // vende TODAS as duplicatas (mantém 1 cópia de cada) em UM lote — sellMany
+  // persiste uma única vez (N vendas soltas travavam o clique em coleção grande).
   const sellAllDuplicates = () => {
-    let total = 0;
-    let sold = 0;
+    const ids: string[] = [];
     for (const row of club) {
       if (row.count <= 1) continue;
-      // mantém a 1ª, vende o resto
-      for (const id of row.ownedIds.slice(1)) {
-        const r = sell(id);
-        if (r.ok) { total += r.credited; sold++; }
-      }
+      ids.push(...row.ownedIds.slice(1)); // mantém a 1ª, vende o resto
     }
-    flash(sold ? `${ct('Vendidas')} ${sold} ${ct('duplicatas')} · +${fmt(total)} 🪙` : ct('Nenhuma duplicata pra vender.'));
+    const r = sellMany(ids);
+    flash(r.sold ? `${ct('Vendidas')} ${r.sold} ${ct('duplicatas')} · +${fmt(r.credited)} 🪙` : ct('Nenhuma duplicata pra vender.'));
   };
 
   const sellOne = (row: ClubRow) => {
-    // vende a cópia "extra" se houver dupe; senão a única
-    const id = row.count > 1 ? row.ownedIds[row.ownedIds.length - 1] : row.ownedIds[0];
+    // prefere uma cópia NÃO travada no squad (a travada não pode ser vendida)
+    const id = row.ownedIds.find((oid) => ownedById.get(oid)?.locked !== 'squad') ?? row.ownedIds[0];
     const r = sell(id);
     if (r.ok) flash(`+${fmt(r.credited)} 🪙`);
+    else flash(ct('Carta escalada no squad — remova do slot pra vender.'));
   };
 
   // primeira vez: onboarding (escolhe esquema → 5 cartas iniciais → onboarded=true).
@@ -503,7 +553,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     return (
       <div className="ut-root ut-live">
         <div className="ut-live__bar">
-          <button onClick={finishMatch} className="ut-live__back"><ArrowLeft size={15} style={{ verticalAlign: '-2px' }} /> {ct('Encerrar')}</button>
+          <button onClick={finishMatch} className="ut-live__back"><ArrowLeft size={15} style={{ verticalAlign: '-2px' }} /> {ct('Ver resultado')}</button>
           <span className="ut-live__vs">{live.teams[0].name} <span style={{ color: 'var(--ut-gold-1)' }}>vs</span> {live.teams[1].name}</span>
           <span className="ut-live__badge"><span className="ut-live__dot" /> {ct('AO VIVO')}</span>
         </div>
@@ -517,8 +567,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   return (
     <div className="ut-root">
       <style>{`
-        .ult-foil { background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.35) 48%, rgba(255,255,255,0.05) 55%, transparent 70%); background-size: 250% 250%; animation: ult-shimmer 3.2s linear infinite; mix-blend-mode: screen; }
-        @keyframes ult-shimmer { 0% { background-position: 120% 0; } 100% { background-position: -60% 0; } }
+        .ult-foil { overflow: hidden; }
+        .ult-foil::before { content: ''; position: absolute; top: -20%; bottom: -20%; left: -80%; width: 120%; background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.32) 50%, transparent 65%); animation: ult-shimmer 3.2s linear infinite; mix-blend-mode: screen; will-change: transform; }
+        @keyframes ult-shimmer { to { transform: translateX(220%); } }
         .ult-reveal-card { animation: ult-pop .45s cubic-bezier(0.2,0.8,0.2,1) both; }
         @keyframes ult-pop { from { opacity:0; transform: translateY(14px) scale(.82) rotateY(35deg); } to { opacity:1; transform:none; } }
       `}</style>
@@ -553,6 +604,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             </div>
             <button className={`ut-nav__item${tab === 'ranked' ? ' is-active' : ''}`} onClick={() => go('ranked')}><Swords size={16} /> {ct('Ranqueada')}</button>
             <button className={`ut-nav__item${tab === 'ranking' ? ' is-active' : ''}`} onClick={() => go('ranking')}><ListOrdered size={16} /> {ct('Ranking')}</button>
+            {/* itens DIRETOS: visíveis só em telas estreitas — os dropdowns ficavam
+                recortados dentro do scroller da nav (<=1160px) e sumiam no clique */}
+            <button className={`ut-nav__item ut-nav__item--direct${tab === 'club' ? ' is-active' : ''}`} onClick={() => go('club')}><Layers size={16} /> {ct('Coleção')}</button>
+            <button className={`ut-nav__item ut-nav__item--direct${tab === 'squad' ? ' is-active' : ''}`} onClick={() => go('squad')}><Shirt size={16} /> {ct('Squad')}</button>
+            <button className={`ut-nav__item ut-nav__item--direct${tab === 'sbc' ? ' is-active' : ''}`} onClick={() => go('sbc')}><FlaskConical size={16} /> {ct('Desafios')}</button>
+            <button className={`ut-nav__item ut-nav__item--direct${tab === 'store' ? ' is-active' : ''}`} onClick={() => go('store')}><Package size={16} /> {ct('Loja')}</button>
+            <button className={`ut-nav__item ut-nav__item--direct${tab === 'mercado' ? ' is-active' : ''}`} onClick={() => go('mercado')}><ArrowLeftRight size={16} /> {ct('Mercado')}</button>
           </div>
           <span style={{ flex: 1 }} />
           <div className="ut-res">
@@ -584,7 +642,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           <div className="ut-season">
             <div className="ut-season__inner">
               <span className="ut-season__tag"><Zap size={12} /> {ct('TEMPORADA')}</span>
-              <span className="ut-season__name">Season 1 — Inception</span>
+              <span className="ut-season__name">Season {state.profile.season?.n ?? 1} — {SEASON_NAMES[((state.profile.season?.n ?? 1) - 1) % SEASON_NAMES.length]}</span>
               {ends && <span className="ut-season__meta">· {ct('Termina em')} {ends}</span>}
               <span className="ut-season__user">{ct('logado como')} <b>{displayName}</b></span>
             </div>
@@ -594,13 +652,15 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
       {/* ===== PAGE ===== */}
       <div className="ut-page">
-        <header className="ut-greet">
-          <div>
-            <div className="ut-greet__kicker">ROAD TO MAJOR · {ct('HUB ONLINE')}</div>
-            <h1 className="ut-greet__title">{ct('Olá')}, <span>{displayName}</span></h1>
-          </div>
-          <button className="ut-outbtn" onClick={() => go('ranking')}><ListOrdered size={15} /> {ct('Leaderboard global')}</button>
-        </header>
+        {tab === 'hub' && (
+          <header className="ut-greet">
+            <div>
+              <div className="ut-greet__kicker">ROAD TO MAJOR · {ct('HUB ONLINE')}</div>
+              <h1 className="ut-greet__title">{ct('Olá')}, <span>{displayName}</span></h1>
+            </div>
+            <button className="ut-outbtn" onClick={() => go('ranking')}><ListOrdered size={15} /> {ct('Leaderboard global')}</button>
+          </header>
+        )}
 
       {tab === 'hub' && (
         <>
@@ -645,10 +705,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               ) : (
                 <>
                   <UtEmpty accent={ct('PRONTO PRA SUBIR NO RANKING?')} icon={<AlertCircle size={30} />} title={ct('Você não tem squad ativo')} sub={ct('Monte e ative uma formação no Squad Builder pra entrar na fila.')} />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="ut-btn ut-btn--gold" onClick={() => go('squad')} style={{ flex: 1 }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
-                    <button className="ut-btn ut-btn--ghost" onClick={() => go('squad')} style={{ flex: 1 }}>{ct('Montar squad')}</button>
-                  </div>
+                  <button className="ut-btn ut-btn--gold" onClick={() => go('squad')} style={{ width: '100%' }}><Shirt size={15} /> {ct('Montar squad')}</button>
                 </>
               )}
             </UtPanel>
@@ -662,7 +719,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   <div className="ut-rank__wl">{state.profile.w}V · {state.profile.l}D · Peak {state.profile.peakElo}</div>
                 </div>
               </div>
-              <div className="ut-div__bar" style={{ marginTop: 10 }}><div style={{ width: `${div.progress}%`, background: div.color }} /></div>
+              <div className="ut-div__bar" style={{ marginTop: 10 }}><div style={{ width: `${div.progress}%`, background: inkOnLight(div.color) }} /></div>
               <div className="ut-rank__foot">{div.next ? <>{ct('faltam')} {div.toNext} RP · {div.next.name}</> : ct('Divisão máxima alcançada!')}</div>
             </UtPanel>
 
@@ -674,21 +731,36 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               </div>
             </UtPanel>
 
-            <UtPanel label={<>{ct('Histórico de ELO')} <em>· +0 {ct('no período')}</em></>} icon={<TrendingUp size={15} className="ut-panel__lead" />} info={ct('Evolução do seu RP na temporada.')}>
-              {state.profile.w + state.profile.l > 0 ? (
-                <div style={{ display: 'flex', gap: 22, alignItems: 'baseline', paddingTop: 4 }}>
-                  <div><div className="ut-stat__k">{ct('ATUAL')}</div><div className="ut-stat__v">{state.profile.elo}</div></div>
-                  <div><div className="ut-stat__k">{ct('PICO')}</div><div className="ut-stat__v">{state.profile.peakElo}</div></div>
-                </div>
+            <UtPanel label={<>{ct('Histórico de ELO')} {histDelta !== 0 && <em style={{ color: histDelta > 0 ? '#0e9d5b' : '#b42318' }}>· {histDelta > 0 ? '+' : ''}{histDelta} {ct('recente')}</em>}</>} icon={<TrendingUp size={15} className="ut-panel__lead" />} info={ct('Soma de RP das suas últimas partidas Rivals.')}>
+              {history.length > 0 ? (
+                <>
+                  <div style={{ display: 'flex', gap: 4, paddingTop: 4, flexWrap: 'wrap' }}>
+                    {history.slice(0, 12).map((h, i) => (
+                      <span key={i} title={`${h.score} · ${h.mode}`} style={{ width: 18, height: 18, borderRadius: 5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.58rem', fontWeight: 900, background: h.won ? 'rgba(18,183,106,0.16)' : 'rgba(220,38,38,0.12)', color: h.won ? '#0e9d5b' : '#b42318', border: `1px solid ${h.won ? 'rgba(18,183,106,0.4)' : 'rgba(220,38,38,0.35)'}` }}>{h.won ? 'V' : 'D'}</span>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 22, alignItems: 'baseline', marginTop: 10 }}>
+                    <div><div className="ut-stat__k">{ct('ATUAL')}</div><div className="ut-stat__v">{state.profile.elo}</div></div>
+                    <div><div className="ut-stat__k">{ct('PICO')}</div><div className="ut-stat__v">{state.profile.peakElo}</div></div>
+                  </div>
+                </>
               ) : (
                 <UtEmpty icon={<TrendingUp size={28} />} title={ct('Sem histórico ainda')} sub={ct('O histórico aparece após sua primeira ranqueada.')} />
               )}
             </UtPanel>
 
-            <UtPanel label={<>{ct('Últimas Ranqueadas')} <em>· {state.profile.w}:{state.profile.l}</em></>} icon={<Swords size={15} className="ut-panel__lead" />} info={ct('Resultado das suas partidas recentes.')}>
-              {state.profile.w + state.profile.l > 0 ? (
-                <div style={{ fontSize: '0.88rem', color: 'var(--ut-muted)', paddingTop: 4 }}>
-                  <b style={{ color: 'var(--ut-green)', fontFamily: 'var(--ut-font-mono)' }}>{state.profile.w}V</b> · <b style={{ color: 'var(--ut-red)', fontFamily: 'var(--ut-font-mono)' }}>{state.profile.l}D</b> · {ct('sequência')} <b style={{ color: 'var(--ut-ink)' }}>{state.profile.streak}</b>
+            <UtPanel label={<>{ct('Últimas Partidas')} <em>· {state.profile.w}V:{state.profile.l}D</em></>} icon={<Swords size={15} className="ut-panel__lead" />} info={ct('Resultado das suas partidas recentes (todos os modos).')}>
+              {history.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 2 }}>
+                  {history.slice(0, 5).map((h, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem' }}>
+                      <span style={{ width: 16, height: 16, borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.54rem', fontWeight: 900, flex: 'none', background: h.won ? 'rgba(18,183,106,0.16)' : 'rgba(220,38,38,0.12)', color: h.won ? '#0e9d5b' : '#b42318' }}>{h.won ? 'V' : 'D'}</span>
+                      <b style={{ fontFamily: 'var(--ut-font-mono)', color: 'var(--ut-ink)', minWidth: 42 }}>{h.score || '—'}</b>
+                      <span style={{ color: 'var(--ut-muted)', flex: 1, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h.mode === 'rivals' ? 'Rivals' : h.mode === 'gauntlet' ? 'Gauntlet' : ct('Amistoso')}</span>
+                      {h.eloDelta !== 0 && <b style={{ fontFamily: 'var(--ut-font-mono)', color: h.eloDelta > 0 ? '#0e9d5b' : '#b42318' }}>{h.eloDelta > 0 ? '+' : ''}{h.eloDelta}</b>}
+                      {h.credits > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: '#92600a', fontFamily: 'var(--ut-font-mono)', fontWeight: 700, fontSize: '0.72rem' }}><Coins size={10} /> {fmtChip(h.credits)}</span>}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <UtEmpty icon={<Swords size={28} />} title={ct('Sem partidas ainda')} sub={ct('Jogue a primeira ranqueada!')} />
@@ -696,7 +768,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             </UtPanel>
 
             <UtPanel label={<>{ct('Streak & Forma')}</>} icon={<Flame size={15} className="ut-panel__lead" />} accent="amber"
-              right={state.profile.w + state.profile.l > 0 ? `${state.profile.w}W · ${state.profile.l}L · ${Math.round((state.profile.w / (state.profile.w + state.profile.l)) * 100)}%` : '0W · 0L'}
+              right={state.profile.w + state.profile.l > 0 ? `${state.profile.w}V · ${state.profile.l}D · ${Math.round((state.profile.w / (state.profile.w + state.profile.l)) * 100)}%` : '0V · 0D'}
               info={ct('Sua sequência de vitórias.')}>
               {state.profile.w + state.profile.l > 0 ? (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -708,6 +780,33 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               )}
             </UtPanel>
           </div>
+
+          {missionsState && todaysMissions.length > 0 && (
+            <UtPanel label={ct('Missões de Hoje')} icon={<CalendarDays size={15} className="ut-panel__lead" />} accent="green"
+              right={missionClaimable > 0 ? <span style={{ color: 'var(--ut-green-deep)' }}>{missionClaimable} {ct('pra resgatar')}</span> : `${missionsState.claimed.length}/${todaysMissions.length}`}
+              info={ct('3 missões novas por dia. Complete e resgate credits.')}>
+              <div className="ut-objs">
+                {todaysMissions.map((m) => {
+                  const prog = missionProgress(m, missionFacts);
+                  const claimed = missionsState.claimed.includes(m.id);
+                  const claimable = prog.done && !claimed;
+                  return (
+                    <div key={m.id} className={`ut-obj${claimable ? ' is-claimable' : ''}${claimed ? ' is-claimed' : ''}`}>
+                      <div className="ut-obj__name">{m.name}</div>
+                      <div className="ut-obj__desc">{ct(m.desc)}</div>
+                      <div className="ut-obj__bar"><div className={prog.done ? 'done' : ''} style={{ width: `${prog.pct}%` }} /></div>
+                      <div className="ut-obj__foot">
+                        <span className="ut-obj__reward"><Coins size={12} /> {fmt(m.credits)}</span>
+                        {claimed ? <span className="ut-obj__done"><Check size={12} strokeWidth={3} /> {ct('resgatado')}</span>
+                          : claimable ? <button className="ut-obj__claim" onClick={() => doClaimMission(m.id)}>{ct('Resgatar')}</button>
+                          : <span className="ut-obj__count">{prog.value}/{m.target}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </UtPanel>
+          )}
 
           <UtPanel label={ct('Objetivos')} icon={<Target size={15} className="ut-panel__lead" />} accent="amber"
             right={objClaimable.length > 0 ? <span style={{ color: '#92600a' }}>{objClaimable.length} {ct('pra resgatar')}</span> : `${claimedSet.size}/${objectives.length}`}
@@ -888,12 +987,16 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                     {filtered.map((row) => {
                       const canEvo = row.evo < EVO_MAX;
                       const evoCost = canEvo ? EVO_COSTS[row.evo] : 0;
+                      // quick-sell exibido = MESMOS insumos do engine (carta base,
+                      // duplicata por cardKey somando todos os níveis de evolução)
+                      const baseCard = index.get(row.card.key) ?? row.card;
+                      const isDup = (keyCount.get(row.card.key) ?? row.count) > 1;
                       return (
                         <div key={`${row.card.key}#${row.evo}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                          <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(row.card.rarity, row.card.ovr, row.count > 1)} evo={row.evo} />
+                          <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} />
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
-                              {row.count > 1 ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
+                              {isDup ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
                             </button>
                             {canEvo && (
                               <button onClick={() => doEvolve(row)} disabled={credits < evoCost} title={`${ct('Evoluir')} → +${row.evo + 1} OVR`}
@@ -971,7 +1074,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           : gDoneToday ? ct('VOLTE AMANHÃ')
           : ct('INICIAR GAUNTLET');
         return (
-          <UtPanel label={<>{ct('Ranqueada')} <em>· Divisão Rivals</em></>} icon={<Swords size={15} className="ut-panel__lead" />}>
+          <UtPanel label={<>{ct('Ranqueada')} <em>· {rankedMode === 'rivals' ? 'Divisão Rivals' : rankedMode === 'casual' ? ct('Amistoso') : 'Elite Gauntlet'}</em></>} icon={<Swords size={15} className="ut-panel__lead" />}>
             {/* seletor de modo */}
             <div className="ut-tabs" style={{ marginBottom: 14 }}>
               <button onClick={() => setRankedMode('rivals')} style={tabBtn(rankedMode === 'rivals')}><Swords size={13} style={{ verticalAlign: '-2px' }} /> {ct('Rivals')} <span style={{ opacity: 0.7 }}>· {ct('vale rank')}</span></button>
@@ -985,7 +1088,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <div className="ut-div__body">
                 <div className="ut-div__name" style={{ color: inkOnLight(div.color) }}>{div.def.name}</div>
                 <div className="ut-div__rp">{state.profile.elo} <span>RP</span></div>
-                <div className="ut-div__bar"><div style={{ width: `${div.progress}%`, background: div.color }} /></div>
+                <div className="ut-div__bar"><div style={{ width: `${div.progress}%`, background: inkOnLight(div.color) }} /></div>
                 <div className="ut-div__next">
                   {div.next ? <>{ct('faltam')} <b>{div.toNext} RP</b> {ct('pra')} <b style={{ color: inkOnLight(DIV_TIER_COLOR[div.next.tier]) }}>{div.next.name}</b></> : <b style={{ color: inkOnLight(div.color) }}>{ct('Divisão máxima alcançada!')}</b>}
                 </div>
@@ -1048,14 +1151,19 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       {/* resultado da partida */}
       {result && (
         <Modal open onClose={() => setResult(null)} title={result.won ? ct('Vitória!') : ct('Derrota')} size="sm"
-          footer={result.mode === 'gauntlet' && result.gaunt?.over
-            ? <Button variant="primary" onClick={() => setResult(null)}>{ct('Fechar')}</Button>
-            : <><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { const md = result.mode; setResult(null); startMatch(md); }} disabled={!squadComplete}>{result.mode === 'gauntlet' ? ct('Continuar') : ct('Jogar de novo')}</Button></>}>
+          footer={result.gaunt?.completed && result.gaunt.card
+            ? <Button variant="primary" onClick={() => { const card = result.gaunt!.card!; setResult(null); setReveal([card]); }}>✦ {ct('Revelar carta Elite')}</Button>
+            : result.mode === 'gauntlet' && result.gaunt?.over
+              ? <Button variant="primary" onClick={() => setResult(null)}>{ct('Fechar')}</Button>
+              : <><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { const md = result.mode; setResult(null); startMatch(md); }} disabled={!squadComplete}>{result.mode === 'gauntlet' ? ct('Continuar') : ct('Jogar de novo')}</Button></>}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
             {result.divChange !== 'same' && (
               <div className={`ut-divchange ${result.divChange}`}>
                 {result.divChange === 'promoted' ? <><TrendingUp size={15} strokeWidth={2.5} /> {ct('PROMOVIDO')} · {result.divName}</> : <><TrendingUp size={15} strokeWidth={2.5} style={{ transform: 'scaleY(-1)' }} /> {ct('rebaixado')} · {result.divName}</>}
               </div>
+            )}
+            {result.gaunt?.completed && (
+              <div className="ut-divchange promoted"><Flame size={15} strokeWidth={2.5} /> {ct('GAUNTLET COMPLETO')} · 5/5</div>
             )}
             <div style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
             <div style={{ display: 'flex', gap: 16, fontSize: '0.9rem', fontWeight: 800 }}>
@@ -1074,9 +1182,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       {/* seletor de carta pro slot */}
       {pickSlot != null && (() => {
         const slotRole = form.slots[pickSlot].role;
-        const cands = state.inventory
-          .map((o) => { const b = index.get(o.cardKey); return { o, card: b ? boostCard(b, o.boost) : undefined }; })
-          .filter((x): x is { o: OwnedCard; card: UltCard } => !!x.card)
+        // agrupa duplicatas (cardKey+boost) — sem isso o picker renderizava TODAS
+        // as cópias (centenas de cards em coleção madura = jank no modal).
+        const groups = new Map<string, { o: OwnedCard; card: UltCard; n: number }>();
+        for (const o of state.inventory) {
+          const b = index.get(o.cardKey);
+          if (!b) continue;
+          const k = `${o.cardKey}#${o.boost ?? 0}`;
+          const g = groups.get(k);
+          if (g) {
+            g.n++;
+            if (g.o.locked === 'squad' && o.locked !== 'squad') g.o = o; // prefere cópia livre
+          } else groups.set(k, { o, card: boostCard(b, o.boost), n: 1 });
+        }
+        const cands = [...groups.values()]
           .sort((a, b) => (Number(roleFitsSlot(b.card.role, slotRole)) - Number(roleFitsSlot(a.card.role, slotRole))) || b.card.ovr - a.card.ovr);
         const current = slotCard(pickSlot);
         return (
@@ -1086,11 +1205,11 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <p className="muted small">{ct('Sem cartas. Abra pacotes na Loja.')}</p>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10, maxHeight: 440, overflowY: 'auto', justifyItems: 'center' }}>
-                {cands.map(({ o, card }) => {
+                {cands.map(({ o, card, n }) => {
                   const fits = roleFitsSlot(card.role, slotRole);
                   return (
                     <button key={o.id} onClick={() => { placeInSquad(pickSlot, o.id); setPickSlot(null); }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: fits ? 1 : 0.72 }}>
-                      <UltCardView card={card} size={116} evo={o.boost ?? 0} />
+                      <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} />
                       {!fits && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(229,138,138,0.85)', color: '#fff' }}>{ct('fora')}</span>}
                       {o.locked === 'squad' && <span style={{ position: 'absolute', bottom: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
                     </button>
@@ -1262,7 +1381,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       })()}
 
       {toast && (
-        <div style={{ position: 'fixed', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 60, padding: '10px 20px', borderRadius: 10, background: '#1f2430', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 700, fontSize: '0.84rem', boxShadow: '0 10px 30px rgba(16,24,40,0.3)' }}>
+        <div style={{ position: 'fixed', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 1100, padding: '10px 20px', borderRadius: 10, background: '#1f2430', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 700, fontSize: '0.84rem', boxShadow: '0 10px 30px rgba(16,24,40,0.3)' }}>
           {toast}
         </div>
       )}

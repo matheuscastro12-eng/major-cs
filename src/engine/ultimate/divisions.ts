@@ -45,6 +45,12 @@ export const DIV_TIER_LABEL: Record<DivTier, string> = {
   bronze: 'Bronze', prata: 'Prata', ouro: 'Ouro', platina: 'Platina', diamante: 'Diamante', elite: 'Elite',
 };
 
+// multiplicador de credits por tier — vencer na Elite paga mais que no Bronze
+// (senão subir de divisão é só cosmético). Consumido por computeMatchOutcome.
+export const DIV_TIER_MULT: Record<DivTier, number> = {
+  bronze: 1.0, prata: 1.15, ouro: 1.3, platina: 1.45, diamante: 1.65, elite: 1.8,
+};
+
 export interface DivisionInfo {
   def: DivisionDef;
   idx: number;

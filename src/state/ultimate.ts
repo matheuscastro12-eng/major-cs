@@ -15,6 +15,7 @@ import { evaluateTitles } from '../engine/ultimate/titles';
 import { checkSbc, sbcById, type SbcReward } from '../engine/ultimate/sbc';
 import { objectiveById } from '../engine/ultimate/objectives';
 import { seasonTierById } from '../engine/ultimate/seasonRewards';
+import { missionsForDay, missionProgress } from '../engine/ultimate/missions';
 import {
   addCredits as _addCredits,
   markObjectiveClaimed as _markObjectiveClaimed,
@@ -24,6 +25,11 @@ import {
   gauntletRecord as _gauntletRecord,
   GAUNTLET_WIN_CREDITS,
   STARTING_ELO,
+  pushHistory as _pushHistory,
+  markBazaarBought as _markBazaarBought,
+  ensureMissions as _ensureMissions,
+  markMissionClaimed as _markMissionClaimed,
+  type MatchRecord,
   applyMatchResult as _applyMatchResult,
   applySeasonRollover as _applySeasonRollover,
   claimDaily as _claimDaily,
@@ -67,10 +73,19 @@ function persist(s: UltimateState): void {
 
 // Catálogo derivado do dataset no build (nunca do localStorage) → todo cliente
 // reconstrói igual. Lazy: só monta na 1ª vez que a Ultimate Squad é aberta.
+// Specials TOTS: os 11 maiores OVR do catálogo base ganham uma versão "Time da
+// Temporada" (+2 OVR) — determinístico, alimenta o Pacote TOTS.
 let _catalog: UltCard[] | null = null;
 let _index: Map<string, UltCard> | null = null;
 export function ultimateCatalog(): UltCard[] {
-  if (!_catalog) _catalog = buildCatalog(CS2_REAL_2026);
+  if (!_catalog) {
+    const base = buildCatalog(CS2_REAL_2026);
+    const tots = [...base]
+      .sort((a, b) => b.ovr - a.ovr)
+      .slice(0, 11)
+      .map((c) => ({ playerId: c.playerId, rarity: 'tots' as const, ovrBoost: 2 }));
+    _catalog = buildCatalog(CS2_REAL_2026, tots);
+  }
   return _catalog;
 }
 export function ultimateIndex(): Map<string, UltCard> {
@@ -83,6 +98,7 @@ interface UltimateStore {
   grant: (cardKey: string, via: AcquiredVia) => void;
   openPack: (packId: string) => { ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' };
   sell: (ownedId: string) => { ok: boolean; credited: number };
+  sellMany: (ownedIds: string[]) => { sold: number; credited: number };
   spend: (n: number) => boolean;
   addCredits: (n: number) => void;
   // squad building (P2)
@@ -90,7 +106,7 @@ interface UltimateStore {
   placeInSquad: (slot: number, ownedId: string | null) => void;
   setFormation: (formationId: string) => void;
   // ranqueada vs IA (P3)
-  recordMatch: (won: boolean, oppElo: number, ranked?: boolean) => MatchOutcome;
+  recordMatch: (won: boolean, oppElo: number, ranked?: boolean, score?: string) => MatchOutcome;
   // daily + títulos + onboarding (P4)
   claimDaily: () => DailyClaim;
   syncTitles: () => string[]; // slugs recém-conquistados
@@ -99,8 +115,8 @@ interface UltimateStore {
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
   tickSeason: () => SeasonRollover;
-  // bazar (P6)
-  buyCard: (cardKey: string, price: number) => boolean;
+  // bazar (P6) — listingId/day marcam a listagem como comprada no save (anti-restock)
+  buyCard: (cardKey: string, price: number, listingId?: string, day?: number) => boolean;
   // objetivos/missões (profundidade)
   claimObjective: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
   // evolução de cartas
@@ -109,7 +125,10 @@ interface UltimateStore {
   claimSeasonReward: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
   // Elite Gauntlet (desafio diário)
   gauntletStart: (today: string) => void;
-  gauntletRecord: (won: boolean) => { wins: number; completed: boolean; over: boolean; credits: number; grantedCard?: UltCard };
+  gauntletRecord: (won: boolean, score?: string) => { wins: number; completed: boolean; over: boolean; credits: number; grantedCard?: UltCard };
+  // missões diárias rotativas
+  syncMissions: (today: string) => void;
+  claimMission: (id: string) => { ok: boolean; credits?: number };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -145,6 +164,20 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }
     return { ok: res.ok, credited: res.credited };
   },
+  sellMany: (ownedIds) => {
+    // vende em lote com UM persist/set no final — N vendas individuais faziam
+    // N serializações completas do save no mesmo click (jank em coleção grande).
+    const idx = ultimateIndex();
+    let s = get().state;
+    let sold = 0;
+    let credited = 0;
+    for (const id of ownedIds) {
+      const r = _sellCard(s, id, idx);
+      if (r.ok) { s = r.state; sold++; credited += r.credited; }
+    }
+    if (sold > 0) { persist(s); set({ state: s }); }
+    return { sold, credited };
+  },
   spend: (n) => {
     const r = _spendCredits(get().state, n);
     if (r.ok) {
@@ -178,18 +211,22 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       persist(s);
       return { state: s };
     }),
-  recordMatch: (won, oppElo, ranked = true) => {
+  recordMatch: (won, oppElo, ranked = true, score = '') => {
+    const rec = (mode: MatchRecord['mode'], eloDelta: number, credits: number): MatchRecord =>
+      ({ t: Date.now(), mode, won, score, eloDelta, credits });
     if (!ranked) {
       // amistoso (sem risco): não mexe em elo/w-l/streak/season; só paga credits.
       const credits = won ? 500 : 150;
-      const s = _addCredits(get().state, credits);
+      let s = _addCredits(get().state, credits);
+      s = _pushHistory(s, rec('casual', 0, credits));
       persist(s);
       set({ state: s });
       return { eloDelta: 0, credits };
     }
     const r = _applyMatchResult(get().state, won, oppElo);
-    persist(r.state);
-    set({ state: r.state });
+    const s = _pushHistory(r.state, rec('rivals', r.outcome.eloDelta, r.outcome.credits));
+    persist(s);
+    set({ state: s });
     return r.outcome;
   },
   claimDaily: () => {
@@ -270,10 +307,13 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (r.state !== get().state) { persist(r.state); set({ state: r.state }); }
     return r.result;
   },
-  buyCard: (cardKey, price) => {
+  buyCard: (cardKey, price, listingId, day) => {
     const sp = _spendCredits(get().state, price);
     if (!sp.ok) return false;
-    const s = _grantCard(sp.state, cardKey, 'market');
+    let s = _grantCard(sp.state, cardKey, 'market');
+    // grava a compra no save — o bazar é determinístico por dia, então sem isso
+    // a listagem comprada "restocava" a cada remount/F5 (faucet de credits).
+    if (listingId && day != null) s = _markBazaarBought(s, day, listingId);
     persist(s);
     set({ state: s });
     return true;
@@ -331,8 +371,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       persist(s);
       return { state: s };
     }),
-  gauntletRecord: (won) => {
+  gauntletRecord: (won, score = '') => {
     const r = _gauntletRecord(get().state, won);
+    // run inativo (advanced=false) → reducer no-opou; NÃO paga nada.
+    if (!r.advanced) return { wins: r.wins, completed: r.completed, over: r.over, credits: 0 };
     let s = r.state;
     const credits = won && r.wins >= 1 ? (GAUNTLET_WIN_CREDITS[r.wins - 1] ?? 0) : 0;
     if (credits) s = _addCredits(s, credits);
@@ -344,9 +386,37 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
         s = _grantCard(s, grantedCard.key, 'reward', { id: `gaunt_${Math.random().toString(36).slice(2, 9)}` });
       }
     }
+    s = _pushHistory(s, { t: Date.now(), mode: 'gauntlet', won, score, eloDelta: 0, credits });
     persist(s);
     set({ state: s });
     return { wins: r.wins, completed: r.completed, over: r.over, credits, grantedCard };
+  },
+  syncMissions: (today) =>
+    set((st) => {
+      const s = _ensureMissions(st.state, today);
+      if (s === st.state) return {};
+      persist(s);
+      return { state: s };
+    }),
+  claimMission: (id) => {
+    const st = get().state;
+    const m = st.profile.missions;
+    if (!m || m.claimed.includes(id)) return { ok: false };
+    const def = missionsForDay(m.day).find((d) => d.id === id);
+    if (!def) return { ok: false };
+    const p = st.profile;
+    const facts = {
+      winsToday: p.w - m.base.w,
+      matchesToday: (p.w + p.l) - (m.base.w + m.base.l),
+      packsToday: p.packSeedCounter - m.base.packs,
+      sbcToday: p.sbcDone.length - m.base.sbc,
+    };
+    if (!missionProgress(def, facts).done) return { ok: false };
+    let s = _markMissionClaimed(st, id);
+    s = _addCredits(s, def.credits);
+    persist(s);
+    set({ state: s });
+    return { ok: true, credits: def.credits };
   },
   setState: (s) => {
     persist(s);
@@ -358,3 +428,16 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
   },
 }));
+
+// Sync entre abas: outra aba do site persistiu → rehidrata esta store (evita
+// last-writer-wins sobrescrever resgates one-time feitos na outra aba).
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY || e.newValue == null) return;
+    try {
+      useUltimate.setState({ state: migrateUltimate(JSON.parse(e.newValue)) });
+    } catch {
+      /* payload corrompido de outra aba — ignora, mantém o estado atual */
+    }
+  });
+}

@@ -44,10 +44,17 @@ function multisetContains(haveRoles: Role[], needRoles: Role[]): boolean {
   return true;
 }
 
+// jogadores DISTINTOS: 3 cópias da mesma carta satisfaziam 'sameOrg' trivialmente
+// e viravam faucet de credits combinadas com o bazar barato.
+export function distinctPlayers(cards: UltCard[]): boolean {
+  return new Set(cards.map((c) => c.playerId)).size === cards.length;
+}
+
 // valida um conjunto submetido contra os requisitos. Devolve checklist pra UI.
 export function checkSbc(cards: UltCard[], req: SbcReq): SbcCheck {
   const items: SbcCheckItem[] = [];
   items.push({ label: `${req.count} cartas`, ok: cards.length === req.count });
+  items.push({ label: 'jogadores diferentes', ok: distinctPlayers(cards) });
   const first = cards[0];
   if (req.minOvrAvg != null) {
     const avg = cards.length ? cards.reduce((a, c) => a + c.ovr, 0) / cards.length : 0;

@@ -552,11 +552,16 @@ body:has(.ut-live) {
 /* ---------------- responsivo ---------------- */
 .ut-res { min-width: 0; }
 /* telas médias (tablet landscape / laptop 11-13"): a nav vai pra própria linha
-   com scroll horizontal, pra não colidir com os chips + botão JOGAR. */
+   com scroll horizontal. Dropdowns ficariam RECORTADOS dentro do scroller
+   (overflow-x:auto força overflow-y) → escondemos os grupos e mostramos os
+   itens DIRETOS (Coleção/Squad/Desafios/Loja/Mercado) no lugar. */
+.ut-nav__item--direct { display: none; }
 @media (max-width: 1160px) {
   .ut-topbar__inner { flex-wrap: wrap; height: auto; padding: 9px 14px; gap: 8px; }
   .ut-nav { order: 3; width: 100%; overflow-x: auto; scrollbar-width: none; }
   .ut-nav::-webkit-scrollbar { display: none; }
+  .ut-nav .ut-nav__group { display: none; }
+  .ut-nav__item--direct { display: inline-flex; }
 }
 @media (max-width: 860px) {
   .ut-jogar span, .ut-brand__mode { display: none; }

@@ -4,8 +4,27 @@
 
 import { quickSellValue } from './quicksell';
 import { computeNextDaily, dailyCredits } from './daily';
+import { divisionFor, DIV_TIER_MULT } from './divisions';
 import type { UltCard } from './cards';
 import type { Role } from '../../types';
+
+// registro de partida (histórico das últimas HISTORY_MAX, todos os modos).
+export interface MatchRecord {
+  t: number;                                   // timestamp (ms)
+  mode: 'rivals' | 'casual' | 'gauntlet';
+  won: boolean;
+  score: string;                               // "13-9"
+  eloDelta: number;                            // 0 fora do rivals
+  credits: number;
+}
+export const HISTORY_MAX = 20;
+
+// missões diárias: baseline dos contadores no início do dia (progresso = atual - base).
+export interface MissionsState {
+  day: string;                                 // dateKey do dia das missões
+  base: { w: number; l: number; packs: number; sbc: number };
+  claimed: string[];
+}
 
 export type AcquiredVia = 'pack' | 'daily' | 'sbc' | 'reward' | 'starter' | 'initial' | 'market';
 
@@ -41,10 +60,13 @@ export interface UltimateProfile {
   equippedTitle: string | null;
   // wl0 = w+l no INÍCIO da season (pra saber se jogou nela e não pagar bônus
   // de fim de temporada a uma conta dormente — ver applySeasonRollover).
-  season: { startedAt: number; endsAt: number; wl0?: number; peak?: number; claimed?: string[] } | null;
+  season: { startedAt: number; endsAt: number; wl0?: number; peak?: number; claimed?: string[]; n?: number } | null;
   sbcDone: string[];
   objectivesClaimed: string[]; // ids de objetivos/missões já resgatados (profundidade)
   gauntlet: { date: string | null; wins: number; active: boolean; best: number }; // Elite Gauntlet (1 run/dia)
+  history: MatchRecord[];      // últimas partidas (cap HISTORY_MAX)
+  bazaarBought: { day: number; ids: string[] }; // listagens do bazar compradas no day-bucket (anti-restock)
+  missions: MissionsState | null; // missões diárias rotativas
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -78,6 +100,9 @@ export function defaultUltimateProfile(): UltimateProfile {
     sbcDone: [],
     objectivesClaimed: [],
     gauntlet: { date: null, wins: 0, active: false, best: 0 },
+    history: [],
+    bazaarBought: { day: 0, ids: [] },
+    missions: null,
   };
 }
 
@@ -131,15 +156,43 @@ export function gauntletStart(state: UltimateState, today: string): UltimateStat
 
 // registra o resultado de uma partida do Gauntlet. Vitória avança; derrota OU
 // completar (GAUNTLET_TARGET) encerra o run. best = maior sequência já feita.
-export function gauntletRecord(state: UltimateState, won: boolean): { state: UltimateState; wins: number; completed: boolean; over: boolean } {
+export function gauntletRecord(state: UltimateState, won: boolean): { state: UltimateState; wins: number; completed: boolean; over: boolean; advanced: boolean } {
   const g = state.profile.gauntlet;
-  if (!g.active) return { state, wins: g.wins, completed: false, over: true };
+  // advanced=false → run inativo: quem chamar NÃO deve pagar recompensa.
+  if (!g.active) return { state, wins: g.wins, completed: false, over: true, advanced: false };
   const wins = won ? g.wins + 1 : g.wins;
   const completed = won && wins >= GAUNTLET_TARGET;
   const over = !won || completed;
   const best = Math.max(g.best, wins);
   const gauntlet = { ...g, wins, best, active: !over };
-  return { state: { ...state, profile: { ...state.profile, gauntlet } }, wins, completed, over };
+  return { state: { ...state, profile: { ...state.profile, gauntlet } }, wins, completed, over, advanced: true };
+}
+
+// ── histórico de partidas (alimenta "Histórico de ELO" e "Últimas Ranqueadas") ──
+export function pushHistory(state: UltimateState, rec: MatchRecord): UltimateState {
+  const history = [rec, ...state.profile.history].slice(0, HISTORY_MAX);
+  return { ...state, profile: { ...state.profile, history } };
+}
+
+// ── bazar: marca listagem comprada no day-bucket (anti-restock por remount/F5) ──
+export function markBazaarBought(state: UltimateState, day: number, id: string): UltimateState {
+  const b = state.profile.bazaarBought;
+  const ids = b.day === day ? [...b.ids, id] : [id];
+  return { ...state, profile: { ...state.profile, bazaarBought: { day, ids } } };
+}
+
+// ── missões diárias: abre o dia (baseline dos contadores) + resgate idempotente ──
+export function ensureMissions(state: UltimateState, day: string): UltimateState {
+  const p = state.profile;
+  if (p.missions?.day === day) return state;
+  const missions: MissionsState = { day, base: { w: p.w, l: p.l, packs: p.packSeedCounter, sbc: p.sbcDone.length }, claimed: [] };
+  return { ...state, profile: { ...p, missions } };
+}
+
+export function markMissionClaimed(state: UltimateState, id: string): UltimateState {
+  const m = state.profile.missions;
+  if (!m || m.claimed.includes(id)) return state;
+  return { ...state, profile: { ...state.profile, missions: { ...m, claimed: [...m.claimed, id] } } };
 }
 
 // gerador de id — usa crypto.randomUUID no runtime; tests passam id explícito.
@@ -251,13 +304,29 @@ export function migrateUltimate(raw: unknown): UltimateState {
     titles: Array.isArray(p.titles) ? p.titles.filter((x): x is string => typeof x === 'string') : [],
     equippedTitle: typeof p.equippedTitle === 'string' ? p.equippedTitle : null,
     season: p.season && typeof p.season === 'object' && typeof p.season.startedAt === 'number'
-      ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [] }
+      ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [], n: Math.max(1, num(p.season.n, 1)) }
       : null,
     sbcDone: Array.isArray(p.sbcDone) ? p.sbcDone.filter((x): x is string => typeof x === 'string') : [],
     objectivesClaimed: Array.isArray(p.objectivesClaimed) ? p.objectivesClaimed.filter((x): x is string => typeof x === 'string') : [],
     gauntlet: p.gauntlet && typeof p.gauntlet === 'object'
       ? { date: typeof p.gauntlet.date === 'string' ? p.gauntlet.date : null, wins: num(p.gauntlet.wins, 0), active: !!p.gauntlet.active, best: num(p.gauntlet.best, 0) }
       : { date: null, wins: 0, active: false, best: 0 },
+    history: Array.isArray(p.history)
+      ? p.history
+          .filter((h): h is MatchRecord => !!h && typeof h === 'object' && typeof (h as MatchRecord).won === 'boolean' && ['rivals', 'casual', 'gauntlet'].includes((h as MatchRecord).mode))
+          .map((h) => ({ t: num(h.t, 0), mode: h.mode, won: h.won, score: typeof h.score === 'string' ? h.score : '', eloDelta: num(h.eloDelta, 0), credits: num(h.credits, 0) }))
+          .slice(0, HISTORY_MAX)
+      : [],
+    bazaarBought: p.bazaarBought && typeof p.bazaarBought === 'object'
+      ? { day: num(p.bazaarBought.day, 0), ids: Array.isArray(p.bazaarBought.ids) ? p.bazaarBought.ids.filter((x): x is string => typeof x === 'string') : [] }
+      : { day: 0, ids: [] },
+    missions: p.missions && typeof p.missions === 'object' && typeof p.missions.day === 'string'
+      ? {
+          day: p.missions.day,
+          base: { w: num(p.missions.base?.w, 0), l: num(p.missions.base?.l, 0), packs: num(p.missions.base?.packs, 0), sbc: num(p.missions.base?.sbc, 0) },
+          claimed: Array.isArray(p.missions.claimed) ? p.missions.claimed.filter((x): x is string => typeof x === 'string') : [],
+        }
+      : null,
   };
   const inventory: OwnedCard[] = Array.isArray(r.inventory)
     ? r.inventory
@@ -268,8 +337,19 @@ export function migrateUltimate(raw: unknown): UltimateState {
           return { ...o, boost: Math.min(EVO_MAX, Math.floor(b)) };
         })
     : [];
+  // sanitiza squads: recomputeLocks itera sq.slots — um save corrompido com
+  // squads sem `slots` (ou com entradas lixo) lançava TypeError no load.
   const squads: UltimateSquad[] = Array.isArray(r.squads)
-    ? r.squads.filter((s): s is UltimateSquad => !!s && typeof s === 'object' && typeof (s as UltimateSquad).id === 'string')
+    ? r.squads
+        .filter((s): s is UltimateSquad => !!s && typeof s === 'object' && typeof (s as UltimateSquad).id === 'string')
+        .map((s) => ({
+          ...s,
+          slots: Array.isArray(s.slots)
+            ? s.slots
+                .filter((sl): sl is UltimateSquad['slots'][number] => !!sl && typeof sl === 'object' && typeof (sl as { slot?: unknown }).slot === 'number')
+                .map((sl) => ({ ...sl, ownedId: typeof sl.ownedId === 'string' ? sl.ownedId : null }))
+            : [],
+        }))
     : [];
   // re-sincroniza locks no load: um save corrompido pode ter carta locked:'squad'
   // que não está em slot nenhum (ficaria invendável pra sempre). recomputeLocks
@@ -348,13 +428,16 @@ export function setFormation(state: UltimateState, formationId: string, slotRole
 export interface MatchOutcome { eloDelta: number; credits: number }
 
 // ELO estilo padrão (K=24, expectativa logística, delta clampado ±40). Recompensa
-// de credits só na vitória, com bônus por bater um rival mais forte.
-export function computeMatchOutcome(userElo: number, oppElo: number, won: boolean): MatchOutcome {
+// de credits só na vitória, com bônus por rival mais forte, MULTIPLICADOR da
+// divisão atual (Bronze 1.0× → Elite 1.8×) e bônus de sequência (+5%/win, cap 25%).
+export function computeMatchOutcome(userElo: number, oppElo: number, won: boolean, streak = 0): MatchOutcome {
   const K = 24;
   const expected = 1 / (1 + Math.pow(10, (oppElo - userElo) / 400));
   const raw = Math.round(K * ((won ? 1 : 0) - expected));
   const eloDelta = Math.max(-40, Math.min(40, raw));
-  const credits = won ? 300 + Math.max(0, Math.round((oppElo - userElo) / 4)) : 0;
+  const divMult = DIV_TIER_MULT[divisionFor(userElo).def.tier];
+  const streakMult = 1 + Math.min(Math.max(0, streak), 5) * 0.05;
+  const credits = won ? Math.round((300 + Math.max(0, Math.round((oppElo - userElo) / 4))) * divMult * streakMult) : 0;
   return { eloDelta, credits };
 }
 
@@ -362,7 +445,7 @@ export function computeMatchOutcome(userElo: number, oppElo: number, won: boolea
 // estado + o outcome (pra UI mostrar +ELO / +credits).
 export function applyMatchResult(state: UltimateState, won: boolean, oppElo: number): { state: UltimateState; outcome: MatchOutcome } {
   const p = state.profile;
-  const outcome = computeMatchOutcome(p.elo, oppElo, won);
+  const outcome = computeMatchOutcome(p.elo, oppElo, won, p.streak);
   const elo = Math.max(0, p.elo + outcome.eloDelta);
   const profile: UltimateProfile = {
     ...p,
@@ -428,8 +511,8 @@ export function removeOwnedCards(state: UltimateState, ids: string[]): UltimateS
 
 export const SEASON_DAYS = 30;
 
-export function startSeason(nowMs: number, wl0 = 0, peak = STARTING_ELO): { startedAt: number; endsAt: number; wl0: number; peak: number; claimed: string[] } {
-  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0, peak, claimed: [] };
+export function startSeason(nowMs: number, wl0 = 0, peak = STARTING_ELO, n = 1): { startedAt: number; endsAt: number; wl0: number; peak: number; claimed: string[]; n: number } {
+  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0, peak, claimed: [], n };
 }
 
 export interface SeasonRollover { rolled: boolean; credits: number; newElo: number }
@@ -456,7 +539,7 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
     // pico da nova season começa em STARTING_ELO (não em newElo) — senão o
     // soft-reset já nasceria acima dos thresholds e liberaria re-resgate das
     // faixas SEM jogar. O jogador precisa re-escalar na temporada nova.
-    season: startSeason(nowMs, wlNow), // novo baseline (peak = STARTING_ELO)
+    season: startSeason(nowMs, wlNow, STARTING_ELO, (s.n ?? 1) + 1), // novo baseline (peak = STARTING_ELO)
   };
   return { state: { ...state, profile }, result: { rolled: true, credits, newElo } };
 }
