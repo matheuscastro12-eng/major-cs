@@ -84,6 +84,8 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   'Histórico da carreira': { en: 'Career history', es: 'Historial de carrera' },
   'Janela aberta · feche acordos pra próxima temporada': { en: 'Window open · close deals for next season', es: 'Mercado abierto · cierra acuerdos para la próxima temporada' },
   'Jogar': { en: 'Play', es: 'Jugar' },
+  'Desbloquear · R$20': { en: 'Unlock · R$20', es: 'Desbloquear · R$20' },
+  'Exclusivo · conta vitalícia': { en: 'Exclusive · lifetime account', es: 'Exclusivo · cuenta de por vida' },
   'Melhores do': { en: 'Best of', es: 'Mejores de' },
   'Modos': { en: 'Modes', es: 'Modos' },
   'Moral média': { en: 'Average morale', es: 'Moral media' },

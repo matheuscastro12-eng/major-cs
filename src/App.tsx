@@ -286,13 +286,18 @@ export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
+  const { account, ready: accountReady, refresh: refreshAccount, logout } = useAccount();
   // Ultimate Squad oculto: se alguém cair em /ultimate com o flag desligado
   // (deep link), manda de volta pro menu — o modo não aparece em produção.
+  // Além disso, os DOIS modos do lançamento (Ultimate Squad + Road to Pro) são
+  // EXCLUSIVOS de conta vitalícia: um usuário grátis/deslogado que cair no deep
+  // link é levado pra landing (checkout). Só trava depois de accountReady, pra
+  // não expulsar um assinante que deu F5 direto na rota antes do /me responder.
   useEffect(() => {
-    if (!ULTIMATE_ENABLED && screen === 'ultimate') setScreen('home');
-    if (!RTP_ENABLED && screen === 'rtp') setScreen('home'); // kill-switch: deep link /road-to-pro cai na home
-  }, [screen]);
-  const { account, ready: accountReady, refresh: refreshAccount, logout } = useAccount();
+    if (!ULTIMATE_ENABLED && screen === 'ultimate') { setScreen('home'); return; }
+    if (!RTP_ENABLED && screen === 'rtp') { setScreen('home'); return; } // kill-switch: deep link /road-to-pro cai na home
+    if (accountReady && !account?.paid && (screen === 'ultimate' || screen === 'rtp')) setScreen('landing');
+  }, [screen, accountReady, account?.paid]);
   const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
@@ -1001,6 +1006,7 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onUltimate={ULTIMATE_ENABLED ? () => setScreen('ultimate') : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
+          premiumLocked={!account?.paid}
           onLeaderboard={() => setScreen('leaderboard')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
@@ -1057,10 +1063,12 @@ export default function App() {
         </>
       )}
 
-      {ULTIMATE_ENABLED && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
+      {/* Ambos exigem conta vitalícia (account.paid). O guard de rota acima já
+          redireciona o free pra landing; este `account?.paid` é a 2ª barreira. */}
+      {ULTIMATE_ENABLED && account?.paid && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
-      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
+      {RTP_ENABLED && account?.paid && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (

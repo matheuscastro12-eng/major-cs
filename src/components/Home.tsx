@@ -19,6 +19,10 @@ interface Props {
   onDiscardCampaign?: () => void;
   onUltimate?: () => void;
   onRoadToPro?: () => void;
+  /** Trava os dois modos do lançamento (Ultimate + Road to Pro): exclusivos de
+   *  conta vitalícia. Card continua visível (isca de conversão), mas o clique
+   *  leva ao checkout via onCreateAccount e mostra selo de cadeado. */
+  premiumLocked?: boolean;
   onLeaderboard?: () => void;
   onCareer?: () => void;
   /** Conta atual (null = não logado, undefined = carregando) */
@@ -47,6 +51,7 @@ export function Home({
   teamCount,
   onUltimate,
   onRoadToPro,
+  premiumLocked,
   onCareer,
   account,
   accountReady,
@@ -135,17 +140,23 @@ export function Home({
               </button>
 
               {onRoadToPro && (
-                <button className="rtm-modecard" data-tone="purple" onClick={onRoadToPro}>
+                <button
+                  className="rtm-modecard"
+                  data-tone="purple"
+                  data-locked={premiumLocked ? '' : undefined}
+                  onClick={() => (premiumLocked ? onCreateAccount?.() : onRoadToPro())}
+                >
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/train.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
                   <span className="rtm-modecard-bar" />
+                  {premiumLocked && <span className="rtm-modecard-lock">🔒 {ct('Vitalícia')}</span>}
                   <span className="rtm-modecard-body">
                     <span className="rtm-modecard-kicker">{ct('Novo')}</span>
                     <span className="rtm-modecard-title">Road to Pro</span>
                     <span className="rtm-modecard-desc">{ct('Você não treina o time — você É o jogador. Viva a carreira de astro do CS: treine, gerencie sua vida e brilhe nos momentos decisivos.')}</span>
                     <span className="rtm-modecard-foot">
-                      <span className="rtm-modecard-meta">{ct('1 jogador · você é o atleta')}</span>
-                      <span className="rtm-modecard-go">{ct('Jogar')} →</span>
+                      <span className="rtm-modecard-meta">{premiumLocked ? ct('Exclusivo · conta vitalícia') : ct('1 jogador · você é o atleta')}</span>
+                      <span className="rtm-modecard-go">{premiumLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>
                     </span>
                   </span>
                 </button>
@@ -167,17 +178,23 @@ export function Home({
               </button>
 
               {onUltimate && (
-                <button className="rtm-modecard" data-tone="gold" onClick={onUltimate}>
+                <button
+                  className="rtm-modecard"
+                  data-tone="gold"
+                  data-locked={premiumLocked ? '' : undefined}
+                  onClick={() => (premiumLocked ? onCreateAccount?.() : onUltimate())}
+                >
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/ancient.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
                   <span className="rtm-modecard-bar" />
+                  {premiumLocked && <span className="rtm-modecard-lock">🔒 {ct('Vitalícia')}</span>}
                   <span className="rtm-modecard-body">
                     <span className="rtm-modecard-kicker">{ct('Competitivo · Online')}</span>
                     <span className="rtm-modecard-title">Ultimate Squad</span>
                     <span className="rtm-modecard-desc">{ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')}</span>
                     <span className="rtm-modecard-foot">
-                      <span className="rtm-modecard-meta">{ct('Online · ranqueada')}</span>
-                      <span className="rtm-modecard-go">{ct('Jogar')} →</span>
+                      <span className="rtm-modecard-meta">{premiumLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')}</span>
+                      <span className="rtm-modecard-go">{premiumLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>
                     </span>
                   </span>
                 </button>

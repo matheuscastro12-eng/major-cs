@@ -4530,6 +4530,20 @@ table.crm-players input.num {
 .rtm-modecard[data-tone="blue"] .rtm-modecard-go { color: var(--rtm-blue-bright); }
 .rtm-modecard[data-tone="green"] .rtm-modecard-go { color: var(--rtm-green-bright); }
 .rtm-modecard:hover .rtm-modecard-go { gap: 10px; }
+/* Modo premium travado (exclusivo de conta vitalícia): card segue visível como
+   isca de conversão, mas ganha realce dourado + selo de cadeado no canto. */
+.rtm-modecard[data-locked] { border-color: var(--rtm-gold-soft); }
+.rtm-modecard[data-locked]:hover { box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 34px rgba(216,169,67,.20); }
+.rtm-modecard-lock {
+  position: absolute; top: 12px; right: 12px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: 999px;
+  font-family: var(--font-cond); font-weight: 800; font-size: 11px;
+  letter-spacing: .8px; text-transform: uppercase; white-space: nowrap;
+  color: #1a1205; background: var(--rtm-gold);
+  box-shadow: 0 4px 14px rgba(216,169,67,.4);
+}
+.rtm-modecard[data-locked] .rtm-modecard-go { color: var(--rtm-gold); }
 @media (max-width: 820px) { .rtm-modemenu { grid-template-columns: 1fr; } .rtm-modecard { min-height: 180px; } }
 .rtm-ranklink { background: var(--rtm-bg-deep); border: 1px solid var(--rtm-gold-soft); color: var(--rtm-gold); font-family: var(--font-cond); font-weight: 700; font-size: 13.5px; letter-spacing: .3px; padding: 8px 16px; border-radius: 999px; cursor: pointer; transition: border-color .15s, background .15s; }
 .rtm-ranklink:hover { background: rgba(216,169,67,.12); border-color: var(--rtm-gold); }
