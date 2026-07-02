@@ -3,7 +3,7 @@
 // Ações (POST body.action): pull | push.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { CloudSavePayloadError, decodeCloudSavePayload } from '../server/cloud-save-codec';
+import { CloudSavePayloadError, decodeCloudSavePayload } from '../server/cloud-save-codec.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
