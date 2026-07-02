@@ -575,8 +575,13 @@ body:has(.ut-live) {
 
 /* ---------------- SKIN BROADCAST no replay (só dentro do .ut-live) ----------------
    O MatchReplay é compartilhado com o modo online — aqui só REVESTIMOS as
-   classes dele quando renderiza no palco do Ultimate. */
-.ut-live .panel.match-replay {
+   classes dele quando renderiza no palco do Ultimate.
+   Seletor `.ut-root.ut-live` (composto, mesmo elemento) e NÃO só `.ut-live`:
+   o <body> carrega `career-dash` global e permanente, e regras claras como
+   `body.career-dash .replay-feed`/`.ut-round-winner`/`.panel-head` (0,2,1)
+   venciam `.ut-live X` (0,2,0), pintando o killfeed/banner de BRANCO no meio
+   do palco escuro. `.ut-root.ut-live X` (0,3,0) supera a especificidade delas. */
+.ut-root.ut-live .panel.match-replay {
   background: linear-gradient(180deg, #171a21 0%, #12141a 100%);
   border: 1px solid rgba(236, 199, 95, 0.16);
   border-radius: 16px;
@@ -584,7 +589,7 @@ body:has(.ut-live) {
   overflow: hidden;
   margin-top: 0;
 }
-.ut-live .panel-head {
+.ut-root.ut-live .panel-head {
   background: rgba(0, 0, 0, 0.25);
   border-bottom: 1px solid rgba(236, 199, 95, 0.22);
   font-family: var(--ut-font-cond);
@@ -592,17 +597,17 @@ body:has(.ut-live) {
   text-transform: uppercase;
   color: var(--ut-gold-1);
 }
-.ut-live .qs-board { padding: 14px 10px 6px; }
-.ut-live .qs-name { font-family: var(--ut-font-cond); font-weight: 700; letter-spacing: 0.4px; color: #e9edf3; }
-.ut-live .qs-score {
+.ut-root.ut-live .qs-board { padding: 14px 10px 6px; }
+.ut-root.ut-live .qs-name { font-family: var(--ut-font-cond); font-weight: 700; letter-spacing: 0.4px; color: #e9edf3; }
+.ut-root.ut-live .qs-score {
   font-family: var(--ut-font-mono);
   font-size: 2.6rem;
   font-weight: 800;
   color: var(--ut-gold-1);
   text-shadow: 0 0 26px rgba(236, 199, 95, 0.28);
 }
-.ut-live .qs-mapscore { color: var(--ut-bar-dim); font-family: var(--ut-font-mono); }
-.ut-live .ut-round-winner {
+.ut-root.ut-live .qs-mapscore { color: var(--ut-bar-dim); font-family: var(--ut-font-mono); }
+.ut-root.ut-live .ut-round-winner {
   font-family: var(--ut-font-cond);
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -612,9 +617,9 @@ body:has(.ut-live) {
   border: 1px solid rgba(236, 199, 95, 0.3);
   color: var(--ut-gold-1);
 }
-.ut-live .ut-tactical-event { color: #cfd5df; font-style: italic; opacity: 0.85; }
-.ut-live .replay-feed { min-height: 96px; }
-.ut-live .rf-row {
+.ut-root.ut-live .ut-tactical-event { color: #cfd5df; font-style: italic; opacity: 0.85; }
+.ut-root.ut-live .replay-feed { min-height: 96px; }
+.ut-root.ut-live .rf-row {
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
@@ -623,24 +628,24 @@ body:has(.ut-live) {
   font-family: var(--ut-font-mono);
   font-size: 0.8rem;
 }
-.ut-live .rf-row .kf-round {
+.ut-root.ut-live .rf-row .kf-round {
   display: inline-block;
   min-width: 34px;
   font-weight: 800;
   color: var(--ut-gold-2);
 }
-.ut-live .live-scoreboard .lsb-team {
+.ut-root.ut-live .live-scoreboard .lsb-team {
   background: rgba(0, 0, 0, 0.22);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
 }
-.ut-live .lsb-head { color: var(--ut-bar-dim); font-family: var(--ut-font-cond); letter-spacing: 0.6px; text-transform: uppercase; font-size: 0.7rem; }
-.ut-live .lsb-row { border-top: 1px solid rgba(255, 255, 255, 0.05); padding: 3px 0; font-size: 0.84rem; }
-.ut-live .lsb-kda { font-family: var(--ut-font-mono); }
-.ut-live .lsb-vs { color: var(--ut-gold-1); font-family: var(--ut-font-cond); font-weight: 800; }
-.ut-live .btn { border-radius: 8px; }
-.ut-live .btn.ghost { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #e9edf3; }
-.ut-live .btn.ghost.active { background: rgba(236, 199, 95, 0.18); border-color: rgba(236, 199, 95, 0.5); color: var(--ut-gold-1); }
+.ut-root.ut-live .lsb-head { color: var(--ut-bar-dim); font-family: var(--ut-font-cond); letter-spacing: 0.6px; text-transform: uppercase; font-size: 0.7rem; }
+.ut-root.ut-live .lsb-row { border-top: 1px solid rgba(255, 255, 255, 0.05); padding: 3px 0; font-size: 0.84rem; }
+.ut-root.ut-live .lsb-kda { font-family: var(--ut-font-mono); }
+.ut-root.ut-live .lsb-vs { color: var(--ut-gold-1); font-family: var(--ut-font-cond); font-weight: 800; }
+.ut-root.ut-live .btn { border-radius: 8px; }
+.ut-root.ut-live .btn.ghost { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #e9edf3; }
+.ut-root.ut-live .btn.ghost.active { background: rgba(236, 199, 95, 0.18); border-color: rgba(236, 199, 95, 0.5); color: var(--ut-gold-1); }
 
 /* ---------------- FILA RANQUEADA (matchmaking) ---------------- */
 .ut-queue {
@@ -713,8 +718,8 @@ body:has(.ut-live) {
 @keyframes ut-fire { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 
 /* killfeed rico (arma + selo HS) — só o Ultimate passa richFeed */
-.ut-live .kf-wpn { color: #8a93a2; font-size: 0.72rem; margin: 0 6px; letter-spacing: 0.3px; }
-.ut-live .kf-hs {
+.ut-root.ut-live .kf-wpn { color: #8a93a2; font-size: 0.72rem; margin: 0 6px; letter-spacing: 0.3px; }
+.ut-root.ut-live .kf-hs {
   font-style: normal; font-weight: 900; font-size: 0.58rem; letter-spacing: 0.5px;
   color: #ffd166; border: 1px solid rgba(255, 209, 102, 0.55); border-radius: 4px;
   padding: 0 3px; margin-left: 4px; vertical-align: 1px;
