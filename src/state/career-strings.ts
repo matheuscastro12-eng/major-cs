@@ -2640,4 +2640,9 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "toque para continuar": { en: "tap to continue", es: "toca para continuar" },
   "cartas": { en: "cards", es: "cartas" },
   "melhor": { en: "best", es: "mejor" },
+  "Uma LENDA do Counter-Strike. Seu nome fica gravado na história do jogo.": { en: "A Counter-Strike LEGEND. Your name is etched into the game's history.", es: "Una LEYENDA del Counter-Strike. Tu nombre queda grabado en la historia del juego." },
+  "Uma ESTRELA de verdade — daquelas que enchiam arena e definiam eras.": { en: "A true STAR — the kind that filled arenas and defined eras.", es: "Una ESTRELLA de verdad — de las que llenaban arenas y definían eras." },
+  "Um PROFISSIONAL respeitado, de carreira sólida e momentos memoráveis.": { en: "A respected PRO, with a solid career and memorable moments.", es: "Un PROFESIONAL respetado, de carrera sólida y momentos memorables." },
+  "Uma PROMESSA que viveu o sonho e deixou boas lembranças.": { en: "A PROSPECT who lived the dream and left good memories.", es: "Una PROMESA que vivió el sueño y dejó buenos recuerdos." },
+  "Um competidor que lutou até o fim. Nem todo mundo chega ao topo — mas você jogou.": { en: "A competitor who fought to the end. Not everyone reaches the top — but you played.", es: "Un competidor que luchó hasta el final. No todos llegan a la cima — pero tú jugaste." },
 };

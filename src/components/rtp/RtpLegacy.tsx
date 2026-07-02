@@ -23,14 +23,14 @@ export function RtpLegacy({ save, onReset, onExit }: {
   const peakRank = save.world.peakRank;
 
   const verdict = legacy >= 700
-    ? 'Uma LENDA do Counter-Strike. Seu nome fica gravado na história do jogo.'
+    ? ct('Uma LENDA do Counter-Strike. Seu nome fica gravado na história do jogo.')
     : legacy >= 450
-      ? 'Uma ESTRELA de verdade — daquelas que enchiam arena e definiam eras.'
+      ? ct('Uma ESTRELA de verdade — daquelas que enchiam arena e definiam eras.')
       : legacy >= 250
-        ? 'Um PROFISSIONAL respeitado, de carreira sólida e momentos memoráveis.'
+        ? ct('Um PROFISSIONAL respeitado, de carreira sólida e momentos memoráveis.')
         : legacy >= 130
-          ? 'Uma PROMESSA que viveu o sonho e deixou boas lembranças.'
-          : 'Um competidor que lutou até o fim. Nem todo mundo chega ao topo — mas você jogou.';
+          ? ct('Uma PROMESSA que viveu o sonho e deixou boas lembranças.')
+          : ct('Um competidor que lutou até o fim. Nem todo mundo chega ao topo — mas você jogou.');
 
   const STATS: { label: string; value: string; icon: Parameters<typeof RtpIcon>[0]['name'] }[] = [
     { label: ct('Temporadas'), value: `${seasons}`, icon: 'calendar' },
