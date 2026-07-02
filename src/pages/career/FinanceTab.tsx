@@ -26,6 +26,7 @@ import {
   type FacilityKey,
 } from '../../engine/career/facilities';
 import type { Player } from '../../types';
+import { scoutById } from '../../engine/scouting';
 
 interface FinanceTabSave {
   org?: { name?: string } | null;
@@ -35,6 +36,7 @@ interface FinanceTabSave {
   facilities?: Record<string, number>;
   split: number;
   difficulty?: Difficulty;
+  hiredScoutId?: string | null;
   youthAge?: Record<string, number>;
   youthDebut?: Record<string, YouthDebut>;
   // pass-through pros helpers effSponsorIncome/careerFans (que esperam CareerSave)
@@ -72,7 +74,10 @@ export function FinanceTab({ save, findSigning, update }: Props) {
   const sponsorInc = effSponsorIncome(save as any);
   const facilities = normalizeFacilities(save.facilities);
   const upkeep = facilityUpkeep(facilities);
-  const net = sponsorInc - folha - encargos - upkeep;
+  // salário do scout: DEBITADO de verdade na virada de split (CareerScreen), mas
+  // ficava fora do "Saldo fixo" — o caixa "sumia" sem linha justificando.
+  const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+  const net = sponsorInc - folha - encargos - upkeep - scoutSalary;
 
   const facilityCards: { key: FacilityKey; icon: CareerIconName; name: string; effect: string }[] = [
     { key: 'training', icon: 'dumbbell', name: ct('Centro de treino'), effect: ct('Acelera a evolução do elenco e da academia.') },
@@ -106,6 +111,9 @@ export function FinanceTab({ save, findSigning, update }: Props) {
           <div className="fin-card"><span className="fin-k">{ct('Encargos (dificuldade)')}</span><b className="neg">-{formatMoney(encargos)}</b></div>
         )}
         <div className="fin-card"><span className="fin-k">{ct('Infraestrutura / split')}</span><b className="neg">-{formatMoney(upkeep)}</b></div>
+        {scoutSalary > 0 && (
+          <div className="fin-card"><span className="fin-k">{ct('Scout / split')}</span><b className="neg">-{formatMoney(scoutSalary)}</b></div>
+        )}
         <div className="fin-card"><span className="fin-k">{ct('Saldo fixo / split')}</span><b className={net >= 0 ? 'pos' : 'neg'}>{net >= 0 ? '+' : ''}{formatMoney(net)}</b></div>
       </div>
       <p className="muted small">

@@ -1668,12 +1668,19 @@ function buildPlayoff(table: TTeam[], circuit: string): Playoff {
   const ids = table.map((t) => t.id);
   if (ids.length >= 8) {
     const s = ids.slice(0, 8);
+    // Seeds vêm do gslQualifiers na ordem [1A,1B,1C,1D,2A,2B,2C,2D]: s[i] e s[i+4]
+    // são o 1º e o 2º do MESMO grupo. Cross-seed real: o 1º e o 2º de um grupo têm
+    // que cair em METADES OPOSTAS (só se reencontram na FINAL) e nenhuma quarta pode
+    // ser revanche de grupo. poAdvance junta QF0+QF1 na semi de cima e QF2+QF3 na de
+    // baixo — então metade de cima = QF0(1A×2B)+QF1(1C×2D), metade de baixo =
+    // QF2(1B×2A)+QF3(1D×2C). Antes (1A×2D, 1D×2A | 1B×2C, 1C×2B) o 1A e o 2A ficavam
+    // na MESMA metade: revanche de grupo já na semi e final entre times do mesmo grupo
+    // impossível.
     return {
       circuit, seeds: s,
-      // quartas cross-seed (1x8, 4x5, 2x7, 3x6): campeões de grupo só se cruzam tarde
       qf: [
-        { a: s[0], b: s[7] }, { a: s[3], b: s[4] },
-        { a: s[1], b: s[6] }, { a: s[2], b: s[5] },
+        { a: s[0], b: s[5] }, { a: s[2], b: s[7] },
+        { a: s[1], b: s[4] }, { a: s[3], b: s[6] },
       ],
       sf: [{ a: '', b: '' }, { a: '', b: '' }], // preenchidas após as quartas
       final: null, champion: null, runnerUp: null,
@@ -4806,13 +4813,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 });
                 // T3.5: bônus de placement dos sponsors no Major. PlacementCode é
                 // 'champion'|'runnerup'|'semi'|'quarters'|'playoffs'|'swiss'.
-                const majorPlacementKind =
+                // bônus SÓ pra colocação real de top 8: quarters = top 8 legítimo
+                // (perdeu a QF do mata-mata). 'playoffs'/'swiss' = eliminado na
+                // fase suíça (não chegou ao mata-mata) → não paga. Antes, QUALQUER
+                // campanha (até 0-3 na suíça) caía no 'top8'.
+                const majorPlacementKind: 'major' | 'top4' | 'top8' | null =
                   mr.champion
-                    ? 'major' as const
+                    ? 'major'
                     : mr.placement === 'runnerup' || mr.placement === 'semi'
-                    ? 'top4' as const
-                    : 'top8' as const;
-                const sponsorMajorBonus = sponsorPlacementBonusTotal(save, save.split, majorPlacementKind);
+                    ? 'top4'
+                    : mr.placement === 'quarters'
+                    ? 'top8'
+                    : null;
+                const sponsorMajorBonus = majorPlacementKind ? sponsorPlacementBonusTotal(save, save.split, majorPlacementKind) : 0;
                 // T11.1/T11.4: dispara modal cinematográfico conforme resultado
                 if (mr.champion) {
                   setChampionModal({
@@ -5256,12 +5269,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   // Usa a mesma lógica de posição que vai pro SplitRecord
                   // (save.playoff? min(pos,poRank) : pos).
                   const finalPosForSponsors = save.playoff ? Math.min(pos, poRank) : pos;
-                  const circuitPlacementKind: 'title' | 'top4' | 'top8' = isChampion
+                  // bônus SÓ pra top 8 REAL: quem caiu na fase de grupos (sem
+                  // playoff) não fez top 8 — não paga. Antes, o mapeamento de
+                  // posição do GSL nunca passava de 7, então todo mundo (até
+                  // último do grupo, 13º-16º real) levava o bônus 'top8'.
+                  const circuitPlacementKind: 'title' | 'top4' | 'top8' | null = isChampion
                     ? 'title'
                     : finalPosForSponsors <= 4
                     ? 'top4'
-                    : 'top8';
-                  const sponsorCircuitBonus = sponsorPlacementBonusTotal(save, save.split, circuitPlacementKind);
+                    : save.playoff && finalPosForSponsors <= 8
+                    ? 'top8'
+                    : null;
+                  const sponsorCircuitBonus = circuitPlacementKind ? sponsorPlacementBonusTotal(save, save.split, circuitPlacementKind) : 0;
                   // T11.1: champion modal cinematográfico se ganhou o circuito.
                   // (Eliminação em circuito é trivial e não vale modal — só Major)
                   if (isChampion) {
