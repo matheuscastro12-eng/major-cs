@@ -18,14 +18,26 @@ export interface DuelPlayArgs {
   myFirst: boolean; // ordem canônica (nick menor primeiro) — igual nos 2 clientes
 }
 
+// sessão do duelo FORA do React: o palco da partida substitui a tela inteira e
+// desmonta este componente — sem isso, ao fim do replay o usuário caía no menu
+// (revanche inalcançável) e a sala morria sem heartbeat.
+const duelSession: { code: string; view: 'menu' | 'room' } = { code: '', view: 'menu' };
+
+// mesmo ledger do recordMatch PvP (escrito no startPvpMatch): serve de guarda
+// "já assisti" — replay só auto-abre pra partida ainda não vista.
+const LEDGER_KEY = 'rtm-ult-pvp-rec';
+function watchedMatch(key: string): boolean {
+  try { return (JSON.parse(localStorage.getItem(LEDGER_KEY) ?? '[]') as string[]).includes(key); } catch { return false; }
+}
+
 export function UltimateDuel({ nick, squad, ready, onPlay }: {
   nick: string;
   squad: UltimatePvpSquad;
   ready: boolean;               // squad completo (5 cartas)?
-  onPlay: (args: DuelPlayArgs) => void;
+  onPlay: (args: DuelPlayArgs) => boolean; // false = não conseguiu montar a partida
 }) {
-  const [view, setView] = useState<'menu' | 'room'>('menu');
-  const [code, setCode] = useState('');
+  const [view, setView] = useState<'menu' | 'room'>(duelSession.view);
+  const [code, setCode] = useState(duelSession.code);
   const [joinCode, setJoinCode] = useState('');
   const [roomName, setRoomName] = useState('');
   const [isPublic, setIsPublic] = useState(true);
@@ -35,8 +47,11 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
   const [error, setError] = useState('');
   // fila ranqueada: null = fora; senão desde quando + telemetria do servidor
   const [queue, setQueue] = useState<{ since: number; waiting?: number; window?: number } | null>(null);
-  const sentRef = useRef('');    // já enviei meu squad neste ciclo (code:status-run)
-  const playedRef = useRef(new Set<string>()); // partidas já entregues ao pai (code:run_seed)
+  const [retryTick, setRetryTick] = useState(0); // re-dispara o envio do squad após falha
+  const sentRef = useRef('');    // já enviei meu squad neste ciclo (code:run_seed)
+  const failedRef = useRef(new Set<string>()); // partidas que o pai não conseguiu montar
+  // persiste a sessão fora do React (sobrevive ao desmonte durante o replay)
+  useEffect(() => { duelSession.view = view; duelSession.code = code; }, [view, code]);
 
   // ── FILA RANQUEADA: entra → poll 2.5s → pareado → sala (já em 'drafting') ──
   const enterQueue = async () => {
@@ -56,14 +71,15 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
   useEffect(() => {
     if (!queue) return;
     let alive = true;
+    // SEM gate de document.hidden: o poll é o heartbeat do ticket — pausar com
+    // a aba oculta fazia a limpeza ceifar o ticket em 45s.
     const t = window.setInterval(async () => {
-      if (document.hidden) return;
       try {
         const r = await lobbyApi({ action: 'queuePoll', nick, elo: squad.elo });
         if (!alive) return;
         if (r.matched && r.code) { setQueue(null); setCode(r.code); setView('room'); setState(null); }
         else if (r.queued) setQueue((q) => (q ? { ...q, waiting: r.waiting, window: r.window } : q));
-        else setQueue(null); // ticket sumiu (limpeza) — usuário re-entra se quiser
+        else { setQueue(null); setError(ct('Você saiu da fila por inatividade — entre de novo.')); }
       } catch { /* transiente — próximo tick tenta de novo */ }
     }, 2500);
     return () => { alive = false; window.clearInterval(t); };
@@ -110,25 +126,40 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
     const key = `${code}:${state.lobby.run_seed ?? state.lobby.seed}`;
     if (sentRef.current === key) return;
     sentRef.current = key;
-    void lobbyApi({ action: 'pick', code, nick, picks: squad.cards.map((c) => c.pid), squad, done: true })
-      .catch(() => { sentRef.current = ''; }); // falhou → tenta no próximo poll
-  }, [state, code, nick, squad]);
+    // lobbyApi NÃO lança em 4xx/5xx (só resolve com {error}) — checa r.ok e
+    // re-arma com timer (429/500 transiente não pode matar o envio pra sempre).
+    const rearm = () => { sentRef.current = ''; window.setTimeout(() => setRetryTick((t) => t + 1), 3000); };
+    lobbyApi({ action: 'pick', code, nick, picks: squad.cards.map((c) => c.pid), squad, done: true })
+      .then((r) => { if (!r.ok) rearm(); })
+      .catch(rearm);
+  }, [state, code, nick, squad, retryTick]);
 
-  // ── partida pronta: 2 squads + status done → entrega pro pai (uma vez por seed) ──
-  useEffect(() => {
-    if (!state || state.lobby.status !== 'done') return;
+  // monta os args da partida a partir do estado atual da sala (usado pelo
+  // auto-play E pelo botão Reassistir).
+  const buildPlayArgs = useCallback((): DuelPlayArgs | null => {
+    if (!state || state.lobby.status !== 'done') return null;
     const actives = state.players.filter((p) => !p.spectator && p.squad && p.squad.cards.length === 5);
-    if (actives.length < 2) return;
-    const runSeed = Number(state.lobby.run_seed ?? state.lobby.seed) || 1;
-    const key = `${code}:${runSeed}`;
-    if (playedRef.current.has(key)) return;
-    playedRef.current.add(key);
+    if (actives.length < 2) return null;
     const me = actives.find((p) => p.nick.toLowerCase() === nick.toLowerCase());
     const opp = actives.find((p) => p.nick.toLowerCase() !== nick.toLowerCase());
-    if (!me?.squad || !opp?.squad) return;
-    const myFirst = me.nick.toLowerCase() < opp.nick.toLowerCase();
-    onPlay({ code, runSeed, mySquad: me.squad, oppSquad: opp.squad, oppNick: opp.squad.name || opp.nick, myFirst });
-  }, [state, code, nick, onPlay]);
+    if (!me?.squad || !opp?.squad) return null;
+    const runSeed = Number(state.lobby.run_seed ?? state.lobby.seed) || 1;
+    return { code, runSeed, mySquad: me.squad, oppSquad: opp.squad, oppNick: opp.squad.name || opp.nick, myFirst: me.nick.toLowerCase() < opp.nick.toLowerCase() };
+  }, [state, code, nick]);
+
+  // ── partida pronta → entrega pro pai UMA vez por code:run_seed. A guarda é o
+  // ledger persistente (o mesmo do recordMatch): sobrevive ao desmonte durante
+  // o replay — sem loop de replay automático ao voltar pra sala. ──
+  useEffect(() => {
+    const args = buildPlayArgs();
+    if (!args) return;
+    const key = `${args.code}:${args.runSeed}`;
+    if (watchedMatch(key) || failedRef.current.has(key)) return;
+    if (!onPlay(args)) {
+      failedRef.current.add(key);
+      setError(ct('Não foi possível montar a partida (versão do rival incompatível).'));
+    }
+  }, [buildPlayArgs, onPlay]);
 
   const create = async () => {
     setBusy(true); setError('');
@@ -219,9 +250,10 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
           </button>
         )}
         {status === 'done' && (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {isHost && <button className="ut-jogar" style={{ flex: 1, justifyContent: 'center', padding: '11px' }} disabled={busy} onClick={() => void rematch()}><Swords size={15} /> {ct('REVANCHE')}</button>}
-            {!isHost && <div style={{ flex: 1, textAlign: 'center', fontSize: '0.78rem', color: 'var(--ut-muted)', alignSelf: 'center' }}>{ct('O host pode pedir revanche — fique na sala.')}</div>}
+            <button className="ut-btn ut-btn--ghost" style={{ padding: '11px 16px' }} onClick={() => { const a = buildPlayArgs(); if (a) onPlay(a); }}>{ct('Reassistir partida')}</button>
+            {!isHost && <div style={{ flex: 1, textAlign: 'center', fontSize: '0.78rem', color: 'var(--ut-muted)', alignSelf: 'center', minWidth: 180 }}>{ct('O host pode pedir revanche — fique na sala.')}</div>}
           </div>
         )}
       </div>

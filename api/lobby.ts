@@ -210,6 +210,9 @@ async function finishDraftIfReady(sql: ReturnType<typeof neon>, code: string, mo
     WHERE code = ${code} AND COALESCE(spectator, false) = false
     ORDER BY joined_at ASC`;
   if (actives.length === 0 || !actives.every((player) => player.done === true)) return;
+  // duel E ultimate são 1v1: com <2 ativos a sala NÃO pode virar 'done' (senão
+  // um leave no drafting deixava o restante preso numa partida de 1 jogador).
+  if (mode === 'ultimate' && actives.length < 2) return;
   if (mode === 'duel') {
     if (actives.length < 2) return;
     const participants = actives.map((player) => String(player.nick));
@@ -235,33 +238,66 @@ function mmWindow(waitedMs: number): number {
   return Math.min(1200, 200 + Math.floor(waitedMs / 1000) * 15);
 }
 
-// tenta parear NA HORA: pega os tickets abertos mais antigos dentro da janela e
-// faz um CLAIM ATÔMICO (UPDATE ... WHERE matched_code IS NULL) — só um lado
-// vence a corrida. Quem casa cria a sala JÁ EM 'drafting' (zero cliques: os
-// dois clients enviam o squad e a partida sai). Host = dono do ticket mais velho.
+// tenta parear NA HORA. Regras anti-corrida (cada sql`` do Neon é um request
+// independente, SEM transação entre awaits):
+// 1) claim DIRECIONAL: só claimo tickets estritamente MAIS VELHOS que o meu
+//    (desempate por nick) — só um lado de cada par pode claimar → sem sala dupla.
+// 2) sala é criada ANTES do claim: se a function morrer no meio sobra só uma
+//    sala órfã vazia (o GC de 4min limpa), nunca um ticket apontando pro nada.
+// 3) claim falhou → desfaz a sala e tenta o próximo candidato.
+// 4) MEU ticket recebe o mesmo matched_code (não é deletado): a coleta vira
+//    idempotente por poll (resposta perdida ≠ match perdido). Se um TERCEIRO
+//    me claimou no meio, desfaço ESTE par e colho o dele no próximo poll.
 async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, myElo: number, enqueuedAtMs: number): Promise<string | null> {
   const windowRp = mmWindow(Date.now() - enqueuedAtMs);
+  const myEnqueuedIso = new Date(enqueuedAtMs).toISOString();
   const cands = await sql`
     SELECT nick FROM mm_queue
     WHERE matched_code IS NULL AND lower(nick) <> ${meNick.toLowerCase()}
-      AND last_seen > now() - interval '30 seconds'
+      AND last_seen > now() - interval '8 seconds'
       AND abs(elo - ${myElo}) <= ${windowRp}
+      AND (enqueued_at < ${myEnqueuedIso}::timestamptz OR (enqueued_at = ${myEnqueuedIso}::timestamptz AND nick < ${meNick}))
     ORDER BY enqueued_at ASC LIMIT 5`;
   for (const cand of cands) {
+    const candNick = String(cand.nick);
     for (let attempt = 0; attempt < 3; attempt++) {
       const newCode = genCode();
       const exists = await sql`SELECT 1 FROM lobbies WHERE code = ${newCode}`;
       if (exists.length > 0) continue;
-      const claimed = await sql`UPDATE mm_queue SET matched_code = ${newCode} WHERE nick = ${String(cand.nick)} AND matched_code IS NULL RETURNING nick`;
-      if (claimed.length === 0) break; // outro cliente levou este ticket — próximo candidato
       const seed = Math.floor(Math.random() * 2147483647);
-      await sql`INSERT INTO lobbies (code, mode, host, status, seed, run_seed, pool, is_public, ranked, ruleset) VALUES (${newCode}, 'ultimate', ${String(cand.nick)}, 'drafting', ${seed}, ${seed}, 'world', false, true, 'open')`;
-      await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${String(cand.nick)}), (${newCode}, ${meNick})`;
-      await sql`DELETE FROM mm_queue WHERE nick = ${meNick}`;
+      await sql`INSERT INTO lobbies (code, mode, host, status, seed, run_seed, pool, is_public, ranked, ruleset) VALUES (${newCode}, 'ultimate', ${candNick}, 'drafting', ${seed}, ${seed}, 'world', false, true, 'open')`;
+      await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${candNick}), (${newCode}, ${meNick})`;
+      const claimed = await sql`UPDATE mm_queue SET matched_code = ${newCode} WHERE nick = ${candNick} AND matched_code IS NULL RETURNING nick`;
+      if (claimed.length === 0) {
+        // rival já foi levado por outro — desfaz a sala e tenta o próximo
+        await sql`DELETE FROM lobby_players WHERE code = ${newCode}`;
+        await sql`DELETE FROM lobbies WHERE code = ${newCode}`;
+        break;
+      }
+      const mine = await sql`UPDATE mm_queue SET matched_code = ${newCode} WHERE nick = ${meNick} AND matched_code IS NULL RETURNING nick`;
+      if (mine.length === 0) {
+        // um jogador mais novo me claimou enquanto eu claimava — prefiro o
+        // match RECEBIDO (coleto no próximo poll) e devolvo o rival pra fila.
+        await sql`UPDATE mm_queue SET matched_code = NULL WHERE nick = ${candNick} AND matched_code = ${newCode}`;
+        await sql`DELETE FROM lobby_players WHERE code = ${newCode}`;
+        await sql`DELETE FROM lobbies WHERE code = ${newCode}`;
+        return null;
+      }
       return newCode;
     }
   }
   return null;
+}
+
+// desfaz um ticket saindo da fila; se ele JÁ tinha par (matched_code), derruba a
+// sala se ainda estiver em 'drafting' — o rival vê 'gone' e volta pra fila, em
+// vez de ficar preso numa sala pela metade.
+async function dropQueueTicket(sql: ReturnType<typeof neon>, nick: string): Promise<void> {
+  const gone = await sql`DELETE FROM mm_queue WHERE nick = ${nick} RETURNING matched_code`;
+  const mc = gone[0]?.matched_code ? String(gone[0].matched_code) : null;
+  if (!mc) return;
+  const del = await sql`DELETE FROM lobbies WHERE code = ${mc} AND status = 'drafting' RETURNING code`;
+  if (del.length) await sql`DELETE FROM lobby_players WHERE code = ${mc}`;
 }
 
 interface Res {
@@ -335,6 +371,21 @@ export default async function handler(
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
+      }
+      // recuperação de 'drafting' abandonado: jogador sem heartbeat há 90s sai
+      // da sala; se sobrar <2, volta pra 'waiting' (ninguém fica preso em
+      // "trocando escalações" com um rival que fechou a aba).
+      if (lobby[0].status === 'drafting') {
+        const stale = await sql`DELETE FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false AND COALESCE(last_seen, joined_at) < now() - interval '90 seconds' RETURNING nick`;
+        if (stale.length > 0) {
+          const actives = await sql`SELECT COUNT(*)::int AS n FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false`;
+          if (Number(actives[0]?.n ?? 0) < 2) {
+            await sql`UPDATE lobbies SET status = 'waiting', updated_at = now() WHERE code = ${code} AND status = 'drafting'`;
+            lobby[0].status = 'waiting';
+          } else {
+            await finishDraftIfReady(sql, code, String(lobby[0].mode));
+          }
+        }
       }
       const players = await sql`
         SELECT nick, picks, coach_pick, done, joined_at, COALESCE(ready_stage, -1) AS ready_stage,
@@ -464,10 +515,15 @@ export default async function handler(
       const elo = Math.max(0, Math.min(5000, Math.round(Number(body.elo) || 1000)));
       // limpa tickets mortos (sem heartbeat) e casados que nunca foram coletados
       await sql`DELETE FROM mm_queue WHERE (matched_code IS NULL AND last_seen < now() - interval '45 seconds') OR last_seen < now() - interval '5 minutes'`;
-      await sql`DELETE FROM mm_queue WHERE nick = ${nick}`; // reset do próprio ticket
+      await dropQueueTicket(sql, nick); // reset (com compensação se tinha par não-coletado)
+      // ticket entra ANTES do pareamento: fecha a janela check-then-insert em
+      // que dois queueJoin simultâneos não se enxergavam.
+      await sql`INSERT INTO mm_queue (nick, elo) VALUES (${nick}, ${elo}) ON CONFLICT (nick) DO UPDATE SET elo = ${elo}, last_seen = now(), matched_code = NULL, enqueued_at = now()`;
       const matchedCode = await tryMatchUltimate(sql, nick, elo, Date.now());
       if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
-      await sql`INSERT INTO mm_queue (nick, elo) VALUES (${nick}, ${elo}) ON CONFLICT (nick) DO UPDATE SET elo = ${elo}, last_seen = now(), matched_code = NULL, enqueued_at = now()`;
+      // posso ter sido claimado por outro DURANTE o tryMatch — colhe na hora
+      const mineNow = await sql`SELECT matched_code FROM mm_queue WHERE nick = ${nick}`;
+      if (mineNow[0]?.matched_code) { res.status(200).json({ ok: true, matched: true, code: String(mineNow[0].matched_code) }); return; }
       res.status(200).json({ ok: true, queued: true, window: mmWindow(0) });
       return;
     }
@@ -478,22 +534,26 @@ export default async function handler(
       if (mine.length === 0) { res.status(200).json({ ok: true, queued: false }); return; }
       const ticket = mine[0];
       if (ticket.matched_code) {
-        // alguém me pareou — coleto o código e saio da fila
-        await sql`DELETE FROM mm_queue WHERE nick = ${nick}`;
+        // coleta IDEMPOTENTE: não deleta o ticket (resposta perdida ≠ match
+        // perdido — o próximo poll devolve o mesmo code; o sweep de 5min limpa).
         res.status(200).json({ ok: true, matched: true, code: String(ticket.matched_code) });
         return;
       }
       const enqueuedMs = new Date(String(ticket.enqueued_at)).getTime();
-      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs);
-      if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
-      const open = await sql`SELECT COUNT(*)::int AS n FROM mm_queue WHERE matched_code IS NULL AND last_seen > now() - interval '30 seconds'`;
       const waitedMs = Math.max(0, Date.now() - enqueuedMs);
+      // pareia em polls ALTERNADOS (corta ~metade das queries de matchmaking
+      // sob carga; quem pula segue claimável pelos outros no intervalo)
+      if (Math.floor(waitedMs / 2500) % 2 === 0) {
+        const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs);
+        if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
+      }
+      const open = await sql`SELECT COUNT(*)::int AS n FROM mm_queue WHERE matched_code IS NULL AND last_seen > now() - interval '30 seconds'`;
       res.status(200).json({ ok: true, queued: true, waiting: Number(open[0]?.n ?? 1), waitedMs, window: mmWindow(waitedMs) });
       return;
     }
 
     if (action === 'queueLeave') {
-      if (nick) await sql`DELETE FROM mm_queue WHERE nick = ${nick}`;
+      if (nick) await dropQueueTicket(sql, nick);
       res.status(200).json({ ok: true });
       return;
     }
@@ -899,7 +959,7 @@ export default async function handler(
     }
 
     if (action === 'pick') {
-      const lobby = await sql`SELECT status FROM lobbies WHERE code = ${code}`;
+      const lobby = await sql`SELECT status, mode FROM lobbies WHERE code = ${code}`;
       if (lobby.length === 0) {
         res.status(404).json({ error: 'lobby não encontrado' });
         return;
@@ -907,6 +967,14 @@ export default async function handler(
       if (lobby[0].status !== 'drafting') {
         res.status(409).json({ error: 'o draft não está em andamento' });
         return;
+      }
+      // ultimate: done exige squad VÁLIDO de 5 cartas — senão a sala vira 'done'
+      // com escalação vazia e o rival não consegue montar a partida.
+      if (lobby[0].mode === 'ultimate' && body.done === true) {
+        const sq = body.squad && typeof body.squad === 'object' ? body.squad as Record<string, unknown> : null;
+        const cardsOk = sq && Array.isArray(sq.cards) && sq.cards.length === 5
+          && sq.cards.every((c) => c && typeof c === 'object' && String((c as Record<string, unknown>).pid ?? '').length > 0);
+        if (!cardsOk) { res.status(400).json({ error: 'squad incompleto (5 cartas obrigatórias)' }); return; }
       }
       const picks = JSON.stringify(
         Array.isArray(body.picks) ? body.picks.filter((p) => typeof p === 'string').slice(0, 5) : [],

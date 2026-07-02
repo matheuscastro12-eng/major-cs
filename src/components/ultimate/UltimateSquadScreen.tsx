@@ -38,7 +38,7 @@ import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
-import type { UltimatePvpSquad } from '../../state/online';
+import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import '../../styles/ultimate.css';
 
@@ -204,7 +204,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   type MatchMode = 'rivals' | 'casual' | 'gauntlet' | 'pvp';
   type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean };
-  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1 } | null>(null);
+  const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1; pvpCode?: string } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
   const [liveRound, setLiveRound] = useState(0); // rounds já exibidos no replay (barra de momentum)
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
@@ -511,14 +511,14 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [displayName, state.profile.elo, chem.multiplier, state.squads, state.inventory]);
 
-  const startPvpMatch = useCallback((args: DuelPlayArgs) => {
+  const startPvpMatch = useCallback((args: DuelPlayArgs): boolean => {
     // reconstrói os DOIS times do dataset (pids compartilhados) com o OVR do
     // snapshot; ordem CANÔNICA (nick menor primeiro) → série idêntica nos 2 lados.
     const buildFive = (sq: UltimatePvpSquad): PoolPlayer[] =>
       sq.cards.map((c) => { const base = poolById.get(c.pid); return base ? { ...base, ovr: c.ovr } : null; }).filter((p): p is PoolPlayer => !!p);
     const mineFive = buildFive(args.mySquad);
     const oppFive = buildFive(args.oppSquad);
-    if (mineFive.length < 5 || oppFive.length < 5) { flash(ct('Squad do rival incompatível com esta versão.')); return; }
+    if (mineFive.length < 5 || oppFive.length < 5) { flash(ct('Squad do rival incompatível com esta versão.')); return false; }
     const firstSq = args.myFirst ? args.mySquad : args.oppSquad;
     const secondSq = args.myFirst ? args.oppSquad : args.mySquad;
     const tA = buildOnlineTeam(firstSq.name || 'A', args.myFirst ? mineFive : oppFive, 'ut-pvp-a');
@@ -559,11 +559,22 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     setResult(null);
     setLiveRound(0);
     setLive({
-      series, teams: [tA, tB], opp: oppFive, intro: true, myIdx,
+      series, teams: [tA, tB], opp: oppFive, intro: true, myIdx, pvpCode: args.code,
       result: { won, score, outcome, mode: 'pvp', divChange: already ? 'same' : divisionChange(eloBefore, eloAfter), divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName, oppName: args.oppNick, repeat: already },
     });
+    return true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [poolById, state.profile.elo, state.squads, state.inventory]);
+
+  // heartbeat da sala PvP DURANTE o replay: o UltimateDuel desmonta quando o
+  // palco assume — sem este ping a sala era limpa pelo GC (>4min sem last_ping)
+  // no meio da partida.
+  const livePvpCode = live?.pvpCode;
+  useEffect(() => {
+    if (!livePvpCode) return;
+    const t = window.setInterval(() => { void lobbyApi({ action: 'ping', code: livePvpCode, nick: pvpNick }).catch(() => undefined); }, 25_000);
+    return () => window.clearInterval(t);
+  }, [livePvpCode, pvpNick]);
 
   // o resultado já foi registrado no playMatch — aqui só troca replay → modal.
   const finishMatch = () => {
