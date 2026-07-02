@@ -3,11 +3,32 @@
 // Ações (POST body.action): pull | push.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { CloudSavePayloadError, decodeCloudSavePayload } from '../server/cloud-save-codec';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 const APP_SECRET = () => clean(process.env.APP_SECRET) || `fallback:${clean(process.env.DATABASE_URL) ?? 'dev'}`;
-const MAX_BYTES = 2_000_000; // teto defensivo por slot (~2MB)
+
+const rlBuckets = new Map<string, { count: number; resetAt: number }>();
+let schemaReady = false;
+
+function rateLimited(key: string, limit: number, windowMs = 60_000): boolean {
+  const now = Date.now();
+  if (rlBuckets.size > 5000) rlBuckets.clear();
+  const current = rlBuckets.get(key);
+  if (!current || current.resetAt <= now) {
+    rlBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return false;
+  }
+  current.count += 1;
+  return current.count > limit;
+}
+
+function clientIp(headers?: Record<string, string | string[] | undefined>): string {
+  const raw = headers?.['x-forwarded-for'] ?? headers?.['x-real-ip'] ?? '';
+  const value = Array.isArray(raw) ? raw[0] : String(raw);
+  return value.split(',')[0].trim() || 'unknown';
+}
 
 function verifyToken(token: string): string | null {
   const [b64, sig] = (token ?? '').split('.');
@@ -22,21 +43,38 @@ function verifyToken(token: string): string | null {
 }
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
+  const ip = clientIp(req.headers);
+  if (rateLimited(`ip:${ip}`, 180)) {
+    res.setHeader('Retry-After', '60');
+    res.status(429).json({ error: 'muitas requisições' });
+    return;
+  }
+
+  let body: Record<string, unknown>;
+  try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {}); } catch {
+    res.status(400).json({ error: 'JSON inválido' });
+    return;
+  }
+  const action = String(body.action ?? '');
+  const email = verifyToken(String(body.token ?? ''));
+  if (!email) { res.status(401).json({ error: 'Entre na sua conta pra usar o save na nuvem.' }); return; }
+  if (rateLimited(`account:${email}:${action}`, action === 'push' ? 30 : 60)) {
+    res.setHeader('Retry-After', '60');
+    res.status(429).json({ error: 'muitas sincronizações' });
+    return;
+  }
+
   const dbUrl = clean(process.env.DATABASE_URL);
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
-  await sql`CREATE TABLE IF NOT EXISTS rtm_saves (email TEXT, slot TEXT, data TEXT, updated_at BIGINT DEFAULT 0, PRIMARY KEY (email, slot))`;
-
-  let body: Record<string, unknown> = {};
-  try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {}); } catch { /* vazio */ }
-  const action = String(body.action ?? '');
-
-  const email = verifyToken(String(body.token ?? ''));
-  if (!email) { res.status(401).json({ error: 'Entre na sua conta pra usar o save na nuvem.' }); return; }
+  if (!schemaReady) {
+    await sql`CREATE TABLE IF NOT EXISTS rtm_saves (email TEXT, slot TEXT, data TEXT, updated_at BIGINT DEFAULT 0, PRIMARY KEY (email, slot))`;
+    schemaReady = true;
+  }
 
   const acc = await sql`SELECT paid FROM rtm_accounts WHERE email=${email}`;
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
@@ -60,11 +98,17 @@ export default async function handler(
   }
 
   if (action === 'push') {
-    const data = String(body.data ?? '');
+    let data: string;
+    try {
+      data = decodeCloudSavePayload(String(body.data ?? ''), body.encoding, body.originalBytes);
+    } catch (error) {
+      const message = error instanceof CloudSavePayloadError ? error.message : 'save inválido';
+      res.status(413).json({ error: message });
+      return;
+    }
     // data vazio = tombstone (lápide) de exclusão. NÃO é erro: grava '' com o
     // timestamp pra que o last-write-wins marque o slot como apagado e ele não
     // ressuscite no próximo sync. Antes isso retornava 400 e o save voltava.
-    if (data && Buffer.byteLength(data, 'utf8') > MAX_BYTES) { res.status(413).json({ error: 'save grande demais' }); return; }
     const updatedAt = Number(body.updatedAt) || Date.now();
     await sql`
       INSERT INTO rtm_saves (email, slot, data, updated_at) VALUES (${email}, ${slot}, ${data}, ${updatedAt})
