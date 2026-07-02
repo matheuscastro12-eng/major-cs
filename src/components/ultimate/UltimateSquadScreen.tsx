@@ -16,7 +16,7 @@ import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/da
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
 import { SBCS, checkSbc, type SbcDef } from '../../engine/ultimate/sbc';
 import { quickSellValue } from '../../engine/ultimate/quicksell';
-import { buildAiLadder, buildBazaar, bazaarDayBucket, type AiPlayer, type Listing } from '../../engine/ultimate/bazaar';
+import { buildBazaar, bazaarDayBucket, type Listing } from '../../engine/ultimate/bazaar';
 import { MatchReplay } from '../online/MatchReplay';
 import { buildOnlineTeam, buildPool, type PoolPlayer } from '../online/onlineData';
 import { makeRng } from '../../engine/rng';
@@ -27,6 +27,7 @@ import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { useAccount, beginCoinsPix, claimPaidCoins, type CoinCharge, type CoinTierId } from '../../state/account';
+import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { UtPanel, UtEmpty } from './UtPanel';
 import {
   LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
@@ -45,6 +46,15 @@ import '../../styles/ultimate.css';
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 // codinomes das temporadas (cicla pela lista conforme season.n cresce)
 const SEASON_NAMES = ['Inception', 'Ascension', 'Dynasty', 'Legacy', 'Overtime', 'Eternal'];
+
+// vendedores do bazar: nicks FICTÍCIOS de manager (jamais pros reais). O bazar é
+// "cartas à venda por outros jogadores (IA)" — usar nome de pro real (donk etc.)
+// dava a impressão falsa de que o pro estava na plataforma. Nomes genéricos evitam isso.
+const BAZAAR_SELLERS = [
+  'zK', 'Nova', 'Falcon', 'V1per', 'Kyzen', 'Orbit', 'Raven', 'Muta', 'Prisma', 'Neo',
+  'Turbo', 'Ghost', 'Kova', 'Slyce', 'Nyx', 'Ember', 'Drako', 'Pulse', 'Volt', 'Zero',
+  'Lynx', 'Ronin', 'Onyx', 'Sable',
+];
 
 // confete da vitória: configs FIXAS (nada de Math.random no render — re-render
 // não pode reembaralhar as peças no meio da animação).
@@ -486,8 +496,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     }
   };
 
-  // ── ladder de IA (ranking) + bazar (mercado) — P6 ──
-  const ladder = useMemo<AiPlayer[]>(() => buildAiLadder(pool.map((p) => ({ nick: p.nick, country: p.country, ovr: p.ovr })), 20260607), [pool]);
+  // ── bazar (mercado) — P6 ── sellers são nicks FICTÍCIOS de manager (sem pros reais).
   const [bazaar, setBazaar] = useState<Listing[]>([]);
   const bazaarBought = state.profile.bazaarBought;
   useEffect(() => {
@@ -495,19 +504,29 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     // determinístico por dia; sem isso, remount/F5 "restocava" a compra.
     const day = bazaarDayBucket(Date.now());
     const boughtIds = new Set(bazaarBought.day === day ? bazaarBought.ids : []);
-    setBazaar(buildBazaar(ultimateCatalog(), ladder.slice(0, 60).map((a) => a.nick), day).filter((l) => !boughtIds.has(l.id)));
-  }, [ladder, bazaarBought]);
+    setBazaar(buildBazaar(ultimateCatalog(), BAZAAR_SELLERS, day).filter((l) => !boughtIds.has(l.id)));
+  }, [bazaarBought]);
   const buyFromBazaar = (l: Listing) => {
     if (buyCard(l.cardKey, l.price, l.id, bazaarDayBucket(Date.now()))) { setBazaar((b) => b.filter((x) => x.id !== l.id)); flash(`✅ ${ct('Comprado')} · -${fmt(l.price)} 🪙`); }
     else flash(ct('Créditos insuficientes.'));
   };
-  // ranking com VOCÊ inserido por elo
-  const rankedList = useMemo(() => {
-    const me: AiPlayer = { id: 'you', nick: ct('Você'), country: 'br', elo: state.profile.elo, w: state.profile.w, l: state.profile.l };
-    const arr = [...ladder, me].sort((a, b) => b.elo - a.elo);
-    return arr;
-  }, [ladder, state.profile.elo, state.profile.w, state.profile.l]);
-  const myRankPos = rankedList.findIndex((p) => p.id === 'you') + 1;
+  // ── ranking global: ladder REAL do servidor (só contas vitalícias). Sem jogadores
+  // fictícios de nick real — é preenchido pelos managers de verdade conforme jogam a
+  // Ranqueada (Rivals). Antes usava um ladder de IA com nomes de pros (donk, molodoy…). ──
+  const [serverLadder, setServerLadder] = useState<RankRow[]>([]);
+  const [myRank, setMyRank] = useState<MyRank | null>(null);
+  const [ladderTotal, setLadderTotal] = useState(0);
+  const [ladderLoading, setLadderLoading] = useState(false);
+  const loadLadder = useCallback(async () => {
+    setLadderLoading(true);
+    try {
+      const [board, mine] = await Promise.all([getLadder(), fetchMyRank(displayName)]);
+      setServerLadder(board.ladder);
+      setLadderTotal(board.total);
+      setMyRank(mine);
+    } finally { setLadderLoading(false); }
+  }, [displayName]);
+  useEffect(() => { if (tab === 'ranking') void loadLadder(); }, [tab, loadLadder]);
 
   const doEvolve = (row: ClubRow) => {
     // prefere evoluir a cópia escalada (fortalece o squad na hora); senão a 1ª.
@@ -569,6 +588,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     } else {
       const ranked = mode === 'rivals';
       const outcome = recordMatch(won, oppElo, ranked, score);
+      if (ranked) void reportResult(won, displayName); // alimenta o ranking global do servidor (contas vitalícias)
       const eloAfter = eloBefore + (ranked ? outcome.eloDelta : 0);
       resultData = { won, score, outcome, mode, divChange: ranked ? divisionChange(eloBefore, eloAfter) : 'same', divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName };
     }
@@ -639,6 +659,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     } catch { /* storage indisponível — registra mesmo assim */ }
     const eloBefore = state.profile.elo;
     const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, true, score);
+    if (!already) void reportResult(won, displayName); // duelo ranqueado também conta no ranking global
     const eloAfter = eloBefore + outcome.eloDelta;
     setResult(null);
     setLiveRound(0);
@@ -1140,46 +1161,56 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       )}
 
       {tab === 'ranking' && (
-        <UtPanel label={ct('Ranking global')} icon={<ListOrdered size={15} className="ut-panel__lead" />} accent="green">
+        <UtPanel label={ct('Ranking global')} icon={<ListOrdered size={15} className="ut-panel__lead" />} accent="green"
+          info={ct('Temporada mensal. Só contas vitalícias entram no ranking — jogue a Ranqueada (Rivals) pra pontuar e subir.')}
+          right={<button className="ut-btn ut-btn--ghost" style={{ padding: '5px 12px', fontSize: '0.76rem' }} onClick={() => void loadLadder()} disabled={ladderLoading}>{ladderLoading ? ct('Atualizando…') : ct('Atualizar')}</button>}>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, fontSize: '0.8rem', color: 'var(--em-muted,#8a99ab)' }}>
-            <span>{ct('Jogadores')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{rankedList.length}</b></span>
-            <span>{ct('Sua posição')}: <b style={{ color: '#92600a' }}>#{myRankPos}</b></span>
-            <span>{ct('Líder')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{rankedList[0]?.nick}</b> ({rankedList[0]?.elo} RP)</span>
+            <span>{ct('Jogadores')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{ladderTotal}</b></span>
+            {myRank && <span>{ct('Sua posição')}: <b style={{ color: '#92600a' }}>#{myRank.rank}</b></span>}
+            {serverLadder[0] && <span>{ct('Líder')}: <b style={{ color: 'var(--em-text,#e6edf5)' }}>{serverLadder[0].nick}</b> ({serverLadder[0].mmr} RP)</span>}
           </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14, alignItems: 'flex-end' }}>
-            {[1, 0, 2].map((idx) => {
-              const p = rankedList[idx];
-              if (!p) return null;
-              const MedalIcon = idx === 0 ? Crown : Medal;
-              const medalColor = idx === 0 ? '#caa53a' : idx === 1 ? '#9aa3ad' : '#cd7f32';
-              return (
-                <div key={idx} style={{ textAlign: 'center', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--em-border,#2a3340)', background: idx === 0 ? 'rgba(232,193,112,0.1)' : 'var(--em-panel,#0f131a)', minWidth: 108, transform: idx === 0 ? 'scale(1.06)' : 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 2 }}><MedalIcon size={24} color={medalColor} /></div>
-                  <PlayerAvatar nick={p.nick} size={40} />
-                  <div style={{ fontWeight: 900, fontSize: '0.82rem', marginTop: 4 }}>{p.nick}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{p.elo} RP</div>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {rankedList.slice(0, 30).map((p, i) => (
-              <div key={p.id} className={`ut-rank-row${p.id === 'you' ? ' is-you' : ''}`}>
-                <span className="ut-rank-row__pos">#{i + 1}</span>
-                <Flag cc={p.country} /> <b className="ut-rank-row__name">{p.nick}</b>
-                <span className="ut-rank-row__wl">{p.w}V-{p.l}D</span>
-                <span className="ut-rank-row__elo">{p.elo}</span>
+          {serverLadder.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--em-muted,#8a99ab)', fontSize: '0.86rem' }}>
+              {ladderLoading ? ct('Carregando ranking…') : ct('O ranking desta temporada está começando. Jogue uma partida Rivals e seja o primeiro a pontuar!')}
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14, alignItems: 'flex-end' }}>
+                {[1, 0, 2].map((idx) => {
+                  const p = serverLadder[idx];
+                  if (!p) return null;
+                  const MedalIcon = idx === 0 ? Crown : Medal;
+                  const medalColor = idx === 0 ? '#caa53a' : idx === 1 ? '#9aa3ad' : '#cd7f32';
+                  return (
+                    <div key={idx} style={{ textAlign: 'center', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--em-border,#2a3340)', background: idx === 0 ? 'rgba(232,193,112,0.1)' : 'var(--em-panel,#0f131a)', minWidth: 108, transform: idx === 0 ? 'scale(1.06)' : 'none' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 2 }}><MedalIcon size={24} color={medalColor} /></div>
+                      <PlayerAvatar nick={p.nick} size={40} />
+                      <div style={{ fontWeight: 900, fontSize: '0.82rem', marginTop: 4 }}>{p.nick}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{p.mmr} RP</div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-            {myRankPos > 30 && (
-              <div className="ut-rank-row is-you" style={{ marginTop: 6 }}>
-                <span className="ut-rank-row__pos">#{myRankPos}</span>
-                <Flag cc="br" /> <b className="ut-rank-row__name">{ct('Você')}</b>
-                <span className="ut-rank-row__wl">{state.profile.w}V-{state.profile.l}D</span>
-                <span className="ut-rank-row__elo">{state.profile.elo}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {serverLadder.slice(0, 30).map((p) => (
+                  <div key={p.rank} className={`ut-rank-row${myRank && p.rank === myRank.rank ? ' is-you' : ''}`}>
+                    <span className="ut-rank-row__pos">#{p.rank}</span>
+                    <b className="ut-rank-row__name">{p.nick}</b>
+                    <span className="ut-rank-row__wl">{p.wins}V-{p.losses}D</span>
+                    <span className="ut-rank-row__elo">{p.mmr}</span>
+                  </div>
+                ))}
+                {myRank && myRank.rank > 30 && (
+                  <div className="ut-rank-row is-you" style={{ marginTop: 6 }}>
+                    <span className="ut-rank-row__pos">#{myRank.rank}</span>
+                    <b className="ut-rank-row__name">{ct('Você')}</b>
+                    <span className="ut-rank-row__wl">{myRank.wins}V-{myRank.losses}D</span>
+                    <span className="ut-rank-row__elo">{myRank.mmr}</span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </UtPanel>
       )}
 
