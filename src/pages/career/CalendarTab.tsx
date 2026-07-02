@@ -53,7 +53,7 @@ export function CalendarTab({ save, league, table, myPos, myVrsRank, setSelTeam 
       status: save.playoff ? (save.playoff.champion ? 'done' : 'live') : 'locked',
       detail: save.playoff
         ? (save.playoff.champion ? ct('Encerrado') : ct('Semis (MD3) + final (MD5)'))
-        : ct('Os 4 melhores do grupo avançam'),
+        : ct('Os 2 melhores de cada grupo avançam (8 no mata-mata)'),
     },
     {
       ic: 'globe',

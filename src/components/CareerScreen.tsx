@@ -630,7 +630,7 @@ function applyAgingTick(save: CareerSave, findSigning: (sig: Signing) => Resolve
   const result = tickAging({ split: save.split, retired: save.retired ?? [], players, applyDecline: false });
   if (result.newRetirees.length === 0) return {};
   const retired = [...(save.retired ?? []), ...result.newRetirees.map((r) => r.id)];
-  const lastRetirees = result.newRetirees.map((r) => ({ nick: r.nick, age: r.age }));
+  const lastRetirees = result.newRetirees.map((r) => ({ id: r.id, nick: r.nick, age: r.age }));
 
   return { retired, lastRetirees };
 }
@@ -1154,7 +1154,7 @@ interface CareerSave {
   // no profile. Engine de aging NÃO força saída — sinaliza.
   retired?: string[];
   // T3.9: lista dos últimos players a se aposentar (mostrar como news no split).
-  lastRetirees?: { nick: string; age: number }[];
+  lastRetirees?: { id?: string; nick: string; age: number }[];
   // T3.8: contador de scrims usadas no split atual (limite 2 por split).
   // Resetado pra 0 a cada virada de split.
   scrimsThisSplit?: number;
@@ -1407,6 +1407,7 @@ function splitNews(ctx: {
   risers: string[]; sliders: string[]; unhappy: string[];
   major?: { placement: number | string; champion: boolean } | null;
   boardConfidence?: number;
+  star?: { nick: string; rating: number } | null;
 }): NewsItem[] {
   const s = ctx.split;
   const out: NewsItem[] = [];
@@ -1426,6 +1427,13 @@ function splitNews(ctx: {
     `${ctx.objMet ? ct('Objetivo cumprido') : ct('Objetivo não cumprido')}: "${ctx.objText}". ${ctx.objMet ? ct('A confiança subiu.') : ct('A confiança caiu — atenção redobrada no próximo split.')}`);
   if (ctx.offer) add('offer', '📞', 'info', 'transfer', `${ctx.offer.orgName} sonda ${ctx.offer.nick}`, `Proposta de ${formatMoney(ctx.offer.fee)} pelo seu ${ctx.offer.nick} (OVR ${ctx.offer.ovr}${ct('). Decida na janela de transferências.')}`);
   if (ctx.releases.length) add('release', '📄', 'bad', 'transfer', `${ct('Contrato vencido:')} ${ctx.releases.join(', ')}`, `${ctx.releases.length === 1 ? ct('O jogador saiu') : ct('Os jogadores saíram')} ${ct('de graça por fim de contrato. Reforce o elenco no mercado.')}`);
+  if (ctx.star) {
+    const r = ctx.star.rating.toFixed(2);
+    const hot = ctx.star.rating >= 1.15;
+    add('star', hot ? '⭐' : '🎯', hot ? 'good' : 'info', 'result',
+      `${ctx.star.nick} ${ct('foi o destaque do split')}`,
+      `${ctx.star.nick} ${ct('fechou a campanha com rating')} ${r}${hot ? ct(' — atuação de melhor em quadra. A imprensa já comenta.') : ct('. Boa entrega individual.')}`);
+  }
   if (ctx.risers.length) add('rise', '📈', 'good', 'board', `${ct('Em ascensão:')} ${ctx.risers.join(', ')}`, `${ct('A comissão técnica destaca a evolução de')} ${ctx.risers.join(', ')} ${ct('no último split.')}`);
   if (ctx.sliders.length) add('slide', '📉', 'info', 'board', `${ct('Em queda:')} ${ctx.sliders.join(', ')}`, `${ctx.sliders.join(', ')} ${ctx.sliders.length === 1 ? 'perdeu' : ct('perderam')} ${ct('rendimento. Veteranos cobram mais minutos de treino.')}`);
   if (ctx.unhappy.length) add('mood', '😟', 'bad', 'board', `${ct('Vestiário:')} ${ctx.unhappy.join(', ')} insatisfeito${ctx.unhappy.length > 1 ? 's' : ''}`, `${ct('Moral baixa no elenco. Vitórias, renovação de contrato e títulos levantam o astral.')}`);
@@ -1935,6 +1943,20 @@ function hltvPointsAt(p: Player, team: TeamSeason, role: Role, split: number): n
 }
 // MVP de um torneio: melhor participante pelos pontos do split (rating+impacto+função).
 interface MvpResult { p: Player; team: TeamSeason; statline: HltvStat; points: number; }
+// destaque do PRÓPRIO time no split: o jogador com melhor rating do elenco do
+// usuário (ponderado pela forma no torneio). Vira manchete na Inbox
+// ("Fulano foi o destaque da campanha"). Recebe o TTeam runtime da partida.
+function userSplitStar(team: TTeam | null, split: number): { nick: string; rating: number } | null {
+  if (!team?.players?.length) return null;
+  let best: { nick: string; rating: number; pts: number } | null = null;
+  for (const p of team.players) {
+    const rating = playerSeasonRating(p, split);
+    const pts = rating * (p.form ?? 1);
+    if (!best || pts > best.pts) best = { nick: p.nick, rating, pts };
+  }
+  return best ? { nick: best.nick, rating: best.rating } : null;
+}
+
 function tournamentMvp(participants: TeamSeason[], split: number, exclude?: Set<string>): MvpResult | null {
   let best: MvpResult | null = null;
   for (const t of participants) for (const p of t.players) {
@@ -2480,9 +2502,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (lastRetireesHandledRef.current === fingerprint) return;
     lastRetireesHandledRef.current = fingerprint;
     const queued: PlayerRetirementData[] = list.map((r) => {
-      // Busca extras do save (peakOvr, titles totais — aproximação por share da carreira)
-      const oid = r.nick.toLowerCase();
-      const peak = save.peakOvr?.[oid];
+      // Busca extras do save (peakOvr, titles totais — aproximação por share da carreira).
+      // peakOvr é chaveado por playerId — antes o lookup usava nick.toLowerCase() e
+      // sempre dava undefined (o pico nunca aparecia no modal de aposentadoria).
+      const peak = r.id ? save.peakOvr?.[r.id] : undefined;
       return {
         nick: r.nick,
         age: r.age,
@@ -4810,6 +4833,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                   major: { placement: mr.placement, champion: mr.champion },
                   boardConfidence: majBoard,
+                  star: userSplitStar(uTeam, save.split),
                 });
                 // T3.5: bônus de placement dos sponsors no Major. PlacementCode é
                 // 'champion'|'runnerup'|'semi'|'quarters'|'playoffs'|'swiss'.
@@ -5264,6 +5288,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
                     unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                     boardConfidence: newBoard,
+                    star: userSplitStar(me, save.split),
                   });
                   // T3.5: bônus de placement do circuito + tick de sponsors.
                   // Usa a mesma lógica de posição que vai pro SplitRecord
