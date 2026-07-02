@@ -26,7 +26,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { useAccount } from '../../state/account';
+import { useAccount, beginCoinsPix, claimPaidCoins, type CoinCharge, type CoinTierId } from '../../state/account';
 import { UtPanel, UtEmpty } from './UtPanel';
 import {
   LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
@@ -58,6 +58,17 @@ const CONFETTI = Array.from({ length: 18 }, (_, i) => ({
 }));
 // chip de recurso: abrevia valores gigantes pra não estourar a nav.
 const fmtChip = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : fmt(n));
+
+// Pacotes de coins via Pix (Woovi). MESMOS tiers do servidor (COIN_TIERS em
+// api/account.ts) — valor por real cresce no tier maior pra recompensar quem
+// apoia mais (R$10=3.0k/R$, R$15=3.3k/R$, R$30=4.0k/R$). `link` é o checkout
+// estático do Woovi, usado só como fallback se a cobrança dinâmica falhar.
+interface CoinPack { tier: CoinTierId; price: string; coins: number; name: string; bonus?: string; best?: boolean; link: string }
+const COIN_PACKS: CoinPack[] = [
+  { tier: 'p10', price: 'R$ 10', coins: 30_000, name: 'Arsenal', link: 'https://woovi.com/pay/af6a46c9-ee7a-4f9a-9900-f13db6deda51' },
+  { tier: 'p15', price: 'R$ 15', coins: 50_000, name: 'Elite', bonus: '+11%', link: 'https://woovi.com/pay/2f276830-759b-4542-a32e-418c0f66797f' },
+  { tier: 'p30', price: 'R$ 30', coins: 120_000, name: 'Lendário', bonus: '+33%', best: true, link: 'https://woovi.com/pay/5b275b87-f9f2-4dc9-9a80-1e43fba9471a' },
+];
 
 // As paletas de rank/raridade/química/título foram feitas pra fundo ESCURO.
 // No tema claro (.ut-root) usar essas cores como TEXTO sobre branco fica ilegível
@@ -196,7 +207,7 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission } = useUltimate();
+  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, addCredits } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -218,6 +229,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [navMenu, setNavMenu] = useState<'clube' | 'mercado' | 'more' | null>(null);
   const [clubFilter, setClubFilter] = useState<'all' | 'bronze' | 'silver' | 'gold' | 'special'>('all');
   const [rankedMode, setRankedMode] = useState<'rivals' | 'casual' | 'gauntlet'>('rivals');
+  // compra de coins: modal com QR Pix. charge=null enquanto gera; error=true
+  // mostra o link estático do Woovi como fallback.
+  const [coinModal, setCoinModal] = useState<{ pack: CoinPack; charge: CoinCharge | null; error?: boolean } | null>(null);
   const { account } = useAccount();
 
   const credits = state.profile.credits;
@@ -245,6 +259,35 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(''), ms);
   };
+
+  // ── Coins via Pix ─────────────────────────────────────────────────────────
+  const buyCoins = (pack: CoinPack) => {
+    if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar coins.')}`, 2800); return; }
+    setCoinModal({ pack, charge: null });
+    beginCoinsPix(pack.tier)
+      .then((charge) => setCoinModal((m) => (m && m.pack.tier === pack.tier ? { ...m, charge } : m)))
+      .catch(() => setCoinModal((m) => (m && m.pack.tier === pack.tier ? { ...m, error: true } : m)));
+  };
+  // credita pedidos pagos fora do fluxo do modal: no mount e ao visitar a Loja
+  // (cobre quem pagou pelo copia-e-cola depois de fechar o QR, ou em outra aba).
+  useEffect(() => {
+    if (!account || (tab !== 'hub' && tab !== 'store')) return;
+    let on = true;
+    void claimPaidCoins().then((n) => { if (on && n > 0) { addCredits(n); flash(`🪙 +${fmt(n)} coins creditados — pagamento confirmado!`, 3600); } });
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, tab]);
+  // …e a cada 4s enquanto o QR está na tela (o webhook marca pago em segundos).
+  useEffect(() => {
+    if (!coinModal?.charge) return;
+    const t = window.setInterval(() => {
+      void claimPaidCoins().then((n) => {
+        if (n > 0) { addCredits(n); setCoinModal(null); flash(`🪙 +${fmt(n)} coins creditados — obrigado pelo apoio!`, 3600); }
+      });
+    }, 4000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coinModal?.charge]);
 
   // garante um squad ativo ao abrir a aba Squad
   useEffect(() => { if (tab === 'squad') ensureSquad(); }, [tab, ensureSquad]);
@@ -1104,6 +1147,28 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>
             {ct('Abra pacotes, monte sua coleção dos jogadores reais de 2026. Venda duplicatas por créditos e junte pros pacotes melhores.')}
           </p>
+          {/* coins com dinheiro real (Pix) — acelera, não substitui: os mesmos
+              packs continuam compráveis só jogando */}
+          <div className="ut-coinshop">
+            <div className="ut-coinshop__head">
+              <span className="ut-coinshop__title"><Zap size={14} /> {ct('Coins via Pix')}</span>
+              <span className="ut-coinshop__sub">{ct('Cai na conta em segundos após o pagamento')}</span>
+            </div>
+            <div className="ut-coinshop__grid">
+              {COIN_PACKS.map((p) => (
+                <button key={p.tier} className={`ut-coinpack${p.best ? ' is-best' : ''}`} onClick={() => buyCoins(p)}>
+                  {p.best && <span className="ut-coinpack__ribbon">{ct('MELHOR VALOR')}</span>}
+                  <span className="ut-coinpack__coins"><Coins size={17} /> {fmt(p.coins)}</span>
+                  <span className="ut-coinpack__name">{ct('Pacote')} {p.name}</span>
+                  <span className={`ut-coinpack__bonus${p.bonus ? '' : ' is-base'}`}>{p.bonus ? `${p.bonus} ${ct('de bônus')}` : ct('preço base')}</span>
+                  <span className="ut-coinpack__price">{p.price}</span>
+                </button>
+              ))}
+            </div>
+            <p className="ut-coinshop__note">
+              {ct('Referência: 30.000 abre um pack TOTS ou 2 Packs Ouro; 120.000 rende 3 Premium ou 4 TOTS. Tudo aqui também é conquistável jogando — comprar só acelera.')}
+            </p>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
             {PACK_DEFS.map((pack) => {
               const afford = credits >= pack.cost;
@@ -1519,6 +1584,41 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               );
             })}
           </div>
+        </Modal>
+      )}
+
+      {/* compra de coins — QR Pix + copia-e-cola; o polling fecha sozinho ao pagar */}
+      {coinModal && (
+        <Modal
+          open
+          // ao fechar, tenta creditar uma última vez — pagou e fechou junto
+          onClose={() => { setCoinModal(null); void claimPaidCoins().then((n) => { if (n > 0) { addCredits(n); flash(`🪙 +${fmt(n)} coins creditados — pagamento confirmado!`, 3600); } }); }}
+          title={`${ct('Pacote')} ${coinModal.pack.name} · ${fmt(coinModal.pack.coins)} coins · ${coinModal.pack.price}`}
+          size="md">
+          {coinModal.error ? (
+            <div className="ut-coinpay">
+              <p className="muted small" style={{ margin: 0 }}>{ct('Não consegui gerar o QR agora. Você ainda pode pagar pelo checkout do Woovi:')}</p>
+              <a className="ut-btn ut-btn--gold" href={coinModal.pack.link} target="_blank" rel="noreferrer">{ct('Abrir checkout Woovi')} · {coinModal.pack.price}</a>
+              <p className="muted small" style={{ margin: 0 }}>
+                {ct('Importante: no checkout, informe o MESMO e-mail da sua conta')} (<strong>{account?.email}</strong>) {ct('— é assim que os coins encontram você. Depois, reabra o Ultimate.')}
+              </p>
+            </div>
+          ) : !coinModal.charge ? (
+            <div className="ut-coinpay"><p className="muted small" style={{ margin: 0 }}>{ct('Gerando cobrança Pix…')}</p></div>
+          ) : (
+            <div className="ut-coinpay">
+              {coinModal.charge.qrCodeImage && <img className="ut-coinpay__qr" src={coinModal.charge.qrCodeImage} alt="QR Code Pix" />}
+              <div className="ut-coinpay__wait"><span className="ut-coinpay__dot" /> {ct('Aguardando pagamento — os coins caem sozinhos assim que o Pix confirmar.')}</div>
+              {coinModal.charge.brCode && (
+                <button className="ut-btn ut-btn--ghost" onClick={() => { void navigator.clipboard?.writeText(coinModal.charge?.brCode ?? '').then(() => flash(`✅ ${ct('Código Pix copiado')}`)); }}>
+                  {ct('Copiar código Pix (copia e cola)')}
+                </button>
+              )}
+              {coinModal.charge.paymentLinkUrl && (
+                <a className="ut-btn ut-btn--ghost" href={coinModal.charge.paymentLinkUrl} target="_blank" rel="noreferrer">{ct('Abrir página de pagamento')}</a>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 

@@ -60,6 +60,33 @@ async function fetchHandler(request: Request): Promise<Response> {
   try { body = JSON.parse(raw) as Record<string, unknown>; } catch { return Response.json({ received: true, processed: false }); }
   if (!isPaidEvent(body)) return Response.json({ received: true, processed: false });
 
+  // compra de coins do Ultimate (correlationID "ultcoins:..."): marca o pedido
+  // pago e PARA aqui — coins não podem ativar conta vitalícia.
+  const chargeObj = body.charge as Record<string, unknown> | undefined;
+  const corr = String(chargeObj?.correlationID ?? (body.correlationID as string | undefined) ?? '');
+  if (corr.startsWith('ultcoins:')) {
+    const coinSql = neon(databaseUrl);
+    await coinSql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ)`;
+    const updated = await coinSql`UPDATE rtm_coin_orders SET status='paid', paid_at=now() WHERE correlation_id=${corr} AND status='pending' RETURNING correlation_id`;
+    if (updated.length === 0) {
+      // rede de segurança: Pix pago sem pedido registrado (falha entre criar a
+      // cobrança e gravar o pedido). Reconstrói pelo correlationID + e-mail do
+      // pagador. Tiers espelham COIN_TIERS em api/account.ts — manter em sincronia.
+      const ULT_COIN_TIERS: Record<string, { cents: number; coins: number }> = {
+        p10: { cents: 1000, coins: 30000 }, p15: { cents: 1500, coins: 50000 }, p30: { cents: 3000, coins: 120000 },
+      };
+      const tier = corr.split(':')[1] ?? '';
+      const pack = ULT_COIN_TIERS[tier];
+      const buyer = payerEmail(body);
+      if (pack && /\S+@\S+\.\S+/.test(buyer)) {
+        // ON CONFLICT DO NOTHING: se o pedido existe como paid/claimed (webhook
+        // duplicado), não recria nem paga duas vezes.
+        await coinSql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, status, paid_at) VALUES (${corr}, ${buyer}, ${tier}, ${pack.coins}, ${pack.cents}, 'paid', now()) ON CONFLICT (correlation_id) DO NOTHING`;
+      }
+    }
+    return Response.json({ received: true, processed: true, coins: true });
+  }
+
   const email = payerEmail(body);
   if (!/\S+@\S+\.\S+/.test(email)) return Response.json({ received: true, processed: false, reason: 'sem email do pagador' });
 

@@ -57,6 +57,29 @@ export async function beginPix(): Promise<PixCharge | null> {
   };
 }
 
+// Compra de coins do Ultimate via Pix (Woovi). Tiers definidos no servidor
+// (api/account.ts COIN_TIERS): p10 → 30k, p15 → 50k, p30 → 120k coins.
+export type CoinTierId = 'p10' | 'p15' | 'p30';
+export interface CoinCharge extends PixCharge { coins: number; correlationID: string }
+export async function beginCoinsPix(tier: CoinTierId): Promise<CoinCharge> {
+  const token = getToken(); if (!token) throw new Error(ct('Faça login antes de comprar coins.'));
+  const d = await post({ action: 'coinsPix', token, tier });
+  return {
+    coins: Number(d.coins) || 0,
+    correlationID: String(d.correlationID ?? ''),
+    qrCodeImage: (d.qrCodeImage as string) ?? null,
+    brCode: (d.brCode as string) ?? null,
+    paymentLinkUrl: (d.paymentLinkUrl as string) ?? null,
+    expiresIn: (d.expiresIn as number) ?? null,
+  };
+}
+// Coleta pedidos pagos e ainda não creditados (idempotente no servidor).
+// Retorna o total de coins a creditar agora (0 se nada novo).
+export async function claimPaidCoins(): Promise<number> {
+  const token = getToken(); if (!token) return 0;
+  try { const d = await post({ action: 'coinsClaim', token }); return Number(d.coins) || 0; } catch { return 0; }
+}
+
 export async function exportAccountData(): Promise<Record<string, unknown>> {
   const token = getToken();
   if (!token) throw new Error(ct('Entre novamente na conta para exportar seus dados.'));

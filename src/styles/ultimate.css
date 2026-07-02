@@ -415,6 +415,7 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   padding: 9px 16px; border-radius: 10px; cursor: pointer; border: none;
   font-family: inherit; font-weight: 700; font-size: 0.84rem; transition: filter .12s, transform .05s;
+  text-decoration: none; /* .ut-btn também é usado em <a> (links de pagamento) */
 }
 .ut-btn:disabled { opacity: 0.5; cursor: default; }
 .ut-btn--green { background: var(--ut-green); color: #fff; box-shadow: 0 3px 10px rgba(18, 183, 106, 0.28); }
@@ -737,6 +738,48 @@ body:has(.ut-live) {
   15% { transform: translateX(-7px); } 30% { transform: translateX(6px); }
   45% { transform: translateX(-4px); } 60% { transform: translateX(3px); } 75% { transform: translateX(-2px); }
 }
+
+/* ---------------- coins via Pix (loja) ---------------- */
+/* vitrine escura dentro do painel claro: sinaliza que aqui é dinheiro real */
+.ut-coinshop {
+  background: linear-gradient(160deg, var(--ut-bar-1, #1c2029), var(--ut-bar-2, #14161c));
+  border: 1px solid rgba(236, 199, 95, 0.28);
+  border-radius: 14px;
+  padding: 14px 16px 12px;
+  margin-bottom: 16px;
+}
+.ut-coinshop__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.ut-coinshop__title { display: inline-flex; align-items: center; gap: 6px; color: var(--ut-gold-1); font-weight: 900; font-size: 0.82rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.ut-coinshop__sub { color: rgba(255, 255, 255, 0.55); font-size: 0.74rem; }
+.ut-coinshop__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.ut-coinpack {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 16px 10px 12px; border-radius: 12px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff; font: inherit;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.ut-coinpack:hover { transform: translateY(-2px); border-color: rgba(236, 199, 95, 0.55); background: rgba(236, 199, 95, 0.07); }
+.ut-coinpack.is-best { border-color: var(--ut-gold-2); background: linear-gradient(180deg, rgba(236, 199, 95, 0.12), rgba(236, 199, 95, 0.04)); }
+.ut-coinpack__ribbon {
+  position: absolute; top: -9px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+  background: linear-gradient(180deg, var(--ut-gold-1), var(--ut-gold-2)); color: var(--ut-gold-ink, #241a06);
+  font-size: 0.6rem; font-weight: 900; letter-spacing: 0.1em; padding: 3px 9px; border-radius: 999px;
+}
+.ut-coinpack__coins { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 1.05rem; color: var(--ut-gold-1); }
+.ut-coinpack__name { font-size: 0.74rem; font-weight: 700; color: rgba(255, 255, 255, 0.85); }
+.ut-coinpack__bonus { font-size: 0.66rem; font-weight: 800; color: #5ed88a; letter-spacing: 0.04em; }
+.ut-coinpack__bonus.is-base { color: rgba(255, 255, 255, 0.4); font-weight: 600; }
+.ut-coinpack__price { margin-top: 6px; background: #fff; color: var(--ut-ink); font-weight: 900; font-size: 0.85rem; padding: 5px 16px; border-radius: 999px; }
+.ut-coinshop__note { margin: 10px 0 0; color: rgba(255, 255, 255, 0.5); font-size: 0.72rem; line-height: 1.45; }
+
+/* modal de pagamento */
+.ut-coinpay { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.ut-coinpay__qr { width: 216px; height: 216px; border-radius: 12px; border: 1px solid var(--ut-line, #e5e7eb); background: #fff; }
+.ut-coinpay__wait { display: inline-flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--ut-ink-2); }
+.ut-coinpay__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ut-amber); animation: ut-coinpulse 1.2s ease-in-out infinite; flex: none; }
+@keyframes ut-coinpulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
 
 /* ---------------- responsivo ---------------- */
 .ut-res { min-width: 0; }

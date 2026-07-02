@@ -42,6 +42,9 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       sql`CREATE TABLE IF NOT EXISTS rtm_saves (email TEXT, slot TEXT, data TEXT, updated_at BIGINT DEFAULT 0, PRIMARY KEY (email, slot))`,
       sql`CREATE TABLE IF NOT EXISTS rtm_ranking (email TEXT PRIMARY KEY, nick TEXT, mmr INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, peak INT DEFAULT 1000, updated_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`,
+      // pedidos de coins do Ultimate (Pix/Woovi): pending → paid (webhook) → claimed (client credita no save)
+      sql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ)`,
+      sql`CREATE INDEX IF NOT EXISTS rtm_coin_orders_email_idx ON rtm_coin_orders (email, status)`,
     ]).then(() => undefined).catch((error) => {
       accountSchemaPromise = null;
       throw error;
@@ -81,6 +84,14 @@ function sign(email: string): string {
   const sig = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
   return `${Buffer.from(body).toString('base64url')}.${sig}`;
 }
+// Tiers de coins do Ultimate (Pix via Woovi). Valor cresce por real gasto pra
+// recompensar o tier maior: R$10 → 30k, R$15 → 50k (+11%), R$30 → 120k (+33%).
+const COIN_TIERS: Record<string, { cents: number; coins: number; label: string }> = {
+  p10: { cents: 1000, coins: 30000, label: 'Pacote Arsenal' },
+  p15: { cents: 1500, coins: 50000, label: 'Pacote Elite' },
+  p30: { cents: 3000, coins: 120000, label: 'Pacote Lendário' },
+};
+
 function verifyToken(token: string): string | null {
   const [b64, sig] = (token ?? '').split('.');
   if (!b64 || !sig) return null;
@@ -307,6 +318,65 @@ export default async function handler(
         expiresIn: c.expiresIn ?? null,
       });
     } catch { res.status(502).json({ error: 'Falha ao falar com o Woovi.' }); }
+    return;
+  }
+
+  // coinsPix: gera cobrança Pix pra um pacote de coins do Ultimate. O prefixo
+  // "ultcoins:" no correlationID separa do pagamento de conta no webhook —
+  // coins pagos NÃO ativam conta vitalícia. Fluxo: pending → paid (webhook)
+  // → claimed (coinsClaim credita no save do cliente).
+  if (action === 'coinsPix') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login antes de comprar coins.' }); return; }
+    const tier = String(body.tier ?? '');
+    const pack = COIN_TIERS[tier];
+    if (!pack) { res.status(400).json({ error: 'pacote inválido' }); return; }
+    const appId = cleanEnv(process.env.OPENPIX_APP_ID);
+    if (!appId) { res.status(500).json({ error: 'Pix indisponível: OPENPIX_APP_ID não configurada.' }); return; }
+    const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+    const nick = String(((await sql`SELECT nick FROM rtm_accounts WHERE email=${em}`)[0]?.nick) ?? '').slice(0, 80) || em;
+    // pedido ANTES da cobrança: pending órfão (se o Woovi falhar) é inofensivo;
+    // o inverso — cobrança paga sem pedido — perderia os coins do jogador.
+    await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents) VALUES (${corr}, ${em}, ${tier}, ${pack.coins}, ${pack.cents}) ON CONFLICT (correlation_id) DO NOTHING`;
+    try {
+      const r = await fetch('https://api.openpix.com.br/api/v1/charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: appId },
+        body: JSON.stringify({
+          correlationID: corr,
+          value: pack.cents,
+          comment: `Ultimate · ${pack.label} (${pack.coins.toLocaleString('pt-BR')} coins)`,
+          customer: { name: nick, email: em },
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!r.ok) {
+        await sql`DELETE FROM rtm_coin_orders WHERE correlation_id=${corr} AND status='pending'`;
+        res.status(502).json({ error: 'Falha ao gerar Pix. Tente de novo.' });
+        return;
+      }
+      const j = (await r.json()) as { charge?: Record<string, unknown> };
+      const c = j?.charge ?? {};
+      res.status(200).json({
+        correlationID: corr,
+        coins: pack.coins,
+        qrCodeImage: c.qrCodeImage ?? null,
+        brCode: c.brCode ?? null,
+        paymentLinkUrl: c.paymentLinkUrl ?? null,
+        expiresIn: c.expiresIn ?? null,
+      });
+    } catch { res.status(502).json({ error: 'Falha ao falar com o Woovi.' }); }
+    return;
+  }
+
+  // coinsClaim: coleta todos os pedidos pagos e ainda não creditados desta conta.
+  // Atômico (UPDATE ... RETURNING): duas abas não creditam o mesmo pedido duas vezes.
+  if (action === 'coinsClaim') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
+    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' RETURNING coins`;
+    const coins = rows.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
+    res.status(200).json({ coins });
     return;
   }
 
