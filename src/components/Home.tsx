@@ -19,6 +19,7 @@ interface Props {
   onDiscardCampaign?: () => void;
   onOnline?: () => void;
   onUltimate?: () => void;
+  onRoadToPro?: () => void;
   onLeaderboard?: () => void;
   onCareer?: () => void;
   /** Conta atual (null = não logado, undefined = carregando) */
@@ -47,6 +48,7 @@ export function Home({
   teamCount,
   onOnline,
   onUltimate,
+  onRoadToPro,
   onCareer,
   account,
   accountReady,
@@ -133,6 +135,23 @@ export function Home({
                   </span>
                 </span>
               </button>
+
+              {onRoadToPro && (
+                <button className="rtm-modecard" data-tone="purple" onClick={onRoadToPro}>
+                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/train.jpg)' }} />
+                  <span className="rtm-modecard-scrim" />
+                  <span className="rtm-modecard-bar" />
+                  <span className="rtm-modecard-body">
+                    <span className="rtm-modecard-kicker">{ct('Novo')}</span>
+                    <span className="rtm-modecard-title">Road to Pro</span>
+                    <span className="rtm-modecard-desc">{ct('Você não treina o time — você É o jogador. Viva a carreira de astro do CS: treine, gerencie sua vida e brilhe nos momentos decisivos.')}</span>
+                    <span className="rtm-modecard-foot">
+                      <span className="rtm-modecard-meta">{ct('1 jogador · você é o atleta')}</span>
+                      <span className="rtm-modecard-go">{ct('Jogar')} →</span>
+                    </span>
+                  </span>
+                </button>
+              )}
 
               <button className="rtm-modecard" data-tone="blue" onClick={() => setView('draft')}>
                 <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/mirage.jpg)' }} />

@@ -143,6 +143,7 @@ export interface TTeam {
   status: 'alive' | 'advanced' | 'eliminated';
   playbook?: Playbook; // esquema tático treinado (modo carreira)
   playbookFam?: number; // entrosamento no esquema, 0..1 (quão bem treinado)
+  noEdge?: boolean; // Road to Pro: dispensa o AI_EDGE de dificuldade do modo carreira
   onlinePlan?: {
     captainNick?: string;
     reserveNick?: string;

@@ -68,6 +68,7 @@ const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then
 const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
 const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
+const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then((m) => ({ default: m.RoadToPro })));
 
 // Ultimate Squad: VISÍVEL em localhost (dev/preview local), OCULTO no site real
 // (roadtomajor.com.br). O código existe no bundle, mas o menu e a rota só ligam
@@ -129,6 +130,7 @@ type Screen =
   | 'matchdetail'
   | 'online'
   | 'ultimate'
+  | 'rtp'
   | 'career'
   | 'careerSaves'
   | 'careerCRM'
@@ -145,6 +147,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   home: '/jogar',
   online: '/online',
   ultimate: '/ultimate',
+  rtp: '/road-to-pro',
   career: '/carreira',
   careerSaves: '/carreira/saves',
   hall: '/hall',
@@ -910,7 +913,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {screen !== 'career' && screen !== 'ultimate' && (
+      {screen !== 'career' && screen !== 'ultimate' && screen !== 'rtp' && (
         <header className="app-header">
           <div className="topbar">
             <span className="logo" onClick={goHome}>
@@ -960,7 +963,7 @@ export default function App() {
       )}
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
-      <main className={screen === 'career' ? 'page page-career' : screen === 'home' ? 'page page-play' : screen === 'ultimate' ? 'page page-ultimate' : 'page'}>
+      <main className={screen === 'career' ? 'page page-career' : screen === 'rtp' ? 'page page-rtp' : screen === 'home' ? 'page page-play' : screen === 'ultimate' ? 'page page-ultimate' : 'page'}>
       <Suspense fallback={<Loader text="…" />}>
       {bannerPreview && screen === 'home' && (
         <>
@@ -991,6 +994,7 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onOnline={() => setScreen('online')}
           onUltimate={ULTIMATE_ENABLED ? () => setScreen('ultimate') : undefined}
+          onRoadToPro={() => setScreen('rtp')}
           onLeaderboard={() => setScreen('leaderboard')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
@@ -1050,6 +1054,9 @@ export default function App() {
       {screen === 'online' && <OnlineMode onBack={() => setScreen('home')} account={account} dataset={dataset} />}
 
       {ULTIMATE_ENABLED && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
+
+      {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
+      {screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (

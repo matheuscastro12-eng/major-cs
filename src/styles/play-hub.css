@@ -240,6 +240,10 @@ body:has(.page-play) .app-header {
   border-color: rgba(111,208,111,.35);
   box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px rgba(111,208,111,.16);
 }
+.play-hub .rtm-modecard[data-tone="purple"]:hover {
+  border-color: rgba(155,124,237,.40);
+  box-shadow: 0 24px 56px rgba(0,0,0,.58), 0 0 38px rgba(155,124,237,.20);
+}
 
 /* chip "logado como" */
 .play-hub .rtm-signed {

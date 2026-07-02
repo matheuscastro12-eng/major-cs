@@ -268,7 +268,7 @@ function effStrength(
   pickedOwnMap: boolean,
 ): number {
   let s = team.strength + (team.mapPrefs[map] ?? 0) * 1.35;
-  if (!team.isUser) s += AI_EDGE; // dificuldade: a IA joga um degrau acima nas suas partidas
+  if (!team.isUser && !team.noEdge) s += AI_EDGE; // dificuldade: a IA joga um degrau acima nas suas partidas (RTP dispensa: noEdge)
   if (side === 'ct') s += 1.1;
   s += BUY_PENALTY[tier];
 
