@@ -401,6 +401,22 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-cstat__k svg { color: var(--ut-muted); }
 .ut-cstat__v { font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.1rem; color: var(--ut-ink); margin-top: 1px; }
 
+/* cabeçalho de stats do Squad Builder (química com barra + multiplicador + OVR) */
+.ut-sqstats { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.ut-sqstat { background: var(--em-panel-2); border: 1px solid var(--ut-line); border-radius: 12px; padding: 10px 13px; display: flex; flex-direction: column; gap: 6px; box-shadow: var(--ut-shadow); }
+.ut-sqstat__k { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ut-muted); }
+.ut-sqstat__row { display: flex; align-items: center; gap: 8px; }
+.ut-sqstat__row b { font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.3rem; line-height: 1; }
+.ut-sqstat__row b span { font-size: 0.78rem; opacity: 0.5; }
+.ut-sqstat__tag { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 9px; border-radius: 999px; border: 1px solid; margin-left: auto; }
+.ut-sqstat__bar { height: 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
+.ut-sqstat__bar > div { height: 100%; border-radius: 999px; transition: width 0.25s ease; }
+.ut-sqstat__big { font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.5rem; line-height: 1; margin-top: 2px; color: var(--ut-ink); }
+@media (max-width: 480px) {
+  .ut-sqstats { grid-template-columns: 1fr 1fr; }
+  .ut-sqstat--chem { grid-column: 1 / -1; }
+}
+
 /* ---------------- DESAFIOS (SBC) ---------------- */
 .ut-sbc { position: relative; border: 1px solid var(--ut-line); border-radius: 12px; padding: 13px 14px; background: #fff; box-shadow: var(--ut-shadow); display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
 .ut-sbc::before { content: ''; position: absolute; top: 0; left: 14px; width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: var(--ut-purple); }

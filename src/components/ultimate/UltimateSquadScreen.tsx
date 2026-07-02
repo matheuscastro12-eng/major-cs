@@ -1258,10 +1258,25 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <button key={f.id} onClick={() => setFormation(f.id)} title={f.desc} style={tabBtn(form.id === f.id)}>{f.name}</button>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', fontSize: '0.82rem' }}>
-            <span>{ct('Química')}: <b style={{ color: inkOnLight(cl.color), fontFamily: '"JetBrains Mono", monospace' }}>{chem.total}/15</b> <span style={{ color: inkOnLight(cl.color), fontWeight: 800 }}>{cl.label}</span></span>
-            <span>{ct('Multiplicador')}: <b style={{ fontFamily: '"JetBrains Mono", monospace', color: chem.multiplier >= 1 ? '#16a34a' : '#dc2626' }}>{chem.multiplier.toFixed(2)}×</b></span>
-            <span>{ct('OVR médio')}: <b style={{ fontFamily: '"JetBrains Mono", monospace' }}>{avgOvr || '—'}</b></span>
+          <div className="ut-sqstats">
+            <div className="ut-sqstat ut-sqstat--chem">
+              <div className="ut-sqstat__row">
+                <span className="ut-sqstat__k">{ct('Química')}</span>
+                <span className="ut-sqstat__tag" style={{ color: inkOnLight(cl.color), borderColor: `${cl.color}66`, background: `${cl.color}14` }}>{cl.label}</span>
+              </div>
+              <div className="ut-sqstat__row">
+                <b style={{ color: inkOnLight(cl.color) }}>{chem.total}<span>/15</span></b>
+              </div>
+              <div className="ut-sqstat__bar"><div style={{ width: `${(chem.total / 15) * 100}%`, background: inkOnLight(cl.color) }} /></div>
+            </div>
+            <div className="ut-sqstat">
+              <span className="ut-sqstat__k">{ct('Multiplicador')}</span>
+              <b className="ut-sqstat__big" style={{ color: chem.multiplier >= 1 ? '#16a34a' : '#dc2626' }}>{chem.multiplier.toFixed(2)}×</b>
+            </div>
+            <div className="ut-sqstat">
+              <span className="ut-sqstat__k">{ct('OVR médio')}</span>
+              <b className="ut-sqstat__big">{avgOvr || '—'}</b>
+            </div>
           </div>
           <div style={{ position: 'relative', width: '100%', maxWidth: 520, margin: '0 auto', aspectRatio: '4 / 5', background: 'radial-gradient(ellipse at 50% 32%, rgba(201,166,60,0.14), transparent 58%), linear-gradient(180deg, #1c2029 0%, #14161c 100%)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, boxShadow: 'inset 0 0 44px rgba(0,0,0,0.35)' }}>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
