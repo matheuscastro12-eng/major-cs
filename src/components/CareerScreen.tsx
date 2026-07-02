@@ -1588,13 +1588,31 @@ function driftFrom(pid: string, baseOvr: number, a0: number, debut: number, spli
 // (debut=1, sem teto extra). Assim o contratado entra no MESMO OVR que aparecia no
 // mercado — antes aiAttrDrift clampava ±10 e driftFrom ±12, causando "contrata 86
 // chega 84" pra jogadores no extremo da escala.
-function signingDrift(player: Player, split: number): number {
+function signingDrift(player: Player, split: number, youthDebut?: Record<string, YouthDebut>): number {
   const r = parseRegenPlayerId(player.id);
   if (r) {
     const orig = CS2_REAL_2026.find((t) => t.id === r.teamId)?.players[r.slot];
     return driftFrom(player.id, playerOvr(player), r.ageAtDebut, r.debut, split, orig ? playerOvr(orig) + 2 : undefined);
   }
+  // prospecto promovido / custom com idade editada: o relógio de drift começa na
+  // PROMOÇÃO (youthDebut.split), não no split 1. Sem isso, debut=1 simulava toda a
+  // evolução desde o começo da carreira e o jovem "teleportava" +9..+12 OVR ao
+  // ser escalado (pulando o desenvolvimento gradual da academia).
+  const yd = youthDebut?.[player.id];
+  if (yd) return driftFrom(player.id, playerOvr(player), yd.age, yd.split, split);
   return driftFrom(player.id, playerOvr(player), baseAge(player), 1, split);
+}
+
+// idade de ESTREIA usada pra calcular o teto de potencial (room-to-grow). baseAge()
+// não conhece regen nem youthDebut → cairia no fallback 25-29, dando room≈0 e
+// travando regens/prospectos contratados "no teto" pra sempre. Aqui resolvemos a
+// idade de estreia correta pra cada tipo: regen (id) > youthDebut (promoção) > dataset.
+function potBaseAge(player: Player, youthAge?: Record<string, number>, youthDebut?: Record<string, YouthDebut>): number {
+  const r = parseRegenPlayerId(player.id);
+  if (r) return r.ageAtDebut;
+  const yd = youthDebut?.[player.id];
+  if (yd) return yd.age;
+  return baseAge(player, youthAge);
 }
 
 // jovem da base que assume a vaga de um titular aposentado. OVR de estreia abaixo
@@ -3251,7 +3269,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // e o evo ficam calculados em cima da MESMA base que o `currentEra` enxerga.
     player = applyBo3PlayerEdit(player, bo3Edits);
     const basePlayer = player;
-    const d = save.evo?.[player.id] ?? signingDrift(player, save.split);
+    const d = save.evo?.[player.id] ?? signingDrift(player, save.split, save.youthDebut);
     if (!d) return { player, from, basePlayer };
     const clamp = (v: number) => Math.max(40, Math.min(99, v));
     return {
@@ -3444,14 +3462,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       // recém-contratado sem evo herda o drift da IA (mesmo OVR do mercado).
       // Usa o BASE (não-envelhecido) + o drift acumulado; f.player já vem driftado,
       // então somar prev de novo contava o envelhecimento em dobro.
-      const prev = s.evo?.[sig.playerId] ?? signingDrift(f.basePlayer, s.split);
+      const prev = s.evo?.[sig.playerId] ?? signingDrift(f.basePlayer, s.split, s.youthDebut);
       const ovr = playerOvr(f.basePlayer) + prev; // OVR efetivo atual (base + evolução)
       const age = effectiveAge(f.basePlayer, s.split, s.youthAge, s.youthDebut);
-      // teto é calculado pela idade-BASE (igual aiAttrDrift faz pra IA). Usar a idade
-      // CORRENTE encolhia o teto a cada virada de bloco etário (21→22, 22→23...) e
-      // travava o jogador "no teto" pra sempre — sem nunca crescer mais (bug do
-      // "jogadores não evoluem dps de um certo tempo").
-      const baseAgeForPot = baseAge(f.basePlayer, s.youthAge);
+      // teto é calculado pela idade de ESTREIA (igual aiAttrDrift faz pra IA). Usar a
+      // idade CORRENTE encolhia o teto a cada virada de bloco etário (21→22, 22→23...)
+      // e travava o jogador "no teto" pra sempre. IMPORTANTE: baseAge NÃO conhece
+      // regen/youthDebut (cai no fallback 25-29), o que dava room≈0 e travava regens
+      // e prospectos contratados no OVR de mercado — potBaseAge resolve a idade de
+      // estreia correta pra cada tipo (regen id / youthDebut / dataset).
+      const baseAgeForPot = potBaseAge(f.basePlayer, s.youthAge, s.youthDebut);
       const pot = playerPotentialOvr(f.basePlayer, baseAgeForPot);
       const atCeiling = ovr >= pot;
       let d = evoDelta(sig.playerId, s.split, age, atCeiling);
@@ -3790,7 +3810,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // (do contrário você JÁ é o topo). Determinístico por split+jogador.
   const makeOffer = (s: CareerSave, newTier: number): PoachOffer | null => {
     if (newTier <= 1) return null;
-    const picks = s.squad.map(findSigning).filter(Boolean) as { player: Player }[];
+    // exclui quem já está saindo numa venda/troca deste split — senão o assédio
+    // paga fee POR CIMA da venda já consumada (dinheiro duplicado pelo mesmo
+    // atleta). Mesmo Set do dueRenewals.
+    const inDeal = new Set([
+      ...(s.pendingDeals ?? []).flatMap((d) => d.outPlayerIds),
+      ...(s.pendingSales ?? []).map((sale) => sale.playerId),
+    ]);
+    const picks = s.squad.filter((sig) => !inDeal.has(sig.playerId)).map(findSigning).filter(Boolean) as { player: Player }[];
     const best = picks.map((p) => p.player).sort((a, b) => {
       const aScore = playerOvr(a) + personalityOfferBonus(a.id, s.morale?.[a.id] ?? MORALE_DEFAULT) / 8;
       const bScore = playerOvr(b) + personalityOfferBonus(b.id, s.morale?.[b.id] ?? MORALE_DEFAULT) / 8;
@@ -4513,6 +4540,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           offer={off}
           orgName={save.org?.name ?? 'sua org'}
           onAccept={() => {
+            // GUARD defensivo: se o alvo do assédio JÁ saiu do elenco (venda in-season
+            // consumada na virada), aceitar não pode creditar fee de novo nem mover o
+            // jogador pro clube errado — só limpa a proposta órfã.
+            if (!save.squad.some((s) => s.playerId === off.playerId)) {
+              const cleared = { ...save, pendingOffer: null };
+              persist(cleared);
+              setSave(cleared);
+              return;
+            }
             // vende: sai do elenco e entra a grana. Você fica com 4 e repõe no
             // mercado (a org compradora leva o jogador "de cena"; não forçamos
             // ele num 6º slot do roster dela pra não quebrar o time).
