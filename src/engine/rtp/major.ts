@@ -16,7 +16,7 @@ import {
 import {
   buildUserTeam, conditionModifiers, assembleProResult, pickMaps, execBoostOvr,
   majorEffectiveAttrs, neutralMapPrefs, NEUTRAL_COACH, applyMatchOutcome, matchConfidence,
-  type MatchPrep, type ProMatchResult,
+  type MatchPrep, type ProMatchResult, type MatchConsequence,
 } from './matchSim';
 import { generateMoments, summarizeMoments, type MomentOutcome } from './moments';
 import { perkMatchFactors } from './perks';
@@ -165,6 +165,10 @@ export function finishMajorMatch(save: RoadToProSave, prep: MatchPrep, outcomes:
 export interface MajorConclusion {
   save: RoadToProSave;
   resolved: boolean;     // o Major terminou pro herói nesta rodada?
+  // resultado da série simulada (pra abrir o modal de resultado no skip do Major,
+  // igual ao circuito). Ausente quando a rodada só adianta o bracket (idle).
+  result?: ProMatchResult;
+  consequence?: MatchConsequence;
 }
 
 // Colocação do Major → número de "place" no molde do circuito (pra derivar prêmio).
@@ -301,8 +305,10 @@ export function autoSimMajorRound(save: RoadToProSave): MajorConclusion | null {
   if (!prep) return advanceMajorIdle(save);
   const { result, pairingResult } = finishMajorMatch(save, prep, []);
   // credita a carreira no skip (sem prêmio por-série no Major — vem da resolução).
-  const { save: afterOutcome } = applyMatchOutcome(save, result, { leaguePrize: false });
-  return concludeMajorRound(afterOutcome, pairingResult);
+  const { save: afterOutcome, consequence } = applyMatchOutcome(save, result, { leaguePrize: false });
+  const conclusion = concludeMajorRound(afterOutcome, pairingResult);
+  // anexa result+consequence pra a UI abrir o modal de resultado (feedback no skip)
+  return conclusion ? { ...conclusion, result, consequence } : conclusion;
 }
 
 // Adianta o torneio quando o herói está sem série (defensivo — o fast-forward do

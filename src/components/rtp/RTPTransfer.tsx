@@ -85,7 +85,9 @@ export function RTPTransfer({ save, onAccept, onNegotiate, onDecline }: {
                 </div>
                 <div className="rtp-offer-actions">
                   <button type="button" className="rtp-nextmatch-btn" onClick={() => onAccept(o.id)}>{ct('Aceitar')}</button>
-                  <button type="button" className="rtp-btn-ghost" onClick={() => negotiate(o.id)}>{ct('Negociar (+salário)')}</button>
+                  {o.negotiated
+                    ? <span className="rtp-btn-ghost" style={{ opacity: 0.5, cursor: 'default' }}>{ct('Salário renegociado')}</span>
+                    : <button type="button" className="rtp-btn-ghost" onClick={() => negotiate(o.id)}>{ct('Negociar (+salário)')}</button>}
                 </div>
               </div>
             );

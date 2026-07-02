@@ -161,7 +161,13 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
       <RTPMajor
         save={save}
         onPlay={() => setPlayingMajor(true)}
-        onSimulate={() => { const c = autoSimMajorRound(save); if (c) handleUpdate(c.save); }}
+        onSimulate={() => {
+          const c = autoSimMajorRound(save);
+          if (!c) return;
+          handleUpdate(c.save);
+          // feedback no skip do Major: abre o mesmo modal de resultado do circuito
+          if (c.result && c.consequence) setSimResult({ result: c.result, consequence: c.consequence });
+        }}
         onDismiss={() => { if (major.resolved) handleUpdate(dismissMajor(save)); else onExit(); }}
       />
     );

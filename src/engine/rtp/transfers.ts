@@ -121,11 +121,14 @@ export function negotiateOffer(save: RoadToProSave, offerId: string, rng: Rng): 
   const offers = (save.world.pendingOffers ?? []).map((o) => ({ ...o }));
   const idx = offers.findIndex((o) => o.id === offerId);
   if (idx < 0) return { offers, result: 'withdrawn' };
+  // UMA negociação por oferta: sem isso o salário empilhava +15% a cada clique
+  // (~85% de sucesso) e ia ao infinito. Já negociada → a org não mexe mais.
+  if (offers[idx].negotiated) return { offers, result: 'raised' };
   const pseudoPlacement = save.team.squadRole === 'star' ? 2 : save.team.squadRole === 'starter' ? 4 : 6;
   const des = desirability(save, pseudoPlacement);
   const acceptChance = clamp(0.3 + (des - TIER_BASE[offers[idx].tier]) * 0.05, 0.1, 0.85);
   if (rng() < acceptChance) {
-    offers[idx] = { ...offers[idx], wage: Math.round((offers[idx].wage * 1.15) / 100) * 100, signingBonus: Math.round(offers[idx].signingBonus * 1.1) };
+    offers[idx] = { ...offers[idx], wage: Math.round((offers[idx].wage * 1.15) / 100) * 100, signingBonus: Math.round(offers[idx].signingBonus * 1.1), negotiated: true };
     return { offers, result: 'raised' };
   }
   offers.splice(idx, 1);

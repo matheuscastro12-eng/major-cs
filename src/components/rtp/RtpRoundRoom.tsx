@@ -210,9 +210,13 @@ export function RtpRoundRoom({ save, prep, onComplete }: {
       setFeed(feedForOutcome(beat, locked.opt, out, heroNick, oppNicks, makeRng((prep.matchSeed ^ (idx * 131) ^ ((clutch?.step ?? 0) * 977)) >>> 0)));
       // só pontua a rodada da BO3 num beat normal OU no FECHAMENTO do clutch.
       if (!inClutch || locked.clutchFinal) {
+        // parcial = round raspado (não-derrota), CONSISTENTE com a needle e com o
+        // +1 frag/valor positivo. Antes o placar usava +0.09 hardcoded (≠ partialBand
+        // da needle), então um 'PARCIAL' às vezes ia pro inimigo no placar mesmo a UI
+        // mostrando parcial. Todo 'partial' já cai na banda por construção do resolveMoment.
         const youWin = inClutch
           ? out.result !== 'fail' && locked.newAlive <= 0
-          : out.result === 'success' || (out.result === 'partial' && locked.roll < locked.odds.total + 0.09);
+          : out.result === 'success' || out.result === 'partial';
         setLive((l) => ({ ...l, mapScore: youWin ? [l.mapScore[0] + 1, l.mapScore[1]] : [l.mapScore[0], l.mapScore[1] + 1] }));
         setMomentum((m) => clamp(m * 0.55 + out.value * 0.45, 0, 1));
         // flash + shake nos rounds grandes (clutch, map point, ou derrota).
@@ -265,7 +269,7 @@ export function RtpRoundRoom({ save, prep, onComplete }: {
     // com viés do momentum/resultado, e mapas fecham na transição da BO3.
     const youWon = inClutch
       ? beatOutcome.result === 'success'
-      : locked.outcome.result === 'success' || (locked.outcome.result === 'partial' && locked.roll < locked.odds.total + 0.09);
+      : locked.outcome.result === 'success' || locked.outcome.result === 'partial';
     const nbLastOfMap = idx + 2 >= beats.length || beats[idx + 2].mapIndex !== nb.mapIndex;
     const bridge = bridgeToBeat(live, nb, youWon, momentum, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), nbLastOfMap);
     setLive(bridge.live);

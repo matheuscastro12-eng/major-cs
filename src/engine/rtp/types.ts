@@ -286,6 +286,7 @@ export interface TransferOffer {
   note: string;                   // por que o time te quer
   kind?: 'transfer' | 'loan';     // default 'transfer'
   clause?: boolean;               // gatilho de cláusula (multa paga)
+  negotiated?: boolean;           // já negociou salário nesta oferta (1 por oferta)
 }
 
 // Snapshot do clube-mãe pra retornar ao fim de um empréstimo (RTP v10).
