@@ -74,13 +74,14 @@ const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then
 // (roadtomajor.com.br). O código existe no bundle, mas o menu e a rota só ligam
 // quando o host é local — OU quando o flag manual `rtm-ultimate`='1' está setado
 // (pra QA pontual em produção). Não era pra aparecer pro público.
+// O Ultimate é o modo online/competitivo do jogo — ligado por padrão.
+// Kill-switch: localStorage rtm-ultimate='0' força esconder (rollback rápido
+// sem redeploy caso apareça algo grave no lançamento).
 const ULTIMATE_ENABLED = (() => {
   try {
-    const h = window.location.hostname;
-    const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || h === '[::1]' || h.endsWith('.local');
-    return isLocal || localStorage.getItem('rtm-ultimate') === '1';
+    return localStorage.getItem('rtm-ultimate') !== '0';
   } catch {
-    return false;
+    return true;
   }
 })();
 const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));

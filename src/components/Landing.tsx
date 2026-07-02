@@ -97,6 +97,7 @@ function Modes({ onPlay }: { onPlay: () => void }) {
   const [tab, setTab] = useState(0);
   const MODES = [
     { id: 'career', tone: 'var(--rtm-gold)', kicker: 'Campanha longa', title: 'Carreira', img: M + 'nuke.jpg', desc: 'Funde a sua organização, monte o elenco, gerencie transferências e dispute uma temporada inteira rumo ao título.', bullets: ['Hub da organização com química do time', 'Mercado de transferências com orçamento', 'Perfis de jogador e de time clicáveis', 'Killfeed ao vivo na partida'] },
+    { id: 'ultimate', tone: 'var(--rtm-green-bright)', kicker: 'Competitivo · Online', title: 'Ultimate', img: M + 'ancient.jpg', desc: 'Abra pacotes, monte seu elenco dos jogadores reais de 2026 e dispute a ranqueada online contra outros managers. Suba de divisão e prove o seu time.', bullets: ['Duelos 1v1 online de verdade', 'Fila ranqueada com divisões (Bronze → Elite)', 'Coleção, evolução de cartas e mercado', 'Temporadas, missões e recompensas'] },
     { id: 'draft', tone: 'var(--em-gold)', kicker: 'Partida rápida', title: 'Draft', img: M + 'mirage.jpg', desc: 'Gire a roleta, pegue uma lenda de cada elenco histórico e jogue um Major de uma sentada só. Rápido e diferente toda vez.', bullets: ['Roleta de sorteio estilo abertura de caixa', 'Cinco escolhas mais o coach', 'Pick Em nas outras partidas da chave', 'Fase suíça completa com playoffs'] },
   ];
   const m = MODES[tab];
@@ -129,11 +130,11 @@ function Modes({ onPlay }: { onPlay: () => void }) {
 }
 
 function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
-  const FREE = ['Os três modos liberados', 'Save no navegador (localStorage)', 'Roleta, draft e Major completos', 'Sem ranking salvo no online'];
-  const PAID = ['Todo o gameplay continua gratuito', 'Save na nuvem, joga de qualquer lugar', 'Ranking e MMR salvos no online', 'Histórico de todas as partidas', 'Selo de apoiador no perfil', 'Pagamento único, sem mensalidade'];
+  const FREE = ['Todos os modos liberados', 'Save no navegador (localStorage)', 'Ranqueada online do Ultimate', 'Roleta, draft e Major completos'];
+  const PAID = ['Todo o gameplay continua gratuito', 'Save na nuvem, joga de qualquer lugar', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil', 'Pagamento único, sem mensalidade'];
   return (
     <section id="conta" className="lp-wrap" style={{ padding: '60px 22px' }}>
-      <SectionHead kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra valer pontos')} sub={ct('Você joga tudo de graça com save no navegador. A conta guarda o seu progresso na nuvem e libera o ranking salvo do modo online.')} />
+      <SectionHead kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra ir além')} sub={ct('Você joga tudo de graça com save no navegador — incluindo a ranqueada online do Ultimate. A conta guarda o seu progresso na nuvem, libera a compra de coins e mais.')} />
       <div className="rtm-reveal l-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: '18px', alignItems: 'stretch', maxWidth: '880px', margin: '0 auto' }}>
         <div style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--rtm-dim)' }}>{ct('Sem conta')}</span>
@@ -170,7 +171,7 @@ function How() {
     ['01', 'Crie o seu manager', 'Nick, idade, país e a cor da sua organização. Leva dez segundos.'],
     ['02', 'Monte o elenco', 'Sorteie elencos históricos e escolha uma lenda de cada era, mais o coach.'],
     ['03', 'Dispute o Major', 'Veto de mapa, killfeed ao vivo e scoreboard. Vença a suíça e os playoffs.'],
-    ['04', 'Suba no ranking', 'No online você ganha MMR. Com conta, tudo fica salvo na nuvem.'],
+    ['04', 'Dispute a ranqueada', 'No Ultimate você joga online contra outros managers e sobe de divisão, do Bronze ao Elite.'],
   ];
   return (
     <section id="como" className="lp-wrap" style={{ padding: '60px 22px' }}>
@@ -190,9 +191,9 @@ function How() {
 
 function Faq() {
   const Q: [string, string][] = [
-    ['Preciso pagar pra jogar?', 'Não. Os três modos estão liberados de graça e o save fica no seu navegador. A conta de R$20 serve pra guardar o progresso na nuvem e liberar o ranking salvo do online.'],
-    ['O que a conta me dá?', 'Save na nuvem pra jogar de qualquer aparelho, ranking e MMR persistentes no modo online, histórico de partidas e um selo de apoiador. Nenhum modo ou vantagem de gameplay é vendido.'],
-    ['Por que o ranking online pede conta?', 'O ranking precisa guardar o seu histórico em servidor pra ser justo e não dar pra burlar. Sem conta você ainda joga partidas online, mas elas não contam pontos salvos.'],
+    ['Preciso pagar pra jogar?', 'Não. Todos os modos estão liberados de graça — incluindo a ranqueada online do Ultimate — e o save fica no seu navegador. A conta de R$20 serve pra guardar o progresso na nuvem e liberar recursos extras.'],
+    ['O que a conta me dá?', 'Save na nuvem pra jogar de qualquer aparelho, a compra de coins pra abrir mais packs no Ultimate, histórico de partidas e um selo de apoiador. Nenhum modo é vendido: todo o gameplay é gratuito.'],
+    ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça — a conta só entra pra salvar na nuvem e comprar coins.'],
     ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
     ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
     ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, cobrindo as cinco eras do Counter-Strike.'],
