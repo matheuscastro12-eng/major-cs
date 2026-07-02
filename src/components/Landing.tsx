@@ -256,14 +256,28 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   // Pix Woovi (merge origin/master) + visual em-* (HEAD)
   const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
   const [copied, setCopied] = useState(false);
-  // polling: confere a cada 4s se a conta já virou paga (webhook do Woovi).
+  // polling: confere se a conta já virou paga (o webhook do Woovi é quem marca; este
+  // poll só detecta pra liberar a tela). Guardas de custo: (1) pausa em aba oculta —
+  // se o pagamento cair com a aba escondida, o webhook já gravou paid e o retorno à
+  // aba re-checa na hora; (2) 6s em vez de 4s (imperceptível ao esperar pagamento);
+  // (3) teto de 15min (o Pix expira) pra não bater /api/account pra sempre numa aba
+  // esquecida. Antes: 4s sem guarda nenhuma = ~900 req/h de invocação à toa.
   useEffect(() => {
     if (!pix) return;
     let alive = true;
-    const t = setInterval(async () => {
+    const startedAt = Date.now();
+    const CAP_MS = 15 * 60_000;
+    const check = async () => {
       try { const me = await fetchMe(); if (alive && me?.paid) { setPix(null); onPlay(); } } catch { /* ignora */ }
-    }, 4000);
-    return () => { alive = false; clearInterval(t); };
+    };
+    const t = setInterval(() => {
+      if (Date.now() - startedAt > CAP_MS) { clearInterval(t); return; } // Pix expirou
+      if (document.hidden) return;                                       // aba oculta: webhook cobre
+      void check();
+    }, 6000);
+    const onVis = () => { if (alive && !document.hidden) void check(); }; // voltou à aba: re-checa já
+    document.addEventListener('visibilitychange', onVis);
+    return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [pix, onPlay]);
   // Input/label nativos puxam os overrides em-* via body.career-dash (Fase 0/1),
   // então não precisamos mais de inline style nos campos.

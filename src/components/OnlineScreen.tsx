@@ -555,7 +555,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     // Evita milhões de invocações por polling sem deixar a UX lenta: o veto ainda
     // atualiza rápido, espera/draft em poucos segundos e resultado concluído só
     // verifica ocasionalmente se o host iniciou uma nova temporada.
-    const syncMs = st === 'veto' ? 2_000 : st === 'waiting' || st === 'drafting' ? 5_000 : lobbyDone ? 30_000 : POLL_MS;
+    const syncMs = st === 'veto' ? 2_000 : st === 'waiting' || st === 'drafting' ? 5_000 : lobbyDone ? 60_000 : POLL_MS;
     pollRef.current = window.setInterval(refresh, syncMs);
     return () => { window.clearTimeout(initial); window.clearInterval(pollRef.current); };
   }, [code, refresh, lobbyDone, localDemo, state?.lobby.mode, state?.lobby.status]);
@@ -699,7 +699,9 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
   useEffect(() => {
     if (code) return; // já está numa sala
     const initial = window.setTimeout(() => void loadRooms(), 0);
-    const id = window.setInterval(loadRooms, 60_000);
+    // 90s (era 60s): lista de salas do hub pré-join não precisa ser rápida; foco/
+    // visibilitychange já re-disparam na hora. Corta ~1/3 das Edge Requests do poller.
+    const id = window.setInterval(loadRooms, 90_000);
     const onVisible = () => {
       if (!document.hidden) void loadRooms();
     };
