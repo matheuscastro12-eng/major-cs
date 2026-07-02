@@ -203,6 +203,47 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
   );
 });
 
+// Tile do TABULEIRO (Squad Builder): o card FUT completo encolhido pra 92px no
+// pitch escuro ficava ilegível (nick/labels de baixo contraste, sem stats). Este
+// é um tile dedicado, escuro sólido, com OVR/borda na cor da raridade, NICK EM
+// BRANCO sobre faixa sólida (contraste garantido) + 3 stats visíveis.
+const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112 }: { card: UltCard; evo?: number; size?: number }) {
+  const info = rarityInfo(card.rarity);
+  const c = info.color;
+  const k = size / 112;
+  const stat = (v: number, label: string) => (
+    <span key={label} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
+      <b style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 900, fontSize: `${k * 0.74}rem`, color: '#fff' }}>{v}</b>
+      <span style={{ fontSize: `${k * 0.44}rem`, fontWeight: 800, color: 'rgba(255,255,255,0.5)', marginTop: 1, letterSpacing: '0.3px' }}>{label}</span>
+    </span>
+  );
+  return (
+    <div style={{ width: size, borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(180deg, #2b3242 0%, #171a21 100%)', border: `1.5px solid ${c}`, boxShadow: `0 6px 20px rgba(0,0,0,0.55), 0 0 16px ${c}55` }}>
+      <div style={{ height: 3, background: c }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: `${k * 7}px ${k * 8}px ${k * 4}px` }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, gap: 2 }}>
+          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 900, fontSize: `${k * 1.4}rem`, color: c, letterSpacing: '-0.5px' }}>{card.ovr}</span>
+          <span style={{ fontSize: `${k * 0.5}rem`, fontWeight: 800, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.4px' }}>{ROLE_CODE[card.role] ?? card.role}</span>
+          <span style={{ marginTop: 1 }}><Flag cc={card.country} /></span>
+        </div>
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <PlayerAvatar nick={card.nick} size={Math.round(size * 0.4)} />
+        </div>
+      </div>
+      <div style={{ background: 'rgba(0,0,0,0.42)', padding: `${k * 3}px 6px`, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+        <span style={{ color: '#fff', fontWeight: 900, fontSize: `${k * 0.76}rem`, textTransform: 'uppercase', letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.nick}</span>
+        {evo > 0 && <span style={{ fontSize: '0.52rem', fontWeight: 900, color: '#22c55e' }}>✦{evo}</span>}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-around', padding: `${k * 5}px 6px ${k * 3}px` }}>
+        {stat(card.stats.mira, 'MIR')}{stat(card.stats.reflexo, 'REF')}{stat(card.stats.clutch, 'CLU')}
+      </div>
+      <div style={{ textAlign: 'center', paddingBottom: k * 5 }}>
+        <span style={{ fontSize: `${k * 0.5}rem`, fontWeight: 900, color: c, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{info.label}</span>
+      </div>
+    </div>
+  );
+});
+
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
 
@@ -1292,7 +1333,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div key={fs.slot} style={{ position: 'absolute', left: `${fs.x * 100}%`, top: `${fs.y * 100}%`, transform: 'translate(-50%,-50%)' }}>
                   {sc ? (
                     <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
-                      <UltCardView card={sc.card} size={92} />
+                      <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={112} />
                     </button>
                   ) : (
                     <button onClick={() => setPickSlot(fs.slot)} style={emptySlot}>
