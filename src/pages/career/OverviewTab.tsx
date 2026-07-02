@@ -19,6 +19,7 @@ import {
   type SeasonStat,
   type Signing,
 } from '../../components/CareerScreen';
+import type { YouthDebut } from '../../engine/career/playerAge';
 import type { VrsTeamRow } from './VrsTab';
 import { buildDashboardTasks } from '../../state/career-tasks';
 import { rivalryLabel, rivalryScore } from '../../engine/career/rivalries';
@@ -42,6 +43,7 @@ interface OverviewTabSave {
   rivalries?: Record<string, number>;
   contracts?: Record<string, number>;
   youthAge?: Record<string, number>;
+  youthDebut?: Record<string, YouthDebut>;
   gamePlan?: GamePlan;
   [key: string]: unknown;
 }
@@ -135,7 +137,7 @@ export function OverviewTab({
   const potentialMap: Record<string, number> = {};
   const ages: Record<string, number> = {};
   for (const p of squadPlayers) {
-    const age = effectiveAge(p, save.split, save.youthAge);
+    const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
     ages[p.id] = age;
     potentialMap[p.id] = playerPotentialOvr(p, age);
   }

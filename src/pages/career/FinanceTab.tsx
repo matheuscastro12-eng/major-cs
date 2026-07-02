@@ -14,6 +14,7 @@ import {
   potentialTier,
   type Signing,
 } from '../../components/CareerScreen';
+import type { YouthDebut } from '../../engine/career/playerAge';
 import { ct } from '../../state/career-i18n';
 import { DIFFICULTY_ECON, DIFFICULTY_LABELS, type Difficulty } from '../../types';
 import { formatMoney, playerWage, playerOvr } from '../../engine/ratings';
@@ -35,6 +36,7 @@ interface FinanceTabSave {
   split: number;
   difficulty?: Difficulty;
   youthAge?: Record<string, number>;
+  youthDebut?: Record<string, YouthDebut>;
   // pass-through pros helpers effSponsorIncome/careerFans (que esperam CareerSave)
   // não exigem mais que isso visível aqui.
   [key: string]: unknown;
@@ -153,7 +155,7 @@ export function FinanceTab({ save, findSigning, update }: Props) {
             {wages.map((w) => {
               const left = w.until != null ? w.until - save.split + 1 : 0;
               const expiring = left <= 1;
-              const age = effectiveAge(w.f.player, save.split, save.youthAge);
+              const age = effectiveAge(w.f.player, save.split, save.youthAge, save.youthDebut);
               const pot = potentialTier(playerPotentialOvr(w.f.player, age));
               return (
                 <tr key={w.sig.playerId} className={expiring ? 'fin-expiring' : ''}>

@@ -31,6 +31,7 @@ import {
   type Signing,
   type SeasonStat,
 } from '../../components/CareerScreen';
+import type { YouthDebut } from '../../engine/career/playerAge';
 import { fatigueBand } from '../../engine/career/fatigue';
 import { activeStint as activeCoachStint } from '../../engine/coachCareer';
 import { playerOrgId } from '../../state/career-player-route';
@@ -58,6 +59,7 @@ interface SquadTabSave {
   fatigue?: Record<string, number>;
   restingPlayers?: string[];
   youthAge?: Record<string, number>;
+  youthDebut?: Record<string, YouthDebut>;
   circuit?: { name?: string } | null;
   split: number;
   [key: string]: unknown;
@@ -202,7 +204,7 @@ export function SquadTab({
               const mi = moraleInfo(mor);
               const fatigue = save.fatigue?.[p.id] ?? 0;
               const reduced = save.restingPlayers?.includes(p.id) ?? false;
-              const age = effectiveAge(p, save.split, save.youthAge);
+              const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
               const potential = playerPotentialOvr(p, age);
               const phase = playerPhase(p.id, age);
               return (

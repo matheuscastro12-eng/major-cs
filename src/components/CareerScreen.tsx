@@ -2513,15 +2513,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       return undefined;
     };
     const ageById = (id: string): number | undefined => {
-      const ya = save.youthAge?.[id];
-      if (ya != null) return ya + Math.floor((save.split - 1) / 4); // envelhece
-      // dataset
+      // relógio CANÔNICO (effectiveAge): antes este helper usava /4 e ignorava
+      // youthDebut/idade-base do dataset — a idade dos prêmios de fim de ano
+      // dessincava do resto do jogo.
+      if (save.youth?.[id] || save.youthAge?.[id] != null || save.youthDebut?.[id]) {
+        return effectiveAge({ id, nick: save.youth?.[id]?.nick ?? '' }, save.split, save.youthAge, save.youthDebut);
+      }
       for (const ts of dataset) {
         const p = ts.players.find((pp: Player) => pp.id === id);
-        if (p) {
-          const r = REAL_AGES[p.nick]?.age;
-          if (r) return r;
-        }
+        if (p) return effectiveAge(p, save.split, save.youthAge, save.youthDebut);
       }
       return undefined;
     };
@@ -5840,7 +5840,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         }
         const rid = playerRuntimeId(p.id);
         const oid = playerOrgId(p.id);
-        const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
+        // Prospecto da academia (não promovido): o .age do entry JÁ é a idade
+        // corrente (mantida por evolveAcademyEntries a cada 3 splits). Passá-lo
+        // por effectiveAge somaria careerYears(split) por cima → idade inflada
+        // no perfil (bug: 17 no AcademyTab, 21 no perfil). Usa a idade crua.
+        const isAcademyEntry = (save.academy?.some((a) => a.id === oid) ?? false)
+          || (save.academyTeam?.some((a) => a.id === oid) ?? false);
+        const age = isAcademyEntry
+          ? Math.max(15, Math.round(p.age ?? 18))
+          : effectiveAge(p, save.split, save.youthAge, save.youthDebut);
         const pot = playerPotentialOvr(p, age);
         const tier = potentialTier(pot);
         const phase = playerPhase(oid, age);
@@ -5906,6 +5914,24 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               // só permite "Conversar" pra player do squad próprio
               save.squad.some((sig) => sig.playerId === oid)
                 ? () => setTalkPlayer({ oid, nick: p.nick, age })
+                : undefined
+            }
+            onEditAge={
+              // Vitalícia: idade de jogador CRIADO é editável. Âncora via
+              // youthDebut {idade, split atual} = FONTE ÚNICA da idade (tem
+              // prioridade sobre customPlayers.age em effectiveAge). O jogador
+              // passa a ter EXATAMENTE essa idade agora e envelhece normal dali
+              // (+1 ano a cada 3 splits). NÃO reescrevemos customPlayers.age
+              // (baseAge o leria como idade-base do split 1 e somaria os anos de
+              // novo — era o vetor do "+15 anos"). Sem clamp de 30 (aquele é pra
+              // prospecto de academia): edição livre 16..40.
+              isPaid && save.customPlayers?.[oid]
+                ? (newAge) => update({
+                    youthDebut: {
+                      ...(save.youthDebut ?? {}),
+                      [oid]: { age: Math.max(16, Math.min(40, Math.round(newAge))), split: Math.max(1, Math.floor(save.split)) },
+                    },
+                  })
                 : undefined
             }
             retired={(save.retired ?? []).includes(oid)}

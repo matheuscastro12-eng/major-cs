@@ -18,6 +18,7 @@ interface SlotDraft {
   name: string;
   country: string;
   role: Role;
+  age: number;
   ovr: number;
   advanced: boolean;
   aim: number;
@@ -32,6 +33,7 @@ const BLANK_SLOT = (role: Role): SlotDraft => ({
   name: '',
   country: 'br',
   role,
+  age: 21,
   ovr: 70,
   advanced: false,
   ...attrsFromOvr(70, role),
@@ -108,6 +110,9 @@ export function CustomRosterBuilder({
         name: s.name.trim(),
         country: s.country,
         role: s.role,
+        // idade escolhida pelo user; a carreira começa no split 1, então age é a
+        // idade-base exata (effectiveAge soma +1 ano a cada 3 splits a partir daqui)
+        age: Math.max(16, Math.min(40, Math.round(s.age))),
         aim: s.aim,
         consistency: s.consistency,
         clutch: s.clutch,
@@ -233,6 +238,9 @@ function SlotCard({ slot, index, onChange }: { slot: SlotDraft; index: number; o
           </select>
         </Field>
       </div>
+      <Field label={`${ct('Idade')} · ${slot.age} ${ct('anos')}`}>
+        <input type="range" min={16} max={40} value={slot.age} onChange={(e) => onChange({ age: Number(e.target.value) })} style={{ width: '100%' }} />
+      </Field>
       {!slot.advanced ? (
         <>
           <Field label={`OVR · ${slot.ovr}`}>

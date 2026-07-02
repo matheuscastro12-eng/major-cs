@@ -210,6 +210,7 @@ export function CareerPlayerPage({
   onToggleRest,
   onBack,
   onTalk,
+  onEditAge,
   retired = false,
   attributes,
 }: {
@@ -248,6 +249,8 @@ export function CareerPlayerPage({
   onToggleRest: () => void;
   /** T3.7 — abre PlayerTalkModal pra conversar com o jogador. */
   onTalk?: () => void;
+  /** Vitalícia: edita a idade de jogador CRIADO (Custom Roster Builder). */
+  onEditAge?: (age: number) => void;
   /** T3.9 — flag indicando que o jogador já se aposentou. Renderiza chip. */
   retired?: boolean;
   /** T3.1 — 28 atributos FM-style. Se passado, renderiza section. */
@@ -255,6 +258,8 @@ export function CareerPlayerPage({
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<PlayerTab>('card');
+  // edição de idade (Vitalícia, só jogador criado): null = fechado
+  const [ageDraft, setAgeDraft] = useState<number | null>(null);
   const oid = playerOrgId(player.id);
   const notesKey = `${NOTES_KEY}:${oid}`;
   const [notes, setNotes] = useState('');
@@ -492,7 +497,49 @@ export function CareerPlayerPage({
                 <p className="pp-personality-desc">{personalityDesc}</p>
                 <div className="pp-personal-meta">
                   <div><span>{ct('Nacionalidade')}</span><b><Flag cc={player.country} /> {player.country.toUpperCase()}</b></div>
-                  <div><span>{ct('Idade')}</span><b>{age} {ct('anos')}</b></div>
+                  <div>
+                    <span>{ct('Idade')}</span>
+                    {ageDraft == null ? (
+                      <b>
+                        {age} {ct('anos')}
+                        {onEditAge && (
+                          <button
+                            type="button"
+                            title={ct('Editar idade (Vitalícia — jogador criado)')}
+                            onClick={() => setAgeDraft(age)}
+                            style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--em-gold)', fontSize: '0.82rem', padding: 0 }}
+                          >✎</button>
+                        )}
+                      </b>
+                    ) : (
+                      <b style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <input
+                          type="number"
+                          min={16}
+                          max={40}
+                          value={ageDraft}
+                          autoFocus
+                          onChange={(e) => setAgeDraft(Number(e.target.value))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && ageDraft >= 16 && ageDraft <= 40) { onEditAge?.(ageDraft); setAgeDraft(null); }
+                            if (e.key === 'Escape') setAgeDraft(null);
+                          }}
+                          style={{ width: 58, padding: '3px 6px', background: 'var(--em-panel-2)', color: 'var(--em-text)', border: '1px solid var(--em-gold)', borderRadius: 4, fontFamily: 'inherit', fontSize: '0.84rem' }}
+                        />
+                        <button
+                          type="button"
+                          disabled={!(ageDraft >= 16 && ageDraft <= 40)}
+                          onClick={() => { onEditAge?.(ageDraft); setAgeDraft(null); }}
+                          style={{ background: 'var(--em-gold)', color: '#1a1205', border: 'none', borderRadius: 4, padding: '3px 9px', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer' }}
+                        >{ct('Salvar')}</button>
+                        <button
+                          type="button"
+                          onClick={() => setAgeDraft(null)}
+                          style={{ background: 'none', color: 'var(--em-muted)', border: '1px solid var(--em-border)', borderRadius: 4, padding: '3px 9px', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer' }}
+                        >{ct('Cancelar')}</button>
+                      </b>
+                    )}
+                  </div>
                 </div>
               </Panel>
               <Panel title="Contrato" icon="coin">
