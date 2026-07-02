@@ -17,6 +17,8 @@
     { "source": "/online/:path*", "destination": "/" },
     { "source": "/ultimateteam", "destination": "/" },
     { "source": "/ultimate-team", "destination": "/" },
+    { "source": "/ultimate", "destination": "/" },
+    { "source": "/road-to-pro", "destination": "/" },
     { "source": "/carreira", "destination": "/" },
     { "source": "/hall", "destination": "/" },
     { "source": "/banners", "destination": "/" },
