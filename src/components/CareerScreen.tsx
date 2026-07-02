@@ -1408,6 +1408,7 @@ function splitNews(ctx: {
   major?: { placement: number | string; champion: boolean } | null;
   boardConfidence?: number;
   star?: { nick: string; rating: number } | null;
+  majorNext?: string | null;
 }): NewsItem[] {
   const s = ctx.split;
   const out: NewsItem[] = [];
@@ -1433,6 +1434,10 @@ function splitNews(ctx: {
     add('star', hot ? '⭐' : '🎯', hot ? 'good' : 'info', 'result',
       `${ctx.star.nick} ${ct('foi o destaque do split')}`,
       `${ctx.star.nick} ${ct('fechou a campanha com rating')} ${r}${hot ? ct(' — atuação de melhor em quadra. A imprensa já comenta.') : ct('. Boa entrega individual.')}`);
+  }
+  if (ctx.majorNext) {
+    add('majorhype', '🌍', 'info', 'scene', `${ct('O MAJOR se aproxima:')} ${ctx.majorNext}`,
+      `${ct('O próximo split é o')} ${ctx.majorNext}${ct('. As melhores organizações do mundo se preparam — é a chance de entrar pra história. A pressão e o hype tomam conta do cenário.')}`);
   }
   if (ctx.risers.length) add('rise', '📈', 'good', 'board', `${ct('Em ascensão:')} ${ctx.risers.join(', ')}`, `${ct('A comissão técnica destaca a evolução de')} ${ctx.risers.join(', ')} ${ct('no último split.')}`);
   if (ctx.sliders.length) add('slide', '📉', 'info', 'board', `${ct('Em queda:')} ${ctx.sliders.join(', ')}`, `${ctx.sliders.join(', ')} ${ctx.sliders.length === 1 ? 'perdeu' : ct('perderam')} ${ct('rendimento. Veteranos cobram mais minutos de treino.')}`);
@@ -5289,6 +5294,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                     boardConfidence: newBoard,
                     star: userSplitStar(me, save.split),
+                    majorNext: isMajorSplit(save.split + 1) ? MAJOR_NAME(save.split + 1) : null,
                   });
                   // T3.5: bônus de placement do circuito + tick de sponsors.
                   // Usa a mesma lógica de posição que vai pro SplitRecord
