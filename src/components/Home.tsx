@@ -17,7 +17,6 @@ interface Props {
   savedCampaign?: { name: string; phase: string } | null;
   onResume?: () => void;
   onDiscardCampaign?: () => void;
-  onOnline?: () => void;
   onUltimate?: () => void;
   onRoadToPro?: () => void;
   onLeaderboard?: () => void;
@@ -46,7 +45,6 @@ export function Home({
   onStart,
   onDonate,
   teamCount,
-  onOnline,
   onUltimate,
   onRoadToPro,
   onCareer,
@@ -167,23 +165,6 @@ export function Home({
                   </span>
                 </span>
               </button>
-
-              {onOnline && (
-                <button className="rtm-modecard" data-tone="green" onClick={onOnline}>
-                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/dust2.jpg)' }} />
-                  <span className="rtm-modecard-scrim" />
-                  <span className="rtm-modecard-bar" />
-                  <span className="rtm-modecard-body">
-                    <span className="rtm-modecard-kicker">{ct('Competitivo')}</span>
-                    <span className="rtm-modecard-title">Online</span>
-                    <span className="rtm-modecard-desc">{ct('Snake draft 1v1 contra outro manager. Suba no ladder ranqueado por MMR.')}</span>
-                    <span className="rtm-modecard-foot">
-                      <span className="rtm-modecard-meta">{ct('1v1 · ranqueada')}</span>
-                      <span className="rtm-modecard-go">{ct('Jogar')} →</span>
-                    </span>
-                  </span>
-                </button>
-              )}
 
               {onUltimate && (
                 <button className="rtm-modecard" data-tone="gold" onClick={onUltimate}>

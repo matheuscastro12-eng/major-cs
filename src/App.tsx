@@ -84,7 +84,6 @@ const ULTIMATE_ENABLED = (() => {
   }
 })();
 const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
-const OnlineMode = lazyWithReload(() => import('./components/online/OnlineMode').then((m) => ({ default: m.OnlineMode })));
 const TournamentStats = lazyWithReload(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
 import { VetoScreen } from './components/VetoScreen';
@@ -197,7 +196,7 @@ function routeFromLocation(): { screen: Screen; bannerPreview: boolean } {
   const path = normalizePath(window.location.pathname);
   if (isCareerPlayerPath(path) || isCareerTeamPath(path)) return { screen: 'career', bannerPreview: false };
   if (path === '/ultimateteam' || path === '/ultimate-team' || path === '/online' || path.startsWith('/online/')) {
-    return { screen: 'online', bannerPreview: false }; // /online/<código> = deep link de sala
+    return { screen: 'home', bannerPreview: false }; // modo Online competitivo removido — links antigos caem na home
   }
   if (path === '/banners') return { screen: 'home', bannerPreview: true };
   const matched = PATH_SCREEN[path] ?? 'home';
@@ -478,10 +477,6 @@ export default function App() {
   // replace para canonicalizar aliases; cliques seguintes criam histórico.
   useEffect(() => {
     let targetPath = screen === 'home' && bannerPreview ? '/banners' : SCREEN_PATH[screen];
-    // o OnlineScreen gere a própria subrota /online/<código>; não canonicaliza de volta
-    if (screen === 'online' && window.location.pathname.toLowerCase().startsWith('/online')) {
-      targetPath = window.location.pathname;
-    }
     if (screen === 'career') {
       const playerId = parseCareerPlayerId();
       const teamId = parseCareerTeamId();
@@ -992,7 +987,6 @@ export default function App() {
             setDonateOpen(true);
           }}
           onHall={() => setScreen('hall')}
-          onOnline={() => setScreen('online')}
           onUltimate={ULTIMATE_ENABLED ? () => setScreen('ultimate') : undefined}
           onRoadToPro={() => setScreen('rtp')}
           onLeaderboard={() => setScreen('leaderboard')}
@@ -1050,8 +1044,6 @@ export default function App() {
           </div>
         </>
       )}
-
-      {screen === 'online' && <OnlineMode onBack={() => setScreen('home')} account={account} dataset={dataset} />}
 
       {ULTIMATE_ENABLED && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
 

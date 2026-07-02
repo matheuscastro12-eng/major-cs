@@ -98,7 +98,6 @@ function Modes({ onPlay }: { onPlay: () => void }) {
   const MODES = [
     { id: 'career', tone: 'var(--rtm-gold)', kicker: 'Campanha longa', title: 'Carreira', img: M + 'nuke.jpg', desc: 'Funde a sua organização, monte o elenco, gerencie transferências e dispute uma temporada inteira rumo ao título.', bullets: ['Hub da organização com química do time', 'Mercado de transferências com orçamento', 'Perfis de jogador e de time clicáveis', 'Killfeed ao vivo na partida'] },
     { id: 'draft', tone: 'var(--em-gold)', kicker: 'Partida rápida', title: 'Draft', img: M + 'mirage.jpg', desc: 'Gire a roleta, pegue uma lenda de cada elenco histórico e jogue um Major de uma sentada só. Rápido e diferente toda vez.', bullets: ['Roleta de sorteio estilo abertura de caixa', 'Cinco escolhas mais o coach', 'Pick Em nas outras partidas da chave', 'Fase suíça completa com playoffs'] },
-    { id: 'online', tone: 'var(--rtm-green-bright)', kicker: 'Competitivo', title: 'Online', img: M + 'dust2.jpg', desc: 'Snake draft contra um rival de verdade e melhor de três pra valer pontos. Suba no ranking e prove que conhece CS.', bullets: ['Matchmaking por MMR', 'Draft alternado contra o rival', 'Ranking e ladder da temporada', 'Histórico salvo (precisa de conta)'] },
   ];
   const m = MODES[tab];
   return (
