@@ -31,3 +31,20 @@ export async function lookupStripe(password: string, email: string): Promise<Str
   try { return (await post({ action: 'stripe', password, email })) as unknown as StripeLookup; }
   catch (e) { return { found: false, error: e instanceof Error ? e.message : ct('erro') }; }
 }
+
+// ── CRM financeiro: contas vitalícias por método de pagamento + compras de coins ──
+export interface MethodCount { method: string; n: number; }
+export interface CoinMethodRow { method: string; orders: number; coins: number; cents: number; }
+export interface CoinTierRow { tier: string; orders: number; coins: number; cents: number; }
+export interface CoinOrderRow { email: string; tier: string; coins: number; cents: number; method: string; status: string; at: string; }
+export interface CoinTrendPoint { day: string; orders: number; cents: number; }
+export interface FinanceData {
+  lifetime: { paid: number; founders: number; total: number; revenueCents: number; byMethod: MethodCount[]; };
+  coins: {
+    paidOrders: number; coinsSold: number; revenueCents: number; pendingOrders: number; buyers: number;
+    byMethod: CoinMethodRow[]; byTier: CoinTierRow[]; recent: CoinOrderRow[]; trend: CoinTrendPoint[];
+  };
+}
+export async function getFinance(password: string): Promise<FinanceData | null> {
+  try { return (await post({ action: 'finance', password })) as unknown as FinanceData; } catch { return null; }
+}

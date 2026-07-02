@@ -35,6 +35,8 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
       sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
       sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
+      // método de pagamento da conta vitalícia: 'stripe' (cartão) | 'pix' | 'admin' | null (legado). Métricas do CRM.
+      sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
       sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
       sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
@@ -44,6 +46,8 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`,
       // pedidos de coins do Ultimate (Pix/Woovi): pending → paid (webhook) → claimed (client credita no save)
       sql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ)`,
+      // método do pedido de coins: 'pix' (Woovi) | 'stripe' (cartão). Métricas do CRM.
+      sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`,
       sql`CREATE INDEX IF NOT EXISTS rtm_coin_orders_email_idx ON rtm_coin_orders (email, status)`,
     ]).then(() => undefined).catch((error) => {
       accountSchemaPromise = null;
@@ -186,7 +190,7 @@ export default async function handler(
       sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
           SELECT email, nick, pass_hash, true, ${accountReference(em)} FROM rtm_pending_signups WHERE email=${em}
           ON CONFLICT (email) DO UPDATE SET paid=true`,
-      sql`UPDATE rtm_accounts SET paid=true, stripe_ref=${accountReference(em)} WHERE email=${em}`,
+      sql`UPDATE rtm_accounts SET paid=true, stripe_ref=${accountReference(em)}, payment_method=COALESCE(payment_method, 'stripe') WHERE email=${em}`,
       sql`DELETE FROM rtm_pending_signups WHERE email=${em}`,
     ];
     if (sessionId) stmts.push(sql`INSERT INTO rtm_payment_sessions (session_id, email) VALUES (${sessionId}, ${em}) ON CONFLICT (session_id) DO NOTHING`);
@@ -366,6 +370,54 @@ export default async function handler(
         expiresIn: c.expiresIn ?? null,
       });
     } catch { res.status(502).json({ error: 'Falha ao falar com o Woovi.' }); }
+    return;
+  }
+
+  // coinsCheckout: paga um pacote de coins com CARTÃO (Stripe) — pra quem não tem
+  // Pix (gringos). Cria uma Checkout Session dinâmica (preço = cents do tier, BRL)
+  // com metadata do pedido. O pedido nasce pending (method='stripe') e o
+  // stripe-webhook o marca paid quando o cartão aprova. O correlationID reusa o
+  // prefixo "ultcoins:" (o webhook filtra por ele → coins NÃO ativam conta).
+  if (action === 'coinsCheckout') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login antes de comprar coins.' }); return; }
+    const tier = String(body.tier ?? '');
+    const pack = COIN_TIERS[tier];
+    if (!pack) { res.status(400).json({ error: 'pacote inválido' }); return; }
+    const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+    const origin = String(body.origin ?? '').replace(/\/+$/, '');
+    const base = /^https:\/\/[\w.-]+/.test(origin) ? origin : 'https://roadtomajor.com.br';
+    // pedido ANTES da sessão (mesma razão do Pix): pending órfão é inofensivo; o
+    // inverso — cartão aprovado sem pedido — perderia os coins do jogador.
+    await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, ${pack.coins}, ${pack.cents}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
+    try {
+      const session = await stripeClient().checkout.sessions.create({
+        mode: 'payment',
+        customer_email: em,
+        client_reference_id: corr,
+        line_items: [{
+          quantity: 1,
+          price_data: {
+            currency: 'brl',
+            unit_amount: pack.cents,
+            product_data: { name: `Ultimate · ${pack.label}`, description: `${pack.coins.toLocaleString('pt-BR')} coins` },
+          },
+        }],
+        metadata: { kind: 'coins', correlationID: corr, tier, coins: String(pack.coins), email: em },
+        success_url: `${base}/ultimate?coins=ok`,
+        cancel_url: `${base}/ultimate?coins=cancel`,
+      });
+      if (!session.url) {
+        await sql`DELETE FROM rtm_coin_orders WHERE correlation_id=${corr} AND status='pending'`;
+        res.status(502).json({ error: 'Falha ao criar checkout. Tente de novo.' });
+        return;
+      }
+      res.status(200).json({ url: session.url, correlationID: corr, coins: pack.coins });
+    } catch (error) {
+      await sql`DELETE FROM rtm_coin_orders WHERE correlation_id=${corr} AND status='pending'`;
+      console.error('coins_checkout_failed', error instanceof Error ? error.message : error);
+      res.status(502).json({ error: 'Não consegui falar com o Stripe agora.' });
+    }
     return;
   }
 

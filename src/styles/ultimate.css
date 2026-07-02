@@ -801,6 +801,11 @@ body:has(.ut-live) {
 .ut-coinpay__wait { display: inline-flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--ut-ink-2); }
 .ut-coinpay__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ut-amber); animation: ut-coinpulse 1.2s ease-in-out infinite; flex: none; }
 @keyframes ut-coinpulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+/* alternativa internacional (cartão via Stripe) no modal de coins */
+.ut-coinpay__alt { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ut-line, #e5e7eb); }
+.ut-coinpay__altsep { align-self: center; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: var(--ut-muted); }
+.ut-btn--card { background: #635bff; color: #fff; box-shadow: 0 3px 10px rgba(99, 91, 255, 0.3); }
+.ut-btn--card:hover:not(:disabled) { filter: brightness(1.06); }
 
 /* ---------------- responsivo ---------------- */
 .ut-res { min-width: 0; }

@@ -5,6 +5,7 @@ import { ct } from '../state/career-i18n';
 const LINKS: [string, string][] = [
   ['/admin', 'Times'],
   ['/admin/acessos', 'Contas pagas'],
+  ['/admin/financeiro', 'Financeiro'],
   ['/admin/carreira', 'Carreira'],
   ['/admin/lab', 'Laboratório'],
 ];

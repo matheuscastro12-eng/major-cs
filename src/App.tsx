@@ -64,6 +64,7 @@ const CareerScreen = lazyWithReload(() => import('./components/CareerScreen').th
 const CareerSaves = lazyWithReload(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
 const CareerCRM = lazyWithReload(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
 const AccountsCRM = lazyWithReload(() => import('./components/AccountsCRM').then((m) => ({ default: m.AccountsCRM })));
+const PaymentsCRM = lazyWithReload(() => import('./components/PaymentsCRM').then((m) => ({ default: m.PaymentsCRM })));
 const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
 const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
@@ -145,6 +146,7 @@ type Screen =
   | 'careerSaves'
   | 'careerCRM'
   | 'careerAccess'
+  | 'paymentsCRM'
   | 'privacy'
   | 'terms'
   | 'refund';
@@ -173,6 +175,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   lab: '/admin/lab',
   careerCRM: '/admin/carreira',
   careerAccess: '/admin/acessos',
+  paymentsCRM: '/admin/financeiro',
   privacy: '/privacidade',
   terms: '/termos',
   refund: '/reembolso',
@@ -1092,6 +1095,11 @@ export default function App() {
       {screen === 'careerAccess' && (
         <AdminGate>
           <AccountsCRM onExit={() => setScreen('home')} />
+        </AdminGate>
+      )}
+      {screen === 'paymentsCRM' && (
+        <AdminGate>
+          <PaymentsCRM onExit={() => setScreen('home')} />
         </AdminGate>
       )}
 

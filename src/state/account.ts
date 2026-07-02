@@ -73,6 +73,17 @@ export async function beginCoinsPix(tier: CoinTierId): Promise<CoinCharge> {
     expiresIn: (d.expiresIn as number) ?? null,
   };
 }
+// Compra de coins com CARTÃO (Stripe) — pra quem não tem Pix (gringos). Cria uma
+// Checkout Session no servidor e devolve a URL; o app redireciona pra lá. Na volta
+// (/ultimate?coins=ok) o webhook já marcou o pedido pago e claimPaidCoins credita.
+export async function beginCoinsCheckout(tier: CoinTierId): Promise<string> {
+  const token = getToken(); if (!token) throw new Error(ct('Faça login antes de comprar coins.'));
+  let origin = ''; try { origin = window.location.origin; } catch { /* sem window */ }
+  const d = await post({ action: 'coinsCheckout', token, tier, origin });
+  if (typeof d.url !== 'string' || !d.url) throw new Error(ct('Checkout indisponível. Tente de novo.'));
+  return d.url;
+}
+
 // Coleta pedidos pagos e ainda não creditados (idempotente no servidor).
 // Retorna o total de coins a creditar agora (0 se nada novo).
 export async function claimPaidCoins(): Promise<number> {

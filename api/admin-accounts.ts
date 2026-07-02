@@ -39,8 +39,11 @@ export default async function handler(
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ)`,
+    sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`,
   ]);
 
   const action = String(body.action ?? '');
@@ -102,7 +105,7 @@ export default async function handler(
       sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
           SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}
           ON CONFLICT (email) DO UPDATE SET paid=true`,
-      sql`UPDATE rtm_accounts SET paid=true WHERE email=${email}`,
+      sql`UPDATE rtm_accounts SET paid=true, payment_method=COALESCE(payment_method, 'admin') WHERE email=${email}`,
       sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
     ]);
     // Edição Fundador: conceder acesso também atribui número de fundador (até o teto).
@@ -157,6 +160,69 @@ export default async function handler(
     } catch (error) {
       res.status(502).json({ error: error instanceof Error ? error.message : 'Stripe indisponível' });
     }
+    return;
+  }
+
+  // finance: métricas de receita — contas vitalícias por método de pagamento +
+  // compras de coins do Ultimate (total, por método, por tier, recentes, tendência).
+  if (action === 'finance') {    const lifeCounts = await sql`SELECT count(*) FILTER (WHERE paid)::int AS paid, count(*) FILTER (WHERE is_founder)::int AS founders, count(*)::int AS total FROM rtm_accounts`;
+    // método da conta vitalícia. Legado sem método: se houver sessão do Stripe, é 'stripe'; senão 'desconhecido'.
+    const lifeByMethod = await sql`
+      SELECT COALESCE(a.payment_method,
+               CASE WHEN EXISTS (SELECT 1 FROM rtm_payment_sessions s WHERE s.email = a.email) THEN 'stripe' ELSE 'desconhecido' END) AS method,
+             count(*)::int AS n
+      FROM rtm_accounts a WHERE a.paid GROUP BY 1 ORDER BY n DESC`;
+    const coinSummary = await sql`
+      SELECT
+        count(*) FILTER (WHERE status IN ('paid', 'claimed'))::int AS paid_orders,
+        COALESCE(sum(coins) FILTER (WHERE status IN ('paid', 'claimed')), 0)::bigint AS coins_sold,
+        COALESCE(sum(cents) FILTER (WHERE status IN ('paid', 'claimed')), 0)::bigint AS revenue_cents,
+        count(*) FILTER (WHERE status = 'pending')::int AS pending_orders,
+        count(DISTINCT email) FILTER (WHERE status IN ('paid', 'claimed'))::int AS buyers
+      FROM rtm_coin_orders`;
+    const coinByMethod = await sql`
+      SELECT COALESCE(method, 'pix') AS method, count(*)::int AS orders,
+             COALESCE(sum(coins), 0)::bigint AS coins, COALESCE(sum(cents), 0)::bigint AS cents
+      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') GROUP BY 1 ORDER BY cents DESC`;
+    const coinByTier = await sql`
+      SELECT tier, count(*)::int AS orders,
+             COALESCE(sum(coins), 0)::bigint AS coins, COALESCE(sum(cents), 0)::bigint AS cents
+      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') GROUP BY 1 ORDER BY cents DESC`;
+    const coinRecent = await sql`
+      SELECT email, tier, coins, cents, COALESCE(method, 'pix') AS method, status, COALESCE(paid_at, created_at) AS at
+      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') ORDER BY COALESCE(paid_at, created_at) DESC LIMIT 25`;
+    const coinTrend = await sql`
+      WITH days AS (
+        SELECT generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day')::date AS day
+      ),
+      orders AS (
+        SELECT date_trunc('day', COALESCE(paid_at, created_at))::date AS day, count(*)::int AS n, COALESCE(sum(cents), 0)::bigint AS cents
+        FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') AND COALESCE(paid_at, created_at) > now() - interval '30 days' GROUP BY 1
+      )
+      SELECT d.day, COALESCE(o.n, 0)::int AS orders, COALESCE(o.cents, 0)::bigint AS cents
+      FROM days d LEFT JOIN orders o ON o.day = d.day ORDER BY d.day`;
+
+    const paidTotal = lifeCounts[0]?.paid ?? 0;
+    res.status(200).json({
+      lifetime: {
+        paid: paidTotal,
+        founders: lifeCounts[0]?.founders ?? 0,
+        total: lifeCounts[0]?.total ?? 0,
+        revenueCents: Number(paidTotal) * 2000, // conta vitalícia = R$20
+        byMethod: lifeByMethod.map((r) => ({ method: String(r.method), n: Number(r.n) })),
+      },
+      coins: {
+        paidOrders: Number(coinSummary[0]?.paid_orders ?? 0),
+        coinsSold: Number(coinSummary[0]?.coins_sold ?? 0),
+        revenueCents: Number(coinSummary[0]?.revenue_cents ?? 0),
+        pendingOrders: Number(coinSummary[0]?.pending_orders ?? 0),
+        buyers: Number(coinSummary[0]?.buyers ?? 0),
+        byMethod: coinByMethod.map((r) => ({ method: String(r.method), orders: Number(r.orders), coins: Number(r.coins), cents: Number(r.cents) })),
+        byTier: coinByTier.map((r) => ({ tier: String(r.tier), orders: Number(r.orders), coins: Number(r.coins), cents: Number(r.cents) })),
+        recent: coinRecent.map((r) => ({ email: String(r.email), tier: String(r.tier), coins: Number(r.coins), cents: Number(r.cents), method: String(r.method), status: String(r.status), at: r.at })),
+        trend: coinTrend.map((r) => ({ day: String(r.day), orders: Number(r.orders), cents: Number(r.cents) })),
+      },
+    });
     return;
   }
 

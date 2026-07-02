@@ -26,7 +26,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { useAccount, beginCoinsPix, claimPaidCoins, type CoinCharge, type CoinTierId } from '../../state/account';
+import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, type CoinCharge, type CoinTierId } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { UtPanel, UtEmpty } from './UtPanel';
 import {
@@ -319,6 +319,37 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       .then((charge) => setCoinModal((m) => (m && m.pack.tier === pack.tier ? { ...m, charge } : m)))
       .catch(() => setCoinModal((m) => (m && m.pack.tier === pack.tier ? { ...m, error: true } : m)));
   };
+  // Pagar coins com CARTÃO (Stripe) — pra quem não tem Pix (gringos). Redireciona
+  // pro checkout do Stripe; na volta (/ultimate?coins=ok) os coins são creditados.
+  const [cardBusy, setCardBusy] = useState(false);
+  const buyCoinsCard = (pack: CoinPack) => {
+    if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar coins.')}`, 2800); return; }
+    setCardBusy(true);
+    flash(ct('Abrindo o checkout do cartão…'), 2400);
+    beginCoinsCheckout(pack.tier)
+      .then((url) => { window.location.href = url; })
+      .catch(() => { setCardBusy(false); flash(ct('Não consegui abrir o checkout do cartão. Tente de novo.'), 2800); });
+  };
+  // Retorno do Stripe (/ultimate?coins=ok): o webhook marca o pedido pago de forma
+  // assíncrona, então faz um curto poll pra creditar assim que cair, e limpa a URL.
+  useEffect(() => {
+    let ok = false;
+    try { ok = new URLSearchParams(window.location.search).get('coins') === 'ok'; } catch { ok = false; }
+    if (!ok || !account) return;
+    flash(ct('Confirmando o pagamento do cartão…'), 3000);
+    let tries = 0;
+    const tick = () => {
+      void claimPaidCoins().then((n) => {
+        if (n > 0) { addCredits(n); flash(`🪙 +${fmt(n)} coins creditados — obrigado pelo apoio!`, 3600); window.clearInterval(timer); }
+      });
+      if (++tries >= 10) window.clearInterval(timer); // ~30s de janela
+    };
+    const timer = window.setInterval(tick, 3000);
+    tick();
+    try { const u = new URL(window.location.href); u.searchParams.delete('coins'); window.history.replaceState({}, '', u.pathname + u.search + u.hash); } catch { /* sem history */ }
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
   // credita pedidos pagos fora do fluxo do modal: no mount e ao visitar a Loja
   // (cobre quem pagou pelo copia-e-cola depois de fechar o QR, ou em outra aba).
   useEffect(() => {
@@ -1706,6 +1737,14 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               )}
             </div>
           )}
+          {/* alternativa internacional: cartão via Stripe (Pix é só Brasil) */}
+          <div className="ut-coinpay__alt">
+            <span className="ut-coinpay__altsep">{ct('ou')}</span>
+            <button className="ut-btn ut-btn--card" onClick={() => buyCoinsCard(coinModal.pack)} disabled={cardBusy}>
+              💳 {cardBusy ? ct('Abrindo…') : `${ct('Pagar com cartão')} · ${coinModal.pack.price}`}
+            </button>
+            <span className="muted small" style={{ textAlign: 'center' }}>{ct('Aceita cartão internacional. Você volta pro jogo e os coins caem automaticamente.')}</span>
+          </div>
         </Modal>
       )}
 

@@ -66,8 +66,9 @@ async function fetchHandler(request: Request): Promise<Response> {
   const corr = String(chargeObj?.correlationID ?? (body.correlationID as string | undefined) ?? '');
   if (corr.startsWith('ultcoins:')) {
     const coinSql = neon(databaseUrl);
-    await coinSql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ)`;
-    const updated = await coinSql`UPDATE rtm_coin_orders SET status='paid', paid_at=now() WHERE correlation_id=${corr} AND status='pending' RETURNING correlation_id`;
+    await coinSql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ, method TEXT DEFAULT 'pix')`;
+    await coinSql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`;
+    const updated = await coinSql`UPDATE rtm_coin_orders SET status='paid', paid_at=now(), method='pix' WHERE correlation_id=${corr} AND status='pending' RETURNING correlation_id`;
     if (updated.length === 0) {
       // rede de segurança: Pix pago sem pedido registrado (falha entre criar a
       // cobrança e gravar o pedido). Reconstrói pelo correlationID + e-mail do
@@ -81,7 +82,7 @@ async function fetchHandler(request: Request): Promise<Response> {
       if (pack && /\S+@\S+\.\S+/.test(buyer)) {
         // ON CONFLICT DO NOTHING: se o pedido existe como paid/claimed (webhook
         // duplicado), não recria nem paga duas vezes.
-        await coinSql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, status, paid_at) VALUES (${corr}, ${buyer}, ${tier}, ${pack.coins}, ${pack.cents}, 'paid', now()) ON CONFLICT (correlation_id) DO NOTHING`;
+        await coinSql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, status, paid_at, method) VALUES (${corr}, ${buyer}, ${tier}, ${pack.coins}, ${pack.cents}, 'paid', now(), 'pix') ON CONFLICT (correlation_id) DO NOTHING`;
       }
     }
     return Response.json({ received: true, processed: true, coins: true });
@@ -96,6 +97,7 @@ async function fetchHandler(request: Request): Promise<Response> {
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT false`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
     sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
   ]);
@@ -105,7 +107,7 @@ async function fetchHandler(request: Request): Promise<Response> {
     sql`INSERT INTO rtm_accounts (email, nick, pass_hash, paid, stripe_ref)
         SELECT email, nick, pass_hash, true, ${accountReference(email)} FROM rtm_pending_signups WHERE email=${email}
         ON CONFLICT (email) DO UPDATE SET paid=true`,
-    sql`UPDATE rtm_accounts SET paid=true, stripe_ref=COALESCE(stripe_ref, ${accountReference(email)}) WHERE email=${email}`,
+    sql`UPDATE rtm_accounts SET paid=true, stripe_ref=COALESCE(stripe_ref, ${accountReference(email)}), payment_method=COALESCE(payment_method, 'pix') WHERE email=${email}`,
     sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
   ]);
   await renumberFounders(sql); // numera o fundador por ordem de pagamento
