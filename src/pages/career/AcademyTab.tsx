@@ -49,7 +49,7 @@ import { makeRng } from '../../engine/rng';
 import { hashStr } from '../../state/hash';
 import { ct } from '../../state/career-i18n';
 import { formatMoney, playerOvr } from '../../engine/ratings';
-import { type MacroRegion } from '../../data/regions';
+import { macroRegionOf, type MacroRegion } from '../../data/regions';
 import type { Signing } from '../../components/CareerScreen';
 import type { MapId, Player, SeriesResult, TTeam } from '../../types';
 
@@ -956,9 +956,12 @@ export function AcademyTab({
                 : ''
             }
             onClick={() => {
-              const region = save.region ?? 'europe';
+              // a base revela TALENTO LOCAL: região derivada do país da org (não
+              // mais fallback fixo 'europe', que fazia um time BR revelar polonês)
+              // e forte viés pra nacionalidade da org via homeCountry.
+              const region = macroRegionOf(orgCountry) ?? save.region ?? 'americas';
               const seed = `aca:${save.org?.tag ?? 'org'}:${save.split}:${aca.length}:${save.budget}`;
-              const p = makeProspect(seed, region, save.split);
+              const p = makeProspect(seed, region, save.split, orgCountry);
               update({ academy: [...aca, p], budget: save.budget - ACADEMY_SCOUT_COST });
             }}
             style={{

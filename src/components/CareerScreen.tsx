@@ -794,7 +794,7 @@ export const REGION_CC: Record<MacroRegion, string[]> = {
 // sufixos pra compor nicks: 50 bases x ~13 variações = centenas de nicks únicos,
 // evitando o "monte de jogador repetido" (com a renovação, muitos jovens nascem).
 const PROSPECT_NICK_SUFFIX = ['', '', 'zy', 'ko', 'ix', 'er', '1x', 'zin', 'oo', 'qt', 'on', 'sk', 'y0'];
-function prospectIdentity(seed: string, region: MacroRegion): { nick: string; name: string; country: string } {
+function prospectIdentity(seed: string, region: MacroRegion, homeCountry?: string): { nick: string; name: string; country: string } {
   const h = hashStr(seed);
   const names = PROSPECT_NAMES[region] ?? PROSPECT_NAMES.europe;
   const ccs = REGION_CC[region] ?? REGION_CC.europe;
@@ -802,10 +802,15 @@ function prospectIdentity(seed: string, region: MacroRegion): { nick: string; na
   // (com sinal) vira NEGATIVO p/ h >= 2^31, gerando índice negativo => undefined.
   const base = PROSPECT_NICKS[(h >>> 4) % PROSPECT_NICKS.length];
   const suffix = PROSPECT_NICK_SUFFIX[(h >>> 11) % PROSPECT_NICK_SUFFIX.length];
+  // NACIONALIDADE: uma base forma TALENTO LOCAL. Com homeCountry, ~78% dos jovens
+  // saem com a nacionalidade da casa e ~22% são "imports" da mesma macro-região
+  // (existem, mas são minoria) — assim um time BR não revela/regenera um polonês.
+  // Sem homeCountry, distribui pela macro-região como antes.
+  const country = homeCountry && (h % 100) < 78 ? homeCountry : ccs[h % ccs.length];
   return {
     nick: base + suffix,
     name: names[(h >>> 7) % names.length],
-    country: ccs[h % ccs.length],
+    country,
   };
 }
 
@@ -824,9 +829,9 @@ export interface AcademyEntry {
   potential: number;  // OVR teto que pode atingir treinando
 }
 // gera um prospecto jovem (determinístico pelo seed) com potencial de evolução
-export function makeProspect(seed: string, region: MacroRegion, split: number): AcademyEntry {
+export function makeProspect(seed: string, region: MacroRegion, split: number, homeCountry?: string): AcademyEntry {
   const h = hashStr(seed);
-  const ident = prospectIdentity(seed, region);
+  const ident = prospectIdentity(seed, region, homeCountry);
   const role: Role = FILL_ROLES[(h >>> 2) % FILL_ROLES.length]; // >>> (sem sinal): evita índice negativo
   const base = 58 + (h % 9); // 58-66 (jovem cru)
   const e: AcademyEntry = {
@@ -1633,7 +1638,10 @@ function potBaseAge(player: Player, youthAge?: Record<string, number>, youthDebu
 function regenYouth(team: TeamSeason, slot: number, gen: number, debut: number, a0: number, orig: Player): Player {
   const seed = `regen:${team.id}:${slot}:${gen}`;
   const region = macroRegionOf(team.country) ?? 'europe';
-  const ident = prospectIdentity(seed, region);
+  // o substituto herda a nacionalidade do titular que saiu (a base do time forma
+  // talento local) — um AWPer BR aposentado abre vaga pra um jovem BR, não um
+  // polonês aleatório. orig.country > país do time (cobre imports do elenco).
+  const ident = prospectIdentity(seed, region, orig.country || team.country);
   const h = hashStr(seed);
   // herda o PERFIL do titular que saiu (mesma função/estilo) e entra um pouco abaixo:
   // quanto mais forte a vaga, menor o gap — o time mantém a firepower ao renovar.
