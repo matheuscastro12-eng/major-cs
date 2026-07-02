@@ -84,6 +84,16 @@ const ULTIMATE_ENABLED = (() => {
     return true;
   }
 })();
+// Road to Pro — 2º modo do lançamento. Ligado por padrão, com o MESMO kill-switch
+// do Ultimate: localStorage rtm-rtp='0' esconde na hora (rollback sem redeploy se
+// aparecer algo grave). RtP nunca teve revisão profunda, então a rede é essencial.
+const RTP_ENABLED = (() => {
+  try {
+    return localStorage.getItem('rtm-rtp') !== '0';
+  } catch {
+    return true;
+  }
+})();
 const MatchDetail = lazyWithReload(() => import('./components/MatchDetail').then((m) => ({ default: m.MatchDetail })));
 const TournamentStats = lazyWithReload(() => import('./components/TournamentStats').then((m) => ({ default: m.TournamentStats })));
 import { applyEvolution, buildEvolution, TransferScreen, type TransferOffer } from './components/TransferScreen';
@@ -280,6 +290,7 @@ export default function App() {
   // (deep link), manda de volta pro menu — o modo não aparece em produção.
   useEffect(() => {
     if (!ULTIMATE_ENABLED && screen === 'ultimate') setScreen('home');
+    if (!RTP_ENABLED && screen === 'rtp') setScreen('home'); // kill-switch: deep link /road-to-pro cai na home
   }, [screen]);
   const { account, ready: accountReady, refresh: refreshAccount, logout } = useAccount();
   const { manager, saveManager } = useManager();
@@ -989,7 +1000,7 @@ export default function App() {
           }}
           onHall={() => setScreen('hall')}
           onUltimate={ULTIMATE_ENABLED ? () => setScreen('ultimate') : undefined}
-          onRoadToPro={() => setScreen('rtp')}
+          onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           onLeaderboard={() => setScreen('leaderboard')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
@@ -1049,7 +1060,7 @@ export default function App() {
       {ULTIMATE_ENABLED && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
-      {screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
+      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (
