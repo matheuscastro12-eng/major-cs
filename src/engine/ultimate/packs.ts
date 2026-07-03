@@ -35,26 +35,26 @@ export const PACK_DEFS: PackDef[] = [
   {
     id: 'silver', name: 'Pacote Prata', desc: '5 cartas · 1 ouro garantido',
     cost: 6000, cards: 5, color: '#c3ccd6',
-    weights: { silver: 42, gold: 38, rareGold: 15, elite: 5 },
+    weights: { silver: 43, gold: 45.5, rareGold: 10, elite: 1.5 },
     guaranteed: [{ bucket: 'gold', count: 1 }],
   },
   {
     id: 'gold', name: 'Pacote Ouro', desc: '7 cartas · 2 ouros garantidos',
     cost: 14000, cards: 7, color: '#e8c170',
-    weights: { gold: 48, rareGold: 34, elite: 14, legendary: 3.5, icon: 0.5 },
+    weights: { gold: 54, rareGold: 38, elite: 7, legendary: 0.9, icon: 0.1 },
     guaranteed: [{ bucket: 'gold', count: 2 }],
   },
   {
     // temático: só existe porque o catálogo agora tem specials TOTS curadas
     id: 'tots', name: 'Pacote TOTS', desc: '5 cartas · 1 Time da Temporada garantida',
-    cost: 30000, cards: 5, color: '#5ed88a',
-    weights: { rareGold: 42, elite: 36, legendary: 14, icon: 4, tots: 4 },
+    cost: 38000, cards: 5, color: '#5ed88a',
+    weights: { rareGold: 70, elite: 20, legendary: 5, icon: 1.5, tots: 3.5 },
     guaranteed: [{ bucket: 'special', count: 1 }],
   },
   {
     id: 'premium', name: 'Pacote Premium', desc: '11 cartas · 3 ouros raros garantidos',
     cost: 40000, cards: 11, color: '#c792ea',
-    weights: { rareGold: 46, elite: 38, legendary: 13, icon: 3 },
+    weights: { rareGold: 70, elite: 22, legendary: 6, icon: 2 },
     guaranteed: [{ bucket: 'gold', count: 3 }],
   },
 ];
