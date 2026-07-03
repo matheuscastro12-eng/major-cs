@@ -15,9 +15,10 @@ import {
 import {
   buildUserTeam, conditionModifiers, assembleProResult, pickMaps, execBoostOvr,
   majorEffectiveAttrs, neutralMapPrefs, NEUTRAL_COACH, applyMatchOutcome, matchConfidence,
-  playSeriesWinner, simulateSeriesForPlay,
+  simulateSeriesForPlay,
   type MatchPrep, type ProMatchResult, type MatchConsequence,
 } from './matchSim';
+import { resolveRoomSeries } from './roundModel';
 import { generateMoments, summarizeMoments, type MomentOutcome } from './moments';
 import { perkMatchFactors } from './perks';
 import { scoutReport } from './meta';
@@ -154,10 +155,10 @@ export function finishMajorMatch(save: RoadToProSave, prep: MatchPrep, outcomes:
   const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg);
   const userTeam = buildUserTeam(save, prep.effAttrs, momentBoost, 'user');
   const oppTeam: TTeam = { ...oppStored, wins: 0, losses: 0, roundDiff: 0, status: 'alive', noEdge: true };
-  // A JOGADA decide (mesma régua do circuito): o placar da série vem do seu
-  // desempenho nos momentos-chave; o simulateSeries é forçado a bater (só stats).
-  const play = playSeriesWinner(summary.score, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.length, prep.bestOf);
-  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, play);
+  // A JOGADA decide (mesma régua do circuito): placar natural da série pela sua
+  // jogada mapa a mapa (resolveRoomSeries); o simulateSeries é forçado a bater.
+  const room = resolveRoomSeries(save.player.role, outcomes, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf);
+  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins: room.mapWins, seriesWon: room.seriesWon });
   const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg);
   const pairingResult = userIdx === 0 ? series : flipSeries(series);
   return { result, pairingResult };

@@ -301,39 +301,6 @@ export function execBoostOvr(execAvg: number | null): number {
   return execAvg == null ? 0 : (execAvg - 0.55) * 10;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// A JOGADA DECIDE (v16): quem vence a série é DIRIGIDO pela sua performance nos
-// momentos-chave (playScore 0..1 = decisões + execução dos minigames). É o driver
-// PRINCIPAL — a força do adversário só desloca a régua. Sem isso os minigames não
-// teriam sentido (a IA decidiria tudo). Puro/determinístico pelo matchSeed.
-//
-// Calibração: swing da JOGADA ~±0.46 na prob por mapa (0.5→0.96 em play perfeito),
-// força ~±0.17 em 15 de gap de OVR. Assim: play ótimo bate adversário mais forte;
-// play ruim perde até pro mais fraco; e o gap de força ainda importa (progressão).
-export function playSeriesWinner(
-  playScore: number, edge: number, matchSeed: number, mapCount: number, bestOf: 1 | 3 | 5,
-): { mapWins: [number, number]; seriesWon: boolean } {
-  const rng = makeRng((matchSeed ^ 0x50a1e5) >>> 0);
-  // a JOGADA domina (mult 0.68 sobre a prob por mapa → BO3 amplia pra swing ~70pts
-  // de win-rate entre jogar perfeito e péssimo); a força desloca (~±0.17 em 15 de gap).
-  const p = Math.max(0.08, Math.min(0.92, 0.5 + (playScore - 0.5) * 0.68 + edge * 0.011));
-  const need = Math.ceil(bestOf / 2);
-  const n = Math.max(1, mapCount);
-  let you = 0, them = 0;
-  for (let i = 0; i < n && you < need && them < need; i++) {
-    if (rng() < p) you++; else them++;
-  }
-  const seriesWon = you >= need ? true : them >= need ? false : you > them || (you === them && rng() < p);
-  // A Sala SEMPRE encena a série até o DECIDER (map 0 → 1-1 → mapPoint), então o
-  // card oficial também vai ao decider: BO3 = 2-1, BO5 = 3-2, BO1 = 1-0. Assim o
-  // placar do card nunca contradiz a narrativa de N mapas que o jogador assistiu
-  // (antes o card podia sair 2-0 e a Sala mostrava 3 mapas → o "2-1 vs 2-0").
-  const mapWins: [number, number] = bestOf === 1
-    ? (seriesWon ? [1, 0] : [0, 1])
-    : (seriesWon ? [need, need - 1] : [need - 1, need]);
-  return { mapWins, seriesWon };
-}
-
 // Re-semeia o simulateSeries até o placar de MAPAS bater o resultado da jogada
 // (mesmo vencedor + 2-0/2-1). Assim o oficial (scoreboard/rating/histórico) é o
 // que a SUA jogada produziu, e o card nunca contradiz o que você viu. Fallback:

@@ -15,9 +15,10 @@ import { userPairing, getTeam, pairingBestOf, placementCode, resolveRound } from
 import {
   buildUserTeam, conditionModifiers, assembleProResult, pickMaps, majorEffectiveAttrs, execBoostOvr,
   neutralMapPrefs, NEUTRAL_COACH, applyMatchOutcome, matchConfidence,
-  playSeriesWinner, simulateSeriesForPlay,
+  simulateSeriesForPlay,
   type MatchPrep, type ProMatchResult, type MatchConsequence,
 } from './matchSim';
+import { resolveRoomSeries } from './roundModel';
 import { generateMoments, summarizeMoments, type MomentOutcome } from './moments';
 import { perkMatchFactors } from './perks';
 import { scoutReport } from './meta';
@@ -252,12 +253,12 @@ export function finishCircuitMatch(save: RoadToProSave, prep: MatchPrep, outcome
   const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg);
   const userTeam = buildUserTeam(save, prep.effAttrs, momentBoost, 'user');
   const oppTeam: TTeam = { ...oppStored, wins: 0, losses: 0, roundDiff: 0, status: 'alive', noEdge: true };
-  // A JOGADA decide: quem vence a série vem do SEU desempenho nos momentos-chave
-  // (decisões + minigames); o simulateSeries é re-semeado até bater esse placar,
-  // gerando só o scoreboard/stats. Sem isso a IA decidiria tudo e os minigames
-  // seriam cosméticos — e o card contradizia a Sala (bug do playtester).
-  const play = playSeriesWinner(summary.score, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.length, prep.bestOf);
-  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, play);
+  // A JOGADA decide: o placar da série sai da SUA jogada mapa a mapa (resolveRoomSeries
+  // — placar NATURAL 2-0/2-1/etc., a série para quando decide); o simulateSeries é
+  // re-semeado até bater esse placar, gerando só o scoreboard/stats. É a MESMA fonte
+  // que a Sala usa → o card nunca contradiz o que você jogou.
+  const room = resolveRoomSeries(save.player.role, outcomes, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf);
+  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins: room.mapWins, seriesWon: room.seriesWon });
   const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg);
   const matchResult = userIdx === 0 ? series : flipSeries(series);
   return { result, matchResult };

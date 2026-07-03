@@ -230,6 +230,48 @@ export function bridgeToBeat(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RESULTADO NATURAL DA SÉRIE (v16b): cada MAPA é decidido pela SUA jogada naquele
+// mapa (a média dos beats daquele mapa), com a força do adversário deslocando. A
+// série PARA quando alguém fecha (need mapas) → placar NATURAL: 2-0 (varreu), 2-1
+// (foi ao decider), 0-2, 1-2 — e 3-0/3-1/3-2 no BO5. É a FONTE DA VERDADE: a Sala
+// revela isto (fecha mapa a mapa, para quando decide) e o card oficial usa o mesmo
+// → nunca divergem. Puro/determinístico. `edge` = ovr do herói − força do adversário.
+export function resolveRoomSeries(
+  role: Role, outcomes: MomentOutcome[], edge: number,
+  matchSeed: number, maps: MapId[], bestOf: 1 | 3 | 5,
+): { maps: { map: MapId; score: [number, number]; won: boolean }[]; seriesWon: boolean; mapWins: [number, number] } {
+  const beats = buildBeatPlan(role, maps, matchSeed);
+  const rng = makeRng((matchSeed ^ 0x5e21e5) >>> 0);
+  const need = Math.ceil(bestOf / 2);
+  // desempenho por MAPA = média dos `value` dos beats daquele mapa (0..1).
+  const mapVals = new Map<number, number[]>();
+  outcomes.forEach((o, i) => {
+    const mi = beats[i]?.mapIndex ?? Math.min(i, Math.max(0, maps.length - 1));
+    const arr = mapVals.get(mi); if (arr) arr.push(o.value); else mapVals.set(mi, [o.value]);
+  });
+  const allPlay = outcomes.length ? outcomes.reduce((a, o) => a + o.value, 0) / outcomes.length : 0.5;
+  const out: { map: MapId; score: [number, number]; won: boolean }[] = [];
+  let you = 0, them = 0;
+  // joga mapa a mapa até alguém fechar (need). Mapa com beats usa a jogada DAQUELE
+  // mapa; mapas extras (ex.: 4º/5º de um BO5, sem beats no plano) usam a agregada.
+  const totalMaps = Math.max(maps.length || bestOf, bestOf);
+  for (let mi = 0; mi < totalMaps && you < need && them < need; mi++) {
+    const vals = mapVals.get(mi);
+    const mapPlay = (vals && vals.length) ? vals.reduce((a, b) => a + b, 0) / vals.length : allPlay;
+    // a JOGADA no mapa domina (mult 0.65 → swing forte); a força desloca (edge*0.012).
+    const p = Math.max(0.1, Math.min(0.9, 0.5 + (mapPlay - 0.5) * 0.65 + edge * 0.012));
+    const won = rng() < p;
+    const margin = Math.abs(mapPlay - 0.5) * 12 + Math.abs(edge) * 0.15;
+    const loser = Math.max(3, Math.min(11, Math.round(11 - margin + (rng() * 4 - 2))));
+    out.push({ map: maps[Math.min(mi, Math.max(0, maps.length - 1))] ?? 'mirage', score: won ? [13, loser] : [loser, 13], won });
+    if (won) you++; else them++;
+  }
+  // guarda final (pool minúsculo): se não fechou, o último mapa decide.
+  if (you < need && them < need && out.length) { if (out[out.length - 1].won) you++; else them++; }
+  return { maps: out, seriesWon: you > them, mapWins: [you, them] };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Killfeed sintetizado (dramatização local do outcome — NÃO do sim)
 
 const WEAPONS: Record<BuyTier, string[]> = {
