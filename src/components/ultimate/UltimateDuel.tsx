@@ -22,7 +22,10 @@ export interface DuelPlayArgs {
 // sessão do duelo FORA do React: o palco da partida substitui a tela inteira e
 // desmonta este componente — sem isso, ao fim do replay o usuário caía no menu
 // (revanche inalcançável) e a sala morria sem heartbeat.
-const duelSession: { code: string; view: 'menu' | 'room' } = { code: '', view: 'menu' };
+// `finishedCode`: a sala que JÁ rendeu partida (persiste ao desmonte do replay).
+// Quando essa sala é coletada pelo GC (4min), morrer é ESPERADO — não é erro. E a
+// fila ranqueada volta direto pro menu no remount (não fica presa na sala morta).
+const duelSession: { code: string; view: 'menu' | 'room'; finishedCode: string } = { code: '', view: 'menu', finishedCode: '' };
 
 // mesmo ledger do recordMatch PvP (escrito no startPvpMatch): serve de guarda
 // "já assisti" — replay só auto-abre pra partida ainda não vista.
@@ -56,6 +59,15 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
   const failedRef = useRef(new Set<string>()); // partidas que o pai não conseguiu montar
   // persiste a sessão fora do React (sobrevive ao desmonte durante o replay)
   useEffect(() => { duelSession.view = view; duelSession.code = code; }, [view, code]);
+  // ao voltar do replay de uma partida RANQUEADA, não fica preso na sala já
+  // encerrada (que dispararia "sala expirou") — volta direto pra fila.
+  useEffect(() => {
+    if (variant === 'ranked' && code && code === duelSession.finishedCode) {
+      duelSession.finishedCode = '';
+      setView('menu'); setCode(''); setState(null); setError('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── FILA RANQUEADA: entra → poll 2.5s → pareado → sala (já em 'drafting') ──
   const enterQueue = async () => {
@@ -111,7 +123,15 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
       if (document.hidden) return;
       const s = await fetchLobby(code, state?.lobby.code === code);
       if (!alive) return;
-      if (s === 'gone') { setError(ct('A sala expirou ou foi encerrada.')); setView('menu'); setState(null); setCode(''); return; }
+      if (s === 'gone') {
+        // sala que JÁ rendeu partida morrendo (GC de 4min) é esperado — volta
+        // pra fila SEM o alarme "sala expirou" (só é erro se morreu ANTES de jogar).
+        const expected = !!code && code === duelSession.finishedCode;
+        duelSession.finishedCode = '';
+        setView('menu'); setState(null); setCode('');
+        if (!expected) setError(ct('A sala expirou ou foi encerrada.'));
+        return;
+      }
       if (s && s !== 'unchanged') setState(s);
     };
     void poll();
@@ -168,6 +188,10 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
     if (!onPlay(args)) {
       failedRef.current.add(key);
       setError(ct('Não foi possível montar a partida (versão do rival incompatível).'));
+    } else {
+      // a sala rendeu partida: quando ela for coletada depois, é esperado (o
+      // handler de 'gone' não alarma) — e a ranqueada volta pra fila no remount.
+      duelSession.finishedCode = args.code;
     }
   }, [buildPlayArgs, onPlay]);
 
