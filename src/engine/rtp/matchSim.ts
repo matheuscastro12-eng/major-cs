@@ -7,7 +7,7 @@
 // foco, físico) modula os atributos efetivos: é aqui que a vida fora do servidor
 // finalmente MORDE o desempenho dentro dele.
 
-import { type Rng } from '../rng';
+import { makeRng, type Rng } from '../rng';
 import { hashStr } from '../../state/hash';
 import { simulateSeries, computeDisplay, mergeLines } from '../match';
 import { MAP_POOL, type MapId, type TPlayer, type TTeam, type Coach, type Role, type PlayerLine, type SeriesResult } from '../../types';
@@ -299,6 +299,49 @@ export function assembleProResult(userTeam: TTeam, oppTeam: TTeam, result: Serie
 // DECISÕES pesam mais, mas a MÃO aparece no rating de forma explícita.
 export function execBoostOvr(execAvg: number | null): number {
   return execAvg == null ? 0 : (execAvg - 0.55) * 10;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A JOGADA DECIDE (v16): quem vence a série é DIRIGIDO pela sua performance nos
+// momentos-chave (playScore 0..1 = decisões + execução dos minigames). É o driver
+// PRINCIPAL — a força do adversário só desloca a régua. Sem isso os minigames não
+// teriam sentido (a IA decidiria tudo). Puro/determinístico pelo matchSeed.
+//
+// Calibração: swing da JOGADA ~±0.46 na prob por mapa (0.5→0.96 em play perfeito),
+// força ~±0.17 em 15 de gap de OVR. Assim: play ótimo bate adversário mais forte;
+// play ruim perde até pro mais fraco; e o gap de força ainda importa (progressão).
+export function playSeriesWinner(
+  playScore: number, edge: number, matchSeed: number, mapCount: number, bestOf: 1 | 3 | 5,
+): { mapWins: [number, number]; seriesWon: boolean } {
+  const rng = makeRng((matchSeed ^ 0x50a1e5) >>> 0);
+  // a JOGADA domina (mult 0.68 sobre a prob por mapa → BO3 amplia pra swing ~70pts
+  // de win-rate entre jogar perfeito e péssimo); a força desloca (~±0.17 em 15 de gap).
+  const p = Math.max(0.08, Math.min(0.92, 0.5 + (playScore - 0.5) * 0.68 + edge * 0.011));
+  const need = Math.ceil(bestOf / 2);
+  const n = Math.max(1, mapCount);
+  let you = 0, them = 0;
+  for (let i = 0; i < n && you < need && them < need; i++) {
+    if (rng() < p) you++; else them++;
+  }
+  const seriesWon = you >= need ? true : them >= need ? false : you > them || (you === them && rng() < p);
+  return { mapWins: [you, them], seriesWon };
+}
+
+// Re-semeia o simulateSeries até o placar de MAPAS bater o resultado da jogada
+// (mesmo vencedor + 2-0/2-1). Assim o oficial (scoreboard/rating/histórico) é o
+// que a SUA jogada produziu, e o card nunca contradiz o que você viu. Fallback:
+// se o placar exato não sair em N tentativas, casa ao menos o VENCEDOR.
+export function simulateSeriesForPlay(
+  baseSeed: number, a: TTeam, b: TTeam, maps: { map: MapId; pickedBy: 0 | 1 | -1 }[],
+  bestOf: 1 | 3 | 5, target: { mapWins: [number, number]; seriesWon: boolean },
+): SeriesResult {
+  let winnerMatch: SeriesResult | null = null;
+  for (let k = 0; k <= 160; k++) {
+    const s = simulateSeries(makeRng((baseSeed ^ (k * 0x9e3779b1)) >>> 0), a, b, maps, bestOf);
+    if (s.mapScore[0] === target.mapWins[0] && s.mapScore[1] === target.mapWins[1]) return s;
+    if (!winnerMatch && (s.winner === 0) === target.seriesWon) winnerMatch = s;
+  }
+  return winnerMatch ?? simulateSeries(makeRng(baseSeed >>> 0), a, b, maps, bestOf);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

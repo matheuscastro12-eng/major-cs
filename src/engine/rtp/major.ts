@@ -8,7 +8,6 @@
 
 import { makeRng } from '../rng';
 import { hashStr } from '../../state/hash';
-import { simulateSeries } from '../match';
 import {
   createSwissStage, stageAdvancers, createPlayoffStage, resolveRound,
   userPairing, getTeam, pairingBestOf, placementCode,
@@ -16,6 +15,7 @@ import {
 import {
   buildUserTeam, conditionModifiers, assembleProResult, pickMaps, execBoostOvr,
   majorEffectiveAttrs, neutralMapPrefs, NEUTRAL_COACH, applyMatchOutcome, matchConfidence,
+  playSeriesWinner, simulateSeriesForPlay,
   type MatchPrep, type ProMatchResult, type MatchConsequence,
 } from './matchSim';
 import { generateMoments, summarizeMoments, type MomentOutcome } from './moments';
@@ -152,10 +152,12 @@ export function finishMajorMatch(save: RoadToProSave, prep: MatchPrep, outcomes:
   const oppStored = getTeam(t, oppId);
   const summary = summarizeMoments(outcomes);
   const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg);
-  const rng = makeRng((prep.matchSeed ^ 0x1234567) >>> 0);
   const userTeam = buildUserTeam(save, prep.effAttrs, momentBoost, 'user');
   const oppTeam: TTeam = { ...oppStored, wins: 0, losses: 0, roundDiff: 0, status: 'alive', noEdge: true };
-  const series = simulateSeries(rng, userTeam, oppTeam, prep.maps, prep.bestOf);  // user = índice 0
+  // A JOGADA decide (mesma régua do circuito): o placar da série vem do seu
+  // desempenho nos momentos-chave; o simulateSeries é forçado a bater (só stats).
+  const play = playSeriesWinner(summary.score, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.length, prep.bestOf);
+  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, play);
   const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg);
   const pairingResult = userIdx === 0 ? series : flipSeries(series);
   return { result, pairingResult };
