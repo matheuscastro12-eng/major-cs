@@ -884,7 +884,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     const timer = window.setTimeout(() => {
       recordedSeasonsRef.current.add(key);
       // ranking salvo (conta paga, só em sala RANQUEADA): manda o resultado e atualiza meu MMR
-      if (account?.paid && state.lobby.ranked) void reportResult(won, nick || account.nick).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
+      if (account?.paid && state.lobby.ranked) void reportResult(won, nick || account.nick, state.lobby.code).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
       setSessionProfile((current) => {
         const next = {
           points: current.points + points,

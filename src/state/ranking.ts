@@ -40,7 +40,9 @@ export async function fetchMyRank(nick?: string): Promise<MyRank | null> {
   if (!getToken()) return null;
   try { return (await post({ action: 'me', token: getToken(), nick })) as unknown as MyRank; } catch { return null; }
 }
-export async function reportResult(won: boolean, nick?: string): Promise<ReportResult | null> {
+// `code` = lobby da partida: o servidor agora só pontua reports POR PARTIDA
+// (1 por jogador) e aplica o MMR quando os dois lados batem (anti-fraude).
+export async function reportResult(won: boolean, nick?: string, code?: string): Promise<ReportResult | null> {
   if (!getToken()) return null;
-  try { return (await post({ action: 'report', token: getToken(), won, nick })) as unknown as ReportResult; } catch { return null; }
+  try { return (await post({ action: 'report', token: getToken(), won, nick, code })) as unknown as ReportResult; } catch { return null; }
 }

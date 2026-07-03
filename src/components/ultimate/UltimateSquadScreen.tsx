@@ -737,7 +737,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const eloBefore = state.profile.elo;
     // sala da FILA (ranked) vale RP + ladder; sala PRIVADA é amistoso (só credits).
     const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, args.ranked, score);
-    if (!already && args.ranked) void reportResult(won, displayName); // só a ranqueada alimenta o ranking global
+    if (!already && args.ranked) void reportResult(won, displayName, args.code); // só a ranqueada alimenta o ranking global (report POR PARTIDA)
     const eloAfter = eloBefore + outcome.eloDelta;
     setResult(null);
     setLiveRound(0);

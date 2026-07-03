@@ -8,6 +8,7 @@
 // Ações (POST body.action): me | ladder | report | champions.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { decidePair, rankedDelta } from './_reportPairing.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -52,6 +53,10 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     sql`ALTER TABLE rtm_ranking ADD COLUMN IF NOT EXISTS season INT`,
     sql`ALTER TABLE rtm_ranking ADD COLUMN IF NOT EXISTS season_games INT DEFAULT 0`,
     sql`CREATE TABLE IF NOT EXISTS rtm_season_archive (season INT, email TEXT, nick TEXT, mmr INT, division TEXT, place INT, PRIMARY KEY (season, email))`,
+    // reports por partida (anti-fraude): 1 por jogador por lobby; o MMR só é
+    // aplicado quando os dois lados batem (ver api/_reportPairing.ts).
+    sql`CREATE TABLE IF NOT EXISTS rtm_match_reports (code TEXT, email TEXT, nick TEXT, won BOOLEAN NOT NULL, status TEXT DEFAULT 'pending', reported_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (code, email))`,
+    sql`CREATE INDEX IF NOT EXISTS rtm_match_reports_email_idx ON rtm_match_reports (email, status)`,
   ]);
   schemaReady = true;
 }
@@ -146,34 +151,118 @@ export default async function handler(
     };
   };
 
+  // aplica UMA partida ranqueada no MMR de um jogador (mesma fórmula do report
+  // legado). Só toca em linha da temporada corrente — linha velha/inexistente
+  // é ignorada (o jogador re-sincroniza no próximo 'me').
+  const applyRanked = async (em: string, w: boolean) => {
+    const cur = await sql`SELECT mmr, season_games FROM rtm_ranking WHERE email=${em} AND season=${season.no}`;
+    if (!cur.length) return null;
+    const before = Number(cur[0].mmr ?? 1000);
+    const gamesBefore = Number(cur[0].season_games ?? 0);
+    const delta = rankedDelta(w, before, gamesBefore, { placementGames: PLACEMENT_GAMES, kWin: K_WIN, kLoss: K_LOSS, kPlace: K_PLACE });
+    const after = Math.max(0, before + delta);
+    const gamesAfter = gamesBefore + 1;
+    await sql`UPDATE rtm_ranking SET mmr=${after}, wins=wins+${w ? 1 : 0}, losses=losses+${w ? 0 : 1}, season_games=${gamesAfter}, peak=GREATEST(peak, ${after}), updated_at=now() WHERE email=${em}`;
+    return { delta, before, after, gamesBefore, gamesAfter };
+  };
+
+  // carência: reports meus pendentes há 10+ min sem contraparte entram solo
+  // (oponente fechou a aba antes de reportar). Roda no 'me' e no 'report'.
+  const sweepSoloGrace = async () => {
+    const stale = await sql`
+      SELECT code, won FROM rtm_match_reports r
+      WHERE email=${email} AND status='pending' AND reported_at < now() - interval '10 minutes'
+        AND NOT EXISTS (SELECT 1 FROM rtm_match_reports o WHERE o.code=r.code AND o.email<>${email})`;
+    for (const s of stale) {
+      // marca ANTES de aplicar (idempotência entre requests concorrentes: só
+      // quem transicionar pending→applied-solo credita a partida).
+      const claim = await sql`UPDATE rtm_match_reports SET status='applied-solo' WHERE code=${String(s.code)} AND email=${email} AND status='pending' RETURNING code`;
+      if (claim.length) await applyRanked(email, !!s.won);
+    }
+  };
+
   if (action === 'me') {
     await ensureRow();
+    await sweepSoloGrace();
     res.status(200).json(await myRow());
     return;
   }
 
   if (action === 'report') {
     const won = !!body.won;
+    const code = String(body.code ?? '').trim().slice(0, 12);
     await ensureRow();
-    const cur = await sql`SELECT mmr, season_games FROM rtm_ranking WHERE email=${email}`;
-    const before = Number(cur[0]?.mmr ?? 1000);
-    const gamesBefore = Number(cur[0]?.season_games ?? 0);
-    const placing = gamesBefore < PLACEMENT_GAMES;
-    const kWin = placing ? K_PLACE : K_WIN;
-    const kLoss = placing ? K_PLACE : K_LOSS;
-    const delta = won ? kWin : -Math.min(kLoss, before);
-    const after = Math.max(0, before + delta);
-    const gamesAfter = gamesBefore + 1;
-    await sql`UPDATE rtm_ranking SET mmr=${after}, wins=wins+${won ? 1 : 0}, losses=losses+${won ? 0 : 1}, season_games=${gamesAfter}, peak=GREATEST(peak, ${after}), updated_at=now() WHERE email=${email}`;
-    const divisionBefore = divFor(before, gamesBefore);
-    const divisionAfter = divFor(after, gamesAfter);
+    await sweepSoloGrace();
+    // report ranqueado agora é POR PARTIDA: precisa do código do lobby. Sem
+    // código = cliente antigo → não pontua (resposta 200 pra não poluir o
+    // console; o cliente ignora o corpo).
+    if (!code) { res.status(200).json({ applied: false, legacy: true, delta: 0, me: await myRow(), ...seasonInfo }); return; }
+    // partida precisa existir, ser RANQUEADA (qualquer modo online) e o
+    // reporter precisa ter jogado nela (participante não-espectador).
+    const lb = await sql`SELECT ranked, mode, created_at FROM lobbies WHERE code=${code}`;
+    if (!lb.length) { res.status(404).json({ error: 'partida não encontrada' }); return; }
+    if (!lb[0].ranked) { res.status(400).json({ error: 'partida não é ranqueada' }); return; }
+    const inLobby = await sql`SELECT 1 FROM lobby_players WHERE code=${code} AND nick=${nick} AND COALESCE(spectator, false) = false`;
+    if (!inLobby.length) { res.status(403).json({ error: 'você não jogou essa partida' }); return; }
+    // 1 report por jogador por partida (PK code+email) — refresh não duplica.
+    const ins = await sql`INSERT INTO rtm_match_reports (code, email, nick, won) VALUES (${code}, ${email}, ${nick}, ${won}) ON CONFLICT (code, email) DO NOTHING RETURNING code`;
+    if (!ins.length) { res.status(200).json({ applied: false, duplicate: true, delta: 0, me: await myRow(), ...seasonInfo }); return; }
+
+    // pareamento zero-soma só faz sentido no DUELO 1v1 do Ultimate. Nos outros
+    // modos ranqueados (Major/gauntlet online) os dois humanos podem vencer
+    // legitimamente (placement) — aplica direto, protegido pelo dedupe por
+    // partida + checagem de participante acima.
+    if (String(lb[0].mode) !== 'ultimate') {
+      const solo = await applyRanked(email, won);
+      await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND email=${email}`;
+      if (!solo) { res.status(200).json({ applied: false, delta: 0, me: await myRow(), ...seasonInfo }); return; }
+      const db = divFor(solo.before, solo.gamesBefore);
+      const da = divFor(solo.after, solo.gamesAfter);
+      res.status(200).json({
+        applied: true, delta: solo.delta, before: solo.before, after: solo.after,
+        division: da, divisionBefore: db,
+        promoted: da !== db && solo.after > solo.before,
+        demoted: da !== db && solo.after < solo.before,
+        placing: solo.gamesAfter < PLACEMENT_GAMES, placementLeft: Math.max(0, PLACEMENT_GAMES - solo.gamesAfter),
+        placedNow: solo.gamesBefore < PLACEMENT_GAMES && solo.gamesAfter >= PLACEMENT_GAMES,
+        me: await myRow(),
+      });
+      return;
+    }
+
+    const other = await sql`SELECT email, won, status FROM rtm_match_reports WHERE code=${code} AND email<>${email} LIMIT 1`;
+    const outcome = decidePair(
+      won,
+      other.length ? !!other[0].won : null,
+      other.length ? (String(other[0].status) as 'pending' | 'applied' | 'applied-solo' | 'conflict') : null,
+    );
+
+    if (outcome === 'wait') {
+      // oponente ainda não reportou: nada aplicado; o par (ou a carência) fecha.
+      res.status(200).json({ applied: false, pending: true, delta: 0, me: await myRow(), ...seasonInfo });
+      return;
+    }
+    if (outcome === 'conflict') {
+      // os dois reclamam o mesmo resultado: partida não conta pra ninguém.
+      await sql`UPDATE rtm_match_reports SET status='conflict' WHERE code=${code}`;
+      res.status(200).json({ applied: false, conflict: true, delta: 0, me: await myRow(), ...seasonInfo });
+      return;
+    }
+    // consistente: aplica o meu lado (e o do oponente, se ainda não entrou solo).
+    const mine = await applyRanked(email, won);
+    if (outcome === 'apply-both' && other.length) await applyRanked(String(other[0].email), !!other[0].won);
+    await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND status IN ('pending')`;
+    if (!mine) { res.status(200).json({ applied: false, delta: 0, me: await myRow(), ...seasonInfo }); return; }
+    const divisionBefore = divFor(mine.before, mine.gamesBefore);
+    const divisionAfter = divFor(mine.after, mine.gamesAfter);
     res.status(200).json({
-      delta, before, after,
+      applied: true,
+      delta: mine.delta, before: mine.before, after: mine.after,
       division: divisionAfter, divisionBefore,
-      promoted: divisionAfter !== divisionBefore && after > before,
-      demoted: divisionAfter !== divisionBefore && after < before,
-      placing: gamesAfter < PLACEMENT_GAMES, placementLeft: Math.max(0, PLACEMENT_GAMES - gamesAfter),
-      placedNow: gamesBefore < PLACEMENT_GAMES && gamesAfter >= PLACEMENT_GAMES,
+      promoted: divisionAfter !== divisionBefore && mine.after > mine.before,
+      demoted: divisionAfter !== divisionBefore && mine.after < mine.before,
+      placing: mine.gamesAfter < PLACEMENT_GAMES, placementLeft: Math.max(0, PLACEMENT_GAMES - mine.gamesAfter),
+      placedNow: mine.gamesBefore < PLACEMENT_GAMES && mine.gamesAfter >= PLACEMENT_GAMES,
       me: await myRow(),
     });
     return;
