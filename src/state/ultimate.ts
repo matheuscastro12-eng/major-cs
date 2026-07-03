@@ -266,7 +266,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       ({ t: Date.now(), mode, won, score, eloDelta, credits });
     if (!ranked) {
       // amistoso (sem risco): não mexe em elo/w-l/streak/season; só paga credits.
-      const credits = won ? 500 : 150;
+      // amistoso é TREINO, não farm: recompensa simbólica (era 500/150, dava pra
+      // spammar até um time 95+ em ~20min). Renda de verdade vem de rivals (PvP),
+      // daily, gauntlet — capados. ~90/vitória → 300+ jogos por um pack Elite.
+      const credits = won ? 90 : 25;
       let s = _addCredits(get().state, credits);
       s = _pushHistory(s, rec('casual', 0, credits));
       persist(s);

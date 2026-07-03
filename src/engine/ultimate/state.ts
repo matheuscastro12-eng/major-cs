@@ -70,11 +70,12 @@ export interface UltimateProfile {
 }
 
 export const ULTIMATE_VERSION = 1;
-export const STARTING_CREDITS = 15000;
+export const STARTING_CREDITS = 6000;   // começa com ~1 pack Prata, não um Ouro de cara
 export const STARTING_ELO = 1000;
 // evolução de cartas: teto de níveis + custo (em credits) p/ ir de boost b → b+1.
+// Encarecida (era 4k/9k/18k): empurrar uma carta pra 95+ é investimento, não trivial.
 export const EVO_MAX = 3;
-export const EVO_COSTS = [4000, 9000, 18000];
+export const EVO_COSTS = [8000, 18000, 36000];
 
 export interface UltimateState {
   version: number;
@@ -145,7 +146,7 @@ export function claimSeasonReward(state: UltimateState, id: string): UltimateSta
 
 // ── Elite Gauntlet: desafio diário de sequência de vitórias ──
 export const GAUNTLET_TARGET = 5;
-export const GAUNTLET_WIN_CREDITS = [800, 1200, 2000, 3500, 6000]; // credits por vitória (index = wins-1)
+export const GAUNTLET_WIN_CREDITS = [800, 1200, 2000, 3200, 4500]; // credits por vitória (index = wins-1); topo aparado (era 6000)
 
 // inicia um run do Gauntlet (1 por dia). No-op se já iniciou hoje.
 export function gauntletStart(state: UltimateState, today: string): UltimateState {

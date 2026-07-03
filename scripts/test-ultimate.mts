@@ -490,10 +490,13 @@ test('migrateUltimate preenche objectivesClaimed (default [] + preserva válidos
 });
 
 test('evolveCard: sobe boost gastando EVO_COSTS, respeita teto e saldo', () => {
-  const s0 = grantCard(defaultUltimateState(), 'p1:gold', 'pack', { id: 'c1' });
+  // saldo folgado: EVO_COSTS[0] agora pode ser > STARTING_CREDITS (evolução virou
+  // investimento, não trivial) — o teste não pode depender do start bancar a evo.
+  const s0 = addCredits(grantCard(defaultUltimateState(), 'p1:gold', 'pack', { id: 'c1' }), 100000);
+  const startCredits = s0.profile.credits;
   const r1 = evolveCard(s0, 'c1');
   assert.ok(r1.ok && r1.newBoost === 1 && r1.cost === EVO_COSTS[0]);
-  assert.equal(r1.state.profile.credits, STARTING_CREDITS - EVO_COSTS[0]);
+  assert.equal(r1.state.profile.credits, startCredits - EVO_COSTS[0]);
   assert.equal(r1.state.inventory.find((o) => o.id === 'c1')!.boost, 1);
   assert.equal(s0.inventory.find((o) => o.id === 'c1')!.boost, undefined); // original intacto
   // sobe até o teto (com saldo folgado)
