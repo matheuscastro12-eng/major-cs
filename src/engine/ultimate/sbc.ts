@@ -25,6 +25,9 @@ export const SBCS: SbcDef[] = [
   { id: 'br-pride', name: 'Orgulho Nacional', desc: '5 cartas do mesmo país, OVR médio ≥ 78.', req: { count: 5, sameCountry: true, minOvrAvg: 78 }, reward: { credits: 8000, card: 'rareGold' } },
   { id: 'regional', name: 'Bloco Regional', desc: '5 cartas da mesma região, OVR médio ≥ 80.', req: { count: 5, sameRegion: true, minOvrAvg: 80 }, reward: { credits: 12000, card: 'elite' } },
   { id: 'elite-five', name: 'Time de Elite', desc: '5 cartas de raridade Elite ou melhor.', req: { count: 5, minTier: 5 }, reward: { card: 'legendary' } },
+  // endgame: consome o topo de uma coleção madura (6 Lendários+ distintos) em
+  // troca da special mais rara do catálogo — o outro caminho é a ladder Elite.
+  { id: 'road-legend', name: 'Rumo à Lenda', desc: '6 cartas Lendário ou melhor, OVR médio ≥ 90.', req: { count: 6, minTier: 6, minOvrAvg: 90 }, reward: { card: 'major' } },
 ];
 
 export function sbcById(id: string): SbcDef | undefined {

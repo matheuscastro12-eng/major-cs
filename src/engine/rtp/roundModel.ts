@@ -14,12 +14,14 @@ import type { MapId, Role } from '../../types';
 import type { MiniGameId } from './minigames';
 import {
   generateMoments, generateEntry, generateRetake, generateEconomy, generateIGL,
+  generateForcedEco, generateAntiEco, generatePostPlant, generateSaveCall, generateTimeout, generateLastRoundHalf,
   type Moment, type MomentOption, type MomentOutcome,
 } from './moments';
 
 export type Side = 'CT' | 'T';
 export type BuyTier = 'eco' | 'force' | 'full';
-export type BeatKind = 'pistol' | 'entry' | 'economy' | 'duel' | 'igl' | 'retake' | 'clutch' | 'mapPoint';
+export type BeatKind = 'pistol' | 'entry' | 'economy' | 'duel' | 'igl' | 'retake' | 'clutch' | 'mapPoint'
+  | 'forcedEco' | 'antiEco' | 'saveCall' | 'postPlant' | 'timeout' | 'lastHalf';
 
 export interface RoundCtx {
   mapIndex: number;
@@ -58,6 +60,8 @@ export interface FeedRow {
 const KICKER: Record<BeatKind, string> = {
   pistol: 'PISTOL', entry: 'EXECUÇÃO', economy: 'ECONOMIA', duel: 'ROUND DE GUN',
   igl: 'MID-ROUND CALL', retake: 'RETAKE', clutch: 'CLUTCH', mapPoint: 'MAP POINT',
+  forcedEco: 'FORCE-BUY', antiEco: 'ANTI-ECO', saveCall: 'SAVE OU JOGA?',
+  postPlant: 'PÓS-PLANT', timeout: 'TIMEOUT TÁTICO', lastHalf: 'FIM DO HALF',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,15 +81,28 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
 
   // IGL chama o mid-round em vez do duelo de rifle (a jogada passa pelo time todo).
   const isIGL = role === 'IGL';
-  // arco: pistol → entry → economia → (duelo|IGL call) → retake → clutch → map point
+  // VARIEDADE: alguns slots do arco sorteiam a SITUAÇÃO pelo seed — nem toda
+  // série tem o mesmo roteiro. Slot de abertura: execução ou último round do
+  // half; slot de economia: eco/force/anti-eco/save; slot do meio: duelo, call
+  // do IGL ou timeout tático; slot de bomba: retake ou pós-plant 1vX.
+  const ecoKind = (['economy', 'forcedEco', 'antiEco', 'saveCall'] as const)[hashStr(`v-eco:${matchSeed}`) % 4];
+  const ecoMoment = ecoKind === 'forcedEco' ? generateForcedEco(role)
+    : ecoKind === 'antiEco' ? generateAntiEco()
+      : ecoKind === 'saveCall' ? generateSaveCall(role)
+        : generateEconomy();
+  const openKind = hashStr(`v-open:${matchSeed}`) % 3 === 2 ? ('lastHalf' as const) : ('entry' as const);
+  const midKind: BeatKind = isIGL ? 'igl' : hashStr(`v-mid:${matchSeed}`) % 3 === 2 ? 'timeout' : 'duel';
+  const midMoment = midKind === 'igl' ? generateIGL() : midKind === 'timeout' ? generateTimeout(role) : duel;
+  const bombKind = hashStr(`v-bomb:${matchSeed}`) % 2 === 0 ? ('retake' as const) : ('postPlant' as const);
+  // arco: pistol → abertura → economia → meio → bomba → clutch → map point
   const blueprint: Array<{ kind: BeatKind; moment: Moment; mapIndex: number; round: number; bombSide?: Side }> = [
     { kind: 'pistol', moment: pistol, mapIndex: 0, round: 1 },
-    { kind: 'entry', moment: generateEntry(role), mapIndex: 0, round: 4 + (hashStr(`r1:${matchSeed}`) % 3) },
-    { kind: 'economy', moment: generateEconomy(), mapIndex: 0, round: 8 + (hashStr(`r2:${matchSeed}`) % 3) },
-    isIGL
-      ? { kind: 'igl', moment: generateIGL(), mapIndex: 1, round: 6 + (hashStr(`r3:${matchSeed}`) % 4) }
-      : { kind: 'duel', moment: duel, mapIndex: 1, round: 6 + (hashStr(`r3:${matchSeed}`) % 4) },
-    { kind: 'retake', moment: generateRetake(), mapIndex: 1, round: 13 + (hashStr(`r4:${matchSeed}`) % 4), bombSide: 'T' },
+    openKind === 'lastHalf'
+      ? { kind: 'lastHalf', moment: generateLastRoundHalf(role), mapIndex: 0, round: 15 }
+      : { kind: 'entry', moment: generateEntry(role), mapIndex: 0, round: 4 + (hashStr(`r1:${matchSeed}`) % 3) },
+    { kind: ecoKind, moment: ecoMoment, mapIndex: 0, round: 8 + (hashStr(`r2:${matchSeed}`) % 3) },
+    { kind: midKind, moment: midMoment, mapIndex: 1, round: 6 + (hashStr(`r3:${matchSeed}`) % 4) },
+    { kind: bombKind, moment: bombKind === 'postPlant' ? generatePostPlant() : generateRetake(), mapIndex: 1, round: 13 + (hashStr(`r4:${matchSeed}`) % 4), bombSide: 'T' },
     { kind: 'clutch', moment: clutch, mapIndex: m.length > 2 ? 2 : 1, round: 18 + (hashStr(`r5:${matchSeed}`) % 4), bombSide: 'CT' },
     { kind: 'mapPoint', moment: mapPoint, mapIndex: m.length > 2 ? 2 : 1, round: 24 + (hashStr(`r6:${matchSeed}`) % 4) },
   ];
@@ -93,7 +110,7 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
   // MOMENTOS-CHAVE com execução (minigame): pistol, clutch e map point sempre;
   // no meio da série, OU o round de gun/call OU o retake (o hash alterna — nem
   // toda partida tem o mesmo roteiro). ~4 execuções por série, cada uma curta.
-  const midSpot: BeatKind = hashStr(`spot:${matchSeed}`) % 2 === 0 ? (isIGL ? 'igl' : 'duel') : 'retake';
+  const midSpot: BeatKind = hashStr(`spot:${matchSeed}`) % 2 === 0 ? midKind : bombKind;
   const SPOT_GAME: Partial<Record<BeatKind, MiniGameId>> = {
     pistol: 'reaction',   // reflexo decide o pistol
     duel: 'flick',        // duelo de mira
@@ -101,6 +118,9 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
     retake: 'spray',      // transferência de spray no retake
     clutch: 'flick',      // o ÚLTIMO duelo do 1vX (a sala só dispara no closing)
     mapPoint: 'tempo',    // segurar o nervo no match point
+    timeout: 'memory',    // sair do pause com a leitura certa
+    postPlant: 'tempo',   // segurar o nervo no pós-plant 1vX
+    // forcedEco/antiEco/saveCall/lastHalf: decisões puras, sem execução
   };
   const spotFor = (k: BeatKind): MiniGameId | undefined => {
     if (k === 'pistol' || k === 'clutch' || k === 'mapPoint') return SPOT_GAME[k];
@@ -109,10 +129,15 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
   };
 
   return blueprint.map((b, i): BeatSpec => {
-    const yourBuy: BuyTier = b.kind === 'pistol' ? 'eco' : b.kind === 'economy' ? 'force' : buy();
-    const theirBuy: BuyTier = b.kind === 'pistol' ? 'eco' : buy();
+    const yourBuy: BuyTier =
+      b.kind === 'pistol' || b.kind === 'saveCall' ? 'eco'
+        : b.kind === 'economy' || b.kind === 'forcedEco' ? 'force'
+          : b.kind === 'antiEco' ? 'full' : buy();
+    const theirBuy: BuyTier =
+      b.kind === 'pistol' || b.kind === 'antiEco' ? 'eco'
+        : b.kind === 'forcedEco' ? 'full' : buy();
     const alive: [number, number] =
-      b.kind === 'clutch' ? [1, 2 + (hashStr(`a:${i}:${matchSeed}`) % 2)]
+      b.kind === 'clutch' || b.kind === 'postPlant' ? [1, 2 + (hashStr(`a:${i}:${matchSeed}`) % 2)]
         : b.kind === 'retake' ? [3 + (hashStr(`ra:${i}:${matchSeed}`) % 2), 2]
           : [5, 5];
     const bomb = b.bombSide

@@ -6,6 +6,12 @@
 // Geração modulada por estado: moral baixa puxa eventos ruins; fama alta puxa
 // convites; contrato perto do fim força a renovação; físico baixo abre risco de
 // lesão. Tudo determinístico (RNG do save).
+//
+// FASE DE CARREIRA: o `eligible` de cada template também gateia por momento de
+// vida (idade, tier do time, fama, nível) — novato vive o primeiro salário e a
+// gaming house; a ascensão traz assédio de org e hype; o veterano lida com
+// mentoria, lesão crônica e o pós-título. Um save de 10 temporadas não vê tudo
+// de uma vez: o conteúdo acompanha a jornada.
 
 import { type Rng } from '../rng';
 import { hashStr } from '../../state/hash';
@@ -304,6 +310,202 @@ const TEMPLATES: LifeTemplate[] = [
       options: [
         { id: 'buy', label: 'Comprar (R$ 2.500)', outcome: 'Setup novo instalado. A fluidez deu aquele gás na confiança.', deltas: { money: -2500, focus: +4, morale: +4 } },
         { id: 'skip', label: 'O que tenho basta', outcome: 'Guardou a grana. Mão não é o monitor.', deltas: {} },
+      ],
+    }),
+  },
+
+  // ═══ FASE: NOVATO ════════════════════════════════════════════════════════════
+  // Início de carreira — base/access, nível baixo, ainda morando com a família.
+  {
+    id: 'first-salary', category: 'money', weight: 20,
+    eligible: (s) => s.player.progression.level <= 6 && (s.team.tier === 'academy' || s.team.tier === 'access') && s.life.money < 5000,
+    make: (s) => ({
+      title: 'Primeiro salário',
+      body: `Caiu o pagamento da ${s.team.teamName}. Pode não ser muito, mas é o PRIMEIRO dinheiro que o CS te dá. Você fica olhando pro extrato sem acreditar.`,
+      options: [
+        { id: 'family', label: 'Ajudar em casa', outcome: 'Chegou com a sacola do mercado cheia. Sua mãe chorou — e você entendeu por que joga.', deltas: { rel: { family: +12 }, morale: +8, money: -400 } },
+        { id: 'save', label: 'Guardar cada centavo', outcome: 'Poupou tudo. Carreira de pro é curta e você já pensa como veterano.', deltas: { focus: +4, morale: +2 } },
+        { id: 'celebrate', label: 'Comemorar com os amigos', outcome: 'Rodada de pizza e lan house por sua conta. A resenha foi histórica — o bolso sentiu.', deltas: { money: -600, morale: +10, energy: -4 } },
+      ],
+    }),
+  },
+  {
+    id: 'gaming-house', category: 'career', weight: 18,
+    eligible: (s) => s.player.age <= 20 && (s.team.tier === 'academy' || s.team.tier === 'access'),
+    make: (s) => ({
+      title: 'Convite pra gaming house',
+      body: `A ${s.team.teamName} montou uma gaming house e quer o elenco morando junto. Sair de casa pela primeira vez, treino a dois passos do quarto — e zero privacidade.`,
+      options: [
+        { id: 'move', label: 'Fazer as malas', outcome: 'Mudou pra gaming house. O entrosamento explodiu, mas dormir com quatro teclados estralando é outra história.', deltas: { rel: { team: +12, family: -6 }, focus: +4, energy: -6 } },
+        { id: 'stay', label: 'Ficar na casa da família', outcome: 'Preferiu o quarto de sempre e a comida de casa. O time entendeu… mas notou a cadeira vazia na resenha.', deltas: { rel: { family: +6, team: -5 }, energy: +5 } },
+        { id: 'hybrid', label: 'Dormir lá só em semana de jogo', outcome: 'Negociou um meio-termo: gaming house em semana de campeonato. Ninguém ficou 100% feliz, mas funciona.', deltas: { rel: { team: +4 }, energy: -2 } },
+      ],
+    }),
+  },
+  {
+    id: 'school-pressure', category: 'personal', weight: 16,
+    eligible: (s) => s.player.age <= 18,
+    make: () => ({
+      title: 'E os estudos?',
+      body: 'Reunião de família: as notas caíram e seu pai colocou o boletim do lado do mousepad. "CS não paga boleto pra sempre." A conversa é séria.',
+      options: [
+        { id: 'both', label: 'Conciliar escola e treino', outcome: 'Montou uma rotina apertada: aula de manhã, servidor à noite. Cansa, mas a família respira aliviada.', deltas: { rel: { family: +10 }, energy: -8, focus: +2 } },
+        { id: 'allin', label: 'All-in no CS', outcome: '"Me dá dois anos." Bateu o pé e apostou tudo na carreira. Em casa, o silêncio no jantar diz muito.', deltas: { rel: { family: -10 }, focus: +8, morale: -3 } },
+        { id: 'promise', label: 'Prometer voltar depois', outcome: 'Prometeu trancar agora e retomar quando a carreira estabilizar. A família topou — e vai cobrar.', deltas: { rel: { family: +3 }, focus: +4 } },
+      ],
+    }),
+  },
+  {
+    id: 'veteran-advice', category: 'team', weight: 14,
+    eligible: (s) => s.player.age <= 19 && s.team.teammates.length > 0,
+    make: (s, rng) => {
+      const m = pickMate(s, rng, 'star')!;
+      return {
+        title: `Puxão de orelha do ${m.nick}`,
+        body: `Depois do treino, ${m.nick} te chamou de canto: "Vi teu demo. Tu tem mão, mas joga igual matchmaking." Ele se ofereceu pra revisar seus VODs.`,
+        options: [
+          { id: 'listen', label: 'Ouvir e anotar tudo', outcome: `Sentou com ${m.nick} e devorou os VODs. Doeu no ego, mas você saiu jogador melhor — e ganhou um aliado.`, deltas: { rel: { team: +10 }, focus: +6, morale: +2, energy: -4 } },
+          { id: 'proud', label: '"Minha mão me trouxe até aqui"', outcome: 'Agradeceu por educação e ignorou. O veterano deu de ombros: "Depois não diz que ninguém avisou."', deltas: { rel: { team: -5 }, morale: +2 } },
+        ],
+      };
+    },
+  },
+
+  // ═══ FASE: ASCENSÃO ══════════════════════════════════════════════════════════
+  // O nome começa a circular — orgs sondam, a mídia aposta, a stream cresce.
+  {
+    id: 'org-poach', category: 'career', weight: 15,
+    eligible: (s) => (s.team.tier === 'access' || s.team.tier === 'challenger') && s.life.fame >= 25 && !s.world.loanReturn,
+    make: (s) => ({
+      title: 'Uma org grande te sondou',
+      body: `Chegou mensagem no privado: o manager de uma org de cima "adoraria tomar um café" com você. Nada oficial — mas todo mundo sabe o que isso significa. E a ${s.team.teamName} não pode saber.`,
+      options: [
+        { id: 'meet', label: 'Aceitar o café', outcome: 'Foi na conversa. Nada assinado, mas agora você sabe seu preço de mercado — e a ambição acendeu.', deltas: { morale: +6, fame: +3, focus: -3 } },
+        { id: 'loyal', label: 'Recusar por lealdade', outcome: `Respondeu que tem contrato e compromisso com a ${s.team.teamName}. A notícia vazou no vestiário — e pegou bem.`, deltas: { rel: { team: +8 }, morale: +3 } },
+        { id: 'leverage', label: 'Usar pra pressionar a diretoria', outcome: 'Deixou a sondagem "escapar" na renovação. O salário subiu, mas a diretoria não esquece uma chantagem.', deltas: { wageMult: 1.15, rel: { team: -6 }, boardConf: -4 } },
+      ],
+    }),
+  },
+  {
+    id: 'hype-next-star', category: 'media', weight: 12,
+    eligible: (s) => s.life.fame >= 30 && s.player.age <= 23 && (s.team.tier === 'challenger' || s.team.tier === 'elite'),
+    make: (s) => ({
+      title: '"A próxima estrela do Brasil"',
+      body: `Saiu matéria grande com sua cara na capa: "${s.player.nick}, o futuro do CS brasileiro". Os números do artigo são reais — mas a expectativa que ele cria também.`,
+      options: [
+        { id: 'embrace', label: 'Abraçar o holofote', outcome: 'Repostou, agradeceu, surfou. A fama subiu — e junto dela, o peso de cada partida ruim.', deltas: { fame: +8, rel: { fans: +6 }, focus: -5 } },
+        { id: 'deflect', label: '"Estrela é o time"', outcome: 'Redirecionou o holofote pro elenco. A imprensa achou sem graça; o vestiário, não.', deltas: { fame: +2, rel: { team: +6 }, morale: +3 } },
+        { id: 'mute', label: 'Silenciar as redes na semana de jogo', outcome: 'Desinstalou tudo até a próxima partida. Ninguém joga bem lendo o próprio nome o dia inteiro.', deltas: { focus: +8, rel: { fans: -3 } } },
+      ],
+    }),
+  },
+  {
+    id: 'stream-contract', category: 'media', weight: 12,
+    eligible: (s) => s.life.fame >= 20 && s.sponsors.length < 3,
+    make: (s) => {
+      const perWeek = 300 + Math.round(s.life.fame * 8);
+      return {
+        title: 'Contrato de streaming',
+        body: `Uma plataforma ofereceu contrato de exclusividade: ${money(perWeek)}/semana pra streamar suas horas de treino. Dinheiro bom — mas stream é trabalho, e o dia continua tendo 24 horas.`,
+        options: [
+          { id: 'sign', label: 'Assinar a exclusividade', outcome: `Contrato fechado: +${money(perWeek)}/semana e chat lotado. Agora todo deathmatch é ao vivo.`, deltas: { addSponsor: { brand: 'Plataforma de stream', perWeek, weeks: 26, fameBonus: 5 }, fame: +5, energy: -5 } },
+          { id: 'casual', label: 'Streamar só quando der', outcome: 'Recusou a exclusividade mas segue ligando a câmera de vez em quando. Liberdade acima de tudo.', deltas: { fame: +2, rel: { fans: +3 } } },
+          { id: 'decline', label: 'Recusar — treino é sagrado', outcome: 'Agradeceu e recusou. Suas horas de servidor continuam sendo só suas.', deltas: { focus: +4 } },
+        ],
+      };
+    },
+  },
+  {
+    id: 'fan-encounter', category: 'media', weight: 10,
+    eligible: (s) => s.life.fame >= 15,
+    make: () => ({
+      title: 'Reconhecido na rua',
+      body: 'No shopping, um moleque de uns 14 anos te para tremendo: "Tu é meu jogador favorito, comecei a jogar por tua causa." A mãe dele pede uma foto.',
+      options: [
+        { id: 'time', label: 'Dar atenção de verdade', outcome: 'Tirou foto, trocou ideia sobre crosshair, autografou o mousepad do menino. Ele saiu flutuando — e você também.', deltas: { rel: { fans: +8 }, morale: +8, energy: -2 } },
+        { id: 'quick', label: 'Foto rápida e seguir', outcome: 'Sorriu pra foto e seguiu o dia. Educado, mas a pressa apareceu na cara do garoto.', deltas: { rel: { fans: +2 } } },
+      ],
+    }),
+  },
+
+  // ═══ FASE: VETERANO / PÓS-TÍTULO ═════════════════════════════════════════════
+  // A idade chega, o corpo cobra, e o jogo passa a ser também sobre legado.
+  {
+    id: 'mentor-rookie', category: 'team', weight: 15,
+    eligible: (s) => s.player.age >= 24 && s.player.progression.level >= 18 && s.team.teammates.length > 0,
+    make: (s) => ({
+      title: 'O novato da base',
+      body: `A ${s.team.teamName} subiu um moleque de 16 anos da base. Talento absurdo, cabeça de matchmaking. O coach sugeriu que VOCÊ o pegasse debaixo da asa — igual fizeram com você um dia.`,
+      options: [
+        { id: 'mentor', label: 'Virar o mentor dele', outcome: 'Sessões de VOD, papo de posicionamento, bronca na hora certa. O moleque destravou — e te chama de "professor" no comms.', deltas: { rel: { team: +10, coach: +5 }, morale: +6, energy: -6 } },
+        { id: 'distance', label: 'Cada um no seu corre', outcome: '"Aprendi apanhando, ele aprende também." Focou no seu jogo. O coach anotou a resposta.', deltas: { focus: +4, rel: { coach: -3 } } },
+        { id: 'rival', label: 'Ver como ameaça à vaga', outcome: 'Passou a treinar dobrado pra deixar claro quem é titular. Sua forma agradece; o clima no vestiário, não.', deltas: { focus: +6, energy: -8, rel: { team: -5 } } },
+      ],
+    }),
+  },
+  {
+    id: 'analyst-invite', category: 'career', weight: 10,
+    eligible: (s) => s.player.age >= 26 && s.life.fame >= 35,
+    make: () => ({
+      title: 'Convite pra bancada',
+      body: 'Uma produtora de eventos te chamou pra ser analista convidado num campeonato na sua semana livre. Cachê bom, exposição boa — e um gostinho do que vem depois da aposentadoria.',
+      options: [
+        { id: 'accept', label: 'Aceitar o convite', outcome: 'Mandou bem demais na bancada: leitura afiada, resenha na medida. O chat já pede sua contratação — e o cachê caiu na conta.', deltas: { money: +2500, fame: +6, rel: { fans: +5 }, energy: -8 } },
+        { id: 'decline', label: '"Ainda sou jogador"', outcome: 'Recusou educadamente. Bancada é pra depois — enquanto a mão responde, seu lugar é no servidor.', deltas: { focus: +5, morale: +2 } },
+      ],
+    }),
+  },
+  {
+    id: 'impostor-syndrome', category: 'health', weight: 14,
+    eligible: (s) => s.life.fame >= 55 && s.player.progression.level >= 25 && s.life.morale < 60,
+    make: () => ({
+      title: 'Síndrome do impostor',
+      body: 'Você chegou onde sonhava — e uma voz na sua cabeça insiste que foi sorte. Cada erro parece prova de que "descobriram a farsa". Ontem você ficou meia hora olhando pro loading screen.',
+      options: [
+        { id: 'therapy', label: 'Procurar o psicólogo esportivo', outcome: 'Colocou nome no monstro. "Isso tem tratamento e metade da elite sente o mesmo", disse o psicólogo. A cabeça começou a clarear.', deltas: { morale: +12, focus: +6, money: -900 } },
+        { id: 'open-up', label: 'Desabafar com o time', outcome: 'Abriu o jogo na concentração. Descobriu que não é o único — e o vestiário nunca esteve tão unido.', deltas: { rel: { team: +10 }, morale: +6 } },
+        { id: 'hide', label: 'Engolir e fingir que passa', outcome: 'Colocou a máscara de sempre. Por fora tudo bem; por dentro, a voz continua ligada.', deltas: { morale: -8, focus: -5 } },
+      ],
+    }),
+  },
+  {
+    id: 'chronic-wrist', category: 'health', weight: 16,
+    eligible: (s) => s.player.age >= 25 && !s.life.flags.injured,
+    make: (s) => ({
+      title: 'O pulso cobra a conta',
+      body: `São ${s.player.age - 15}+ anos de mouse. O formigamento virou rotina, o alongamento virou ritual — e o médico foi direto: "Isso é crônico. Dá pra conviver, mas não dá pra ignorar."`,
+      options: [
+        { id: 'program', label: 'Programa de fisio contínuo (R$ 1.500)', outcome: 'Contratou acompanhamento fixo: fisio duas vezes por semana, carga de treino monitorada. Caro, mas é o preço de continuar.', deltas: { money: -1500, fitness: +14, energy: +4 } },
+        { id: 'injection', label: 'Infiltração pra aguentar a temporada', outcome: 'A injeção segura a dor por ora e você segue jogando — mas todo veterano sabe que isso é empurrar a conta com juros.', deltas: { fitness: -10, money: -700 } },
+        { id: 'reduce', label: 'Cortar as horas de deathmatch', outcome: 'Reduziu o volume de treino mecânico e priorizou o descanso. O pulso melhorou; a mão sente falta do ritmo.', deltas: { fitness: +8, focus: -4, energy: +6 } },
+      ],
+    }),
+  },
+  {
+    id: 'investment-advisor', category: 'money', weight: 10,
+    eligible: (s) => s.life.money >= 20000,
+    make: (s) => {
+      const fee = 1200;
+      return {
+        title: 'Hora de investir?',
+        body: `Seu saldo passou de ${money(s.life.money)} e um consultor financeiro (indicação de outro pro) sugeriu parar de deixar tudo parado: "Carreira de jogador é curta. O dinheiro tem que trabalhar por você."`,
+        options: [
+          { id: 'invest', label: `Contratar o consultor (${money(fee)})`, outcome: 'Diversificou com juízo: renda fixa, um pouco de risco. Dormir sabendo que o futuro tem plano vale muito.', deltas: { money: -fee, morale: +6, focus: +3 } },
+          { id: 'course', label: 'Fazer um curso e aprender sozinho (R$ 800)', outcome: 'Preferiu entender antes de assinar. Planilha aberta, vídeo-aula no segundo monitor — respeito.', deltas: { money: -800, focus: +2, morale: +3 } },
+          { id: 'later', label: '"Depois eu vejo isso"', outcome: 'Empurrou pra depois. O dinheiro segue parado — e a carreira segue curta.', deltas: {} },
+        ],
+      };
+    },
+  },
+  {
+    id: 'charity-stream', category: 'media', weight: 8,
+    eligible: (s) => s.life.fame >= 35 && s.life.money >= 5000,
+    make: () => ({
+      title: 'Live beneficente',
+      body: 'Uma ONG da sua cidade te procurou pra encabeçar uma live beneficente — arrecadação pra reformar a quadra e a sala de informática do bairro onde você cresceu.',
+      options: [
+        { id: 'host', label: 'Topar e doar junto (R$ 2.000)', outcome: 'A live bateu meta em duas horas. Ver o bairro mobilizado pelo seu nome vale mais que qualquer troféu.', deltas: { money: -2000, fame: +7, morale: +10, rel: { fans: +8, family: +4 }, energy: -6 } },
+        { id: 'support', label: 'Divulgar sem aparecer', outcome: 'Compartilhou a campanha e mandou um vídeo de apoio. Ajudou — de longe.', deltas: { fame: +2, rel: { fans: +2 } } },
       ],
     }),
   },

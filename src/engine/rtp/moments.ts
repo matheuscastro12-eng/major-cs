@@ -181,6 +181,98 @@ export function generateEconomy(): Moment {
   };
 }
 
+// Variedade de conteúdo — situações táticas extras (mesma shape Moment, prontas
+// pra entrar no buildBeatPlan como as demais).
+
+// Eco forçado — de pistol contra full buy. O round é "perdido", mas dano e info
+// têm valor. A role muda a leitura: Support joga o stack, o resto caça exit.
+export function generateForcedEco(role: Role): Moment {
+  return {
+    id: 'm-forcedeco', kind: 'forcedeco',
+    title: 'Eco forçado',
+    situation: 'Zero de caixa: cinco pistols contra full buy. Ninguém espera o round — e é exatamente por isso que ele vale ouro.',
+    options: [
+      { id: 'rushstack', label: 'Rush juntos num ângulo só', attr: role === 'Support' ? 'teamwork' : 'aim', style: 'aggro', desc: 'Cinco pistols na mesma porta. Ou sai o milagre, ou sai rápido.' },
+      { id: 'damage', label: 'Tirar dano e sair vivo', attr: 'discipline', style: 'safe', desc: 'Quebra colete de longe e preserva o próximo round.' },
+      { id: 'exit', label: 'Caçar a exit frag no tempo', attr: 'anticipation', style: 'smart', desc: 'Espera a saída deles relaxar e pune a arma cara.' },
+    ],
+  };
+}
+
+// Anti-eco — o round que "não pode" perder. Jogar demais é o único jeito de errar.
+export function generateAntiEco(): Moment {
+  return {
+    id: 'm-antieco', kind: 'antieco',
+    title: 'Anti-eco',
+    situation: 'Eles estão de pistol e vocês de full. Round obrigatório — perder aqui quebra a economia E o moral. Como você joga?',
+    options: [
+      { id: 'punish', label: 'Pushar e atropelar', attr: 'aim', style: 'aggro', desc: 'Vai pra cima antes que armem a cilada. Cuidado com o stack.' },
+      { id: 'range', label: 'Segurar distância', attr: 'discipline', style: 'safe', desc: 'Pistol não ganha duelo de longe. Zero brecha, zero vergonha.' },
+      { id: 'spread', label: 'Fechar as trocas em dupla', attr: 'positioning', style: 'smart', desc: 'Cada ângulo com cobertura — se um cair, o rush morre no trade.' },
+    ],
+  };
+}
+
+// Pós-plant 1vX com o kit — você é o último CT vivo, defuse na mão. Kind
+// 'clutch' de propósito: fechar aqui conta (e narra) como clutch.
+export function generatePostPlant(): Moment {
+  return {
+    id: 'm-postplant', kind: 'clutch',
+    title: 'Pós-plant — 1vX com o kit',
+    situation: 'Bomba plantada, você é o último CT vivo — mas tem o kit. O relógio corre e cada passo faz barulho.',
+    options: [
+      { id: 'clear', label: 'Limpar os duelos antes', attr: 'aim', style: 'aggro', desc: 'Mata primeiro, defusa depois. Sem ninguém vivo, não tem stick errado.' },
+      { id: 'ninja', label: 'Ninja defuse na smoke', attr: 'composure', style: 'smart', desc: 'Entra calado, sticka na fumaça e reza meio segundo.' },
+      { id: 'sound', label: 'Fake no kit pra puxar o push', attr: 'anticipation', style: 'safe', desc: 'Toca o defuse, solta e espera — quem vier apressado, morre.' },
+    ],
+  };
+}
+
+// Decisão de save — o round já foi; a briga agora é pela economia do próximo.
+export function generateSaveCall(role: Role): Moment {
+  return {
+    id: 'm-savecall', kind: 'savecall',
+    title: 'Salvar ou tentar?',
+    situation: 'Deu ruim: 2v4, bomba plantada e o round praticamente perdido. Na sua mão, uma AWP/rifle caro. O que você faz com os segundos que restam?',
+    options: [
+      { id: 'try', label: 'Tentar o impossível', attr: 'clutch', style: 'aggro', desc: 'Ninguém salva highlight. Vai atrás do retake maluco.' },
+      { id: 'save', label: 'Salvar as armas', attr: 'discipline', style: 'safe', desc: 'Engole o round e garante o full buy do próximo. Frio, mas certo.' },
+      { id: 'flank', label: 'Sumir e punir o exit', attr: role === 'Lurker' ? 'anticipation' : 'gameSense', style: 'smart', desc: 'Se esconde no flanco e cobra caro de quem sair comemorando.' },
+    ],
+  };
+}
+
+// Timeout tático — o jogo travou e o coach pausou. O que você faz da pausa
+// mexe com o TIME todo, não só com você.
+export function generateTimeout(role: Role): Moment {
+  return {
+    id: 'm-timeout', kind: 'timeout',
+    title: 'Timeout tático',
+    situation: 'Sequência de rounds perdidos e o coach pediu pausa. Trinta segundos, cinco cabeças quentes. O que você coloca na mesa?',
+    options: [
+      { id: 'fire', label: 'Cobrar atitude no grito', attr: 'communication', style: 'aggro', desc: 'Sacode o time. Ou acorda todo mundo, ou racha de vez.' },
+      { id: 'reset', label: 'Acalmar e resetar', attr: role === 'IGL' ? 'leadership' : 'composure', style: 'safe', desc: 'Respira, limpa a lousa: "round novo, jogo novo".' },
+      { id: 'adjust', label: 'Propor o ajuste tático', attr: 'vision', style: 'smart', desc: 'Você viu o padrão deles. Aponta a correção exata.' },
+    ],
+  };
+}
+
+// Último round do half — a última chance de mexer no placar antes da troca de
+// lado (e a última leitura que eles levam pro intervalo).
+export function generateLastRoundHalf(role: Role): Moment {
+  const duelAttr = ROLE_DUEL_ATTR[role];
+  return {
+    id: 'm-lasthalf', kind: 'lasthalf',
+    title: 'Último round do half',
+    situation: 'Round 12. O que acontecer aqui vira o tom do intervalo — e a informação que você mostrar agora, eles estudam na troca de lado.',
+    options: [
+      { id: 'momentum', label: 'Fechar o half por cima', attr: duelAttr, style: 'aggro', desc: 'Carrega o round na sua função e entra no intervalo embalado.' },
+      { id: 'standard', label: 'Jogar o padrão treinado', attr: 'discipline', style: 'safe', desc: 'Nada de invenção: executa o protocolo e não entrega leitura.' },
+      { id: 'pocket', label: 'Gastar a jogada ensaiada', attr: 'vision', style: 'smart', desc: 'Solta a estratégia do bolso — eles não têm demo disso.' },
+    ],
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Resolução de um momento
 

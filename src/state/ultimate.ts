@@ -125,6 +125,9 @@ export async function syncUltimateFromCloud(): Promise<'restored' | 'pushed' | '
 // reconstrói igual. Lazy: só monta na 1ª vez que a Ultimate Squad é aberta.
 // Specials TOTS: os 11 maiores OVR do catálogo base ganham uma versão "Time da
 // Temporada" (+2 OVR) — determinístico, alimenta o Pacote TOTS.
+// Specials MAJOR: o quinteto do time #1 do dataset (o dataset não marca campeão
+// de Major; o topo do ranking é o proxy curado) ganha versão "Campeão de Major"
+// (+3 OVR) — topo da coleção, só sai da ladder de temporada e do SBC caríssimo.
 let _catalog: UltCard[] | null = null;
 let _index: Map<string, UltCard> | null = null;
 export function ultimateCatalog(): UltCard[] {
@@ -134,7 +137,9 @@ export function ultimateCatalog(): UltCard[] {
       .sort((a, b) => b.ovr - a.ovr)
       .slice(0, 11)
       .map((c) => ({ playerId: c.playerId, rarity: 'tots' as const, ovrBoost: 2 }));
-    _catalog = buildCatalog(CS2_REAL_2026, tots);
+    const majors = (CS2_REAL_2026[0]?.players ?? [])
+      .map((p) => ({ playerId: p.id, rarity: 'major' as const, ovrBoost: 3 }));
+    _catalog = buildCatalog(CS2_REAL_2026, [...tots, ...majors]);
   }
   return _catalog;
 }
