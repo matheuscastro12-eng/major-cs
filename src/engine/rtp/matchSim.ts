@@ -324,7 +324,14 @@ export function playSeriesWinner(
     if (rng() < p) you++; else them++;
   }
   const seriesWon = you >= need ? true : them >= need ? false : you > them || (you === them && rng() < p);
-  return { mapWins: [you, them], seriesWon };
+  // A Sala SEMPRE encena a série até o DECIDER (map 0 → 1-1 → mapPoint), então o
+  // card oficial também vai ao decider: BO3 = 2-1, BO5 = 3-2, BO1 = 1-0. Assim o
+  // placar do card nunca contradiz a narrativa de N mapas que o jogador assistiu
+  // (antes o card podia sair 2-0 e a Sala mostrava 3 mapas → o "2-1 vs 2-0").
+  const mapWins: [number, number] = bestOf === 1
+    ? (seriesWon ? [1, 0] : [0, 1])
+    : (seriesWon ? [need, need - 1] : [need - 1, need]);
+  return { mapWins, seriesWon };
 }
 
 // Re-semeia o simulateSeries até o placar de MAPAS bater o resultado da jogada
