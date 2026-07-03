@@ -38,7 +38,7 @@ import {
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
-import { missionsForWeek, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
+import { missionsForWeek, weeklyFactsOf, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
 import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
@@ -500,15 +500,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // ── missões semanais renováveis ──
   const weeklyState = state.profile.weekly;
   const weeksMissions = weeklyState ? missionsForWeek(weeklyState.week) : [];
-  const weeklyFacts = weeklyState
-    ? {
-        winsWeek: state.profile.w - weeklyState.base.w,
-        matchesWeek: (state.profile.w + state.profile.l) - (weeklyState.base.w + weeklyState.base.l),
-        packsWeek: state.profile.packSeedCounter - weeklyState.base.packs,
-        sbcWeek: state.profile.sbcDone.length - weeklyState.base.sbc,
-        bazaarWeek: state.profile.bazaarBuys - weeklyState.base.bazaar,
-      }
-    : { winsWeek: 0, matchesWeek: 0, packsWeek: 0, sbcWeek: 0, bazaarWeek: 0 };
+  const weeklyFacts = weeklyFactsOf(state.profile);
   const weeklyClaimable = weeklyState
     ? weeksMissions.filter((m) => !weeklyState.claimed.includes(m.id) && weeklyProgress(m, weeklyFacts).done).length
     : 0;

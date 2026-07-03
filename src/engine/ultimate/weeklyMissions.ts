@@ -3,7 +3,9 @@
 // recompensas maiores. Completar as 3 libera um pack bônus barato (resgate na
 // store, que tem catálogo). Progresso = contadores do perfil MENOS o baseline
 // capturado na abertura da semana (profile.weekly.base). Puro.
-import { makeRng } from '../rng';
+// Sorteio/hash/progresso vivem no núcleo compartilhado (missionCore.ts).
+import { drawMissions, goalProgress } from './missionCore';
+import type { UltimateProfile } from './state';
 
 export type WeeklyMetric = 'winsWeek' | 'matchesWeek' | 'packsWeek' | 'sbcWeek' | 'bazaarWeek';
 
@@ -43,28 +45,29 @@ export function weekKey(d: Date): string {
   return `${y}-W${String(week).padStart(2, '0')}`;
 }
 
-// hash simples e estável da weekKey → seed do sorteio da semana.
-function weekHash(week: string): number {
-  let h = 0;
-  for (let i = 0; i < week.length; i++) h = ((h * 31) + week.charCodeAt(i)) >>> 0;
-  return h || 1;
-}
-
 export function missionsForWeek(week: string): WeeklyMissionDef[] {
-  const rng = makeRng(weekHash(week));
-  const pool = [...WEEKLY_POOL];
-  const out: WeeklyMissionDef[] = [];
-  for (let i = 0; i < WEEKLY_PER_WEEK && pool.length; i++) {
-    out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
-  }
-  return out;
+  return drawMissions(WEEKLY_POOL, week, WEEKLY_PER_WEEK);
 }
 
 export interface WeeklyFacts { winsWeek: number; matchesWeek: number; packsWeek: number; sbcWeek: number; bazaarWeek: number }
 
+// fatos semanais do perfil (contadores atuais MENOS o baseline da semana) —
+// derivação ÚNICA usada pela tela e pelo claim do store, pra nunca divergirem.
+// Sem semana aberta ainda → tudo zero.
+export function weeklyFactsOf(p: UltimateProfile): WeeklyFacts {
+  const b = p.weekly?.base;
+  if (!b) return { winsWeek: 0, matchesWeek: 0, packsWeek: 0, sbcWeek: 0, bazaarWeek: 0 };
+  return {
+    winsWeek: p.w - b.w,
+    matchesWeek: (p.w + p.l) - (b.w + b.l),
+    packsWeek: p.packSeedCounter - b.packs,
+    sbcWeek: p.sbcDone.length - b.sbc,
+    bazaarWeek: p.bazaarBuys - b.bazaar,
+  };
+}
+
 export function weeklyProgress(def: WeeklyMissionDef, facts: WeeklyFacts): { value: number; done: boolean; pct: number } {
-  const value = Math.max(0, facts[def.metric] ?? 0);
-  return { value, done: value >= def.target, pct: Math.min(100, Math.round((value / def.target) * 100)) };
+  return goalProgress(def, facts);
 }
 
 export function weeklyMissionById(id: string): WeeklyMissionDef | undefined {

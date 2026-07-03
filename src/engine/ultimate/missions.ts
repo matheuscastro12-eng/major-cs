@@ -1,7 +1,8 @@
 // Missões diárias rotativas — 3 metas sorteadas deterministicamente pelo dia
 // (mesmo padrão seeded do bazar). Progresso = contadores do perfil MENOS o
 // baseline capturado na abertura do dia (profile.missions.base). Puro.
-import { makeRng } from '../rng';
+// Sorteio/hash/progresso vivem no núcleo compartilhado (missionCore.ts).
+import { drawMissions, goalProgress } from './missionCore';
 
 export type MissionMetric = 'winsToday' | 'matchesToday' | 'packsToday' | 'sbcToday';
 
@@ -27,28 +28,14 @@ export const MISSION_POOL: MissionDef[] = [
 
 export const MISSIONS_PER_DAY = 3;
 
-// hash simples e estável do dateKey → seed do sorteio do dia.
-function dayHash(day: string): number {
-  let h = 0;
-  for (let i = 0; i < day.length; i++) h = ((h * 31) + day.charCodeAt(i)) >>> 0;
-  return h || 1;
-}
-
 export function missionsForDay(day: string): MissionDef[] {
-  const rng = makeRng(dayHash(day));
-  const pool = [...MISSION_POOL];
-  const out: MissionDef[] = [];
-  for (let i = 0; i < MISSIONS_PER_DAY && pool.length; i++) {
-    out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
-  }
-  return out;
+  return drawMissions(MISSION_POOL, day, MISSIONS_PER_DAY);
 }
 
 export interface MissionFacts { winsToday: number; matchesToday: number; packsToday: number; sbcToday: number }
 
 export function missionProgress(def: MissionDef, facts: MissionFacts): { value: number; done: boolean; pct: number } {
-  const value = Math.max(0, facts[def.metric] ?? 0);
-  return { value, done: value >= def.target, pct: Math.min(100, Math.round((value / def.target) * 100)) };
+  return goalProgress(def, facts);
 }
 
 export function missionById(id: string): MissionDef | undefined {

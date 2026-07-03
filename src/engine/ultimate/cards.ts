@@ -80,27 +80,37 @@ export function specialCardForPlayer(p: Player, team: TeamSeason, rarity: UltRar
 
 export interface SpecialSpec { playerId: string; rarity: UltRarity; ovrBoost?: number; }
 
-// monta o catálogo inteiro: 1 carta base por jogador (dedup por nick, como o
-// buildPool) + as specials curadas. Determinístico — mesma entrada, mesma saída.
-export function buildCatalog(dataset: TeamSeason[], specials: SpecialSpec[] = []): UltCard[] {
-  const out: UltCard[] = [];
-  const seen = new Set<string>();
+// anexa specials curadas a um catálogo base já montado — mesma saída de
+// buildCatalog(dataset, specials), sem pagar a reconstrução da base quando o
+// chamador já tem ela em mãos (ex.: ensureCatalog derivou tots/promos da base).
+export function appendSpecials(dataset: TeamSeason[], base: UltCard[], specials: SpecialSpec[]): UltCard[] {
   const byPlayer = new Map<string, { p: Player; t: TeamSeason }>();
   for (const t of dataset) {
-    for (const p of t.players) {
-      byPlayer.set(p.id, { p, t });
-      const dedup = p.nick.toLowerCase();
-      if (seen.has(dedup)) continue;
-      seen.add(dedup);
-      out.push(baseCardForPlayer(p, t));
-    }
+    for (const p of t.players) byPlayer.set(p.id, { p, t });
   }
+  const out = [...base];
   for (const s of specials) {
     const ref = byPlayer.get(s.playerId);
     if (!ref) continue;
     out.push(specialCardForPlayer(ref.p, ref.t, s.rarity, s.ovrBoost));
   }
   return out.sort((a, b) => b.ovr - a.ovr);
+}
+
+// monta o catálogo inteiro: 1 carta base por jogador (dedup por nick, como o
+// buildPool) + as specials curadas. Determinístico — mesma entrada, mesma saída.
+export function buildCatalog(dataset: TeamSeason[], specials: SpecialSpec[] = []): UltCard[] {
+  const base: UltCard[] = [];
+  const seen = new Set<string>();
+  for (const t of dataset) {
+    for (const p of t.players) {
+      const dedup = p.nick.toLowerCase();
+      if (seen.has(dedup)) continue;
+      seen.add(dedup);
+      base.push(baseCardForPlayer(p, t));
+    }
+  }
+  return appendSpecials(dataset, base, specials);
 }
 
 // índice key → carta, pra resolver OwnedCard.cardKey rápido.

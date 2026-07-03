@@ -9,10 +9,10 @@ import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot } from './cloud';
 import { captureError } from './errlog';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
-import { buildCatalog, catalogIndex, type UltCard } from '../engine/ultimate/cards';
+import { appendSpecials, buildCatalog, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { packById, rollPack, PROMO_PACK } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoSpecsThrough, type MonthlyPromo } from '../engine/ultimate/promos';
-import { missionsForWeek, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
+import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import { pickStarterCards } from '../engine/ultimate/cards';
 import { dateKey } from '../engine/ultimate/daily';
@@ -153,7 +153,8 @@ function ensureCatalog(): void {
     .map((p) => ({ playerId: p.id, rarity: 'major' as const, ovrBoost: 3 }));
   const promos = promoSpecsThrough(base, mi);
   _promo = promoForMonth(base, mi);
-  _catalog = buildCatalog(CS2_REAL_2026, [...tots, ...majors, ...promos]);
+  // a base já está montada — só anexa as specials (evita reconstruir tudo 2x).
+  _catalog = appendSpecials(CS2_REAL_2026, base, [...tots, ...majors, ...promos]);
   _index = catalogIndex(_catalog);
   _catalogMonth = mi;
 }
@@ -521,15 +522,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (!w || w.claimed.includes(id)) return { ok: false };
     const def = missionsForWeek(w.week).find((d) => d.id === id);
     if (!def) return { ok: false };
-    const p = st.profile;
-    const facts = {
-      winsWeek: p.w - w.base.w,
-      matchesWeek: (p.w + p.l) - (w.base.w + w.base.l),
-      packsWeek: p.packSeedCounter - w.base.packs,
-      sbcWeek: p.sbcDone.length - w.base.sbc,
-      bazaarWeek: p.bazaarBuys - w.base.bazaar,
-    };
-    if (!weeklyProgress(def, facts).done) return { ok: false };
+    if (!weeklyProgress(def, weeklyFactsOf(st.profile)).done) return { ok: false };
     let s = _markWeeklyClaimed(st, id);
     s = _addCredits(s, def.credits);
     persist(s);

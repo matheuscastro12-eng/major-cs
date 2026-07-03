@@ -8,7 +8,7 @@
 // Ações (POST body.action): me | ladder | report | champions.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { decidePair, rankedDelta } from './_reportPairing.js';
+import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -166,12 +166,13 @@ export default async function handler(
     return { delta, before, after, gamesBefore, gamesAfter };
   };
 
-  // carência: reports meus pendentes há 10+ min sem contraparte entram solo
+  // carência: reports meus pendentes há GRACE_MS sem contraparte entram solo
   // (oponente fechou a aba antes de reportar). Roda no 'me' e no 'report'.
+  // A janela deriva de GRACE_MS (api/_reportPairing.ts) pra nunca divergir da lógica pura.
   const sweepSoloGrace = async () => {
     const stale = await sql`
       SELECT code, won FROM rtm_match_reports r
-      WHERE email=${email} AND status='pending' AND reported_at < now() - interval '10 minutes'
+      WHERE email=${email} AND status='pending' AND reported_at < now() - make_interval(secs => ${GRACE_MS / 1000})
         AND NOT EXISTS (SELECT 1 FROM rtm_match_reports o WHERE o.code=r.code AND o.email<>${email})`;
     for (const s of stale) {
       // marca ANTES de aplicar (idempotência entre requests concorrentes: só
