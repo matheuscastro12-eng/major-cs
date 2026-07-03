@@ -264,7 +264,7 @@ async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, my
   const cands = await sql`
     SELECT nick FROM mm_queue
     WHERE matched_code IS NULL AND lower(nick) <> ${meNick.toLowerCase()}
-      AND last_seen > now() - interval '11 seconds'
+      AND last_seen > now() - interval '8 seconds'
       AND abs(elo - ${myElo}) <= ${windowRp}
       AND (enqueued_at < ${myEnqueuedIso}::timestamptz OR (enqueued_at = ${myEnqueuedIso}::timestamptz AND nick < ${meNick}))
     ORDER BY enqueued_at ASC LIMIT 5`;

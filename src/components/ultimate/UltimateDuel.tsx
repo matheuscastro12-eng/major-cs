@@ -124,12 +124,14 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
       const s = await fetchLobby(code, state?.lobby.code === code);
       if (!alive) return;
       if (s === 'gone') {
-        // sala que JÁ rendeu partida morrendo (GC de 4min) é esperado — volta
-        // pra fila SEM o alarme "sala expirou" (só é erro se morreu ANTES de jogar).
         const expected = !!code && code === duelSession.finishedCode;
         duelSession.finishedCode = '';
         setView('menu'); setState(null); setCode('');
-        if (!expected) setError(ct('A sala expirou ou foi encerrada.'));
+        // RANQUEADA: a sala é efêmera do matchmaking — se morre por QUALQUER motivo
+        // (adversário saiu, no-show, GC pós-partida) você só VOLTA PRA FILA, nunca o
+        // alarme vermelho. PRIVADA: só alarma se a sala morreu ANTES de render
+        // partida (você esperava um amigo entrar por código).
+        if (variant !== 'ranked' && !expected) setError(ct('A sala expirou ou foi encerrada.'));
         return;
       }
       if (s && s !== 'unchanged') setState(s);
