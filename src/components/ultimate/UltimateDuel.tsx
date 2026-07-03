@@ -69,12 +69,16 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // saiu da fila por MATCH (true) vs cancelar/desmontar (false). No MATCH o cleanup
+  // da fila NÃO pode chamar queueLeave: o dropQueueTicket derruba a sala 'drafting'
+  // recém-criada → os dois lados destruíam a própria partida ("sala expirou").
+  const matchedRef = useRef(false);
   // ── FILA RANQUEADA: entra → poll 2.5s → pareado → sala (já em 'drafting') ──
   const enterQueue = async () => {
-    setBusy(true); setError('');
+    setBusy(true); setError(''); matchedRef.current = false;
     try {
       const r = await lobbyApi({ action: 'queueJoin', nick, elo: squad.elo });
-      if (r.matched && r.code) { setCode(r.code); setView('room'); setState(null); }
+      if (r.matched && r.code) { matchedRef.current = true; setCode(r.code); setView('room'); setState(null); }
       else if (r.queued) setQueue({ since: Date.now(), window: r.window });
       else setError(r.error ?? ct('Não foi possível entrar na fila.'));
     } catch { setError(ct('Sem conexão com o servidor.')); }
@@ -93,7 +97,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
       try {
         const r = await lobbyApi({ action: 'queuePoll', nick, elo: squad.elo });
         if (!alive) return;
-        if (r.matched && r.code) { setQueue(null); setCode(r.code); setView('room'); setState(null); }
+        if (r.matched && r.code) { matchedRef.current = true; setQueue(null); setCode(r.code); setView('room'); setState(null); }
         else if (r.queued) setQueue((q) => (q ? { ...q, waiting: r.waiting, window: r.window } : q));
         else { setQueue(null); setError(ct('Você saiu da fila por inatividade — entre de novo.')); }
       } catch { /* transiente — próximo tick tenta de novo */ }
@@ -106,8 +110,9 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
     document.addEventListener('visibilitychange', onVis);
     return () => { alive = false; window.clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [queue !== null, nick, squad.elo]); // eslint-disable-line react-hooks/exhaustive-deps
-  // sai da fila ao desmontar a aba (não deixa ticket fantasma)
-  useEffect(() => () => { if (queue) void lobbyApi({ action: 'queueLeave', nick }).catch(() => undefined); }, [queue !== null, nick]); // eslint-disable-line react-hooks/exhaustive-deps
+  // sai da fila ao desmontar/cancelar (não deixa ticket fantasma) — MAS nunca
+  // quando o motivo foi CASAR (matchedRef): aí a sala já é sua e não pode cair.
+  useEffect(() => () => { if (queue && !matchedRef.current) void lobbyApi({ action: 'queueLeave', nick }).catch(() => undefined); }, [queue !== null, nick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshRooms = useCallback(async () => {
     const all = await listOpenLobbies();
@@ -124,12 +129,14 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
       const s = await fetchLobby(code, state?.lobby.code === code);
       if (!alive) return;
       if (s === 'gone') {
-        // sala que JÁ rendeu partida morrendo (GC de 4min) é esperado — volta
-        // pra fila SEM o alarme "sala expirou" (só é erro se morreu ANTES de jogar).
         const expected = !!code && code === duelSession.finishedCode;
         duelSession.finishedCode = '';
         setView('menu'); setState(null); setCode('');
-        if (!expected) setError(ct('A sala expirou ou foi encerrada.'));
+        // RANQUEADA: a sala é efêmera do matchmaking — se morre por QUALQUER motivo
+        // (adversário saiu, no-show, GC pós-partida) você só VOLTA PRA FILA, nunca o
+        // alarme vermelho. PRIVADA: só alarma se a sala morreu ANTES de render
+        // partida (você esperava um amigo entrar por código).
+        if (variant !== 'ranked' && !expected) setError(ct('A sala expirou ou foi encerrada.'));
         return;
       }
       if (s && s !== 'unchanged') setState(s);
