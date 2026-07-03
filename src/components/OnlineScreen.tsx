@@ -884,7 +884,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
     const timer = window.setTimeout(() => {
       recordedSeasonsRef.current.add(key);
       // ranking salvo (conta paga, só em sala RANQUEADA): manda o resultado e atualiza meu MMR
-      if (account?.paid && state.lobby.ranked) void reportResult(won, nick || account.nick, state.lobby.code).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
+      if (account?.paid && state.lobby.ranked) void reportResult(won, nick || account.nick, state.lobby.code, nick).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
       setSessionProfile((current) => {
         const next = {
           points: current.points + points,
@@ -916,13 +916,19 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       <div className={`rtm-rank-delta ${rankFeedback.delta >= 0 ? 'up' : 'down'}`}>{rankFeedback.delta >= 0 ? '+' : ''}{rankFeedback.delta}</div>
       <div className="rtm-rank-body">
         <b>{
-          rankFeedback.placedNow ? `🎯 ${ct('Colocação concluída')} · ${rankFeedback.division}`
-            : rankFeedback.placing ? `🎯 ${ct('Partida de colocação')}`
-              : rankFeedback.promoted ? `⬆ ${ct('Promovido pra')} ${rankFeedback.division}!`
-                : rankFeedback.demoted ? `⬇ ${ct('Caiu pra')} ${rankFeedback.division}`
-                  : rankFeedback.delta >= 0 ? ct('Vitória ranqueada') : ct('Derrota ranqueada')
+          rankFeedback.conflict ? `⚠ ${ct('Reports divergentes — a partida não pontuou')}`
+            : rankFeedback.pending ? `⏳ ${ct('Resultado enviado')}`
+              : rankFeedback.placedNow ? `🎯 ${ct('Colocação concluída')} · ${rankFeedback.division}`
+                : rankFeedback.placing ? `🎯 ${ct('Partida de colocação')}`
+                  : rankFeedback.promoted ? `⬆ ${ct('Promovido pra')} ${rankFeedback.division}!`
+                    : rankFeedback.demoted ? `⬇ ${ct('Caiu pra')} ${rankFeedback.division}`
+                      : rankFeedback.delta >= 0 ? ct('Vitória ranqueada') : ct('Derrota ranqueada')
         }</b>
-        <span>MMR {rankFeedback.before} → {rankFeedback.after}{rankFeedback.placing && !rankFeedback.placedNow ? ` · ${ct('faltam')} ${rankFeedback.placementLeft} ${ct('de colocação')}` : ` · ${rankFeedback.division}`}</span>
+        <span>{
+          rankFeedback.pending ? ct('O MMR entra quando o oponente confirmar o resultado.')
+            : rankFeedback.conflict ? ct('Os dois lados reclamaram o mesmo resultado.')
+              : <>MMR {rankFeedback.before} → {rankFeedback.after}{rankFeedback.placing && !rankFeedback.placedNow ? ` · ${ct('faltam')} ${rankFeedback.placementLeft} ${ct('de colocação')}` : ` · ${rankFeedback.division}`}</>
+        }</span>
       </div>
     </div>, document.body) : null;
 

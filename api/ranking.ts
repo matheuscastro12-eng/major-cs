@@ -198,21 +198,26 @@ export default async function handler(
     // console; o cliente ignora o corpo).
     if (!code) { res.status(200).json({ applied: false, legacy: true, delta: 0, me: await myRow(), ...seasonInfo }); return; }
     // partida precisa existir, ser RANQUEADA (qualquer modo online) e o
-    // reporter precisa ter jogado nela (participante não-espectador).
+    // reporter precisa ter jogado nela (participante não-espectador). O nick
+    // DENTRO do lobby pode diferir do nick do ladder (o Ultimate joga com
+    // sufixo anti-colisão, ex. 'Manager#AB12') — vem em body.lobbyNick; o
+    // match é case-insensitive (o resto do fluxo online compara em lower).
+    const lobbyNick = String((body.lobbyNick as string) || nick).slice(0, 60);
     const lb = await sql`SELECT ranked, mode, created_at FROM lobbies WHERE code=${code}`;
     if (!lb.length) { res.status(404).json({ error: 'partida não encontrada' }); return; }
     if (!lb[0].ranked) { res.status(400).json({ error: 'partida não é ranqueada' }); return; }
-    const inLobby = await sql`SELECT 1 FROM lobby_players WHERE code=${code} AND nick=${nick} AND COALESCE(spectator, false) = false`;
+    const inLobby = await sql`SELECT 1 FROM lobby_players WHERE code=${code} AND lower(nick)=lower(${lobbyNick}) AND COALESCE(spectator, false) = false`;
     if (!inLobby.length) { res.status(403).json({ error: 'você não jogou essa partida' }); return; }
     // 1 report por jogador por partida (PK code+email) — refresh não duplica.
     const ins = await sql`INSERT INTO rtm_match_reports (code, email, nick, won) VALUES (${code}, ${email}, ${nick}, ${won}) ON CONFLICT (code, email) DO NOTHING RETURNING code`;
     if (!ins.length) { res.status(200).json({ applied: false, duplicate: true, delta: 0, me: await myRow(), ...seasonInfo }); return; }
 
-    // pareamento zero-soma só faz sentido no DUELO 1v1 do Ultimate. Nos outros
-    // modos ranqueados (Major/gauntlet online) os dois humanos podem vencer
-    // legitimamente (placement) — aplica direto, protegido pelo dedupe por
-    // partida + checagem de participante acima.
-    if (String(lb[0].mode) !== 'ultimate') {
+    // pareamento zero-soma vale pros modos 1v1 (duelo do Ultimate e Ranked 1v1
+    // 'duel' do online). Nos modos ranqueados NÃO-zero-soma (Major/gauntlet)
+    // os dois humanos podem vencer legitimamente (placement) — aplica direto,
+    // protegido pelo dedupe por partida + checagem de participante acima.
+    const ZERO_SUM_MODES = ['ultimate', 'duel'];
+    if (!ZERO_SUM_MODES.includes(String(lb[0].mode))) {
       const solo = await applyRanked(email, won);
       await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND email=${email}`;
       if (!solo) { res.status(200).json({ applied: false, delta: 0, me: await myRow(), ...seasonInfo }); return; }
@@ -248,11 +253,19 @@ export default async function handler(
       res.status(200).json({ applied: false, conflict: true, delta: 0, me: await myRow(), ...seasonInfo });
       return;
     }
-    // consistente: aplica o meu lado (e o do oponente, se ainda não entrou solo).
-    const mine = await applyRanked(email, won);
-    if (outcome === 'apply-both' && other.length) await applyRanked(String(other[0].email), !!other[0].won);
-    await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND status IN ('pending')`;
-    if (!mine) { res.status(200).json({ applied: false, delta: 0, me: await myRow(), ...seasonInfo }); return; }
+    // consistente: CLAIM atômico antes de creditar — dois reports quase
+    // simultâneos decidem 'apply-both' os dois, mas só a invocação que
+    // transicionar pending→applied (RETURNING) aplica MMR; a outra vê zero
+    // linhas e não credita em dobro (mesmo padrão do sweepSoloGrace).
+    const claimed = outcome === 'apply-both'
+      ? await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND status='pending' RETURNING email, won`
+      : await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND email=${email} AND status='pending' RETURNING email, won`;
+    let mine: Awaited<ReturnType<typeof applyRanked>> = null;
+    for (const row of claimed) {
+      const applied = await applyRanked(String(row.email), !!row.won);
+      if (String(row.email) === email) mine = applied;
+    }
+    if (!mine) { res.status(200).json({ applied: claimed.length === 0, raced: claimed.length === 0, delta: 0, me: await myRow(), ...seasonInfo }); return; }
     const divisionBefore = divFor(mine.before, mine.gamesBefore);
     const divisionAfter = divFor(mine.after, mine.gamesAfter);
     res.status(200).json({

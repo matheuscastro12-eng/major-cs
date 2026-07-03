@@ -338,8 +338,11 @@ export default async function handler(
     // a resposta no CDN elimina milhares de invocações e consultas idênticas.
     res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=20');
     try {
-      // aproveita pra fechar salas inativas (sem heartbeat há mais de 2min)
-      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes'`;
+      // aproveita pra fechar salas inativas (sem heartbeat há mais de 2min).
+      // Sala RANQUEADA recente sobrevive 15min mesmo sem ping: o report do
+      // resultado valida contra a linha do lobby e a carência do pareamento é
+      // de 10min (api/ranking.ts) — GC precoce fazia report legítimo dar 404.
+      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes' AND NOT (COALESCE(ranked, false) = true AND created_at > now() - interval '15 minutes')`;
       // só lista salas com alguém ativo (ping nos últimos 60s)
       const rows = await sql`
         SELECT l.code, l.mode, l.pool, l.host, l.name, l.created_at, COALESCE(l.ranked, false) AS ranked,
@@ -502,8 +505,9 @@ export default async function handler(
       const draftRollouts = Math.max(0, Math.min(5, body.draftRollouts == null ? 2 : Number(body.draftRollouts) || 0));
       const seed = Math.floor(Math.random() * 2147483647);
       // fecha salas inativas: ninguém com a aba aberta há mais de 2min (sem
-      // heartbeat). Backstop de 6h pra qualquer resíduo.
-      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes'`;
+      // heartbeat). Backstop de 6h pra qualquer resíduo. Sala RANQUEADA recente
+      // sobrevive 15min sem ping — o report valida contra o lobby (ver ?list).
+      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes' AND NOT (COALESCE(ranked, false) = true AND created_at > now() - interval '15 minutes')`;
       await sql`DELETE FROM lobbies WHERE created_at < now() - interval '6 hours'`;
       // tenta alguns códigos até achar um livre
       for (let attempt = 0; attempt < 5; attempt++) {
