@@ -60,15 +60,24 @@ export function SprayTracer({ seed, durationMs, onFinish }: MiniGameProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const move = (e: React.MouseEvent) => {
+  // pointer events cobrem mouse E toque (celular). Normaliza pela escala real do
+  // elemento (a arena pode ser redimensionada no mobile) pra o cursor bater com o alvo.
+  const move = (e: React.PointerEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+    const sx = r.width ? SIZE / r.width : 1;
+    const sy = r.height ? SIZE / r.height : 1;
+    const p = { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
     cursorRef.current = p;
     setCur(p);
   };
 
   return (
-    <div className="rtp-mini-spray" style={{ width: SIZE, height: SIZE }} onMouseMove={move}>
+    <div
+      className="rtp-mini-spray"
+      style={{ width: SIZE, height: SIZE, maxWidth: '100%', touchAction: 'none' }}
+      onPointerMove={move}
+      onPointerDown={move}
+    >
       <div className="rtp-mini-hud"><span>{ct('No alvo')} {frame.pct}%</span></div>
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="rtp-mini-spray-svg">
         <polyline points={path.map((p) => `${p.x},${p.y}`).join(' ')} className="rtp-mini-spray-path" />
