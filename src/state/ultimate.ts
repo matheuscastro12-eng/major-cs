@@ -1,9 +1,12 @@
 // Ultimate Squad — store Zustand (P0). Casca fina sobre os reducers puros de
 // src/engine/ultimate/state.ts, persistida numa chave PARALELA de localStorage
-// (`rtm-ultimate-v1`) — NÃO toca no save de carreira. Cloud sync opcional entra
-// numa fase posterior. Ver docs-but-map.md §4/§6.
+// (`rtm-ultimate-v1`) — NÃO toca no save de carreira. Cloud sync no slot
+// 'ultimate' (mesma infra last-write-wins da carreira/RtP), com backup `.bak`
+// local — o save guarda coins pagos. Ver docs-but-map.md §4/§6.
 
 import { create } from 'zustand';
+import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot } from './cloud';
+import { captureError } from './errlog';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
 import { buildCatalog, catalogIndex, type UltCard } from '../engine/ultimate/cards';
@@ -52,23 +55,70 @@ import {
 } from '../engine/ultimate/state';
 
 const KEY = 'rtm-ultimate-v1';
+const CLOUD_SLOT = 'ultimate';
 
 function load(): UltimateState {
+  let raw: string | null;
+  try { raw = localStorage.getItem(KEY); } catch { return defaultUltimateState(); }
+  if (!raw) return defaultUltimateState();
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return defaultUltimateState();
     return migrateUltimate(JSON.parse(raw));
-  } catch {
+  } catch (e) {
+    // principal ilegível: preserva pra diagnóstico e tenta o backup de um passo
+    // (o save guarda coins comprados com dinheiro real — não pode evaporar).
+    captureError(e, 'ultimate-load');
+    try { localStorage.setItem(KEY + '.corrupt', raw); } catch { /* sem espaço pro diagnóstico */ }
+    try {
+      const bak = localStorage.getItem(KEY + '.bak');
+      if (bak) return migrateUltimate(JSON.parse(bak));
+    } catch { /* backup também ilegível */ }
     return defaultUltimateState();
   }
 }
 
 function persist(s: UltimateState): void {
+  const json = JSON.stringify(s);
+  let prev: string | null = null;
+  try { prev = localStorage.getItem(KEY); } catch { /* segue */ }
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
-  } catch {
+    localStorage.setItem(KEY, json);
+  } catch (e) {
     /* storage cheio/indisponível — modo é opcional, não trava o app */
+    captureError(e, 'ultimate-persist');
+    return;
   }
+  // backup de um passo: se o save novo ficar ilegível, dá pra voltar pro anterior
+  if (prev && prev !== json) {
+    try { localStorage.setItem(KEY + '.bak', prev); } catch { /* best-effort */ }
+  }
+  // timestamp local + push debounced pra nuvem (no-op se deslogado/grátis).
+  markSavedAt(KEY);
+  cloudOnLocalSave(CLOUD_SLOT, KEY, () => json);
+}
+
+// True quando o save local ainda é "virgem" (nunca onboardou, sem cartas nem
+// partidas): é o estado default que o boot persiste antes de a conta carregar.
+// Nesse caso o timestamp local não vale nada — a nuvem, se tiver save, vence.
+function isPristine(s: UltimateState): boolean {
+  return !s.profile.onboarded && s.inventory.length === 0 && s.profile.w + s.profile.l === 0;
+}
+
+// Reconcilia o save do Ultimate com a nuvem no boot (após a conta carregar).
+// 'restored'/'deleted' já rehidratam a store — o consumidor só reage na UI.
+export async function syncUltimateFromCloud(): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
+  if (!cloudEnabled()) return 'none';
+  // Save virgem persistido no boot NÃO pode vencer o save real da nuvem por
+  // timestamp (sobrescreveria a coleção do jogador num aparelho novo).
+  if (isPristine(useUltimate.getState().state)) markSavedAt(KEY, 0);
+  const r = await syncSlot(CLOUD_SLOT, KEY);
+  if (r === 'restored') {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) useUltimate.setState({ state: migrateUltimate(JSON.parse(raw)) });
+    } catch { /* nuvem ilegível — mantém o estado atual */ }
+  }
+  if (r === 'deleted') useUltimate.setState({ state: defaultUltimateState() });
+  return r;
 }
 
 // Catálogo derivado do dataset no build (nunca do localStorage) → todo cliente

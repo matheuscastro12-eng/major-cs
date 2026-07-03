@@ -7,7 +7,8 @@
 // RTP1: 1 slot local pra todo mundo (sem paywall). Cloud sync se logado.
 
 import { getToken } from './account';
-import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave } from './cloud';
+import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave, cloudOnLocalSave, syncSlot, localSavedAt, markSavedAt } from './cloud';
+import { captureError } from './errlog';
 import { RTP_SAVE_VERSION, ACTIONS_PER_WEEK, rebuildRealWorld, STARTER_SETUP } from '../engine/rtp/createSave';
 import { buildLeague, circuitEventName } from '../engine/rtp/league';
 import { buildCircuit, computeObjective } from '../engine/rtp/circuit';
@@ -181,25 +182,48 @@ export function loadRtp(): RoadToProSave | null {
   if (!raw) return null;
   try {
     return migrateRtp(JSON.parse(raw) as Record<string, unknown>);
-  } catch {
-    return null; // ilegível → trata como inexistente (não destrói; fica pro .corrupt)
+  } catch (e) {
+    // principal ilegível: preserva pra diagnóstico e tenta o backup de um passo
+    // (espelha o gameStore da carreira — sem isso, criar de novo destruía o save).
+    captureError(e, 'rtp-load');
+    try { localStorage.setItem(KEY + '.corrupt', raw); } catch { /* sem espaço pro diagnóstico */ }
+    try {
+      const bak = localStorage.getItem(KEY + '.bak');
+      if (bak) return migrateRtp(JSON.parse(bak) as Record<string, unknown>);
+    } catch { /* backup também ilegível */ }
+    return null;
   }
 }
 
-export function saveRtp(save: RoadToProSave): void {
+// Devolve false quando o localStorage recusou a escrita (quota/indisponível) —
+// o consumidor avisa o jogador em vez de perder a sessão em silêncio.
+export function saveRtp(save: RoadToProSave): boolean {
   const stamped: RoadToProSave = {
     ...save,
     _v: RTP_SAVE_VERSION,
     createdAt: save.createdAt || Date.now(),
   };
   const data = JSON.stringify(stamped);
+  let prev: string | null = null;
+  try { prev = localStorage.getItem(KEY); } catch { /* segue */ }
   try {
     localStorage.setItem(KEY, data);
-  } catch { /* quota/sem storage — silencioso, igual à carreira */ }
-  // cloud push (debounced internamente) se logado
-  if (getToken()) {
-    void pushCloud(CLOUD_SLOT, data, Date.now());
+  } catch (e) {
+    captureError(e, 'rtp-persist');
+    return false;
   }
+  // backup de um passo: se o save novo ficar ilegível, dá pra voltar pro anterior
+  if (prev && prev !== data) {
+    try { localStorage.setItem(KEY + '.bak', prev); } catch { /* best-effort; quota não derruba o principal */ }
+  }
+  // timestamp local sempre (mesmo deslogado) — é o que o last-write-wins do
+  // syncSlot usa pra reconciliar com a nuvem no próximo login.
+  markSavedAt(KEY);
+  // cloud push debounced (cloudOnLocalSave no-opa se a nuvem está desligada)
+  if (getToken()) {
+    cloudOnLocalSave(CLOUD_SLOT, KEY, () => data);
+  }
+  return true;
 }
 
 export function deleteRtp(): void {
@@ -216,19 +240,33 @@ export function deleteRtp(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cloud merge no boot (restaura save de outro aparelho se local estiver vazio)
+// Cloud merge no boot: last-write-wins por timestamp via syncSlot (restaura,
+// re-sobe ou apaga por tombstone — igual à carreira). 'restored'/'deleted'
+// pedem re-render do consumidor.
 
-export async function syncRtpFromCloud(): Promise<'restored' | 'none'> {
+export async function syncRtpFromCloud(): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
   if (!cloudEnabled()) return 'none';
-  if (hasRtp()) return 'none'; // local ganha; reconciliação fina fica pro futuro
-  const c = await pullCloud(CLOUD_SLOT).catch(() => null);
-  if (!c?.data) return 'none'; // '' = tombstone
-  try {
-    localStorage.setItem(KEY, c.data);
-    return 'restored';
-  } catch {
-    return 'none';
+  // Legado: saves gravados antes do `.cloudts` não têm timestamp local — o
+  // last-write-wins escolheria às cegas. Desempata por progresso (temporada/
+  // semana): a nuvem só vence se estiver comprovadamente mais adiantada.
+  if (hasRtp() && localSavedAt(KEY) === 0) {
+    const local = loadRtp();
+    const c = await pullCloud(CLOUD_SLOT).catch(() => null);
+    if (local && c?.data) {
+      try {
+        const cloudSave = migrateRtp(JSON.parse(c.data) as Record<string, unknown>);
+        const prog = (s: RoadToProSave) => (s.world?.season ?? 0) * 1000 + (s.world?.week ?? 0);
+        if (prog(cloudSave) > prog(local)) {
+          localStorage.setItem(KEY, c.data);
+          markSavedAt(KEY, c.updatedAt);
+          return 'restored';
+        }
+      } catch { /* nuvem ilegível → mantém o local */ }
+    }
+    // local venceu (ou nuvem vazia): estampa agora pro syncSlot re-subir o local.
+    markSavedAt(KEY);
   }
+  return syncSlot(CLOUD_SLOT, KEY);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -66,28 +66,31 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
   const [notice, setNotice] = useState<RtpNotice | null>(null);
   // Resultado do SIMULAR (modal com placar + stats — não só uma notificação).
   const [simResult, setSimResult] = useState<{ result: ProMatchResult; consequence: MatchConsequence } | null>(null);
+  // localStorage recusou a última gravação (quota cheia): avisa em vez de perder
+  // a sessão em silêncio.
+  const [saveError, setSaveError] = useState(false);
 
-  // Boot: tenta restaurar da nuvem se o local estiver vazio (outro aparelho).
+  // Boot: reconcilia com a nuvem (restaura de outro aparelho, re-sobe o local
+  // mais novo ou aplica tombstone de exclusão) — não só quando o local está vazio.
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (!loadRtp()) {
-        const r = await syncRtpFromCloud().catch(() => 'none' as const);
-        if (alive && r === 'restored') setSave(loadRtp());
-      }
+      const r = await syncRtpFromCloud().catch(() => 'none' as const);
+      if (alive && r === 'restored') setSave(loadRtp());
+      if (alive && r === 'deleted') setSave(null);
       if (alive) setBooted(true);
     })();
     return () => { alive = false; };
   }, []);
 
   const handleCreated = (next: RoadToProSave) => {
-    saveRtp(next);
+    setSaveError(!saveRtp(next));
     setSave(loadRtp()); // recarrega já estampado (createdAt/_v)
   };
 
   // Atualização in-game (treino, ações, virada de semana): persiste e re-renderiza.
   const handleUpdate = (next: RoadToProSave) => {
-    saveRtp(next);
+    setSaveError(!saveRtp(next));
     setSave(next);
   };
 
@@ -218,8 +221,10 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
         onPlayMatch={() => { setNotice(null); setPlaying(true); }}
         onAutoSim={handleAutoSim}
         onResolveEvent={(eventId, optionId) => handleUpdate(applyLifeChoice(save, eventId, optionId))}
-        notice={notice}
-        onDismissNotice={() => setNotice(null)}
+        notice={saveError
+          ? { kind: 'season', text: `⚠️ ${ct('Não consegui gravar seu progresso (armazenamento do navegador cheio ou indisponível). Libere espaço — sem isso, o que você jogar agora se perde ao fechar a página.')}` }
+          : notice}
+        onDismissNotice={() => { setSaveError(false); setNotice(null); }}
       />
       {simResult && (
         <RtpSimResult result={simResult.result} consequence={simResult.consequence} onClose={() => setSimResult(null)} />

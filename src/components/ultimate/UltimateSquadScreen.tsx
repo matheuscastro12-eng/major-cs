@@ -5,7 +5,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
-import { ultimateCatalog, ultimateIndex, useUltimate } from '../../state/ultimate';
+import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, useUltimate } from '../../state/ultimate';
 import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
@@ -383,6 +383,21 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     syncMissions(dateKey(new Date()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // cloud: reconcilia o save com a nuvem assim que a conta carrega (restaura a
+  // coleção/coins de outro aparelho ou re-sobe o local mais novo). A store é
+  // rehidratada dentro do sync; aqui só refazemos season/missões e avisamos.
+  useEffect(() => {
+    if (!account) return;
+    let on = true;
+    void syncUltimateFromCloud().then((r) => {
+      if (!on || r !== 'restored') return;
+      tickSeason();
+      syncMissions(dateKey(new Date()));
+      flash(`☁️ ${ct('Save restaurado da nuvem.')}`, 2600);
+    }).catch(() => { /* offline — segue com o local */ });
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
   // tick de baixa frequência: countdown do daily/missões vira na hora certa
   // (sem isso, "PRÓXIMA EM Xh Ym" e o dia das missões congelavam até um re-render).
   const [, setClock] = useState(0);
