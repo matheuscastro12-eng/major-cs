@@ -239,10 +239,13 @@ const MM_OPEN = 1_000_000;
 // espalhados) dois managers esperando PRECISAM se enfrentar mesmo com RP
 // distante — senão a fila fica com "2 na fila" que nunca casam. Por isso cresce
 // rápido (±300 → ±1300) e, após ~15s, ABRE GERAL (pareia qualquer um).
+// Fila FINA de lançamento: prioriza ACHAR partida sobre justiça de RP. Abre GERAL
+// em 6s (era 15s) e cresce rápido — dois managers sobrepostos na fila casam em
+// segundos mesmo com RP distante (ladder ainda tem inflação da era Rivals-vs-IA).
 function mmWindow(waitedMs: number): number {
   const s = Math.floor(waitedMs / 1000);
-  if (s >= 15) return MM_OPEN;
-  return 300 + s * 70;
+  if (s >= 6) return MM_OPEN;
+  return 500 + s * 900;   // 500 → 1400 → 2300 → 3200 → 4100 → 5000 → aberta
 }
 
 // tenta parear NA HORA. Regras anti-corrida (cada sql`` do Neon é um request
@@ -261,7 +264,7 @@ async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, my
   const cands = await sql`
     SELECT nick FROM mm_queue
     WHERE matched_code IS NULL AND lower(nick) <> ${meNick.toLowerCase()}
-      AND last_seen > now() - interval '8 seconds'
+      AND last_seen > now() - interval '11 seconds'
       AND abs(elo - ${myElo}) <= ${windowRp}
       AND (enqueued_at < ${myEnqueuedIso}::timestamptz OR (enqueued_at = ${myEnqueuedIso}::timestamptz AND nick < ${meNick}))
     ORDER BY enqueued_at ASC LIMIT 5`;
@@ -520,8 +523,10 @@ export default async function handler(
     if (action === 'queueJoin') {
       if (!nick) { res.status(400).json({ error: 'nick obrigatório' }); return; }
       const elo = Math.max(0, Math.min(5000, Math.round(Number(body.elo) || 1000)));
-      // limpa tickets mortos (sem heartbeat) e casados que nunca foram coletados
-      await sql`DELETE FROM mm_queue WHERE (matched_code IS NULL AND last_seen < now() - interval '45 seconds') OR last_seen < now() - interval '5 minutes'`;
+      // limpa tickets mortos (sem heartbeat) e casados que nunca foram coletados.
+      // 90s de folga: no mobile trocar de app (ex.: WhatsApp pra combinar) PAUSA o
+      // poll — não dá pra ceifar o ticket rápido demais senão some da fila ao voltar.
+      await sql`DELETE FROM mm_queue WHERE (matched_code IS NULL AND last_seen < now() - interval '90 seconds') OR last_seen < now() - interval '5 minutes'`;
       await dropQueueTicket(sql, nick); // reset (com compensação se tinha par não-coletado)
       // ticket entra ANTES do pareamento: fecha a janela check-then-insert em
       // que dois queueJoin simultâneos não se enxergavam.
@@ -548,15 +553,11 @@ export default async function handler(
       }
       const enqueuedMs = new Date(String(ticket.enqueued_at)).getTime();
       const waitedMs = Math.max(0, Date.now() - enqueuedMs);
-      // pareia em polls ALTERNADOS (corta ~metade das queries de matchmaking
-      // sob carga; quem pula segue claimável pelos outros no intervalo). Mas com
-      // a janela já aberta (>=15s esperando, fila fina) tenta a CADA poll: aí só
-      // acontece quando não tem carga mesmo, e casa em ~2.5s em vez de esperar o
-      // próximo poll par.
-      if (waitedMs >= 15_000 || Math.floor(waitedMs / 2500) % 2 === 0) {
-        const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs);
-        if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
-      }
+      // pareia a CADA poll (query indexada e barata). A antiga alternância (polls
+      // pares) cortava queries sob carga mas DOBRAVA o tempo de match numa fila
+      // fina de lançamento — aqui achar partida > economizar query.
+      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs);
+      if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       const open = await sql`SELECT COUNT(*)::int AS n FROM mm_queue WHERE matched_code IS NULL AND last_seen > now() - interval '30 seconds'`;
       res.status(200).json({ ok: true, queued: true, waiting: Number(open[0]?.n ?? 1), waitedMs, window: mmWindow(waitedMs) });
       return;

@@ -76,8 +76,8 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
     if (!queue) return;
     let alive = true;
     // SEM gate de document.hidden: o poll é o heartbeat do ticket — pausar com
-    // a aba oculta fazia a limpeza ceifar o ticket em 45s.
-    const t = window.setInterval(async () => {
+    // a aba oculta fazia a limpeza ceifar o ticket.
+    const pollOnce = async () => {
       try {
         const r = await lobbyApi({ action: 'queuePoll', nick, elo: squad.elo });
         if (!alive) return;
@@ -85,8 +85,14 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
         else if (r.queued) setQueue((q) => (q ? { ...q, waiting: r.waiting, window: r.window } : q));
         else { setQueue(null); setError(ct('Você saiu da fila por inatividade — entre de novo.')); }
       } catch { /* transiente — próximo tick tenta de novo */ }
-    }, 2500);
-    return () => { alive = false; window.clearInterval(t); };
+    };
+    const t = window.setInterval(pollOnce, 2500);
+    // mobile: ao VOLTAR pro app (trocou pro WhatsApp pra combinar e voltou), o
+    // timer estava congelado — refaz o heartbeat NA HORA pra não perder a vaga
+    // nem deixar de colher um match que caiu enquanto a aba estava oculta.
+    const onVis = () => { if (!document.hidden) void pollOnce(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { alive = false; window.clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [queue !== null, nick, squad.elo]); // eslint-disable-line react-hooks/exhaustive-deps
   // sai da fila ao desmontar a aba (não deixa ticket fantasma)
   useEffect(() => () => { if (queue) void lobbyApi({ action: 'queueLeave', nick }).catch(() => undefined); }, [queue !== null, nick]); // eslint-disable-line react-hooks/exhaustive-deps
