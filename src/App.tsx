@@ -1025,6 +1025,7 @@ export default function App() {
           onAccount={() => setScreen(manager ? 'profile' : 'setup')}
           onCreateAccount={() => setScreen('landing')}
           onLogout={() => { logout(); setCloudEnabled(false); }}
+          onAdmin={account?.admin ? () => setScreen('admin') : undefined}
           onAchievements={() => setAchOpen(true)}
           teamCount={dataset.length}
           playerCount={playerCount}
@@ -1088,17 +1089,17 @@ export default function App() {
         </>
       )}
       {screen === 'careerCRM' && (
-        <AdminGate>
+        <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>
           <CareerCRM onExit={() => setScreen('home')} />
         </AdminGate>
       )}
       {screen === 'careerAccess' && (
-        <AdminGate>
+        <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>
           <AccountsCRM onExit={() => setScreen('home')} />
         </AdminGate>
       )}
       {screen === 'paymentsCRM' && (
-        <AdminGate>
+        <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>
           <PaymentsCRM onExit={() => setScreen('home')} />
         </AdminGate>
       )}
@@ -1186,7 +1187,7 @@ export default function App() {
       )}
 
       {screen === 'admin' && (
-        <AdminGate>
+        <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>
           <Admin
             dataset={dataset}
             onChange={changeDataset}

@@ -157,6 +157,32 @@ export function startTeam(country: string, seed: number): { team: WorldTeam; reg
   return { team, region, tier };
 }
 
+// Time inicial num TIER ALVO (definido pela peneira). `strong` (peneira boa) puxa
+// do terço FORTE do pool do tier; senão, do terço fraco (entra por baixo). Se a
+// região não tiver time no tier pedido, desce um tier até achar pool jogável, pra
+// o placement nunca quebrar. Determinístico por seed.
+export function startTeamForTier(
+  country: string,
+  seed: number,
+  tier: Tier,
+  strong: boolean,
+): { team: WorldTeam; region: MacroRegion; tier: Tier } {
+  const region = regionOfCountry(country);
+  let t = tier;
+  let pool = divisionPool(region, t, 1, 12);
+  while (pool.length === 0 && TIER_ORDER.indexOf(t) > 0) {
+    t = TIER_ORDER[TIER_ORDER.indexOf(t) - 1];
+    pool = divisionPool(region, t, 1, 12);
+  }
+  if (pool.length === 0) return startTeam(country, seed); // fallback duro
+  const rng = makeRng((seed ^ 0xa11ce) >>> 0);
+  const sorted = [...pool].sort((a, b) => a.strength - b.strength);
+  const third = Math.max(1, Math.ceil(sorted.length / 3));
+  const band = strong ? sorted.slice(-third) : sorted.slice(0, third);
+  const team = band[Math.floor(rng() * band.length)] ?? sorted[0];
+  return { team, region, tier: t };
+}
+
 // Você assume a vaga de um jogador no time: substitui quem joga na sua função
 // (ou o mais fraco). Devolve os 4 COLEGAS reais restantes.
 export function joinTeam(team: WorldTeam, heroRole: Role): TPlayer[] {

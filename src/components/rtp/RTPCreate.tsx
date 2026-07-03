@@ -4,7 +4,8 @@ import { ct } from '../../state/career-i18n';
 import { Flag } from '../ui';
 import { RtpIcon } from './RtpIcon';
 import { hashStr } from '../../state/hash';
-import { makeRng } from '../../engine/rng';
+import { makeRng, randomSeed } from '../../engine/rng';
+import { TryoutModal } from './TryoutModal';
 import { type Role, type Playstyle, PLAYSTYLE_LABELS, PLAYSTYLE_ICONS } from '../../types';
 import {
   type PlayerPersonality, PERSONALITY_LABEL, PERSONALITY_DESC,
@@ -17,7 +18,7 @@ import {
   type CreateRtpInput,
 } from '../../engine/rtp/createSave';
 import { proOvr } from '../../engine/rtp/coreStats';
-import type { RoadToProSave } from '../../engine/rtp/types';
+import type { RoadToProSave, Tier } from '../../engine/rtp/types';
 
 const ROLES: { role: Role; desc: string }[] = [
   { role: 'Entry', desc: 'Abre os bombsites' },
@@ -92,12 +93,26 @@ export function RTPCreate({ onExit, onCreated }: {
 
   const canCreate = nick.trim().length >= 2 && remaining === 0;
 
+  // Peneira: guarda a seed (compartilhada entre o reveal e o createRtpSave, pra o
+  // time revelado ser o time real) + o OVR do build (peso leve na nota).
+  const [tryout, setTryout] = useState<{ seed: number; ovr: number } | null>(null);
+
+  const baseInput = (): CreateRtpInput => ({
+    nick: nick.trim(), country, role, playstyle: playstyle ?? undefined,
+    personality, archetype, age, categoryPoints: points,
+  });
+
+  // "Criar" agora ABRE A PENEIRA; o save só nasce quando ela termina (com o tier).
   const handleCreate = () => {
     if (!canCreate) return;
-    const save = createRtpSave({
-      nick: nick.trim(), country, role, playstyle: playstyle ?? undefined,
-      personality, archetype, age, categoryPoints: points,
-    });
+    setTryout({ seed: randomSeed(), ovr: preview.ovr });
+  };
+
+  const finishTryout = (startTier: Tier, tryoutStrong: boolean) => {
+    const t = tryout;
+    if (!t) return;
+    const save = createRtpSave({ ...baseInput(), seed: t.seed, startTier, tryoutStrong });
+    setTryout(null);
     onCreated(save);
   };
 
@@ -286,6 +301,16 @@ export function RTPCreate({ onExit, onCreated }: {
           </div>
         </div>
       </div>
+
+      {tryout && (
+        <TryoutModal
+          country={country}
+          seed={tryout.seed}
+          ovr={tryout.ovr}
+          onDone={(tier, strong) => finishTryout(tier, strong)}
+          onCancel={() => setTryout(null)}
+        />
+      )}
     </RtpFrame>
   );
 }

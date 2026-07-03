@@ -1,94 +1,82 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { fetchAdminKey, type Account } from '../state/account';
 
 const KEY = 'major-admin-unlocked-v1';
 const PASS_KEY = 'major-admin-key-v1';
 
 export function isAdminUnlocked(): boolean {
-  return localStorage.getItem(KEY) === '1';
+  try { return localStorage.getItem(KEY) === '1'; } catch { return false; }
 }
 
+// Chave do CRM usada pelos endpoints de admin já existentes (enviada como body.password).
+// Agora é preenchida AUTOMATICAMENTE pela conta admin (via fetchAdminKey), não digitada.
 export function adminPassword(): string {
-  return localStorage.getItem(PASS_KEY) ?? '';
+  try { return localStorage.getItem(PASS_KEY) ?? ''; } catch { return ''; }
 }
 
 export function lockAdmin(): void {
-  localStorage.removeItem(KEY);
-  localStorage.removeItem(PASS_KEY);
+  try { localStorage.removeItem(KEY); localStorage.removeItem(PASS_KEY); } catch { /* sem storage */ }
 }
 
-// Em produção valida contra /api/admin-login (ADMIN_PASSWORD na Vercel).
-// Em desenvolvimento local (sem backend) aceita a senha de desenvolvimento.
-async function checkPassword(password: string): Promise<boolean> {
-  try {
-    const res = await fetch('/api/admin-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (res.status === 200) return true;
-    if (res.status === 401) return false;
-  } catch {
-    /* backend indisponível (dev local) */
-  }
-  if (import.meta.env.DEV || location.hostname === 'localhost') {
-    return password === 'dev';
-  }
-  return false;
-}
+// Acesso ao CRM é por CONTA (account.admin) — não mais por senha/rota secreta. Conta
+// admin destrava sozinha (troca o token pela chave do CRM). Não-admin vê "acesso
+// restrito". Em dev local (sem backend) libera pra poder testar a UI do CRM.
+export function AdminGate({
+  account,
+  ready = true,
+  onExit,
+  children,
+}: {
+  account?: Account | null;
+  ready?: boolean;
+  onExit?: () => void;
+  children: ReactNode;
+}) {
+  const [state, setState] = useState<'checking' | 'ok' | 'denied'>(() => (isAdminUnlocked() ? 'ok' : 'checking'));
 
-export function AdminGate({ children }: { children: ReactNode }) {
-  const [unlocked, setUnlocked] = useState(isAdminUnlocked());
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  if (unlocked) return <>{children}</>;
-
-  const submit = async () => {
-    if (busy || !password) return;
-    setBusy(true);
-    setError('');
-    const ok = await checkPassword(password);
-    setBusy(false);
-    if (ok) {
-      localStorage.setItem(KEY, '1');
-      localStorage.setItem(PASS_KEY, password);
-      setUnlocked(true);
+  useEffect(() => {
+    if (!ready) { setState((s) => (s === 'ok' ? 'ok' : 'checking')); return; }
+    let on = true;
+    const isDev = import.meta.env.DEV || location.hostname === 'localhost';
+    if (account?.admin) {
+      void fetchAdminKey().then((key) => {
+        if (!on) return;
+        if (key) {
+          try { localStorage.setItem(KEY, '1'); localStorage.setItem(PASS_KEY, key); } catch { /* sem storage */ }
+          setState('ok');
+        } else if (isDev) {
+          try { localStorage.setItem(KEY, '1'); localStorage.setItem(PASS_KEY, 'dev'); } catch { /* sem storage */ }
+          setState('ok');
+        } else setState('denied');
+      });
+    } else if (isDev && !account) {
+      // dev local sem /api: /me falha → sem conta. Libera pra testar a UI do CRM.
+      try { localStorage.setItem(KEY, '1'); localStorage.setItem(PASS_KEY, 'dev'); } catch { /* sem storage */ }
+      setState('ok');
     } else {
-      setError('Senha incorreta.');
-      setPassword('');
+      lockAdmin();
+      setState('denied');
     }
-  };
+    return () => { on = false; };
+  }, [account, ready]);
+
+  if (state === 'ok') return <>{children}</>;
+
+  if (state === 'checking') {
+    return <div className="fade-in muted" style={{ padding: 60, textAlign: 'center' }}>Verificando acesso…</div>;
+  }
 
   return (
     <div className="fade-in">
-      <div className="panel" style={{ maxWidth: 440, margin: '60px auto' }}>
+      <div className="panel" style={{ maxWidth: 460, margin: '60px auto' }}>
         <div className="panel-head">🔒 Área administrativa</div>
         <div className="panel-body">
           <p className="muted small" style={{ marginTop: 0 }}>
-            A base de dados só pode ser gerenciada pelo administrador. Digite a senha para continuar.
+            Esta área é exclusiva de contas administradoras. A sua conta não tem esse acesso.
           </p>
-          <div className="field">
-            <label>Senha</label>
-            <input
-              type="password"
-              value={password}
-              autoFocus
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
-            />
-          </div>
-          {error && (
-            <div className="neg small" style={{ marginTop: 8 }}>
-              {error}
-            </div>
+          {onExit && (
+            <button className="btn" onClick={onExit} style={{ marginTop: 14 }}>← Voltar</button>
           )}
-          <div style={{ marginTop: 14 }}>
-            <button className="btn" onClick={submit} disabled={busy || !password}>
-              {busy ? 'Verificando…' : 'Entrar'}
-            </button>
-          </div>
         </div>
       </div>
     </div>

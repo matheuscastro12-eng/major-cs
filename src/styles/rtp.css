@@ -1351,6 +1351,24 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp-mini-resnote { color: var(--rtp-ink-dim); font-size: .8rem; text-align: center; margin: 0; }
 .rtp-mini-foot { display: flex; gap: 10px; margin-top: 6px; }
 
+/* ── PENEIRA (tryout) ── */
+.rtp-tryout-steps { display: flex; gap: 6px; padding: 12px 14px 0; justify-content: center; flex-wrap: wrap; }
+.rtp-tryout-step { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--rtp-line); background: var(--rtp-well); color: var(--rtp-ink-faint); font-size: .72rem; font-weight: 600; }
+.rtp-tryout-step svg { opacity: .7; }
+.rtp-tryout-step.on { border-color: var(--rtp-signal); color: var(--rtp-signal); }
+.rtp-tryout-step.done { border-color: color-mix(in srgb, var(--rtp-win) 50%, transparent); color: var(--rtp-win); }
+.rtp-tryout-reveal { gap: 10px; text-align: center; }
+.rtp-tryout-badge { font-family: var(--rtp-display); font-weight: 800; letter-spacing: 3px; font-size: 1.5rem; padding: 6px 18px; border-radius: 10px; border: 1px solid var(--rtp-line-hot); animation: rtp-pop .35s var(--rtp-ease); }
+.rtp-tryout-badge.tone-gold { color: var(--rtp-gold, #e8c170); border-color: color-mix(in srgb, var(--rtp-gold, #e8c170) 55%, transparent); background: color-mix(in srgb, var(--rtp-gold, #e8c170) 12%, transparent); }
+.rtp-tryout-badge.tone-blue { color: #61a8dd; border-color: #61a8dd66; background: #61a8dd1f; }
+.rtp-tryout-badge.tone-green { color: var(--rtp-win); border-color: color-mix(in srgb, var(--rtp-win) 50%, transparent); background: color-mix(in srgb, var(--rtp-win) 12%, transparent); }
+.rtp-tryout-badge.tone-dim { color: var(--rtp-ink-dim); }
+.rtp-tryout-team { display: flex; align-items: center; gap: 8px; font-family: var(--rtp-display); font-size: 1.2rem; color: var(--rtp-ink); }
+.rtp-tryout-tag { font-family: var(--rtp-mono); font-size: .7rem; color: var(--rtp-ink-faint); border: 1px solid var(--rtp-line); border-radius: 5px; padding: 2px 6px; }
+.rtp-tryout-blurb { color: var(--rtp-ink-dim); font-size: .88rem; margin: 0; max-width: 300px; }
+.rtp-tryout-score { font-family: var(--rtp-mono); font-size: .78rem; color: var(--rtp-ink-faint); }
+.rtp-tryout-score b { color: var(--rtp-ink); font-size: 1rem; }
+
 /* CrosshairFlick */
 .rtp-mini-flick { position: relative; border-radius: 10px; background: var(--rtp-well); border: 1px solid var(--rtp-line); overflow: hidden; cursor: crosshair; }
 .rtp-mini-target { position: absolute; padding: 0; border: none; background: none; cursor: crosshair; animation: rtp-pop .12s var(--rtp-ease); }

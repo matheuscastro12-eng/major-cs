@@ -35,6 +35,8 @@ interface Props {
   onCreateAccount?: () => void;
   /** Logout (só faz sentido se account != null) */
   onLogout?: () => void;
+  /** Abre o painel admin (só passado/visível quando account.admin) */
+  onAdmin?: () => void;
 }
 
 const DIFFICULTIES: Difficulty[] = ['normal', 'hard', 'legend'];
@@ -58,6 +60,7 @@ export function Home({
   onAccount,
   onCreateAccount,
   onLogout,
+  onAdmin,
 }: Props) {
   const { t, lang } = useLang();
   const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
@@ -95,6 +98,7 @@ export function Home({
           onAccount={onAccount}
           onCreate={onCreateAccount}
           onLogout={onLogout}
+          onAdmin={onAdmin}
         />
       </div>
 
@@ -296,6 +300,7 @@ function AccountChip({
   onAccount,
   onCreate,
   onLogout,
+  onAdmin,
 }: {
   account?: Account | null;
   ready: boolean;
@@ -305,6 +310,7 @@ function AccountChip({
   onAccount?: () => void;
   onCreate?: () => void;
   onLogout?: () => void;
+  onAdmin?: () => void;
 }) {
   // Loading state
   if (!ready) {
@@ -472,6 +478,15 @@ function AccountChip({
               icon="👤"
               onClick={() => { onClose(); onAccount?.(); }}
             />
+            {account.admin && onAdmin && (
+              <DropItem
+                label="Painel admin"
+                hint="Times, contas pagas e financeiro"
+                icon="⚙"
+                accent="gold"
+                onClick={() => { onClose(); onAdmin(); }}
+              />
+            )}
             {!isPaid && (
               <DropItem
                 label="✨ Upgrade vitalício"

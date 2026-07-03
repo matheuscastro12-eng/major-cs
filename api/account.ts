@@ -37,6 +37,8 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS founder_no INT`,
       // método de pagamento da conta vitalícia: 'stripe' (cartão) | 'pix' | 'admin' | null (legado). Métricas do CRM.
       sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
+      // cargo de admin por CONTA: acesso ao CRM vem daqui (não mais por senha/rota secreta).
+      sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false`,
       sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
       sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
@@ -204,9 +206,9 @@ export default async function handler(
     await renumberFounders(sql, FOUNDER_LIMIT);
     founderAuditAt = Date.now();
   };
-  const founderOf = async (em: string): Promise<{ founder: boolean; founderNo: number | null }> => {
-    const r = await sql`SELECT is_founder, founder_no FROM rtm_accounts WHERE email=${em}`;
-    return { founder: Boolean(r[0]?.is_founder), founderNo: r[0]?.founder_no != null ? Number(r[0].founder_no) : null };
+  const founderOf = async (em: string): Promise<{ founder: boolean; founderNo: number | null; admin: boolean }> => {
+    const r = await sql`SELECT is_founder, founder_no, is_admin FROM rtm_accounts WHERE email=${em}`;
+    return { founder: Boolean(r[0]?.is_founder), founderNo: r[0]?.founder_no != null ? Number(r[0].founder_no) : null, admin: Boolean(r[0]?.is_admin) };
   };
   const ensureReference = async (em: string): Promise<void> => {
     await sql`UPDATE rtm_accounts SET stripe_ref=${accountReference(em)} WHERE email=${em} AND stripe_ref IS DISTINCT FROM ${accountReference(em)}`;
@@ -245,7 +247,7 @@ export default async function handler(
     }
     await sql`INSERT INTO rtm_pending_signups (email, nick, pass_hash) VALUES (${email}, ${nick}, ${passHash})
               ON CONFLICT (email) DO UPDATE SET nick=EXCLUDED.nick, pass_hash=EXCLUDED.pass_hash, created_at=now()`;
-    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, url: checkoutUrl(email) });
+    res.status(200).json({ token: sign(email), email, nick, paid: false, pending: true, founder: false, founderNo: null, admin: false, url: checkoutUrl(email) });
     return;
   }
 
@@ -272,6 +274,21 @@ export default async function handler(
     if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
     await ensureReference(em);
     res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)) });
+    return;
+  }
+
+  // adminKey: se a conta do token for admin (is_admin), devolve a chave do CRM
+  // (ADMIN_PASSWORD) pro cliente autenticar nos endpoints de admin já existentes.
+  // É a ponte que faz o acesso ao CRM vir da CONTA, não mais de senha/rota secreta.
+  // Não-admin recebe 403 (o painel nem aparece pra ele no cliente).
+  if (action === 'adminKey') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
+    const r = await sql`SELECT is_admin FROM rtm_accounts WHERE email=${em}`;
+    if (!r.length || !r[0].is_admin) { res.status(403).json({ error: 'not admin' }); return; }
+    const key = cleanEnv(process.env.ADMIN_PASSWORD);
+    if (!key) { res.status(500).json({ error: 'ADMIN_PASSWORD não configurada' }); return; }
+    res.status(200).json({ key });
     return;
   }
 

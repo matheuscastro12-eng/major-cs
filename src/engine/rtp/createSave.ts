@@ -16,7 +16,7 @@ import type {
 import { coreStatsFromAttrs, proOvr } from './coreStats';
 import { buildCircuit, computeObjective } from './circuit';
 import { computeWorldRank } from './standing';
-import { startTeam, joinTeam } from './world';
+import { startTeam, startTeamForTier, joinTeam } from './world';
 import { STARTER_SETUP } from './setup';
 import { defaultProgression } from './perks';
 import { defaultMedia } from './media';
@@ -98,6 +98,10 @@ export interface CreateRtpInput {
   // pontos distribuídos pelo usuário (somam até CREATE_BUDGET)
   categoryPoints: { mechanical: number; mental: number; physical: number };
   seed?: number;
+  // Peneira (RTP): tier alvo de contratação + se foi bem (topo do pool). Sem isso,
+  // cai no comportamento antigo (startTeam → tier mais baixo da região).
+  startTier?: import('./types').Tier;
+  tryoutStrong?: boolean;
 }
 
 // Constrói os 28 atributos iniciais. Base baixa (moleque cru) + bônus de role +
@@ -184,9 +188,12 @@ export function createRtpSave(input: CreateRtpInput): RoadToProSave {
     progression: defaultProgression(),   // RTP v8 — nível 1, sem perks/traits ainda
   };
 
-  // Entra num time REAL da sua região, no tier mais baixo (academia se houver,
-  // senão access/T3). Seus 4 colegas são os jogadores REAIS daquele time.
-  const start = startTeam(input.country, seed);
+  // Entra num time REAL da sua região. Com a peneira, no TIER definido pelo
+  // desempenho (elite/challenger/access/academy). Sem peneira (legado), no tier
+  // mais baixo. Seus 4 colegas são os jogadores REAIS daquele time.
+  const start = input.startTier
+    ? startTeamForTier(input.country, seed, input.startTier, input.tryoutStrong ?? false)
+    : startTeam(input.country, seed);
   const teammates = joinTeam(start.team, input.role);
   const team: TeamContext = {
     teamId: 'rtp-user',
@@ -239,8 +246,9 @@ export function createRtpSave(input: CreateRtpInput): RoadToProSave {
     sponsors: [],
     rng: { seed, tick: 0 },
   };
-  // RTP4 — divisão de academia (você + 7 rivais, turno-returno).
-  save.world.league = buildCircuit(save, 'academy', (seed ^ 0x5eed1) >>> 0);
+  // RTP4 — divisão do TIER de contratação (você + rivais, turno-returno). Antes era
+  // sempre 'academy'; agora acompanha o tier definido pela peneira.
+  save.world.league = buildCircuit(save, start.tier, (seed ^ 0x5eed1) >>> 0);
   save.world.objective = computeObjective(save.world.league);   // RTP v12 — meta da diretoria
   save.world.boardConfidence = 55;
   // RTP v13 — ranking mundial inicial (rookie de academia nasce lá no fim da fila).
