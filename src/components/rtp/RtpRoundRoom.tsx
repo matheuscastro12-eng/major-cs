@@ -7,6 +7,7 @@ import {
 } from '../../engine/rtp/moments';
 import {
   buildBeatPlan, ctxForBeat, feedForOutcome, outcomePills, bridgeToBeat, initialLiveScore,
+  resolveMapFromPlay, mapPlayOf,
   type BeatSpec, type FeedRow, type LiveScore, type Interlude,
 } from '../../engine/rtp/roundModel';
 import { MINIGAMES, type MiniGameId, type MiniGameProps } from '../../engine/rtp/minigames';
@@ -263,15 +264,64 @@ export function RtpRoundRoom({ save, prep, onComplete }: {
     const acc = [...outcomes, beatOutcome];
     setOutcomes(acc);
     setLocked(null); setFeed([]);
-    if (isLast) { onComplete(acc); return; }
+    // A JOGADA decide o mapa: fecho cada mapa pela SUA média de beats NELE, com a
+    // MESMA régua/seed do card (resolveMapFromPlay) → o placar vivo == o resultado.
+    // Placar NATURAL: 2-0 varre (para nos beats restantes); 2-1 vai à decisão.
+    const edge = save.player.ovr - prep.opp.strength;
+    const need = Math.ceil(prep.bestOf / 2);
+    const mapsIds = prep.maps.map((m) => m.map);
+    const allPlay = acc.length ? acc.reduce((s, o) => s + o.value, 0) / acc.length : 0.5;
+    const closeMap = (mi: number, play: number) => resolveMapFromPlay(play, edge, prep.matchSeed, mi);
+
+    if (isLast) {
+      // fecha o mapa corrente (tem beats) + mapas virtuais do BO5 (4º/5º, sem beats
+      // no plano) pela jogada AGREGADA — idêntico ao fallback do resolveRoomSeries.
+      let sy = live.seriesScore[0], st = live.seriesScore[1];
+      const cm = closeMap(beat.mapIndex, mapPlayOf(acc, beats, beat.mapIndex, allPlay));
+      if (cm.won) sy++; else st++;
+      let mi = beat.mapIndex + 1;
+      while (sy < need && st < need) { const r = closeMap(mi, allPlay); if (r.won) sy++; else st++; mi++; }
+      setFlash({ k: idx * 7 + 5, type: cm.won ? 'win' : 'loss', big: true });
+      setLive({ mapScore: cm.score, seriesScore: [sy, st], mapIndex: beat.mapIndex });
+      onComplete(acc);
+      return;
+    }
+
     const nb = beats[idx + 1];
-    // PONTE: os rounds entre este beat e o próximo acontecem agora — placar avança
-    // com viés do momentum/resultado, e mapas fecham na transição da BO3.
+    // TRANSIÇÃO DE MAPA: fecha o mapa que acabou pela sua jogada nele.
+    if (nb.mapIndex > beat.mapIndex) {
+      const { won, score } = closeMap(beat.mapIndex, mapPlayOf(acc, beats, beat.mapIndex, allPlay));
+      const newSeries: [number, number] = won
+        ? [live.seriesScore[0] + 1, live.seriesScore[1]]
+        : [live.seriesScore[0], live.seriesScore[1] + 1];
+      const closeLine = won
+        ? `Vocês fecharam o mapa ${score[0]}–${score[1]} — série ${newSeries[0]}–${newSeries[1]}.`
+        : `Eles levaram o mapa ${score[1]}–${score[0]} — série ${newSeries[0]}–${newSeries[1]}.`;
+      setFlash({ k: idx * 7 + 3, type: won ? 'win' : 'loss', big: true });
+      if (newSeries[0] >= need || newSeries[1] >= need) {
+        // série decidida (ex.: 2-0): NÃO joga os beats restantes — varreu.
+        setLive({ mapScore: score, seriesScore: newSeries, mapIndex: beat.mapIndex });
+        setInterlude({ bridged: [0, 0], lines: [closeLine], mapClosed: { map: beat.map, won, score } });
+        onComplete(acc);
+        return;
+      }
+      // série segue: abre o próximo mapa (bridge só a ABERTURA, sem novo fechamento).
+      const openLive: LiveScore = { mapScore: [0, 0], seriesScore: newSeries, mapIndex: nb.mapIndex };
+      const nbLastOfMap = idx + 2 >= beats.length || beats[idx + 2].mapIndex !== nb.mapIndex;
+      const bridge = bridgeToBeat(openLive, nb, null, momentum, edge, prep.matchSeed, mapsIds, nbLastOfMap);
+      setLive(bridge.live);
+      setInterlude({ bridged: bridge.interlude?.bridged ?? [0, 0], lines: [closeLine, ...(bridge.interlude?.lines ?? [])], mapClosed: { map: beat.map, won, score } });
+      setClutch(nb?.kind === 'clutch' ? initClutch(nb) : null);
+      setReadUsed(false);
+      setIdx(idx + 1); setSub('decide');
+      return;
+    }
+
+    // MESMO MAPA: os rounds entre este beat e o próximo acontecem (bridge intra-mapa).
     const youWon = inClutch
       ? beatOutcome.result === 'success'
       : locked.outcome.result === 'success' || locked.outcome.result === 'partial';
-    const nbLastOfMap = idx + 2 >= beats.length || beats[idx + 2].mapIndex !== nb.mapIndex;
-    const bridge = bridgeToBeat(live, nb, youWon, momentum, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), nbLastOfMap);
+    const bridge = bridgeToBeat(live, nb, youWon, momentum, edge, prep.matchSeed, mapsIds, false);
     setLive(bridge.live);
     setInterlude(bridge.interlude);
     setClutch(nb?.kind === 'clutch' ? initClutch(nb) : null);

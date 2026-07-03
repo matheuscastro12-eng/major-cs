@@ -236,19 +236,33 @@ export function bridgeToBeat(
 // (foi ao decider), 0-2, 1-2 — e 3-0/3-1/3-2 no BO5. É a FONTE DA VERDADE: a Sala
 // revela isto (fecha mapa a mapa, para quando decide) e o card oficial usa o mesmo
 // → nunca divergem. Puro/determinístico. `edge` = ovr do herói − força do adversário.
+// Resultado de UM mapa a partir da SUA jogada NAQUELE mapa. Seed POR-MAPA (mi) →
+// a Sala pode fechar cada mapa independente e bater EXATAMENTE com o card (ambos
+// chamam esta função com o mesmo mapPlay/edge/seed). `mapPlay` 0..1 = média dos
+// beats do mapa. mult 0.65 (jogada domina) + edge*0.012 (força desloca).
+export function resolveMapFromPlay(
+  mapPlay: number, edge: number, matchSeed: number, mi: number,
+): { won: boolean; score: [number, number] } {
+  const rng = makeRng((matchSeed ^ 0x5e21e5 ^ ((mi + 1) * 0x9e3779b1)) >>> 0);
+  const p = Math.max(0.1, Math.min(0.9, 0.5 + (mapPlay - 0.5) * 0.65 + edge * 0.012));
+  const won = rng() < p;
+  const margin = Math.abs(mapPlay - 0.5) * 12 + Math.abs(edge) * 0.15;
+  const loser = Math.max(3, Math.min(11, Math.round(11 - margin + (rng() * 4 - 2))));
+  return { won, score: won ? [13, loser] : [loser, 13] };
+}
+
+// média dos `value` dos beats de um mapa (helper compartilhado Sala ↔ card).
+export function mapPlayOf(outcomes: MomentOutcome[], beats: BeatSpec[], mapIndex: number, fallback: number): number {
+  const vals = outcomes.map((o, i) => ({ v: o.value, mi: beats[i]?.mapIndex })).filter((x) => x.mi === mapIndex).map((x) => x.v);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : fallback;
+}
+
 export function resolveRoomSeries(
   role: Role, outcomes: MomentOutcome[], edge: number,
   matchSeed: number, maps: MapId[], bestOf: 1 | 3 | 5,
 ): { maps: { map: MapId; score: [number, number]; won: boolean }[]; seriesWon: boolean; mapWins: [number, number] } {
   const beats = buildBeatPlan(role, maps, matchSeed);
-  const rng = makeRng((matchSeed ^ 0x5e21e5) >>> 0);
   const need = Math.ceil(bestOf / 2);
-  // desempenho por MAPA = média dos `value` dos beats daquele mapa (0..1).
-  const mapVals = new Map<number, number[]>();
-  outcomes.forEach((o, i) => {
-    const mi = beats[i]?.mapIndex ?? Math.min(i, Math.max(0, maps.length - 1));
-    const arr = mapVals.get(mi); if (arr) arr.push(o.value); else mapVals.set(mi, [o.value]);
-  });
   const allPlay = outcomes.length ? outcomes.reduce((a, o) => a + o.value, 0) / outcomes.length : 0.5;
   const out: { map: MapId; score: [number, number]; won: boolean }[] = [];
   let you = 0, them = 0;
@@ -256,14 +270,9 @@ export function resolveRoomSeries(
   // mapa; mapas extras (ex.: 4º/5º de um BO5, sem beats no plano) usam a agregada.
   const totalMaps = Math.max(maps.length || bestOf, bestOf);
   for (let mi = 0; mi < totalMaps && you < need && them < need; mi++) {
-    const vals = mapVals.get(mi);
-    const mapPlay = (vals && vals.length) ? vals.reduce((a, b) => a + b, 0) / vals.length : allPlay;
-    // a JOGADA no mapa domina (mult 0.65 → swing forte); a força desloca (edge*0.012).
-    const p = Math.max(0.1, Math.min(0.9, 0.5 + (mapPlay - 0.5) * 0.65 + edge * 0.012));
-    const won = rng() < p;
-    const margin = Math.abs(mapPlay - 0.5) * 12 + Math.abs(edge) * 0.15;
-    const loser = Math.max(3, Math.min(11, Math.round(11 - margin + (rng() * 4 - 2))));
-    out.push({ map: maps[Math.min(mi, Math.max(0, maps.length - 1))] ?? 'mirage', score: won ? [13, loser] : [loser, 13], won });
+    const mapPlay = mapPlayOf(outcomes, beats, mi, allPlay);
+    const { won, score } = resolveMapFromPlay(mapPlay, edge, matchSeed, mi);
+    out.push({ map: maps[Math.min(mi, Math.max(0, maps.length - 1))] ?? 'mirage', score, won });
     if (won) you++; else them++;
   }
   // guarda final (pool minúsculo): se não fechou, o último mapa decide.
