@@ -19,6 +19,7 @@ import { setupConditionMods } from './setup';
 import { perkAttrBonus, aggregatePassives, applyMatchProgression, detectHistoryTraits, traitById, type MatchProgressCtx } from './perks';
 import { heroMapComfort, type GamePlan, type ScoutReport } from './meta';
 import { updateMediaAfterMatch, rivalStakeDelta, type MediaMatchCtx } from './media';
+import { defaultRecords, recordsAfterSeries } from './records';
 import type { RoadToProSave, SetupState, Tier, SquadRole } from './types';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -409,6 +410,7 @@ export function applyMatchOutcome(save: RoadToProSave, mr: ProMatchResult, opts:
     awards: h.awards,
     accolades: h.accolades ?? [],
     timeline: h.timeline ?? [],
+    records: recordsAfterSeries(h.records ?? defaultRecords(), won),  // RTP v15 — placar da temporada (invicta)
     peakOvr: Math.max(h.peakOvr, save.player.ovr),
   };
 

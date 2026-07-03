@@ -25,6 +25,7 @@ import { scoutReport } from './meta';
 import { isFacingRival, pushHeadline } from './media';
 import { divisionPool, type WorldTeam } from './world';
 import { computeWorldRank, deriveEventAward, makeAccolade } from './standing';
+import { defaultRecords, recordsAtMajorEnd, applyRecordBreaks } from './records';
 import { majorName } from '../../data/tournaments';
 import type { Tournament, TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave, Tier, MajorState, MajorPlacementCode } from './types';
@@ -210,7 +211,9 @@ function applyResolution(save: RoadToProSave, name: string, tier: Tier, res: Non
     season: save.world.season, event: 0, eventName: name, tier, teamTag: save.team.tag,
     place: placeNum, rating: Math.round(avg * 100) / 100, award: res.award ?? undefined, major: true,
   }];
-  const history = { ...save.history, trophies, awards, accolades, timeline };
+  // DINASTIA (RTP v15): Majors de elite consecutivos entram na sequência histórica.
+  const records = recordsAtMajorEnd(save.history.records ?? defaultRecords(), { champion: res.placement === 'champion', elite: tier === 'elite' });
+  const history = { ...save.history, trophies, awards, accolades, timeline, records };
   // Recalcula o ranking mundial pós-Major e zera o acumulador de rating.
   const prevRank = save.world.worldRank ?? computeWorldRank(save);
   const worldRank = computeWorldRank({ ...save, history });
@@ -226,7 +229,9 @@ function applyResolution(save: RoadToProSave, name: string, tier: Tier, res: Non
   if (media && res.award) {
     media = pushHeadline(media, `${save.player.nick} é o ${res.award.toUpperCase()} do ${name}.`, 'good', save.world.season, save.world.week);
   }
-  return {
+  // applyRecordBreaks: um marco de lenda quebrado NO Major (ex.: 3º seguido) sai
+  // na imprensa junto com a manchete do título.
+  return applyRecordBreaks({
     ...save,
     life: {
       ...save.life,
@@ -236,7 +241,7 @@ function applyResolution(save: RoadToProSave, name: string, tier: Tier, res: Non
     history,
     media,
     world: { ...save.world, worldRank, peakRank, eventRatingSum: 0, eventSeries: 0 },
-  };
+  });
 }
 
 export function concludeMajorRound(save: RoadToProSave, pairingResult: SeriesResult): MajorConclusion {

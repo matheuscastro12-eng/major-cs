@@ -18,6 +18,7 @@ import {
   type CreateRtpInput,
 } from '../../engine/rtp/createSave';
 import { proOvr } from '../../engine/rtp/coreStats';
+import { bestHallCareer } from '../../state/rtpHall';
 import type { RoadToProSave, Tier } from '../../engine/rtp/types';
 
 const ROLES: { role: Role; desc: string }[] = [
@@ -92,6 +93,10 @@ export function RTPCreate({ onExit, onCreated }: {
   }, [nick, country, role, playstyle, personality, archetype, age, points]);
 
   const canCreate = nick.trim().length >= 2 && remaining === 0;
+
+  // Hall da Fama entre carreiras (RTP v15): a melhor carreira já aposentada vira
+  // a meta a bater da próxima. Lido uma vez — o hall não muda durante a criação.
+  const best = useMemo(() => bestHallCareer(), []);
 
   // Peneira: guarda a seed (compartilhada entre o reveal e o createRtpSave, pra o
   // time revelado ser o time real) + o OVR do build (peso leve na nota).
@@ -295,6 +300,21 @@ export function RTPCreate({ onExit, onCreated }: {
               )}
             </div>
           </div>
+
+          {/* Melhor carreira até hoje (hall entre carreiras) — a marca a bater */}
+          {best && (
+            <div className="dash-card" style={{ marginTop: 12 }}>
+              <header className="dash-card-head"><b><RtpIcon name="trophy" size={13} /> {ct('Melhor carreira até hoje')}</b></header>
+              <div className="dash-card-body">
+                <div className="rtp-preview-meta">
+                  <Flag cc={best.country} /> <b>{best.nick}</b> · {best.tierLabel}<br />
+                  {ct('Legado')} <b>{best.legacy}</b> · {best.titles} {ct('título(s)')} · {best.majors} Major(s)
+                  {typeof best.peakRank === 'number' ? <> · {ct('pico')} #{best.peakRank}</> : null}<br />
+                  {best.role} · {best.seasons} {ct('temporadas')} · {ct('aposentou aos')} {best.ageRetired}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="rtp-footer-actions">
             <button type="button" className="rtp-btn-ghost" onClick={onExit}>{ct('Cancelar')}</button>

@@ -5,8 +5,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
-import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, useUltimate } from '../../state/ultimate';
-import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
+import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, useUltimate } from '../../state/ultimate';
+import { PACK_DEFS, PROMO_PACK, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
@@ -38,6 +38,7 @@ import {
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
+import { missionsForWeek, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
 import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
@@ -105,12 +106,12 @@ const STAT_ROWS: [keyof UltCard['stats'], string][][] = [
   [['tiro', 'TIR'], ['mira', 'MIR'], ['reflexo', 'REF']],
   [['visao', 'VIS'], ['clutch', 'CLU'], ['util', 'UTI']],
 ];
-const FOIL_RARITIES = new Set(['legendary', 'icon', 'tots', 'major']);
+const FOIL_RARITIES = new Set(['legendary', 'icon', 'tots', 'major', 'promo']);
 const REGION_CODE: Record<string, string> = { samerica: 'SA', namerica: 'NA', europe: 'EU', cis: 'CIS', asia: 'AS', oceania: 'OCE', africa: 'AF', global: 'GLB' };
 
 // tiers "especiais" ganham fundo ESCURO com brilho + foil; os comuns viram uma
 // placa metálica CLARA. Dá hierarquia visual (comum → especial) estilo FUT.
-const DARK_TIERS = new Set(['elite', 'legendary', 'icon', 'tots', 'major']);
+const DARK_TIERS = new Set(['elite', 'legendary', 'icon', 'tots', 'major', 'promo']);
 function cardSkin(rarity: UltCard['rarity']) {
   const c = rarityInfo(rarity).color;
   if (DARK_TIERS.has(rarity)) {
@@ -258,7 +259,7 @@ const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112 }: { card:
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, addCredits } = useUltimate();
+  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -376,11 +377,12 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // reveal/walkout: começa a revelação na 1ª carta sempre que abre um novo pacote
   useEffect(() => { setRevealIdx(0); }, [reveal]);
   // season: no mount, inicia/rola por relógio local; se rolou, mostra o modal.
-  // Missões diárias abrem o dia no mount também.
+  // Missões diárias/semanais abrem o dia/semana no mount também.
   useEffect(() => {
     const r = tickSeason();
     if (r.rolled) setSeasonRoll({ credits: r.credits, newElo: r.newElo });
     syncMissions(dateKey(new Date()));
+    syncWeekly(weekKey(new Date()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // cloud: reconcilia o save com a nuvem assim que a conta carrega (restaura a
@@ -393,6 +395,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       if (!on || r !== 'restored') return;
       tickSeason();
       syncMissions(dateKey(new Date()));
+      syncWeekly(weekKey(new Date()));
       flash(`☁️ ${ct('Save restaurado da nuvem.')}`, 2600);
     }).catch(() => { /* offline — segue com o local */ });
     return () => { on = false; };
@@ -402,7 +405,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // (sem isso, "PRÓXIMA EM Xh Ym" e o dia das missões congelavam até um re-render).
   const [, setClock] = useState(0);
   useEffect(() => {
-    const t = window.setInterval(() => { setClock((c) => c + 1); syncMissions(dateKey(new Date())); }, 60_000);
+    const t = window.setInterval(() => { setClock((c) => c + 1); syncMissions(dateKey(new Date())); syncWeekly(weekKey(new Date())); }, 60_000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -492,6 +495,34 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const doClaimMission = (id: string) => {
     const r = claimMission(id);
     if (r.ok) flash(`✅ ${ct('Missão concluída')} · +${fmt(r.credits ?? 0)} 🪙`, 2200);
+  };
+
+  // ── missões semanais renováveis ──
+  const weeklyState = state.profile.weekly;
+  const weeksMissions = weeklyState ? missionsForWeek(weeklyState.week) : [];
+  const weeklyFacts = weeklyState
+    ? {
+        winsWeek: state.profile.w - weeklyState.base.w,
+        matchesWeek: (state.profile.w + state.profile.l) - (weeklyState.base.w + weeklyState.base.l),
+        packsWeek: state.profile.packSeedCounter - weeklyState.base.packs,
+        sbcWeek: state.profile.sbcDone.length - weeklyState.base.sbc,
+        bazaarWeek: state.profile.bazaarBuys - weeklyState.base.bazaar,
+      }
+    : { winsWeek: 0, matchesWeek: 0, packsWeek: 0, sbcWeek: 0, bazaarWeek: 0 };
+  const weeklyClaimable = weeklyState
+    ? weeksMissions.filter((m) => !weeklyState.claimed.includes(m.id) && weeklyProgress(m, weeklyFacts).done).length
+    : 0;
+  const weeklyAllClaimed = weeklyState != null && weeksMissions.length > 0 && weeksMissions.every((m) => weeklyState.claimed.includes(m.id));
+  const doClaimWeekly = (id: string) => {
+    const r = claimWeekly(id);
+    if (r.ok) flash(`✅ ${ct('Missão semanal concluída')} · +${fmt(r.credits ?? 0)} 🪙`, 2200);
+  };
+  const doClaimWeeklyBonus = () => {
+    const r = claimWeeklyBonus();
+    if (r.ok) {
+      flash(`🎁 ${ct('Bônus da semana')}: ${ct('pack grátis!')}`, 2400);
+      setReveal([...r.cards].sort((a, b) => b.ovr - a.ovr));
+    }
   };
 
   // ── objetivos/missões (profundidade) ──
@@ -1130,6 +1161,41 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             </UtPanel>
           )}
 
+          {weeklyState && weeksMissions.length > 0 && (
+            <UtPanel label={ct('Missões da Semana')} icon={<CalendarDays size={15} className="ut-panel__lead" />} accent="amber"
+              right={weeklyClaimable > 0 ? <span style={{ color: '#92600a' }}>{weeklyClaimable} {ct('pra resgatar')}</span> : `${weeklyState.claimed.length}/${weeksMissions.length}`}
+              info={ct('3 missões novas por semana, com metas e prêmios maiores. Complete as 3 e leve um pack bônus.')}>
+              <div className="ut-objs">
+                {weeksMissions.map((m) => {
+                  const prog = weeklyProgress(m, weeklyFacts);
+                  const claimed = weeklyState.claimed.includes(m.id);
+                  const claimable = prog.done && !claimed;
+                  return (
+                    <div key={m.id} className={`ut-obj${claimable ? ' is-claimable' : ''}${claimed ? ' is-claimed' : ''}`}>
+                      <div className="ut-obj__name">{m.name}</div>
+                      <div className="ut-obj__desc">{ct(m.desc)}</div>
+                      <div className="ut-obj__bar"><div className={prog.done ? 'done' : ''} style={{ width: `${prog.pct}%` }} /></div>
+                      <div className="ut-obj__foot">
+                        <span className="ut-obj__reward"><Coins size={12} /> {fmt(m.credits)}</span>
+                        {claimed ? <span className="ut-obj__done"><Check size={12} strokeWidth={3} /> {ct('resgatado')}</span>
+                          : claimable ? <button className="ut-obj__claim" onClick={() => doClaimWeekly(m.id)}>{ct('Resgatar')}</button>
+                          : <span className="ut-obj__count">{prog.value}/{m.target}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {weeklyAllClaimed && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--ut-muted)' }}><Gift size={13} style={{ verticalAlign: -2 }} /> {ct('Semana completa! Seu pack bônus está liberado.')}</span>
+                  {weeklyState.bonusClaimed
+                    ? <span className="ut-obj__done"><Check size={12} strokeWidth={3} /> {ct('bônus resgatado')}</span>
+                    : <button className="ut-btn ut-btn--gold" style={{ padding: '6px 14px', fontSize: '0.78rem' }} onClick={doClaimWeeklyBonus}><Gift size={14} /> {ct('Abrir pack bônus')}</button>}
+                </div>
+              )}
+            </UtPanel>
+          )}
+
           <UtPanel label={ct('Objetivos')} icon={<Target size={15} className="ut-panel__lead" />} accent="amber"
             right={objClaimable.length > 0 ? <span style={{ color: '#92600a' }}>{objClaimable.length} {ct('pra resgatar')}</span> : `${claimedSet.size}/${objectives.length}`}
             info={ct('Metas de coleção e competição. Complete pra ganhar credits e cartas.')}>
@@ -1288,6 +1354,28 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               {ct('Referência: 30.000 abre um pack TOTS ou 2 Packs Ouro; 120.000 rende 3 Premium ou 4 TOTS. Tudo aqui também é conquistável jogando — comprar só acelera.')}
             </p>
           </div>
+          {/* Pacote Promo — só vende no mês do tema (rotaciona todo mês). O card
+              carrega o nome do tema e a contagem regressiva até a rotação. */}
+          {(() => {
+            const promo = ultimatePromo();
+            if (Date.now() >= promo.endsAt) return null; // fora da janela — some da Loja até o cache do mês novo
+            const left = Math.max(0, promo.endsAt - Date.now());
+            const dd = Math.floor(left / 86400000);
+            const hh = Math.floor((left % 86400000) / 3_600_000);
+            const afford = credits >= PROMO_PACK.cost;
+            return (
+              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${promo.theme.color} 0%, ${promo.theme.color}dd 55%, ${promo.theme.color}aa 100%)`, marginBottom: 12 }}>
+                <div className="ut-pack__shine" />
+                <div className="ut-pack__art"><Sparkles size={44} strokeWidth={1.4} /></div>
+                <div className="ut-pack__name">{ct('Pacote Promo')} · {promo.theme.name}</div>
+                <div className="ut-pack__desc">{ct(promo.theme.desc)} — {ct('11 cartas promo (+2 OVR) este mês, 1 garantida no pack.')}</div>
+                <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Termina em')} {dd}d {hh}h</div>
+                <button className="ut-pack__buy" onClick={() => buy(PROMO_PACK)} disabled={!afford} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                  {afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(PROMO_PACK.cost)}
+                </button>
+              </div>
+            );
+          })()}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
             {PACK_DEFS.map((pack) => {
               const afford = credits >= pack.cost;

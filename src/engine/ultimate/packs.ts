@@ -59,7 +59,19 @@ export const PACK_DEFS: PackDef[] = [
   },
 ];
 
+// Pacote Promo — fora de PACK_DEFS de propósito: só vende durante o mês da promo
+// (a Loja o renderiza à parte, com o tema e o countdown de promos.ts). Como o
+// bucket 'special' dos weights só tem 'promo', a garantia resolve SEMPRE numa
+// carta promo (nunca cai em tots/major).
+export const PROMO_PACK: PackDef = {
+  id: 'promo', name: 'Pacote Promo', desc: '5 cartas · 1 promo do mês garantida',
+  cost: 25000, cards: 5, color: '#f472b6',
+  weights: { gold: 28, rareGold: 36, elite: 24, legendary: 8, promo: 4 },
+  guaranteed: [{ bucket: 'special', count: 1 }],
+};
+
 export function packById(id: string): PackDef | undefined {
+  if (id === PROMO_PACK.id) return PROMO_PACK;
   return PACK_DEFS.find((p) => p.id === id);
 }
 

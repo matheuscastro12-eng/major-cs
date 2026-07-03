@@ -355,6 +355,12 @@ export function legacyScore(save: RoadToProSave): number {
   // Chegar ao topo do mundo é feito de lenda: bônus pelo melhor ranking já atingido.
   const peak = save.world.peakRank;
   const peakPts = typeof peak === 'number' ? (peak <= 1 ? 120 : peak <= 5 ? 80 : peak <= 20 ? 45 : peak <= 50 ? 20 : 0) : 0;
+  // Recordes de dinastia (RTP v15): quebrar um marco de lenda, fechar temporada
+  // invicta e reinar semanas no #1 são o que separa campeão de LENDA.
+  const rec = h.records;
+  const recordPts = rec
+    ? rec.broken.length * 40 + rec.perfectSeasons * 35 + Math.min(60, rec.totalWeeksAtOne) + rec.bestTitleStreak * 8
+    : 0;
   return Math.round(
     prog.level * 6 +
     h.trophies.length * 40 +
@@ -362,6 +368,7 @@ export function legacyScore(save: RoadToProSave): number {
     h.mvps * 6 +
     accoladePts +
     peakPts +
+    recordPts +
     save.player.ovr +
     prog.traits.length * 12,
   );

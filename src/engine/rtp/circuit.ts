@@ -31,6 +31,7 @@ import { weeklyTick, ageUp, RETIRE_AGE } from './weekly';
 import { generateLifeEvent } from './lifeEvents';
 import { ACTIONS_PER_WEEK } from './createSave';
 import { computeWorldRank, deriveEventAward, makeAccolade } from './standing';
+import { defaultRecords, recordsAtEventEnd, recordsWeekTick, applyRecordBreaks } from './records';
 import { MAP_LABELS } from '../../types';
 import type { Tournament, TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave, Tier, CircuitState, MajorState, TransferOffer, TeamContext, SeasonObjective, CareerLog, ProPlayer, Accolade, MediaState } from './types';
@@ -340,7 +341,10 @@ function withWeekStart(save: RoadToProSave): RoadToProSave {
   const erng = makeRng((s.rng.seed ^ (s.world.season * 7717) ^ ((s.world.seasonEvent ?? 1) * 2749) ^ (s.world.week * 5381)) >>> 0);
   const ev = generateLifeEvent(s, erng);
   if (ev) s = { ...s, inbox: [...s.inbox, ev] };
-  return s;
+  // DINASTIA (RTP v15): semana no topo alimenta o reinado (semanas em #1); marcos
+  // de lenda quebrados nesta virada viram manchete (única — records.broken).
+  const rec = recordsWeekTick(s.history.records ?? defaultRecords(), s.world.worldRank === 1);
+  return applyRecordBreaks({ ...s, history: { ...s.history, records: rec } });
 }
 
 // Manchetes de CARREIRA (RTP v14): a imprensa reage a título, prêmio individual,
@@ -422,10 +426,12 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
     season: save.world.season, event: seasonEvent, eventName: finishedName, tier: save.team.tier,
     teamTag: save.team.tag, place, rating: eventRatingOut, award: awardKind ?? undefined,
   };
-  const withRecords = (h: CareerLog): CareerLog => ({
+  const withRecords = (h: CareerLog, seasonEnd: boolean): CareerLog => ({
     ...h,
     accolades: accolade ? [...(h.accolades ?? []), accolade] : (h.accolades ?? []),
     timeline: [...(h.timeline ?? []), timelineEntry],
+    // DINASTIA (RTP v15): série de títulos de elite + avaliação da temporada invicta.
+    records: recordsAtEventEnd(h.records ?? defaultRecords(), { won: wonEvent, elite: save.team.tier === 'elite', seasonEnd }),
   });
 
   // AINDA HÁ ETAPAS na temporada → próximo CAMPEONATO (mesmo tier/temporada), sem
@@ -440,7 +446,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
     const confNext = replacement ? 42 : boardConfidence;
     const saveForCircuit = { ...save, team: teamNext };
     const nextCircuit = buildCircuit(saveForCircuit, teamNext.tier, (save.rng.seed ^ (nextEvent * 7717) ^ (replacement ? 0x5ac : 0)) >>> 0, nextEvent);
-    const history = withRecords(eventTrophy ? { ...save.history, trophies: [...save.history.trophies, eventTrophy] } : save.history);
+    const history = withRecords(eventTrophy ? { ...save.history, trophies: [...save.history.trophies, eventTrophy] } : save.history, false);
     const st = updateStanding(save, history, save.player, teamNext.tier);
     const media = beatHeadlines(save, { title: eventTrophy, award: awardKind, sackedTo: replacement?.teamName, rankDelta: st.delta, rank: st.worldRank, eventName: finishedName });
     // propostas de meio de temporada: RARAS (senão vira spam) e não se emprestado
@@ -496,7 +502,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
 
   const champion = place === 1 && oldTier === 'elite';
   // Título do campeonato final da temporada entra na galeria + prêmio + timeline.
-  const historyEnd = withRecords(eventTrophy ? { ...save.history, trophies: [...save.history.trophies, eventTrophy] } : save.history);
+  const historyEnd = withRecords(eventTrophy ? { ...save.history, trophies: [...save.history.trophies, eventTrophy] } : save.history, true);
 
   const season = save.world.season + 1;
   const agedPlayer = ageUp(save.player);   // +1 ano + declínio por idade + OVR
@@ -516,7 +522,9 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
   if (retired) {
     return {
       seasonEnd,
-      save: { ...save, player: agedPlayer, life, team: { ...save.team, contract }, history: historyEnd, world: { ...save.world, worldRank: st.worldRank, peakRank: st.peakRank, eventRatingSum: 0, eventSeries: 0 }, retired: true, rng: { seed: save.rng.seed, tick: save.rng.tick + 1 } },
+      // applyRecordBreaks: a última temporada ainda pode quebrar um marco de lenda
+      // (aqui não passa pelo withWeekStart) — marca antes de fechar o legado.
+      save: applyRecordBreaks({ ...save, player: agedPlayer, life, team: { ...save.team, contract }, history: historyEnd, world: { ...save.world, worldRank: st.worldRank, peakRank: st.peakRank, eventRatingSum: 0, eventSeries: 0 }, retired: true, rng: { seed: save.rng.seed, tick: save.rng.tick + 1 } }),
     };
   }
 

@@ -5,7 +5,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PACK_DEFS, packById, rollPack } from '../src/engine/ultimate/packs.ts';
+import { PACK_DEFS, PROMO_PACK, packById, rollPack } from '../src/engine/ultimate/packs.ts';
+import { PROMO_BOOST, PROMO_EPOCH, PROMO_SIZE, PROMO_THEMES, monthEndMs, promoForMonth, promoSpecsThrough, themeForMonth } from '../src/engine/ultimate/promos.ts';
+import { WEEKLY_PER_WEEK, WEEKLY_POOL, missionsForWeek, weekKey, weeklyProgress } from '../src/engine/ultimate/weeklyMissions.ts';
+import { buildCatalog } from '../src/engine/ultimate/cards.ts';
+import { CS2_REAL_2026 } from '../src/data/bo3.ts';
 import { rarityMatchesBucket, RARITIES, type UltRarity } from '../src/engine/ultimate/rarities.ts';
 import { makeRng } from '../src/engine/rng.ts';
 import { computeChemistry, type ChemNode, type ChemNodeCard } from '../src/engine/ultimate/chemistry.ts';
@@ -22,6 +26,10 @@ import {
   gauntletStart,
   gauntletRecord,
   evolveCard,
+  ensureWeekly,
+  markWeeklyClaimed,
+  markWeeklyBonusClaimed,
+  markBazaarBought,
   migrateUltimate,
   countCopies,
   STARTING_CREDITS,
@@ -45,7 +53,7 @@ function mkCard(o: Partial<UltCard> & { playerId: string }): UltCard {
 
 // 4 cartas por raridade (playerIds distintos) — todo pool de pack fica não-vazio.
 function syntheticCatalog(): UltCard[] {
-  const rarities: UltRarity[] = ['bronze', 'silver', 'gold', 'rareGold', 'elite', 'legendary', 'icon', 'tots', 'major'];
+  const rarities: UltRarity[] = ['bronze', 'silver', 'gold', 'rareGold', 'elite', 'legendary', 'icon', 'tots', 'major', 'promo'];
   const out: UltCard[] = [];
   for (const r of rarities) {
     for (let i = 0; i < 4; i++) {
@@ -350,4 +358,135 @@ test('computeNextDaily cobre os 3 ramos: mesmo dia, ontem (+1), gap (reset)', ()
   for (let d = 2; d <= 7; d++) assert.ok(dailyCredits(d) > dailyCredits(d - 1));
   assert.equal(dailyCredits(0), DAILY_TABLE[0].credits);
   assert.equal(dailyCredits(99), DAILY_TABLE[6].credits);
+});
+
+// ---------- promos mensais ----------
+test('promoForMonth: determinística por mês, 11 jogadores do tema com +2 de boost', () => {
+  const base = buildCatalog(CS2_REAL_2026);
+  const mi = PROMO_EPOCH; // julho/2026, mês de estreia
+  const a = promoForMonth(base, mi);
+  const b = promoForMonth(base, mi);
+  assert.deepEqual(a.playerIds, b.playerIds); // mesma seed → mesma promo
+  assert.equal(a.playerIds.length, PROMO_SIZE);
+  assert.equal(new Set(a.playerIds).size, PROMO_SIZE); // 11 jogadores DISTINTOS
+  assert.equal(a.theme, themeForMonth(mi));
+  for (const s of a.specs) {
+    assert.equal(s.rarity, 'promo');
+    assert.equal(s.ovrBoost, PROMO_BOOST);
+    // todo promovido de fato pertence ao tema do mês
+    const card = base.find((c) => c.playerId === s.playerId)!;
+    assert.ok(a.theme.filter(card), `${s.playerId} bate o tema ${a.theme.id}`);
+  }
+  // mês seguinte → tema rotaciona e o elenco muda
+  const next = promoForMonth(base, mi + 1);
+  assert.notEqual(next.theme.id, a.theme.id);
+  assert.notDeepEqual(next.playerIds, a.playerIds);
+  // fim do mês = 00:00 do dia 1 do mês seguinte
+  assert.equal(monthEndMs(2026 * 12 + 6), new Date(2026, 7, 1).getTime());
+  assert.equal(PROMO_THEMES.length >= 2, true);
+});
+
+test('promoSpecsThrough: acumula meses passados sem duplicar jogador (chaves estáveis)', () => {
+  const base = buildCatalog(CS2_REAL_2026);
+  const specs = promoSpecsThrough(base, PROMO_EPOCH + 3); // 4 meses de promo
+  assert.ok(specs.length > PROMO_SIZE); // acumulou mais de um mês
+  assert.equal(new Set(specs.map((s) => s.playerId)).size, specs.length); // dedup
+  // toda promo do mês corrente está presente (inventário antigo E pack novo resolvem)
+  const cur = promoForMonth(base, PROMO_EPOCH + 3);
+  const ids = new Set(specs.map((s) => s.playerId));
+  for (const id of cur.playerIds) assert.ok(ids.has(id));
+  // catálogo montado com os specs resolve a chave `${playerId}:promo`
+  const cat = buildCatalog(CS2_REAL_2026, specs);
+  const promoCards = cat.filter((c) => c.rarity === 'promo');
+  assert.equal(promoCards.length, specs.length);
+});
+
+test('Pacote Promo: 25k, só via packById, garante 1 carta promo', () => {
+  assert.equal(PROMO_PACK.cost, 25000);
+  assert.equal(packById('promo'), PROMO_PACK);
+  assert.ok(!PACK_DEFS.some((p) => p.id === 'promo')); // fora da grade fixa da Loja
+  const cat = syntheticCatalog();
+  for (const seed of [1, 42, 999]) {
+    const cards = rollPack(cat, PROMO_PACK, makeRng(seed));
+    assert.equal(cards.length, PROMO_PACK.cards);
+    assert.ok(cards.some((c) => c.rarity === 'promo'), `seed ${seed}: 1 promo garantida`);
+    // a garantia 'special' do Promo NUNCA cai em tots/major (weights só têm promo)
+    assert.ok(!cards.some((c) => c.rarity === 'tots' || c.rarity === 'major'), `seed ${seed}: sem tots/major`);
+  }
+});
+
+// ---------- missões semanais ----------
+test('weekKey: semana ISO no fuso local (segunda vira a semana; W53 em ano longo)', () => {
+  assert.equal(weekKey(new Date(2026, 6, 3)), '2026-W27');  // sexta 3/jul
+  assert.equal(weekKey(new Date(2026, 6, 5)), '2026-W27');  // domingo ainda é W27
+  assert.equal(weekKey(new Date(2026, 6, 6)), '2026-W28');  // segunda vira
+  assert.equal(weekKey(new Date(2026, 0, 1)), '2026-W01');  // 1/jan/2026 é quinta → W01
+  assert.equal(weekKey(new Date(2027, 0, 1)), '2026-W53');  // 1/jan/2027 pertence à W53 de 2026
+});
+
+test('missionsForWeek: determinística por semana, 3 missões distintas do pool', () => {
+  const a = missionsForWeek('2026-W27');
+  assert.deepEqual(a.map((m) => m.id), missionsForWeek('2026-W27').map((m) => m.id));
+  assert.equal(a.length, WEEKLY_PER_WEEK);
+  assert.equal(new Set(a.map((m) => m.id)).size, WEEKLY_PER_WEEK);
+  for (const m of a) assert.ok(WEEKLY_POOL.some((p) => p.id === m.id));
+  // semanas diferentes tendem a sortear conjuntos diferentes (ao menos uma destas difere)
+  const weeks = ['2026-W27', '2026-W28', '2026-W29', '2026-W30'];
+  const sets = weeks.map((w) => missionsForWeek(w).map((m) => m.id).join(','));
+  assert.ok(new Set(sets).size > 1);
+});
+
+test('ensureWeekly: abre a semana com baseline; semana nova reseta; mesma semana é no-op', () => {
+  let s = defaultUltimateState();
+  s = { ...s, profile: { ...s.profile, w: 4, l: 2, packSeedCounter: 3, bazaarBuys: 1 } };
+  const w1 = ensureWeekly(s, '2026-W27');
+  assert.deepEqual(w1.profile.weekly, { week: '2026-W27', base: { w: 4, l: 2, packs: 3, sbc: 0, bazaar: 1 }, claimed: [], bonusClaimed: false });
+  assert.equal(ensureWeekly(w1, '2026-W27'), w1); // mesma semana → referência intacta
+  // progride e resgata; a semana seguinte zera claims/bonus e re-baselina
+  let s2 = { ...w1, profile: { ...w1.profile, w: 11 } };
+  s2 = markWeeklyClaimed(s2, 'w-win7');
+  s2 = markWeeklyBonusClaimed(s2);
+  assert.ok(s2.profile.weekly!.claimed.includes('w-win7') && s2.profile.weekly!.bonusClaimed);
+  const w2 = ensureWeekly(s2, '2026-W28');
+  assert.equal(w2.profile.weekly!.week, '2026-W28');
+  assert.deepEqual(w2.profile.weekly!.claimed, []);
+  assert.equal(w2.profile.weekly!.bonusClaimed, false);
+  assert.equal(w2.profile.weekly!.base.w, 11); // baseline novo = contadores atuais
+});
+
+test('markWeeklyClaimed/BonusClaimed: idempotentes (2º resgate é no-op)', () => {
+  const s = ensureWeekly(defaultUltimateState(), '2026-W27');
+  const once = markWeeklyClaimed(s, 'w-win7');
+  assert.equal(markWeeklyClaimed(once, 'w-win7'), once); // referência intacta
+  assert.deepEqual(once.profile.weekly!.claimed, ['w-win7']);
+  const bonus = markWeeklyBonusClaimed(once);
+  assert.equal(markWeeklyBonusClaimed(bonus), bonus);
+  // sem semana aberta → no-op
+  const empty = defaultUltimateState();
+  assert.equal(markWeeklyClaimed(empty, 'w-win7'), empty);
+  assert.equal(markWeeklyBonusClaimed(empty), empty);
+});
+
+test('weeklyProgress + bazaarBuys: progresso vem dos contadores menos o baseline', () => {
+  const def = WEEKLY_POOL.find((m) => m.id === 'w-bazaar3')!;
+  assert.deepEqual(weeklyProgress(def, { winsWeek: 0, matchesWeek: 0, packsWeek: 0, sbcWeek: 0, bazaarWeek: 2 }), { value: 2, done: false, pct: 67 });
+  assert.ok(weeklyProgress(def, { winsWeek: 0, matchesWeek: 0, packsWeek: 0, sbcWeek: 0, bazaarWeek: 3 }).done);
+  // markBazaarBought incrementa o acumulado que alimenta a métrica
+  let s = ensureWeekly(defaultUltimateState(), '2026-W27');
+  s = markBazaarBought(s, 100, 'l1');
+  s = markBazaarBought(s, 101, 'l2'); // dia novo zera o bucket, mas NÃO o acumulado
+  assert.equal(s.profile.bazaarBuys, 2);
+  assert.deepEqual(s.profile.bazaarBought, { day: 101, ids: ['l2'] });
+});
+
+test('migrateUltimate: backfill de weekly=null e bazaarBuys=0 em save antigo', () => {
+  const old = { version: 1, profile: { credits: 500, missions: { day: '2026-07-01', base: { w: 0, l: 0, packs: 0, sbc: 0 }, claimed: [] } } };
+  const m = migrateUltimate(old);
+  assert.equal(m.profile.weekly, null);
+  assert.equal(m.profile.bazaarBuys, 0);
+  // weekly válido sobrevive à migração
+  const withWeekly = { version: 1, profile: { weekly: { week: '2026-W27', base: { w: 1, l: 0, packs: 2, sbc: 0, bazaar: 1 }, claimed: ['w-win7'], bonusClaimed: true }, bazaarBuys: 3 } };
+  const m2 = migrateUltimate(withWeekly);
+  assert.deepEqual(m2.profile.weekly, { week: '2026-W27', base: { w: 1, l: 0, packs: 2, sbc: 0, bazaar: 1 }, claimed: ['w-win7'], bonusClaimed: true });
+  assert.equal(m2.profile.bazaarBuys, 3);
 });
