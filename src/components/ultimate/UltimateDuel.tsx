@@ -278,7 +278,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
               <div className="ut-queue__title">{ct('PROCURANDO RIVAL…')}</div>
               <div className="ut-queue__meta">
                 {Math.floor((Date.now() - queue.since) / 1000)}s {ct('na fila')}
-                {queue.window != null && <> · {ct('janela')} ±{queue.window} RP</>}
+                {queue.window != null && (queue.window >= 100000 ? <> · {ct('janela aberta')}</> : <> · {ct('janela')} ±{queue.window} RP</>)}
                 {queue.waiting != null && <> · {queue.waiting} {ct('na fila agora')}</>}
               </div>
             </div>

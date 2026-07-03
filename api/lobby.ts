@@ -233,9 +233,16 @@ async function finishDraftIfReady(sql: ReturnType<typeof neon>, code: string, mo
     WHERE code = ${code} AND status = 'drafting'`;
 }
 
-// janela de elo do matchmaking: alarga com a espera (±200 → ±1200 RP).
+// janela aberta: valor sentinela que faz o pareamento aceitar QUALQUER RP.
+const MM_OPEN = 1_000_000;
+// janela de elo do matchmaking. Numa fila pequena (poucas contas, RPs bem
+// espalhados) dois managers esperando PRECISAM se enfrentar mesmo com RP
+// distante — senão a fila fica com "2 na fila" que nunca casam. Por isso cresce
+// rápido (±300 → ±1300) e, após ~15s, ABRE GERAL (pareia qualquer um).
 function mmWindow(waitedMs: number): number {
-  return Math.min(1200, 200 + Math.floor(waitedMs / 1000) * 15);
+  const s = Math.floor(waitedMs / 1000);
+  if (s >= 15) return MM_OPEN;
+  return 300 + s * 70;
 }
 
 // tenta parear NA HORA. Regras anti-corrida (cada sql`` do Neon é um request
@@ -542,8 +549,11 @@ export default async function handler(
       const enqueuedMs = new Date(String(ticket.enqueued_at)).getTime();
       const waitedMs = Math.max(0, Date.now() - enqueuedMs);
       // pareia em polls ALTERNADOS (corta ~metade das queries de matchmaking
-      // sob carga; quem pula segue claimável pelos outros no intervalo)
-      if (Math.floor(waitedMs / 2500) % 2 === 0) {
+      // sob carga; quem pula segue claimável pelos outros no intervalo). Mas com
+      // a janela já aberta (>=15s esperando, fila fina) tenta a CADA poll: aí só
+      // acontece quando não tem carga mesmo, e casa em ~2.5s em vez de esperar o
+      // próximo poll par.
+      if (waitedMs >= 15_000 || Math.floor(waitedMs / 2500) % 2 === 0) {
         const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs);
         if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       }
