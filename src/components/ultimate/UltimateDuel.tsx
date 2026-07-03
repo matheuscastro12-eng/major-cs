@@ -16,6 +16,7 @@ export interface DuelPlayArgs {
   oppSquad: UltimatePvpSquad;
   oppNick: string;
   myFirst: boolean; // ordem canônica (nick menor primeiro) — igual nos 2 clientes
+  ranked: boolean;  // sala da fila (vale RP + ladder) vs sala privada (amistoso)
 }
 
 // sessão do duelo FORA do React: o palco da partida substitui a tela inteira e
@@ -30,11 +31,14 @@ function watchedMatch(key: string): boolean {
   try { return (JSON.parse(localStorage.getItem(LEDGER_KEY) ?? '[]') as string[]).includes(key); } catch { return false; }
 }
 
-export function UltimateDuel({ nick, squad, ready, onPlay }: {
+export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }: {
   nick: string;
   squad: UltimatePvpSquad;
   ready: boolean;               // squad completo (5 cartas)?
   onPlay: (args: DuelPlayArgs) => boolean; // false = não conseguiu montar a partida
+  // 'ranked' = só a fila de matchmaking (Rivals, vale ladder); 'private' = só
+  // criar/entrar por código + salas abertas (amistoso com amigo, sem ladder).
+  variant?: 'ranked' | 'private';
 }) {
   const [view, setView] = useState<'menu' | 'room'>(duelSession.view);
   const [code, setCode] = useState(duelSession.code);
@@ -91,7 +95,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
     const all = await listOpenLobbies();
     setRooms(all.filter((r) => r.mode === 'ultimate'));
   }, []);
-  useEffect(() => { if (view === 'menu') void refreshRooms(); }, [view, refreshRooms]);
+  useEffect(() => { if (view === 'menu' && variant === 'private') void refreshRooms(); }, [view, variant, refreshRooms]);
 
   // ── poll do estado da sala (ETag/304 dentro do fetchLobby) ──
   useEffect(() => {
@@ -144,7 +148,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
     const opp = actives.find((p) => p.nick.toLowerCase() !== nick.toLowerCase());
     if (!me?.squad || !opp?.squad) return null;
     const runSeed = Number(state.lobby.run_seed ?? state.lobby.seed) || 1;
-    return { code, runSeed, mySquad: me.squad, oppSquad: opp.squad, oppNick: opp.squad.name || opp.nick, myFirst: me.nick.toLowerCase() < opp.nick.toLowerCase() };
+    return { code, runSeed, mySquad: me.squad, oppSquad: opp.squad, oppNick: opp.squad.name || opp.nick, myFirst: me.nick.toLowerCase() < opp.nick.toLowerCase(), ranked: !!state.lobby.ranked };
   }, [state, code, nick]);
 
   // ── partida pronta → entrega pro pai UMA vez por code:run_seed. A guarda é o
@@ -164,7 +168,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
   const create = async () => {
     setBusy(true); setError('');
     try {
-      const r = await lobbyApi({ action: 'create', nick, mode: 'ultimate', pool: 'world', name: roomName.trim() || undefined, isPublic, ranked: true, ruleset: 'open' });
+      const r = await lobbyApi({ action: 'create', nick, mode: 'ultimate', pool: 'world', name: roomName.trim() || undefined, isPublic, ranked: variant === 'ranked', ruleset: 'open' });
       if (r.ok && r.code) { setCode(r.code); setView('room'); setState(null); }
       else setError(r.error ?? ct('Não foi possível criar a sala.'));
     } catch { setError(ct('Sem conexão com o servidor.')); }
@@ -260,64 +264,69 @@ export function UltimateDuel({ nick, squad, ready, onPlay }: {
     );
   }
 
-  // ── menu: fila ranqueada + criar / entrar / salas abertas ──
+  // ── menu ──
+  // ranked: só a fila de matchmaking (Rivals). private: criar / entrar / salas.
   return (
     <div className="ut-duel">
       {!ready && <div className="ut-duel__err">{ct('Complete os 5 slots do seu squad (aba Squad) pra duelar online.')}</div>}
 
-      {queue ? (
-        <div className="ut-queue is-searching">
-          <div className="ut-queue__pulse" />
-          <div className="ut-queue__body">
-            <div className="ut-queue__title">{ct('PROCURANDO RIVAL…')}</div>
-            <div className="ut-queue__meta">
-              {Math.floor((Date.now() - queue.since) / 1000)}s {ct('na fila')}
-              {queue.window != null && <> · {ct('janela')} ±{queue.window} RP</>}
-              {queue.waiting != null && <> · {queue.waiting} {ct('na fila agora')}</>}
+      {variant === 'ranked' ? (
+        queue ? (
+          <div className="ut-queue is-searching">
+            <div className="ut-queue__pulse" />
+            <div className="ut-queue__body">
+              <div className="ut-queue__title">{ct('PROCURANDO RIVAL…')}</div>
+              <div className="ut-queue__meta">
+                {Math.floor((Date.now() - queue.since) / 1000)}s {ct('na fila')}
+                {queue.window != null && (queue.window >= 100000 ? <> · {ct('janela aberta')}</> : <> · {ct('janela')} ±{queue.window} RP</>)}
+                {queue.waiting != null && <> · {queue.waiting} {ct('na fila agora')}</>}
+              </div>
+            </div>
+            <button className="ut-btn ut-btn--ghost" onClick={cancelQueue}>{ct('Cancelar')}</button>
+          </div>
+        ) : (
+          <div className="ut-queue">
+            <div className="ut-queue__body">
+              <div className="ut-queue__title">{ct('FILA RANQUEADA')}</div>
+              <div className="ut-queue__meta">{ct('Pareamento automático por RP')} · {ct('seu elo')}: <b>{squad.elo}</b></div>
+            </div>
+            <button className="ut-jogar" style={{ padding: '11px 22px' }} disabled={busy || !ready} onClick={() => void enterQueue()}><Zap size={16} /> {ct('ENTRAR NA FILA')}</button>
+          </div>
+        )
+      ) : (
+        <>
+          <div className="ut-duel__grid">
+            <div className="ut-duel__box">
+              <div className="ut-duel__boxtitle"><Plus size={14} /> {ct('Criar sala')}</div>
+              <input className="ut-duel__input" placeholder={ct('Nome da sala (opcional)')} maxLength={40} value={roomName} onChange={(e) => setRoomName(e.target.value)} />
+              <label className="ut-duel__chk"><input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} /> {ct('Sala pública (aparece na lista)')}</label>
+              <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', padding: '11px' }} disabled={busy || !ready} onClick={() => void create()}><Zap size={15} /> {ct('CRIAR DUELO')}</button>
+            </div>
+            <div className="ut-duel__box">
+              <div className="ut-duel__boxtitle"><Globe size={14} /> {ct('Entrar com código')}</div>
+              <input className="ut-duel__input" placeholder="ABCDE" maxLength={5} value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} style={{ textTransform: 'uppercase', letterSpacing: '4px', fontFamily: 'var(--ut-font-mono)', textAlign: 'center' }} />
+              <button className="ut-btn ut-btn--gold" style={{ width: '100%' }} disabled={busy || !ready || joinCode.length !== 5} onClick={() => void join(joinCode)}>{ct('ENTRAR')}</button>
             </div>
           </div>
-          <button className="ut-btn ut-btn--ghost" onClick={cancelQueue}>{ct('Cancelar')}</button>
-        </div>
-      ) : (
-        <div className="ut-queue">
-          <div className="ut-queue__body">
-            <div className="ut-queue__title">{ct('FILA RANQUEADA')}</div>
-            <div className="ut-queue__meta">{ct('Pareamento automático por RP')} · {ct('seu elo')}: <b>{squad.elo}</b></div>
-          </div>
-          <button className="ut-jogar" style={{ padding: '11px 22px' }} disabled={busy || !ready} onClick={() => void enterQueue()}><Zap size={16} /> {ct('ENTRAR NA FILA')}</button>
-        </div>
-      )}
 
-      <div className="ut-duel__grid">
-        <div className="ut-duel__box">
-          <div className="ut-duel__boxtitle"><Plus size={14} /> {ct('Criar sala')}</div>
-          <input className="ut-duel__input" placeholder={ct('Nome da sala (opcional)')} maxLength={40} value={roomName} onChange={(e) => setRoomName(e.target.value)} />
-          <label className="ut-duel__chk"><input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} /> {ct('Sala pública (aparece na lista)')}</label>
-          <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', padding: '11px' }} disabled={busy || !ready} onClick={() => void create()}><Zap size={15} /> {ct('CRIAR DUELO')}</button>
-        </div>
-        <div className="ut-duel__box">
-          <div className="ut-duel__boxtitle"><Globe size={14} /> {ct('Entrar com código')}</div>
-          <input className="ut-duel__input" placeholder="ABCDE" maxLength={5} value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} style={{ textTransform: 'uppercase', letterSpacing: '4px', fontFamily: 'var(--ut-font-mono)', textAlign: 'center' }} />
-          <button className="ut-btn ut-btn--gold" style={{ width: '100%' }} disabled={busy || !ready || joinCode.length !== 5} onClick={() => void join(joinCode)}>{ct('ENTRAR')}</button>
-        </div>
-      </div>
+          <div className="ut-duel__boxtitle" style={{ marginTop: 6 }}><Swords size={14} /> {ct('Salas abertas')} <button className="ut-duel__copy" onClick={() => void refreshRooms()} title={ct('Atualizar')}><RefreshCw size={12} /></button></div>
+          {rooms.length === 0 ? (
+            <div style={{ fontSize: '0.8rem', color: 'var(--ut-muted)', padding: '6px 2px' }}>{ct('Nenhuma sala aberta agora — crie a sua!')}</div>
+          ) : (
+            <div className="ut-duel__rooms">
+              {rooms.map((r) => (
+                <div key={r.code} className="ut-duel__room">
+                  <b>{r.name || r.code}</b>
+                  <span>{r.host} · {r.players}/{r.max}</span>
+                  <button className="ut-btn ut-btn--ghost" style={{ padding: '5px 13px', fontSize: '0.74rem' }} disabled={busy || !ready} onClick={() => void join(r.code)}>{ct('Entrar')}</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       {error && <div className="ut-duel__err">{error}</div>}
-
-      <div className="ut-duel__boxtitle" style={{ marginTop: 6 }}><Swords size={14} /> {ct('Salas abertas')} <button className="ut-duel__copy" onClick={() => void refreshRooms()} title={ct('Atualizar')}><RefreshCw size={12} /></button></div>
-      {rooms.length === 0 ? (
-        <div style={{ fontSize: '0.8rem', color: 'var(--ut-muted)', padding: '6px 2px' }}>{ct('Nenhuma sala aberta agora — crie a sua!')}</div>
-      ) : (
-        <div className="ut-duel__rooms">
-          {rooms.map((r) => (
-            <div key={r.code} className="ut-duel__room">
-              <b>{r.name || r.code}</b>
-              <span>{r.host} · {r.players}/{r.max}</span>
-              <button className="ut-btn ut-btn--ghost" style={{ padding: '5px 13px', fontSize: '0.74rem' }} disabled={busy || !ready} onClick={() => void join(r.code)}>{ct('Entrar')}</button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

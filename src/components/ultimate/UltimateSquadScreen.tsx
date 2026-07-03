@@ -297,7 +297,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     return () => document.removeEventListener('click', h);
   }, [navMenu]);
   const go = (t: typeof tab) => { setTab(t); setNavMenu(null); };
-  const onJogar = () => { if (squadComplete) playMatch('rivals'); else setTab('squad'); };
+  const onJogar = () => { if (squadComplete) { setRankedMode('rivals'); setTab('ranked'); } else setTab('squad'); };
   // contagem regressiva até a próxima recompensa (meia-noite local)
   const msToMidnight = (() => { const d = new Date(); const n = new Date(d); n.setHours(24, 0, 0, 0); return n.getTime() - d.getTime(); })();
   const nextIn = daily.canClaim ? ct('disponível') : `${Math.floor(msToMidnight / 3_600_000)}h ${Math.floor((msToMidnight % 3_600_000) / 60_000)}m`;
@@ -617,11 +617,11 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       const r = gauntletRecord(won, score);
       resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard }, mvp, roundLog, mapName };
     } else {
-      const ranked = mode === 'rivals';
-      const outcome = recordMatch(won, oppElo, ranked, score);
-      if (ranked) void reportResult(won, displayName); // alimenta o ranking global do servidor (contas vitalícias)
-      const eloAfter = eloBefore + (ranked ? outcome.eloDelta : 0);
-      resultData = { won, score, outcome, mode, divChange: ranked ? divisionChange(eloBefore, eloAfter) : 'same', divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName };
+      // Amistoso (casual): sem risco de RP, sem ladder — só credits. O ranqueado
+      // (Rivals) virou PvP online de verdade e passa pelo startPvpMatch; contra IA
+      // sobra só o Gauntlet e este treino amistoso, que NÃO alimentam o ranking.
+      const outcome = recordMatch(won, oppElo, false, score);
+      resultData = { won, score, outcome, mode, divChange: 'same', divName: divisionFor(eloBefore).def.name, mvp, roundLog, mapName };
     }
     setResult(null);
     setLiveRound(0);
@@ -689,8 +689,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       if (!already) localStorage.setItem(ledgerKey, JSON.stringify([recKey, ...led].slice(0, 40)));
     } catch { /* storage indisponível — registra mesmo assim */ }
     const eloBefore = state.profile.elo;
-    const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, true, score);
-    if (!already) void reportResult(won, displayName); // duelo ranqueado também conta no ranking global
+    // sala da FILA (ranked) vale RP + ladder; sala PRIVADA é amistoso (só credits).
+    const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, args.ranked, score);
+    if (!already && args.ranked) void reportResult(won, displayName); // só a ranqueada alimenta o ranking global
     const eloAfter = eloBefore + outcome.eloDelta;
     setResult(null);
     setLiveRound(0);
@@ -907,7 +908,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               )}
             </div>
             <button className={`ut-nav__item${tab === 'ranked' ? ' is-active' : ''}`} onClick={() => go('ranked')}><Swords size={16} /> {ct('Ranqueada')}</button>
-            <button className={`ut-nav__item${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo Online')}</button>
+            <button className={`ut-nav__item${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo Privado')}</button>
             <button className={`ut-nav__item${tab === 'ranking' ? ' is-active' : ''}`} onClick={() => go('ranking')}><ListOrdered size={16} /> {ct('Ranking')}</button>
             {/* itens DIRETOS: visíveis só em telas estreitas — os dropdowns ficavam
                 recortados dentro do scroller da nav (<=1160px) e sumiam no clique */}
@@ -1489,23 +1490,34 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
             {!squadComplete && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Complete os 5 slots do seu squad (aba Squad) pra jogar.')}</div>}
 
-            <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', marginTop: 12, padding: '13px' }} onClick={() => startMatch(rankedMode)} disabled={ctaDisabled}>
-              <Zap size={17} /> {ctaLabel}
-            </button>
-            <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
-              {rankedMode === 'rivals' ? ct('Vitória sobe RP e pode promover de divisão. Derrota tira RP.')
-                : rankedMode === 'casual' ? ct('Sem risco de RP — treina e ganha credits (500 vitória / 150 derrota).')
-                : ct('Recompensa cresce a cada vitória (800 → 6.000) + carta Elite ao completar 5/5.')}
-            </div>
+            {rankedMode === 'rivals' ? (
+              // Rivals = PvP online de verdade: a fila pareia com outro manager por RP.
+              <div style={{ marginTop: 12 }}>
+                <UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={squadComplete} onPlay={startPvpMatch} />
+                <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
+                  {ct('Você enfrenta o squad de outro manager de verdade. Vitória sobe RP, pode promover de divisão e conta no ranking global. Derrota tira RP.')}
+                </div>
+              </div>
+            ) : (
+              <>
+                <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', marginTop: 12, padding: '13px' }} onClick={() => startMatch(rankedMode)} disabled={ctaDisabled}>
+                  <Zap size={17} /> {ctaLabel}
+                </button>
+                <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
+                  {rankedMode === 'casual' ? ct('Sem risco de RP — treina e ganha credits (500 vitória / 150 derrota).')
+                    : ct('Recompensa cresce a cada vitória (800 → 6.000) + carta Elite ao completar 5/5.')}
+                </div>
+              </>
+            )}
           </UtPanel>
         );
       })()}
 
       {tab === 'duelo' && (
-        <UtPanel label={<>{ct('Duelo Online')} <em>· {ct('PvP 1v1')}</em></>} icon={<Globe size={15} className="ut-panel__lead" />}
+        <UtPanel label={<>{ct('Duelo Privado')} <em>· {ct('com amigo')}</em></>} icon={<Globe size={15} className="ut-panel__lead" />}
           right={<span style={{ fontFamily: 'var(--ut-font-mono)' }}>{pvpNick}</span>}
-          info={ct('Enfrente o squad de outro jogador de verdade. Vale RP: seu elo vs o elo do rival.')}>
-          <UltimateDuel nick={pvpNick} squad={pvpSquad} ready={squadComplete} onPlay={startPvpMatch} />
+          info={ct('Crie uma sala ou entre com código pra enfrentar um amigo. Amistoso: não vale RP nem ranking global.')}>
+          <UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={squadComplete} onPlay={startPvpMatch} />
         </UtPanel>
       )}
 
