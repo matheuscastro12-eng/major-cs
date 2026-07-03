@@ -12,6 +12,7 @@ import {
   xpToNext, legacyScore, legacyTier, MILESTONES, milestoneProgress, MAX_LEVEL,
   type PerkDef, type PerkEffect, type PerkTree,
 } from '../../engine/rtp/perks';
+import { legendBoard, LEGEND_MARKS } from '../../engine/rtp/legends';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
 // Descreve um efeito de perk/trait em chips curtos e legíveis.
@@ -65,6 +66,9 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
   ];
   const accolades = history.accolades ?? [];
   const timeline = history.timeline ?? [];
+  // Dinastia & Lendas (RTP v15): placar vs o panteão + recordes vivos.
+  const board = legendBoard(save);
+  const records = history.records;
 
   return (
     <>
@@ -159,6 +163,51 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
               <div key={m.id} className={`rtp-ms${done ? ' done' : ''}`}>
                 <span className="rtp-ms-check"><RtpIcon name={done ? 'check' : m.icon} size={13} /></span>
                 {m.label}
+              </div>
+            );
+          })}
+        </div>
+      </DashCard>
+
+      {/* Placar de lendas (RTP v15) — sua carreira vs o panteão, ao vivo */}
+      <DashCard title={ct('Placar de lendas')} actions={<span className="rtp-id-pointchip">#{board.heroPos} {ct('de')} {board.rows.length}</span>}>
+        <div className="rtp-tl">
+          {board.rows.map((r, i) => (
+            <div key={r.isHero ? '__hero' : r.nick} className={`rtp-tl-row${r.isHero ? ' champ' : ''}`}>
+              <span className="rtp-tl-when">#{i + 1}</span>
+              <div className="rtp-tl-info">
+                <b><Flag cc={r.country} /> {r.nick}{r.isHero ? ` — ${ct('você')}` : ''}</b>
+                <span>{r.m.majors} Majors · {r.m.titles} {ct('títulos elite')} · {r.m.weeksAtOne} {ct('sem. em #1')} · {r.m.mvps} MVPs{r.era ? ` · ${r.era}` : ''}</span>
+              </div>
+              <span className="rtp-tl-place">{r.pts} {ct('pts')}</span>
+            </div>
+          ))}
+        </div>
+        <div className="rtp-soon" style={{ marginTop: 8 }}>{ct('Majors, títulos de elite, semanas em #1 e MVPs pontuam. Passe as lendas e entre pra história.')}</div>
+      </DashCard>
+
+      {/* Recordes vivos (RTP v15) — as sequências que fazem uma dinastia */}
+      <DashCard title={ct('Recordes vivos')}>
+        <div className="rtp-statgrid">
+          {[
+            { label: ct('Títulos elite seguidos'), value: `${records?.titleStreak ?? 0} · ${ct('recorde')} ${records?.bestTitleStreak ?? 0}` },
+            { label: ct('Majors consecutivos'), value: `${records?.majorStreak ?? 0} · ${ct('recorde')} ${records?.bestMajorStreak ?? 0}` },
+            { label: ct('Semanas seguidas em #1'), value: `${records?.weeksAtOne ?? 0} · ${ct('recorde')} ${records?.bestWeeksAtOne ?? 0}` },
+            { label: ct('Temporadas invictas'), value: `${records?.perfectSeasons ?? 0}` },
+          ].map((s) => (
+            <div key={s.label} className="rtp-statcell">
+              <b>{s.value}</b>
+              <span>{s.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="rtp-mslist" style={{ marginTop: 10 }}>
+          {LEGEND_MARKS.map((m) => {
+            const done = records?.broken.includes(m.id) ?? false;
+            return (
+              <div key={m.id} className={`rtp-ms${done ? ' done' : ''}`}>
+                <span className="rtp-ms-check"><RtpIcon name={done ? 'check' : 'fame'} size={13} /></span>
+                {m.label} <small style={{ opacity: 0.7 }}>· {ct('marca de')} {m.holder}</small>
               </div>
             );
           })}

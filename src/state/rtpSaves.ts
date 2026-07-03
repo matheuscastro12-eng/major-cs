@@ -13,8 +13,9 @@ import { RTP_SAVE_VERSION, ACTIONS_PER_WEEK, rebuildRealWorld, STARTER_SETUP } f
 import { buildLeague, circuitEventName } from '../engine/rtp/league';
 import { buildCircuit, computeObjective } from '../engine/rtp/circuit';
 import { computeWorldRank } from '../engine/rtp/standing';
+import { deriveRecords } from '../engine/rtp/records';
 import { ALL_ATTRS } from '../engine/attributes';
-import type { RoadToProSave, RtpSlotSummary, Tier } from '../engine/rtp/types';
+import type { RoadToProSave, RtpSlotSummary, Tier, CareerLog } from '../engine/rtp/types';
 
 const KEY = 'rtm-rtp-v1';
 const CLOUD_SLOT = 'rtp';
@@ -155,6 +156,17 @@ const RTP_MIGRATIONS: Record<number, RtpMigration> = {
   13: (save) => {
     const history = (save.history ?? {}) as Record<string, unknown>;
     return { ...save, history: { ...history, timeline: Array.isArray(history.timeline) ? history.timeline : [] }, _v: 14 };
+  },
+  // v14 → v15 (DINASTIA & LENDAS): recordes vivos (títulos de elite seguidos,
+  // Majors consecutivos, semanas em #1, temporada invicta). Backfill reconstrói
+  // as sequências de título/Major da timeline; o resto começa do zero (conservador).
+  14: (save) => {
+    const history = (save.history ?? {}) as Record<string, unknown>;
+    return {
+      ...save,
+      history: { ...history, records: history.records ?? deriveRecords(history as Partial<CareerLog>) },
+      _v: 15,
+    };
   },
 };
 

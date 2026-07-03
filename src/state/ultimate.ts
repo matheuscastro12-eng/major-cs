@@ -10,7 +10,9 @@ import { captureError } from './errlog';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
 import { buildCatalog, catalogIndex, type UltCard } from '../engine/ultimate/cards';
-import { packById, rollPack } from '../engine/ultimate/packs';
+import { packById, rollPack, PROMO_PACK } from '../engine/ultimate/packs';
+import { monthIndex, promoForMonth, promoSpecsThrough, type MonthlyPromo } from '../engine/ultimate/promos';
+import { missionsForWeek, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import { pickStarterCards } from '../engine/ultimate/cards';
 import { dateKey } from '../engine/ultimate/daily';
@@ -32,6 +34,9 @@ import {
   markBazaarBought as _markBazaarBought,
   ensureMissions as _ensureMissions,
   markMissionClaimed as _markMissionClaimed,
+  ensureWeekly as _ensureWeekly,
+  markWeeklyClaimed as _markWeeklyClaimed,
+  markWeeklyBonusClaimed as _markWeeklyBonusClaimed,
   type MatchRecord,
   applyMatchResult as _applyMatchResult,
   applySeasonRollover as _applySeasonRollover,
@@ -128,24 +133,42 @@ export async function syncUltimateFromCloud(): Promise<'restored' | 'pushed' | '
 // Specials MAJOR: o quinteto do time #1 do dataset (o dataset não marca campeão
 // de Major; o topo do ranking é o proxy curado) ganha versão "Campeão de Major"
 // (+3 OVR) — topo da coleção, só sai da ladder de temporada e do SBC caríssimo.
+// Specials PROMO: 11 jogadores rotativos por MÊS-calendário (+2 OVR), tema
+// determinístico em promos.ts. O catálogo carrega as promos de TODOS os meses
+// desde a época (chave `${playerId}:promo` é estável) — quem tirou uma promo em
+// mês passado continua com a carta válida; o cache invalida quando o mês vira.
 let _catalog: UltCard[] | null = null;
 let _index: Map<string, UltCard> | null = null;
+let _promo: MonthlyPromo | null = null;
+let _catalogMonth = -1;
+function ensureCatalog(): void {
+  const mi = monthIndex(new Date());
+  if (_catalog && _catalogMonth === mi) return;
+  const base = buildCatalog(CS2_REAL_2026);
+  const tots = [...base]
+    .sort((a, b) => b.ovr - a.ovr)
+    .slice(0, 11)
+    .map((c) => ({ playerId: c.playerId, rarity: 'tots' as const, ovrBoost: 2 }));
+  const majors = (CS2_REAL_2026[0]?.players ?? [])
+    .map((p) => ({ playerId: p.id, rarity: 'major' as const, ovrBoost: 3 }));
+  const promos = promoSpecsThrough(base, mi);
+  _promo = promoForMonth(base, mi);
+  _catalog = buildCatalog(CS2_REAL_2026, [...tots, ...majors, ...promos]);
+  _index = catalogIndex(_catalog);
+  _catalogMonth = mi;
+}
 export function ultimateCatalog(): UltCard[] {
-  if (!_catalog) {
-    const base = buildCatalog(CS2_REAL_2026);
-    const tots = [...base]
-      .sort((a, b) => b.ovr - a.ovr)
-      .slice(0, 11)
-      .map((c) => ({ playerId: c.playerId, rarity: 'tots' as const, ovrBoost: 2 }));
-    const majors = (CS2_REAL_2026[0]?.players ?? [])
-      .map((p) => ({ playerId: p.id, rarity: 'major' as const, ovrBoost: 3 }));
-    _catalog = buildCatalog(CS2_REAL_2026, [...tots, ...majors]);
-  }
-  return _catalog;
+  ensureCatalog();
+  return _catalog!;
 }
 export function ultimateIndex(): Map<string, UltCard> {
-  if (!_index) _index = catalogIndex(ultimateCatalog());
-  return _index;
+  ensureCatalog();
+  return _index!;
+}
+// a promo do mês CORRENTE (tema + 11 promovidos + fim do mês) — alimenta a Loja.
+export function ultimatePromo(): MonthlyPromo {
+  ensureCatalog();
+  return _promo!;
 }
 
 interface UltimateStore {
@@ -184,6 +207,10 @@ interface UltimateStore {
   // missões diárias rotativas
   syncMissions: (today: string) => void;
   claimMission: (id: string) => { ok: boolean; credits?: number };
+  // missões semanais renováveis
+  syncWeekly: (week: string) => void;
+  claimWeekly: (id: string) => { ok: boolean; credits?: number };
+  claimWeeklyBonus: () => { ok: boolean; cards: UltCard[] };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -204,7 +231,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     // seed incremental gravado ANTES do reveal → reload não re-rola (anti-reroll)
     const seed = spent.state.profile.packSeedCounter + 1;
     const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
-    const cards = rollPack(ultimateCatalog(), pack, rng);
+    // Pacote Promo puxa SÓ as promos do mês corrente (o catálogo guarda as de
+    // meses passados pra resolver inventário antigo — não podem sair do pack).
+    const cat = pack.id === PROMO_PACK.id
+      ? ultimateCatalog().filter((c) => c.rarity !== 'promo' || ultimatePromo().playerIds.includes(c.playerId))
+      : ultimateCatalog();
+    const cards = rollPack(cat, pack, rng);
     let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
     for (const c of cards) s = _grantCard(s, c.key, 'pack');
     persist(s);
@@ -475,6 +507,53 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     persist(s);
     set({ state: s });
     return { ok: true, credits: def.credits };
+  },
+  syncWeekly: (week) =>
+    set((st) => {
+      const s = _ensureWeekly(st.state, week);
+      if (s === st.state) return {};
+      persist(s);
+      return { state: s };
+    }),
+  claimWeekly: (id) => {
+    const st = get().state;
+    const w = st.profile.weekly;
+    if (!w || w.claimed.includes(id)) return { ok: false };
+    const def = missionsForWeek(w.week).find((d) => d.id === id);
+    if (!def) return { ok: false };
+    const p = st.profile;
+    const facts = {
+      winsWeek: p.w - w.base.w,
+      matchesWeek: (p.w + p.l) - (w.base.w + w.base.l),
+      packsWeek: p.packSeedCounter - w.base.packs,
+      sbcWeek: p.sbcDone.length - w.base.sbc,
+      bazaarWeek: p.bazaarBuys - w.base.bazaar,
+    };
+    if (!weeklyProgress(def, facts).done) return { ok: false };
+    let s = _markWeeklyClaimed(st, id);
+    s = _addCredits(s, def.credits);
+    persist(s);
+    set({ state: s });
+    return { ok: true, credits: def.credits };
+  },
+  claimWeeklyBonus: () => {
+    // pack bônus GRÁTIS ao completar (e resgatar) as 3 missões da semana — mesmo
+    // esquema anti-reroll do openPack (seed incremental gravado antes do reveal).
+    const st = get().state;
+    const w = st.profile.weekly;
+    if (!w || w.bonusClaimed) return { ok: false, cards: [] };
+    if (!missionsForWeek(w.week).every((d) => w.claimed.includes(d.id))) return { ok: false, cards: [] };
+    const pack = packById(WEEKLY_BONUS_PACK);
+    if (!pack) return { ok: false, cards: [] };
+    const seed = st.profile.packSeedCounter + 1;
+    const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
+    const cards = rollPack(ultimateCatalog(), pack, rng);
+    let s = _markWeeklyBonusClaimed(st);
+    s = { ...s, profile: { ...s.profile, packSeedCounter: seed } };
+    for (const c of cards) s = _grantCard(s, c.key, 'reward');
+    persist(s);
+    set({ state: s });
+    return { ok: true, cards };
   },
   setState: (s) => {
     persist(s);

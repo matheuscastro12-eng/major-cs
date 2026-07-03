@@ -1,8 +1,9 @@
 // Ultimate Squad — ladder de raridades (adaptação CS do sistema de rarezas do
 // BUT/FUT). Puro, determinístico, sem deps de DOM/save. Ver docs-but-map.md §4.
 //
-// 7 tiers base derivados por OVR (bronze→icon) + 2 specials curados (tots/major)
-// que NÃO saem do OVR (são atribuídos à mão / por conquista) e dão boost.
+// 7 tiers base derivados por OVR (bronze→icon) + 3 specials curados
+// (tots/major/promo) que NÃO saem do OVR (são atribuídos à mão / por
+// conquista/promo mensal) e dão boost.
 
 export type UltRarity =
   | 'bronze'
@@ -13,7 +14,8 @@ export type UltRarity =
   | 'legendary'
   | 'icon'
   | 'tots'   // Time da Temporada (special)
-  | 'major'; // Campeão de Major (special)
+  | 'major'  // Campeão de Major (special)
+  | 'promo'; // Promo do Mês (special rotativa — ver promos.ts)
 
 export type RarityBucket = 'bronze' | 'silver' | 'gold' | 'special';
 
@@ -41,6 +43,7 @@ export const RARITIES: Record<UltRarity, RarityInfo> = {
   // specials — ovrMin/Max só delimitam onde costumam cair; a atribuição é curada
   tots:      { id: 'tots',      label: 'Time da Temporada', tier: 8,  ovrMin: 84, ovrMax: 96, bucket: 'special', color: '#5ed88a', valueMult: 15, quickSellBase: 7000,  special: true },
   major:     { id: 'major',     label: 'Campeão de Major',  tier: 9,  ovrMin: 84, ovrMax: 97, bucket: 'special', color: '#e58a8a', valueMult: 18, quickSellBase: 10000, special: true },
+  promo:     { id: 'promo',     label: 'Promo do Mês',      tier: 8,  ovrMin: 78, ovrMax: 96, bucket: 'special', color: '#f472b6', valueMult: 13, quickSellBase: 6000,  special: true },
 };
 
 // tiers base (derivados por OVR), do mais fraco pro mais forte

@@ -20,11 +20,12 @@ import { startTeam, startTeamForTier, joinTeam } from './world';
 import { STARTER_SETUP } from './setup';
 import { defaultProgression } from './perks';
 import { defaultMedia } from './media';
+import { defaultRecords } from './records';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes de início (academia)
 
-export const RTP_SAVE_VERSION = 14;
+export const RTP_SAVE_VERSION = 15;
 const START_MONEY = 2_000;       // moleque de academia: bolso curto
 const START_WAGE = 800;          // R$/semana
 const CONTRACT_WEEKS = 52;
@@ -241,7 +242,7 @@ export function createRtpSave(input: CreateRtpInput): RoadToProSave {
     inbox: [],
     history: {
       matchesPlayed: 0, mapsPlayed: 0, kills: 0, deaths: 0,
-      ratingSum: 0, mvps: 0, trophies: [], awards: [], accolades: [], timeline: [], peakOvr: ovr,
+      ratingSum: 0, mvps: 0, trophies: [], awards: [], accolades: [], timeline: [], records: defaultRecords(), peakOvr: ovr,
     },
     sponsors: [],
     rng: { seed, tick: 0 },

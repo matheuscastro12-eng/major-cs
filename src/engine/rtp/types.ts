@@ -420,7 +420,25 @@ export interface CareerLog {
   awards: string[];               // prêmios individuais (labels legados; Major placement)
   accolades: Accolade[];          // RTP v13 — prêmios individuais estruturados (MVP/EVP por campeonato)
   timeline: TimelineEntry[];      // RTP v14 — linha do tempo: um registro por campeonato fechado
+  records?: CareerRecords;        // RTP v15 — recordes vivos (dinastia; migração backfilla)
   peakOvr: number;
+}
+
+// Recordes vivos da carreira (RTP v15 — Dinastia & Lendas). Sequências EM CURSO
+// + melhores marcas de sempre. `broken` guarda os ids de LEGEND_MARKS (legends.ts)
+// já superados — garante manchete única e alimenta a pontuação de legado.
+export interface CareerRecords {
+  titleStreak: number;        // títulos de ELITE consecutivos (em curso; qualquer etapa fora do elite reseta)
+  bestTitleStreak: number;
+  majorStreak: number;        // Majors (elite) consecutivos vencidos (em curso)
+  bestMajorStreak: number;
+  weeksAtOne: number;         // semanas SEGUIDAS no #1 do ranking mundial (em curso)
+  bestWeeksAtOne: number;
+  totalWeeksAtOne: number;    // total de semanas no #1 (métrica do placar de lendas)
+  seasonSeries: number;       // séries jogadas na temporada corrente
+  seasonLosses: number;       // séries perdidas na temporada corrente (0 ao fechar = invicta)
+  perfectSeasons: number;     // temporadas de ELITE fechadas sem perder uma série
+  broken: string[];           // ids de marcos de lenda já quebrados
 }
 
 // Registro de um campeonato na linha do tempo da carreira (RTP v14). A história

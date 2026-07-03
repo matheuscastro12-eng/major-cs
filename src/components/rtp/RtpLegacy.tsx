@@ -1,12 +1,17 @@
+import { useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { Flag } from '../ui';
 import { RtpIcon } from './RtpIcon';
 import { legacyScore, legacyTier, traitById } from '../../engine/rtp/perks';
 import { archetypeDef } from '../../engine/rtp/createSave';
+import { LEGEND_MARKS, legendBoard } from '../../engine/rtp/legends';
+import { recordCareerInHall, type HallCareer } from '../../state/rtpHall';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
 // Tela de LEGADO (RTP v10): encerra a carreira na aposentadoria. Resumo dos
-// números, títulos, traits e o veredito do Hall da Fama.
+// números, títulos, traits e o veredito do Hall da Fama. RTP v15: arquiva a
+// carreira no HALL entre carreiras (localStorage separado — sobrevive ao delete
+// do save) e mostra as anteriores.
 export function RtpLegacy({ save, onReset, onExit }: {
   save: RoadToProSave;
   onReset: () => void;
@@ -21,6 +26,14 @@ export function RtpLegacy({ save, onReset, onExit }: {
   const seasons = save.world.season;
   const accolades = history.accolades ?? [];
   const peakRank = save.world.peakRank;
+  const records = history.records;
+  const brokenMarks = LEGEND_MARKS.filter((m) => records?.broken.includes(m.id));
+  const pantheon = legendBoard(save);
+
+  // Arquiva no hall entre carreiras no primeiro render (lazy init — roda uma vez;
+  // idempotente por id, então re-montar a tela não duplica a entrada).
+  const [hall] = useState<HallCareer[]>(() => recordCareerInHall(save));
+  const hallId = `hof-${save.createdAt || save.rng.seed}`;
 
   const verdict = legacy >= 700
     ? ct('Uma LENDA do Counter-Strike. Seu nome fica gravado na história do jogo.')
@@ -110,6 +123,42 @@ export function RtpLegacy({ save, onReset, onExit }: {
             <div className="rtp-legacy-section-h">{ct('Sua marca')}</div>
             <div className="rtp-traits">
               {prog.traits.map((id) => { const t = traitById(id); return t ? <span key={id} className="rtp-trait"><RtpIcon name={t.icon} size={13} /> {t.label}</span> : null; })}
+            </div>
+          </div>
+        )}
+
+        {/* Recordes de dinastia (RTP v15) — marcos de lenda quebrados nesta carreira */}
+        {brokenMarks.length > 0 && (
+          <div className="rtp-legacy-section">
+            <div className="rtp-legacy-section-h">{ct('Recordes históricos quebrados')}</div>
+            <div className="rtp-trophies">
+              {brokenMarks.map((m) => (
+                <span key={m.id} className="rtp-trophy award"><RtpIcon name="spark" size={13} /> {m.label} ({ct('antes de')} {m.holder})</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Placar de lendas: onde esta carreira parou no panteão */}
+        <div className="rtp-legacy-section">
+          <div className="rtp-legacy-section-h">{ct('No panteão das lendas')}: #{pantheon.heroPos} {ct('de')} {pantheon.rows.length}</div>
+        </div>
+
+        {/* Hall da fama entre carreiras — sobrevive ao delete do save */}
+        {hall.length > 1 && (
+          <div className="rtp-legacy-section">
+            <div className="rtp-legacy-section-h">{ct('Hall da Fama — suas carreiras')}</div>
+            <div className="rtp-tl rtp-tl-legacy">
+              {hall.slice(0, 8).map((c, i) => (
+                <div key={c.id} className={`rtp-tl-row${c.id === hallId ? ' champ' : ''}`}>
+                  <span className="rtp-tl-when">#{i + 1}</span>
+                  <div className="rtp-tl-info">
+                    <b><Flag cc={c.country} /> {c.nick}{c.id === hallId ? ` · ${ct('esta carreira')}` : ''}</b>
+                    <span>{c.role} · {c.seasons} {ct('temporadas')} · {c.titles} {ct('título(s)')} · {c.majors} Major(s){typeof c.peakRank === 'number' ? ` · ${ct('pico')} #${c.peakRank}` : ''}</span>
+                  </div>
+                  <span className="rtp-tl-place">{c.tierLabel} · {c.legacy} {ct('pts')}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}

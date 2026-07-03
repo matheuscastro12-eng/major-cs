@@ -26,6 +26,15 @@ export interface MissionsState {
   claimed: string[];
 }
 
+// missões semanais: mesmo esquema das diárias, mas por semana ISO (weekKey) e
+// com baseline extra do bazar. bonusClaimed = pack bônus das 3 já resgatado.
+export interface WeeklyState {
+  week: string;                                // weekKey ISO da semana das missões
+  base: { w: number; l: number; packs: number; sbc: number; bazaar: number };
+  claimed: string[];
+  bonusClaimed: boolean;
+}
+
 export type AcquiredVia = 'pack' | 'daily' | 'sbc' | 'reward' | 'starter' | 'initial' | 'market';
 
 export interface OwnedCard {
@@ -66,7 +75,9 @@ export interface UltimateProfile {
   gauntlet: { date: string | null; wins: number; active: boolean; best: number }; // Elite Gauntlet (1 run/dia)
   history: MatchRecord[];      // últimas partidas (cap HISTORY_MAX)
   bazaarBought: { day: number; ids: string[] }; // listagens do bazar compradas no day-bucket (anti-restock)
+  bazaarBuys: number;             // total ACUMULADO de compras no bazar (alimenta as missões semanais)
   missions: MissionsState | null; // missões diárias rotativas
+  weekly: WeeklyState | null;     // missões semanais renováveis
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -103,7 +114,9 @@ export function defaultUltimateProfile(): UltimateProfile {
     gauntlet: { date: null, wins: 0, active: false, best: 0 },
     history: [],
     bazaarBought: { day: 0, ids: [] },
+    bazaarBuys: 0,
     missions: null,
+    weekly: null,
   };
 }
 
@@ -176,10 +189,11 @@ export function pushHistory(state: UltimateState, rec: MatchRecord): UltimateSta
 }
 
 // ── bazar: marca listagem comprada no day-bucket (anti-restock por remount/F5) ──
+// também incrementa o acumulado bazaarBuys (métrica das missões semanais).
 export function markBazaarBought(state: UltimateState, day: number, id: string): UltimateState {
   const b = state.profile.bazaarBought;
   const ids = b.day === day ? [...b.ids, id] : [id];
-  return { ...state, profile: { ...state.profile, bazaarBought: { day, ids } } };
+  return { ...state, profile: { ...state.profile, bazaarBought: { day, ids }, bazaarBuys: state.profile.bazaarBuys + 1 } };
 }
 
 // ── missões diárias: abre o dia (baseline dos contadores) + resgate idempotente ──
@@ -194,6 +208,31 @@ export function markMissionClaimed(state: UltimateState, id: string): UltimateSt
   const m = state.profile.missions;
   if (!m || m.claimed.includes(id)) return state;
   return { ...state, profile: { ...state.profile, missions: { ...m, claimed: [...m.claimed, id] } } };
+}
+
+// ── missões semanais: abre a semana (baseline dos contadores) + resgates idempotentes ──
+export function ensureWeekly(state: UltimateState, week: string): UltimateState {
+  const p = state.profile;
+  if (p.weekly?.week === week) return state;
+  const weekly: WeeklyState = {
+    week,
+    base: { w: p.w, l: p.l, packs: p.packSeedCounter, sbc: p.sbcDone.length, bazaar: p.bazaarBuys },
+    claimed: [],
+    bonusClaimed: false,
+  };
+  return { ...state, profile: { ...p, weekly } };
+}
+
+export function markWeeklyClaimed(state: UltimateState, id: string): UltimateState {
+  const w = state.profile.weekly;
+  if (!w || w.claimed.includes(id)) return state;
+  return { ...state, profile: { ...state.profile, weekly: { ...w, claimed: [...w.claimed, id] } } };
+}
+
+export function markWeeklyBonusClaimed(state: UltimateState): UltimateState {
+  const w = state.profile.weekly;
+  if (!w || w.bonusClaimed) return state;
+  return { ...state, profile: { ...state.profile, weekly: { ...w, bonusClaimed: true } } };
 }
 
 // gerador de id — usa crypto.randomUUID no runtime; tests passam id explícito.
@@ -321,11 +360,21 @@ export function migrateUltimate(raw: unknown): UltimateState {
     bazaarBought: p.bazaarBought && typeof p.bazaarBought === 'object'
       ? { day: num(p.bazaarBought.day, 0), ids: Array.isArray(p.bazaarBought.ids) ? p.bazaarBought.ids.filter((x): x is string => typeof x === 'string') : [] }
       : { day: 0, ids: [] },
+    bazaarBuys: num(p.bazaarBuys, 0),
     missions: p.missions && typeof p.missions === 'object' && typeof p.missions.day === 'string'
       ? {
           day: p.missions.day,
           base: { w: num(p.missions.base?.w, 0), l: num(p.missions.base?.l, 0), packs: num(p.missions.base?.packs, 0), sbc: num(p.missions.base?.sbc, 0) },
           claimed: Array.isArray(p.missions.claimed) ? p.missions.claimed.filter((x): x is string => typeof x === 'string') : [],
+        }
+      : null,
+    // backfill: saves antigos não têm weekly — nasce null e o ensureWeekly abre a semana.
+    weekly: p.weekly && typeof p.weekly === 'object' && typeof p.weekly.week === 'string'
+      ? {
+          week: p.weekly.week,
+          base: { w: num(p.weekly.base?.w, 0), l: num(p.weekly.base?.l, 0), packs: num(p.weekly.base?.packs, 0), sbc: num(p.weekly.base?.sbc, 0), bazaar: num(p.weekly.base?.bazaar, 0) },
+          claimed: Array.isArray(p.weekly.claimed) ? p.weekly.claimed.filter((x): x is string => typeof x === 'string') : [],
+          bonusClaimed: p.weekly.bonusClaimed === true,
         }
       : null,
   };
