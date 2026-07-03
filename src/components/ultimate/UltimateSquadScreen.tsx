@@ -581,7 +581,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     // determinístico por dia; sem isso, remount/F5 "restocava" a compra.
     const day = bazaarDayBucket(Date.now());
     const boughtIds = new Set(bazaarBought.day === day ? bazaarBought.ids : []);
-    setBazaar(buildBazaar(ultimateCatalog(), BAZAAR_SELLERS, day).filter((l) => !boughtIds.has(l.id)));
+    // major (só ladder Elite/SBC) e promo (só o Pacote Promo do mês) ficam FORA
+    // do bazar — sem isso o topo aspiracional da coleção era comprável por credits.
+    const buyable = ultimateCatalog().filter((c) => c.rarity !== 'major' && c.rarity !== 'promo');
+    setBazaar(buildBazaar(buyable, BAZAAR_SELLERS, day).filter((l) => !boughtIds.has(l.id)));
   }, [bazaarBought]);
   const buyFromBazaar = (l: Listing) => {
     if (buyCard(l.cardKey, l.price, l.id, bazaarDayBucket(Date.now()))) { setBazaar((b) => b.filter((x) => x.id !== l.id)); flash(`✅ ${ct('Comprado')} · -${fmt(l.price)} 🪙`); }
@@ -737,7 +740,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     const eloBefore = state.profile.elo;
     // sala da FILA (ranked) vale RP + ladder; sala PRIVADA é amistoso (só credits).
     const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, args.ranked, score);
-    if (!already && args.ranked) void reportResult(won, displayName, args.code); // só a ranqueada alimenta o ranking global (report POR PARTIDA)
+    // só a ranqueada alimenta o ranking global (report POR PARTIDA). Nick do
+    // ladder = displayName; participante no lobby = pvpNick (tem sufixo #XXXX).
+    if (!already && args.ranked) void reportResult(won, displayName, args.code, pvpNick);
     const eloAfter = eloBefore + outcome.eloDelta;
     setResult(null);
     setLiveRound(0);

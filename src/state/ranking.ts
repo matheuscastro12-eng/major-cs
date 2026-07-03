@@ -8,6 +8,9 @@ export interface MyRank extends SeasonInfo { mmr: number; wins: number; losses: 
 export interface ReportResult {
   delta: number; before: number; after: number; division: string; divisionBefore: string;
   promoted: boolean; demoted: boolean; placing: boolean; placementLeft: number; placedNow: boolean; me: MyRank | null;
+  // pareamento por partida (1v1): o MMR pode ficar pendente até o oponente
+  // confirmar; conflito = os dois reclamaram o mesmo resultado, ninguém pontua.
+  applied?: boolean; pending?: boolean; conflict?: boolean; duplicate?: boolean;
 }
 export interface Champion { place: number; nick: string; mmr: number; division: string; }
 
@@ -42,7 +45,9 @@ export async function fetchMyRank(nick?: string): Promise<MyRank | null> {
 }
 // `code` = lobby da partida: o servidor agora só pontua reports POR PARTIDA
 // (1 por jogador) e aplica o MMR quando os dois lados batem (anti-fraude).
-export async function reportResult(won: boolean, nick?: string, code?: string): Promise<ReportResult | null> {
+// `lobbyNick` = nick usado DENTRO do lobby quando difere do nick do ladder
+// (o Ultimate joga com sufixo anti-colisão, ex. 'Manager#AB12').
+export async function reportResult(won: boolean, nick?: string, code?: string, lobbyNick?: string): Promise<ReportResult | null> {
   if (!getToken()) return null;
-  try { return (await post({ action: 'report', token: getToken(), won, nick, code })) as unknown as ReportResult; } catch { return null; }
+  try { return (await post({ action: 'report', token: getToken(), won, nick, code, lobbyNick })) as unknown as ReportResult; } catch { return null; }
 }
