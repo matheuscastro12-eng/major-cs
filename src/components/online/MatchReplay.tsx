@@ -187,9 +187,9 @@ export function MatchReplay({
       </div>
       <div className="panel-body">
         <div className="qs-board" style={{ marginBottom: 10 }}>
-          <div className="qs-side"><TeamBadge tag={teams[0].tag} colors={teams[0].colors} size={40} logoUrl={teams[0].logoUrl} /><div className="qs-name">{teams[0].name}</div><div className="qs-score">{sa}</div></div>
-          <div className="qs-mid"><div className="qs-mapscore">{mapsA} - {mapsB} <span className="muted small">{ct('mapas')}</span></div></div>
-          <div className="qs-side"><TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={40} logoUrl={teams[1].logoUrl} /><div className="qs-name">{teams[1].name}</div><div className="qs-score">{sb}</div></div>
+          <div className="qs-side team-0"><TeamBadge tag={teams[0].tag} colors={teams[0].colors} size={40} logoUrl={teams[0].logoUrl} /><div className="qs-name">{teams[0].name}</div><div className="qs-score">{sa}</div></div>
+          <div className="qs-mid"><div className="qs-mapscore">{mapsA} <span className="qs-mapsep">-</span> {mapsB}</div><div className="qs-mapslbl">{ct('mapas')}</div></div>
+          <div className="qs-side team-1"><TeamBadge tag={teams[1].tag} colors={teams[1].colors} size={40} logoUrl={teams[1].logoUrl} /><div className="qs-name">{teams[1].name}</div><div className="qs-score">{sb}</div></div>
         </div>
         {tacticalEvent && <div className="ut-tactical-event">{tacticalEvent}</div>}
         {!done && lastWinner !== null && (
@@ -203,11 +203,11 @@ export function MatchReplay({
               {feed.length === 0 ? <div className="muted small">…</div> : feed.map((e, i) => (
                 <div key={i} className="rf-row">
                   <span className="kf-round">R{e.round}</span>
-                  <span style={{ color: e.killerTeam === 0 ? '#6fb6ec' : '#f0b35c' }}>{idIndex.get(e.killerId)?.nick ?? '?'}</span>
+                  <span className={`kf-name team-${e.killerTeam}`}>{idIndex.get(e.killerId)?.nick ?? '?'}</span>
                   {richFeed
-                    ? <span className="kf-wpn">[{e.weapon}{e.headshot ? <i className="kf-hs">HS</i> : null}]</span>
-                    : (e.headshot ? ' ◉ ' : ' ▸ ')}
-                  <span style={{ color: e.victimTeam === 0 ? '#6fb6ec' : '#f0b35c' }}>{idIndex.get(e.victimId)?.nick ?? '?'}</span>
+                    ? <span className="kf-wpn">{e.weapon}{e.headshot ? <i className="kf-hs">HS</i> : null}</span>
+                    : <span className="kf-arrow">{e.headshot ? '◉' : '▸'}</span>}
+                  <span className={`kf-name kf-victim team-${e.victimTeam}`}>{idIndex.get(e.victimId)?.nick ?? '?'}</span>
                 </div>
               ))}
             </div>

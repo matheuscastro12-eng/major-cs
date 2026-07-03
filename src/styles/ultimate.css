@@ -556,7 +556,7 @@ body:has(.ut-live) {
   font-family: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer;
 }
 .ut-live__back:hover { background: rgba(255, 255, 255, 0.12); }
-.ut-live__vs { flex: 1; text-align: center; font-weight: 800; font-size: 0.86rem; color: #cfd5df; }
+.ut-live__vs { flex: 1; text-align: center; font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; color: #f2f5f9; }
 .ut-live__badge {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
   background: rgba(226, 59, 46, 0.16); border: 1px solid rgba(226, 59, 46, 0.5); color: #ff6b5e;
@@ -598,70 +598,91 @@ body:has(.ut-live) {
    venciam `.ut-live X` (0,2,0), pintando o killfeed/banner de BRANCO no meio
    do palco escuro. `.ut-root.ut-live X` (0,3,0) supera a especificidade delas. */
 .ut-root.ut-live .panel.match-replay {
-  background: linear-gradient(180deg, #171a21 0%, #12141a 100%);
-  border: 1px solid rgba(236, 199, 95, 0.16);
+  background: linear-gradient(180deg, #14171e 0%, #0b0d12 100%);
+  border: 1px solid rgba(236, 199, 95, 0.2);
   border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
   margin-top: 0;
 }
 .ut-root.ut-live .panel-head {
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(236, 199, 95, 0.22);
+  background: linear-gradient(180deg, rgba(236, 199, 95, 0.07), rgba(0, 0, 0, 0.3));
+  border-bottom: 1px solid rgba(236, 199, 95, 0.24);
   font-family: var(--ut-font-cond);
-  letter-spacing: 1px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
-  color: var(--ut-gold-1);
+  color: #f4d97a;
+  padding: 12px 14px;
 }
-.ut-root.ut-live .qs-board { padding: 14px 10px 6px; }
-.ut-root.ut-live .qs-name { font-family: var(--ut-font-cond); font-weight: 700; letter-spacing: 0.4px; color: #e9edf3; }
+/* ---- scorebug (placar ao vivo) ---- */
+.ut-root.ut-live .qs-board { padding: 20px 14px 12px; }
+.ut-root.ut-live .qs-name { font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.06rem; letter-spacing: 0.3px; color: #f2f5f9; }
 .ut-root.ut-live .qs-score {
   font-family: var(--ut-font-mono);
-  font-size: 2.6rem;
+  font-size: 3rem;
   font-weight: 800;
-  color: var(--ut-gold-1);
-  text-shadow: 0 0 26px rgba(236, 199, 95, 0.28);
+  color: #f2f5f9;
+  line-height: 1;
 }
-.ut-root.ut-live .qs-mapscore { color: var(--ut-bar-dim); font-family: var(--ut-font-mono); }
+.ut-root.ut-live .qs-side.team-0 .qs-score { color: #8ec5f2; text-shadow: 0 0 28px rgba(116, 185, 240, 0.4); }
+.ut-root.ut-live .qs-side.team-1 .qs-score { color: #f9c06a; text-shadow: 0 0 28px rgba(247, 185, 85, 0.4); }
+.ut-root.ut-live .qs-mid { gap: 3px; }
+.ut-root.ut-live .qs-mapscore { color: #eef1f6; font-family: var(--ut-font-mono); font-weight: 800; font-size: 1.2rem; }
+.ut-root.ut-live .qs-mapsep { color: var(--ut-gold-1); margin: 0 2px; }
+.ut-root.ut-live .qs-mapslbl { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.58rem; letter-spacing: 1.8px; text-transform: uppercase; color: #aeb7c4; }
+/* ---- banner "ROUND N · time pontua" ---- */
 .ut-root.ut-live .ut-round-winner {
   font-family: var(--ut-font-cond);
+  font-weight: 800;
   letter-spacing: 1.2px;
   text-transform: uppercase;
   border-radius: 10px;
-  padding: 8px 12px;
-  background: rgba(236, 199, 95, 0.1);
-  border: 1px solid rgba(236, 199, 95, 0.3);
-  color: var(--ut-gold-1);
-}
-.ut-root.ut-live .ut-tactical-event { color: #cfd5df; font-style: italic; opacity: 0.85; }
-.ut-root.ut-live .replay-feed { min-height: 96px; }
-.ut-root.ut-live .rf-row {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  padding: 4px 10px;
-  margin-bottom: 3px;
-  font-family: var(--ut-font-mono);
+  padding: 9px 12px;
   font-size: 0.8rem;
 }
-.ut-root.ut-live .rf-row .kf-round {
-  display: inline-block;
-  min-width: 34px;
-  font-weight: 800;
-  color: var(--ut-gold-2);
+.ut-root.ut-live .ut-round-winner.team-0 { background: rgba(116, 185, 240, 0.15); border: 1px solid rgba(116, 185, 240, 0.42); color: #a7d4f7; }
+.ut-root.ut-live .ut-round-winner.team-1 { background: rgba(247, 185, 85, 0.15); border: 1px solid rgba(247, 185, 85, 0.42); color: #f9c988; }
+.ut-root.ut-live .ut-tactical-event { color: #d7dde6; font-style: italic; }
+/* ---- killfeed ---- */
+.ut-root.ut-live .replay-feed { min-height: 96px; gap: 4px; }
+.ut-root.ut-live .rf-row {
+  display: flex; align-items: center; gap: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-left: 2px solid rgba(236, 199, 95, 0.5);
+  border-radius: 8px;
+  padding: 5px 11px;
+  margin-bottom: 0;
+  font-family: var(--ut-font-mono);
+  font-size: 0.82rem;
 }
+.ut-root.ut-live .rf-row .kf-round {
+  display: inline-block; min-width: 30px;
+  font-weight: 800; color: #d8b24a; margin-right: 4px;
+}
+.ut-root.ut-live .kf-name.team-0 { color: #8ec5f2; }
+.ut-root.ut-live .kf-name.team-1 { color: #f9c06a; }
+.ut-root.ut-live .kf-victim { color: #cdd4de; opacity: 0.82; }
+.ut-root.ut-live .kf-arrow { color: #7f8a99; margin: 0 6px; }
+/* ---- scoreboards ---- */
 .ut-root.ut-live .live-scoreboard .lsb-team {
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(0, 0, 0, 0.28);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
+  padding: 10px 12px;
 }
-.ut-root.ut-live .lsb-head { color: var(--ut-bar-dim); font-family: var(--ut-font-cond); letter-spacing: 0.6px; text-transform: uppercase; font-size: 0.7rem; }
-.ut-root.ut-live .lsb-row { border-top: 1px solid rgba(255, 255, 255, 0.05); padding: 3px 0; font-size: 0.84rem; }
-.ut-root.ut-live .lsb-kda { font-family: var(--ut-font-mono); }
+.ut-root.ut-live .lsb-head { color: #f2f5f9; font-family: var(--ut-font-cond); font-weight: 800; letter-spacing: 0.5px; text-transform: none; font-size: 0.95rem; }
+.ut-root.ut-live .lsb-cols { color: #8f99a6; }
+.ut-root.ut-live .lsb-row { border-top: 1px solid rgba(255, 255, 255, 0.06); padding: 4px 0; font-size: 0.86rem; }
+.ut-root.ut-live .lsb-nick { color: #e7ebf1; font-weight: 600; }
+.ut-root.ut-live .lsb-kda { font-family: var(--ut-font-mono); color: #c4ccd6; }
+.ut-root.ut-live .lsb-kda i.pos { color: #4ade80; }
+.ut-root.ut-live .lsb-kda i.neg { color: #ff6b5e; }
 .ut-root.ut-live .lsb-vs { color: var(--ut-gold-1); font-family: var(--ut-font-cond); font-weight: 800; }
 .ut-root.ut-live .btn { border-radius: 8px; }
 .ut-root.ut-live .btn.ghost { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #e9edf3; }
-.ut-root.ut-live .btn.ghost.active { background: rgba(236, 199, 95, 0.18); border-color: rgba(236, 199, 95, 0.5); color: var(--ut-gold-1); }
+.ut-root.ut-live .btn.ghost.active { background: rgba(236, 199, 95, 0.2); border-color: rgba(236, 199, 95, 0.55); color: var(--ut-gold-1); }
 
 /* ---------------- FILA RANQUEADA (matchmaking) ---------------- */
 .ut-queue {
@@ -734,7 +755,7 @@ body:has(.ut-live) {
 @keyframes ut-fire { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 
 /* killfeed rico (arma + selo HS) — só o Ultimate passa richFeed */
-.ut-root.ut-live .kf-wpn { color: #8a93a2; font-size: 0.72rem; margin: 0 6px; letter-spacing: 0.3px; }
+.ut-root.ut-live .kf-wpn { color: #b8c0cc; font-size: 0.74rem; margin: 0 7px; letter-spacing: 0.3px; text-transform: lowercase; }
 .ut-root.ut-live .kf-hs {
   font-style: normal; font-weight: 900; font-size: 0.58rem; letter-spacing: 0.5px;
   color: #ffd166; border: 1px solid rgba(255, 209, 102, 0.55); border-radius: 4px;

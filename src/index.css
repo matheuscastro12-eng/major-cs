@@ -5480,6 +5480,12 @@ button.world-champ:focus-visible, button.world-runner:focus-visible { outline: 2
 .replay-feed { min-height: 92px; display: flex; flex-direction: column; gap: 3px; margin: 10px 0; }
 .rf-row { font-size: 0.88rem; }
 .rf-row .kf-round { color: var(--muted); font-size: 0.72rem; margin-right: 6px; }
+/* killfeed: nomes por time (base — modos Online/Gauntlet; a Sala do Ultimate realça) */
+.kf-name { font-weight: 700; }
+.kf-name.team-0 { color: #6fb6ec; }
+.kf-name.team-1 { color: #f0b35c; }
+.kf-victim { opacity: 0.92; }
+.kf-arrow { color: var(--muted); margin: 0 5px; }
 
 @media (max-width: 680px) {
   .ut-room-row { flex-wrap: wrap; gap: 8px !important; }
@@ -6096,6 +6102,8 @@ button.t20-row {
 .qs-map { font-family: var(--font-cond); font-weight: 800; letter-spacing: 1px; color: var(--gold); }
 .qs-vs { color: var(--muted); font-size: 0.8rem; }
 .qs-mapscore { font-family: var(--font-cond); font-weight: 700; }
+.qs-mapsep { color: var(--muted); }
+.qs-mapslbl { font-family: var(--font-cond); font-weight: 700; font-size: 0.58rem; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin-top: 1px; }
 .qs-foot { margin-top: 20px; min-height: 28px; }
 .qs-final { font-family: var(--font-cond); font-weight: 800; font-size: 1.1rem; }
 
