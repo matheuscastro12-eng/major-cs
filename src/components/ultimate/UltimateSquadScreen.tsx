@@ -6,6 +6,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, useUltimate } from '../../state/ultimate';
+import { setCloudEnabled } from '../../state/cloud';
 import { PACK_DEFS, PROMO_PACK, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
@@ -411,6 +412,11 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // rehidratada dentro do sync; aqui só refazemos season/missões e avisamos.
   useEffect(() => {
     if (!account) return;
+    // CRÍTICO: garante o gate da nuvem ANTES do sync. O setCloudEnabled do App
+    // vive num effect do PAI, que roda DEPOIS do effect deste filho — sem isto o
+    // sync do Ultimate rodava com cloudEnabled()=false, NÃO restaurava a coleção
+    // (mostrava 0 em outro aparelho) e ainda arriscava sobrescrever a nuvem paga.
+    setCloudEnabled(!!account.paid);
     let on = true;
     void syncUltimateFromCloud().then((r) => {
       if (!on || r !== 'restored') return;

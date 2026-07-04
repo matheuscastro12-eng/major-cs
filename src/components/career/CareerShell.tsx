@@ -203,6 +203,10 @@ export function CareerShell({
     <div
       className="em-nav-dropdown em-nav-dropdown--portal"
       role="menu"
+      // sem isto o mouseleave do botão agendava o fechamento e passar o mouse PRO
+      // dropdown não cancelava → o submenu sumia na cara ao tentar clicar num item.
+      onPointerEnter={() => { if (openGroup) openDropdown(openGroup.id); }}
+      onPointerLeave={(e) => { if (e.pointerType === 'mouse') scheduleClose(); }}
       style={{
         position: 'fixed',
         top: dropdownRect.top,
@@ -274,15 +278,15 @@ export function CareerShell({
                     aria-expanded={hasMenu ? isOpen : undefined}
                     aria-haspopup={hasMenu ? 'menu' : undefined}
                     onClick={() => {
-                      if (hasMenu) {
-                        // (any-hover: hover) é false em dispositivos puramente touch
-                        // — mais confiável do que (hover: none) no Android/Chrome
-                        const hasPointerHover = window.matchMedia('(any-hover: hover)').matches;
-                        if (!hasPointerHover || isOpen) {
-                          setOpenMenu(isOpen ? null : g.id);
-                        } else {
-                          pickTab(g.id, g.tabs[0]);
-                        }
+                      // (any-hover: hover) é false em dispositivos puramente touch
+                      // — mais confiável do que (hover: none) no Android/Chrome.
+                      const hasPointerHover = window.matchMedia('(any-hover: hover)').matches;
+                      // TOUCH com submenu: o tap ABRE/FECHA o dropdown de subpáginas.
+                      // MOUSE (ou grupo sem submenu): clicar NAVEGA direto pra 1ª
+                      // subpágina. Antes, no desktop o hover já abria (isOpen), e o
+                      // clique caía no toggle e FECHAVA → precisava clicar 2×.
+                      if (hasMenu && !hasPointerHover) {
+                        setOpenMenu(isOpen ? null : g.id);
                       } else {
                         pickTab(g.id, g.tabs[0]);
                       }

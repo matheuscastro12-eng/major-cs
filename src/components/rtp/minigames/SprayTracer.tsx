@@ -74,7 +74,7 @@ export function SprayTracer({ seed, durationMs, onFinish }: MiniGameProps) {
   return (
     <div
       className="rtp-mini-spray"
-      style={{ width: SIZE, height: SIZE, maxWidth: '100%', touchAction: 'none' }}
+      style={{ width: SIZE, aspectRatio: '1', maxWidth: '100%', touchAction: 'none' }}
       onPointerMove={move}
       onPointerDown={move}
     >
@@ -82,8 +82,8 @@ export function SprayTracer({ seed, durationMs, onFinish }: MiniGameProps) {
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="rtp-mini-spray-svg">
         <polyline points={path.map((p) => `${p.x},${p.y}`).join(' ')} className="rtp-mini-spray-path" />
       </svg>
-      <div className={`rtp-mini-spray-dot${frame.near ? ' on' : ''}`} style={{ left: frame.dx - 16, top: frame.dy - 16 }} />
-      <div className="rtp-mini-spray-cursor" style={{ left: cur.x - 4, top: cur.y - 4 }} />
+      <div className={`rtp-mini-spray-dot${frame.near ? ' on' : ''}`} style={{ left: `calc(${(frame.dx / SIZE) * 100}% - 16px)`, top: `calc(${(frame.dy / SIZE) * 100}% - 16px)` }} />
+      <div className="rtp-mini-spray-cursor" style={{ left: `calc(${(cur.x / SIZE) * 100}% - 4px)`, top: `calc(${(cur.y / SIZE) * 100}% - 4px)` }} />
     </div>
   );
 }
