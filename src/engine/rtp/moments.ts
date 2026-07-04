@@ -294,7 +294,7 @@ export function resolveMoment(
 ): MomentOutcome {
   const skill = clamp(effAttr / 20, 0, 1);
   const style = STYLE_MOD[option.style];
-  const oppPenalty = (oppStrength - 60) / 220;   // adversário forte dificulta
+  const oppPenalty = (oppStrength - 55) / 150;   // adversário forte dificulta (v10: ~1.5× + centro mais baixo → tiers altos punem de verdade)
   const successChance = clamp(0.22 + skill * 0.62 + style.chance - oppPenalty, 0.05, 0.92);
 
   const roll = rng();
@@ -367,7 +367,7 @@ export function explainOdds(
 ): OddsBreakdown {
   const skill = clamp(effAttr / 20, 0, 1);
   const style = STYLE_MOD[opt.style];
-  const oppPenalty = (oppStrength - 60) / 220;
+  const oppPenalty = (oppStrength - 55) / 150;   // espelha resolveMoment (v10)
   const total = clamp(0.22 + skill * 0.62 + style.chance - oppPenalty, 0.05, 0.92);
   return {
     total,

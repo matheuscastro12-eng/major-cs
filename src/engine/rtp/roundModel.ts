@@ -264,12 +264,13 @@ export function bridgeToBeat(
 // Resultado de UM mapa a partir da SUA jogada NAQUELE mapa. Seed POR-MAPA (mi) →
 // a Sala pode fechar cada mapa independente e bater EXATAMENTE com o card (ambos
 // chamam esta função com o mesmo mapPlay/edge/seed). `mapPlay` 0..1 = média dos
-// beats do mapa. mult 0.65 (jogada domina) + edge*0.012 (força desloca).
+// beats do mapa. mult 0.65 (jogada domina) + edge*0.018 (v10: força desloca ~1.5×
+// mais — antes 0.012 quase não pesava; agora subir de tier é sentido de verdade).
 export function resolveMapFromPlay(
   mapPlay: number, edge: number, matchSeed: number, mi: number,
 ): { won: boolean; score: [number, number] } {
   const rng = makeRng((matchSeed ^ 0x5e21e5 ^ ((mi + 1) * 0x9e3779b1)) >>> 0);
-  const p = Math.max(0.1, Math.min(0.9, 0.5 + (mapPlay - 0.5) * 0.65 + edge * 0.012));
+  const p = Math.max(0.1, Math.min(0.9, 0.5 + (mapPlay - 0.5) * 0.65 + edge * 0.018));
   const won = rng() < p;
   const margin = Math.abs(mapPlay - 0.5) * 12 + Math.abs(edge) * 0.15;
   const loser = Math.max(3, Math.min(11, Math.round(11 - margin + (rng() * 4 - 2))));
