@@ -20,7 +20,10 @@
     "api/account.ts",
     "api/admin-accounts.ts",
     "api/stripe-webhook.ts",
+    "api/ultimate-economy.ts",
     "server/payments.ts",
-    "server/payments.test.ts"
+    "server/payments.test.ts",
+    "server/ultimate-economy.ts",
+    "server/ultimate-economy.test.ts"
   ]
 }
