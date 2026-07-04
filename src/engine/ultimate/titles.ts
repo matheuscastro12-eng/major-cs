@@ -41,7 +41,7 @@ export function evaluateTitles(f: TitleFacts): string[] {
   if (f.uniqueCards >= 25) out.push('collector');
   if (f.streak >= 5) out.push('streaker');
   if (f.wins >= 25) out.push('veteran');
-  if (f.peakElo >= 2200) out.push('elite'); // topo do ONLINE_RANKS (Global Elite)
+  if (f.peakElo >= 1950) out.push('elite'); // piso da divisão Elite (topo do Ultimate, divisions.ts) — o 2200 antigo era do ONLINE_RANKS e deixava o título INATINGÍVEL
   if (f.iconsOwned >= 1) out.push('icon-owner');
   return out;
 }

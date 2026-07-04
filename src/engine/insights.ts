@@ -122,6 +122,47 @@ export function analyzeSeries(series: SeriesResult, teams: [TTeam, TTeam], povId
     bullets.push({ icon: '⚡', text: `${ct('Seu time dominou as aberturas de round')} (${myOpen} a ${oppOpen}).`, tone: 'good' });
   }
 
+  // 5.5) história do mapa: viradas e apagões (lê o placar round a round).
+  // Roda o placar cumulativo do mapa: a maior desvantagem que o time reverteu
+  // (e fechou o mapa) vira "jogou de baixo"; a maior vantagem que escorreu pelos
+  // dedos vira "apagão". Puro leitura do roundLog, nada de simulação.
+  let bestComeback = 0;
+  let worstChoke = 0;
+  for (const m of series.maps) {
+    let povR = 0, oppR = 0, maxDeficit = 0, maxLead = 0;
+    for (const w of m.roundLog) {
+      if (w === povIdx) povR++; else oppR++;
+      if (oppR - povR > maxDeficit) maxDeficit = oppR - povR;
+      if (povR - oppR > maxLead) maxLead = povR - oppR;
+    }
+    if (m.winner === povIdx) bestComeback = Math.max(bestComeback, maxDeficit);
+    else worstChoke = Math.max(worstChoke, maxLead);
+  }
+  if (bestComeback >= 5) {
+    bullets.push({ icon: '🔄', text: `${ct('Seu time jogou de baixo e virou:')} ${ct('chegou a estar')} ${bestComeback} ${ct('rounds atrás e ainda assim fechou o mapa. Cabeça fria na hora do save e no anti-eco.')}`, tone: 'good' });
+  }
+  if (worstChoke >= 5) {
+    bullets.push({ icon: '🕳️', text: `${ct('Apagão caro:')} ${ct('seu time abriu')} ${worstChoke} ${ct('rounds de vantagem e deixou o mapa escapar. O adversário achou os retakes e o placar desandou.')}`, tone: 'bad' });
+  }
+
+  // 5.6) disciplina de trade / refrag: morte trocada mantém o round no 5v5;
+  // morrer seco entrega vantagem numérica de graça. Compara a taxa de refrag dos
+  // dois lados (mortes trocadas sobre o total de mortes) — só leitura das linhas.
+  const teamTrades = (team: TTeam) =>
+    team.players.reduce((acc, p) => {
+      const line = playerSeriesLine(series, p.id);
+      return { td: acc.td + (line?.tradedDeaths ?? 0), d: acc.d + (line?.deaths ?? 0) };
+    }, { td: 0, d: 0 });
+  const myTrades = teamTrades(me);
+  const oppTrades = teamTrades(opp);
+  const myRefrag = myTrades.d > 0 ? myTrades.td / myTrades.d : 0;
+  const oppRefrag = oppTrades.d > 0 ? oppTrades.td / oppTrades.d : 0;
+  if (oppRefrag - myRefrag > 0.12) {
+    bullets.push({ icon: '🔗', text: ct('Disciplina de trade: o adversário refragou quase toda baixa, enquanto seu time caiu seco. Sem a troca, cada entry virou desvantagem numérica no round.'), tone: 'bad' });
+  } else if (myRefrag - oppRefrag > 0.12) {
+    bullets.push({ icon: '🔗', text: ct('Seu time trocou tudo: quase nenhuma morte ficou sem refrag e os rounds se mantiveram no 5v5. Disciplina de trade impecável.'), tone: 'good' });
+  }
+
   // 6) overtime / placares apertados
   const otMaps = series.maps.filter((m) => m.ot).length;
   if (otMaps > 0 && !won) {
