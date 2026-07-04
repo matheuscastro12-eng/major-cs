@@ -23,6 +23,7 @@ import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career
 import { applyFatigueForm, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
+import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
@@ -408,33 +409,13 @@ function sellResistance(player: Player, fromTeamwork: number): number {
 function askingPrice(player: Player, fromTeamwork: number): number {
   return Math.round(playerValue(player) * sellResistance(player, fromTeamwork));
 }
-type NegoReply =
-  | { kind: 'accept' }
-  | { kind: 'counter'; value: number }
-  | { kind: 'reject'; firm: boolean; msg: string };
 // resposta do clube a uma proposta (offer = dinheiro + valor da troca).
-function clubReply(offer: number, asking: number, player: Player, fromTeamwork: number, round: number): NegoReply {
-  const ovr = playerOvr(player);
-  // estrela de time forte às vezes simplesmente não está à venda
-  if (ovr >= 89 && fromTeamwork >= 84 && round === 0 && hashStr(`${player.id}:nfs`) % 100 < 55) {
-    return { kind: 'reject', firm: true, msg: `${player.nick} ${ct('não está à venda. O clube não quer nem ouvir.')}` };
-  }
-  // PISO: o menor valor que o clube aceita. Amolece no MÁXIMO ~12% ao longo de
-  // poucas rodadas e NUNCA abaixo disso — insistir com a mesma oferta não derruba
-  // mais o preço (antes a contraproposta caía sem limite e dava pra pagar 0).
-  const soft = Math.round(asking * (1 - 0.04 * Math.min(round, 3)));
-  if (offer >= soft) return { kind: 'accept' };
-  const ratio = offer / Math.max(1, asking);
-  // lowball repetido: o clube cansa e encerra a negociação
-  if (ratio < 0.6 && round >= 2) {
-    return { kind: 'reject', firm: true, msg: ct('O clube cansou da conversa: proposta baixa demais, negociação encerrada.') };
-  }
-  if (ratio < 0.45) {
-    return { kind: 'reject', firm: false, msg: ct('Proposta muito abaixo do valor. O clube recusou na hora.') };
-  }
-  // contraproposta entre a sua oferta e a pedida, SEMPRE >= o piso (nunca abaixo)
-  const counter = Math.max(soft, Math.round((offer + asking) / 2));
-  return { kind: 'counter', value: counter };
+// Gap #14: a decisão mora em engine/career/decideOffer.ts (multifatorial —
+// franchise-core, reposição de role, gap de prestígio, forma do clube), que
+// preserva o contrato NegoReply antigo (+ `reason` opcional pro modal). Este
+// wrapper mantém a assinatura antiga e injeta o contexto opcional do vendedor.
+function clubReply(offer: number, asking: number, player: Player, fromTeamwork: number, round: number, ctx?: DecideOfferCtx): NegoReply {
+  return decideOffer({ offer, asking, marketValue: playerValue(player), player, fromTeamwork, round, ctx });
 }
 
 // Patrocinadores movidos pra src/data/sponsors.ts (T3.5). O catálogo legacy
@@ -6118,6 +6099,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           market={market}
           squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
           budget={save.budget}
+          clubFormOf={(id) => formOf(save, id)}
           pendingDeals={save.pendingDeals ?? []}
           pendingSales={save.pendingSales ?? []}
           offers={incomingOffers}
@@ -8699,12 +8681,19 @@ function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: 
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, swapPool, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, sellerForm, buyerStrength, freeAgents, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
   swapPool?: Player[]; // seus jogadores disponíveis pra incluir na troca (habilita swap)
+  // contexto do decideOffer (gap #14) — todos opcionais/degradáveis
+  sellerForm?: number;      // formOf(save, from.id)
+  buyerStrength?: number;   // força do SEU elenco (média top-5 de OVR)
+  freeAgents?: Player[];    // pool livre atual (reposição de role do vendedor)
   onClose: () => void; onAgree: (fee: number, outIds: string[]) => void;
 }) {
   const ask = askingPrice(player, from.teamwork);
+  // contexto multifatorial do clube vendedor — from.players já é o elenco
+  // ATUAL (currentEra vem pós-applyMoves)
+  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents };
   const mkt = playerValue(player);
   const wage = playerWage(player);
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
@@ -8720,7 +8709,7 @@ function NegotiationModal({ player, from, budget, swapPool, onClose, onAgree }: 
   const reset = () => setReply(null);
   const submit = () => {
     if (overBudget) return;
-    setReply(clubReply(effectiveOffer, ask, player, from.teamwork, round));
+    setReply(clubReply(effectiveOffer, ask, player, from.teamwork, round, negoCtx));
     setRound((r) => r + 1);
   };
   const toggleSwap = (id: string) => {
@@ -8881,6 +8870,12 @@ function NegotiationModal({ player, from, budget, swapPool, onClose, onAgree }: 
             {reply.kind === 'accept' && <span>✅ {from.team} {ct('aceitou a oferta de')} <b>{formatMoney(effectiveOffer)}</b>.</span>}
             {reply.kind === 'counter' && <span>↔️ {from.team} {ct('quer')} <b>{formatMoney(reply.value)}</b> {ct('no total')}{swapValue > 0 ? ` (${formatMoney(counterCash)} ${ct('em dinheiro + sua troca')})` : ''}.</span>}
             {reply.kind === 'reject' && <span>❌ {reply.msg}</span>}
+            {/* razão do decideOffer (gap #14): o "porquê" da resposta do clube */}
+            {(reply.kind === 'accept' || reply.kind === 'counter') && reply.reason && (
+              <div style={{ marginTop: 4, fontSize: '0.74rem', color: 'var(--em-muted)', fontStyle: 'italic' }}>
+                💬 {reply.reason}
+              </div>
+            )}
           </div>
         )}
 
@@ -9003,10 +8998,11 @@ function ActionGold({ label, onClick, disabled }: { label: string; onClick: () =
 }
 
 // ---------- negociações durante a temporada (acordos pendentes p/ a janela) ----------
-function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed }: {
+function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf }: {
   market: { player: Player; from: TeamSeason; price: number }[];
   squadPlayers: Player[];
   budget: number;
+  clubFormOf?: (teamId: string) => number; // forma REAL do clube (teamForm) pro decideOffer
   pendingDeals: PendingDeal[];
   pendingSales: { playerId: string; nick: string; fee: number; toTag: string; toId: string }[];
   offers: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toId: string; toName: string }[];
@@ -9163,6 +9159,9 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
           from={target.from}
           budget={dealBudget}
           swapPool={swapPool}
+          sellerForm={clubFormOf?.(target.from.id)}
+          buyerStrength={squadPlayers.length > 0 ? squadStrength(squadPlayers) : undefined}
+          freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
           onClose={() => setTarget(null)}
           onAgree={(fee, outIds) => {
             onAddDeal({
@@ -9851,6 +9850,12 @@ function MarketScreen({
           player={nego.player}
           from={nego.from}
           budget={budgetLeft}
+          sellerForm={formOf(save, nego.from.id)}
+          buyerStrength={(() => {
+            const mine = squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[];
+            return mine.length > 0 ? squadStrength(mine) : undefined;
+          })()}
+          freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
           onClose={() => setNego(null)}
           onAgree={(fee) => {
             setSquad([...squad, signingWithSnapshot({ playerId: nego.player.id, fromId: nego.from.id, fee }, { player: nego.player, from: nego.from, basePlayer: nego.player })]);
