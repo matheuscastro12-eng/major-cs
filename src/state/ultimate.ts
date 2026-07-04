@@ -28,6 +28,7 @@ import { checkSbc, sbcById, type SbcReward } from '../engine/ultimate/sbc';
 import { objectiveById } from '../engine/ultimate/objectives';
 import { seasonTierById } from '../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../engine/ultimate/missions';
+import { ensurePass, levelForXp, markPassClaimed, passLevelDef, passTitleSlug, PASS_PREMIUM_COST, type PassReward, type PassTrack } from '../engine/ultimate/seasonPass';
 import {
   addCredits as _addCredits,
   markObjectiveClaimed as _markObjectiveClaimed,
@@ -44,6 +45,9 @@ import {
   ensureWeekly as _ensureWeekly,
   markWeeklyClaimed as _markWeeklyClaimed,
   markWeeklyBonusClaimed as _markWeeklyBonusClaimed,
+  grantPassXp as _grantPassXp,
+  setPassPremium as _setPassPremium,
+  passSeasonId,
   type MatchRecord,
   applyMatchResult as _applyMatchResult,
   applySeasonRollover as _applySeasonRollover,
@@ -268,6 +272,9 @@ interface UltimateStore {
   syncWeekly: (week: string) => void;
   claimWeekly: (id: string) => { ok: boolean; credits?: number };
   claimWeeklyBonus: () => { ok: boolean; cards: UltCard[] };
+  // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
+  buyPremiumPass: () => { ok: boolean; reason?: 'already' | 'insufficient' };
+  claimPassLevel: (level: number, track: PassTrack) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -299,6 +306,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     const cards = rollPack(cat, pack, rng);
     let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
     for (const c of cards) s = _grantCard(s, c.key, 'pack');
+    s = _grantPassXp(s, 'pack', dateKey(new Date())); // XP do passe (cap diário em seasonPass.ts)
     persist(s);
     set({ state: s });
     // pack aberto no cliente (fase 3a): espelha custo+cartas com o seed usado —
@@ -380,6 +388,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       const prev = get().state;
       let s = _addCredits(prev, credits);
       s = _pushHistory(s, rec('casual', 0, credits));
+      s = _grantPassXp(s, won ? 'casualWin' : 'casualLoss', dateKey(new Date()));
       persist(s);
       set({ state: s });
       mirrorUltimateChange(prev, s, 'reward', { src: 'match', mode: 'casual' });
@@ -387,7 +396,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }
     const prev = get().state;
     const r = _applyMatchResult(prev, won, oppElo);
-    const s = _pushHistory(r.state, rec('rivals', r.outcome.eloDelta, r.outcome.credits));
+    let s = _pushHistory(r.state, rec('rivals', r.outcome.eloDelta, r.outcome.credits));
+    s = _grantPassXp(s, won ? 'rankedWin' : 'rankedLoss', dateKey(new Date()));
     persist(s);
     set({ state: s });
     mirrorUltimateChange(prev, s, 'reward', { src: 'match', mode: 'rivals' });
@@ -397,9 +407,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     const prev = get().state;
     const r = _claimDaily(prev, dateKey(new Date()));
     if (r.result.claimed) {
-      persist(r.state);
-      set({ state: r.state });
-      mirrorUltimateChange(prev, r.state, 'reward', { src: 'daily' });
+      const s = _grantPassXp(r.state, 'daily', dateKey(new Date()));
+      persist(s);
+      set({ state: s });
+      mirrorUltimateChange(prev, s, 'reward', { src: 'daily' });
     }
     return r.result;
   },
@@ -470,6 +481,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       }
     }
     s = { ...s, profile: { ...s.profile, sbcDone: [...s.profile.sbcDone, def.id] } };
+    s = _grantPassXp(s, 'sbc', dateKey(new Date()));
     persist(s);
     set({ state: s });
     mirrorUltimateChange(st, s, 'sbc', { sbcId: def.id });
@@ -516,6 +528,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
         s = _grantCard(s, grantedCard.key, 'reward', { id: gid });
       }
     }
+    s = _grantPassXp(s, 'objective', dateKey(new Date()));
     persist(s);
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'objective', id });
@@ -578,6 +591,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       }
     }
     s = _pushHistory(s, { t: Date.now(), mode: 'gauntlet', won, score, eloDelta: 0, credits });
+    if (won) s = _grantPassXp(s, 'gauntletWin', dateKey(new Date())); // XP por estágio vencido
     persist(s);
     set({ state: s });
     mirrorUltimateChange(prev, s, 'reward', { src: 'gauntlet' });
@@ -606,6 +620,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (!missionProgress(def, facts).done) return { ok: false };
     let s = _markMissionClaimed(st, id);
     s = _addCredits(s, def.credits);
+    s = _grantPassXp(s, 'mission', dateKey(new Date()));
     persist(s);
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'mission', id });
@@ -627,6 +642,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (!weeklyProgress(def, weeklyFactsOf(st.profile)).done) return { ok: false };
     let s = _markWeeklyClaimed(st, id);
     s = _addCredits(s, def.credits);
+    s = _grantPassXp(s, 'weekly', dateKey(new Date()));
     persist(s);
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'weekly', id });
@@ -651,6 +667,65 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'weekly-bonus', seed });
     return { ok: true, cards };
+  },
+  buyPremiumPass: () => {
+    // desbloqueia a trilha premium do Passe gastando credits pelo funil normal
+    // (spendCredits) — o gasto cai no ledger-sombra como 'spend' src:'pass-premium'.
+    // v1: só credits; a compra via coins (dinheiro real) entra por premiumVia
+    // numa iteração futura sem migração de save.
+    const prev = get().state;
+    const pass = ensurePass(prev.profile.pass, passSeasonId(prev.profile));
+    if (pass.premium) return { ok: false, reason: 'already' as const };
+    const sp = _spendCredits(prev, PASS_PREMIUM_COST);
+    if (!sp.ok) return { ok: false, reason: 'insufficient' as const };
+    const s = _setPassPremium({ ...sp.state, profile: { ...sp.state.profile, pass } }, 'credits');
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(prev, s, 'spend', { src: 'pass-premium' });
+    return { ok: true };
+  },
+  claimPassLevel: (level, track) => {
+    const st = get().state;
+    const def = passLevelDef(level);
+    if (!def) return { ok: false, reason: 'unknown' as const };
+    const pass = ensurePass(st.profile.pass, passSeasonId(st.profile));
+    if (levelForXp(pass.xp) < level) return { ok: false, reason: 'unreached' as const };
+    if (track === 'premium' && !pass.premium) return { ok: false, reason: 'locked' as const };
+    const claimed = track === 'premium' ? pass.claimedPremium : pass.claimedFree;
+    if (claimed.includes(level)) return { ok: false, reason: 'claimed' as const };
+    const reward = track === 'premium' ? def.premium : def.free;
+    let s: UltimateState = { ...st, profile: { ...st.profile, pass: markPassClaimed(pass, level, track) } };
+    if (reward.credits) s = _addCredits(s, reward.credits);
+    let grantedCard: UltCard | undefined;
+    if (reward.card) {
+      // mesmo funil de carta aleatória por raridade dos outros claims
+      const pool = ultimateCatalog().filter((c) => c.rarity === reward.card);
+      if (pool.length) {
+        grantedCard = pool[Math.floor(Math.random() * pool.length)];
+        s = _grantCard(s, grantedCard.key, 'reward', { id: `pass_${Math.random().toString(36).slice(2, 9)}` });
+      }
+    }
+    let packCards: UltCard[] = [];
+    if (reward.pack) {
+      // pack de recompensa: mesmo esquema anti-reroll do claimWeeklyBonus
+      // (seed incremental gravado antes do reveal). NÃO dá XP de pack (não é
+      // openPack — recompensa não alimenta a própria barra).
+      const pk = packById(reward.pack);
+      if (pk) {
+        const seed = s.profile.packSeedCounter + 1;
+        const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
+        packCards = rollPack(ultimateCatalog(), pk, rng);
+        s = { ...s, profile: { ...s.profile, packSeedCounter: seed } };
+        for (const c of packCards) s = _grantCard(s, c.key, 'reward');
+      }
+    }
+    // título exclusivo do premium 35 — slug dinâmico por temporada; mergeTitles
+    // aceita qualquer slug (a UI da fase B usa passTitleLabel como fallback).
+    if (reward.title) s = _mergeTitles(s, [passTitleSlug(pass.seasonId)]).state;
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'pass', level, track });
+    return { ok: true, reward, grantedCard, packCards };
   },
   setState: (s) => {
     persist(s);
