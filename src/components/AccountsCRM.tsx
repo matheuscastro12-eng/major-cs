@@ -6,8 +6,8 @@ import { adminPassword } from './AdminGate';
 import { AdminNav } from './AdminNav';
 import { ct } from '../state/career-i18n';
 import {
-  listAccounts, grantAccess, revokeAccess, lookupStripe, setUserPassword,
-  type AccountsList, type AdminAccount, type StripeLookup, type TrendPoint,
+  listAccounts, grantAccess, revokeAccess, lookupStripe, setUserPassword, getRankingIntegrity,
+  type AccountsList, type AdminAccount, type StripeLookup, type TrendPoint, type IntegrityData,
 } from '../state/adminAccounts';
 
 const fmtDate = (v: string) => { try { return new Date(v).toLocaleDateString('pt-BR'); } catch { return '—'; } };
@@ -57,6 +57,90 @@ function SortableTh({ label, sortKey, active, dir, onSort }: { label: string; so
   return <th className="sortable" onClick={() => onSort(sortKey)}>{label}{active ? (dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>;
 }
 
+const fmtWhen = (v: string) => { try { return new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } };
+const STATUS_LABEL: Record<string, string> = { pending: 'Pendentes', applied: 'Aplicadas', 'applied-solo': 'Aplicadas (solo)', conflict: 'Em conflito' };
+
+// ── Integridade do ranking PvP: conflitos de report (fraude/bug) e reports órfãos ──
+// `conflict` = os dois jogadores reclamaram o MESMO resultado; a partida não conta.
+// Reincidência é o sinal forte de fraude — por isso a lista de reincidentes.
+function RankingIntegrity({ data }: { data: IntegrityData | null }) {
+  if (!data) return <div className="muted small" style={{ padding: '6px 0' }}>{ct('Carregando integridade do ranking…')}</div>;
+  const statusOf = (s: string) => data.byStatus.find((r) => r.status === s);
+  const conflictPct = data.matches.total > 0 ? Math.round((data.matches.conflicts / data.matches.total) * 100) : 0;
+  const reportLabel = (won: boolean) => (won ? ct('reportou VITÓRIA') : ct('reportou derrota'));
+  return (
+    <>
+      <div className="acc-stats">
+        <StatCard value={data.matches.conflicts7} label={ct('Conflitos 7d')} />
+        <StatCard value={`${conflictPct}%`} label={ct('Partidas em conflito')} />
+        <StatCard value={data.stalePending} label={ct('Pendentes >1h (órfãos)')} />
+        <StatCard tone="blue" value={data.matches.total} label={ct('Partidas reportadas')} />
+        <StatCard tone="green" value={(statusOf('applied')?.total ?? 0) + (statusOf('applied-solo')?.total ?? 0)} label={ct('Reports aplicados')} />
+      </div>
+
+      {/* reports por status (7 dias x total) */}
+      <div className="crm-bars">
+        {data.byStatus.map((r) => (
+          <div key={r.status} className="crm-bar-row">
+            <span className="crm-bar-label">{ct(STATUS_LABEL[r.status] ?? r.status)}</span>
+            <div className="crm-bar-track">
+              <div className="crm-bar-fill" style={{ width: `${(r.total / Math.max(1, ...data.byStatus.map((x) => x.total))) * 100}%`, background: r.status === 'conflict' ? '#dc2626' : r.status === 'pending' ? '#caa53a' : '#16a34a' }} />
+            </div>
+            <span className="crm-bar-sub">{r.total} {ct('total')} · {r.last7} {ct('em 7d')}</span>
+          </div>
+        ))}
+        {data.byStatus.length === 0 && <div className="muted small" style={{ padding: '6px 0' }}>{ct('Nenhum report de partida ainda.')}</div>}
+      </div>
+
+      {/* últimas partidas em conflito: quem reportou o quê */}
+      <div className="muted small section-label" style={{ marginTop: 14, marginBottom: 6 }}>{ct('Partidas em conflito recentes')} ({data.conflicts.length})</div>
+      {data.conflicts.length === 0 ? (
+        <div className="muted small" style={{ marginBottom: 8 }}>{ct('Nenhum conflito de report — ranking saudável.')}</div>
+      ) : (
+        <table className="acc-table">
+          <thead><tr><th>{ct('Quando')}</th><th>{ct('Sala')}</th><th>{ct('Jogador A')}</th><th>{ct('Jogador B')}</th></tr></thead>
+          <tbody>
+            {data.conflicts.map((c) => (
+              <tr key={c.code}>
+                <td style={{ color: 'var(--rtm-dim)' }}>{fmtWhen(c.at)}</td>
+                <td><code>{c.code}</code></td>
+                {c.reports.slice(0, 2).map((r, i) => (
+                  <td key={i}>
+                    <b style={{ color: 'var(--rtm-text-strong)' }}>{r.nick}</b>
+                    <span className="muted small" title={r.email}> · {r.email}</span>
+                    <div className={r.won ? 'neg small' : 'muted small'}>{reportLabel(r.won)}</div>
+                  </td>
+                ))}
+                {c.reports.length < 2 && <td className="muted small">{ct('report do oponente ausente')}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* reincidentes: jogadores com mais conflitos */}
+      {data.offenders.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div className="muted small section-label" style={{ marginBottom: 6 }}>{ct('Reincidentes (mais conflitos)')}</div>
+          <table className="acc-table">
+            <thead><tr><th>{ct('Jogador')}</th><th>{ct('Conflitos')}</th><th>{ct('Aplicadas')}</th><th>{ct('Último conflito')}</th></tr></thead>
+            <tbody>
+              {data.offenders.map((o) => (
+                <tr key={o.email}>
+                  <td><b style={{ color: 'var(--rtm-text-strong)' }}>{o.nick}</b><span className="muted small" title={o.email}> · {o.email}</span></td>
+                  <td className={o.conflicts >= 3 ? 'neg' : undefined} style={{ textAlign: 'center', fontWeight: 700 }}>{o.conflicts}</td>
+                  <td style={{ textAlign: 'center' }}>{o.applied}</td>
+                  <td style={{ color: 'var(--rtm-dim)' }}>{o.lastConflict ? fmtWhen(o.lastConflict) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function AccountsCRM({ onExit }: { onExit: () => void }) {
   const [data, setData] = useState<AccountsList | null>(null);
   const [err, setErr] = useState('');
@@ -68,6 +152,7 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
   const [filter, setFilter] = useState<'all' | 'paid' | 'free'>('all');
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [integrity, setIntegrity] = useState<IntegrityData | null>(null);
 
   const rows = (data?.accounts ?? []).filter((a) => filter === 'all' || (filter === 'paid' ? a.paid : !a.paid));
   const sortedRows = useMemo(() => {
@@ -91,6 +176,8 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
 
   const load = useCallback(async (q = '') => {
     setErr('');
+    // integridade do ranking carrega em paralelo, sem travar a lista de contas
+    void getRankingIntegrity(adminPassword()).then((i) => { if (i) setIntegrity(i); });
     const r = await listAccounts(adminPassword(), q);
     if (r) setData(r);
     else setErr(ct('Não foi possível carregar (login de admin necessário; só funciona no site publicado).'));
@@ -269,6 +356,11 @@ export function AccountsCRM({ onExit }: { onExit: () => void }) {
                   ))}
                 </div>
               )}
+
+              {/* integridade do ranking PvP: conflitos de report e reports órfãos */}
+              <h3 className="crm-fin-sub">🛡 {ct('Integridade do ranking (PvP)')}</h3>
+              <div className="muted small" style={{ marginBottom: 10 }}>{ct('Conflito = os dois jogadores reclamaram o mesmo resultado (fraude ou bug); a partida não conta no MMR.')}</div>
+              <RankingIntegrity data={integrity} />
             </>
           )}
         </div>

@@ -44,6 +44,8 @@ export default async function handler(
     sql`CREATE TABLE IF NOT EXISTS rtm_pending_signups (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ)`,
     sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`,
+    // mesma DDL do api/ranking.ts — garante a tabela mesmo se o ranking nunca rodou nesta instância
+    sql`CREATE TABLE IF NOT EXISTS rtm_match_reports (code TEXT, email TEXT, nick TEXT, won BOOLEAN NOT NULL, status TEXT DEFAULT 'pending', reported_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (code, email))`,
   ]);
 
   const action = String(body.action ?? '');
@@ -222,6 +224,73 @@ export default async function handler(
         recent: coinRecent.map((r) => ({ email: String(r.email), tier: String(r.tier), coins: Number(r.coins), cents: Number(r.cents), method: String(r.method), status: String(r.status), at: r.at })),
         trend: coinTrend.map((r) => ({ day: String(r.day), orders: Number(r.orders), cents: Number(r.cents) })),
       },
+    });
+    return;
+  }
+
+  // integrity: saúde do ranking PvP (rtm_match_reports). `conflict` = os dois
+  // jogadores reclamaram o MESMO resultado (tentativa de fraude ou bug) — a
+  // partida não conta. Reincidência de conflito é o sinal forte de fraude.
+  if (action === 'integrity') {
+    // contagens por status (total e últimos 7 dias)
+    const byStatus = await sql`
+      SELECT status, count(*)::int AS total,
+             count(*) FILTER (WHERE reported_at > now() - interval '7 days')::int AS last7
+      FROM rtm_match_reports GROUP BY status`;
+    // partidas (codes distintos) totais x em conflito, pra % de partidas sujas
+    const matches = await sql`
+      SELECT count(DISTINCT code)::int AS total,
+             count(DISTINCT code) FILTER (WHERE status = 'conflict')::int AS conflicts,
+             count(DISTINCT code) FILTER (WHERE reported_at > now() - interval '7 days')::int AS total7,
+             count(DISTINCT code) FILTER (WHERE status = 'conflict' AND reported_at > now() - interval '7 days')::int AS conflicts7
+      FROM rtm_match_reports`;
+    // reports 'pending' velhos (>1h): já passaram da carência do solo-apply e
+    // ninguém os resolveu — órfãos, métrica de saúde do pareamento.
+    const stale = await sql`SELECT count(*)::int AS n FROM rtm_match_reports WHERE status = 'pending' AND reported_at < now() - interval '1 hour'`;
+    // últimas ~20 partidas em conflito, com os 2 reports de cada uma
+    const conflictRows = await sql`
+      SELECT r.code, r.email, r.nick, r.won, r.reported_at, c.last
+      FROM rtm_match_reports r
+      JOIN (
+        SELECT code, max(reported_at) AS last FROM rtm_match_reports
+        WHERE status = 'conflict' GROUP BY code ORDER BY last DESC LIMIT 20
+      ) c ON c.code = r.code
+      WHERE r.status = 'conflict'
+      ORDER BY c.last DESC, r.code, r.reported_at`;
+    // top jogadores por nº de conflitos (reincidência), com partidas aplicadas de contraste
+    const offenders = await sql`
+      SELECT email, max(nick) AS nick,
+             count(*) FILTER (WHERE status = 'conflict')::int AS conflicts,
+             count(*) FILTER (WHERE status IN ('applied', 'applied-solo'))::int AS applied,
+             max(reported_at) FILTER (WHERE status = 'conflict') AS last_conflict
+      FROM rtm_match_reports GROUP BY email
+      HAVING count(*) FILTER (WHERE status = 'conflict') > 0
+      ORDER BY 3 DESC, 5 DESC LIMIT 10`;
+
+    // agrupa os reports de conflito por partida (code), preservando a ordem (mais recente primeiro)
+    const byCode = new Map<string, { code: string; at: string; reports: { email: string; nick: string; won: boolean; at: string }[] }>();
+    for (const r of conflictRows) {
+      const code = String(r.code);
+      const entry = byCode.get(code) ?? { code, at: String(r.last), reports: [] };
+      entry.reports.push({ email: String(r.email), nick: String(r.nick ?? 'manager'), won: !!r.won, at: String(r.reported_at) });
+      byCode.set(code, entry);
+    }
+
+    res.status(200).json({
+      byStatus: byStatus.map((r) => ({ status: String(r.status ?? 'pending'), total: Number(r.total), last7: Number(r.last7) })),
+      matches: {
+        total: Number(matches[0]?.total ?? 0),
+        conflicts: Number(matches[0]?.conflicts ?? 0),
+        total7: Number(matches[0]?.total7 ?? 0),
+        conflicts7: Number(matches[0]?.conflicts7 ?? 0),
+      },
+      stalePending: Number(stale[0]?.n ?? 0),
+      conflicts: [...byCode.values()],
+      offenders: offenders.map((r) => ({
+        email: String(r.email), nick: String(r.nick ?? 'manager'),
+        conflicts: Number(r.conflicts), applied: Number(r.applied),
+        lastConflict: r.last_conflict ? String(r.last_conflict) : null,
+      })),
     });
     return;
   }
