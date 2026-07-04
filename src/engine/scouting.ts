@@ -214,6 +214,52 @@ function promiseFromOvr(ovr: number, age: number): Promise {
   return 'C';
 }
 
+// Observação específica por ROLE do prospect — o que o scout destaca no vídeo
+// dele. Deixa cada relatório com sabor de CS de verdade (AWP, entry, lurk, call)
+// em vez de um parecer genérico. Determinístico via seed (id+nick).
+function roleObservation(role: string, seed: number): string {
+  const pools: Record<string, string[]> = {
+    AWP: [
+      'AWP agressiva — adora o pick de abertura no comum',
+      'segura ângulo de AWP com paciência de veterano',
+      'flick de AWP consistente, mas às vezes força o duelo perdido',
+      'reposiciona a AWP rápido depois do primeiro tiro',
+    ],
+    IGL: [
+      'chamada clara e pós-plant bem desenhado',
+      'lê a economia adversária e pune force-buy',
+      'cabeça tática forte, mas ainda frag pouco pra IGL',
+      'monta o meio de mapa com utility no timing certo',
+    ],
+    Entry: [
+      'entry fragger nato — abre bomb sem pedir licença',
+      'prefire afiado nos comuns, garante a primeira luz',
+      'aposta na velocidade, às vezes morre em trade ruim',
+      'primeiro a entrar, dita o ritmo do take',
+    ],
+    Support: [
+      'utility impecável — smoke e flash sempre no tempo',
+      'joga pro time: troca frag por espaço sem reclamar',
+      'suporte silencioso que segura o pós-plant no detalhe',
+      'baita lançador de granada, fecha rotação com molotov',
+    ],
+    Lurker: [
+      'lurk paciente, aparece nas costas na hora exata',
+      'lê rotação como ninguém e isola o retake',
+      'timing de flanco perigoso, mas some do mapa em round ruim',
+      'segura informação e explode o mapa no clutch',
+    ],
+    Rifler: [
+      'rifler versátil, spray controlado no meião',
+      'consistente no AK — troca duelo parelho em qualquer ângulo',
+      'aim puro, ainda cru na leitura de round',
+      'refrag confiável, não desperdiça a segunda entrada',
+    ],
+  };
+  const list = pools[role] ?? pools.Rifler;
+  return list[seed % list.length];
+}
+
 function buildNote(scout: ScoutDef, p: ProspectCandidate, promise: Promise): string {
   const flavors: Record<Promise, string[]> = {
     S: [
@@ -228,7 +274,7 @@ function buildNote(scout: ScoutDef, p: ProspectCandidate, promise: Promise): str
     ],
     B: [
       'cumpre o papel; precisa de coach forte',
-      'reservas decente de tier 2',
+      'reserva decente de tier 2',
       'tem ceiling limitado mas é confiável',
     ],
     C: [
@@ -237,10 +283,12 @@ function buildNote(scout: ScoutDef, p: ProspectCandidate, promise: Promise): str
       'profissional ok pra tier 3',
     ],
   };
-  const list = flavors[promise];
-  const idx = Math.abs(p.id.charCodeAt(0) + p.nick.length) % list.length;
-  void scout;
-  return list[idx];
+  const seed = Math.abs(p.id.charCodeAt(0) + p.nick.length);
+  const promiseNote = flavors[promise][seed % flavors[promise].length];
+  const roleNote = roleObservation(p.role, seed);
+  // O tier do scout modula a confiança do parecer: elite crava, local hesita.
+  const prefix = scout.tier === 1 ? 'Parecer confiável: ' : scout.tier === 3 ? 'Impressão inicial: ' : '';
+  return `${prefix}${roleNote}; ${promiseNote}.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
