@@ -18,6 +18,7 @@ import {
   retrieveCheckout,
   stripeClient,
 } from '../server/payments.js';
+import { restorableCoins } from '../server/coin-restore.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const APP_SECRET = () => cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
@@ -51,6 +52,10 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       // método do pedido de coins: 'pix' (Woovi) | 'stripe' (cartão). Métricas do CRM.
       sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`,
       sql`CREATE INDEX IF NOT EXISTS rtm_coin_orders_email_idx ON rtm_coin_orders (email, status)`,
+      // re-emissões de coins comprados (jogador perdeu o save local): cada linha é
+      // uma restauração; SUM(coins) por e-mail nunca passa do SUM dos pedidos claimed.
+      sql`CREATE TABLE IF NOT EXISTS rtm_coin_restores (id BIGSERIAL PRIMARY KEY, email TEXT NOT NULL, coins INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
+      sql`CREATE INDEX IF NOT EXISTS rtm_coin_restores_email_idx ON rtm_coin_restores (email)`,
     ]).then(() => undefined).catch((error) => {
       accountSchemaPromise = null;
       throw error;
@@ -445,6 +450,44 @@ export default async function handler(
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
     const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' RETURNING coins`;
     const coins = rows.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
+    res.status(200).json({ coins });
+    return;
+  }
+
+  // coinsSummary: quanto esta conta já comprou de coins (pedidos claimed) e
+  // quanto ainda pode ser RE-EMITIDO (1× por coin) pra quem perdeu o save local.
+  // Pedidos 'paid' ainda não claimed ficam de fora — o coinsClaim normal cobre.
+  if (action === 'coinsSummary') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
+    const [orders, restores] = await Promise.all([
+      sql`SELECT coins FROM rtm_coin_orders WHERE email=${em} AND status='claimed'`,
+      sql`SELECT coins FROM rtm_coin_restores WHERE email=${em}`,
+    ]);
+    const purchased = orders.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
+    const restorable = restorableCoins(orders.map((r) => Number(r.coins) || 0), restores.map((r) => Number(r.coins) || 0));
+    res.status(200).json({ purchased, restorable });
+    return;
+  }
+
+  // coinsRestore: re-emite os coins comprados que ainda não foram restaurados —
+  // 1× por coin, pra sempre. Atômico: o advisory lock transacional (por e-mail)
+  // serializa requests simultâneos e o INSERT ... SELECT calcula o saldo restante
+  // (claimed − já restaurado) no PRÓPRIO statement; o segundo request só roda
+  // depois do commit do primeiro, enxerga a linha nova e insere nada (retorna 0).
+  if (action === 'coinsRestore') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
+    const [, rows] = await sql.transaction([
+      sql`SELECT pg_advisory_xact_lock(hashtext('rtm_coin_restore'), hashtext(${em}))`,
+      sql`INSERT INTO rtm_coin_restores (email, coins)
+          SELECT ${em}, s.remaining FROM (
+            SELECT (COALESCE((SELECT SUM(coins) FROM rtm_coin_orders WHERE email=${em} AND status='claimed'), 0)
+                  - COALESCE((SELECT SUM(coins) FROM rtm_coin_restores WHERE email=${em}), 0))::int AS remaining
+          ) s WHERE s.remaining > 0
+          RETURNING coins`,
+    ]);
+    const coins = (rows ?? []).reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
     res.status(200).json({ coins });
     return;
   }

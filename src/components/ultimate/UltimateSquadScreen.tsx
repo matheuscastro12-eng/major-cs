@@ -26,7 +26,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, type CoinCharge, type CoinTierId } from '../../state/account';
+import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, type CoinCharge, type CoinTierId } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { UtPanel, UtEmpty } from './UtPanel';
 import {
@@ -353,13 +353,34 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   }, [account]);
   // credita pedidos pagos fora do fluxo do modal: no mount e ao visitar a Loja
   // (cobre quem pagou pelo copia-e-cola depois de fechar o QR, ou em outra aba).
+  // De carona, busca o resumo de compras (fetchCoinsSummary) pro card "Recuperar
+  // compras" — depois do claim, pra contar pedidos recém-creditados como comprados.
+  const [restoreInfo, setRestoreInfo] = useState<{ purchased: number; restorable: number } | null>(null);
+  const [restoreBusy, setRestoreBusy] = useState(false);
   useEffect(() => {
     if (!account || (tab !== 'hub' && tab !== 'store')) return;
     let on = true;
-    void claimPaidCoins().then((n) => { if (on && n > 0) { addCredits(n); flash(`🪙 +${fmt(n)} coins creditados — pagamento confirmado!`, 3600); } });
+    void claimPaidCoins()
+      .then((n) => { if (on && n > 0) { addCredits(n); flash(`🪙 +${fmt(n)} coins creditados — pagamento confirmado!`, 3600); } })
+      .then(() => fetchCoinsSummary())
+      .then((s) => { if (on) setRestoreInfo(s); });
     return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, tab]);
+  // recuperação de coins comprados (perdeu o save local): resumo vem do efeito
+  // acima; o clique re-emite no servidor (1× por coin) e credita no save atual.
+  const doRestore = () => {
+    if (restoreBusy) return;
+    setRestoreBusy(true);
+    void restorePurchasedCoins()
+      .then((n) => {
+        if (n > 0) { addCredits(n); flash(`🛟 +${fmt(n)} coins recuperados no seu save!`, 3600); }
+        else flash(ct('Nada a recuperar agora — suas compras já foram restauradas.'), 3000);
+        return fetchCoinsSummary();
+      })
+      .then((s) => setRestoreInfo(s))
+      .finally(() => setRestoreBusy(false));
+  };
   // …e a cada 4s enquanto o QR está na tela (o webhook marca pago em segundos).
   useEffect(() => {
     if (!coinModal?.charge) return;
@@ -1329,6 +1350,23 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>
             {ct('Abra pacotes, monte sua coleção dos jogadores reais de 2026. Venda duplicatas por créditos e junte pros pacotes melhores.')}
           </p>
+          {/* recuperação de coins comprados: só pra quem PERDEU o save local
+              (navegador limpo / aparelho novo). O servidor re-emite cada coin
+              comprado no máximo 1× — clicar sem ter perdido nada não duplica. */}
+          {account && restoreInfo && restoreInfo.restorable > 0 && (
+            <div className="ut-coinshop" style={{ marginBottom: 12 }}>
+              <div className="ut-coinshop__head">
+                <span className="ut-coinshop__title">🛟 {ct('Recuperar compras')}</span>
+                <span className="ut-coinshop__sub">{ct('Só pra quem perdeu o save (navegador limpo / aparelho novo)')}</span>
+              </div>
+              <p className="muted small" style={{ margin: '6px 0 8px' }}>
+                {ct('Detectamos')} {fmt(restoreInfo.restorable)} {ct('coins de compras suas que não estão neste save. Se você perdeu seu save local, dá pra trazê-los de volta — cada coin comprado só pode ser recuperado uma vez, então não use se seus coins já estão aí.')}
+              </p>
+              <button className="ut-btn ut-btn--gold" onClick={doRestore} disabled={restoreBusy}>
+                <Coins size={15} /> {restoreBusy ? ct('Recuperando…') : `${ct('Recuperar')} ${fmt(restoreInfo.restorable)} coins`}
+              </button>
+            </div>
+          )}
           {/* coins com dinheiro real (Pix) — acelera, não substitui: os mesmos
               packs continuam compráveis só jogando */}
           <div className="ut-coinshop">
