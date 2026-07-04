@@ -29,6 +29,7 @@ import { ct } from '../state/career-i18n';
 import { track } from '../state/track';
 import type { Account } from '../state/account';
 import { fetchMyRank, getLadder, reportResult, type MyRank, type RankRow, type ReportResult } from '../state/ranking';
+import { wlMirrorReport } from '../state/weekendLeague';
 import type { MapId, Pairing, Phase, Player, PlayerLine, SeriesResult, TeamSeason, Tournament, TournamentPool, TPlayer, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
 import { TournamentBracket } from './Bracket';
@@ -885,6 +886,13 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       recordedSeasonsRef.current.add(key);
       // ranking salvo (conta paga, só em sala RANQUEADA): manda o resultado e atualiza meu MMR
       if (account?.paid && state.lobby.ranked) void reportResult(won, nick || account.nick, state.lobby.code, nick).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
+      // espelho do Major do Sábado (Weekend League): duelo ranqueado também conta
+      // pro run do fim de semana SE o gate local diz que estou inscrito na janela.
+      // Fire-and-forget — nunca perturba o fluxo do ranking (o servidor valida tudo).
+      if (account?.paid && state.lobby.ranked && duel) {
+        const opp = duel.nicks.find((playerNick) => playerNick.toLowerCase() !== nick.toLowerCase()) ?? '';
+        wlMirrorReport(won, state.lobby.code, opp);
+      }
       setSessionProfile((current) => {
         const next = {
           points: current.points + points,
