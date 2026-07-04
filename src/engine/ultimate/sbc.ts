@@ -21,7 +21,14 @@ export interface SbcReward { credits?: number; card?: UltRarity }
 export interface SbcDef { id: string; name: string; desc: string; req: SbcReq; reward: SbcReward }
 
 export const SBCS: SbcDef[] = [
-  { id: 'one-org', name: 'Uma Só Camisa', desc: '3 cartas da mesma organização.', req: { count: 3, sameOrg: true }, reward: { credits: 6000 } },
+  // SBCs são REPETÍVEIS (submitSbc não trava sbcDone) → a recompensa TEM de ficar
+  // abaixo do custo de aquisição dos insumos, senão vira faucet de credits. Antes:
+  // {count:3, sameOrg} sem piso de qualidade + 6000cr = milho de bronze (3 bronzes
+  // valem ~1200 no bazar / ~75 no quick-sell → 6000cr repetível, ~2000/carta, o
+  // melhor mill do modo). Piso Prata+ (minTier 2) sobe o custo de insumo pra ~11k
+  // no bazar e 3000cr (1000/carta) deixa a mais FÁCIL das SBCs com o menor prêmio
+  // por carta — curva dificuldade→prêmio volta a ser monotônica.
+  { id: 'one-org', name: 'Uma Só Camisa', desc: '3 cartas Prata+ da mesma organização.', req: { count: 3, sameOrg: true, minTier: 2 }, reward: { credits: 3000 } },
   { id: 'br-pride', name: 'Orgulho Nacional', desc: '5 cartas do mesmo país, OVR médio ≥ 78.', req: { count: 5, sameCountry: true, minOvrAvg: 78 }, reward: { credits: 8000, card: 'rareGold' } },
   { id: 'regional', name: 'Bloco Regional', desc: '5 cartas da mesma região, OVR médio ≥ 80.', req: { count: 5, sameRegion: true, minOvrAvg: 80 }, reward: { credits: 12000, card: 'elite' } },
   { id: 'elite-five', name: 'Time de Elite', desc: '5 cartas de raridade Elite ou melhor.', req: { count: 5, minTier: 5 }, reward: { card: 'legendary' } },

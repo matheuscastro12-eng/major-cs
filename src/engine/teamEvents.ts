@@ -228,6 +228,154 @@ export const TEAM_EVENTS: TeamEventDef[] = [
       { id: 'cut',  label: 'Negar — improvise',           outcome: 'Analista entende, mas trabalha com menos ferramentas.',          moraleDelta: -1 },
     ],
   },
+
+  // ─── EXPANSÃO iter8 — mais eventos de vida (evita esgotar o catálogo) ─────
+
+  // ─── INTERNAL ──────────────────────────────────────────────────
+  {
+    id: 'team_igl_burnout',
+    category: 'internal',
+    title: 'O IGL quer largar a call',
+    body: 'Depois de uma sequência de vetos ruins e mid-rounds travados, seu IGL admite que o peso de chamar está comendo o próprio jogo. Ele cogita passar o comando pra outro.',
+    weight: 7,
+    minSplit: 2,
+    choices: [
+      { id: 'keep',   label: 'Convencer ele a seguir na call',      outcome: 'Você reforça a confiança. Ele topa segurar o comando, aliviado por ser ouvido.', moraleDelta: 4 },
+      { id: 'share',  label: 'Dividir a call por bomb site',        outcome: 'Vocês distribuem a chamada entre ele e o lurker. Frescor tático, mas leva tempo pra afinar.', moraleDelta: 1 },
+      { id: 'free',   label: 'Tirar o peso e soltar o fragging dele', outcome: 'Ele volta a fragar solto, mas o time fica sem norte nos mid-rounds por um tempo.', moraleDelta: -1 },
+    ],
+  },
+  {
+    id: 'team_offstrat_lurker',
+    category: 'internal',
+    title: 'O lurker joga por conta',
+    body: 'Seu lurker vem largando o default pra caçar picks sozinho. Às vezes fecha um clutch de 1vX; às vezes estoura o timing do time inteiro na execução.',
+    weight: 7,
+    choices: [
+      { id: 'rein',   label: 'Cobrar disciplina no setup', outcome: 'Ele volta ao book. Menos highlight de lurk, mais rounds jogados no sistema.', moraleDelta: -1, boardDelta: 2 },
+      { id: 'trust',  label: 'Dar liberdade — é o instinto dele', outcome: 'Ele agradece a confiança e assume de vez o papel de faísca imprevisível do time.', moraleDelta: 4 },
+    ],
+  },
+  {
+    id: 'team_comms_toxic',
+    category: 'internal',
+    title: 'Comms pegando fogo',
+    body: 'O coach te mostra um VOD de scrim: sua estrela flamou o time inteiro depois de um eco perdido. O clima azedou no meio do bloco de treino.',
+    weight: 8,
+    minSplit: 2,
+    choices: [
+      { id: 'talk',   label: 'Chamar a estrela pra uma conversa reservada', outcome: 'Ele reconhece o excesso e pede desculpas ao grupo. O comms limpa.', moraleDelta: 3 },
+      { id: 'fine',   label: 'Multar por quebra de conduta',                outcome: 'Recado dado e caixa cresce — mas a estrela fica ressentida.', budgetDelta: 6000, moraleDelta: -4 },
+      { id: 'ignore', label: 'Deixar rolar — é competitivo',                outcome: 'Sem intervenção, o atrito no comms vira rotina.', moraleDelta: -2 },
+    ],
+  },
+
+  // ─── MEDIA ─────────────────────────────────────────────────────
+  {
+    id: 'media_hltv_top20',
+    category: 'media',
+    title: 'Cotado no Top 20 da HLTV',
+    body: 'A imprensa especula que seu fragger pode entrar no ranking anual dos melhores do mundo. A hype tá alta e ele sabe disso.',
+    weight: 5,
+    minSplit: 3,
+    choices: [
+      { id: 'hype',   label: 'Bancar a narrativa e pedir foco',  outcome: 'Ele canaliza a pressão no treino. Motivação lá em cima.', moraleDelta: 5 },
+      { id: 'humble', label: 'Pregar pés no chão',                outcome: 'Você prega humildade. Ele entende, mas esfria um tico a empolgação.', moraleDelta: 1, boardDelta: 2 },
+    ],
+  },
+  {
+    id: 'media_roster_leak',
+    category: 'media',
+    title: 'Vazou uma troca no elenco',
+    body: 'Um insider tuitou que você estaria de olho num rifler de outro time. O vestiário viu o print e ficou desconfortável.',
+    weight: 6,
+    minSplit: 2,
+    choices: [
+      { id: 'deny',      label: 'Desmentir e reafirmar o grupo', outcome: 'Você fecha a questão publicamente. O elenco relaxa.', moraleDelta: 3 },
+      { id: 'nocomment', label: 'Não confirmar nem negar',        outcome: 'O silêncio mantém a dúvida no ar — alguns titulares ficam na defensiva.', moraleDelta: -3, boardDelta: 1 },
+    ],
+  },
+  {
+    id: 'media_coach_bug_probe',
+    category: 'media',
+    title: 'Jornalista mexe em caso antigo',
+    body: 'Um repórter investiga um suposto abuso do bug de câmera de coach numa era passada do clube. Pode respingar na imagem, mesmo sem seu envolvimento.',
+    weight: 4,
+    minSplit: 4,
+    choices: [
+      { id: 'open',   label: 'Colaborar e abrir os demos antigos', outcome: 'Transparência total. A diretoria aprova a postura e o assunto morre rápido.', boardDelta: 5 },
+      { id: 'legal',  label: 'Passar pro jurídico e não comentar',  outcome: 'Sem declaração, a história perde força — mas fica um clima no ar.', boardDelta: -2 },
+      { id: 'deny',   label: 'Negar tudo publicamente',             outcome: 'Negativa dura. Se algo aparecer depois, vai custar caro.', boardDelta: 2, moraleDelta: -1 },
+    ],
+  },
+
+  // ─── COMMERCIAL ────────────────────────────────────────────────
+  {
+    id: 'commercial_major_stickers',
+    category: 'commercial',
+    title: 'Dinheiro das figurinhas',
+    body: 'A classificação pro Major liberou a cota de stickers do time na loja do jogo. A receita das figurinhas caiu na conta.',
+    weight: 5,
+    minSplit: 3,
+    minTier: 2,
+    choices: [
+      { id: 'reinvest', label: 'Reinvestir no bootcamp',  outcome: 'A grana vira preparação. O time sente o investimento no nível das scrims.', budgetDelta: 20000, moraleDelta: 3 },
+      { id: 'bank',     label: 'Guardar no caixa',          outcome: 'Reserva reforçada pra janela de transferências que vem aí.', budgetDelta: 35000 },
+    ],
+  },
+  {
+    id: 'commercial_energy_drink',
+    category: 'commercial',
+    title: 'Sponsor de energético',
+    body: 'Uma marca de energético topa um contrato gordo, mas exige menção ao vivo dos jogadores em toda stream. Parte do elenco torce o nariz pro jabá.',
+    weight: 5,
+    choices: [
+      { id: 'sign',      label: 'Assinar — a grana ajuda',       outcome: 'Caixa engorda. Alguns jogadores reclamam do jabá no meio das lives.', budgetDelta: 30000, moraleDelta: -2 },
+      { id: 'negotiate', label: 'Negociar menos menções',         outcome: 'Acordo equilibrado: menos dinheiro, menos jabá forçado.', budgetDelta: 15000 },
+      { id: 'pass',      label: 'Recusar — não combina com o time', outcome: 'Você preserva a vibe das lives. Sem receita extra.' },
+    ],
+  },
+
+  // ─── TRAINING ──────────────────────────────────────────────────
+  {
+    id: 'training_demo_leak',
+    category: 'training',
+    title: 'Vazou um demo de scrim',
+    body: 'Um demo com seus setups novos apareceu num fórum às vésperas do campeonato. Metade das suas execuções de treino tá exposta.',
+    weight: 5,
+    minSplit: 3,
+    choices: [
+      { id: 'rework', label: 'Refazer o playbook às pressas', outcome: 'Noites viradas remontando as chamadas. Cansaço sobe, mas a surpresa é preservada.', moraleDelta: -3 },
+      { id: 'adapt',  label: 'Manter e variar no detalhe',     outcome: 'Vocês trocam timings e utility sem jogar tudo fora. Aposta calculada.', moraleDelta: 1 },
+    ],
+  },
+  {
+    id: 'training_aim_coach',
+    category: 'training',
+    title: 'Contratar um aim coach',
+    body: 'Surgiu a chance de trazer um especialista só em mira e duelos por um bloco de treinos. Rotinas de crosshair placement, prefire e spray control. Não é barato.',
+    weight: 4,
+    minSplit: 3,
+    choices: [
+      { id: 'hire', label: 'Contratar por um split', outcome: 'Duelos de entrada mais afiados e mira mais consistente. O nível sobe.', budgetDelta: -25000, moraleDelta: 4 },
+      { id: 'pass', label: 'Deixar pra próxima',       outcome: 'Vocês seguem com a rotina atual. Sem custo, sem ganho.' },
+    ],
+  },
+
+  // ─── STAFF ─────────────────────────────────────────────────────
+  {
+    id: 'staff_sports_psych',
+    category: 'staff',
+    title: 'Oferta de psicólogo esportivo',
+    body: 'Um psicólogo esportivo especializado em esports se ofereceu pra trabalhar controle emocional e clutch pressure com o elenco.',
+    weight: 5,
+    minSplit: 2,
+    choices: [
+      { id: 'hire',  label: 'Contratar em tempo integral', outcome: 'O time aprende a segurar o tremor no 1v1. Cabeça mais fria nos rounds decisivos.', budgetDelta: -20000, moraleDelta: 5 },
+      { id: 'trial', label: 'Fazer um período de teste',    outcome: 'Sessões pontuais antes dos playoffs. Efeito mais tímido, custo menor.', budgetDelta: -8000, moraleDelta: 2 },
+      { id: 'pass',  label: 'Recusar — não é prioridade',   outcome: 'Vocês seguem no instinto. Sem mudança.' },
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
