@@ -7,6 +7,7 @@ import { computeNextDaily, dailyCredits } from './daily';
 import { divisionFor, DIV_TIER_MULT } from './divisions';
 import { defaultPassState, ensurePass, passAddXp, PASS_MAX_LEVEL, type PassState, type PassXpSource } from './seasonPass';
 import type { UltCard } from './cards';
+import { isStyleId, STYLE_COST, type StyleId } from './traits';
 import type { Role } from '../../types';
 
 // registro de partida (histórico das últimas HISTORY_MAX, todos os modos).
@@ -46,6 +47,7 @@ export interface OwnedCard {
   acquiredAt: number;
   locked: 'squad' | null;  // travada num squad → não pode vender
   boost?: number;          // nível de evolução (+OVR/atributos por nível), 0..EVO_MAX
+  style?: StyleId;         // estilo de química aplicado (iter33) — aditivo, migration-safe
 }
 
 export interface UltimateSquad {
@@ -150,6 +152,24 @@ export function evolveCard(
   if (!spent.ok) return { ok: false, state, reason: 'insufficient' };
   const inventory = spent.state.inventory.map((o) => (o.id === ownedId ? { ...o, boost: boost + 1 } : o));
   return { ok: true, state: { ...spent.state, inventory }, cost, newBoost: boost + 1 };
+}
+
+// aplica um ESTILO DE QUÍMICA numa carta possuída: gasta STYLE_COST credits e
+// grava `style` na cópia (SUBSTITUI o estilo anterior, se houver). Mesmo padrão
+// do evolveCard — o funil de gasto é o spendCredits normal.
+export function applyCardStyle(
+  state: UltimateState,
+  ownedId: string,
+  styleId: StyleId,
+): { ok: boolean; state: UltimateState; cost?: number; replaced?: StyleId; reason?: 'missing' | 'invalid' | 'same' | 'insufficient' } {
+  const owned = state.inventory.find((o) => o.id === ownedId);
+  if (!owned) return { ok: false, state, reason: 'missing' };
+  if (!isStyleId(styleId)) return { ok: false, state, reason: 'invalid' };
+  if (owned.style === styleId) return { ok: false, state, reason: 'same' };
+  const spent = spendCredits(state, STYLE_COST);
+  if (!spent.ok) return { ok: false, state, reason: 'insufficient' };
+  const inventory = spent.state.inventory.map((o) => (o.id === ownedId ? { ...o, style: styleId } : o));
+  return { ok: true, state: { ...spent.state, inventory }, cost: STYLE_COST, replaced: owned.style };
 }
 
 // marca uma faixa da ladder de temporada como resgatada (idempotente). A
@@ -426,8 +446,10 @@ export function migrateUltimate(raw: unknown): UltimateState {
         .filter((o): o is OwnedCard => !!o && typeof o === 'object' && typeof (o as OwnedCard).cardKey === 'string' && typeof (o as OwnedCard).id === 'string')
         .map((o) => {
           const b = o.boost;
-          if (typeof b !== 'number' || !Number.isFinite(b) || b <= 0) return { ...o, boost: undefined };
-          return { ...o, boost: Math.min(EVO_MAX, Math.floor(b)) };
+          const boost = (typeof b !== 'number' || !Number.isFinite(b) || b <= 0) ? undefined : Math.min(EVO_MAX, Math.floor(b));
+          // estilo (iter33): campo aditivo — só sobrevive se for um StyleId conhecido
+          const style = isStyleId(o.style) ? o.style : undefined;
+          return { ...o, boost, style };
         })
     : [];
   // sanitiza squads: recomputeLocks itera sq.slots — um save corrompido com

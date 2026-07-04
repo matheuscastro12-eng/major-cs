@@ -46,6 +46,7 @@ import { missionsForWeek, weeklyFactsOf, weeklyProgress, weekKey } from '../../e
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
 import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
+import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQUAD_DUEL_CAP, type StyleId } from '../../engine/ultimate/traits';
 import '../../styles/ultimate.css';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
@@ -273,16 +274,34 @@ function PassRewardChip({ r }: { r: PassReward }) {
   );
 }
 
+// chip minúsculo de trait/estilo (emoji + tooltip) — usado na escalação do
+// confronto, no pitch e na coleção. Reusa a linguagem dos chips existentes.
+const duelChip: CSSProperties = { fontSize: '0.62rem', lineHeight: 1, padding: '2px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.16)', cursor: 'default' };
+function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId; light?: boolean }) {
+  const st = styleById(styleId);
+  const tr = traitsFor(card);
+  if (!st && tr.length === 0) return null;
+  const base = light ? { ...duelChip, background: 'rgba(0,0,0,0.06)', border: '1px solid var(--em-border,#2a3340)' } : duelChip;
+  return (
+    <div style={{ display: 'flex', gap: 3, justifyContent: 'center', flexWrap: 'wrap' }}>
+      {st && <span style={{ ...base, borderColor: '#c9a63c88' }} title={`${ct('Estilo')} ${st.name} — ${st.desc}`}>{st.icon}</span>}
+      {tr.map((t) => { const d = traitById(t); return <span key={t} style={base} title={`${d.name} — ${d.desc}`}>{d.icon}</span>; })}
+    </div>
+  );
+}
+
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
-interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
+interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, buyPremiumPass, claimPassLevel } = useUltimate();
+  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, buyPremiumPass, claimPassLevel, applyStyle } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   const [pickSlot, setPickSlot] = useState<number | null>(null);
+  // estilo comprado na Loja aguardando a escolha da carta-alvo (modal picker)
+  const [stylePick, setStylePick] = useState<StyleId | null>(null);
   type MatchMode = 'rivals' | 'casual' | 'gauntlet' | 'pvp';
   type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean };
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1; pvpCode?: string } | null>(null);
@@ -482,20 +501,21 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   }, [state.profile.w, state.profile.peakElo, state.profile.streak, state.inventory.length, state.profile.onboarded]);
 
   const club = useMemo<ClubRow[]>(() => {
-    // agrupa por carta + nível de evolução (uma Prata +2 é distinta da Prata base).
-    const byKey = new Map<string, { card: UltCard; evo: number; ownedIds: string[] }>();
+    // agrupa por carta + nível de evolução + estilo (uma Prata +2 é distinta da
+    // Prata base; uma cópia com estilo Fragger é distinta da sem estilo).
+    const byKey = new Map<string, { card: UltCard; evo: number; style?: StyleId; ownedIds: string[] }>();
     for (const o of state.inventory) {
       const base = index.get(o.cardKey);
       if (!base) continue;
       const evo = Math.min(EVO_MAX, Math.max(0, o.boost ?? 0));
-      const key = `${o.cardKey}#${evo}`;
+      const key = `${o.cardKey}#${evo}#${o.style ?? ''}`;
       const g = byKey.get(key);
       if (g) g.ownedIds.push(o.id);
-      else byKey.set(key, { card: boostCard(base, evo), evo, ownedIds: [o.id] });
+      else byKey.set(key, { card: boostCard(base, evo), evo, style: o.style, ownedIds: [o.id] });
     }
     const rows: ClubRow[] = [];
-    for (const { card, evo, ownedIds } of byKey.values()) {
-      rows.push({ card, evo, count: ownedIds.length, ownedIds });
+    for (const { card, evo, style, ownedIds } of byKey.values()) {
+      rows.push({ card, evo, style, count: ownedIds.length, ownedIds });
     }
     return rows.sort((a, b) => b.card.ovr - a.card.ovr);
   }, [state.inventory, index]);
@@ -530,6 +550,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const placed = form.slots.map((fs) => slotCard(fs.slot)?.card).filter((c): c is UltCard => !!c);
   const avgOvr = placed.length ? Math.round(placed.reduce((a, c) => a + c.ovr, 0) / placed.length) : 0;
   const cl = chemLabel(chem.total);
+  // bônus de duelo (iter33): estilos aplicados + traits derivadas das cartas
+  // escaladas → multiplicador de força capado em 1.03 (números em traits.ts).
+  const duel = squadDuelBonus(
+    form.slots
+      .map((fs): { card: UltCard; styleId?: StyleId } | null => { const sc = slotCard(fs.slot); return sc ? { card: sc.card, styleId: sc.owned.style } : null; })
+      .filter((x): x is { card: UltCard; styleId?: StyleId } => x !== null),
+  );
 
   // ── ranqueada vs IA ──
   const pool = useMemo(() => buildPool(CS2_REAL_2026), []);
@@ -731,6 +758,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     userTeam.strength = userTeam.strength * chem.multiplier; // química influencia a força
     const totalBoost = form.slots.reduce((a, fs) => a + (slotCard(fs.slot)?.owned.boost ?? 0), 0);
     if (totalBoost > 0) userTeam.strength *= 1 + totalBoost * 0.01; // evolução: +1% de força por nível
+    if (duel.total > 0) userTeam.strength *= duel.multiplier; // estilos+traits (iter33): teto 1.03
     // rivals: rival escala pela divisão (elo); amistoso: justo pelo OVR; gauntlet:
     // sobe a dificuldade a cada vitória do run.
     const target = mode === 'rivals'
@@ -798,10 +826,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const pvpSquad = useMemo<UltimatePvpSquad>(() => ({
     name: displayName.slice(0, 24),
     elo: state.profile.elo,
-    chem: chem.multiplier,
+    // estilos+traits viajam EMBUTIDOS no multiplicador do snapshot (campo `chem`
+    // já aplicado pelos DOIS clientes) → determinístico entre versões, sem campo
+    // novo no protocolo. Teto combinado: 1.10 (química) × 1.03 (duelo) = 1.133.
+    chem: chem.multiplier * duel.multiplier,
     cards: form.slots.map((fs) => slotCard(fs.slot)).filter((sc): sc is NonNullable<typeof sc> => !!sc).map((sc) => ({ pid: sc.card.playerId, ovr: sc.card.ovr })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [displayName, state.profile.elo, chem.multiplier, state.squads, state.inventory]);
+  }), [displayName, state.profile.elo, chem.multiplier, duel.multiplier, state.squads, state.inventory]);
 
   const startPvpMatch = useCallback((args: DuelPlayArgs): boolean => {
     // reconstrói os DOIS times do dataset (pids compartilhados) com o OVR do
@@ -971,13 +1002,21 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div className="ut-vs__team">{live.teams[live.myIdx].name}</div>
                 <div className="ut-vs__meta">{avgOvr} OVR · {ct('química')} {chem.total}/15</div>
                 <div className="ut-vs__cards">
-                  {form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? <UltCardView key={fs.slot} card={sc.card} size={82} evo={sc.owned.boost ?? 0} /> : null; })}
+                  {form.slots.map((fs) => {
+                    const sc = slotCard(fs.slot);
+                    return sc ? (
+                      <div key={fs.slot} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                        <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} />
+                        <DuelChips card={sc.card} styleId={sc.owned.style} />
+                      </div>
+                    ) : null;
+                  })}
                 </div>
               </div>
               <div className="ut-vs__mid">
                 <div className="ut-vs__map">{live.result.mapName}</div>
                 <div className="ut-vs__vs">VS</div>
-                <div className="ut-vs__fmt">MD1 · {chem.multiplier.toFixed(2)}× {ct('força')}</div>
+                <div className="ut-vs__fmt">MD1 · {(chem.multiplier * duel.multiplier).toFixed(2)}× {ct('força')}</div>
                 <button className="ut-jogar" style={{ padding: '13px 26px', fontSize: '1rem' }} onClick={() => setLive({ ...live, intro: false })}><Zap size={17} /> {ct('COMEÇAR PARTIDA')}</button>
                 <button className="ut-vs__skip" onClick={finishMatch}>{ct('Pular direto pro resultado')}</button>
               </div>
@@ -1539,6 +1578,36 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               );
             })}
           </div>
+          {/* Estilos de Química (iter33): consumível de 2.500 credits aplicado a
+              UMA carta — muda o perfil dela no duelo (bônus por encaixe do stat).
+              A compra acontece AO ESCOLHER a carta-alvo (funil applyStyle). */}
+          <div className="ut-coinshop" style={{ marginTop: 12 }}>
+            <div className="ut-coinshop__head">
+              <span className="ut-coinshop__title">🧪 {ct('Estilos de Química')}</span>
+              <span className="ut-coinshop__sub">{ct('Aplica em 1 carta e muda o perfil dela no duelo — substitui o estilo anterior')}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 10, marginTop: 8 }}>
+              {STYLES.map((s) => {
+                const afford = credits >= STYLE_COST;
+                return (
+                  <button key={s.id} className="ut-coinpack" onClick={() => {
+                    if (!state.inventory.length) { flash(ct('Você ainda não tem cartas — abra um pacote primeiro.')); return; }
+                    if (!afford) { flash(ct('Créditos insuficientes.')); return; }
+                    setStylePick(s.id);
+                  }}>
+                    <span className="ut-coinpack__coins">{s.icon} {s.name}</span>
+                    <span className="ut-coinpack__name" style={{ whiteSpace: 'normal' }}>{ct(s.desc)}</span>
+                    <span className="ut-coinpack__price" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {afford ? <Coins size={13} /> : <Lock size={12} />} {fmt(STYLE_COST)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="ut-coinshop__note">
+              {ct('O bônus escala com o encaixe: stat visado 85+ rende +1.5 de força equivalente; 75-84 rende +1.0; abaixo disso +0.5. Traits da carta somam +0.5 cada (máx 2). Teto por carta: +2.5; teto do squad: +3% de força.')}
+            </p>
+          </div>
         </UtPanel>
       )}
 
@@ -1581,8 +1650,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                       const baseCard = index.get(row.card.key) ?? row.card;
                       const isDup = (keyCount.get(row.card.key) ?? row.count) > 1;
                       return (
-                        <div key={`${row.card.key}#${row.evo}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                        <div key={`${row.card.key}#${row.evo}#${row.style ?? ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                           <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} />
+                          <DuelChips card={row.card} styleId={row.style} light />
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
                               {isDup ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
@@ -1631,6 +1701,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <span className="ut-sqstat__k">{ct('OVR médio')}</span>
               <b className="ut-sqstat__big">{avgOvr || '—'}</b>
             </div>
+            <div className="ut-sqstat" title={`${ct('Estilos aplicados + traits das cartas escaladas')} · ${ct('máx')} +${SQUAD_DUEL_CAP} (${duel.multiplier.toFixed(3)}× ${ct('de força')})`}>
+              <span className="ut-sqstat__k">{ct('Duelo')}</span>
+              <b className="ut-sqstat__big" style={{ color: duel.total > 0 ? '#16a34a' : undefined }}>+{duel.total.toFixed(1)}</b>
+            </div>
           </div>
           <div style={{ position: 'relative', width: '100%', maxWidth: 520, margin: '0 auto', aspectRatio: '4 / 5', background: 'radial-gradient(ellipse at 50% 32%, rgba(201,166,60,0.14), transparent 58%), linear-gradient(180deg, #1c2029 0%, #14161c 100%)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, boxShadow: 'inset 0 0 44px rgba(0,0,0,0.35)' }}>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
@@ -1645,9 +1719,12 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               return (
                 <div key={fs.slot} style={{ position: 'absolute', left: `${fs.x * 100}%`, top: `${fs.y * 100}%`, transform: 'translate(-50%,-50%)' }}>
                   {sc ? (
-                    <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
-                      <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={112} />
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                      <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
+                        <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={112} />
+                      </button>
+                      <DuelChips card={sc.card} styleId={sc.owned.style} />
+                    </div>
                   ) : (
                     <button onClick={() => setPickSlot(fs.slot)} style={emptySlot}>
                       <Plus size={22} strokeWidth={2.4} />
@@ -1660,6 +1737,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           </div>
           <p className="muted small" style={{ textAlign: 'center', marginTop: 10 }}>
             {ct('Mesma org (+1), mesma região (+0.5) e mesmo país (+0.5) entre jogadores conectados dão química. Encaixe as funções pra somar mais.')}
+            {' '}{ct('Traits (derivadas da carta) e Estilos de Química (Loja) somam o bônus de Duelo — até +3% de força.')}
           </p>
         </UtPanel>
       )}
@@ -1976,6 +2054,48 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 })}
               </div>
             )}
+          </Modal>
+        );
+      })()}
+
+      {stylePick != null && (() => {
+        // picker do alvo do ESTILO: agrupa cópias (cardKey+boost+estilo atual) e
+        // prefere a cópia ESCALADA como representante (é a que joga o duelo).
+        const def = STYLES.find((s) => s.id === stylePick)!;
+        const groups = new Map<string, { o: OwnedCard; card: UltCard; n: number }>();
+        for (const o of state.inventory) {
+          const b = index.get(o.cardKey);
+          if (!b) continue;
+          const k = `${o.cardKey}#${o.boost ?? 0}#${o.style ?? ''}`;
+          const g = groups.get(k);
+          if (g) {
+            g.n++;
+            if (g.o.locked !== 'squad' && o.locked === 'squad') g.o = o; // prefere a escalada
+          } else groups.set(k, { o, card: boostCard(b, o.boost), n: 1 });
+        }
+        const cands = [...groups.values()].sort((a, b) =>
+          (Number(b.o.locked === 'squad') - Number(a.o.locked === 'squad')) || (b.card.stats[def.stat] - a.card.stats[def.stat]) || b.card.ovr - a.card.ovr);
+        const bonusOf = (card: UltCard) => { const v = card.stats[def.stat]; return v >= 85 ? 1.5 : v >= 75 ? 1.0 : 0.5; };
+        return (
+          <Modal open onClose={() => setStylePick(null)} title={`${def.icon} ${ct('Aplicar estilo')} ${def.name} · ${fmt(STYLE_COST)} 🪙`} size="lg">
+            <p className="muted small" style={{ marginTop: 0 }}>
+              {ct('Escolha a carta que recebe o estilo (substitui o estilo atual dela). O gasto só acontece ao confirmar a carta.')}
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10, maxHeight: 440, overflowY: 'auto', justifyItems: 'center' }}>
+              {cands.map(({ o, card, n }) => (
+                <button key={o.id} onClick={() => {
+                  const r = applyStyle(o.id, def.id);
+                  if (r.ok) { flash(`🧪 ${ct('Estilo')} ${def.name} ${ct('aplicado em')} ${card.nick} · -${fmt(r.cost ?? STYLE_COST)} 🪙`, 2400); setStylePick(null); }
+                  else flash(r.reason === 'same' ? ct('Essa cópia já tem esse estilo.') : r.reason === 'insufficient' ? ct('Créditos insuficientes.') : ct('Não foi possível aplicar o estilo.'));
+                }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} />
+                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: bonusOf(card) >= 1.5 ? '#16a34a' : bonusOf(card) >= 1.0 ? '#92600a' : 'var(--em-muted,#8a99ab)' }}>
+                    +{bonusOf(card).toFixed(1)} {ct('força eq.')}{o.style ? ` · ${ct('troca')} ${styleById(o.style)?.icon ?? ''}` : ''}
+                  </span>
+                  {o.locked === 'squad' && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
+                </button>
+              ))}
+            </div>
           </Modal>
         );
       })()}

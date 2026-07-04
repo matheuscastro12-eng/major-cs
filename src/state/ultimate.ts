@@ -29,11 +29,13 @@ import { objectiveById } from '../engine/ultimate/objectives';
 import { seasonTierById } from '../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../engine/ultimate/missions';
 import { ensurePass, levelForXp, markPassClaimed, passLevelDef, passTitleSlug, PASS_PREMIUM_COST, type PassReward, type PassTrack } from '../engine/ultimate/seasonPass';
+import type { StyleId } from '../engine/ultimate/traits';
 import {
   addCredits as _addCredits,
   markObjectiveClaimed as _markObjectiveClaimed,
   claimSeasonReward as _claimSeasonReward,
   evolveCard as _evolveCard,
+  applyCardStyle as _applyCardStyle,
   gauntletStart as _gauntletStart,
   gauntletRecord as _gauntletRecord,
   GAUNTLET_WIN_CREDITS,
@@ -260,6 +262,8 @@ interface UltimateStore {
   claimObjective: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
   // evolução de cartas
   evolveCard: (ownedId: string) => { ok: boolean; cost?: number; newBoost?: number; reason?: string };
+  // estilos de química (iter33): compra+aplicação numa carta (substitui o anterior)
+  applyStyle: (ownedId: string, styleId: StyleId) => { ok: boolean; cost?: number; reason?: string };
   // recompensas de temporada (ladder de RP)
   claimSeasonReward: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
   // Elite Gauntlet (desafio diário)
@@ -544,6 +548,18 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       mirrorUltimateChange(prev, r.state, 'spend', { src: 'evolve', ownedId });
     }
     return { ok: r.ok, cost: r.cost, newBoost: r.newBoost, reason: r.reason };
+  },
+  applyStyle: (ownedId, styleId) => {
+    // estilo de química: gasto pelo funil normal (spendCredits no reducer) +
+    // espelho-sombra 'spend' com o cardId — mesmo padrão do evolveCard.
+    const prev = get().state;
+    const r = _applyCardStyle(prev, ownedId, styleId);
+    if (r.ok) {
+      persist(r.state);
+      set({ state: r.state });
+      mirrorUltimateChange(prev, r.state, 'spend', { src: 'style', cardId: ownedId, styleId });
+    }
+    return { ok: r.ok, cost: r.cost, reason: r.reason };
   },
   claimSeasonReward: (id) => {
     const def = seasonTierById(id);
