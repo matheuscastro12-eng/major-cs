@@ -62,7 +62,17 @@ const CATEGORY_KEYS: Record<TrainFocus, AttrKey[]> = {
 
 const BASE_TRAIN_XP = 4.0;        // orçamento base de XP por treino
 export const MIN_TRAIN_ENERGY = 12; // abaixo disso, cansado demais pra treinar
-const LIVING_COST = 200;          // custo de vida semanal (R$)
+// Custo de vida semanal (R$). ANTES era um flat R$200 — irrelevante assim que
+// você sobe de tier (0,8% do salário elite de 26k), virando um no-op: nenhum
+// motivo pra administrar dinheiro conforme a carreira cresce, e o gear/psicólogo
+// (a progressão gated por grana) deixava de ser uma escolha. Agora escala com o
+// salário (inflação de estilo de vida do pro), com PISO no valor antigo pra não
+// tocar no início pobre (academia: 10% de 800-1000 < 200 → continua 200).
+const LIVING_COST_MIN = 200;
+const LIVING_COST_WAGE_FRAC = 0.10;
+function livingCostFor(wage: number): number {
+  return Math.max(LIVING_COST_MIN, Math.round(wage * LIVING_COST_WAGE_FRAC));
+}
 const WEEK_ENERGY_RECOVERY = 30;  // energia recuperada ao virar a semana
 
 const CATEGORY_LABEL: Record<TrainFocus, string> = {
@@ -352,7 +362,7 @@ export function weeklyTick(life: RoadToProSave['life'], wage: number, setup: Set
     focus: clamp(life.focus + Math.round((65 - life.focus) * 0.2) + recoveryBonus, 0, 100),
     fame: clamp(life.fame - 1, 0, 100),
     // piso 0: mesma invariante do applyLifeChoice — o jogo não modela dívida.
-    money: Math.max(0, life.money + wage - LIVING_COST - psych.retainer),
+    money: Math.max(0, life.money + wage - livingCostFor(wage) - psych.retainer),
     flags,
   };
 }
@@ -379,7 +389,7 @@ export function advanceWeek(save: RoadToProSave): { save: RoadToProSave; summary
   const contract = { ...save.team.contract, weeksLeft: Math.max(0, save.team.contract.weeksLeft - 1) };
 
   return {
-    summary: { wagePaid: wage, livingCost: LIVING_COST, psychRetainer, newSeason, agedUp },
+    summary: { wagePaid: wage, livingCost: livingCostFor(wage), psychRetainer, newSeason, agedUp },
     save: {
       ...save,
       player,

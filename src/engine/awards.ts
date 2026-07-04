@@ -13,6 +13,8 @@
 //
 // Awards não-aplicáveis (sem candidato qualificado) ficam de fora.
 
+import { hashStr } from '../state/hash';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
 
@@ -153,6 +155,67 @@ export interface AwardsLookups {
 const ROOKIE_MAX_AGE = 22;
 const BREAKOUT_MIN_PEAK = 78;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Citações da cerimônia
+//
+// O YearAwardsModal renderiza `reason` como uma CITAÇÃO em itálico entre aspas —
+// a "placa" do troféu. Só a linha de estatística soava seca e repetia igual todo
+// ano. Aqui cada prêmio ganha uma frase de cena (voz do circuito CS-BR) escolhida
+// de forma DETERMINÍSTICA por vencedor+ano, então a placa muda de ano pra ano e
+// entre jogadores, mas é estável no mesmo save. A frase precede a estatística:
+// abre com o feito, fecha com o número.
+
+const AWARD_CITATIONS: Record<AwardKind, string[]> = {
+  mvp: [
+    'Quando a bomba plantava, era o nome dele que aparecia no retake.',
+    'Carregou o time nas costas em todo clutch que o jogo pediu.',
+    'O primeiro nome da scoreline, rodada após rodada, mapa após mapa.',
+    'Abriu os sites no entry e fechou os rounds no último tiro.',
+    'O jogador que o circuito inteiro passou o ano tentando prefirar — e não conseguiu.',
+    'Ditou o ritmo de cada série: quem impôs o próprio jogo do primeiro pistol ao match point.',
+  ],
+  rookie: [
+    'Chegou sem medo do palco e já joga como quem tem Major nas costas.',
+    'Ninguém avisou o moleque que era pra tremer na semifinal.',
+    'A base entregou uma joia — e ela subiu pronta pro tier de cima.',
+    'Cabeça fria em bomb site fervendo: raríssimo nessa idade.',
+    'O futuro do CS-BR chegou adiantado, e chegou clutchando.',
+  ],
+  mostImproved: [
+    'Ano passado era projeto; hoje é peça de rotação que ninguém tira.',
+    'Ralou no deathmatch até a mira virar outra pessoa.',
+    'Pegou o VOD, engoliu o ego e voltou um jogador inteiro melhor.',
+    'A curva mais íngreme do elenco — pura oficina, sem atalho.',
+    'Transformou a maior lacuna do próprio jogo na maior arma.',
+  ],
+  breakout: [
+    'Ninguém tinha no radar; terminou o ano no highlight de todo mundo.',
+    'Entrou de fininho e virou peça-chave antes de alguém notar.',
+    'A aposta que o scout cravou na mosca contra o mercado inteiro.',
+    'Do anonimato pro comms principal em uma única temporada.',
+    'Chegou pra completar elenco e saiu como referência de função.',
+  ],
+  coachOfYear: [
+    'Leu o meta antes de todo mundo e montou o veto perfeito.',
+    'No timeout certo, virou série que o placar já dava por perdida.',
+    'Transformou anti-eco em ciência e retake em rotina ensaiada.',
+    'O cérebro por trás de cada mid-round que pareceu improviso e era plano.',
+    'Fez o elenco jogar acima do próprio OVR o ano inteiro.',
+  ],
+  teamOfSeason: [
+    'Os cinco que dominaram a scoreline do circuito de ponta a ponta.',
+    'O balanço perfeito: AWP, entry, IGL e o refrag que fecha tudo.',
+    'Se esses cinco jogassem juntos, o resto do tier jogava por segundo lugar.',
+    'A seleção do ano por função — cada um o melhor no que faz.',
+  ],
+};
+
+/** Placa determinística do troféu: estável por vencedor+ano, varia entre eles. */
+function awardCitation(kind: AwardKind, seed: string): string {
+  const pool = AWARD_CITATIONS[kind];
+  return pool[hashStr(`cite:${kind}:${seed}`) % pool.length];
+}
+
 /**
  * Detecta awards do ano que ACABOU. Chama quando `save.split % 4 === 0`
  * (ou seja, quando split avançou pra 5, 9, 13... — virada de ano).
@@ -197,7 +260,7 @@ export function detectYearAwards(
       kind: 'mvp',
       playerNick: top.nick,
       label: 'Jogador do Ano',
-      reason: `Rating ${top.rating.toFixed(2)} em ${top.maps} mapas — o melhor desempenho da temporada${top.mine ? ' (e é do SEU elenco!)' : ''}.`,
+      reason: `${awardCitation('mvp', `${top.nick}:${yearJustEnded}`)} Rating ${top.rating.toFixed(2)} em ${top.maps} mapas — o melhor desempenho da temporada${top.mine ? ' (e é do SEU elenco!)' : ''}.`,
     });
   } else {
     const mvp = pickBestBy(s.squad, (sg) => s.peakOvr?.[sg.playerId] ?? 0);
@@ -207,7 +270,7 @@ export function detectYearAwards(
         kind: 'mvp',
         playerNick: lookups.nickById(mvp.best.playerId) ?? '—',
         label: 'Jogador do Ano',
-        reason: `Alcançou pico de OVR ${mvp.bestValue} e foi a referência do elenco.`,
+        reason: `${awardCitation('mvp', `${lookups.nickById(mvp.best.playerId) ?? '—'}:${yearJustEnded}`)} Alcançou pico de OVR ${mvp.bestValue} e foi a referência do elenco.`,
       });
     }
   }
@@ -218,7 +281,7 @@ export function detectYearAwards(
     winners.push({
       kind: 'teamOfSeason',
       label: 'Time da Temporada',
-      reason: 'Os cinco melhores desempenhos do ano, escolhidos por função.',
+      reason: awardCitation('teamOfSeason', `${tos.map((l) => l.nick).join('-')}:${yearJustEnded}`),
       lineup: tos.map((l) => ({ nick: l.nick, role: l.role, rating: l.rating, mine: l.mine })),
     });
   }
@@ -236,7 +299,7 @@ export function detectYearAwards(
         kind: 'mostImproved',
         playerNick: nick,
         label: 'Maior Evolução',
-        reason: `Subiu ${bestEvoVal.toFixed(1)} pontos de OVR ao longo do ano.`,
+        reason: `${awardCitation('mostImproved', `${nick}:${yearJustEnded}`)} Subiu ${bestEvoVal.toFixed(1)} pontos de OVR ao longo do ano.`,
       });
     }
   }
@@ -252,7 +315,7 @@ export function detectYearAwards(
       kind: 'rookie',
       playerNick: rk.nick,
       label: 'Revelação do Ano',
-      reason: `Aos ${rk.age} anos, rating ${rk.rating.toFixed(2)} em ${rk.maps} mapas — o melhor jovem do ano.`,
+      reason: `${awardCitation('rookie', `${rk.nick}:${yearJustEnded}`)} Aos ${rk.age} anos, rating ${rk.rating.toFixed(2)} em ${rk.maps} mapas — o melhor jovem do ano.`,
     });
   } else {
     const rookies = s.squad.filter((sg) => {
@@ -268,7 +331,7 @@ export function detectYearAwards(
           kind: 'rookie',
           playerNick: nick,
           label: 'Revelação do Ano',
-          reason: `Aos ${age ?? '?'} anos, atingiu pico de OVR ${rk.bestValue} no elenco.`,
+          reason: `${awardCitation('rookie', `${nick}:${yearJustEnded}`)} Aos ${age ?? '?'} anos, atingiu pico de OVR ${rk.bestValue} no elenco.`,
         });
       }
     }
@@ -287,7 +350,7 @@ export function detectYearAwards(
         kind: 'breakout',
         playerNick: nick,
         label: 'Surpresa do Ano',
-        reason: `Chegou no ano e já bateu OVR ${br.bestValue}, virou peça-chave.`,
+        reason: `${awardCitation('breakout', `${nick}:${yearJustEnded}`)} Chegou no ano e já bateu OVR ${br.bestValue}, virou peça-chave.`,
       });
     }
   }
@@ -303,7 +366,7 @@ export function detectYearAwards(
       kind: 'coachOfYear',
       coachNick: s.coach.nick,
       label: 'Técnico do Ano',
-      reason: `Conduziu o time ao título no ano. Trabalho reconhecido pelo circuito.`,
+      reason: `${awardCitation('coachOfYear', `${s.coach.nick}:${yearJustEnded}`)} Conduziu o time ao título no ano. Trabalho reconhecido pelo circuito.`,
     });
   }
 
