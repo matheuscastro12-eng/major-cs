@@ -2,6 +2,10 @@
 // onlineData.jsx do design. É um modo single-player vs IA: rivais são bots e a partida
 // é resolvida por força de time. Ranking salvo só pra conta paga (ver useOnlineStats).
 import type { Coach, Player, TeamSeason, TTeam } from '../../types';
+// perfil do jogador (MMR/pontos/histórico): agora persiste em state/onlineStats
+// (localStorage + cloud slot 'online' pra vitalícia). Re-export mantém a
+// superfície de import dos componentes deste diretório.
+export { DEFAULT_STATS, loadStats, saveStats, type OnlineStats } from '../../state/onlineStats';
 import { buildUserTeam, playerOvr } from '../../engine/ratings';
 import { ct } from '../../state/career-i18n';
 
@@ -17,7 +21,6 @@ export function buildOnlineTeam(name: string, picks: PoolPlayer[], idPrefix: str
 // PoolPlayer carrega o Player completo + a TeamSeason de origem pra montar TTeam real.
 export interface PoolPlayer { id: string; nick: string; country: string; role: string; ovr: number; player: Player; from: TeamSeason; }
 export interface Rival { nick: string; country: string; mmr: number; }
-export interface OnlineStats { mmr: number; w: number; l: number; majorPts: number; bestStreak: number; gamesMajor: number; }
 
 // pool achatado de lendas, melhor primeiro (dedupe por nick)
 export function buildPool(dataset: TeamSeason[]): PoolPlayer[] {
@@ -66,13 +69,3 @@ export function resolve(myOvr: number, oppOvr: number): { win: boolean; prob: nu
   const loserMaps = Math.random() < 0.5 ? 0 : 1;
   return { win, prob: p, score: win ? `2-${loserMaps}` : `${loserMaps}-2` };
 }
-
-// stats do jogador. Persiste local pra todo mundo; o ranking SALVO (servidor) é da
-// conta paga — quem decide é o componente (mostra o gate quando não é paga).
-const STATS_KEY = 'rtm-online-stats-v1';
-export const DEFAULT_STATS: OnlineStats = { mmr: 1000, w: 0, l: 0, majorPts: 0, bestStreak: 0, gamesMajor: 0 };
-export function loadStats(): OnlineStats {
-  try { const raw = localStorage.getItem(STATS_KEY); if (raw) return { ...DEFAULT_STATS, ...JSON.parse(raw) }; } catch { /* sem storage */ }
-  return { ...DEFAULT_STATS };
-}
-export function saveStats(s: OnlineStats) { try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch { /* sem storage */ } }
