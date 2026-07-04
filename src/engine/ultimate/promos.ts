@@ -32,13 +32,13 @@ export interface PromoTheme {
 // temas em rotação (mês % length). Filtros por região/país/role — variados o
 // bastante pra promo nunca repetir dois meses seguidos.
 export const PROMO_THEMES: PromoTheme[] = [
-  { id: 'br', name: 'Craques BR', desc: 'Os destaques do Brasil em versão promo', color: '#4ade80', filter: (c) => c.country === 'br' },
-  { id: 'eu', name: 'Estrelas EU', desc: 'A elite europeia em versão promo', color: '#7aa2f7', filter: (c) => c.region === 'europe' },
-  { id: 'awp', name: 'Snipers de Elite', desc: 'Os melhores AWPers do circuito', color: '#f0d878', filter: (c) => c.role === 'AWP' },
-  { id: 'cis', name: 'Feras da CIS', desc: 'O poderio da CIS em versão promo', color: '#e58a8a', filter: (c) => c.region === 'cis' },
-  { id: 'entry', name: 'Linha de Frente', desc: 'Os entry fraggers mais agressivos', color: '#fb923c', filter: (c) => c.role === 'Entry' },
-  { id: 'americas', name: 'Força das Américas', desc: 'Os craques das Américas em versão promo', color: '#5ed88a', filter: (c) => c.region === 'samerica' || c.region === 'namerica' },
-  { id: 'igl', name: 'Mentes Brilhantes', desc: 'Os cérebros táticos (IGLs) do circuito', color: '#c792ea', filter: (c) => c.role === 'IGL' },
+  { id: 'br', name: 'Craques BR', desc: 'A escola brasileira de CS: raça, clutch e figurinha rara em versão promo', color: '#4ade80', filter: (c) => c.country === 'br' },
+  { id: 'eu', name: 'Estrelas EU', desc: 'A elite europeia que decide Major, com boost de OVR nesta promo', color: '#7aa2f7', filter: (c) => c.region === 'europe' },
+  { id: 'awp', name: 'Snipers de Elite', desc: 'As melhores AWPs do circuito — um tiro, um abate — em edição especial', color: '#f0d878', filter: (c) => c.role === 'AWP' },
+  { id: 'cis', name: 'Feras da CIS', desc: 'O aim bruto da região que sai dos bootcamps assombrando HLTV', color: '#e58a8a', filter: (c) => c.region === 'cis' },
+  { id: 'entry', name: 'Linha de Frente', desc: 'Os entry fraggers que abrem o bomb no corpo pra abrir espaço pro time', color: '#fb923c', filter: (c) => c.role === 'Entry' },
+  { id: 'americas', name: 'Força das Américas', desc: 'Do Brasil ao Canadá, os craques que carregam as Américas nos Majors', color: '#5ed88a', filter: (c) => c.region === 'samerica' || c.region === 'namerica' },
+  { id: 'igl', name: 'Mentes Brilhantes', desc: 'Os IGLs que ganham o veto e leem o round antes do pistol sair', color: '#c792ea', filter: (c) => c.role === 'IGL' },
 ];
 
 export interface MonthlyPromo {

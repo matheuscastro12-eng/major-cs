@@ -60,7 +60,16 @@ const CATEGORY_KEYS: Record<TrainFocus, AttrKey[]> = {
   physical: PHYSICAL_KEYS,
 };
 
-const BASE_TRAIN_XP = 4.0;        // orçamento base de XP por treino
+// Orçamento base de XP por treino. ANTES 4.0: com o ageFactor jovem (1.3 aos ≤18)
+// e energia cheia, um atributo-chave da role (peso 3 de wsum 13) recebia
+// 4.0·0,94·1,3·3/13 ≈ 1,13 XP POR SESSÃO — sempre >1,0, virando +1 ponto garantido
+// toda sessão. Isso anulava o buffer de XP fracionário (o path "Sem ponto novo"
+// nunca disparava nos atributos de foco) e um prospecto maxava seus dois
+// atributos-chave numa única temporada (~12 semanas). Baixado pra 3.2 (−20%):
+// o mesmo jovem passa a ~0,90 XP/sessão nos atributos-chave, voltando abaixo de
+// 1,0 — o acúmulo fracionário volta a gatear e o desenvolvimento estica pra
+// ~1,3–1,6 temporadas, sem tocar veteranos (ageFactor já <1) nem builds largas.
+const BASE_TRAIN_XP = 3.2;        // orçamento base de XP por treino
 export const MIN_TRAIN_ENERGY = 12; // abaixo disso, cansado demais pra treinar
 // Custo de vida semanal (R$). ANTES era um flat R$200 — irrelevante assim que
 // você sobe de tier (0,8% do salário elite de 26k), virando um no-op: nenhum
