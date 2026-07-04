@@ -328,8 +328,17 @@ export function simulateSeriesForPlay(
 // Premiação por série (vitória; derrota paga 1/3 de ajuda de custo). Academia é
 // amadora: prêmio simbólico (antes R$4k/vitória + R$1,3k/derrota deixava um rookie
 // falido milionário numa temporada — irrealista).
+//
+// RTP v15 (iter15) — REESCALADO ao salário. O prêmio antigo escalava MUITO mais
+// íngreme que o salário (TIER_WAGE 1000/3000/9000/26000): a razão prêmio/salário
+// disparava 1.2x → 3.0x → 5.0x → 4.6x, então uma ÚNICA vitória de elite (120k)
+// pagava ~4.6 semanas de salário e ~1/4 de um setup elite completo (~500k). Isso
+// afogava o sink de custo de vida (iter14) e trivializava o loop de investimento
+// em gear/psicólogo — o dinheiro deixava de importar já no meio da carreira.
+// Agora o prêmio dos tiers PRO fica ~2x o salário semanal (constante), suplemento
+// forte da renda sem virar mangueira de dinheiro; academia segue simbólica (1.2x).
 const TIER_PRIZE: Record<Tier, number> = {
-  elite: 120_000, challenger: 45_000, access: 9_000, academy: 1_200,
+  elite: 55_000, challenger: 20_000, access: 6_000, academy: 1_200,
 };
 function tierPrize(tier: Tier): number { return TIER_PRIZE[tier] ?? 4_000; }
 

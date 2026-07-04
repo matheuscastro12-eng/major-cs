@@ -12,7 +12,7 @@
 // T3.2: a reação ao tom é modulada pela PERSONALITY do jogador (leader,
 // mercenary, prodigy, hothead, resilient) via personalityTalkResponse.
 
-import { personalityTalkResponse } from './career/personality';
+import { personalityTalkResponse, personalityTalkColor, playerPersonality, type PlayerPersonality } from './career/personality';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
@@ -149,8 +149,8 @@ export function resolvePlayerTalk(
     delta = personalityTalkResponse(state.playerId, topic, tone, delta);
   }
 
-  const outcomeText = buildOutcomeText(topic, tone, delta);
   const toneCat: TalkOutcome['tone'] = delta >= 4 ? 'positive' : delta <= -1 ? 'negative' : 'neutral';
+  const outcomeText = buildOutcomeText(topic, tone, delta, state.playerId ? playerPersonality(state.playerId) : undefined, toneCat);
 
   return {
     topic,
@@ -165,7 +165,13 @@ export function resolvePlayerTalk(
 
 // Texto narrativo determinístico — mapa topic × tone → frase. Mantém o feel
 // "consequência humana" sem virar wall of text.
-function buildOutcomeText(topic: TalkTopicId, tone: TalkTone, delta: number): string {
+function buildOutcomeText(
+  topic: TalkTopicId,
+  tone: TalkTone,
+  delta: number,
+  personality?: PlayerPersonality,
+  valence?: TalkOutcome['tone'],
+): string {
   const positive = delta >= 4;
   const negative = delta <= -1;
   const lookup: Record<TalkTopicId, Record<TalkTone, { good: string; ok: string; bad: string }>> = {
@@ -201,9 +207,14 @@ function buildOutcomeText(topic: TalkTopicId, tone: TalkTone, delta: number): st
     },
   };
   const cell = lookup[topic][tone];
-  if (positive) return cell.good;
-  if (negative) return cell.bad;
-  return cell.ok;
+  const base = positive ? cell.good : negative ? cell.bad : cell.ok;
+  // Cor de personalidade: uma cláusula curta que dá voz ao tipo do jogador
+  // (o mesmo delta soa diferente num líder e num esquentado). Só anexa quando
+  // há personality resolvida e a frase-base é real (o placeholder '—' fica intacto).
+  if (personality && valence && base !== '—') {
+    return `${base} ${personalityTalkColor(personality, valence)}`;
+  }
+  return base;
 }
 
 // Helper pro modal: agrupa tones em colunas pra cada topic. O `_topic` não é
