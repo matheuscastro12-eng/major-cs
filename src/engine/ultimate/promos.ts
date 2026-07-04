@@ -53,6 +53,12 @@ export function themeForMonth(mi: number): PromoTheme {
   return PROMO_THEMES[((mi % PROMO_THEMES.length) + PROMO_THEMES.length) % PROMO_THEMES.length];
 }
 
+// lookup por id — as promos AGENDADAS do live-ops referenciam um tema pela chave
+// (allowlist no servidor espelha estes ids); o filtro compilado nunca sai daqui.
+export function promoThemeById(id: string): PromoTheme | undefined {
+  return PROMO_THEMES.find((t) => t.id === id);
+}
+
 // a promo de UM mês: filtra o catálogo BASE pelo tema, pega os ~2x melhores por
 // OVR (desempate por playerId — estável) e sorteia 11 seeded pelo mês. Assim o
 // mesmo tema, meses depois, promove um recorte DIFERENTE do topo.
