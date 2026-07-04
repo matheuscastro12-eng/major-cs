@@ -22,6 +22,7 @@ import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career/rivalries';
 import { applyFatigueForm, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
+import { formOf, teamFormBand } from '../engine/career/teamForm';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
@@ -6320,7 +6321,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           </div>
         </div>
       )}
-      {selTeam && <TeamDetail team={selTeam} league={league} onClose={() => setSelTeam(null)} />}
+      {selTeam && <TeamDetail team={selTeam} league={league} form={formOf(save, selTeam.id)} onClose={() => setSelTeam(null)} />}
       {talkPlayer && (
         <PlayerTalkModal
           playerNick={talkPlayer.nick}
@@ -6755,7 +6756,11 @@ function Top20Ceremony({ entries, mine, orgTag, split, circuit, onClose }: {
   );
 }
 
-function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | null; onClose: () => void }) {
+function TeamDetail({ team, league, form, onClose }: { team: TTeam; league?: League | null; form?: number | null; onClose: () => void }) {
+  // forma do CLUBE (engine/career/teamForm — NÃO é a forma de jogador do
+  // form.ts): 3 faixas com os MESMOS limiares que o mercado vivo vai usar
+  // (#23 tick / #14 decideOffer). null/undefined = não exibe o chip.
+  const formBand = form != null ? teamFormBand(form) : null;
   // histórico por mapa do time nesta temporada (séries já jogadas na liga)
   const mapStats = useMemo(() => {
     const rec: Record<string, { w: number; l: number; rf: number; ra: number }> = {};
@@ -6783,7 +6788,7 @@ function TeamDetail({ team, league, onClose }: { team: TTeam; league?: League | 
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '20px 22px', flexWrap: 'wrap' }}>
               <TeamBadge tag={team.tag} colors={team.colors} logoUrl={team.logoUrl} size={64} />
               <div style={{ flex: 1, minWidth: 180 }}>
-                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>{team.wins}-{team.losses} · {ct('saldo')} {team.roundDiff >= 0 ? '+' : ''}{team.roundDiff} · {ct('força')} {team.strength.toFixed(1)}</div>
+                <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--rtm-gold)', fontWeight: 700 }}>{team.wins}-{team.losses} · {ct('saldo')} {team.roundDiff >= 0 ? '+' : ''}{team.roundDiff} · {ct('força')} {team.strength.toFixed(1)}{formBand && <> · <span style={{ color: formBand.color }}>{ct(formBand.label)}</span></>}</div>
                 <h1 style={{ margin: '2px 0', fontFamily: 'var(--rtm-font-cond)', fontSize: '34px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)', lineHeight: 1 }}>{team.name}</h1>
                 <div style={{ fontSize: '13px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={team.country} /> {team.tag}{team.coach && <> · {ct('Técnico:')} <b style={{ color: 'var(--rtm-text)' }}>{team.coach.nick}</b> ({team.coach.rating})</>}</div>
               </div>
