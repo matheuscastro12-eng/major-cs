@@ -33,6 +33,7 @@ import {
 } from '../../components/CareerScreen';
 import type { YouthDebut } from '../../engine/career/playerAge';
 import { fatigueBand } from '../../engine/career/fatigue';
+import { formStatus } from '../../engine/career/form';
 import { activeStint as activeCoachStint } from '../../engine/coachCareer';
 import { playerOrgId } from '../../state/career-player-route';
 import { ct } from '../../state/career-i18n';
@@ -57,6 +58,8 @@ interface SquadTabSave {
   evo?: Record<string, number>;
   morale?: Record<string, number>;
   fatigue?: Record<string, number>;
+  // forma recente: janela deslizante de ratings por série (cap 6) por jogador
+  recentRatings?: Record<string, number[]>;
   restingPlayers?: string[];
   youthAge?: Record<string, number>;
   youthDebut?: Record<string, YouthDebut>;
@@ -221,6 +224,21 @@ export function SquadTab({
                   <span className={`cs-fatigue ${fatigueBand(fatigue)}`} title={`${ct('Fadiga:')} ${fatigue}/100`}>
                     <CareerIcon name="battery" size={14} /> {fatigue}
                   </span>
+                  {(() => {
+                    // chip de forma recente (média da janela de ratings por série)
+                    const fs = formStatus(save.recentRatings?.[p.id]);
+                    return (
+                      <span
+                        className="cs-form"
+                        style={{ color: fs.color }}
+                        title={fs.avg != null
+                          ? `${ct('Forma recente:')} ${ct(fs.label)} (${ct('média')} ${fs.avg.toFixed(2)})`
+                          : ct('Forma recente: precisa de pelo menos 2 séries')}
+                      >
+                        {fs.avg != null ? ct(fs.label) : '—'}
+                      </span>
+                    );
+                  })()}
                   <span
                     className={`cs-development ${phase}`}
                     title={`${ct('Potencial (teto de OVR)')}: ${potential} · ${ct(PHASE_LABEL[phase])}`}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Player } from '../../types';
 import { ct } from '../../state/career-i18n';
+import type { FormStatus } from '../../engine/career/form';
 import { playerOrgId } from '../../state/career-player-route';
 import { FutCard } from '../FutCard';
 import { Flag, PlayerAvatar, TeamBadge } from '../ui';
@@ -202,6 +203,7 @@ export function CareerPlayerPage({
   reducedLoad,
   trainingLevel,
   career,
+  form,
   cur,
   seasonGames,
   seasonWins,
@@ -241,6 +243,8 @@ export function CareerPlayerPage({
   reducedLoad: boolean;
   trainingLevel: number;
   career: CareerDerived | null;
+  /** Forma recente (janela de ratings por série) — chip colorido no Status. */
+  form?: FormStatus;
   cur?: { rating: number; kd: number; adr: number; maps?: number };
   seasonGames: number;
   seasonWins: number;
@@ -456,7 +460,20 @@ export function CareerPlayerPage({
             <aside className="pp-overview-side">
               <Panel title="Status">
                 <div className="pp-status-grid">
-                  <div><span>{ct('Forma')}</span><b>{cur ? cur.rating.toFixed(2) : ct('Sem dados')}</b></div>
+                  <div>
+                    <span>{ct('Forma')}</span>
+                    {form ? (
+                      <b
+                        className="pp-form-pill"
+                        style={{ color: form.color }}
+                        title={form.avg != null ? `${ct('Média das últimas séries:')} ${form.avg.toFixed(2)}` : ct('Precisa de pelo menos 2 séries recentes')}
+                      >
+                        {ct(form.label)}{form.avg != null ? ` · ${form.avg.toFixed(2)}` : ''}
+                      </b>
+                    ) : (
+                      <b>{cur ? cur.rating.toFixed(2) : ct('Sem dados')}</b>
+                    )}
+                  </div>
                   <div><span>{ct('Físico')}</span><b>{fitness}/100</b></div>
                   <div><span>{ct('Satisfação')}</span><b>{moraleLabel} {satisfaction}/100</b></div>
                   <div><span>{ct('Disciplina')}</span><b>{morale >= 60 ? ct('Boa') : ct('Instável')}</b></div>
