@@ -40,7 +40,15 @@ export const OBJECTIVES: ObjectiveDef[] = [
   { id: 'open-5', name: 'Abridor de pacotes', desc: 'Abra 5 pacotes', metric: 'packsOpened', target: 5, reward: { credits: 2500 }, group: 'colecionar' },
   { id: 'unique-25', name: 'Colecionador', desc: 'Tenha 25 cartas únicas', metric: 'uniqueCards', target: 25, reward: { credits: 5000 }, group: 'colecionar' },
   { id: 'unique-60', name: 'Enciclopédia', desc: 'Tenha 60 cartas únicas', metric: 'uniqueCards', target: 60, reward: { credits: 12000, card: 'elite' }, group: 'colecionar' },
-  { id: 'icon-1', name: 'Lenda viva', desc: 'Possua 1 carta Ícone', metric: 'iconsOwned', target: 1, reward: { credits: 8000 }, group: 'colecionar' },
+  // Possuir um Ícone é o feito mais raro do modo: nos packs a odd de icon é
+  // 0.1%–2% (só sai em Ouro/Premium) e no bazar custa ~1M cr. Ainda assim o
+  // prêmio (8000) ficava ABAIXO de unique-60 (12000+elite) e de win-20 (12000+
+  // rareGold) — objetivos bem mais fáceis — e sem carta. Curva dificuldade→prêmio
+  // do grupo 'colecionar' estava invertida no topo (mesma falha de monotonicidade
+  // corrigida nas SBCs). Vira o capstone da coleção: 16000 cr, acima de unique-60,
+  // batendo a raridade do feito. (Sem carta: quem tem Ícone já detém a carta mais
+  // rara — o prêmio certo é um windfall de credits, não outro faucet de carta.)
+  { id: 'icon-1', name: 'Lenda viva', desc: 'Possua 1 carta Ícone', metric: 'iconsOwned', target: 1, reward: { credits: 16000 }, group: 'colecionar' },
   // montar
   { id: 'ovr-80', name: 'Time de respeito', desc: 'Monte um squad 80+ OVR', metric: 'squadOvr', target: 80, reward: { credits: 6000 }, group: 'montar' },
   { id: 'chem-12', name: 'Entrosados', desc: 'Química 12+ no squad ativo', metric: 'chem', target: 12, reward: { credits: 4000 }, group: 'montar' },

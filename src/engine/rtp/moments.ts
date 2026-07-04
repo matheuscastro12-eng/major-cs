@@ -285,6 +285,109 @@ const STYLE_MOD: Record<MomentStyle, { chance: number; winFrags: number; winOpen
   smart: { chance: +0.02, winFrags: 1, winOpen: 0, failDeath: 0 },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Narrativa por SITUAÇÃO — cada `kind` de momento (entry, retake, eco, call de
+// IGL, save…) rende uma frase própria pra cada desfecho, em vez de 3 linhas
+// genéricas pra tudo. Puro texto: NÃO toca em value/frags/deaths/chance.
+// `failAggro` é usado quando o estilo era agressivo (o custo de morrer aparece);
+// `failSafe` cobre os desfechos seguros/inteligentes.
+
+interface MomentNarr { success: string; partial: string; failAggro: string; failSafe: string; }
+
+const MOMENT_NARR: Record<string, MomentNarr> = {
+  default: {
+    success: 'Jogada perfeita — o round vira pro seu lado.',
+    partial: 'Saiu meia-boca: trocou um, mas não decidiu o round.',
+    failAggro: 'Foi pego na agressão — morreu cedo e abriu o round pro adversário.',
+    failSafe: 'Não funcionou: o adversário leu a jogada.',
+  },
+  pistol: {
+    success: 'Pistola limpa! Você abriu o round e o time entra no half com sangue nos olhos.',
+    partial: 'Trocou no pistol, mas o round ficou 50/50 — ninguém dominou.',
+    failAggro: 'Rushou seco e morreu na entrada: o pistol já começou perdido.',
+    failSafe: 'O stack não pegou nada — eles leram o setup e passaram fácil.',
+  },
+  duel: {
+    success: 'Duelo ganho na função — você abriu espaço e o round desandou pro seu lado.',
+    partial: 'Trocou um, mas não foi o duelo que decide o round.',
+    failAggro: 'Foi pego forçando o duelo: morreu cedo e entregou o espaço.',
+    failSafe: 'Perdeu a leitura — o adversário chegou primeiro no ângulo.',
+  },
+  clutch: {
+    success: 'CLUTCH! Você fechou o 1vX sozinho e o comms explode.',
+    partial: 'Levou o clutch quase até o fim — tirou um ou dois, mas caiu no último duelo.',
+    failAggro: 'Foi atrás dos duelos rápido demais e o clutch morreu na pressa.',
+    failSafe: 'Jogou o tempo, mas não achou a brecha — o round escapou.',
+  },
+  mappoint: {
+    success: 'No match point você assumiu a responsa e cravou o round que fecha o mapa.',
+    partial: 'Round de mapa quente: você contribuiu, mas foi pro detalhe.',
+    failAggro: 'A pressão do match point pesou — arriscou demais e caiu.',
+    failSafe: 'Executou o padrão, mas eles tinham a resposta pro round decisivo.',
+  },
+  entry: {
+    success: 'Entry perfeito! Você abriu o bombsite na primeira bala e o time inundou atrás.',
+    partial: 'Trocou na entrada: abriu o espaço, mas o refrag veio junto.',
+    failAggro: 'Swingou seco e comeu o crossfire — entry fatal logo na porta.',
+    failSafe: 'A flash saiu torta e a entrada travou no choke.',
+  },
+  retake: {
+    success: 'Retake cirúrgico! Vocês retomaram o site e desarmaram no talo.',
+    partial: 'Retomaram o site, mas o defuse não deu tempo — round dividido.',
+    failAggro: 'Invadiram afobados e o retake morreu no crossfire pós-plant.',
+    failSafe: 'O utilitário não foi suficiente: eles seguraram o pós-plant.',
+  },
+  igl: {
+    success: 'Call certeira! O mid-round pegou a defesa de calças curtas e o round saiu coordenado.',
+    partial: 'A chamada funcionou pela metade — deu espaço, mas não fechou o round.',
+    failAggro: 'O hit rápido bateu na cabeça do stack — a call não pegou.',
+    failSafe: 'O default não achou a abertura e o tempo escorreu.',
+  },
+  economy: {
+    success: 'Decisão de caixa premiada: a compra pegou eles no contrapé e o round veio.',
+    partial: 'A economia segurou, mas o round mesmo ficou no fio.',
+    failAggro: 'O force não colou — perderam o duelo e a caixa junto.',
+    failSafe: 'Salvaram a grana, mas doeu ceder o round de graça.',
+  },
+  forcedeco: {
+    success: 'MILAGRE de eco! Cinco pistols atropelaram o full buy — que roubo de round!',
+    partial: 'O eco tirou dano e uma arma cara, mesmo sem levar o round.',
+    failAggro: 'O rush de pistol morreu junto no primeiro ângulo: eco previsível.',
+    failSafe: 'Tiraram um pouco de dano e saíram — o full buy passou por cima.',
+  },
+  antieco: {
+    success: 'Anti-eco resolvido no capricho: round obrigatório no bolso, economia intacta.',
+    partial: 'Levaram o anti-eco, mas alguém quase deu vexame na correria.',
+    failAggro: 'Pisou na cilada do stack de pistol — o anti-eco virou vergonha e prejuízo.',
+    failSafe: 'Deixaram a distância curta e um pistol roubou o round que não podia perder.',
+  },
+  savecall: {
+    success: 'Retake maluco! Você virou o que ninguém dava nada — highlight puro.',
+    partial: 'Tirou um antes de cair; o round já era, mas custou caro pra eles.',
+    failAggro: 'Foi atrás do impossível e entregou a arma — save nenhum.',
+    failSafe: 'Salvou o rifle/AWP e garantiu o full buy do próximo. Frio e certo.',
+  },
+  timeout: {
+    success: 'O timeout pegou! O time saiu da pausa reconectado e virou a chave.',
+    partial: 'A pausa acalmou os ânimos, mas o embalo deles não sumiu de vez.',
+    failAggro: 'Cobrou no grito e racharam mais — a pausa piorou o clima.',
+    failSafe: 'Resetaram a cabeça, mas o adversário voltou com o mesmo gás.',
+  },
+  lasthalf: {
+    success: 'Fechou o último round do half por cima e entra no intervalo embalado.',
+    partial: 'Round 12 dividido — nem ganhou momento, nem entregou leitura.',
+    failAggro: 'Forçou no fim do half e deu o round de bandeja antes da virada.',
+    failSafe: 'Jogou seguro, mas eles roubaram o último round e o momentum.',
+  },
+};
+
+function momentNarrative(kind: string, style: MomentStyle, result: MomentResult): string {
+  const bank = MOMENT_NARR[kind] ?? MOMENT_NARR.default;
+  if (result === 'success') return bank.success;
+  if (result === 'partial') return bank.partial;
+  return style === 'aggro' ? bank.failAggro : bank.failSafe;
+}
+
 export function resolveMoment(
   moment: Moment,
   option: MomentOption,
@@ -310,7 +413,6 @@ export function resolveMoment(
   const isClutch = moment.kind === 'clutch';
   let frags = 0, deaths = 0, openings = 0, clutches = 0;
   let value: number;
-  let narrative: string;
 
   if (result === 'success') {
     value = 1;
@@ -318,20 +420,15 @@ export function resolveMoment(
     openings = style.winOpen + (moment.kind === 'duel' && option.style === 'aggro' ? 0 : 0);
     if (moment.kind === 'pistol' && option.style === 'aggro') openings += 1;
     if (isClutch) clutches = 1;
-    narrative = isClutch
-      ? 'CLUTCH! Você fechou o round 1vX e o time explode no comms.'
-      : `Jogada perfeita — ${frags} abate(s) e o round vira pro seu lado.`;
   } else if (result === 'partial') {
     value = 0.55;
     frags = 1;
-    narrative = 'Saiu meia-boca: trocou um, mas não decidiu o round.';
   } else {
     value = 0.1;
     deaths = 1 + (option.style === 'aggro' ? style.failDeath : 0);
-    narrative = option.style === 'aggro'
-      ? 'Foi pego na agressão — morreu cedo e abriu o round pro adversário.'
-      : 'Não funcionou: o adversário leu a jogada.';
   }
+
+  const narrative = momentNarrative(moment.kind, option.style, result);
 
   return { result, value, frags, deaths, openings, clutches, narrative };
 }
