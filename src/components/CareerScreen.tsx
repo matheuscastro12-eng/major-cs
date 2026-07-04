@@ -3188,7 +3188,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const freeRookies = backfillPlayers(FREE_AGENTS_FROM, 5)
         .filter((p) => !squadIds.has(p.id))
         .map((p) => ({ player: p, from: FREE_AGENTS_FROM, price: 0 }));
-      return [...fromTeams, ...freeAgents, ...freeRookies].sort((a, b) => a.price - b.price);
+      // DEDUP por id: um jogador só pode aparecer UMA vez no mercado. Sem isto, um
+      // vendido que volta pro pool aparecia em freeAgents E no backfill (2× free
+      // agent, reportado). Mantém a oferta mais barata (free agent 0 vence a de time).
+      const all = [...fromTeams, ...freeAgents, ...freeRookies];
+      const byId = new Map<string, (typeof all)[number]>();
+      for (const o of all) {
+        const prev = byId.get(o.player.id);
+        if (!prev || o.price < prev.price) byId.set(o.player.id, o);
+      }
+      return [...byId.values()].sort((a, b) => a.price - b.price);
     },
     [currentEra, save.squad, save.evo],
   );
