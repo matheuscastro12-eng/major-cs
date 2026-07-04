@@ -851,3 +851,85 @@ body:has(.ut-live) {
   .ut-daily__grid { grid-template-columns: repeat(3, 1fr); }
   .ut-greet__title { font-size: 1.5rem; }
 }
+
+/* ---------------- Passe de Temporada (fase B) ---------------- */
+/* badge de resgates pendentes na nav (contagem em ouro) */
+.ut-nav__badge {
+  margin-left: 4px; min-width: 16px; height: 16px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; font-size: 0.62rem; font-weight: 900;
+  font-family: var(--ut-font-mono); background: var(--ut-gold-1); color: var(--ut-gold-ink);
+}
+
+/* header: temporada + nível grande + XP + ações */
+.ut-passhead {
+  display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+  background: linear-gradient(135deg, var(--ut-bar-1) 0%, var(--ut-bar-2) 100%);
+  border: 1px solid var(--ut-bar-line); border-radius: 14px;
+  padding: 16px 20px; margin-bottom: 16px; box-shadow: var(--ut-shadow);
+  color: var(--ut-bar-ink);
+}
+.ut-passhead__info { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 4px; }
+.ut-passhead__kicker { display: inline-flex; align-items: center; gap: 5px; font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.66rem; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ut-gold-1); }
+.ut-passhead__title { font-weight: 900; font-size: 1.15rem; }
+.ut-passhead__meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.76rem; color: var(--ut-bar-dim); }
+.ut-passhead__meta > span { display: inline-flex; align-items: center; gap: 4px; }
+.ut-passhead__chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px;
+  font-size: 0.66rem; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase;
+  border: 1px solid var(--ut-bar-line); color: var(--ut-bar-dim); background: rgba(255, 255, 255, 0.05);
+}
+.ut-passhead__chip.is-premium { border-color: rgba(236, 199, 95, 0.55); color: var(--ut-gold-1); background: rgba(236, 199, 95, 0.12); }
+.ut-passhead__hint { font-size: 0.72rem; color: var(--ut-bar-dim); margin-top: 2px; }
+.ut-passhead__lvl { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 190px; }
+.ut-passhead__lvlnum { font-family: var(--ut-font-mono); font-weight: 800; font-size: 2.3rem; line-height: 1; color: var(--ut-gold-1); }
+.ut-passhead__lvlnum span { font-size: 0.9rem; color: var(--ut-bar-dim); }
+.ut-passhead__lvllabel { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.6rem; letter-spacing: 1.6px; color: var(--ut-bar-dim); }
+.ut-passhead__bar { width: 100%; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.ut-passhead__bar > div { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--ut-gold-2), var(--ut-gold-1)); transition: width 0.3s; }
+.ut-passhead__xp { font-family: var(--ut-font-mono); font-weight: 700; font-size: 0.7rem; color: var(--ut-bar-dim); }
+.ut-passhead__actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 200px; }
+.ut-passhead__reason { text-align: center; font-size: 0.7rem; font-weight: 700; color: var(--ut-bar-dim); }
+
+/* trilha: rail horizontal de 35 níveis (grátis em cima, premium embaixo) */
+.ut-pass__tracklabels { display: flex; flex-direction: column; gap: 54px; float: left; padding: 22px 10px 0 0; }
+.ut-pass__tracklabels span { display: inline-flex; align-items: center; gap: 4px; font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.62rem; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ut-muted); }
+.ut-pass__tracklabels span.is-premium { color: var(--ut-amber-ink); }
+.ut-pass__rail { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px; scrollbar-width: thin; }
+.ut-pl { display: flex; flex-direction: column; align-items: stretch; gap: 4px; flex: none; width: 108px; }
+.ut-pl__num {
+  align-self: center; min-width: 26px; text-align: center; padding: 1px 7px; border-radius: 999px;
+  font-family: var(--ut-font-mono); font-weight: 800; font-size: 0.68rem;
+  background: #eceae3; color: var(--ut-muted);
+}
+.ut-pl.is-reached .ut-pl__num { background: var(--ut-gold-1); color: var(--ut-gold-ink); }
+.ut-pl.is-next .ut-pl__num { box-shadow: 0 0 0 3px rgba(236, 199, 95, 0.28); }
+.ut-pl__cell {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  min-height: 52px; padding: 6px 6px; border-radius: 10px; text-align: center;
+  border: 1px solid var(--ut-line); background: #fff; font-family: inherit;
+}
+.ut-pl__cell.is-premium { background: #fffdf5; border-color: rgba(201, 166, 60, 0.3); }
+.ut-pl__cell.is-dim { opacity: 0.5; }
+.ut-pl__cell.is-claimed { background: #eefaf3; border-color: rgba(18, 183, 106, 0.35); opacity: 0.75; }
+.ut-pl__cell.is-claimable {
+  cursor: pointer; border-color: rgba(201, 166, 60, 0.65); background: #fff8ec;
+  box-shadow: 0 2px 10px rgba(201, 166, 60, 0.2); animation: ut-pl-pulse 1.6s ease-in-out infinite;
+}
+.ut-pl__cell.is-claimable:hover { filter: brightness(1.03); animation: none; box-shadow: 0 0 0 3px rgba(236, 199, 95, 0.4); }
+@keyframes ut-pl-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(236, 199, 95, 0.45); }
+  50% { box-shadow: 0 0 0 5px rgba(236, 199, 95, 0.08); }
+}
+.ut-pl__state { position: absolute; top: 4px; right: 5px; color: var(--ut-muted); }
+.ut-pl__state.ok { color: var(--ut-green); }
+.ut-pl__reward { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.ut-pl__bit { display: inline-flex; align-items: center; gap: 3px; font-family: var(--ut-font-mono); font-weight: 800; font-size: 0.66rem; color: var(--ut-ink-2); white-space: nowrap; }
+.ut-pl__bit--coin { color: var(--ut-amber-ink); }
+.ut-pl__bit--coin svg { color: var(--ut-amber); }
+.ut-pl__bit--title { color: var(--ut-amber-ink); }
+@media (max-width: 700px) {
+  .ut-passhead { gap: 14px; }
+  .ut-passhead__actions { width: 100%; }
+  .ut-pass__tracklabels { display: none; }
+}
