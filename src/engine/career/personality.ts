@@ -110,6 +110,45 @@ export function personalityChemBonus(playerId: string): number {
   return 1.0;                                      // prodigy, neutral
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Cor de reação pra PlayerTalks. O delta já é modulado por personalityTalkResponse;
+// isto dá VOZ a essa modulação: uma cláusula curta anexada ao outcome do talk que
+// reflete COMO cada tipo encaixou o papo (positivo/neutro/negativo). Sem isso,
+// líder e esquentado saíam com a mesma narração — o texto agora acompanha o número.
+export function personalityTalkColor(
+  personality: PlayerPersonality,
+  valence: 'positive' | 'neutral' | 'negative',
+): string {
+  const table: Record<PlayerPersonality, Record<typeof valence, string>> = {
+    leader: {
+      positive: 'Como líder do elenco, ele já leva o recado pra call — o grupo entra mais afinado.',
+      neutral: 'Ele ouve, assente e volta pro servidor sem drama.',
+      negative: 'Discorda na lata, mas encara de frente: líder não foge de conversa dura.',
+    },
+    mercenary: {
+      positive: 'Ele agradece seco — no fundo, só o próximo contrato move o ponteiro dele.',
+      neutral: 'Dá de ombros: enquanto o salário cair em dia, tá tudo certo.',
+      negative: 'Nem se abala — já calcula quanto vale a ficha dele no mercado.',
+    },
+    prodigy: {
+      positive: 'O moleque sai de olho brilhando, doido pra soltar a mão no próximo deathmatch.',
+      neutral: 'Ele acena meio sem saber o peso do papo — ainda aprende o jogo por trás do jogo.',
+      negative: 'A cobrança pesa no jovem: sai cabisbaixo, mastigando cada palavra.',
+    },
+    hothead: {
+      positive: 'Ele se inflama na hora — quer entrar no próximo round só pra te dar razão.',
+      neutral: 'Segura a explosão dessa vez, mas o pavio curto tá à mostra.',
+      negative: 'Estoura na hora: soco na mesa, headset arrancado e porta batida.',
+    },
+    resilient: {
+      positive: 'Ele absorve com a calma de sempre e toca o baile.',
+      neutral: 'Nada o abala: ouve, processa e segue o treino como se nada fosse.',
+      negative: 'Encaixa a crítica sem drama — amanhã tá no servidor como se nada tivesse rolado.',
+    },
+  };
+  return table[personality][valence];
+}
+
 // Label humanizado pra UI (chip no profile do player).
 export const PERSONALITY_LABEL: Record<PlayerPersonality, string> = {
   leader: 'Líder',
