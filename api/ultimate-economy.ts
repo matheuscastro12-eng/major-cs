@@ -1,7 +1,9 @@
 // Economia server-authoritative do Ultimate Squad (fase 1 — endpoint DORMENTE).
 // Carteira + coleção + ledger idempotente no Neon. O cliente ainda NÃO chama
 // esta rota (o cutover vem nas fases 2/3); ela só estabelece a fundação.
-// Ações (POST body.action): state | tx. Só conta PAGA (mesmo gate do cloud-save).
+// Ações (POST body.action): state | tx | packOpen. Só conta PAGA (mesmo gate
+// do cloud-save). packOpen (fase 2) rola o pack NO SERVIDOR com as mesmas odds
+// do engine do cliente — seed auditável no ledger, replay idempotente.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
@@ -9,8 +11,10 @@ import {
   getUltState,
   ultEconomySchemaQueries,
   validateUltTx,
+  ULT_TX_MAX_OP_ID,
   type SqlTag,
 } from '../server/ultimate-economy.js';
+import { openPack } from '../server/ultimate-pack.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -101,6 +105,27 @@ export default async function handler(
     const result = await applyUltTransaction(sql, email, parsed.tx);
     if (!result.ok) { res.status(409).json({ error: result.error, credits: result.credits }); return; }
     res.status(200).json({ ok: true, replayed: result.replayed, credits: result.credits });
+    return;
+  }
+
+  if (action === 'packOpen') {
+    // op_id vem do cliente (idempotência de retry); packId só seleciona o pack
+    // — custo/odds saem SEMPRE do engine no servidor, nunca do request.
+    const rawOp = body.op_id ?? body.opId;
+    const opId = typeof rawOp === 'string' ? rawOp.trim() : '';
+    if (!opId || opId.length > ULT_TX_MAX_OP_ID) { res.status(400).json({ error: 'op_id inválido (1..64 chars)' }); return; }
+    const packId = typeof body.packId === 'string' ? body.packId.trim() : '';
+    const r = await openPack(sql, email, { opId, packId });
+    if (!r.ok) {
+      if (r.error === 'unknown_pack') { res.status(400).json({ error: 'pack desconhecido' }); return; }
+      if (r.error === 'op_conflict') { res.status(409).json({ error: 'op_conflict' }); return; }
+      res.status(409).json({ error: r.error, credits: r.credits });
+      return;
+    }
+    res.status(200).json({
+      ok: true, replayed: r.replayed, credits: r.credits,
+      packId: r.packId, cost: r.cost, seed: r.seed, cards: r.cards,
+    });
     return;
   }
 

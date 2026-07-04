@@ -9,9 +9,10 @@ import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot } from './cloud';
 import { captureError } from './errlog';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
-import { appendSpecials, buildCatalog, catalogIndex, type UltCard } from '../engine/ultimate/cards';
+import { catalogIndex, type UltCard } from '../engine/ultimate/cards';
+import { buildFullCatalog } from '../engine/ultimate/catalog';
 import { packById, rollPack, PROMO_PACK } from '../engine/ultimate/packs';
-import { monthIndex, promoForMonth, promoSpecsThrough, type MonthlyPromo } from '../engine/ultimate/promos';
+import { monthIndex, promoForMonth, type MonthlyPromo } from '../engine/ultimate/promos';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import { pickStarterCards } from '../engine/ultimate/cards';
@@ -144,17 +145,11 @@ let _catalogMonth = -1;
 function ensureCatalog(): void {
   const mi = monthIndex(new Date());
   if (_catalog && _catalogMonth === mi) return;
-  const base = buildCatalog(CS2_REAL_2026);
-  const tots = [...base]
-    .sort((a, b) => b.ovr - a.ovr)
-    .slice(0, 11)
-    .map((c) => ({ playerId: c.playerId, rarity: 'tots' as const, ovrBoost: 2 }));
-  const majors = (CS2_REAL_2026[0]?.players ?? [])
-    .map((p) => ({ playerId: p.id, rarity: 'major' as const, ovrBoost: 3 }));
-  const promos = promoSpecsThrough(base, mi);
+  // derivação compartilhada com o servidor (engine/ultimate/catalog.ts) — a
+  // fase 2 da economia rola packs server-side sobre o MESMO catálogo.
+  const { base, catalog } = buildFullCatalog(CS2_REAL_2026, mi);
   _promo = promoForMonth(base, mi);
-  // a base já está montada — só anexa as specials (evita reconstruir tudo 2x).
-  _catalog = appendSpecials(CS2_REAL_2026, base, [...tots, ...majors, ...promos]);
+  _catalog = catalog;
   _index = catalogIndex(_catalog);
   _catalogMonth = mi;
 }
