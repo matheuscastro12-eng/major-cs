@@ -196,8 +196,13 @@ export function bridgeToBeat(
   toIsLastOfMap = false,
 ): { live: LiveScore; interlude: Interlude | null } {
   const rng = makeRng((matchSeed ^ hashStr(`bridge:${to.kind}:${to.mapIndex}:${to.round}`)) >>> 0);
+  // edge*0.018 casa com resolveMapFromPlay (iter10 subiu o peso da força de 0.012
+  // pra 0.018): antes a ponte usava 0.006, então o placar CORRIDO entre beats
+  // pendia a seu favor contra um adversário forte que o FECHAMENTO do mapa depois
+  // virava em derrota ("tava ganhando de 12 e no fim perdi"). Alinhado, o placar
+  // vivo tende na mesma direção do resultado.
   const pWin = Math.max(0.25, Math.min(0.75,
-    0.5 + (momentum - 0.5) * 0.26 + (prevWon == null ? 0 : prevWon ? 0.05 : -0.05) + edge * 0.006));
+    0.5 + (momentum - 0.5) * 0.26 + (prevWon == null ? 0 : prevWon ? 0.05 : -0.05) + edge * 0.018));
 
   let mapScore: [number, number] = [...live.mapScore];
   let seriesScore: [number, number] = [...live.seriesScore];

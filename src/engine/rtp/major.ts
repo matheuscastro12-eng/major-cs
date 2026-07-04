@@ -160,7 +160,7 @@ export function finishMajorMatch(save: RoadToProSave, prep: MatchPrep, outcomes:
   // jogada mapa a mapa (resolveRoomSeries); o simulateSeries é forçado a bater.
   const room = resolveRoomSeries(save.player.role, outcomes, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf);
   const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins: room.mapWins, seriesWon: room.seriesWon });
-  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg);
+  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, room.maps);
   const pairingResult = userIdx === 0 ? series : flipSeries(series);
   return { result, pairingResult };
 }
