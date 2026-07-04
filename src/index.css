@@ -4990,6 +4990,14 @@ button.world-champ:focus-visible, button.world-runner:focus-visible { outline: 2
 .cs-morale.good { color: var(--green-bright); background: rgba(70, 200, 110, 0.1); }
 .cs-morale.warn { color: var(--gold-2); background: rgba(224, 168, 0, 0.1); }
 .cs-morale.bad { color: var(--red-bright); background: rgba(220, 90, 90, 0.1); }
+/* chip de forma recente no elenco (cor inline via formStatus — token var(--...)) */
+.cs-form {
+  flex: 0 0 auto; font-weight: 700; font-size: 0.72rem;
+  padding: 2px 6px; border-radius: 6px; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.05);
+}
+/* pill de forma no perfil do jogador (painel Status) */
+.pp-form-pill { font-weight: 800; }
 .pp-tag.mood-good { color: var(--green-bright); }
 .pp-tag.mood-warn { color: var(--gold-2); }
 .pp-tag.mood-bad { color: var(--red-bright); }

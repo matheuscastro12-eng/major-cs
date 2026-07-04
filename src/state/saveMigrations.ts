@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -163,6 +163,18 @@ const MIGRATIONS: Record<number, Migration> = {
         ? save.careerStatsYearStart
         : {},
     _v: 15,
+  }),
+  // v15 → v16 (forma recente): adiciona recentRatings (playerId → number[]),
+  // a janela deslizante (cap 6) de ratings por série de cada jogador do elenco.
+  // Backfill {} = sem histórico (a janela enche nas próximas séries). Alimenta
+  // o status de forma (Em chamas → Péssima fase) no perfil e na gestão do elenco.
+  15: (save) => ({
+    ...save,
+    recentRatings:
+      save.recentRatings && typeof save.recentRatings === 'object'
+        ? save.recentRatings
+        : {},
+    _v: 16,
   }),
 };
 

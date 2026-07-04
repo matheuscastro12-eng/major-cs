@@ -21,6 +21,7 @@ import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career/rivalries';
 import { applyFatigueForm, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
+import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
@@ -1114,6 +1115,10 @@ interface CareerSave {
   // desempenho REAL por mapa do time do usuário, acumulado na carreira (w/l +
   // rounds pró/contra). Alimenta a tabela "Desempenho por mapa" e o veto da IA.
   mapStats?: Record<string, { w: number; l: number; rf: number; ra: number }>;
+  // forma recente: janela deslizante (cap 6) de ratings por série de cada
+  // jogador do elenco (id estável, sem user__). Gravada em recordCareerMatch;
+  // formStatus() deriva o tier (Em chamas → Péssima fase) pra UI.
+  recentRatings?: Record<string, number[]>;
   sponsors: string[];
   playoff: Playoff | null;
   majorT: Tournament | null;
@@ -1298,6 +1303,7 @@ const emptySave = (): CareerSave => ({
   history: [],
   difficulty: 'normal',
   mapStats: {},
+  recentRatings: {},
   sponsors: [],
   playoff: null,
   majorT: null,
@@ -2222,6 +2228,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     'morale', 'peakOvr', 'mapTraining', 'playbookMem', 'youth', 'youthAge', 'youthDebut',
     'lastTalkAt', 'pairChem', 'extraOnTeam', 'academyPlayed', 'rivalries',
     'fatigue', 'facilities', 'mapStats', 'aiDrift', 'careerStatsYearStart',
+    'recentRatings',
   ].forEach(defaultInvalidRecord);
   [
     'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
@@ -2964,7 +2971,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           ra: prev.ra + (m.score[oppI] ?? 0),
         };
       }
-      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, ...pushNews(current, items) };
+      // forma recente: empurra o rating da SÉRIE de cada titular na janela
+      // deslizante (cap 6, shift no overflow) — alimenta o status de forma.
+      const recentRatings = recordSeriesRatings(current.recentRatings, series, userTeam.players);
+      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, recentRatings, ...pushNews(current, items) };
       persist(next);
       return next;
     });
@@ -6002,6 +6012,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             reducedLoad={save.restingPlayers?.includes(oid) ?? false}
             trainingLevel={normalizeFacilities(save.facilities).training}
             career={deriveCareer(save.careerStats?.[rid])}
+            form={formStatus(save.recentRatings?.[oid])}
             cur={cur}
             seasonGames={cur?.maps ?? 0}
             seasonWins={0}
