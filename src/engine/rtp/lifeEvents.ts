@@ -509,6 +509,103 @@ const TEMPLATES: LifeTemplate[] = [
       ],
     }),
   },
+
+  // ═══ CENA COMPETITIVA — dramas autênticos do circuito ════════════════════════
+  // O lado do CS que não aparece no scoreboard: figurinha de Major, aposta suja,
+  // visto negado, medo de palco, produto com a tua cara e rato no elenco.
+  {
+    // A FIGURINHA: classificou pro Major, a Valve imprime seu autógrafo no jogo e
+    // os royalties de pacote de figurinha caem na conta. Dinheiro de Major muda vida.
+    id: 'major-stickers', category: 'money', weight: 11,
+    eligible: (s) => (s.team.tier === 'elite' || s.team.tier === 'challenger') && s.life.fame >= 40,
+    make: (s) => ({
+      title: 'Sua figurinha no Major',
+      body: `A ${s.team.teamName} se classificou pro Major e a organização do evento colocou a SUA figurinha de autógrafo dentro do jogo. A cada pacote vendido, um pedaço pinga na sua conta — e a fanbase está comprando muito.`,
+      options: [
+        { id: 'save', label: 'Guardar a bolada', outcome: 'Deixou a renda das figurinhas rendendo na conta. Dinheiro de Major não cai todo mês — e você joga pensando a longo prazo.', deltas: { money: +9000, focus: +3, morale: +5 } },
+        { id: 'family', label: 'Realizar um sonho da família', outcome: 'Usou a grana pra tirar a família do aluguel. Ver isso acontecer por causa de uma figurinha do seu autógrafo não tem preço.', deltas: { money: +4000, rel: { family: +14 }, morale: +10 } },
+        { id: 'flex', label: 'Se dar de presente', outcome: 'Torrou uma parte no que sempre quis. A resenha zoou, mas você merecia — e o hype curtiu o flex.', deltas: { money: +2500, fame: +5, morale: +6, rel: { fans: +3 } } },
+      ],
+    }),
+  },
+  {
+    // A PROPOSTA SUJA: aliciamento pra entregar mapa em site de aposta. Ban vitalício
+    // se topar — o teste de caráter clássico do cenário (iBUYPOWER e afins).
+    id: 'matchfix-approach', category: 'career', weight: 8,
+    eligible: (s) => (s.team.tier === 'academy' || s.team.tier === 'access' || s.team.tier === 'challenger') && s.life.money < 8000,
+    make: () => ({
+      title: 'Uma proposta suja',
+      body: 'Um número desconhecido te chamou no privado com uma "oportunidade": entregar um mapa específico de propósito e faturar alto num site de apostas. "Ninguém desconfia", ele jura. É crime, é ban vitalício — e é muito dinheiro pra quem ainda ganha pouco.',
+      options: [
+        { id: 'report', label: 'Denunciar na hora', outcome: 'Printou tudo e mandou pra org e pra liga. Fez o certo — a integridade que te define vale mais que qualquer bolada suja.', deltas: { rel: { team: +8, fans: +4 }, morale: +6, boardConf: +8 } },
+        { id: 'block', label: 'Bloquear e seguir', outcome: 'Bloqueou o contato e não comentou com ninguém. Longe da sujeira, mas guardou o print — nesse meio nunca se sabe.', deltas: { focus: +3, morale: +2 } },
+        { id: 'tempted', label: 'Só ouvir a proposta…', outcome: 'Deixou a conversa fluir sem topar nada. Perigoso: quem senta nessa mesa já sai sujo, e a cabeça fica remoendo o que não devia.', deltas: { morale: -6, focus: -5, rel: { team: -4 } } },
+      ],
+    }),
+  },
+  {
+    // VISTO NEGADO: a burocracia de viajar pra LAN internacional — pesadelo real do
+    // brasileiro e do leste europeu. Pode custar a vaga na line do evento.
+    id: 'visa-denied', category: 'career', weight: 9,
+    eligible: (s) => s.team.tier === 'challenger' || s.team.tier === 'elite',
+    make: () => ({
+      title: 'Visto negado',
+      body: 'Faltando dias pro campeonato lá fora, o consulado negou seu visto. Carimbo errado, papelada, sei-lá-o-quê — o resultado é o mesmo: ou o time acha um jeito, ou vai jogar com stand-in no seu lugar.',
+      options: [
+        { id: 'fight', label: 'Virar a noite com o despachante', outcome: 'Passou a madrugada com o despachante da org atrás de um recurso de emergência. Estresse puro, mas o carimbo saiu na última hora e você embarcou.', deltas: { energy: -8, focus: -4, money: -600, morale: +4 } },
+        { id: 'remote', label: 'Deixar o stand-in e apoiar de casa', outcome: 'Engoliu seco e assistiu o time jogar com stand-in pela tela. Ver a sua vaga ocupada por outro dói mais que qualquer derrota.', deltas: { morale: -10, rel: { team: -3 } } },
+        { id: 'calm', label: 'Manter a calma e focar no próximo ciclo', outcome: 'Assumiu que não dava dessa vez e evitou o desespero. Maturidade que a diretoria reparou — nem tudo dá pra controlar.', deltas: { focus: +4, boardConf: +3, morale: -3 } },
+      ],
+    }),
+  },
+  {
+    // ESTREIA NA LAN: primeira vez no palco, holofote e arquibancada. O frio na
+    // barriga que todo pro conhece — e a diferença entre online e presencial.
+    id: 'lan-debut', category: 'career', weight: 13,
+    eligible: (s) => s.player.age <= 21 && (s.team.tier === 'access' || s.team.tier === 'challenger'),
+    make: () => ({
+      title: 'Primeira LAN de verdade',
+      body: 'Chegou o dia: primeira vez pisando num palco de LAN, holofote na cara, arquibancada gritando e o telão mostrando cada respirada sua. O fone abafa a torcida, mas o coração acelerado não tem como desligar.',
+      options: [
+        { id: 'embrace', label: 'Respirar fundo e abraçar o palco', outcome: 'Trocou o frio na barriga por adrenalina. Quando plantou a bomb no primeiro round e a arquibancada explodiu, o nervoso virou foco — palco é a sua casa agora.', deltas: { focus: +8, morale: +8, fame: +3, energy: -4 } },
+        { id: 'routine', label: 'Fingir que é só mais um scrim', outcome: 'Colocou o fone, ignorou a plateia e jogou no automático. Funcionou — profissionalismo puro, sem drama nem holofote na cabeça.', deltas: { focus: +5, morale: +2 } },
+        { id: 'choke', label: 'Deixar o nervoso tomar conta', outcome: 'As mãos tremeram, o prefire falhou, o peso do crowd travou tudo. Aprendeu na marra que LAN é outro jogo — e prometeu que da próxima vai ser diferente.', deltas: { focus: -6, morale: -6, energy: -4 } },
+      ],
+    }),
+  },
+  {
+    // PRODUTO SIGNATURE: mousepad/config com a tua cara. O nome vira mercadoria —
+    // marco de quem chegou (s1mple, ZywOo e cia. têm linha própria).
+    id: 'signature-gear', category: 'media', weight: 10,
+    eligible: (s) => s.life.fame >= 40 && s.sponsors.length < 3,
+    make: () => ({
+      title: 'Produto com a sua assinatura',
+      body: 'Uma marca de periféricos quer lançar uma linha com a sua cara: mousepad signature, sensibilidade e crosshair oficiais impressos na caixa. Royalties por unidade vendida — o seu nome virando produto de prateleira.',
+      options: [
+        { id: 'sign', label: 'Fechar a linha signature', outcome: 'Assinou o contrato: cada mousepad vendido pinga na conta e a molecada joga com a SUA config. Nome que virou marca registrada.', deltas: { addSponsor: { brand: 'Linha Signature', perWeek: 350, weeks: 24, fameBonus: 6 }, fame: +6, morale: +5 } },
+        { id: 'perfectionist', label: 'Só topar se o produto prestar', outcome: 'Exigiu testar cada protótipo antes de emprestar o nome. Atrasou o lançamento, mas você não bota assinatura em qualquer coisa.', deltas: { focus: +3, fame: +2 } },
+        { id: 'decline', label: 'Recusar — seu nome não está à venda', outcome: 'Agradeceu e passou. Prefere ser lembrado pelas jogadas, não pela caixa no e-commerce.', deltas: { focus: +3, morale: +2 } },
+      ],
+    }),
+  },
+  {
+    // O RATO: um colega negocia escondido com outra org e estratégia vaza junto.
+    // A paranoia de vestiário que racha line — decisão de liderança.
+    id: 'roster-leak', category: 'team', weight: 12,
+    eligible: (s) => s.team.teammates.length >= 3,
+    make: (s, rng) => {
+      const m = pickMate(s, rng)!;
+      return {
+        title: 'Rato no elenco',
+        body: `Um print circulando nos bastidores mostra que ${m.nick} (${m.role}) anda conversando com outra org escondido — e detalhes de estratégia estão vazando junto. O grupo passou a desconfiar de todo mundo e o clima azedou.`,
+        options: [
+          { id: 'direct', label: `Cobrar ${m.nick} na cara`, outcome: `Puxou ${m.nick} num canto e cobrou a real: ou se explica, ou o vestiário racha. Liderança é também bancar a conversa difícil na hora certa.`, deltas: { rel: { team: +5, coach: +3 }, morale: +2, energy: -4 } },
+          { id: 'coach', label: 'Levar o print pra diretoria', outcome: 'Entregou o caso pra cúpula resolver por dentro. Profissional, mas alguns colegas te olharam torto por "abrir o jogo".', deltas: { boardConf: +5, rel: { team: -3, coach: +4 } } },
+          { id: 'silent', label: 'Fechar a boca e blindar as calls', outcome: 'Não acusou ninguém, só passou a segurar informação sensível nas calls. O time joga mais travado, mas de você não vaza nada.', deltas: { focus: -3, rel: { team: -2 } } },
+        ],
+      };
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

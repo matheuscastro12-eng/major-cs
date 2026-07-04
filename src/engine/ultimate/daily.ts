@@ -4,6 +4,16 @@
 
 export interface DailyEntry { day: number; credits: number }
 
+// Curva de streak: cada dia cresce ~×1.4–1.5 sobre o anterior (800→1200→1800→
+// 2500→3500→5000). O capstone do dia 7 seguia a ×1.8 (5000→9000) — um SPIKE fora
+// da própria curva, e único faucet 100% PASSIVO (só abrir o app, zero jogo) que
+// pagava MAIS que a missão semanal mais dura (w-win10 = 8000 por 10 vitórias) e
+// que o topo por-vitória do Gauntlet (4500). Como as `coins` compradas (Stripe/
+// Pix) são creditadas NESTE MESMO saldo `credits` (moeda única — ver addCredits
+// no fluxo de compra), um faucet passivo inflado canibaliza a venda de coins.
+// Dia 7 agora usa a ×1.5 que é o PICO já estabelecido pela própria curva (dias
+// 2 e 3): 5000×1.5 = 7500. Segue o maior prêmio diário e acima do Gauntlet, mas
+// abaixo da semanal mais dura — restaura ativo > passivo. (Semana: 23800→22300.)
 export const DAILY_TABLE: DailyEntry[] = [
   { day: 1, credits: 800 },
   { day: 2, credits: 1200 },
@@ -11,7 +21,7 @@ export const DAILY_TABLE: DailyEntry[] = [
   { day: 4, credits: 2500 },
   { day: 5, credits: 3500 },
   { day: 6, credits: 5000 },
-  { day: 7, credits: 9000 },
+  { day: 7, credits: 7500 },
 ];
 
 // YYYY-MM-DD no fuso local (single-player: dia local é o que o jogador percebe).
