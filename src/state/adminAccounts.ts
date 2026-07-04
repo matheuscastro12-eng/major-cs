@@ -48,3 +48,19 @@ export interface FinanceData {
 export async function getFinance(password: string): Promise<FinanceData | null> {
   try { return (await post({ action: 'finance', password })) as unknown as FinanceData; } catch { return null; }
 }
+
+// ── Integridade do ranking PvP: conflitos de report (fraude/bug) e reports órfãos ──
+export interface IntegrityStatusRow { status: string; total: number; last7: number; }
+export interface ConflictReport { email: string; nick: string; won: boolean; at: string; }
+export interface ConflictMatch { code: string; at: string; reports: ConflictReport[]; }
+export interface IntegrityOffender { email: string; nick: string; conflicts: number; applied: number; lastConflict: string | null; }
+export interface IntegrityData {
+  byStatus: IntegrityStatusRow[];
+  matches: { total: number; conflicts: number; total7: number; conflicts7: number };
+  stalePending: number;
+  conflicts: ConflictMatch[];
+  offenders: IntegrityOffender[];
+}
+export async function getRankingIntegrity(password: string): Promise<IntegrityData | null> {
+  try { return (await post({ action: 'integrity', password })) as unknown as IntegrityData; } catch { return null; }
+}
