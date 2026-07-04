@@ -8,11 +8,12 @@ import { Flag, PlayerAvatar } from '../ui';
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, useUltimate } from '../../state/ultimate';
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
-import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
+import { PACK_DEFS, packById, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
-import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
+import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, passSeasonId, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
+import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, passTitleSlug, totalXpForLevel, xpForLevel, PASS_MAX_LEVEL, PASS_PREMIUM_COST, type PassReward, type PassTrack } from '../../engine/ultimate/seasonPass';
 import type { UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
@@ -36,7 +37,7 @@ import {
   LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
   Swords, ListOrdered, ChevronDown, Coins, Trophy, Zap, Menu, CalendarDays, Lock,
   Check, Gift, Star, Gem, Crown, Wallet, TrendingUp, Medal, Flame, AlertCircle,
-  Tag, ArrowLeft, Sparkles, Plus, X, Target, Globe,
+  Tag, ArrowLeft, Sparkles, Plus, X, Target, Globe, Ticket,
 } from 'lucide-react';
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
@@ -258,13 +259,27 @@ const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112 }: { card:
   );
 });
 
+// conteúdo de uma recompensa do Passe — mesma iconografia dos irmãos: credits
+// com <Coins> (ut-obj__reward), pack pelo NOME da def (packs.ts), carta pelo
+// rótulo/cor da raridade (rarityInfo + inkOnLight), título com <Tag>.
+function PassRewardChip({ r }: { r: PassReward }) {
+  return (
+    <span className="ut-pl__reward">
+      {r.credits != null && <span className="ut-pl__bit ut-pl__bit--coin"><Coins size={11} /> {fmt(r.credits)}</span>}
+      {r.pack && <span className="ut-pl__bit"><Package size={11} /> {packById(r.pack)?.name.replace(/^Pacote /, '') ?? r.pack}</span>}
+      {r.card && <span className="ut-pl__bit" style={{ color: inkOnLight(rarityInfo(r.card).color) }}><Star size={11} /> {rarityInfo(r.card).label}</span>}
+      {r.title && <span className="ut-pl__bit ut-pl__bit--title"><Tag size={11} /> {ct('Título')}</span>}
+    </span>
+  );
+}
+
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits } = useUltimate();
+  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, buyPremiumPass, claimPassLevel } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking'>('hub');
+  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   const [pickSlot, setPickSlot] = useState<number | null>(null);
@@ -290,7 +305,11 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const { account } = useAccount();
 
   const credits = state.profile.credits;
-  const equipped = state.profile.equippedTitle ? titleBySlug(state.profile.equippedTitle) : undefined;
+  // rótulo do título equipado: TITLES estáticos OU o slug dinâmico do Passe
+  // (passe-sN não está em TITLES — passTitleLabel é o fallback da fase A).
+  const equippedLabel = state.profile.equippedTitle
+    ? (titleBySlug(state.profile.equippedTitle)?.label ?? passTitleLabel(state.profile.equippedTitle) ?? state.profile.equippedTitle)
+    : undefined;
   const daily = computeNextDaily(state.profile.daily.streakDay, state.profile.daily.lastClaim, dateKey(new Date()));
   const displayName = account?.nick || account?.email?.split('@')[0] || 'Manager';
   // navegação por dropdown fecha ao clicar fora
@@ -558,6 +577,60 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       flash(`🎁 ${ct('Bônus da semana')}: ${ct('pack grátis!')}`, 2400);
       setReveal([...r.cards].sort((a, b) => b.ovr - a.ovr));
     }
+  };
+
+  // ── Passe de Temporada (fase B — UI; engine em seasonPass.ts) ──
+  // ensurePass é leitura pura: save antigo (pass === null) ou temporada virada
+  // rendem um estado nível 0 / 0 XP sem mutar o save (a 1ª mutação real grava).
+  const pass = ensurePass(state.profile.pass, passSeasonId(state.profile));
+  const passLevel = levelForXp(pass.xp);
+  const passXpNext = passLevel < PASS_MAX_LEVEL ? xpForLevel(passLevel + 1) : 0; // XP do nível seguinte
+  const passXpInto = pass.xp - totalXpForLevel(passLevel);                       // XP já dentro do nível
+  const passFreeClaimable = claimableLevels(pass, 'free');
+  const passPremClaimable = claimableLevels(pass, 'premium');
+  const passClaimableCount = passFreeClaimable.length + passPremClaimable.length;
+  const [passConfirm, setPassConfirm] = useState(false);
+  const doClaimPass = (level: number, track: PassTrack) => {
+    const r = claimPassLevel(level, track);
+    if (!r.ok) {
+      flash(r.reason === 'locked' ? ct('Desbloqueie o Premium pra resgatar essa trilha.') : r.reason === 'unreached' ? ct('Nível ainda não alcançado.') : ct('Já resgatado.'));
+      return;
+    }
+    const cards: UltCard[] = [...(r.packCards ?? [])];
+    if (r.grantedCard) cards.push(r.grantedCard);
+    const bits: string[] = [];
+    if (r.reward?.credits) bits.push(`+${fmt(r.reward.credits)} 🪙`);
+    if (r.reward?.title) bits.push(`${ct('título')} “${passTitleLabel(passTitleSlug(pass.seasonId)) ?? ''}”`);
+    flash(`🎫 ${ct('Nível')} ${level} · ${track === 'premium' ? 'Premium' : ct('Grátis')} ${ct('resgatado')}${bits.length ? ` · ${bits.join(' · ')}` : ''}`, 2600);
+    if (cards.length) setReveal([...cards].sort((a, b) => b.ovr - a.ovr));
+    if (r.reward?.title) syncTitles();
+  };
+  const doClaimAllPass = () => {
+    // resgata tudo que está liberado nas duas trilhas — cada claim persiste na
+    // store (idempotente); aqui só agregamos o feedback num toast + um reveal.
+    let creditsSum = 0; let n = 0; let gotTitle = false;
+    const cards: UltCard[] = [];
+    const runs: [PassTrack, number[]][] = [['free', passFreeClaimable], ['premium', passPremClaimable]];
+    for (const [track, lvls] of runs) {
+      for (const lvl of lvls) {
+        const r = claimPassLevel(lvl, track);
+        if (!r.ok) continue;
+        n++;
+        creditsSum += r.reward?.credits ?? 0;
+        if (r.grantedCard) cards.push(r.grantedCard);
+        if (r.packCards?.length) cards.push(...r.packCards);
+        if (r.reward?.title) gotTitle = true;
+      }
+    }
+    if (!n) return;
+    flash(`🎫 ${n} ${n === 1 ? ct('recompensa resgatada') : ct('recompensas resgatadas')}${creditsSum ? ` · +${fmt(creditsSum)} 🪙` : ''}${gotTitle ? ` · ${ct('novo título!')}` : ''}`, 3200);
+    if (cards.length) setReveal([...cards].sort((a, b) => b.ovr - a.ovr));
+  };
+  const doBuyPremium = () => {
+    setPassConfirm(false);
+    const r = buyPremiumPass();
+    if (r.ok) flash(`👑 ${ct('Passe Premium desbloqueado! Recompensas premium até o seu nível já estão liberadas.')}`, 3200);
+    else flash(r.reason === 'already' ? ct('Premium já ativo.') : ct('Créditos insuficientes.'));
   };
 
   // ── objetivos/missões (profundidade) ──
@@ -997,6 +1070,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               )}
             </div>
             <button className={`ut-nav__item${tab === 'ranked' ? ' is-active' : ''}`} onClick={() => go('ranked')}><Swords size={16} /> {ct('Ranqueada')}</button>
+            <button className={`ut-nav__item${tab === 'passe' ? ' is-active' : ''}`} onClick={() => go('passe')}><Ticket size={16} /> {ct('Passe')}{passClaimableCount > 0 && <span className="ut-nav__badge">{passClaimableCount}</span>}</button>
             <button className={`ut-nav__item${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo Privado')}</button>
             <button className={`ut-nav__item${tab === 'ranking' ? ' is-active' : ''}`} onClick={() => go('ranking')}><ListOrdered size={16} /> {ct('Ranking')}</button>
             {/* itens DIRETOS: visíveis só em telas estreitas — os dropdowns ficavam
@@ -1022,7 +1096,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             {navMenu === 'more' && (
               <div className="ut-menu ut-ham__menu" onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => { setDailyOpen(true); setNavMenu(null); }}><Gift size={16} /> {ct('Recompensa diária')}{daily.canClaim ? ' •' : ''}</button>
-                <button onClick={() => { setTitlesOpen(true); setNavMenu(null); }}><Tag size={16} /> {ct('Títulos')}{equipped ? ` · ${equipped.label}` : ''}</button>
+                <button onClick={() => { setTitlesOpen(true); setNavMenu(null); }}><Tag size={16} /> {ct('Títulos')}{equippedLabel ? ` · ${equippedLabel}` : ''}</button>
                 <button onClick={() => { onBack(); setNavMenu(null); }}><ArrowLeft size={16} /> {ct('Voltar ao Road to Major')}</button>
               </div>
             )}
@@ -1697,6 +1771,115 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         </UtPanel>
       )}
 
+      {tab === 'passe' && (() => {
+        const season = state.profile.season;
+        const seasonN = season?.n ?? pass.seasonId;
+        const daysLeft = season ? Math.max(0, Math.ceil((season.endsAt - Date.now()) / 86400000)) : null;
+        const pct = passLevel >= PASS_MAX_LEVEL ? 100 : Math.min(100, Math.round((passXpInto / Math.max(1, passXpNext)) * 100));
+        const titleName = passTitleLabel(passTitleSlug(pass.seasonId));
+        const affordPremium = credits >= PASS_PREMIUM_COST;
+        return (
+          <>
+            {/* header do passe: temporada + nível/XP + status premium */}
+            <section className="ut-passhead">
+              <div className="ut-passhead__info">
+                <div className="ut-passhead__kicker"><Ticket size={13} /> {ct('PASSE DE TEMPORADA')}</div>
+                <div className="ut-passhead__title">Season {seasonN} — {SEASON_NAMES[(seasonN - 1) % SEASON_NAMES.length]}</div>
+                <div className="ut-passhead__meta">
+                  {daysLeft != null && <span><CalendarDays size={12} /> {daysLeft} {daysLeft === 1 ? ct('dia restante') : ct('dias restantes')}</span>}
+                  {pass.premium
+                    ? <span className="ut-passhead__chip is-premium"><Crown size={12} /> {ct('Premium ativo')}</span>
+                    : <span className="ut-passhead__chip">{ct('Grátis')}</span>}
+                </div>
+                <div className="ut-passhead__hint">{ct('Ganhe XP jogando ranqueadas, missões e objetivos.')}</div>
+              </div>
+              <div className="ut-passhead__lvl">
+                <div className="ut-passhead__lvlnum">{passLevel}<span>/{PASS_MAX_LEVEL}</span></div>
+                <div className="ut-passhead__lvllabel">{ct('NÍVEL')}</div>
+                <div className="ut-passhead__bar"><div style={{ width: `${pct}%` }} /></div>
+                <div className="ut-passhead__xp">
+                  {passLevel >= PASS_MAX_LEVEL ? ct('Passe completo!') : <>{fmt(passXpInto)}/{fmt(passXpNext)} XP · {ct('nível')} {passLevel + 1}</>}
+                </div>
+              </div>
+              <div className="ut-passhead__actions">
+                {!pass.premium && (
+                  <button className="ut-btn ut-btn--gold" onClick={() => setPassConfirm(true)} disabled={!affordPremium}
+                    title={affordPremium ? ct('Desbloquear a trilha Premium') : ct('Créditos insuficientes.')}>
+                    <Crown size={15} /> {ct('Desbloquear Premium')} — {fmt(PASS_PREMIUM_COST)}
+                  </button>
+                )}
+                {!pass.premium && !affordPremium && (
+                  <span className="ut-passhead__reason">{ct('Faltam')} {fmt(PASS_PREMIUM_COST - credits)} 🪙</span>
+                )}
+                {passClaimableCount > 1 && (
+                  <button className="ut-btn ut-btn--green" onClick={doClaimAllPass}>
+                    <Gift size={15} /> {ct('Resgatar tudo')} ({passClaimableCount})
+                  </button>
+                )}
+              </div>
+            </section>
+
+            <UtPanel label={<>{ct('Trilha do Passe')} <em>· 35 {ct('níveis')}</em></>} icon={<Ticket size={15} className="ut-panel__lead" />} accent="amber"
+              right={passClaimableCount > 0 ? <span style={{ color: '#92600a' }}>{passClaimableCount} {ct('pra resgatar')}</span> : `${ct('nível')} ${passLevel}/${PASS_MAX_LEVEL}`}
+              info={ct('Cada nível libera uma recompensa grátis e uma premium. A trilha premium exige o desbloqueio do passe.')}>
+              <div className="ut-pass__tracklabels">
+                <span>{ct('GRÁTIS')}</span>
+                <span className={pass.premium ? 'is-premium' : ''}><Crown size={11} /> PREMIUM</span>
+              </div>
+              <div className="ut-pass__rail">
+                {passLevels().map((def) => {
+                  const reached = passLevel >= def.level;
+                  const isNext = def.level === passLevel + 1;
+                  const freeClaimed = pass.claimedFree.includes(def.level);
+                  const premClaimed = pass.claimedPremium.includes(def.level);
+                  const freeClaimable = reached && !freeClaimed;
+                  const premClaimable = reached && pass.premium && !premClaimed;
+                  const cell = (track: PassTrack, r: PassReward, claimed: boolean, claimable: boolean, premLock: boolean) =>
+                    claimable ? (
+                      <button className={`ut-pl__cell is-claimable${track === 'premium' ? ' is-premium' : ''}`} onClick={() => doClaimPass(def.level, track)} title={ct('Resgatar')}>
+                        <PassRewardChip r={r} />
+                      </button>
+                    ) : (
+                      <div className={`ut-pl__cell${claimed ? ' is-claimed' : ''}${!reached || premLock ? ' is-dim' : ''}${track === 'premium' ? ' is-premium' : ''}`}>
+                        {claimed ? <Check size={11} strokeWidth={3} className="ut-pl__state ok" /> : (premLock || !reached) ? <Lock size={10} className="ut-pl__state" /> : null}
+                        <PassRewardChip r={r} />
+                      </div>
+                    );
+                  return (
+                    <div key={def.level} className={`ut-pl${reached ? ' is-reached' : ''}${isNext ? ' is-next' : ''}`}>
+                      {cell('free', def.free, freeClaimed, freeClaimable, false)}
+                      <div className="ut-pl__num">{def.level}</div>
+                      {cell('premium', def.premium, premClaimed, premClaimable, !pass.premium)}
+                    </div>
+                  );
+                })}
+              </div>
+              {titleName && (
+                <p className="muted small" style={{ marginTop: 10, marginBottom: 0 }}>
+                  👑 {ct('Nível 35 Premium')}: {ct('carta TOTS garantida + o título exclusivo')} “{titleName}”.
+                </p>
+              )}
+            </UtPanel>
+          </>
+        );
+      })()}
+
+      {/* confirmação do Passe Premium */}
+      {passConfirm && (
+        <Modal open onClose={() => setPassConfirm(false)} title={ct('Desbloquear Passe Premium')} size="sm"
+          footer={<><Button variant="ghost" onClick={() => setPassConfirm(false)}>{ct('Cancelar')}</Button><Button variant="primary" onClick={doBuyPremium} disabled={credits < PASS_PREMIUM_COST}>{ct('Desbloquear')} · {fmt(PASS_PREMIUM_COST)} 🪙</Button></>}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
+            <p className="muted small" style={{ margin: 0 }}>
+              {ct('A trilha Premium libera uma SEGUNDA recompensa em cada um dos 35 níveis — incluindo o Pacote Promo (nível 15), uma carta Elite (25) e a carta TOTS + título exclusivo da temporada (35).')}
+            </p>
+            <p className="muted small" style={{ margin: 0 }}>
+              {ct('As recompensas premium dos níveis que você JÁ alcançou ficam liberadas na hora. O premium vale só nesta temporada.')}
+            </p>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 900, color: '#92600a' }}><Coins size={15} /> {fmt(PASS_PREMIUM_COST)} · {ct('saldo')}: {fmt(credits)}</div>
+          </div>
+        </Modal>
+      )}
+
       {/* resultado da partida */}
       {result && (
         <Modal open onClose={() => setResult(null)} title={result.won ? ct('Vitória!') : ct('Derrota')} size="sm"
@@ -1957,6 +2140,23 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                     ? <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '3px 11px', borderRadius: 999, background: 'rgba(201,166,60,0.16)', border: '1px solid rgba(201,166,60,0.4)', color: '#92600a' }}>{ct('equipado')}</span>
                     : <button onClick={() => equipTitle(t.slug)} className="ut-btn ut-btn--ghost" style={{ padding: '4px 12px', fontSize: '0.72rem' }}>{ct('equipar')}</button>)
                     : <Lock size={13} style={{ color: 'var(--ut-muted)' }} />}
+                </div>
+              );
+            })}
+            {/* títulos DINÂMICOS (Passe Premium: slug passe-sN não está em TITLES) —
+                fallback de rótulo via passTitleLabel (fase A); sem ele o picker
+                mostrava o slug cru ou nem listava o título conquistado. */}
+            {state.profile.titles.filter((slug) => !titleBySlug(slug)).map((slug) => {
+              const label = passTitleLabel(slug) ?? slug;
+              const isEq = state.profile.equippedTitle === slug;
+              const gold = '#c9a63c';
+              return (
+                <div key={slug} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: `1px solid ${gold}55`, background: `${gold}10` }}>
+                  <span style={{ fontWeight: 900, color: inkOnLight(gold), fontSize: '0.88rem', minWidth: 150, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Crown size={13} /> {label}</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', flex: 1 }}>{ct('Título exclusivo do Passe Premium desta temporada.')}</span>
+                  {isEq
+                    ? <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '3px 11px', borderRadius: 999, background: 'rgba(201,166,60,0.16)', border: '1px solid rgba(201,166,60,0.4)', color: '#92600a' }}>{ct('equipado')}</span>
+                    : <button onClick={() => equipTitle(slug)} className="ut-btn ut-btn--ghost" style={{ padding: '4px 12px', fontSize: '0.72rem' }}>{ct('equipar')}</button>}
                 </div>
               );
             })}
