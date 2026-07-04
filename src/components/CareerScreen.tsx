@@ -22,7 +22,8 @@ import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career/rivalries';
 import { applyFatigueForm, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
-import { formOf, teamFormBand } from '../engine/career/teamForm';
+import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
+import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
@@ -2049,85 +2050,11 @@ function seasonTopPlayersYear(pool: TeamSeason[], endSplit: number, n: number): 
     .slice(0, n);
 }
 
-// janela de transferências: feed determinístico de movimentações por split
+// janela de transferências: feed de movimentações da IA no split (shape da UI)
 interface TransferItem { nick: string; cc: string; from: string; to: string; fee: number; reason?: string; }
-
-// Mercado VIVO da IA (Brasval gap #1): cada time tem uma "forma" por split —
-// expectativa pela força (teamwork) + variância determinística por split. Essa
-// forma É o resultado da temporada da IA (jogos AI-vs-AI não são simulados, mas
-// o roll seeded faz o papel). Times em MÁ fase se movimentam mais e buscam
-// reforço; times em boa fase ficam parados. Determinístico (mesmo split = mesmo
-// mercado), então o feed mostrado é o que de fato se aplica.
-function aiTeamForm(t: TeamSeason, split: number): number {
-  // teamwork 60..92 -> expectativa ~12..89
-  const expected = Math.max(12, Math.min(90, Math.round((t.teamwork - 55) * 2.4)));
-  const noise = (hashStr(`form:${t.id}:${split}`) % 51) - 25; // -25..+25
-  return Math.max(0, Math.min(100, expected + noise));
-}
-// Feed determinístico de transferências REALISTAS: um jogador só troca por um
-// time de tier parecido (teamwork +-8), evitando movimentos absurdos como um
-// jogador de time fraco indo direto pra um top mundial.
-// ranking mundial real do time (vem no honors dos times importados do bo3)
-const worldRank = (t: TeamSeason): number => {
-  const m = /#(\d+)/.exec(t.honors ?? '');
-  return m ? Number(m[1]) : 999;
-};
-
-// Transferências da janela: cada movimento é um SWAP (o jogador vai pro novo
-// time e o reserva mais fraco do destino volta), pra os times manterem 5. É
-// determinístico por split, então o mercado mostrado é o que de fato se aplica.
-function computeTransfers(split: number, teams: TeamSeason[]): { feed: TransferItem[]; swaps: { pid: string; toId: string }[] } {
-  const pool = teams.filter((t) => t.id !== 'user' && t.players.length >= 5);
-  const feed: TransferItem[] = [];
-  const swaps: { pid: string; toId: string }[] = [];
-  const seen = new Set<string>(); // playerIds já envolvidos nesta janela
-  // forma por time neste split — dirige QUEM se movimenta (Brasval computeTeamForm).
-  const formOf = new Map<string, number>(pool.map((t) => [t.id, aiTeamForm(t, split)]));
-  // ORIGENS: enviesa pra times em má fase (eles reformulam). Ordena por forma asc
-  // e amostra dos piores 60% — os times em boa fase quase não vendem.
-  const movers = [...pool].sort((a, b) => (formOf.get(a.id) ?? 50) - (formOf.get(b.id) ?? 50));
-  const srcBias = movers.slice(0, Math.max(4, Math.ceil(movers.length * 0.6)));
-  for (let i = 0; feed.length < 11 && i < 600; i++) {
-    const h = hashStr(`tf${split}:${i}`);
-    const src = srcBias[h % srcBias.length];
-    const srcForm = formOf.get(src.id) ?? 50;
-    // time em boa fase raramente mexe no elenco (1 em 5 ainda mexe pra ter ruído)
-    if (srcForm >= 60 && h % 5 !== 0) continue;
-    const pl = src.players[(h >>> 3) % src.players.length];
-    if (!pl || seen.has(pl.id)) continue;
-    const ovr = playerOvr(pl);
-    if (ovr >= 88 && h % 8 !== 0) continue; // estrelas quase não se movem
-    const sr = worldRank(src);
-    const cands = pool.filter((t) => {
-      if (t.id === src.id) return false;
-      const dr = worldRank(t);
-      if (ovr >= 88) return dr <= 8; // estrela só vai pra elite (sem ZywOo na FOKUS)
-      const maxFall = ovr >= 82 ? 6 : 15;
-      return dr <= sr + maxFall && dr >= sr - 12 && t.teamwork >= ovr - 12;
-    });
-    if (cands.length === 0) continue;
-    // DESTINOS: enviesa pra times em má fase (eles são os que BUSCAM reforço).
-    cands.sort((a, b) => (formOf.get(a.id) ?? 50) - (formOf.get(b.id) ?? 50));
-    const dest = cands[(h >>> 7) % Math.max(1, Math.ceil(cands.length * 0.5))];
-    // contrapartida: o reserva mais fraco do destino (ainda não movido) vai pro src
-    const back = [...dest.players].filter((p) => !seen.has(p.id)).sort((a, b) => playerOvr(a) - playerOvr(b))[0];
-    if (!back || back.id === pl.id) continue;
-    seen.add(pl.id);
-    seen.add(back.id);
-    swaps.push({ pid: pl.id, toId: dest.id }, { pid: back.id, toId: src.id });
-    const destForm = formOf.get(dest.id) ?? 50;
-    // motivo legível pro feed (sabor de "mundo reagindo a resultado")
-    const reason = destForm < 38 ? 'reforço após campanha fraca'
-      : srcForm < 38 ? 'reformulação pós-eliminação'
-      : ovr >= 85 ? 'movimento de elite'
-      : undefined;
-    feed.push({ nick: pl.nick, cc: pl.country, from: src.tag, to: dest.tag, fee: playerValue(pl), reason });
-  }
-  return { feed, swaps };
-}
-function transferFeed(split: number, teams: TeamSeason[]): TransferItem[] {
-  return computeTransfers(split, teams).feed;
-}
+// (o mercado VIVO da IA mora em engine/career/transferAI.ts — tickAIMarketActivity,
+// gated pela forma REAL de clube de engine/career/teamForm.ts. O pseudo-form
+// antigo por hash de teamwork+split foi aposentado no gap #23.)
 
 // reconstrói os elencos aplicando as transferências acumuladas (playerId -> teamId).
 // Como cada transferência é um swap balanceado, todo time se mantém com 5.
@@ -2142,6 +2069,18 @@ function applyMoves(teams: TeamSeason[], moves: Record<string, string> | undefin
   };
   return teams.map((t) => ({ ...t, players: all.filter((ap) => teamOf(ap.p.id, ap.orig) === t.id).map((ap) => ap.p) }));
 }
+
+// pool ATUAL de free agents: o __free__ da base com save.moves aplicado — a IA
+// pode ter contratado FAs (saem do pool) e liberado deslocados (entram). Antes
+// o pool era o snapshot estático da base, então um FA contratado pela IA ainda
+// apareceria de graça no mercado do usuário (duplicado).
+function currentFreeAgents(base: TeamSeason[], moves: Record<string, string> | undefined): Player[] {
+  return applyMoves(base, moves).find((t) => t.id === FREE_TEAM_ID)?.players ?? [];
+}
+
+// ids endereçáveis por save.moves (jogadores REAIS da base — backfill sintético
+// e extraOnTeam ficam fora do mercado da IA porque applyMoves não os move)
+const BASE_PLAYER_IDS: ReadonlySet<string> = new Set(CS2_REAL_2026.flatMap((t) => t.players.map((p) => p.id)));
 
 // MIGRAÇÃO: prospectos/jovens gerados antes do fix do shift (>>) podiam ser
 // salvos SEM nick/name/role (só o country sobrevivia). Regenera de forma
@@ -3186,7 +3125,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         return { ...base, aim: clampA(base.aim + d), consistency: clampA(base.consistency + d), clutch: clampA(base.clutch + d), awp: clampA(base.awp + d), igl: clampA(base.igl + d) };
       };
       const fromTeams = currentEra.flatMap((t) => t.players.map((p) => { const pl = withDecline(p); return { player: pl, from: t, price: playerValue(pl) }; }));
-      const freeAgents = FREE_AGENT_PLAYERS
+      // pool VIVO: com o mercado da IA (gap #23), FAs contratados pela IA somem
+      // daqui (aparecem no clube via fromTeams) e deslocados liberados entram.
+      const freeAgents = currentFreeAgents(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves)
         .filter((p) => !squadIds.has(p.id)) // some do mercado quando já contratado
         // FREE agents são free — em CS real você assina sem taxa de transferência,
         // só salário. User Guilherme reportou: '"free agents" é considerado um
@@ -3210,7 +3151,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       }
       return [...byId.values()].sort((a, b) => a.price - b.price);
     },
-    [currentEra, save.squad, save.evo],
+    [currentEra, save.squad, save.evo, save.moves, bo3Edits],
   );
 
   const findSigning = (s: Signing): ResolvedSigning | null => {
@@ -3693,48 +3634,51 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     };
   };
 
-  // aplica a janela de transferências do split que está fechando: os swaps viram
-  // movimentos persistentes (save.moves) e o resumo vai pra lastMoves (exibido
-  // no próximo split). Não move jogadores do elenco do usuário.
-  const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves' | 'aiDrift'> => {
-    // o SEU org não participa do mercado da IA (não perde nem ganha jogador
-    // por transferência) — evita seu elenco ser bagunçado entre splits.
+  // Mercado VIVO da IA (gap #23): um tick de tickAIMarketActivity sobre o estado
+  // atual — quem age (gate pela forma REAL de clube + stagger por hash), contrata
+  // do mercado livre ou rouba de rival, tudo determinístico por (save, split).
+  // O SEU org não participa (protectedIds): roubar do usuário continua passando
+  // SÓ pelas propostas com consentimento (incomingOffers/pendingSales).
+  const runAIMarketTick = (s: CareerSave) => {
     const pool = currentEra.filter((t) => t.id !== s.takeoverId);
-    const tr = computeTransfers(s.split, pool);
-    const squadIds = new Set(s.squad.map((x) => x.playerId));
-    const moves = { ...(s.moves ?? {}) };
-    // BUG FIX (caça-bugs): computeTransfers emite swaps em PARES (i, i+1). Aplicar
-    // só uma ponta (quando a outra é jogador seu / vai pro seu org) deixava o time
-    // da IA com 6 ou 4 jogadores (drift de roster). Aplica o par atomicamente: só
-    // se AMBAS as pontas forem válidas.
-    for (let i = 0; i < tr.swaps.length; i += 2) {
-      const a = tr.swaps[i];
-      const b = tr.swaps[i + 1];
-      if (!a || !b) continue;
-      const invalid = (sw: { pid: string; toId: string }) =>
-        squadIds.has(sw.pid) || (!!s.takeoverId && sw.toId === s.takeoverId);
-      if (invalid(a) || invalid(b)) continue; // descarta o par inteiro
-      moves[a.pid] = a.toId;
-      moves[b.pid] = b.toId;
-    }
-    const lastMoves = tr.feed.slice(0, 8).map((f) => ({ nick: f.nick, from: f.from, to: f.to }));
+    return tickAIMarketActivity({
+      save: s,
+      split: s.split,
+      teams: pool,
+      freeAgents: currentFreeAgents(applyBo3Edits(CS2_REAL_2026, bo3Edits), s.moves),
+      protectedIds: new Set(s.squad.map((x) => x.playerId)),
+      movableIds: BASE_PLAYER_IDS,
+    });
+  };
+
+  // aplica a janela de transferências do split que está fechando: os movimentos
+  // do tick da IA viram persistentes (save.moves — a MESMA rota das vendas do
+  // usuário), o resumo vai pra lastMoves e as manchetes saem em marketNews
+  // (cat 'transfer', mescladas no pushNews da virada pelos call sites).
+  const applyTransferWindow = (s: CareerSave): Pick<CareerSave, 'moves' | 'lastMoves' | 'aiDrift'> & { marketNews: NewsItem[] } => {
+    const tick = runAIMarketTick(s);
+    const moves = { ...(s.moves ?? {}), ...tick.moves };
+    const lastMoves = tick.log.slice(0, 8).map((m) => ({ nick: m.nick, from: m.fromTag, to: m.toTag }));
     // MERCADO VIVO — drift de força: cada time da IA move o teamwork conforme a
-    // forma sustentada do split. Forma alta empurra +1 (até +6), baixa -1 (até
-    // -6), neutra decai 1 rumo a 0. currentEra JÁ aplica o drift no teamwork, então
-    // o form roll usa a força ATUAL → feedback auto-corretivo (quem subiu fica mais
-    // difícil de cair). Mantém o mundo competitivo se reorganizando ao longo dos anos.
+    // forma REAL de clube (teamForm.ts) + ruído determinístico por split (sem o
+    // ruído, form deriva de drift*4 pra quem não está na liga e o roll viraria
+    // moto-perpétuo: drift +2 ⇒ form 58 ⇒ +1 pra sempre). Forma alta empurra +1
+    // (até +6), baixa -1 (até -6), neutra decai rumo a 0. currentEra JÁ aplica o
+    // drift no teamwork → feedback auto-corretivo ao longo dos anos.
+    const forms = computeAllTeamForms(s);
     const aiDrift = { ...(s.aiDrift ?? {}) };
-    for (const t of pool) {
-      const form = aiTeamForm(t, s.split);
+    for (const t of currentEra.filter((x) => x.id !== s.takeoverId)) {
+      const noise = (hashStr(`drift:${t.id}:${s.split}`) % 31) - 15; // -15..+15
+      const roll = (forms[t.id] ?? 50) + noise;
       const prev = aiDrift[t.id] ?? 0;
       let next = prev;
-      if (form >= 62) next = Math.min(6, prev + 1);
-      else if (form <= 38) next = Math.max(-6, prev - 1);
+      if (roll >= 62) next = Math.min(6, prev + 1);
+      else if (roll <= 38) next = Math.max(-6, prev - 1);
       else next = prev > 0 ? prev - 1 : prev < 0 ? prev + 1 : 0; // decai rumo a 0
       if (next === 0) delete aiDrift[t.id];
       else aiDrift[t.id] = next;
     }
-    return { moves, lastMoves, aiDrift };
+    return { moves, lastMoves, aiDrift, marketNews: tick.news };
   };
 
   // janela aberta: consuma os acordos fechados durante a temporada (pendingDeals).
@@ -4331,7 +4275,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     }
     return rows.sort((a, b) => b.rating - a.rating).slice(0, 20);
   }, [save.careerStats, save.roles, save.org, currentEra]);
-  const feedMemo = useMemo(() => transferFeed(save.split, currentEra), [save.split, currentEra]);
+  // feed do mercado da IA: PROJEÇÃO viva do tick que vai fechar este split —
+  // reage aos resultados da liga em andamento (forma real de clube) e, no
+  // momento do fechamento, é exatamente o que applyTransferWindow aplica.
+  const feedMemo = useMemo<TransferItem[]>(
+    () => runAIMarketTick(save).log.map((m) => ({ nick: m.nick, cc: m.country, from: m.fromTag, to: m.toTag, fee: m.fee, reason: m.reason })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runAIMarketTick é puro sobre (save, currentEra, bo3Edits)
+    [save, currentEra, bo3Edits],
+  );
   // propostas que CHEGAM pelos seus jogadores: clubes assediam seus melhores nomes.
   // Determinístico por split; some quem você já vendeu ou recusou.
   const incomingOffers = (() => {
@@ -4912,6 +4863,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 // T3.12: scouting tick — salário + relatórios
                 const scoutingPatchMajor = applyScoutingSplitTick(save, oppEra, rngRef.current);
                 const scoutSalaryMajor = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+                // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
+                const { marketNews: majorMarketNews, ...majorWindowPatch } = applyTransferWindow(save);
                 const next = {
                   ...save,
                   budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
@@ -4946,7 +4899,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     qualified: true, endTier: save.tier, wonMajor: mr.champion,
                   }),
                   ...evo,
-                  ...applyTransferWindow(save),
+                  ...majorWindowPatch,
                   pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
                   board: majBoard,
                   lastObjective: majObj ? { text: majObj.text, met: true, delta: majBoard - save.board } : null,
@@ -4960,7 +4913,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                  ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
+                  ...pushNews(save, [...items, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
                 const fin = consummateDeals(next);
                 persist(fin);
@@ -5363,6 +5316,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   // T3.12: scouting tick — salário + relatórios
                   const scoutingPatch = applyScoutingSplitTick(save, oppEra, rngRef.current);
                   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+                  // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
+                  const { marketNews, ...windowPatch } = applyTransferWindow(save);
                   const next = {
                     ...save,
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
@@ -5390,7 +5345,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     }),
                     ...bankStats(save),
                     ...evo,
-                    ...applyTransferWindow(save),
+                    ...windowPatch,
                     ...boardPatch,
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
@@ -5403,7 +5358,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    ...pushNews(save, [...items, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
                   };
                   const fin = consummateDeals(next);
                   persist(fin);
@@ -9262,7 +9217,18 @@ function MarketScreen({
   const [marketSort, setMarketSort] = useState<MarketSort>('ovr-desc');
   const [sponsors, setSponsors] = useState<string[]>(save.sponsors);
   const [sponsorUntil, setSponsorUntil] = useState<Record<string, number>>(save.sponsorUntil ?? {});
-  const marketFeed = useMemo(() => transferFeed(save.split, coaches), [save.split, coaches]);
+  // feed do mercado da IA (#23): mesma projeção do tick real de tickAIMarketActivity
+  const marketFeed = useMemo<TransferItem[]>(
+    () => tickAIMarketActivity({
+      save,
+      split: save.split,
+      teams: coaches.filter((t) => t.id !== save.takeoverId),
+      freeAgents: currentFreeAgents(CS2_REAL_2026, save.moves),
+      protectedIds: new Set(save.squad.map((x) => x.playerId)),
+      movableIds: BASE_PLAYER_IDS,
+    }).log.map((m) => ({ nick: m.nick, cc: m.country, from: m.fromTag, to: m.toTag, fee: m.fee, reason: m.reason })),
+    [save, coaches],
+  );
 
   // contrato ativo = ainda dentro do prazo (não pode rescindir antes do fim)
   const underContract = (id: string) => (sponsorUntil[id] ?? 0) >= save.split;
