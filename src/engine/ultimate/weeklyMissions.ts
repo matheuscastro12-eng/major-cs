@@ -30,8 +30,15 @@ export const WEEKLY_POOL: WeeklyMissionDef[] = [
 ];
 
 export const WEEKLY_PER_WEEK = 3;
-// completar as 3 missões da semana libera um pack bônus (o mais barato da Loja).
-export const WEEKLY_BONUS_PACK = 'bronze';
+// completar (e resgatar) as 3 missões da semana libera um pack bônus GRÁTIS. Antes
+// era 'bronze' (o pack MAIS BARATO da Loja: 55% bronze/35% prata, garante só 1
+// prata) — capstone de uma semana inteira das 3 metas mais duras que valia menos
+// que a diária de login. As win-missions semanais já pagam ~700-800/vitória, o
+// MESMO ou MENOS que a diária m-win1 (800/vit), então a faixa semanal não tinha
+// prêmio-prêmio nenhum sobre grindar diárias. Subir p/ 'silver' (garante 1 OURO)
+// dá um momento de pull de verdade ao capstone sem inflar credits: o pack é
+// gratuito e travado atrás de completar E resgatar as 3 missões da semana.
+export const WEEKLY_BONUS_PACK = 'silver';
 
 // chave ISO-8601 da semana ("2026-W27") no fuso LOCAL — semana começa na
 // segunda; W01 é a semana da 1ª quinta-feira do ano (mesma família do dateKey).

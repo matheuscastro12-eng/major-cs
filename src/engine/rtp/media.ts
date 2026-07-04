@@ -37,6 +37,7 @@ export interface MediaMatchCtx {
 // ─────────────────────────────────────────────────────────────────────────────
 // Rival
 
+// Provocação NEUTRA — rivalidade equilibrada, ninguém domina o head-to-head.
 const TAUNTS = [
   'Cadê o hype? No servidor você some.',
   'Bom no Twitter, mediano na LAN.',
@@ -46,15 +47,49 @@ const TAUNTS = [
   'Chegou a promessa… vamos ver se aguenta a pressão.',
   'O clipe foi bonito. E o troféu, cadê?',
   'Sua torcida grita alto — até a gente calar.',
+  'No veto eu já sei o que você vai banir. Previsível.',
+  'Estudei sua demo inteira: prefire em todo canto que você joga.',
+  'Clutch de sorte não repete. E a gente joga cinco mapas.',
+  'Você abre o round, eu te refrago. Sempre foi assim.',
+  'Pode trocar de org, de coach, de país. O placar contra mim não muda.',
+  'Fala menos no Twitter e treina mais o spray. Conselho de graça.',
 ];
+// Provocação com RESPEITO — você venceu o suficiente pra virar pesadelo do rival.
 const RESPECT_TAUNTS = [
   'Confesso: você tá difícil de bater.',
   'Respeito. Mas ainda não acabou.',
   'Tá virando pesadelo meu, admito.',
+  'Todo mundo tem um freguês. Detesto admitir que virei o seu.',
+  'Da próxima eu levo no overtime. Anota.',
+  'Você subiu a régua. Agora sou eu que corro atrás dela.',
+  'Sem climão dessa vez: jogada limpa, mão melhor. Foi merecido.',
+  'Ainda vou te pegar num Bo5. Mas hoje o dia foi seu.',
+];
+// Provocação DOMINANTE — o rival abriu vantagem no head-to-head e não perdoa.
+const DOMINANT_TAUNTS = [
+  'Quantas vezes mais você quer perder pra mim? Já perdi a conta.',
+  'Freguês oficial. Podia vir de graça jogar pro nosso lado.',
+  'Marca mais um mapa, marca dez. O resultado tá decorado.',
+  'Treina a semana toda pra tomar 16 a 6 de novo?',
+  'Nem preciso abrir sua demo. Já sei seu jogo de cor.',
+  'A torcida já sabe o final — só vem ver o placar confirmar.',
+  'Eco ou full buy, tanto faz: contra mim você não vira o round.',
+  'Devolve o hype pra prateleira. Esse duelo nunca foi seu.',
 ];
 
-function pickTaunt(rng: Rng, dominatedByHero: boolean): string {
-  const pool = dominatedByHero ? RESPECT_TAUNTS : TAUNTS;
+type RivalMood = 'neutral' | 'respect' | 'dominant';
+
+// Humor da provocação a partir do head-to-head (perspectiva do HERÓI): abriu 3+ de
+// frente → o rival te respeita; levou 3+ na cara → o rival provoca dominando.
+function rivalMood(heroW: number, heroL: number): RivalMood {
+  const diff = heroW - heroL;
+  if (diff >= 3) return 'respect';
+  if (diff <= -3) return 'dominant';
+  return 'neutral';
+}
+
+function pickTaunt(rng: Rng, mood: RivalMood): string {
+  const pool = mood === 'respect' ? RESPECT_TAUNTS : mood === 'dominant' ? DOMINANT_TAUNTS : TAUNTS;
   return pool[Math.floor(rng() * pool.length)] ?? pool[0];
 }
 
@@ -69,7 +104,7 @@ function makeRival(opp: TTeam, season: number, rng: Rng): Rival {
     orgId: opp.id, orgName: opp.name, tag: opp.tag, colors: opp.colors, logoUrl: opp.logoUrl,
     playerNick: star.nick, playerRole: star.role, playerOvr: star.ovr,
     intensity: 55, h2h: { w: 0, l: 0 }, originSeason: season, lastSeason: season,
-    taunt: pickTaunt(rng, false),
+    taunt: pickTaunt(rng, 'neutral'),
   };
 }
 
@@ -133,12 +168,11 @@ export function updateMediaAfterMatch(save: RoadToProSave, ctx: MediaMatchCtx): 
   let rival: Rival | null = media.rival;
   if (rival && facedRival) {
     const h2h = { w: rival.h2h.w + (ctx.won ? 1 : 0), l: rival.h2h.l + (ctx.won ? 0 : 1) };
-    const dominatedByHero = h2h.w - h2h.l >= 3;
     rival = {
       ...rival, h2h,
       intensity: clamp(rival.intensity + (ctx.won ? 8 : 14), 0, 100),
       lastSeason: ctx.season,
-      taunt: pickTaunt(rng, dominatedByHero),
+      taunt: pickTaunt(rng, rivalMood(h2h.w, h2h.l)),
       playerOvr: starOf(ctx.oppTeam).ovr,
     };
   } else {
