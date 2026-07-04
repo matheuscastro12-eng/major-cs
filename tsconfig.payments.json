@@ -21,9 +21,12 @@
   "include": [
     "api/account.ts",
     "api/admin-accounts.ts",
+    "api/liveops.ts",
     "api/stripe-webhook.ts",
     "api/ultimate-economy.ts",
     "api/weekend-league.ts",
+    "server/liveops.ts",
+    "server/liveops.test.ts",
     "server/payments.ts",
     "server/payments.test.ts",
     "server/ultimate-economy.ts",
