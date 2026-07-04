@@ -5,6 +5,7 @@
 import { quickSellValue } from './quicksell';
 import { computeNextDaily, dailyCredits } from './daily';
 import { divisionFor, DIV_TIER_MULT } from './divisions';
+import { defaultPassState, ensurePass, passAddXp, PASS_MAX_LEVEL, type PassState, type PassXpSource } from './seasonPass';
 import type { UltCard } from './cards';
 import type { Role } from '../../types';
 
@@ -78,6 +79,7 @@ export interface UltimateProfile {
   bazaarBuys: number;             // total ACUMULADO de compras no bazar (alimenta as missões semanais)
   missions: MissionsState | null; // missões diárias rotativas
   weekly: WeeklyState | null;     // missões semanais renováveis
+  pass: PassState | null;         // Passe de Temporada (reset no rollover; premium NÃO carrega)
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -117,6 +119,7 @@ export function defaultUltimateProfile(): UltimateProfile {
     bazaarBuys: 0,
     missions: null,
     weekly: null,
+    pass: null,
   };
 }
 
@@ -233,6 +236,32 @@ export function markWeeklyBonusClaimed(state: UltimateState): UltimateState {
   const w = state.profile.weekly;
   if (!w || w.bonusClaimed) return state;
   return { ...state, profile: { ...state.profile, weekly: { ...w, bonusClaimed: true } } };
+}
+
+// ── Passe de Temporada: reducers finos sobre seasonPass.ts ──────────────────
+// id da temporada corrente pro passe (= season.n; 1 se a season ainda não abriu).
+export function passSeasonId(p: UltimateProfile): number {
+  return p.season?.n ?? 1;
+}
+
+// concede XP do passe (fonte tabelada em PASS_XP). `day` = dateKey de hoje
+// (alimenta o cap diário de XP de pack). Self-heal: pass nulo/da temporada
+// errada renasce zerado antes de somar. Retorna o MESMO estado se nada mudou.
+export function grantPassXp(state: UltimateState, source: PassXpSource, day: string): UltimateState {
+  const p = state.profile;
+  const pass = ensurePass(p.pass, passSeasonId(p));
+  const next = passAddXp(pass, source, day);
+  if (next === pass && pass === p.pass) return state; // pack capado, nada a gravar
+  return { ...state, profile: { ...p, pass: next } };
+}
+
+// desbloqueia a trilha premium gastando PASS_PREMIUM_COST (o débito em si é
+// feito pela store via spendCredits — aqui só o flag, mantendo o funil normal).
+export function setPassPremium(state: UltimateState, via: 'credits' | 'coins'): UltimateState {
+  const p = state.profile;
+  const pass = ensurePass(p.pass, passSeasonId(p));
+  if (pass.premium) return state;
+  return { ...state, profile: { ...p, pass: { ...pass, premium: true, premiumVia: via } } };
 }
 
 // gerador de id — usa crypto.randomUUID no runtime; tests passam id explícito.
@@ -375,6 +404,20 @@ export function migrateUltimate(raw: unknown): UltimateState {
           base: { w: num(p.weekly.base?.w, 0), l: num(p.weekly.base?.l, 0), packs: num(p.weekly.base?.packs, 0), sbc: num(p.weekly.base?.sbc, 0), bazaar: num(p.weekly.base?.bazaar, 0) },
           claimed: Array.isArray(p.weekly.claimed) ? p.weekly.claimed.filter((x): x is string => typeof x === 'string') : [],
           bonusClaimed: p.weekly.bonusClaimed === true,
+        }
+      : null,
+    // Passe de Temporada — campo aditivo: saves antigos nascem null (o passe
+    // abre no primeiro grantPassXp/claim via ensurePass).
+    pass: p.pass && typeof p.pass === 'object' && typeof p.pass.seasonId === 'number'
+      ? {
+          seasonId: Math.max(1, Math.floor(num(p.pass.seasonId, 1))),
+          xp: Math.max(0, num(p.pass.xp, 0)),
+          premium: p.pass.premium === true,
+          premiumVia: p.pass.premiumVia === 'credits' || p.pass.premiumVia === 'coins' ? p.pass.premiumVia : null,
+          claimedFree: Array.isArray(p.pass.claimedFree) ? p.pass.claimedFree.filter((x): x is number => typeof x === 'number' && Number.isInteger(x) && x >= 1 && x <= PASS_MAX_LEVEL) : [],
+          claimedPremium: Array.isArray(p.pass.claimedPremium) ? p.pass.claimedPremium.filter((x): x is number => typeof x === 'number' && Number.isInteger(x) && x >= 1 && x <= PASS_MAX_LEVEL) : [],
+          packXpDay: typeof p.pass.packXpDay === 'string' ? p.pass.packXpDay : null,
+          packXpCount: Math.max(0, num(p.pass.packXpCount, 0)),
         }
       : null,
   };
@@ -573,7 +616,8 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
   const wlNow = p.w + p.l;
   if (!s) {
     // 1ª vez: abre a season marcando o baseline de jogos (não paga nada).
-    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
+    // O passe abre junto (temporada 1), preservando XP já ganho antes do tick.
+    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow), pass: ensurePass(p.pass, 1) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
   }
   if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: p.elo } };
   // só paga bônus se JOGOU nesta season (conta dormente não vira fonte de credits).
@@ -590,6 +634,9 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
     // soft-reset já nasceria acima dos thresholds e liberaria re-resgate das
     // faixas SEM jogar. O jogador precisa re-escalar na temporada nova.
     season: startSeason(nowMs, wlNow, STARTING_ELO, (s.n ?? 1) + 1), // novo baseline (peak = STARTING_ELO)
+    // Passe de Temporada zera com a season: XP volta a 0 e o premium NÃO
+    // carrega pra temporada nova (compra vale UMA season, como no BUT/FUT).
+    pass: defaultPassState((s.n ?? 1) + 1),
   };
   return { state: { ...state, profile }, result: { rolled: true, credits, newElo } };
 }
