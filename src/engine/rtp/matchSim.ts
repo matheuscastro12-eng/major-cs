@@ -266,8 +266,23 @@ function emptyLine(): PlayerLine {
 
 // Monta o ProMatchResult a partir de uma série JÁ orientada ao usuário (índice 0
 // = você). Compartilhado por finishCircuitMatch (liga) e finishMajorMatch (Major).
-export function assembleProResult(userTeam: TTeam, oppTeam: TTeam, result: SeriesResult, momentScore: number, execAvg: number | null = null): ProMatchResult {
-  const won = result.winner === 0;
+//
+// `roomMaps` (a jogada da Sala — resolveRoomSeries) é a FONTE DA VERDADE do placar
+// exibido: o simulateSeries é re-semeado só até bater as VITÓRIAS de mapa, mas os
+// PLACARES por mapa dele vêm da sim cheia (que pode ir pra prorrogação 13→16) e
+// nas rodadas de fallback nem o número de mapas casava. Resultado: o card mostrava
+// ex. "16-11" ou uma série que a Sala não jogou. Passando roomMaps, o card exibe
+// EXATAMENTE o placar que você viu na Sala (sempre 13-x, mesma ordem); o sim entra
+// só pro scoreboard/rating agregado.
+export function assembleProResult(userTeam: TTeam, oppTeam: TTeam, result: SeriesResult, momentScore: number, execAvg: number | null = null, roomMaps?: { map: MapId; score: [number, number]; won: boolean }[]): ProMatchResult {
+  // Placar/vitórias de mapa: da Sala quando disponível (verdade), senão do sim.
+  const displayMaps = roomMaps && roomMaps.length
+    ? roomMaps.map((m) => ({ map: m.map, score: m.score, won: m.won }))
+    : result.maps.map((m) => ({ map: m.map, score: m.score, won: m.winner === 0 }));
+  const mapScore: [number, number] = roomMaps && roomMaps.length
+    ? [roomMaps.filter((m) => m.won).length, roomMaps.filter((m) => !m.won).length]
+    : result.mapScore;
+  const won = mapScore[0] > mapScore[1];
   const heroLinesRaw = result.maps.map((m) => m.stats['rtp-hero']?.both).filter(Boolean) as PlayerLine[];
   const heroRaw = mergeLines(heroLinesRaw.length ? heroLinesRaw : [emptyLine()]);
   // Média dos COLEGAS (mesmo time, sem o herói) pra ancorar o piso relativo.
@@ -288,8 +303,8 @@ export function assembleProResult(userTeam: TTeam, oppTeam: TTeam, result: Serie
   };
   return {
     oppName: oppTeam.name, oppTag: oppTeam.tag, oppColors: oppTeam.colors,
-    won, mapScore: result.mapScore,
-    maps: result.maps.map((m) => ({ map: m.map, score: m.score, won: m.winner === 0 })),
+    won, mapScore,
+    maps: displayMaps,
     heroRating, mvp, userRows, oppRows, momentScore, execAvg, heroStats,
     series: result, userTeam, oppTeam,
   };
