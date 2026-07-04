@@ -98,6 +98,24 @@ export async function claimPaidCoins(): Promise<number> {
   try { const d = await post({ action: 'coinsClaim', token }); return Number(d.coins) || 0; } catch { return 0; }
 }
 
+// Resumo das compras de coins da conta: purchased = total já comprado (pedidos
+// creditados) e restorable = quanto ainda pode ser re-emitido (1× por coin) pra
+// quem perdeu o save local. null se deslogado/offline.
+export async function fetchCoinsSummary(): Promise<{ purchased: number; restorable: number } | null> {
+  const token = getToken(); if (!token) return null;
+  try {
+    const d = await post({ action: 'coinsSummary', token });
+    return { purchased: Number(d.purchased) || 0, restorable: Number(d.restorable) || 0 };
+  } catch { return null; }
+}
+
+// Re-emite os coins comprados que ainda não foram restaurados (o servidor limita
+// a 1× por coin comprado, pra sempre). Retorna quantos coins creditar agora.
+export async function restorePurchasedCoins(): Promise<number> {
+  const token = getToken(); if (!token) return 0;
+  try { const d = await post({ action: 'coinsRestore', token }); return Number(d.coins) || 0; } catch { return 0; }
+}
+
 export async function exportAccountData(): Promise<Record<string, unknown>> {
   const token = getToken();
   if (!token) throw new Error(ct('Entre novamente na conta para exportar seus dados.'));
