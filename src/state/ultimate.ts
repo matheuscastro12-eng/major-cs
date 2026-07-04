@@ -7,6 +7,11 @@
 import { create } from 'zustand';
 import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot } from './cloud';
 import { captureError } from './errlog';
+// Fase 3a da economia server-side: cada mutação econômica (credits/cartas) é
+// ESPELHADA como tx idempotente pro servidor via mirrorUltimateChange — o save
+// local/cloud-save segue sendo a fonte da verdade; o espelho nunca bloqueia
+// nem lança (tudo fire-and-forget dentro do próprio módulo).
+import { bootUltimateShadow, mirrorUltimateChange } from './ultimateShadow';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
 import { catalogIndex, type UltCard } from '../engine/ultimate/cards';
@@ -124,6 +129,10 @@ export async function syncUltimateFromCloud(): Promise<'restored' | 'pushed' | '
     } catch { /* nuvem ilegível — mantém o estado atual */ }
   }
   if (r === 'deleted') useUltimate.setState({ state: defaultUltimateState() });
+  // Fase 3a: com o save já reconciliado com a nuvem e a conta conhecida, roda a
+  // migração one-time pro ledger do servidor + drena a fila-sombra pendente.
+  // Fire-and-forget — não atrasa o retorno pra UI.
+  bootUltimateShadow();
   return r;
 }
 
@@ -217,12 +226,14 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set((st) => {
       const s = _grantCard(st.state, cardKey, via);
       persist(s);
+      mirrorUltimateChange(st.state, s, 'grant', { via });
       return { state: s };
     }),
   openPack: (packId) => {
     const pack = packById(packId);
     if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' };
-    const spent = _spendCredits(get().state, pack.cost);
+    const prev = get().state;
+    const spent = _spendCredits(prev, pack.cost);
     if (!spent.ok) return { ok: false, cards: [], reason: 'insufficient' };
     // seed incremental gravado ANTES do reveal → reload não re-rola (anti-reroll)
     const seed = spent.state.profile.packSeedCounter + 1;
@@ -237,13 +248,18 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     for (const c of cards) s = _grantCard(s, c.key, 'pack');
     persist(s);
     set({ state: s });
+    // pack aberto no cliente (fase 3a): espelha custo+cartas com o seed usado —
+    // o servidor ainda não rola o pack (isso é a fase 3b via action packOpen).
+    mirrorUltimateChange(prev, s, 'pack', { packId: pack.id, seed });
     return { ok: true, cards };
   },
   sell: (ownedId) => {
-    const res = _sellCard(get().state, ownedId, ultimateIndex());
+    const prev = get().state;
+    const res = _sellCard(prev, ownedId, ultimateIndex());
     if (res.ok) {
       persist(res.state);
       set({ state: res.state });
+      mirrorUltimateChange(prev, res.state, 'quicksell');
     }
     return { ok: res.ok, credited: res.credited };
   },
@@ -251,21 +267,24 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     // vende em lote com UM persist/set no final — N vendas individuais faziam
     // N serializações completas do save no mesmo click (jank em coleção grande).
     const idx = ultimateIndex();
-    let s = get().state;
+    const prev = get().state;
+    let s = prev;
     let sold = 0;
     let credited = 0;
     for (const id of ownedIds) {
       const r = _sellCard(s, id, idx);
       if (r.ok) { s = r.state; sold++; credited += r.credited; }
     }
-    if (sold > 0) { persist(s); set({ state: s }); }
+    if (sold > 0) { persist(s); set({ state: s }); mirrorUltimateChange(prev, s, 'quicksell', { n: sold }); }
     return { sold, credited };
   },
   spend: (n) => {
-    const r = _spendCredits(get().state, n);
+    const prev = get().state;
+    const r = _spendCredits(prev, n);
     if (r.ok) {
       persist(r.state);
       set({ state: r.state });
+      mirrorUltimateChange(prev, r.state, 'spend');
     }
     return r.ok;
   },
@@ -273,6 +292,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set((st) => {
       const s = _addCredits(st.state, n);
       persist(s);
+      // crédito direto (compra de coins paga/restaurada etc.) → 'grant'
+      mirrorUltimateChange(st.state, s, 'grant', { src: 'credit' });
       return { state: s };
     }),
   ensureSquad: () =>
@@ -303,21 +324,30 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // spammar até um time 95+ em ~20min). Renda de verdade vem de rivals (PvP),
       // daily, gauntlet — capados. ~90/vitória → 300+ jogos por um pack Elite.
       const credits = won ? 90 : 25;
-      let s = _addCredits(get().state, credits);
+      const prev = get().state;
+      let s = _addCredits(prev, credits);
       s = _pushHistory(s, rec('casual', 0, credits));
       persist(s);
       set({ state: s });
+      mirrorUltimateChange(prev, s, 'reward', { src: 'match', mode: 'casual' });
       return { eloDelta: 0, credits };
     }
-    const r = _applyMatchResult(get().state, won, oppElo);
+    const prev = get().state;
+    const r = _applyMatchResult(prev, won, oppElo);
     const s = _pushHistory(r.state, rec('rivals', r.outcome.eloDelta, r.outcome.credits));
     persist(s);
     set({ state: s });
+    mirrorUltimateChange(prev, s, 'reward', { src: 'match', mode: 'rivals' });
     return r.outcome;
   },
   claimDaily: () => {
-    const r = _claimDaily(get().state, dateKey(new Date()));
-    if (r.result.claimed) { persist(r.state); set({ state: r.state }); }
+    const prev = get().state;
+    const r = _claimDaily(prev, dateKey(new Date()));
+    if (r.result.claimed) {
+      persist(r.state);
+      set({ state: r.state });
+      mirrorUltimateChange(prev, r.state, 'reward', { src: 'daily' });
+    }
     return r.result;
   },
   syncTitles: () => {
@@ -347,7 +377,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
   claimStarter: (formationId) => {
     const roles = formationSlotRoles(formationId);
     const cards = pickStarterCards(ultimateCatalog(), roles, 76);
-    let s = _ensureSquad(get().state, formationId, roles);
+    const prev = get().state;
+    let s = _ensureSquad(prev, formationId, roles);
     cards.forEach((c, i) => {
       const id = `starter_${i}_${Math.random().toString(36).slice(2, 9)}`;
       s = _grantCard(s, c.key, 'starter', { id });
@@ -357,6 +388,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _mergeTitles(s, ['rookie']).state;
     persist(s);
     set({ state: s });
+    mirrorUltimateChange(prev, s, 'grant', { src: 'starter' });
     return cards;
   },
   submitSbc: (sbcId, ownedIds) => {
@@ -385,16 +417,23 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = { ...s, profile: { ...s.profile, sbcDone: [...s.profile.sbcDone, def.id] } };
     persist(s);
     set({ state: s });
+    mirrorUltimateChange(st, s, 'sbc', { sbcId: def.id });
     return { ok: true, reward: def.reward, grantedCard };
   },
   tickSeason: () => {
-    const r = _applySeasonRollover(get().state, Date.now());
+    const prev = get().state;
+    const r = _applySeasonRollover(prev, Date.now());
     // só grava se o estado mudou (evita write no localStorage a cada mount).
-    if (r.state !== get().state) { persist(r.state); set({ state: r.state }); }
+    if (r.state !== prev) {
+      persist(r.state);
+      set({ state: r.state });
+      mirrorUltimateChange(prev, r.state, 'reward', { src: 'season-rollover' });
+    }
     return r.result;
   },
   buyCard: (cardKey, price, listingId, day) => {
-    const sp = _spendCredits(get().state, price);
+    const prev = get().state;
+    const sp = _spendCredits(prev, price);
     if (!sp.ok) return false;
     let s = _grantCard(sp.state, cardKey, 'market');
     // grava a compra no save — o bazar é determinístico por dia, então sem isso
@@ -402,6 +441,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (listingId && day != null) s = _markBazaarBought(s, day, listingId);
     persist(s);
     set({ state: s });
+    // compra no bazar: gasta credits E adiciona a carta na mesma tx-sombra
+    mirrorUltimateChange(prev, s, 'spend', { src: 'bazaar', cardKey });
     return true;
   },
   claimObjective: (id) => {
@@ -422,11 +463,18 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }
     persist(s);
     set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'objective', id });
     return { ok: true, reward: def.reward, grantedCard };
   },
   evolveCard: (ownedId) => {
-    const r = _evolveCard(get().state, ownedId);
-    if (r.ok) { persist(r.state); set({ state: r.state }); }
+    const prev = get().state;
+    const r = _evolveCard(prev, ownedId);
+    if (r.ok) {
+      persist(r.state);
+      set({ state: r.state });
+      // evolução: só o custo é espelhado (o boost fica no meta da fase 3b)
+      mirrorUltimateChange(prev, r.state, 'spend', { src: 'evolve', ownedId });
+    }
     return { ok: r.ok, cost: r.cost, newBoost: r.newBoost, reason: r.reason };
   },
   claimSeasonReward: (id) => {
@@ -448,6 +496,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }
     persist(ns);
     set({ state: ns });
+    mirrorUltimateChange(st, ns, 'reward', { src: 'season', id });
     return { ok: true, reward: def.reward, grantedCard };
   },
   gauntletStart: (today) =>
@@ -458,7 +507,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       return { state: s };
     }),
   gauntletRecord: (won, score = '') => {
-    const r = _gauntletRecord(get().state, won);
+    const prev = get().state;
+    const r = _gauntletRecord(prev, won);
     // run inativo (advanced=false) → reducer no-opou; NÃO paga nada.
     if (!r.advanced) return { wins: r.wins, completed: r.completed, over: r.over, credits: 0 };
     let s = r.state;
@@ -475,6 +525,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _pushHistory(s, { t: Date.now(), mode: 'gauntlet', won, score, eloDelta: 0, credits });
     persist(s);
     set({ state: s });
+    mirrorUltimateChange(prev, s, 'reward', { src: 'gauntlet' });
     return { wins: r.wins, completed: r.completed, over: r.over, credits, grantedCard };
   },
   syncMissions: (today) =>
@@ -502,6 +553,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _addCredits(s, def.credits);
     persist(s);
     set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'mission', id });
     return { ok: true, credits: def.credits };
   },
   syncWeekly: (week) =>
@@ -522,6 +574,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _addCredits(s, def.credits);
     persist(s);
     set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'weekly', id });
     return { ok: true, credits: def.credits };
   },
   claimWeeklyBonus: () => {
@@ -541,6 +594,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     for (const c of cards) s = _grantCard(s, c.key, 'reward');
     persist(s);
     set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'weekly-bonus', seed });
     return { ok: true, cards };
   },
   setState: (s) => {
