@@ -1,15 +1,17 @@
 // Roteador do modo Online (novo design): hub → ranked 1v1 | ranked major | gauntlet.
 // Single-player vs IA. Ranking salvo (servidor) só pra conta paga; convidado/grátis
 // joga casual e os pontos ficam só no navegador.
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TeamSeason } from '../../types';
 import type { Account } from '../../state/account';
 import { getManager } from '../../state/manager';
+import { setCloudEnabled } from '../../state/cloud';
+import { syncOnlineStatsFromCloud } from '../../state/onlineStats';
 import { Button } from '../ds';
 import { OnlineHub, type OnlineModeId } from './OnlineHub';
 import { OnlineGauntlet } from './OnlineGauntlet';
 import { OnlineScreen } from '../OnlineScreen';
-import { buildPool, loadStats, saveStats, type OnlineStats } from './onlineData';
+import { buildPool, loadStats, saveStats, DEFAULT_STATS, type OnlineStats } from './onlineData';
 import { ct } from '../../state/career-i18n';
 
 export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; account: Account | null; dataset: TeamSeason[] }) {
@@ -27,6 +29,23 @@ export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; a
   const setStats = useCallback((fn: (s: OnlineStats) => OnlineStats) => {
     setStatsRaw((prev) => { const next = fn(prev); saveStats(next); return next; });
   }, []);
+
+  // cloud: reconcilia o perfil (MMR/pontos/histórico) com a nuvem assim que a
+  // conta carrega — restaura de outro aparelho ou re-sobe o local mais novo,
+  // igual ao boot do Ultimate/RtP. Grátis/deslogado: no-op, perfil só local.
+  useEffect(() => {
+    if (!account) return;
+    // garante o gate da nuvem ANTES do sync (o setCloudEnabled do App vive num
+    // effect do pai, que roda DEPOIS deste — mesma armadilha do Ultimate).
+    setCloudEnabled(!!account.paid);
+    let on = true;
+    void syncOnlineStatsFromCloud().then((r) => {
+      if (!on) return;
+      if (r === 'restored') setStatsRaw(loadStats());
+      if (r === 'deleted') setStatsRaw({ ...DEFAULT_STATS });
+    }).catch(() => { /* offline — segue com o local */ });
+    return () => { on = false; };
+  }, [account]);
 
   if (!manager) {
     return (
