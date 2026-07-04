@@ -12,12 +12,13 @@ import { captureError } from './errlog';
 // local/cloud-save segue sendo a fonte da verdade; o espelho nunca bloqueia
 // nem lança (tudo fire-and-forget dentro do próprio módulo).
 import { bootUltimateShadow, mirrorUltimateChange } from './ultimateShadow';
+import { scheduledPromo, scheduledSbcById } from './liveops';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
-import { catalogIndex, type UltCard } from '../engine/ultimate/cards';
+import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { buildFullCatalog } from '../engine/ultimate/catalog';
-import { packById, rollPack, PROMO_PACK } from '../engine/ultimate/packs';
-import { monthIndex, promoForMonth, type MonthlyPromo } from '../engine/ultimate/promos';
+import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
+import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import { pickStarterCards } from '../engine/ultimate/cards';
@@ -151,16 +152,61 @@ let _catalog: UltCard[] | null = null;
 let _index: Map<string, UltCard> | null = null;
 let _promo: MonthlyPromo | null = null;
 let _catalogMonth = -1;
+let _catalogLoKey = ''; // id+params da promo AGENDADA que o memo atual embute ('' = nenhuma)
+
+// seed determinística a partir do id do evento (djb2) — todo cliente sorteia os
+// MESMOS 11 promovidos de uma promo agendada, igual ao seeded-por-mês da mensal.
+function liveopsSeed(id: string): number {
+  let h = 5381;
+  for (let i = 0; i < id.length; i++) h = ((h * 33) ^ id.charCodeAt(i)) >>> 0;
+  return h || 1;
+}
+
 function ensureCatalog(): void {
   const mi = monthIndex(new Date());
-  if (_catalog && _catalogMonth === mi) return;
+  // memo key = mês + promo agendada (live-ops): se um agendamento entra/sai/muda
+  // NO MEIO da sessão, a chave muda e o catálogo/promo é reconstruído na hora.
+  const lo = scheduledPromo();
+  const loKey = lo ? `${lo.id}:${lo.payload.filterKey}:${lo.payload.ovrBoost}` : '';
+  if (_catalog && _catalogMonth === mi && _catalogLoKey === loKey) return;
   // derivação compartilhada com o servidor (engine/ultimate/catalog.ts) — a
   // fase 2 da economia rola packs server-side sobre o MESMO catálogo.
   const { base, catalog } = buildFullCatalog(CS2_REAL_2026, mi);
   _promo = promoForMonth(base, mi);
   _catalog = catalog;
+  // promo AGENDADA sobrepõe a mensal: tema resolvido por filterKey (allowlist →
+  // filtro compilado de promos.ts), flavor (nome/desc/cor) e boost do payload.
+  const theme = lo ? promoThemeById(lo.payload.filterKey) : undefined;
+  if (lo && theme) {
+    const pool = base
+      .filter(theme.filter)
+      .sort((a, b) => b.ovr - a.ovr || a.playerId.localeCompare(b.playerId))
+      .slice(0, PROMO_SIZE * 2);
+    const rng = makeRng(liveopsSeed(lo.id));
+    const chosen: UltCard[] = [];
+    while (chosen.length < PROMO_SIZE && pool.length) {
+      chosen.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+    }
+    if (chosen.length) {
+      // só anexa versão promo de quem ainda NÃO tem (a chave `${playerId}:promo`
+      // é única no índice — quem já foi promo em mês passado reusa a carta).
+      const already = new Set(catalog.filter((c) => c.rarity === 'promo').map((c) => c.playerId));
+      const extra = chosen
+        .filter((c) => !already.has(c.playerId))
+        .map((c) => ({ playerId: c.playerId, rarity: 'promo' as const, ovrBoost: lo.payload.ovrBoost }));
+      _catalog = extra.length ? appendSpecials(CS2_REAL_2026, catalog, extra) : catalog;
+      _promo = {
+        monthIndex: mi,
+        theme: { ...theme, name: lo.payload.name, desc: lo.payload.desc, color: lo.payload.color },
+        playerIds: chosen.map((c) => c.playerId),
+        specs: chosen.map((c) => ({ playerId: c.playerId, rarity: 'promo' as const, ovrBoost: lo.payload.ovrBoost })),
+        endsAt: lo.endsAtMs,
+      };
+    }
+  }
   _index = catalogIndex(_catalog);
   _catalogMonth = mi;
+  _catalogLoKey = loKey;
 }
 export function ultimateCatalog(): UltCard[] {
   ensureCatalog();
@@ -171,9 +217,15 @@ export function ultimateIndex(): Map<string, UltCard> {
   return _index!;
 }
 // a promo do mês CORRENTE (tema + 11 promovidos + fim do mês) — alimenta a Loja.
+// Se há promo AGENDADA (live-ops) ativa, é ela que sai daqui (override total).
 export function ultimatePromo(): MonthlyPromo {
   ensureCatalog();
   return _promo!;
+}
+// o Pacote Promo em vigor: o padrão, ou com o custo do agendamento ativo.
+export function ultimatePromoPack(): PackDef {
+  const lo = scheduledPromo();
+  return lo && promoThemeById(lo.payload.filterKey) ? { ...PROMO_PACK, cost: lo.payload.packCost } : PROMO_PACK;
 }
 
 interface UltimateStore {
@@ -230,7 +282,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       return { state: s };
     }),
   openPack: (packId) => {
-    const pack = packById(packId);
+    // Pacote Promo usa a def em vigor (custo pode vir de promo agendada do live-ops)
+    const pack = packId === PROMO_PACK.id ? ultimatePromoPack() : packById(packId);
     if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' };
     const prev = get().state;
     const spent = _spendCredits(prev, pack.cost);
@@ -392,7 +445,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     return cards;
   },
   submitSbc: (sbcId, ownedIds) => {
-    const def = sbcById(sbcId);
+    // 'lo-…' = SBC agendada do live-ops: resolve a def do snapshot (mesma forma
+    // de SbcDef; a recompensa flui pelo MESMO caminho, inclusive o espelho-sombra)
+    const def = sbcById(sbcId) ?? scheduledSbcById(sbcId);
     if (!def) return { ok: false, reason: 'unknown_sbc' };
     if (new Set(ownedIds).size !== ownedIds.length) return { ok: false, reason: 'duplicate_ids' };
     const st = get().state;

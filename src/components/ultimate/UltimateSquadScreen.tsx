@@ -5,9 +5,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
-import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, useUltimate } from '../../state/ultimate';
+import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, useUltimate } from '../../state/ultimate';
+import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
-import { PACK_DEFS, PROMO_PACK, type PackDef } from '../../engine/ultimate/packs';
+import { PACK_DEFS, type PackDef } from '../../engine/ultimate/packs';
 import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
@@ -394,6 +395,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coinModal?.charge]);
+
+  // live-ops: conteúdo agendado pelo CRM (promo/SBC/aviso). Snapshot do cache
+  // já no 1º render (nunca bloqueia); o fetch revalida em segundo plano e a
+  // assinatura rehidrata se um agendamento entrar/sair no meio da sessão.
+  const [liveops, setLiveops] = useState<LiveopsItem[]>(() => liveopsSnapshot());
+  const [, setNoticeTick] = useState(0); // re-render após dispensar um aviso
+  useEffect(() => {
+    let on = true;
+    void fetchActiveLiveops().then((items) => { if (on) setLiveops(items); });
+    const un = subscribeLiveops(() => { if (on) setLiveops(liveopsSnapshot()); });
+    return () => { on = false; un(); };
+  }, []);
+  const liveNotices = activeNotices(liveops).filter((n) => !isNoticeDismissed(n.id));
+  const liveSbcs = scheduledSbcs(liveops);
 
   // garante um squad ativo ao abrir a aba Squad
   useEffect(() => { if (tab === 'squad') ensureSquad(); }, [tab, ensureSquad]);
@@ -1033,6 +1048,17 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
 
       {/* ===== PAGE ===== */}
       <div className="ut-page">
+        {/* avisos agendados (live-ops) — dispensáveis por id, some pra sempre */}
+        {liveNotices.map((n) => (
+          <div key={n.id} role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', marginBottom: 12, borderRadius: 12, background: 'rgba(122,162,247,0.12)', border: '1px solid rgba(122,162,247,0.4)' }}>
+            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2, color: '#7aa2f7' }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 900, fontSize: '0.85rem' }}>{n.payload.title}</div>
+              <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{n.payload.body}</div>
+            </div>
+            <button className="icon-btn" title={ct('Dispensar aviso')} onClick={() => { dismissNotice(n.id); setNoticeTick((t) => t + 1); }}><X size={14} /></button>
+          </div>
+        ))}
         {tab === 'hub' && (
           <header className="ut-greet">
             <div>
@@ -1407,7 +1433,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             const left = Math.max(0, promo.endsAt - Date.now());
             const dd = Math.floor(left / 86400000);
             const hh = Math.floor((left % 86400000) / 3_600_000);
-            const afford = credits >= PROMO_PACK.cost;
+            // def em vigor: a padrão, ou com o custo da promo AGENDADA (live-ops)
+            const promoPack = ultimatePromoPack();
+            const afford = credits >= promoPack.cost;
             return (
               <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${promo.theme.color} 0%, ${promo.theme.color}dd 55%, ${promo.theme.color}aa 100%)`, marginBottom: 12 }}>
                 <div className="ut-pack__shine" />
@@ -1415,8 +1443,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div className="ut-pack__name">{ct('Pacote Promo')} · {promo.theme.name}</div>
                 <div className="ut-pack__desc">{ct(promo.theme.desc)} — {ct('11 cartas promo (+2 OVR) este mês, 1 garantida no pack.')}</div>
                 <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Termina em')} {dd}d {hh}h</div>
-                <button className="ut-pack__buy" onClick={() => buy(PROMO_PACK)} disabled={!afford} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
-                  {afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(PROMO_PACK.cost)}
+                <button className="ut-pack__buy" onClick={() => buy(promoPack)} disabled={!afford} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                  {afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(promoPack.cost)}
                 </button>
               </div>
             );
@@ -1775,12 +1803,18 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             {ct('Monte times que cumpram os requisitos e troque cartas (inclusive duplicatas) por recompensas. As cartas usadas são consumidas.')}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
-            {SBCS.map((s) => {
+            {/* SBCs embutidas + agendadas (live-ops, id 'lo-…' nunca colide) */}
+            {[...SBCS.map((s) => ({ def: s, limitEnd: null as string | null })), ...liveSbcs.map((x) => ({ def: x.def, limitEnd: x.endsAt }))].map(({ def: s, limitEnd }) => {
               const done = state.profile.sbcDone.includes(s.id);
               return (
                 <div key={s.id} className="ut-sbc">
                   <div className="ut-sbc__head">
                     <span className="ut-sbc__name">{s.name}</span>
+                    {limitEnd && (
+                      <span title={`${ct('Disponível até')} ${new Date(limitEnd).toLocaleDateString('pt-BR')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.62rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.4px', padding: '2px 7px', borderRadius: 999, background: 'rgba(244,114,182,0.14)', border: '1px solid rgba(244,114,182,0.5)', color: '#d1447f' }}>
+                        <CalendarDays size={10} /> {ct('por tempo limitado')} · {new Date(limitEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      </span>
+                    )}
                     {done && <span className="ut-sbc__done" title={ct('já concluído (repetível)')}><Check size={12} strokeWidth={3} /></span>}
                   </div>
                   <div className="ut-sbc__desc">{s.desc}</div>

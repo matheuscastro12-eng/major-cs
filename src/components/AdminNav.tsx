@@ -6,6 +6,7 @@ const LINKS: [string, string][] = [
   ['/admin', 'Times'],
   ['/admin/acessos', 'Contas pagas'],
   ['/admin/financeiro', 'Financeiro'],
+  ['/admin/liveops', 'Live-ops'],
   ['/admin/carreira', 'Carreira'],
   ['/admin/lab', 'Laboratório'],
 ];
