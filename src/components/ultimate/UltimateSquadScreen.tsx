@@ -29,6 +29,7 @@ import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, type CoinCharge, type CoinTierId } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
+import { wlMirrorReport } from '../../state/weekendLeague';
 import { UtPanel, UtEmpty } from './UtPanel';
 import {
   LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
@@ -762,6 +763,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     // só a ranqueada alimenta o ranking global (report POR PARTIDA). Nick do
     // ladder = displayName; participante no lobby = pvpNick (tem sufixo #XXXX).
     if (!already && args.ranked) void reportResult(won, displayName, args.code, pvpNick);
+    // espelho do Major do Sábado: duelo ranqueado do Ultimate também conta pro
+    // run do fim de semana (gate local de inscrição; fire-and-forget, servidor valida).
+    if (!already && args.ranked) wlMirrorReport(won, args.code, args.oppNick);
     const eloAfter = eloBefore + outcome.eloDelta;
     setResult(null);
     setLiveRound(0);

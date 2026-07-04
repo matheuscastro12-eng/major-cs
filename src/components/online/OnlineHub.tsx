@@ -9,7 +9,7 @@ import { getLadder, type RankRow } from '../../state/ranking';
 import { rankFor, majorPlace, type OnlineStats } from './onlineData';
 import { ct } from '../../state/career-i18n';
 
-export type OnlineModeId = '1v1' | 'major' | 'gauntlet';
+export type OnlineModeId = '1v1' | 'major' | 'gauntlet' | 'weekend';
 
 export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }: {
   manager: Manager;
@@ -22,14 +22,15 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
   const me = manager;
   const rk = rankFor(stats.mmr);
   const paid = !!account?.paid;
-  const [lb, setLb] = useState<OnlineModeId>('1v1');
+  const [lb, setLb] = useState<'1v1' | 'major' | 'gauntlet'>('1v1');
   const [ladder, setLadder] = useState<RankRow[]>([]);
   useEffect(() => { void getLadder().then((d) => setLadder(d.ladder)); }, []);
 
   const MODES = [
-    { id: '1v1' as const, icon: '⚔', tone: 'var(--em-gold)', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
-    { id: 'major' as const, icon: '🏆', tone: 'var(--em-gold)', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'] },
-    { id: 'gauntlet' as const, icon: '🔥', tone: '#29c47a', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
+    { id: '1v1' as const, icon: '⚔', tone: 'var(--em-gold)', badge: '', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
+    { id: 'major' as const, icon: '🏆', tone: 'var(--em-gold)', badge: '', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'] },
+    { id: 'gauntlet' as const, icon: '🔥', tone: '#29c47a', badge: '', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
+    { id: 'weekend' as const, icon: '🏟️', tone: 'var(--em-gold)', badge: 'SÁB-DOM', name: 'Major do Sábado', players: 'Liga de fim de semana', ranked: 'Créditos e cartas', pitch: 'Weekend League: até 10 ranqueadas no fim de semana valendo recompensas.', how: ['Inscreva-se na janela (sábado 00h → domingo 23h59)', 'Jogue até 10 Ranked 1v1 — cada duelo confirmado conta', 'Quanto mais vitórias, maior a faixa de recompensa', 'Resgate créditos (2k a 25k) e cartas ao fim do run'] },
   ];
 
   type LbRow = { nick: string; country: string; val: number; you: boolean; sub: string; subColor: string; fmt: string };
@@ -47,7 +48,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
     }
     return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: ct('Sequência recorde'), subColor: '#29c47a', fmt: stats.bestStreak + ' ' + ct('seguidas') }];
   }
-  const LB_NOTE: Record<OnlineModeId, string> = {
+  const LB_NOTE: Record<'1v1' | 'major' | 'gauntlet', string> = {
     '1v1': 'Ranking real por MMR (contas com ranking salvo). Ganhar sobe, perder desce.',
     major: 'Pontos de colocação dos seus Majors. Por enquanto o placar é só o seu.',
     gauntlet: 'A maior sequência de vitórias que você já emendou sem perder.',
@@ -89,7 +90,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       </div>
 
       {/* grid de modos */}
-      <div className="rtm-online-modes" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+      <div className="rtm-online-modes" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
         {MODES.map((m) => (
           <div key={m.id} style={{ display: 'flex', flexDirection: 'column', background: 'var(--em-panel)', border: '1px solid var(--em-border)', borderRadius: '12px', overflow: 'hidden' }}>
             <div style={{ position: 'relative', padding: '18px 20px', borderBottom: '1px solid var(--em-border)' }}>
@@ -100,6 +101,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
                   <h2 style={{ margin: 0, fontFamily: 'inherit', fontSize: '21px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-text)' }}>{ct(m.name)}</h2>
                   <div style={{ fontSize: '11.5px', color: m.tone, fontWeight: 700 }}>{ct(m.players)}</div>
                 </div>
+                {m.badge && <span style={{ marginLeft: 'auto', alignSelf: 'flex-start', fontSize: '9px', fontWeight: 800, letterSpacing: '.6px', textTransform: 'uppercase', color: '#06121d', background: m.tone, padding: '3px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}>{m.badge}</span>}
               </div>
               <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--em-text)', lineHeight: 1.5 }}>{ct(m.pitch)}</p>
             </div>
@@ -118,7 +120,10 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--rtm-faint)', marginBottom: '12px' }}>
                 <span style={{ color: 'var(--em-muted)' }}>{ct('Vale para:')}</span> <b style={{ color: m.tone }}>{ct(m.ranked)}</b>
               </div>
-              <Button variant={m.id === 'major' ? 'gold' : 'primary'} style={{ width: '100%' }} onClick={() => onPlay(m.id)}>{ct('Jogar')} {ct(m.name)}</Button>
+              {m.id === 'weekend' && !paid && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--em-gold)', fontWeight: 700, marginBottom: '8px' }}>🔒 {ct('Precisa da conta vitalícia (save na nuvem)')}</div>
+              )}
+              <Button variant={m.id === 'major' || m.id === 'weekend' ? 'gold' : 'primary'} style={{ width: '100%' }} onClick={() => onPlay(m.id)}>{m.id === 'weekend' ? ct('Abrir') : ct('Jogar')} {ct(m.name)}</Button>
             </div>
           </div>
         ))}
@@ -137,7 +142,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       {/* leaderboard */}
       <Panel title={ct('Ranking')} accent="gold" flush actions={
         <span style={{ display: 'flex', gap: '6px' }}>
-          {([['1v1', 'Ranked 1v1'], ['major', 'Ranked Major'], ['gauntlet', 'Gauntlet']] as [OnlineModeId, string][]).map(([id, lbl]) => (
+          {([['1v1', 'Ranked 1v1'], ['major', 'Ranked Major'], ['gauntlet', 'Gauntlet']] as ['1v1' | 'major' | 'gauntlet', string][]).map(([id, lbl]) => (
             <button key={id} type="button" onClick={() => setLb(id)} style={{ cursor: 'pointer', borderRadius: '999px', padding: '5px 13px', fontSize: '12px', fontWeight: 700, border: `1px solid ${lb === id ? 'var(--em-gold)' : 'var(--em-border-strong)'}`, background: lb === id ? 'var(--em-gold)' : 'transparent', color: lb === id ? '#06121d' : 'var(--em-muted)' }}>{ct(lbl)}</button>
           ))}
         </span>
