@@ -35,6 +35,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
+import { trackPaywallView } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { wlMirrorReport } from '../../state/weekendLeague';
@@ -771,6 +772,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // Conta grátis vê a seção travada (mesmo gate do Major do Sábado); toda
   // chamada é try/catch com toast — o Mercado nunca trava a tela.
   const mktPaid = !!account?.paid;
+  // funil: conta grátis abriu a aba Mercado e viu a trava da vitalícia
+  useEffect(() => { if (tab === 'mercado' && !mktPaid) trackPaywallView('mkt-lock'); }, [tab, mktPaid]);
   const [mktSub, setMktSub] = useState<'browse' | 'mine'>('browse');
   const [mktRows, setMktRows] = useState<MktBrowseItem[]>([]);
   const [mktMineRows, setMktMineRows] = useState<MktMineItem[]>([]);

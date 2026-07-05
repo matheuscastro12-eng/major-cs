@@ -8,6 +8,7 @@ import type { Account } from '../../state/account';
 import { getLadder, type RankRow } from '../../state/ranking';
 import { rankFor, majorPlace, type OnlineStats } from './onlineData';
 import { ct } from '../../state/career-i18n';
+import { trackPaywallView } from '../../state/track';
 
 export type OnlineModeId = '1v1' | 'major' | 'gauntlet' | 'weekend';
 
@@ -25,6 +26,8 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
   const [lb, setLb] = useState<'1v1' | 'major' | 'gauntlet'>('1v1');
   const [ladder, setLadder] = useState<RankRow[]>([]);
   useEffect(() => { void getLadder().then((d) => setLadder(d.ladder)); }, []);
+  // funil: conta grátis vê o badge de trava vitalícia no card do Major do Sábado
+  useEffect(() => { if (!paid) trackPaywallView('hub-wl'); }, [paid]);
 
   const MODES = [
     { id: '1v1' as const, icon: '⚔', tone: 'var(--em-gold)', badge: '', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },

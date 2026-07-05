@@ -13,6 +13,12 @@ const ALLOWED_TYPES = new Set([
   'ad_click',
   'share_card',
   'presence',
+  // funil de conversão da vitalícia (iter39): visão de paywall → checkout → abandono
+  'paywall_view',     // {src} — superfície de venda vista (1x/sessão/src no cliente)
+  'checkout_open',    // {src, method} — Stripe redirect ou QR Pix aberto (substitui o antigo checkout_start)
+  'checkout_abandon', // {src, method, secondsOpen} — QR Pix fechado sem pagar
+  'signup_start',     // {src} — submit do cadastro pré-pagamento
+  'signup_done',      // {src} — cadastro criado (rtm_pending_signups/conta)
 ]);
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();

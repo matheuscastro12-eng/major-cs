@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { type Difficulty, type TournamentPool } from '../types';
+import { setCheckoutSrc, trackPaywallView } from '../state/track';
 import { useLang } from '../state/i18n';
 import { getManager } from '../state/manager';
 import { ct } from '../state/career-i18n';
@@ -73,6 +74,14 @@ export function Home({
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [name, setName] = useState('');
 
+  // funil: superfícies de venda da vitalícia visíveis no menu (1x/sessão/src)
+  useEffect(() => {
+    if (view !== 'menu') return;
+    if (premiumLocked && onRoadToPro) trackPaywallView('home-rtp');       // card RtP com cadeado
+    if (premiumLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
+    if (accountReady && account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
+  }, [view, premiumLocked, onRoadToPro, onUltimate, accountReady, account]);
+
   const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool, difficulty);
   const DIFF_ICON: Record<Difficulty, string> = { normal: '🟢', hard: '🟠', legend: '🔴' };
 
@@ -115,7 +124,7 @@ export function Home({
             {accountReady && account && !account.paid && (
               <button
                 type="button"
-                onClick={onCreateAccount}
+                onClick={() => { setCheckoutSrc('home-pill'); onCreateAccount?.(); }}
                 className="rtm-supporter-pill"
                 title={ct('Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras')}
               >
@@ -148,7 +157,7 @@ export function Home({
                   className="rtm-modecard"
                   data-tone="purple"
                   data-locked={premiumLocked ? '' : undefined}
-                  onClick={() => (premiumLocked ? onCreateAccount?.() : onRoadToPro())}
+                  onClick={() => (premiumLocked ? (setCheckoutSrc('home-rtp'), onCreateAccount?.()) : onRoadToPro())}
                 >
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/train.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
@@ -186,7 +195,7 @@ export function Home({
                   className="rtm-modecard"
                   data-tone="gold"
                   data-locked={premiumLocked ? '' : undefined}
-                  onClick={() => (premiumLocked ? onCreateAccount?.() : onUltimate())}
+                  onClick={() => (premiumLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())}
                 >
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/ancient.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
@@ -312,6 +321,10 @@ function AccountChip({
   onLogout?: () => void;
   onAdmin?: () => void;
 }) {
+  // funil: dropdown aberto por conta grátis mostra o item "Upgrade vitalício"
+  useEffect(() => {
+    if (open && account && !account.paid) trackPaywallView('acct-chip');
+  }, [open, account]);
   // Loading state
   if (!ready) {
     return (
@@ -340,7 +353,7 @@ function AccountChip({
     return (
       <button
         type="button"
-        onClick={onCreate}
+        onClick={() => { setCheckoutSrc('acct-chip'); onCreate?.(); }}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -493,7 +506,7 @@ function AccountChip({
                 hint="Até 5 saves + sincronização nuvem"
                 icon=""
                 accent="gold"
-                onClick={() => { onClose(); onCreate?.(); }}
+                onClick={() => { setCheckoutSrc('acct-chip'); onClose(); onCreate?.(); }}
               />
             )}
             <DropItem

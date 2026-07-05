@@ -118,7 +118,7 @@ import { parseCareerTeamId, careerTeamPath, isCareerTeamPath } from './state/car
 import { getActiveSlot, setActiveSlot, slotKey, cloudSlot } from './state/careerSaves';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
-import { track, trackVisit } from './state/track';
+import { setCheckoutSrc, track, trackCheckoutOpen, trackPaywallView, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -302,6 +302,10 @@ export default function App() {
     if (!ULTIMATE_ENABLED && screen === 'ultimate') { setScreen('home'); return; }
     if (!RTP_ENABLED && screen === 'rtp') { setScreen('home'); return; } // kill-switch: deep link /road-to-pro cai na home
     if (accountReady && !account?.paid && (screen === 'ultimate' || screen === 'rtp')) setScreen('landing');
+  }, [screen, accountReady, account?.paid]);
+  // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
+  useEffect(() => {
+    if (screen === 'landing' && accountReady && !account?.paid) trackPaywallView('landing');
   }, [screen, accountReady, account?.paid]);
   const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
@@ -838,7 +842,7 @@ export default function App() {
 
   // O backend liga o Payment Link à conta autenticada com uma referência opaca.
   const startCheckout = async () => {
-    track('checkout_start', {});
+    trackCheckoutOpen('stripe'); // funil: checkout Stripe da vitalícia abrindo (src = 1º CTA da sessão)
     const url = await beginCheckout();
     if (url) window.location.href = url;
     else {
@@ -875,7 +879,7 @@ export default function App() {
           account={account}
           onBack={() => setScreen('home')}
           onEdit={() => setScreen('setup')}
-          onUpgrade={() => setScreen('landing')}
+          onUpgrade={() => { setCheckoutSrc('profile'); setScreen('landing'); }}
           onManageSaves={account?.paid ? () => setScreen('careerSaves') : undefined}
           onAccountDeleted={() => {
             logout();
@@ -891,7 +895,7 @@ export default function App() {
   if (screen === 'leaderboard') {
     return (
       <main className="page" style={{ paddingTop: 24 }}>
-        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => setScreen('landing')} />
+        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); setScreen('landing'); }} />
       </main>
     );
   }
