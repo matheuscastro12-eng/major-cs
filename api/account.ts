@@ -30,6 +30,10 @@ const TTL = 60 * 60 * 24 * 180; // 180 dias
 const FOUNDER_LIMIT = Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
 let accountSchemaPromise: Promise<void> | null = null;
 let founderAuditAt = 0;
+// Cache em memória da contagem pública de Fundadores (prova social). Serve de
+// rate-limit natural: por instância, no máximo 1 query/min mesmo sob rajada;
+// o Cache-Control público (5 min) segura o resto na CDN/navegador.
+let foundersCache: { at: number; founders: number } | null = null;
 type AccountSql = NeonQueryFunction<false, false>;
 
 async function ensureAccountSchema(sql: AccountSql): Promise<void> {
@@ -122,6 +126,25 @@ export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string },
   res: Res,
 ) {
+  // GET público: contagem agregada de Fundadores (prova social honesta). Sem
+  // auth — é um único número agregado, sem dado pessoal. Cacheável (5 min) e
+  // protegido por cache em memória (60s por instância) contra rajadas.
+  if (req.method === 'GET') {
+    const dbUrl = cleanEnv(process.env.DATABASE_URL);
+    if (!dbUrl) { res.status(500).json({ error: 'indisponível' }); return; }
+    try {
+      if (!foundersCache || Date.now() - foundersCache.at > 60_000) {
+        const sql = neon(dbUrl);
+        await ensureAccountSchema(sql);
+        const r = await sql`SELECT count(*) FILTER (WHERE is_founder)::int AS founders FROM rtm_accounts`;
+        foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0) };
+      }
+      res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
+      res.status(200).json({ founders: foundersCache.founders, limit: FOUNDER_LIMIT });
+    } catch { res.status(500).json({ error: 'indisponível' }); }
+    return;
+  }
+
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
   res.setHeader('Cache-Control', 'no-store');
   const dbUrl = cleanEnv(process.env.DATABASE_URL);

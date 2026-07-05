@@ -1691,6 +1691,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
                   {ct('Abra packs na Loja e venda repetidas — o Mercado entre managers é da conta vitalícia.')}
                 </p>
+                {/* valor concreto da vitalícia + âncora de preço (pagamento único) */}
+                <p style={{ margin: 0, maxWidth: 440, fontSize: '0.76rem', lineHeight: 1.5, color: 'var(--em-gold, #e8c170)', fontWeight: 600 }}>
+                  ✓ {ct('Mercado entre managers · Major do Sábado · ranqueada no ladder real · saves na nuvem em 5 slots')}
+                </p>
+                <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--ut-ink)', fontWeight: 800 }}>
+                  R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}
+                </p>
               </div>
             ) : (
               <>
