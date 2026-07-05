@@ -10,6 +10,7 @@ import type { MomentOutcome } from '../../engine/rtp/moments';
 import type { GamePlan } from '../../engine/rtp/meta';
 import { atmoCloser, atmoStageOf } from '../../engine/rtp/atmosphere';
 import { RtpRoundRoom } from './RtpRoundRoom';
+import { RtpInterview } from './RtpInterview';
 import { RtpPrematch } from './RtpPrematch';
 import { Scoreboard } from '../Scoreboard';
 import { RtpIcon } from './RtpIcon';
@@ -98,7 +99,10 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
         />
       )}
 
-      {phase === 'result' && result && <Result save={save} result={result} onConclude={conclude} mode={mode} />}
+      {phase === 'result' && result && matchPrep && (
+        <Result save={save} result={result} onConclude={conclude} mode={mode}
+          matchSeed={matchPrep.matchSeed} grudge={(matchPrep.grudge ?? 0) > 0} />
+      )}
     </RtpFrame>
   );
 }
@@ -106,7 +110,10 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Resultado: placar + linha do protagonista + scoreboard dos 10
 
-function Result({ save, result, onConclude, mode }: { save: RoadToProSave; result: ProMatchResult; onConclude: () => void; mode: MatchMode }) {
+function Result({ save, result, onConclude, mode, matchSeed, grudge }: {
+  save: RoadToProSave; result: ProMatchResult; onConclude: () => void; mode: MatchMode;
+  matchSeed: number; grudge: boolean;
+}) {
   const conseq = useMemo<MatchConsequence>(() => applyMatchOutcome(save, result, { leaguePrize: mode !== 'major' }).consequence, [save, result, mode]);
   const hero = result.userRows.find((r) => r.isHero);
   // Fechamento de ATMOSFERA (iter41): a arena reage ao veredito — tier-aware e
@@ -207,6 +214,11 @@ function Result({ save, result, onConclude, mode }: { save: RoadToProSave; resul
           </div>
         </div>
       </div>
+
+      {/* ENTREVISTA PÓS-JOGO (iter44): a imprensa te alcança na saída do palco.
+          Só em partidas JOGADAS (o simular não pisa no palco) e 100% opcional —
+          o CTA de concluir segue sempre visível logo abaixo. */}
+      <RtpInterview save={save} result={result} major={mode === 'major'} matchSeed={matchSeed} grudge={grudge} />
 
       {/* CTA coerente com o que acontece de verdade: no Major a rodada NÃO gasta
           semana (só o circuito avança o calendário). */}

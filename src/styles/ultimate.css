@@ -1002,6 +1002,22 @@ body:has(.ut-live) {
   animation: ut-cast-in var(--beat-dur, 1.2s) ease both;
 }
 
+/* textura de frag (iter44): fala secundária — presente, sem roubar a cena */
+.ut-cast__line.is-frag { opacity: 0.92; }
+.ut-cast__line.is-frag .ut-cast__text { color: #cfd8e3; font-weight: 700; }
+
+/* strip de stats ao vivo (iter44): top fragger corrente + star watch */
+.ut-cast__strip { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ut-cast__stat {
+  font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.7rem; letter-spacing: 0.6px;
+  color: rgba(226, 232, 240, 0.72); white-space: nowrap;
+}
+.ut-cast__stat b { font-weight: 900; color: #f2f5f9; }
+.ut-cast__stat.is-you b { color: #6ee7a0; }
+.ut-cast__stat.is-opp b { color: #f6a8a0; }
+.ut-cast__stat--watch { color: rgba(203, 213, 225, 0.6); }
+.ut-cast__stat--watch.is-hot { color: #ffd166; }
+
 /* melhores momentos no modal de resultado (tema claro do modal) */
 .ut-hl { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .ut-hl__title { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.62rem; letter-spacing: 1.6px; color: var(--ut-muted, #8a8577); }

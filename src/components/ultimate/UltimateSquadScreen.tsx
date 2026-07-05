@@ -1384,6 +1384,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           roundLog={live.series.maps[0]?.roundLog ?? []}
           names={[live.teams[0].name, live.teams[1].name]}
           players={[live.teams[0].players, live.teams[1].players]}
+          killFeed={live.series.maps[0]?.killFeed ?? []}
           shown={liveRound}
           speed={speed}
           myIdx={live.myIdx}

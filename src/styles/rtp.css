@@ -1881,3 +1881,43 @@ html:has(main.page-rtp) { background: #070b11; }
 @media (prefers-reduced-motion: reduce) {
   .rtp .rtp-atmo, .rtp .rtp-atmo-pressure, .rtp .rtp-crowd-line { animation: none; }
 }
+
+/* ── iter44 — ENTREVISTA PÓS-JOGO ─────────────────────────────────────────────
+   Zona mista / coletiva depois do resultado. Segmento opcional: nunca esconde
+   o CTA de concluir (que segue logo abaixo). */
+.rtp .rtp-itv { margin-top: 12px; padding: 12px 14px; border-radius: 12px;
+  background: var(--rtp-well); border: 1px solid var(--rtp-line); animation: rtp-fade-up .35s var(--rtp-ease); }
+.rtp .rtp-itv.press { border-color: color-mix(in srgb, var(--rtp-frag) 35%, var(--rtp-line));
+  background: color-mix(in srgb, var(--rtp-frag) 5%, var(--rtp-well)); }
+.rtp .rtp-itv-head { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+.rtp .rtp-itv-kicker { display: inline-flex; align-items: center; gap: 5px; font-family: var(--rtp-mono);
+  font-size: .58rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--rtp-frag); }
+.rtp .rtp-itv-setting { font-size: .72rem; font-style: italic; color: var(--rtp-ink-faint); }
+.rtp .rtp-itv-count { font-family: var(--rtp-mono); font-size: .56rem; letter-spacing: .5px; color: var(--rtp-ink-faint); }
+.rtp .rtp-itv-block { margin-top: 8px; }
+.rtp .rtp-itv-block.answered { opacity: .92; }
+.rtp .rtp-itv-q { margin: 2px 0 8px; font-size: .8rem; line-height: 1.45; color: var(--rtp-ink); }
+.rtp .rtp-itv-q b { color: var(--rtp-ink-dim); font-size: .7rem; letter-spacing: .4px; text-transform: uppercase; }
+.rtp .rtp-itv-answers { display: flex; flex-direction: column; gap: 6px; }
+.rtp .rtp-itv-answer { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 9px;
+  border: 1px solid var(--rtp-line); background: var(--rtp-deck-2); color: var(--rtp-ink);
+  font-size: .76rem; line-height: 1.4; cursor: pointer;
+  transition: border-color .18s var(--rtp-ease), transform .18s var(--rtp-ease); }
+.rtp .rtp-itv-answer:hover { border-color: var(--rtp-line-hot); transform: translateY(-1px); }
+.rtp .rtp-itv-tone { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; padding: 1px 7px;
+  border-radius: 999px; font-family: var(--rtp-mono); font-size: .54rem; font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase; }
+.rtp .rtp-itv-tone.t-humble { color: var(--rtp-win); background: color-mix(in srgb, var(--rtp-win) 12%, transparent); }
+.rtp .rtp-itv-tone.t-confident { color: var(--rtp-clutch); background: color-mix(in srgb, var(--rtp-clutch) 14%, transparent); }
+.rtp .rtp-itv-tone.t-provocative { color: var(--rtp-loss); background: color-mix(in srgb, var(--rtp-loss) 13%, transparent); }
+.rtp .rtp-itv-echo { margin-left: 3px; font-style: normal; color: var(--rtp-frag); }
+.rtp .rtp-itv-said { margin: 0 0 4px; font-size: .78rem; line-height: 1.45; color: var(--rtp-ink); }
+.rtp .rtp-itv-rep { display: flex; align-items: baseline; gap: 5px; margin: 0 0 6px; font-size: .72rem;
+  font-style: italic; color: var(--rtp-ink-dim); animation: rtp-fade-up .3s var(--rtp-ease); }
+.rtp .rtp-itv-closer { margin: 10px 0 0; font-size: .72rem; font-style: italic; color: var(--rtp-ink-faint); }
+.rtp .rtp-itv-skip { margin-top: 10px; font-size: .74rem; }
+.rtp .rtp-itv-skipped { display: flex; align-items: baseline; gap: 8px; }
+.rtp .rtp-itv-skipnote { font-size: .72rem; font-style: italic; color: var(--rtp-ink-faint); }
+@media (prefers-reduced-motion: reduce) {
+  .rtp .rtp-itv, .rtp .rtp-itv-rep { animation: none; }
+}
