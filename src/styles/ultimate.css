@@ -347,7 +347,7 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-tier__lock { display: inline-flex; align-items: center; gap: 3px; color: var(--ut-muted); font-family: var(--ut-font-mono); font-weight: 700; font-size: 0.7rem; }
 .ut-tier__lock svg { color: var(--ut-muted); }
 
-/* ---------------- MERCADO (bazaar) ---------------- */
+/* ---------------- MERCADO (P2P entre managers) ---------------- */
 .ut-mkt { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 10px 8px; border: 1px solid var(--ut-line); border-radius: 14px; background: #fff; box-shadow: var(--ut-shadow); }
 .ut-mkt__seller { font-size: 0.62rem; color: var(--ut-muted); }
 .ut-mkt__buy {

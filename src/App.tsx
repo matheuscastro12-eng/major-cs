@@ -63,8 +63,7 @@ const Admin = lazyWithReload(() => import('./components/Admin').then((m) => ({ d
 const CareerScreen = lazyWithReload(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
 const CareerSaves = lazyWithReload(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
 const CareerCRM = lazyWithReload(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
-const AccountsCRM = lazyWithReload(() => import('./components/AccountsCRM').then((m) => ({ default: m.AccountsCRM })));
-const PaymentsCRM = lazyWithReload(() => import('./components/PaymentsCRM').then((m) => ({ default: m.PaymentsCRM })));
+const RevenueCRM = lazyWithReload(() => import('./components/RevenueCRM').then((m) => ({ default: m.RevenueCRM })));
 const LiveopsCRM = lazyWithReload(() => import('./components/LiveopsCRM').then((m) => ({ default: m.LiveopsCRM })));
 const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
 const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
@@ -146,8 +145,7 @@ type Screen =
   | 'career'
   | 'careerSaves'
   | 'careerCRM'
-  | 'careerAccess'
-  | 'paymentsCRM'
+  | 'revenueCRM'
   | 'liveopsCRM'
   | 'privacy'
   | 'terms'
@@ -176,8 +174,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   admin: '/admin',
   lab: '/admin/lab',
   careerCRM: '/admin/carreira',
-  careerAccess: '/admin/acessos',
-  paymentsCRM: '/admin/financeiro',
+  revenueCRM: '/admin/receita',
   liveopsCRM: '/admin/liveops',
   privacy: '/privacidade',
   terms: '/termos',
@@ -205,7 +202,7 @@ function routeFromLocation(): { screen: Screen; bannerPreview: boolean } {
     '#hall': 'hall',
     '#carreira': 'career',
     '#carreira-crm': 'careerCRM',
-    '#carreira-acessos': 'careerAccess',
+    '#carreira-acessos': 'revenueCRM',
   };
   if (hash === '#banners') return { screen: 'home', bannerPreview: true };
   if (legacyHash[hash]) return { screen: legacyHash[hash], bannerPreview: false };
@@ -216,6 +213,8 @@ function routeFromLocation(): { screen: Screen; bannerPreview: boolean } {
     return { screen: 'home', bannerPreview: false }; // modo Online competitivo removido — links antigos caem na home
   }
   if (path === '/banners') return { screen: 'home', bannerPreview: true };
+  // CRMs antigos fundidos no CRM de receita (iter38): deep links continuam vivos
+  if (path === '/admin/acessos' || path === '/admin/financeiro') return { screen: 'revenueCRM', bannerPreview: false };
   const matched = PATH_SCREEN[path] ?? 'home';
   if (TRANSIENT_SCREENS.has(matched)) {
     const routeState = window.history.state as { screen?: Screen; routeSession?: string } | null;
@@ -1096,14 +1095,9 @@ export default function App() {
           <CareerCRM onExit={() => setScreen('home')} />
         </AdminGate>
       )}
-      {screen === 'careerAccess' && (
+      {screen === 'revenueCRM' && (
         <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>
-          <AccountsCRM onExit={() => setScreen('home')} />
-        </AdminGate>
-      )}
-      {screen === 'paymentsCRM' && (
-        <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>
-          <PaymentsCRM onExit={() => setScreen('home')} />
+          <RevenueCRM onExit={() => setScreen('home')} />
         </AdminGate>
       )}
       {screen === 'liveopsCRM' && (

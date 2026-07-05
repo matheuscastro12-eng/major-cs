@@ -26,7 +26,6 @@ import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/da
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
 import { SBCS, checkSbc, type SbcDef } from '../../engine/ultimate/sbc';
 import { quickSellValue } from '../../engine/ultimate/quicksell';
-import { buildBazaar, bazaarDayBucket, type Listing } from '../../engine/ultimate/bazaar';
 import { MatchReplay } from '../online/MatchReplay';
 import { buildOnlineTeam, buildPool, type PoolPlayer } from '../online/onlineData';
 import { makeRng } from '../../engine/rng';
@@ -59,15 +58,6 @@ import '../../styles/ultimate.css';
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 // codinomes das temporadas (cicla pela lista conforme season.n cresce)
 const SEASON_NAMES = ['Inception', 'Ascension', 'Dynasty', 'Legacy', 'Overtime', 'Eternal'];
-
-// vendedores do bazar: nicks FICTÍCIOS de manager (jamais pros reais). O bazar é
-// "cartas à venda por outros jogadores (IA)" — usar nome de pro real (donk etc.)
-// dava a impressão falsa de que o pro estava na plataforma. Nomes genéricos evitam isso.
-const BAZAAR_SELLERS = [
-  'zK', 'Nova', 'Falcon', 'V1per', 'Kyzen', 'Orbit', 'Raven', 'Muta', 'Prisma', 'Neo',
-  'Turbo', 'Ghost', 'Kova', 'Slyce', 'Nyx', 'Ember', 'Drako', 'Pulse', 'Volt', 'Zero',
-  'Lynx', 'Ronin', 'Onyx', 'Sable',
-];
 
 // confete da vitória: configs FIXAS (nada de Math.random no render — re-render
 // não pode reembaralhar as peças no meio da animação).
@@ -301,7 +291,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -777,23 +767,6 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     }
   };
 
-  // ── bazar (mercado) — P6 ── sellers são nicks FICTÍCIOS de manager (sem pros reais).
-  const [bazaar, setBazaar] = useState<Listing[]>([]);
-  const bazaarBought = state.profile.bazaarBought;
-  useEffect(() => {
-    // filtra as listagens JÁ COMPRADAS hoje (persistidas no save) — o bazar é
-    // determinístico por dia; sem isso, remount/F5 "restocava" a compra.
-    const day = bazaarDayBucket(Date.now());
-    const boughtIds = new Set(bazaarBought.day === day ? bazaarBought.ids : []);
-    // major (só ladder Elite/SBC) e promo (só o Pacote Promo do mês) ficam FORA
-    // do bazar — sem isso o topo aspiracional da coleção era comprável por credits.
-    const buyable = ultimateCatalog().filter((c) => c.rarity !== 'major' && c.rarity !== 'promo');
-    setBazaar(buildBazaar(buyable, BAZAAR_SELLERS, day).filter((l) => !boughtIds.has(l.id)));
-  }, [bazaarBought]);
-  const buyFromBazaar = (l: Listing) => {
-    if (buyCard(l.cardKey, l.price, l.id, bazaarDayBucket(Date.now()))) { setBazaar((b) => b.filter((x) => x.id !== l.id)); flash(`✅ ${ct('Comprado')} · -${fmt(l.price)} 🪙`); }
-    else flash(ct('Créditos insuficientes.'));
-  };
   // ── mercado P2P (fase B) — vitrine/venda/minhas listagens contra o servidor ──
   // Conta grátis vê a seção travada (mesmo gate do Major do Sábado); toda
   // chamada é try/catch com toast — o Mercado nunca trava a tela.
@@ -1710,7 +1683,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <span style={{ fontSize: '34px' }}>🔒</span>
                 <b style={{ fontSize: '1rem', color: 'var(--ut-ink)' }}>{ct('O Mercado de Jogadores é da conta vitalícia')}</b>
                 <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
-                  {ct('Contas vitalícias compram e vendem cartas entre si, com a economia protegida no servidor. O bazar diário (IA) logo abaixo continua liberado pra todo mundo.')}
+                  {ct('Contas vitalícias compram e vendem cartas entre si, com a economia protegida no servidor.')}
+                </p>
+                <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
+                  {ct('Abra packs na Loja e venda repetidas — o Mercado entre managers é da conta vitalícia.')}
                 </p>
               </div>
             ) : (
@@ -1821,27 +1797,6 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   )
                 )}
               </>
-            )}
-          </UtPanel>
-
-          {/* ── bazar diário (IA) — o antigo transfer market, agora rotulado como IA ── */}
-          <UtPanel label={<>{ct('Bazar diário')} <em>· IA</em></>} icon={<Store size={15} className="ut-panel__lead" />} info={ct('Cartas à venda por vendedores fictícios (IA). Renova todo dia.')}>
-            <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>{ct('Cartas à venda por vendedores fictícios (IA). O bazar renova todo dia. Compre com credits.')}</p>
-            {bazaar.length === 0 ? <p className="muted small">{ct('Sem listagens agora.')}</p> : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 12, justifyItems: 'center' }}>
-                {bazaar.map((l) => {
-                  const c = index.get(l.cardKey);
-                  if (!c) return null;
-                  const afford = credits >= l.price;
-                  return (
-                    <div key={l.id} className="ut-mkt">
-                      <UltCardView card={c} size={124} />
-                      <div className="ut-mkt__seller">{ct('por')} {l.sellerNick}</div>
-                      <button className="ut-mkt__buy" onClick={() => buyFromBazaar(l)} disabled={!afford}><Coins size={12} /> {fmt(l.price)}</button>
-                    </div>
-                  );
-                })}
-              </div>
             )}
           </UtPanel>
         </>

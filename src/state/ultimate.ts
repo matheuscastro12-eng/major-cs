@@ -43,7 +43,6 @@ import {
   GAUNTLET_WIN_CREDITS,
   STARTING_ELO,
   pushHistory as _pushHistory,
-  markBazaarBought as _markBazaarBought,
   ensureMissions as _ensureMissions,
   markMissionClaimed as _markMissionClaimed,
   ensureWeekly as _ensureWeekly,
@@ -263,8 +262,6 @@ interface UltimateStore {
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
   tickSeason: () => SeasonRollover;
-  // bazar (P6) — listingId/day marcam a listagem como comprada no save (anti-restock)
-  buyCard: (cardKey: string, price: number, listingId?: string, day?: number) => boolean;
   // objetivos/missões (profundidade)
   claimObjective: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
   // evolução de cartas
@@ -615,20 +612,6 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }
     return r.result;
   },
-  buyCard: (cardKey, price, listingId, day) => {
-    const prev = get().state;
-    const sp = _spendCredits(prev, price);
-    if (!sp.ok) return false;
-    let s = _grantCard(sp.state, cardKey, 'market');
-    // grava a compra no save — o bazar é determinístico por dia, então sem isso
-    // a listagem comprada "restocava" a cada remount/F5 (faucet de credits).
-    if (listingId && day != null) s = _markBazaarBought(s, day, listingId);
-    persist(s);
-    set({ state: s });
-    // compra no bazar: gasta credits E adiciona a carta na mesma tx-sombra
-    mirrorUltimateChange(prev, s, 'spend', { src: 'bazaar', cardKey });
-    return true;
-  },
   claimObjective: (id) => {
     const def = objectiveById(id);
     if (!def) return { ok: false };
@@ -846,7 +829,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // débito LOCAL do preço (não o saldo absoluto do servidor) — política
       // local-vence do 3b: divergência é resolvida pela reconciliação do boot.
       const p = Math.max(0, Math.trunc(price));
-      s = { ...s, profile: { ...s.profile, credits: Math.max(0, s.profile.credits - p) } };
+      // bazaarBuys herdado do bazar de IA (removido): agora conta compras no
+      // Mercado entre managers — mantém a missão semanal "Olho no mercado"
+      // (w-bazaar3, métrica bazaarWeek) completável sem migrar o save.
+      s = { ...s, profile: { ...s.profile, credits: Math.max(0, s.profile.credits - p), bazaarBuys: s.profile.bazaarBuys + 1 } };
       persist(s);
       // SEM mirror: o 'trade' do servidor já debitou + moveu a carta no ledger.
       return { state: s };

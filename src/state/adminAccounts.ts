@@ -49,6 +49,27 @@ export async function getFinance(password: string): Promise<FinanceData | null> 
   try { return (await post({ action: 'finance', password })) as unknown as FinanceData; } catch { return null; }
 }
 
+// ── CRM de receita unificado (/admin/receita): série diária crua de 60 dias ──
+// A API devolve contagens/centavos por dia; janelas (7d/30d), splits e a
+// previsão são derivadas no cliente (ver RevenueCRM.tsx).
+export interface RevenueDay {
+  day: string;
+  vitPix: number; vitStripe: number; vitOther: number; vitAdmin: number;
+  orders: number; ordPixCents: number; ordStripeCents: number;
+  coinsCents: number; passeCents: number;
+  visitors: number;
+}
+export interface RevenueAllTimeOrder { method: string; product: string; orders: number; cents: number; }
+export interface RevenueData {
+  vitPriceCents: number;
+  visitorsAvailable: boolean;
+  days: RevenueDay[];
+  allTime: { vitByMethod: MethodCount[]; orders: RevenueAllTimeOrder[] };
+}
+export async function getRevenue(password: string): Promise<RevenueData | null> {
+  try { return (await post({ action: 'revenue', password })) as unknown as RevenueData; } catch { return null; }
+}
+
 // ── Integridade do ranking PvP: conflitos de report (fraude/bug) e reports órfãos ──
 export interface IntegrityStatusRow { status: string; total: number; last7: number; }
 export interface ConflictReport { email: string; nick: string; won: boolean; at: string; }
