@@ -1,8 +1,12 @@
-// Ultimate Squad — espelho "sombra" da economia (fase 3a do cutover server-side).
+// Ultimate Squad — espelho "sombra" da economia (fase 3a) + FLIP (fase 3b).
 // O save local/cloud-save continua sendo a FONTE DA VERDADE pro jogador; este
-// módulo apenas reflete cada mutação de credits/cartas como uma transação
-// idempotente em /api/ultimate-economy (action 'tx'), pra que o ledger no Neon
-// convirja em segundo plano. A fase 3b (futura) vira as leituras pro servidor.
+// módulo reflete cada mutação de credits/cartas como uma transação idempotente
+// em /api/ultimate-economy (action 'tx'), pra que o ledger no Neon convirja.
+// A fase 3b (aqui) vira os caminhos cheat-críticos pro servidor:
+//   - pack open de conta paga rola NO SERVIDOR (openPackOnServer, action
+//     'packOpen') com op_id crash-safe — fallback local se a rede falhar;
+//   - no boot, reconciliação defensiva servidor↔local (reconcileFlip):
+//     LOCAL VENCE e o servidor é trazido até ele via tx 'admin' auditável.
 //
 // Regras de ouro:
 //   - NUNCA bloqueia nem lança pro caminho da UI (tudo fire-and-forget + try/catch);
@@ -16,8 +20,9 @@ import { cloudEnabled } from './cloud';
 import { captureError } from './errlog';
 import type { UltimateState } from '../engine/ultimate/state';
 
-// kinds aceitos pela rota (subset de ULT_TX_KINDS do servidor — 'admin' é só dele)
-export type UltShadowKind = 'grant' | 'spend' | 'pack' | 'quicksell' | 'sbc' | 'reward';
+// kinds aceitos pela rota (subset de ULT_TX_KINDS do servidor). 'admin' entrou
+// na fase 3b: é o kind da tx de reconciliação (meta {src:'reconcile-3b'}).
+export type UltShadowKind = 'grant' | 'spend' | 'pack' | 'quicksell' | 'sbc' | 'reward' | 'admin';
 
 export interface ShadowCardOp {
   op: 'add' | 'remove';
@@ -37,6 +42,9 @@ interface ShadowEntry {
 
 const QKEY = 'rtm-ultimate-shadow-q1'; // fila pendente (sobrevive a reload)
 const DRIFT_KEY = 'rtm-ultimate-shadow-drift'; // '1' = perdemos txs → ledger divergiu
+const PENDING_OPEN_KEY = 'rtm-ult-pending-open-v1'; // pack open server em voo (crash-safety do op_id)
+const FLIP_DRIFT_KEY = 'rtm-ult-flip-drift'; // '1' = fallback/saldo divergente no flip → reconciliar no boot
+const PACK_OPEN_TIMEOUT_MS = 10_000; // acima disso o jogador não espera: cai pro roll local
 const MIGRATED_PREFIX = 'rtm-ultimate-shadow-migrated-v1:'; // + email (cache local; o guard real é o op_id)
 const LOCAL_SAVE_KEY = 'rtm-ultimate-v1'; // espelho de KEY em ultimate.ts (só LEITURA aqui)
 const QUEUE_CAP = 500; // acima disso derruba o mais antigo + marca drift
@@ -114,7 +122,7 @@ async function postTx(tx: { opId: string; kind: string; creditsDelta: number; ca
   } catch { return 0; }
 }
 
-async function fetchServerState(): Promise<{ credits: number; cards: unknown[]; ledgerTail: unknown[] } | null> {
+async function fetchServerState(): Promise<{ credits: number; cards: { cardId: string; cardKey: string }[]; ledgerTail: unknown[] } | null> {
   const token = getToken();
   if (!token) return null;
   try {
@@ -126,9 +134,17 @@ async function fetchServerState(): Promise<{ credits: number; cards: unknown[]; 
     if (!r.ok) return null;
     const d = (await r.json().catch(() => null)) as Record<string, unknown> | null;
     if (!d) return null;
+    // cards normalizados pra {cardId, cardKey} — a reconciliação 3b compara por id
+    const cards = (Array.isArray(d.cards) ? d.cards : []).map((c) => {
+      const cc = (c && typeof c === 'object' ? c : {}) as Record<string, unknown>;
+      return {
+        cardId: typeof cc.cardId === 'string' ? cc.cardId : '',
+        cardKey: typeof cc.cardKey === 'string' ? cc.cardKey : '',
+      };
+    }).filter((c) => c.cardId);
     return {
       credits: Number(d.credits ?? 0),
-      cards: Array.isArray(d.cards) ? d.cards : [],
+      cards,
       ledgerTail: Array.isArray(d.ledgerTail) ? d.ledgerTail : [],
     };
   } catch { return null; }
@@ -318,14 +334,212 @@ export async function migrateIfNeeded(): Promise<'done' | 'skipped' | 'failed'> 
   }
 }
 
-// Boot do espelho: migração one-time (se preciso) e depois drena a fila que
-// sobrou de sessões anteriores. Fire-and-forget — chamado após a reconciliação
-// do slot 'ultimate' com a nuvem, nunca bloqueia a UI.
+// ------------------------------------------- fase 3b: pack open no servidor
+
+// Flag de drift do FLIP: setada quando um packOpen server-side caiu pro
+// fallback local (o servidor PODE ter aplicado a tx) ou quando o saldo
+// devolvido divergiu do esperado. Puramente informativa — a reconciliação do
+// boot roda sempre e converge; a flag só é limpa quando os lados batem.
+export function markFlipDrift(reason: string): void {
+  try { localStorage.setItem(FLIP_DRIFT_KEY, '1'); } catch { /* best-effort */ }
+  captureError(new Error(`ult-flip drift: ${reason}`), 'ult-flip');
+}
+
+export function flipDrifted(): boolean {
+  try { return localStorage.getItem(FLIP_DRIFT_KEY) === '1'; } catch { return false; }
+}
+
+function clearFlipDrift(): void {
+  try { localStorage.removeItem(FLIP_DRIFT_KEY); } catch { /* best-effort */ }
+}
+
+// Registro do pack open EM VOO: persistido ANTES do fetch. Se a página morrer
+// com a resposta no ar, a PRÓXIMA abertura do MESMO pack reusa o op_id e o
+// servidor devolve as MESMAS cartas (replay do ledger) — nunca rola/debita 2×.
+interface PendingOpen { opId: string; packId: string; t: number }
+
+function readPendingOpen(): PendingOpen | null {
+  try {
+    const raw = localStorage.getItem(PENDING_OPEN_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<PendingOpen>;
+    if (typeof p?.opId === 'string' && p.opId && typeof p.packId === 'string') {
+      return { opId: p.opId, packId: p.packId, t: Number(p.t ?? 0) };
+    }
+    return null;
+  } catch { return null; }
+}
+
+function writePendingOpen(p: PendingOpen): void {
+  try { localStorage.setItem(PENDING_OPEN_KEY, JSON.stringify(p)); } catch { /* best-effort */ }
+}
+
+function clearPendingOpen(): void {
+  try { localStorage.removeItem(PENDING_OPEN_KEY); } catch { /* best-effort */ }
+}
+
+export interface ServerPackCard { cardId: string; cardKey: string }
+export interface ServerPackResult { credits: number; seed: number; replayed: boolean; cards: ServerPackCard[] }
+
+// POST action 'packOpen' com timeout — o jogador está com o dedo no botão,
+// não pode ficar pendurado (acima do timeout cai pro roll local).
+async function postPackOpen(opId: string, packId: string): Promise<{ status: number; data: Record<string, unknown> | null }> {
+  const token = getToken();
+  if (!token) return { status: 401, data: null };
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), PACK_OPEN_TIMEOUT_MS) : null;
+  try {
+    const r = await fetch('/api/ultimate-economy', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'packOpen', token, op_id: opId, packId }),
+      ...(ctrl ? { signal: ctrl.signal } : {}),
+    });
+    const data = (await r.json().catch(() => null)) as Record<string, unknown> | null;
+    return { status: r.status, data };
+  } catch {
+    return { status: 0, data: null };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// Abre um pack NO SERVIDOR (roll autoritativo — fase 3b). Devolve null quando
+// o chamador deve usar o FALLBACK local (rede/rota indisponível, conta sem
+// direito, saldo divergente) — nunca lança, nunca bloqueia.
+// Crash-safety: op_id persistido em PENDING_OPEN_KEY ANTES do fetch; retry após
+// crash reenvia o MESMO op_id e recebe as mesmas cartas (replay idempotente).
+// 'op_conflict' (op_id já usado por tx que NÃO é pack — registro corrompido):
+// descarta o pendente, gera op_id novo e tenta UMA vez.
+export async function openPackOnServer(packId: string): Promise<ServerPackResult | null> {
+  try {
+    if (!cloudEnabled()) return null;
+    let pending = readPendingOpen();
+    // pendente de OUTRO pack (crash antigo + jogador mudou de pack): descarta.
+    // Se o servidor tiver aplicado aquela tx, a reconciliação do boot desfaz
+    // (local vence) — não seguramos o jogador refém de um registro velho.
+    if (pending && pending.packId !== packId) { clearPendingOpen(); pending = null; }
+    let opId = pending?.opId ?? makeOpId();
+    writePendingOpen({ opId, packId, t: Date.now() });
+    let r = await postPackOpen(opId, packId);
+    if (r.status === 409 && r.data?.error === 'op_conflict') {
+      opId = makeOpId();
+      writePendingOpen({ opId, packId, t: Date.now() });
+      r = await postPackOpen(opId, packId);
+    }
+    if (r.status >= 200 && r.status < 300 && r.data) {
+      const rawCards = Array.isArray(r.data.cards) ? r.data.cards : [];
+      const cards: ServerPackCard[] = [];
+      for (const c of rawCards) {
+        if (!c || typeof c !== 'object') continue;
+        const cc = c as Record<string, unknown>;
+        const cardId = typeof cc.cardId === 'string' ? cc.cardId : '';
+        const cardKey = typeof cc.cardKey === 'string' ? cc.cardKey : '';
+        if (cardId && cardKey) cards.push({ cardId, cardKey });
+      }
+      clearPendingOpen();
+      if (!cards.length) {
+        // 2xx sem cartas aproveitáveis: o servidor aplicou algo que não dá pra
+        // reproduzir localmente → fallback local + drift (o boot reconcilia).
+        markFlipDrift('packOpen 2xx sem cartas');
+        return null;
+      }
+      return {
+        credits: Number(r.data.credits ?? 0),
+        seed: Number(r.data.seed ?? 0) >>> 0,
+        replayed: r.data.replayed === true,
+        cards,
+      };
+    }
+    // Falha de rede/timeout (0), 5xx/429, 401/403 ou 409 de saldo: NUNCA
+    // bloqueia — o chamador cai pro roll local (que espelha via shadow, como
+    // sempre). O servidor PODE ter aplicado a tx (timeout) ou estar divergido
+    // (409 insufficient): marca o drift e deixa a reconciliação do boot
+    // convergir. O pendente é limpo: esta op não será re-tentada — o roll
+    // local que sai agora é a versão que vale.
+    clearPendingOpen();
+    markFlipDrift(`packOpen fallback status=${r.status}`);
+    return null;
+  } catch (e) {
+    captureError(e, 'ult-flip');
+    clearPendingOpen();
+    return null;
+  }
+}
+
+// ---------------------------------------------- fase 3b: reconciliação boot
+
+// Política v1 (defensiva): LOCAL VENCE, reconciliando o servidor PRA CIMA.
+// Racional: o shadow/ledger acabou de nascer e NÃO teve tempo de "assar" — o
+// servidor tem, na melhor hipótese, dias de dados; o save local (sincronizado
+// via cloud-save há meses) é a fonte madura. Divergiu → enfileira UMA tx
+// 'admin' (meta {src:'reconcile-3b'}) com o diff exato (delta de credits +
+// add/remove de cartas) que traz o servidor até o local. O ledger continua
+// append-only e auditável — nada é apagado nem reescrito.
+// Guardas defensivos:
+//   - fila-sombra não drenada → pula (as txs pendentes ainda vão mudar o
+//     servidor; comparar agora geraria um diff falso/duplicado — o próximo
+//     boot, com a fila vazia, reconcilia);
+//   - save local virgem → pula (default de boot não "vence" nada);
+//   - servidor inacessível → pula (tenta no próximo boot).
+async function reconcileFlip(): Promise<void> {
+  try {
+    if (!cloudEnabled()) return;
+    if (loadQueue().length > 0) return;
+    const server = await fetchServerState();
+    if (!server) return;
+    let local: UltimateState | null = null;
+    try {
+      const raw = localStorage.getItem(LOCAL_SAVE_KEY);
+      local = raw ? (JSON.parse(raw) as UltimateState) : null;
+    } catch { local = null; }
+    if (!local || !local.profile || !Array.isArray(local.inventory)) return;
+    const pristine = !local.profile.onboarded && local.inventory.length === 0 && (local.profile.w + local.profile.l) === 0;
+    if (pristine) return;
+
+    const localCredits = Math.max(0, Math.trunc(local.profile.credits) || 0);
+    const serverIds = new Set(server.cards.map((c) => c.cardId));
+    const localIds = new Set(local.inventory.map((o) => o.id));
+    const creditsDelta = localCredits - server.credits;
+    const adds: ShadowCardOp[] = local.inventory
+      .filter((o) => !serverIds.has(o.id))
+      .map((o) => ({
+        op: 'add' as const,
+        cardId: o.id,
+        cardKey: o.cardKey,
+        meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}) },
+      }));
+    const removes: ShadowCardOp[] = server.cards
+      .filter((c) => !localIds.has(c.cardId))
+      .map((c) => ({ op: 'remove' as const, cardId: c.cardId }));
+
+    if (creditsDelta === 0 && adds.length === 0 && removes.length === 0) {
+      clearFlipDrift(); // convergiu — qualquer drift anotado já foi absorvido
+      return;
+    }
+    // log só com TAMANHOS (nunca despeja cartas/coleção no errlog)
+    captureError(
+      new Error(`ult-flip divergência: creditsΔ=${creditsDelta} adds=${adds.length} removes=${removes.length} local=${localIds.size} server=${serverIds.size}`),
+      'ult-flip-reconcile',
+    );
+    // shadowTx fatia >200 card-ops em várias txs e já dispara o flush
+    shadowTx('admin', creditsDelta, [...adds, ...removes], { src: 'reconcile-3b' });
+    clearFlipDrift();
+  } catch (e) {
+    captureError(e, 'ult-flip-reconcile');
+  }
+}
+
+// Boot do espelho: migração one-time (se preciso), drena a fila que sobrou de
+// sessões anteriores e roda a reconciliação defensiva da fase 3b (servidor é
+// trazido até o local — ver reconcileFlip). Fire-and-forget — chamado após a
+// reconciliação do slot 'ultimate' com a nuvem, nunca bloqueia a UI.
 export function bootUltimateShadow(): void {
   void (async () => {
     try {
       await migrateIfNeeded();
       await flushShadowQueue();
+      await reconcileFlip();
     } catch (e) {
       captureError(e, 'ult-shadow');
     }
