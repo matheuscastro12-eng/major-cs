@@ -283,11 +283,57 @@ interface UltimateStore {
   syncWeekly: (week: string) => void;
   claimWeekly: (id: string) => { ok: boolean; credits?: number };
   claimWeeklyBonus: () => { ok: boolean; cards: UltCard[] };
+  // Mercado P2P (fase B — UI; servidor na fase A em server/ultimate-market.ts).
+  // Mutações LOCAIS sem espelho-sombra: a perna do servidor ('escrow'/'trade')
+  // JÁ está no ledger quando estas rodam — espelhar duplicaria tudo (mesma
+  // supressão do openPackCloud, que não chama mirrorUltimateChange).
+  marketListCard: (ownedId: string) => void;               // listou: carta sai da coleção local (custódia)
+  marketCardSold: (credits: number) => void;               // venda vista no mktMine: credita proceeds 1×
+  marketCardReturned: (cardId: string, cardKey: string) => void; // cancelou/expirou: carta volta
+  marketBuyApply: (cardId: string, cardKey: string, price: number) => void; // comprou: debita + adiciona
   // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
   unlockPremiumPaid: (orderId: string, orderSeason: number) => { ok: boolean; already?: boolean };
   claimPassLevel: (level: number, track: PassTrack) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
   setState: (s: UltimateState) => void;
   reset: () => void;
+}
+
+// ── mercado P2P: stash local de boost/estilo das cópias em custódia ─────────
+// Chaveado pelo uuid da cópia (cardId). Best-effort e capado: se o storage
+// falhar, a carta devolvida perde só o cosmético local (o card_meta segue
+// íntegro no servidor pra quem comprar).
+const ESCROW_META_KEY = 'rtm-ult-mkt-escrow-v1';
+type EscrowMeta = { boost?: number; style?: StyleId };
+
+function loadEscrowStash(): Record<string, EscrowMeta> {
+  try {
+    const raw = localStorage.getItem(ESCROW_META_KEY);
+    const obj = raw ? (JSON.parse(raw) as unknown) : {};
+    return obj && typeof obj === 'object' ? (obj as Record<string, EscrowMeta>) : {};
+  } catch { return {}; }
+}
+
+function stashEscrowMeta(cardId: string, meta: EscrowMeta): void {
+  if (!meta.boost && !meta.style) return;
+  try {
+    const stash = loadEscrowStash();
+    stash[cardId] = meta;
+    const keys = Object.keys(stash);
+    // cap defensivo (10 listagens ativas é o limite do servidor; 40 dá folga)
+    for (const k of keys.slice(0, Math.max(0, keys.length - 40))) delete stash[k];
+    localStorage.setItem(ESCROW_META_KEY, JSON.stringify(stash));
+  } catch { /* best-effort */ }
+}
+
+function takeEscrowMeta(cardId: string): EscrowMeta | null {
+  try {
+    const stash = loadEscrowStash();
+    const meta = stash[cardId];
+    if (!meta) return null;
+    delete stash[cardId];
+    localStorage.setItem(ESCROW_META_KEY, JSON.stringify(stash));
+    return meta;
+  } catch { return null; }
 }
 
 export const useUltimate = create<UltimateStore>((set, get) => ({
@@ -751,6 +797,60 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     mirrorUltimateChange(st, s, 'reward', { src: 'weekly-bonus', seed });
     return { ok: true, cards };
   },
+  marketListCard: (ownedId) =>
+    set((st) => {
+      const owned = st.state.inventory.find((o) => o.id === ownedId);
+      if (!owned) return {};
+      // guarda boost/estilo da cópia num stash local: o servidor preserva o
+      // card_meta no custódia, mas o retorno (cancel/expire) chega só com
+      // cardId/cardKey — sem o stash a carta voltaria "pelada" na UI local.
+      stashEscrowMeta(owned.id, { boost: owned.boost, style: owned.style });
+      const s = _removeOwnedCards(st.state, [ownedId]);
+      persist(s);
+      // SEM mirror: o mktList já gravou a perna 'escrow' (remove) no ledger.
+      return { state: s };
+    }),
+  marketCardSold: (credits) =>
+    set((st) => {
+      const n = Math.max(0, Math.trunc(credits));
+      if (!n) return {};
+      const s = _addCredits(st.state, n);
+      persist(s);
+      // SEM mirror: o 'trade' do servidor já creditou os proceeds no ledger.
+      return { state: s };
+    }),
+  marketCardReturned: (cardId, cardKey) =>
+    set((st) => {
+      if (st.state.inventory.some((o) => o.id === cardId)) return {}; // já voltou (outra aba/poll)
+      let s = _grantCard(st.state, cardKey, 'market', { id: cardId });
+      const meta = takeEscrowMeta(cardId);
+      if (meta && (meta.boost || meta.style)) {
+        s = {
+          ...s,
+          inventory: s.inventory.map((o) => (o.id === cardId
+            ? { ...o, ...(meta.boost ? { boost: meta.boost } : {}), ...(meta.style ? { style: meta.style } : {}) }
+            : o)),
+        };
+      }
+      persist(s);
+      // SEM mirror: a devolução já tem perna 'escrow' (add) no ledger.
+      return { state: s };
+    }),
+  marketBuyApply: (cardId, cardKey, price) =>
+    set((st) => {
+      let s = st.state;
+      // replay/dupla aplicação: a cópia entra com o MESMO uuid do servidor —
+      // se já está no inventário, não duplica (e não re-debita).
+      if (s.inventory.some((o) => o.id === cardId)) return {};
+      s = _grantCard(s, cardKey, 'market', { id: cardId });
+      // débito LOCAL do preço (não o saldo absoluto do servidor) — política
+      // local-vence do 3b: divergência é resolvida pela reconciliação do boot.
+      const p = Math.max(0, Math.trunc(price));
+      s = { ...s, profile: { ...s.profile, credits: Math.max(0, s.profile.credits - p) } };
+      persist(s);
+      // SEM mirror: o 'trade' do servidor já debitou + moveu a carta no ledger.
+      return { state: s };
+    }),
   unlockPremiumPaid: (orderId, orderSeason) => {
     // Passe Premium PAGO (R$ 30,00 Pix/Stripe): o pedido "pass-s<N>" já foi
     // pago (webhook) e claimado (passClaim) no servidor — aqui só liga o flag.
