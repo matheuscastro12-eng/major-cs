@@ -6,6 +6,8 @@ import { getManager } from '../state/manager';
 import { ct } from '../state/career-i18n';
 import { BrandMark } from './brand';
 import { PlayStaticBackground } from './PlayStaticBackground';
+import { FounderCounter } from './FounderCounter';
+import { useFounders } from '../state/founders';
 import type { Account } from '../state/account';
 
 interface Props {
@@ -82,6 +84,10 @@ export function Home({
     if (accountReady && account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
   }, [view, premiumLocked, onRoadToPro, onUltimate, accountReady, account]);
 
+  // prova social real: contador de Fundadores (null = sem dado → não mostra nada)
+  const founders = useFounders();
+  const founderSoldOut = !!founders && founders.founders >= founders.limit;
+
   const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool, difficulty);
   const DIFF_ICON: Record<Difficulty, string> = { normal: '🟢', hard: '🟠', legend: '🔴' };
 
@@ -122,18 +128,29 @@ export function Home({
                Fundador sem precisar abrir modal. Sticky no Home, clica e cai no fluxo.
                Cosmético/conveniência — zero pay-to-win. */}
             {accountReady && account && !account.paid && (
-              <button
-                type="button"
-                onClick={() => { setCheckoutSrc('home-pill'); onCreateAccount?.(); }}
-                className="rtm-supporter-pill"
-                title={ct('Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras')}
-              >
-                <span className="rtm-supporter-pill-badge">★</span>
-                <span className="rtm-supporter-pill-text">
-                  <b>{ct('Vire Fundador')}</b> {ct('· selo #001–#500, cloud sync e 5 carreiras')}
-                </span>
-                <span className="rtm-supporter-pill-cta">R$20 →</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setCheckoutSrc('home-pill'); onCreateAccount?.(); }}
+                  className="rtm-supporter-pill"
+                  title={ct('Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras')}
+                >
+                  <span className="rtm-supporter-pill-badge">★</span>
+                  <span className="rtm-supporter-pill-text">
+                    {founderSoldOut ? (
+                      /* Edição Fundador esgotada (dado real): copy da vitalícia comum */
+                      <><b>{ct('Conta vitalícia')}</b> {ct('· cloud sync, 5 carreiras e ranking real')}</>
+                    ) : (
+                      <><b>{ct('Vire Fundador')}</b> {ct('· selo #001–#500, cloud sync e 5 carreiras')}</>
+                    )}
+                  </span>
+                  <span className="rtm-supporter-pill-cta">R$20 →</span>
+                </button>
+                {/* contador REAL de Fundadores (fetch falhou? não renderiza nada) */}
+                <div style={{ marginTop: 8 }}>
+                  <FounderCounter />
+                </div>
+              </>
             )}
 
             <div className="rtm-modemenu">
@@ -167,6 +184,12 @@ export function Home({
                     <span className="rtm-modecard-kicker">{ct('Novo')}</span>
                     <span className="rtm-modecard-title">Road to Pro</span>
                     <span className="rtm-modecard-desc">{ct('Você não treina o time — você É o jogador. Viva a carreira de astro do CS: treine, gerencie sua vida e brilhe nos momentos decisivos.')}</span>
+                    {premiumLocked && (
+                      <span className="rtm-modecard-benefits">
+                        ✓ {ct('Road to Pro completo · Major do Sábado · saves na nuvem em 5 slots')}
+                        <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
+                      </span>
+                    )}
                     <span className="rtm-modecard-foot">
                       <span className="rtm-modecard-meta">{premiumLocked ? ct('Exclusivo · conta vitalícia') : ct('1 jogador · você é o atleta')}</span>
                       <span className="rtm-modecard-go">{premiumLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>
@@ -205,6 +228,12 @@ export function Home({
                     <span className="rtm-modecard-kicker">{ct('Competitivo · Online')}</span>
                     <span className="rtm-modecard-title">Ultimate Squad</span>
                     <span className="rtm-modecard-desc">{ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')}</span>
+                    {premiumLocked && (
+                      <span className="rtm-modecard-benefits">
+                        ✓ {ct('Ultimate com mercado entre managers · ranqueada no ladder real · Major do Sábado')}
+                        <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
+                      </span>
+                    )}
                     <span className="rtm-modecard-foot">
                       <span className="rtm-modecard-meta">{premiumLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')}</span>
                       <span className="rtm-modecard-go">{premiumLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>

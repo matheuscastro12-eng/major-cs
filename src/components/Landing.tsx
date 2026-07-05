@@ -2,8 +2,9 @@
 // design system. Hero, modos, planos (grátis x R$20 vitalício), como funciona,
 // FAQ, CTA e o modal de conta (que dispara o checkout real via Stripe).
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackSignup } from '../state/track';
+import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
 import { BrandMark } from './brand';
+import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
 import { LegalLinks } from './Legal';
@@ -153,7 +154,9 @@ function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => v
             <span style={{ fontFamily: 'var(--font-cond)', fontSize: '44px', fontWeight: 800, color: 'var(--rtm-gold)' }}>R$20</span>
             <span style={{ fontSize: '13px', color: 'var(--rtm-dim)' }}>{ct('uma vez, sem assinatura')}</span>
           </div>
-          <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '18px' }}>{ct('Persistência enquanto o serviço estiver em operação')}</span>
+          <span style={{ fontSize: '13px', color: 'var(--rtm-faint)', marginBottom: '10px' }}>{ct('Persistência enquanto o serviço estiver em operação')}</span>
+          {/* prova social REAL: contagem de Fundadores do servidor (falhou? não mostra nada) */}
+          <FounderCounter style={{ marginBottom: '14px' }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
             {PAID.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: i === 0 ? 'var(--rtm-dim)' : 'var(--rtm-text)' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{ct(f)}</span>)}
           </div>
@@ -246,6 +249,10 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
   );
 }
 
+// nudge anti-abandono do QR Pix: no máximo 1x por sessão de navegação (guard de
+// módulo). Honesto e descartável — sem timer fake, sem segunda modal.
+const nudgeShownThisSession = new Set<string>();
+
 export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
   const [mode, setMode] = useState<'signup' | 'login'>(initialMode);
   const [nick, setNick] = useState('');
@@ -257,6 +264,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   // Pix Woovi (merge origin/master) + visual em-* (HEAD)
   const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [nudge, setNudge] = useState(false);
   // funil: abandono do QR Pix — best-effort, dispara no desmonte do modal se o
   // QR chegou a abrir e o pagamento não foi confirmado pelo polling.
   const pixOpenedAt = useRef(0);
@@ -326,6 +334,17 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     if (!pix?.charge.brCode) return;
     try { await navigator.clipboard.writeText(pix.charge.brCode); setCopied(true); setTimeout(() => setCopied(false), 2200); } catch { /* sem permissão */ }
   };
+  // fechar com o QR Pix aberto e sem pagamento confirmado: UM nudge leve inline
+  // (1x por sessão), honesto e descartável. Depois disso, fechar fecha mesmo.
+  const requestClose = () => {
+    if (pix && !pixConfirmed.current && !nudgeShownThisSession.has('pix-nudge')) {
+      nudgeShownThisSession.add('pix-nudge');
+      setNudge(true);
+      trackPaywallView('checkout-nudge'); // funil: nudge exibido (evento existente, novo src)
+      return;
+    }
+    onClose();
+  };
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <BrandMark size={22} />
@@ -333,11 +352,21 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     </span>
   );
   return (
-    <Modal open onClose={onClose} title={title} size="sm">
+    <Modal open onClose={requestClose} title={title} size="sm">
       {mode === 'signup' && (
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-          <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>R$20</span>
-          <span style={{ fontSize: '0.82rem', color: 'var(--em-muted)' }}>{ct('pagamento único pelo save em nuvem')}</span>
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--em-gold)' }}>R$20</span>
+            <span style={{ fontSize: '0.82rem', color: 'var(--em-muted)' }}>{ct('pagamento único pelo save em nuvem')}</span>
+          </div>
+          {/* reassurance: tira as 3 dúvidas mais comuns antes do pagamento */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', marginTop: '8px', fontSize: '0.74rem', color: 'var(--em-muted)', fontWeight: 600 }}>
+            <span>✔ {ct('Pagamento único')}</span>
+            <span>✔ {ct('Acesso imediato')}</span>
+            <span>✔ {ct('Pix ou cartão')}</span>
+          </div>
+          {/* prova social REAL (servidor); fetch falhou → não renderiza nada */}
+          <FounderCounter style={{ marginTop: '8px' }} />
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -365,6 +394,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#5ed88a', boxShadow: '0 0 8px #5ed88a', animation: 'pulse 1.4s infinite' }} />
             <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
           </div>
+          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+            {ct('Pagamento aprovado em segundos — esta tela confirma sozinha, não precisa recarregar.')}
+          </p>
           {pix.charge.qrCodeImage && (
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
               <img src={pix.charge.qrCodeImage} alt="QR Pix" style={{ width: '200px', height: '200px', background: '#fff', padding: '8px', borderRadius: '8px' }} />
@@ -384,6 +416,24 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
             {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
           </p>
+          {nudge && (
+            /* nudge anti-abandono (1x/sessão): inline, honesto, descartável */
+            <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(232,193,112,.08)', border: '1px solid rgba(232,193,112,.4)', borderRadius: '6px' }}>
+              <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--em-text)', lineHeight: 1.5 }}>
+                {ct('Ficou alguma dúvida? O acesso é vitalício e o Pix confirma na hora.')}
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" onClick={() => setNudge(false)}
+                  style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'var(--em-gold)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                  {ct('Continuar pagamento')}
+                </button>
+                <button type="button" onClick={onClose}
+                  style={{ flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                  {ct('Fechar')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>

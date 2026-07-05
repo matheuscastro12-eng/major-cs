@@ -96,6 +96,13 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5, maxWidth: '420px' }}>
               {ct('Torneio de fim de semana com recompensas em créditos e cartas do Ultimate. Ative a conta com save na nuvem para participar.')}
             </p>
+            {/* valor concreto da vitalícia + âncora de preço (pagamento único) */}
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--em-gold, #e8c170)', lineHeight: 1.5, maxWidth: '420px', fontWeight: 600 }}>
+              ✓ {ct('Major do Sábado · Road to Pro completo · mercado entre managers · saves na nuvem em 5 slots')}
+            </p>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--em-text)', fontWeight: 800 }}>
+              R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}
+            </p>
             <a href="/" onClick={() => setCheckoutSrc('wl-lock')} style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Ativar conta →')}</a>
           </div>
         </Panel>
