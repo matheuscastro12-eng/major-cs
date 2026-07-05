@@ -35,9 +35,9 @@ const fmtMoney = (cents?: number | null, currency?: string | null) => {
   catch { return `${(cents / 100).toFixed(2)} ${currency ?? ''}`; }
 };
 
-const METHOD_LABEL: Record<string, string> = { stripe: 'Cartão (Stripe)', pix: 'Pix', admin: 'Concedido (admin)', desconhecido: 'Não identificado' };
+const METHOD_LABEL: Record<string, string> = { stripe: 'Cartão (Stripe)', pix: 'Pix', admin: 'Concedido (admin)', desconhecido: 'Pix (legado)' };
 const methodLabel = (m: string) => ct(METHOD_LABEL[m] ?? m);
-const methodTone = (m: string) => (m === 'stripe' ? '#635bff' : m === 'pix' ? '#16a34a' : m === 'admin' ? '#caa53a' : '#8a99ab');
+const methodTone = (m: string) => (m === 'stripe' ? '#635bff' : m === 'pix' || m === 'desconhecido' ? '#16a34a' : m === 'admin' ? '#caa53a' : '#8a99ab');
 const TIER_LABEL: Record<string, string> = { p10: 'Arsenal', p15: 'Elite', p30: 'Lendário' };
 const tierLabel = (t: string) => (t.startsWith('pass-') ? `${ct('Passe')} ${t.slice(5).toUpperCase()}` : TIER_LABEL[t] ?? t);
 
@@ -71,7 +71,8 @@ function MethodBars({ rows, total }: { rows: BarRow[]; total: number }) {
 // ── derivação por dia: contagens cruas → receita em centavos ────────────────
 // Regra de receita da vitalícia: preço fixo (vitPriceCents = R$ 20). Contas
 // 'admin' (concedidas) contam como conta mas NÃO geram receita. Método
-// 'desconhecido' (legado sem trilha) entra no TOTAL mas fora do split Pix×cartão.
+// 'desconhecido' (legado sem trilha de método) conta como PIX no split —
+// decisão do dono (2026-07-05): as vendas legadas sem sessão Stripe foram Pix.
 interface DayRow {
   day: string;
   sold: number;        // contas vitalícias VENDIDAS no dia (pix + stripe + desconhecido)
@@ -86,14 +87,15 @@ function deriveDays(data: RevenueData): DayRow[] {
   const p = data.vitPriceCents;
   return data.days.map((d: RevenueDay) => {
     const vitCents = (d.vitPix + d.vitStripe + d.vitOther) * p;
-    const pixCents = d.vitPix * p + d.ordPixCents;
+    // vitOther ('desconhecido') dobra no Pix — ver comentário acima.
+    const pixCents = (d.vitPix + d.vitOther) * p + d.ordPixCents;
     const stripeCents = d.vitStripe * p + d.ordStripeCents;
     return {
       day: d.day,
       sold: d.vitPix + d.vitStripe + d.vitOther,
       granted: d.vitAdmin,
       pixCents, stripeCents,
-      totalCents: pixCents + stripeCents + d.vitOther * p,
+      totalCents: pixCents + stripeCents,
       vitCents, coinsCents: d.coinsCents, passeCents: d.passeCents,
       orders: d.orders, visitors: d.visitors,
     };
@@ -189,7 +191,10 @@ function RevenueSection({ data }: { data: RevenueData }) {
   const p = data.vitPriceCents;
   const vitAllSold = data.allTime.vitByMethod.filter((m) => m.method !== 'admin').reduce((a, m) => a + m.n, 0);
   const allTimeCents = vitAllSold * p + data.allTime.orders.reduce((a, o) => a + o.cents, 0);
-  const allPix = (data.allTime.vitByMethod.find((m) => m.method === 'pix')?.n ?? 0) * p
+  // 'desconhecido' dobra no Pix também no all-time (mesma regra do por-dia).
+  const allPix = data.allTime.vitByMethod
+    .filter((m) => m.method === 'pix' || m.method === 'desconhecido')
+    .reduce((a, m) => a + m.n, 0) * p
     + data.allTime.orders.filter((o) => o.method === 'pix').reduce((a, o) => a + o.cents, 0);
   const allStripe = (data.allTime.vitByMethod.find((m) => m.method === 'stripe')?.n ?? 0) * p
     + data.allTime.orders.filter((o) => o.method !== 'pix').reduce((a, o) => a + o.cents, 0);
