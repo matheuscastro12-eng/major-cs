@@ -1844,3 +1844,19 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-vest-mate-id b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rtp .rtp-vest-mate-id span { font-family: var(--rtp-mono); font-size: .56rem; letter-spacing: .3px; text-transform: uppercase; color: var(--rtp-ink-faint); }
 .rtp .rtp-vest-chem { flex: 0 0 auto; width: 22px; text-align: right; font-family: var(--rtp-mono); font-size: .68rem; color: var(--rtp-ink-dim); }
+
+/* ── iter42 — FLOW POLISH ─────────────────────────────────────────────────────
+   Consistência Sala↔resultado + transições suaves da camada de atmosfera. */
+
+/* card de resultado fala a mesma língua do scorebug da Sala: TAG placar TAG */
+.rtp .rtp-result-score { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.rtp .rtp-result-tag { font-size: .92rem; font-weight: 700; letter-spacing: 1px; color: var(--rtp-ink-dim); }
+.rtp .rtp-result-tag.you { color: var(--rtp-ink); }
+
+/* atmosfera entra em cena, não "pisca" — mesma linguagem do rtp-atmo-open */
+.rtp .rtp-atmo { animation: rtp-fade-up .35s var(--rtp-ease); }
+.rtp .rtp-atmo-pressure { animation: rtp-fade-up .3s var(--rtp-ease); }
+.rtp .rtp-crowd-line { animation: rtp-fade-up .4s var(--rtp-ease) .16s both; }
+@media (prefers-reduced-motion: reduce) {
+  .rtp .rtp-atmo, .rtp .rtp-atmo-pressure, .rtp .rtp-crowd-line { animation: none; }
+}

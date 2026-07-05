@@ -51,7 +51,7 @@ export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch,
       right={<span className="rtp-moneychip"><RtpIcon name="money" size={13} /> {money(life.money)}</span>}
     >
       {tab === 'overview' && (
-        <RtpOverview save={save} notice={notice} onDismissNotice={onDismissNotice} onPlayMatch={onPlayMatch} onAutoSim={onAutoSim} />
+        <RtpOverview save={save} notice={notice} onDismissNotice={onDismissNotice} onPlayMatch={onPlayMatch} onAutoSim={onAutoSim} onGoTab={(id) => setTab(id)} />
       )}
       {tab === 'training' && <RtpTraining save={save} onUpdate={onUpdate} />}
       {tab === 'league' && <RtpLeague save={save} />}
