@@ -51,6 +51,8 @@ import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
+import { UltimateCast } from './UltimateCast';
+import { pickHighlights } from '../../engine/ultimate/liveDrama';
 import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQUAD_DUEL_CAP, type StyleId } from '../../engine/ultimate/traits';
@@ -1311,6 +1313,16 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               : <span style={{ opacity: 0.55 }}>{ct('MOMENTUM')}</span>}
           </div>
         </div>
+        {/* camada de transmissão (iter41): caster + hype + stakes + estrelas.
+            Alimentada pelos dados CANÔNICOS da série (iguais nos 2 clientes). */}
+        <UltimateCast
+          roundLog={live.series.maps[0]?.roundLog ?? []}
+          names={[live.teams[0].name, live.teams[1].name]}
+          players={[live.teams[0].players, live.teams[1].players]}
+          shown={liveRound}
+          speed={speed}
+          myIdx={live.myIdx}
+        />
         <div className="ut-live__stage">
           <MatchReplay series={live.series} teams={live.teams} playbackSpeed={speed} canControlSpeed onPlaybackSpeedChange={setSpeed} onFinish={finishMatch} onClose={finishMatch} onRound={setLiveRound} richFeed />
         </div>
@@ -2410,6 +2422,20 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 {result.roundLog.map((w, i) => (
                   <span key={i} title={`Round ${i + 1}`} style={{ width: 9, height: 9, borderRadius: 3, background: w === 0 ? '#22c55e' : '#e5e2da', border: `1px solid ${w === 0 ? '#16a34a' : '#d3d0c7'}`, marginLeft: i === 12 ? 8 : 0 }} />
                 ))}
+              </div>
+            )}
+            {/* melhores momentos (iter41): 3 rounds-chave derivados do roundLog
+                (pistol, maior swing, decisivo) — mesma função pura da transmissão */}
+            {result.roundLog.length > 1 && (
+              <div className="ut-hl">
+                <div className="ut-hl__title">{ct('MELHORES MOMENTOS')}</div>
+                <div className="ut-hl__row">
+                  {pickHighlights(result.roundLog).map((h) => (
+                    <span key={h.round} className={`ut-hl__chip${h.winner === 0 ? ' win' : ''}`}>
+                      <b>R{h.round + 1}</b> {ct(h.label)} · {h.winner === 0 ? ct('você') : (result.oppName ?? ct('rival'))}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
             {result.mvp && (

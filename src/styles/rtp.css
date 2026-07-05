@@ -768,6 +768,46 @@ html:has(main.page-rtp) { background: #070b11; }
   padding: 2px 7px; border-radius: 3px;
 }
 
+/* ── ATMOSFERA (iter41): o palco da série — venue + lotação + pressão ──────── */
+.rtp .rtp-atmo {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+  padding: 5px 10px; border-radius: 7px; border: 1px solid var(--rtp-line);
+  background: color-mix(in srgb, var(--rtp-well) 70%, transparent);
+}
+.rtp .rtp-atmo-venue { flex: 1; min-width: 0; font-size: .68rem; font-style: italic; color: var(--rtp-ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtp .rtp-atmo.st-major { border-color: color-mix(in srgb, var(--rtp-gold) 40%, var(--rtp-line)); }
+.rtp .rtp-atmo.st-major .rtp-atmo-venue { color: var(--rtp-gold); }
+.rtp .rtp-atmo-crowd { display: inline-flex; align-items: center; gap: 6px; font-family: var(--rtp-mono); font-size: .52rem; font-weight: 700; letter-spacing: 1px; color: var(--rtp-ink-faint); white-space: nowrap; }
+.rtp .rtp-atmo-crowd-track { position: relative; width: 52px; height: 5px; border-radius: 3px; background: var(--rtp-well); border: 1px solid var(--rtp-line); overflow: hidden; }
+.rtp .rtp-atmo-crowd-fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: linear-gradient(90deg, var(--rtp-ink-faint), var(--rtp-signal)); }
+.rtp .rtp-atmo.st-major .rtp-atmo-crowd-fill { background: linear-gradient(90deg, var(--rtp-signal), var(--rtp-gold)); }
+
+/* abertura: walkout do MAJOR + o que está em jogo (antes do 1º beat) */
+.rtp .rtp-atmo-open { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--rtp-line); background: var(--rtp-well); animation: rtp-fade-up .3s var(--rtp-ease); }
+.rtp .rtp-atmo-walkout { font-size: .78rem; font-style: italic; color: var(--rtp-ink-dim); line-height: 1.45; }
+.rtp .rtp-atmo-stakes { font-size: .78rem; color: var(--rtp-ink); line-height: 1.45; }
+.rtp .rtp-atmo-stakes b { font-family: var(--rtp-mono); font-size: .56rem; font-weight: 700; letter-spacing: 1.5px; color: var(--rtp-live); margin-right: 6px; }
+
+/* pressão: clutch / match point — a sala escurece e o quadro pulsa */
+.rtp .rtp-room.pres .rtp-room-decide { border-radius: 14px; animation: rtp-pres-pulse 1.6s ease-in-out infinite; }
+@keyframes rtp-pres-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--rtp-live) 30%, transparent); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--rtp-live) 60%, transparent), 0 0 26px color-mix(in srgb, var(--rtp-live) 14%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .rtp .rtp-room.pres .rtp-room-decide { animation: none; box-shadow: 0 0 0 1px color-mix(in srgb, var(--rtp-live) 45%, transparent); } }
+.rtp .rtp-atmo-pressure { display: flex; flex-direction: column; gap: 5px; align-items: center; margin-bottom: 10px; }
+.rtp .rtp-atmo-pressure-kicker { font-family: var(--rtp-mono); font-size: .64rem; font-weight: 800; letter-spacing: 2.5px; color: var(--rtp-live); text-align: center; }
+.rtp .rtp-atmo-taunt { font-size: .76rem; font-style: italic; color: var(--rtp-ink-dim); text-align: center; }
+.rtp .rtp-atmo-taunt b { font-style: normal; color: var(--rtp-loss); }
+
+/* reação da torcida ao beat + ambiente do interlúdio */
+.rtp .rtp-crowd-line { margin: -6px 0 12px; font-size: .76rem; font-style: italic; color: var(--rtp-ink-faint); }
+.rtp .rtp-atmo-amb { color: var(--rtp-ink-faint); }
+
+/* fechamento de atmosfera na tela de resultado */
+.rtp .rtp-result-atmo { margin: 10px 2px 12px; font-size: .84rem; font-style: italic; line-height: 1.5; color: var(--rtp-ink-dim); text-align: center; }
+.rtp .rtp-result-atmo.w { color: color-mix(in srgb, var(--rtp-win) 70%, var(--rtp-ink-dim)); }
+
 /* win-prob + momentum + rating */
 .rtp .rtp-room-meters { display: grid; grid-template-columns: 1fr 200px; gap: 10px; margin-bottom: 14px; }
 @media (max-width: 600px) { .rtp .rtp-room-meters { grid-template-columns: 1fr; } }
