@@ -87,6 +87,28 @@ export async function retrieveCheckout(stripe: Stripe, sessionId: string): Promi
   return stripe.checkout.sessions.retrieve(sessionId, { expand: ['line_items'] });
 }
 
+// ── Passe Premium do Ultimate (dinheiro real, R$ 30,00) ──────────────────────
+// O pedido REUSA rtm_coin_orders com tier "pass-s<N>" (coins=0, cents=3000):
+// o ciclo pending → paid (webhook) → claimed é idêntico ao de coins, e o N do
+// tier grava a TEMPORADA comprada (o premium do passe vale só naquela season).
+// O correlationID mantém o prefixo "ultcoins:" — é ele que roteia os webhooks
+// (Stripe/Woovi) pro caminho de pedidos sem NENHUMA mudança no caminho feliz.
+// Stripe usa Checkout Session dinâmica (price_data em BRL) igual aos coins —
+// não há price id pra configurar no dashboard.
+export const PASS_PRICE_CENTS = 3000; // R$ 30,00
+
+export function passTier(season: number): string {
+  return `pass-s${Math.floor(season)}`;
+}
+
+// temporada de um tier de passe ("pass-s3" → 3), ou null se não for de passe.
+export function parsePassTier(tier: string): number | null {
+  const m = /^pass-s(\d+)$/.exec(tier ?? '');
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}
+
 export async function findPaidCheckoutForEmail(
   stripe: Stripe,
   email: string,

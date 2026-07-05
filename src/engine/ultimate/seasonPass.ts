@@ -35,7 +35,9 @@
 // FREE:    100/200/300/400/500/600 por faixa de 6 níveis, menos os níveis de
 //          item (10/20/30) → 10.900 credits.
 // PREMIUM: 200/350/500/650/800/950 por faixa, menos os níveis de item
-//          (15/25/35) → 17.500 credits (líquido do preço de 15.000: +2.500).
+//          (15/25/35) → 17.500 credits. (v1 custava 15.000 credits → líquido
+//          +2.500; v2 é dinheiro real R$ 30,00, então os 17.500 entram cheios —
+//          aceitável: é conteúdo PAGO, mesma lógica da compra de coins.)
 // TOTAL:   28.400 credits ≈ 1.0× o capstone mensal da ladder de temporada
 //          (Elite = 28.000; ladder completa = 54.000) — dentro do teto de ~2×
 //          pedido pra não inundar a economia. Itens de referência: pack prata
@@ -44,10 +46,17 @@
 import type { UltRarity } from './rarities';
 
 export const PASS_MAX_LEVEL = 35;
-export const PASS_PREMIUM_COST = 15000; // em credits (v1)
+/**
+ * @deprecated v1 cobrava 15.000 credits pelo premium. Desde a v2 o desbloqueio
+ * é dinheiro real (R$ 30,00 via Pix/Stripe) — este valor NÃO é mais comprável;
+ * fica exportado só como referência histórica do ledger (spend src:'pass-premium').
+ */
+export const PASS_PREMIUM_COST = 15000; // em credits (v1, legado)
 
-// v1: premium só por credits; 'coins' fica na porta pro fluxo de compra de
-// coins (dinheiro real) numa iteração futura — o campo premiumVia já persiste.
+// premiumVia: 'credits' = compra legada da v1 (grandfathered — quem pagou
+// 15.000 credits mantém o premium); 'coins' = compra em DINHEIRO REAL (R$ 30,00
+// Pix/Stripe). Renomear 'coins' → 'paid' exigiria migrar saves persistidos e o
+// sanitizador do codec — mantemos o valor e documentamos o significado.
 export type PassPremiumMethod = 'credits' | 'coins';
 
 // fontes de XP do passe — XP é um contador NOVO (não toca credits).

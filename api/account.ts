@@ -14,6 +14,9 @@ import {
   checkoutUrl,
   cleanEnv,
   findPaidCheckoutForEmail,
+  parsePassTier,
+  passTier,
+  PASS_PRICE_CENTS,
   renumberFounders,
   retrieveCheckout,
   stripeClient,
@@ -445,10 +448,13 @@ export default async function handler(
 
   // coinsClaim: coleta todos os pedidos pagos e ainda não creditados desta conta.
   // Atômico (UPDATE ... RETURNING): duas abas não creditam o mesmo pedido duas vezes.
+  // Pedidos de PASSE (tier "pass-s<N>", coins=0) ficam de fora — quem os coleta é
+  // o passClaim; se o coinsClaim os marcasse claimed, o desbloqueio do premium
+  // se perderia (o cliente só veria "0 coins").
   if (action === 'coinsClaim') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' RETURNING coins`;
+    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' AND tier NOT LIKE 'pass-s%' RETURNING coins`;
     const coins = rows.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
     res.status(200).json({ coins });
     return;
@@ -489,6 +495,128 @@ export default async function handler(
     ]);
     const coins = (rows ?? []).reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
     res.status(200).json({ coins });
+    return;
+  }
+
+  // ── Passe Premium do Ultimate (R$ 30,00 · dinheiro real) ──────────────────
+  // Mesmo funil dos coins: pedido em rtm_coin_orders com tier "pass-s<N>"
+  // (coins=0, cents=3000, N = temporada comprada), correlationID "ultcoins:..."
+  // (roteia os webhooks pro caminho de pedidos), pending → paid (webhook) →
+  // claimed (passClaim — o CLIENTE liga o premium no save ao coletar).
+
+  // passPix: gera a cobrança Pix (Woovi) do Passe Premium da temporada corrente.
+  if (action === 'passPix') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login antes de comprar o passe.' }); return; }
+    const season = Math.floor(Number(body.season ?? 0));
+    if (!Number.isInteger(season) || season < 1 || season > 9999) { res.status(400).json({ error: 'temporada inválida' }); return; }
+    const tier = passTier(season);
+    // dupla compra: já existe pedido pago/claimado desta temporada → não cobra 2×.
+    // 'paid' ainda não claimado devolve already:true — o cliente coleta e desbloqueia.
+    const dup = await sql`SELECT status FROM rtm_coin_orders WHERE email=${em} AND tier=${tier} AND status IN ('paid','claimed') LIMIT 1`;
+    if (dup.length) {
+      if (String(dup[0].status) === 'paid') { res.status(200).json({ already: true }); return; }
+      res.status(409).json({ error: 'Você já comprou o Passe Premium desta temporada.' });
+      return;
+    }
+    const appId = cleanEnv(process.env.OPENPIX_APP_ID);
+    if (!appId) { res.status(500).json({ error: 'Pix indisponível: OPENPIX_APP_ID não configurada.' }); return; }
+    const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+    const nick = String(((await sql`SELECT nick FROM rtm_accounts WHERE email=${em}`)[0]?.nick) ?? '').slice(0, 80) || em;
+    // pedido ANTES da cobrança (mesma razão dos coins): pending órfão é inofensivo;
+    // cobrança paga sem pedido perderia o passe do jogador.
+    await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents) VALUES (${corr}, ${em}, ${tier}, 0, ${PASS_PRICE_CENTS}) ON CONFLICT (correlation_id) DO NOTHING`;
+    try {
+      const r = await fetch('https://api.openpix.com.br/api/v1/charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: appId },
+        body: JSON.stringify({
+          correlationID: corr,
+          value: PASS_PRICE_CENTS,
+          comment: `Ultimate · Passe Premium (Season ${season})`,
+          customer: { name: nick, email: em },
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!r.ok) {
+        await sql`DELETE FROM rtm_coin_orders WHERE correlation_id=${corr} AND status='pending'`;
+        res.status(502).json({ error: 'Falha ao gerar Pix. Tente de novo.' });
+        return;
+      }
+      const j = (await r.json()) as { charge?: Record<string, unknown> };
+      const c = j?.charge ?? {};
+      res.status(200).json({
+        correlationID: corr,
+        season,
+        qrCodeImage: c.qrCodeImage ?? null,
+        brCode: c.brCode ?? null,
+        paymentLinkUrl: c.paymentLinkUrl ?? null,
+        expiresIn: c.expiresIn ?? null,
+      });
+    } catch { res.status(502).json({ error: 'Falha ao falar com o Woovi.' }); }
+    return;
+  }
+
+  // passCheckout: paga o Passe Premium com CARTÃO (Stripe) — Checkout Session
+  // dinâmica em BRL (sem price id no dashboard), espelho do coinsCheckout.
+  if (action === 'passCheckout') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login antes de comprar o passe.' }); return; }
+    const season = Math.floor(Number(body.season ?? 0));
+    if (!Number.isInteger(season) || season < 1 || season > 9999) { res.status(400).json({ error: 'temporada inválida' }); return; }
+    const tier = passTier(season);
+    const dup = await sql`SELECT status FROM rtm_coin_orders WHERE email=${em} AND tier=${tier} AND status IN ('paid','claimed') LIMIT 1`;
+    if (dup.length) {
+      if (String(dup[0].status) === 'paid') { res.status(200).json({ already: true }); return; }
+      res.status(409).json({ error: 'Você já comprou o Passe Premium desta temporada.' });
+      return;
+    }
+    const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+    const origin = String(body.origin ?? '').replace(/\/+$/, '');
+    const base = /^https:\/\/[\w.-]+/.test(origin) ? origin : 'https://roadtomajor.com.br';
+    await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, 0, ${PASS_PRICE_CENTS}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
+    try {
+      const session = await stripeClient().checkout.sessions.create({
+        mode: 'payment',
+        customer_email: em,
+        client_reference_id: corr,
+        line_items: [{
+          quantity: 1,
+          price_data: {
+            currency: 'brl',
+            unit_amount: PASS_PRICE_CENTS,
+            product_data: { name: 'Ultimate · Passe Premium', description: `Season ${season} — trilha premium do Passe de Temporada` },
+          },
+        }],
+        metadata: { kind: 'pass', correlationID: corr, tier, season: String(season), email: em },
+        success_url: `${base}/ultimate?pass=ok`,
+        cancel_url: `${base}/ultimate?pass=cancel`,
+      });
+      if (!session.url) {
+        await sql`DELETE FROM rtm_coin_orders WHERE correlation_id=${corr} AND status='pending'`;
+        res.status(502).json({ error: 'Falha ao criar checkout. Tente de novo.' });
+        return;
+      }
+      res.status(200).json({ url: session.url, correlationID: corr, season });
+    } catch (error) {
+      await sql`DELETE FROM rtm_coin_orders WHERE correlation_id=${corr} AND status='pending'`;
+      console.error('pass_checkout_failed', error instanceof Error ? error.message : error);
+      res.status(502).json({ error: 'Não consegui falar com o Stripe agora.' });
+    }
+    return;
+  }
+
+  // passClaim: coleta os pedidos de PASSE pagos e ainda não claimados. Atômico
+  // e idempotente (UPDATE ... RETURNING) igual ao coinsClaim; devolve os pedidos
+  // (orderId + temporada) pro cliente ligar o premium no save.
+  if (action === 'passClaim') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
+    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' AND tier LIKE 'pass-s%' RETURNING correlation_id, tier`;
+    const orders = rows
+      .map((r) => ({ orderId: String(r.correlation_id), season: parsePassTier(String(r.tier)) ?? 0 }))
+      .filter((o) => o.season > 0);
+    res.status(200).json({ orders });
     return;
   }
 

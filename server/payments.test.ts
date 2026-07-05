@@ -10,6 +10,9 @@ import {
   checkoutUrl,
   DEFAULT_PRICE_ID,
   findPaidCheckoutForEmail,
+  parsePassTier,
+  passTier,
+  PASS_PRICE_CENTS,
 } from './payments.js';
 
 const session = (overrides: Partial<Stripe.Checkout.Session> = {}): Stripe.Checkout.Session => ({
@@ -87,6 +90,37 @@ test('reconciliation filters by email and returns only the account product', asy
     },
   } as unknown as Stripe;
   assert.equal((await findPaidCheckoutForEmail(stripe, ' Account@Example.com '))?.id, 'cs_expected');
+});
+
+test('pass tier encodes the season and costs R$ 30,00', () => {
+  assert.equal(PASS_PRICE_CENTS, 3000); // R$ 30,00 — preço do Passe Premium
+  assert.equal(passTier(3), 'pass-s3');
+  assert.equal(passTier(12.9), 'pass-s12'); // floor defensivo
+  // roundtrip: o tier do pedido devolve a temporada comprada
+  assert.equal(parsePassTier(passTier(1)), 1);
+  assert.equal(parsePassTier(passTier(42)), 42);
+});
+
+test('parsePassTier rejects everything that is not a pass order tier', () => {
+  // tiers de COINS nunca podem ser lidos como passe (o coinsClaim os coleta)
+  assert.equal(parsePassTier('p10'), null);
+  assert.equal(parsePassTier('p30'), null);
+  assert.equal(parsePassTier(''), null);
+  assert.equal(parsePassTier('pass-s'), null);
+  assert.equal(parsePassTier('pass-s0'), null);   // temporada começa em 1
+  assert.equal(parsePassTier('pass-sX'), null);
+  assert.equal(parsePassTier('pass-s3x'), null);
+  assert.equal(parsePassTier('xpass-s3'), null);
+});
+
+test('pass correlation ids route through the ultcoins order path and match the pass LIKE filter', () => {
+  // o prefixo "ultcoins:" é o que faz os webhooks (Stripe/Woovi) tratarem o
+  // pagamento como PEDIDO (pending→paid) e nunca como conta vitalícia; o
+  // padrão "pass-s%" é o que separa passClaim (passe) de coinsClaim (coins).
+  const corr = `ultcoins:${passTier(7)}:abc:def`;
+  assert.ok(corr.startsWith('ultcoins:'));
+  assert.ok(passTier(7).startsWith('pass-s')); // LIKE 'pass-s%'
+  assert.equal(parsePassTier(corr.split(':')[1]), 7);
 });
 
 test('webhook rejects altered payloads and accepts a valid Stripe signature', async () => {

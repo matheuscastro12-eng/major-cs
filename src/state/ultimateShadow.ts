@@ -244,7 +244,10 @@ export function mirrorUltimateChange(prev: UltimateState, next: UltimateState, k
     for (const o of prev.inventory) {
       if (!nextIds.has(o.id)) cards.push({ op: 'remove', cardId: o.id });
     }
-    if (creditsDelta === 0 && cards.length === 0) return;
+    // desbloqueio do Passe Premium PAGO (R$ 30,00): não muda credits nem
+    // cartas, mas o ledger PRECISA registrar a compra (auditoria de dinheiro
+    // real — meta carrega o orderId do pedido pass-s<N>).
+    if (creditsDelta === 0 && cards.length === 0 && meta?.src !== 'pass-premium-paid') return;
     shadowTx(kind, creditsDelta, cards, meta);
   } catch (e) {
     captureError(e, 'ult-shadow');
