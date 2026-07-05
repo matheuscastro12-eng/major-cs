@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { ct } from '../../state/career-i18n';
 import { Flag } from '../ui';
 import { RtpIcon } from './RtpIcon';
@@ -53,7 +53,14 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
   const tree = perkTreeFor(player.role);
   const groups: PerkTree[] = ['universal', player.role];
   const ownedTraits = new Set(prog.traits);
-  const doUnlock = (id: string) => { if (canUnlock(save, id).ok) onUpdate(unlockPerk(save, id)); };
+  // Micro-feedback do desbloqueio (iter45): o gasto do ponto ganhava só o flip
+  // visual da linha — agora tem confirmação explícita (mesmo estilo do treino).
+  const [perkFlash, setPerkFlash] = useState<string | null>(null);
+  const doUnlock = (id: string) => {
+    if (!canUnlock(save, id).ok) return;
+    setPerkFlash(perkById(id)?.label ?? id);
+    onUpdate(unlockPerk(save, id));
+  };
 
   const STATS: { label: string; value: string }[] = [
     { label: ct('Partidas'), value: `${history.matchesPlayed}` },
@@ -127,6 +134,9 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
 
       {/* Árvore de perks */}
       <DashCard title={ct('Árvore de perks')} actions={<span className="rtp-id-pointchip">{prog.perkPoints} pt</span>}>
+        {perkFlash && (
+          <div className="rtp-feedback rtp-setup-flash"><b><RtpIcon name="spark" size={13} /> {ct('Perk desbloqueado')}: {perkFlash}</b></div>
+        )}
         {groups.map((g) => {
           const perks = tree.filter((p) => p.tree === g);
           if (!perks.length) return null;

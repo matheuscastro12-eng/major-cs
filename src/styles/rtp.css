@@ -756,6 +756,7 @@ html:has(main.page-rtp) { background: #070b11; }
 /* scorebug do round room */
 .rtp .rtp-room-bug {
   display: flex; align-items: center; justify-content: center; gap: 10px;
+  flex-wrap: wrap; row-gap: 4px;
   font-family: var(--rtp-display); margin-bottom: 10px;
 }
 .rtp .rtp-room-bug-team { font-weight: 700; letter-spacing: 1px; color: var(--rtp-ink-dim); }
@@ -766,6 +767,11 @@ html:has(main.page-rtp) { background: #070b11; }
   margin-left: 10px; font-family: var(--rtp-mono); font-size: .6rem; letter-spacing: 1px;
   color: var(--rtp-signal); border: 1px solid color-mix(in srgb, var(--rtp-signal) 40%, transparent);
   padding: 2px 7px; border-radius: 3px;
+}
+/* 360px: o chip de progresso ("MAPA 1/3 · MOMENTO 4/12") desce pra linha própria
+   em vez de espremer o placar pra fora da tela. */
+@media (max-width: 480px) {
+  .rtp .rtp-room-bug-prog { flex-basis: 100%; margin-left: 0; text-align: center; }
 }
 
 /* ── ATMOSFERA (iter41): o palco da série — venue + lotação + pressão ──────── */
@@ -996,7 +1002,7 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-interlude-map span { font-size: .72rem; color: var(--rtp-ink-dim); }
 .rtp .rtp-interlude-body { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; border: 1px solid var(--rtp-line); border-radius: 0 0 10px 10px; background: var(--rtp-well); font-size: .78rem; color: var(--rtp-ink-dim); font-style: italic; }
 .rtp .rtp-interlude:not(:has(.rtp-interlude-map)) .rtp-interlude-body { border-radius: 10px; }
-.rtp .rtp-interlude-kicker { font-family: var(--rtp-mono); font-size: .54rem; font-weight: 700; font-style: normal; letter-spacing: 1.5px; color: var(--rtp-ink-faint); }
+.rtp .rtp-interlude-kicker { font-family: var(--rtp-mono); font-size: .55rem; font-weight: 700; font-style: normal; letter-spacing: 1.5px; color: var(--rtp-ink-faint); }
 .rtp .rtp-interlude-score { font-style: normal; font-family: var(--rtp-mono); font-size: .68rem; color: var(--rtp-ink); }
 .rtp .rtp-room-bug-maps { font-family: var(--rtp-mono); font-size: .74rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; background: var(--rtp-well); border: 1px solid var(--rtp-line); color: var(--rtp-ink-dim); }
 .rtp .rtp-room-bug-maps.you { color: var(--rtp-signal); border-color: color-mix(in srgb, var(--rtp-signal) 40%, var(--rtp-line)); }
@@ -1631,6 +1637,12 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-scout-note b { color: var(--rtp-ink); }
 @media (max-width: 560px) { .rtp .rtp-scout-grid { grid-template-columns: 1fr; } }
 
+/* 360px: headers de card com ações (ex.: "Veto de mapa" + Veto rápido + turno)
+   quebram linha em vez de estourar pro lado — .dash-card-head base não quebra. */
+@media (max-width: 560px) {
+  .rtp .dash-card-head { flex-wrap: wrap; row-gap: 4px; }
+}
+
 /* iter43 — DIA DE JOGO: manchete (ticker), mesa redonda, caster do veto */
 .rtp .rtp-daybrief { display: flex; align-items: center; gap: 9px; padding: 7px 11px; border: 1px solid var(--rtp-line); border-radius: 8px; background: var(--rtp-well); }
 .rtp .rtp-daybrief-kicker { flex: none; font-family: var(--rtp-mono); font-size: .55rem; font-weight: 700; letter-spacing: 1.2px; color: var(--rtp-signal); padding: 2px 7px; border: 1px solid color-mix(in srgb, var(--rtp-signal) 45%, var(--rtp-line)); border-radius: 5px; }
@@ -1649,7 +1661,7 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-desk-palpite-line { margin: 6px 0 0; font-size: .72rem; color: var(--rtp-ink-faint); line-height: 1.4; }
 .rtp .rtp-veto-cast { margin: 10px 0 0; font-size: .76rem; font-style: italic; color: var(--rtp-ink-dim); line-height: 1.4; }
 .rtp .rtp-veto-cast.final { color: var(--rtp-ink); }
-.rtp .rtp-veto-cast-k { font-family: var(--rtp-mono); font-size: .54rem; font-weight: 700; font-style: normal; letter-spacing: 1px; color: var(--rtp-signal); margin-right: 6px; }
+.rtp .rtp-veto-cast-k { font-family: var(--rtp-mono); font-size: .55rem; font-weight: 700; font-style: normal; letter-spacing: 1px; color: var(--rtp-signal); margin-right: 6px; }
 .rtp .rtp-walk-cue { margin: 0; text-align: center; font-size: .74rem; font-style: italic; color: var(--rtp-ink-faint); }
 
 /* plano de jogo */

@@ -58,15 +58,18 @@ function buildPalpite(save: RoadToProSave, prep: MatchPrep, seed: string): DeskP
     ? pickBy([
         `A bancada é unânime: ${fav} favorito com folga — ${pct}% na sensação da mesa. Zebra aqui vira manchete.`,
         `Ninguém na mesa hesita: ${fav} ${pct}%–${100 - pct}%. O ${dog} precisa de um dia perfeito.`,
+        `${pct}% pro ${fav} na sensação da mesa — no papel, só dá um. Mas série não se joga no papel…`,
       ] as const, `${seed}:pline`)
     : pct >= 55
       ? pickBy([
           `A mesa pende pro ${fav} (${pct}%), mas ninguém assina embaixo — série com cara de decider.`,
           `Favoritismo leve do ${fav}: ${pct}%–${100 - pct}%. Um mapa de conforto e isso vira.`,
+          `${fav} sai na frente na sensação da mesa (${pct}%), mas todo mundo aqui já viu série assim virar.`,
         ] as const, `${seed}:pline`)
       : pickBy([
           `Bancada RACHADA: ${pct}%–${100 - pct}% é margem de erro. Quem ganhar o veto ganha meio caminho.`,
           `Cara ou coroa pra mesa (${pct}%–${100 - pct}%) — série que se decide no detalhe.`,
+          `${pct}%–${100 - pct}%: a mesa não crava nem sob tortura. Série de um round.`,
         ] as const, `${seed}:pline`);
   return { favYou, favLabel: fav, pct, line };
 }
@@ -127,7 +130,11 @@ export function vetoReaction(
   const c = ctx.comfort[map] ?? 0;
   const key = `vetocast:${ctx.matchSeed}:${stepIndex}`;
 
-  if (action === 'decider') return `${name} sobrou como decider — se a série esticar, é lá que ela morre.`;
+  if (action === 'decider') return pickBy([
+    `${name} sobrou como decider — se a série esticar, é lá que ela morre.`,
+    `Decider definido: ${name}. A bancada já avisa — mapa de decisão não perdoa nervos.`,
+    `${name} fecha o pool como decider. Se chegar lá, esquece o papel: vale coragem.`,
+  ] as const, key);
 
   if (action === 'pick') {
     if (team === 0) {
