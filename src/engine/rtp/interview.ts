@@ -185,10 +185,14 @@ function questionFor(ctxId: InterviewContext, c: StoryCtx, seed: string): string
     case 'win': return q([
       `${c.nick}, vitória sólida sobre ${c.oppName}. O que funcionou hoje que vocês vinham buscando?`,
       `${c.nick}, mais três pontos na caminhada. Dá pra dizer que o time encontrou a identidade?`,
+      `${c.nick}, série controlada contra ${c.oppName}. Esse é o nível que a gente deve esperar daqui pra frente?`,
+      `${c.nick}, ${c.mapScore[0]} a ${c.mapScore[1]} no placar. Onde essa série foi ganha, na sua leitura?`,
     ]);
     case 'loss': return q([
       `${c.nick}, resultado ruim contra ${c.oppName}. Foi dia ruim ou tem algo maior pra corrigir?`,
       `${c.nick}, a torcida saiu em silêncio hoje. Que resposta vocês devem na próxima série?`,
+      `${c.nick}, ${c.oppName} levou essa. O que o vestiário conversa depois de uma noite assim?`,
+      `${c.nick}, o placar não ajudou hoje. Em que momento a série escapou do plano de vocês?`,
     ]);
     case 'followup': return q([
       `Última pergunta, ${c.nick}: o que muda na preparação de vocês daqui pra frente?`,
@@ -328,12 +332,21 @@ export function buildInterview(
 ): Interview {
   const seed = `itv:${opts.matchSeed}`;
   const press = isPressConference(save, opts);
+  // Rótulo REAL da fase do Major (era um campo morto, sempre null): a pergunta
+  // de 'major_life' cita a campanha de verdade — "Suíça 2–1" / "playoffs".
+  const mj = opts.major ? save.world.major : null;
+  const mjUser = mj?.tournament.teams.find((tm) => tm.id === mj.userTeamId);
+  const majorLabel = mj
+    ? (mj.phaseStage === 'playoffs'
+        ? 'playoffs do Major, onde cada série vale uma vida'
+        : mjUser ? `Suíça ${mjUser.wins}–${mjUser.losses}, cada série valendo uma vida` : null)
+    : null;
   const story: StoryCtx = {
     nick: save.player.nick, teamTag: save.team.tag,
     oppName: result.oppName, oppTag: result.oppTag,
     won: result.won, mapScore: result.mapScore,
     rivalNick: save.media?.rival?.playerNick ?? null,
-    majorLabel: null,
+    majorLabel,
   };
 
   const contexts = matchedContexts(save, result, opts);
@@ -363,10 +376,12 @@ export function buildInterview(
     ? pickBy([
         'Sala de imprensa lotada — flashes, gravadores empilhados e transmissão ao vivo.',
         'Coletiva oficial: a assessoria pede ordem, mas a sala está fervendo.',
+        'Mesa da coletiva, garrafa d’água e vinte microfones apontados pra você.',
       ] as const, `${seed}:set`)
     : pickBy([
         'Na saída do palco, um microfone encosta antes de você tirar o fone.',
         'Zona mista apertada — o repórter te alcança ainda no corredor.',
+        'Meio caminho pro vestiário e a câmera acende na sua frente — ao vivo.',
       ] as const, `${seed}:set`);
 
   return { press, setting, questions };

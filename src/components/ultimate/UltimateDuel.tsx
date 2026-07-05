@@ -316,20 +316,30 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
       {!ready && <div className="ut-duel__err">{ct('Complete os 5 slots do seu squad (aba Squad) pra duelar online.')}</div>}
 
       {variant === 'ranked' ? (
-        queue ? (
-          <div className="ut-queue is-searching">
-            <div className="ut-queue__pulse" />
-            <div className="ut-queue__body">
-              <div className="ut-queue__title">{ct('PROCURANDO RIVAL…')}</div>
-              <div className="ut-queue__meta">
-                {Math.floor((Date.now() - queue.since) / 1000)}s {ct('na fila')}
-                {queue.window != null && (queue.window >= 100000 ? <> · {ct('janela aberta')}</> : <> · {ct('janela')} ±{queue.window} RP</>)}
-                {queue.waiting != null && <> · {queue.waiting} {ct('na fila agora')}</>}
+        queue ? (() => {
+          const waitSec = Math.floor((Date.now() - queue.since) / 1000);
+          return (
+            <div className="ut-queue is-searching">
+              <div className="ut-queue__pulse" />
+              <div className="ut-queue__body">
+                <div className="ut-queue__title">{ct('PROCURANDO RIVAL…')}</div>
+                <div className="ut-queue__meta">
+                  {waitSec}s {ct('na fila')}
+                  {queue.window != null && (queue.window >= 100000 ? <> · {ct('janela aberta')}</> : <> · {ct('janela')} ±{queue.window} RP</>)}
+                  {queue.waiting != null && <> · {queue.waiting} {ct('na fila agora')}</>}
+                </div>
+                {/* madrugada / fila vazia: depois de 45s sem par, oferece uma saída
+                    honesta em vez de deixar o jogador olhando o contador subir */}
+                {waitSec >= 45 && (
+                  <div className="ut-queue__hint">
+                    {ct('Poucos rivais online agora. Você pode seguir na fila — ou jogar um Amistoso ou o Gauntlet e voltar depois.')}
+                  </div>
+                )}
               </div>
+              <button className="ut-btn ut-btn--ghost" onClick={cancelQueue}>{ct('Cancelar')}</button>
             </div>
-            <button className="ut-btn ut-btn--ghost" onClick={cancelQueue}>{ct('Cancelar')}</button>
-          </div>
-        ) : (
+          );
+        })() : (
           <div className="ut-queue">
             <div className="ut-queue__body">
               <div className="ut-queue__title">{ct('FILA RANQUEADA')}</div>

@@ -75,7 +75,7 @@ const CONFETTI = Array.from({ length: 18 }, (_, i) => ({
   spin: i % 2 === 0 ? 1 : -1,
 }));
 // chip de recurso: abrevia valores gigantes pra não estourar a nav.
-const fmtChip = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : fmt(n));
+const fmtChip = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace('.', ',')}M` : fmt(n));
 
 // Pacotes de coins via Pix (Woovi). MESMOS tiers do servidor (COIN_TIERS em
 // api/account.ts) — valor por real cresce no tier maior pra recompensar quem
@@ -327,11 +327,27 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [toast, setToast] = useState<string>('');
   const [navMenu, setNavMenu] = useState<'clube' | 'mercado' | 'more' | null>(null);
   const [clubFilter, setClubFilter] = useState<'all' | 'bronze' | 'silver' | 'gold' | 'special'>('all');
+  // busca por nick na coleção: com 300-500+ cartas, achar um jogador específico
+  // só rolando a grade era inviável (o mercado já tinha busca; a coleção não).
+  const [clubQuery, setClubQuery] = useState('');
   const [rankedMode, setRankedMode] = useState<'rivals' | 'casual' | 'gauntlet'>('rivals');
   // compra de coins: modal com QR Pix. charge=null enquanto gera; error=true
   // mostra o link estático do Woovi como fallback.
   const [coinModal, setCoinModal] = useState<{ pack: CoinPack; charge: CoinCharge | null; error?: boolean } | null>(null);
   const { account } = useAccount();
+
+  // viewport estreito (≤430px): o PitchTile de 112px estourava o tabuleiro no
+  // celular (3 tiles na mesma linha = 336px > ~294px úteis; tiles de borda
+  // clipavam fora do pitch). Presentational puro — só encolhe o tile.
+  const [narrow, setNarrow] = useState<boolean>(() => {
+    try { return window.matchMedia('(max-width: 430px)').matches; } catch { return false; }
+  });
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 430px)');
+    const h = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
 
   const credits = state.profile.credits;
   // rótulo do título equipado: TITLES estáticos OU o slug dinâmico do Passe
@@ -996,6 +1012,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   }, [displayName]);
   useEffect(() => { if (tab === 'ranking') void loadLadder(); }, [tab, loadLadder]);
 
+  // equipar título era um sucesso SILENCIOSO (só o chip "equipado" trocava no
+  // modal) — micro-feedback consistente com os irmãos (evolve/estilo/venda).
+  const doEquipTitle = (slug: string | null, label?: string) => {
+    equipTitle(slug);
+    flash(slug ? `🏷️ ${ct('Título equipado')}: ${label ?? slug}` : ct('Título removido.'), 2000);
+  };
+
   const doEvolve = (row: ClubRow) => {
     // prefere evoluir a cópia escalada (fortalece o squad na hora); senão a 1ª.
     const id = row.ownedIds.find((oid) => ownedById.get(oid)?.locked === 'squad') ?? row.ownedIds[0];
@@ -1430,7 +1453,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               {navMenu === 'mercado' && (
                 <div className="ut-menu" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => go('store')}><Package size={16} /> {ct('Loja de pacotes')}</button>
-                  <button onClick={() => go('mercado')}><ArrowLeftRight size={16} /> {ct('Transfer market')}</button>
+                  <button onClick={() => go('mercado')}><ArrowLeftRight size={16} /> {ct('Mercado de jogadores')}</button>
                 </div>
               )}
             </div>
@@ -2087,7 +2110,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           ) : (() => {
             const buckets: Record<string, number> = { all: club.length, bronze: 0, silver: 0, gold: 0, special: 0 };
             for (const r of club) { const b = rarityInfo(r.card.rarity).bucket; buckets[b] = (buckets[b] ?? 0) + 1; }
-            const filtered = clubFilter === 'all' ? club : club.filter((r) => rarityInfo(r.card.rarity).bucket === clubFilter);
+            const byBucket = clubFilter === 'all' ? club : club.filter((r) => rarityInfo(r.card.rarity).bucket === clubFilter);
+            const q = clubQuery.trim().toLowerCase();
+            const filtered = q ? byBucket.filter((r) => r.card.nick.toLowerCase().includes(q)) : byBucket;
             return (
               <>
                 <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -2095,13 +2120,19 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   <div className="ut-cstat"><div className="ut-cstat__k"><Sparkles size={12} /> {ct('ÚNICAS')}</div><div className="ut-cstat__v">{uniqueCards}</div></div>
                   <div className="ut-cstat"><div className="ut-cstat__k"><Coins size={12} /> {ct('DUPLICATAS')}</div><div className="ut-cstat__v" style={dupCount > 0 ? { color: '#92600a' } : undefined}>{dupCount}</div></div>
                 </div>
-                <div className="ut-tabs" style={{ marginBottom: 12 }}>
+                <div className="ut-tabs" style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   {([['all', ct('Todas')], ['bronze', ct('Bronze')], ['silver', ct('Prata')], ['gold', ct('Ouro')], ['special', ct('Especiais')]] as const).map(([id, label]) => (
                     <button key={id} onClick={() => setClubFilter(id)} style={{ ...tabBtn(clubFilter === id), padding: '6px 13px', fontSize: '0.78rem' }}>{label} <span style={{ opacity: 0.65 }}>({buckets[id] ?? 0})</span></button>
                   ))}
+                  <input
+                    value={clubQuery}
+                    onChange={(e) => setClubQuery(e.target.value)}
+                    placeholder={ct('Buscar jogador…')}
+                    style={{ flex: '1 1 150px', minWidth: 130, maxWidth: 240, padding: '7px 12px', borderRadius: 999, border: '1px solid var(--em-border,#2a3340)', background: 'var(--em-panel,#fff)', color: 'var(--em-text,inherit)', fontFamily: 'inherit', fontSize: '0.8rem' }}
+                  />
                 </div>
                 {filtered.length === 0 ? (
-                  <p className="muted small" style={{ textAlign: 'center', padding: '10px 0' }}>{ct('Nenhuma carta nesse filtro.')}</p>
+                  <p className="muted small" style={{ textAlign: 'center', padding: '10px 0' }}>{q ? `${ct('Nenhuma carta encontrada pra')} “${clubQuery.trim()}”.` : ct('Nenhuma carta nesse filtro.')}</p>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, justifyItems: 'center' }}>
                     {filtered.map((row) => {
@@ -2203,7 +2234,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   {sc ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                       <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
-                        <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={112} />
+                        <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={narrow ? 84 : 112} />
                       </button>
                       <DuelChips card={sc.card} styleId={sc.owned.style} />
                     </div>
@@ -2305,7 +2336,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               </div>
             )}
 
-            {!squadComplete && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Complete os 5 slots do seu squad (aba Squad) pra jogar.')}</div>}
+            {/* no Rivals o próprio UltimateDuel já mostra este aviso — sem o gate a
+                mensagem aparecia DUPLICADA (uma em cima da outra) */}
+            {!squadComplete && rankedMode !== 'rivals' && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Complete os 5 slots do seu squad (aba Squad) pra jogar.')}</div>}
 
             {rankedMode === 'rivals' ? (
               // Rivals = PvP online de verdade: a fila pareia com outro manager por RP.
@@ -2814,7 +2847,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   <span style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', flex: 1 }}>{t.desc}</span>
                   {owned ? (isEq
                     ? <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '3px 11px', borderRadius: 999, background: 'rgba(201,166,60,0.16)', border: '1px solid rgba(201,166,60,0.4)', color: '#92600a' }}>{ct('equipado')}</span>
-                    : <button onClick={() => equipTitle(t.slug)} className="ut-btn ut-btn--ghost" style={{ padding: '4px 12px', fontSize: '0.72rem' }}>{ct('equipar')}</button>)
+                    : <button onClick={() => doEquipTitle(t.slug, t.label)} className="ut-btn ut-btn--ghost" style={{ padding: '4px 12px', fontSize: '0.72rem' }}>{ct('equipar')}</button>)
                     : <Lock size={13} style={{ color: 'var(--ut-muted)' }} />}
                 </div>
               );
@@ -2832,11 +2865,11 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   <span style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', flex: 1 }}>{ct('Título exclusivo do Passe Premium desta temporada.')}</span>
                   {isEq
                     ? <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '3px 11px', borderRadius: 999, background: 'rgba(201,166,60,0.16)', border: '1px solid rgba(201,166,60,0.4)', color: '#92600a' }}>{ct('equipado')}</span>
-                    : <button onClick={() => equipTitle(slug)} className="ut-btn ut-btn--ghost" style={{ padding: '4px 12px', fontSize: '0.72rem' }}>{ct('equipar')}</button>}
+                    : <button onClick={() => doEquipTitle(slug, label)} className="ut-btn ut-btn--ghost" style={{ padding: '4px 12px', fontSize: '0.72rem' }}>{ct('equipar')}</button>}
                 </div>
               );
             })}
-            {state.profile.equippedTitle && <button onClick={() => equipTitle(null)} className="ut-btn ut-btn--ghost" style={{ alignSelf: 'flex-start', padding: '5px 13px', fontSize: '0.74rem' }}>{ct('desequipar')}</button>}
+            {state.profile.equippedTitle && <button onClick={() => doEquipTitle(null)} className="ut-btn ut-btn--ghost" style={{ alignSelf: 'flex-start', padding: '5px 13px', fontSize: '0.74rem' }}>{ct('desequipar')}</button>}
           </div>
         </Modal>
       )}
@@ -2993,7 +3026,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       })()}
 
       {toast && (
-        <div style={{ position: 'fixed', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 1100, padding: '10px 20px', borderRadius: 10, background: '#1f2430', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 700, fontSize: '0.84rem', boxShadow: '0 10px 30px rgba(16,24,40,0.3)' }}>
+        <div role="status" style={{ position: 'fixed', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 1100, maxWidth: 'min(92vw, 520px)', textAlign: 'center', padding: '10px 20px', borderRadius: 10, background: '#1f2430', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 700, fontSize: '0.84rem', boxShadow: '0 10px 30px rgba(16,24,40,0.3)' }}>
           {toast}
         </div>
       )}

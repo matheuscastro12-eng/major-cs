@@ -708,6 +708,12 @@ body:has(.ut-live) {
   100% { box-shadow: 0 0 0 16px rgba(236, 199, 95, 0); }
 }
 .ut-queue .ut-btn--ghost { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.16); color: #e9edf3; }
+/* fila longa (madrugada): hint com caminho alternativo, sem tom de erro */
+.ut-queue__hint {
+  margin-top: 8px; padding: 7px 11px; border-radius: 9px;
+  font-size: 0.74rem; line-height: 1.45; color: #f0d68a;
+  background: rgba(236, 199, 95, 0.08); border: 1px dashed rgba(236, 199, 95, 0.35);
+}
 
 /* ---------------- DUELO ONLINE (PvP) ---------------- */
 .ut-duel { display: flex; flex-direction: column; gap: 12px; }
@@ -852,6 +858,9 @@ body:has(.ut-live) {
   .ut-res__chip:not(.ut-res__chip--coin) { display: none; }
   .ut-daily__grid { grid-template-columns: repeat(3, 1fr); }
   .ut-greet__title { font-size: 1.5rem; }
+  /* momentum: o chip de streak (nome do time + "N rounds seguidos") é nowrap e
+     estourava a barra em 360-400px — deixa quebrar pra linha de baixo */
+  .ut-mom { flex-wrap: wrap; }
 }
 
 /* ---------------- Passe de Temporada (fase B) ---------------- */
@@ -1087,4 +1096,17 @@ body:has(.ut-live) {
   .ut-vs__calltext { animation: none; clip-path: none; }
   .ut-vs__walk { animation: none; }
   .ut-mvpspot { animation: none; box-shadow: 0 0 14px rgba(201, 166, 60, 0.22); }
+  /* iter45: cobertura COMPLETA — as passadas anteriores só cobriam o iter42.
+     Loops infinitos e entradas com transform param; estados finais legíveis. */
+  .ult-wo__rays,                     /* raios girando no walkout */
+  .ult-foil::before,                 /* shimmer infinito das cartas foil */
+  .ut-confetti i,                    /* confete da vitória */
+  .ut-score-pop, .ut-score-shake,    /* pop/shake do placar */
+  .ut-mom__streak.fire-you, .ut-mom__streak.fire-opp, /* pulso de streak */
+  .ut-stakes.is-mp,                  /* pulso de match point */
+  .ut-queue__pulse,                  /* sonar da fila */
+  .ut-pl__cell.is-claimable,         /* pulso de resgate do passe */
+  .ut-cast__line, .ut-cast__star,    /* entradas do caster */
+  .ult-wo__card, .ult-reveal-card { animation: none; }
+  .ult-wo__flash { animation: none; opacity: 0.14; }
 }
