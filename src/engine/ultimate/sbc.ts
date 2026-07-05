@@ -13,6 +13,10 @@ export interface SbcReq {
   sameRegion?: boolean;  // todas da mesma região
   sameOrg?: boolean;     // todas da mesma org
   minTier?: number;      // raridade (tier) mínima de TODAS as cartas
+  maxTier?: number;      // raridade (tier) MÁXIMA de TODAS as cartas — com minTier
+                         // igual vira "tier exato". Protege o jogador de queimar
+                         // carta acima do necessário (ex.: um Ícone no legend-trio,
+                         // que premia... um Ícone) e barra specials (tier 8-9).
   roles?: Role[];        // multiset de funções que precisa conter
 }
 
@@ -32,6 +36,17 @@ export const SBCS: SbcDef[] = [
   { id: 'br-pride', name: 'Orgulho Nacional', desc: '5 cartas do mesmo país, OVR médio ≥ 78.', req: { count: 5, sameCountry: true, minOvrAvg: 78 }, reward: { credits: 8000, card: 'rareGold' } },
   { id: 'regional', name: 'Bloco Regional', desc: '5 cartas da mesma região, OVR médio ≥ 80.', req: { count: 5, sameRegion: true, minOvrAvg: 80 }, reward: { credits: 12000, card: 'elite' } },
   { id: 'elite-five', name: 'Time de Elite', desc: '5 cartas de raridade Elite ou melhor.', req: { count: 5, minTier: 5 }, reward: { card: 'legendary' } },
+  // degrau de ENTRADA da escada de raridades (rebalance iter47): 5 Ouro Raro
+  // (~300k de insumo no mercado) viram 1 Elite (~200k) — sink de cartas com
+  // propósito, mesma economia do elite-five. Tier EXATO (min=max=4): Elite+
+  // vale mais que o prêmio, submeter seria prejuízo — a trava protege o jogador.
+  { id: 'rare-five', name: 'Garimpo Dourado', desc: '5 cartas Ouro Raro (exatamente essa raridade).', req: { count: 5, minTier: 4, maxTier: 4 }, reward: { card: 'elite' } },
+  // topo da escada (rebalance iter47): o PRIMEIRO caminho determinístico até um
+  // Ícone — 3 Lendários (~1,4M de insumo) viram 1 Ícone (~1,5M). Valor justo,
+  // sink gigante. Tier EXATO (min=max=6): sem a trava, um Ícone (tier 7) ou uma
+  // special (tots/major, tier 8-9) contariam como insumo — queimar um Ícone pra
+  // ganhar um Ícone é armadilha, não desafio.
+  { id: 'legend-trio', name: 'Consagração', desc: '3 cartas Lendárias (exatamente essa raridade).', req: { count: 3, minTier: 6, maxTier: 6 }, reward: { card: 'icon' } },
   // endgame: consome o topo de uma coleção madura (6 Lendários+ distintos) em
   // troca da special mais rara do catálogo — o outro caminho é a ladder Elite.
   { id: 'road-legend', name: 'Rumo à Lenda', desc: '6 cartas Lendário ou melhor, OVR médio ≥ 90.', req: { count: 6, minTier: 6, minOvrAvg: 90 }, reward: { card: 'major' } },
@@ -74,6 +89,7 @@ export function checkSbc(cards: UltCard[], req: SbcReq): SbcCheck {
   if (req.sameRegion) items.push({ label: 'mesma região', ok: !!first && cards.every((c) => c.region === first.region) });
   if (req.sameOrg) items.push({ label: 'mesma organização', ok: !!first && cards.every((c) => c.teamOrigin === first.teamOrigin) });
   if (req.minTier != null) items.push({ label: `raridade ≥ tier ${req.minTier}`, ok: cards.length > 0 && cards.every((c) => rarityInfo(c.rarity).tier >= req.minTier!) });
+  if (req.maxTier != null) items.push({ label: `raridade ≤ tier ${req.maxTier}`, ok: cards.length > 0 && cards.every((c) => rarityInfo(c.rarity).tier <= req.maxTier!) });
   if (req.roles && req.roles.length) items.push({ label: `funções: ${req.roles.join(', ')}`, ok: multisetContains(cards.map((c) => c.role), req.roles) });
   const ok = cards.length === req.count && items.every((i) => i.ok);
   return { ok, items };

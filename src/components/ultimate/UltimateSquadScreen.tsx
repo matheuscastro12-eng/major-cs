@@ -47,7 +47,7 @@ import {
   Tag, ArrowLeft, Sparkles, Plus, X, Target, Globe, Ticket,
 } from 'lucide-react';
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
-import { evaluateSeasonTiers } from '../../engine/ultimate/seasonRewards';
+import { evaluateSeasonMilestone, evaluateSeasonTiers, SEASON_MILESTONE } from '../../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
@@ -296,7 +296,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -323,6 +323,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [titlesOpen, setTitlesOpen] = useState(false);
   const [sbcDef, setSbcDef] = useState<SbcDef | null>(null);
   const [sbcSel, setSbcSel] = useState<string[]>([]);
+  // marco da temporada "Escolha um Lendário": modal do picker + carta escolhida
+  const [msPick, setMsPick] = useState(false);
+  const [msSel, setMsSel] = useState<string | null>(null);
   const [seasonRoll, setSeasonRoll] = useState<{ credits: number; newElo: number } | null>(null);
   const [toast, setToast] = useState<string>('');
   const [navMenu, setNavMenu] = useState<'clube' | 'mercado' | 'more' | null>(null);
@@ -791,6 +794,22 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       if (r.grantedCard) setReveal([r.grantedCard]);
       flash(`🏆 ${ct('Recompensa de temporada')}: ${t.tier.name}${r.reward?.credits ? ` · +${fmt(r.reward.credits)} 🪙` : ''}`, 2400);
       syncTitles();
+    }
+  };
+
+  // ── marco da temporada "Escolha um Lendário" (40 vitórias ranqueadas) ──
+  const msProg = evaluateSeasonMilestone(state.profile.season?.w ?? 0, seasonClaimedIds);
+  const msLegendaries = useMemo(() => ultimateCatalog().filter((c) => c.rarity === SEASON_MILESTONE.rewardRarity).sort((a, b) => b.ovr - a.ovr), []);
+  const confirmMilestone = () => {
+    if (!msSel) return;
+    const r = claimSeasonMilestone(msSel);
+    if (r.ok && r.grantedCard) {
+      setMsPick(false); setMsSel(null);
+      setReveal([r.grantedCard]);
+      flash(`🌟 ${ct('Lendário escolhido')}: ${r.grantedCard.nick}! ${ct('Bem-vindo ao clube.')}`, 2800);
+      syncTitles();
+    } else {
+      flash(r.reason === 'claimed' ? ct('O marco desta temporada já foi resgatado.') : r.reason === 'unreached' ? ct('Ainda faltam vitórias nesta temporada.') : ct('Carta inválida pra este marco.'));
     }
   };
 
@@ -1757,6 +1776,23 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 );
               })}
             </div>
+            {/* marco da temporada (iter47): 40 vitórias ranqueadas → ESCOLHE 1 Lendário */}
+            {(() => {
+              const pct = Math.min(100, Math.round((msProg.wins / SEASON_MILESTONE.target) * 100));
+              return (
+                <div className={`ut-obj${msProg.reached && !msProg.claimed ? ' is-claimable' : ''}${msProg.claimed ? ' is-claimed' : ''}`} style={{ marginTop: 10 }}>
+                  <div className="ut-obj__name">🌟 {ct(SEASON_MILESTONE.name)}</div>
+                  <div className="ut-obj__desc">{ct(SEASON_MILESTONE.desc)}</div>
+                  <div className="ut-obj__bar"><div className={msProg.reached ? 'done' : ''} style={{ width: `${pct}%` }} /></div>
+                  <div className="ut-obj__foot">
+                    <span className="ut-obj__reward">{ct('1 Lendário à sua escolha')}</span>
+                    {msProg.claimed ? <span className="ut-obj__done"><Check size={12} strokeWidth={3} /> {ct('resgatado')}</span>
+                      : msProg.reached ? <button className="ut-obj__claim" onClick={() => { setMsSel(null); setMsPick(true); }}>{ct('Escolher lendário')}</button>
+                      : <span className="ut-obj__count">{msProg.wins}/{SEASON_MILESTONE.target} {ct('vitórias na temporada')}</span>}
+                  </div>
+                </div>
+              );
+            })()}
           </UtPanel>
 
           {squadComplete && (
@@ -2756,6 +2792,27 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           </Modal>
         );
       })()}
+
+      {/* marco da temporada: escolher o Lendário (iter47) — picker no padrão do SBC/estilos */}
+      {msPick && (
+        <Modal open onClose={() => { setMsPick(false); setMsSel(null); }} title={`🌟 ${ct('Escolha seu Lendário')}`} size="lg"
+          footer={<Button variant="primary" disabled={!msSel} onClick={confirmMilestone}>{msSel ? `${ct('Confirmar')}: ${index.get(msSel)?.nick ?? ''}` : ct('Escolha uma carta')}</Button>}>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            {ct('Você venceu')} {msProg.wins} {ct('ranqueadas nesta temporada — o clube dos Lendários abriu a porta. Escolha UM pra levar pra sua coleção (só nesta temporada; a escolha é definitiva).')}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(118px,1fr))', gap: 8, maxHeight: 420, overflowY: 'auto', justifyItems: 'center' }}>
+            {msLegendaries.map((card) => {
+              const on = msSel === card.key;
+              return (
+                <button key={card.key} onClick={() => setMsSel(on ? null : card.key)} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, outline: on ? '2px solid #16a34a' : 'none', borderRadius: 10, opacity: on || !msSel ? 1 : 0.55 }}>
+                  <UltCardView card={card} size={112} />
+                  {on && <span style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: '50%', background: '#16a34a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={11} strokeWidth={3} /></span>}
+                </button>
+              );
+            })}
+          </div>
+        </Modal>
+      )}
 
       {/* nova temporada */}
       {seasonRoll && (

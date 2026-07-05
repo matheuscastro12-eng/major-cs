@@ -150,15 +150,15 @@ test('parseWindowId: só sábado real no formato wl-YYYY-MM-DD', () => {
 
 test('rewardForWins: faixas 1/3/5/7/9', () => {
   assert.equal(rewardForWins(0), null);
-  assert.equal(rewardForWins(1)?.credits, 2000);
-  assert.equal(rewardForWins(2)?.credits, 2000);
-  assert.equal(rewardForWins(3)?.credits, 5000);
-  assert.equal(rewardForWins(4)?.credits, 5000);
-  assert.equal(rewardForWins(5)?.credits, 9000);
+  assert.equal(rewardForWins(1)?.credits, 3000);
+  assert.equal(rewardForWins(2)?.credits, 3000);
+  assert.equal(rewardForWins(3)?.credits, 7500);
+  assert.equal(rewardForWins(4)?.credits, 7500);
+  assert.equal(rewardForWins(5)?.credits, 13500);
   assert.equal(rewardForWins(5)?.card, 'rareGold');
-  assert.equal(rewardForWins(7)?.credits, 15000);
-  assert.equal(rewardForWins(9)?.credits, 25000);
-  assert.equal(rewardForWins(10)?.credits, 25000);
+  assert.equal(rewardForWins(7)?.credits, 22500);
+  assert.equal(rewardForWins(9)?.credits, 37500);
+  assert.equal(rewardForWins(10)?.credits, 37500);
   assert.equal(rewardForWins(10)?.card, 'tots');
   assert.equal(WL_REWARD_TIERS.length, 5);
 });
@@ -278,11 +278,11 @@ test('claim: antes de fechar só com run completo; paga a faixa pelo ledger', as
   assert.ok(r.ok);
   if (r.ok) {
     assert.equal(r.replayed, false);
-    assert.equal(r.tier.credits, 9000); // 6 vitórias → faixa 5+
+    assert.equal(r.tier.credits, 13500); // 6 vitórias → faixa 5+
     assert.equal(r.tier.card, 'rareGold');
-    assert.equal(r.credits, 9000);
+    assert.equal(r.credits, 13500);
   }
-  assert.equal(db.wallets.get('a@x'), 9000);
+  assert.equal(db.wallets.get('a@x'), 13500);
   const led = db.ledger.find((l) => l.email === 'a@x' && l.opId === `wl:${WID}`);
   assert.ok(led);
   assert.equal(led?.kind, 'reward');
@@ -295,7 +295,7 @@ test('claim: depois do fechamento com qualquer nº de partidas; 0 vitórias sem 
   a.wins = 1; a.losses = 2;
   const r = await wlClaim(db.sql, 'a@x', WID, MON_START);
   assert.ok(r.ok);
-  if (r.ok) assert.equal(r.tier.credits, 2000);
+  if (r.ok) assert.equal(r.tier.credits, 3000);
   const b = db.entry('b@x', WID)!;
   b.wins = 0; b.losses = 4;
   const zero = await wlClaim(db.sql, 'b@x', WID, MON_START);
@@ -308,7 +308,7 @@ test('claim: idempotente — claimed_at barra e op_id wl:<windowId> não paga em
   const a = db.entry('a@x', WID)!;
   a.wins = 9; a.losses = 1;
   const r1 = await wlClaim(db.sql, 'a@x', WID, MON_START);
-  assert.ok(r1.ok && r1.credits === 25000);
+  assert.ok(r1.ok && r1.credits === 37500);
   const r2 = await wlClaim(db.sql, 'a@x', WID, MON_START);
   assert.deepEqual(r2, { ok: false, error: 'already_claimed' });
   // crash-heal: mesmo se claimed_at se perdesse, o replay do op não re-paga
@@ -316,7 +316,7 @@ test('claim: idempotente — claimed_at barra e op_id wl:<windowId> não paga em
   const r3 = await wlClaim(db.sql, 'a@x', WID, MON_START);
   assert.ok(r3.ok);
   if (r3.ok) assert.equal(r3.replayed, true);
-  assert.equal(db.wallets.get('a@x'), 25000); // pagou UMA vez
+  assert.equal(db.wallets.get('a@x'), 37500); // pagou UMA vez
   assert.equal(a.claimedAt != null, true); // marcador restaurado
   const bad = await wlClaim(db.sql, 'a@x', 'wl-2026-07-08', MON_START); // quarta
   assert.deepEqual(bad, { ok: false, error: 'bad_window' });
