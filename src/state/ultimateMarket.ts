@@ -35,6 +35,14 @@ export function mktSellerProceeds(price: number): number {
   return Math.ceil(price * (1 - MKT_TAX_RATE));
 }
 
+// Desvio % do preço vs valor justo (estimateCardValue) — o coração do flip:
+// negativo = abaixo do valor (deal 🔥), positivo = acima (caro). Arredondado
+// pra inteiro pra caber num chip. value<=0 (carta fora do catálogo) → 0.
+export function mktDeviation(price: number, value: number): number {
+  if (!Number.isFinite(price) || !Number.isFinite(value) || value <= 0) return 0;
+  return Math.round((price / value - 1) * 100);
+}
+
 // ------------------------------------------------------------------- shapes
 
 export interface MktBrowseItem {
@@ -229,6 +237,81 @@ export async function mktMine(): Promise<{ ok: true; listings: MktMineItem[] } |
         });
       }
       return { ok: true, listings };
+    }
+    return { ok: false, error: commonFail(status) ?? 'unknown' };
+  } catch (e) {
+    captureError(e, 'ult-mkt');
+    return { ok: false, error: 'unknown' };
+  }
+}
+
+// ------------------------------------------------------- histórico de vendas
+
+// ESPELHO dos shapes de server/ultimate-market.ts (action mktSales).
+export interface MktCardSales {
+  n: number; // vendas na janela do servidor (máx 20)
+  avgPrice: number; // média da janela (0 = nunca vendeu)
+  lastPrice: number; // venda mais recente (0 = nunca vendeu)
+  sales: { price: number; soldAt: string }[]; // últimas 5, mais nova primeiro
+}
+export interface MktRecentSale { cardKey: string; price: number; soldAt: string }
+
+// Cache em memória (por cardKey; '@global' = fita) com TTL de 60s — abrir e
+// fechar o modal de venda/compra da mesma carta não martela a rota.
+const MKT_SALES_TTL_MS = 60_000;
+const salesCache = new Map<string, { at: number; value: MktCardSales | MktRecentSale[] }>();
+
+function salesCacheGet<T extends MktCardSales | MktRecentSale[]>(key: string): T | null {
+  const hit = salesCache.get(key);
+  if (!hit || Date.now() - hit.at >= MKT_SALES_TTL_MS) return null;
+  return hit.value as T;
+}
+
+// Últimas vendas + agregado de UMA carta ("últimas vendas: 210k · 195k · média
+// 200k") — vendedor precifica como no FUT; comprador sabe se é deal.
+export async function mktSalesFor(cardKey: string): Promise<{ ok: true; sales: MktCardSales } | { ok: false; error: 'unpaid' | 'offline' | 'unknown' }> {
+  const cached = salesCacheGet<MktCardSales>(cardKey);
+  if (cached) return { ok: true, sales: cached };
+  try {
+    const { status, data } = await post({ action: 'mktSales', cardKey });
+    if (status >= 200 && status < 300 && data) {
+      const raw = Array.isArray(data.sales) ? data.sales : [];
+      const sales: MktCardSales['sales'] = [];
+      for (const s of raw) {
+        if (!s || typeof s !== 'object') continue;
+        const ss = s as Record<string, unknown>;
+        const price = num(ss.price);
+        if (price > 0) sales.push({ price, soldAt: str(ss.soldAt) });
+      }
+      const out: MktCardSales = { n: num(data.n), avgPrice: num(data.avgPrice), lastPrice: num(data.lastPrice), sales };
+      salesCache.set(cardKey, { at: Date.now(), value: out });
+      return { ok: true, sales: out };
+    }
+    return { ok: false, error: commonFail(status) ?? 'unknown' };
+  } catch (e) {
+    captureError(e, 'ult-mkt');
+    return { ok: false, error: 'unknown' };
+  }
+}
+
+// Fita "vendidas agora": últimas 3 vendas do mercado inteiro (liquidez + FOMO).
+export async function mktRecentSales(): Promise<{ ok: true; recent: MktRecentSale[] } | { ok: false; error: 'unpaid' | 'offline' | 'unknown' }> {
+  const cached = salesCacheGet<MktRecentSale[]>('@global');
+  if (cached) return { ok: true, recent: cached };
+  try {
+    const { status, data } = await post({ action: 'mktSales' });
+    if (status >= 200 && status < 300 && data) {
+      const raw = Array.isArray(data.recent) ? data.recent : [];
+      const recent: MktRecentSale[] = [];
+      for (const s of raw) {
+        if (!s || typeof s !== 'object') continue;
+        const ss = s as Record<string, unknown>;
+        const cardKey = str(ss.cardKey);
+        const price = num(ss.price);
+        if (cardKey && price > 0) recent.push({ cardKey, price, soldAt: str(ss.soldAt) });
+      }
+      salesCache.set('@global', { at: Date.now(), value: recent });
+      return { ok: true, recent };
     }
     return { ok: false, error: commonFail(status) ?? 'unknown' };
   } catch (e) {

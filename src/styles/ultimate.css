@@ -357,6 +357,15 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 }
 .ut-mkt__buy:hover:not(:disabled) { filter: brightness(1.05); }
 .ut-mkt__buy:disabled { opacity: 0.6; cursor: default; background: #f2f2ef; color: var(--ut-muted); border-color: var(--ut-line); }
+/* chip de desvio vs valor justo (trading): verde = deal, neutro = na faixa, vermelho = caro */
+.ut-mkt__dev { font-size: 0.62rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; font-family: var(--ut-font-mono); white-space: nowrap; }
+.ut-mkt__dev--deal { background: rgba(18, 183, 106, 0.14); color: #0e9d5b; border: 1px solid rgba(18, 183, 106, 0.35); }
+.ut-mkt__dev--fair { background: rgba(120, 130, 140, 0.12); color: var(--ut-muted); border: 1px solid var(--ut-line); }
+.ut-mkt__dev--high { background: rgba(220, 38, 38, 0.1); color: #b42318; border: 1px solid rgba(220, 38, 38, 0.3); }
+/* fita "vendidas agora" no topo da vitrine (liquidez + FOMO) */
+.ut-mkt-ticker { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 7px 12px; margin-bottom: 12px; border: 1px dashed var(--ut-line); border-radius: 10px; font-size: 0.72rem; color: var(--ut-muted); background: rgba(236, 199, 95, 0.07); }
+.ut-mkt-ticker b { color: var(--ut-ink); }
+.ut-mkt-ticker__item { white-space: nowrap; }
 
 /* ---------------- RANKING (linhas) ---------------- */
 .ut-rank-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 0.82rem; border-radius: 8px; }

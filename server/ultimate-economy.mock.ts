@@ -232,6 +232,27 @@ export class FakeDb {
       return [{ cancelled_id: lid, status: 'cancelled' }];
     }
 
+    // Histórico de vendas por carta (cardSales): últimas N sold, mais nova primeiro.
+    if (text.startsWith("SELECT price, sold_at FROM rtm_ult_listings WHERE status='sold' AND card_key=")) {
+      const key = String(params[0]);
+      const cap = Number(params[1]);
+      return this.listings
+        .filter((l) => l.status === 'sold' && l.cardKey === key)
+        .sort((a, b) => ((a.soldAt ?? '') < (b.soldAt ?? '') ? 1 : (a.soldAt ?? '') > (b.soldAt ?? '') ? -1 : b.id - a.id))
+        .slice(0, cap)
+        .map((l) => ({ price: l.price, sold_at: l.soldAt }));
+    }
+
+    // Fita global "vendidas agora" (recentSales).
+    if (text.startsWith("SELECT card_key, price, sold_at FROM rtm_ult_listings WHERE status='sold'")) {
+      const cap = Number(params[0]);
+      return this.listings
+        .filter((l) => l.status === 'sold')
+        .sort((a, b) => ((a.soldAt ?? '') < (b.soldAt ?? '') ? 1 : (a.soldAt ?? '') > (b.soldAt ?? '') ? -1 : b.id - a.id))
+        .slice(0, cap)
+        .map((l) => ({ card_key: l.cardKey, price: l.price, sold_at: l.soldAt }));
+    }
+
     // browse / mine (SELECTs de leitura de listagens).
     if (text.startsWith('SELECT id, seller_email, card_id, card_key, price, status, created_at, expires_at, buyer_email, sold_at FROM rtm_ult_listings')) {
       const toRow = (l: FakeListing): Row => ({

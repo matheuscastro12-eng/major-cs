@@ -83,6 +83,11 @@ export function ultMarketSchemaQueries(sql: SqlTag): SqlQuery[] {
     )`,
     sql`CREATE INDEX IF NOT EXISTS rtm_ult_listings_status_key_idx ON rtm_ult_listings (status, card_key)`,
     sql`CREATE INDEX IF NOT EXISTS rtm_ult_listings_seller_idx ON rtm_ult_listings (seller_email, status)`,
+    // histórico de vendas por carta (mktSales): WHERE card_key=? AND status='sold'
+    // ORDER BY sold_at DESC casa exatamente com (card_key, status, sold_at).
+    // A fita global (status='sold' ORDER BY sold_at) se vira com o índice de
+    // status acima — volume de sold é pequeno e o LIMIT é 3.
+    sql`CREATE INDEX IF NOT EXISTS rtm_ult_listings_sales_idx ON rtm_ult_listings (card_key, status, sold_at)`,
   ];
 }
 
@@ -420,6 +425,47 @@ export async function browseListings(
         WHERE status='active' AND (${cardKey} = '' OR card_key = ${cardKey}) AND (${maxPrice} = 0 OR price <= ${maxPrice})
         ORDER BY price ASC, id ASC LIMIT ${MKT_BROWSE_CAP}`;
   return rows.map(rowToListing);
+}
+
+// ------------------------------------------------------------------- vendas
+
+// Histórico de vendas (price discovery estilo FUT). Leitura PURA sobre linhas
+// já 'sold' — não passa pelo expireListings (expirar não muda venda feita) nem
+// pelo advisory lock: é read-only e eventual-consistente por natureza.
+export const MKT_SALES_RECENT_N = 5; // vendas individuais devolvidas ao cliente
+export const MKT_SALES_AGG_WINDOW = 20; // janela do agregado (média RECENTE, não histórica)
+export const MKT_TICKER_N = 3; // fita "vendidas agora" (mercado inteiro)
+
+export interface MktCardSales {
+  n: number; // vendas na janela (máx MKT_SALES_AGG_WINDOW)
+  avgPrice: number; // média arredondada da janela (0 = nunca vendeu)
+  lastPrice: number; // venda mais recente (0 = nunca vendeu)
+  sales: { price: number; soldAt: string }[]; // últimas MKT_SALES_RECENT_N, mais nova primeiro
+}
+
+// Últimas vendas de UMA carta + agregado. O agregado usa a JANELA das últimas
+// MKT_SALES_AGG_WINDOW vendas de propósito: preço de semana passada não pode
+// contaminar a média de hoje (o meta muda quando promos/rebalances entram).
+export async function cardSales(sql: SqlTag, cardKey: string): Promise<MktCardSales> {
+  const key = cardKey.slice(0, 160);
+  const rows = await sql`SELECT price, sold_at FROM rtm_ult_listings
+    WHERE status='sold' AND card_key=${key}
+    ORDER BY sold_at DESC, id DESC LIMIT ${MKT_SALES_AGG_WINDOW}`;
+  const window = rows.map((r) => ({ price: Number(r.price ?? 0), soldAt: String(r.sold_at ?? '') }));
+  const n = window.length;
+  const avgPrice = n ? Math.round(window.reduce((s, x) => s + x.price, 0) / n) : 0;
+  return { n, avgPrice, lastPrice: window[0]?.price ?? 0, sales: window.slice(0, MKT_SALES_RECENT_N) };
+}
+
+export interface MktRecentSale { cardKey: string; price: number; soldAt: string }
+
+// Fita "vendidas agora": últimas vendas do mercado INTEIRO (sinal de liquidez
+// + FOMO na vitrine). Não vaza comprador/vendedor — só carta, preço e quando.
+export async function recentSales(sql: SqlTag, limit: number = MKT_TICKER_N): Promise<MktRecentSale[]> {
+  const cap = Math.max(1, Math.min(10, Math.trunc(limit) || MKT_TICKER_N));
+  const rows = await sql`SELECT card_key, price, sold_at FROM rtm_ult_listings
+    WHERE status='sold' ORDER BY sold_at DESC, id DESC LIMIT ${cap}`;
+  return rows.map((r) => ({ cardKey: String(r.card_key ?? ''), price: Number(r.price ?? 0), soldAt: String(r.sold_at ?? '') }));
 }
 
 // Minhas listagens (todas as situações), mais recentes primeiro, cap 30.
