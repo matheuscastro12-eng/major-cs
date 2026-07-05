@@ -27,7 +27,13 @@ const money = (cents: number) => {
 const num = (n: number) => n.toLocaleString('pt-BR');
 const pct = (v: number, digits = 1) => `${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: digits })}%`;
 const fmtDate = (v: string) => { try { return new Date(v).toLocaleDateString('pt-BR'); } catch { return '—'; } };
-const fmtDay = (v: string) => { try { return new Date(`${v}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); } catch { return v; } };
+// tolerante: aceita "YYYY-MM-DD", ISO completo ou até "Sun Jul 05 2026" (legado
+// do String(Date) no servidor) — nunca renderiza "Invalid Date".
+const fmtDay = (v: string) => {
+  const iso = v.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  const d = iso ? new Date(`${iso}T00:00:00`) : new Date(v);
+  return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+};
 const fmtWhen = (v: string) => { try { return new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } };
 const fmtMoney = (cents?: number | null, currency?: string | null) => {
   if (cents == null) return '—';

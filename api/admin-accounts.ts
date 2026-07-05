@@ -17,6 +17,18 @@ interface Res { status: (code: number) => { json: (b: unknown) => void }; setHea
 // mesmo teto da Edição Fundador usado em api/account.ts
 const FOUNDER_LIMIT = Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
 
+// Coluna ::date pode chegar como Date (driver) ou string — String(Date) vira
+// "Sun Jul 05 2026..." e quebrava o parse no cliente ("Invalid Date" no CRM).
+// Normaliza SEMPRE pra "YYYY-MM-DD".
+function isoDay(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const s = String(v);
+  const m = s.match(/^\d{4}-\d{2}-\d{2}/);
+  if (m) return m[0];
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
+}
+
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string },
   res: Res,
@@ -94,7 +106,7 @@ export default async function handler(
       withRefTotal: counts[0]?.with_ref ?? 0,
       new7: counts[0]?.new7 ?? 0, new30: counts[0]?.new30 ?? 0, paid30: counts[0]?.paid30 ?? 0,
       orphanTotal: orphanCount[0]?.n ?? 0,
-      trend: trend.map((r) => ({ day: String(r.day), signups: Number(r.signups), sales: Number(r.sales) })),
+      trend: trend.map((r) => ({ day: isoDay(r.day), signups: Number(r.signups), sales: Number(r.sales) })),
     });
     return;
   }
@@ -222,7 +234,7 @@ export default async function handler(
         byMethod: coinByMethod.map((r) => ({ method: String(r.method), orders: Number(r.orders), coins: Number(r.coins), cents: Number(r.cents) })),
         byTier: coinByTier.map((r) => ({ tier: String(r.tier), orders: Number(r.orders), coins: Number(r.coins), cents: Number(r.cents) })),
         recent: coinRecent.map((r) => ({ email: String(r.email), tier: String(r.tier), coins: Number(r.coins), cents: Number(r.cents), method: String(r.method), status: String(r.status), at: r.at })),
-        trend: coinTrend.map((r) => ({ day: String(r.day), orders: Number(r.orders), cents: Number(r.cents) })),
+        trend: coinTrend.map((r) => ({ day: isoDay(r.day), orders: Number(r.orders), cents: Number(r.cents) })),
       },
     });
     return;
@@ -304,7 +316,7 @@ export default async function handler(
         SELECT (created_at AT TIME ZONE 'America/Sao_Paulo')::date AS day, count(DISTINCT sid)::int AS visitors
         FROM events WHERE type = 'visit' AND created_at > now() - interval '61 days'
         GROUP BY 1 ORDER BY 1`;
-      visitors = vis.map((r) => ({ day: String(r.day).slice(0, 10), visitors: Number(r.visitors) }));
+      visitors = vis.map((r) => ({ day: isoDay(r.day), visitors: Number(r.visitors) }));
     } catch { visitorsAvailable = false; }
     const visByDay = new Map(visitors.map((v) => [v.day, v.visitors]));
     // agregados all-time (a série de 60d não cobre o histórico completo)
@@ -322,7 +334,7 @@ export default async function handler(
       vitPriceCents: VIT_PRICE_CENTS,
       visitorsAvailable,
       days: days.map((r) => {
-        const day = String(r.day).slice(0, 10);
+        const day = isoDay(r.day);
         return {
           day,
           vitPix: Number(r.vit_pix), vitStripe: Number(r.vit_stripe), vitOther: Number(r.vit_other), vitAdmin: Number(r.vit_admin),
