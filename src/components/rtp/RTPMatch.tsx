@@ -30,6 +30,8 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
   const prep = useState<MatchPrep | null>(() => (mode === 'major' ? prepareMajorMatch(save) : prepareCircuitMatch(save)))[0];
   const [phase, setPhase] = useState<Phase>('intro');
   const [outcomes, setOutcomes] = useState<MomentOutcome[]>([]);
+  // v17: mapas como a Sala exibiu — o card oficial usa exatamente estes placares.
+  const liveMapsRef = useRef<{ map: MapId; score: [number, number]; won: boolean }[] | null>(null);
   // Escolhas de pré-jogo (META): plano de jogo + mapas vetados.
   const [plan, setPlan] = useState<GamePlan>('default');
   const [vetoedMaps, setVetoedMaps] = useState<{ map: MapId; pickedBy: 0 | 1 | -1 }[] | null>(null);
@@ -44,8 +46,8 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
   // Resultado da série + a série orientada ao bracket (pairing/match) pra gravar.
   const finished = useMemo(() => {
     if (phase !== 'result' || !matchPrep) return null;
-    if (mode === 'major') { const r = finishMajorMatch(save, matchPrep, outcomes); return { result: r.result, write: r.pairingResult }; }
-    const r = finishCircuitMatch(save, matchPrep, outcomes);
+    if (mode === 'major') { const r = finishMajorMatch(save, matchPrep, outcomes, liveMapsRef.current ?? undefined); return { result: r.result, write: r.pairingResult }; }
+    const r = finishCircuitMatch(save, matchPrep, outcomes, liveMapsRef.current ?? undefined);
     return { result: r.result, write: r.matchResult };
   }, [phase, save, matchPrep, outcomes, mode]);
   const result: ProMatchResult | null = finished?.result ?? null;
@@ -109,7 +111,7 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
           save={save}
           prep={matchPrep}
           major={mode === 'major'}
-          onComplete={(outs) => { setOutcomes(outs); setPhase('result'); }}
+          onComplete={(outs, maps) => { setOutcomes(outs); liveMapsRef.current = maps ?? null; setPhase('result'); }}
         />
       )}
 

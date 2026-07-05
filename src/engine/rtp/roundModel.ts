@@ -234,17 +234,22 @@ export function bridgeToBeat(
   // = MATCH POINT legítimo; nunca 12-12 fantasma). Beat que NÃO é o último do
   // mapa não pode NASCER com o líder em 12 (vencer o beat fecharia o mapa cedo
   // demais) — cap 11; vitória leva a 12 e o match point fica pro beat final.
-  const cap = toIsLastOfMap ? 12 : 11;
+  // v17 (bug do 15-8): SÓ UM lado pode sentar em 12 (match point), e só no
+  // último beat do mapa; o outro trava em ≤11. Sem isso o placar corrido podia
+  // pintar 12-12 e, somado ao +1 do próprio beat na Sala, estourar 13/14/15 sem
+  // o mapa fechar ("só acaba quando o juiz quiser").
+  const canInc = (side: number, other: number): boolean =>
+    side + 1 <= 11 || (side + 1 === 12 && toIsLastOfMap && other <= 11);
   const played = mapScore[0] + mapScore[1];
   const target = Math.min(to.round - 1, 23);
   const n = Math.max(0, target - played);
   let dy = 0, dt = 0;
   for (let i = 0; i < n; i++) {
     const you = rng() < pWin;
-    if (you && mapScore[0] + dy < cap) dy++;
-    else if (!you && mapScore[1] + dt < cap) dt++;
-    else if (mapScore[0] + dy < cap) dy++;
-    else if (mapScore[1] + dt < cap) dt++;
+    if (you && canInc(mapScore[0] + dy, mapScore[1] + dt)) dy++;
+    else if (!you && canInc(mapScore[1] + dt, mapScore[0] + dy)) dt++;
+    else if (canInc(mapScore[0] + dy, mapScore[1] + dt)) dy++;
+    else if (canInc(mapScore[1] + dt, mapScore[0] + dy)) dt++;
   }
   mapScore = [mapScore[0] + dy, mapScore[1] + dt];
   if (dy + dt > 0) {
@@ -280,6 +285,27 @@ export function resolveMapFromPlay(
   const margin = Math.abs(mapPlay - 0.5) * 12 + Math.abs(edge) * 0.15;
   const loser = Math.max(3, Math.min(11, Math.round(11 - margin + (rng() * 4 - 2))));
   return { won, score: won ? [13, loser] : [loser, 13] };
+}
+
+// v17: FUNDE o fechamento computado com o placar VIVO que o jogador assistiu.
+// Regra: quem VENCE continua vindo da jogada (resolveMapFromPlay — RP/prêmio
+// intocados), mas o placar final NUNCA encolhe o que a Sala mostrou: o lado
+// perdedor fecha com max(computado, vivo) capado em 11. Ex.: vivo 11-7 seu e o
+// fechamento diz derrota → "11-13" (run de 6-0 deles), jamais "9-13" com os
+// SEUS rounds diminuindo (bug reportado por jogador em 2026-07-05).
+export function mergeMapClose(
+  computed: { won: boolean; score: [number, number] },
+  liveMap: [number, number],
+): { won: boolean; score: [number, number] } {
+  const liveLoser = computed.won ? liveMap[1] : liveMap[0];
+  const computedLoser = computed.won ? computed.score[1] : computed.score[0];
+  const loser = Math.max(computedLoser, liveLoser);
+  // perdedor em 12 no vivo (match point que a jogada não confirmou): 13-12 não
+  // existe na regulamentação — o fechamento honesto é PRORROGAÇÃO, 16-14.
+  if (loser >= 12) {
+    return { won: computed.won, score: computed.won ? [16, 14] : [14, 16] };
+  }
+  return { won: computed.won, score: computed.won ? [13, loser] : [loser, 13] };
 }
 
 // média dos `value` dos beats de um mapa (helper compartilhado Sala ↔ card).

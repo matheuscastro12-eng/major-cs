@@ -27,7 +27,7 @@ import { divisionPool, type WorldTeam } from './world';
 import { computeWorldRank, deriveEventAward, makeAccolade } from './standing';
 import { defaultRecords, recordsAtMajorEnd, applyRecordBreaks } from './records';
 import { majorName } from '../../data/tournaments';
-import type { Tournament, TTeam, SeriesResult } from '../../types';
+import type { MapId, Tournament, TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave, Tier, MajorState, MajorPlacementCode } from './types';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -146,7 +146,7 @@ function flipSeries(s: SeriesResult): SeriesResult {
 
 // Resolve a série do herói (momentos já jogados). Devolve o ProMatchResult
 // (orientado ao usuário, índice 0) + a série orientada ao pairing pra gravar.
-export function finishMajorMatch(save: RoadToProSave, prep: MatchPrep, outcomes: MomentOutcome[]): { result: ProMatchResult; pairingResult: SeriesResult } {
+export function finishMajorMatch(save: RoadToProSave, prep: MatchPrep, outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]): { result: ProMatchResult; pairingResult: SeriesResult } {
   const t = save.world.major!.tournament;
   const up = userPairing(t)!;
   const userIdx = up.a === 'user' ? 0 : 1;
@@ -160,7 +160,11 @@ export function finishMajorMatch(save: RoadToProSave, prep: MatchPrep, outcomes:
   // jogada mapa a mapa (resolveRoomSeries); o simulateSeries é forçado a bater.
   const room = resolveRoomSeries(save.player.role, outcomes, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf);
   const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins: room.mapWins, seriesWon: room.seriesWon });
-  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, room.maps);
+  // v17: quando a partida foi JOGADA na Sala, o card usa os mapas COMO ELA
+  // EXIBIU (fechamento fundido com o placar vivo) — Sala == card por
+  // construção. Skip/sim (sem Sala) seguem no resolveRoomSeries puro.
+  const displayMaps = liveMaps && liveMaps.length ? liveMaps : room.maps;
+  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, displayMaps);
   const pairingResult = userIdx === 0 ? series : flipSeries(series);
   return { result, pairingResult };
 }

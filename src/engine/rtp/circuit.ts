@@ -33,7 +33,7 @@ import { ACTIONS_PER_WEEK } from './createSave';
 import { computeWorldRank, deriveEventAward, makeAccolade } from './standing';
 import { defaultRecords, recordsAtEventEnd, recordsWeekTick, applyRecordBreaks } from './records';
 import { MAP_LABELS } from '../../types';
-import type { Tournament, TTeam, SeriesResult } from '../../types';
+import type { MapId, Tournament, TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave, Tier, CircuitState, MajorState, TransferOffer, TeamContext, SeasonObjective, CareerLog, ProPlayer, Accolade, MediaState } from './types';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -242,7 +242,7 @@ function flipSeries(s: SeriesResult): SeriesResult {
   };
 }
 
-export function finishCircuitMatch(save: RoadToProSave, prep: MatchPrep, outcomes: MomentOutcome[]): { result: ProMatchResult; matchResult: SeriesResult } {
+export function finishCircuitMatch(save: RoadToProSave, prep: MatchPrep, outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]): { result: ProMatchResult; matchResult: SeriesResult } {
   const c = save.world.league!;
   const um = userMatch(c)!;
   const userIdx = um.a === 'user' ? 0 : 1;
@@ -260,7 +260,11 @@ export function finishCircuitMatch(save: RoadToProSave, prep: MatchPrep, outcome
   // que a Sala usa → o card nunca contradiz o que você jogou.
   const room = resolveRoomSeries(save.player.role, outcomes, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf);
   const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins: room.mapWins, seriesWon: room.seriesWon });
-  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, room.maps);
+  // v17: quando a partida foi JOGADA na Sala, o card usa os mapas COMO ELA
+  // EXIBIU (fechamento fundido com o placar vivo) — Sala == card por
+  // construção. Skip/sim (sem Sala) seguem no resolveRoomSeries puro.
+  const displayMaps = liveMaps && liveMaps.length ? liveMaps : room.maps;
+  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, displayMaps);
   const matchResult = userIdx === 0 ? series : flipSeries(series);
   return { result, matchResult };
 }

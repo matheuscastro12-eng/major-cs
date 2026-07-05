@@ -1,12 +1,13 @@
 import { useMemo, useState, useEffect, useRef, type ComponentType } from 'react';
 import { makeRng } from '../../engine/rng';
+import type { MapId } from '../../types';
 import { hashStr } from '../../state/hash';
 import {
   resolveMoment, explainOdds, clutchStepMoment,
   type MomentOption, type MomentOutcome, type OddsBreakdown,
 } from '../../engine/rtp/moments';
 import {
-  buildBeatPlan, ctxForBeat, feedForOutcome, outcomePills, bridgeToBeat, initialLiveScore,
+  buildBeatPlan, ctxForBeat, feedForOutcome, outcomePills, bridgeToBeat, initialLiveScore, mergeMapClose,
   resolveMapFromPlay, mapPlayOf,
   type BeatSpec, type FeedRow, type LiveScore, type Interlude,
 } from '../../engine/rtp/roundModel';
@@ -58,7 +59,9 @@ function oddsColor(pct: number): string {
 export function RtpRoundRoom({ save, prep, onComplete, major }: {
   save: RoadToProSave;
   prep: MatchPrep;
-  onComplete: (outcomes: MomentOutcome[]) => void;
+  // liveMaps: os mapas COMO A SALA FECHOU/EXIBIU (v17) — o card oficial usa
+  // exatamente estes placares em vez de recomputar (Sala == card por construção).
+  onComplete: (outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]) => void;
   major?: boolean;
 }) {
   const beats = useMemo<BeatSpec[]>(
@@ -70,6 +73,8 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
   // PLACAR VIVO (v15): rounds do mapa + série de mapas. Os rounds ENTRE os
   // momentos-chave acontecem via bridgeToBeat — nada de placar pulando 1-0 → 2-0.
   const [live, setLive] = useState<LiveScore>(initialLiveScore);
+  // mapas fechados como exibidos (v17) — entregues no onComplete.
+  const closedMapsRef = useRef<{ map: MapId; score: [number, number]; won: boolean }[]>([]);
   const [interlude, setInterlude] = useState<Interlude | null>(null);
   const [outcomes, setOutcomes] = useState<MomentOutcome[]>([]);
   const [sub, setSub] = useState<SubPhase>('decide');
@@ -225,7 +230,18 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
         const youWin = inClutch
           ? out.result !== 'fail' && locked.newAlive <= 0
           : out.result === 'success' || out.result === 'partial';
-        setLive((l) => ({ ...l, mapScore: youWin ? [l.mapScore[0] + 1, l.mapScore[1]] : [l.mapScore[0], l.mapScore[1] + 1] }));
+        // v17 (bug do 15-8): o +1 do beat respeita o MESMO teto da ponte — um
+        // lado só chega a 12 (match point) se o outro estiver ≤11; 13 é
+        // exclusivo do FECHAMENTO do mapa. Sem o guard, beats depois do teto
+        // estouravam 13/14/15 sem o mapa fechar.
+        setLive((l) => {
+          const [you, them] = l.mapScore;
+          const next: [number, number] = youWin ? [you + 1, them] : [you, them + 1];
+          const grew = youWin ? next[0] : next[1];
+          const other = youWin ? next[1] : next[0];
+          if (grew > 12 || (grew === 12 && other >= 12)) return l; // teto: round acontece, placar segura
+          return { ...l, mapScore: next };
+        });
         setMomentum((m) => clamp(m * 0.55 + out.value * 0.45, 0, 1));
         // flash + shake nos rounds grandes (clutch, map point, ou derrota).
         const big = inClutch || beat.kind === 'clutch' || beat.kind === 'mapPoint';
@@ -278,38 +294,48 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
     const need = Math.ceil(prep.bestOf / 2);
     const mapsIds = prep.maps.map((m) => m.map);
     const allPlay = acc.length ? acc.reduce((s, o) => s + o.value, 0) / acc.length : 0.5;
-    const closeMap = (mi: number, play: number) => resolveMapFromPlay(play, edge, prep.matchSeed, mi);
+    // v17: fechamento FUNDIDO com o placar vivo (nunca encolhe o que o jogador
+    // viu; vencedor segue 100% da jogada). Mapas virtuais (BO5 sem beats) não
+    // têm vivo → merge com [0,0] (no-op).
+    const closeMap = (mi: number, play: number, liveMap: [number, number] = [0, 0]) =>
+      mergeMapClose(resolveMapFromPlay(play, edge, prep.matchSeed, mi), liveMap);
 
     if (isLast) {
       // fecha o mapa corrente (tem beats) + mapas virtuais do BO5 (4º/5º, sem beats
       // no plano) pela jogada AGREGADA — idêntico ao fallback do resolveRoomSeries.
       let sy = live.seriesScore[0], st = live.seriesScore[1];
-      const cm = closeMap(beat.mapIndex, mapPlayOf(acc, beats, beat.mapIndex, allPlay));
+      const cm = closeMap(beat.mapIndex, mapPlayOf(acc, beats, beat.mapIndex, allPlay), live.mapScore);
+      closedMapsRef.current.push({ map: mapsIds[Math.min(beat.mapIndex, mapsIds.length - 1)] ?? 'mirage', score: cm.score, won: cm.won });
       if (cm.won) sy++; else st++;
       let mi = beat.mapIndex + 1;
-      while (sy < need && st < need) { const r = closeMap(mi, allPlay); if (r.won) sy++; else st++; mi++; }
+      while (sy < need && st < need) {
+        const r = closeMap(mi, allPlay);
+        closedMapsRef.current.push({ map: mapsIds[Math.min(mi, Math.max(0, mapsIds.length - 1))] ?? 'mirage', score: r.score, won: r.won });
+        if (r.won) sy++; else st++; mi++;
+      }
       setFlash({ k: idx * 7 + 5, type: cm.won ? 'win' : 'loss', big: true });
       setLive({ mapScore: cm.score, seriesScore: [sy, st], mapIndex: beat.mapIndex });
-      onComplete(acc);
+      onComplete(acc, closedMapsRef.current);
       return;
     }
 
     const nb = beats[idx + 1];
     // TRANSIÇÃO DE MAPA: fecha o mapa que acabou pela sua jogada nele.
     if (nb.mapIndex > beat.mapIndex) {
-      const { won, score } = closeMap(beat.mapIndex, mapPlayOf(acc, beats, beat.mapIndex, allPlay));
+      const { won, score } = closeMap(beat.mapIndex, mapPlayOf(acc, beats, beat.mapIndex, allPlay), live.mapScore);
       const newSeries: [number, number] = won
         ? [live.seriesScore[0] + 1, live.seriesScore[1]]
         : [live.seriesScore[0], live.seriesScore[1] + 1];
       const closeLine = won
         ? `Vocês fecharam o mapa ${score[0]}–${score[1]} — série ${newSeries[0]}–${newSeries[1]}.`
         : `Eles levaram o mapa ${score[1]}–${score[0]} — série ${newSeries[0]}–${newSeries[1]}.`;
+      closedMapsRef.current.push({ map: mapsIds[Math.min(beat.mapIndex, mapsIds.length - 1)] ?? 'mirage', score, won });
       setFlash({ k: idx * 7 + 3, type: won ? 'win' : 'loss', big: true });
       if (newSeries[0] >= need || newSeries[1] >= need) {
         // série decidida (ex.: 2-0): NÃO joga os beats restantes — varreu.
         setLive({ mapScore: score, seriesScore: newSeries, mapIndex: beat.mapIndex });
         setInterlude({ bridged: [0, 0], lines: [closeLine], mapClosed: { map: beat.map, won, score } });
-        onComplete(acc);
+        onComplete(acc, closedMapsRef.current);
         return;
       }
       // série segue: abre o próximo mapa (bridge só a ABERTURA, sem novo fechamento).
