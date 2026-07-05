@@ -78,13 +78,15 @@ export function parseWindowId(id: string): { startsAt: Date; endsAt: Date } | nu
 // -------------------------------------------------------------- recompensas
 
 // Faixas por vitórias, avaliadas NA HORA do claim (paga só a maior atingida).
-// Âncoras da economia: w-win10 (missão semanal mais dura) = 8.000; capstone
-// semanal = pack silver; ladder de season Elite = 28.000 + carta 'major'
-// (MENSAL). A Weekend League é o pico SEMANAL: 5 vitórias pareadas já superam
-// a w-win10 (9.000 + carta), e o topo (9-10 de 10, raríssimo em PvP pareado)
-// fica em 25.000 — ABAIXO do Elite mensal de propósito, pra season ladder
-// continuar sendo o teto aspiracional. Cartas: 'rareGold' espelha a faixa Ouro
-// da season; 'tots' só no quase-perfeito (não vira faucet do pack de 38k).
+// Rebalance iter47 (+50% em todas as faixas): a auditoria da economia mostrou a
+// renda passiva de login (~22,3k/semana) superando a renda de JOGAR — o pico
+// semanal competitivo precisava pagar como pico. Âncoras: w-win10 (missão
+// semanal mais dura) = 8.000; 5 vitórias pareadas (13.500 + carta) superam com
+// folga a w-win10; o topo (9-10 de 10, raríssimo em PvP pareado) fica em 37.500
+// — acima do Elite mensal da season (28.000) de propósito: exige performance
+// quase perfeita TODA semana, não uma escalada única por mês. Cartas: 'rareGold'
+// espelha a faixa Ouro da season; 'tots' só no quase-perfeito (não vira faucet
+// do pack de 38k).
 export interface WlRewardTier {
   minWins: number;
   credits: number;
@@ -93,11 +95,11 @@ export interface WlRewardTier {
 }
 
 export const WL_REWARD_TIERS: WlRewardTier[] = [
-  { minWins: 1, credits: 2000, name: 'Participante' },
-  { minWins: 3, credits: 5000, name: 'Competidor' },
-  { minWins: 5, credits: 9000, card: 'rareGold', name: 'Contender' },
-  { minWins: 7, credits: 15000, card: 'rareGold', name: 'Elite do Sábado' },
-  { minWins: 9, credits: 25000, card: 'tots', name: 'Campeão do Major' },
+  { minWins: 1, credits: 3000, name: 'Participante' },
+  { minWins: 3, credits: 7500, name: 'Competidor' },
+  { minWins: 5, credits: 13500, card: 'rareGold', name: 'Contender' },
+  { minWins: 7, credits: 22500, card: 'rareGold', name: 'Elite do Sábado' },
+  { minWins: 9, credits: 37500, card: 'tots', name: 'Campeão do Major' },
 ];
 
 export function rewardForWins(wins: number): WlRewardTier | null {

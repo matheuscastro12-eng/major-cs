@@ -28,7 +28,7 @@ import { dateKey } from '../engine/ultimate/daily';
 import { evaluateTitles } from '../engine/ultimate/titles';
 import { checkSbc, sbcById, type SbcReward } from '../engine/ultimate/sbc';
 import { objectiveById } from '../engine/ultimate/objectives';
-import { seasonTierById } from '../engine/ultimate/seasonRewards';
+import { SEASON_MILESTONE, seasonTierById } from '../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../engine/ultimate/missions';
 import { ensurePass, levelForXp, markPassClaimed, passLevelDef, passTitleSlug, type PassReward, type PassTrack } from '../engine/ultimate/seasonPass';
 import type { StyleId } from '../engine/ultimate/traits';
@@ -270,6 +270,9 @@ interface UltimateStore {
   applyStyle: (ownedId: string, styleId: StyleId) => { ok: boolean; cost?: number; reason?: string };
   // recompensas de temporada (ladder de RP)
   claimSeasonReward: (id: string) => { ok: boolean; reward?: { credits?: number; card?: string }; grantedCard?: UltCard };
+  // marco da temporada "Escolha um Lendário" (40 vitórias ranqueadas na season):
+  // o jogador ESCOLHE a carta (cardKey) — determinístico, 1× por temporada.
+  claimSeasonMilestone: (cardKey: string) => { ok: boolean; reason?: 'unreached' | 'claimed' | 'invalid_card'; grantedCard?: UltCard };
   // Elite Gauntlet (desafio diário)
   gauntletStart: (today: string) => void;
   gauntletRecord: (won: boolean, score?: string) => { wins: number; completed: boolean; over: boolean; credits: number; grantedCard?: UltCard };
@@ -678,6 +681,24 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: ns });
     mirrorUltimateChange(st, ns, 'reward', { src: 'season', id });
     return { ok: true, reward: def.reward, grantedCard };
+  },
+  claimSeasonMilestone: (cardKey) => {
+    // marco "Escolha um Lendário": valida meta + 1×/season + carta Lendária do
+    // catálogo, e concede a carta ESCOLHIDA pelo funil normal (grantCard) com
+    // espelho-sombra 'reward'. O resgate entra em season.claimed (id do marco),
+    // então reseta no rollover junto com a ladder — mesmo padrão do passe.
+    const st = get().state;
+    const s = st.profile.season;
+    if (!s || (s.claimed ?? []).includes(SEASON_MILESTONE.id)) return { ok: false, reason: 'claimed' as const };
+    if ((s.w ?? 0) < SEASON_MILESTONE.target) return { ok: false, reason: 'unreached' as const };
+    const card = ultimateIndex().get(cardKey);
+    if (!card || card.rarity !== SEASON_MILESTONE.rewardRarity) return { ok: false, reason: 'invalid_card' as const };
+    let ns = _claimSeasonReward(st, SEASON_MILESTONE.id); // marca o id em season.claimed (idempotente)
+    ns = _grantCard(ns, card.key, 'reward', { id: `msleg_${Math.random().toString(36).slice(2, 9)}` });
+    persist(ns);
+    set({ state: ns });
+    mirrorUltimateChange(st, ns, 'reward', { src: 'season-milestone', cardKey });
+    return { ok: true, grantedCard: card };
   },
   gauntletStart: (today) =>
     set((st) => {

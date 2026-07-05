@@ -19,8 +19,10 @@ import {
   browseListings,
   buyListing,
   cancelListing,
+  cardSales,
   listCard,
   myListings,
+  recentSales,
   ultMarketSchemaQueries,
   type MktBrowseFilters,
 } from '../server/ultimate-market.js';
@@ -223,6 +225,21 @@ export default async function handler(
         id: l.id, cardKey: l.cardKey, price: l.price, expiresAt: l.expiresAt, mine: l.sellerEmail === email,
       })),
     });
+    return;
+  }
+
+  if (action === 'mktSales') {
+    // Histórico de vendas (price discovery). Com cardKey → últimas vendas +
+    // agregado daquela carta; sem cardKey → fita global "vendidas agora".
+    // Mesmo rate limit padrão do mktBrowse (60/min via bucket por ação).
+    const cardKey = typeof body.cardKey === 'string' ? body.cardKey.trim().slice(0, 160) : '';
+    if (cardKey) {
+      const s = await cardSales(sql, cardKey);
+      res.status(200).json({ ok: true, cardKey, n: s.n, avgPrice: s.avgPrice, lastPrice: s.lastPrice, sales: s.sales });
+      return;
+    }
+    const recent = await recentSales(sql);
+    res.status(200).json({ ok: true, recent });
     return;
   }
 

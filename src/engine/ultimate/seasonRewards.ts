@@ -41,3 +41,34 @@ export function evaluateSeasonTiers(peak: number, claimed: string[]): SeasonTier
 export function seasonTierById(id: string): SeasonTier | undefined {
   return SEASON_TIERS.find((t) => t.id === id);
 }
+
+// ── Marco da temporada: "Escolha um Lendário" (rebalance iter47) ─────────────
+// Caminho de CONQUISTA (não de sorte): 40 vitórias ranqueadas NA temporada
+// liberam a escolha de 1 carta Lendária do catálogo — o jogador ESCOLHE qual
+// (determinístico, sem roll). Uma vez por temporada; o resgate entra em
+// season.claimed e por isso reseta no rollover junto com a ladder de RP.
+// 40 vitórias ≈ 2 sessões/dia por um mês — é o grind de quem JOGA, e conversa
+// com a medida A (ranqueada pagando mais): a mesma rotina agora rende credits
+// E um Lendário garantido por temporada.
+export interface SeasonMilestone {
+  id: string;
+  name: string;
+  desc: string;
+  target: number;           // vitórias ranqueadas na temporada
+  rewardRarity: UltRarity;  // raridade da carta à ESCOLHA do jogador
+}
+
+export const SEASON_MILESTONE: SeasonMilestone = {
+  id: 'ms-40wins',
+  name: 'Maratona da Temporada',
+  desc: 'Vença 40 ranqueadas nesta temporada e escolha um Lendário do catálogo.',
+  target: 40,
+  rewardRarity: 'legendary',
+};
+
+export interface SeasonMilestoneProgress { wins: number; reached: boolean; claimed: boolean }
+
+export function evaluateSeasonMilestone(wins: number, claimed: string[]): SeasonMilestoneProgress {
+  const w = Math.max(0, Math.trunc(wins));
+  return { wins: w, reached: w >= SEASON_MILESTONE.target, claimed: claimed.includes(SEASON_MILESTONE.id) };
+}

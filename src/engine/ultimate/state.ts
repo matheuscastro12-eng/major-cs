@@ -72,7 +72,9 @@ export interface UltimateProfile {
   equippedTitle: string | null;
   // wl0 = w+l no INÍCIO da season (pra saber se jogou nela e não pagar bônus
   // de fim de temporada a uma conta dormente — ver applySeasonRollover).
-  season: { startedAt: number; endsAt: number; wl0?: number; peak?: number; claimed?: string[]; n?: number } | null;
+  // w = vitórias ranqueadas NESTA season (alimenta o marco "Escolha um Lendário";
+  // campo aditivo/opcional — saves antigos normalizam pra 0 e zera no rollover).
+  season: { startedAt: number; endsAt: number; wl0?: number; peak?: number; claimed?: string[]; n?: number; w?: number } | null;
   sbcDone: string[];
   objectivesClaimed: string[]; // ids de objetivos/missões já resgatados (profundidade)
   gauntlet: { date: string | null; wins: number; active: boolean; best: number }; // Elite Gauntlet (1 run/dia)
@@ -394,7 +396,7 @@ export function migrateUltimate(raw: unknown): UltimateState {
     titles: Array.isArray(p.titles) ? p.titles.filter((x): x is string => typeof x === 'string') : [],
     equippedTitle: typeof p.equippedTitle === 'string' ? p.equippedTitle : null,
     season: p.season && typeof p.season === 'object' && typeof p.season.startedAt === 'number'
-      ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [], n: Math.max(1, num(p.season.n, 1)) }
+      ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [], n: Math.max(1, num(p.season.n, 1)), w: Math.max(0, num(p.season.w, 0)) }
       : null,
     sbcDone: Array.isArray(p.sbcDone) ? p.sbcDone.filter((x): x is string => typeof x === 'string') : [],
     objectivesClaimed: Array.isArray(p.objectivesClaimed) ? p.objectivesClaimed.filter((x): x is string => typeof x === 'string') : [],
@@ -546,6 +548,9 @@ export interface MatchOutcome { eloDelta: number; credits: number }
 // ELO estilo padrão (K=24, expectativa logística, delta clampado ±40). Recompensa
 // de credits só na vitória, com bônus por rival mais forte, MULTIPLICADOR da
 // divisão atual (Bronze 1.0× → Elite 1.8×) e bônus de sequência (+5%/win, cap 25%).
+// Base 500 (era 300): a auditoria da economia mostrou o login passivo (daily/streak,
+// ~22,3k/semana) rendendo MAIS que 20 vitórias ranqueadas (~9k) — o jogo pagava
+// melhor pra quem não jogava. Com 500, jogar bem volta a ser a melhor renda ativa.
 export function computeMatchOutcome(userElo: number, oppElo: number, won: boolean, streak = 0): MatchOutcome {
   const K = 24;
   const expected = 1 / (1 + Math.pow(10, (oppElo - userElo) / 400));
@@ -553,7 +558,7 @@ export function computeMatchOutcome(userElo: number, oppElo: number, won: boolea
   const eloDelta = Math.max(-40, Math.min(40, raw));
   const divMult = DIV_TIER_MULT[divisionFor(userElo).def.tier];
   const streakMult = 1 + Math.min(Math.max(0, streak), 5) * 0.05;
-  const credits = won ? Math.round((300 + Math.max(0, Math.round((oppElo - userElo) / 4))) * divMult * streakMult) : 0;
+  const credits = won ? Math.round((500 + Math.max(0, Math.round((oppElo - userElo) / 4))) * divMult * streakMult) : 0;
   return { eloDelta, credits };
 }
 
@@ -571,8 +576,10 @@ export function applyMatchResult(state: UltimateState, won: boolean, oppElo: num
     l: p.l + (won ? 0 : 1),
     streak: won ? p.streak + 1 : 0,
     credits: p.credits + outcome.credits,
-    // pico da TEMPORADA (p/ ladder de recompensas) — distinto do peakElo all-time
-    season: p.season ? { ...p.season, peak: Math.max(p.season.peak ?? p.elo, elo) } : p.season,
+    // pico da TEMPORADA (p/ ladder de recompensas) — distinto do peakElo all-time.
+    // w = vitórias da temporada (marco "Escolha um Lendário"); só ranqueada passa
+    // por aqui, então todo won conta.
+    season: p.season ? { ...p.season, peak: Math.max(p.season.peak ?? p.elo, elo), w: (p.season.w ?? 0) + (won ? 1 : 0) } : p.season,
   };
   return { state: { ...state, profile }, outcome };
 }
@@ -627,8 +634,10 @@ export function removeOwnedCards(state: UltimateState, ids: string[]): UltimateS
 
 export const SEASON_DAYS = 30;
 
-export function startSeason(nowMs: number, wl0 = 0, peak = STARTING_ELO, n = 1): { startedAt: number; endsAt: number; wl0: number; peak: number; claimed: string[]; n: number } {
-  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0, peak, claimed: [], n };
+export function startSeason(nowMs: number, wl0 = 0, peak = STARTING_ELO, n = 1): { startedAt: number; endsAt: number; wl0: number; peak: number; claimed: string[]; n: number; w: number } {
+  // w (vitórias da season) nasce em 0 — o marco "Escolha um Lendário" reseta
+  // junto com a ladder (claimed) e o passe a cada temporada.
+  return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0, peak, claimed: [], n, w: 0 };
 }
 
 export interface SeasonRollover { rolled: boolean; credits: number; newElo: number }

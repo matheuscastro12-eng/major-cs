@@ -7,14 +7,19 @@ import { FakeDb } from './ultimate-economy.mock.js';
 import {
   MKT_BROWSE_CAP,
   MKT_MAX_ACTIVE_LISTINGS,
+  MKT_SALES_AGG_WINDOW,
+  MKT_SALES_RECENT_N,
+  MKT_TICKER_N,
   browseListings,
   buyListing,
   cancelListing,
+  cardSales,
   expireListings,
   listCard,
   mktPriceBounds,
   mktSellerProceeds,
   myListings,
+  recentSales,
   ultMarketSchemaQueries,
 } from './ultimate-market.js';
 import { buildServerCatalog } from './ultimate-pack.js';
@@ -55,13 +60,15 @@ async function listOk(db: FakeDb, card: UltCard, cardId = 'copy-1', price?: numb
 
 // --------------------------------------------------------------------- schema
 
-test('schema cria rtm_ult_listings com índices de status e vendedor', () => {
+test('schema cria rtm_ult_listings com índices de status, vendedor e vendas', () => {
   const db = new FakeDb();
   const texts = ultMarketSchemaQueries(db.sql).map((q) => (q as unknown as { text: string }).text);
-  assert.equal(texts.length, 3);
+  assert.equal(texts.length, 4);
   assert.ok(texts[0].includes('rtm_ult_listings') && texts[0].includes("status IN ('active','sold','cancelled','expired')"));
   assert.ok(texts[1].includes('(status, card_key)'));
   assert.ok(texts[2].includes('(seller_email, status)'));
+  // índice do mktSales: casa com WHERE card_key=? AND status='sold' ORDER BY sold_at
+  assert.ok(texts[3].includes('(card_key, status, sold_at)'));
 });
 
 // ---------------------------------------------------------------------- list
@@ -307,6 +314,90 @@ test('browse/mine respeitam caps (50/30) e mine traz todas as situações', asyn
   const mine = await myListings(db.sql, SELLER);
   assert.equal(mine.length, 1);
   assert.equal(mine[0].status, 'cancelled'); // todas as situações, não só ativas
+});
+
+// -------------------------------------------------------------------- vendas
+
+// helper: injeta uma linha SOLD direto na FakeDb (como o cap test faz com ativas)
+function soldRow(db: FakeDb, cardKey: string, price: number, soldAtMs: number, buyer = BUYER) {
+  db.listings.push({
+    id: db.nextListingId++, sellerEmail: SELLER, cardId: `sold-${db.nextListingId}`, cardKey,
+    cardMeta: {}, price, status: 'sold',
+    createdAt: new Date(soldAtMs - 60_000).toISOString(),
+    expiresAt: new Date(soldAtMs + 3_600_000).toISOString(),
+    buyerEmail: buyer, soldAt: new Date(soldAtMs).toISOString(),
+  });
+}
+
+test('cardSales: últimas 5 (mais nova primeiro) + agregado da janela', async () => {
+  const db = new FakeDb();
+  const card = normalCard();
+  const t0 = 1_700_000_000_000;
+  // 7 vendas: preços 100..700, cada uma 1min mais nova que a anterior
+  for (let i = 1; i <= 7; i++) soldRow(db, card.key, i * 100, t0 + i * 60_000);
+  // ruído: venda de OUTRA carta e listagem ativa não entram
+  soldRow(db, 'outra-carta', 99_999, t0 + 99 * 60_000);
+  db.listings.push({
+    id: db.nextListingId++, sellerEmail: SELLER, cardId: 'ativa', cardKey: card.key,
+    cardMeta: {}, price: 1, status: 'active', createdAt: new Date(t0).toISOString(),
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(), buyerEmail: null, soldAt: null,
+  });
+
+  const s = await cardSales(db.sql, card.key);
+  assert.equal(s.n, 7); // janela inteira (7 < MKT_SALES_AGG_WINDOW)
+  assert.ok(MKT_SALES_AGG_WINDOW >= 7);
+  assert.equal(s.sales.length, MKT_SALES_RECENT_N);
+  assert.deepEqual(s.sales.map((x) => x.price), [700, 600, 500, 400, 300]); // mais nova primeiro
+  assert.equal(s.lastPrice, 700);
+  assert.equal(s.avgPrice, Math.round((100 + 200 + 300 + 400 + 500 + 600 + 700) / 7)); // 400
+});
+
+test('cardSales: carta sem vendas devolve zeros (sem erro)', async () => {
+  const db = new FakeDb();
+  assert.deepEqual(await cardSales(db.sql, 'nunca-vendida'), { n: 0, avgPrice: 0, lastPrice: 0, sales: [] });
+});
+
+test('cardSales agrega só a JANELA das últimas vendas (preço velho não contamina)', async () => {
+  const db = new FakeDb();
+  const card = normalCard();
+  const t0 = 1_700_000_000_000;
+  soldRow(db, card.key, 1_000_000, t0); // venda ANTIGA com preço fora da curva
+  for (let i = 1; i <= MKT_SALES_AGG_WINDOW; i++) soldRow(db, card.key, 100, t0 + i * 60_000);
+  const s = await cardSales(db.sql, card.key);
+  assert.equal(s.n, MKT_SALES_AGG_WINDOW); // a antiga caiu pra fora da janela
+  assert.equal(s.avgPrice, 100); // média limpa
+  assert.equal(s.lastPrice, 100);
+});
+
+test('recentSales: fita global traz as últimas vendas do mercado inteiro', async () => {
+  const db = new FakeDb();
+  const card = normalCard();
+  const t0 = 1_700_000_000_000;
+  soldRow(db, card.key, 500, t0 + 1 * 60_000);
+  soldRow(db, 'carta-b', 900, t0 + 2 * 60_000);
+  soldRow(db, 'carta-c', 300, t0 + 3 * 60_000);
+  soldRow(db, 'carta-d', 700, t0 + 4 * 60_000);
+  const r = await recentSales(db.sql);
+  assert.equal(r.length, MKT_TICKER_N); // cap 3
+  assert.deepEqual(r.map((x) => [x.cardKey, x.price]), [['carta-d', 700], ['carta-c', 300], ['carta-b', 900]]);
+  assert.ok(r.every((x) => x.soldAt)); // sem vazar e-mails: shape é só carta/preço/quando
+});
+
+test('venda de verdade (list + buy) aparece no cardSales e na fita', async () => {
+  const db = new FakeDb();
+  const card = normalCard();
+  const { listingId, price } = await listOk(db, card);
+  db.wallets.set(BUYER, price);
+  const buy = await buyListing(db.sql, BUYER, { listingId });
+  assert.ok(buy.ok);
+  const s = await cardSales(db.sql, card.key);
+  assert.equal(s.n, 1);
+  assert.equal(s.lastPrice, price);
+  assert.equal(s.avgPrice, price);
+  const r = await recentSales(db.sql);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].cardKey, card.key);
+  assert.equal(r[0].price, price);
 });
 
 test('listCard sem catálogo (lookup null) recusa com catalog_unavailable e não toca nada', async () => {
