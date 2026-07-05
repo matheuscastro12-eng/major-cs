@@ -13,6 +13,20 @@ export interface PendingQuery extends PromiseLike<Row[]> {
   params: unknown[];
 }
 
+export interface FakeListing {
+  id: number;
+  sellerEmail: string;
+  cardId: string;
+  cardKey: string;
+  cardMeta: Record<string, unknown>;
+  price: number;
+  status: 'active' | 'sold' | 'cancelled' | 'expired';
+  createdAt: string;
+  expiresAt: string;
+  buyerEmail: string | null;
+  soldAt: string | null;
+}
+
 interface LedgerRow {
   id: number;
   email: string;
@@ -28,7 +42,9 @@ export class FakeDb {
   wallets = new Map<string, number>();
   cards = new Map<string, { cardId: string; cardKey: string; meta: Record<string, unknown>; acquiredAt: string }[]>();
   ledger: LedgerRow[] = [];
+  listings: FakeListing[] = []; // rtm_ult_listings (mercado P2P)
   nextId = 1;
+  nextListingId = 1;
   executed: string[] = [];
 
   sql: SqlTag;
@@ -90,6 +106,158 @@ export class FakeDb {
         }
       }
       return [{ prior_id: null, inserted_id: id, new_credits: newCredits, old_credits: oldCredits }];
+    }
+
+    // ------------------------------------------------ mercado P2P (listings)
+    const pushLedger = (email: string, opId: string, kind: string, delta: number, cards: Row[], meta: Row) => {
+      if (this.ledger.some((l) => l.email === email && l.opId === opId)) return null; // ON CONFLICT DO NOTHING
+      const id = this.nextId++;
+      this.ledger.push({ id, email, opId, kind, delta, cards, meta, createdAt: new Date(1_700_000_000_000 + id * 1000).toISOString() });
+      return id;
+    };
+    const returnCard = (email: string, cardId: string, cardKey: string, meta: Record<string, unknown>) => {
+      const list = this.cardsOf(email);
+      if (!list.some((x) => x.cardId === cardId)) {
+        list.push({ cardId, cardKey, meta, acquiredAt: new Date().toISOString() });
+      }
+    };
+
+    // Expiração lazy: UPDATE ... status='expired' + ledger 'escrow' + carta volta.
+    if (text.startsWith('WITH mkt_expire AS')) {
+      const nowIso = String(params[0]);
+      let n = 0;
+      for (const l of this.listings) {
+        if (l.status === 'active' && l.expiresAt <= nowIso) {
+          l.status = 'expired';
+          n++;
+          pushLedger(l.sellerEmail, `mkt-expire:${l.id}`, 'escrow', 0,
+            [{ op: 'add', cardId: l.cardId, cardKey: l.cardKey, meta: l.cardMeta }],
+            { listingId: l.id, action: 'expire' });
+          returnCard(l.sellerEmail, l.cardId, l.cardKey, l.cardMeta);
+        }
+      }
+      return [{ n }];
+    }
+
+    // Leitura de posse do listCard (mais específica que o handler genérico de cards).
+    if (text.startsWith('SELECT card_key FROM rtm_ult_cards WHERE')) {
+      const email = String(params[0]);
+      const cardId = String(params[1]);
+      return this.cardsOf(email).filter((c) => c.cardId === cardId).map((c) => ({ card_key: c.cardKey }));
+    }
+
+    // Statement atômico do listCard.
+    if (text.startsWith('WITH mkt_list_owned AS')) {
+      const seller = String(params[0]);
+      const cardId = String(params[1]);
+      const cardKey = String(params[2]);
+      const price = Number(params[5]);
+      const createdAt = String(params[6]);
+      const expiresAt = String(params[7]);
+      const cap = Number(params[8]);
+      const list = this.cardsOf(seller);
+      const ownedIdx = list.findIndex((c) => c.cardId === cardId && c.cardKey === cardKey);
+      const activeN = this.listings.filter((l) => l.sellerEmail === seller && l.status === 'active').length;
+      if (ownedIdx < 0) return [{ listing_id: null, owned: false, active_n: activeN }];
+      if (activeN >= cap) return [{ listing_id: null, owned: true, active_n: activeN }];
+      const owned = list[ownedIdx];
+      const id = this.nextListingId++;
+      this.listings.push({
+        id, sellerEmail: seller, cardId, cardKey, cardMeta: owned.meta, price,
+        status: 'active', createdAt, expiresAt, buyerEmail: null, soldAt: null,
+      });
+      pushLedger(seller, `mkt-list:${id}`, 'escrow', 0,
+        [{ op: 'remove', cardId }], { listingId: id, action: 'list', cardKey, price });
+      list.splice(ownedIdx, 1);
+      return [{ listing_id: id, owned: true, active_n: activeN }];
+    }
+
+    // Leitura da listagem no buyListing.
+    if (text.startsWith('SELECT id, seller_email, card_id, card_key, card_meta, price, status FROM rtm_ult_listings WHERE id=')) {
+      const id = Number(params[0]);
+      return this.listings.filter((l) => l.id === id).map((l) => ({
+        id: l.id, seller_email: l.sellerEmail, card_id: l.cardId, card_key: l.cardKey,
+        card_meta: l.cardMeta, price: l.price, status: l.status, buyer_email: l.buyerEmail,
+      }));
+    }
+
+    // Statement atômico do buyListing (as duas pernas 'trade' + carta + carteiras).
+    if (text.startsWith('WITH mkt_buy_prior AS')) {
+      const buyer = String(params[0]);
+      const opId = String(params[1]);
+      const nowIso = String(params[4]);
+      const lid = Number(params[5]);
+      const price = Number(params[6]);
+      const seller = String(params[7]);
+      const buyerCards = JSON.parse(String(params[13])) as Row[];
+      const buyerMeta = JSON.parse(String(params[14])) as Row;
+      const sellerOpId = String(params[16]);
+      const proceeds = Number(params[17]);
+      const sellerMeta = JSON.parse(String(params[18])) as Row;
+      const cardId = String(params[25]);
+      const cardKey = String(params[26]);
+      const prior = this.ledger.find((l) => l.email === buyer && l.opId === opId);
+      const oldCredits = this.wallets.get(buyer) ?? 0;
+      const listing = this.listings.find((l) => l.id === lid);
+      const eligible = listing && listing.status === 'active' && listing.price === price
+        && listing.sellerEmail === seller && seller !== buyer && !prior && oldCredits >= price;
+      if (!eligible) {
+        return [{ sold_id: null, prior_id: prior?.id ?? null, old_credits: oldCredits, new_credits: null }];
+      }
+      listing.status = 'sold';
+      listing.buyerEmail = buyer;
+      listing.soldAt = nowIso;
+      pushLedger(buyer, opId, 'trade', -price, buyerCards, buyerMeta);
+      pushLedger(seller, sellerOpId, 'trade', proceeds, [], sellerMeta);
+      const newCredits = oldCredits - price;
+      this.wallets.set(buyer, newCredits);
+      this.wallets.set(seller, (this.wallets.get(seller) ?? 0) + proceeds);
+      const cardMeta = ((buyerCards[0] as { meta?: Record<string, unknown> })?.meta) ?? {};
+      returnCard(buyer, cardId, cardKey, cardMeta);
+      return [{ sold_id: lid, prior_id: null, old_credits: oldCredits, new_credits: newCredits }];
+    }
+
+    // Statement atômico do cancelListing.
+    if (text.startsWith('WITH mkt_cancel_upd AS')) {
+      const lid = Number(params[0]);
+      const seller = String(params[1]);
+      const listing = this.listings.find((l) => l.id === lid && l.sellerEmail === seller);
+      if (!listing) return [{ cancelled_id: null, status: null }];
+      if (listing.status !== 'active') return [{ cancelled_id: null, status: listing.status }];
+      listing.status = 'cancelled';
+      pushLedger(seller, `mkt-cancel:${lid}`, 'escrow', 0,
+        [{ op: 'add', cardId: listing.cardId, cardKey: listing.cardKey, meta: listing.cardMeta }],
+        { listingId: lid, action: 'cancel' });
+      returnCard(seller, listing.cardId, listing.cardKey, listing.cardMeta);
+      return [{ cancelled_id: lid, status: 'cancelled' }];
+    }
+
+    // browse / mine (SELECTs de leitura de listagens).
+    if (text.startsWith('SELECT id, seller_email, card_id, card_key, price, status, created_at, expires_at, buyer_email, sold_at FROM rtm_ult_listings')) {
+      const toRow = (l: FakeListing): Row => ({
+        id: l.id, seller_email: l.sellerEmail, card_id: l.cardId, card_key: l.cardKey,
+        price: l.price, status: l.status, created_at: l.createdAt, expires_at: l.expiresAt,
+        buyer_email: l.buyerEmail, sold_at: l.soldAt,
+      });
+      if (text.includes("WHERE status='active'")) {
+        const cardKey = String(params[0]);
+        const maxPrice = Number(params[2]);
+        const cap = Number(params[4]);
+        const rows = this.listings.filter((l) =>
+          l.status === 'active' && (cardKey === '' || l.cardKey === cardKey) && (maxPrice === 0 || l.price <= maxPrice));
+        const sorted = text.includes('ORDER BY price ASC')
+          ? rows.sort((a, b) => a.price - b.price || a.id - b.id)
+          : rows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.id - a.id));
+        return sorted.slice(0, cap).map(toRow);
+      }
+      // mine
+      const seller = String(params[0]);
+      const cap = Number(params[1]);
+      return this.listings
+        .filter((l) => l.sellerEmail === seller)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.id - a.id))
+        .slice(0, cap)
+        .map(toRow);
     }
 
     // Queries do getUltState.
