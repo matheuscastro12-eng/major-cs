@@ -185,7 +185,7 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-season__tag { display: inline-flex; align-items: center; gap: 5px; color: var(--ut-gold-1); font-weight: 800; letter-spacing: 0.8px; font-size: 0.68rem; text-transform: uppercase; }
 .ut-season__name { font-weight: 800; color: #fff; }
 .ut-season__meta { color: var(--ut-bar-dim); }
-.ut-season__user { margin-left: auto; color: var(--ut-bar-dim); }
+.ut-season__user { margin-left: auto; color: var(--ut-bar-dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ut-season__user b { color: #cfd5df; font-weight: 700; }
 
 /* ---------------- PAGE (centered content) ---------------- */
@@ -363,7 +363,8 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 .ut-rank-row + .ut-rank-row { border-top: 1px solid var(--ut-line); }
 .ut-rank-row.is-you { background: rgba(236, 199, 95, 0.14); border-top-color: transparent; }
 .ut-rank-row__pos { min-width: 30px; color: var(--ut-muted); font-family: var(--ut-font-mono); font-weight: 700; }
-.ut-rank-row__name { flex: 1; font-weight: 800; color: var(--ut-ink); }
+/* ellipsis: nick longo empurrava V-D e RP pra fora da linha no mobile */
+.ut-rank-row__name { flex: 1; min-width: 0; font-weight: 800; color: var(--ut-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ut-rank-row.is-you .ut-rank-row__name { color: #92600a; }
 .ut-rank-row__wl { color: var(--ut-muted); font-size: 0.76rem; }
 .ut-rank-row__elo { font-family: var(--ut-font-mono); font-weight: 800; color: var(--ut-ink); }
@@ -556,7 +557,8 @@ body:has(.ut-live) {
   font-family: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer;
 }
 .ut-live__back:hover { background: rgba(255, 255, 255, 0.12); }
-.ut-live__vs { flex: 1; text-align: center; font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; color: #f2f5f9; }
+/* min-width/ellipsis: nomes PvP longos (até 24 chars cada lado) estouravam a barra no mobile */
+.ut-live__vs { flex: 1; min-width: 0; text-align: center; font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; color: #f2f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ut-live__badge {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
   background: rgba(226, 59, 46, 0.16); border: 1px solid rgba(226, 59, 46, 0.5); color: #ff6b5e;
@@ -571,12 +573,12 @@ body:has(.ut-live) {
 .ut-vs__kicker { text-align: center; font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.76rem; letter-spacing: 2.4px; color: var(--ut-gold-1); margin-bottom: 26px; }
 .ut-vs__grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px; align-items: start; }
 .ut-vs__side { text-align: center; }
-.ut-vs__team { font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.3rem; color: #fff; }
+.ut-vs__team { font-family: var(--ut-font-cond); font-weight: 800; font-size: 1.3rem; color: #fff; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ut-vs__meta { font-size: 0.76rem; color: var(--ut-bar-dim); margin: 4px 0 14px; }
 .ut-vs__cards { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .ut-vs__roster { display: flex; flex-direction: column; gap: 6px; max-width: 260px; margin: 0 auto; }
 .ut-vs__row { display: flex; align-items: center; gap: 9px; padding: 7px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); }
-.ut-vs__nick { flex: 1; text-align: left; font-weight: 800; font-size: 0.82rem; color: #e9edf3; }
+.ut-vs__nick { flex: 1; min-width: 0; text-align: left; font-weight: 800; font-size: 0.82rem; color: #e9edf3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ut-vs__ovr { font-family: var(--ut-font-mono); font-weight: 800; font-size: 0.9rem; color: var(--ut-gold-1); }
 .ut-vs__mid { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 22px; }
 .ut-vs__map { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.78rem; letter-spacing: 1.6px; text-transform: uppercase; color: #cfd5df; padding: 5px 14px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 999px; }

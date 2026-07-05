@@ -88,6 +88,14 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
     setQueue(null);
     void lobbyApi({ action: 'queueLeave', nick }).catch(() => undefined);
   }, [nick]);
+  // tick de 1s enquanto na fila: o "Xs na fila" só re-renderizava no poll de
+  // 2.5s e o contador pulava/congelava — dava impressão de fila travada.
+  const [, setQTick] = useState(0);
+  useEffect(() => {
+    if (!queue) return;
+    const t = window.setInterval(() => setQTick((x) => x + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [queue !== null]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!queue) return;
     let alive = true;
