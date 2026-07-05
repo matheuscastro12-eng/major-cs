@@ -319,6 +319,22 @@ export default async function handler(
       visitors = vis.map((r) => ({ day: isoDay(r.day), visitors: Number(r.visitors) }));
     } catch { visitorsAvailable = false; }
     const visByDay = new Map(visitors.map((v) => [v.day, v.visitors]));
+    // FUNIL (iter39): paywall_view/checkout_open por dia × src, sid DISTINTO por
+    // dia (mesma convenção dos visitantes: recorrente conta de novo em outro dia).
+    // Janela de 28d fechada aqui — o cliente só agrega. try/catch: eventos são da
+    // telemetria e podem não existir; o funil fica indisponível sem quebrar nada.
+    let funnelDays: { day: string; type: string; src: string; n: number }[] = [];
+    let funnelAvailable = true;
+    try {
+      const fu = await sql`
+        SELECT (created_at AT TIME ZONE 'America/Sao_Paulo')::date AS day, type,
+               COALESCE(NULLIF(data->>'src', ''), 'direto') AS src,
+               count(DISTINCT sid)::int AS n
+        FROM events
+        WHERE type IN ('paywall_view', 'checkout_open') AND created_at > now() - interval '29 days'
+        GROUP BY 1, 2, 3 ORDER BY 1`;
+      funnelDays = fu.map((r) => ({ day: isoDay(r.day), type: String(r.type), src: String(r.src).slice(0, 40), n: Number(r.n) }));
+    } catch { funnelAvailable = false; }
     // agregados all-time (a série de 60d não cobre o histórico completo)
     const vitAll = await sql`
       SELECT COALESCE(a.payment_method,
@@ -348,6 +364,8 @@ export default async function handler(
         vitByMethod: vitAll.map((r) => ({ method: String(r.method), n: Number(r.n) })),
         orders: ordAll.map((r) => ({ method: String(r.method), product: String(r.product), orders: Number(r.orders), cents: Number(r.cents) })),
       },
+      // funil visit → paywall_view → checkout_open → venda (janela de 28d)
+      funnel: { available: funnelAvailable, days: funnelDays },
     });
     return;
   }

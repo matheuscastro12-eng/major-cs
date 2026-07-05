@@ -2,6 +2,7 @@
 // design system. Hero, modos, planos (grátis x R$20 vitalício), como funciona,
 // FAQ, CTA e o modal de conta (que dispara o checkout real via Stripe).
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackSignup } from '../state/track';
 import { BrandMark } from './brand';
 import { Button, Modal } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
@@ -256,6 +257,13 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   // Pix Woovi (merge origin/master) + visual em-* (HEAD)
   const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // funil: abandono do QR Pix — best-effort, dispara no desmonte do modal se o
+  // QR chegou a abrir e o pagamento não foi confirmado pelo polling.
+  const pixOpenedAt = useRef(0);
+  const pixConfirmed = useRef(false);
+  useEffect(() => () => {
+    if (pixOpenedAt.current && !pixConfirmed.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);
+  }, []);
   // polling: confere se a conta já virou paga (o webhook do Woovi é quem marca; este
   // poll só detecta pra liberar a tela). Guardas de custo: (1) pausa em aba oculta —
   // se o pagamento cair com a aba escondida, o webhook já gravou paid e o retorno à
@@ -268,7 +276,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     const startedAt = Date.now();
     const CAP_MS = 15 * 60_000;
     const check = async () => {
-      try { const me = await fetchMe(); if (alive && me?.paid) { setPix(null); onPlay(); } } catch { /* ignora */ }
+      try { const me = await fetchMe(); if (alive && me?.paid) { pixConfirmed.current = true; setPix(null); onPlay(); } } catch { /* ignora */ }
     };
     const t = setInterval(() => {
       if (Date.now() - startedAt > CAP_MS) { clearInterval(t); return; } // Pix expirou
@@ -288,9 +296,11 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     if (!valid || busy) return;
     setBusy(true); setErr('');
     try {
+      if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
       const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
+      if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
       if (acct.paid) { onPlay(); return; }           // já tem conta vitalícia: entra direto
-      await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento
+      await onCheckout(acct.email, acct.nick || nick.trim()); // segue pro pagamento (checkout_open é do App.startCheckout)
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
   };
   // Pix via Woovi (merged de origin/master): cria/entra na conta, gera a cobrança
@@ -300,11 +310,15 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     if (!valid || busy) return;
     setBusy(true); setErr('');
     try {
+      if (mode === 'signup') trackSignup('start'); // funil: cadastro pré-pagamento começou
       const acct = mode === 'signup' ? await signup(email.trim(), pw, nick.trim()) : await login(email.trim(), pw);
+      if (mode === 'signup') trackSignup('done');  // funil: cadastro criado com sucesso
       if (acct.paid) { onPlay(); return; }
       const charge = await beginPix();
       if (!charge) { onPlay(); return; } // já estava paga
       setPix({ charge, email: acct.email });
+      pixOpenedAt.current = Date.now();
+      trackCheckoutOpen('pix'); // funil: QR Pix da vitalícia na tela
       setBusy(false);
     } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); setBusy(false); }
   };
@@ -401,7 +415,9 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
   const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
   const ref = useReveal();
-  const openAcct = (mode: 'signup' | 'login' = 'signup') => { setAcctMode(mode); setAcct(true); };
+  // funil: CTA da landing abrindo o modal de conta — first-touch, então quem
+  // chegou de uma trava (home-rtp, wl-lock...) mantém a origem original.
+  const openAcct = (mode: 'signup' | 'login' = 'signup') => { setCheckoutSrc('landing'); setAcctMode(mode); setAcct(true); };
   return (
     <div ref={ref} className="lp-root">
       <Nav onAccount={() => openAcct('signup')} onLogin={() => openAcct('login')} onPlay={onPlay} />

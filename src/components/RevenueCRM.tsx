@@ -187,6 +187,104 @@ function CellBar({ value, max, tone }: { value: number; max: number; tone?: stri
   return <div className="rev-cellbar"><i style={{ width: `${max > 0 ? (value / max) * 100 : 0}%`, background: tone }} /></div>;
 }
 
+// ── FUNIL visit → paywall_view → checkout_open → venda (28 dias) ────────────
+// Eventos instrumentados na iter39 (track.ts): cada etapa é a soma dos sids
+// DISTINTOS por dia (mesma convenção dos visitantes — recorrente conta de novo
+// em outro dia, então as taxas são conservadoras). "Por origem" mostra QUAL
+// superfície de venda gera views e checkouts.
+const FUNNEL_SRC_LABEL: Record<string, string> = {
+  landing: 'Landing (pricing)',
+  'home-rtp': 'Home · card Road to Pro',
+  'home-ultimate': 'Home · card Ultimate',
+  'home-pill': 'Home · pill Fundador',
+  'acct-chip': 'Chip de conta (dropdown)',
+  'upsell-card': 'Card de upsell',
+  'wl-lock': 'Trava · Major do Sábado',
+  'hub-wl': 'Hub online · badge Sábado',
+  'mkt-lock': 'Trava · Mercado P2P',
+  profile: 'Perfil do manager',
+  leaderboard: 'Leaderboard',
+  direto: 'Direto (sem origem)',
+};
+const funnelSrcLabel = (s: string) => ct(FUNNEL_SRC_LABEL[s] ?? s);
+
+function FunnelBlock({ data, days }: { data: RevenueData; days: DayRow[] }) {
+  const visits28 = sum(days.slice(-28).map((d) => d.visitors));
+  const sold28 = sum(days.slice(-28).map((d) => d.sold));
+  const agg = useMemo(() => {
+    const bySrc = new Map<string, { views: number; checkouts: number }>();
+    let views = 0, checkouts = 0;
+    for (const r of data.funnel?.days ?? []) {
+      const e = bySrc.get(r.src) ?? { views: 0, checkouts: 0 };
+      if (r.type === 'paywall_view') { e.views += r.n; views += r.n; }
+      else if (r.type === 'checkout_open') { e.checkouts += r.n; checkouts += r.n; }
+      bySrc.set(r.src, e);
+    }
+    const rows = [...bySrc.entries()].map(([src, v]) => ({ src, ...v }))
+      .sort((a, b) => b.views - a.views || b.checkouts - a.checkouts);
+    return { views, checkouts, rows };
+  }, [data.funnel]);
+
+  if (!data.funnel?.available) {
+    return (
+      <>
+        <h3 className="crm-fin-sub">{ct('Funil de conversão — 28 dias')}</h3>
+        <div className="muted small">{ct('Telemetria do funil indisponível (tabela de eventos ausente ou servidor sem a action atualizada).')}</div>
+      </>
+    );
+  }
+  const empty = agg.views === 0 && agg.checkouts === 0;
+  // etapas do funil: valor + taxa em relação à etapa ANTERIOR
+  const stages: { key: string; label: string; value: number; prev: number; tone: string }[] = [
+    { key: 'visit', label: ct('Visitantes'), value: visits28, prev: 0, tone: 'var(--blue-bright, #4a9eda)' },
+    { key: 'paywall', label: ct('Viram oferta (paywall)'), value: agg.views, prev: visits28, tone: '#caa53a' },
+    { key: 'checkout', label: ct('Abriram checkout'), value: agg.checkouts, prev: agg.views, tone: '#635bff' },
+    { key: 'sale', label: ct('Compraram (vitalícia)'), value: sold28, prev: agg.checkouts, tone: '#16a34a' },
+  ];
+  const max = Math.max(1, ...stages.map((s) => s.value));
+  return (
+    <>
+      <h3 className="crm-fin-sub">{ct('Funil de conversão — 28 dias')}</h3>
+      {empty && <div className="muted small" style={{ marginBottom: 8 }}>{ct('Ainda sem eventos de funil — a instrumentação é nova, os dados começam a acumular a partir deste deploy.')}</div>}
+      <div className="crm-bars">
+        {stages.map((s) => (
+          <div key={s.key} className="crm-bar-row">
+            <span className="crm-bar-label">{s.label}</span>
+            <div className="crm-bar-track"><div className="crm-bar-fill" style={{ width: `${(s.value / max) * 100}%`, background: s.tone }} /></div>
+            <span className="crm-bar-sub">{num(s.value)}{s.prev > 0 && s.value > 0 && <span className="muted"> · {pct(s.value / s.prev, 2)}</span>}</span>
+          </div>
+        ))}
+      </div>
+      <div className="muted small" style={{ margin: '6px 0 12px' }}>
+        {ct('Cada etapa soma sids distintos por dia (recorrente conta de novo em outro dia); a % é sobre a etapa anterior. Abandono de Pix e cadastros (signup_start/done) ficam na tabela de eventos pra análise ad-hoc.')}
+      </div>
+      {agg.rows.length > 0 && (
+        <>
+          <h4 className="crm-fin-sub s2">{ct('Por origem — qual superfície converte')}</h4>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="acc-table">
+              <thead><tr><th>{ct('Origem')}</th><th>{ct('Viram')}</th><th>{ct('Abriram checkout')}</th><th>{ct('View → checkout')}</th></tr></thead>
+              <tbody>
+                {agg.rows.map((r) => (
+                  <tr key={r.src}>
+                    <td>{funnelSrcLabel(r.src)} <span className="muted small">({r.src})</span></td>
+                    <td style={{ minWidth: 90 }}>{num(r.views)}<CellBar value={r.views} max={Math.max(1, ...agg.rows.map((x) => x.views))} tone="#caa53a" /></td>
+                    <td style={{ minWidth: 90 }}>{num(r.checkouts)}<CellBar value={r.checkouts} max={Math.max(1, ...agg.rows.map((x) => x.checkouts))} tone="#635bff" /></td>
+                    <td style={{ textAlign: 'center' }}>{r.views > 0 && r.checkouts > 0 ? pct(r.checkouts / r.views) : <span className="muted">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="muted small" style={{ marginTop: 6 }}>
+            {ct('Checkout sem view na mesma origem é normal: a origem do checkout é o PRIMEIRO CTA clicado na sessão (first-touch), e a view deduplica 1x por sessão.')}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 // ═════════ ABA RECEITA: resumo · por dia · previsão ═════════════════════════
 function RevenueSection({ data }: { data: RevenueData }) {
   const days = useMemo(() => deriveDays(data), [data]);
@@ -267,6 +365,9 @@ function RevenueSection({ data }: { data: RevenueData }) {
         </table>
       </div>
       {!data.visitorsAvailable && <div className="muted small" style={{ marginTop: 6 }}>{ct('Telemetria de visitas indisponível — funil e previsão ficam sem visitantes.')}</div>}
+
+      {/* FUNIL visitante → paywall → checkout → venda (iter39) */}
+      <FunnelBlock data={data} days={days} />
 
       {/* PREVISÃO */}
       <h3 className="crm-fin-sub">{ct('Previsão de receita')}</h3>

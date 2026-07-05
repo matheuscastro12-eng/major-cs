@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAccount } from '../state/account';
+import { setCheckoutSrc, trackPaywallView } from '../state/track';
 import { ct } from '../state/career-i18n';
 
 // Card de ativação (upsell) pra contas GRÁTIS. Abre em momentos estratégicos do
@@ -46,6 +47,7 @@ export function UpsellCard({ onUpgrade }: { onUpgrade: () => void }) {
       if (!force && Date.now() - last < COOLDOWN_MS) return; // respeita cooldown só nos disparos automáticos
       setHook(HOOKS[trigger ?? 'default'] ?? HOOKS.default);
       setOpen(true);
+      trackPaywallView('upsell-card'); // funil: card de upsell exibido (1x/sessão)
       localStorage.setItem(LAST_KEY, String(Date.now()));
     };
     window.addEventListener('rtm:upsell', onEvt);
@@ -70,7 +72,7 @@ export function UpsellCard({ onUpgrade }: { onUpgrade: () => void }) {
           <li><b>{ct('Selo de Fundador #001–#500')}</b> {ct('· logo própria do clube + número baixo é troféu (500 primeiros)')}</li>
         </ul>
         <div className="upsell-actions">
-          <button className="btn gold big" onClick={() => { close(); onUpgrade(); }}>
+          <button className="btn gold big" onClick={() => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
             {ct('Criar conta vitalícia')} · R$20
           </button>
           <button className="upsell-later" onClick={close}>{ct('Agora não')}</button>

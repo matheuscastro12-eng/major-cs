@@ -11,6 +11,7 @@ import {
   type WlStatus, type WlClaimOutcome,
 } from '../../state/weekendLeague';
 import { ct } from '../../state/career-i18n';
+import { setCheckoutSrc, trackPaywallView } from '../../state/track';
 
 // countdown legível: "1d 4h", "6h 32min", "12min"
 function fmtLeft(ms: number): string {
@@ -80,6 +81,9 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
     </div>
   );
 
+  // funil: conta grátis viu a trava da vitalícia do Major do Sábado
+  useEffect(() => { if (!paid) trackPaywallView('wl-lock'); }, [paid]);
+
   // ------------------------------------------------ grátis: trava vitalícia
   if (!paid) {
     return (
@@ -92,7 +96,7 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5, maxWidth: '420px' }}>
               {ct('Torneio de fim de semana com recompensas em créditos e cartas do Ultimate. Ative a conta com save na nuvem para participar.')}
             </p>
-            <a href="/" style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Ativar conta →')}</a>
+            <a href="/" onClick={() => setCheckoutSrc('wl-lock')} style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Ativar conta →')}</a>
           </div>
         </Panel>
       </div>
