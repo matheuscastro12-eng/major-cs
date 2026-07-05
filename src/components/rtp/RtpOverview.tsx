@@ -38,12 +38,13 @@ const METERS: { key: LifeMeterKey; label: string; icon: RtpIconName }[] = [
 ];
 const meterColor = (v: number) => (v >= 66 ? 'var(--rtp-win)' : v >= 33 ? 'var(--rtp-warn)' : 'var(--rtp-loss)');
 
-export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onAutoSim }: {
+export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onAutoSim, onGoTab }: {
   save: RoadToProSave;
   notice: RtpNotice | null;
   onDismissNotice: () => void;
   onPlayMatch: () => void;
   onAutoSim: () => void;
+  onGoTab?: (id: 'training' | 'market') => void;
 }) {
   const { player, life, team, world, history } = save;
   const circuit = world.league;
@@ -128,7 +129,24 @@ export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onAuto
                   </div>
                 </div>
               ) : (
-                <div className="em-nextup-done"><IconTrophy size={16} /> {ct('Sem série pendente')}</div>
+                <>
+                  <div className="em-nextup-done"><IconTrophy size={16} /> {ct('Sem série pendente')}</div>
+                  {/* PRÓXIMO PASSO claro (derivado do estado real): sem série na
+                      semana → treinar (se sobram ações) ou ver ofertas pendentes. */}
+                  {onGoTab && (world.actionsLeft > 0 || (world.pendingOffers ?? []).length > 0) && (
+                    <div className="em-nextup-actions">
+                      {world.actionsLeft > 0 ? (
+                        <button type="button" className="em-btn em-btn-primary" onClick={() => onGoTab('training')}>
+                          <RtpIcon name="gym" size={13} /> {ct('Treinar')} · {world.actionsLeft} {world.actionsLeft > 1 ? ct('ações') : ct('ação')}
+                        </button>
+                      ) : (
+                        <button type="button" className="em-btn em-btn-primary" onClick={() => onGoTab('market')}>
+                          <RtpIcon name="trade" size={13} /> {ct('Ver ofertas no mercado')}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
               <div className="em-nextup-meta">
                 <span>{team.teamName}</span>

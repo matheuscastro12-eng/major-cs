@@ -61,6 +61,13 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
     }
   };
 
+  // Sair no meio da Sala descarta os beats já jogados (a série recomeça do zero
+  // na volta) — guarda de confirmação SÓ nessa fase; intro/result saem direto.
+  const guardedExit = () => {
+    if (phase === 'moments' && !window.confirm(ct('Sair da série agora? O progresso desta partida será perdido.'))) return;
+    onExit();
+  };
+
   if (!prep) {
     return (
       <RtpFrame onExit={onExit}>
@@ -71,7 +78,7 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
   }
 
   return (
-    <RtpFrame onExit={onExit} kicker={mode === 'major' ? ct('MAJOR') : undefined}>
+    <RtpFrame onExit={guardedExit} kicker={mode === 'major' ? ct('MAJOR') : undefined}>
       {phase === 'intro' && (
         <RtpPrematch
           save={save}
@@ -113,7 +120,11 @@ function Result({ save, result, onConclude, mode }: { save: RoadToProSave; resul
     <div className="rtp-result">
       <div className={`rtp-result-banner ${result.won ? 'win' : 'loss'}`}>
         <div className="rtp-result-verdict">{result.won ? ct('VITÓRIA') : ct('DERROTA')}</div>
-        <div className="rtp-result-score">{result.mapScore[0]} — {result.mapScore[1]}</div>
+        <div className="rtp-result-score">
+          <span className="rtp-result-tag you">{save.team.tag}</span>
+          {result.mapScore[0]} — {result.mapScore[1]}
+          <span className="rtp-result-tag">{result.oppTag}</span>
+        </div>
         <div className="rtp-result-maps">
           {result.maps.map((m, i) => (
             <span key={i} className={`rtp-result-map ${m.won ? 'w' : 'l'}`}>
@@ -132,7 +143,7 @@ function Result({ save, result, onConclude, mode }: { save: RoadToProSave; resul
         <div className="rtp-hero-line-rating" style={{ color: ratingColor(result.heroRating) }}>{result.heroRating.toFixed(2)}</div>
         <div className="rtp-hero-line-meta">
           <b>{hero?.nick}</b> · {hero?.kills}–{hero?.deaths} · {hero?.adr} ADR<br />
-          <span className="rtp-soon" style={{ fontSize: '0.74rem' }}>{ct('Sua avaliação na série (rating 2.0)')}</span>
+          <span className="rtp-soon" style={{ fontSize: '0.74rem' }}>{ct('Sua avaliação na série (rating 3.0)')}</span>
         </div>
       </div>
 
@@ -197,7 +208,11 @@ function Result({ save, result, onConclude, mode }: { save: RoadToProSave; resul
         </div>
       </div>
 
-      <button type="button" className="rtp-cta rtp-advance" onClick={onConclude}>{ct('Concluir semana')} →</button>
+      {/* CTA coerente com o que acontece de verdade: no Major a rodada NÃO gasta
+          semana (só o circuito avança o calendário). */}
+      <button type="button" className="rtp-cta rtp-advance" onClick={onConclude}>
+        {mode === 'major' ? ct('Continuar no Major') : ct('Concluir semana')} →
+      </button>
     </div>
   );
 }

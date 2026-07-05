@@ -70,7 +70,8 @@ export function RtpPrematch({ save, prep, major, onReady, onExit }: {
         <span className="rtp-vs-name">{prep.opp.name}</span>
       </div>
       <div className="rtp-match-maps">
-        <span className="rtp-bo">{major ? ct('MAJOR') : ''} BO{prep.bestOf}</span>
+        {/* MD (melhor de) — mesma língua do hub e da Sala; era "BO" só aqui. */}
+        <span className="rtp-bo">{major ? ct('MAJOR') : ''} MD{prep.bestOf}</span>
         <span className={`rtp-cond-net ${condPct >= 0 ? 'good' : 'bad'}`}>{ct('Condição')} {condPct >= 0 ? '+' : ''}{condPct}%</span>
       </div>
 
@@ -159,7 +160,7 @@ export function RtpPrematch({ save, prep, major, onReady, onExit }: {
 
       <div className="rtp-footer-actions">
         <button type="button" className="rtp-cta" style={{ flex: 1 }} disabled={!done} onClick={() => onReady(plan, picked)}>
-          {ct('Entrar em quadra')} →
+          {done ? <>{ct('Entrar em quadra')} →</> : ct('Termine o veto pra entrar…')}
         </button>
         <button type="button" className="rtp-btn-ghost" onClick={onExit}>{ct('Voltar')}</button>
       </div>

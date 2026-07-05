@@ -35,7 +35,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { trackPaywallView } from '../../state/track';
+import { track, trackPaywallView } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { wlMirrorReport } from '../../state/weekendLeague';
@@ -52,7 +52,9 @@ import { missionsForDay, missionProgress } from '../../engine/ultimate/missions'
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
 import { UltimateCast } from './UltimateCast';
-import { pickHighlights } from '../../engine/ultimate/liveDrama';
+import { buildDramaScript, pickHighlights, starsFromPlayers, type DramaStar } from '../../engine/ultimate/liveDrama';
+import { buildTaleOfTape, finalCallOf, pickMatchStar, streakLine, type MatchStar } from '../../engine/ultimate/showtime';
+import { shareUltimateResult } from './shareCard';
 import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQUAD_DUEL_CAP, type StyleId } from '../../engine/ultimate/traits';
@@ -305,9 +307,12 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // estilo comprado na Loja aguardando a escolha da carta-alvo (modal picker)
   const [stylePick, setStylePick] = useState<StyleId | null>(null);
   type MatchMode = 'rivals' | 'casual' | 'gauntlet' | 'pvp';
-  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean };
+  // cerimônia pós-jogo (iter42): star = craque do duelo (determinístico, lado
+  // JÁ na perspectiva do usuário: 0 = você); casterFinal = chamada final do caster.
+  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null };
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1; pvpCode?: string } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
+  const [shareState, setShareState] = useState<'busy' | 'shared' | 'saved' | null>(null);
   const [liveRound, setLiveRound] = useState(0); // rounds já exibidos no replay (barra de momentum)
   const [speed, setSpeed] = useState<PlaybackSpeed>(2);
   const [onbForm, setOnbForm] = useState('standard');
@@ -1038,16 +1043,22 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     }
     const mapName = m0 ? (MAP_LABELS[m0.map] ?? m0.map) : '';
     const roundLog = m0?.roundLog ?? [];
+    // cerimônia pós-jogo (iter42): craque do duelo + chamada final derivados do
+    // MESMO script determinístico da transmissão (aqui myIdx=0 → lado já é o do usuário).
+    const dramaStars: [DramaStar[], DramaStar[]] = [starsFromPlayers(userTeam.players), starsFromPlayers(oppTeam.players)];
+    const script = buildDramaScript(roundLog, [userTeam.name, oppTeam.name], dramaStars);
+    const star = pickMatchStar(script, dramaStars, won ? 0 : 1) ?? undefined;
+    const casterFinal = finalCallOf(script);
     let resultData: LiveResult;
     if (mode === 'gauntlet') {
       const r = gauntletRecord(won, score);
-      resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard }, mvp, roundLog, mapName };
+      resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard }, mvp, roundLog, mapName, star, casterFinal };
     } else {
       // Amistoso (casual): sem risco de RP, sem ladder — só credits. O ranqueado
       // (Rivals) virou PvP online de verdade e passa pelo startPvpMatch; contra IA
       // sobra só o Gauntlet e este treino amistoso, que NÃO alimentam o ranking.
       const outcome = recordMatch(won, oppElo, false, score);
-      resultData = { won, score, outcome, mode, divChange: 'same', divName: divisionFor(eloBefore).def.name, mvp, roundLog, mapName };
+      resultData = { won, score, outcome, mode, divChange: 'same', divName: divisionFor(eloBefore).def.name, mvp, roundLog, mapName, star, casterFinal };
     }
     setResult(null);
     setLiveRound(0);
@@ -1108,6 +1119,15 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       if (!sc || !line) continue;
       if (!mvp || line.kills > mvp.kills || (line.kills === mvp.kills && line.deaths < mvp.deaths)) mvp = { card: sc.card, kills: line.kills, deaths: line.deaths };
     }
+    // cerimônia pós-jogo (iter42): craque + chamada final do script CANÔNICO
+    // (roundLog/nomes/rosters na ordem canônica ⇒ MESMO craque nos 2 clientes);
+    // só o `side` é espelhado pra perspectiva do usuário (0 = você).
+    const canonLog = m0?.roundLog ?? [];
+    const dramaStars: [DramaStar[], DramaStar[]] = [starsFromPlayers(tA.players), starsFromPlayers(tB.players)];
+    const script = buildDramaScript(canonLog, [tA.name, tB.name], dramaStars);
+    const starCanon = pickMatchStar(script, dramaStars, series.winner as 0 | 1);
+    const star = starCanon ? { ...starCanon, side: (starCanon.side === myIdx ? 0 : 1) as 0 | 1 } : undefined;
+    const casterFinal = finalCallOf(script);
     // dedupe: F5/reassistir não recontabiliza (ledger fora do save, cap 40)
     const ledgerKey = 'rtm-ult-pvp-rec';
     const recKey = `${args.code}:${args.runSeed}`;
@@ -1131,7 +1151,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     setLiveRound(0);
     setLive({
       series, teams: [tA, tB], opp: oppFive, intro: true, myIdx, pvpCode: args.code,
-      result: { won, score, outcome, mode: 'pvp', divChange: already ? 'same' : divisionChange(eloBefore, eloAfter), divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName, oppName: args.oppNick, repeat: already },
+      result: { won, score, outcome, mode: 'pvp', divChange: already ? 'same' : divisionChange(eloBefore, eloAfter), divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName, oppName: args.oppNick, repeat: already, star, casterFinal },
     });
     return true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1152,7 +1172,25 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     if (!live) return;
     const r = live.result;
     setLive(null);
+    setShareState(null);
     setResult(r);
+  };
+
+  // card de compartilhamento (iter42): mesmo padrão canvas→PNG do FinalScreen
+  // (state/share.ts) — sem libs; Web Share quando dá, senão download+clipboard.
+  const doShare = async (r: LiveResult) => {
+    if (shareState === 'busy') return;
+    setShareState('busy');
+    track('share_card', { mode: 'ultimate' });
+    const t = r.star ? traitById(r.star.trait) : null;
+    const outcome = await shareUltimateResult({
+      won: r.won, score: r.score, mapName: r.mapName, mode: r.mode, oppName: r.oppName,
+      mvp: r.mvp ? { nick: r.mvp.card.nick, kills: r.mvp.kills, deaths: r.mvp.deaths } : undefined,
+      star: r.star && t ? { nick: r.star.nick, traitName: t.name, traitIcon: t.icon } : undefined,
+      casterLine: r.casterFinal,
+      divName: r.mode === 'pvp' || r.mode === 'rivals' ? `${div.def.name} · ${state.profile.elo} RP` : undefined,
+    });
+    setShareState(outcome);
   };
 
   // inicia/continua uma partida por modo. Gauntlet: abre o run se não estiver
@@ -1243,19 +1281,34 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     // mapa e química — o replay só começa no "COMEÇAR PARTIDA".
     if (live.intro) {
       const oppOvr = live.opp.length ? Math.round(live.opp.reduce((a, p) => a + p.ovr, 0) / live.opp.length) : 0;
+      // TALE OF THE TAPE (iter42): leitura seeded do confronto derivada dos
+      // dados CANÔNICOS compartilhados (nomes+rosters) — byte-idêntica nos 2
+      // clientes do PvP; a UI só espelha os lados via myIdx.
+      const tale = buildTaleOfTape([live.teams[0].name, live.teams[1].name], [live.teams[0].players, live.teams[1].players]);
+      const taleMine = tale.sides[live.myIdx];
+      const taleOpp = tale.sides[1 - live.myIdx];
+      const bestLine = (s: typeof taleMine) => {
+        const t = s.best.trait ? traitById(s.best.trait) : null;
+        return <>★ <b>{s.best.nick}</b> {s.best.ovr}{t && <span className="ut-vs__besttrait">{t.icon} {t.name}</span>}</>;
+      };
       return (
         <div className="ut-root ut-live">
           <div className="ut-vs">
             <div className="ut-vs__kicker">{ct('MATCH DAY')} · {live.result.mode === 'rivals' ? 'DIVISÃO RIVALS' : live.result.mode === 'gauntlet' ? 'ELITE GAUNTLET' : live.result.mode === 'pvp' ? `${ct('DUELO ONLINE')} · PVP` : ct('AMISTOSO')}</div>
+            <div className="ut-vs__call">
+              <span className="ut-cast__tag">{ct('CASTER')}</span>
+              <span className="ut-vs__calltext">{tale.line}</span>
+            </div>
             <div className="ut-vs__grid">
               <div className="ut-vs__side">
                 <div className="ut-vs__team">{live.teams[live.myIdx].name}</div>
                 <div className="ut-vs__meta">{avgOvr} OVR · {ct('química')} {chem.total}/15</div>
+                <div className="ut-vs__best">{bestLine(taleMine)}</div>
                 <div className="ut-vs__cards">
-                  {form.slots.map((fs) => {
+                  {form.slots.map((fs, wi) => {
                     const sc = slotCard(fs.slot);
                     return sc ? (
-                      <div key={fs.slot} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                      <div key={fs.slot} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
                         <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} />
                         <DuelChips card={sc.card} styleId={sc.owned.style} />
                       </div>
@@ -1273,9 +1326,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               <div className="ut-vs__side">
                 <div className="ut-vs__team">{live.teams[1 - live.myIdx].name}</div>
                 <div className="ut-vs__meta">{oppOvr} OVR · {ct('adversário')}</div>
+                <div className="ut-vs__best">{bestLine(taleOpp)}</div>
                 <div className="ut-vs__roster">
-                  {live.opp.map((p) => (
-                    <div key={p.id} className="ut-vs__row">
+                  {live.opp.map((p, wi) => (
+                    <div key={p.id} className="ut-vs__row ut-vs__walk" style={{ ['--wi' as string]: wi }}>
                       <PlayerAvatar nick={p.nick} size={26} />
                       <span className="ut-vs__nick"><Flag cc={p.country} /> {p.nick}</span>
                       <span className="ut-vs__ovr">{p.ovr}</span>
@@ -2439,15 +2493,37 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               </div>
             )}
             {result.mvp && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, padding: '10px 16px', borderRadius: 12, background: 'rgba(201,166,60,0.1)', border: '1px solid rgba(201,166,60,0.35)' }}>
+              <div className="ut-mvpspot" style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, padding: '10px 16px', borderRadius: 12, background: 'rgba(201,166,60,0.1)', border: '1px solid rgba(201,166,60,0.35)' }}>
                 <UltCardView card={result.mvp.card} size={72} />
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.66rem', letterSpacing: '1.4px', color: '#92600a' }}>★ {ct('MVP DA PARTIDA')}</div>
                   <div style={{ fontWeight: 900, fontSize: '0.95rem', color: 'var(--ut-ink)' }}>{result.mvp.card.nick}</div>
                   <div style={{ fontFamily: 'var(--ut-font-mono)', fontSize: '0.78rem', color: 'var(--ut-ink-2)' }}>{result.mvp.kills}K · {result.mvp.deaths}D</div>
+                  {result.star?.nick === result.mvp.card.nick && (
+                    <div className="ut-cere__trait">{traitById(result.star.trait).icon} {traitById(result.star.trait).name} · {ct('craque do duelo')}</div>
+                  )}
                 </div>
               </div>
             )}
+            {/* cerimônia (iter42): craque do duelo (determinístico — MESMO nos 2
+                clientes do PvP), chamada final do caster e contexto de streak */}
+            {result.star && result.star.nick !== result.mvp?.card.nick && (
+              <div className="ut-cere__star ut-mvpspot">
+                <PlayerAvatar nick={result.star.nick} size={40} />
+                <div style={{ textAlign: 'left' }}>
+                  <div className="ut-cere__label">★ {ct('CRAQUE DO DUELO')}</div>
+                  <div className="ut-cere__nick">{result.star.nick} <span className="ut-cere__trait">{traitById(result.star.trait).icon} {traitById(result.star.trait).name}</span></div>
+                  <div className="ut-cere__side">{result.star.side === 0 ? ct('do seu squad') : ct('do squad rival')}</div>
+                </div>
+              </div>
+            )}
+            {result.casterFinal && (
+              <div className="ut-cere__call"><span className="ut-cast__tag">{ct('CASTER')}</span> <em>{result.casterFinal}</em></div>
+            )}
+            {(() => {
+              const cheer = result.repeat ? null : streakLine(state.profile.history, result.won);
+              return cheer ? <div className={`ut-cere__streak${result.won ? ' win' : ''}`}>{result.won ? '🔥' : '🧊'} {cheer}</div> : null;
+            })()}
             <div style={{ display: 'flex', gap: 16, fontSize: '0.9rem', fontWeight: 800 }}>
               {result.mode === 'rivals' || result.mode === 'pvp'
                 ? (result.repeat
@@ -2459,6 +2535,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               {result.outcome.credits > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#92600a' }}><Coins size={13} /> +{fmt(result.outcome.credits)}</span>}
             </div>
             <span style={{ fontSize: '0.78rem', color: 'var(--em-muted,#8a99ab)' }}>{result.mode === 'pvp' ? `${ct('Duelo vs')} ${result.oppName ?? '?'} · ${div.def.name} · ${state.profile.elo} RP` : result.mode === 'rivals' ? `${div.def.name} · ${state.profile.elo} RP` : result.mode === 'gauntlet' ? `${ct('Elite Gauntlet')} · ${ct('recorde')} ${state.profile.gauntlet.best}` : ct('Treino amistoso')}</span>
+            {/* card compartilhável (iter42) — canvas→PNG, padrão do FinalScreen */}
+            <button className="ut-btn ut-btn--ghost ut-cere__share" disabled={shareState === 'busy'} onClick={() => void doShare(result)}>
+              {shareState === 'shared' ? `✔ ${ct('Compartilhado!')}` : shareState === 'saved' ? `✔ ${ct('Card salvo · texto copiado')}` : `📤 ${ct('Compartilhar resultado')}`}
+            </button>
           </div>
         </Modal>
       )}
