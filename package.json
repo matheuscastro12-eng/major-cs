@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "tsx --test server/*.test.ts",
     "test:sim": "tsx --test scripts/test-*.mts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gen:ult-catalog": "tsx scripts/gen-ult-catalog.mts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

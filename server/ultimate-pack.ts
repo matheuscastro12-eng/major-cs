@@ -10,13 +10,19 @@
 //
 // Idempotência: replay do mesmo op_id NÃO re-rola — as cartas voltam do
 // próprio ledger (rtm_ult_ledger.cards), idênticas às da primeira resposta.
+// RUNTIME DA VERCEL (sem bundle): este módulo só pode importar arquivos cuja
+// cadeia de imports relativos usa extensão .js — a cadeia COMPLETA do engine
+// (cards → data/regions → bo3.json) não resolve no Node ESM em runtime e já
+// derrubou a rota inteira (2026-07-05). Por isso o catálogo vem MATERIALIZADO
+// do snapshot gerado (ultimate-catalog.snapshot.ts, regen via
+// npm run gen:ult-catalog; drift guardado por teste) e o roll importa apenas
+// packs.js/rng.js/promos.js, que têm cadeia runtime-safe (sufixos .js).
 import { randomBytes, randomUUID } from 'node:crypto';
-import { CS2_REAL_2026 } from '../src/data/bo3.js';
 import { makeRng } from '../src/engine/rng.js';
-import { buildFullCatalog } from '../src/engine/ultimate/catalog.js';
-import { catalogIndex, type UltCard } from '../src/engine/ultimate/cards.js';
+import type { UltCard } from '../src/engine/ultimate/cards.js';
 import { packById, rollPack, type PackDef } from '../src/engine/ultimate/packs.js';
 import { monthIndex } from '../src/engine/ultimate/promos.js';
+import { ULT_CATALOG_MONTHS, ULT_SNAPSHOT_FIRST_MONTH, ULT_SNAPSHOT_LAST_MONTH, type SnapCard } from './ultimate-catalog.snapshot.js';
 import { applyUltTransaction, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
 
 // versão do motor de roll gravada no ledger — se as odds/engine mudarem um dia,
@@ -25,24 +31,31 @@ export const ULT_PACK_ENGINE_VERSION = 'ult-pack-v1';
 
 // ------------------------------------------------------------------ catálogo
 
-// Catálogo do servidor: MESMA derivação do cliente (base + tots + major +
-// promos até o mês corrente), cacheado por monthIndex — igual ao ensureCatalog
-// de src/state/ultimate.ts.
-let _catalog: UltCard[] | null = null;
-let _index: Map<string, UltCard> | null = null;
+// Catálogo do servidor: MESMA derivação do cliente, MATERIALIZADA no snapshot
+// (o gerador roda buildFullCatalog(CS2_REAL_2026, mi) mês a mês; o teste de
+// drift garante igualdade byte a byte com o engine). Fora da faixa coberta,
+// clampa no mês mais próximo — packs continuam funcionando com o catálogo mais
+// recente disponível, e o teste de cobertura avisa pra regenerar.
+let _catalog: SnapCard[] | null = null;
+let _index: Map<string, SnapCard> | null = null;
 let _month = -1;
 
-export function buildServerCatalog(now: Date = new Date()): UltCard[] {
+function snapshotMonth(mi: number): SnapCard[] {
+  const clamped = Math.max(ULT_SNAPSHOT_FIRST_MONTH, Math.min(ULT_SNAPSHOT_LAST_MONTH, mi));
+  return ULT_CATALOG_MONTHS[clamped] ?? [];
+}
+
+export function buildServerCatalog(now: Date = new Date()): SnapCard[] {
   const mi = monthIndex(now);
   if (!_catalog || _month !== mi) {
-    _catalog = buildFullCatalog(CS2_REAL_2026, mi).catalog;
-    _index = catalogIndex(_catalog);
+    _catalog = snapshotMonth(mi);
+    _index = new Map(_catalog.map((c) => [c.key, c]));
     _month = mi;
   }
   return _catalog;
 }
 
-export function serverCatalogIndex(now: Date = new Date()): Map<string, UltCard> {
+export function serverCatalogIndex(now: Date = new Date()): Map<string, SnapCard> {
   buildServerCatalog(now);
   return _index!;
 }

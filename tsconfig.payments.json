@@ -34,6 +34,8 @@
     "server/ultimate-economy.mock.ts",
     "server/ultimate-market.ts",
     "server/ultimate-catalog-lazy.ts",
+    "server/ultimate-catalog.snapshot.ts",
+    "server/ultimate-catalog-snapshot.test.ts",
     "server/ultimate-market.test.ts",
     "server/ultimate-pack.ts",
     "server/ultimate-pack.test.ts",
