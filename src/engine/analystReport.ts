@@ -251,6 +251,27 @@ function buildNarrative(ctx: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Take de bancada (RTP iter43 — "DIA DE JOGO")
+//
+// Versão de TRANSMISSÃO do relatório: 1 frase de leitura tática pro segmento
+// "mesa redonda" do pré-jogo, montada com o MESMO material do report (astro,
+// mapa forte/fraco, threat). Determinística por seedKey — mesmo confronto,
+// mesma fala do analista.
+
+export function deskTacticalLine(r: AnalystReport, oppTag: string, seedKey: string): string {
+  const star = r.starPlayer;
+  const strong = MAP_LABELS[r.strongMap];
+  const weak = MAP_LABELS[r.weakMap];
+  const threat = THREAT_LABEL[r.threatLevel].toLowerCase();
+  const pool = [
+    `Taticamente, tudo passa por ${star.nick} (${star.ovr} OVR). Se o ${oppTag} instalar o jogo em ${strong}, complica — o caminho é arrastar a série pra ${weak}.`,
+    `No papel o ${oppTag} é ${threat}, e ${strong} é a casa deles. Cortar o espaço do ${star.nick} vale mais que qualquer pick hoje.`,
+    `Pra mim a série começa no veto: ${strong} não pode passar, e ${weak} é onde o ${oppTag} patina. Feito isso, sobra vigiar o ${star.nick}.`,
+  ];
+  return pick(pool, `desk:${seedKey}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // UI helpers
 
 export const THREAT_LABEL: Record<AnalystReport['threatLevel'], string> = {

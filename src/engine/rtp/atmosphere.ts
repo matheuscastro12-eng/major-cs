@@ -128,6 +128,12 @@ function majorWalkout(save: RoadToProSave, prep: MatchPrep): string[] {
   ];
 }
 
+// O que está em jogo hoje, em 1 linha (rival > Major > circuito) — também
+// alimenta a MANCHETE DO DIA do pré-jogo (iter43, broadcast.ts). Fonte única.
+export function matchStakes(save: RoadToProSave, prep: MatchPrep, major: boolean): string | null {
+  return rivalStakes(save, prep) ?? (major ? majorStakes(save) : leagueStakes(save));
+}
+
 // ── Atmosfera da partida (chamado uma vez, memoizado na Sala) ────────────────
 
 export function matchAtmosphere(save: RoadToProSave, prep: MatchPrep, major: boolean): Atmosphere {
@@ -137,7 +143,7 @@ export function matchAtmosphere(save: RoadToProSave, prep: MatchPrep, major: boo
   const jitter = (hashStr(`${seed}:crowd`) % 5) - 2;
   const crowd = Math.max(0, Math.min(100, CROWD_BASE[stage] + jitter));
   const rival = prep.grudge && save.media?.rival ? save.media.rival : null;
-  const stakes = rivalStakes(save, prep) ?? (major ? majorStakes(save) : leagueStakes(save));
+  const stakes = matchStakes(save, prep, major);
   return {
     stage, venue, crowd, crowdLabel: CROWD_LABEL[stage], stakes,
     walkout: stage === 'major' ? majorWalkout(save, prep) : null,

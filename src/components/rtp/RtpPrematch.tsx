@@ -7,11 +7,14 @@ import { MAP_LABELS, type MapId, type TTeam } from '../../types';
 import { makeRng } from '../../engine/rng';
 import { newVeto, currentStep, applyVeto, aiChoice, vetoDone, vetoMaps, type VetoState } from '../../engine/veto';
 import { GAME_PLANS, heroMapComfort, type GamePlan } from '../../engine/rtp/meta';
+import { prematchDesk, vetoReaction, stageDefinedLine, walkoutCue } from '../../engine/rtp/broadcast';
 import type { MatchPrep } from '../../engine/rtp/matchSim';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
 // Pré-jogo (RTP v9 — META COMPETITIVO): scouting do adversário + plano de jogo +
 // veto de mapa interativo. Devolve o plano escolhido e os mapas vetados.
+// iter43 — DIA DE JOGO: pacote de transmissão em volta do formulário (manchete,
+// mesa redonda, palpite da bancada, caster no veto). 100% apresentação/seeded.
 export function RtpPrematch({ save, prep, major, onReady, onExit }: {
   save: RoadToProSave;
   prep: MatchPrep;
@@ -46,6 +49,18 @@ export function RtpPrematch({ save, prep, major, onReady, onExit }: {
   const yourTurn = step?.team === 0;
   const picked = vetoMaps(veto);
 
+  // DIA DE JOGO (iter43): manchete + mesa redonda + palpite — tudo seeded.
+  const desk = useMemo(() => prematchDesk(save, prep, !!major), [save, prep, major]);
+  // Caster reage ao ÚLTIMO passo do veto (seeded por índice — estável).
+  const vetoCast = useMemo(() => {
+    const s = veto.steps[veto.steps.length - 1];
+    if (!s?.map) return null;
+    return vetoReaction(
+      { matchSeed: prep.matchSeed, oppTag: prep.opp.tag, oppStrong: scout?.strongMap, oppWeak: scout?.weakMap, comfort },
+      veto.steps.length - 1, s.team, s.action, s.map,
+    );
+  }, [veto.steps, prep.matchSeed, prep.opp.tag, scout, comfort]);
+
   const onMap = (m: MapId) => { if (yourTurn) setVeto((v) => applyVeto(v, m)); };
 
   // VETO RÁPIDO (RTP v14): resolve os passos restantes na hora — os seus pelo
@@ -64,6 +79,11 @@ export function RtpPrematch({ save, prep, major, onReady, onExit }: {
 
   return (
     <div className="rtp-prematch">
+      {/* MANCHETE DO DIA — ticker de cobertura (stakes reais da atmosfera) */}
+      <div className="rtp-daybrief">
+        <span className="rtp-daybrief-kicker">{ct('DIA DE JOGO')}</span>
+        <span className="rtp-daybrief-txt">{desk.headline}</span>
+      </div>
       <div className="rtp-vs">
         <span className="rtp-vs-tag" style={{ color: save.team.colors[0] }}>{save.team.tag}</span>
         <span className="rtp-vs-x">VS</span>
@@ -105,6 +125,24 @@ export function RtpPrematch({ save, prep, major, onReady, onExit }: {
         </div>
       )}
 
+      {/* MESA REDONDA — a bancada dos analistas (iter43): 2 takes + palpite */}
+      <div className="dash-card rtp-desk">
+        <header className="dash-card-head">
+          <b>{ct('Mesa redonda')}</b><span style={{ flex: 1 }} />
+          <span className="rtp-desk-live">● {ct('AO VIVO')}</span>
+        </header>
+        <div className="dash-card-body">
+          <p className="rtp-desk-take"><span className="rtp-desk-who">{ct('ANALISTA')}</span> “{desk.tactical}”</p>
+          <p className="rtp-desk-take hot"><span className="rtp-desk-who">{ct('EX-PRO')}</span> “{desk.hot}”</p>
+          <div className="rtp-desk-palpite">
+            <span className="rtp-desk-palpite-k">{ct('Palpite da bancada')}</span>
+            <span className={`rtp-desk-palpite-bar${desk.palpite.favYou ? ' you' : ''}`}><i style={{ width: `${desk.palpite.pct}%` }} /></span>
+            <span className={`rtp-desk-palpite-v${desk.palpite.favYou ? ' you' : ''}`}>{desk.palpite.favLabel} {desk.palpite.pct}%</span>
+          </div>
+          <p className="rtp-desk-palpite-line">{desk.palpite.line}</p>
+        </div>
+      </div>
+
       {/* Plano de jogo */}
       <div className="dash-card">
         <header className="dash-card-head"><b>{ct('Plano de jogo')}</b></header>
@@ -141,6 +179,10 @@ export function RtpPrematch({ save, prep, major, onReady, onExit }: {
               );
             })}
           </div>
+          {/* caster reage ao último ban/pick (iter43 — veto como drama) */}
+          {!done && vetoCast && (
+            <p className="rtp-veto-cast"><span className="rtp-veto-cast-k">{ct('CASTER')}</span> {vetoCast}</p>
+          )}
           {/* histórico do veto */}
           <div className="rtp-veto-log">
             {veto.steps.map((s, i) => (
@@ -150,13 +192,20 @@ export function RtpPrematch({ save, prep, major, onReady, onExit }: {
             ))}
           </div>
           {done && (
-            <div className="rtp-veto-final">
-              <span className="rtp-veto-final-lbl">{ct('Vão jogar')}:</span>
-              {picked.map((p) => <span key={p.map} className={`rtp-veto-final-map${p.pickedBy === 0 ? ' you' : p.pickedBy === -1 ? ' dec' : ''}`}>{MAP_LABELS[p.map]}</span>)}
-            </div>
+            <>
+              {/* PALCO DEFINIDO — o beat de fechamento do veto (iter43) */}
+              <p className="rtp-veto-cast final"><span className="rtp-veto-cast-k">{ct('CASTER')}</span> {stageDefinedLine(picked.map((p) => p.map), prep.matchSeed)}</p>
+              <div className="rtp-veto-final">
+                <span className="rtp-veto-final-lbl">{ct('Vão jogar')}:</span>
+                {picked.map((p) => <span key={p.map} className={`rtp-veto-final-map${p.pickedBy === 0 ? ' you' : p.pickedBy === -1 ? ' dec' : ''}`}>{MAP_LABELS[p.map]}</span>)}
+              </div>
+            </>
           )}
         </div>
       </div>
+
+      {/* continuidade com a Sala: no MAJOR o walkout (iter41) é a próxima cena */}
+      {done && major && <p className="rtp-walk-cue">{walkoutCue(prep.matchSeed, prep.opp.name)}</p>}
 
       <div className="rtp-footer-actions">
         <button type="button" className="rtp-cta" style={{ flex: 1 }} disabled={!done} onClick={() => onReady(plan, picked)}>

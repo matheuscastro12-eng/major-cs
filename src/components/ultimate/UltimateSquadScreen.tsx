@@ -301,6 +301,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
+  // pack em abertura (id) — o roll pode ir ao SERVIDOR; sem isso o clique parecia
+  // morto em conexão lenta e o usuário clicava de novo (o engine só ignorava).
+  const [packBusy, setPackBusy] = useState<string | null>(null);
   // fase 3b: último pack veio do roll do SERVIDOR? (selinho ☁️ na Loja)
   const [packFromCloud, setPackFromCloud] = useState(false);
   const [pickSlot, setPickSlot] = useState<number | null>(null);
@@ -784,6 +787,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const [mktSub, setMktSub] = useState<'browse' | 'mine'>('browse');
   const [mktRows, setMktRows] = useState<MktBrowseItem[]>([]);
   const [mktMineRows, setMktMineRows] = useState<MktMineItem[]>([]);
+  // 1ª carga de "Minhas listagens" concluída? Sem isso o subtab abria já no
+  // empty-state ("você ainda não listou") antes do servidor responder.
+  const [mktMineLoaded, setMktMineLoaded] = useState(false);
   const [mktLoading, setMktLoading] = useState(false);
   const [mktErr, setMktErr] = useState('');
   const [mktQuery, setMktQuery] = useState('');
@@ -829,6 +835,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     if (!r.ok) return; // silencioso: o poll de retorno não pode gerar toast de erro em loop
     processMine(r.listings);
     setMktMineRows(r.listings);
+    setMktMineLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1208,15 +1215,19 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const buy = (pack: PackDef) => {
     // fase 3b: conta paga abre no SERVIDOR (roll autoritativo); free/offline
     // caem no roll local dentro do próprio openPackCloud — nunca bloqueia.
+    if (packBusy) return;
+    setPackBusy(pack.id);
     void (async () => {
-      const res = await openPackCloud(pack.id);
-      if (!res.ok) {
-        if (res.reason === 'busy') return; // double-click com request em voo — ignora em silêncio
-        flash(res.reason === 'insufficient' ? ct('Créditos insuficientes.') : ct('Não foi possível abrir.'));
-        return;
-      }
-      setPackFromCloud(res.source === 'server');
-      setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
+      try {
+        const res = await openPackCloud(pack.id);
+        if (!res.ok) {
+          if (res.reason === 'busy') return; // double-click com request em voo — ignora em silêncio
+          flash(res.reason === 'insufficient' ? ct('Créditos insuficientes.') : ct('Não foi possível abrir.'));
+          return;
+        }
+        setPackFromCloud(res.source === 'server');
+        setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
+      } finally { setPackBusy(null); }
     })();
   };
 
@@ -1437,9 +1448,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           </div>
           <span style={{ flex: 1 }} />
           <div className="ut-res">
-            <span className="ut-res__chip ut-res__chip--coin"><Coins size={15} /> {fmtChip(credits)}</span>
-            <span className="ut-res__chip"><Layers size={15} /> {totalCards}</span>
-            <span className="ut-res__chip ut-res__chip--rp"><Trophy size={15} /> {state.profile.elo}</span>
+            {/* tooltips: o chip abrevia (1.2M) e o RP vem sem rótulo — o hover dá o contexto exato */}
+            <span className="ut-res__chip ut-res__chip--coin" title={`${fmt(credits)} coins`}><Coins size={15} /> {fmtChip(credits)}</span>
+            <span className="ut-res__chip" title={`${totalCards} ${ct('cartas na coleção')}`}><Layers size={15} /> {totalCards}</span>
+            <span className="ut-res__chip ut-res__chip--rp" title={`${div.def.name} · ${state.profile.elo} RP`}><Trophy size={15} /> {state.profile.elo}</span>
           </div>
           <button className="ut-jogar" onClick={onJogar} title={squadComplete ? ct('Jogar ranqueada') : ct('Montar squad')}><Zap size={16} /> <span>{ct('JOGAR')}</span></button>
           <div className="ut-nav__group">
@@ -1534,7 +1546,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', textAlign: 'center', padding: '8px 0' }}>
                   <div className="ut-empty__accent">{ct('PRONTO PRA SUBIR NO RANKING?')}</div>
                   <div style={{ fontSize: '0.86rem', color: 'var(--ut-muted)' }}>{ct('Squad pronto. Entre na fila ranqueada.')}</div>
-                  <button className="ut-btn ut-btn--gold" onClick={() => go('ranked')} style={{ width: '100%' }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
+                  {/* mesmo comportamento do JOGAR da nav: o rótulo promete ranqueada,
+                      então garante o sub-modo Rivals (e não o último visitado, ex. Gauntlet) */}
+                  <button className="ut-btn ut-btn--gold" onClick={() => { setRankedMode('rivals'); go('ranked'); }} style={{ width: '100%' }}><Zap size={15} /> {ct('JOGAR RANQUEADA')}</button>
                 </div>
               ) : (
                 <>
@@ -1764,13 +1778,18 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--ut-ink)', fontWeight: 800 }}>
                   R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}
                 </p>
+                {/* sem isto a trava era um beco sem saída: dizia o preço mas não ONDE ativar */}
+                <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
+                  {ct('Pra ativar: volte à tela inicial do Road to Major e entre na sua conta vitalícia — esta seção destrava na hora.')}
+                </p>
               </div>
             ) : (
               <>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
                   <button onClick={() => setMktSub('browse')} style={{ ...tabBtn(mktSub === 'browse'), padding: '6px 14px', fontSize: '0.78rem' }}>{ct('Comprar')}</button>
                   <button onClick={() => { setMktSub('mine'); void refreshMine(); }} style={{ ...tabBtn(mktSub === 'mine'), padding: '6px 14px', fontSize: '0.78rem' }}>
-                    {ct('Minhas listagens')} <span style={{ opacity: 0.7 }}>({mktActiveCount}/{MKT_MAX_ACTIVE_LISTINGS})</span>
+                    {/* contador só depois da 1ª carga — senão exibia "(0/3)" falso */}
+                    {ct('Minhas listagens')} {mktMineLoaded && <span style={{ opacity: 0.7 }}>({mktActiveCount}/{MKT_MAX_ACTIVE_LISTINGS})</span>}
                   </button>
                   <span style={{ flex: 1 }} />
                   <button className="ut-btn ut-btn--gold" style={{ padding: '6px 14px', fontSize: '0.78rem' }} onClick={() => setMktSellPick(true)}>
@@ -1837,7 +1856,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 )}
 
                 {mktSub === 'mine' && (
-                  mktMineRows.length === 0 ? (
+                  !mktMineLoaded && mktMineRows.length === 0 ? (
+                    <p className="muted small" style={{ textAlign: 'center', padding: '14px 0' }}>{ct('Carregando suas listagens…')}</p>
+                  ) : mktMineRows.length === 0 ? (
                     <UtEmpty icon={<Tag size={28} />} title={ct('Você ainda não listou nenhuma carta')} sub={`${ct('Use "Vender carta" pra listar — até')} ${MKT_MAX_ACTIVE_LISTINGS} ${ct('listagens ativas, válidas por')} ${MKT_LISTING_TTL_H}h.`} />
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1996,8 +2017,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 <div className="ut-pack__name">{ct('Pacote Promo')} · {promo.theme.name}</div>
                 <div className="ut-pack__desc">{ct(promo.theme.desc)} — {ct('11 cartas promo (+2 OVR) este mês, 1 garantida no pack.')}</div>
                 <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Termina em')} {dd}d {hh}h</div>
-                <button className="ut-pack__buy" onClick={() => buy(promoPack)} disabled={!afford} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
-                  {afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(promoPack.cost)}
+                <button className="ut-pack__buy" onClick={() => buy(promoPack)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                  {packBusy === promoPack.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(promoPack.cost)}</>}
                 </button>
               </div>
             );
@@ -2011,8 +2032,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                   <div className="ut-pack__art"><Package size={44} strokeWidth={1.4} /></div>
                   <div className="ut-pack__name">{pack.name}</div>
                   <div className="ut-pack__desc">{pack.desc}</div>
-                  <button className="ut-pack__buy" onClick={() => buy(pack)} disabled={!afford} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
-                    {afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(pack.cost)}
+                  <button className="ut-pack__buy" onClick={() => buy(pack)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                    {packBusy === pack.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(pack.cost)}</>}
                   </button>
                 </div>
               );
@@ -2194,6 +2215,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 </div>
               );
             })}
+          </div>
+          {/* fecha o loop montar → jogar sem caçar a aba na nav; incompleto mostra
+              o progresso dos slots em vez de deixar o usuário sem próxima ação */}
+          <div style={{ textAlign: 'center', marginTop: 14 }}>
+            {squadComplete
+              ? <button className="ut-jogar" style={{ padding: '12px 26px' }} onClick={() => { setRankedMode('rivals'); go('ranked'); }}><Zap size={16} /> {ct('JOGAR RANQUEADA')}</button>
+              : <span className="muted small">{placed.length}/5 {ct('escalados — toque num slot vazio pra completar o squad.')}</span>}
           </div>
           <p className="muted small" style={{ textAlign: 'center', marginTop: 10 }}>
             {ct('Mesma org (+1), mesma região (+0.5) e mesmo país (+0.5) entre jogadores conectados dão química. Encaixe as funções pra somar mais.')}
@@ -2823,8 +2851,10 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         return (
           <Modal open onClose={() => setReveal(null)} title={ct('Pacote aberto')} size="lg"
             footer={inWalkout
-              ? <><Button variant="ghost" onClick={() => setRevealIdx(wo.length)}>{ct('Pular')}</Button><Button variant="primary" onClick={() => setRevealIdx((i) => i + 1)}>{isBest ? ct('Concluir') : `${ct('Próxima')} (${revealIdx + 1}/${wo.length})`}</Button></>
-              : <Button variant="primary" onClick={() => { setReveal(null); setTab('club'); }}>{ct('Ver coleção')}</Button>}>
+              ? <><Button variant="ghost" onClick={() => setRevealIdx(wo.length)}>{ct('Pular')}</Button><Button variant="primary" onClick={() => setRevealIdx((i) => i + 1)}>{isBest ? ct('Concluir') : `${ct('Próxima')} (${revealIdx + 2}/${wo.length})`}</Button></>
+              // "Fechar" ao lado: resgates do Passe/Hub abriam o reveal e o único
+              // caminho era "Ver coleção" — que arrancava o usuário da aba atual.
+              : <><Button variant="ghost" onClick={() => setReveal(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { setReveal(null); setTab('club'); }}>{ct('Ver coleção')}</Button></>}>
             {inWalkout ? (
               <div className="ult-wo" style={{ '--wo': info.color } as CSSProperties} onClick={() => setRevealIdx((i) => i + 1)}>
                 <div className="ult-wo__flash" key={`f${revealIdx}`} />
