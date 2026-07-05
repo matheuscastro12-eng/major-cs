@@ -11,7 +11,9 @@ import { captureError } from './errlog';
 // ESPELHADA como tx idempotente pro servidor via mirrorUltimateChange — o save
 // local/cloud-save segue sendo a fonte da verdade; o espelho nunca bloqueia
 // nem lança (tudo fire-and-forget dentro do próprio módulo).
-import { bootUltimateShadow, mirrorUltimateChange } from './ultimateShadow';
+// Fase 3b (o FLIP): pack de conta paga rola NO SERVIDOR (openPackOnServer) —
+// roll autoritativo com op_id crash-safe; fallback local se a rede falhar.
+import { bootUltimateShadow, markFlipDrift, mirrorUltimateChange, openPackOnServer } from './ultimateShadow';
 import { scheduledPromo, scheduledSbcById } from './liveops';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
@@ -74,6 +76,8 @@ import {
 
 const KEY = 'rtm-ultimate-v1';
 const CLOUD_SLOT = 'ultimate';
+// fase 3b: pack open server-side em voo (guarda anti double-click do openPackCloud)
+let _packOpenInFlight = false;
 
 function load(): UltimateState {
   let raw: string | null;
@@ -238,6 +242,9 @@ interface UltimateStore {
   state: UltimateState;
   grant: (cardKey: string, via: AcquiredVia) => void;
   openPack: (packId: string) => { ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' };
+  // fase 3b: abre no SERVIDOR quando conta paga+logada (roll autoritativo);
+  // free/offline/Promo caem no openPack local. source diz de onde veio o roll.
+  openPackCloud: (packId: string) => Promise<{ ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' | 'busy'; source: 'server' | 'local' }>;
   sell: (ownedId: string) => { ok: boolean; credited: number };
   sellMany: (ownedIds: string[]) => { sold: number; credited: number };
   spend: (n: number) => boolean;
@@ -317,6 +324,66 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     // o servidor ainda não rola o pack (isso é a fase 3b via action packOpen).
     mirrorUltimateChange(prev, s, 'pack', { packId: pack.id, seed });
     return { ok: true, cards };
+  },
+  openPackCloud: async (packId) => {
+    // Fase 3b (o FLIP): conta PAGA+logada abre o pack NO SERVIDOR — o roll é
+    // autoritativo (seed/cartas auditáveis no ledger, imune a save editado).
+    // Caem no caminho LOCAL de sempre (openPack, que espelha via shadow):
+    //   - conta grátis/deslogada (zero rede, comportamento intocado);
+    //   - Pacote Promo (custo de live-ops + catálogo filtrado por mês que o
+    //     servidor não replica — roll server-side sairia com odds erradas);
+    //   - qualquer falha de rede/rota (o jogo NUNCA bloqueia esperando rede).
+    const localRoll = () => ({ ...get().openPack(packId), source: 'local' as const });
+    if (!cloudEnabled() || packId === PROMO_PACK.id) return localRoll();
+    const pack = packById(packId);
+    if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' as const, source: 'local' as const };
+    if (get().state.profile.credits < pack.cost) return { ok: false, cards: [], reason: 'insufficient' as const, source: 'local' as const };
+    // guarda anti double-click: duas aberturas em voo reusariam o MESMO op_id
+    // pendente e aplicariam as mesmas cartas 2× no local.
+    if (_packOpenInFlight) return { ok: false, cards: [], reason: 'busy' as const, source: 'local' as const };
+    _packOpenInFlight = true;
+    let r: Awaited<ReturnType<typeof openPackOnServer>>;
+    try { r = await openPackOnServer(pack.id); } finally { _packOpenInFlight = false; }
+    if (!r) return localRoll(); // fallback: roll local (espelhado como sempre) — drift já anotado
+    const prev = get().state;
+    // O roll do SERVIDOR substitui o local INTEIRO: as cópias entram com o
+    // uuid gerado lá (mesmo id em rtm_ult_cards) — a reconciliação do boot
+    // compara por id, então os dois lados batem 1:1.
+    // Débito LOCAL do custo (não o saldo absoluto do servidor): política 3b é
+    // local-vence — se o saldo do servidor divergir do esperado, quem corrige
+    // é a reconciliação do boot (servidor → local), nunca o contrário. Assim
+    // um ledger atrasado não "evapora" credits do jogador.
+    const spent = _spendCredits(prev, pack.cost);
+    if (!spent.ok) {
+      // corrida raríssima (gasto concorrente entre o check e a resposta): o
+      // servidor JÁ debitou/rolou — anota o drift e deixa o boot reconciliar.
+      markFlipDrift('packOpen aplicado no servidor mas saldo local mudou');
+      return { ok: false, cards: [], reason: 'insufficient' as const, source: 'server' as const };
+    }
+    // paridade com o caminho local: missões/semanais contam packs via
+    // packSeedCounter (o seed local não é usado — o do servidor está no ledger)
+    const seed = spent.state.profile.packSeedCounter + 1;
+    let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
+    const idx = ultimateIndex();
+    const revealed: UltCard[] = [];
+    for (const c of r.cards) {
+      if (s.inventory.some((o) => o.id === c.cardId)) continue; // replay já aplicado — não duplica
+      s = _grantCard(s, c.cardKey, 'pack', { id: c.cardId });
+      const card = idx.get(c.cardKey);
+      if (card) revealed.push(card);
+    }
+    s = _grantPassXp(s, 'pack', dateKey(new Date()));
+    if (r.credits !== prev.profile.credits - pack.cost) {
+      // saldo do servidor ≠ esperado → o ledger ainda não convergiu com o
+      // local; informativo — a reconciliação do próximo boot resolve.
+      markFlipDrift(`packOpen saldo server=${r.credits} esperado=${prev.profile.credits - pack.cost}`);
+    }
+    persist(s);
+    set({ state: s });
+    // NÃO chama mirrorUltimateChange aqui: o packOpen JÁ gravou a tx (débito +
+    // cartas + seed) no ledger server-side — espelhar duplicaria tudo. O
+    // espelho continua valendo pra todos os outros kinds e pro fallback local.
+    return { ok: true, cards: revealed, source: 'server' as const };
   },
   sell: (ownedId) => {
     const prev = get().state;

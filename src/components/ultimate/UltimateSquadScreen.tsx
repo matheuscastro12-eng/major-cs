@@ -294,11 +294,13 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
+  // fase 3b: último pack veio do roll do SERVIDOR? (selinho ☁️ na Loja)
+  const [packFromCloud, setPackFromCloud] = useState(false);
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   // estilo comprado na Loja aguardando a escolha da carta-alvo (modal picker)
   const [stylePick, setStylePick] = useState<StyleId | null>(null);
@@ -987,9 +989,18 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   };
 
   const buy = (pack: PackDef) => {
-    const res = openPack(pack.id);
-    if (!res.ok) { flash(res.reason === 'insufficient' ? ct('Créditos insuficientes.') : ct('Não foi possível abrir.')); return; }
-    setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
+    // fase 3b: conta paga abre no SERVIDOR (roll autoritativo); free/offline
+    // caem no roll local dentro do próprio openPackCloud — nunca bloqueia.
+    void (async () => {
+      const res = await openPackCloud(pack.id);
+      if (!res.ok) {
+        if (res.reason === 'busy') return; // double-click com request em voo — ignora em silêncio
+        flash(res.reason === 'insufficient' ? ct('Créditos insuficientes.') : ct('Não foi possível abrir.'));
+        return;
+      }
+      setPackFromCloud(res.source === 'server');
+      setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
+    })();
   };
 
   // vende TODAS as duplicatas (mantém 1 cópia de cada) em UM lote — sellMany
@@ -1558,6 +1569,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         <UtPanel label={ct('Loja de pacotes')} icon={<Package size={15} className="ut-panel__lead" />} accent="amber">
           <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>
             {ct('Abra pacotes, monte sua coleção dos jogadores reais de 2026. Venda duplicatas por créditos e junte pros pacotes melhores.')}
+            {/* fase 3b: selinho discreto quando o último pack foi rolado no servidor */}
+            {packFromCloud && <span style={{ marginLeft: 8, whiteSpace: 'nowrap', opacity: 0.85 }}>☁️ {ct('economia sincronizada')}</span>}
           </p>
           {/* recuperação de coins comprados: só pra quem PERDEU o save local
               (navegador limpo / aparelho novo). O servidor re-emite cada coin
