@@ -9,7 +9,14 @@ import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, u
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
 import { PACK_DEFS, packById, type PackDef } from '../../engine/ultimate/packs';
-import { rarityInfo } from '../../engine/ultimate/rarities';
+import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
+// mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
+// nas actions marketListCard/marketCardSold/marketCardReturned/marketBuyApply.
+import {
+  mktBrowse, mktBuy, mktCancel, mktList, mktMine, mktMarkSeen, mktSeenHas,
+  mktPriceBounds, mktSellerProceeds, MKT_LISTING_TTL_H, MKT_MAX_ACTIVE_LISTINGS,
+  type MktBrowseItem, type MktMineItem,
+} from '../../state/ultimateMarket';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
 import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, passSeasonId, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
@@ -294,7 +301,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -787,6 +794,200 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     if (buyCard(l.cardKey, l.price, l.id, bazaarDayBucket(Date.now()))) { setBazaar((b) => b.filter((x) => x.id !== l.id)); flash(`✅ ${ct('Comprado')} · -${fmt(l.price)} 🪙`); }
     else flash(ct('Créditos insuficientes.'));
   };
+  // ── mercado P2P (fase B) — vitrine/venda/minhas listagens contra o servidor ──
+  // Conta grátis vê a seção travada (mesmo gate do Major do Sábado); toda
+  // chamada é try/catch com toast — o Mercado nunca trava a tela.
+  const mktPaid = !!account?.paid;
+  const [mktSub, setMktSub] = useState<'browse' | 'mine'>('browse');
+  const [mktRows, setMktRows] = useState<MktBrowseItem[]>([]);
+  const [mktMineRows, setMktMineRows] = useState<MktMineItem[]>([]);
+  const [mktLoading, setMktLoading] = useState(false);
+  const [mktErr, setMktErr] = useState('');
+  const [mktQuery, setMktQuery] = useState('');
+  const [mktMaxPrice, setMktMaxPrice] = useState('');
+  const [mktSort, setMktSort] = useState<'cheap' | 'new'>('cheap');
+  const [mktBusy, setMktBusy] = useState(false);
+  const [mktBuyItem, setMktBuyItem] = useState<MktBrowseItem | null>(null);
+  const [mktSellPick, setMktSellPick] = useState(false); // modal: escolher carta pra vender
+  const [mktSellTarget, setMktSellTarget] = useState<{ o: OwnedCard; card: UltCard } | null>(null);
+  const [mktPrice, setMktPrice] = useState('');
+  const [mktBounds, setMktBounds] = useState<{ min: number; max: number } | null>(null);
+
+  const mktTimeLeft = (iso: string) => {
+    const ms = new Date(iso).getTime() - Date.now();
+    if (!Number.isFinite(ms) || ms <= 0) return ct('expirando');
+    const h = Math.floor(ms / 3_600_000);
+    const m = Math.floor((ms % 3_600_000) / 60_000);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
+
+  // vendas/retornos vistos no mktMine são processados EXATAMENTE UMA VEZ:
+  // ids marcados em localStorage (rtm-ult-mkt-seen-v1) — F5/poll não re-credita.
+  const processMine = (rows: MktMineItem[]) => {
+    let soldN = 0; let credited = 0; let backN = 0;
+    for (const l of rows) {
+      if (l.status === 'sold' && !mktSeenHas(`sold:${l.id}`)) {
+        const p = mktSellerProceeds(l.price);
+        marketCardSold(p);
+        mktMarkSeen(`sold:${l.id}`);
+        soldN++; credited += p;
+      } else if ((l.status === 'expired' || l.status === 'cancelled') && !mktSeenHas(`back:${l.id}`)) {
+        marketCardReturned(l.cardId, l.cardKey);
+        mktMarkSeen(`back:${l.id}`);
+        backN++;
+      }
+    }
+    if (soldN) flash(`💰 ${soldN === 1 ? ct('Carta vendida no Mercado!') : `${soldN} ${ct('cartas vendidas no Mercado!')}`} +${fmt(credited)} 🪙 (${ct('taxa de 5% já descontada')})`, 3600);
+    else if (backN) flash(`↩️ ${backN === 1 ? ct('Uma listagem expirou — a carta voltou pra sua coleção.') : `${backN} ${ct('listagens expiraram — as cartas voltaram pra sua coleção.')}`}`, 3200);
+  };
+
+  const refreshMine = useCallback(async () => {
+    const r = await mktMine();
+    if (!r.ok) return; // silencioso: o poll de retorno não pode gerar toast de erro em loop
+    processMine(r.listings);
+    setMktMineRows(r.listings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const refreshBrowse = useCallback(async () => {
+    setMktLoading(true);
+    setMktErr('');
+    try {
+      // busca por nome: resolve cardKey no catálogo (client-side). Fecha em UMA
+      // carta → filtra no servidor; várias → traz a vitrine e filtra local.
+      const q = mktQuery.trim().toLowerCase();
+      let cardKey: string | undefined;
+      if (q) {
+        const keys = new Set(ultimateCatalog().filter((c) => c.nick.toLowerCase().includes(q)).map((c) => c.key));
+        if (keys.size === 1) cardKey = [...keys][0];
+      }
+      const max = Math.max(0, Math.trunc(Number(mktMaxPrice) || 0));
+      const r = await mktBrowse({ cardKey, maxPrice: max > 0 ? max : undefined, sort: mktSort });
+      if (!r.ok) {
+        setMktErr(r.error === 'unpaid' ? ct('Entre na sua conta vitalícia pra usar o Mercado.') : ct('Sem conexão com o Mercado agora. Tente atualizar em instantes.'));
+        return;
+      }
+      setMktRows(r.listings);
+    } finally { setMktLoading(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mktQuery, mktMaxPrice, mktSort]);
+
+  // abrir a seção (ou trocar a ordenação) recarrega vitrine + minhas listagens
+  useEffect(() => {
+    if (tab !== 'mercado' || !mktPaid) return;
+    void refreshBrowse();
+    void refreshMine();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, mktPaid, mktSort]);
+
+  const mktActiveCount = mktMineRows.filter((l) => l.status === 'active').length;
+  // filtro local por nick quando a busca não fechou num cardKey único
+  const mktVisibleRows = (() => {
+    const q = mktQuery.trim().toLowerCase();
+    if (!q) return mktRows;
+    return mktRows.filter((l) => (index.get(l.cardKey)?.nick ?? '').toLowerCase().includes(q));
+  })();
+
+  // abre o modal de preço pra UMA cópia (usa a carta BASE do catálogo pra faixa
+  // — o servidor ancora o preço na carta sem boost; o boost viaja no card_meta)
+  const openMktSell = (o: OwnedCard) => {
+    const base = index.get(o.cardKey);
+    if (!base) { flash(ct('Carta fora do catálogo atual — não dá pra listar.')); return; }
+    if (isSpecial(base.rarity)) { flash(ct('Cartas especiais (TOTS/Major/Promo) não podem ir ao Mercado.')); return; }
+    if (o.locked === 'squad') { flash(ct('Carta escalada no squad — remova do slot pra listar.')); return; }
+    const b = mktPriceBounds(base);
+    setMktBounds(b);
+    setMktPrice(String(Math.min(b.max, Math.max(b.min, Math.round((b.min + b.max) / 3))))); // sugestão ~valor estimado
+    setMktSellTarget({ o, card: boostCard(base, o.boost) });
+  };
+
+  const doMktList = async () => {
+    if (!mktSellTarget || mktBusy) return;
+    const p = Math.trunc(Number(mktPrice) || 0);
+    if (mktBounds && (p < mktBounds.min || p > mktBounds.max)) {
+      flash(`${ct('Preço fora da faixa')} (${fmt(mktBounds.min)}–${fmt(mktBounds.max)} 🪙).`);
+      return;
+    }
+    setMktBusy(true);
+    try {
+      const r = await mktList(mktSellTarget.o.id, p);
+      if (r.ok) {
+        // custódia: a carta SAI da coleção local (o servidor já a removeu) —
+        // sem espelho-sombra (a perna 'escrow' já existe no ledger).
+        marketListCard(mktSellTarget.o.id);
+        flash(`🏷️ ${mktSellTarget.card.nick} ${ct('no Mercado por')} ${fmt(p)} 🪙 — ${ct('você recebe')} ${fmt(mktSellerProceeds(p))} ${ct('na venda.')}`, 3400);
+        setMktSellTarget(null);
+        setMktSellPick(false);
+        setMktSub('mine');
+        void refreshMine();
+      } else if (r.error === 'invalid_price') {
+        if (r.min != null && r.max != null) setMktBounds({ min: r.min, max: r.max });
+        flash(`${ct('Preço fora da faixa permitida')}${r.min != null && r.max != null ? ` (${fmt(r.min)}–${fmt(r.max)} 🪙)` : ''}.`, 2800);
+      } else if (r.error === 'listing_cap') {
+        flash(`${ct('Você já tem')} ${r.cap} ${ct('listagens ativas — cancele alguma pra listar de novo.')}`, 3000);
+      } else if (r.error === 'special_not_listable') {
+        flash(ct('Cartas especiais (TOTS/Major/Promo) não podem ir ao Mercado.'));
+      } else if (r.error === 'not_owner') {
+        flash(ct('Essa cópia não está mais disponível — atualizando suas listagens.'));
+        void refreshMine();
+      } else if (r.error === 'unpaid') {
+        flash(`🔒 ${ct('O Mercado é da conta vitalícia — entre na sua conta.')}`, 2800);
+      } else {
+        flash(ct('Sem conexão com o Mercado — sua carta continua com você. Tente de novo.'), 2800);
+      }
+    } finally { setMktBusy(false); }
+  };
+
+  const doMktBuy = async () => {
+    if (!mktBuyItem || mktBusy) return;
+    setMktBusy(true);
+    try {
+      const r = await mktBuy(mktBuyItem.id);
+      if (r.ok) {
+        // aplica LOCAL: mesma cópia (uuid do servidor) + débito do preço — sem
+        // espelho (a tx 'trade' já está no ledger do servidor).
+        marketBuyApply(r.cardId, r.cardKey, r.price);
+        const c = index.get(r.cardKey);
+        flash(`✅ ${ct('Comprado')}${c ? ` · ${c.nick}` : ''} · -${fmt(r.price)} 🪙`, 2800);
+        setMktBuyItem(null);
+        setMktRows((rows) => rows.filter((x) => x.id !== r.listingId));
+      } else if (r.error === 'insufficient_credits') {
+        flash(ct('Créditos insuficientes.'));
+        setMktBuyItem(null);
+      } else if (r.error === 'not_active' || r.error === 'not_found') {
+        flash(ct('Essa carta acabou de ser vendida ou saiu do ar — atualizando a vitrine.'), 2800);
+        setMktBuyItem(null);
+        void refreshBrowse();
+      } else if (r.error === 'self_buy') {
+        flash(ct('Essa listagem é sua — cancele em "Minhas listagens" pra recuperar a carta.'), 2800);
+        setMktBuyItem(null);
+      } else {
+        flash(ct('Sem conexão com o Mercado — nada foi cobrado. Tente de novo.'), 2800);
+      }
+    } finally { setMktBusy(false); }
+  };
+
+  const doMktCancel = async (l: MktMineItem) => {
+    if (mktBusy) return;
+    setMktBusy(true);
+    try {
+      const r = await mktCancel(l.id);
+      if (r.ok) {
+        if (!mktSeenHas(`back:${l.id}`)) {
+          marketCardReturned(l.cardId, l.cardKey); // sem espelho: 'escrow' add já no ledger
+          mktMarkSeen(`back:${l.id}`);
+        }
+        setMktMineRows((rows) => rows.map((x) => (x.id === l.id ? { ...x, status: 'cancelled' as const } : x)));
+        flash(`↩️ ${ct('Listagem cancelada — a carta voltou pra sua coleção.')}`, 2800);
+      } else if (r.error === 'not_active' || r.error === 'not_found') {
+        flash(ct('Essa listagem já fechou (vendida ou expirada) — atualizando.'), 2800);
+        void refreshMine();
+      } else {
+        flash(ct('Sem conexão com o Mercado — tente de novo.'), 2600);
+      }
+    } finally { setMktBusy(false); }
+  };
+
   // ── ranking global: ladder REAL do servidor (só contas vitalícias). Sem jogadores
   // fictícios de nick real — é preenchido pelos managers de verdade conforme jogam a
   // Ranqueada (Rivals). Antes usava um ladder de IA com nomes de pros (donk, molodoy…). ──
@@ -1490,25 +1691,160 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
       )}
 
       {tab === 'mercado' && (
-        <UtPanel label={ct('Transfer market')} icon={<ArrowLeftRight size={15} className="ut-panel__lead" />} info={ct('Cartas à venda por outros jogadores (IA). Renova todo dia.')}>
-          <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>{ct('Cartas à venda por outros jogadores (IA). O mercado renova todo dia. Compre com credits.')}</p>
-          {bazaar.length === 0 ? <p className="muted small">{ct('Sem listagens agora.')}</p> : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 12, justifyItems: 'center' }}>
-              {bazaar.map((l) => {
-                const c = index.get(l.cardKey);
-                if (!c) return null;
-                const afford = credits >= l.price;
-                return (
-                  <div key={l.id} className="ut-mkt">
-                    <UltCardView card={c} size={124} />
-                    <div className="ut-mkt__seller">{ct('por')} {l.sellerNick}</div>
-                    <button className="ut-mkt__buy" onClick={() => buyFromBazaar(l)} disabled={!afford}><Coins size={12} /> {fmt(l.price)}</button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </UtPanel>
+        <>
+          {/* ── Mercado P2P (fase B): listagens de managers DE VERDADE ── */}
+          <UtPanel
+            label={<>{ct('Mercado de Jogadores')} <em>· {ct('entre managers')}</em></>}
+            icon={<ArrowLeftRight size={15} className="ut-panel__lead" />}
+            accent="amber"
+            info={ct('Compre e venda cartas com outros managers. A carta listada fica em custódia no servidor; a venda paga 5% de taxa e listagens expiram em 48h.')}
+            right={mktPaid ? (
+              <button className="ut-btn ut-btn--ghost" style={{ padding: '5px 12px', fontSize: '0.76rem' }} onClick={() => { void refreshBrowse(); void refreshMine(); }} disabled={mktLoading}>
+                {mktLoading ? ct('Atualizando…') : ct('Atualizar')}
+              </button>
+            ) : undefined}
+          >
+            {!mktPaid ? (
+              // conta grátis: seção visível mas travada — mesma linguagem do Major do Sábado
+              <div style={{ textAlign: 'center', padding: '26px 10px', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+                <span style={{ fontSize: '34px' }}>🔒</span>
+                <b style={{ fontSize: '1rem', color: 'var(--ut-ink)' }}>{ct('O Mercado de Jogadores é da conta vitalícia')}</b>
+                <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
+                  {ct('Contas vitalícias compram e vendem cartas entre si, com a economia protegida no servidor. O bazar diário (IA) logo abaixo continua liberado pra todo mundo.')}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+                  <button onClick={() => setMktSub('browse')} style={{ ...tabBtn(mktSub === 'browse'), padding: '6px 14px', fontSize: '0.78rem' }}>{ct('Comprar')}</button>
+                  <button onClick={() => { setMktSub('mine'); void refreshMine(); }} style={{ ...tabBtn(mktSub === 'mine'), padding: '6px 14px', fontSize: '0.78rem' }}>
+                    {ct('Minhas listagens')} <span style={{ opacity: 0.7 }}>({mktActiveCount}/{MKT_MAX_ACTIVE_LISTINGS})</span>
+                  </button>
+                  <span style={{ flex: 1 }} />
+                  <button className="ut-btn ut-btn--gold" style={{ padding: '6px 14px', fontSize: '0.78rem' }} onClick={() => setMktSellPick(true)}>
+                    <Tag size={14} /> {ct('Vender carta')}
+                  </button>
+                </div>
+
+                {mktSub === 'browse' && (
+                  <>
+                    {/* filtros: nome (resolve cardKey no catálogo), preço máx, ordenação */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+                      <input
+                        value={mktQuery}
+                        onChange={(e) => setMktQuery(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') void refreshBrowse(); }}
+                        placeholder={ct('Buscar jogador…')}
+                        style={{ flex: '1 1 160px', minWidth: 140, padding: '7px 12px', borderRadius: 8, border: '1px solid var(--em-border,#2a3340)', background: 'var(--em-panel,#fff)', color: 'var(--em-text,inherit)', fontFamily: 'inherit', fontSize: '0.82rem' }}
+                      />
+                      <input
+                        value={mktMaxPrice}
+                        onChange={(e) => setMktMaxPrice(e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') void refreshBrowse(); }}
+                        placeholder={ct('Preço máx.')}
+                        inputMode="numeric"
+                        style={{ width: 110, padding: '7px 12px', borderRadius: 8, border: '1px solid var(--em-border,#2a3340)', background: 'var(--em-panel,#fff)', color: 'var(--em-text,inherit)', fontFamily: 'inherit', fontSize: '0.82rem' }}
+                      />
+                      <button onClick={() => setMktSort('cheap')} style={{ ...tabBtn(mktSort === 'cheap'), padding: '6px 12px', fontSize: '0.74rem' }}>{ct('Mais baratas')}</button>
+                      <button onClick={() => setMktSort('new')} style={{ ...tabBtn(mktSort === 'new'), padding: '6px 12px', fontSize: '0.74rem' }}>{ct('Mais novas')}</button>
+                      <button className="ut-btn ut-btn--ghost" style={{ padding: '6px 14px', fontSize: '0.78rem' }} onClick={() => void refreshBrowse()} disabled={mktLoading}>{ct('Buscar')}</button>
+                    </div>
+                    {mktErr ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '14px 0' }}>
+                        <UtEmpty icon={<AlertCircle size={28} />} title={ct('Mercado indisponível')} sub={mktErr} />
+                        <button className="ut-btn ut-btn--ghost" onClick={() => void refreshBrowse()}>{ct('Tentar de novo')}</button>
+                      </div>
+                    ) : mktLoading && mktVisibleRows.length === 0 ? (
+                      <p className="muted small" style={{ textAlign: 'center', padding: '14px 0' }}>{ct('Carregando a vitrine…')}</p>
+                    ) : mktVisibleRows.length === 0 ? (
+                      <UtEmpty icon={<ArrowLeftRight size={28} />} title={ct('Nenhuma listagem agora')} sub={ct('Seja o primeiro: liste uma carta sua no botão "Vender carta".')} />
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, justifyItems: 'center' }}>
+                        {mktVisibleRows.map((l) => {
+                          const c = index.get(l.cardKey);
+                          if (!c) return null;
+                          const afford = credits >= l.price;
+                          return (
+                            <div key={l.id} className="ut-mkt">
+                              <UltCardView card={c} size={124} />
+                              <div className="ut-mkt__seller">⏳ {mktTimeLeft(l.expiresAt)}{l.mine ? ` · ${ct('sua listagem')}` : ''}</div>
+                              <button
+                                className="ut-mkt__buy"
+                                onClick={() => setMktBuyItem(l)}
+                                disabled={l.mine || !afford || mktBusy}
+                                title={l.mine ? ct('Essa listagem é sua — cancele em "Minhas listagens".') : afford ? ct('Comprar') : ct('Créditos insuficientes.')}
+                              >
+                                <Coins size={12} /> {fmt(l.price)}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {mktSub === 'mine' && (
+                  mktMineRows.length === 0 ? (
+                    <UtEmpty icon={<Tag size={28} />} title={ct('Você ainda não listou nenhuma carta')} sub={`${ct('Use "Vender carta" pra listar — até')} ${MKT_MAX_ACTIVE_LISTINGS} ${ct('listagens ativas, válidas por')} ${MKT_LISTING_TTL_H}h.`} />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {mktMineRows.map((l) => {
+                        const c = index.get(l.cardKey);
+                        return (
+                          <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--em-border,#2a3340)', background: 'var(--em-panel,#fff)' }}>
+                            {c ? <UltCardView card={c} size={62} /> : <span style={{ width: 62 }} />}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 900, fontSize: '0.86rem', color: 'var(--ut-ink)' }}>{c?.nick ?? l.cardKey}</div>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--ut-font-mono)', fontWeight: 800, fontSize: '0.78rem', color: '#92600a' }}><Coins size={11} /> {fmt(l.price)}</div>
+                            </div>
+                            {l.status === 'active' && (
+                              <>
+                                <span className="muted small" style={{ whiteSpace: 'nowrap' }}>⏳ {mktTimeLeft(l.expiresAt)}</span>
+                                <button className="ut-btn ut-btn--ghost" style={{ padding: '5px 12px', fontSize: '0.74rem' }} onClick={() => void doMktCancel(l)} disabled={mktBusy}>{ct('Cancelar')}</button>
+                              </>
+                            )}
+                            {l.status === 'sold' && (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.74rem', fontWeight: 800, padding: '3px 10px', borderRadius: 999, background: 'rgba(18,183,106,0.14)', border: '1px solid rgba(18,183,106,0.4)', color: '#0e9d5b' }}>
+                                <Check size={12} strokeWidth={3} /> {ct('vendida')} · +{fmt(mktSellerProceeds(l.price))} 🪙
+                              </span>
+                            )}
+                            {(l.status === 'expired' || l.status === 'cancelled') && (
+                              <span className="muted small" style={{ whiteSpace: 'nowrap' }}>
+                                {l.status === 'expired' ? ct('expirada') : ct('cancelada')} · {ct('carta devolvida')}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </>
+            )}
+          </UtPanel>
+
+          {/* ── bazar diário (IA) — o antigo transfer market, agora rotulado como IA ── */}
+          <UtPanel label={<>{ct('Bazar diário')} <em>· IA</em></>} icon={<Store size={15} className="ut-panel__lead" />} info={ct('Cartas à venda por vendedores fictícios (IA). Renova todo dia.')}>
+            <p className="muted small" style={{ marginTop: -2, marginBottom: 10 }}>{ct('Cartas à venda por vendedores fictícios (IA). O bazar renova todo dia. Compre com credits.')}</p>
+            {bazaar.length === 0 ? <p className="muted small">{ct('Sem listagens agora.')}</p> : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 12, justifyItems: 'center' }}>
+                {bazaar.map((l) => {
+                  const c = index.get(l.cardKey);
+                  if (!c) return null;
+                  const afford = credits >= l.price;
+                  return (
+                    <div key={l.id} className="ut-mkt">
+                      <UltCardView card={c} size={124} />
+                      <div className="ut-mkt__seller">{ct('por')} {l.sellerNick}</div>
+                      <button className="ut-mkt__buy" onClick={() => buyFromBazaar(l)} disabled={!afford}><Coins size={12} /> {fmt(l.price)}</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </UtPanel>
+        </>
       )}
 
       {tab === 'ranking' && (
@@ -1730,6 +2066,26 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                             <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
                               {isDup ? ct('vender dup') : ct('vender')} <Coins size={11} style={{ verticalAlign: '-1px' }} />
                             </button>
+                            {mktPaid && (() => {
+                              // "Vender no Mercado" direto da coleção: exclui especiais e
+                              // cópias escaladas AQUI (tooltip explica) — o servidor re-valida.
+                              const special = isSpecial(baseCard.rarity);
+                              const freeId = row.ownedIds.find((oid) => ownedById.get(oid)?.locked !== 'squad');
+                              const disabled = special || !freeId;
+                              const tip = special ? ct('Cartas especiais (TOTS/Major/Promo) não podem ir ao Mercado.')
+                                : !freeId ? ct('Carta escalada no squad — remova do slot pra listar.')
+                                : ct('Vender no Mercado (outros managers)');
+                              return (
+                                <button
+                                  onClick={() => { const o = freeId ? ownedById.get(freeId) : undefined; if (o) openMktSell(o); }}
+                                  disabled={disabled}
+                                  title={tip}
+                                  style={{ ...sellBtn, display: 'inline-flex', alignItems: 'center', gap: 3, ...(disabled ? { opacity: 0.5, cursor: 'default' } : { borderColor: 'rgba(201,166,60,0.5)', color: '#92600a' }) }}
+                                >
+                                  <Tag size={11} /> {ct('mercado')}
+                                </button>
+                              );
+                            })()}
                             {canEvo && (
                               <button onClick={() => doEvolve(row)} disabled={credits < evoCost} title={`${ct('Evoluir')} → +${row.evo + 1} OVR`}
                                 style={{ ...sellBtn, display: 'inline-flex', alignItems: 'center', gap: 3, borderColor: credits >= evoCost ? 'rgba(34,197,94,0.5)' : 'var(--em-border,#2a3340)', color: credits >= evoCost ? '#16a34a' : 'var(--em-muted,#8a99ab)', cursor: credits >= evoCost ? 'pointer' : 'default' }}>
@@ -2421,6 +2777,115 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 </div>
               </>
             )}
+          </Modal>
+        );
+      })()}
+
+      {/* ── mercado P2P: confirmar compra ── */}
+      {mktBuyItem && (() => {
+        const c = index.get(mktBuyItem.cardKey);
+        const after = credits - mktBuyItem.price;
+        return (
+          <Modal open onClose={() => setMktBuyItem(null)} title={ct('Confirmar compra')} size="sm"
+            footer={<>
+              <Button variant="ghost" onClick={() => setMktBuyItem(null)}>{ct('Cancelar')}</Button>
+              <Button variant="primary" onClick={() => void doMktBuy()} disabled={mktBusy || after < 0}>{mktBusy ? ct('Comprando…') : `${ct('Comprar por')} ${fmt(mktBuyItem.price)} 🪙`}</Button>
+            </>}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+              {c && <UltCardView card={c} size={132} />}
+              <div style={{ display: 'flex', gap: 18, fontSize: '0.84rem' }}>
+                <span>{ct('Preço')}: <b style={{ fontFamily: 'var(--ut-font-mono)', color: '#92600a' }}>{fmt(mktBuyItem.price)} 🪙</b></span>
+                <span>{ct('Saldo após')}: <b style={{ fontFamily: 'var(--ut-font-mono)', color: after < 0 ? '#dc2626' : 'var(--ut-ink)' }}>{fmt(Math.max(0, after))} 🪙</b></span>
+              </div>
+              {after < 0 && <p className="muted small" style={{ margin: 0, color: '#b42318' }}>{ct('Créditos insuficientes pra essa compra.')}</p>}
+              <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>⏳ {ct('Expira em')} {mktTimeLeft(mktBuyItem.expiresAt)} · {ct('a carta entra na sua coleção na hora.')}</p>
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {/* ── mercado P2P: escolher carta pra vender ── */}
+      {mktSellPick && (() => {
+        // agrupa cópias (cardKey+boost+estilo) como o picker de estilos; especiais
+        // e escaladas aparecem desabilitadas com o motivo no tooltip.
+        const groups = new Map<string, { o: OwnedCard; card: UltCard; n: number }>();
+        for (const o of state.inventory) {
+          const b = index.get(o.cardKey);
+          if (!b) continue;
+          const k = `${o.cardKey}#${o.boost ?? 0}#${o.style ?? ''}`;
+          const g = groups.get(k);
+          if (g) {
+            g.n++;
+            if (g.o.locked === 'squad' && o.locked !== 'squad') g.o = o; // prefere cópia livre
+          } else groups.set(k, { o, card: boostCard(b, o.boost), n: 1 });
+        }
+        const cands = [...groups.values()].sort((a, b) => b.card.ovr - a.card.ovr);
+        return (
+          <Modal open onClose={() => setMktSellPick(false)} title={`🏷️ ${ct('Vender no Mercado')} · ${ct('escolha a carta')}`} size="lg">
+            <p className="muted small" style={{ marginTop: 0 }}>
+              {ct('A carta listada sai da coleção e fica em custódia até vender, expirar (48h) ou você cancelar. Especiais (TOTS/Major/Promo) e cartas escaladas não podem ser listadas.')}
+            </p>
+            {cands.length === 0 ? (
+              <p className="muted small">{ct('Sem cartas. Abra pacotes na Loja.')}</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10, maxHeight: 440, overflowY: 'auto', justifyItems: 'center' }}>
+                {cands.map(({ o, card, n }) => {
+                  const special = isSpecial(card.rarity);
+                  const locked = o.locked === 'squad';
+                  const blocked = special || locked;
+                  const tip = special ? ct('Cartas especiais (TOTS/Major/Promo) não podem ir ao Mercado.')
+                    : locked ? ct('Carta escalada no squad — remova do slot pra listar.')
+                    : ct('Listar esta carta');
+                  return (
+                    <button
+                      key={o.id}
+                      onClick={() => { if (!blocked) openMktSell(o); }}
+                      title={tip}
+                      style={{ position: 'relative', border: 'none', background: 'transparent', cursor: blocked ? 'not-allowed' : 'pointer', padding: 0, opacity: blocked ? 0.45 : 1 }}
+                    >
+                      <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} />
+                      {special && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#f2c078' }}>{ct('especial')}</span>}
+                      {!special && locked && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Modal>
+        );
+      })()}
+
+      {/* ── mercado P2P: definir o preço da listagem ── */}
+      {mktSellTarget && (() => {
+        const p = Math.trunc(Number(mktPrice) || 0);
+        const inRange = mktBounds ? p >= mktBounds.min && p <= mktBounds.max : p > 0;
+        return (
+          <Modal open onClose={() => setMktSellTarget(null)} title={`🏷️ ${ct('Listar')} ${mktSellTarget.card.nick}`} size="sm"
+            footer={<>
+              <Button variant="ghost" onClick={() => setMktSellTarget(null)}>{ct('Cancelar')}</Button>
+              <Button variant="primary" onClick={() => void doMktList()} disabled={mktBusy || !inRange}>{mktBusy ? ct('Listando…') : ct('Listar no Mercado')}</Button>
+            </>}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+              <UltCardView card={mktSellTarget.card} size={124} evo={mktSellTarget.o.boost ?? 0} />
+              {mktBounds && (
+                <div className="muted small">{ct('Faixa permitida')}: <b style={{ fontFamily: 'var(--ut-font-mono)' }}>{fmt(mktBounds.min)}</b> – <b style={{ fontFamily: 'var(--ut-font-mono)' }}>{fmt(mktBounds.max)}</b> 🪙</div>
+              )}
+              <input
+                value={mktPrice}
+                onChange={(e) => setMktPrice(e.target.value.replace(/\D/g, ''))}
+                inputMode="numeric"
+                autoFocus
+                style={{ width: 180, textAlign: 'center', padding: '9px 12px', borderRadius: 10, border: `1.5px solid ${inRange ? 'var(--em-border,#2a3340)' : '#dc2626'}`, background: 'var(--em-panel,#fff)', color: 'var(--em-text,inherit)', fontFamily: 'var(--ut-font-mono)', fontWeight: 800, fontSize: '1rem' }}
+              />
+              <div style={{ fontSize: '0.86rem', fontWeight: 800, color: inRange ? '#0e9d5b' : '#b42318' }}>
+                {inRange
+                  ? <>{ct('Você recebe')} {fmt(mktSellerProceeds(p))} 🪙 <span style={{ color: 'var(--ut-muted)', fontWeight: 700 }}>({ct('taxa de 5%')})</span></>
+                  : ct('Preço fora da faixa permitida.')}
+              </div>
+              <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
+                {ct('A carta sai da sua coleção enquanto estiver listada (custódia). Sem venda em 48h, ela volta sozinha.')}
+              </p>
+            </div>
           </Modal>
         );
       })()}
