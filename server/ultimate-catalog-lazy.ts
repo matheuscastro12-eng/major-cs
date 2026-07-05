@@ -33,21 +33,14 @@ export function loadPackModule(): Promise<PackModule | null> {
 // mensal (serverCatalogIndex já cacheia por mês internamente).
 export async function loadMktCardLookup(now: Date): Promise<MktCardLookup | null> {
   try {
-    const [pack, cards, rarities] = await Promise.all([
-      import('./ultimate-pack.js'),
-      import('../src/engine/ultimate/cards.js'),
-      import('../src/engine/ultimate/rarities.js'),
-    ]);
+    // value/special vêm PRÉ-CALCULADOS do snapshot (gen-ult-catalog) — nenhuma
+    // parte da cadeia pesada do engine é tocada em runtime.
+    const pack = await import('./ultimate-pack.js');
     const idx = pack.serverCatalogIndex(now);
     return (cardKey: string): MktCardInfo | null => {
       const c = idx.get(cardKey);
       if (!c) return null;
-      return {
-        ovr: c.ovr,
-        rarity: c.rarity,
-        value: cards.estimateCardValue(c.ovr, c.rarity),
-        special: rarities.isSpecial(c.rarity),
-      };
+      return { ovr: c.ovr, rarity: c.rarity, value: c.value, special: c.special };
     };
   } catch {
     return null;

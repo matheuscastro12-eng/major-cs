@@ -2,10 +2,12 @@
 // lógica do BUT (`packs.ts`: weighted rarity + garantias por bucket + fallback
 // cascade), mas 100% client com o nosso `rng.ts`. Ver docs-but-map.md §2.2/§4.
 
-import type { Rng } from '../rng';
-import { pick, weightedIndex } from '../rng';
-import type { UltCard } from './cards';
-import { RARITY_FALLBACK, rarityMatchesBucket, type RarityBucket, type UltRarity } from './rarities';
+// NOTA: imports relativos COM extensão .js — este módulo roda também no
+// SERVIDOR (Vercel compila sem bundle; import sem extensão quebra o Node ESM).
+import type { Rng } from '../rng.js';
+import { pick, weightedIndex } from '../rng.js';
+import type { UltCard } from './cards.js';
+import { RARITY_FALLBACK, rarityMatchesBucket, type RarityBucket, type UltRarity } from './rarities.js';
 
 export interface PackGuarantee {
   bucket: RarityBucket; // garante ao menos 1 carta desse bucket (ou melhor, via weights)

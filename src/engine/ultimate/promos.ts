@@ -3,8 +3,10 @@
 // padrão seeded das missões diárias). O tema cicla por região/país/role; o
 // sorteio dentro do tema é seeded pelo mês → todo cliente instancia as MESMAS
 // cartas. Puro: recebe o catálogo BASE e devolve SpecialSpec[] pro buildCatalog.
-import { makeRng } from '../rng';
-import type { SpecialSpec, UltCard } from './cards';
+// NOTA: imports relativos COM extensão .js — este módulo roda também no
+// SERVIDOR (Vercel compila sem bundle; import sem extensão quebra o Node ESM).
+import { makeRng } from '../rng.js';
+import type { SpecialSpec, UltCard } from './cards.js';
 
 export const PROMO_BOOST = 2;   // +OVR da versão promo
 export const PROMO_SIZE = 11;   // jogadores promovidos por mês
