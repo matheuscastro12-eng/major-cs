@@ -24,7 +24,11 @@ import {
   ultMarketSchemaQueries,
   type MktBrowseFilters,
 } from '../server/ultimate-market.js';
-import { openPack } from '../server/ultimate-pack.js';
+// LAZY: a cadeia do engine (ultimate-pack → cards → src/data/*) NÃO pode ser
+// importada em top-level — na Vercel ela quebra no runtime ESM (imports sem
+// extensão) e derrubava a rota INTEIRA no load (mercado "não conecta",
+// 2026-07-05). Ver server/ultimate-catalog-lazy.ts.
+import { loadMktCardLookup, loadPackModule } from '../server/ultimate-catalog-lazy.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -135,7 +139,14 @@ export default async function handler(
     const opId = typeof rawOp === 'string' ? rawOp.trim() : '';
     if (!opId || opId.length > ULT_TX_MAX_OP_ID) { res.status(400).json({ error: 'op_id inválido (1..64 chars)' }); return; }
     const packId = typeof body.packId === 'string' ? body.packId.trim() : '';
-    const r = await openPack(sql, email, { opId, packId });
+    const packMod = await loadPackModule();
+    if (!packMod) {
+      // cadeia do engine não carrega neste runtime — o cliente (3b) trata 5xx
+      // como offline e cai pro roll local com espelho shadow. Nada trava.
+      res.status(503).json({ error: 'catalog_unavailable' });
+      return;
+    }
+    const r = await packMod.openPack(sql, email, { opId, packId });
     if (!r.ok) {
       if (r.error === 'unknown_pack') { res.status(400).json({ error: 'pack desconhecido' }); return; }
       if (r.error === 'op_conflict') { res.status(409).json({ error: 'op_conflict' }); return; }
@@ -158,8 +169,9 @@ export default async function handler(
     const price = Number(body.price ?? 0);
     if (!cardId || cardId.length > 80) { res.status(400).json({ error: 'cardId inválido' }); return; }
     if (!Number.isSafeInteger(price) || price <= 0) { res.status(400).json({ error: 'preço inválido' }); return; }
-    const r = await listCard(sql, email, { cardId, price });
+    const r = await listCard(sql, email, { cardId, price }, await loadMktCardLookup(new Date()));
     if (!r.ok) {
+      if (r.error === 'catalog_unavailable') { res.status(503).json({ error: 'catalog_unavailable' }); return; }
       if (r.error === 'invalid_price') { res.status(400).json({ error: 'preço fora da faixa', min: r.min, max: r.max }); return; }
       if (r.error === 'special_not_listable') { res.status(400).json({ error: 'cartas especiais não são listáveis' }); return; }
       if (r.error === 'listing_cap') { res.status(409).json({ error: 'limite de listagens ativas', cap: r.cap }); return; }

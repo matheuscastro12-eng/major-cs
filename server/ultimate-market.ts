@@ -22,10 +22,21 @@
 // Expiração: LAZY — toda leitura/mutação primeiro expira listagens vencidas
 // (status→expired + carta de volta via ledger 'escrow'). Zero cron.
 
-import { estimateCardValue, type UltCard } from '../src/engine/ultimate/cards.js';
-import { isSpecial } from '../src/engine/ultimate/rarities.js';
+// HOTFIX (import runtime): este módulo NÃO pode importar a cadeia do engine
+// (cards/ultimate-pack → src/data/*) em top-level — na Vercel os arquivos do
+// engine são compilados sem bundle e os imports SEM extensão deles quebram o
+// Node ESM em runtime (ERR_MODULE_NOT_FOUND src/data/regions), derrubando a
+// rota inteira no load. O catálogo agora entra INJETADO (MktCardLookup, criado
+// via dynamic import em server/ultimate-catalog-lazy.ts) só no listCard, único
+// ponto que precisa dele. import type é apagado na compilação — seguro.
+import type { UltRarity } from '../src/engine/ultimate/rarities.js';
 import type { SqlQuery, SqlTag } from './ultimate-economy.js';
-import { serverCatalogIndex } from './ultimate-pack.js';
+
+// Info mínima da carta pro anchor de preço — `value` JÁ vem calculado pelo
+// carregador (estimateCardValue) e `special` idem (isSpecial), pra este módulo
+// não tocar na cadeia pesada nem em runtime.
+export interface MktCardInfo { ovr: number; rarity: UltRarity; value: number; special: boolean }
+export type MktCardLookup = (cardKey: string) => MktCardInfo | null;
 
 export const MKT_MAX_ACTIVE_LISTINGS = 10;
 export const MKT_TAX_RATE = 0.05; // 5% queimados na venda (sink)
@@ -79,12 +90,12 @@ export function ultMarketSchemaQueries(sql: SqlTag): SqlQuery[] {
 
 // Faixa permitida de preço pra uma carta do catálogo. Âncora única =
 // estimateCardValue (mesma função que o cliente/bazar usam) ⇒ piso/teto
-// acompanham OVR × raridade sem tabela paralela.
-export function mktPriceBounds(card: Pick<UltCard, 'ovr' | 'rarity'>): { min: number; max: number } {
-  const value = estimateCardValue(card.ovr, card.rarity);
+// acompanham OVR × raridade sem tabela paralela. O `value` chega pré-calculado
+// no MktCardInfo (ver nota do hotfix no topo).
+export function mktPriceBounds(card: Pick<MktCardInfo, 'value'>): { min: number; max: number } {
   return {
-    min: Math.max(1, Math.ceil(value * MKT_PRICE_FLOOR_MULT)),
-    max: Math.max(1, Math.floor(value * MKT_PRICE_CEIL_MULT)),
+    min: Math.max(1, Math.ceil(card.value * MKT_PRICE_FLOOR_MULT)),
+    max: Math.max(1, Math.floor(card.value * MKT_PRICE_CEIL_MULT)),
   };
 }
 
@@ -132,7 +143,10 @@ export type MktListResult =
   | { ok: false; error: 'not_owner' }
   | { ok: false; error: 'unknown_card' }
   | { ok: false; error: 'special_not_listable' }
-  | { ok: false; error: 'listing_cap'; cap: number };
+  | { ok: false; error: 'listing_cap'; cap: number }
+  // catálogo indisponível no servidor (cadeia do engine não carregou) — a rota
+  // devolve 503 e o cliente mostra o estado offline amigável; browse/buy seguem.
+  | { ok: false; error: 'catalog_unavailable' };
 
 // Lista uma carta: valida posse + faixa de preço + cap, e num statement único
 // insere a listagem, grava a perna 'escrow' no ledger (remove) e tira a carta
@@ -142,9 +156,13 @@ export async function listCard(
   sql: SqlTag,
   sellerEmail: string,
   req: { cardId: string; price: number },
+  lookup: MktCardLookup | null,
   opts?: { now?: Date },
 ): Promise<MktListResult> {
   const now = opts?.now ?? new Date();
+  // sem catálogo (cadeia do engine não carregou no servidor) não há âncora de
+  // preço confiável — recusa listar em vez de aceitar preço sem validação.
+  if (!lookup) return { ok: false, error: 'catalog_unavailable' };
   await expireListings(sql, now);
 
   const price = req.price;
@@ -156,9 +174,9 @@ export async function listCard(
   const cardKey = String(ownedRows[0].card_key ?? '');
 
   // 2) âncora de preço SEMPRE do catálogo do servidor (nunca do request).
-  const card = serverCatalogIndex(now).get(cardKey);
+  const card = lookup(cardKey);
   if (!card) return { ok: false, error: 'unknown_card' };
-  if (isSpecial(card.rarity)) return { ok: false, error: 'special_not_listable' };
+  if (card.special) return { ok: false, error: 'special_not_listable' };
   const bounds = mktPriceBounds(card);
   if (price < bounds.min || price > bounds.max) {
     return { ok: false, error: 'invalid_price', min: bounds.min, max: bounds.max };

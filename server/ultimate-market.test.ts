@@ -23,6 +23,13 @@ const SELLER = 'seller@x.com';
 const BUYER = 'buyer@x.com';
 
 const catalog = buildServerCatalog();
+// lookup injetado (hotfix do import runtime): mesmo shape que o
+// server/ultimate-catalog-lazy.ts produz, construído do catálogo real.
+const LOOKUP = (cardKey: string) => {
+  const c = catalog.find((x) => x.key === cardKey);
+  if (!c) return null;
+  return { ovr: c.ovr, rarity: c.rarity, value: estimateCardValue(c.ovr, c.rarity), special: isSpecial(c.rarity) };
+};
 const normalCard = (): UltCard => {
   const c = catalog.find((x) => !isSpecial(x.rarity) && x.ovr >= 74);
   assert.ok(c, 'catálogo precisa ter carta normal');
@@ -41,7 +48,7 @@ function giveCard(db: FakeDb, email: string, cardId: string, card: UltCard, meta
 async function listOk(db: FakeDb, card: UltCard, cardId = 'copy-1', price?: number) {
   giveCard(db, SELLER, cardId, card, { boost: 2 });
   const p = price ?? estimateCardValue(card.ovr, card.rarity);
-  const r = await listCard(db.sql, SELLER, { cardId, price: p });
+  const r = await listCard(db.sql, SELLER, { cardId, price: p }, LOOKUP);
   assert.ok(r.ok, `list falhou: ${JSON.stringify(r)}`);
   return { listingId: r.ok ? r.listingId : 0, price: p };
 }
@@ -79,7 +86,7 @@ test('listCard escrowa a carta: sai da coleção, listagem ativa, ledger escrow'
 test('listCard rejeita carta que não é do vendedor', async () => {
   const db = new FakeDb();
   const card = normalCard();
-  const r = await listCard(db.sql, SELLER, { cardId: 'nao-tenho', price: estimateCardValue(card.ovr, card.rarity) });
+  const r = await listCard(db.sql, SELLER, { cardId: 'nao-tenho', price: estimateCardValue(card.ovr, card.rarity) }, LOOKUP);
   assert.deepEqual(r, { ok: false, error: 'not_owner' });
 });
 
@@ -87,7 +94,7 @@ test('listCard rejeita especiais (tots/major/promo)', async () => {
   const db = new FakeDb();
   const card = specialCard();
   giveCard(db, SELLER, 'sp-1', card);
-  const r = await listCard(db.sql, SELLER, { cardId: 'sp-1', price: estimateCardValue(card.ovr, card.rarity) });
+  const r = await listCard(db.sql, SELLER, { cardId: 'sp-1', price: estimateCardValue(card.ovr, card.rarity) }, LOOKUP);
   assert.deepEqual(r, { ok: false, error: 'special_not_listable' });
   assert.equal(db.cardsOf(SELLER).length, 1); // nada escrowado
 });
@@ -96,18 +103,18 @@ test('listCard prende o preço a 0.5×..3× do estimateCardValue', async () => {
   const db = new FakeDb();
   const card = normalCard();
   const value = estimateCardValue(card.ovr, card.rarity);
-  const bounds = mktPriceBounds(card);
+  const bounds = mktPriceBounds({ value: estimateCardValue(card.ovr, card.rarity) });
   assert.equal(bounds.min, Math.max(1, Math.ceil(value * 0.5)));
   assert.equal(bounds.max, Math.floor(value * 3));
 
   giveCard(db, SELLER, 'c1', card);
-  const low = await listCard(db.sql, SELLER, { cardId: 'c1', price: bounds.min - 1 });
+  const low = await listCard(db.sql, SELLER, { cardId: 'c1', price: bounds.min - 1 }, LOOKUP);
   assert.ok(!low.ok && low.error === 'invalid_price' && low.min === bounds.min && low.max === bounds.max);
-  const high = await listCard(db.sql, SELLER, { cardId: 'c1', price: bounds.max + 1 });
+  const high = await listCard(db.sql, SELLER, { cardId: 'c1', price: bounds.max + 1 }, LOOKUP);
   assert.ok(!high.ok && high.error === 'invalid_price');
-  const zero = await listCard(db.sql, SELLER, { cardId: 'c1', price: 0 });
+  const zero = await listCard(db.sql, SELLER, { cardId: 'c1', price: 0 }, LOOKUP);
   assert.ok(!zero.ok && zero.error === 'invalid_price');
-  const edge = await listCard(db.sql, SELLER, { cardId: 'c1', price: bounds.max });
+  const edge = await listCard(db.sql, SELLER, { cardId: 'c1', price: bounds.max }, LOOKUP);
   assert.ok(edge.ok); // limites inclusivos
 });
 
@@ -117,15 +124,15 @@ test('listCard aplica cap de 10 listagens ativas por vendedor', async () => {
   const price = estimateCardValue(card.ovr, card.rarity);
   for (let i = 0; i < MKT_MAX_ACTIVE_LISTINGS; i++) {
     giveCard(db, SELLER, `c${i}`, card);
-    const r = await listCard(db.sql, SELLER, { cardId: `c${i}`, price });
+    const r = await listCard(db.sql, SELLER, { cardId: `c${i}`, price }, LOOKUP);
     assert.ok(r.ok, `listagem ${i} deveria passar`);
   }
   giveCard(db, SELLER, 'c-extra', card);
-  const r = await listCard(db.sql, SELLER, { cardId: 'c-extra', price });
+  const r = await listCard(db.sql, SELLER, { cardId: 'c-extra', price }, LOOKUP);
   assert.deepEqual(r, { ok: false, error: 'listing_cap', cap: MKT_MAX_ACTIVE_LISTINGS });
   // cancelar uma libera espaço
   await cancelListing(db.sql, SELLER, { listingId: 1 });
-  const r2 = await listCard(db.sql, SELLER, { cardId: 'c-extra', price });
+  const r2 = await listCard(db.sql, SELLER, { cardId: 'c-extra', price }, LOOKUP);
   assert.ok(r2.ok);
 });
 
@@ -300,4 +307,14 @@ test('browse/mine respeitam caps (50/30) e mine traz todas as situações', asyn
   const mine = await myListings(db.sql, SELLER);
   assert.equal(mine.length, 1);
   assert.equal(mine[0].status, 'cancelled'); // todas as situações, não só ativas
+});
+
+test('listCard sem catálogo (lookup null) recusa com catalog_unavailable e não toca nada', async () => {
+  const db = new FakeDb();
+  const card = normalCard();
+  giveCard(db, SELLER, 'c-nolookup', card);
+  const r = await listCard(db.sql, SELLER, { cardId: 'c-nolookup', price: 1000 }, null);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.equal(r.error, 'catalog_unavailable');
+  assert.equal(db.cardsOf(SELLER).length, 1); // carta continua com o vendedor
 });
