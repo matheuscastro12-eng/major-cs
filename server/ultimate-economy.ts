@@ -15,8 +15,14 @@
 // padrão do coinsRestore em api/account.ts) + um único statement WITH ... que
 // insere o ledger, atualiza a carteira e aplica as cartas de uma vez.
 
-export const ULT_TX_KINDS = ['grant', 'spend', 'pack', 'quicksell', 'sbc', 'reward', 'admin'] as const;
+export const ULT_TX_KINDS = ['grant', 'spend', 'pack', 'quicksell', 'sbc', 'reward', 'admin', 'escrow', 'trade'] as const;
 export type UltTxKind = (typeof ULT_TX_KINDS)[number];
+
+// Kinds que SÓ o servidor grava (mercado P2P — server/ultimate-market.ts):
+// 'escrow' move carta pra/da custódia da listagem; 'trade' liquida a compra.
+// A rota (api/ultimate-economy.ts) REJEITA esses kinds em `tx` do cliente —
+// senão qualquer um forjaria créditos "de venda".
+export const ULT_TX_SERVER_ONLY_KINDS: readonly UltTxKind[] = ['escrow', 'trade'];
 
 export const ULT_TX_MAX_CARDS = 200;
 export const ULT_TX_MAX_OP_ID = 64;

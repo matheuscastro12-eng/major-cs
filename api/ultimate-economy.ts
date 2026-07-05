@@ -12,8 +12,18 @@ import {
   ultEconomySchemaQueries,
   validateUltTx,
   ULT_TX_MAX_OP_ID,
+  ULT_TX_SERVER_ONLY_KINDS,
   type SqlTag,
 } from '../server/ultimate-economy.js';
+import {
+  browseListings,
+  buyListing,
+  cancelListing,
+  listCard,
+  myListings,
+  ultMarketSchemaQueries,
+  type MktBrowseFilters,
+} from '../server/ultimate-market.js';
 import { openPack } from '../server/ultimate-pack.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -73,7 +83,10 @@ export default async function handler(
   const action = String(body.action ?? '');
   const email = verifyToken(String(body.token ?? ''));
   if (!email) { res.status(401).json({ error: 'Entre na sua conta pra usar a economia do Ultimate.' }); return; }
-  if (rateLimited(`account:${email}:${action}`, action === 'tx' ? 120 : 60)) {
+  // limites por ação: tx 120/min; listagens 30/min (anti-spam do mercado);
+  // resto (inclui mktBuy) 60/min.
+  const actionLimit = action === 'tx' ? 120 : action === 'mktList' ? 30 : 60;
+  if (rateLimited(`account:${email}:${action}`, actionLimit)) {
     res.setHeader('Retry-After', '60');
     res.status(429).json({ error: 'muitas requisições' });
     return;
@@ -84,6 +97,7 @@ export default async function handler(
   const sql = neon(dbUrl) as unknown as SqlTag;
   if (!schemaReady) {
     for (const q of ultEconomySchemaQueries(sql)) await q;
+    for (const q of ultMarketSchemaQueries(sql)) await q;
     schemaReady = true;
   }
 
@@ -102,6 +116,12 @@ export default async function handler(
     // kind na allowlist, cards ≤ 200 entradas, delta inteiro seguro.
     const parsed = validateUltTx(body.tx);
     if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
+    // kinds do mercado P2P são SERVER-ONLY: aceitar 'trade'/'escrow' aqui
+    // deixaria o cliente forjar créditos de venda / custódia falsa.
+    if (ULT_TX_SERVER_ONLY_KINDS.includes(parsed.tx.kind)) {
+      res.status(400).json({ error: 'kind reservado ao servidor' });
+      return;
+    }
     const result = await applyUltTransaction(sql, email, parsed.tx);
     if (!result.ok) { res.status(409).json({ error: result.error, credits: result.credits }); return; }
     res.status(200).json({ ok: true, replayed: result.replayed, credits: result.credits });
@@ -126,6 +146,77 @@ export default async function handler(
       ok: true, replayed: r.replayed, credits: r.credits,
       packId: r.packId, cost: r.cost, seed: r.seed, cards: r.cards,
     });
+    return;
+  }
+
+  // ----------------------------------------------------- mercado P2P (fase A)
+  // Mesmo gate pago/HMAC das outras ações. Toda operação expira listagens
+  // vencidas antes (lazy) — ver server/ultimate-market.ts.
+
+  if (action === 'mktList') {
+    const cardId = typeof body.cardId === 'string' ? body.cardId.trim() : '';
+    const price = Number(body.price ?? 0);
+    if (!cardId || cardId.length > 80) { res.status(400).json({ error: 'cardId inválido' }); return; }
+    if (!Number.isSafeInteger(price) || price <= 0) { res.status(400).json({ error: 'preço inválido' }); return; }
+    const r = await listCard(sql, email, { cardId, price });
+    if (!r.ok) {
+      if (r.error === 'invalid_price') { res.status(400).json({ error: 'preço fora da faixa', min: r.min, max: r.max }); return; }
+      if (r.error === 'special_not_listable') { res.status(400).json({ error: 'cartas especiais não são listáveis' }); return; }
+      if (r.error === 'listing_cap') { res.status(409).json({ error: 'limite de listagens ativas', cap: r.cap }); return; }
+      res.status(r.error === 'not_owner' ? 403 : 400).json({ error: r.error });
+      return;
+    }
+    res.status(200).json({ ok: true, listingId: r.listingId, expiresAt: r.expiresAt, price: r.price });
+    return;
+  }
+
+  if (action === 'mktBuy') {
+    const listingId = Number(body.listingId ?? 0);
+    const r = await buyListing(sql, email, { listingId });
+    if (!r.ok) {
+      if (r.error === 'not_found') { res.status(404).json({ error: 'listagem não encontrada' }); return; }
+      if (r.error === 'insufficient_credits') { res.status(409).json({ error: r.error, credits: r.credits }); return; }
+      res.status(409).json({ error: r.error });
+      return;
+    }
+    res.status(200).json({
+      ok: true, replayed: r.replayed, credits: r.credits,
+      listingId: r.listingId, cardId: r.cardId, cardKey: r.cardKey, price: r.price,
+    });
+    return;
+  }
+
+  if (action === 'mktCancel') {
+    const listingId = Number(body.listingId ?? 0);
+    const r = await cancelListing(sql, email, { listingId });
+    if (!r.ok) {
+      res.status(r.error === 'not_found' ? 404 : 409).json({ error: r.error });
+      return;
+    }
+    res.status(200).json({ ok: true, listingId: r.listingId });
+    return;
+  }
+
+  if (action === 'mktBrowse') {
+    const filters: MktBrowseFilters = {
+      cardKey: typeof body.cardKey === 'string' ? body.cardKey : undefined,
+      maxPrice: Number.isSafeInteger(Number(body.maxPrice)) ? Number(body.maxPrice) : undefined,
+      sort: body.sort === 'new' ? 'new' : 'cheap',
+    };
+    const listings = await browseListings(sql, filters);
+    // vitrine pública não vaza e-mail do vendedor — só marca as minhas.
+    res.status(200).json({
+      ok: true,
+      listings: listings.map((l) => ({
+        id: l.id, cardKey: l.cardKey, price: l.price, expiresAt: l.expiresAt, mine: l.sellerEmail === email,
+      })),
+    });
+    return;
+  }
+
+  if (action === 'mktMine') {
+    const listings = await myListings(sql, email);
+    res.status(200).json({ ok: true, listings });
     return;
   }
 
