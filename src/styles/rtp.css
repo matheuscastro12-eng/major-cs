@@ -1926,10 +1926,20 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-itv-said { margin: 0 0 4px; font-size: .78rem; line-height: 1.45; color: var(--rtp-ink); }
 .rtp .rtp-itv-rep { display: flex; align-items: baseline; gap: 5px; margin: 0 0 6px; font-size: .72rem;
   font-style: italic; color: var(--rtp-ink-dim); animation: rtp-fade-up .3s var(--rtp-ease); }
+/* iter46 — saldo mecânico REAL da entrevista (+fama/seguidores · manchete) */
+.rtp .rtp-itv-fx { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 0;
+  padding: 4px 10px; border-radius: 8px; font-family: var(--rtp-mono); font-size: .64rem;
+  letter-spacing: .3px; color: var(--rtp-win);
+  background: color-mix(in srgb, var(--rtp-win) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rtp-win) 25%, transparent);
+  animation: rtp-fade-up .3s var(--rtp-ease); }
+.rtp .rtp-itv-fx.bad { color: var(--rtp-loss);
+  background: color-mix(in srgb, var(--rtp-loss) 9%, transparent);
+  border-color: color-mix(in srgb, var(--rtp-loss) 25%, transparent); }
 .rtp .rtp-itv-closer { margin: 10px 0 0; font-size: .72rem; font-style: italic; color: var(--rtp-ink-faint); }
 .rtp .rtp-itv-skip { margin-top: 10px; font-size: .74rem; }
 .rtp .rtp-itv-skipped { display: flex; align-items: baseline; gap: 8px; }
 .rtp .rtp-itv-skipnote { font-size: .72rem; font-style: italic; color: var(--rtp-ink-faint); }
 @media (prefers-reduced-motion: reduce) {
-  .rtp .rtp-itv, .rtp .rtp-itv-rep { animation: none; }
+  .rtp .rtp-itv, .rtp .rtp-itv-rep, .rtp .rtp-itv-fx { animation: none; }
 }

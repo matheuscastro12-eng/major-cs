@@ -7,16 +7,19 @@
 // entrevista — o herói não pisou no palco, e a graça daqui é responder pelo
 // que VOCÊ acabou de jogar.
 //
-// Camada 100% de APRESENTAÇÃO e 100% stateless: a pergunta nasce da história
-// REAL da série (MVP, clutches, derrota apertada, atropelo, revanche, vida no
-// Major), determinística pelo matchSeed; a ESCOLHA da resposta é do jogador
-// (esse é o jogo); a repercussão é semeada por seed+tom. Nada daqui mexe em
-// moral/fama/números — v1 é puro sabor (fiação tom→fama é follow-up anotado).
+// iter46 — a entrevista agora é MECANICAMENTE REAL: o tom escolhido tem uma
+// consequência pequena e honesta (fama/seguidores/torcida + uma manchete que
+// CITA a sua resposta no feed de imprensa). A pergunta continua nascendo da
+// história REAL da série, determinística pelo matchSeed; a ESCOLHA da resposta
+// é do jogador (esse é o jogo). A consequência é aplicada no CTA de concluir
+// (applyInterviewOutcome, chamado pelo RTPMatch DEPOIS do applyMatchOutcome) —
+// pular a entrevista segue 100% neutro: sem bônus, sem risco.
 
 import { hashStr } from '../../state/hash';
 import { stageLabel } from './circuit';
+import { pushHeadline, defaultMedia } from './media';
 import type { ProMatchResult } from './matchSim';
-import type { RoadToProSave } from './types';
+import type { RoadToProSave, HeadlineTone } from './types';
 
 const pickBy = <T,>(pool: readonly T[], key: string): T => pool[hashStr(key) % pool.length];
 
@@ -388,15 +391,162 @@ export function buildInterview(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CONSEQUÊNCIA REAL (iter46) — o tom escolhido mexe (pouco) no mundo.
+//
+// Escalas de referência: fama é 0–100 e uma partida rende 0–3 de fama
+// (fameBase do applyMatchOutcome; +3 extra contra o rival). A entrevista fica
+// DENTRO dessa banda — ±1..3 de fama (1–3% da escala), nunca dominante sobre o
+// desempenho em si. Seguidores por partida ficam em ~300–1200; a entrevista
+// rende ~120–550.
+//
+// Tabela tom → consequência:
+//   HUMILDE     → fama +1 · seguidores +120 · torcida (rel.fans) +2 · manchete 'good'
+//   CONFIANTE   → fama +2 · seguidores +320 · manchete 'hype'
+//   PROVOCADOR  → fama +3 · seguidores +550 · manchete 'hype' · rival: +6 de heat
+//                 MAS pode SAIR PELA CULATRA (seeded do matchSeed, ver abaixo):
+//                 fama −2 · seguidores +180 (polêmica ainda dá clique) ·
+//                 torcida −2 · manchete 'bad' ("arrogância") · rival: +8 de heat
+//   PULAR       → neutro absoluto (sem bônus, sem risco).
+//
+// REGRA DA COLETIVA (2 perguntas): prevalece o tom MAIS FORTE entre as duas
+// respostas (provocador > confiante > humilde) — as consequências NÃO somam,
+// então responder duas vezes nunca rende mais que a resposta mais ousada.
+
+export interface InterviewFxCtx {
+  matchSeed: number;
+  won: boolean;
+  rival: boolean;             // enfrentou o rival nesta série
+  nick: string;
+  oppTag: string;
+  rivalNick: string | null;
+}
+
+export interface InterviewFx {
+  tone: InterviewTone;        // o tom que prevaleceu
+  quote: string;              // trecho da SUA resposta, citado na manchete
+  fame: number;               // Δ life.fame (escala 0–100)
+  followers: number;          // Δ media.followers
+  fans: number;               // Δ life.rel.fans
+  rivalHeat: number;          // Δ intensity do rival (0 se não enfrentou o rival)
+  backfired: boolean;         // provocador que saiu pela culatra
+  headlineText: string;
+  headlineTone: HeadlineTone;
+}
+
+const TONE_RANK: Record<InterviewTone, number> = { humble: 0, confident: 1, provocative: 2 };
+
+// A culatra é semeada UMA vez por partida (matchSeed) — determinística, sem
+// Math.random. O risco existe onde a provocação é cara: derrota (55%), clássico
+// contra o rival (40%); vitória comum ainda arrisca 20%.
+export function interviewBackfires(ctx: InterviewFxCtx): boolean {
+  const chance = !ctx.won ? 55 : ctx.rival ? 40 : 20;
+  return hashStr(`itv-fire:${ctx.matchSeed}`) % 100 < chance;
+}
+
+// Trecho curto da resposta pra manchete (o payoff: suas palavras no feed).
+function excerptOf(text: string): string {
+  const t = text.trim();
+  if (t.length <= 64) return t;
+  const cut = t.slice(0, 64);
+  const sp = cut.lastIndexOf(' ');
+  return `${cut.slice(0, sp > 24 ? sp : 64).replace(/[,.;:!?…]+$/, '')}…`;
+}
+
+function fxHeadline(tone: InterviewTone, backfired: boolean, quote: string, ctx: InterviewFxCtx): { text: string; tone: HeadlineTone } {
+  if (backfired) {
+    return {
+      text: `“Arrogância”: fala de ${ctx.nick} após a ${ctx.won ? 'vitória' : 'derrota'} repercute mal — “${quote}”`,
+      tone: 'bad',
+    };
+  }
+  switch (tone) {
+    case 'humble': return {
+      text: ctx.won
+        ? `${ctx.nick} mantém o pé no chão após bater ${ctx.oppTag}: “${quote}”`
+        : `${ctx.nick} assume a derrota pra ${ctx.oppTag} com maturidade: “${quote}”`,
+      tone: 'good',
+    };
+    case 'confident': return {
+      text: ctx.won
+        ? `${ctx.nick} crava após a vitória sobre ${ctx.oppTag}: “${quote}”`
+        : `${ctx.nick} segue confiante mesmo após ${ctx.oppTag}: “${quote}”`,
+      tone: 'hype',
+    };
+    case 'provocative': return {
+      text: ctx.rival
+        ? `${ctx.nick} cutuca ${ctx.rivalNick ?? 'o rival'} na coletiva: “${quote}”`
+        : ctx.won
+          ? `${ctx.nick} provoca depois de bater ${ctx.oppTag}: “${quote}”`
+          : `${ctx.nick} manda recado mesmo após perder pra ${ctx.oppTag}: “${quote}”`,
+      tone: 'hype',
+    };
+  }
+}
+
+// Consequência das respostas dadas. `answers` vazio (pulou) → null = neutro.
+// Numa coletiva, prevalece a resposta de tom MAIS FORTE (regra documentada acima).
+export function interviewFx(answers: readonly InterviewAnswer[], ctx: InterviewFxCtx): InterviewFx | null {
+  if (answers.length === 0) return null;
+  const lead = answers.reduce((a, b) => (TONE_RANK[b.tone] > TONE_RANK[a.tone] ? b : a));
+  const quote = excerptOf(lead.text);
+  const backfired = lead.tone === 'provocative' && interviewBackfires(ctx);
+  const base = backfired
+    ? { fame: -2, followers: 180, fans: -2, heat: 8 }
+    : lead.tone === 'humble' ? { fame: 1, followers: 120, fans: 2, heat: 0 }
+    : lead.tone === 'confident' ? { fame: 2, followers: 320, fans: 0, heat: 0 }
+    : { fame: 3, followers: 550, fans: 0, heat: 6 };
+  const hl = fxHeadline(lead.tone, backfired, quote, ctx);
+  return {
+    tone: lead.tone, quote,
+    fame: base.fame, followers: base.followers, fans: base.fans,
+    rivalHeat: ctx.rival ? base.heat : 0,
+    backfired, headlineText: hl.text, headlineTone: hl.tone,
+  };
+}
+
+const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+// Aplica a consequência no save — chamado pelo RTPMatch no CTA de concluir,
+// DEPOIS do applyMatchOutcome (a manchete da entrevista entra por cima da
+// manchete do jogo: é a que "sai amanhã"). Puro: retorna um save novo.
+export function applyInterviewOutcome(
+  save: RoadToProSave, answers: readonly InterviewAnswer[], ctx: InterviewFxCtx,
+): RoadToProSave {
+  const fx = interviewFx(answers, ctx);
+  if (!fx) return save; // pulou = neutro
+  const media0 = save.media ?? defaultMedia(save.life.fame);
+  let media = pushHeadline(media0, fx.headlineText, fx.headlineTone, save.world.season, save.world.week);
+  media = { ...media, followers: Math.max(0, media.followers + fx.followers) };
+  if (fx.rivalHeat !== 0 && media.rival && ctx.rival) {
+    media = { ...media, rival: { ...media.rival, intensity: clampN(media.rival.intensity + fx.rivalHeat, 0, 100) } };
+  }
+  return {
+    ...save,
+    media,
+    life: {
+      ...save.life,
+      fame: clampN(save.life.fame + fx.fame, 0, 100),
+      rel: { ...save.life.rel, fans: clampN(save.life.rel.fans + fx.fans, 0, 100) },
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Repercussão — o eco imediato da resposta (semeado por seed+tom+resultado).
-// Nada de stats: uma linha de consequência de sabor.
+// iter46: a linha reflete a consequência REAL (backfire incluso) — a UI ainda
+// mostra o saldo mecânico ao lado; aqui é a leitura de cena.
 
 export function repercussion(
   tone: InterviewTone,
-  ctx: { matchSeed: number; qIndex: number; won: boolean; rival: boolean; rivalNick: string | null; press: boolean },
+  ctx: { matchSeed: number; qIndex: number; won: boolean; rival: boolean; rivalNick: string | null; press: boolean; backfired?: boolean },
 ): string {
   const key = `rep:${ctx.matchSeed}:${ctx.qIndex}:${tone}`;
   if (tone === 'provocative') {
+    if (ctx.backfired) return pickBy([
+      'A frase saiu do jeito errado — “arrogância” já é a palavra do dia nos comentários.',
+      'O recorte viralizou contra você. A assessoria já pediu pra “alinhar o discurso”.',
+      ctx.rival ? `${ctx.rivalNick ?? 'O rival'} repostou com um emoji de pipoca. A internet fez o resto.` : 'A bancada trocou olhares. Amanhã isso vira pauta — e não do jeito bom.',
+    ] as const, key);
     if (ctx.rival) return pickBy([
       `${ctx.rivalNick ?? 'O rival'} já respondeu nos stories. Isso vai longe…`,
       'A frase virou clipe antes de você sair da sala. O clássico ganhou mais um capítulo.',
