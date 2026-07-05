@@ -8,6 +8,7 @@ import { prepareMajorMatch, finishMajorMatch, concludeMajorRound } from '../../e
 import type { SeasonEndResult } from '../../engine/rtp/league';
 import type { MomentOutcome } from '../../engine/rtp/moments';
 import type { GamePlan } from '../../engine/rtp/meta';
+import { atmoCloser, atmoStageOf } from '../../engine/rtp/atmosphere';
 import { RtpRoundRoom } from './RtpRoundRoom';
 import { RtpPrematch } from './RtpPrematch';
 import { Scoreboard } from '../Scoreboard';
@@ -85,6 +86,7 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
         <RtpRoundRoom
           save={save}
           prep={matchPrep}
+          major={mode === 'major'}
           onComplete={(outs) => { setOutcomes(outs); setPhase('result'); }}
         />
       )}
@@ -100,6 +102,12 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
 function Result({ save, result, onConclude, mode }: { save: RoadToProSave; result: ProMatchResult; onConclude: () => void; mode: MatchMode }) {
   const conseq = useMemo<MatchConsequence>(() => applyMatchOutcome(save, result, { leaguePrize: mode !== 'major' }).consequence, [save, result, mode]);
   const hero = result.userRows.find((r) => r.isHero);
+  // Fechamento de ATMOSFERA (iter41): a arena reage ao veredito — tier-aware e
+  // determinístico. "Apertada" = série no decider ou mapa decidido no detalhe.
+  const tight = (result.maps.length > 1 && Math.abs(result.mapScore[0] - result.mapScore[1]) === 1)
+    || result.maps.some((m) => Math.abs(m.score[0] - m.score[1]) <= 2);
+  const closer = atmoCloser(atmoStageOf(save, mode === 'major'), result.won, tight,
+    `${save.world.season}:${save.world.week}:${result.oppTag}`);
 
   return (
     <div className="rtp-result">
@@ -115,6 +123,9 @@ function Result({ save, result, onConclude, mode }: { save: RoadToProSave; resul
         </div>
         {result.mvp && <div className="rtp-mvp"><RtpIcon name="fame" size={14} /> MVP</div>}
       </div>
+
+      {/* a arena reage ao resultado — fechamento de atmosfera */}
+      <p className={`rtp-result-atmo ${result.won ? 'w' : 'l'}`}>{closer}</p>
 
       {/* Sua linha */}
       <div className="rtp-hero-line">

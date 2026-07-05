@@ -17,6 +17,7 @@ import { SprayTracer } from './minigames/SprayTracer';
 import { CalloutMemory } from './minigames/CalloutMemory';
 import { TempoLock } from './minigames/TempoLock';
 import type { MatchPrep } from '../../engine/rtp/matchSim';
+import { matchAtmosphere, crowdBeatLine, interludeAmbientLine, pressureKicker } from '../../engine/rtp/atmosphere';
 import { MAP_LABELS } from '../../types';
 import { planStyleBias, gamePlanDef } from '../../engine/rtp/meta';
 import type { RoadToProSave } from '../../engine/rtp/types';
@@ -54,10 +55,11 @@ function oddsColor(pct: number): string {
   return 'var(--rtp-odds-lo)';
 }
 
-export function RtpRoundRoom({ save, prep, onComplete }: {
+export function RtpRoundRoom({ save, prep, onComplete, major }: {
   save: RoadToProSave;
   prep: MatchPrep;
   onComplete: (outcomes: MomentOutcome[]) => void;
+  major?: boolean;
 }) {
   const beats = useMemo<BeatSpec[]>(
     () => buildBeatPlan(save.player.role, prep.maps.map((m) => m.map), prep.matchSeed),
@@ -87,6 +89,11 @@ export function RtpRoundRoom({ save, prep, onComplete }: {
   const [readUsed, setReadUsed] = useState(false);
   // flash/shake cinematográfico no fechamento de um round-chave.
   const [flash, setFlash] = useState<{ k: number; type: 'win' | 'loss'; big: boolean } | null>(null);
+
+  // ATMOSFERA (iter41): o palco escala com tier/evento — ginásio vazio na
+  // academia, arena lotada na elite, o palco máximo no MAJOR. Só texto/CSS,
+  // determinístico pelo matchSeed; nunca toca em odds/beats/resultado.
+  const atmo = useMemo(() => matchAtmosphere(save, prep, !!major), [save, prep, major]);
 
   const beat = beats[idx];
   const isLast = idx >= beats.length - 1;
@@ -351,8 +358,11 @@ export function RtpRoundRoom({ save, prep, onComplete }: {
     return Math.round((0.55 + avg * 1.05) * 100) / 100;
   }, [outcomes, locked, sub]);
 
+  // chave determinística do beat corrente (reações da torcida / kicker de pressão)
+  const beatSeedKey = `${idx}:${clutch?.step ?? 0}:${prep.matchSeed}`;
+
   return (
-    <div className={`rtp-room${momentum >= 0.62 ? ' mom-hot' : momentum <= 0.38 ? ' mom-cold' : ''}`}>
+    <div className={`rtp-room${momentum >= 0.62 ? ' mom-hot' : momentum <= 0.38 ? ' mom-cold' : ''}${pressure ? ' pres' : ''}`}>
       {/* flash cinematográfico do fechamento de round-chave */}
       {flash && sub === 'result' && <div key={flash.k} className={`rtp-room-flash f-${flash.type}${flash.big ? ' big' : ''}`} aria-hidden />}
       {/* scorebug do round room — série (mapas) + placar do mapa atual */}
@@ -366,6 +376,15 @@ export function RtpRoundRoom({ save, prep, onComplete }: {
         <span className="rtp-room-bug-team">{prep.opp.tag}</span>
         <span className="rtp-room-bug-prog">
           {prep.maps.length > 1 ? `MAPA ${Math.min(live.mapIndex + 1, prep.maps.length)}/${prep.maps.length} · ` : ''}MOMENTO {idx + 1}/{beats.length}
+        </span>
+      </div>
+
+      {/* ATMOSFERA — o palco da série: local + lotação (persistente, sutil) */}
+      <div className={`rtp-atmo st-${atmo.stage}`}>
+        <span className="rtp-atmo-venue">{atmo.venue}</span>
+        <span className="rtp-atmo-crowd" title="Lotação da arena">
+          <i className="rtp-atmo-crowd-track"><i className="rtp-atmo-crowd-fill" style={{ width: `${atmo.crowd}%` }} /></i>
+          {atmo.crowdLabel}
         </span>
       </div>
 
@@ -409,7 +428,29 @@ export function RtpRoundRoom({ save, prep, onComplete }: {
             {interlude.bridged[0] + interlude.bridged[1] > 0 && !interlude.mapClosed && (
               <span className="rtp-interlude-score">placar chegou em {live.mapScore[0]}–{live.mapScore[1]}</span>
             )}
+            {(() => {
+              const amb = interludeAmbientLine(atmo, `${idx}:${prep.matchSeed}`);
+              return amb ? <span className="rtp-atmo-amb">{amb}</span> : null;
+            })()}
           </div>
+        </div>
+      )}
+
+      {/* ABERTURA — antes do 1º beat: walkout (MAJOR) + o que está em jogo */}
+      {sub === 'decide' && idx === 0 && outcomes.length === 0 && (atmo.walkout || atmo.stakes) && (
+        <div className="rtp-atmo-open">
+          {atmo.walkout?.map((l, i) => <span key={i} className="rtp-atmo-walkout">{l}</span>)}
+          {atmo.stakes && <span className="rtp-atmo-stakes"><b>EM JOGO</b> {atmo.stakes}</span>}
+        </div>
+      )}
+
+      {/* PRESSÃO — clutch / match point: a arquibancada vira personagem */}
+      {sub === 'decide' && pressure && (
+        <div className="rtp-atmo-pressure">
+          <span className="rtp-atmo-pressure-kicker">{pressureKicker(atmo, beatSeedKey)}</span>
+          {atmo.taunt && atmo.rivalName && (
+            <span className="rtp-atmo-taunt"><b>{atmo.rivalName}</b> provoca do outro lado: “{atmo.taunt}”</span>
+          )}
         </div>
       )}
 
@@ -518,6 +559,8 @@ export function RtpRoundRoom({ save, prep, onComplete }: {
             </div>
           </div>
           <p className="rtp-room-narr">{locked.outcome.narrative}</p>
+          {/* a torcida reage ao SEU round — 1 linha, coerente com o palco */}
+          <p className="rtp-crowd-line">{crowdBeatLine(atmo, locked.outcome.result, !!flash?.big, beatSeedKey)}</p>
           {feed.length > 0 && (
             <div className="rtp-killfeed">
               {feed.map((f, i) => (

@@ -933,3 +933,80 @@ body:has(.ut-live) {
   .ut-passhead__actions { width: 100%; }
   .ut-pass__tracklabels { display: none; }
 }
+
+/* ---------------- TRANSMISSÃO AO VIVO (iter41): caster + hype + stakes ----------------
+   Camada presentational sobre o replay — dentro do palco escuro (.ut-live). */
+.ut-cast { max-width: 980px; margin: 0 auto; padding: 0 16px 10px; display: flex; flex-direction: column; gap: 7px; }
+.ut-cast__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ut-hype { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 9px; }
+.ut-hype__lbl {
+  font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.6rem; letter-spacing: 1.4px;
+  color: rgba(255, 107, 94, 0.85);
+}
+.ut-hype__lbl.you { color: rgba(34, 197, 94, 0.9); }
+.ut-hype__track {
+  position: relative; flex: 1; height: 8px; border-radius: 999px; overflow: visible;
+  background: linear-gradient(90deg, rgba(226, 59, 46, 0.35), rgba(255, 255, 255, 0.08) 50%, rgba(34, 197, 94, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.ut-hype__fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, transparent 55%, rgba(34, 197, 94, 0.28)); transition: width .6s cubic-bezier(0.3, 0.9, 0.4, 1); }
+.ut-hype__pin {
+  position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+  transform: translate(-50%, -50%); background: #f2f5f9; border: 2px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5); transition: left .6s cubic-bezier(0.3, 0.9, 0.4, 1);
+}
+.ut-stakes {
+  white-space: nowrap; font-family: var(--ut-font-cond); font-weight: 800; font-size: 0.7rem;
+  letter-spacing: 1.3px; text-transform: uppercase; color: #e9edf3;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.05);
+}
+.ut-stakes.is-mp {
+  color: #ffd166; border-color: rgba(255, 209, 102, 0.6); background: rgba(255, 209, 102, 0.1);
+  animation: ut-fire 0.9s ease-in-out infinite;
+}
+.ut-cast__line {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 12px;
+  background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.12);
+  animation: ut-cast-in var(--beat-dur, 1.2s) cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.ut-cast__line.is-key {
+  border-color: rgba(255, 209, 102, 0.55); background: rgba(255, 209, 102, 0.08);
+  box-shadow: 0 0 24px rgba(255, 209, 102, 0.18);
+  animation: ut-cast-key var(--beat-dur, 1.4s) cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.ut-cast__tag {
+  flex: none; font-family: var(--ut-font-cond); font-weight: 800; font-size: 0.56rem; letter-spacing: 1.6px;
+  color: #0c0f14; background: var(--ut-gold-1, #ecc75f); border-radius: 4px; padding: 2px 6px;
+}
+.ut-cast__text { flex: 1; min-width: 0; font-weight: 800; font-size: 0.88rem; color: #f2f5f9; line-height: 1.3; }
+.ut-cast__line.is-key .ut-cast__text { color: #ffe9b0; }
+.ut-cast__score {
+  flex: none; font-family: var(--ut-font-mono); font-weight: 900; font-size: 1.05rem; color: #ffd166;
+  text-shadow: 0 0 18px rgba(255, 209, 102, 0.55);
+}
+@keyframes ut-cast-in {
+  0% { opacity: 0; transform: translateY(-6px); }
+  35%, 100% { opacity: 1; transform: none; }
+}
+@keyframes ut-cast-key {
+  0% { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  25% { opacity: 1; transform: scale(1.02); box-shadow: 0 0 42px rgba(255, 209, 102, 0.4); }
+  55% { transform: scale(1); }
+  100% { opacity: 1; transform: none; }
+}
+.ut-cast__star {
+  align-self: flex-start; font-weight: 800; font-size: 0.78rem; color: #ffd166;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(255, 209, 102, 0.5); background: rgba(255, 209, 102, 0.09);
+  animation: ut-cast-in var(--beat-dur, 1.2s) ease both;
+}
+
+/* melhores momentos no modal de resultado (tema claro do modal) */
+.ut-hl { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ut-hl__title { font-family: var(--ut-font-cond); font-weight: 700; font-size: 0.62rem; letter-spacing: 1.6px; color: var(--ut-muted, #8a8577); }
+.ut-hl__row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.ut-hl__chip {
+  font-size: 0.72rem; font-weight: 700; color: #9a2c21;
+  padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(180, 35, 24, 0.3); background: rgba(226, 59, 46, 0.07);
+}
+.ut-hl__chip.win { color: #14532d; border-color: rgba(22, 163, 74, 0.35); background: rgba(34, 197, 94, 0.09); }
+.ut-hl__chip b { font-family: var(--ut-font-mono); margin-right: 3px; }
