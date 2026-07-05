@@ -1631,6 +1631,27 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-scout-note b { color: var(--rtp-ink); }
 @media (max-width: 560px) { .rtp .rtp-scout-grid { grid-template-columns: 1fr; } }
 
+/* iter43 — DIA DE JOGO: manchete (ticker), mesa redonda, caster do veto */
+.rtp .rtp-daybrief { display: flex; align-items: center; gap: 9px; padding: 7px 11px; border: 1px solid var(--rtp-line); border-radius: 8px; background: var(--rtp-well); }
+.rtp .rtp-daybrief-kicker { flex: none; font-family: var(--rtp-mono); font-size: .55rem; font-weight: 700; letter-spacing: 1.2px; color: var(--rtp-signal); padding: 2px 7px; border: 1px solid color-mix(in srgb, var(--rtp-signal) 45%, var(--rtp-line)); border-radius: 5px; }
+.rtp .rtp-daybrief-txt { font-size: .74rem; color: var(--rtp-ink-dim); line-height: 1.35; min-width: 0; }
+.rtp .rtp-desk-live { font-family: var(--rtp-mono); font-size: .56rem; font-weight: 700; letter-spacing: 1px; color: var(--rtp-loss); }
+.rtp .rtp-desk-take { margin: 0 0 8px; font-size: .78rem; line-height: 1.45; color: var(--rtp-ink-dim); }
+.rtp .rtp-desk-take.hot { font-style: italic; color: var(--rtp-ink); }
+.rtp .rtp-desk-who { font-family: var(--rtp-mono); font-size: .55rem; font-weight: 700; font-style: normal; letter-spacing: 1px; color: var(--rtp-ink-faint); margin-right: 6px; }
+.rtp .rtp-desk-palpite { display: flex; align-items: center; gap: 9px; margin-top: 2px; }
+.rtp .rtp-desk-palpite-k { flex: none; font-family: var(--rtp-mono); font-size: .55rem; letter-spacing: 1px; text-transform: uppercase; color: var(--rtp-ink-faint); }
+.rtp .rtp-desk-palpite-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--rtp-line); overflow: hidden; }
+.rtp .rtp-desk-palpite-bar i { display: block; height: 100%; border-radius: 3px; background: var(--rtp-warn); }
+.rtp .rtp-desk-palpite-bar.you i { background: var(--rtp-win); }
+.rtp .rtp-desk-palpite-v { flex: none; font-family: var(--rtp-mono); font-size: .72rem; font-weight: 700; color: var(--rtp-warn); }
+.rtp .rtp-desk-palpite-v.you { color: var(--rtp-win); }
+.rtp .rtp-desk-palpite-line { margin: 6px 0 0; font-size: .72rem; color: var(--rtp-ink-faint); line-height: 1.4; }
+.rtp .rtp-veto-cast { margin: 10px 0 0; font-size: .76rem; font-style: italic; color: var(--rtp-ink-dim); line-height: 1.4; }
+.rtp .rtp-veto-cast.final { color: var(--rtp-ink); }
+.rtp .rtp-veto-cast-k { font-family: var(--rtp-mono); font-size: .54rem; font-weight: 700; font-style: normal; letter-spacing: 1px; color: var(--rtp-signal); margin-right: 6px; }
+.rtp .rtp-walk-cue { margin: 0; text-align: center; font-size: .74rem; font-style: italic; color: var(--rtp-ink-faint); }
+
 /* plano de jogo */
 .rtp .rtp-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .rtp .rtp-plan { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 10px 12px; border-radius: 10px; cursor: pointer;
