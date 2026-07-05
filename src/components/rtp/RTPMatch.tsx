@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { RtpFrame } from './RtpFrame';
 import { ct } from '../../state/career-i18n';
 import { MAP_LABELS, type MapId } from '../../types';
@@ -11,6 +11,7 @@ import type { GamePlan } from '../../engine/rtp/meta';
 import { atmoCloser, atmoStageOf } from '../../engine/rtp/atmosphere';
 import { RtpRoundRoom } from './RtpRoundRoom';
 import { RtpInterview } from './RtpInterview';
+import { applyInterviewOutcome, type InterviewAnswer } from '../../engine/rtp/interview';
 import { RtpPrematch } from './RtpPrematch';
 import { Scoreboard } from '../Scoreboard';
 import { RtpIcon } from './RtpIcon';
@@ -49,15 +50,28 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
   }, [phase, save, matchPrep, outcomes, mode]);
   const result: ProMatchResult | null = finished?.result ?? null;
 
+  // Respostas dadas na entrevista pós-jogo (iter46): a consequência (fama/
+  // seguidores/manchete que cita a fala) é aplicada AQUI, no CTA de concluir —
+  // a resposta é conhecida antes do CTA, e o conclude é a única mutação de save
+  // do fluxo jogado. Pular a entrevista deixa o array vazio = neutro.
+  const itvAnswers = useRef<InterviewAnswer[]>([]);
+
   const conclude = () => {
-    if (!result || !finished?.write) return;
+    if (!result || !finished?.write || !matchPrep) return;
     // No Major a premiação vem da resolução do torneio — sem prêmio por-série lá.
     const { save: afterOutcome } = applyMatchOutcome(save, result, { leaguePrize: mode !== 'major' });
+    // Entrevista: pequena e honesta, DEPOIS do outcome (a manchete da fala entra
+    // por cima da manchete do jogo no feed). Nada de prêmio/RP/dificuldade.
+    const afterItv = applyInterviewOutcome(afterOutcome, itvAnswers.current, {
+      matchSeed: matchPrep.matchSeed, won: result.won, rival: (matchPrep.grudge ?? 0) > 0,
+      nick: save.player.nick, oppTag: result.oppTag,
+      rivalNick: save.media?.rival?.playerNick ?? null,
+    });
     if (mode === 'major') {
-      const { save: next } = concludeMajorRound(afterOutcome, finished.write);
+      const { save: next } = concludeMajorRound(afterItv, finished.write);
       onDone(next);
     } else {
-      const { save: next, seasonEnd, eventEnd } = concludeCircuitRound(afterOutcome, finished.write);
+      const { save: next, seasonEnd, eventEnd } = concludeCircuitRound(afterItv, finished.write);
       onDone(next, seasonEnd, eventEnd);
     }
   };
@@ -101,7 +115,8 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
 
       {phase === 'result' && result && matchPrep && (
         <Result save={save} result={result} onConclude={conclude} mode={mode}
-          matchSeed={matchPrep.matchSeed} grudge={(matchPrep.grudge ?? 0) > 0} />
+          matchSeed={matchPrep.matchSeed} grudge={(matchPrep.grudge ?? 0) > 0}
+          onInterviewAnswer={(a) => { itvAnswers.current = [...itvAnswers.current, a]; }} />
       )}
     </RtpFrame>
   );
@@ -110,9 +125,9 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Resultado: placar + linha do protagonista + scoreboard dos 10
 
-function Result({ save, result, onConclude, mode, matchSeed, grudge }: {
+function Result({ save, result, onConclude, mode, matchSeed, grudge, onInterviewAnswer }: {
   save: RoadToProSave; result: ProMatchResult; onConclude: () => void; mode: MatchMode;
-  matchSeed: number; grudge: boolean;
+  matchSeed: number; grudge: boolean; onInterviewAnswer: (a: InterviewAnswer) => void;
 }) {
   const conseq = useMemo<MatchConsequence>(() => applyMatchOutcome(save, result, { leaguePrize: mode !== 'major' }).consequence, [save, result, mode]);
   const hero = result.userRows.find((r) => r.isHero);
@@ -215,10 +230,12 @@ function Result({ save, result, onConclude, mode, matchSeed, grudge }: {
         </div>
       </div>
 
-      {/* ENTREVISTA PÓS-JOGO (iter44): a imprensa te alcança na saída do palco.
-          Só em partidas JOGADAS (o simular não pisa no palco) e 100% opcional —
-          o CTA de concluir segue sempre visível logo abaixo. */}
-      <RtpInterview save={save} result={result} major={mode === 'major'} matchSeed={matchSeed} grudge={grudge} />
+      {/* ENTREVISTA PÓS-JOGO (iter44/iter46): a imprensa te alcança na saída do
+          palco. Só em partidas JOGADAS (o simular não pisa no palco) e 100%
+          opcional — o CTA de concluir segue sempre visível logo abaixo. O tom
+          escolhido sobe via onAnswer e vira consequência real no conclude. */}
+      <RtpInterview save={save} result={result} major={mode === 'major'} matchSeed={matchSeed} grudge={grudge}
+        onAnswer={onInterviewAnswer} />
 
       {/* CTA coerente com o que acontece de verdade: no Major a rodada NÃO gasta
           semana (só o circuito avança o calendário). */}
