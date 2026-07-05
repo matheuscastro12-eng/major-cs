@@ -99,7 +99,9 @@ export function Home({
       <div
         style={{
           position: 'fixed',
-          top: 16,
+          // 76 = abaixo do header do /jogar (~60px) — em top:16 o pill ficava POR
+          // CIMA dos botões CONTA/HALL no topo da página (visto no passe visual).
+          top: 76,
           right: 16,
           zIndex: 50,
         }}
