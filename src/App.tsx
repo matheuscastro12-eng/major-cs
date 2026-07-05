@@ -944,7 +944,9 @@ export default function App() {
             <span className="subtitle">{t('nav.subtitle')}</span>
             <LangSwitcher />
             <DonateButton onClick={() => setDonateOpen(true)} />
-            {account && (
+            {/* no /jogar (screen 'home') o Home já renderiza o AccountChip fixo no
+                canto — este aqui junto DUPLICAVA o chip (um por trás de CONTA/HALL). */}
+            {account && screen !== 'home' && (
               <button className="acct-chip" title={account.founder ? `${ct('Fundador')}${account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''} · ${ct('apoiador desde o lançamento')}` : account.paid ? ct('Conta vitalícia (apoiador) · perfil, saves e conta') : ct('Sua conta · ver perfil')} onClick={() => setScreen(manager ? 'profile' : 'setup')}>
                 {account.paid && <span className="acct-star">★</span>}
                 {account.nick || account.email}
