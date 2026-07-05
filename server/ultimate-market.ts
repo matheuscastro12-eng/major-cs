@@ -200,8 +200,11 @@ export async function listCard(
         ), led AS (
           INSERT INTO rtm_ult_ledger (email, op_id, kind, credits_delta, cards, meta)
           SELECT ${sellerEmail}, 'mkt-list:' || (SELECT id FROM ins), 'escrow', 0,
-                 jsonb_build_array(jsonb_build_object('op','remove','cardId',${req.cardId})),
-                 jsonb_build_object('listingId',(SELECT id FROM ins),'action','list','cardKey',${cardKey},'price',${price})
+                 -- casts explícitos: parâmetro dentro de jsonb_build_* é "any" e o
+                 -- PG não infere o tipo (42P18 "could not determine data type of
+                 -- parameter" visto em produção — o FakeDb dos testes não typa).
+                 jsonb_build_array(jsonb_build_object('op','remove','cardId',${req.cardId}::text)),
+                 jsonb_build_object('listingId',(SELECT id FROM ins),'action','list','cardKey',${cardKey}::text,'price',${price}::bigint)
           WHERE EXISTS (SELECT 1 FROM ins)
         ), del AS (
           DELETE FROM rtm_ult_cards
