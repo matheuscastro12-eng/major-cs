@@ -275,8 +275,9 @@ export function grantPassXp(state: UltimateState, source: PassXpSource, day: str
   return { ...state, profile: { ...p, pass: next } };
 }
 
-// desbloqueia a trilha premium gastando PASS_PREMIUM_COST (o débito em si é
-// feito pela store via spendCredits — aqui só o flag, mantendo o funil normal).
+// liga o flag premium do passe. via: 'credits' = compra legada da v1
+// (15.000 credits, grandfathered); 'coins' = compra em dinheiro real
+// (R$ 30,00 Pix/Stripe — pedido pago/claimado no servidor antes de chegar aqui).
 export function setPassPremium(state: UltimateState, via: 'credits' | 'coins'): UltimateState {
   const p = state.profile;
   const pass = ensurePass(p.pass, passSeasonId(p));

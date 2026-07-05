@@ -44,11 +44,13 @@ async function fetchHandler(request: Request): Promise<Response> {
 
   const sql = neon(databaseUrl);
 
-  // Compra de COINS do Ultimate (cartão): metadata.kind==='coins' ou
-  // client_reference_id "ultcoins:...". Marca o pedido pago (method='stripe') e
-  // PARA aqui — coins NÃO ativam conta vitalícia. Espelha o caminho do woovi-webhook.
+  // Compra de COINS do Ultimate ou do PASSE Premium (cartão): metadata.kind
+  // 'coins'/'pass' ou client_reference_id "ultcoins:...". Marca o pedido pago
+  // (method='stripe') e PARA aqui — pedidos NÃO ativam conta vitalícia.
+  // Espelha o caminho do woovi-webhook. O passe reusa rtm_coin_orders com
+  // tier "pass-s<N>" (coins=0) — mesmo ciclo pending → paid → claimed.
   const coinCorr = String(session.metadata?.correlationID ?? session.client_reference_id ?? '');
-  if (session.metadata?.kind === 'coins' || coinCorr.startsWith('ultcoins:')) {
+  if (session.metadata?.kind === 'coins' || session.metadata?.kind === 'pass' || coinCorr.startsWith('ultcoins:')) {
     await sql`CREATE TABLE IF NOT EXISTS rtm_coin_orders (correlation_id TEXT PRIMARY KEY, email TEXT NOT NULL, tier TEXT NOT NULL, coins INT NOT NULL, cents INT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now(), paid_at TIMESTAMPTZ, claimed_at TIMESTAMPTZ, method TEXT DEFAULT 'pix')`;
     await sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`;
     const updated = await sql`UPDATE rtm_coin_orders SET status='paid', paid_at=now(), method='stripe' WHERE correlation_id=${coinCorr} AND status='pending' RETURNING correlation_id`;
@@ -59,7 +61,8 @@ async function fetchHandler(request: Request): Promise<Response> {
       const coins = Number(session.metadata?.coins ?? 0);
       const buyer = normalizeEmail(String(session.metadata?.email ?? checkoutEmail(session) ?? ''));
       const cents = Number(session.amount_total ?? 0);
-      if (tier && coins > 0 && /\S+@\S+\.\S+/.test(buyer)) {
+      // pedido de PASSE reconstruído tem coins=0 por definição (tier pass-s<N>).
+      if (tier && (coins > 0 || /^pass-s\d+$/.test(tier)) && /\S+@\S+\.\S+/.test(buyer)) {
         await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, status, paid_at, method) VALUES (${coinCorr}, ${buyer}, ${tier}, ${coins}, ${cents}, 'paid', now(), 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
       }
     }

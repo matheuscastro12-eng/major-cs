@@ -28,7 +28,7 @@ import { checkSbc, sbcById, type SbcReward } from '../engine/ultimate/sbc';
 import { objectiveById } from '../engine/ultimate/objectives';
 import { seasonTierById } from '../engine/ultimate/seasonRewards';
 import { missionsForDay, missionProgress } from '../engine/ultimate/missions';
-import { ensurePass, levelForXp, markPassClaimed, passLevelDef, passTitleSlug, PASS_PREMIUM_COST, type PassReward, type PassTrack } from '../engine/ultimate/seasonPass';
+import { ensurePass, levelForXp, markPassClaimed, passLevelDef, passTitleSlug, type PassReward, type PassTrack } from '../engine/ultimate/seasonPass';
 import type { StyleId } from '../engine/ultimate/traits';
 import {
   addCredits as _addCredits,
@@ -277,7 +277,7 @@ interface UltimateStore {
   claimWeekly: (id: string) => { ok: boolean; credits?: number };
   claimWeeklyBonus: () => { ok: boolean; cards: UltCard[] };
   // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
-  buyPremiumPass: () => { ok: boolean; reason?: 'already' | 'insufficient' };
+  unlockPremiumPaid: (orderId: string, orderSeason: number) => { ok: boolean; already?: boolean };
   claimPassLevel: (level: number, track: PassTrack) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
   setState: (s: UltimateState) => void;
   reset: () => void;
@@ -684,20 +684,28 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     mirrorUltimateChange(st, s, 'reward', { src: 'weekly-bonus', seed });
     return { ok: true, cards };
   },
-  buyPremiumPass: () => {
-    // desbloqueia a trilha premium do Passe gastando credits pelo funil normal
-    // (spendCredits) — o gasto cai no ledger-sombra como 'spend' src:'pass-premium'.
-    // v1: só credits; a compra via coins (dinheiro real) entra por premiumVia
-    // numa iteração futura sem migração de save.
+  unlockPremiumPaid: (orderId, orderSeason) => {
+    // Passe Premium PAGO (R$ 30,00 Pix/Stripe): o pedido "pass-s<N>" já foi
+    // pago (webhook) e claimado (passClaim) no servidor — aqui só liga o flag.
+    // premiumVia:'coins' = dinheiro real (renomear pra 'paid' exigiria migrar o
+    // save/codec; o significado está documentado em seasonPass.ts). A compra
+    // legada por credits (v1) permanece válida — nada retroativo.
     const prev = get().state;
-    const pass = ensurePass(prev.profile.pass, passSeasonId(prev.profile));
-    if (pass.premium) return { ok: false, reason: 'already' as const };
-    const sp = _spendCredits(prev, PASS_PREMIUM_COST);
-    if (!sp.ok) return { ok: false, reason: 'insufficient' as const };
-    const s = _setPassPremium({ ...sp.state, profile: { ...sp.state.profile, pass } }, 'credits');
+    const seasonNow = passSeasonId(prev.profile);
+    const pass = ensurePass(prev.profile.pass, seasonNow);
+    if (pass.premium) return { ok: true, already: true };
+    const s = _setPassPremium({ ...prev, profile: { ...prev.profile, pass } }, 'coins');
     persist(s);
     set({ state: s });
-    mirrorUltimateChange(prev, s, 'spend', { src: 'pass-premium' });
+    // creditsDelta = 0 — o 'grant' registra o desbloqueio no ledger-sombra.
+    // Comprado na borda do rollover (orderSeason ≠ temporada atual): honramos a
+    // temporada CORRENTE e anotamos a divergência no meta.
+    mirrorUltimateChange(prev, s, 'grant', {
+      src: 'pass-premium-paid',
+      orderId,
+      orderSeason,
+      ...(orderSeason !== seasonNow ? { honoredSeason: seasonNow } : {}),
+    });
     return { ok: true };
   },
   claimPassLevel: (level, track) => {

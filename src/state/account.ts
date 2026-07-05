@@ -98,6 +98,47 @@ export async function claimPaidCoins(): Promise<number> {
   try { const d = await post({ action: 'coinsClaim', token }); return Number(d.coins) || 0; } catch { return 0; }
 }
 
+// ── Passe Premium do Ultimate (R$ 30,00 · dinheiro real) ────────────────────
+// Mesmo funil dos coins: pedido pending → paid (webhook Pix/Stripe) → claimed.
+// `already: true` = já existe pedido PAGO desta temporada (pula direto pro claim).
+export interface PassCharge extends PixCharge { correlationID: string; season: number; already?: boolean }
+export async function beginPassPix(season: number): Promise<PassCharge> {
+  const token = getToken(); if (!token) throw new Error(ct('Faça login antes de comprar o passe.'));
+  const d = await post({ action: 'passPix', token, season });
+  return {
+    correlationID: String(d.correlationID ?? ''),
+    season: Number(d.season) || season,
+    already: !!d.already,
+    qrCodeImage: (d.qrCodeImage as string) ?? null,
+    brCode: (d.brCode as string) ?? null,
+    paymentLinkUrl: (d.paymentLinkUrl as string) ?? null,
+    expiresIn: (d.expiresIn as number) ?? null,
+  };
+}
+// Passe Premium com CARTÃO (Stripe): Checkout Session dinâmica; na volta
+// (/ultimate?pass=ok) o webhook já marcou pago e claimPaidPassOrders desbloqueia.
+// Devolve null se o pedido já está pago (already) — basta coletar.
+export async function beginPassCheckout(season: number): Promise<string | null> {
+  const token = getToken(); if (!token) throw new Error(ct('Faça login antes de comprar o passe.'));
+  let origin = ''; try { origin = window.location.origin; } catch { /* sem window */ }
+  const d = await post({ action: 'passCheckout', token, season, origin });
+  if (d.already) return null;
+  if (typeof d.url !== 'string' || !d.url) throw new Error(ct('Checkout indisponível. Tente de novo.'));
+  return d.url;
+}
+// Coleta pedidos de passe pagos e ainda não claimados (idempotente no servidor).
+export interface PaidPassOrder { orderId: string; season: number }
+export async function claimPaidPassOrders(): Promise<PaidPassOrder[]> {
+  const token = getToken(); if (!token) return [];
+  try {
+    const d = await post({ action: 'passClaim', token });
+    const arr = Array.isArray(d.orders) ? (d.orders as { orderId?: unknown; season?: unknown }[]) : [];
+    return arr
+      .map((o) => ({ orderId: String(o.orderId ?? ''), season: Number(o.season) || 0 }))
+      .filter((o) => o.orderId && o.season > 0);
+  } catch { return []; }
+}
+
 // Resumo das compras de coins da conta: purchased = total já comprado (pedidos
 // creditados) e restorable = quanto ainda pode ser re-emitido (1× por coin) pra
 // quem perdeu o save local. null se deslogado/offline.

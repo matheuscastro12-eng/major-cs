@@ -13,7 +13,7 @@ import { rarityInfo } from '../../engine/ultimate/rarities';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
 import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, passSeasonId, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
-import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, passTitleSlug, totalXpForLevel, xpForLevel, PASS_MAX_LEVEL, PASS_PREMIUM_COST, type PassReward, type PassTrack } from '../../engine/ultimate/seasonPass';
+import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, passTitleSlug, totalXpForLevel, xpForLevel, PASS_MAX_LEVEL, type PassReward, type PassTrack } from '../../engine/ultimate/seasonPass';
 import type { UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
@@ -29,7 +29,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, type CoinCharge, type CoinTierId } from '../../state/account';
+import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { wlMirrorReport } from '../../state/weekendLeague';
 import { UtPanel, UtEmpty } from './UtPanel';
@@ -294,7 +294,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
-  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, buyPremiumPass, claimPassLevel, applyStyle } = useUltimate();
+  const { state, openPack, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, buyCard, claimObjective, evolveCard, claimSeasonReward, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -616,7 +616,73 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const passFreeClaimable = claimableLevels(pass, 'free');
   const passPremClaimable = claimableLevels(pass, 'premium');
   const passClaimableCount = passFreeClaimable.length + passPremClaimable.length;
-  const [passConfirm, setPassConfirm] = useState(false);
+  // ── Passe Premium (R$ 30,00 · dinheiro real, Pix/Stripe) ──────────────────
+  // Mesma UX da compra de coins: modal com QR Pix + botão de cartão; o webhook
+  // marca o pedido pago e o polling (claimPaidPassOrders) liga o premium.
+  const [passModal, setPassModal] = useState<{ charge: PassCharge | null; error?: string } | null>(null);
+  // coleta pedidos de passe pagos no servidor (idempotente) e liga o premium.
+  // Season guard: comprado na borda do rollover vale pra temporada CORRENTE
+  // (unlockPremiumPaid anota a divergência no meta do espelho).
+  const tryClaimPass = () => claimPaidPassOrders().then((orders) => {
+    if (!orders.length) return false;
+    const o = orders[0];
+    unlockPremiumPaid(o.orderId, o.season);
+    setPassModal(null);
+    flash(`👑 ${ct('Passe Premium desbloqueado! Recompensas premium até o seu nível já estão liberadas.')}`, 3600);
+    return true;
+  });
+  const openPassPurchase = () => {
+    if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar o Passe Premium.')}`, 2800); return; }
+    setPassModal({ charge: null });
+    beginPassPix(pass.seasonId)
+      .then((charge) => {
+        // already: pedido desta temporada JÁ está pago — só coleta e desbloqueia.
+        if (charge.already) { setPassModal(null); void tryClaimPass(); return; }
+        setPassModal((m) => (m ? { ...m, charge } : m));
+      })
+      .catch((e) => setPassModal((m) => (m ? { ...m, error: e instanceof Error ? e.message : ct('Falha ao gerar Pix. Tente de novo.') } : m)));
+  };
+  // Passe com CARTÃO (Stripe) — redireciona; na volta (?pass=ok) o efeito abaixo coleta.
+  const buyPassCard = () => {
+    if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar o Passe Premium.')}`, 2800); return; }
+    setCardBusy(true);
+    flash(ct('Abrindo o checkout do cartão…'), 2400);
+    beginPassCheckout(pass.seasonId)
+      .then((url) => {
+        if (url) { window.location.href = url; return; }
+        setCardBusy(false); setPassModal(null); void tryClaimPass(); // já pago — só coleta
+      })
+      .catch((e) => { setCardBusy(false); flash(e instanceof Error ? e.message : ct('Não consegui abrir o checkout do cartão. Tente de novo.'), 2800); });
+  };
+  // …polling a cada 4s enquanto o QR do passe está na tela (webhook marca em segundos)
+  useEffect(() => {
+    if (!passModal?.charge) return;
+    const t = window.setInterval(() => { void tryClaimPass(); }, 4000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passModal?.charge]);
+  // Retorno do Stripe (/ultimate?pass=ok): curto poll até o webhook confirmar, e limpa a URL.
+  useEffect(() => {
+    let ok = false;
+    try { ok = new URLSearchParams(window.location.search).get('pass') === 'ok'; } catch { ok = false; }
+    if (!ok || !account) return;
+    flash(ct('Confirmando o pagamento do cartão…'), 3000);
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      void tryClaimPass().then((done) => { if (done) window.clearInterval(timer); });
+      if (++tries >= 10) window.clearInterval(timer); // ~30s de janela
+    }, 3000);
+    void tryClaimPass();
+    try { const u = new URL(window.location.href); u.searchParams.delete('pass'); window.history.replaceState({}, '', u.pathname + u.search + u.hash); } catch { /* sem history */ }
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
+  // pagou em outra aba / copia-e-cola depois de fechar o QR: checa ao abrir a aba do passe
+  useEffect(() => {
+    if (!account || tab !== 'passe' || pass.premium) return;
+    void tryClaimPass();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, tab]);
   const doClaimPass = (level: number, track: PassTrack) => {
     const r = claimPassLevel(level, track);
     if (!r.ok) {
@@ -652,12 +718,6 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     if (!n) return;
     flash(`🎫 ${n} ${n === 1 ? ct('recompensa resgatada') : ct('recompensas resgatadas')}${creditsSum ? ` · +${fmt(creditsSum)} 🪙` : ''}${gotTitle ? ` · ${ct('novo título!')}` : ''}`, 3200);
     if (cards.length) setReveal([...cards].sort((a, b) => b.ovr - a.ovr));
-  };
-  const doBuyPremium = () => {
-    setPassConfirm(false);
-    const r = buyPremiumPass();
-    if (r.ok) flash(`👑 ${ct('Passe Premium desbloqueado! Recompensas premium até o seu nível já estão liberadas.')}`, 3200);
-    else flash(r.reason === 'already' ? ct('Premium já ativo.') : ct('Créditos insuficientes.'));
   };
 
   // ── objetivos/missões (profundidade) ──
@@ -1855,7 +1915,6 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         const daysLeft = season ? Math.max(0, Math.ceil((season.endsAt - Date.now()) / 86400000)) : null;
         const pct = passLevel >= PASS_MAX_LEVEL ? 100 : Math.min(100, Math.round((passXpInto / Math.max(1, passXpNext)) * 100));
         const titleName = passTitleLabel(passTitleSlug(pass.seasonId));
-        const affordPremium = credits >= PASS_PREMIUM_COST;
         return (
           <>
             {/* header do passe: temporada + nível/XP + status premium */}
@@ -1881,13 +1940,9 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               </div>
               <div className="ut-passhead__actions">
                 {!pass.premium && (
-                  <button className="ut-btn ut-btn--gold" onClick={() => setPassConfirm(true)} disabled={!affordPremium}
-                    title={affordPremium ? ct('Desbloquear a trilha Premium') : ct('Créditos insuficientes.')}>
-                    <Crown size={15} /> {ct('Desbloquear Premium')} — {fmt(PASS_PREMIUM_COST)}
+                  <button className="ut-btn ut-btn--gold" onClick={openPassPurchase} title={ct('Desbloquear a trilha Premium')}>
+                    <Crown size={15} /> {ct('Desbloquear Premium')} — R$ 30,00
                   </button>
-                )}
-                {!pass.premium && !affordPremium && (
-                  <span className="ut-passhead__reason">{ct('Faltam')} {fmt(PASS_PREMIUM_COST - credits)} 🪙</span>
                 )}
                 {passClaimableCount > 1 && (
                   <button className="ut-btn ut-btn--green" onClick={doClaimAllPass}>
@@ -1942,18 +1997,50 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
         );
       })()}
 
-      {/* confirmação do Passe Premium */}
-      {passConfirm && (
-        <Modal open onClose={() => setPassConfirm(false)} title={ct('Desbloquear Passe Premium')} size="sm"
-          footer={<><Button variant="ghost" onClick={() => setPassConfirm(false)}>{ct('Cancelar')}</Button><Button variant="primary" onClick={doBuyPremium} disabled={credits < PASS_PREMIUM_COST}>{ct('Desbloquear')} · {fmt(PASS_PREMIUM_COST)} 🪙</Button></>}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
+      {/* compra do Passe Premium (R$ 30,00) — QR Pix + cartão; o polling fecha sozinho ao pagar */}
+      {passModal && (
+        <Modal
+          open
+          // ao fechar, tenta coletar uma última vez — pagou e fechou junto
+          onClose={() => { setPassModal(null); void tryClaimPass(); }}
+          title={`${ct('Passe Premium')} · Season ${pass.seasonId} · R$ 30,00`}
+          size="md">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 8px' }}>
             <p className="muted small" style={{ margin: 0 }}>
               {ct('A trilha Premium libera uma SEGUNDA recompensa em cada um dos 35 níveis — incluindo o Pacote Promo (nível 15), uma carta Elite (25) e a carta TOTS + título exclusivo da temporada (35).')}
             </p>
             <p className="muted small" style={{ margin: 0 }}>
               {ct('As recompensas premium dos níveis que você JÁ alcançou ficam liberadas na hora. O premium vale só nesta temporada.')}
             </p>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 900, color: '#92600a' }}><Coins size={15} /> {fmt(PASS_PREMIUM_COST)} · {ct('saldo')}: {fmt(credits)}</div>
+          </div>
+          {passModal.error ? (
+            <div className="ut-coinpay">
+              <p className="muted small" style={{ margin: 0 }}>{passModal.error}</p>
+              <button className="ut-btn ut-btn--gold" onClick={openPassPurchase}>{ct('Tentar de novo')}</button>
+            </div>
+          ) : !passModal.charge ? (
+            <div className="ut-coinpay"><p className="muted small" style={{ margin: 0 }}>{ct('Gerando cobrança Pix…')}</p></div>
+          ) : (
+            <div className="ut-coinpay">
+              {passModal.charge.qrCodeImage && <img className="ut-coinpay__qr" src={passModal.charge.qrCodeImage} alt="QR Code Pix" />}
+              <div className="ut-coinpay__wait"><span className="ut-coinpay__dot" /> {ct('Aguardando pagamento — o premium destrava sozinho assim que o Pix confirmar.')}</div>
+              {passModal.charge.brCode && (
+                <button className="ut-btn ut-btn--ghost" onClick={() => { void navigator.clipboard?.writeText(passModal.charge?.brCode ?? '').then(() => flash(`✅ ${ct('Código Pix copiado')}`)); }}>
+                  {ct('Copiar código Pix (copia e cola)')}
+                </button>
+              )}
+              {passModal.charge.paymentLinkUrl && (
+                <a className="ut-btn ut-btn--ghost" href={passModal.charge.paymentLinkUrl} target="_blank" rel="noreferrer">{ct('Abrir página de pagamento')}</a>
+              )}
+            </div>
+          )}
+          {/* alternativa internacional: cartão via Stripe (Pix é só Brasil) */}
+          <div className="ut-coinpay__alt">
+            <span className="ut-coinpay__altsep">{ct('ou')}</span>
+            <button className="ut-btn ut-btn--card" onClick={buyPassCard} disabled={cardBusy}>
+              💳 {cardBusy ? ct('Abrindo…') : `${ct('Pagar com cartão')} · R$ 30,00`}
+            </button>
+            <span className="muted small" style={{ textAlign: 'center' }}>{ct('Aceita cartão internacional. Você volta pro jogo e o premium destrava automaticamente.')}</span>
           </div>
         </Modal>
       )}

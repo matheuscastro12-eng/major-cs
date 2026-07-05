@@ -60,8 +60,9 @@ async function fetchHandler(request: Request): Promise<Response> {
   try { body = JSON.parse(raw) as Record<string, unknown>; } catch { return Response.json({ received: true, processed: false }); }
   if (!isPaidEvent(body)) return Response.json({ received: true, processed: false });
 
-  // compra de coins do Ultimate (correlationID "ultcoins:..."): marca o pedido
-  // pago e PARA aqui — coins não podem ativar conta vitalícia.
+  // compra de coins do Ultimate OU do Passe Premium (correlationID
+  // "ultcoins:..."; o passe reusa rtm_coin_orders com tier "pass-s<N>",
+  // coins=0): marca o pedido pago e PARA aqui — não ativa conta vitalícia.
   const chargeObj = body.charge as Record<string, unknown> | undefined;
   const corr = String(chargeObj?.correlationID ?? (body.correlationID as string | undefined) ?? '');
   if (corr.startsWith('ultcoins:')) {
@@ -77,7 +78,8 @@ async function fetchHandler(request: Request): Promise<Response> {
         p10: { cents: 1000, coins: 30000 }, p15: { cents: 1500, coins: 50000 }, p30: { cents: 3000, coins: 120000 },
       };
       const tier = corr.split(':')[1] ?? '';
-      const pack = ULT_COIN_TIERS[tier];
+      // Passe Premium: tier "pass-s<N>" (coins=0, R$ 30,00 = 3000 cents).
+      const pack = ULT_COIN_TIERS[tier] ?? (/^pass-s\d+$/.test(tier) ? { cents: 3000, coins: 0 } : undefined);
       const buyer = payerEmail(body);
       if (pack && /\S+@\S+\.\S+/.test(buyer)) {
         // ON CONFLICT DO NOTHING: se o pedido existe como paid/claimed (webhook
