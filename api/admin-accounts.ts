@@ -228,6 +228,118 @@ export default async function handler(
     return;
   }
 
+  // revenue: série diária unificada de receita (60 dias) pro CRM /admin/receita.
+  // Cada dia traz: vendas de vitalícia POR MÉTODO (pix/stripe/outro/admin),
+  // pedidos pagos de coins+passe (rtm_coin_orders) com centavos por método e por
+  // produto, e visitantes únicos (events type='visit'). A API devolve os dados
+  // CRUS por dia — somas de janelas (7d/30d) e a previsão são calculadas no
+  // cliente, mantendo esta action burra e reutilizável.
+  //
+  // Sinais usados:
+  // - Vitalícia: rtm_paid_emails.created_at é a DATA da venda (o webhook insere
+  //   na hora do pagamento). O MÉTODO vem de rtm_accounts.payment_method
+  //   ('stripe' via stripe-webhook, 'pix' via woovi-webhook, 'admin' via grant).
+  //   Legado sem método: se existe sessão em rtm_payment_sessions → 'stripe';
+  //   senão 'desconhecido' (vendas antes da coluna payment_method existir).
+  //   Caveat: não há VALOR por venda de vitalícia gravado — o preço é fixo
+  //   (R$ 20,00 = 2000 cents), então o cliente multiplica contagem × preço.
+  //   Contas 'admin' (concedidas) contam como conta, mas receita zero.
+  // - Coins + Passe: rtm_coin_orders com status paid/claimed; dia = paid_at
+  //   (fallback created_at); método 'pix'/'stripe'; tier 'pass-s<N>' = passe.
+  // - Visitantes: events (type='visit', sid distinto/dia) — mesma fonte do
+  //   api/metrics.ts, estendida de 14 pra 60 dias, fuso America/Sao_Paulo.
+  if (action === 'revenue') {
+    const VIT_PRICE_CENTS = 2000; // conta vitalícia = R$ 20,00 (preço fixo, sem registro por venda)
+    // série 60d: vitalícias por método × pedidos (coins/passe) por método/produto,
+    // tudo num único round-trip com generate_series + 2 CTEs pré-agregadas.
+    const days = await sql`
+      WITH days AS (
+        SELECT generate_series((now() AT TIME ZONE 'America/Sao_Paulo')::date - 59, (now() AT TIME ZONE 'America/Sao_Paulo')::date, interval '1 day')::date AS day
+      ),
+      vit AS (
+        SELECT (p.created_at AT TIME ZONE 'America/Sao_Paulo')::date AS day,
+               COALESCE(a.payment_method,
+                 CASE WHEN EXISTS (SELECT 1 FROM rtm_payment_sessions s WHERE s.email = p.email) THEN 'stripe' ELSE 'desconhecido' END) AS method
+        FROM rtm_paid_emails p LEFT JOIN rtm_accounts a ON a.email = p.email
+        WHERE p.created_at > now() - interval '61 days'
+      ),
+      vitd AS (
+        SELECT day,
+          count(*) FILTER (WHERE method = 'pix')::int AS vit_pix,
+          count(*) FILTER (WHERE method = 'stripe')::int AS vit_stripe,
+          count(*) FILTER (WHERE method NOT IN ('pix','stripe','admin'))::int AS vit_other,
+          count(*) FILTER (WHERE method = 'admin')::int AS vit_admin
+        FROM vit GROUP BY 1
+      ),
+      ord AS (
+        SELECT (COALESCE(o.paid_at, o.created_at) AT TIME ZONE 'America/Sao_Paulo')::date AS day,
+               COALESCE(o.method, 'pix') AS method, o.cents,
+               CASE WHEN o.tier LIKE 'pass-%' THEN 'passe' ELSE 'coins' END AS product
+        FROM rtm_coin_orders o
+        WHERE o.status IN ('paid','claimed') AND COALESCE(o.paid_at, o.created_at) > now() - interval '61 days'
+      ),
+      ordd AS (
+        SELECT day, count(*)::int AS orders,
+          COALESCE(sum(cents) FILTER (WHERE method = 'pix'), 0)::bigint AS ord_pix_cents,
+          COALESCE(sum(cents) FILTER (WHERE method <> 'pix'), 0)::bigint AS ord_stripe_cents,
+          COALESCE(sum(cents) FILTER (WHERE product = 'coins'), 0)::bigint AS coins_cents,
+          COALESCE(sum(cents) FILTER (WHERE product = 'passe'), 0)::bigint AS passe_cents
+        FROM ord GROUP BY 1
+      )
+      SELECT d.day,
+        COALESCE(v.vit_pix, 0)::int AS vit_pix, COALESCE(v.vit_stripe, 0)::int AS vit_stripe,
+        COALESCE(v.vit_other, 0)::int AS vit_other, COALESCE(v.vit_admin, 0)::int AS vit_admin,
+        COALESCE(o.orders, 0)::int AS orders,
+        COALESCE(o.ord_pix_cents, 0)::bigint AS ord_pix_cents, COALESCE(o.ord_stripe_cents, 0)::bigint AS ord_stripe_cents,
+        COALESCE(o.coins_cents, 0)::bigint AS coins_cents, COALESCE(o.passe_cents, 0)::bigint AS passe_cents
+      FROM days d LEFT JOIN vitd v ON v.day = d.day LEFT JOIN ordd o ON o.day = d.day
+      ORDER BY d.day`;
+    // visitantes únicos/dia (60d). Query separada com try/catch: a tabela events
+    // pertence à telemetria (api/track.ts) e pode não existir numa instância nova
+    // — o funil fica indisponível, mas a receita continua funcionando.
+    let visitors: { day: string; visitors: number }[] = [];
+    let visitorsAvailable = true;
+    try {
+      const vis = await sql`
+        SELECT (created_at AT TIME ZONE 'America/Sao_Paulo')::date AS day, count(DISTINCT sid)::int AS visitors
+        FROM events WHERE type = 'visit' AND created_at > now() - interval '61 days'
+        GROUP BY 1 ORDER BY 1`;
+      visitors = vis.map((r) => ({ day: String(r.day).slice(0, 10), visitors: Number(r.visitors) }));
+    } catch { visitorsAvailable = false; }
+    const visByDay = new Map(visitors.map((v) => [v.day, v.visitors]));
+    // agregados all-time (a série de 60d não cobre o histórico completo)
+    const vitAll = await sql`
+      SELECT COALESCE(a.payment_method,
+               CASE WHEN EXISTS (SELECT 1 FROM rtm_payment_sessions s WHERE s.email = p.email) THEN 'stripe' ELSE 'desconhecido' END) AS method,
+             count(*)::int AS n
+      FROM rtm_paid_emails p LEFT JOIN rtm_accounts a ON a.email = p.email GROUP BY 1`;
+    const ordAll = await sql`
+      SELECT COALESCE(method, 'pix') AS method,
+             CASE WHEN tier LIKE 'pass-%' THEN 'passe' ELSE 'coins' END AS product,
+             count(*)::int AS orders, COALESCE(sum(cents), 0)::bigint AS cents
+      FROM rtm_coin_orders WHERE status IN ('paid','claimed') GROUP BY 1, 2`;
+    res.status(200).json({
+      vitPriceCents: VIT_PRICE_CENTS,
+      visitorsAvailable,
+      days: days.map((r) => {
+        const day = String(r.day).slice(0, 10);
+        return {
+          day,
+          vitPix: Number(r.vit_pix), vitStripe: Number(r.vit_stripe), vitOther: Number(r.vit_other), vitAdmin: Number(r.vit_admin),
+          orders: Number(r.orders),
+          ordPixCents: Number(r.ord_pix_cents), ordStripeCents: Number(r.ord_stripe_cents),
+          coinsCents: Number(r.coins_cents), passeCents: Number(r.passe_cents),
+          visitors: visByDay.get(day) ?? 0,
+        };
+      }),
+      allTime: {
+        vitByMethod: vitAll.map((r) => ({ method: String(r.method), n: Number(r.n) })),
+        orders: ordAll.map((r) => ({ method: String(r.method), product: String(r.product), orders: Number(r.orders), cents: Number(r.cents) })),
+      },
+    });
+    return;
+  }
+
   // integrity: saúde do ranking PvP (rtm_match_reports). `conflict` = os dois
   // jogadores reclamaram o MESMO resultado (tentativa de fraude ou bug) — a
   // partida não conta. Reincidência de conflito é o sinal forte de fraude.

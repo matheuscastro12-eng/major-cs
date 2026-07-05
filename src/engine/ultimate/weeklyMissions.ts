@@ -26,7 +26,9 @@ export const WEEKLY_POOL: WeeklyMissionDef[] = [
   { id: 'w-pack5', name: 'Semana de sorte', desc: 'Abra 5 pacotes esta semana', metric: 'packsWeek', target: 5, credits: 4000 },
   { id: 'w-pack8', name: 'Chuva de cartas', desc: 'Abra 8 pacotes esta semana', metric: 'packsWeek', target: 8, credits: 6500 },
   { id: 'w-sbc3', name: 'Maratona de desafios', desc: 'Conclua 3 desafios (SBC) esta semana', metric: 'sbcWeek', target: 3, credits: 7000 },
-  { id: 'w-bazaar3', name: 'Olho no mercado', desc: 'Compre 3 cartas no bazar esta semana', metric: 'bazaarWeek', target: 3, credits: 3000 },
+  // métrica bazaarWeek herdada do bazar de IA (removido) — hoje conta compras
+  // no Mercado entre managers (marketBuyApply incrementa profile.bazaarBuys).
+  { id: 'w-bazaar3', name: 'Olho no mercado', desc: 'Compre 3 cartas no Mercado esta semana', metric: 'bazaarWeek', target: 3, credits: 3000 },
 ];
 
 export const WEEKLY_PER_WEEK = 3;

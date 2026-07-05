@@ -6413,6 +6413,10 @@ button.t20-row {
 .crm-fin-email { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
 @media (max-width: 560px) { .crm-bar-row { grid-template-columns: 96px 1fr; } .crm-bar-sub { grid-column: 2; text-align: right; } }
 
+/* CRM de receita (/admin/receita): mini-barra proporcional dentro de célula de tabela */
+.rev-cellbar { height: 4px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border-soft); overflow: hidden; margin-top: 4px; min-width: 56px; }
+.rev-cellbar i { display: block; height: 100%; background: var(--gold); border-radius: 999px; }
+
 /* ============================================================
    MOTION LAYER — mais vida no site (ambiente, entradas, hover).
    Tudo desativado em prefers-reduced-motion (acessibilidade).
