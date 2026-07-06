@@ -265,6 +265,18 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [nudge, setNudge] = useState(false);
+  // funil: dado real (checkout_abandon) mostra abandono só depois de 45s–300s de
+  // QR aberto, nunca em segundos — contradiz a promessa de "aprovado em segundos".
+  // Passado 1min sem confirmar, troca a expectativa por uma reassurance honesta.
+  const [pixWaitLong, setPixWaitLong] = useState(false);
+  useEffect(() => {
+    if (!pix) { setPixWaitLong(false); return; }
+    const t = window.setTimeout(() => setPixWaitLong(true), 60_000);
+    return () => window.clearTimeout(t);
+  }, [pix]);
+  useEffect(() => {
+    if (pixWaitLong) trackPaywallView('pix-wait-longo'); // funil: reassurance de espera longa exibida (evento existente, novo src)
+  }, [pixWaitLong]);
   // funil: abandono do QR Pix — best-effort, dispara no desmonte do modal se o
   // QR chegou a abrir e o pagamento não foi confirmado pelo polling.
   const pixOpenedAt = useRef(0);
@@ -416,6 +428,12 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
             {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
           </p>
+          {pixWaitLong && (
+            /* reassurance honesta pra quem passou de 1min esperando (ver comentário acima) */
+            <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
+              {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
+            </p>
+          )}
           {nudge && (
             /* nudge anti-abandono (1x/sessão): inline, honesto, descartável */
             <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(232,193,112,.08)', border: '1px solid rgba(232,193,112,.4)', borderRadius: '6px' }}>
