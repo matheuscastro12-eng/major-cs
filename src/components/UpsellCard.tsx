@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAccount } from '../state/account';
 import { setCheckoutSrc, trackPaywallView } from '../state/track';
 import { ct } from '../state/career-i18n';
+import { FounderCounter } from './FounderCounter';
 
 // Card de ativação (upsell) pra contas GRÁTIS. Abre em momentos estratégicos do
 // jogo (fim de split, título conquistado, etc.) via evento global, o usuário pode
@@ -71,6 +72,8 @@ export function UpsellCard({ onUpgrade }: { onUpgrade: () => void }) {
           <li><b>{ct('Perfil e selo de apoiador')}</b> {ct('· identidade no jogo todo')}</li>
           <li><b>{ct('Selo de Fundador #001–#500')}</b> {ct('· logo própria do clube + número baixo é troféu (500 primeiros)')}</li>
         </ul>
+        {/* prova social real: única superfície de venda com tráfego relevante que ainda não mostrava (iter48) */}
+        <FounderCounter style={{ marginBottom: '4px' }} />
         <div className="upsell-actions">
           <button className="btn gold big" onClick={() => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
             {ct('Criar conta vitalícia')} · R$20
