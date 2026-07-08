@@ -15,7 +15,9 @@ export const DRAFT5_META = {
   tagline: ct('A cobertura completa do seu cenário competitivo'),
 };
 
-// redação fictícia da DRAFT5 in-game (determinística por manchete)
+// redação fictícia da DRAFT5 in-game. Cada editoria tem seus SETORISTAS
+// fixos (como num site real: quem cobre mercado assina mercado) e a escolha
+// dentro do beat é determinística por manchete.
 export interface Draft5Author { name: string; role: string }
 const AUTHORS: Draft5Author[] = [
   { name: 'Rafa Siqueira', role: ct('Repórter de mercado') },
@@ -25,6 +27,14 @@ const AUTHORS: Draft5Author[] = [
   { name: 'Iuri Sant’Anna', role: ct('Colunista') },
   { name: 'Malu Ribas', role: ct('Bastidores') },
 ];
+// índices em AUTHORS por editoria (NewsCat)
+const BEAT: Record<string, number[]> = {
+  transfer: [0, 4],       // mercado: Rafa + coluna do Iuri
+  result: [3, 1, 2],      // competitivo: Bia, setorista, analista
+  board: [5, 1],          // bastidores: Malu + setorista
+  scout: [2, 4],          // scouting: análise tática + coluna
+  scene: [3, 4, 5],       // cenário: torneios, coluna, bastidores
+};
 
 const hash = (s: string) => {
   let h = 5381;
@@ -32,7 +42,10 @@ const hash = (s: string) => {
   return h;
 };
 
-export const draft5Author = (newsId: string): Draft5Author => AUTHORS[hash(newsId) % AUTHORS.length];
+export function draft5Author(newsId: string, cat?: string): Draft5Author {
+  const pool = BEAT[cat ?? 'scene'] ?? BEAT.scene;
+  return AUTHORS[pool[hash(newsId) % pool.length]];
+}
 
 // rótulo editorial por categoria de manchete (chaves = NewsCat do CareerScreen;
 // string solta de propósito pra não importar tipo de componente no engine)

@@ -39,6 +39,8 @@ import {
   type YouthDebut,
 } from '../engine/career/playerAge';
 import { applyCareerVrsDecay, careerEventKey } from '../engine/career/progress';
+import * as newsroom from '../engine/career/newsroom';
+import type { SeriesAngle } from '../engine/career/newsroom';
 // academyLeague: usado pela AcademyTab; import movido pra page.
 import { VetoScreen } from './VetoScreen';
 import { Scoreboard } from './Scoreboard';
@@ -1406,40 +1408,36 @@ function splitNews(ctx: {
 }): NewsItem[] {
   const s = ctx.split;
   const out: NewsItem[] = [];
-  const add = (key: string, icon: string, tone: NewsItem['tone'], cat: NewsCat, title: string, body: string) =>
-    out.push({ id: `${s}:${key}`, split: s, icon, tone, cat, title, body });
+  // textos vêm da redação (newsroom.ts): variantes determinísticas por
+  // split+chave, pra carreira longa não reler a mesma manchete toda temporada
+  const add = (key: string, icon: string, tone: NewsItem['tone'], cat: NewsCat, story: { title: string; body: string }) =>
+    out.push({ id: `${s}:${key}`, split: s, icon, tone, cat, title: story.title, body: story.body });
+  const seed = (key: string) => `${s}:${key}`;
 
   if (ctx.major) {
-    if (ctx.major.champion) add('major', '🏆', 'good', 'result', `${ctx.org} ${ct('é CAMPEÃO MUNDIAL!')}`, `${ct('A')} ${ctx.org} ${ct('levantou o troféu do Major. O nome entrou para a história do CS.')}`);
-    else add('major', '🌍', 'info', 'result', `${ctx.org} ${ct('no Major:')} ${ctx.major.placement}º`, `${ct('A campanha mundial terminou em')} ${ctx.major.placement}º. Aprendizado pra voltar mais forte.`);
+    if (ctx.major.champion) add('major', '🏆', 'good', 'result', newsroom.storyMajorChampion(seed('major'), ctx.org));
+    else add('major', '🌍', 'info', 'result', newsroom.storyMajorPlacement(seed('major'), ctx.org, ctx.major.placement));
   } else if (ctx.champion) {
-    add('title', '🏆', 'good', 'result', `${ctx.org} ${ct('campeã do')} ${ctx.circuit}`, `${ct('Título conquistado! A torcida foi à loucura e a diretoria respira aliviada.')}`);
+    add('title', '🏆', 'good', 'result', newsroom.storyTitleWin(seed('title'), ctx.org, ctx.circuit));
   }
-  if (ctx.tierChange === 'up') add('tier', '⬆️', 'good', 'result', `${ctx.org} promovida ao ${ctx.tierName}`, `${ct('Subir de divisão coloca a org mais perto do Major. Patrocinadores de olho.')}`);
-  else if (ctx.tierChange === 'down') add('tier', '⬇️', 'bad', 'result', `${ctx.org} rebaixada ao ${ctx.tierName}`, `${ct('Temporada para esquecer: a queda de divisão pressiona o elenco e o caixa.')}`);
+  if (ctx.tierChange === 'up') add('tier', '⬆️', 'good', 'result', newsroom.storyTierUp(seed('tier'), ctx.org, ctx.tierName ?? ''));
+  else if (ctx.tierChange === 'down') add('tier', '⬇️', 'bad', 'result', newsroom.storyTierDown(seed('tier'), ctx.org, ctx.tierName ?? ''));
   if (ctx.objText) add('board', ctx.objMet ? '🏛️' : '⚠️', ctx.objMet ? 'good' : 'bad', 'board',
-    ctx.objMet ? ct('Diretoria satisfeita') : ct('Diretoria cobra resultados'),
-    `${ctx.objMet ? ct('Objetivo cumprido') : ct('Objetivo não cumprido')}: "${ctx.objText}". ${ctx.objMet ? ct('A confiança subiu.') : ct('A confiança caiu — atenção redobrada no próximo split.')}`);
-  if (ctx.offer) add('offer', '📞', 'info', 'transfer', `${ctx.offer.orgName} sonda ${ctx.offer.nick}`, `Proposta de ${formatMoney(ctx.offer.fee)} pelo seu ${ctx.offer.nick} (OVR ${ctx.offer.ovr}${ct('). Decida na janela de transferências.')}`);
-  if (ctx.releases.length) add('release', '📄', 'bad', 'transfer', `${ct('Contrato vencido:')} ${ctx.releases.join(', ')}`, `${ctx.releases.length === 1 ? ct('O jogador saiu') : ct('Os jogadores saíram')} ${ct('de graça por fim de contrato. Reforce o elenco no mercado.')}`);
+    ctx.objMet ? newsroom.storyBoardMet(seed('board'), ctx.objText) : newsroom.storyBoardMissed(seed('board'), ctx.objText));
+  if (ctx.offer) add('offer', '📞', 'info', 'transfer', newsroom.storyOffer(seed('offer'), ctx.offer.orgName, ctx.offer.nick, ctx.offer.ovr, formatMoney(ctx.offer.fee)));
+  if (ctx.releases.length) add('release', '📄', 'bad', 'transfer', newsroom.storyReleases(seed('release'), ctx.releases.join(', '), ctx.releases.length === 1));
   if (ctx.star) {
-    const r = ctx.star.rating.toFixed(2);
     const hot = ctx.star.rating >= 1.15;
-    add('star', hot ? '⭐' : '🎯', hot ? 'good' : 'info', 'result',
-      `${ctx.star.nick} ${ct('foi o destaque do split')}`,
-      `${ctx.star.nick} ${ct('fechou a campanha com rating')} ${r}${hot ? ct(' — atuação de melhor em quadra. A imprensa já comenta.') : ct('. Boa entrega individual.')}`);
+    add('star', hot ? '⭐' : '🎯', hot ? 'good' : 'info', 'result', newsroom.storyStar(seed('star'), ctx.star.nick, ctx.star.rating));
   }
-  if (ctx.majorNext) {
-    add('majorhype', '🌍', 'info', 'scene', `${ct('O MAJOR se aproxima:')} ${ctx.majorNext}`,
-      `${ct('O próximo split é o')} ${ctx.majorNext}${ct('. As melhores organizações do mundo se preparam — é a chance de entrar pra história. A pressão e o hype tomam conta do cenário.')}`);
-  }
-  if (ctx.risers.length) add('rise', '📈', 'good', 'board', `${ct('Em ascensão:')} ${ctx.risers.join(', ')}`, `${ct('A comissão técnica destaca a evolução de')} ${ctx.risers.join(', ')} ${ct('no último split.')}`);
-  if (ctx.sliders.length) add('slide', '📉', 'info', 'board', `${ct('Em queda:')} ${ctx.sliders.join(', ')}`, `${ctx.sliders.join(', ')} ${ctx.sliders.length === 1 ? 'perdeu' : ct('perderam')} ${ct('rendimento. Veteranos cobram mais minutos de treino.')}`);
-  if (ctx.unhappy.length) add('mood', '😟', 'bad', 'board', `${ct('Vestiário:')} ${ctx.unhappy.join(', ')} insatisfeito${ctx.unhappy.length > 1 ? 's' : ''}`, `${ct('Moral baixa no elenco. Vitórias, renovação de contrato e títulos levantam o astral.')}`);
-  if ((ctx.boardConfidence ?? 100) <= 25) add('ultimatum', '🚨', 'bad', 'board', ct('Ultimato da diretoria'), ct('A confiança chegou ao limite. O próximo campeonato precisa mostrar evolução ou o cargo estará em risco.'));
-  else if ((ctx.boardConfidence ?? 100) <= 42) add('pressure', '📰', 'bad', 'board', ct('Pressão aumenta nos bastidores'), ct('Diretoria e torcida cobram uma resposta imediata depois dos resultados recentes.'));
-  if (!ctx.champion && !ctx.objMet) add('fans', '📣', 'bad', 'scene', ct('Torcida pede reação'), ct('As arquibancadas perderam a paciência. O próximo split começa com cobrança por desempenho e atitude.'));
-  else if (ctx.champion) add('fans', '📣', 'good', 'scene', ct('Festa com a torcida'), ct('O título levou a torcida às ruas e aumentou a expectativa pelo próximo campeonato.'));
+  if (ctx.majorNext) add('majorhype', '🌍', 'info', 'scene', newsroom.storyMajorHype(seed('majorhype'), ctx.majorNext));
+  if (ctx.risers.length) add('rise', '📈', 'good', 'board', newsroom.storyRisers(seed('rise'), ctx.risers.join(', ')));
+  if (ctx.sliders.length) add('slide', '📉', 'info', 'board', newsroom.storySliders(seed('slide'), ctx.sliders.join(', '), ctx.sliders.length > 1));
+  if (ctx.unhappy.length) add('mood', '😟', 'bad', 'board', newsroom.storyUnhappy(seed('mood'), ctx.unhappy.join(', '), ctx.unhappy.length > 1));
+  if ((ctx.boardConfidence ?? 100) <= 25) add('ultimatum', '🚨', 'bad', 'board', newsroom.storyUltimatum(seed('ultimatum')));
+  else if ((ctx.boardConfidence ?? 100) <= 42) add('pressure', '📰', 'bad', 'board', newsroom.storyPressure(seed('pressure')));
+  if (!ctx.champion && !ctx.objMet) add('fans', '📣', 'bad', 'scene', newsroom.storyFansAngry(seed('fans')));
+  else if (ctx.champion) add('fans', '📣', 'good', 'scene', newsroom.storyFansParty(seed('fans')));
   return out;
 }
 
@@ -1454,18 +1452,17 @@ function socialNews(teams: TeamSeason[], split: number, org: string, champion: b
   if (pool.length) {
     const ranked = pool.slice().sort((a, b) => playerOvr(b.p) - playerOvr(a.p));
     const pick = ranked[hashStr(`star:${split}`) % Math.min(5, ranked.length)];
-    add('star', '@cs_headlines', 'info', `${pick.p.nick} ${ct('dominando o cenário')}`,
-      `${pick.p.nick} (${pick.t.team}${ct(') está em outro nível nesse split. Provavelmente o melhor do mundo agora. 🔥')}`);
+    const st = newsroom.storySocialStar(`${split}:sstar`, pick.p.nick, pick.t.team);
+    add('star', '@cs_headlines', 'info', st.title, st.body);
   }
   // meme reagindo ao seu time
-  add('meme', '@clutchozao', champion ? 'good' : 'info',
-    champion ? `${org} ${ct('CAMPEÃO e a TL surtou')}` : `e a ${org}...?`,
-    champion ? `${org} ${ct('levantou a taça e o povo foi à loucura. MERECIDO. 🐐🏆')}` : `mais um split da ${org} ${ct('sem troféu. calma que ano que vem é nosso 😅🙏')}`);
+  const meme = newsroom.storySocialMeme(`${split}:meme`, org, champion);
+  add('meme', '@clutchozao', champion ? 'good' : 'info', meme.title, meme.body);
   // time em alta no cenário
   if (teams.length) {
     const hot = teams[hashStr(`hot:${split}`) % teams.length];
-    add('hot', '@vrs_radar', 'info', `Fica de olho na ${hot.team}`,
-      `${ct('A')} ${hot.team} ${ct('vem subindo no ranking e promete brigar lá em cima. Time pra acompanhar. 📈')}`);
+    const hs = newsroom.storySocialHot(`${split}:hot`, hot.team);
+    add('hot', '@vrs_radar', 'info', hs.title, hs.body);
   }
   return out;
 }
@@ -1475,11 +1472,13 @@ function worldNews(teams: TeamSeason[], split: number, userRegion: CareerRegion)
   return worldScene(teams, split)
     .filter((s) => s.reg !== userRegion)
     .slice(0, 2)
-    .map((s) => ({
-      id: `${split}:world:${s.reg}`, split, icon: '🌐', tone: 'info' as const, cat: 'scene' as const,
-      title: `${s.champ.team} ${ct('campeão na')} ${CAREER_REGION_LABELS[s.reg]}`,
-      body: `${s.champ.team} ${ct('venceu o')} ${s.league}${s.runnerUp ? ` sobre ${s.runnerUp.team}` : ''}. A cena segue fervendo enquanto você disputa a sua região.`,
-    }));
+    .map((s) => {
+      const st = newsroom.storyWorldChampion(`${split}:world:${s.reg}`, s.champ.team, s.league, CAREER_REGION_LABELS[s.reg], s.runnerUp?.team);
+      return {
+        id: `${split}:world:${s.reg}`, split, icon: '🌐', tone: 'info' as const, cat: 'scene' as const,
+        title: st.title, body: st.body,
+      };
+    });
 }
 
 // ----- evolução de elenco entre temporadas -----
@@ -2862,16 +2861,24 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         title: `${ct('Virou clássico:')} ${current.org?.tag ?? 'ORG'} x ${opponent.tag}`,
         body: ct('Os confrontos repetidos e equilibrados transformaram esta série numa rivalidade. O elenco entra mais focado nos próximos encontros.'),
       });
-      if (userWon && userTeam.strength + 2 < opponent.strength) items.push({
-        id: `${current.split}:upset:${opponent.id}:${label}`.slice(0, 80), split: current.split,
-        icon: '📰', tone: 'good', cat: 'scene', title: ct('A zebra que abalou o circuito'),
-        body: `${current.org?.name ?? ct('Sua organização')} ${ct('derrubou um favorito e virou assunto entre analistas e torcedores.')}`,
-      });
-      else if (userWon && mapGap >= 2) items.push({
-        id: `${current.split}:dominant:${opponent.id}:${label}`.slice(0, 80), split: current.split,
-        icon: '📣', tone: 'good', cat: 'social', handle: '@arena_cs', title: ct('Vitória dominante'),
-        body: `${current.org?.tag ?? 'ORG'} ${ct('controlou a série do início ao fim. A torcida já pede voo mais alto.')}`,
-      });
+      // cobertura de TODA série (vitória E derrota), com o ângulo editorial certo:
+      // zebra, atropelo, jogo apertado, tropeço — placar real na manchete.
+      {
+        const uScore = series.mapScore[userIdx];
+        const oScore = series.mapScore[userIdx === 0 ? 1 : 0];
+        const angle: SeriesAngle = userWon
+          ? (userTeam.strength + 2 < opponent.strength ? 'upset' : mapGap >= 2 ? 'dominant' : 'close')
+          : (opponent.strength + 2 < userTeam.strength ? 'upsetAgainst' : mapGap <= 1 ? 'lossClose' : 'loss');
+        const st = newsroom.storySeries(`${current.split}:${label}:${opponent.id}`, {
+          org: current.org?.name ?? ct('Sua organização'), tag: current.org?.tag ?? 'ORG',
+          oppTag: opponent.tag, score: `${uScore}-${oScore}`, label, angle,
+        });
+        items.push({
+          id: `${current.split}:series:${opponent.id}:${label}`.slice(0, 80), split: current.split,
+          icon: userWon ? '📰' : '📉', tone: userWon ? 'good' : 'bad',
+          cat: angle === 'upset' ? 'scene' : 'result', title: st.title, body: st.body,
+        });
+      }
       if (load.newBurnouts.length) items.push({
         id: `${current.split}:burnout:${load.newBurnouts.join('-')}`.slice(0, 80), split: current.split,
         icon: '🔋', tone: 'bad', cat: 'board',

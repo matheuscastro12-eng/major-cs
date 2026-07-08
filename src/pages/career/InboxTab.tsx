@@ -127,7 +127,7 @@ export function InboxTab({ news, newsCat, setNewsCat, unread, onMarkAllRead }: P
                   </div>
                 );
               }
-              const author = draft5Author(n.id);
+              const author = draft5Author(n.id, n.cat);
               return (
                 <div key={n.id} className={`news-item d5-article ${n.tone}`}>
                   <span className="news-ic"><CareerIconLegacy icon={n.icon} size={18} /></span>
