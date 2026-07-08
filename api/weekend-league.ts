@@ -1,5 +1,5 @@
-// "Major do Sábado" — Weekend League do Ultimate (fase A: servidor).
-// Torneio de fim de semana (sáb 00:00 → dom 23:59 America/Sao_Paulo): registro
+// "Major da Semana" — Weekend League do Ultimate (fase A: servidor).
+// Torneio semanal (qui 00:00 → sáb 23:59 America/Sao_Paulo): registro
 // por janela, até 10 partidas com reports PAREADOS (mesma filosofia anti-fraude
 // da ranqueada — resultado só conta quando os dois lados batem) e recompensa
 // por faixa de vitórias paga pela economia server-authoritative (ledger
@@ -77,7 +77,7 @@ export default async function handler(
   }
   const action = String(body.action ?? '');
   const email = verifyToken(String(body.token ?? ''));
-  if (!email) { res.status(401).json({ error: 'Entre na sua conta pra jogar o Major do Sábado.' }); return; }
+  if (!email) { res.status(401).json({ error: 'Entre na sua conta pra jogar o Major da Semana.' }); return; }
   if (rateLimited(`account:${email}:${action}`, ACTION_LIMITS[action] ?? 30)) {
     res.setHeader('Retry-After', '60');
     res.status(429).json({ error: 'muitas requisições' });
@@ -94,7 +94,7 @@ export default async function handler(
 
   const acc = await (sql`SELECT paid FROM rtm_accounts WHERE email=${email}`);
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
-  if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O Major do Sábado faz parte da conta com save na nuvem.' }); return; }
+  if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O Major da Semana faz parte da conta com save na nuvem.' }); return; }
 
   const now = new Date();
 
@@ -108,7 +108,7 @@ export default async function handler(
     if (!WINDOW_ID_RE.test(windowId)) { res.status(400).json({ error: 'windowId inválido' }); return; }
     const r = await wlRegister(sql, email, windowId, now);
     if (!r.ok) {
-      if (r.error === 'window_closed') { res.status(409).json({ error: 'window_closed', message: 'A janela do Major do Sábado está fechada. Volta no sábado!' }); return; }
+      if (r.error === 'window_closed') { res.status(409).json({ error: 'window_closed', message: 'A janela do Major da Semana está fechada. Volta na quinta!' }); return; }
       res.status(400).json({ error: 'wrong_window', message: 'Essa não é a janela atual.' });
       return;
     }

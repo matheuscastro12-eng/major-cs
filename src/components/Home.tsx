@@ -188,7 +188,7 @@ export function Home({
                     <span className="rtm-modecard-desc">{ct('Você não treina o time — você É o jogador. Viva a carreira de astro do CS: treine, gerencie sua vida e brilhe nos momentos decisivos.')}</span>
                     {premiumLocked && (
                       <span className="rtm-modecard-benefits">
-                        ✓ {ct('Road to Pro completo · Major do Sábado · saves na nuvem em 5 slots')}
+                        ✓ {ct('Road to Pro completo · Major da Semana · saves na nuvem em 5 slots')}
                         <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
                       </span>
                     )}
@@ -232,7 +232,7 @@ export function Home({
                     <span className="rtm-modecard-desc">{ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')}</span>
                     {premiumLocked && (
                       <span className="rtm-modecard-benefits">
-                        ✓ {ct('Ultimate com mercado entre managers · ranqueada no ladder real · Major do Sábado')}
+                        ✓ {ct('Ultimate com mercado entre managers · ranqueada no ladder real · Major da Semana')}
                         <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
                       </span>
                     )}

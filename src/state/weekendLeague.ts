@@ -1,4 +1,4 @@
-// Cliente do "Major do Sábado" (Weekend League) — fala com api/weekend-league.ts.
+// Cliente do "Major da Semana" (Weekend League) — fala com api/weekend-league.ts.
 // Mesmo padrão de ranking.ts: POST com token da conta, erro vira Error com a
 // mensagem do servidor. Além do CRUD da tela, expõe o ESPELHO de report:
 // quando uma ranqueada 1v1 termina, o cliente também manda o resultado pra

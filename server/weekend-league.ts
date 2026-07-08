@@ -1,10 +1,10 @@
-// "Major do Sábado" — Weekend League do Ultimate (estilo FUT, adaptado).
+// "Major da Semana" — Weekend League do Ultimate (estilo FUT, adaptado).
 // Lógica PURA do lado do servidor: janela de fim de semana, registro, reports
 // pareados (mesma filosofia anti-fraude da ranqueada: resultado só conta quando
 // os DOIS lados batem; conflito não conta pra ninguém) e claim de recompensa
 // por faixa de vitórias pago via applyUltTransaction (ledger auditável).
 //
-// JANELA: todo sábado 00:00 → domingo 23:59:59 em America/Sao_Paulo. O Brasil
+// JANELA: toda quinta 00:00 → sábado 23:59:59 em America/Sao_Paulo. O Brasil
 // aboliu o horário de verão em 2019, então São Paulo é UTC-3 FIXO — a conta é
 // feita em offset fixo de -03:00 (se o DST voltar um dia, este módulo precisa
 // migrar pra Intl/tz db; documentado de propósito).
@@ -36,43 +36,45 @@ const SP_OFFSET_MS = 3 * 3600_000; // America/Sao_Paulo = UTC-3 fixo (sem DST)
 const DAY_MS = 86_400_000;
 
 export interface WlWindow {
-  id: string; // 'wl-YYYY-MM-DD' (data do sábado, em -03:00)
-  startsAt: string; // ISO UTC do sábado 00:00 -03
-  endsAt: string; // ISO UTC da segunda 00:00 -03 (exclusivo)
+  id: string; // 'wl-YYYY-MM-DD' (data da quinta, em -03:00)
+  startsAt: string; // ISO UTC da quinta 00:00 -03
+  endsAt: string; // ISO UTC do domingo 00:00 -03 (exclusivo)
   open: boolean;
 }
 
-// Janela corrente se aberta; senão a PRÓXIMA (sexta → sábado seguinte; segunda
-// → sábado da mesma semana que vem). Determinística a partir de `now`.
+// Janela corrente se aberta; senão a PRÓXIMA (quarta → quinta seguinte; domingo
+// → quinta da semana que vem). Determinística a partir de `now`.
 export function weekendWindowFor(now: Date): WlWindow {
   const local = new Date(now.getTime() - SP_OFFSET_MS); // "relógio de SP" em campos UTC
   const dow = local.getUTCDay(); // 0=dom … 6=sáb
-  const daysToSat = dow === 6 ? 0 : dow === 0 ? -1 : 6 - dow;
-  const satMidnightLocal = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + daysToSat);
-  const startsMs = satMidnightLocal + SP_OFFSET_MS; // 00:00 -03 = 03:00 UTC
-  const endsMs = startsMs + 2 * DAY_MS;
-  const sat = new Date(satMidnightLocal);
+  // Âncora = quinta (dow 4). Qui/sex/sáb pertencem à janela corrente; dom→qua
+  // apontam pra PRÓXIMA quinta.
+  const daysToThu = dow === 4 ? 0 : dow === 5 ? -1 : dow === 6 ? -2 : (4 - dow + 7) % 7;
+  const thuMidnightLocal = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + daysToThu);
+  const startsMs = thuMidnightLocal + SP_OFFSET_MS; // 00:00 -03 = 03:00 UTC
+  const endsMs = startsMs + 3 * DAY_MS; // qui 00:00 → dom 00:00 -03 (qui+sex+sáb)
+  const thu = new Date(thuMidnightLocal);
   const pad = (n: number) => String(n).padStart(2, '0');
   return {
-    id: `wl-${sat.getUTCFullYear()}-${pad(sat.getUTCMonth() + 1)}-${pad(sat.getUTCDate())}`,
+    id: `wl-${thu.getUTCFullYear()}-${pad(thu.getUTCMonth() + 1)}-${pad(thu.getUTCDate())}`,
     startsAt: new Date(startsMs).toISOString(),
     endsAt: new Date(endsMs).toISOString(),
     open: now.getTime() >= startsMs && now.getTime() < endsMs,
   };
 }
 
-// Valida 'wl-YYYY-MM-DD' e devolve os limites da janela (a data PRECISA ser um
-// sábado real — id forjado com quarta-feira é rejeitado).
+// Valida 'wl-YYYY-MM-DD' e devolve os limites da janela (a data PRECISA ser uma
+// quinta-feira real — id forjado com outro dia é rejeitado).
 export function parseWindowId(id: string): { startsAt: Date; endsAt: Date } | null {
   const m = /^wl-(\d{4})-(\d{2})-(\d{2})$/.exec(id);
   if (!m) return null;
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const satMidnightLocal = Date.UTC(y, mo - 1, d);
-  const sat = new Date(satMidnightLocal);
-  if (sat.getUTCFullYear() !== y || sat.getUTCMonth() !== mo - 1 || sat.getUTCDate() !== d) return null;
-  if (sat.getUTCDay() !== 6) return null;
-  const startsMs = satMidnightLocal + SP_OFFSET_MS;
-  return { startsAt: new Date(startsMs), endsAt: new Date(startsMs + 2 * DAY_MS) };
+  const thuMidnightLocal = Date.UTC(y, mo - 1, d);
+  const thu = new Date(thuMidnightLocal);
+  if (thu.getUTCFullYear() !== y || thu.getUTCMonth() !== mo - 1 || thu.getUTCDate() !== d) return null;
+  if (thu.getUTCDay() !== 4) return null;
+  const startsMs = thuMidnightLocal + SP_OFFSET_MS;
+  return { startsAt: new Date(startsMs), endsAt: new Date(startsMs + 3 * DAY_MS) };
 }
 
 // -------------------------------------------------------------- recompensas
@@ -98,7 +100,7 @@ export const WL_REWARD_TIERS: WlRewardTier[] = [
   { minWins: 1, credits: 3000, name: 'Participante' },
   { minWins: 3, credits: 7500, name: 'Competidor' },
   { minWins: 5, credits: 13500, card: 'rareGold', name: 'Contender' },
-  { minWins: 7, credits: 22500, card: 'rareGold', name: 'Elite do Sábado' },
+  { minWins: 7, credits: 22500, card: 'rareGold', name: 'Elite da Semana' },
   { minWins: 9, credits: 37500, card: 'tots', name: 'Campeão do Major' },
 ];
 

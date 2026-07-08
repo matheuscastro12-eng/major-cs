@@ -1,4 +1,4 @@
-// "Major do Sábado" — tela da Weekend League (fase B, cliente).
+// "Major da Semana" — tela da Weekend League (fase B, cliente).
 // Uma tela só: janela + countdown, meu run (X/10, W-L, faixas de recompensa,
 // inscrever/resgatar) e o top-20 da janela. Os resultados entram sozinhos:
 // toda ranqueada 1v1 jogada com a inscrição ativa é espelhada pro servidor
@@ -81,7 +81,7 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
     </div>
   );
 
-  // funil: conta grátis viu a trava da vitalícia do Major do Sábado
+  // funil: conta grátis viu a trava da vitalícia do Major da Semana
   useEffect(() => { if (!paid) trackPaywallView('wl-lock'); }, [paid]);
 
   // ------------------------------------------------ grátis: trava vitalícia
@@ -89,16 +89,16 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
     return (
       <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {back}
-        <Panel title={ct('Major do Sábado')} accent="gold">
+        <Panel title={ct('Major da Semana')} accent="gold">
           <div style={{ textAlign: 'center', padding: '26px 10px', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
             <span style={{ fontSize: '34px' }}>🔒</span>
-            <b style={{ fontSize: '16px', color: 'var(--em-text)' }}>{ct('O Major do Sábado é da conta vitalícia')}</b>
+            <b style={{ fontSize: '16px', color: 'var(--em-text)' }}>{ct('O Major da Semana é da conta vitalícia')}</b>
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5, maxWidth: '420px' }}>
-              {ct('Torneio de fim de semana com recompensas em créditos e cartas do Ultimate. Ative a conta com save na nuvem para participar.')}
+              {ct('Torneio semanal com recompensas em créditos e cartas do Ultimate. Ative a conta com save na nuvem para participar.')}
             </p>
             {/* valor concreto da vitalícia + âncora de preço (pagamento único) */}
             <p style={{ margin: 0, fontSize: '12px', color: 'var(--em-gold, #e8c170)', lineHeight: 1.5, maxWidth: '420px', fontWeight: 600 }}>
-              ✓ {ct('Major do Sábado · Road to Pro completo · mercado entre managers · saves na nuvem em 5 slots')}
+              ✓ {ct('Major da Semana · Road to Pro completo · mercado entre managers · saves na nuvem em 5 slots')}
             </p>
             <p style={{ margin: 0, fontSize: '12px', color: 'var(--em-text)', fontWeight: 800 }}>
               R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}
@@ -114,8 +114,8 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
     return (
       <div style={{ maxWidth: '760px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {back}
-        <Panel title={ct('Major do Sábado')} accent="gold">
-          <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--em-muted)', fontSize: '13px' }}>{ct('Carregando a janela do fim de semana…')}</div>
+        <Panel title={ct('Major da Semana')} accent="gold">
+          <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--em-muted)', fontSize: '13px' }}>{ct('Carregando a janela da semana…')}</div>
         </Panel>
       </div>
     );
@@ -125,9 +125,9 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
     return (
       <div style={{ maxWidth: '760px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {back}
-        <Panel title={ct('Major do Sábado')} accent="gold">
+        <Panel title={ct('Major da Semana')} accent="gold">
           <div style={{ textAlign: 'center', padding: '26px 10px', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: 'var(--em-red, #c0392b)', fontWeight: 700 }}>{error || ct('Não deu pra carregar o Major do Sábado.')}</span>
+            <span style={{ fontSize: '13px', color: 'var(--em-red, #c0392b)', fontWeight: 700 }}>{error || ct('Não deu pra carregar o Major da Semana.')}</span>
             <Button variant="ghost" onClick={load}>{ct('Tentar de novo')}</Button>
           </div>
         </Panel>
@@ -153,9 +153,9 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '20px 24px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '34px' }}>🏟️</span>
           <div style={{ flex: 1, minWidth: '200px' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>{ct('Weekend League · sábado e domingo')}</div>
-            <h1 style={{ margin: '2px 0', fontFamily: 'inherit', fontSize: '26px', fontWeight: 800, color: 'var(--em-text)' }}>{ct('Major do Sábado')}</h1>
-            <div style={{ fontSize: '12.5px', color: 'var(--em-muted)' }}>{ct('Até 10 ranqueadas 1v1 no fim de semana. Quanto mais vitórias, maior a recompensa.')}</div>
+            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>{ct('Weekend League · quinta a sábado')}</div>
+            <h1 style={{ margin: '2px 0', fontFamily: 'inherit', fontSize: '26px', fontWeight: 800, color: 'var(--em-text)' }}>{ct('Major da Semana')}</h1>
+            <div style={{ fontSize: '12.5px', color: 'var(--em-muted)' }}>{ct('Até 10 ranqueadas 1v1 de quinta a sábado. Quanto mais vitórias, maior a recompensa.')}</div>
           </div>
           <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '8px', background: 'rgba(18,22,27,.6)', border: `1px solid ${win.open ? '#29c47a' : 'var(--em-border-strong)'}` }}>
             <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', fontWeight: 800, color: win.open ? '#29c47a' : 'var(--em-muted)' }}>
@@ -165,8 +165,8 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
               {win.open
                 ? `${ct('fecha em')} ${fmtLeft(endsMs - now)}`
                 : now < startsMs
-                  ? `${ct('abre sábado · em')} ${fmtLeft(startsMs - now)}`
-                  : ct('abre sábado')}
+                  ? `${ct('abre quinta · em')} ${fmtLeft(startsMs - now)}`
+                  : ct('abre quinta')}
             </div>
           </div>
         </div>
@@ -195,8 +195,8 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
           ) : (
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>
               {win.open
-                ? ct('Inscreva-se para valer neste fim de semana. Depois é só jogar Ranked 1v1: os resultados contam automaticamente (quando os dois lados confirmam).')
-                : ct('Você não participou desta janela. A inscrição abre junto com a janela, no sábado.')}
+                ? ct('Inscreva-se para valer nesta semana. Depois é só jogar Ranked 1v1: os resultados contam automaticamente (quando os dois lados confirmam).')
+                : ct('Você não participou desta janela. A inscrição abre junto com a janela, na quinta.')}
             </p>
           )}
 
@@ -223,7 +223,7 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
           {/* ação principal por estado */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             {win.open && !entry && (
-              <Button variant="gold" disabled={busy} onClick={doRegister}>{busy ? ct('Inscrevendo…') : ct('Inscrever-se no Major do Sábado')}</Button>
+              <Button variant="gold" disabled={busy} onClick={doRegister}>{busy ? ct('Inscrevendo…') : ct('Inscrever-se no Major da Semana')}</Button>
             )}
             {claimable && (
               <Button variant="gold" disabled={busy} onClick={doClaim}>{busy ? ct('Resgatando…') : ct('Resgatar recompensa')}</Button>
@@ -241,7 +241,7 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
       </Panel>
 
       {/* top 20 da janela */}
-      <Panel title={ct('Classificação do fim de semana · top 20')} accent="gold" flush>
+      <Panel title={ct('Classificação da semana · top 20')} accent="gold" flush>
         {standings.length === 0 ? (
           <div style={{ padding: '18px 16px', fontSize: '12.5px', color: 'var(--em-muted)' }}>{ct('Ninguém se inscreveu nesta janela ainda. Seja o primeiro!')}</div>
         ) : (

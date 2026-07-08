@@ -815,7 +815,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   };
 
   // ── mercado P2P (fase B) — vitrine/venda/minhas listagens contra o servidor ──
-  // Conta grátis vê a seção travada (mesmo gate do Major do Sábado); toda
+  // Conta grátis vê a seção travada (mesmo gate do Major da Semana); toda
   // chamada é try/catch com toast — o Mercado nunca trava a tela.
   const mktPaid = !!account?.paid;
   // funil: conta grátis abriu a aba Mercado e viu a trava da vitalícia
@@ -1267,8 +1267,8 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     // só a ranqueada alimenta o ranking global (report POR PARTIDA). Nick do
     // ladder = displayName; participante no lobby = pvpNick (tem sufixo #XXXX).
     if (!already && args.ranked) void reportResult(won, displayName, args.code, pvpNick);
-    // espelho do Major do Sábado: duelo ranqueado do Ultimate também conta pro
-    // run do fim de semana (gate local de inscrição; fire-and-forget, servidor valida).
+    // espelho do Major da Semana: duelo ranqueado do Ultimate também conta pro
+    // run da semana (gate local de inscrição; fire-and-forget, servidor valida).
     if (!already && args.ranked) wlMirrorReport(won, args.code, args.oppNick);
     const eloAfter = eloBefore + outcome.eloDelta;
     setResult(null);
@@ -1896,7 +1896,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
             ) : undefined}
           >
             {!mktPaid ? (
-              // conta grátis: seção visível mas travada — mesma linguagem do Major do Sábado
+              // conta grátis: seção visível mas travada — mesma linguagem do Major da Semana
               <div style={{ textAlign: 'center', padding: '26px 10px', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
                 <span style={{ fontSize: '34px' }}>🔒</span>
                 <b style={{ fontSize: '1rem', color: 'var(--ut-ink)' }}>{ct('O Mercado de Jogadores é da conta vitalícia')}</b>
@@ -1908,7 +1908,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
                 </p>
                 {/* valor concreto da vitalícia + âncora de preço (pagamento único) */}
                 <p style={{ margin: 0, maxWidth: 440, fontSize: '0.76rem', lineHeight: 1.5, color: 'var(--em-gold, #e8c170)', fontWeight: 600 }}>
-                  ✓ {ct('Mercado entre managers · Major do Sábado · ranqueada no ladder real · saves na nuvem em 5 slots')}
+                  ✓ {ct('Mercado entre managers · Major da Semana · ranqueada no ladder real · saves na nuvem em 5 slots')}
                 </p>
                 <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--ut-ink)', fontWeight: 800 }}>
                   R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}

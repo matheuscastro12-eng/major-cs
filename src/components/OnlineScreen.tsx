@@ -886,8 +886,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
       recordedSeasonsRef.current.add(key);
       // ranking salvo (conta paga, só em sala RANQUEADA): manda o resultado e atualiza meu MMR
       if (account?.paid && state.lobby.ranked) void reportResult(won, nick || account.nick, state.lobby.code, nick).then((r) => { if (r) { setRankFeedback(r); if (r.me) setMyRank(r.me); } });
-      // espelho do Major do Sábado (Weekend League): duelo ranqueado também conta
-      // pro run do fim de semana SE o gate local diz que estou inscrito na janela.
+      // espelho do Major da Semana (Weekend League): duelo ranqueado também conta
+      // pro run da semana SE o gate local diz que estou inscrito na janela.
       // Fire-and-forget — nunca perturba o fluxo do ranking (o servidor valida tudo).
       if (account?.paid && state.lobby.ranked && duel) {
         const opp = duel.nicks.find((playerNick) => playerNick.toLowerCase() !== nick.toLowerCase()) ?? '';

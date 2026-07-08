@@ -199,7 +199,7 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'home-pill': 'Home · pill Fundador',
   'acct-chip': 'Chip de conta (dropdown)',
   'upsell-card': 'Card de upsell',
-  'wl-lock': 'Trava · Major do Sábado',
+  'wl-lock': 'Trava · Major da Semana',
   'hub-wl': 'Hub online · badge Sábado',
   'mkt-lock': 'Trava · Mercado P2P',
   profile: 'Perfil do manager',
