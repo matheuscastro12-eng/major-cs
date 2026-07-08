@@ -29,6 +29,7 @@ import { playerOvr, playerValue } from '../ratings';
 import { hashStr } from '../../state/hash';
 import { ct } from '../../state/career-i18n';
 import { computeAllTeamForms, TEAM_FORM_CRISIS, TEAM_FORM_PASSIVE, type TeamFormSave } from './teamForm';
+import { storyAIMoveFree, storyAIMoveTrade } from './newsroom';
 
 // id do "time" virtual que guarda os free agents em CS2_REAL_2026
 export const FREE_TEAM_ID = '__free__';
@@ -102,14 +103,13 @@ const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id 
 function newsFor(m: AIMarketMove, split: number): AIMarketNewsItem {
   const roleLabel = ROLE_LABEL[m.role] ?? m.role;
   const crisis = m.reason === ct('reformulação após crise de resultados');
-  const opener = crisis ? `${ct('Em crise, a')} ${m.toName}` : `${ct('A')} ${m.toName}`;
-  const title = m.kind === 'free'
-    ? `${m.toName} ${ct('contrata')} ${m.nick} ${ct('do mercado livre')}`
-    : `${m.toName} ${ct('tira')} ${m.nick} ${ct('da')} ${m.fromName}`;
-  const body = m.kind === 'free'
-    ? `${opener} ${ct('foi ao mercado livre e fechou com o')} ${roleLabel} ${m.nick} (OVR ${m.ovr}). ${m.outNick} ${ct('perde a vaga e fica livre no mercado.')}`
-    : `${opener} ${ct('buscou o')} ${roleLabel} ${m.nick} (OVR ${m.ovr}) ${ct('na')} ${m.fromName}; ${m.outNick} ${ct('faz o caminho inverso na troca.')}`;
-  return { id: `${split}:aimkt:${m.playerId}`, split, icon: m.kind === 'free' ? '🖊️' : '🔁', tone: 'info', cat: 'transfer', title, body };
+  const seed = `${split}:aimkt:${m.playerId}`;
+  // textos da redação (newsroom): variantes determinísticas pra janela de
+  // transferências não ler igual toda temporada
+  const story = m.kind === 'free'
+    ? storyAIMoveFree(seed, m.toName, m.nick, roleLabel, m.ovr, m.outNick, crisis)
+    : storyAIMoveTrade(seed, m.toName, m.fromName, m.nick, roleLabel, m.ovr, m.outNick, crisis);
+  return { id: seed, split, icon: m.kind === 'free' ? '🖊️' : '🔁', tone: 'info', cat: 'transfer', title: story.title, body: story.body };
 }
 
 export function tickAIMarketActivity(args: AIMarketTickArgs): AIMarketTick {

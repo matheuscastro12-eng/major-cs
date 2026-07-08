@@ -6,6 +6,7 @@
 
 import {
   CareerOverview,
+  type OverviewNewsRow,
   type RecentMatchRow,
 } from '../../components/career/CareerOverview';
 import {
@@ -45,6 +46,7 @@ interface OverviewTabSave {
   youthAge?: Record<string, number>;
   youthDebut?: Record<string, YouthDebut>;
   gamePlan?: GamePlan;
+  news?: OverviewNewsRow[];
   [key: string]: unknown;
 }
 
@@ -187,6 +189,8 @@ export function OverviewTab({
       onPlay={playMine}
       onSim={simMine}
       onSimSplit={simWholeSplit}
+      news={save.news ?? []}
+      onOpenNews={() => setHubTab('inbox')}
       onOpenTasks={() => setHubTab('inbox')}
       onOpenCalendar={() => setHubTab('calendar')}
       onOpenVrs={() => setHubTab('vrs')}

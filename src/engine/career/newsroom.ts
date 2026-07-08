@@ -199,6 +199,34 @@ export function storySeries(
   }
 }
 
+// --------------------------------------------------- mercado da IA (cena viva)
+export function storyAIMoveFree(seed: string, toName: string, nick: string, role: string, ovr: number, outNick: string, crisis: boolean): Story {
+  const opener = crisis ? `${ct('Em crise, a')} ${toName}` : `${ct('A')} ${toName}`;
+  return pick(seed, [
+    { title: `${toName} ${ct('contrata')} ${nick} ${ct('do mercado livre')}`, body: `${opener} ${ct('foi ao mercado livre e fechou com o')} ${role} ${nick} (OVR ${ovr}). ${outNick} ${ct('perde a vaga e fica livre no mercado.')}` },
+    { title: `${ct('OFICIAL:')} ${nick} ${ct('é o novo')} ${role} ${ct('da')} ${toName}`, body: `${ct('Sem custo de transferência: o OVR')} ${ovr} ${ct('estava livre no mercado. Quem sai da vaga é')} ${outNick}${ct(', agora à procura de clube.')}` },
+    { title: `${toName} ${ct('anuncia')} ${nick}`, body: `${opener} ${ct('apostou no mercado livre pra resolver a posição de')} ${role}. ${nick} (OVR ${ovr}) ${ct('chega pra vaga de')} ${outNick}.` },
+  ]);
+}
+export function storyAIMoveTrade(seed: string, toName: string, fromName: string, nick: string, role: string, ovr: number, outNick: string, crisis: boolean): Story {
+  const opener = crisis ? `${ct('Em crise, a')} ${toName}` : `${ct('A')} ${toName}`;
+  return pick(seed, [
+    { title: `${toName} ${ct('tira')} ${nick} ${ct('da')} ${fromName}`, body: `${opener} ${ct('buscou o')} ${role} ${nick} (OVR ${ovr}) ${ct('na')} ${fromName}; ${outNick} ${ct('faz o caminho inverso na troca.')}` },
+    { title: `${ct('BOMBA no mercado:')} ${nick} ${ct('troca')} ${fromName} ${ct('por')} ${toName}`, body: `${ct('Negócio fechado entre as orgs: o')} ${role} ${ct('de OVR')} ${ovr} ${ct('muda de camisa e')} ${outNick} ${ct('vai na direção contrária.')}` },
+    { title: `${nick} ${ct('é o novo reforço da')} ${toName}`, body: `${opener} ${ct('convenceu a')} ${fromName} ${ct('a liberar seu')} ${role} (OVR ${ovr}). ${ct('Na troca,')} ${outNick} ${ct('ganha novo endereço.')}` },
+  ]);
+}
+
+// ------------------------------------------------ forma individual (orgânica)
+export function storyHotForm(seed: string, nick: string, avg: number, org: string): Story {
+  const r = avg.toFixed(2);
+  return pick(seed, [
+    { title: `${nick} ${ct('está EM CHAMAS')}`, body: `${ct('Média')} ${r} ${ct('nas últimas séries pela')} ${org}${ct('. Nos rankings de forma da DRAFT5, ninguém entrega mais que ele agora.')}` },
+    { title: `${ct('A fase de')} ${nick} ${ct('virou pauta no cenário')}`, body: `${r} ${ct('de rating médio na janela recente. Adversários já montam o plano de jogo em cima de frear o astro da')} ${org}.` },
+    { title: `${ct('Que fase:')} ${nick} ${ct('não erra')}`, body: `${ct('Sequência rara de consistência — média')} ${r} ${ct('nas últimas séries. Na')} ${org}${ct(', a ordem é simples: dar espaço pra ele decidir.')}` },
+  ]);
+}
+
 // -------------------------------------------------------------- social/mundo
 export function storySocialStar(seed: string, nick: string, team: string): Story {
   return pick(seed, [

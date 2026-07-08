@@ -20,7 +20,7 @@ import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career/rivalries';
-import { applyFatigueForm, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
+import { applyFatigueForm, careerPlayerId, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
@@ -2851,9 +2851,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const highlight = bestSeriesMoment(series, teams, userIdx);
       const userWon = series.winner === userIdx;
       const mapGap = Math.abs(series.mapScore[0] - series.mapScore[1]);
+      // manchetes usam só o nome do torneio (o label completo carrega etapa/fase
+      // e estoura o título: "IEM Katowice · Etapa 1/3 (Split 1) · Vencedores...")
+      const shortLabel = label.split('·')[0].trim() || label;
       if (highlight) items.push({
         id: `${current.split}:hl:${highlight.nick}:${label}`.slice(0, 80), split: current.split,
-        icon: '🎬', tone: 'good', cat: 'result', title: highlight.text, body: `${label} · vs ${opponent.tag}.`,
+        icon: '🎬', tone: 'good', cat: 'result', title: highlight.text, body: `${shortLabel} · vs ${opponent.tag}.`,
       });
       if (rivalry.becameRival) items.push({
         id: `${current.split}:rival:${opponent.id}`, split: current.split,
@@ -2871,7 +2874,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           : (opponent.strength + 2 < userTeam.strength ? 'upsetAgainst' : mapGap <= 1 ? 'lossClose' : 'loss');
         const st = newsroom.storySeries(`${current.split}:${label}:${opponent.id}`, {
           org: current.org?.name ?? ct('Sua organização'), tag: current.org?.tag ?? 'ORG',
-          oppTag: opponent.tag, score: `${uScore}-${oScore}`, label, angle,
+          oppTag: opponent.tag, score: `${uScore}-${oScore}`, label: shortLabel, angle,
         });
         items.push({
           id: `${current.split}:series:${opponent.id}:${label}`.slice(0, 80), split: current.split,
@@ -2902,6 +2905,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       // forma recente: empurra o rating da SÉRIE de cada titular na janela
       // deslizante (cap 6, shift no overflow) — alimenta o status de forma.
       const recentRatings = recordSeriesRatings(current.recentRatings, series, userTeam.players);
+      // matéria ORGÂNICA: jogador em fase rara (janela cheia com média alta).
+      // No máximo uma por split por jogador — dedup pelo id contra o feed atual.
+      const existingIds = new Set((current.news ?? []).map((n) => n.id));
+      for (const p of userTeam.players) {
+        const window = recentRatings[careerPlayerId(p.id)];
+        if (!window || window.length < 4) continue;
+        const avg = window.reduce((a, b) => a + b, 0) / window.length;
+        if (avg < 1.18) continue;
+        const hotId = `${current.split}:hotform:${p.nick}`;
+        if (existingIds.has(hotId)) continue;
+        const st = newsroom.storyHotForm(hotId, p.nick, avg, current.org?.name ?? ct('sua org'));
+        items.push({ id: hotId, split: current.split, icon: '🔥', tone: 'good', cat: 'result', title: st.title, body: st.body });
+      }
       const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, recentRatings, ...pushNews(current, items) };
       persist(next);
       return next;
@@ -3972,8 +3988,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
     setQuickSim({
       series, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1,
-      label: `${l.name} · ${l.gsl ? ct(GSL_ROUND_LABELS[l.current]) : `${ct('Rodada')} ${l.current + 1}`}`,
-      onDone: () => { setQuickSim(null); finishUserRound(l, series); recordCareerMatch(series, [a, b], m.a === 'user' ? 0 : 1, `${l.name} · ${l.gsl ? ct(GSL_ROUND_LABELS[l.current]) : `${ct('Rodada')} ${l.current + 1}`}`); },
+      label: `${l.name} · ${l.gsl ? ct(GSL_ROUND_LABELS[l.current] ?? 'Fase de grupos') : `${ct('Rodada')} ${l.current + 1}`}`,
+      onDone: () => { setQuickSim(null); finishUserRound(l, series); recordCareerMatch(series, [a, b], m.a === 'user' ? 0 : 1, `${l.name} · ${l.gsl ? ct(GSL_ROUND_LABELS[l.current] ?? 'Fase de grupos') : `${ct('Rodada')} ${l.current + 1}`}`); },
     });
   };
 
@@ -3995,7 +4011,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             const [a, b] = pair;
             const bo = m.bo ?? 3;
             m.result = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
-            simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct(GSL_ROUND_LABELS[l.current])}` });
+            simulated.push({ series: m.result, teams: [a, b], userIdx: m.a === 'user' ? 0 : 1, label: `${l.name} · ${ct(GSL_ROUND_LABELS[l.current] ?? 'Fase de grupos')}` });
           }
         }
         resolveGSLRound(l, rngRef.current);
@@ -5571,7 +5587,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       userIdx: myMatch.a === 'user' ? 0 : 1,
       mode: 'league',
       bestOf: myMatch.bo ?? LEAGUE_BO, // GSL: abertura Bo1, resto Bo3
-      phaseLabel: `${league.name} · ${league.gsl ? ct(GSL_ROUND_LABELS[league.current]) : `${ct('Rodada')} ${league.current + 1}`}`,
+      phaseLabel: `${league.name} · ${league.gsl ? ct(GSL_ROUND_LABELS[league.current] ?? 'Fase de grupos') : `${ct('Rodada')} ${league.current + 1}`}`,
     });
     setStage('veto');
   };

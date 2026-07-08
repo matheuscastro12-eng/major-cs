@@ -7,6 +7,7 @@ import { ct } from '../../state/career-i18n';
 import { playerOrgId } from '../../state/career-player-route';
 import type { DashTask } from '../../state/career-tasks';
 import { Flag, TeamBadge } from '../ui';
+import { draft5Author, draft5Category } from '../../engine/career/draft5';
 import { PlayerLink } from './PlayerLink';
 import { DashCard } from './DashCard';
 import { SparkLine } from './DashCharts';
@@ -27,6 +28,11 @@ export type VrsRow = {
 
 export type RecentMatchRow = {
   key: string; label: string; opponent: string; score: string; won: boolean; maps: string[];
+};
+
+// manchete compacta pro painel DRAFT5 do dashboard (subset do NewsItem)
+export type OverviewNewsRow = {
+  id: string; title: string; cat?: string; tone: 'good' | 'bad' | 'info'; split: number;
 };
 
 function moodLabel(morale: number): string {
@@ -52,6 +58,7 @@ export function CareerOverview({
   roundLabel, boLabel, venueLabel, nextRivalry, nextRivalryScore,
   onPlay, onSim, onSimSplit, onOpenTasks, onOpenCalendar, onOpenVrs, onOpenResults,
   onPickTeam, onPickPlayer, onSquad, gamePlanPicker, oppScoutStats,
+  news, onOpenNews,
 }: {
   save: { org?: { name?: string; tag?: string; colors?: [string, string]; logo?: string }; circuit?: { name?: string }; split: number; titles?: number; budget: number; tier?: number };
   league: League;
@@ -92,6 +99,8 @@ export function CareerOverview({
   onSquad: () => void;
   gamePlanPicker: ReactNode;
   oppScoutStats?: Record<string, { rating: number; adr: number }>;
+  news?: OverviewNewsRow[];
+  onOpenNews?: () => void;
 }) {
   const eventName = save.circuit?.name ?? ct('Circuito');
   const oppPlayers = opp?.players ?? [];
@@ -402,6 +411,30 @@ export function CareerOverview({
             ))}
           </div>
         </DashCard>
+
+        {news && news.length > 0 && (
+          <DashCard
+            title="DRAFT5"
+            flush
+            className="em-news-card"
+            actions={onOpenNews && (
+              <button type="button" className="em-link-btn" onClick={onOpenNews}>{ct('Ver tudo')} <IconExternal size={11} /></button>
+            )}
+          >
+            <div className="em-news-list">
+              {news.slice(0, 4).map((n) => (
+                <button key={n.id} type="button" className="em-news-row em-btn-reset" onClick={onOpenNews}>
+                  <span className={`em-news-dot ${n.tone}`} />
+                  <div className="em-news-info">
+                    <span className="em-news-kicker">{draft5Category(n.cat)}</span>
+                    <span className="em-news-title">{n.title}</span>
+                    <span className="em-news-byline">{ct('Por')} {draft5Author(n.id, n.cat).name} · DRAFT5</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </DashCard>
+        )}
 
         <DashCard
           title={ct('Ranking mundial')}
