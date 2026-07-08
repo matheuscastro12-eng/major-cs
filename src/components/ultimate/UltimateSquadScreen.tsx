@@ -39,7 +39,8 @@ import { ct } from '../../state/career-i18n';
 import { track, trackPaywallView } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
-import { wlMirrorReport } from '../../state/weekendLeague';
+import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
+import { WeekendLeague } from '../online/WeekendLeague';
 import { UtPanel, UtEmpty } from './UtPanel';
 import {
   LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
@@ -299,7 +300,8 @@ interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: numbe
 export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe'>('hub');
+  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
+  const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
   // pack em abertura (id) — o roll pode ir ao SERVIDOR; sem isso o clique parecia
@@ -339,6 +341,13 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
   // mostra o link estático do Woovi como fallback.
   const [coinModal, setCoinModal] = useState<{ pack: CoinPack; charge: CoinCharge | null; error?: boolean } | null>(null);
   const { account } = useAccount();
+  // Major da Semana: status/ranking pro banner + ranking do hub (best-effort)
+  useEffect(() => {
+    if (!account || (tab !== 'hub' && tab !== 'major-semana')) return;
+    let alive = true;
+    void fetchWlStatus().then((s) => { if (alive) setWlStatus(s); }).catch(() => { /* banner best-effort */ });
+    return () => { alive = false; };
+  }, [account, tab]);
 
   // viewport estreito (≤430px): o PitchTile de 112px estourava o tabuleiro no
   // celular (3 tiles na mesma linha = 336px > ~294px úteis; tiles de borda
@@ -1552,6 +1561,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
               )}
             </div>
             <button className={`ut-nav__item${tab === 'ranked' ? ' is-active' : ''}`} onClick={() => go('ranked')}><Swords size={16} /> {ct('Ranqueada')}</button>
+            <button className={`ut-nav__item${tab === 'major-semana' ? ' is-active' : ''}`} onClick={() => go('major-semana')}><Trophy size={16} /> {ct('Major da Semana')}{wlWindowNow().open && <span className="ut-nav__badge" style={{ background: '#29c47a' }}>●</span>}</button>
             <button className={`ut-nav__item${tab === 'passe' ? ' is-active' : ''}`} onClick={() => go('passe')}><Ticket size={16} /> {ct('Passe')}{passClaimableCount > 0 && <span className="ut-nav__badge">{passClaimableCount}</span>}</button>
             <button className={`ut-nav__item${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo Privado')}</button>
             <button className={`ut-nav__item${tab === 'ranking' ? ' is-active' : ''}`} onClick={() => go('ranking')}><ListOrdered size={16} /> {ct('Ranking')}</button>
@@ -1626,8 +1636,48 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           </header>
         )}
 
+      {tab === 'major-semana' && <WeekendLeague account={account} onHub={() => go('hub')} />}
+
       {tab === 'hub' && (
         <>
+          {/* Major da Semana — destaque no topo do hub (exposição + ranking) */}
+          {(() => {
+            const wlWin = wlWindowNow();
+            const stand = wlStatus?.standings ?? [];
+            return (
+              <section style={{ borderRadius: '14px', overflow: 'hidden', border: `1px solid ${wlWin.open ? '#29c47a' : '#e8c170'}`, marginBottom: '16px', background: '#0e141b' }}>
+                <button type="button" onClick={() => go('major-semana')} style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', position: 'relative', overflow: 'hidden', border: 'none', background: 'transparent', padding: 0 }}>
+                  <span style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/mirage.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.16 }} />
+                  <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(216,169,67,.2), rgba(13,17,22,.94) 62%)' }} />
+                  <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 22px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '30px' }}>🏟️</span>
+                    <span style={{ flex: 1, minWidth: '200px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 800, color: wlWin.open ? '#29c47a' : '#e8c170' }}>
+                        {wlWin.open && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 6px 1px rgba(41,196,122,.7)' }} />}
+                        {wlWin.open ? ct('Major da Semana · AO VIVO') : ct('Major da Semana')}
+                      </span>
+                      <span style={{ display: 'block', margin: '2px 0', fontFamily: 'inherit', fontSize: '22px', fontWeight: 800, color: '#f2f5f9' }}>{wlWin.open ? ct('Torneio da semana rolando agora') : ct('Abre quarta')}</span>
+                      <span style={{ display: 'block', fontSize: '12.5px', color: '#9aa4b0' }}>{ct('Ranqueada quarta→sábado · vitórias viram coins · 70.000 pro campeão')}</span>
+                    </span>
+                    <span style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontWeight: 800, fontSize: '14px', color: '#06121d', background: wlWin.open ? '#29c47a' : '#e8c170', whiteSpace: 'nowrap' }}>{ct('Entrar')} →</span>
+                  </span>
+                </button>
+                {stand.length > 0 && (
+                  <div style={{ padding: '12px 18px 14px', borderTop: '1px solid #1c242d' }}>
+                    <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: '#8a93a2', fontWeight: 700, marginBottom: '8px' }}>{ct('Classificação · Major da Semana')}</div>
+                    {stand.slice(0, 5).map((r) => (
+                      <div key={r.rank} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', fontSize: '13px', borderTop: r.rank > 1 ? '1px solid #161d24' : 'none' }}>
+                        <span style={{ width: '22px', textAlign: 'center', fontWeight: 800, color: r.rank === 1 ? '#e8c170' : '#9aa4b0' }}>{r.rank}</span>
+                        <span style={{ flex: 1, color: '#e8ecf0', fontWeight: 600 }}>{r.nick}</span>
+                        <span style={{ color: '#8a93a2', fontSize: '11.5px' }}>{r.division}</span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}><span style={{ color: '#29c47a', fontWeight: 700 }}>{r.wins}V</span> <span style={{ color: '#8a93a2' }}>{r.losses}D</span></span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })()}
           {/* recompensa diária */}
           <section className="ut-daily">
             <div className="ut-daily__head">

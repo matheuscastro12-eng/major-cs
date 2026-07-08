@@ -11,7 +11,6 @@ import {
   type WlStatus, type WlClaimOutcome,
 } from '../../state/weekendLeague';
 import { ct } from '../../state/career-i18n';
-import { setCheckoutSrc, trackPaywallView } from '../../state/track';
 
 // countdown legível: "1d 4h", "6h 32min", "12min"
 function fmtLeft(ms: number): string {
@@ -27,7 +26,6 @@ function fmtLeft(ms: number): string {
 const fmtCredits = (n: number) => n.toLocaleString('pt-BR');
 
 export function WeekendLeague({ account, onHub }: { account: Account | null; onHub: () => void }) {
-  const paid = !!account?.paid;
   const [status, setStatus] = useState<WlStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -36,14 +34,14 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
   const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(() => {
-    if (!paid) { setLoading(false); return; }
+    if (!account) { setLoading(false); return; }
     setLoading(true);
     setError('');
     fetchWlStatus()
       .then((s) => setStatus(s))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : ct('Erro de conexão. Tente de novo.')))
       .finally(() => setLoading(false));
-  }, [paid]);
+  }, [account]);
   useEffect(() => { load(); }, [load]);
 
   // relógio do countdown (30s de passo é suficiente pra "fecha em Xh Ymin")
@@ -81,29 +79,19 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
     </div>
   );
 
-  // funil: conta grátis viu a trava da vitalícia do Major da Semana
-  useEffect(() => { if (!paid) trackPaywallView('wl-lock'); }, [paid]);
-
-  // ------------------------------------------------ grátis: trava vitalícia
-  if (!paid) {
+  // sem conta logada: convite pra criar conta GRÁTIS (o jogo abriu — sem paywall)
+  if (!account) {
     return (
       <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {back}
         <Panel title={ct('Major da Semana')} accent="gold">
           <div style={{ textAlign: 'center', padding: '26px 10px', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
-            <span style={{ fontSize: '34px' }}>🔒</span>
-            <b style={{ fontSize: '16px', color: 'var(--em-text)' }}>{ct('O Major da Semana é da conta vitalícia')}</b>
+            <span style={{ fontSize: '34px' }}>🏟️</span>
+            <b style={{ fontSize: '16px', color: 'var(--em-text)' }}>{ct('Entre pra jogar a Major da Semana')}</b>
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5, maxWidth: '420px' }}>
-              {ct('Torneio semanal com recompensas em créditos e cartas do Ultimate. Ative a conta com save na nuvem para participar.')}
+              {ct('Torneio semanal (quarta a sábado) valendo coins — 70.000 pro campeão. Crie uma conta grátis pra entrar.')}
             </p>
-            {/* valor concreto da vitalícia + âncora de preço (pagamento único) */}
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--em-gold, #e8c170)', lineHeight: 1.5, maxWidth: '420px', fontWeight: 600 }}>
-              ✓ {ct('Major da Semana · Road to Pro completo · mercado entre managers · saves na nuvem em 5 slots')}
-            </p>
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--em-text)', fontWeight: 800 }}>
-              R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}
-            </p>
-            <a href="/" onClick={() => setCheckoutSrc('wl-lock')} style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Ativar conta →')}</a>
+            <a href="/" style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Criar conta grátis / entrar →')}</a>
           </div>
         </Panel>
       </div>
