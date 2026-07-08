@@ -227,6 +227,109 @@ export function storyHotForm(seed: string, nick: string, avg: number, org: strin
   ]);
 }
 
+// ------------------------------------------------- matéria completa (leitura)
+// Expande uma manchete do feed numa MATÉRIA de verdade, nos moldes da Draft5:
+// lide (o body da manchete) + contexto + aspas de uma fonte + análise + gancho
+// de fechamento. Tudo determinístico pelo id da manchete — reabrir a mesma
+// matéria mostra o mesmo texto.
+export interface ArticleCtx {
+  id: string; title: string; body: string; cat?: string;
+  tone: 'good' | 'bad' | 'info'; split: number; org: string;
+}
+
+// fontes fictícias por tom (quem "fala" na matéria)
+const SPEAKERS_GOOD = [
+  { who: 'o coach, em entrevista à DRAFT5', q: [
+    'O grupo vem trabalhando muito e o resultado é consequência. Mas aqui ninguém se contenta — a régua sobe toda semana.',
+    'A gente sabia do nosso teto. O que me deixa feliz é ver o plano de jogo aparecendo dentro do servidor.',
+    'Isso é mérito dos jogadores. Meu trabalho é só não atrapalhar o que esse elenco tem de talento.',
+  ]},
+  { who: 'o capitão da equipe', q: [
+    'A confiança tá lá em cima, mas pé no chão: semana que vem tem mais e ninguém vai nos dar nada de graça.',
+    'A torcida merece esse momento. Cada treino puxado valeu a pena.',
+  ]},
+];
+const SPEAKERS_BAD = [
+  { who: 'uma fonte próxima à organização, sob anonimato', q: [
+    'O clima não é de crise, mas ninguém está confortável. As cobranças internas já começaram.',
+    'Existe uma pressão real. Se os resultados não vierem rápido, mudanças não estão descartadas.',
+  ]},
+  { who: 'o coach, em tom de desabafo', q: [
+    'Errar faz parte, repetir o erro não. A resposta tem que vir dentro do servidor, não em nota oficial.',
+    'Assumo a responsabilidade. O elenco tem qualidade e vamos provar isso já na próxima série.',
+  ]},
+];
+const SPEAKERS_INFO = [
+  { who: 'um analista ouvido pela DRAFT5', q: [
+    'É o tipo de movimento que só se avalia com o tempo. No papel faz sentido; o servidor dirá o resto.',
+    'O cenário está mais competitivo do que nunca — qualquer detalhe desses muda uma classificação.',
+  ]},
+  { who: 'uma fonte do mercado', q: [
+    'Tem mais conversa acontecendo nos bastidores do que o público imagina. Essa história ainda vai render.',
+  ]},
+];
+
+// contexto e análise por editoria
+const CONTEXT_BY_CAT: Record<string, string[]> = {
+  result: [
+    'O resultado mexe diretamente com as contas do split: cada série vale posição na tabela, e posição vale vaga de playoff — além de pesar no ranking VRS, que define convites e seed nos torneios seguintes.',
+    'Mais do que o placar, o que fica é a leitura do momento: forma recente define confiança, e confiança define como o time entra nos rounds decisivos das próximas semanas.',
+  ],
+  transfer: [
+    'A janela de transferências costuma recompensar quem se antecipa: contratos, moral do vestiário e teto salarial entram na mesma conta, e um movimento puxa o outro em efeito dominó pelo cenário.',
+    'No mercado, timing é tudo. Quem compra reação paga caro; quem planeja com antecedência monta elenco com margem — e esse tipo de história raramente termina no primeiro capítulo.',
+  ],
+  board: [
+    'Nos bastidores, resultado e paciência andam juntos: diretorias toleram derrota com plano, não derrota com silêncio. A régua interna é a meta do split — e ela não muda por causa de uma semana boa ou ruim.',
+    'A relação entre comissão técnica e cúpula é o termômetro real de qualquer projeto. Quando a confiança oscila, tudo fica mais caro: renovação, reforço e até o tempo de treino.',
+  ],
+  scout: [
+    'Os relatórios de scouting valem ouro na preparação: tendência de mapa, estilo de jogo e individualidades do adversário mudam o veto — e o veto, muitas vezes, decide a série antes do primeiro round.',
+    'Conhecer o adversário é metade do plano de jogo. A outra metade é ter frieza pra executar o anti-strat quando a partida aperta.',
+  ],
+  scene: [
+    'O cenário competitivo não para: enquanto uma região celebra, outra recalcula rota. Ranking, convites e vagas de Major formam um tabuleiro global em que todo resultado importa.',
+    'É esse ecossistema em movimento que torna cada split único — narrativas nascem, rivalidades esquentam e o Major segue no horizonte como régua definitiva.',
+  ],
+};
+const CLOSER_BY_TONE: Record<string, string[]> = {
+  good: [
+    'O desafio agora é transformar o momento em rotina. No CS, o difícil não é chegar — é sustentar o nível série após série.',
+    'Resta saber se este capítulo é ponto fora da curva ou o começo de algo maior. A DRAFT5 segue acompanhando.',
+  ],
+  bad: [
+    'O calendário não dá trégua: a resposta precisa vir já na próxima série, e a DRAFT5 acompanha cada passo dessa reconstrução.',
+    'Momentos assim definem projetos — pra cima ou pra baixo. Os próximos resultados dirão qual é o caso.',
+  ],
+  info: [
+    'A história ainda tem capítulos pela frente, e os desdobramentos devem aparecer nas próximas semanas. A DRAFT5 acompanha.',
+    'Como sempre no cenário, a única certeza é que nada fica parado por muito tempo.',
+  ],
+};
+
+export function buildArticle(a: ArticleCtx): string[] {
+  // OBS: a lide (a.body) NÃO entra aqui — a página já a mostra como standfirst
+  // logo abaixo do título. Repetir viraria parágrafo duplicado. O corpo abre
+  // direto no contexto e expande dali.
+  const paras: string[] = [];
+  // contexto por editoria
+  const ctxPool = CONTEXT_BY_CAT[a.cat ?? 'scene'] ?? CONTEXT_BY_CAT.scene;
+  paras.push(ct(pick(`${a.id}:ctx`, ctxPool)));
+  // aspas de uma fonte (por tom)
+  const speakers = a.tone === 'good' ? SPEAKERS_GOOD : a.tone === 'bad' ? SPEAKERS_BAD : SPEAKERS_INFO;
+  const sp = pick(`${a.id}:who`, speakers);
+  paras.push(`"${ct(pick(`${a.id}:q`, sp.q))}", ${ct('disse')} ${ct(sp.who)}.`);
+  // análise ancorada na org/split
+  paras.push(ct(pick(`${a.id}:an`, [
+    `${ct('No caso da')} ${a.org}${ct(', o contexto do Split')} ${a.split} ${ct('amplifica tudo: com a temporada em andamento, cada semana é uma prova nova — e o elenco sabe que consistência vale mais que pico de forma.')}`,
+    `${ct('Internamente, a')} ${a.org} ${ct('trata o Split')} ${a.split} ${ct('como um projeto por etapas: o discurso é de processo, mas ninguém esconde que resultado é o que sustenta processo.')}`,
+    `${ct('Pra')} ${a.org}${ct(', o timing importa: no Split')} ${a.split}${ct(', com objetivos da diretoria na mesa e o mercado sempre atento, nenhum resultado é só um resultado.')}`,
+  ])));
+  // fechamento por tom
+  paras.push(ct(pick(`${a.id}:close`, CLOSER_BY_TONE[a.tone] ?? CLOSER_BY_TONE.info)));
+  return paras;
+}
+
 // -------------------------------------------------------------- social/mundo
 export function storySocialStar(seed: string, nick: string, team: string): Story {
   return pick(seed, [

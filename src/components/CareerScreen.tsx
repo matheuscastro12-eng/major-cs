@@ -5621,7 +5621,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     overview: ct('Visão geral'), major: 'Major', calendar: ct('Calendário'), results: ct('Resultados'),
     standings: ct('Classificação'), bracket: ct('Chave'), squad: ct('Elenco'), academy: ct('Academia'),
     market: ct('Negociações'), finance: ct('Finanças'), vrs: ct('Ranking VRS'), top20: 'Top 20 HLTV',
-    world: ct('Cena mundial'), inbox: ct('Tarefas'), history: ct('História da org'),
+    world: ct('Cena mundial'), inbox: ct('Notícias DRAFT5'), history: ct('História da org'),
     stats: ct('Geral'),
   };
   const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
@@ -5634,7 +5634,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   ];
   const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);
   const tabLabelFull = (id: HubTab) =>
-    id === 'inbox' && unread > 0 ? `${ct('Tarefas')} (${unread})`
+    id === 'inbox' && unread > 0 ? `${ct('Notícias DRAFT5')} (${unread})`
     : id === 'finance' && expiringCount > 0 ? `${ct('Finanças')} (${expiringCount})`
     : TAB_LABEL[id];
   const activeGroup = HUB_GROUPS.find((g) => g.tabs.includes(hubTab)) ?? HUB_GROUPS[0];
@@ -6076,6 +6076,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           setNewsCat={setNewsCat}
           unread={save.unread ?? 0}
           onMarkAllRead={() => update({ unread: 0 })}
+          orgName={save.org?.name}
         />
       )}
 

@@ -176,11 +176,27 @@ export function CareerOverview({
           </div>
         </section>
 
-        <DashCard title={ct('Tarefas')} flush className="em-tasks-card">
+        <DashCard title={ct('Notícias DRAFT5')} flush className="em-tasks-card">
+          {news && news.length > 0 && (
+            <div className="em-news-list">
+              {news.slice(0, 4).map((n) => (
+                <button key={n.id} type="button" className="em-news-row em-btn-reset" onClick={onOpenNews}>
+                  <span className={`em-news-dot ${n.tone}`} />
+                  <div className="em-news-info">
+                    <span className="em-news-kicker">{draft5Category(n.cat)}</span>
+                    <span className="em-news-title">{n.title}</span>
+                    <span className="em-news-byline">{ct('Por')} {draft5Author(n.id, n.cat).name} · DRAFT5</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {(!news || news.length === 0) && tasks.length === 0 && (
+            <p className="em-empty">{ct('A redação ainda não publicou nada — as matérias saem conforme a carreira anda.')}</p>
+          )}
           <div className="em-task-list">
-            {tasks.length === 0 ? (
-              <p className="em-empty">{ct('Nenhuma tarefa pendente.')}</p>
-            ) : tasks.map((t) => (
+            {tasks.length > 0 && <div className="em-task-divider">{ct('Pendências')}</div>}
+            {tasks.map((t) => (
               <div key={t.id} className={`em-task${t.urgent ? ' urgent' : ''}`}>
                 <div className="em-task-main">
                   <b>{t.title}</b>
@@ -411,30 +427,6 @@ export function CareerOverview({
             ))}
           </div>
         </DashCard>
-
-        {news && news.length > 0 && (
-          <DashCard
-            title="DRAFT5"
-            flush
-            className="em-news-card"
-            actions={onOpenNews && (
-              <button type="button" className="em-link-btn" onClick={onOpenNews}>{ct('Ver tudo')} <IconExternal size={11} /></button>
-            )}
-          >
-            <div className="em-news-list">
-              {news.slice(0, 4).map((n) => (
-                <button key={n.id} type="button" className="em-news-row em-btn-reset" onClick={onOpenNews}>
-                  <span className={`em-news-dot ${n.tone}`} />
-                  <div className="em-news-info">
-                    <span className="em-news-kicker">{draft5Category(n.cat)}</span>
-                    <span className="em-news-title">{n.title}</span>
-                    <span className="em-news-byline">{ct('Por')} {draft5Author(n.id, n.cat).name} · DRAFT5</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </DashCard>
-        )}
 
         <DashCard
           title={ct('Ranking mundial')}

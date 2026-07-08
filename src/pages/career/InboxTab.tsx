@@ -21,6 +21,7 @@ import {
   DRAFT5_META, draft5Author, draft5Category, draft5ArticleUrl,
   fetchDraft5Feed, type Draft5FeedItem,
 } from '../../engine/career/draft5';
+import { buildArticle } from '../../engine/career/newsroom';
 import { ct } from '../../state/career-i18n';
 
 interface Props {
@@ -31,11 +32,23 @@ interface Props {
   unread: number;
   // T2.4: callback que zera save.unread (chamado on-view + via botão)
   onMarkAllRead: () => void;
+  // nome da org (ancora a análise da matéria aberta)
+  orgName?: string;
 }
 
-export function InboxTab({ news, newsCat, setNewsCat, unread, onMarkAllRead }: Props) {
+// tempo de leitura fake mas estável (2-4 min) — vitrine, não métrica
+const readMinutes = (id: string) => {
+  let h = 5381;
+  for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) >>> 0;
+  return 2 + (h % 3);
+};
+
+export function InboxTab({ news, newsCat, setNewsCat, unread, onMarkAllRead, orgName }: Props) {
   const all = news;
   const shown = newsCat === 'all' ? all : all.filter((n) => (n.cat ?? 'scene') === newsCat);
+  // matéria aberta pra leitura (null = feed)
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openNews = openId ? all.find((n) => n.id === openId) ?? null : null;
 
   // feed real da Draft5 (cache de 15 min no cliente + 15 min no proxy)
   const [feed, setFeed] = useState<{ items: Draft5FeedItem[]; link: string } | null>(null);
@@ -64,6 +77,49 @@ export function InboxTab({ news, newsCat, setNewsCat, unread, onMarkAllRead }: P
       <CareerIcon name="check" size={12} /> {ct('Marcar tudo como lido')}
     </button>
   ) : undefined;
+
+  // ---------- página de leitura da matéria (nos moldes da Draft5) ----------
+  if (openNews) {
+    const author = draft5Author(openNews.id, openNews.cat);
+    const paras = buildArticle({
+      id: openNews.id, title: openNews.title, body: openNews.body,
+      cat: openNews.cat, tone: openNews.tone, split: openNews.split,
+      org: orgName ?? ct('sua organização'),
+    });
+    return (
+      <DashCard title="DRAFT5">
+        <div className="d5-masthead">
+          <span className="d5-logo">DRAFT5</span>
+          <span className="d5-tagline">{DRAFT5_META.tagline}</span>
+        </div>
+        <article className="d5-page">
+          <button type="button" className="btn small ghost d5-page-back" onClick={() => setOpenId(null)}>
+            ← {ct('Voltar pro feed')}
+          </button>
+          <div className="d5-kicker">
+            <span className="d5-cat">{draft5Category(openNews.cat)}</span>
+            <span className="news-split">Split {openNews.split}</span>
+          </div>
+          <h1 className="d5-page-title">{openNews.title}</h1>
+          <p className="d5-page-standfirst">{openNews.body}</p>
+          <div className="d5-page-byline">
+            <span className="d5-page-avatar">{author.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>
+            <span>
+              {ct('Por')} <strong>{author.name}</strong> · {author.role}
+              <span className="d5-page-meta">DRAFT5 · Split {openNews.split} · {readMinutes(openNews.id)} {ct('min de leitura')}</span>
+            </span>
+          </div>
+          <div className="d5-page-body">
+            {paras.map((p, i) => <p key={i}>{p}</p>)}
+          </div>
+          <div className="d5-page-footer">
+            <span className="d5-logo small">DRAFT5</span>
+            <span className="muted small">{ct('Cobertura do modo carreira · Road to Major')}</span>
+          </div>
+        </article>
+      </DashCard>
+    );
+  }
 
   return (
     <DashCard title="DRAFT5" actions={headerActions}>
@@ -129,7 +185,13 @@ export function InboxTab({ news, newsCat, setNewsCat, unread, onMarkAllRead }: P
               }
               const author = draft5Author(n.id, n.cat);
               return (
-                <div key={n.id} className={`news-item d5-article ${n.tone}`}>
+                <button
+                  key={n.id}
+                  type="button"
+                  className={`news-item d5-article d5-clickable ${n.tone}`}
+                  onClick={() => setOpenId(n.id)}
+                  title={ct('Ler a matéria completa')}
+                >
                   <span className="news-ic"><CareerIconLegacy icon={n.icon} size={18} /></span>
                   <div className="news-body">
                     <div className="d5-kicker">
@@ -139,10 +201,10 @@ export function InboxTab({ news, newsCat, setNewsCat, unread, onMarkAllRead }: P
                     <div className="news-title">{n.title}</div>
                     <div className="news-text muted small">{n.body}</div>
                     <div className="d5-byline">
-                      {ct('Por')} <strong>{author.name}</strong> · {author.role} · DRAFT5
+                      {ct('Por')} <strong>{author.name}</strong> · {author.role} · DRAFT5 · <span className="d5-readmore">{ct('ler matéria')} →</span>
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
             {shown.length === 0 && <p className="muted small">{ct('Nada nessa categoria ainda.')}</p>}

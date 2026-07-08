@@ -4858,6 +4858,44 @@ button.world-champ:focus-visible, button.world-runner:focus-visible { outline: 2
 .d5-real-excerpt { line-height: 1.35; }
 @media (max-width: 520px) { .d5-real-img { display: none; } }
 
+/* página de leitura da matéria (nos moldes da Draft5) */
+.d5-clickable { cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; transition: border-color .12s, background .12s; }
+.d5-clickable:hover { border-color: #ffc500; background: var(--panel-3); }
+.d5-readmore { color: #ffc500; font-weight: 700; }
+.d5-page { max-width: 760px; }
+.d5-page-back { margin-bottom: 12px; }
+.d5-page-title {
+  font-family: var(--font-cond, inherit); font-weight: 900; line-height: 1.15;
+  font-size: clamp(1.4rem, 3.2vw, 2rem); margin: 6px 0 8px;
+}
+.d5-page-standfirst { color: var(--muted); font-size: 1.02rem; line-height: 1.45; margin: 0 0 14px; }
+.d5-page-byline {
+  display: flex; align-items: center; gap: 10px; padding: 10px 0;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  font-size: 0.86rem; margin-bottom: 14px;
+}
+.d5-page-byline strong { color: var(--text); }
+.d5-page-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #ffc500, #b8860b); color: #1a1205;
+  font-weight: 900; font-size: 0.8rem; letter-spacing: 0.5px;
+}
+.d5-page-meta { display: block; color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
+.d5-page-body p { line-height: 1.65; margin: 0 0 13px; font-size: 0.97rem; }
+.d5-page-body p:first-child { font-weight: 600; }
+.d5-page-footer {
+  display: flex; align-items: baseline; gap: 8px; margin-top: 16px;
+  padding-top: 10px; border-top: 1px solid var(--border);
+}
+
+/* divider de pendências dentro do card Notícias DRAFT5 */
+.em-task-divider {
+  padding: 8px 14px 4px; color: var(--muted); font-size: 0.68rem;
+  font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px;
+  border-top: 1px solid var(--border);
+}
+
 /* painel DRAFT5 compacto no dashboard da carreira */
 .em-news-list { display: flex; flex-direction: column; }
 .em-news-row {
