@@ -1636,7 +1636,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           </header>
         )}
 
-      {tab === 'major-semana' && <WeekendLeague account={account} onHub={() => go('hub')} />}
+      {tab === 'major-semana' && <WeekendLeague account={account} onHub={() => go('hub')} onPlay={() => { setRankedMode('rivals'); go('ranked'); }} />}
 
       {tab === 'hub' && (
         <>

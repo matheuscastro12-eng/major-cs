@@ -68,7 +68,7 @@ export function OnlineMode({ onBack, account, dataset }: { onBack: () => void; a
       {screen === 'major' && <OnlineScreen preset="party" forceRanked account={account} onBack={toHub} />}
       {screen === 'gauntlet' && <OnlineGauntlet pool={pool} stats={stats} setStats={setStats} onHub={toHub} onExit={onBack} />}
       {/* Major da Semana (Weekend League): status/inscrição/claim via api/weekend-league */}
-      {screen === 'weekend' && <WeekendLeague account={account} onHub={toHub} />}
+      {screen === 'weekend' && <WeekendLeague account={account} onHub={toHub} onPlay={() => setScreen('1v1')} />}
       {screen === 'casual' && <OnlineScreen casualOnly account={account} onBack={toHub} />}
     </div>
   );

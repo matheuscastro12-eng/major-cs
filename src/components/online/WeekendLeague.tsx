@@ -7,8 +7,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Panel, Button } from '../ds';
 import type { Account } from '../../state/account';
 import {
-  fetchWlStatus, wlRegister, wlClaim, WL_MAX_MATCHES,
-  type WlStatus, type WlClaimOutcome,
+  fetchWlStatus, wlRegister, WL_MAX_MATCHES,
+  type WlStatus,
 } from '../../state/weekendLeague';
 import { ct } from '../../state/career-i18n';
 
@@ -25,12 +25,15 @@ function fmtLeft(ms: number): string {
 
 const fmtCredits = (n: number) => n.toLocaleString('pt-BR');
 
-export function WeekendLeague({ account, onHub }: { account: Account | null; onHub: () => void }) {
+// Prêmios por COLOCAÇÃO no fim da janela (top 10). #1 = 70k; pago pelo dono no fecho.
+const PLACEMENT_PRIZES = [70000, 40000, 25000, 15000, 10000, 7000, 5000, 4000, 3000, 2000];
+const prizeForPlace = (rank: number): number => (rank >= 1 && rank <= PLACEMENT_PRIZES.length ? PLACEMENT_PRIZES[rank - 1] : 0);
+
+export function WeekendLeague({ account, onHub, onPlay }: { account: Account | null; onHub: () => void; onPlay?: () => void }) {
   const [status, setStatus] = useState<WlStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [claimed, setClaimed] = useState<WlClaimOutcome | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(() => {
@@ -60,15 +63,15 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
       .finally(() => setBusy(false));
   };
 
-  const doClaim = () => {
-    if (!status || busy) return;
+  // JOGAR: puxa a fila ranqueada (cai com outro online). Inscreve na janela antes
+  // se ainda não estiver — o resultado da ranqueada conta sozinho pro Major.
+  const doPlay = () => {
+    if (!status || busy || !onPlay) return;
+    if (status.entry) { onPlay(); return; }
     setBusy(true);
     setError('');
-    wlClaim(status.window.id)
-      .then((r) => {
-        setClaimed(r);
-        setStatus((s) => (s && s.entry ? { ...s, entry: { ...s.entry, claimed: true } } : s));
-      })
+    wlRegister(status.window)
+      .then((entry) => { setStatus((s) => (s ? { ...s, entry } : s)); onPlay(); })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : ct('Erro de conexão. Tente de novo.')))
       .finally(() => setBusy(false));
   };
@@ -123,12 +126,13 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
     );
   }
 
-  const { window: win, entry, standings, rewardTiers } = status;
+  const { window: win, entry, standings } = status;
   const games = entry ? entry.wins + entry.losses : 0;
-  const claimable = !!entry && !entry.claimed && entry.wins >= 1 && (!win.open || entry.runComplete);
   const startsMs = Date.parse(win.startsAt);
   const endsMs = Date.parse(win.endsAt);
   const myNick = (account?.nick ?? '').toLowerCase();
+  const myPlace = myNick ? (standings.find((r) => r.nick.toLowerCase() === myNick)?.rank ?? 0) : 0;
+  const myPrize = prizeForPlace(myPlace);
 
   return (
     <div style={{ maxWidth: '860px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -176,60 +180,59 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
                 </div>
               ))}
               <div style={{ flex: 1, minWidth: '180px', fontSize: '12px', color: 'var(--rtm-faint)', lineHeight: 1.5 }}>
-                {win.open && !entry.runComplete && !entry.claimed && ct('Jogue Ranked 1v1 com a inscrição ativa: cada duelo confirmado pelos dois lados entra sozinho no seu run.')}
-                {entry.runComplete && !entry.claimed && ct('Run completo! Resgate sua recompensa.')}
+                {myPlace > 0
+                  ? (myPlace <= 10
+                      ? `${ct('Você está em')} ${myPlace}º — ${ct('valendo')} ${fmtCredits(myPrize)} ${ct('coins')}. ${ct('Suba mais na tabela!')}`
+                      : `${ct('Você está em')} ${myPlace}º. ${ct('Entre no top 10 pra premiar!')}`)
+                  : ct('Jogue ranqueada com a inscrição ativa: cada duelo confirmado te posiciona na tabela.')}
               </div>
             </div>
           ) : (
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>
               {win.open
-                ? ct('Inscreva-se para valer nesta semana. Depois é só jogar Ranked 1v1: os resultados contam automaticamente (quando os dois lados confirmam).')
+                ? ct('Entre na fila, jogue ranqueada e suba na tabela: os prêmios vão pros 10 primeiros no fim da janela.')
                 : ct('Você não participou desta janela. A inscrição abre junto com a janela, na quarta.')}
             </p>
           )}
 
-          {/* faixas de recompensa */}
+          {/* prêmios por COLOCAÇÃO (top 10) — pagos no fim da janela */}
           <div>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700, marginBottom: '8px' }}>{ct('Faixas de recompensa (paga a maior atingida)')}</div>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.8px', color: 'var(--em-muted)', fontWeight: 700, marginBottom: '8px' }}>{ct('Prêmios por colocação · top 10 (pagos no fim)')}</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {rewardTiers.map((t) => {
-                const reached = !!entry && entry.wins >= t.minWins;
+              {PLACEMENT_PRIZES.map((coins, i) => {
+                const rank = i + 1;
+                const mine = myPlace === rank;
                 return (
-                  <div key={t.minWins} title={ct(t.name)} style={{
+                  <div key={rank} style={{
                     padding: '7px 12px', borderRadius: '999px', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap',
-                    border: `1px solid ${reached ? 'var(--em-gold)' : 'var(--em-border-strong)'}`,
-                    background: reached ? 'rgba(216,169,67,.14)' : 'transparent',
-                    color: reached ? 'var(--em-gold)' : 'var(--em-muted)',
+                    border: `1px solid ${mine ? 'var(--em-gold)' : rank <= 3 ? 'rgba(216,169,67,.5)' : 'var(--em-border-strong)'}`,
+                    background: mine ? 'rgba(216,169,67,.18)' : 'transparent',
+                    color: mine || rank <= 3 ? 'var(--em-gold)' : 'var(--em-muted)',
                   }}>
-                    {reached ? '✓ ' : ''}{t.minWins}+ {ct('vit')} · {fmtCredits(t.credits)} {ct('créditos')}{t.card ? ` + ${ct('carta')} ${t.card === 'tots' ? 'TOTS' : ct('ouro rara')}` : ''}
+                    {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}º`} {fmtCredits(coins)} {ct('coins')}
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* ação principal por estado */}
+          {/* ação principal: inscrever + JOGAR (puxa a fila ranqueada) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            {win.open && !entry && (
+            {win.open && onPlay && (
+              <Button variant="gold" disabled={busy} onClick={doPlay}>{busy ? ct('Entrando…') : `⚡ ${entry ? ct('Jogar — puxar fila') : ct('Entrar e jogar')}`}</Button>
+            )}
+            {win.open && !entry && !onPlay && (
               <Button variant="gold" disabled={busy} onClick={doRegister}>{busy ? ct('Inscrevendo…') : ct('Inscrever-se no Major da Semana')}</Button>
             )}
-            {claimable && (
-              <Button variant="gold" disabled={busy} onClick={doClaim}>{busy ? ct('Resgatando…') : ct('Resgatar recompensa')}</Button>
-            )}
-            {entry?.claimed && (
-              <span style={{ fontSize: '13px', fontWeight: 800, color: '#29c47a' }}>
-                {ct('Resgatado ✓')}{claimed ? ` · +${fmtCredits(claimed.credits)} ${ct('créditos')} (${ct(claimed.tier.name)})` : ''}
-              </span>
-            )}
-            {entry && !entry.claimed && !claimable && !win.open && entry.wins < 1 && (
-              <span style={{ fontSize: '12.5px', color: 'var(--rtm-faint)' }}>{ct('Sem vitórias nesta janela — sem recompensa desta vez.')}</span>
+            {!win.open && (
+              <span style={{ fontSize: '12.5px', color: 'var(--rtm-faint)' }}>{ct('Janela fechada. Prêmios pagos pra quem terminou no top 10.')}</span>
             )}
           </div>
         </div>
       </Panel>
 
       {/* top 20 da janela */}
-      <Panel title={ct('Classificação da semana · top 20')} accent="gold" flush>
+      <Panel title={ct('Classificação · top 10 leva prêmio')} accent="gold" flush>
         {standings.length === 0 ? (
           <div style={{ padding: '18px 16px', fontSize: '12.5px', color: 'var(--em-muted)' }}>{ct('Ninguém se inscreveu nesta janela ainda. Seja o primeiro!')}</div>
         ) : (
@@ -237,8 +240,9 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
             <tbody>
               {standings.map((r, i) => {
                 const you = !!myNick && r.nick.toLowerCase() === myNick;
+                const prize = prizeForPlace(r.rank);
                 return (
-                  <tr key={r.nick + i} style={{ background: you ? 'rgba(216,169,67,.1)' : (i % 2 ? 'var(--em-panel-2)' : 'var(--em-panel)'), boxShadow: you ? 'inset 3px 0 0 var(--em-gold)' : 'none' }}>
+                  <tr key={r.nick + i} style={{ background: you ? 'rgba(216,169,67,.1)' : (i % 2 ? 'var(--em-panel-2)' : 'var(--em-panel)'), boxShadow: you ? 'inset 3px 0 0 var(--em-gold)' : prize > 0 ? 'inset 3px 0 0 rgba(216,169,67,.4)' : 'none' }}>
                     <td style={{ padding: '9px 14px', width: '44px', textAlign: 'center', fontFamily: 'inherit', fontWeight: 800, fontSize: '15px', color: i === 0 ? 'var(--em-gold)' : i < 3 ? 'var(--em-text)' : 'var(--rtm-faint)' }}>{r.rank}</td>
                     <td style={{ padding: '9px 14px' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -246,7 +250,7 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
                         {you && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase', color: '#06121d', background: 'var(--em-gold)', padding: '2px 7px', borderRadius: '999px' }}>{ct('Você')}</span>}
                       </span>
                     </td>
-                    <td style={{ padding: '9px 14px', color: 'var(--em-muted)', fontSize: '11.5px', fontWeight: 700 }}>{r.division}</td>
+                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, fontSize: '12.5px', color: 'var(--em-gold)', whiteSpace: 'nowrap' }}>{prize > 0 ? `${fmtCredits(prize)} 🪙` : ''}</td>
                     <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, fontSize: '14.5px', color: 'var(--em-text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                       <span style={{ color: '#29c47a' }}>{r.wins}V</span> <span style={{ color: 'var(--rtm-faint)' }}>–</span> <span style={{ color: 'var(--em-red, #c0392b)' }}>{r.losses}D</span>
                     </td>
