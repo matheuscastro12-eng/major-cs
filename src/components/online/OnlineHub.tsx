@@ -9,6 +9,7 @@ import { getLadder, type RankRow } from '../../state/ranking';
 import { rankFor, majorPlace, type OnlineStats } from './onlineData';
 import { ct } from '../../state/career-i18n';
 import { trackPaywallView } from '../../state/track';
+import { wlWindowNow } from '../../state/weekendLeague';
 
 export type OnlineModeId = '1v1' | 'major' | 'gauntlet' | 'weekend';
 
@@ -28,6 +29,11 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
   useEffect(() => { void getLadder().then((d) => setLadder(d.ladder)); }, []);
   // funil: conta grátis vê o badge de trava vitalícia no card do Major da Semana
   useEffect(() => { if (!paid) trackPaywallView('hub-wl'); }, [paid]);
+  // relógio pro banner ao vivo da Major da Semana (30s basta pro "fecha em Xh")
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
+  const wlWin = wlWindowNow(now);
+  const wlLeft = (ms: number) => { const mins = Math.max(1, Math.floor(ms / 60_000)); const d = Math.floor(mins / 1440); const h = Math.floor((mins % 1440) / 60); const m = mins % 60; return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}min` : `${m}min`; };
 
   const MODES = [
     { id: '1v1' as const, icon: '⚔', tone: 'var(--em-gold)', badge: '', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
@@ -91,6 +97,28 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
           </div>
         )}
       </div>
+
+      {/* Major da Semana — banner ao vivo (destaque quando a janela abre) */}
+      <button type="button" onClick={() => onPlay('weekend')} aria-label={ct('Abrir Major da Semana')} style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', position: 'relative', overflow: 'hidden', borderRadius: '12px', border: `1px solid ${wlWin.open ? '#29c47a' : 'var(--em-gold)'}`, background: 'transparent', padding: 0 }}>
+        <span style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/mirage.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.18 }} />
+        <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(216,169,67,.18), rgba(13,17,22,.93) 62%)' }} />
+        <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px', padding: '15px 22px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '28px', width: '52px', height: '52px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(216,169,67,.14)', border: '1px solid rgba(216,169,67,.4)', flexShrink: 0 }}>🏟️</span>
+          <span style={{ flex: 1, minWidth: '200px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 800, color: wlWin.open ? '#29c47a' : 'var(--em-gold)' }}>
+              {wlWin.open && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 6px 1px rgba(41,196,122,.7)' }} />}
+              {wlWin.open ? ct('Ao vivo agora') : ct('Próxima janela')}
+            </span>
+            <span style={{ display: 'block', margin: '2px 0', fontFamily: 'inherit', fontSize: '22px', fontWeight: 800, color: 'var(--em-text)' }}>{ct('Major da Semana')}</span>
+            <span style={{ display: 'block', fontSize: '12.5px', color: 'var(--em-muted)' }}>
+              {wlWin.open
+                ? `${ct('Fecha em')} ${wlLeft(Date.parse(wlWin.endsAt) - now)} · ${ct('vitórias viram coins, até 37,5k')}`
+                : `${ct('Abre quinta · em')} ${wlLeft(Date.parse(wlWin.startsAt) - now)}`}
+            </span>
+          </span>
+          <span style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontFamily: 'inherit', fontWeight: 800, fontSize: '14px', color: '#06121d', background: wlWin.open ? '#29c47a' : 'var(--em-gold)', whiteSpace: 'nowrap' }}>{wlWin.open ? ct('Entrar') : ct('Ver')} →</span>
+        </span>
+      </button>
 
       {/* grid de modos */}
       <div className="rtm-online-modes" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>

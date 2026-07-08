@@ -19,6 +19,28 @@ export interface WlClaimOutcome { replayed: boolean; tier: WlRewardTier; wins: n
 
 export const WL_MAX_MATCHES = 10;
 
+// Espelho LEVE da janela do servidor (server/weekend-league.ts) só pra UI mostrar
+// "aberta / abre em X" sem bater na API — o servidor continua a verdade (registro,
+// report, claim). Qui 00:00 → sáb 23:59:59 em America/Sao_Paulo (-03 fixo, sem DST).
+export function wlWindowNow(nowMs: number = Date.now()): WlWindow {
+  const SP_OFFSET_MS = 3 * 3600_000;
+  const DAY_MS = 86_400_000;
+  const local = new Date(nowMs - SP_OFFSET_MS);
+  const dow = local.getUTCDay(); // 0=dom … 6=sáb
+  const daysToThu = dow === 4 ? 0 : dow === 5 ? -1 : dow === 6 ? -2 : (4 - dow + 7) % 7;
+  const thuMid = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + daysToThu);
+  const startsMs = thuMid + SP_OFFSET_MS;
+  const endsMs = startsMs + 3 * DAY_MS;
+  const thu = new Date(thuMid);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    id: `wl-${thu.getUTCFullYear()}-${pad(thu.getUTCMonth() + 1)}-${pad(thu.getUTCDate())}`,
+    startsAt: new Date(startsMs).toISOString(),
+    endsAt: new Date(endsMs).toISOString(),
+    open: nowMs >= startsMs && nowMs < endsMs,
+  };
+}
+
 async function post(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   const r = await fetch('/api/weekend-league', {
     method: 'POST',
