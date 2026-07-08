@@ -10,6 +10,7 @@ import { Hub } from './components/Hub';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
 import { UpsellCard } from './components/UpsellCard';
+import { UltimateGate } from './components/ultimate/UltimateGate';
 import { Loader } from './components/ui';
 import { AchievementsModal, AchievementToast } from './components/Achievements';
 import { recordGameEnd, type AchDef } from './state/achievements';
@@ -292,6 +293,17 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
   const { account, ready: accountReady, refresh: refreshAccount, logout } = useAccount();
+  // Modo convidado do Ultimate: quem NÃO tem conta pode entrar e jogar mesmo
+  // assim (o save do Ultimate é local), correndo o risco de perder o progresso.
+  // Persistido pra sobreviver ao F5. NÃO libera Road to Pro nem saves extras de
+  // carreira — esses seguem exclusivos de conta vitalícia (account.paid).
+  const [utGuest, setUtGuest] = useState<boolean>(() => {
+    try { return localStorage.getItem('rtm-ut-guest') === '1'; } catch { return false; }
+  });
+  const enableUtGuest = () => {
+    try { localStorage.setItem('rtm-ut-guest', '1'); } catch { /* sem storage */ }
+    setUtGuest(true);
+  };
   // Ultimate Squad oculto: se alguém cair em /ultimate com o flag desligado
   // (deep link), manda de volta pro menu — o modo não aparece em produção.
   // Além disso, os DOIS modos do lançamento (Ultimate Squad + Road to Pro) são
@@ -301,8 +313,10 @@ export default function App() {
   useEffect(() => {
     if (!ULTIMATE_ENABLED && screen === 'ultimate') { setScreen('home'); return; }
     if (!RTP_ENABLED && screen === 'rtp') { setScreen('home'); return; } // kill-switch: deep link /road-to-pro cai na home
-    if (accountReady && ((screen === 'ultimate' && !account) || (screen === 'rtp' && !account?.paid))) setScreen('landing');
-  }, [screen, accountReady, account?.paid]);
+    // Ultimate: conta logada OU convidado entram. Road to Pro (rtp) segue
+    // EXCLUSIVO de conta vitalícia — o modo convidado não afrouxa esse gate.
+    if (accountReady && ((screen === 'ultimate' && !account && !utGuest) || (screen === 'rtp' && !account?.paid))) setScreen('landing');
+  }, [screen, accountReady, account?.paid, utGuest]);
   // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
   useEffect(() => {
     if (screen === 'landing' && accountReady && !account?.paid) trackPaywallView('landing');
@@ -429,6 +443,7 @@ export default function App() {
   // já abre no cadastro quando veio do deep-link /?criar (pra divulgar no Twitter).
   const [authOpen, setAuthOpen] = useState(WANTS_SIGNUP); // modal de login/conta acessível do header
   const [authMode, setAuthMode] = useState<'login' | 'signup'>(WANTS_SIGNUP ? 'signup' : 'login');
+  const [utGateOpen, setUtGateOpen] = useState(false); // modal de escolha (convidado × conta)
   // limpa o ?criar/#criar da URL depois que a intenção já foi capturada.
   useEffect(() => {
     if (!WANTS_SIGNUP) return;
@@ -984,6 +999,14 @@ export default function App() {
           onPlay={async () => { setAuthOpen(false); await refreshAccount(); setScreen(manager ? 'home' : 'setup'); }}
         />
       )}
+      {utGateOpen && !account && (
+        <UltimateGate
+          onClose={() => setUtGateOpen(false)}
+          onSignup={() => { setUtGateOpen(false); setScreen('landing'); }}
+          onLogin={() => { setUtGateOpen(false); setAuthMode('login'); setAuthOpen(true); }}
+          onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
+        />
+      )}
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
       <main className={screen === 'career' ? 'page page-career' : screen === 'rtp' ? 'page page-rtp' : screen === 'home' ? 'page page-play' : screen === 'ultimate' ? 'page page-ultimate' : 'page'}>
@@ -1015,7 +1038,7 @@ export default function App() {
             setDonateOpen(true);
           }}
           onHall={() => setScreen('hall')}
-          onUltimate={ULTIMATE_ENABLED ? () => setScreen('ultimate') : undefined}
+          onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
@@ -1076,10 +1099,17 @@ export default function App() {
         </>
       )}
 
-      {/* Abertos a QUALQUER conta logada (grátis ou vitalícia). O guard de rota
-          acima só manda o DESLOGADO pra landing; conta logada joga. Os perks
-          pagos ficam no cloud-save + ladder persistente, não no acesso. */}
-      {ULTIMATE_ENABLED && account && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
+      {/* Aberto a QUALQUER conta logada (grátis ou vitalícia) E ao convidado
+          (utGuest) — o save do Ultimate é local. Sem conta e sem escolher
+          convidado, o guard de rota manda pra landing. Os perks pagos (coins,
+          ladder persistente, save na nuvem) ficam no entitlement, não no acesso. */}
+      {ULTIMATE_ENABLED && (account || utGuest) && screen === 'ultimate' && (
+        <UltimateSquadScreen
+          onBack={() => setScreen('home')}
+          guest={!account}
+          onCreateAccount={() => { setCheckoutSrc('ultimate-guest'); setScreen('landing'); }}
+        />
+      )}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
       {RTP_ENABLED && account?.paid && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}

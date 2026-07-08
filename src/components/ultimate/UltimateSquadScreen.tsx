@@ -297,7 +297,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
-export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
+export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void }) {
   const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
@@ -1596,6 +1596,31 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
           </div>
         </div>
       </nav>
+
+      {/* ===== AVISO DE CONVIDADO ===== */}
+      {/* Jogador sem conta: joga aqui e agora, mas o progresso do Ultimate fica só
+          neste navegador (localStorage). Banner honesto + CTA pra conta vitalícia,
+          que salva na nuvem e libera jogar no PC e no celular com o mesmo squad. */}
+      {guest && (
+        <div className="ut-guest-warn" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 16px', background: 'rgba(232,193,112,0.10)', borderBottom: '1px solid rgba(232,193,112,0.35)', color: 'var(--em-text, #eadfce)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', lineHeight: 1.4, flex: '1 1 320px' }}>
+            <Lock size={16} style={{ color: '#e8c170', flexShrink: 0 }} />
+            <span>
+              <b>{ct('Você está jogando sem conta.')}</b>{' '}
+              {ct('Seu progresso do Ultimate fica salvo só neste navegador — se limpar o cache ou trocar de aparelho, você perde tudo.')}
+            </span>
+          </span>
+          {onCreateAccount && (
+            <button
+              type="button"
+              onClick={onCreateAccount}
+              style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
+            >
+              {ct('Criar conta vitalícia · salva na nuvem e joga no PC e no celular')}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ===== SEASON STRIP ===== */}
       {(() => {
