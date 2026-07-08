@@ -5606,7 +5606,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     { id: 'team', label: ct('Meu time'), tabs: ['squad', 'academy'] },
     { id: 'ingame', label: ct('Em jogo'), tabs: [...(majorActive ? ['major' as HubTab] : []), 'bracket', 'results', 'standings'] },
     { id: 'transfers', label: ct('Transferências'), tabs: ['market', 'finance'] },
-    { id: 'news', label: ct('Notícias HLTV'), tabs: ['inbox'] },
+    { id: 'news', label: 'DRAFT5', tabs: ['inbox'] },
     { id: 'stats', label: ct('Estatísticas'), tabs: ['stats', 'vrs', 'top20', 'world', 'history'] },
   ];
   const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);

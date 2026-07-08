@@ -4819,6 +4819,45 @@ button.world-champ:focus-visible, button.world-runner:focus-visible { outline: 2
 .nc-chip.on { background: var(--panel-3); color: var(--gold-2); border-color: var(--gold-soft); }
 .nc-chip .nc-n { font-size: 10px; opacity: 0.7; font-variant-numeric: tabular-nums; }
 
+/* DRAFT5 — plataforma de notícias in-game (marca real: amarelo sobre escuro) */
+.d5-masthead {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; margin-bottom: 12px; border-radius: 9px;
+  background: linear-gradient(120deg, #0e1420, #131c2e);
+  border: 1px solid var(--border); border-left: 3px solid #ffc500;
+}
+.d5-logo {
+  font-family: var(--font-cond); font-weight: 900; font-style: italic;
+  letter-spacing: 1px; font-size: 1.15rem; color: #ffc500;
+}
+.d5-logo.small { font-size: 0.82rem; }
+.d5-tagline { color: var(--muted); font-size: 0.78rem; font-weight: 600; }
+.d5-kicker { display: flex; align-items: baseline; gap: 8px; }
+.d5-cat {
+  color: #ffc500; font-weight: 800; font-size: 0.68rem;
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.d5-byline { margin-top: 5px; color: var(--muted); font-size: 0.72rem; }
+.d5-byline strong { color: var(--text); font-weight: 700; }
+
+/* feed real da Draft5 (via /api/news) */
+.d5-real { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.d5-real-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 9px; }
+.d5-real-title { color: var(--muted); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.d5-real-list { display: flex; flex-direction: column; gap: 8px; }
+.d5-real-item {
+  display: flex; gap: 11px; align-items: flex-start; text-decoration: none; color: inherit;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-left: 3px solid #ffc500; border-radius: 9px; padding: 9px 12px;
+  transition: border-color .12s, background .12s;
+}
+.d5-real-item:hover { border-color: #ffc500; background: var(--panel-3); }
+.d5-real-img { width: 74px; height: 46px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+.d5-real-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.d5-real-item-title { font-weight: 700; font-size: 0.9rem; line-height: 1.3; }
+.d5-real-excerpt { line-height: 1.35; }
+@media (max-width: 520px) { .d5-real-img { display: none; } }
+
 /* post estilo rede social */
 .news-item.social { border-left-color: #1d9bf0; background: linear-gradient(160deg, var(--panel-3), var(--panel-2)); }
 .news-handle { color: #4bb3f0; font-weight: 800; }
