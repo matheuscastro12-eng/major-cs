@@ -135,21 +135,21 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
       {back}
 
       {/* cabeçalho da janela + countdown */}
-      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--em-border-strong)' }}>
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/mirage.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.2 }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(216,169,67,.16), rgba(13,17,22,.92) 60%)' }} />
+      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--em-border-strong)', background: '#0e141b' }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/mirage.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.18 }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(216,169,67,.20), rgba(13,17,22,.86) 60%)' }} />
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '20px 24px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '34px' }}>🏟️</span>
           <div style={{ flex: 1, minWidth: '200px' }}>
             <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>{ct('Weekend League · quarta a sábado')}</div>
-            <h1 style={{ margin: '2px 0', fontFamily: 'inherit', fontSize: '26px', fontWeight: 800, color: 'var(--em-text)' }}>{ct('Major da Semana')}</h1>
-            <div style={{ fontSize: '12.5px', color: 'var(--em-muted)' }}>{ct('Até 10 ranqueadas 1v1 de quarta a sábado. Quanto mais vitórias, maior a recompensa.')}</div>
+            <h1 style={{ margin: '2px 0', fontFamily: 'inherit', fontSize: '26px', fontWeight: 800, color: '#f2f5f9' }}>{ct('Major da Semana')}</h1>
+            <div style={{ fontSize: '12.5px', color: '#c2cad4' }}>{ct('Até 10 ranqueadas 1v1 de quarta a sábado. Quanto mais vitórias, maior a recompensa.')}</div>
           </div>
-          <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '8px', background: 'rgba(18,22,27,.6)', border: `1px solid ${win.open ? '#29c47a' : 'var(--em-border-strong)'}` }}>
-            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', fontWeight: 800, color: win.open ? '#29c47a' : 'var(--em-muted)' }}>
+          <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '8px', background: 'rgba(9,12,16,.72)', border: `1px solid ${win.open ? '#29c47a' : 'var(--em-border-strong)'}` }}>
+            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', fontWeight: 800, color: win.open ? '#29c47a' : '#c2cad4' }}>
               {win.open ? ct('Janela aberta') : ct('Janela fechada')}
             </div>
-            <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '17px', color: 'var(--em-text)', whiteSpace: 'nowrap' }}>
+            <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '17px', color: '#f2f5f9', whiteSpace: 'nowrap' }}>
               {win.open
                 ? `${ct('fecha em')} ${fmtLeft(endsMs - now)}`
                 : now < startsMs

@@ -301,7 +301,7 @@ export default function App() {
   useEffect(() => {
     if (!ULTIMATE_ENABLED && screen === 'ultimate') { setScreen('home'); return; }
     if (!RTP_ENABLED && screen === 'rtp') { setScreen('home'); return; } // kill-switch: deep link /road-to-pro cai na home
-    if (accountReady && !account && (screen === 'ultimate' || screen === 'rtp')) setScreen('landing');
+    if (accountReady && ((screen === 'ultimate' && !account) || (screen === 'rtp' && !account?.paid))) setScreen('landing');
   }, [screen, accountReady, account?.paid]);
   // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
   useEffect(() => {
@@ -1017,7 +1017,8 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onUltimate={ULTIMATE_ENABLED ? () => setScreen('ultimate') : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
-          premiumLocked={false}
+          premiumLocked={!account?.paid}
+          ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
@@ -1081,7 +1082,7 @@ export default function App() {
       {ULTIMATE_ENABLED && account && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
-      {RTP_ENABLED && account && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
+      {RTP_ENABLED && account?.paid && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (

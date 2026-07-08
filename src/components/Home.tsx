@@ -22,10 +22,11 @@ interface Props {
   onDiscardCampaign?: () => void;
   onUltimate?: () => void;
   onRoadToPro?: () => void;
-  /** Trava os dois modos do lançamento (Ultimate + Road to Pro): exclusivos de
-   *  conta vitalícia. Card continua visível (isca de conversão), mas o clique
-   *  leva ao checkout via onCreateAccount e mostra selo de cadeado. */
+  /** Trava o Road to Pro (exclusivo de conta vitalícia). Card continua visível
+   *  (isca de conversão), mas o clique leva ao checkout via onCreateAccount. */
   premiumLocked?: boolean;
+  /** Trava o card do Ultimate. Ultimate abriu pra todos → passado como false. */
+  ultimateLocked?: boolean;
   onLeaderboard?: () => void;
   onCareer?: () => void;
   /** Conta atual (null = não logado, undefined = carregando) */
@@ -57,6 +58,7 @@ export function Home({
   onUltimate,
   onRoadToPro,
   premiumLocked,
+  ultimateLocked,
   onCareer,
   account,
   accountReady,
@@ -80,9 +82,9 @@ export function Home({
   useEffect(() => {
     if (view !== 'menu') return;
     if (premiumLocked && onRoadToPro) trackPaywallView('home-rtp');       // card RtP com cadeado
-    if (premiumLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
+    if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
     if (accountReady && account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
-  }, [view, premiumLocked, onRoadToPro, onUltimate, accountReady, account]);
+  }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account]);
 
   // prova social real: contador de Fundadores (null = sem dado → não mostra nada)
   const founders = useFounders();
@@ -219,26 +221,26 @@ export function Home({
                 <button
                   className="rtm-modecard"
                   data-tone="gold"
-                  data-locked={premiumLocked ? '' : undefined}
-                  onClick={() => (premiumLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())}
+                  data-locked={ultimateLocked ? '' : undefined}
+                  onClick={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())}
                 >
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/ancient.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
                   <span className="rtm-modecard-bar" />
-                  {premiumLocked && <span className="rtm-modecard-lock">🔒 {ct('Vitalícia')}</span>}
+                  {ultimateLocked && <span className="rtm-modecard-lock">🔒 {ct('Vitalícia')}</span>}
                   <span className="rtm-modecard-body">
                     <span className="rtm-modecard-kicker">{ct('Competitivo · Online')}</span>
                     <span className="rtm-modecard-title">Ultimate Squad</span>
                     <span className="rtm-modecard-desc">{ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')}</span>
-                    {premiumLocked && (
+                    {ultimateLocked && (
                       <span className="rtm-modecard-benefits">
                         ✓ {ct('Ultimate com mercado entre managers · ranqueada no ladder real · Major da Semana')}
                         <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
                       </span>
                     )}
                     <span className="rtm-modecard-foot">
-                      <span className="rtm-modecard-meta">{premiumLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')}</span>
-                      <span className="rtm-modecard-go">{premiumLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>
+                      <span className="rtm-modecard-meta">{ultimateLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')}</span>
+                      <span className="rtm-modecard-go">{ultimateLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>
                     </span>
                   </span>
                 </button>
