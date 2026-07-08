@@ -153,9 +153,9 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '20px 24px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '34px' }}>🏟️</span>
           <div style={{ flex: 1, minWidth: '200px' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>{ct('Weekend League · quinta a sábado')}</div>
+            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--em-gold)', fontWeight: 800 }}>{ct('Weekend League · quarta a sábado')}</div>
             <h1 style={{ margin: '2px 0', fontFamily: 'inherit', fontSize: '26px', fontWeight: 800, color: 'var(--em-text)' }}>{ct('Major da Semana')}</h1>
-            <div style={{ fontSize: '12.5px', color: 'var(--em-muted)' }}>{ct('Até 10 ranqueadas 1v1 de quinta a sábado. Quanto mais vitórias, maior a recompensa.')}</div>
+            <div style={{ fontSize: '12.5px', color: 'var(--em-muted)' }}>{ct('Até 10 ranqueadas 1v1 de quarta a sábado. Quanto mais vitórias, maior a recompensa.')}</div>
           </div>
           <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '8px', background: 'rgba(18,22,27,.6)', border: `1px solid ${win.open ? '#29c47a' : 'var(--em-border-strong)'}` }}>
             <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', fontWeight: 800, color: win.open ? '#29c47a' : 'var(--em-muted)' }}>
@@ -165,8 +165,8 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
               {win.open
                 ? `${ct('fecha em')} ${fmtLeft(endsMs - now)}`
                 : now < startsMs
-                  ? `${ct('abre quinta · em')} ${fmtLeft(startsMs - now)}`
-                  : ct('abre quinta')}
+                  ? `${ct('abre quarta · em')} ${fmtLeft(startsMs - now)}`
+                  : ct('abre quarta')}
             </div>
           </div>
         </div>
@@ -196,7 +196,7 @@ export function WeekendLeague({ account, onHub }: { account: Account | null; onH
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>
               {win.open
                 ? ct('Inscreva-se para valer nesta semana. Depois é só jogar Ranked 1v1: os resultados contam automaticamente (quando os dois lados confirmam).')
-                : ct('Você não participou desta janela. A inscrição abre junto com a janela, na quinta.')}
+                : ct('Você não participou desta janela. A inscrição abre junto com a janela, na quarta.')}
             </p>
           )}
 

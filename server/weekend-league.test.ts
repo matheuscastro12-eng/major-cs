@@ -103,27 +103,27 @@ class WlFakeDb extends FakeDb {
   }
 }
 
-// datas fixas (jul/2026): 02/jul é quinta. Offsets em UTC (SP = -03).
-const WED_NOON = new Date('2026-07-01T15:00:00Z'); // qua 12:00 -03
-const THU_START = new Date('2026-07-02T03:00:00Z'); // qui 00:00 -03
-const THU_MORNING = new Date('2026-07-02T12:00:00Z'); // qui 09:00 -03
+// datas fixas (jul/2026): 01/jul é quarta. Offsets em UTC (SP = -03).
+const TUE_NOON = new Date('2026-06-30T15:00:00Z'); // ter 12:00 -03
+const WED_START = new Date('2026-07-01T03:00:00Z'); // qua 00:00 -03
+const WED_MORNING = new Date('2026-07-01T12:00:00Z'); // qua 09:00 -03
 const SAT_LAST_MIN = new Date('2026-07-05T02:59:00Z'); // sáb 23:59 -03
 const SUN_START = new Date('2026-07-05T03:00:00Z'); // dom 00:00 -03
-const WID = 'wl-2026-07-02';
+const WID = 'wl-2026-07-01';
 
 // ---------------------------------------------------------------- janela
 
-test('weekendWindowFor: quarta → fechada apontando pra quinta seguinte', () => {
-  const w = weekendWindowFor(WED_NOON);
+test('weekendWindowFor: terça → fechada apontando pra quarta seguinte', () => {
+  const w = weekendWindowFor(TUE_NOON);
   assert.equal(w.open, false);
   assert.equal(w.id, WID);
-  assert.equal(w.startsAt, '2026-07-02T03:00:00.000Z');
+  assert.equal(w.startsAt, '2026-07-01T03:00:00.000Z');
   assert.equal(w.endsAt, '2026-07-05T03:00:00.000Z');
 });
 
-test('weekendWindowFor: quinta 00:00 e manhã → aberta', () => {
-  assert.equal(weekendWindowFor(THU_START).open, true);
-  const w = weekendWindowFor(THU_MORNING);
+test('weekendWindowFor: quarta 00:00 e manhã → aberta', () => {
+  assert.equal(weekendWindowFor(WED_START).open, true);
+  const w = weekendWindowFor(WED_MORNING);
   assert.equal(w.open, true);
   assert.equal(w.id, WID);
 });
@@ -134,13 +134,13 @@ test('weekendWindowFor: sábado 23:59 -03 ainda aberta; domingo 00:00 fechada co
   assert.equal(sat.id, WID);
   const sun = weekendWindowFor(SUN_START);
   assert.equal(sun.open, false);
-  assert.equal(sun.id, 'wl-2026-07-09');
+  assert.equal(sun.id, 'wl-2026-07-08');
 });
 
-test('parseWindowId: só quinta real no formato wl-YYYY-MM-DD', () => {
+test('parseWindowId: só quarta real no formato wl-YYYY-MM-DD', () => {
   const b = parseWindowId(WID);
   assert.ok(b);
-  assert.equal(b?.startsAt.toISOString(), '2026-07-02T03:00:00.000Z');
+  assert.equal(b?.startsAt.toISOString(), '2026-07-01T03:00:00.000Z');
   assert.equal(parseWindowId('wl-2026-07-04'), null); // sábado (âncora antiga)
   assert.equal(parseWindowId('wl-2026-07-05'), null); // domingo
   assert.equal(parseWindowId('wl-2026-02-30'), null); // data inexistente
@@ -169,7 +169,7 @@ test('rewardForWins: faixas 1/3/5/7/9', () => {
 test('register: snapshot de divisão/elo da ranqueada + idempotente', async () => {
   const db = new WlFakeDb();
   db.ranking.set('a@x', 1600); // Platina
-  const r1 = await wlRegister(db.sql, 'a@x', WID, THU_MORNING);
+  const r1 = await wlRegister(db.sql, 'a@x', WID, WED_MORNING);
   assert.ok(r1.ok);
   if (r1.ok) {
     assert.equal(r1.replayed, false);
@@ -177,36 +177,36 @@ test('register: snapshot de divisão/elo da ranqueada + idempotente', async () =
     assert.equal(r1.entry.division, 'Platina');
     assert.equal(r1.entry.wins, 0);
   }
-  const r2 = await wlRegister(db.sql, 'a@x', WID, THU_MORNING);
+  const r2 = await wlRegister(db.sql, 'a@x', WID, WED_MORNING);
   assert.ok(r2.ok && r2.replayed);
   assert.equal(db.entries.length, 1);
   // sem linha na ranqueada → default 1000
-  const r3 = await wlRegister(db.sql, 'b@x', WID, THU_MORNING);
+  const r3 = await wlRegister(db.sql, 'b@x', WID, WED_MORNING);
   assert.ok(r3.ok);
   if (r3.ok) assert.equal(r3.entry.elo, 1000);
 });
 
 test('register: janela fechada ou id errado rejeitados', async () => {
   const db = new WlFakeDb();
-  const closed = await wlRegister(db.sql, 'a@x', WID, WED_NOON);
+  const closed = await wlRegister(db.sql, 'a@x', WID, TUE_NOON);
   assert.deepEqual(closed, { ok: false, error: 'window_closed' });
-  const wrong = await wlRegister(db.sql, 'a@x', 'wl-2026-07-09', THU_MORNING);
+  const wrong = await wlRegister(db.sql, 'a@x', 'wl-2026-07-09', WED_MORNING);
   assert.deepEqual(wrong, { ok: false, error: 'wrong_window' });
 });
 
 // ------------------------------------------------------------------ report
 
 async function setupPair(db: WlFakeDb) {
-  await wlRegister(db.sql, 'a@x', WID, THU_MORNING);
-  await wlRegister(db.sql, 'b@x', WID, THU_MORNING);
+  await wlRegister(db.sql, 'a@x', WID, WED_MORNING);
+  await wlRegister(db.sql, 'b@x', WID, WED_MORNING);
 }
 
 test('report: par consistente conta vitória e derrota pros dois lados', async () => {
   const db = new WlFakeDb();
   await setupPair(db);
-  const r1 = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0001', won: true, oppNick: 'B' }, THU_MORNING);
+  const r1 = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0001', won: true, oppNick: 'B' }, WED_MORNING);
   assert.ok(r1.ok && r1.outcome === 'pending');
-  const r2 = await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0001', won: false, oppNick: 'A' }, THU_MORNING);
+  const r2 = await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0001', won: false, oppNick: 'A' }, WED_MORNING);
   assert.ok(r2.ok && r2.outcome === 'applied');
   assert.equal(db.entry('a@x', WID)?.wins, 1);
   assert.equal(db.entry('a@x', WID)?.losses, 0);
@@ -217,8 +217,8 @@ test('report: par consistente conta vitória e derrota pros dois lados', async (
 test('report: conflito (dois "ganhei") não conta pra ninguém', async () => {
   const db = new WlFakeDb();
   await setupPair(db);
-  await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0002', won: true, oppNick: 'B' }, THU_MORNING);
-  const r2 = await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0002', won: true, oppNick: 'A' }, THU_MORNING);
+  await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0002', won: true, oppNick: 'B' }, WED_MORNING);
+  const r2 = await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0002', won: true, oppNick: 'A' }, WED_MORNING);
   assert.ok(r2.ok && r2.outcome === 'conflict');
   assert.equal(db.entry('a@x', WID)?.wins, 0);
   assert.equal(db.entry('b@x', WID)?.wins, 0);
@@ -228,13 +228,13 @@ test('report: conflito (dois "ganhei") não conta pra ninguém', async () => {
 test('report: duplicado não re-aplica; não-registrado e código curto rejeitados', async () => {
   const db = new WlFakeDb();
   await setupPair(db);
-  await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0003', won: true, oppNick: 'B' }, THU_MORNING);
-  const dup = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0003', won: false, oppNick: 'B' }, THU_MORNING);
+  await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0003', won: true, oppNick: 'B' }, WED_MORNING);
+  const dup = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0003', won: false, oppNick: 'B' }, WED_MORNING);
   assert.ok(dup.ok && dup.outcome === 'duplicate');
   assert.equal(db.reports.filter((r) => r.matchCode === 'M0003').length, 1);
-  const noreg = await wlReport(db.sql, 'c@x', { windowId: WID, matchCode: 'M0003', won: false, oppNick: 'A' }, THU_MORNING);
+  const noreg = await wlReport(db.sql, 'c@x', { windowId: WID, matchCode: 'M0003', won: false, oppNick: 'A' }, WED_MORNING);
   assert.deepEqual(noreg, { ok: false, error: 'not_registered' });
-  const short = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M1', won: true, oppNick: 'B' }, THU_MORNING);
+  const short = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M1', won: true, oppNick: 'B' }, WED_MORNING);
   assert.deepEqual(short, { ok: false, error: 'bad_match_code' });
   const closed = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0004', won: true, oppNick: 'B' }, SUN_START);
   assert.deepEqual(closed, { ok: false, error: 'window_closed' });
@@ -245,21 +245,21 @@ test('report: cap de 10 partidas — 11º report rejeitado; lado capado não con
   await setupPair(db);
   const a = db.entry('a@x', WID)!;
   a.wins = 6; a.losses = 4; // run completo
-  const r = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0011', won: true, oppNick: 'B' }, THU_MORNING);
+  const r = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0011', won: true, oppNick: 'B' }, WED_MORNING);
   assert.deepEqual(r, { ok: false, error: 'run_complete' });
   // b reporta contra a (a capado ENTRE o report e o pareamento): b conta, a não
-  await wlRegister(db.sql, 'c@x', WID, THU_MORNING);
+  await wlRegister(db.sql, 'c@x', WID, WED_MORNING);
   const c = db.entry('c@x', WID)!;
-  await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0012', won: true, oppNick: 'C' }, THU_MORNING);
+  await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0012', won: true, oppNick: 'C' }, WED_MORNING);
   c.wins = 6; c.losses = 4; // capou depois de b reportar? não — c nem reportou; simula cap no apply
-  const rc = await wlReport(db.sql, 'c@x', { windowId: WID, matchCode: 'M0012', won: false, oppNick: 'B' }, THU_MORNING);
+  const rc = await wlReport(db.sql, 'c@x', { windowId: WID, matchCode: 'M0012', won: false, oppNick: 'B' }, WED_MORNING);
   assert.deepEqual(rc, { ok: false, error: 'run_complete' }); // submit já barra
   // cap no APLICAR: b pendente em M0013, então b completa o run por outras partidas
-  await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0013', won: true, oppNick: 'D' }, THU_MORNING);
-  await wlRegister(db.sql, 'd@x', WID, THU_MORNING);
+  await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0013', won: true, oppNick: 'D' }, WED_MORNING);
+  await wlRegister(db.sql, 'd@x', WID, WED_MORNING);
   const b = db.entry('b@x', WID)!;
   b.wins = 7; b.losses = 3; // capou entre o report e o par
-  const rd = await wlReport(db.sql, 'd@x', { windowId: WID, matchCode: 'M0013', won: false, oppNick: 'B' }, THU_MORNING);
+  const rd = await wlReport(db.sql, 'd@x', { windowId: WID, matchCode: 'M0013', won: false, oppNick: 'B' }, WED_MORNING);
   assert.ok(rd.ok && rd.outcome === 'applied');
   assert.equal(b.wins + b.losses, 10); // capado: não passou de 10
   assert.equal(db.entry('d@x', WID)?.losses, 1); // lado com espaço conta
@@ -272,10 +272,10 @@ test('claim: antes de fechar só com run completo; paga a faixa pelo ledger', as
   await setupPair(db);
   const a = db.entry('a@x', WID)!;
   a.wins = 3; a.losses = 2;
-  const early = await wlClaim(db.sql, 'a@x', WID, THU_MORNING);
+  const early = await wlClaim(db.sql, 'a@x', WID, WED_MORNING);
   assert.deepEqual(early, { ok: false, error: 'window_still_open' });
   a.wins = 6; a.losses = 4; // run completo ainda na janela
-  const r = await wlClaim(db.sql, 'a@x', WID, THU_MORNING);
+  const r = await wlClaim(db.sql, 'a@x', WID, WED_MORNING);
   assert.ok(r.ok);
   if (r.ok) {
     assert.equal(r.replayed, false);
@@ -319,7 +319,7 @@ test('claim: idempotente — claimed_at barra e op_id wl:<windowId> não paga em
   if (r3.ok) assert.equal(r3.replayed, true);
   assert.equal(db.wallets.get('a@x'), 37500); // pagou UMA vez
   assert.equal(a.claimedAt != null, true); // marcador restaurado
-  const bad = await wlClaim(db.sql, 'a@x', 'wl-2026-07-08', SUN_START); // quarta
+  const bad = await wlClaim(db.sql, 'a@x', 'wl-2026-07-07', SUN_START); // terça
   assert.deepEqual(bad, { ok: false, error: 'bad_window' });
   const noreg = await wlClaim(db.sql, 'z@x', WID, SUN_START);
   assert.deepEqual(noreg, { ok: false, error: 'not_registered' });
@@ -334,7 +334,7 @@ test('status: janela + minha entry + standings top por vitórias', async () => {
   await setupPair(db);
   db.entry('a@x', WID)!.wins = 4;
   db.entry('b@x', WID)!.wins = 7;
-  const s = await wlStatus(db.sql, 'a@x', THU_MORNING);
+  const s = await wlStatus(db.sql, 'a@x', WED_MORNING);
   assert.equal(s.window.id, WID);
   assert.equal(s.entry?.wins, 4);
   assert.equal(s.standings.length, 2);
@@ -342,7 +342,7 @@ test('status: janela + minha entry + standings top por vitórias', async () => {
   assert.equal(s.standings[0].rank, 1);
   assert.equal(s.rewardTiers, WL_REWARD_TIERS);
   // não registrado → entry null
-  const s2 = await wlStatus(db.sql, 'z@x', THU_MORNING);
+  const s2 = await wlStatus(db.sql, 'z@x', WED_MORNING);
   assert.equal(s2.entry, null);
 });
 

@@ -1,5 +1,5 @@
 // "Major da Semana" — Weekend League do Ultimate (fase A: servidor).
-// Torneio semanal (qui 00:00 → sáb 23:59 America/Sao_Paulo): registro
+// Torneio semanal (qua 00:00 → sáb 23:59 America/Sao_Paulo): registro
 // por janela, até 10 partidas com reports PAREADOS (mesma filosofia anti-fraude
 // da ranqueada — resultado só conta quando os dois lados batem) e recompensa
 // por faixa de vitórias paga pela economia server-authoritative (ledger
@@ -94,7 +94,7 @@ export default async function handler(
 
   const acc = await (sql`SELECT paid FROM rtm_accounts WHERE email=${email}`);
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
-  if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O Major da Semana faz parte da conta com save na nuvem.' }); return; }
+  // Major da Semana aberto a QUALQUER conta logada (grátis ou vitalícia) — sem gate de paid.
 
   const now = new Date();
 
@@ -108,7 +108,7 @@ export default async function handler(
     if (!WINDOW_ID_RE.test(windowId)) { res.status(400).json({ error: 'windowId inválido' }); return; }
     const r = await wlRegister(sql, email, windowId, now);
     if (!r.ok) {
-      if (r.error === 'window_closed') { res.status(409).json({ error: 'window_closed', message: 'A janela do Major da Semana está fechada. Volta na quinta!' }); return; }
+      if (r.error === 'window_closed') { res.status(409).json({ error: 'window_closed', message: 'A janela do Major da Semana está fechada. Volta na quarta!' }); return; }
       res.status(400).json({ error: 'wrong_window', message: 'Essa não é a janela atual.' });
       return;
     }

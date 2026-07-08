@@ -188,30 +188,30 @@ export default async function handler(
       FROM rtm_accounts a WHERE a.paid GROUP BY 1 ORDER BY n DESC`;
     const coinSummary = await sql`
       SELECT
-        count(*) FILTER (WHERE status IN ('paid', 'claimed'))::int AS paid_orders,
-        COALESCE(sum(coins) FILTER (WHERE status IN ('paid', 'claimed')), 0)::bigint AS coins_sold,
-        COALESCE(sum(cents) FILTER (WHERE status IN ('paid', 'claimed')), 0)::bigint AS revenue_cents,
+        count(*) FILTER (WHERE status IN ('paid', 'claimed') AND cents > 0)::int AS paid_orders,
+        COALESCE(sum(coins) FILTER (WHERE status IN ('paid', 'claimed') AND cents > 0), 0)::bigint AS coins_sold,
+        COALESCE(sum(cents) FILTER (WHERE status IN ('paid', 'claimed') AND cents > 0), 0)::bigint AS revenue_cents,
         count(*) FILTER (WHERE status = 'pending')::int AS pending_orders,
-        count(DISTINCT email) FILTER (WHERE status IN ('paid', 'claimed'))::int AS buyers
+        count(DISTINCT email) FILTER (WHERE status IN ('paid', 'claimed') AND cents > 0)::int AS buyers
       FROM rtm_coin_orders`;
     const coinByMethod = await sql`
       SELECT COALESCE(method, 'pix') AS method, count(*)::int AS orders,
              COALESCE(sum(coins), 0)::bigint AS coins, COALESCE(sum(cents), 0)::bigint AS cents
-      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') GROUP BY 1 ORDER BY cents DESC`;
+      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') AND cents > 0 GROUP BY 1 ORDER BY cents DESC`;
     const coinByTier = await sql`
       SELECT tier, count(*)::int AS orders,
              COALESCE(sum(coins), 0)::bigint AS coins, COALESCE(sum(cents), 0)::bigint AS cents
-      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') GROUP BY 1 ORDER BY cents DESC`;
+      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') AND cents > 0 GROUP BY 1 ORDER BY cents DESC`;
     const coinRecent = await sql`
       SELECT email, tier, coins, cents, COALESCE(method, 'pix') AS method, status, COALESCE(paid_at, created_at) AS at
-      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') ORDER BY COALESCE(paid_at, created_at) DESC LIMIT 25`;
+      FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') AND cents > 0 ORDER BY COALESCE(paid_at, created_at) DESC LIMIT 25`;
     const coinTrend = await sql`
       WITH days AS (
         SELECT generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day')::date AS day
       ),
       orders AS (
         SELECT date_trunc('day', COALESCE(paid_at, created_at))::date AS day, count(*)::int AS n, COALESCE(sum(cents), 0)::bigint AS cents
-        FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') AND COALESCE(paid_at, created_at) > now() - interval '30 days' GROUP BY 1
+        FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') AND cents > 0 AND COALESCE(paid_at, created_at) > now() - interval '30 days' GROUP BY 1
       )
       SELECT d.day, COALESCE(o.n, 0)::int AS orders, COALESCE(o.cents, 0)::bigint AS cents
       FROM days d LEFT JOIN orders o ON o.day = d.day ORDER BY d.day`;
@@ -288,7 +288,7 @@ export default async function handler(
                COALESCE(o.method, 'pix') AS method, o.cents,
                CASE WHEN o.tier LIKE 'pass-%' THEN 'passe' ELSE 'coins' END AS product
         FROM rtm_coin_orders o
-        WHERE o.status IN ('paid','claimed') AND COALESCE(o.paid_at, o.created_at) > now() - interval '61 days'
+        WHERE o.status IN ('paid','claimed') AND o.cents > 0 AND COALESCE(o.paid_at, o.created_at) > now() - interval '61 days'
       ),
       ordd AS (
         SELECT day, count(*)::int AS orders,

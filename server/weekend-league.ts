@@ -4,7 +4,7 @@
 // os DOIS lados batem; conflito não conta pra ninguém) e claim de recompensa
 // por faixa de vitórias pago via applyUltTransaction (ledger auditável).
 //
-// JANELA: toda quinta 00:00 → sábado 23:59:59 em America/Sao_Paulo. O Brasil
+// JANELA: toda quarta 00:00 → sábado 23:59:59 em America/Sao_Paulo. O Brasil
 // aboliu o horário de verão em 2019, então São Paulo é UTC-3 FIXO — a conta é
 // feita em offset fixo de -03:00 (se o DST voltar um dia, este módulo precisa
 // migrar pra Intl/tz db; documentado de propósito).
@@ -36,27 +36,27 @@ const SP_OFFSET_MS = 3 * 3600_000; // America/Sao_Paulo = UTC-3 fixo (sem DST)
 const DAY_MS = 86_400_000;
 
 export interface WlWindow {
-  id: string; // 'wl-YYYY-MM-DD' (data da quinta, em -03:00)
-  startsAt: string; // ISO UTC da quinta 00:00 -03
+  id: string; // 'wl-YYYY-MM-DD' (data da quarta, em -03:00)
+  startsAt: string; // ISO UTC da quarta 00:00 -03
   endsAt: string; // ISO UTC do domingo 00:00 -03 (exclusivo)
   open: boolean;
 }
 
-// Janela corrente se aberta; senão a PRÓXIMA (quarta → quinta seguinte; domingo
-// → quinta da semana que vem). Determinística a partir de `now`.
+// Janela corrente se aberta; senão a PRÓXIMA (dom→ter → quarta seguinte).
+// Determinística a partir de `now`.
 export function weekendWindowFor(now: Date): WlWindow {
   const local = new Date(now.getTime() - SP_OFFSET_MS); // "relógio de SP" em campos UTC
   const dow = local.getUTCDay(); // 0=dom … 6=sáb
-  // Âncora = quinta (dow 4). Qui/sex/sáb pertencem à janela corrente; dom→qua
-  // apontam pra PRÓXIMA quinta.
-  const daysToThu = dow === 4 ? 0 : dow === 5 ? -1 : dow === 6 ? -2 : (4 - dow + 7) % 7;
-  const thuMidnightLocal = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + daysToThu);
-  const startsMs = thuMidnightLocal + SP_OFFSET_MS; // 00:00 -03 = 03:00 UTC
-  const endsMs = startsMs + 3 * DAY_MS; // qui 00:00 → dom 00:00 -03 (qui+sex+sáb)
-  const thu = new Date(thuMidnightLocal);
+  // Âncora = quarta (dow 3). Qua/qui/sex/sáb pertencem à janela corrente; dom→ter
+  // apontam pra PRÓXIMA quarta.
+  const daysToWed = dow === 3 ? 0 : dow === 4 ? -1 : dow === 5 ? -2 : dow === 6 ? -3 : (3 - dow + 7) % 7;
+  const wedMidnightLocal = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + daysToWed);
+  const startsMs = wedMidnightLocal + SP_OFFSET_MS; // 00:00 -03 = 03:00 UTC
+  const endsMs = startsMs + 4 * DAY_MS; // qua 00:00 → dom 00:00 -03 (qua+qui+sex+sáb)
+  const wed = new Date(wedMidnightLocal);
   const pad = (n: number) => String(n).padStart(2, '0');
   return {
-    id: `wl-${thu.getUTCFullYear()}-${pad(thu.getUTCMonth() + 1)}-${pad(thu.getUTCDate())}`,
+    id: `wl-${wed.getUTCFullYear()}-${pad(wed.getUTCMonth() + 1)}-${pad(wed.getUTCDate())}`,
     startsAt: new Date(startsMs).toISOString(),
     endsAt: new Date(endsMs).toISOString(),
     open: now.getTime() >= startsMs && now.getTime() < endsMs,
@@ -64,17 +64,17 @@ export function weekendWindowFor(now: Date): WlWindow {
 }
 
 // Valida 'wl-YYYY-MM-DD' e devolve os limites da janela (a data PRECISA ser uma
-// quinta-feira real — id forjado com outro dia é rejeitado).
+// quarta-feira real — id forjado com outro dia é rejeitado).
 export function parseWindowId(id: string): { startsAt: Date; endsAt: Date } | null {
   const m = /^wl-(\d{4})-(\d{2})-(\d{2})$/.exec(id);
   if (!m) return null;
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const thuMidnightLocal = Date.UTC(y, mo - 1, d);
-  const thu = new Date(thuMidnightLocal);
-  if (thu.getUTCFullYear() !== y || thu.getUTCMonth() !== mo - 1 || thu.getUTCDate() !== d) return null;
-  if (thu.getUTCDay() !== 4) return null;
-  const startsMs = thuMidnightLocal + SP_OFFSET_MS;
-  return { startsAt: new Date(startsMs), endsAt: new Date(startsMs + 3 * DAY_MS) };
+  const wedMidnightLocal = Date.UTC(y, mo - 1, d);
+  const wed = new Date(wedMidnightLocal);
+  if (wed.getUTCFullYear() !== y || wed.getUTCMonth() !== mo - 1 || wed.getUTCDate() !== d) return null;
+  if (wed.getUTCDay() !== 3) return null;
+  const startsMs = wedMidnightLocal + SP_OFFSET_MS;
+  return { startsAt: new Date(startsMs), endsAt: new Date(startsMs + 4 * DAY_MS) };
 }
 
 // -------------------------------------------------------------- recompensas

@@ -27,14 +27,14 @@ export function wlWindowNow(nowMs: number = Date.now()): WlWindow {
   const DAY_MS = 86_400_000;
   const local = new Date(nowMs - SP_OFFSET_MS);
   const dow = local.getUTCDay(); // 0=dom … 6=sáb
-  const daysToThu = dow === 4 ? 0 : dow === 5 ? -1 : dow === 6 ? -2 : (4 - dow + 7) % 7;
-  const thuMid = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + daysToThu);
-  const startsMs = thuMid + SP_OFFSET_MS;
-  const endsMs = startsMs + 3 * DAY_MS;
-  const thu = new Date(thuMid);
+  const daysToWed = dow === 3 ? 0 : dow === 4 ? -1 : dow === 5 ? -2 : dow === 6 ? -3 : (3 - dow + 7) % 7;
+  const wedMid = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + daysToWed);
+  const startsMs = wedMid + SP_OFFSET_MS;
+  const endsMs = startsMs + 4 * DAY_MS;
+  const wed = new Date(wedMid);
   const pad = (n: number) => String(n).padStart(2, '0');
   return {
-    id: `wl-${thu.getUTCFullYear()}-${pad(thu.getUTCMonth() + 1)}-${pad(thu.getUTCDate())}`,
+    id: `wl-${wed.getUTCFullYear()}-${pad(wed.getUTCMonth() + 1)}-${pad(wed.getUTCDate())}`,
     startsAt: new Date(startsMs).toISOString(),
     endsAt: new Date(endsMs).toISOString(),
     open: nowMs >= startsMs && nowMs < endsMs,

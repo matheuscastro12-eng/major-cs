@@ -301,7 +301,7 @@ export default function App() {
   useEffect(() => {
     if (!ULTIMATE_ENABLED && screen === 'ultimate') { setScreen('home'); return; }
     if (!RTP_ENABLED && screen === 'rtp') { setScreen('home'); return; } // kill-switch: deep link /road-to-pro cai na home
-    if (accountReady && !account?.paid && (screen === 'ultimate' || screen === 'rtp')) setScreen('landing');
+    if (accountReady && !account && (screen === 'ultimate' || screen === 'rtp')) setScreen('landing');
   }, [screen, accountReady, account?.paid]);
   // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
   useEffect(() => {
@@ -1017,7 +1017,7 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onUltimate={ULTIMATE_ENABLED ? () => setScreen('ultimate') : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
-          premiumLocked={!account?.paid}
+          premiumLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
@@ -1075,12 +1075,13 @@ export default function App() {
         </>
       )}
 
-      {/* Ambos exigem conta vitalícia (account.paid). O guard de rota acima já
-          redireciona o free pra landing; este `account?.paid` é a 2ª barreira. */}
-      {ULTIMATE_ENABLED && account?.paid && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
+      {/* Abertos a QUALQUER conta logada (grátis ou vitalícia). O guard de rota
+          acima só manda o DESLOGADO pra landing; conta logada joga. Os perks
+          pagos ficam no cloud-save + ladder persistente, não no acesso. */}
+      {ULTIMATE_ENABLED && account && screen === 'ultimate' && <UltimateSquadScreen onBack={() => setScreen('home')} />}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
-      {RTP_ENABLED && account?.paid && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
+      {RTP_ENABLED && account && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (

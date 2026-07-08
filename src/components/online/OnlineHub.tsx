@@ -39,7 +39,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
     { id: '1v1' as const, icon: '⚔', tone: 'var(--em-gold)', badge: '', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
     { id: 'major' as const, icon: '🏆', tone: 'var(--em-gold)', badge: '', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'] },
     { id: 'gauntlet' as const, icon: '🔥', tone: '#29c47a', badge: '', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
-    { id: 'weekend' as const, icon: '🏟️', tone: 'var(--em-gold)', badge: 'QUI-SÁB', name: 'Major da Semana', players: 'Liga da semana', ranked: 'Créditos e cartas', pitch: 'Weekend League: até 10 ranqueadas de quinta a sábado valendo recompensas.', how: ['Inscreva-se na janela (quinta 00h → sábado 23h59)', 'Jogue até 10 Ranked 1v1 — cada duelo confirmado conta', 'Quanto mais vitórias, maior a faixa de recompensa', 'Resgate créditos (3k a 37,5k) e cartas ao fim do run'] },
+    { id: 'weekend' as const, icon: '🏟️', tone: 'var(--em-gold)', badge: 'QUA-SÁB', name: 'Major da Semana', players: 'Liga da semana', ranked: 'Créditos e cartas', pitch: 'Weekend League: até 10 ranqueadas de quarta a sábado valendo recompensas.', how: ['Inscreva-se na janela (quarta 00h → sábado 23h59)', 'Jogue até 10 Ranked 1v1 — cada duelo confirmado conta', 'Quanto mais vitórias, maior a faixa de recompensa', 'Resgate créditos (3k a 37,5k) e cartas ao fim do run'] },
   ];
 
   type LbRow = { nick: string; country: string; val: number; you: boolean; sub: string; subColor: string; fmt: string };
@@ -113,7 +113,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
             <span style={{ display: 'block', fontSize: '12.5px', color: 'var(--em-muted)' }}>
               {wlWin.open
                 ? `${ct('Fecha em')} ${wlLeft(Date.parse(wlWin.endsAt) - now)} · ${ct('vitórias viram coins, até 37,5k')}`
-                : `${ct('Abre quinta · em')} ${wlLeft(Date.parse(wlWin.startsAt) - now)}`}
+                : `${ct('Abre quarta · em')} ${wlLeft(Date.parse(wlWin.startsAt) - now)}`}
             </span>
           </span>
           <span style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontFamily: 'inherit', fontWeight: 800, fontSize: '14px', color: '#06121d', background: wlWin.open ? '#29c47a' : 'var(--em-gold)', whiteSpace: 'nowrap' }}>{wlWin.open ? ct('Entrar') : ct('Ver')} →</span>
