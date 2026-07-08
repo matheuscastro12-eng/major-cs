@@ -38,6 +38,15 @@ export function Modal({
   const ref = useRef<HTMLDivElement | null>(null);
   const returnFocusTo = useRef<HTMLElement | null>(null);
 
+  // BUG FIX (teclado fecha a cada tecla): este effect NÃO pode depender de
+  // `onClose`. Quem consome o Modal costuma passar uma função recriada a cada
+  // render (ex.: AccountModal → requestClose); se `onClose` estivesse nas deps,
+  // cada tecla digitada num input re-rodava o effect, e o queueMicrotask abaixo
+  // roubava o foco de volta pro primeiro campo — no mobile isso fecha o teclado.
+  // Solução: só rodar em [open]; o handler de ESC lê o onClose atual via ref.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
   // ESC global + lock no scroll do body enquanto aberto + retorna foco no close
   useEffect(() => {
     if (!open) return;
@@ -46,7 +55,7 @@ export function Modal({
     const id = Symbol('modal');
     modalStack.push(id);
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape' && modalStack[modalStack.length - 1] === id) onClose();
+      if (e.key === 'Escape' && modalStack[modalStack.length - 1] === id) onCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -64,7 +73,7 @@ export function Modal({
       if (modalStack.length === 0) document.body.style.overflow = prevOverflow;
       returnFocusTo.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   // focus-trap: ao apertar Tab/Shift+Tab no primeiro/último foco, faz wrap
   const onKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
