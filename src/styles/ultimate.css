@@ -695,6 +695,34 @@ body:has(.ut-live) {
 .ut-root.ut-live .btn.ghost { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #e9edf3; }
 .ut-root.ut-live .btn.ghost.active { background: rgba(236, 199, 95, 0.2); border-color: rgba(236, 199, 95, 0.55); color: var(--ut-gold-1); }
 
+/* ---- SCOREBOARD DE RESULTADO (pós-partida) no mesmo tema broadcast escuro ----
+   Só a visão AO VIVO (lsb-*) tinha tratamento dark; o Scoreboard final (sb-*,
+   potm-*, tabs, seg) renderizava com o estilo CLARO da carreira sobre o palco
+   escuro = contraste bugado. Aqui ele herda o mesmo visual da Sala. */
+.ut-root.ut-live .match-replay > .panel { background: transparent; border: 0; box-shadow: none; margin: 0; }
+.ut-root.ut-live .match-replay > .panel > .panel-head { background: rgba(0, 0, 0, 0.22); color: #f2f5f9; border-bottom: 1px solid rgba(255, 255, 255, 0.08); letter-spacing: 0.6px; }
+/* filtro TR/CT + abas de mapa */
+.ut-root.ut-live .seg { background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; }
+.ut-root.ut-live .seg button { color: #aeb7c4; background: transparent; }
+.ut-root.ut-live .seg button.active { background: rgba(236, 199, 95, 0.18); color: var(--ut-gold-1); }
+.ut-root.ut-live .tabs .tab { color: #aeb7c4; }
+.ut-root.ut-live .tabs .tab.active { color: #f2f5f9; border-bottom-color: var(--ut-gold-1); }
+.ut-root.ut-live .tabs .tab .muted, .ut-root.ut-live .sb-table .muted { color: #8f99a6; }
+/* tabela de stats */
+.ut-root.ut-live .sb-table th { color: #8f99a6; font-family: var(--ut-font-cond); text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+.ut-root.ut-live .sb-table td { color: #e7ebf1; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.ut-root.ut-live .sb-table .sb-player { color: #f2f5f9; font-weight: 600; }
+.ut-root.ut-live .sb-kad b { color: #f2f5f9; }
+.ut-root.ut-live .team-row td { color: #f2f5f9; font-weight: 800; background: rgba(255, 255, 255, 0.035); font-family: var(--ut-font-cond); letter-spacing: 0.4px; }
+/* destaque da partida (POTM) */
+.ut-root.ut-live .potm { background: rgba(0, 0, 0, 0.26); border: 1px solid rgba(236, 199, 95, 0.24); border-radius: 12px; }
+.ut-root.ut-live .potm-tag { color: var(--ut-gold-1); }
+.ut-root.ut-live .potm-name { color: #f2f5f9; }
+.ut-root.ut-live .pb-track { background: rgba(0, 0, 0, 0.4); }
+.ut-root.ut-live .pb-label { color: #aeb7c4; }
+.ut-root.ut-live .pb-val { color: #f2f5f9; }
+.ut-root.ut-live .era-chip { color: #aeb7c4; border-color: rgba(255, 255, 255, 0.14); }
+
 /* ---------------- FILA RANQUEADA (matchmaking) ---------------- */
 .ut-queue {
   position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px;
