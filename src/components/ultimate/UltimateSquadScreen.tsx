@@ -1278,7 +1278,7 @@ export function UltimateSquadScreen({ onBack }: { onBack: () => void }) {
     if (!already && args.ranked) void reportResult(won, displayName, args.code, pvpNick);
     // espelho do Major da Semana: duelo ranqueado do Ultimate também conta pro
     // run da semana (gate local de inscrição; fire-and-forget, servidor valida).
-    if (!already && args.ranked) wlMirrorReport(won, args.code, args.oppNick);
+    if (!already && args.ranked) { const [rf, ra] = score.split('-').map((n) => parseInt(n, 10) || 0); wlMirrorReport(won, args.code, args.oppNick, rf, ra); }
     const eloAfter = eloBefore + outcome.eloDelta;
     setResult(null);
     setLiveRound(0);

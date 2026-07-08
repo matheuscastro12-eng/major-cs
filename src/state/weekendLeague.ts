@@ -10,14 +10,14 @@ import { getToken } from './account';
 export interface WlWindow { id: string; startsAt: string; endsAt: string; open: boolean; }
 export interface WlEntry {
   windowId: string; division: string; elo: number;
-  wins: number; losses: number; claimed: boolean; runComplete: boolean;
+  wins: number; losses: number; roundsFor: number; roundsAgainst: number; roundBalance: number; claimed: boolean; runComplete: boolean;
 }
-export interface WlStanding { rank: number; nick: string; division: string; wins: number; losses: number; }
+export interface WlStanding { rank: number; nick: string; division: string; wins: number; losses: number; roundBalance: number; }
 export interface WlRewardTier { minWins: number; credits: number; card?: string; name: string; }
 export interface WlStatus { window: WlWindow; entry: WlEntry | null; standings: WlStanding[]; rewardTiers: WlRewardTier[]; }
 export interface WlClaimOutcome { replayed: boolean; tier: WlRewardTier; wins: number; credits: number; }
 
-export const WL_MAX_MATCHES = 10;
+export const WL_MAX_MATCHES = 60;
 
 // Espelho LEVE da janela do servidor (server/weekend-league.ts) só pra UI mostrar
 // "aberta / abre em X" sem bater na API — o servidor continua a verdade (registro,
@@ -104,10 +104,10 @@ export async function wlClaim(windowId: string): Promise<WlClaimOutcome> {
 // Espelho do report da ranqueada: fire-and-forget, NUNCA lança nem perturba o
 // fluxo do ranking. Só dispara se o gate local diz que estou inscrito na
 // janela corrente (stale ok — o servidor rejeita o que não vale).
-export function wlMirrorReport(won: boolean, matchCode: string, oppNick: string): void {
+export function wlMirrorReport(won: boolean, matchCode: string, oppNick: string, roundsFor = 0, roundsAgainst = 0): void {
   try {
     const reg = localWlRegistration();
     if (!reg || !matchCode || !getToken()) return;
-    void post({ action: 'report', windowId: reg.windowId, matchCode, won, oppNick }).catch(() => { /* espelho best-effort */ });
+    void post({ action: 'report', windowId: reg.windowId, matchCode, won, oppNick, roundsFor, roundsAgainst }).catch(() => { /* espelho best-effort */ });
   } catch { /* nunca propaga pro fluxo da ranqueada */ }
 }

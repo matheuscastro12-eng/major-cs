@@ -173,7 +173,7 @@ export function WeekendLeague({ account, onHub, onPlay }: { account: Account | n
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {entry ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              {([[ct('Partidas'), `${games}/${WL_MAX_MATCHES}`, 'var(--em-text)'], [ct('Vitórias'), String(entry.wins), '#29c47a'], [ct('Derrotas'), String(entry.losses), 'var(--em-red, #c0392b)'], [ct('Divisão'), entry.division || '—', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
+              {([[ct('Partidas'), `${games}/${WL_MAX_MATCHES}`, 'var(--em-text)'], [ct('Vitórias'), String(entry.wins), '#29c47a'], [ct('Derrotas'), String(entry.losses), 'var(--em-red, #c0392b)'], [ct('Saldo (SR)'), (entry.roundBalance >= 0 ? '+' : '') + entry.roundBalance, entry.roundBalance >= 0 ? '#29c47a' : 'var(--em-red, #c0392b)'], [ct('Divisão'), entry.division || '—', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
                 <div key={k} style={{ textAlign: 'center', padding: '8px 16px', borderRadius: '6px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)' }}>
                   <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>{k}</div>
                   <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '17px', color: c }}>{v}</div>
@@ -252,7 +252,7 @@ export function WeekendLeague({ account, onHub, onPlay }: { account: Account | n
                     </td>
                     <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, fontSize: '12.5px', color: 'var(--em-gold)', whiteSpace: 'nowrap' }}>{prize > 0 ? `${fmtCredits(prize)} 🪙` : ''}</td>
                     <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, fontSize: '14.5px', color: 'var(--em-text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                      <span style={{ color: '#29c47a' }}>{r.wins}V</span> <span style={{ color: 'var(--rtm-faint)' }}>–</span> <span style={{ color: 'var(--em-red, #c0392b)' }}>{r.losses}D</span>
+                      <span style={{ color: '#29c47a' }}>{r.wins}V</span> <span style={{ color: 'var(--rtm-faint)' }}>–</span> <span style={{ color: 'var(--em-red, #c0392b)' }}>{r.losses}D</span> <span title={ct('Saldo de rounds (desempate)')} style={{ color: 'var(--rtm-faint)', fontSize: '11px', fontWeight: 700 }}>· {r.roundBalance >= 0 ? '+' : ''}{r.roundBalance}</span>
                     </td>
                   </tr>
                 );

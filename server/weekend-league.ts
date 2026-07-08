@@ -26,7 +26,7 @@ import { decidePair } from '../api/_reportPairing.js';
 import { divisionFor } from '../src/engine/ultimate/divisions.js';
 import { applyUltTransaction, type SqlTag, type SqlQuery } from './ultimate-economy.js';
 
-export const WL_MAX_MATCHES = 10;
+export const WL_MAX_MATCHES = 60;
 export const WL_MATCH_CODE_MIN = 4;
 export const WL_MATCH_CODE_MAX = 24;
 
@@ -122,20 +122,28 @@ export function wlSchemaQueries(sql: SqlTag): SqlQuery[] {
       elo INT NOT NULL DEFAULT 1000,
       wins INT NOT NULL DEFAULT 0,
       losses INT NOT NULL DEFAULT 0,
+      rounds_for INT NOT NULL DEFAULT 0,
+      rounds_against INT NOT NULL DEFAULT 0,
       registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       claimed_at TIMESTAMPTZ,
       PRIMARY KEY (email, window_id)
     )`,
+    sql`ALTER TABLE rtm_wl_entries ADD COLUMN IF NOT EXISTS rounds_for INT NOT NULL DEFAULT 0`,
+    sql`ALTER TABLE rtm_wl_entries ADD COLUMN IF NOT EXISTS rounds_against INT NOT NULL DEFAULT 0`,
     sql`CREATE TABLE IF NOT EXISTS rtm_wl_reports (
       window_id TEXT NOT NULL,
       match_code TEXT NOT NULL,
       email TEXT NOT NULL,
       opp_nick TEXT NOT NULL DEFAULT '',
       won BOOLEAN NOT NULL,
+      rounds_for INT NOT NULL DEFAULT 0,
+      rounds_against INT NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'pending',
       reported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (window_id, match_code, email)
     )`,
+    sql`ALTER TABLE rtm_wl_reports ADD COLUMN IF NOT EXISTS rounds_for INT NOT NULL DEFAULT 0`,
+    sql`ALTER TABLE rtm_wl_reports ADD COLUMN IF NOT EXISTS rounds_against INT NOT NULL DEFAULT 0`,
     sql`CREATE INDEX IF NOT EXISTS rtm_wl_entries_window_idx ON rtm_wl_entries (window_id, wins DESC)`,
   ];
 }
@@ -148,6 +156,9 @@ export interface WlEntry {
   elo: number;
   wins: number;
   losses: number;
+  roundsFor: number;
+  roundsAgainst: number;
+  roundBalance: number;
   claimed: boolean;
   runComplete: boolean;
 }
@@ -155,12 +166,17 @@ export interface WlEntry {
 const entryFromRow = (windowId: string, r: Record<string, unknown>): WlEntry => {
   const wins = Number(r.wins ?? 0);
   const losses = Number(r.losses ?? 0);
+  const roundsFor = Number(r.rounds_for ?? 0);
+  const roundsAgainst = Number(r.rounds_against ?? 0);
   return {
     windowId,
     division: String(r.division ?? ''),
     elo: Number(r.elo ?? 1000),
     wins,
     losses,
+    roundsFor,
+    roundsAgainst,
+    roundBalance: roundsFor - roundsAgainst,
     claimed: r.claimed_at != null,
     runComplete: wins + losses >= WL_MAX_MATCHES,
   };
@@ -182,7 +198,7 @@ export async function wlRegister(sql: SqlTag, email: string, windowId: string, n
   const ins = await sql`INSERT INTO rtm_wl_entries (email, window_id, division, elo)
     VALUES (${email}, ${windowId}, ${division}, ${elo})
     ON CONFLICT (email, window_id) DO NOTHING RETURNING wins`;
-  const rows = await sql`SELECT division, elo, wins, losses, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${windowId}`;
+  const rows = await sql`SELECT division, elo, wins, losses, rounds_for, rounds_against, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${windowId}`;
   return { ok: true, replayed: ins.length === 0, entry: entryFromRow(windowId, rows[0] ?? {}) };
 }
 
@@ -193,6 +209,8 @@ export interface WlReportParams {
   matchCode: string;
   won: boolean;
   oppNick: string;
+  roundsFor?: number;
+  roundsAgainst?: number;
 }
 
 export type WlReportResult =
@@ -212,18 +230,20 @@ export async function wlReport(sql: SqlTag, email: string, p: WlReportParams, no
   const code = p.matchCode.trim();
   if (code.length < WL_MATCH_CODE_MIN || code.length > WL_MATCH_CODE_MAX) return { ok: false, error: 'bad_match_code' };
 
-  const my = await sql`SELECT division, elo, wins, losses, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${p.windowId}`;
+  const my = await sql`SELECT division, elo, wins, losses, rounds_for, rounds_against, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${p.windowId}`;
   if (!my.length) return { ok: false, error: 'not_registered' };
   const entryNow = () => entryFromRow(p.windowId, my[0]);
   if (Number(my[0].wins ?? 0) + Number(my[0].losses ?? 0) >= WL_MAX_MATCHES) return { ok: false, error: 'run_complete' };
 
   const freshEntry = async (): Promise<WlEntry> => {
-    const r = await sql`SELECT division, elo, wins, losses, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${p.windowId}`;
+    const r = await sql`SELECT division, elo, wins, losses, rounds_for, rounds_against, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${p.windowId}`;
     return r.length ? entryFromRow(p.windowId, r[0]) : entryNow();
   };
 
-  const ins = await sql`INSERT INTO rtm_wl_reports (window_id, match_code, email, opp_nick, won)
-    VALUES (${p.windowId}, ${code}, ${email}, ${p.oppNick.slice(0, 60)}, ${p.won})
+  const rf = Math.max(0, Math.min(200, Math.trunc(Number(p.roundsFor) || 0)));
+  const ra = Math.max(0, Math.min(200, Math.trunc(Number(p.roundsAgainst) || 0)));
+  const ins = await sql`INSERT INTO rtm_wl_reports (window_id, match_code, email, opp_nick, won, rounds_for, rounds_against)
+    VALUES (${p.windowId}, ${code}, ${email}, ${p.oppNick.slice(0, 60)}, ${p.won}, ${rf}, ${ra})
     ON CONFLICT (window_id, match_code, email) DO NOTHING RETURNING match_code`;
   if (!ins.length) return { ok: true, outcome: 'duplicate', entry: entryNow() };
 
@@ -242,11 +262,13 @@ export async function wlReport(sql: SqlTag, email: string, p: WlReportParams, no
   // consistente ('apply-both'; 'apply-mine' não existe aqui — sem carência solo).
   // CLAIM atômico pending→applied: só a invocação que transicionar credita
   // (dois requests quase simultâneos não contam a partida em dobro).
-  const claimed = await sql`UPDATE rtm_wl_reports SET status='applied' WHERE window_id=${p.windowId} AND match_code=${code} AND status='pending' RETURNING email, won`;
+  const claimed = await sql`UPDATE rtm_wl_reports SET status='applied' WHERE window_id=${p.windowId} AND match_code=${code} AND status='pending' RETURNING email, won, rounds_for, rounds_against`;
   for (const row of claimed) {
     const em = String(row.email);
     const w = !!row.won;
-    await sql`UPDATE rtm_wl_entries SET wins = wins + ${w ? 1 : 0}, losses = losses + ${w ? 0 : 1}
+    const rrf = Number(row.rounds_for ?? 0);
+    const rra = Number(row.rounds_against ?? 0);
+    await sql`UPDATE rtm_wl_entries SET wins = wins + ${w ? 1 : 0}, losses = losses + ${w ? 0 : 1}, rounds_for = rounds_for + ${rrf}, rounds_against = rounds_against + ${rra}
       WHERE email=${em} AND window_id=${p.windowId} AND wins + losses < ${WL_MAX_MATCHES}`;
   }
   return { ok: true, outcome: 'applied', entry: await freshEntry() };
@@ -264,7 +286,7 @@ export type WlClaimResult =
 export async function wlClaim(sql: SqlTag, email: string, windowId: string, now: Date): Promise<WlClaimResult> {
   const bounds = parseWindowId(windowId);
   if (!bounds) return { ok: false, error: 'bad_window' };
-  const rows = await sql`SELECT division, elo, wins, losses, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${windowId}`;
+  const rows = await sql`SELECT division, elo, wins, losses, rounds_for, rounds_against, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${windowId}`;
   if (!rows.length) return { ok: false, error: 'not_registered' };
   const entry = entryFromRow(windowId, rows[0]);
   if (entry.claimed) return { ok: false, error: 'already_claimed' };
@@ -295,6 +317,7 @@ export interface WlStanding {
   division: string;
   wins: number;
   losses: number;
+  roundBalance: number;
 }
 
 export interface WlStatus {
@@ -306,10 +329,10 @@ export interface WlStatus {
 
 export async function wlStatus(sql: SqlTag, email: string, now: Date): Promise<WlStatus> {
   const win = weekendWindowFor(now);
-  const mine = await sql`SELECT division, elo, wins, losses, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${win.id}`;
-  const top = await sql`SELECT e.wins, e.losses, e.division, COALESCE(a.nick, 'manager') AS nick
+  const mine = await sql`SELECT division, elo, wins, losses, rounds_for, rounds_against, claimed_at FROM rtm_wl_entries WHERE email=${email} AND window_id=${win.id}`;
+  const top = await sql`SELECT e.wins, e.losses, e.rounds_for, e.rounds_against, e.division, COALESCE(a.nick, 'manager') AS nick
     FROM rtm_wl_entries e LEFT JOIN rtm_accounts a ON a.email = e.email
-    WHERE e.window_id=${win.id} ORDER BY e.wins DESC, e.losses ASC, e.registered_at ASC LIMIT 20`;
+    WHERE e.window_id=${win.id} ORDER BY e.wins DESC, (e.rounds_for - e.rounds_against) DESC, e.losses ASC, e.registered_at ASC LIMIT 20`;
   return {
     window: win,
     entry: mine.length ? entryFromRow(win.id, mine[0]) : null,
@@ -319,6 +342,7 @@ export async function wlStatus(sql: SqlTag, email: string, now: Date): Promise<W
       division: String(r.division ?? ''),
       wins: Number(r.wins ?? 0),
       losses: Number(r.losses ?? 0),
+      roundBalance: Number(r.rounds_for ?? 0) - Number(r.rounds_against ?? 0),
     })),
     rewardTiers: WL_REWARD_TIERS,
   };

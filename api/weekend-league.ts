@@ -122,7 +122,9 @@ export default async function handler(
     const matchCode = String(body.matchCode ?? '').trim();
     if (!matchCode || matchCode.length > WL_MATCH_CODE_MAX) { res.status(400).json({ error: 'matchCode inválido' }); return; }
     const oppNick = String(body.oppNick ?? '').slice(0, 60);
-    const r = await wlReport(sql, email, { windowId, matchCode, won: !!body.won, oppNick }, now);
+    const roundsFor = Math.max(0, Math.trunc(Number(body.roundsFor) || 0));
+    const roundsAgainst = Math.max(0, Math.trunc(Number(body.roundsAgainst) || 0));
+    const r = await wlReport(sql, email, { windowId, matchCode, won: !!body.won, oppNick, roundsFor, roundsAgainst }, now);
     if (!r.ok) {
       const status = r.error === 'bad_match_code' ? 400 : r.error === 'not_registered' ? 403 : 409;
       res.status(status).json({ error: r.error });

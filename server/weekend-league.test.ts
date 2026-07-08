@@ -25,8 +25,8 @@ type Row = Record<string, unknown>;
 // tabelas rtm_wl_entries/rtm_wl_reports + rtm_ranking/rtm_accounts em memória
 // e delega o resto (ledger/carteira do applyUltTransaction) pro base.
 
-interface WlEntryRow { email: string; windowId: string; division: string; elo: number; wins: number; losses: number; claimedAt: string | null; seq: number }
-interface WlReportRow { windowId: string; matchCode: string; email: string; oppNick: string; won: boolean; status: string }
+interface WlEntryRow { email: string; windowId: string; division: string; elo: number; wins: number; losses: number; roundsFor: number; roundsAgainst: number; claimedAt: string | null; seq: number }
+interface WlReportRow { windowId: string; matchCode: string; email: string; oppNick: string; won: boolean; roundsFor: number; roundsAgainst: number; status: string }
 
 class WlFakeDb extends FakeDb {
   entries: WlEntryRow[] = [];
@@ -41,6 +41,7 @@ class WlFakeDb extends FakeDb {
 
   run(q: PendingQuery): Row[] {
     const { text, params } = q;
+    if (text.startsWith('ALTER TABLE')) return [];
     if (text.includes('FROM rtm_ranking WHERE email=')) {
       const email = String(params[0]);
       return this.ranking.has(email) ? [{ mmr: this.ranking.get(email) }] : [];
@@ -48,18 +49,20 @@ class WlFakeDb extends FakeDb {
     if (text.startsWith('INSERT INTO rtm_wl_entries')) {
       const [email, windowId, division, elo] = params.map(String);
       if (this.entry(email, windowId)) return [];
-      this.entries.push({ email, windowId, division, elo: Number(elo), wins: 0, losses: 0, claimedAt: null, seq: this.seq++ });
+      this.entries.push({ email, windowId, division, elo: Number(elo), wins: 0, losses: 0, roundsFor: 0, roundsAgainst: 0, claimedAt: null, seq: this.seq++ });
       return [{ wins: 0 }];
     }
     if (text.includes('FROM rtm_wl_entries WHERE email=')) {
       const e = this.entry(String(params[0]), String(params[1]));
-      return e ? [{ division: e.division, elo: e.elo, wins: e.wins, losses: e.losses, claimed_at: e.claimedAt }] : [];
+      return e ? [{ division: e.division, elo: e.elo, wins: e.wins, losses: e.losses, rounds_for: e.roundsFor, rounds_against: e.roundsAgainst, claimed_at: e.claimedAt }] : [];
     }
     if (text.startsWith('INSERT INTO rtm_wl_reports')) {
       const [windowId, matchCode, email, oppNick] = params.slice(0, 4).map(String);
       const won = !!params[4];
+      const roundsFor = Number(params[5] ?? 0);
+      const roundsAgainst = Number(params[6] ?? 0);
       if (this.reports.some((r) => r.windowId === windowId && r.matchCode === matchCode && r.email === email)) return [];
-      this.reports.push({ windowId, matchCode, email, oppNick, won, status: 'pending' });
+      this.reports.push({ windowId, matchCode, email, oppNick, won, roundsFor, roundsAgainst, status: 'pending' });
       return [{ match_code: matchCode }];
     }
     if (text.includes('FROM rtm_wl_reports WHERE window_id=') && text.includes('email<>')) {
@@ -76,14 +79,16 @@ class WlFakeDb extends FakeDb {
       const [windowId, matchCode] = params.map(String);
       const claimed = this.reports.filter((r) => r.windowId === windowId && r.matchCode === matchCode && r.status === 'pending');
       for (const r of claimed) r.status = 'applied';
-      return claimed.map((r) => ({ email: r.email, won: r.won }));
+      return claimed.map((r) => ({ email: r.email, won: r.won, rounds_for: r.roundsFor, rounds_against: r.roundsAgainst }));
     }
     if (text.startsWith('UPDATE rtm_wl_entries SET wins = wins +')) {
       const winInc = Number(params[0]);
       const lossInc = Number(params[1]);
-      const e = this.entry(String(params[2]), String(params[3]));
-      const cap = Number(params[4]);
-      if (e && e.wins + e.losses < cap) { e.wins += winInc; e.losses += lossInc; return [{}]; }
+      const rrf = Number(params[2]);
+      const rra = Number(params[3]);
+      const e = this.entry(String(params[4]), String(params[5]));
+      const cap = Number(params[6]);
+      if (e && e.wins + e.losses < cap) { e.wins += winInc; e.losses += lossInc; e.roundsFor += rrf; e.roundsAgainst += rra; return [{}]; }
       return [];
     }
     if (text.startsWith('UPDATE rtm_wl_entries SET claimed_at=now()')) {
@@ -95,9 +100,9 @@ class WlFakeDb extends FakeDb {
       const windowId = String(params[0]);
       return this.entries
         .filter((e) => e.windowId === windowId)
-        .sort((a, b) => b.wins - a.wins || a.losses - b.losses || a.seq - b.seq)
+        .sort((a, b) => b.wins - a.wins || (b.roundsFor - b.roundsAgainst) - (a.roundsFor - a.roundsAgainst) || a.losses - b.losses || a.seq - b.seq)
         .slice(0, 20)
-        .map((e) => ({ wins: e.wins, losses: e.losses, division: e.division, nick: this.nicks.get(e.email) ?? 'manager' }));
+        .map((e) => ({ wins: e.wins, losses: e.losses, rounds_for: e.roundsFor, rounds_against: e.roundsAgainst, division: e.division, nick: this.nicks.get(e.email) ?? 'manager' }));
     }
     return super.run(q);
   }
@@ -240,28 +245,28 @@ test('report: duplicado não re-aplica; não-registrado e código curto rejeitad
   assert.deepEqual(closed, { ok: false, error: 'window_closed' });
 });
 
-test('report: cap de 10 partidas — 11º report rejeitado; lado capado não conta no apply', async () => {
+test('report: cap de 60 partidas — report além do cap rejeitado; lado capado não conta no apply', async () => {
   const db = new WlFakeDb();
   await setupPair(db);
   const a = db.entry('a@x', WID)!;
-  a.wins = 6; a.losses = 4; // run completo
+  a.wins = 40; a.losses = 20; // run completo (60)
   const r = await wlReport(db.sql, 'a@x', { windowId: WID, matchCode: 'M0011', won: true, oppNick: 'B' }, WED_MORNING);
   assert.deepEqual(r, { ok: false, error: 'run_complete' });
   // b reporta contra a (a capado ENTRE o report e o pareamento): b conta, a não
   await wlRegister(db.sql, 'c@x', WID, WED_MORNING);
   const c = db.entry('c@x', WID)!;
   await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0012', won: true, oppNick: 'C' }, WED_MORNING);
-  c.wins = 6; c.losses = 4; // capou depois de b reportar? não — c nem reportou; simula cap no apply
+  c.wins = 40; c.losses = 20; // capou depois de b reportar? não — c nem reportou; simula cap no apply
   const rc = await wlReport(db.sql, 'c@x', { windowId: WID, matchCode: 'M0012', won: false, oppNick: 'B' }, WED_MORNING);
   assert.deepEqual(rc, { ok: false, error: 'run_complete' }); // submit já barra
   // cap no APLICAR: b pendente em M0013, então b completa o run por outras partidas
   await wlReport(db.sql, 'b@x', { windowId: WID, matchCode: 'M0013', won: true, oppNick: 'D' }, WED_MORNING);
   await wlRegister(db.sql, 'd@x', WID, WED_MORNING);
   const b = db.entry('b@x', WID)!;
-  b.wins = 7; b.losses = 3; // capou entre o report e o par
+  b.wins = 57; b.losses = 3; // capou entre o report e o par (60)
   const rd = await wlReport(db.sql, 'd@x', { windowId: WID, matchCode: 'M0013', won: false, oppNick: 'B' }, WED_MORNING);
   assert.ok(rd.ok && rd.outcome === 'applied');
-  assert.equal(b.wins + b.losses, 10); // capado: não passou de 10
+  assert.equal(b.wins + b.losses, 60); // capado: não passou de 60
   assert.equal(db.entry('d@x', WID)?.losses, 1); // lado com espaço conta
 });
 
@@ -274,7 +279,7 @@ test('claim: antes de fechar só com run completo; paga a faixa pelo ledger', as
   a.wins = 3; a.losses = 2;
   const early = await wlClaim(db.sql, 'a@x', WID, WED_MORNING);
   assert.deepEqual(early, { ok: false, error: 'window_still_open' });
-  a.wins = 6; a.losses = 4; // run completo ainda na janela
+  a.wins = 6; a.losses = 54; // run completo ainda na janela (60)
   const r = await wlClaim(db.sql, 'a@x', WID, WED_MORNING);
   assert.ok(r.ok);
   if (r.ok) {
@@ -346,9 +351,24 @@ test('status: janela + minha entry + standings top por vitórias', async () => {
   assert.equal(s2.entry, null);
 });
 
+test('status: desempate por saldo de rounds (mesmo nº de vitórias)', async () => {
+  const db = new WlFakeDb();
+  db.nicks.set('a@x', 'Alice');
+  db.nicks.set('b@x', 'Bob');
+  await setupPair(db);
+  const a = db.entry('a@x', WID)!;
+  const b = db.entry('b@x', WID)!;
+  a.wins = 5; a.losses = 5; a.roundsFor = 100; a.roundsAgainst = 90; // saldo +10
+  b.wins = 5; b.losses = 5; b.roundsFor = 100; b.roundsAgainst = 70; // saldo +30
+  const s = await wlStatus(db.sql, 'a@x', WED_MORNING);
+  assert.deepEqual(s.standings.map((x) => x.nick), ['Bob', 'Alice']); // Bob à frente pelo saldo
+  assert.equal(s.standings[0].roundBalance, 30);
+  assert.equal(s.standings[1].roundBalance, 10);
+});
+
 test('schema: DDL idempotente roda no fake sem erro', async () => {
   const db = new WlFakeDb();
   for (const q of wlSchemaQueries(db.sql)) await q;
   assert.ok(db.executed.some((t) => t.startsWith('CREATE TABLE IF NOT EXISTS rtm_wl_entries')));
-  assert.equal(WL_MAX_MATCHES, 10);
+  assert.equal(WL_MAX_MATCHES, 60);
 });
