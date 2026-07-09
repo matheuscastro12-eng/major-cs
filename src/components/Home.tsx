@@ -192,6 +192,8 @@ export function Home({
                       <span className="rtm-modecard-benefits">
                         ✓ {ct('Road to Pro completo · Major da Semana · saves na nuvem em 5 slots')}
                         <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
+                        {/* prova social real no card de maior tráfego do funil (iter41) */}
+                        <FounderCounter style={{ display: 'block', marginTop: 6, fontSize: '11px' }} />
                       </span>
                     )}
                     <span className="rtm-modecard-foot">
@@ -236,6 +238,8 @@ export function Home({
                       <span className="rtm-modecard-benefits">
                         ✓ {ct('Ultimate com mercado entre managers · ranqueada no ladder real · Major da Semana')}
                         <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
+                        {/* prova social real no card de maior tráfego do funil (iter41) */}
+                        <FounderCounter style={{ display: 'block', marginTop: 6, fontSize: '11px' }} />
                       </span>
                     )}
                     <span className="rtm-modecard-foot">
