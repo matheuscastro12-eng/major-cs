@@ -15,8 +15,8 @@ import { adminPassword } from './AdminGate';
 import { AdminNav } from './AdminNav';
 import { ct } from '../state/career-i18n';
 import {
-  getFinance, getRankingIntegrity, getRevenue, grantAccess, listAccounts, lookupStripe, revokeAccess, setUserPassword,
-  type AccountsList, type AdminAccount, type FinanceData, type IntegrityData, type RevenueData, type RevenueDay, type StripeLookup, type TrendPoint,
+  getFinance, getRankingIntegrity, getRevenue, getWlBoard, grantAccess, listAccounts, lookupStripe, revokeAccess, settleWl, setUserPassword,
+  type AccountsList, type AdminAccount, type FinanceData, type IntegrityData, type RevenueData, type RevenueDay, type StripeLookup, type TrendPoint, type WlAdminBoard, type WlSettlePaid,
 } from '../state/adminAccounts';
 
 // ── formatadores pt-BR ──────────────────────────────────────────────────────
@@ -815,8 +815,86 @@ function OrdersSection() {
   );
 }
 
+// ── Major da Semana: ranking ao vivo + FECHAR E PREMIAR (top 10 por colocação) ──
+function WlSection() {
+  const [data, setData] = useState<WlAdminBoard | null>(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<WlSettlePaid[] | null>(null);
+
+  const load = useCallback(async () => {
+    setErr('');
+    const d = await getWlBoard(adminPassword());
+    if (d) setData(d);
+    else setErr(ct('Não foi possível carregar (login de admin necessário; só funciona no site publicado).'));
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const doSettle = async () => {
+    if (!data || busy) return;
+    const open = data.window.open;
+    const msg = open
+      ? ct('A janela AINDA ESTÁ ABERTA. Fechar agora paga o top 10 pela colocação ATUAL. Confirmar?')
+      : ct('Fechar a janela e pagar o top 10 pela colocação final?');
+    if (!window.confirm(msg)) return;
+    setBusy(true); setErr('');
+    const r = await settleWl(adminPassword(), data.windowId, open);
+    setBusy(false);
+    if (!r.ok) { setErr(r.error || ct('erro')); return; }
+    setResult(r.paid ?? []);
+    void load();
+  };
+
+  if (err && !data) return <div className="crm-save-msg err">{err} <button className="btn ghost small" onClick={() => void load()}>↻ {ct('Tentar de novo')}</button></div>;
+  if (!data) return <div className="muted" style={{ padding: 16 }}>{ct('Carregando…')}</div>;
+  const totalPrize = data.prizes.reduce((a, b) => a + b, 0);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div className="muted" style={{ fontSize: 12 }}>{ct('Janela')}: <b>{data.windowId}</b> · {data.window.open ? <b style={{ color: '#16a34a' }}>{ct('ABERTA')}</b> : <b style={{ color: '#c0392b' }}>{ct('FECHADA')}</b>}</div>
+          <div className="muted" style={{ fontSize: 12 }}>{ct('Prêmios (top 10)')}: {data.prizes.map((p) => num(p)).join(' · ')} 🪙 · {ct('total')} {num(totalPrize)}</div>
+        </div>
+        <span style={{ flex: 1 }} />
+        <button className="btn ghost" onClick={() => void load()}>↻ {ct('Atualizar')}</button>
+        <button className="btn" style={{ background: '#caa53a', color: '#111' }} disabled={busy || data.board.length === 0} onClick={() => void doSettle()}>
+          {busy ? ct('Pagando…') : `🏆 ${ct('FECHAR E PREMIAR')}`}
+        </button>
+      </div>
+      {err && <div className="crm-save-msg err">{err}</div>}
+      {result && (
+        <div className="crm-save-msg" style={{ background: 'rgba(22,163,74,.12)', border: '1px solid #16a34a' }}>
+          ✓ {ct('Pagos')}: {result.length === 0 ? ct('ninguém (ranking vazio ou tudo já pago antes)') : result.map((p) => `${p.rank}º ${p.nick} +${num(p.prize)}${p.replayed ? ` (${ct('já pago — não duplicou')})` : ''}`).join(' · ')}
+        </div>
+      )}
+      {data.board.length === 0 ? (
+        <div className="muted" style={{ padding: 16 }}>{ct('Ninguém inscrito nesta janela ainda.')}</div>
+      ) : (
+        <table className="crm-table" style={{ width: '100%', fontSize: 13 }}>
+          <thead>
+            <tr><th>#</th><th>{ct('Nick')}</th><th>{ct('E-mail')}</th><th style={{ textAlign: 'right' }}>V–D</th><th style={{ textAlign: 'right' }}>{ct('Saldo')}</th><th style={{ textAlign: 'right' }}>{ct('Prêmio')}</th><th>{ct('Pago')}</th></tr>
+          </thead>
+          <tbody>
+            {data.board.map((r) => (
+              <tr key={r.email} style={r.prize > 0 ? { background: 'rgba(202,165,58,.08)' } : undefined}>
+                <td style={{ fontWeight: 800 }}>{r.rank}</td>
+                <td style={{ fontWeight: 700 }}>{r.nick}</td>
+                <td className="muted" style={{ fontSize: 12 }}>{r.email}</td>
+                <td style={{ textAlign: 'right' }}>{r.wins}V–{r.losses}D</td>
+                <td style={{ textAlign: 'right' }}>{r.roundBalance >= 0 ? '+' : ''}{r.roundBalance}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: r.prize > 0 ? '#caa53a' : undefined }}>{r.prize > 0 ? `${num(r.prize)} 🪙` : '—'}</td>
+                <td>{r.paid ? '✓' : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 // ═════════ TELA: /admin/receita ═════════════════════════════════════════════
-type Tab = 'receita' | 'contas' | 'pedidos';
+type Tab = 'receita' | 'contas' | 'pedidos' | 'major';
 
 export function RevenueCRM({ onExit }: { onExit: () => void }) {
   const [tab, setTab] = useState<Tab>('receita');
@@ -845,7 +923,7 @@ export function RevenueCRM({ onExit }: { onExit: () => void }) {
         <div className="panel-body">
           <AdminNav current="/admin/receita" />
           <div className="acc-filters" style={{ marginBottom: 16 }}>
-            {([['receita', ct('Receita & previsão')], ['contas', ct('Contas')], ['pedidos', ct('Pedidos')]] as const).map(([t, lbl]) => (
+            {([['receita', ct('Receita & previsão')], ['contas', ct('Contas')], ['pedidos', ct('Pedidos')], ['major', '🏆 ' + ct('Major da Semana')]] as const).map(([t, lbl]) => (
               <button key={t} className={`acc-chip${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}>{lbl}</button>
             ))}
           </div>
@@ -856,6 +934,7 @@ export function RevenueCRM({ onExit }: { onExit: () => void }) {
           )}
           {tab === 'contas' && <AccountsSection />}
           {tab === 'pedidos' && <OrdersSection />}
+          {tab === 'major' && <WlSection />}
         </div>
       </div>
     </div>

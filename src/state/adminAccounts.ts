@@ -89,3 +89,27 @@ export interface IntegrityData {
 export async function getRankingIntegrity(password: string): Promise<IntegrityData | null> {
   try { return (await post({ action: 'integrity', password })) as unknown as IntegrityData; } catch { return null; }
 }
+
+// ── Major da Semana (Weekend League): controle do DONO no CRM ──────────────
+// Fala com /api/weekend-league (ações admin adminBoard/settle, senha do CRM).
+async function postWl(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const r = await fetch('/api/weekend-league', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : (r.status === 401 ? ct('Login de admin necessário.') : ct('erro')));
+  return data as Record<string, unknown>;
+}
+export interface WlAdminRow { rank: number; email: string; nick: string; division: string; wins: number; losses: number; roundBalance: number; prize: number; paid: boolean; }
+export interface WlAdminBoard {
+  window: { id: string; startsAt: string; endsAt: string; open: boolean };
+  windowId: string;
+  prizes: number[];
+  board: WlAdminRow[];
+}
+export async function getWlBoard(password: string, windowId?: string): Promise<WlAdminBoard | null> {
+  try { return (await postWl({ action: 'adminBoard', password, ...(windowId ? { windowId } : {}) })) as unknown as WlAdminBoard; } catch { return null; }
+}
+export interface WlSettlePaid { rank: number; email: string; nick: string; prize: number; replayed: boolean; }
+export async function settleWl(password: string, windowId: string, force: boolean): Promise<{ ok: boolean; paid?: WlSettlePaid[]; error?: string }> {
+  try { const d = await postWl({ action: 'settle', password, windowId, force }); return { ok: !!d.ok, paid: d.paid as WlSettlePaid[] | undefined }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'erro' }; }
+}

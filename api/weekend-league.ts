@@ -13,7 +13,11 @@ import {
   wlRegister,
   wlReport,
   wlClaim,
+  wlBoard,
+  wlSettle,
+  weekendWindowFor,
   WL_MATCH_CODE_MAX,
+  WL_PLACEMENT_PRIZES,
 } from '../server/weekend-league.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 
@@ -76,6 +80,33 @@ export default async function handler(
     return;
   }
   const action = String(body.action ?? '');
+
+  // ---- ações ADMIN (senha do CRM em body.password; sem token de jogador) ----
+  // adminBoard = ranking completo com e-mails; settle = FECHAR E PREMIAR o top 10
+  // por colocação (idempotente — op_id wl:<windowId> por e-mail no ledger).
+  if (action === 'adminBoard' || action === 'settle') {
+    const adminPass = clean(process.env.ADMIN_PASSWORD);
+    if (!adminPass || String(body.password ?? '').trim() !== adminPass) { res.status(401).json({ error: 'admin' }); return; }
+    const adbUrl = clean(process.env.DATABASE_URL);
+    if (!adbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
+    const asql = neon(adbUrl) as unknown as SqlTag;
+    if (!schemaReady) {
+      for (const q of [...ultEconomySchemaQueries(asql), ...wlSchemaQueries(asql)]) await q;
+      schemaReady = true;
+    }
+    const anow = new Date();
+    const win = weekendWindowFor(anow);
+    const windowId = WINDOW_ID_RE.test(String(body.windowId ?? '')) ? String(body.windowId) : win.id;
+    if (action === 'adminBoard') {
+      res.status(200).json({ ok: true, window: win, windowId, prizes: WL_PLACEMENT_PRIZES, board: await wlBoard(asql, windowId) });
+      return;
+    }
+    const r = await wlSettle(asql, windowId, anow, !!body.force);
+    if (!r.ok) { res.status(409).json({ error: r.error }); return; }
+    res.status(200).json(r);
+    return;
+  }
+
   const email = verifyToken(String(body.token ?? ''));
   if (!email) { res.status(401).json({ error: 'Entre na sua conta pra jogar o Major da Semana.' }); return; }
   if (rateLimited(`account:${email}:${action}`, ACTION_LIMITS[action] ?? 30)) {

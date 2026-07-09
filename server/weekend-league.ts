@@ -347,3 +347,72 @@ export async function wlStatus(sql: SqlTag, email: string, now: Date): Promise<W
     rewardTiers: WL_REWARD_TIERS,
   };
 }
+
+// ------------------------------------------------------------ fecho (admin)
+
+// Prêmios por COLOCAÇÃO no fim da janela (top 10). Fonte canônica — o client
+// espelha esses valores na UI. Pagos pelo DONO via wlSettle (CRM).
+export const WL_PLACEMENT_PRIZES = [70000, 40000, 25000, 15000, 10000, 7000, 5000, 4000, 3000, 2000];
+
+export interface WlBoardRow {
+  rank: number;
+  email: string;
+  nick: string;
+  division: string;
+  wins: number;
+  losses: number;
+  roundBalance: number;
+  prize: number;
+  paid: boolean; // claimed_at marcado (settle já pagou esta entry)
+}
+
+// Ranking COMPLETO da janela com e-mails (só admin). Mesmo critério do público:
+// vitórias > saldo de rounds > menos derrotas > inscrição mais antiga.
+export async function wlBoard(sql: SqlTag, windowId: string): Promise<WlBoardRow[]> {
+  const rows = await sql`SELECT e.email, e.wins, e.losses, e.rounds_for, e.rounds_against, e.division, e.claimed_at, COALESCE(a.nick, 'manager') AS nick
+    FROM rtm_wl_entries e LEFT JOIN rtm_accounts a ON a.email = e.email
+    WHERE e.window_id=${windowId} ORDER BY e.wins DESC, (e.rounds_for - e.rounds_against) DESC, e.losses ASC, e.registered_at ASC LIMIT 100`;
+  return rows.map((r, i) => ({
+    rank: i + 1,
+    email: String(r.email),
+    nick: String(r.nick ?? 'manager'),
+    division: String(r.division ?? ''),
+    wins: Number(r.wins ?? 0),
+    losses: Number(r.losses ?? 0),
+    roundBalance: Number(r.rounds_for ?? 0) - Number(r.rounds_against ?? 0),
+    prize: i < WL_PLACEMENT_PRIZES.length ? WL_PLACEMENT_PRIZES[i] : 0,
+    paid: r.claimed_at != null,
+  }));
+}
+
+export type WlSettleResult =
+  | { ok: true; windowId: string; paid: { rank: number; email: string; nick: string; prize: number; replayed: boolean }[] }
+  | { ok: false; error: 'bad_window' | 'window_still_open' | 'empty' };
+
+// Fecha a janela e PAGA o top 10 por colocação. Idempotente em dois níveis:
+// op_id `wl:<windowId>` por e-mail no ledger (o MESMO do claim legado — rodar o
+// settle duas vezes, ou settle depois de um claim antigo, nunca paga em dobro)
+// + claimed_at na entry como marcador de UI. `force` permite fechar antes do
+// fim da janela (decisão do dono no CRM).
+export async function wlSettle(sql: SqlTag, windowId: string, now: Date, force = false): Promise<WlSettleResult> {
+  const bounds = parseWindowId(windowId);
+  if (!bounds) return { ok: false, error: 'bad_window' };
+  if (!force && now.getTime() < bounds.endsAt.getTime()) return { ok: false, error: 'window_still_open' };
+  const board = await wlBoard(sql, windowId);
+  if (!board.length) return { ok: false, error: 'empty' };
+  const paid: { rank: number; email: string; nick: string; prize: number; replayed: boolean }[] = [];
+  for (const row of board.slice(0, WL_PLACEMENT_PRIZES.length)) {
+    if (row.prize <= 0) continue;
+    const pay = await applyUltTransaction(sql, row.email, {
+      opId: `wl:${windowId}`,
+      kind: 'reward',
+      creditsDelta: row.prize,
+      cards: [],
+      meta: { source: 'weekend-league-settle', windowId, rank: row.rank, wins: row.wins, roundBalance: row.roundBalance },
+    });
+    if (!pay.ok) continue; // defensivo — delta positivo não falha
+    await sql`UPDATE rtm_wl_entries SET claimed_at=now() WHERE email=${row.email} AND window_id=${windowId} AND claimed_at IS NULL`;
+    paid.push({ rank: row.rank, email: row.email, nick: row.nick, prize: row.prize, replayed: pay.replayed });
+  }
+  return { ok: true, windowId, paid };
+}

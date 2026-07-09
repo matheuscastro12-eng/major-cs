@@ -16,6 +16,8 @@ import {
   wlReport,
   wlClaim,
   wlStatus,
+  wlSettle,
+  WL_PLACEMENT_PRIZES,
 } from './weekend-league.js';
 
 type Row = Record<string, unknown>;
@@ -102,7 +104,7 @@ class WlFakeDb extends FakeDb {
         .filter((e) => e.windowId === windowId)
         .sort((a, b) => b.wins - a.wins || (b.roundsFor - b.roundsAgainst) - (a.roundsFor - a.roundsAgainst) || a.losses - b.losses || a.seq - b.seq)
         .slice(0, 20)
-        .map((e) => ({ wins: e.wins, losses: e.losses, rounds_for: e.roundsFor, rounds_against: e.roundsAgainst, division: e.division, nick: this.nicks.get(e.email) ?? 'manager' }));
+        .map((e) => ({ email: e.email, wins: e.wins, losses: e.losses, rounds_for: e.roundsFor, rounds_against: e.roundsAgainst, division: e.division, claimed_at: e.claimedAt, nick: this.nicks.get(e.email) ?? 'manager' }));
     }
     return super.run(q);
   }
@@ -364,6 +366,36 @@ test('status: desempate por saldo de rounds (mesmo nº de vitórias)', async () 
   assert.deepEqual(s.standings.map((x) => x.nick), ['Bob', 'Alice']); // Bob à frente pelo saldo
   assert.equal(s.standings[0].roundBalance, 30);
   assert.equal(s.standings[1].roundBalance, 10);
+});
+
+test('settle: paga o top pela colocação, idempotente, respeita janela aberta', async () => {
+  const db = new WlFakeDb();
+  db.nicks.set('a@x', 'Alice');
+  db.nicks.set('b@x', 'Bob');
+  await setupPair(db);
+  await wlRegister(db.sql, 'c@x', WID, WED_MORNING);
+  const a = db.entry('a@x', WID)!; a.wins = 8; a.losses = 2; a.roundsFor = 104; a.roundsAgainst = 60;
+  const b = db.entry('b@x', WID)!; b.wins = 8; b.losses = 2; b.roundsFor = 104; b.roundsAgainst = 40; // mesmo W: saldo decide → Bob 1º
+  const c = db.entry('c@x', WID)!; c.wins = 3; c.losses = 5;
+  // janela aberta sem force → recusa
+  const early = await wlSettle(db.sql, WID, WED_MORNING, false);
+  assert.deepEqual(early, { ok: false, error: 'window_still_open' });
+  // aberta COM force (dono fecha no CRM) → paga por colocação
+  const r = await wlSettle(db.sql, WID, WED_MORNING, true);
+  assert.ok(r.ok);
+  if (r.ok) {
+    assert.deepEqual(r.paid.map((p) => [p.rank, p.email, p.prize]), [[1, 'b@x', 70000], [2, 'a@x', 40000], [3, 'c@x', 25000]]);
+  }
+  assert.equal(db.wallets.get('b@x'), 70000);
+  assert.equal(db.wallets.get('a@x'), 40000);
+  assert.equal(db.wallets.get('c@x'), 25000);
+  // idempotência: segundo settle replaya (op_id wl:<windowId>) — carteiras intactas
+  const again = await wlSettle(db.sql, WID, SUN_START, false);
+  assert.ok(again.ok);
+  if (again.ok) assert.ok(again.paid.every((p) => p.replayed));
+  assert.equal(db.wallets.get('b@x'), 70000);
+  assert.equal(WL_PLACEMENT_PRIZES[0], 70000);
+  assert.equal(WL_PLACEMENT_PRIZES.length, 10);
 });
 
 test('schema: DDL idempotente roda no fake sem erro', async () => {
