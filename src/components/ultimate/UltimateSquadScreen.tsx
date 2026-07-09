@@ -37,6 +37,7 @@ import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { track, trackPaywallView } from '../../state/track';
+import { FounderCounter } from '../FounderCounter';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
@@ -341,6 +342,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
   // mostra o link estático do Woovi como fallback.
   const [coinModal, setCoinModal] = useState<{ pack: CoinPack; charge: CoinCharge | null; error?: boolean } | null>(null);
   const { account } = useAccount();
+  // funil: convidado viu o aviso/CTA de conta vitalícia no topo do Ultimate
+  // (única superfície de venda do modo convidado, aberto desde o guest mode)
+  useEffect(() => { if (guest) trackPaywallView('ultimate-guest'); }, [guest]);
   // Major da Semana: status/ranking pro banner + ranking do hub (best-effort)
   useEffect(() => {
     if (!account || (tab !== 'hub' && tab !== 'major-semana')) return;
@@ -1611,13 +1615,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
             </span>
           </span>
           {onCreateAccount && (
-            <button
-              type="button"
-              onClick={onCreateAccount}
-              style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
-            >
-              {ct('Criar conta vitalícia · salva na nuvem e joga no PC e no celular')}
-            </button>
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={onCreateAccount}
+                style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
+              >
+                {ct('Criar conta vitalícia · salva na nuvem e joga no PC e no celular')}
+              </button>
+              {/* prova social real na única superfície de venda do modo convidado (iter42) */}
+              <FounderCounter style={{ fontSize: '10px' }} />
+            </span>
           )}
         </div>
       )}
