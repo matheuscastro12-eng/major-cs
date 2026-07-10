@@ -319,17 +319,30 @@ export function execBoostOvr(execAvg: number | null): number {
 
 // Re-semeia o simulateSeries até o placar de MAPAS bater o resultado da jogada
 // (mesmo vencedor + 2-0/2-1). Assim o oficial (scoreboard/rating/histórico) é o
-// que a SUA jogada produziu, e o card nunca contradiz o que você viu. Fallback:
-// se o placar exato não sair em N tentativas, casa ao menos o VENCEDOR.
+// que a SUA jogada produziu, e o card nunca contradiz o que você viu.
+//
+// BUG CORRIGIDO (report do dono: "rodando de um jeito, resultado sai diferente"):
+// quando a Sala dava uma ZEBRA (a régua de dificuldade da Sala pesa o adversário
+// diferente do sim), 161 seeds podiam NUNCA reproduzir o vencedor no sim — o
+// fallback devolvia uma série com vencedor/placar ERRADOS, que ia pro scoreboard
+// e pro histórico da liga contradizendo o banner. Agora o sim ESCALA a força do
+// lado que precisa vencer (+0 → +32 de strength) até o placar-alvo sair: a fase
+// 0 mantém os seeds de hoje (caso comum idêntico), e vencedor errado deixa de
+// existir na prática. O boost só distorce stats no caso raro — cosmético.
 export function simulateSeriesForPlay(
   baseSeed: number, a: TTeam, b: TTeam, maps: { map: MapId; pickedBy: 0 | 1 | -1 }[],
   bestOf: 1 | 3 | 5, target: { mapWins: [number, number]; seriesWon: boolean },
 ): SeriesResult {
+  const nudge = (t: TTeam, delta: number): TTeam => (delta === 0 ? t : { ...t, strength: t.strength + delta });
   let winnerMatch: SeriesResult | null = null;
-  for (let k = 0; k <= 160; k++) {
-    const s = simulateSeries(makeRng((baseSeed ^ (k * 0x9e3779b1)) >>> 0), a, b, maps, bestOf);
-    if (s.mapScore[0] === target.mapWins[0] && s.mapScore[1] === target.mapWins[1]) return s;
-    if (!winnerMatch && (s.winner === 0) === target.seriesWon) winnerMatch = s;
+  for (const boost of [0, 6, 12, 20, 32]) {
+    const ua = target.seriesWon ? nudge(a, boost) : a;
+    const ub = target.seriesWon ? b : nudge(b, boost);
+    for (let k = 0; k <= 160; k++) {
+      const s = simulateSeries(makeRng((baseSeed ^ (k * 0x9e3779b1) ^ (boost * 0x85ebca6b)) >>> 0), ua, ub, maps, bestOf);
+      if (s.mapScore[0] === target.mapWins[0] && s.mapScore[1] === target.mapWins[1]) return s;
+      if (!winnerMatch && (s.winner === 0) === target.seriesWon) winnerMatch = s;
+    }
   }
   return winnerMatch ?? simulateSeries(makeRng(baseSeed >>> 0), a, b, maps, bestOf);
 }
