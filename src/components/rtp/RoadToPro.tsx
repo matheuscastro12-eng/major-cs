@@ -7,6 +7,8 @@ import { RTPTransfer } from './RTPTransfer';
 import { confirm as confirmDialog } from '../ConfirmDialog';
 import { ct } from '../../state/career-i18n';
 import { loadRtp, saveRtp, deleteRtp, syncRtpFromCloud } from '../../state/rtpSaves';
+import { useAccount } from '../../state/account';
+import { setCloudEnabled } from '../../state/cloud';
 import { type ProMatchResult, type MatchConsequence } from '../../engine/rtp/matchSim';
 import { RtpSimResult } from './RtpSimResult';
 import { autoSimCircuitRound, type EventEnd } from '../../engine/rtp/circuit';
@@ -72,16 +74,29 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
 
   // Boot: reconcilia com a nuvem (restaura de outro aparelho, re-sobe o local
   // mais novo ou aplica tombstone de exclusão) — não só quando o local está vazio.
+  //
+  // CRÍTICO (mesmo fix do Ultimate): liga o gate da nuvem AQUI, antes do sync.
+  // O setCloudEnabled do App vive num effect do PAI, que roda DEPOIS do effect
+  // deste filho — sem isto o sync rodava com cloudEnabled()=false, devolvia
+  // 'none' e o RtP começava DO ZERO em outro aparelho (e o save fresco ainda
+  // podia sobrescrever a nuvem no próximo push). Espera a conta carregar
+  // (deps [account]) em vez de rodar uma única vez às cegas.
+  const { account } = useAccount();
   useEffect(() => {
+    if (!account) { setBooted(true); return; } // deslogado: local puro (a rota já é gated)
+    setCloudEnabled(!!account.paid);
     let alive = true;
     (async () => {
       const r = await syncRtpFromCloud().catch(() => 'none' as const);
-      if (alive && r === 'restored') setSave(loadRtp());
+      if (alive && r === 'restored') {
+        setSave(loadRtp());
+        setNotice({ kind: 'autosim', text: `☁ ${ct('Save do Road to Pro restaurado da nuvem.')}` });
+      }
       if (alive && r === 'deleted') setSave(null);
       if (alive) setBooted(true);
     })();
     return () => { alive = false; };
-  }, []);
+  }, [account]);
 
   const handleCreated = (next: RoadToProSave) => {
     setSaveError(!saveRtp(next));
