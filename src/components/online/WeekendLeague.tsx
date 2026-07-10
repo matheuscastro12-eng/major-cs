@@ -11,6 +11,8 @@ import {
   type WlStatus,
 } from '../../state/weekendLeague';
 import { ct } from '../../state/career-i18n';
+import { setCheckoutSrc, trackPaywallView } from '../../state/track';
+import { FounderCounter } from '../FounderCounter';
 
 // countdown legível: "1d 4h", "6h 32min", "12min"
 function fmtLeft(ms: number): string {
@@ -29,7 +31,7 @@ const fmtCredits = (n: number) => n.toLocaleString('pt-BR');
 const PLACEMENT_PRIZES = [70000, 40000, 25000, 15000, 10000, 7000, 5000, 4000, 3000, 2000];
 const prizeForPlace = (rank: number): number => (rank >= 1 && rank <= PLACEMENT_PRIZES.length ? PLACEMENT_PRIZES[rank - 1] : 0);
 
-export function WeekendLeague({ account, onHub, onPlay }: { account: Account | null; onHub: () => void; onPlay?: () => void }) {
+export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { account: Account | null; onHub: () => void; onPlay?: () => void; onCreateAccount?: () => void }) {
   const [status, setStatus] = useState<WlStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,6 +48,10 @@ export function WeekendLeague({ account, onHub, onPlay }: { account: Account | n
       .finally(() => setLoading(false));
   }, [account]);
   useEffect(() => { load(); }, [load]);
+
+  // funil: conta grátis jogando o Major da Semana vê o convite de vitalícia
+  // (tela ficou 100% grátis pra todos — mas nunca tinha CTA nem instrumentação)
+  useEffect(() => { if (account && !account.paid) trackPaywallView('wl-free'); }, [account]);
 
   // relógio do countdown (30s de passo é suficiente pra "fecha em Xh Ymin")
   useEffect(() => {
@@ -166,6 +172,26 @@ export function WeekendLeague({ account, onHub, onPlay }: { account: Account | n
 
       {error && (
         <div style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--em-red, #c0392b)', background: 'rgba(192,57,43,.08)', color: 'var(--em-text)', fontSize: '12.5px' }}>{error}</div>
+      )}
+
+      {/* convite pra vitalícia — só conta grátis (não trava nada aqui, o Major da
+          Semana é 100% grátis). Mesma mensagem já usada no upsell in-game. */}
+      {account && !account.paid && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 16px', borderRadius: '10px', background: 'rgba(216,169,67,.08)', border: '1px solid rgba(216,169,67,.3)' }}>
+          <span style={{ flex: '1 1 320px', fontSize: '12.5px', color: 'var(--em-text)', lineHeight: 1.5 }}>
+            {ct('Gostando do Major da Semana? No grátis, seu MMR ranqueado não conta pro ladder mundial — a conta vitalícia ativa o ladder de verdade e salva tudo na nuvem.')}{' '}
+            <FounderCounter style={{ display: 'inline-block', marginLeft: 4 }} />
+          </span>
+          {onCreateAccount && (
+            <button
+              type="button"
+              onClick={() => { setCheckoutSrc('wl-free'); onCreateAccount(); }}
+              style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
+            >
+              {ct('Criar conta vitalícia')} · R$20
+            </button>
+          )}
+        </div>
       )}
 
       {/* meu run */}
