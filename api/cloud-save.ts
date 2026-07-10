@@ -3,7 +3,7 @@
 // Ações (POST body.action): pull | push.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { CloudSavePayloadError, decodeCloudSavePayload } from '../server/cloud-save-codec.js';
+import { CloudSavePayloadError, decodeCloudSavePayload, encodeCloudSavePayload } from '../server/cloud-save-codec.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -93,6 +93,14 @@ export default async function handler(
     // Origin Transfer do login/sync quando o aparelho já está sincronizado.
     // Tombstone SEMPRE vai inteiro (é vazio) pra a exclusão continuar propagando.
     if (since > 0 && data !== '' && updatedAt <= since) { res.status(200).json({ unchanged: true, updatedAt }); return; }
+    // Comprime a resposta quando o cliente anuncia suporte (accept) e não é
+    // tombstone. Corta o Fast Origin Transfer da restauração cross-device/1º
+    // sync. Tombstone ('') e clientes antigos (sem accept) recebem JSON cru.
+    if (data !== '' && body.accept === 'gzip-base64') {
+      const wire = encodeCloudSavePayload(data);
+      res.status(200).json({ ...wire, updatedAt });
+      return;
+    }
     res.status(200).json({ data, updatedAt });
     return;
   }

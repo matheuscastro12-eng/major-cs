@@ -1,9 +1,33 @@
-import { gunzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 
 export const MAX_CLOUD_SAVE_BYTES = 2_000_000;
 const MAX_ENCODED_BYTES = 2_000_000;
+// Abaixo disso, comprimir o pull não compensa (metadados + base64 comem o ganho).
+const MIN_ENCODE_BYTES = 1024;
 
 export class CloudSavePayloadError extends Error {}
+
+export interface CloudWirePayload {
+  data: string;
+  encoding?: 'gzip-base64';
+  originalBytes?: number;
+}
+
+// Comprime a resposta do PULL (servidor → cliente) espelhando o encode do
+// cliente no push. Só entra em ação quando o cliente anuncia suporte e o blob é
+// grande o bastante pra valer a pena; caso contrário devolve o JSON cru. Nunca
+// deixa a resposta ficar MAIOR que o original (fallback pra cru).
+export function encodeCloudSavePayload(json: string): CloudWirePayload {
+  if (!json || Buffer.byteLength(json, 'utf8') < MIN_ENCODE_BYTES) return { data: json };
+  try {
+    const originalBytes = Buffer.byteLength(json, 'utf8');
+    const encoded = gzipSync(Buffer.from(json, 'utf8')).toString('base64');
+    if (encoded.length >= originalBytes) return { data: json };
+    return { data: encoded, encoding: 'gzip-base64', originalBytes };
+  } catch {
+    return { data: json };
+  }
+}
 
 function assertJson(data: string): void {
   if (!data) return; // tombstone

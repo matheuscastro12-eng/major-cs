@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { gzipSync } from 'node:zlib';
-import { encodeCloudPayload, hashCloudPayload } from '../src/state/cloudCodec';
+import { decodeCloudPayload, encodeCloudPayload, hashCloudPayload } from '../src/state/cloudCodec';
 import {
   CloudSavePayloadError,
   decodeCloudSavePayload,
+  encodeCloudSavePayload,
   MAX_CLOUD_SAVE_BYTES,
 } from './cloud-save-codec';
 
@@ -41,6 +42,30 @@ test('cloud transport compresses losslessly and keeps the database payload uncha
 
   const restored = decodeCloudSavePayload(wire.data, wire.encoding, wire.originalBytes);
   assert.equal(restored, original);
+});
+
+test('pull response compresses and the client inflates it losslessly', async () => {
+  const original = careerLikeSave();
+  const wire = encodeCloudSavePayload(original);
+
+  // servidor comprime a resposta do pull...
+  assert.equal(wire.encoding, 'gzip-base64');
+  assert.ok(wire.data.length < original.length * 0.5);
+
+  // ...e o cliente (decodeCloudPayload) recupera o JSON exato.
+  const restored = await decodeCloudPayload(wire.data, wire.encoding);
+  assert.equal(restored, original);
+});
+
+test('pull compression is skipped for tiny payloads and passes through raw', async () => {
+  const small = JSON.stringify({ split: 1, squad: [] });
+  assert.deepEqual(encodeCloudSavePayload(small), { data: small });
+  // sem encoding, o cliente devolve o JSON cru inalterado.
+  assert.equal(await decodeCloudPayload(small, undefined), small);
+});
+
+test('client returns null when a compressed pull cannot be inflated', async () => {
+  assert.equal(await decodeCloudPayload('not-valid-base64!!', 'gzip-base64'), null);
 });
 
 test('small and legacy payloads keep working without compression', async () => {

@@ -1,11 +1,18 @@
 // Save na nuvem (conta vitalícia): sincroniza chaves do localStorage com a conta,
 // last-write-wins por timestamp. O grátis ignora tudo isso (save só local).
 import { getToken } from './account';
-import { encodeCloudPayload, hashCloudPayload } from './cloudCodec';
+import { encodeCloudPayload, decodeCloudPayload, hashCloudPayload } from './cloudCodec';
 
 const TS = (key: string) => `${key}.cloudts`;
 const FIRST_PUSH_DELAY_MS = 2500;
-const MIN_PUSH_INTERVAL_MS = 30_000;
+// Intervalo mínimo entre pushes do MESMO slot durante o jogo. A cada ação o save
+// LOCAL grava na hora; a nuvem é só backup/cross-device, então não precisa
+// acompanhar em tempo real. Custo: "Fast Origin Transfer" da Vercel conta os dois
+// sentidos edge↔função, e o RTP empurra um blob (~18KB) a cada ação. Espaçar de
+// 30s → 120s corta ~4× o volume de pushes numa sessão longa. A durabilidade
+// segue coberta pelo flush em visibilitychange/pagehide (keepalive), que sobe o
+// estado mais novo quando o jogador sai/troca de aba — inclusive após unload.
+const MIN_PUSH_INTERVAL_MS = 120_000;
 export const localSavedAt = (key: string): number => { try { return Number(localStorage.getItem(TS(key)) || 0); } catch { return 0; } };
 export const markSavedAt = (key: string, ts = Date.now()): void => { try { localStorage.setItem(TS(key), String(ts)); } catch { /* sem storage */ } };
 
@@ -30,10 +37,20 @@ async function post(body: Record<string, unknown>, keepalive = false): Promise<R
 // mais novo (e não for tombstone), devolve unchanged sem o blob — economiza banda.
 export async function pullCloud(slot: string, since = 0): Promise<{ data: string | null; updatedAt: number; unchanged?: boolean } | null> {
   if (!cloudEnabled()) return null;
-  const d = await post({ action: 'pull', token: getToken(), slot, since });
+  // `accept`: só anuncia gzip quando ESTE browser sabe inflar (DecompressionStream).
+  // Sem suporte, não pede comprimido → servidor devolve JSON cru e a restauração
+  // segue funcionando (Safari antigo etc.). Servidor antigo ignora o flag.
+  const accept = typeof DecompressionStream !== 'undefined' ? 'gzip-base64' : undefined;
+  const d = await post({ action: 'pull', token: getToken(), slot, since, accept });
   if (!d) return null;
   if (d.unchanged) return { data: null, updatedAt: Number(d.updatedAt ?? since), unchanged: true };
-  return { data: (d.data as string) ?? null, updatedAt: Number(d.updatedAt ?? 0) };
+  const wire = (d.data as string) ?? null;
+  if (wire == null || wire === '') return { data: wire, updatedAt: Number(d.updatedAt ?? 0) };
+  const decoded = await decodeCloudPayload(wire, d.encoding as string | undefined);
+  // decoded === null: veio comprimido mas não conseguimos inflar → trata como
+  // "nada" em vez de gravar lixo por cima do save bom.
+  if (decoded == null) return null;
+  return { data: decoded, updatedAt: Number(d.updatedAt ?? 0) };
 }
 
 export async function pushCloud(slot: string, data: string, updatedAt: number, keepalive = false): Promise<boolean> {
