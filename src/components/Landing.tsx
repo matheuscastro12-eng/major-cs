@@ -393,12 +393,22 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         </label>
       )}
       {err && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
-      <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : mode === 'signup' ? ct('Ativar com cartão (Stripe)') : ct('Entrar')}</Button>
-      {mode === 'signup' && (
-        <button type="button" disabled={!valid || busy} onClick={goPix}
-          style={{ width: '100%', marginTop: '10px', padding: '11px', borderRadius: '6px', cursor: !valid || busy ? 'default' : 'pointer', opacity: !valid || busy ? 0.5 : 1, background: 'rgba(94,216,138,.12)', border: '1px solid rgba(94,216,138,.55)', color: '#5ed88a', fontWeight: 700, fontSize: '0.84rem', fontFamily: 'inherit' }}>
-          {ct('Pagar com Pix (Woovi)')}
-        </button>
+      {/* funil: dado real (checkout_open x rtm_paid_emails, por método) mostra o Pix
+          confirmando a imensa maioria dos checkouts abertos, enquanto o cartão perde
+          a maior parte no redirect pro Stripe — então o Pix vira o CTA primário
+          (ouro) e o cartão passa a secundário, sem tirar a opção de ninguém. */}
+      {mode === 'signup' ? (
+        <>
+          <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={goPix}>
+            {busy ? ct('Aguarde…') : ct('Pagar com Pix')}
+          </Button>
+          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', textAlign: 'center', margin: '6px 0 0' }}>{ct('Confirma na hora, sem sair desta tela')}</p>
+          <Button variant="ghost" disabled={!valid || busy} style={{ width: '100%', marginTop: '10px' }} onClick={go}>
+            {busy ? ct('Aguarde…') : ct('Ativar com cartão (Stripe)')}
+          </Button>
+        </>
+      ) : (
+        <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : ct('Entrar')}</Button>
       )}
       {pix && (
         <div style={{ marginTop: '14px', background: 'rgba(94,216,138,.08)', border: '1px solid rgba(94,216,138,.35)', borderRadius: '6px', padding: '14px' }}>
