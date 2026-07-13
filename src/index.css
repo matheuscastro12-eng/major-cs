@@ -6435,6 +6435,9 @@ button.t20-row {
 .upsell-list li b{ color:#fff; }
 .upsell-actions{ display:flex; flex-direction:column; gap:8px; }
 .upsell-actions .btn.gold.big{ width:100%; justify-content:center; font-size:15px; }
+.upsell-card-btn{ width:100%; padding:10px; border-radius:8px; cursor:pointer; background:#222a33; border:1px solid #313a45; color:#c7ced7; font-weight:700; font-size:13px; font-family:inherit; }
+.upsell-card-btn:hover{ background:#2c343d; color:#fff; }
+.upsell-card-btn:disabled{ opacity:.5; cursor:default; }
 .upsell-later{ background:none; border:none; color:#8b96a3; font-size:12.5px; cursor:pointer; padding:6px; }
 .upsell-later:hover{ color:#c7ced7; }
 .upsell-foot{ margin-top:12px; font-size:10.5px; color:#5e6975; text-align:center; line-height:1.4; }
