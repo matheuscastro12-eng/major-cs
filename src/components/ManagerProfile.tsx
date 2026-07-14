@@ -10,6 +10,8 @@ import { deleteAccount, exportAccountData, type Account } from '../state/account
 import { fetchMyRank, type MyRank } from '../state/ranking';
 import type { Manager } from '../state/manager';
 import { ct } from '../state/career-i18n';
+import { trackPaywallView } from '../state/track';
+import { FounderCounter } from './FounderCounter';
 
 export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, onAccountDeleted, onManageSaves }: {
   manager: Manager;
@@ -28,6 +30,8 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [dataError, setDataError] = useState('');
   useEffect(() => { if (paid) void fetchMyRank(manager.nick).then(setRank); }, [paid, manager.nick]);
+  // funil: CTA de vitalícia visto na tela de Perfil (src já existe em App.tsx, faltava a view)
+  useEffect(() => { if (!paid) trackPaywallView('profile'); }, [paid]);
 
   const downloadData = async () => {
     if (dataBusy) return;
@@ -163,6 +167,7 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
                   <span style={{ ...cond, fontSize: '30px', color: 'var(--rtm-gold)' }}>R$20</span>
                   <span style={{ fontSize: '12px', color: 'var(--rtm-dim)' }}>{ct('uma vez, sem mensalidade')}</span>
                 </div>
+                <FounderCounter style={{ marginBottom: '10px', display: 'block' }} />
                 <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{ct('Ativar save na nuvem')}</Button>
               </div>
             )}
