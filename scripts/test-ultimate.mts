@@ -24,7 +24,7 @@ import { evaluateTitles } from '../src/engine/ultimate/titles.ts';
 import { pickStarterCards } from '../src/engine/ultimate/cards.ts';
 import { formationSlotRoles as slotRoles } from '../src/engine/ultimate/formations.ts';
 import { checkSbc } from '../src/engine/ultimate/sbc.ts';
-import { buildAiLadder, buildBazaar } from '../src/engine/ultimate/bazaar.ts';
+import { buildAiLadder } from '../src/engine/ultimate/bazaar.ts';
 import { applySeasonRollover, removeOwnedCards, markObjectiveClaimed, evolveCard, EVO_MAX, EVO_COSTS, claimSeasonReward, startSeason, STARTING_ELO, gauntletStart, gauntletRecord, pushHistory, markBazaarBought, ensureMissions, markMissionClaimed, HISTORY_MAX, type MatchRecord } from '../src/engine/ultimate/state.ts';
 import { missionsForDay, missionProgress, MISSIONS_PER_DAY, MISSION_POOL } from '../src/engine/ultimate/missions.ts';
 import { distinctPlayers } from '../src/engine/ultimate/sbc.ts';
@@ -439,15 +439,9 @@ test('buildAiLadder: determinístico, ordenado por elo, elo cresce com OVR', () 
   for (const p of l1) { assert.ok(p.w >= 0 && p.l >= 0); }
 });
 
-test('buildBazaar: N listagens, preços positivos e ordenados, determinístico', () => {
-  const cat = buildCatalog(CS2_REAL_2026);
-  const a = buildBazaar(cat, ['x', 'y'], 7, 20);
-  const b = buildBazaar(cat, ['x', 'y'], 7, 20);
-  assert.equal(a.length, 20);
-  assert.deepEqual(a.map((l) => l.cardKey), b.map((l) => l.cardKey));
-  for (let i = 1; i < a.length; i++) assert.ok(a[i - 1].price <= a[i].price);
-  for (const l of a) assert.ok(l.price >= 50);
-});
+// NOTA: o teste do buildBazaar foi removido junto com o engine (iter38 trocou o
+// bazar de IA pelo Mercado P2P real) — o import quebrado derrubava o arquivo
+// INTEIRO da suíte desde então.
 
 test('migrateUltimate: lixo vira default; parcial é preenchido; inventário válido preservado', () => {
   assert.deepEqual(migrateUltimate(null), defaultUltimateState());
@@ -662,11 +656,14 @@ test('divisionChange: promove/rebaixa/mantém pela faixa', () => {
 });
 
 test('evaluateSeasonTiers: reached pelo pico, claimed pela lista', () => {
-  const tiers = evaluateSeasonTiers(1300, ['s-bronze']);
+  // limiares atuais: bronze 1050 · prata 1150 · ouro 1375 · platina 1600
+  // (o teste apodreceu enquanto o arquivo estava fora da suíte pelo import
+  // quebrado do buildBazaar — valores re-sincronizados com seasonRewards.ts)
+  const tiers = evaluateSeasonTiers(1400, ['s-bronze']);
   assert.ok(tiers.find((t) => t.tier.id === 's-bronze')!.reached);
   assert.ok(tiers.find((t) => t.tier.id === 's-bronze')!.claimed);
-  assert.ok(tiers.find((t) => t.tier.id === 's-ouro')!.reached && !tiers.find((t) => t.tier.id === 's-ouro')!.claimed); // rp 1300
-  assert.ok(!tiers.find((t) => t.tier.id === 's-platina')!.reached); // rp 1500
+  assert.ok(tiers.find((t) => t.tier.id === 's-ouro')!.reached && !tiers.find((t) => t.tier.id === 's-ouro')!.claimed); // rp 1400 ≥ 1375
+  assert.ok(!tiers.find((t) => t.tier.id === 's-platina')!.reached); // rp 1600
 });
 
 test('applyMatchResult atualiza o pico da season (season.peak)', () => {
