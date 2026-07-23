@@ -3,6 +3,7 @@
 // 100% testável. Ver docs-but-map.md §4/§6.
 
 import { quickSellValue } from './quicksell';
+import { DRAFT_DEFAULT, DRAFT_ENTRY, DRAFT_REWARDS, DRAFT_ROLES, DRAFT_TARGET, type DraftRunState } from './draft';
 import { computeNextDaily, dailyCredits } from './daily';
 import { divisionFor, DIV_TIER_MULT } from './divisions';
 import { defaultPassState, ensurePass, passAddXp, PASS_MAX_LEVEL, type PassState, type PassXpSource } from './seasonPass';
@@ -13,7 +14,7 @@ import type { Role } from '../../types';
 // registro de partida (histórico das últimas HISTORY_MAX, todos os modos).
 export interface MatchRecord {
   t: number;                                   // timestamp (ms)
-  mode: 'rivals' | 'casual' | 'gauntlet';
+  mode: 'rivals' | 'casual' | 'gauntlet' | 'draft';
   won: boolean;
   score: string;                               // "13-9"
   eloDelta: number;                            // 0 fora do rivals
@@ -78,6 +79,7 @@ export interface UltimateProfile {
   sbcDone: string[];
   objectivesClaimed: string[]; // ids de objetivos/missões já resgatados (profundidade)
   gauntlet: { date: string | null; wins: number; active: boolean; best: number }; // Elite Gauntlet (1 run/dia)
+  draft: DraftRunState; // Ultimate Draft (squad emprestado + run de 4 — ver draft.ts)
   history: MatchRecord[];      // últimas partidas (cap HISTORY_MAX)
   bazaarBought: { day: number; ids: string[] }; // listagens do bazar compradas no day-bucket (anti-restock)
   bazaarBuys: number;             // total ACUMULADO de compras no bazar (alimenta as missões semanais)
@@ -118,6 +120,7 @@ export function defaultUltimateProfile(): UltimateProfile {
     sbcDone: [],
     objectivesClaimed: [],
     gauntlet: { date: null, wins: 0, active: false, best: 0 },
+    draft: { ...DRAFT_DEFAULT },
     history: [],
     bazaarBought: { day: 0, ids: [] },
     bazaarBuys: 0,
@@ -206,6 +209,64 @@ export function gauntletRecord(state: UltimateState, won: boolean): { state: Ult
   const gauntlet = { ...g, wins, best, active: !over };
   return { state: { ...state, profile: { ...state.profile, gauntlet } }, wins, completed, over, advanced: true };
 }
+
+// ── Ultimate Draft: squad emprestado + run de até DRAFT_TARGET vitórias ──
+
+/** Inicia um run (debita a inscrição). Falha com run ativo ou sem credits. */
+export function draftStart(
+  state: UltimateState,
+  today: string,
+  seed: number,
+): { state: UltimateState; ok: boolean; reason?: string } {
+  const d = state.profile.draft;
+  if (d.active) return { state, ok: false, reason: 'Run em andamento' };
+  if (state.profile.credits < DRAFT_ENTRY) return { state, ok: false, reason: `Inscrição custa ${DRAFT_ENTRY.toLocaleString('pt-BR')} credits` };
+  const draft: DraftRunState = {
+    date: today, seed: (seed >>> 0) || 1, stage: 0, picks: [],
+    wins: 0, active: true, best: d.best, runs: d.runs + 1,
+  };
+  return {
+    state: { ...state, profile: { ...state.profile, credits: state.profile.credits - DRAFT_ENTRY, draft } },
+    ok: true,
+  };
+}
+
+/** Registra a escolha do estágio atual. Idempotente contra double-click. */
+export function draftPick(state: UltimateState, cardKey: string): UltimateState {
+  const d = state.profile.draft;
+  if (!d.active || d.stage >= DRAFT_ROLES.length || d.picks.includes(cardKey)) return state;
+  const draft = { ...d, picks: [...d.picks, cardKey], stage: d.stage + 1 };
+  return { ...state, profile: { ...state.profile, draft } };
+}
+
+/**
+ * Resultado de uma partida do run. Vitória avança; derrota OU campanha
+ * perfeita (DRAFT_TARGET) encerra e CREDITA a recompensa da tabela — a carta
+ * prêmio (se houver) volta como raridade pro caller grantCard (mesmo fluxo do
+ * SBC). advanced=false → run inativo (caller não paga nada).
+ */
+export function draftRecord(
+  state: UltimateState,
+  won: boolean,
+): { state: UltimateState; wins: number; completed: boolean; over: boolean; advanced: boolean; credits: number; rewardCard?: DraftReward['card'] } {
+  const d = state.profile.draft;
+  if (!d.active) return { state, wins: d.wins, completed: false, over: true, advanced: false, credits: 0 };
+  const wins = won ? d.wins + 1 : d.wins;
+  const completed = won && wins >= DRAFT_TARGET;
+  const over = !won || completed;
+  const reward = over ? DRAFT_REWARDS[Math.min(wins, DRAFT_REWARDS.length - 1)] : { credits: 0 };
+  const draft: DraftRunState = { ...d, wins, best: Math.max(d.best, wins), active: !over };
+  return {
+    state: {
+      ...state,
+      profile: { ...state.profile, draft, credits: state.profile.credits + (over ? reward.credits : 0) },
+    },
+    wins, completed, over, advanced: true,
+    credits: over ? reward.credits : 0,
+    rewardCard: over ? reward.card : undefined,
+  };
+}
+type DraftReward = (typeof DRAFT_REWARDS)[number];
 
 // ── histórico de partidas (alimenta "Histórico de ELO" e "Últimas Ranqueadas") ──
 export function pushHistory(state: UltimateState, rec: MatchRecord): UltimateState {
@@ -403,9 +464,22 @@ export function migrateUltimate(raw: unknown): UltimateState {
     gauntlet: p.gauntlet && typeof p.gauntlet === 'object'
       ? { date: typeof p.gauntlet.date === 'string' ? p.gauntlet.date : null, wins: num(p.gauntlet.wins, 0), active: !!p.gauntlet.active, best: num(p.gauntlet.best, 0) }
       : { date: null, wins: 0, active: false, best: 0 },
+    // backfill: saves antigos não têm draft — nasce inativo com defaults
+    draft: p.draft && typeof p.draft === 'object'
+      ? {
+          date: typeof p.draft.date === 'string' ? p.draft.date : null,
+          seed: num(p.draft.seed, 0),
+          stage: num(p.draft.stage, 0),
+          picks: Array.isArray(p.draft.picks) ? p.draft.picks.filter((x): x is string => typeof x === 'string') : [],
+          wins: num(p.draft.wins, 0),
+          active: !!p.draft.active,
+          best: num(p.draft.best, 0),
+          runs: num(p.draft.runs, 0),
+        }
+      : { ...DRAFT_DEFAULT },
     history: Array.isArray(p.history)
       ? p.history
-          .filter((h): h is MatchRecord => !!h && typeof h === 'object' && typeof (h as MatchRecord).won === 'boolean' && ['rivals', 'casual', 'gauntlet'].includes((h as MatchRecord).mode))
+          .filter((h): h is MatchRecord => !!h && typeof h === 'object' && typeof (h as MatchRecord).won === 'boolean' && ['rivals', 'casual', 'gauntlet', 'draft'].includes((h as MatchRecord).mode))
           .map((h) => ({ t: num(h.t, 0), mode: h.mode, won: h.won, score: typeof h.score === 'string' ? h.score : '', eloDelta: num(h.eloDelta, 0), credits: num(h.credits, 0) }))
           .slice(0, HISTORY_MAX)
       : [],

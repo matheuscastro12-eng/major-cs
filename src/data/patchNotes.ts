@@ -26,6 +26,17 @@ export interface PatchNote {
 
 export const PATCHES: PatchNote[] = [
   {
+    id: '2026.07.23',
+    date: '23 jul 2026',
+    title: 'ULTIMATE DRAFT — o modo mais pedido chegou',
+    items: [
+      { kind: 'feature', area: 'Ultimate', text: 'ULTIMATE DRAFT: pague a inscrição, drafte um squad emprestado (capitão de pool premium — Elite, Lendário, Ícone e specials) e vença até 4 seguidas contra IA que escala.' },
+      { kind: 'feature', area: 'Ultimate', text: 'Recompensas do Draft crescem por vitória: campanha perfeita paga 42.000 credits + carta Lendária. Uma derrota encerra o run.' },
+      { kind: 'feature', area: 'Ultimate', text: 'Anti-reroll de verdade: as 5 opções de cada pick são fixadas no início do run — F5 não re-rola. A escolha é sua, o azar também.' },
+      { kind: 'tweak', area: 'Ultimate', text: 'Draft entra no histórico de partidas, no card compartilhável e dá XP de Passe por estágio vencido (igual ao Gauntlet).' },
+    ],
+  },
+  {
     id: '2026.07.22',
     date: '22 jul 2026',
     title: 'A GRANDE ATUALIZAÇÃO: janela 2026.2, demissão sem game-over e muito mais',

@@ -19,6 +19,7 @@ import {
   type MktBrowseItem, type MktMineItem, type MktCardSales, type MktRecentSale,
 } from '../../state/ultimateMarket';
 import { FORMATIONS, formationById } from '../../engine/ultimate/formations';
+import { DRAFT_ENTRY, DRAFT_OPTIONS, DRAFT_REWARDS, DRAFT_ROLES, DRAFT_TARGET, draftOptions, draftOppTarget } from '../../engine/ultimate/draft';
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
 import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, passSeasonId, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
 import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, passTitleSlug, totalXpForLevel, xpForLevel, PASS_MAX_LEVEL, type PassReward, type PassTrack } from '../../engine/ultimate/seasonPass';
@@ -298,9 +299,9 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
+  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
@@ -312,10 +313,10 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   // estilo comprado na Loja aguardando a escolha da carta-alvo (modal picker)
   const [stylePick, setStylePick] = useState<StyleId | null>(null);
-  type MatchMode = 'rivals' | 'casual' | 'gauntlet' | 'pvp';
+  type MatchMode = 'rivals' | 'casual' | 'gauntlet' | 'pvp' | 'draft';
   // cerimônia pós-jogo (iter42): star = craque do duelo (determinístico, lado
   // JÁ na perspectiva do usuário: 0 = você); casterFinal = chamada final do caster.
-  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null };
+  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; draft?: { wins: number; completed: boolean; over: boolean; credits: number; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null };
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1; pvpCode?: string } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
   const [shareState, setShareState] = useState<'busy' | 'shared' | 'saved' | null>(null);
@@ -1328,6 +1329,61 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
 
   // inicia/continua uma partida por modo. Gauntlet: abre o run se não estiver
   // ativo (bloqueia se já jogou hoje) e passa a sequência atual pro scaling.
+  // ── Ultimate Draft: partida do run com o squad EMPRESTADO (picks do draft) ──
+  const draftCards = useMemo(
+    () => state.profile.draft.picks.map((k) => index.get(k)).filter((c): c is UltCard => !!c),
+    [state.profile.draft.picks, index],
+  );
+  const playDraftMatch = () => {
+    const d = state.profile.draft;
+    if (!d.active || draftCards.length < 5) return;
+    const five = draftCards
+      .map((c) => pool.find((p) => p.id === c.playerId))
+      .filter((p): p is PoolPlayer => !!p);
+    if (five.length < 5) return;
+    const userTeam = buildOnlineTeam(ct('Seu Draft'), five, 'ut-draft');
+    // química do draft: slots na ordem dos DRAFT_ROLES (formação standard)
+    const dNodes: ChemNode[] = draftCards.map((c, i) => ({ slot: i, slotRole: DRAFT_ROLES[i], card: c }));
+    const dChem = computeChemistry(formationById('standard').adjacency, dNodes);
+    userTeam.strength *= dChem.multiplier;
+    const draftAvg = Math.round(draftCards.reduce((a, c) => a + c.ovr, 0) / draftCards.length);
+    const target = draftOppTarget(draftAvg, d.wins);
+    const mineIds = new Set(five.map((p) => p.id));
+    const oppFive = pool.filter((p) => !mineIds.has(p.id))
+      .sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5)
+      .sort((a, b) => b.ovr - a.ovr);
+    const oppTeam = buildOnlineTeam(ct('Esquadrão IA'), oppFive, 'ut-opp');
+    const rng = makeRng(Math.floor(Math.random() * 2147483647));
+    const maps = autoVeto([userTeam, oppTeam], rng, 1);
+    const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
+    // COMMIT-ON-START (anti loss-dodge): resultado registrado ANTES do replay.
+    const won = series.winner === 0;
+    const m0 = series.maps[0];
+    const score = m0 ? `${m0.score[0]}-${m0.score[1]}` : `${series.mapScore[0]}-${series.mapScore[1]}`;
+    const r = draftRecord(won, score);
+    const mapStats = m0?.stats ?? {};
+    let mvp: LiveResult['mvp'];
+    for (const c of draftCards) {
+      const line = mapStats[`ut-draft__${c.playerId}`]?.both ?? mapStats[c.playerId]?.both;
+      if (!line) continue;
+      if (!mvp || line.kills > mvp.kills || (line.kills === mvp.kills && line.deaths < mvp.deaths)) mvp = { card: c, kills: line.kills, deaths: line.deaths };
+    }
+    const mapName = m0 ? (MAP_LABELS[m0.map] ?? m0.map) : '';
+    const roundLog = m0?.roundLog ?? [];
+    const dramaStars: [DramaStar[], DramaStar[]] = [starsFromPlayers(userTeam.players), starsFromPlayers(oppTeam.players)];
+    const script = buildDramaScript(roundLog, [userTeam.name, oppTeam.name], dramaStars);
+    const star = pickMatchStar(script, dramaStars, won ? 0 : 1) ?? undefined;
+    const resultData: LiveResult = {
+      won, score, outcome: { eloDelta: 0, credits: r.credits }, mode: 'draft',
+      divChange: 'same', divName: '',
+      draft: { wins: r.wins, completed: r.completed, over: r.over, credits: r.credits, card: r.grantedCard },
+      mvp, roundLog, mapName, star, casterFinal: finalCallOf(script),
+    };
+    setResult(null);
+    setLiveRound(0);
+    setLive({ series, teams: [userTeam, oppTeam], result: resultData, opp: oppFive, intro: true, myIdx: 0 });
+  };
+
   const startMatch = (mode: MatchMode) => {
     if (mode === 'gauntlet') {
       const g = state.profile.gauntlet;
@@ -1431,7 +1487,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
       return (
         <div className="ut-root ut-live">
           <div className="ut-vs">
-            <div className="ut-vs__kicker">{ct('MATCH DAY')} · {live.result.mode === 'rivals' ? 'DIVISÃO RIVALS' : live.result.mode === 'gauntlet' ? 'ELITE GAUNTLET' : live.result.mode === 'pvp' ? `${ct('DUELO ONLINE')} · PVP` : ct('AMISTOSO')}</div>
+            <div className="ut-vs__kicker">{ct('MATCH DAY')} · {live.result.mode === 'rivals' ? 'DIVISÃO RIVALS' : live.result.mode === 'gauntlet' ? 'ELITE GAUNTLET' : live.result.mode === 'draft' ? 'ULTIMATE DRAFT' : live.result.mode === 'pvp' ? `${ct('DUELO ONLINE')} · PVP` : ct('AMISTOSO')}</div>
             <div className="ut-vs__call">
               <span className="ut-cast__tag">{ct('CASTER')}</span>
               <span className="ut-vs__calltext">{tale.line}</span>
@@ -1561,6 +1617,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
               )}
             </div>
             <button className={`ut-nav__item${tab === 'ranked' ? ' is-active' : ''}`} onClick={() => go('ranked')}><Swords size={16} /> {ct('Ranqueada')}</button>
+            <button className={`ut-nav__item${tab === 'draft' ? ' is-active' : ''}`} onClick={() => go('draft')}><Layers size={16} /> {ct('Draft')}{state.profile.draft.active && <span className="ut-nav__badge" style={{ background: '#29c47a' }}>●</span>}</button>
             <button className={`ut-nav__item${tab === 'major-semana' ? ' is-active' : ''}`} onClick={() => go('major-semana')}><Trophy size={16} /> {ct('Major da Semana')}{wlWindowNow().open && <span className="ut-nav__badge" style={{ background: '#29c47a' }}>●</span>}</button>
             <button className={`ut-nav__item${tab === 'passe' ? ' is-active' : ''}`} onClick={() => go('passe')}><Ticket size={16} /> {ct('Passe')}{passClaimableCount > 0 && <span className="ut-nav__badge">{passClaimableCount}</span>}</button>
             <button className={`ut-nav__item${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo Privado')}</button>
@@ -2588,6 +2645,99 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
         );
       })()}
 
+      {/* ── ULTIMATE DRAFT: squad emprestado + run de 4 ── */}
+      {tab === 'draft' && (() => {
+        const d = state.profile.draft;
+        const pickedIds = draftCards.map((c) => c.playerId);
+        const options = d.active && d.stage < DRAFT_ROLES.length
+          ? draftOptions(ultimateCatalog(), d.seed, d.stage, pickedIds)
+          : [];
+        const draftAvg = draftCards.length ? Math.round(draftCards.reduce((a, c) => a + c.ovr, 0) / draftCards.length) : 0;
+        const dChem = draftCards.length === 5
+          ? computeChemistry(formationById('standard').adjacency, draftCards.map((c, i): ChemNode => ({ slot: i, slotRole: DRAFT_ROLES[i], card: c })))
+          : null;
+        return (
+          <UtPanel
+            label={<>{ct('Ultimate Draft')} <em>· {ct('squad emprestado, glória de verdade')}</em></>}
+            icon={<Layers size={15} className="ut-panel__lead" />}
+            right={<span style={{ fontFamily: 'var(--ut-font-mono)', fontSize: '0.78rem' }}>{ct('recorde')} {d.best}/{DRAFT_TARGET} · {d.runs} {ct('runs')}</span>}
+          >
+            {!d.active ? (
+              <>
+                <p style={{ margin: '0 0 12px', color: 'var(--ut-ink-2)', fontSize: '0.86rem', lineHeight: 1.5 }}>
+                  {ct('Pague a inscrição, drafte um squad EMPRESTADO escolhendo 1 de')} {DRAFT_OPTIONS} {ct('cartas por função (o capitão vem de um pool premium — Elite, Lendário, Ícone e specials) e leve o time num run de até')} {DRAFT_TARGET} {ct('vitórias contra IA que escala. A primeira derrota encerra. As cartas voltam — o prêmio fica.')}
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 14 }}>
+                  {DRAFT_REWARDS.map((r, wins) => (
+                    <div key={wins} style={{ padding: '8px 10px', borderRadius: 10, border: '1px solid var(--ut-line)', background: wins === DRAFT_TARGET ? 'rgba(201,166,60,0.08)' : 'var(--ut-well, rgba(0,0,0,0.03))', textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.66rem', letterSpacing: '1px', color: 'var(--ut-muted)' }}>{wins} {wins === 1 ? ct('VITÓRIA') : ct('VITÓRIAS')}</div>
+                      <div style={{ fontWeight: 900, fontFamily: 'var(--ut-font-mono)', fontSize: '0.86rem' }}>+{fmt(r.credits)}</div>
+                      {r.card && <div style={{ fontSize: '0.68rem', fontWeight: 800, color: rarityInfo(r.card).color }}>+ {rarityInfo(r.card).label}</div>}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="ut-jogar"
+                  style={{ width: '100%', justifyContent: 'center', padding: '13px' }}
+                  disabled={state.profile.credits < DRAFT_ENTRY}
+                  onClick={() => { const r = draftStart(dateKey(new Date())); if (!r.ok && r.reason) setToast(r.reason); }}
+                >
+                  <Layers size={17} /> {ct('INICIAR DRAFT')} · {fmt(DRAFT_ENTRY)}
+                </button>
+                {state.profile.credits < DRAFT_ENTRY && (
+                  <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>{ct('Inscrição custa')} {fmt(DRAFT_ENTRY)} — {ct('você tem')} {fmt(state.profile.credits)}.</div>
+                )}
+              </>
+            ) : d.stage < DRAFT_ROLES.length ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <div style={{ fontWeight: 900, fontSize: '1.02rem' }}>
+                    {d.stage === 0 ? ct('Escolha seu CAPITÃO') : `${ct('Escolha seu')} ${DRAFT_ROLES[d.stage]}`}
+                    <span style={{ color: 'var(--ut-muted)', fontWeight: 600, fontSize: '0.8rem' }}> · {ct('pick')} {d.stage + 1}/{DRAFT_ROLES.length}</span>
+                  </div>
+                  {d.stage === 0 && <span style={{ fontSize: '0.72rem', color: '#92600a', fontWeight: 700 }}>★ {ct('pool premium: Elite+ e specials')}</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {options.map((c) => (
+                    <button key={c.key} onClick={() => draftPick(c.key)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }} title={`${c.nick} · ${c.ovr} OVR`}>
+                      <UltCardView card={c} size={118} />
+                    </button>
+                  ))}
+                </div>
+                {draftCards.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--ut-muted)', fontWeight: 700, letterSpacing: '0.5px' }}>{ct('SEU DRAFT')}</span>
+                    {draftCards.map((c) => <UltCardView key={c.key} card={c} size={62} />)}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 12 }}>
+                  {draftCards.map((c) => <UltCardView key={c.key} card={c} size={104} />)}
+                </div>
+                <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', fontSize: '0.84rem', color: 'var(--ut-ink-2)', marginBottom: 10 }}>
+                  <span>{ct('OVR do draft')} <b style={{ fontFamily: 'var(--ut-font-mono)' }}>{draftAvg}</b></span>
+                  {dChem && <span>{ct('química')} <b>{dChem.total}/15</b></span>}
+                  <span>{ct('run')} <b style={{ color: '#0e9d5b' }}>{d.wins}/{DRAFT_TARGET}</b></span>
+                </div>
+                <div className="ut-gaunt" style={{ marginBottom: 12 }}>
+                  <div className="ut-gaunt__dots">
+                    {Array.from({ length: DRAFT_TARGET }, (_, i) => (
+                      <span key={i} className={`ut-gaunt__dot${i < d.wins ? ' on' : ''}`}>{i < d.wins ? '✦' : i + 1}</span>
+                    ))}
+                  </div>
+                  <div className="ut-gaunt__info">{ct('IA escala a cada vitória — uma derrota encerra o run e paga a linha da tabela.')}</div>
+                </div>
+                <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', padding: '13px' }} onClick={playDraftMatch}>
+                  <Zap size={17} /> {ct('JOGAR PARTIDA')} {d.wins + 1}/{DRAFT_TARGET}
+                </button>
+              </>
+            )}
+          </UtPanel>
+        );
+      })()}
+
       {tab === 'duelo' && (
         <UtPanel label={<>{ct('Duelo Privado')} <em>· {ct('com amigo')}</em></>} icon={<Globe size={15} className="ut-panel__lead" />}
           right={<span style={{ fontFamily: 'var(--ut-font-mono)' }}>{pvpNick}</span>}
@@ -2737,6 +2887,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
         <Modal open onClose={() => setResult(null)} title={result.won ? ct('Vitória!') : ct('Derrota')} size="sm"
           footer={result.gaunt?.completed && result.gaunt.card
             ? <Button variant="primary" onClick={() => { const card = result.gaunt!.card!; setResult(null); setReveal([card]); }}>✦ {ct('Revelar carta Elite')}</Button>
+            : result.mode === 'draft' && result.draft?.over && result.draft.card
+              ? <Button variant="primary" onClick={() => { const card = result.draft!.card!; setResult(null); setReveal([card]); }}>✦ {ct('Revelar carta prêmio')}</Button>
+            : result.mode === 'draft'
+              ? (result.draft?.over
+                  ? <Button variant="primary" onClick={() => setResult(null)}>{ct('Fechar')}</Button>
+                  : <><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { setResult(null); playDraftMatch(); }}>{ct('Próxima partida')}</Button></>)
             : result.mode === 'pvp' || (result.mode === 'gauntlet' && result.gaunt?.over)
               ? <Button variant="primary" onClick={() => setResult(null)}>{ct('Fechar')}</Button>
               : <><Button variant="ghost" onClick={() => setResult(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { const md = result.mode; setResult(null); startMatch(md); }} disabled={!squadComplete}>{result.mode === 'gauntlet' ? ct('Continuar') : ct('Jogar de novo')}</Button></>}>
@@ -2755,6 +2911,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
             )}
             {result.gaunt?.completed && (
               <div className="ut-divchange promoted"><Flame size={15} strokeWidth={2.5} /> {ct('GAUNTLET COMPLETO')} · 5/5</div>
+            )}
+            {result.draft?.completed && (
+              <div className="ut-divchange promoted"><Layers size={15} strokeWidth={2.5} /> {ct('CAMPANHA PERFEITA')} · {DRAFT_TARGET}/{DRAFT_TARGET}</div>
             )}
             <div className={result.won ? 'ut-score-pop' : 'ut-score-shake'} style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
             {result.mapName && <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--ut-muted)', marginTop: -6 }}>{result.mapName}</div>}
@@ -2818,6 +2977,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
                     : <span style={{ color: result.outcome.eloDelta >= 0 ? '#16a34a' : '#dc2626' }}>{result.outcome.eloDelta >= 0 ? '▲ +' : '▼ '}{result.outcome.eloDelta} RP</span>)
                 : result.mode === 'gauntlet'
                   ? <span style={{ color: result.won ? '#0e9d5b' : '#b42318', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flame size={14} /> {result.gaunt?.wins ?? 0}/{GAUNTLET_TARGET}{result.won ? '' : ` · ${ct('run encerrado')}`}</span>
+                : result.mode === 'draft'
+                  ? <span style={{ color: result.won ? '#0e9d5b' : '#b42318', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Layers size={14} /> {result.draft?.wins ?? 0}/{DRAFT_TARGET}{result.draft?.over ? ` · ${ct('run encerrado')}` : ''}</span>
                   : <span style={{ color: 'var(--ut-muted)' }}>{ct('Amistoso · sem RP')}</span>}
               {result.outcome.credits > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#92600a' }}><Coins size={13} /> +{fmt(result.outcome.credits)}</span>}
             </div>

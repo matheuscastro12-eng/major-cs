@@ -7,7 +7,7 @@ export interface UltShareData {
   won: boolean;
   score: string;               // já na perspectiva do usuário ("13-9")
   mapName: string;
-  mode: 'rivals' | 'casual' | 'gauntlet' | 'pvp';
+  mode: 'rivals' | 'casual' | 'gauntlet' | 'pvp' | 'draft';
   oppName?: string;
   mvp?: { nick: string; kills: number; deaths: number };
   star?: { nick: string; traitName: string; traitIcon: string };
@@ -16,7 +16,7 @@ export interface UltShareData {
 }
 
 const MODE_LABEL: Record<UltShareData['mode'], string> = {
-  rivals: 'DIVISÃO RIVALS', casual: 'AMISTOSO', gauntlet: 'ELITE GAUNTLET', pvp: 'DUELO ONLINE',
+  rivals: 'DIVISÃO RIVALS', casual: 'AMISTOSO', gauntlet: 'ELITE GAUNTLET', pvp: 'DUELO ONLINE', draft: 'ULTIMATE DRAFT',
 };
 
 export function drawUltimateShareCard(d: UltShareData): string {

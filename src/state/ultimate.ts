@@ -40,6 +40,9 @@ import {
   applyCardStyle as _applyCardStyle,
   gauntletStart as _gauntletStart,
   gauntletRecord as _gauntletRecord,
+  draftStart as _draftStart,
+  draftPick as _draftPick,
+  draftRecord as _draftRecord,
   GAUNTLET_WIN_CREDITS,
   STARTING_ELO,
   pushHistory as _pushHistory,
@@ -276,6 +279,9 @@ interface UltimateStore {
   // Elite Gauntlet (desafio diário)
   gauntletStart: (today: string) => void;
   gauntletRecord: (won: boolean, score?: string) => { wins: number; completed: boolean; over: boolean; credits: number; grantedCard?: UltCard };
+  draftStart: (today: string) => { ok: boolean; reason?: string };
+  draftPick: (cardKey: string) => void;
+  draftRecord: (won: boolean, score?: string) => { wins: number; completed: boolean; over: boolean; credits: number; grantedCard?: UltCard };
   // missões diárias rotativas
   syncMissions: (today: string) => void;
   claimMission: (id: string) => { ok: boolean; credits?: number };
@@ -729,6 +735,44 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
     mirrorUltimateChange(prev, s, 'reward', { src: 'gauntlet' });
     return { wins: r.wins, completed: r.completed, over: r.over, credits, grantedCard };
+  },
+  // ── Ultimate Draft: inscrição → picks → run (mesmo padrão do gauntlet) ──
+  draftStart: (today) => {
+    const prev = get().state;
+    // seed do run fixado AGORA (anti-reroll: F5 não re-rola as opções)
+    const r = _draftStart(prev, today, Math.floor(Math.random() * 2147483647));
+    if (!r.ok) return { ok: false, reason: r.reason };
+    persist(r.state);
+    set({ state: r.state });
+    mirrorUltimateChange(prev, r.state, 'spend', { src: 'draft-entry' });
+    return { ok: true };
+  },
+  draftPick: (cardKey) =>
+    set((st) => {
+      const s = _draftPick(st.state, cardKey);
+      if (s === st.state) return {};
+      persist(s);
+      return { state: s };
+    }),
+  draftRecord: (won, score = '') => {
+    const prev = get().state;
+    const r = _draftRecord(prev, won);
+    if (!r.advanced) return { wins: r.wins, completed: r.completed, over: r.over, credits: 0 };
+    let s = r.state; // credits da recompensa já entraram no reducer
+    let grantedCard: UltCard | undefined;
+    if (r.over && r.rewardCard) {
+      const pool = ultimateCatalog().filter((c) => c.rarity === r.rewardCard);
+      if (pool.length) {
+        grantedCard = pool[Math.floor(Math.random() * pool.length)];
+        s = _grantCard(s, grantedCard.key, 'reward', { id: `draft_${Math.random().toString(36).slice(2, 9)}` });
+      }
+    }
+    s = _pushHistory(s, { t: Date.now(), mode: 'draft', won, score, eloDelta: 0, credits: r.credits });
+    if (won) s = _grantPassXp(s, 'gauntletWin', dateKey(new Date())); // mesmo XP por estágio do gauntlet
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(prev, s, 'reward', { src: 'draft' });
+    return { wins: r.wins, completed: r.completed, over: r.over, credits: r.credits, grantedCard };
   },
   syncMissions: (today) =>
     set((st) => {
