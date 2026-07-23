@@ -8,6 +8,7 @@ import { playerOrgId } from '../../state/career-player-route';
 import type { DashTask } from '../../state/career-tasks';
 import { Flag, TeamBadge } from '../ui';
 import { draft5Author, draft5Category } from '../../engine/career/draft5';
+import { boardTone, type BoardLogEntry } from '../../engine/career/boardApproval';
 import { PlayerLink } from './PlayerLink';
 import { DashCard } from './DashCard';
 import { SparkLine } from './DashCharts';
@@ -58,7 +59,7 @@ export function CareerOverview({
   roundLabel, boLabel, venueLabel, nextRivalry, nextRivalryScore,
   onPlay, onSim, onSimSplit, onOpenTasks, onOpenCalendar, onOpenVrs, onOpenResults,
   onPickTeam, onPickPlayer, onSquad, gamePlanPicker, oppScoutStats,
-  news, onOpenNews,
+  news, onOpenNews, board, boardLog,
 }: {
   save: { org?: { name?: string; tag?: string; colors?: [string, string]; logo?: string }; circuit?: { name?: string }; split: number; titles?: number; budget: number; tier?: number };
   league: League;
@@ -101,6 +102,8 @@ export function CareerOverview({
   oppScoutStats?: Record<string, { rating: number; adr: number }>;
   news?: OverviewNewsRow[];
   onOpenNews?: () => void;
+  board?: number; // confiança da diretoria (0-100)
+  boardLog?: BoardLogEntry[]; // #8: histórico de ajustes (mais recente primeiro)
 }) {
   const eventName = save.circuit?.name ?? ct('Circuito');
   const oppPlayers = opp?.players ?? [];
@@ -329,6 +332,40 @@ export function CareerOverview({
             </div>
           </DashCard>
         </div>
+
+        {board != null && (() => {
+          // #8: a diretoria reage a cada evento — este card dá o medidor e o
+          // rastro (últimos ajustes com motivo), antes visível só no fim do split.
+          const tone = boardTone(board);
+          const toneColor = tone === 'ok' ? 'var(--em-green)' : tone === 'warn' ? 'var(--em-gold)' : 'var(--em-red)';
+          const entries = (boardLog ?? []).slice(0, 5);
+          return (
+            <DashCard title={ct('Diretoria')} className="em-board-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: entries.length ? 10 : 0 }}>
+                <b style={{ fontSize: '1.35rem', color: toneColor }}>{Math.round(board)}%</b>
+                <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--em-border)', overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.max(0, Math.min(100, board))}%`, height: '100%', background: toneColor, borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--em-muted)' }}>
+                  {tone === 'ok' ? ct('Diretoria tranquila') : tone === 'warn' ? ct('Sob observação') : ct('Cargo em risco')}
+                </span>
+              </div>
+              {entries.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {entries.map((e, i) => (
+                    <div key={`${e.split}:${i}`} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: '0.76rem' }}>
+                      <b style={{ minWidth: 30, textAlign: 'right', color: e.delta >= 0 ? 'var(--em-green)' : 'var(--em-red)' }}>
+                        {e.delta >= 0 ? '+' : ''}{e.delta}
+                      </b>
+                      <span style={{ color: 'var(--em-text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.reason}</span>
+                      <span style={{ color: 'var(--em-muted)', fontSize: '0.68rem' }}>{ct('Split')} {e.split}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DashCard>
+          );
+        })()}
 
         <DashCard
           title={ct('Visão do elenco')}

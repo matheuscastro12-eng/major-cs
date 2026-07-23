@@ -199,6 +199,8 @@ export function OverviewTab({
       onPickTeam={openTeamProfile}
       onPickPlayer={openPlayerProfile}
       oppScoutStats={oppScoutStats}
+      board={typeof save.board === 'number' ? (save.board as number) : undefined}
+      boardLog={Array.isArray(save.boardLog) ? (save.boardLog as import('../../engine/career/boardApproval').BoardLogEntry[]) : []}
       gamePlanPicker={
         <GamePlanPicker
           plan={save.gamePlan ?? 'disciplined'}

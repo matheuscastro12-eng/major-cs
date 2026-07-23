@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -175,6 +175,16 @@ const MIGRATIONS: Record<number, Migration> = {
         ? save.recentRatings
         : {},
     _v: 16,
+  }),
+  // v16 → v17 (#8 board approval contínuo): adiciona boardLog, o histórico dos
+  // ajustes de confiança da diretoria (ring de 12 — {split, delta, reason}).
+  // Backfill [] = sem rastro; o log enche conforme os próximos eventos
+  // (vitória/derrota/objetivo/caixa/Major) rolam. Alimenta o card "Diretoria"
+  // no dashboard e o texto justificado da demissão.
+  16: (save) => ({
+    ...save,
+    boardLog: Array.isArray(save.boardLog) ? save.boardLog : [],
+    _v: 17,
   }),
 };
 
