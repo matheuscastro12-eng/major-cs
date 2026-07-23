@@ -6,9 +6,12 @@
 //
 // NÃO confundir com Road to Pro / saves extras de carreira: esses continuam
 // EXCLUSIVOS de conta vitalícia. O modo convidado vale só para o Ultimate.
+import { useEffect } from 'react';
 import { Button, Modal } from '../ds';
 import { BrandMark } from '../brand';
+import { FounderCounter } from '../FounderCounter';
 import { ct } from '../../state/career-i18n';
+import { trackPaywallView } from '../../state/track';
 
 export function UltimateGate({
   onGuest,
@@ -21,6 +24,11 @@ export function UltimateGate({
   onLogin: () => void;
   onClose: () => void;
 }) {
+  // App.tsx já chama setCheckoutSrc('home-ultimate') antes de abrir este gate
+  // (único ponto de entrada), então reusa o mesmo src aqui — é a mesma métrica
+  // que ficou órfã quando este modal substituiu o card travado da Home.
+  useEffect(() => { trackPaywallView('home-ultimate'); }, []);
+
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <BrandMark size={22} />
@@ -44,6 +52,7 @@ export function UltimateGate({
           <span>✔ {ct('Jogue no PC e no celular com a mesma conta')}</span>
           <span>✔ {ct('Ranqueada no ladder real e Major da Semana')}</span>
         </div>
+        <FounderCounter style={{ marginTop: 10 }} />
       </div>
 
       <Button variant="gold" style={{ width: '100%' }} onClick={onSignup}>
