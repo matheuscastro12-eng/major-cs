@@ -27,9 +27,11 @@ interface Props {
   data: FiredModalData | null;
   onClose: () => void;
   onRestart: () => void;
+  /** #19 — job hunt: procurar novo clube preservando a carreira. */
+  onJobHunt?: () => void;
 }
 
-export function FiredModal({ data, onClose, onRestart }: Props) {
+export function FiredModal({ data, onClose, onRestart, onJobHunt }: Props) {
   if (!data) return null;
 
   return (
@@ -109,14 +111,21 @@ export function FiredModal({ data, onClose, onRestart }: Props) {
           <Stat label="Sponsors perdidos" value={data.sponsorsLost} tone="red" />
         </div>
 
-        {/* Ações */}
+        {/* Ações — #19: a demissão não apaga mais a carreira; procurar clube é
+            o caminho principal, reiniciar (wipe) vira a opção destrutiva. */}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--em-border)', paddingTop: 14 }}>
-          <Button variant="ghost" onClick={onClose}>
-            Continuar (livre)
+          <Button variant="ghost" onClick={onRestart}>
+            Encerrar carreira (recomeçar do zero)
           </Button>
-          <Button variant="primary" onClick={onRestart}>
-            Reiniciar carreira
-          </Button>
+          {onJobHunt ? (
+            <Button variant="primary" onClick={onJobHunt}>
+              Procurar novo clube
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={onClose}>
+              Continuar
+            </Button>
+          )}
         </div>
       </div>
     </Modal>

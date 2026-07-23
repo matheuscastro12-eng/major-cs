@@ -26,6 +26,28 @@ export interface PatchNote {
 
 export const PATCHES: PatchNote[] = [
   {
+    id: '2026.07.22',
+    date: '22 jul 2026',
+    title: 'A GRANDE ATUALIZAÇÃO: janela 2026.2, demissão sem game-over e muito mais',
+    items: [
+      { kind: 'feature', area: 'Carreira', text: 'Demitido? A carreira CONTINUA: procure um novo clube, seja recusado, recomece um tier abaixo — com todo o seu histórico preservado.' },
+      { kind: 'feature', area: 'Carreira', text: 'Scrim de verdade: escolha o sparring (banda de força + disponibilidade) e jogue um MD1 real com relatório por titular e MVP.' },
+      { kind: 'feature', area: 'Carreira', text: 'Lendas geracionais: craques ganham aura por pico de carreira (Em ascensão → Craque → LENDA → GOAT), com fase "legacy" no declínio.' },
+      { kind: 'feature', area: 'Carreira', text: 'Analista com memória: o relatório pré-veto agora cruza seu W-L REAL por mapa ("você: 4-1 aqui") nas recomendações de pick/ban.' },
+      { kind: 'feature', area: 'Carreira', text: 'Linha do tempo visual da carreira por temporada (títulos, Majors e tropeços como marcos) no topo do Histórico.' },
+      { kind: 'feature', area: 'Carreira', text: 'Ficha técnica do pro no perfil: eDPI, resolução, crosshair e gear — determinística por jogador.' },
+      { kind: 'feature', area: 'Carreira', text: 'Elencos atualizados com a janela do meio do ano: 88 transferências reais, 34 organizações novas (127 times no total).' },
+      { kind: 'feature', area: 'Carreira', text: 'Mercado de free agents renovado: 87 nomes disponíveis, incluindo estrelas deslocadas na janela (broky, SunPayus, siuhy, nawwk).' },
+      { kind: 'feature', area: 'Carreira', text: 'Cena BR mais profunda: Luminosity, Grêmio, Vasco, RED Canids e times de base (MIBR Academy, paiN Academy) entram no circuito.' },
+      { kind: 'feature', area: 'Carreira', text: 'Diretoria viva: a confiança agora reage a CADA série, caixa no vermelho e campanha de Major — com histórico no dashboard.' },
+      { kind: 'feature', area: 'Carreira', text: 'Demissão justificada: o comunicado da diretoria cita os eventos que derrubaram sua confiança.' },
+      { kind: 'tweak', area: 'Carreira', text: 'Idades reais importadas pra ~300 jogadores e funções secundárias (AWP+IGL) no dataset.' },
+      { kind: 'feature', area: 'Road to Pro', text: '3 minigames novos: Prefire nos ângulos, Utilitária perfeita (estilingue de granada) e Segure o ângulo (cuidado com o aliado).' },
+      { kind: 'feature', area: 'Road to Pro', text: 'Treinos rotacionam o minijogo a cada semana — mira alterna com prefire, demos alterna com leitura de peek.' },
+      { kind: 'feature', area: 'Road to Pro', text: 'Sala com mais mão na partida: 5 execuções por série, casadas com a situação (retake = utilitária, pós-plant = segurar o ângulo).' },
+    ],
+  },
+  {
     id: '2026.06.26',
     date: '26 jun 2026',
     title: 'Visual novo em toda a app + Academia jogável',

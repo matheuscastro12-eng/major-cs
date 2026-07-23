@@ -234,7 +234,7 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
       </div>
 
       {/* T3.13: relatório do analista sobre o adversário, com narrativa + bans/picks recomendados */}
-      <AnalystReportCardLazy teams={teams} userIdx={userIdx} />
+      <AnalystReportCardLazy teams={teams} userIdx={userIdx} mapRecord={mapRecord} />
 
       <VetoAnalysis teams={teams} userIdx={userIdx} dead={mapState} mapRecord={mapRecord} />
 
@@ -247,10 +247,15 @@ export function VetoScreen({ teams, userIdx, rng, phaseLabel, bestOf = 3, mapRec
 
 // Wrapper que memoiza o relatório (não recalcula a cada veto step). O report
 // é estável durante todo o veto — só muda se trocar os times.
-function AnalystReportCardLazy({ teams, userIdx }: { teams: [TTeam, TTeam]; userIdx: 0 | 1 }) {
+function AnalystReportCardLazy({ teams, userIdx, mapRecord }: {
+  teams: [TTeam, TTeam];
+  userIdx: 0 | 1;
+  mapRecord?: Record<string, { w: number; l: number }>;
+}) {
   const opp = teams[userIdx === 0 ? 1 : 0];
   const me = teams[userIdx];
-  const report = useMemo(() => generateAnalystReport(opp, me), [opp, me]);
+  // #25: o relatório agora cruza o W-L REAL da sua run por mapa
+  const report = useMemo(() => generateAnalystReport(opp, me, mapRecord), [opp, me, mapRecord]);
   return <AnalystReportCard report={report} oppName={opp.name} oppTag={opp.tag} />;
 }
 

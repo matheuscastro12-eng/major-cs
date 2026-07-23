@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { FiredModal, type FiredModalData } from './FiredModal';
 
-type State = { data: FiredModalData; onRestart: () => void } | null;
+type State = { data: FiredModalData; onRestart: () => void; onJobHunt?: () => void } | null;
 type Listener = (next: State) => void;
 
 const listeners = new Set<Listener>();
@@ -14,8 +14,8 @@ function setAll(next: State): void {
   for (const l of listeners) l(next);
 }
 
-export function openFiredModal(data: FiredModalData, onRestart: () => void): void {
-  setAll({ data, onRestart });
+export function openFiredModal(data: FiredModalData, onRestart: () => void, onJobHunt?: () => void): void {
+  setAll({ data, onRestart, onJobHunt });
 }
 
 export function FiredModalHost() {
@@ -40,6 +40,7 @@ export function FiredModalHost() {
         state?.onRestart();
         close();
       }}
+      onJobHunt={state?.onJobHunt ? () => { state.onJobHunt?.(); close(); } : undefined}
     />
   );
 }

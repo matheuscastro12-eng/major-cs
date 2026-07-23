@@ -22,6 +22,7 @@ import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career/rivalries';
 import { applyFatigueForm, careerPlayerId, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
+import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry } from '../engine/career/boardApproval';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -460,7 +461,8 @@ import {
   type CoachStint,
 } from '../engine/coachCareer';
 import { tickAging, type AgingState } from '../engine/aging';
-import { canScrimNow, runScrim } from '../engine/scrim';
+import { canScrimNow, runScrimVs, listScrimOpponents, type ScrimMatchReport } from '../engine/scrim';
+import { listJobOffers, applyForJob, rejectionReason, type JobOffer } from '../engine/career/jobHunt';
 import { playerAttributes } from '../engine/attributes';
 import {
   generateScoutReports,
@@ -468,7 +470,7 @@ import {
   type ProspectCandidate,
   type ScoutReport,
 } from '../engine/scouting';
-import { useToast, Modal } from './ds';
+import { useToast, Modal, Button } from './ds';
 import { confirm as confirmDialog } from './ConfirmDialog';
 // T8.1 — abrir tutorial HowToPlay (host global montado no main.tsx)
 import { openHowToPlay } from './HowToPlayHost';
@@ -1177,7 +1179,8 @@ interface CareerSave {
   // precisa de uma rota alternativa, senão somem. teamId -> jogadores apensos
   // no roster do comprador, com snapshot dos atributos no momento da venda.
   extraOnTeam?: Record<string, { player: Player; arrival: number }[]>;
-  board: number; // confiança da diretoria (0-100). Cai se você falha os objetivos.
+  board: number; // confiança da diretoria (0-100). Reage a cada evento (vitória/derrota/objetivo/caixa).
+  boardLog?: BoardLogEntry[]; // #8: histórico dos ajustes de confiança (ring de 12), mais recente primeiro
   objective?: BoardObjective | null; // meta da diretoria pro split atual
   lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
   fired?: boolean; // demitido pela diretoria (confiança no chão)
@@ -1302,6 +1305,7 @@ const emptySave = (): CareerSave => ({
   tier: 3,
   tierChange: null,
   board: 60,
+  boardLog: [],
   objective: null,
   lastObjective: null,
   fired: false,
@@ -2141,6 +2145,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     // fluxo de stages do Major (majorSeed2/3 são arrays de TTeam, majorPre/
     // majorHistory também). Backfill = remove o lixo, deixa o default assumir.
     'majorSeed2', 'majorSeed3', 'majorPre', 'majorHistory',
+    'boardLog',
   ].forEach(defaultInvalidArray);
   ['mapFocus'].forEach(defaultInvalidNullableArray);
   [
@@ -2635,8 +2640,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     toast.info('Scout dispensado');
   };
 
-  // T3.8: roda 1 scrim. Valida, aplica patch (custo + chem + fadiga) + toast.
-  const doScrim = () => {
+  // #6/#21: scrim contra adversário REAL — o manager escolhe o sparring e o
+  // treino roda o motor de partida de verdade (MD1). Relatório fica em estado
+  // efêmero (não infla o save); a lista de sparrings é montada após buildTeam.
+  const [scrimReport, setScrimReport] = useState<ScrimMatchReport | null>(null);
+  // #19 — job hunt pós-demissão: lista de clubes interessados (null = modal
+  // ainda aberto / não iniciou) + recusas já recebidas (com motivo).
+  const [jobOffers, setJobOffers] = useState<JobOffer[] | null>(null);
+  const [jobRejections, setJobRejections] = useState<Record<string, string>>({});
+  const doScrimVs = (oppId: string) => {
+    const me = buildTeam(save);
+    if (!me) { toast.error(ct('Elenco incompleto (precisa 5 titulares)')); return; }
+    const oppSeason = currentEra.find((t) => t.id === oppId);
+    if (!oppSeason) return;
     const starterIds = save.squad.map((s) => s.playerId);
     const stateArg = {
       split: save.split,
@@ -2651,14 +2667,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       toast.error(check.reason ?? 'Scrim indisponível');
       return;
     }
-    const result = runScrim(stateArg, rngRef.current);
+    const { report, patch } = runScrimVs(stateArg, me, teamSeasonToTTeam(oppSeason), rngRef.current);
     update({
-      budget: save.budget + result.patch.budgetDelta,
-      scrimsThisSplit: result.patch.scrimsThisSplitNext,
-      pairChem: result.patch.pairChem,
-      fatigue: result.patch.fatigue,
+      budget: save.budget + patch.budgetDelta,
+      scrimsThisSplit: patch.scrimsThisSplitNext,
+      pairChem: patch.pairChem,
+      fatigue: patch.fatigue,
     });
-    toast.success(`Scrim vs ${result.opponentName}: ${result.outcome}`);
+    setScrimReport(report);
+    (report.won ? toast.success : toast.error)(
+      `Scrim vs ${report.oppTag}: ${report.won ? 'W' : 'L'} ${report.myScore}-${report.oppScore} · ${report.mapLabel}`,
+    );
   };
 
   // T3.5: prompt automático quando uma oferta de patrocínio é gerada na virada
@@ -2918,7 +2937,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const st = newsroom.storyHotForm(hotId, p.nick, avg, current.org?.name ?? ct('sua org'));
         items.push({ id: hotId, split: current.split, icon: '🔥', tone: 'good', cat: 'result', title: st.title, body: st.body });
       }
-      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, recentRatings, ...pushNews(current, items) };
+      // #8: a diretoria reage a CADA série (não só ao objetivo do split). O
+      // objetivo segue sendo o maior peso (±12/-18); aqui é o pulso do dia-a-dia.
+      const bd = applyBoardDelta(
+        current.board,
+        current.boardLog,
+        current.split,
+        userWon ? APPROVAL_DELTAS.matchWin : APPROVAL_DELTAS.matchLoss,
+        `${userWon ? ct('Vitória') : ct('Derrota')} ${series.mapScore[userIdx]}-${series.mapScore[oppI]} vs ${opponent.tag} · ${shortLabel}`,
+      );
+      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, ...pushNews(current, items) };
       persist(next);
       return next;
     });
@@ -3370,6 +3398,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       playbook: s.playbook, playbookFam: Math.max(0, Math.min(1, (s.playbookXp ?? 0) / 100)),
     };
   };
+
+  // #6: sparrings elegíveis pro scrim (banda de força + disponibilidade
+  // determinística por split/uso). Depende de buildTeam — fica declarado aqui.
+  const scrimOpponents = useMemo(() => {
+    const me = buildTeam(save);
+    if (!me) return [];
+    return listScrimOpponents(me.strength, currentEra.map(teamSeasonToTTeam), save.split, save.scrimsThisSplit ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.squad, save.scrimsThisSplit, save.split, currentEra]);
 
   const startSplit = (s: CareerSave, circuit: (typeof circuits)[number]) => {
     const user = buildTeam(s);
@@ -4402,7 +4439,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           circuitTitles: orgAg.circuitTitles,
           majorTitles: orgAg.majorTitles,
           sponsorsLost: (save.sponsors ?? []).length,
-          reason: ct('Confiança da diretoria chegou ao fundo após resultados consecutivos abaixo do esperado.'),
+          // #8: demissão JUSTIFICADA — cita os últimos eventos negativos do log
+          // em vez do boilerplate genérico (fallback pra saves sem histórico).
+          reason: (() => {
+            const detail = boardFiredDetail(save.boardLog);
+            return detail
+              ? `${ct('A confiança da diretoria chegou ao fundo. Os últimos eventos pesaram contra você:')} ${detail}.`
+              : ct('Confiança da diretoria chegou ao fundo após resultados consecutivos abaixo do esperado.');
+          })(),
           quote: quotes[quoteIdx],
         },
         () => {
@@ -4413,6 +4457,120 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           setOrgChoice('select');
           setStage('found');
         },
+        // #19 — job hunt: a demissão vira arco de carreira, não game-over
+        () => {
+          setJobRejections({});
+          setJobOffers(listJobOffers(
+            currentEra.map((t) => ({ t, tier: teamTier(t) })),
+            save.org?.name ?? '',
+            save.tier ?? 3,
+            (save.coachStints ?? []) as Parameters<typeof listJobOffers>[3],
+            save.split,
+          ));
+        },
+      );
+    }
+    // #19 — tela de candidaturas (preserva história/coachStints; assumir um
+    // clube reusa a receita do takeover da fundação e volta pro estágio market).
+    if (jobOffers) {
+      const acceptJob = (offer: JobOffer) => {
+        const t = currentEra.find((x) => x.id === offer.teamId);
+        if (!t) return;
+        const tier = teamTier(t);
+        update({
+          org: { name: t.team, tag: t.tag, colors: t.colors, logo: t.logoUrl ?? logoForTeam(t) },
+          squad: t.players.slice(0, 5).map((p) => ({ playerId: p.id, fromId: t.id })),
+          coachFromId: t.id,
+          budget: takeoverBudget(tier),
+          tier,
+          takeoverId: t.id,
+          region: macroRegionPlurality(t.players.slice(0, 5).map((p) => p.country)),
+          board: 50,
+          boardLog: [],
+          objective: null,
+          lastObjective: null,
+          fired: false,
+          morale: {},
+          fatigue: {},
+          restingPlayers: [],
+          contracts: {},
+          pendingOffer: null,
+          pendingDeals: [],
+          renewals: [],
+          pendingSales: [],
+          rejectedOffers: [],
+          league: null,
+          circuit: null,
+          playoff: null,
+          majorT: null,
+          scenario: null,
+          sponsors: [],
+          sponsorUntil: {},
+        });
+        setJobOffers(null);
+        firedShownRef.current = false;
+        toast.success(`${ct('Contratado! Você agora comanda a')} ${t.team}.`);
+        setStage('market');
+      };
+      const tryApply = (offer: JobOffer) => {
+        if (applyForJob(offer, save.split)) { acceptJob(offer); return; }
+        setJobRejections((r) => ({ ...r, [offer.teamId]: rejectionReason(offer) }));
+      };
+      const allRejected = jobOffers.every((o) => jobRejections[o.teamId]);
+      return (
+        <div className="fade-in" style={{ maxWidth: 760, margin: '24px auto', padding: '0 16px' }}>
+          <DashCard title={ct('Procurando clube — sua carreira continua')}>
+            <p style={{ margin: '0 0 12px', color: 'var(--em-muted)', fontSize: '0.84rem' }}>
+              {ct('Seu histórico e suas passagens ficam com você. Cada clube mostra a chance HONESTA de te contratar — recusou, recusou (sem reroll). Recomeçar num tier abaixo faz parte da volta por cima.')}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {jobOffers.map((o) => {
+                const rejected = jobRejections[o.teamId];
+                return (
+                  <div key={o.teamId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', borderRadius: 6, opacity: rejected ? 0.6 : 1 }}>
+                    <TeamBadge tag={o.tag} colors={o.colors} size={30} logoUrl={o.logoUrl} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <b>{o.name}</b>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--em-muted)' }}>
+                        {ct(TIER_NAMES[o.tier])}{o.dream ? ` · ${ct('aposta alta')}` : ''}
+                        {rejected ? ` — ${ct('Recusou:')} ${rejected}` : ''}
+                      </div>
+                    </div>
+                    {!rejected && (
+                      <>
+                        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: o.chance >= 0.55 ? 'var(--em-green)' : o.chance >= 0.3 ? 'var(--em-gold)' : 'var(--em-red)' }}>
+                          {Math.round(o.chance * 100)}%
+                        </b>
+                        <Button variant="primary" size="sm" onClick={() => tryApply(o)}>{ct('Candidatar-se')}</Button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {allRejected && (
+              <p style={{ margin: '12px 0 0', color: 'var(--em-red)', fontSize: '0.84rem' }}>
+                {ct('Todas as portas se fecharam nesta janela. Resta recomeçar do zero.')}
+              </p>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  wipeActiveSlot();
+                  const fresh = emptySave();
+                  persist(fresh);
+                  setSave(fresh);
+                  setJobOffers(null);
+                  setOrgChoice('select');
+                  setStage('found');
+                }}
+              >
+                {ct('Encerrar carreira (recomeçar do zero)')}
+              </Button>
+            </div>
+          </DashCard>
+        </div>
       );
     }
     // Render mínimo enquanto o modal está aberto — visual neutro pra não
@@ -4795,7 +4953,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 // ganhar o Major dá um respeito extra
                 const majObj = save.objective;
                 const majBonus = majObj ? majObj.bonus + (mr.champion ? 400_000 : 0) : 0;
-                const majBoard = Math.min(100, save.board + (mr.champion ? 18 : 12));
+                const majBd = applyBoardDelta(
+                  save.board, save.boardLog, save.split,
+                  mr.champion ? APPROVAL_DELTAS.majorChampion : APPROVAL_DELTAS.majorRun,
+                  mr.champion ? ct('CAMPEÃO do Major — a diretoria está em êxtase') : ct('Campanha no Major encheu os olhos da diretoria'),
+                );
+                const majBoard = majBd.board;
                 const renewals = dueRenewals(save, save.split + 1);
                 // evolui só quem FICOU (pós-fim de contrato): quem saiu não carrega
                 // a evolução/declínio acumulado pra uma futura recontratação
@@ -4906,6 +5069,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   ...majorWindowPatch,
                   pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
                   board: majBoard,
+                  boardLog: majBd.boardLog,
                   lastObjective: majObj ? { text: majObj.text, met: true, delta: majBoard - save.board } : null,
                   objective: null,
                   renewals,
@@ -5054,16 +5218,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       : obj.type === 'top4' ? finalPos <= 4
       : obj.type === 'promote' ? tierResult.tierChange === 'up'
       : tierResult.tierChange !== 'down'; // noRelegation
-    const boardDelta = obj ? (objMet ? 12 : -18) : 0;
+    const boardDelta = obj ? (objMet ? APPROVAL_DELTAS.objectiveMet : APPROVAL_DELTAS.objectiveMissed) : 0;
     // deriva leve rumo ao neutro (só quando há objetivo avaliado), espelhando a
     // reversão à média da moral: falhar ainda dói (-18), mas um técnico em apuros
     // consegue subir de volta com um acerto em vez de ficar grudado na demissão.
+    // A deriva não entra no log (#8) — é ruído de fundo, não um "evento".
     const drifted = obj ? save.board + (50 - save.board) * 0.1 : save.board;
-    const newBoard = Math.max(0, Math.min(100, drifted + boardDelta));
+    const boardObj = obj
+      ? applyBoardDelta(drifted, save.boardLog, save.split, boardDelta,
+          objMet ? `${ct('Objetivo cumprido:')} ${ct(obj.text)}` : `${ct('Objetivo falhou:')} ${ct(obj.text)}`)
+      : { board: Math.max(0, Math.min(100, drifted)), boardLog: save.boardLog ?? [] };
+    const newBoard = boardObj.board;
     const objBonus = obj && objMet ? obj.bonus : 0;
     const fired = !!obj && newBoard <= 12; // confiança no chão -> demitido
     const boardPatch = {
       board: newBoard,
+      boardLog: boardObj.boardLog,
       lastObjective: obj ? { text: obj.text, met: objMet, delta: boardDelta } : null,
       objective: null,
       fired,
@@ -5322,11 +5492,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
                   // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                   const { marketNews, ...windowPatch } = applyTransferWindow(save);
+                  // #8: fechar o split no vermelho (receitas não cobriram a folha)
+                  // também corrói a confiança — a diretoria vê o caixa, não só a tabela.
+                  const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
+                  const boardCash = rawBudget < 0
+                    ? applyBoardDelta(boardPatch.board, boardPatch.boardLog, save.split, APPROVAL_DELTAS.splitCashCrunch, ct('Caixa zerado: receitas do split não cobriram a folha'))
+                    : null;
                   const next = {
                     ...save,
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
-                    budget: Math.max(0, save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus),
+                    budget: Math.max(0, rawBudget),
                     vrs: applyCareerVrsDecay(save.vrs, vrsGain), // VRS rolante (decai e soma o ganho do evento)
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
@@ -5351,6 +5527,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     ...evo,
                     ...windowPatch,
                     ...boardPatch,
+                    ...(boardCash ? { board: boardCash.board, boardLog: boardCash.boardLog } : {}),
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
                     pendingOffer: offer,
@@ -6200,7 +6377,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           findSigning={findSigning}
           update={update as unknown as Parameters<typeof SquadTab>[0]['update']}
           openPlayerProfile={openPlayerProfile}
-          doScrim={doScrim}
+          doScrimVs={doScrimVs}
+          scrimOpponents={scrimOpponents}
+          scrimReport={scrimReport}
           hireScout={hireScout}
           fireScout={fireScout}
           seasonStats={seasonStats}
@@ -7773,7 +7952,7 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
             {ct('Assuma uma organização')}
           </h2>
           <p style={{ margin: '6px 0 0', fontSize: '0.82rem', color: 'var(--em-muted)', maxWidth: 620, lineHeight: 1.45 }}>
-            {ct('Qualquer time do dataset CS2 (86+) tá disponível. Tiers maiores ganham menos caixa pra balancear — elite tem folha pesada, tier 3 tem caixa folgado pra reconstruir.')}
+            {ct('Qualquer time do dataset CS2 (120+) tá disponível. Tiers maiores ganham menos caixa pra balancear — elite tem folha pesada, tier 3 tem caixa folgado pra reconstruir.')}
           </p>
         </div>
         <button

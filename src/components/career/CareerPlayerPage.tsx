@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Player } from '../../types';
 import { ct } from '../../state/career-i18n';
 import type { FormStatus } from '../../engine/career/form';
+import { legendStatus } from '../../engine/legend';
+import { rollProSetup } from '../../engine/proSetup';
 import { playerOrgId } from '../../state/career-player-route';
 import { FutCard } from '../FutCard';
 import { Flag, PlayerAvatar, TeamBadge } from '../ui';
@@ -281,6 +283,10 @@ export function CareerPlayerPage({
 
   const dims = useMemo(() => profileDimensions(player), [player]);
   const groups = useMemo(() => attrGroups(player), [player]);
+  // #49: aura de lenda geracional por pico de carreira (null = jogador comum)
+  const legend = legendStatus(ovr, peakOvr);
+  // #52: ficha técnica determinística por nick (flavor da cena)
+  const setup = useMemo(() => rollProSetup(player.nick), [player.nick]);
   const roleTag = (player.role || 'PRO').toUpperCase().slice(0, 4);
   const role2Tag = player.role2 ? player.role2.toUpperCase().slice(0, 4) : null;
 
@@ -367,6 +373,11 @@ export function CareerPlayerPage({
                 <Flag cc={player.country} />
                 <span className={`pp-role ${player.role}`}>{roleTag}</span>
                 {role2Tag && <span className="pp-role alt">{role2Tag}</span>}
+                {legend && (
+                  <span className={`pp-legend t-${legend.tier}${legend.legacy ? ' legacy' : ''}`} title={legend.desc}>
+                    {ct(legend.label)}
+                  </span>
+                )}
               </div>
               <p className="pp-realname">{player.name}</p>
               <p className="pp-meta">
@@ -587,6 +598,19 @@ export function CareerPlayerPage({
                 {focused && <> · <b>{ct('Foco individual ativo')}</b></>}
                 {reducedLoad && <> · <b>{ct('Carga reduzida')}</b></>}
               </p>
+            </Panel>
+            {/* #52 — ficha técnica do pro (determinística por nick, só flavor) */}
+            <Panel title="Setup de jogo" icon="pin">
+              <div className="pp-kv-grid">
+                <div><span>eDPI</span><b>{setup.edpi} ({setup.dpi} × {setup.sens})</b></div>
+                <div><span>{ct('Polling')}</span><b>{setup.hz} Hz</b></div>
+                <div><span>{ct('Resolução')}</span><b>{setup.resolution}</b></div>
+                <div><span>{ct('Crosshair')}</span><b>{setup.crosshair}</b></div>
+                <div><span>{ct('Mouse')}</span><b>{setup.mouse}</b></div>
+                <div><span>{ct('Monitor')}</span><b>{setup.monitor}</b></div>
+                <div><span>{ct('Teclado')}</span><b>{setup.keyboard}</b></div>
+                <div><span>{ct('Headset')}</span><b>{setup.headset}</b></div>
+              </div>
             </Panel>
           </div>
         )}

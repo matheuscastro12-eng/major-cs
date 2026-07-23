@@ -1,6 +1,7 @@
 // Aba History — T1.4. Saiu de inline no CareerScreen (hubTab === 'history').
 
 import { DashCard } from '../../components/ds';
+import { CareerTimeline } from '../../components/career/CareerTimeline';
 import { PLACE_SHORT, type SplitRecord } from '../../components/CareerScreen';
 import { ct } from '../../state/career-i18n';
 import { formatMoney } from '../../engine/ratings';
@@ -30,6 +31,8 @@ export function HistoryTab({ save, org }: Props) {
         <div className="cstat"><b>{org.bestPlacement}</b><span>{ct('Melhor campanha')}</span></div>
       </div>
       <div className="muted small section-label">{ct('Linha do tempo')}</div>
+      {/* #51: narrativa visual por temporada (chips de marco); tabela detalhada abaixo */}
+      <CareerTimeline history={save.history} />
       {save.history.length === 0 ? (
         <p className="muted small">{ct('Sua organização ainda não encerrou nenhum split. A história começa agora.')}</p>
       ) : (

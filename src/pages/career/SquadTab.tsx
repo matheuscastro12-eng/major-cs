@@ -12,6 +12,7 @@ import { openCompare } from '../../components/CompareHost';
 import { ChemistryMatrix } from '../../components/career/ChemistryMatrix';
 import { CoachStintsCard } from '../../components/career/CoachStintsCard';
 import { ScrimCard } from '../../components/career/ScrimCard';
+import type { ScrimMatchReport, ScrimOpponentOption } from '../../engine/scrim';
 import { ScoutingCard } from '../../components/career/ScoutingCard';
 import {
   ROLE_OPTS,
@@ -73,7 +74,9 @@ interface Props {
   findSigning: (s: Signing) => { player: Player } | null;
   update: (patch: Record<string, unknown>) => void;
   openPlayerProfile: (p: Player) => void;
-  doScrim: () => void;
+  doScrimVs: (oppId: string) => void;
+  scrimOpponents: ScrimOpponentOption[];
+  scrimReport: ScrimMatchReport | null;
   hireScout: (id: string) => void;
   fireScout: () => void;
   seasonStats: SeasonStat[];
@@ -85,7 +88,9 @@ export function SquadTab({
   findSigning,
   update,
   openPlayerProfile,
-  doScrim,
+  doScrimVs,
+  scrimOpponents,
+  scrimReport,
   hireScout,
   fireScout,
   seasonStats,
@@ -172,11 +177,13 @@ export function SquadTab({
         coachNick={activeCoachStint((save.coachStints ?? []) as any)?.coachNick}
       />
 
-      {/* T3.8: scrim semanal */}
+      {/* T3.8 → #6: scrim contra adversário real (escolha o sparring) */}
       <ScrimCard
         scrimsThisSplit={save.scrimsThisSplit ?? 0}
         budget={save.budget}
-        onScrim={doScrim}
+        opponents={scrimOpponents}
+        report={scrimReport}
+        onScrim={doScrimVs}
       />
 
       {/* T3.12: scouting */}

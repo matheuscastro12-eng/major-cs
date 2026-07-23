@@ -55,8 +55,9 @@ export function AnalystReportCard({ report, oppName, oppTag }: Props) {
       </div>
 
       <div style={mapsRowStyle}>
-        <MapChip label="Ban prioritário" maps={report.recommendedBans.map((m) => MAP_LABELS[m] ?? m)} tone="danger" />
-        <MapChip label="Nossa pick" maps={[MAP_LABELS[report.recommendedPick] ?? report.recommendedPick]} tone="success" />
+        {/* #25 — anexa o W-L REAL da sua run a cada recomendação (quando há amostra) */}
+        <MapChip label="Ban prioritário" maps={report.recommendedBans.map((m) => withRecord(m, report))} tone="danger" />
+        <MapChip label="Nossa pick" maps={[withRecord(report.recommendedPick, report)]} tone="success" />
       </div>
 
       {report.missingRoles.length > 0 && (
@@ -69,6 +70,13 @@ export function AnalystReportCard({ report, oppName, oppTag }: Props) {
       )}
     </section>
   );
+}
+
+// "Nuke (você: 1-4)" quando a run tem histórico naquele mapa; só o nome senão.
+function withRecord(m: string, report: AnalystReport): string {
+  const label = MAP_LABELS[m] ?? m;
+  const rec = report.realRecord?.[m as keyof NonNullable<AnalystReport['realRecord']>];
+  return rec ? `${label} (você: ${rec.w}-${rec.l})` : label;
 }
 
 function PlayerChip({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: 'warning' | 'positive' }) {

@@ -13,6 +13,7 @@
 import type { MapId, Role, TPlayer, TTeam } from '../types';
 import { MAP_LABELS, MAP_POOL } from '../types';
 import { hashStr } from '../state/hash';
+import { VETO_MIN_GAMES } from './teamMapStats';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
@@ -36,6 +37,9 @@ export interface AnalystReport {
   narrative: string;
   /** Threat-level geral do adversário (1-5). 1 = limalheza, 5 = elite. */
   threatLevel: 1 | 2 | 3 | 4 | 5;
+  /** #25 — W-L REAL da sua run por mapa (só mapas já jogados). A UI mostra
+   *  "você: 3-1 aqui" ao lado das recomendações. */
+  realRecord?: Partial<Record<MapId, { w: number; l: number }>>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,8 +52,21 @@ export interface AnalystReport {
  * `noiseSeed` é opcional pra que o mesmo confronto sempre gere o mesmo
  * relatório (estabilidade na UI — não muda a cada re-render).
  */
-export function generateAnalystReport(opp: TTeam, me?: TTeam): AnalystReport {
-  // 1) Mapas fortes/fracos do adversário via mapPrefs
+export function generateAnalystReport(
+  opp: TTeam,
+  me?: TTeam,
+  myMapRecord?: Record<string, { w: number; l: number }>,
+): AnalystReport {
+  // 1) Mapas fortes/fracos do adversário via mapPrefs + o SEU histórico real
+  // da run (#25): com amostra mínima, o win-rate de verdade pesa mais que a
+  // preferência teórica — o analista deixa de ser "cego" ao que você vem
+  // ganhando/perdendo de fato.
+  const wrEdge = (m: MapId): number => {
+    const rec = myMapRecord?.[m];
+    const g = rec ? rec.w + rec.l : 0;
+    if (!rec || g < VETO_MIN_GAMES) return 0;
+    return ((rec.w / g) * 100 - 50) / 25; // ±2 no score em 100%/0% de WR
+  };
   const oppPrefs = MAP_POOL.map((m) => ({
     m,
     pref: opp.mapPrefs?.[m] ?? 0,
@@ -59,19 +76,26 @@ export function generateAnalystReport(opp: TTeam, me?: TTeam): AnalystReport {
   const strongMap = sortedByOppPref[0].m;
   const weakMap = sortedByOppPref[sortedByOppPref.length - 1].m;
 
-  // Bans prioritários: mapas em que ELE é mais forte E nós somos mais fracos.
-  // Score = oppPref - myPref. Maior delta = mais perigoso pra gente.
+  // Bans prioritários: mapas em que ELE é mais forte E nós somos mais fracos —
+  // e onde a SUA run confirma a fraqueza (win-rate real baixo sobe a prioridade).
   const banScored = oppPrefs
-    .map((x) => ({ m: x.m, score: x.pref - x.myPref }))
+    .map((x) => ({ m: x.m, score: x.pref - x.myPref - wrEdge(x.m) }))
     .sort((a, b) => b.score - a.score);
   const recommendedBans = banScored.slice(0, 2).map((x) => x.m);
 
-  // Pick recomendado: mapa em que NÓS somos mais fortes (delta inverso),
-  // mas excluindo o que ELE já preferiria (não daria de bandeja).
+  // Pick recomendado: mapa em que NÓS somos mais fortes (delta inverso +
+  // win-rate real), mas excluindo o que ELE já preferiria (não daria de bandeja).
   const pickScored = oppPrefs
-    .map((x) => ({ m: x.m, score: x.myPref - x.pref }))
+    .map((x) => ({ m: x.m, score: x.myPref - x.pref + wrEdge(x.m) }))
     .sort((a, b) => b.score - a.score);
   const recommendedPick = pickScored[0]?.m ?? strongMap;
+
+  // W-L real por mapa (só jogados) pra UI anexar às recomendações
+  const realRecord: AnalystReport['realRecord'] = {};
+  for (const m of MAP_POOL) {
+    const rec = myMapRecord?.[m];
+    if (rec && rec.w + rec.l > 0) realRecord[m] = { w: rec.w, l: rec.l };
+  }
 
   // 2) Jogador estrela e elo fraco
   const players: TPlayer[] = opp.players ?? [];
@@ -124,6 +148,7 @@ export function generateAnalystReport(opp: TTeam, me?: TTeam): AnalystReport {
     missingRoles,
     narrative,
     threatLevel,
+    realRecord,
   };
 }
 
