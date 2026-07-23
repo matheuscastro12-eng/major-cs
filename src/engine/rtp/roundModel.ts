@@ -107,23 +107,27 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
     { kind: 'mapPoint', moment: mapPoint, mapIndex: m.length > 2 ? 2 : 1, round: 24 + (hashStr(`r6:${matchSeed}`) % 4) },
   ];
 
-  // MOMENTOS-CHAVE com execução (minigame): pistol, clutch e map point sempre;
-  // no meio da série, OU o round de gun/call OU o retake (o hash alterna — nem
-  // toda partida tem o mesmo roteiro). ~4 execuções por série, cada uma curta.
+  // MOMENTOS-CHAVE com execução (minigame): pistol, abertura, clutch e map
+  // point sempre; no meio da série, OU o round de gun/call OU o round de bomba
+  // (o hash alterna — nem toda partida tem o mesmo roteiro). ~5 execuções por
+  // série, cada uma curta e CASADA com a situação (retake = utilitária,
+  // pós-plant = segurar o ângulo, entry = prefire).
   const midSpot: BeatKind = hashStr(`spot:${matchSeed}`) % 2 === 0 ? midKind : bombKind;
   const SPOT_GAME: Partial<Record<BeatKind, MiniGameId>> = {
-    pistol: 'reaction',   // reflexo decide o pistol
-    duel: 'flick',        // duelo de mira
-    igl: 'memory',        // a call certa no mid-round
-    retake: 'spray',      // transferência de spray no retake
-    clutch: 'flick',      // o ÚLTIMO duelo do 1vX (a sala só dispara no closing)
-    mapPoint: 'tempo',    // segurar o nervo no match point
-    timeout: 'memory',    // sair do pause com a leitura certa
-    postPlant: 'tempo',   // segurar o nervo no pós-plant 1vX
-    // forcedEco/antiEco/saveCall/lastHalf: decisões puras, sem execução
+    pistol: 'reaction',     // reflexo decide o pistol
+    entry: 'prefire',       // abrir o site = prefire nos ângulos
+    duel: 'flick',          // duelo de mira
+    igl: 'memory',          // a call certa no mid-round
+    retake: 'nade',         // a utilitária certa abre o retake
+    clutch: 'flick',        // o ÚLTIMO duelo do 1vX (a sala só dispara no closing)
+    mapPoint: 'tempo',      // segurar o nervo no match point
+    timeout: 'memory',      // sair do pause com a leitura certa
+    postPlant: 'holdangle', // segurar o ângulo no pós-plant 1vX
+    lastHalf: 'prefire',    // o pick de fim de half sai no prefire
+    // forcedEco/antiEco/saveCall: decisões puras, sem execução
   };
   const spotFor = (k: BeatKind): MiniGameId | undefined => {
-    if (k === 'pistol' || k === 'clutch' || k === 'mapPoint') return SPOT_GAME[k];
+    if (k === 'pistol' || k === 'clutch' || k === 'mapPoint' || k === 'entry' || k === 'lastHalf') return SPOT_GAME[k];
     if (k === midSpot) return SPOT_GAME[k];
     return undefined;
   };

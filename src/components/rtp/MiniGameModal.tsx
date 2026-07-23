@@ -1,21 +1,9 @@
-import { useState, useEffect, useRef, type ComponentType } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ct } from '../../state/career-i18n';
 import { RtpIcon } from './RtpIcon';
-import { miniSeed, AUTO_PERF, type MiniGameDef, type MiniGameId, type MiniGameProps } from '../../engine/rtp/minigames';
-import { CrosshairFlick } from './minigames/CrosshairFlick';
-import { ReactionGate } from './minigames/ReactionGate';
-import { SprayTracer } from './minigames/SprayTracer';
-import { CalloutMemory } from './minigames/CalloutMemory';
-import { TempoLock } from './minigames/TempoLock';
+import { miniSeed, AUTO_PERF, type MiniGameDef } from '../../engine/rtp/minigames';
+import { GAME_COMPONENTS } from './minigames';
 import type { RoadToProSave } from '../../engine/rtp/types';
-
-const GAME_COMPONENTS: Record<MiniGameId, ComponentType<MiniGameProps>> = {
-  flick: CrosshairFlick,
-  reaction: ReactionGate,
-  spray: SprayTracer,
-  memory: CalloutMemory,
-  tempo: TempoLock,
-};
 
 type Phase = 'intro' | 'play' | 'result';
 

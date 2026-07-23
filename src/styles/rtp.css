@@ -1449,9 +1449,44 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp-mini-tempo-zone { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--rtp-signal) 26%, transparent); border-left: 2px solid var(--rtp-signal); border-right: 2px solid var(--rtp-signal); }
 .rtp-mini-tempo-needle { position: absolute; top: -6px; bottom: -6px; width: 4px; margin-left: -2px; background: var(--rtp-live); box-shadow: 0 0 10px var(--rtp-live-glow); border-radius: 2px; }
 
+/* PrefireRun */
+.rtp-mini-prefire { position: relative; border-radius: 10px; background: var(--rtp-well); border: 1px solid var(--rtp-line); overflow: hidden; cursor: crosshair; }
+.rtp-prefire-head { position: absolute; width: 26px; height: 26px; pointer-events: none; }
+.rtp-prefire-head span { display: block; width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--rtp-live); background: color-mix(in srgb, var(--rtp-live) 26%, transparent); }
+.rtp-prefire-head.hit span { border-color: var(--rtp-win); background: color-mix(in srgb, var(--rtp-win) 34%, transparent); transform: scale(.8); transition: transform .15s, background .15s, border-color .15s; }
+.rtp-prefire-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--rtp-signal); box-shadow: 0 0 10px var(--rtp-signal-glow); pointer-events: none; }
+
+/* NadeArc */
+.rtp-mini-nade { position: relative; border-radius: 10px; background: var(--rtp-well); border: 1px solid var(--rtp-line); overflow: hidden; cursor: grab; }
+.rtp-mini-nade:active { cursor: grabbing; }
+.rtp-nade-target { position: absolute; aspect-ratio: 1; border-radius: 50%; border: 2px dashed color-mix(in srgb, var(--rtp-signal) 60%, transparent); display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.rtp-nade-target span { width: 42%; height: 42%; border-radius: 50%; border: 2px solid var(--rtp-signal); background: color-mix(in srgb, var(--rtp-signal) 18%, transparent); }
+.rtp-nade-origin { position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--rtp-ink-dim); background: var(--rtp-deck-2); pointer-events: none; }
+.rtp-nade-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.rtp-nade-band { stroke: var(--rtp-live); stroke-width: 2.5; stroke-dasharray: 4 4; }
+.rtp-nade-dot { position: absolute; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: var(--rtp-signal); pointer-events: none; }
+.rtp-nade-ball { position: absolute; width: 12px; height: 12px; margin: -6px; border-radius: 50%; background: var(--rtp-ink); box-shadow: 0 0 8px var(--rtp-signal-glow); pointer-events: none; }
+.rtp-nade-ball.land-good { background: var(--rtp-win); animation: rtp-pop .3s var(--rtp-ease); }
+.rtp-nade-ball.land-bad { background: var(--rtp-loss); animation: rtp-pop .3s var(--rtp-ease); }
+.rtp-nade-callout { position: absolute; transform: translateX(-50%); font-family: var(--rtp-display); font-weight: 800; font-size: .82rem; letter-spacing: 1px; color: var(--rtp-ink); text-shadow: 0 1px 6px rgb(0 0 0 / .6); pointer-events: none; animation: rtp-pop .25s var(--rtp-ease); }
+
+/* AngleHold */
+.rtp-mini-hold { position: relative; border-radius: 10px; background: var(--rtp-well); border: 1px solid var(--rtp-line); overflow: hidden; cursor: crosshair; }
+.rtp-hold-doors { position: absolute; inset: 16% 6% 22%; display: flex; gap: 8%; align-items: stretch; }
+.rtp-hold-door { position: relative; flex: 1; border: none; padding: 0; background: none; cursor: crosshair; display: flex; align-items: flex-end; justify-content: center; }
+.rtp-hold-arch { position: absolute; inset: 0; border-radius: 46% 46% 6px 6px; background: var(--rtp-deck-2); border: 1px solid var(--rtp-line); transition: border-color .1s, box-shadow .1s; }
+.rtp-hold-door.peek-enemy .rtp-hold-arch { border-color: var(--rtp-live); box-shadow: inset 0 0 20px color-mix(in srgb, var(--rtp-live) 30%, transparent); }
+.rtp-hold-door.peek-ally .rtp-hold-arch { border-color: var(--rtp-win); box-shadow: inset 0 0 20px color-mix(in srgb, var(--rtp-win) 26%, transparent); }
+.rtp-hold-fig { position: relative; width: 46%; height: 58%; border-radius: 40% 40% 4px 4px; margin-bottom: 4%; display: flex; align-items: center; justify-content: center; font-family: var(--rtp-mono); font-size: .5rem; letter-spacing: .5px; animation: rtp-pop .1s var(--rtp-ease); pointer-events: none; }
+.rtp-hold-fig.f-enemy { background: color-mix(in srgb, var(--rtp-live) 72%, #000); border: 1px solid var(--rtp-live); }
+.rtp-hold-fig.f-ally { background: color-mix(in srgb, var(--rtp-win) 55%, #000); border: 1px solid var(--rtp-win); color: #dff7ea; }
+.rtp-hold-floor { position: absolute; left: 0; right: 0; bottom: 0; height: 20%; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--rtp-deck-2) 80%, transparent)); pointer-events: none; }
+
 @media (pointer: coarse) {
   .rtp-mini-target { transform: scale(1.25); }
   .rtp-mini-cell { min-height: 84px; }
+  .rtp-prefire-head { transform: scale(1.3); }
+  .rtp-prefire-head.hit span { transform: scale(.85); }
 }
 @media (prefers-reduced-motion: reduce) {
   .rtp-mini-countnum, .rtp-mini-target { animation: none; }

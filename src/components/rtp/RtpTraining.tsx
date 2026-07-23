@@ -44,7 +44,9 @@ export function RtpTraining({ save, onUpdate }: {
   };
 
   const doAction = (kind: ActionKind) => {
-    const g = gameForAction(kind);
+    // variant = tick do rng: o pool de minijogos daquela ação rotaciona por
+    // semana (mira ↔ prefire, memória ↔ segurar o ângulo) — sem repetir sempre.
+    const g = gameForAction(kind, save.rng.tick);
     if (g) { setGame({ def: g, kind }); return; }   // ação com minijogo → abre o modal
     commitAction(kind, 1.0);                          // instantânea (rest/social/stream)
   };

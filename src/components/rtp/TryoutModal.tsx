@@ -1,22 +1,14 @@
 // RTP — PENEIRA de entrada. 3 estações de minigame (mira, reflexo, leitura); a nota
 // média define o tier do time que te contrata. Reusa os componentes de minigame já
 // existentes (contrato MiniGameProps) e a linguagem visual rtp-mini-*.
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { RtpIcon } from './RtpIcon';
-import { MINIGAMES, type MiniGameId, type MiniGameProps } from '../../engine/rtp/minigames';
-import { CrosshairFlick } from './minigames/CrosshairFlick';
-import { ReactionGate } from './minigames/ReactionGate';
-import { CalloutMemory } from './minigames/CalloutMemory';
+import { MINIGAMES } from '../../engine/rtp/minigames';
+import { GAME_COMPONENTS } from './minigames';
 import { TRYOUT_STATIONS, tryoutScore, tryoutTier, tryoutStrong, TIER_FLAVOR } from '../../engine/rtp/tryout';
 import { startTeamForTier } from '../../engine/rtp/world';
 import type { Tier } from '../../engine/rtp/types';
-
-const GAME_COMPONENTS: Partial<Record<MiniGameId, ComponentType<MiniGameProps>>> = {
-  flick: CrosshairFlick,
-  reaction: ReactionGate,
-  memory: CalloutMemory,
-};
 
 const reducedMotion = () =>
   typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;

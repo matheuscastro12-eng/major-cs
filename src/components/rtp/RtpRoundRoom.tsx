@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, type ComponentType } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { makeRng } from '../../engine/rng';
 import type { MapId } from '../../types';
 import { hashStr } from '../../state/hash';
@@ -11,12 +11,8 @@ import {
   resolveMapFromPlay, mapPlayOf,
   type BeatSpec, type FeedRow, type LiveScore, type Interlude,
 } from '../../engine/rtp/roundModel';
-import { MINIGAMES, type MiniGameId, type MiniGameProps } from '../../engine/rtp/minigames';
-import { CrosshairFlick } from './minigames/CrosshairFlick';
-import { ReactionGate } from './minigames/ReactionGate';
-import { SprayTracer } from './minigames/SprayTracer';
-import { CalloutMemory } from './minigames/CalloutMemory';
-import { TempoLock } from './minigames/TempoLock';
+import { MINIGAMES } from '../../engine/rtp/minigames';
+import { GAME_COMPONENTS } from './minigames';
 import type { MatchPrep } from '../../engine/rtp/matchSim';
 import { matchAtmosphere, crowdBeatLine, interludeAmbientLine, pressureKicker } from '../../engine/rtp/atmosphere';
 import { MAP_LABELS } from '../../types';
@@ -27,9 +23,6 @@ import { RtpIcon } from './RtpIcon';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-const GAME_COMPONENTS: Record<MiniGameId, ComponentType<MiniGameProps>> = {
-  flick: CrosshairFlick, reaction: ReactionGate, spray: SprayTracer, memory: CalloutMemory, tempo: TempoLock,
-};
 // perf → pontos de atributo EFETIVO. 0.55 = neutro (o "instinto"); execução
 // perfeita ≈ +2.7 attr (~+8% de chance), o piso do scoreToPerf ≈ −0.9 (~−3%).
 const EXEC_NEUTRAL = 0.55;
