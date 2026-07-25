@@ -37,7 +37,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { track, trackPaywallView } from '../../state/track';
+import { setCheckoutSrc, track, trackPaywallView } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
@@ -298,7 +298,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
-export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void }) {
+export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
   const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
@@ -2045,10 +2045,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
                 <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--ut-ink)', fontWeight: 800 }}>
                   R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}
                 </p>
-                {/* sem isto a trava era um beco sem saída: dizia o preço mas não ONDE ativar */}
-                <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
-                  {ct('Pra ativar: volte à tela inicial do Road to Major e entre na sua conta vitalícia — esta seção destrava na hora.')}
-                </p>
+                {/* funil: antes esta trava era um beco sem saída — dizia o preço mas
+                    exigia voltar pra tela inicial e achar o botão sozinho (mkt-lock
+                    tinha 0% de checkout aberto nos últimos 28 dias). Botão direto,
+                    igual às outras travas do jogo. */}
+                <button
+                  type="button"
+                  onClick={() => { setCheckoutSrc('mkt-lock'); (guest ? onCreateAccount : onUpgrade)?.(); }}
+                  style={{ marginTop: 4, padding: '10px 20px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit' }}
+                >
+                  {ct('Ativar conta vitalícia')}
+                </button>
               </div>
             ) : (
               <>
