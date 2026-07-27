@@ -335,6 +335,107 @@ function beatHeadlines(save: RoadToProSave, ctx: BeatCtx): MediaState | undefine
   return media;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FASES PURAS do fechamento de etapa — seams internos do concludeCircuitRound.
+// Cada fase lê o save e devolve DADO (nada de mutação): dá pra testar demissão,
+// prêmio, promoção e empréstimo isolados, sem montar um campeonato inteiro.
+
+// Resultado da etapa fechada: nome/troféu, prêmio individual (MVP/EVP pelo
+// rating médio + colocação + força do field) e o registro da linha do tempo.
+export interface EventOutcome {
+  place: number;
+  finishedName: string;
+  wonEvent: boolean;
+  eventTrophy: string | null;
+  seasonEvent: number;
+  awardKind: ReturnType<typeof deriveEventAward>;
+  eventRating: number;
+  accolade: Accolade | null;
+  timelineEntry: NonNullable<CareerLog['timeline']>[number];
+}
+
+export function resolveEventOutcome(save: RoadToProSave, place: number): EventOutcome {
+  const finishedName = save.world.league?.name ?? TIER_NAME[save.team.tier];
+  const wonEvent = place === 1;
+  // A etapa da temporada vive no WORLD (não no circuito) — sobrevive a transferências:
+  // o ano fecha na última etapa, não importa por quantos times você passou.
+  const seasonEvent = save.world.seasonEvent ?? (save.world.league?.event ?? 1);
+  const eventSeries = save.world.eventSeries ?? 0;
+  const avgEventRating = eventSeries > 0 ? (save.world.eventRatingSum ?? 0) / eventSeries : 1.0;
+  const finishedTeams = (save.world.league?.gsl as GslLeague | undefined)?.teams ?? [];
+  const userStrength = finishedTeams.find((t) => t.id === 'user')?.strength ?? 0;
+  const strongerCount = finishedTeams.filter((t) => t.id !== 'user' && t.strength > userStrength).length;
+  const awardKind = deriveEventAward(place, avgEventRating, strongerCount);
+  const eventRating = Math.round(avgEventRating * 100) / 100;
+  return {
+    place, finishedName, wonEvent,
+    eventTrophy: wonEvent ? finishedName : null,
+    seasonEvent, awardKind, eventRating,
+    accolade: awardKind
+      ? makeAccolade(awardKind, finishedName, save.world.season, avgEventRating, save.team.tier, save.rng.tick)
+      : null,
+    timelineEntry: {
+      season: save.world.season, event: seasonEvent, eventName: finishedName, tier: save.team.tier,
+      teamTag: save.team.tag, place, rating: eventRating, award: awardKind ?? undefined,
+    },
+  };
+}
+
+// Histórico pós-etapa: troféu (se campeão) + prêmio + linha do tempo + DINASTIA
+// (série de títulos de elite; no fim do ano, avaliação da temporada invicta).
+export function historyAfterEvent(save: RoadToProSave, out: EventOutcome, seasonEnd: boolean): CareerLog {
+  const h = out.eventTrophy ? { ...save.history, trophies: [...save.history.trophies, out.eventTrophy] } : save.history;
+  return {
+    ...h,
+    accolades: out.accolade ? [...(h.accolades ?? []), out.accolade] : (h.accolades ?? []),
+    timeline: [...(h.timeline ?? []), out.timelineEntry],
+    records: recordsAtEventEnd(h.records ?? defaultRecords(), { won: out.wonEvent, elite: save.team.tier === 'elite', seasonEnd }),
+  };
+}
+
+// META DA DIRETORIA: avalia o campeonato fechado e mexe na confiança (emprego).
+// DEMISSÃO: meta falhada + confiança no fundo do poço = cortado. Não durante
+// empréstimo (quem manda é o clube-mãe). O aviso (evento hot-seat) já veio.
+export interface BoardVerdictPhase {
+  verdict: ReturnType<typeof evaluateObjective> | null;
+  boardConfidence: number;
+  sackable: boolean;
+}
+export function evaluateBoard(save: RoadToProSave, place: number): BoardVerdictPhase {
+  const obj = save.world.objective;
+  const verdict = obj ? evaluateObjective(obj, place) : null;
+  const boardConfidence = clamp((save.world.boardConfidence ?? 55) + (verdict?.confDelta ?? 0), 0, 100);
+  const sackable = !!verdict && !verdict.met && boardConfidence <= 5 && !save.world.loanReturn;
+  return { verdict, boardConfidence, sackable };
+}
+
+// PROMOÇÃO/REBAIXAMENTO por colocação. Academia não move por colocação (boas
+// campanhas geram PROPOSTAS de times access — ir pro pro é aceitar uma); nos
+// tiers profissionais, finalistas sobem e 4º de grupo cai (access é o piso).
+export function tierMove(oldTier: Tier, place: number): { newTier: Tier; promoted: boolean; relegated: boolean } {
+  if (oldTier !== 'academy') {
+    if (place <= 2 && oldTier !== 'elite') return { newTier: tierUp(oldTier), promoted: true, relegated: false };
+    if (place >= 7 && oldTier !== 'access') return { newTier: tierDown(oldTier), promoted: false, relegated: true };
+  }
+  return { newTier: oldTier, promoted: false, relegated: false };
+}
+
+// EMPRÉSTIMO: fim da temporada emprestada. Brilhou (place<=2) → comprado de vez
+// (null, fluxo normal). Senão → VOLTA pro clube-mãe (reconstrói o elenco real,
+// tier/contrato do parent), ignorando promoção/rebaixamento.
+export function resolveLoanReturn(save: RoadToProSave, place: number): TeamContext | null {
+  const loan = save.world.loanReturn;
+  if (!loan || place <= 2) return null;
+  const parent = worldTeamById(loan.realTeamId, save.world.season + 1);
+  if (!parent) return null;
+  const teammates = joinTeam(parent, save.player.role);
+  return {
+    teamId: 'rtp-user', realTeamId: parent.id, teamName: parent.name, tag: parent.tag,
+    colors: parent.colors, logo: parent.logoUrl, tier: loan.tier, squadRole: squadRoleFor(place),
+    contract: loan.contract, teammates, chem: Object.fromEntries(teammates.map((m) => [m.sourcePlayerId, 30])),
+  };
+}
+
 export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesResult): RoundConclusion {
   // Contrato EXPIRADO (0 semanas) = salário congelado até renovar/assinar. A
   // renovação forçada (life event) segue nagando; agora ignorá-la custa o bolso.
@@ -357,49 +458,14 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
     };
   }
 
-  // ── Campeonato (etapa) resolvido ──
+  // ── Campeonato (etapa) resolvido — fases puras acima decidem, aqui compõe ──
   // Colocação (1=campeão, 2=vice, 3=semifinalista, 5=3º do grupo, 7=4º do grupo).
   const place = adv.place;
-  const finishedName = save.world.league?.name ?? TIER_NAME[save.team.tier];
-  const wonEvent = place === 1;
-  const eventTrophy = wonEvent ? finishedName : null;
-  // A etapa da temporada vive no WORLD (não no circuito) — sobrevive a transferências:
-  // o ano fecha na última etapa, não importa por quantos times você passou.
-  const seasonEvent = save.world.seasonEvent ?? (save.world.league?.event ?? 1);
-
-  // META DA DIRETORIA: avalia o campeonato que fechou e mexe na confiança (emprego).
+  const out = resolveEventOutcome(save, place);
+  const { verdict, boardConfidence, sackable } = evaluateBoard(save, place);
+  const { finishedName, eventTrophy, seasonEvent, awardKind, eventRating: eventRatingOut } = out;
   const obj = save.world.objective;
-  const verdict = obj ? evaluateObjective(obj, place) : null;
-  const boardConfidence = clamp((save.world.boardConfidence ?? 55) + (verdict?.confDelta ?? 0), 0, 100);
-  // DEMISSÃO: meta falhada + confiança no fundo do poço = você foi CORTADO. Não
-  // durante empréstimo (quem manda é o clube-mãe). O aviso (evento hot-seat) já veio.
-  const sackable = !!verdict && !verdict.met && boardConfidence <= 5 && !save.world.loanReturn;
-
-  // PRÊMIO INDIVIDUAL (RTP v13): rating médio do herói no campeonato (acumulado por
-  // série em applyMatchOutcome) + colocação + força do field decidem MVP/EVP.
-  const eventSeries = save.world.eventSeries ?? 0;
-  const avgEventRating = eventSeries > 0 ? (save.world.eventRatingSum ?? 0) / eventSeries : 1.0;
-  const finishedTeams = (save.world.league?.gsl as GslLeague | undefined)?.teams ?? [];
-  const userStrength = finishedTeams.find((t) => t.id === 'user')?.strength ?? 0;
-  const strongerCount = finishedTeams.filter((t) => t.id !== 'user' && t.strength > userStrength).length;
-  const awardKind = deriveEventAward(place, avgEventRating, strongerCount);
-  const accolade: Accolade | null = awardKind
-    ? makeAccolade(awardKind, finishedName, save.world.season, avgEventRating, save.team.tier, save.rng.tick)
-    : null;
-  const eventRatingOut = Math.round(avgEventRating * 100) / 100;
-  // LINHA DO TEMPO (RTP v14): um registro por campeonato fechado — a história da
-  // carreira que o Perfil e o Legado contam.
-  const timelineEntry = {
-    season: save.world.season, event: seasonEvent, eventName: finishedName, tier: save.team.tier,
-    teamTag: save.team.tag, place, rating: eventRatingOut, award: awardKind ?? undefined,
-  };
-  const withRecords = (h: CareerLog, seasonEnd: boolean): CareerLog => ({
-    ...h,
-    accolades: accolade ? [...(h.accolades ?? []), accolade] : (h.accolades ?? []),
-    timeline: [...(h.timeline ?? []), timelineEntry],
-    // DINASTIA (RTP v15): série de títulos de elite + avaliação da temporada invicta.
-    records: recordsAtEventEnd(h.records ?? defaultRecords(), { won: wonEvent, elite: save.team.tier === 'elite', seasonEnd }),
-  });
+  const wonEvent = out.wonEvent;
 
   // AINDA HÁ ETAPAS na temporada → próximo CAMPEONATO (mesmo tier/temporada), sem
   // envelhecer/promover. É aqui que também podem CHEGAR propostas no meio do ano.
@@ -413,7 +479,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
     const confNext = replacement ? 42 : boardConfidence;
     const saveForCircuit = { ...save, team: teamNext };
     const nextCircuit = buildCircuit(saveForCircuit, teamNext.tier, (save.rng.seed ^ (nextEvent * 7717) ^ (replacement ? 0x5ac : 0)) >>> 0, nextEvent);
-    const history = withRecords(eventTrophy ? { ...save.history, trophies: [...save.history.trophies, eventTrophy] } : save.history, false);
+    const history = historyAfterEvent(save, out, false);
     const st = updateStanding(save, history, save.player, teamNext.tier);
     const media = beatHeadlines(save, { title: eventTrophy, award: awardKind, sackedTo: replacement?.teamName, rankDelta: st.delta, rank: st.worldRank, eventName: finishedName });
     // propostas de meio de temporada: RARAS (senão vira spam) e não se emprestado
@@ -436,40 +502,16 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
 
   // ── Última etapa → FIM DE TEMPORADA (envelhece, promove, Major) ──
   const oldTier = save.team.tier;
-  let newTier = oldTier;
-  let promoted = false, relegated = false;
-  if (oldTier === 'academy') {
-    // ACADEMIA: não promove por colocação. Boas campanhas geram PROPOSTAS de times
-    // profissionais (access) — aceitar uma é "ir pro pro". Recusar = fica outra
-    // temporada na academia provando seu valor. Sem rebaixamento (é o degrau base).
-  } else {
-    // Tiers PROFISSIONAIS: finalistas (place<=2) sobem; 4º de grupo (place 7) cai —
-    // mas access é o piso do pro (não cai pra academia).
-    if (place <= 2 && oldTier !== 'elite') { newTier = tierUp(oldTier); promoted = true; }
-    else if (place >= 7 && oldTier !== 'access') { newTier = tierDown(oldTier); relegated = true; }
-  }
-
-  // EMPRÉSTIMO: fim da temporada emprestada. Brilhou (place<=2) → comprado de vez
-  // (some o loanReturn, fluxo normal). Senão → VOLTA pro clube-mãe (reconstrói o
-  // elenco real, tier/contrato do parent), ignorando promoção/rebaixamento.
-  const loan = save.world.loanReturn;
-  let returnTeam: TeamContext | null = null;
-  if (loan && place > 2) {
-    const parent = worldTeamById(loan.realTeamId, save.world.season + 1);
-    if (parent) {
-      const teammates = joinTeam(parent, save.player.role);
-      returnTeam = {
-        teamId: 'rtp-user', realTeamId: parent.id, teamName: parent.name, tag: parent.tag,
-        colors: parent.colors, logo: parent.logoUrl, tier: loan.tier, squadRole: squadRoleFor(place),
-        contract: loan.contract, teammates, chem: Object.fromEntries(teammates.map((m) => [m.sourcePlayerId, 30])),
-      };
-      newTier = loan.tier; promoted = false; relegated = false;
-    }
-  }
+  const returnTeam = resolveLoanReturn(save, place);
+  // volta de empréstimo ignora promoção/rebaixamento (o tier é o do clube-mãe).
+  const move = returnTeam
+    ? { newTier: returnTeam.tier, promoted: false, relegated: false }
+    : tierMove(oldTier, place);
+  const { newTier, promoted, relegated } = move;
 
   const champion = place === 1 && oldTier === 'elite';
   // Título do campeonato final da temporada entra na galeria + prêmio + timeline.
-  const historyEnd = withRecords(eventTrophy ? { ...save.history, trophies: [...save.history.trophies, eventTrophy] } : save.history, true);
+  const historyEnd = historyAfterEvent(save, out, true);
 
   const season = save.world.season + 1;
   const agedPlayer = ageUp(save.player);   // +1 ano + declínio por idade + OVR
