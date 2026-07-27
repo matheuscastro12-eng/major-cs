@@ -37,12 +37,13 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { track, trackPaywallView } from '../../state/track';
+import { setCheckoutSrc, track, trackPaywallView } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
 import { WeekendLeague } from '../online/WeekendLeague';
 import { UtPanel, UtEmpty } from './UtPanel';
+import { FounderCounter } from '../FounderCounter';
 import {
   LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
   Swords, ListOrdered, ChevronDown, Coins, Trophy, Zap, Menu, CalendarDays, Lock,
@@ -2045,10 +2046,25 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount }: 
                 <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--ut-ink)', fontWeight: 800 }}>
                   R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}
                 </p>
-                {/* sem isto a trava era um beco sem saída: dizia o preço mas não ONDE ativar */}
-                <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
-                  {ct('Pra ativar: volte à tela inicial do Road to Major e entre na sua conta vitalícia — esta seção destrava na hora.')}
-                </p>
+                <FounderCounter style={{ fontSize: '11px' }} />
+                {/* funil (iter42): a trava tinha o preço mas nenhum botão — só um texto
+                    mandando voltar pra Home. 0% de conversão em 81 sessões/28d (vs 1.3–2.6%
+                    nas outras travas, que abrem o checkout direto). Reusa o mesmo
+                    onCreateAccount que o aviso de convidado já usa nesta tela. */}
+                {onCreateAccount ? (
+                  <button
+                    type="button"
+                    className="ut-btn ut-btn--gold"
+                    style={{ padding: '9px 20px', fontSize: '0.82rem', marginTop: 2 }}
+                    onClick={() => { setCheckoutSrc('mkt-lock'); onCreateAccount(); }}
+                  >
+                    {ct('Virar Fundador · destravar o Mercado')}
+                  </button>
+                ) : (
+                  <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
+                    {ct('Pra ativar: volte à tela inicial do Road to Major e entre na sua conta vitalícia — esta seção destrava na hora.')}
+                  </p>
+                )}
               </div>
             ) : (
               <>
