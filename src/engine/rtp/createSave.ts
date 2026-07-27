@@ -18,6 +18,7 @@ import { buildCircuit, computeObjective } from './circuit';
 import { computeWorldRank } from './standing';
 import { startTeam, startTeamForTier, joinTeam } from './world';
 import { STARTER_SETUP } from './setup';
+import { STARTER_LIFESTYLE } from './lifestyle';
 import { defaultProgression } from './perks';
 import { defaultMedia } from './media';
 import { defaultRecords } from './records';
@@ -25,7 +26,7 @@ import { defaultRecords } from './records';
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes de início (academia)
 
-export const RTP_SAVE_VERSION = 15;
+export const RTP_SAVE_VERSION = 16;
 const START_MONEY = 2_000;       // moleque de academia: bolso curto
 const START_WAGE = 800;          // R$/semana
 const CONTRACT_WEEKS = 52;
@@ -226,6 +227,7 @@ export function createRtpSave(input: CreateRtpInput): RoadToProSave {
     },
     team,
     setup: STARTER_SETUP(),   // RTP v6 — começa todo sucateado
+    lifestyle: STARTER_LIFESTYLE(), // RTP v16 — quarto na casa dos pais, zero investido
     media: defaultMedia(8),   // RTP v9 — audiência inicial ~fama; sem rival ainda
     ui: { tab: 'overview', attrsOpen: false },
     world: {
@@ -303,5 +305,6 @@ export function refreshOvr(save: RoadToProSave): RoadToProSave {
 
 // Stats core derivados (pra UI mostrar os 5 legados, e o engine no RTP3).
 export { coreStatsFromAttrs };
-// Factory do setup inicial (RTP v6) — reexport pro registry de migrations.
+// Factories de estado inicial — reexport pro registry de migrations.
 export { STARTER_SETUP };
+export { STARTER_LIFESTYLE };

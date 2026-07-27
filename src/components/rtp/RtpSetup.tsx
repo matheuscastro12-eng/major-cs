@@ -6,6 +6,10 @@ import {
   PERIPHERALS, PSYCH_TIERS, TIER_NAMES, setupLevel, buyGear, hirePsych, psychDef,
   type PeripheralDef,
 } from '../../engine/rtp/setup';
+import {
+  HOUSING_TIERS, housingDef, buyHousing, buyFamilyHome, invest, redeem,
+  FAMILY_HOME_PRICE, FAMILY_HOME_RECOVERY, INVEST_STEPS, investRate,
+} from '../../engine/rtp/lifestyle';
 import type { RoadToProSave, GearTier } from '../../engine/rtp/types';
 
 const money = (v: number) => `R$ ${v.toLocaleString('pt-BR')}`;
@@ -115,6 +119,108 @@ export function RtpSetup({ save, onUpdate }: {
           <button type="button" className="rtp-psych-cta" disabled><RtpIcon name="check" size={13} /> {ct('Melhor psicólogo')}</button>
         )}
       </div>
+
+      {/* ── VIDA DE PRO (RTP v16) — gastos de longo prazo ─────────────────── */}
+      <LifestyleSection save={save} onUpdate={onUpdate} onFlash={(f, n) => { setFlash(f); setNote(n); }} />
     </DashCard>
+  );
+}
+
+// ── Vida de pro: moradia + casa da família + investimentos ──────────────────
+function LifestyleSection({ save, onUpdate, onFlash }: {
+  save: RoadToProSave;
+  onUpdate: (next: RoadToProSave) => void;
+  onFlash: (flash: string | null, note: string | null) => void;
+}) {
+  const ls = save.lifestyle;
+  const house = housingDef(ls.housing);
+  const nextHouse = ls.housing < 4 ? HOUSING_TIERS[ls.housing + 1] : null;
+  const run = (res: { ok: boolean; save: RoadToProSave; reason?: string; feedback?: string }) => {
+    if (!res.ok) { onFlash(null, res.reason ?? ct('Não foi possível.')); return; }
+    onFlash(res.feedback ?? ct('Feito!'), null);
+    onUpdate(res.save);
+  };
+  // taxa da PRÓXIMA virada (mesmo seed/tick que o investWeekTick vai usar) — o
+  // jogador vê a régua honesta do que está contratando, não uma promessa.
+  const nextRate = investRate(save.rng.seed, save.rng.tick + 1);
+
+  return (
+    <div className="rtp-lifestyle">
+      <div className="rtp-lifestyle-kicker"><RtpIcon name="home" size={15} /> {ct('Vida de pro')}</div>
+
+      {/* Moradia */}
+      <div className="rtp-life-card">
+        <div className="rtp-psych-head">
+          <span className="rtp-psych-ico"><RtpIcon name={house.icon} size={22} /></span>
+          <div>
+            <b>{house.label}</b>
+            <span>{house.blurb}</span>
+          </div>
+        </div>
+        <div className="rtp-psych-stats">
+          <div><span>{ct('Energia/sem')}</span><b>+{house.energyBonus}</b></div>
+          <div><span>{ct('Recuperação')}</span><b>+{house.recoveryBonus}</b></div>
+          <div><span>{ct('Nível')}</span><b>{ls.housing}/4</b></div>
+        </div>
+        {nextHouse ? (
+          <button type="button" className="rtp-psych-cta rtp-lift" disabled={save.life.money < nextHouse.price} onClick={() => run(buyHousing(save))}>
+            {ct('Mudar pra')} {nextHouse.label} · {money(nextHouse.price)}
+            <small>+{nextHouse.energyBonus} {ct('energia')} · +{nextHouse.recoveryBonus} {ct('recuperação por semana')}</small>
+          </button>
+        ) : (
+          <button type="button" className="rtp-psych-cta" disabled><RtpIcon name="check" size={13} /> {ct('Morando no topo')}</button>
+        )}
+      </div>
+
+      {/* Casa da família */}
+      <div className={`rtp-life-card${ls.familyHome ? ' done' : ''}`}>
+        <div className="rtp-psych-head">
+          <span className="rtp-psych-ico"><RtpIcon name="personal" size={22} /></span>
+          <div>
+            <b>{ct('Casa da família')}</b>
+            <span>{ls.familyHome
+              ? ct('A escritura tem o sobrenome de vocês. Ninguém paga mais aluguel.')
+              : ct('Tirar a família do aluguel. O motivo pelo qual você começou.')}</span>
+          </div>
+        </div>
+        {ls.familyHome ? (
+          <button type="button" className="rtp-psych-cta" disabled><RtpIcon name="check" size={13} /> {ct('Sonho realizado')}</button>
+        ) : (
+          <button type="button" className="rtp-psych-cta rtp-lift" disabled={save.life.money < FAMILY_HOME_PRICE} onClick={() => run(buyFamilyHome(save))}>
+            {ct('Comprar')} · {money(FAMILY_HOME_PRICE)}
+            <small>{ct('família')} +30 · +{FAMILY_HOME_RECOVERY} {ct('moral/sem pra sempre')} · {ct('legado')}</small>
+          </button>
+        )}
+      </div>
+
+      {/* Investimentos */}
+      <div className="rtp-life-card">
+        <div className="rtp-psych-head">
+          <span className="rtp-psych-ico"><RtpIcon name="chart" size={22} /></span>
+          <div>
+            <b>{ct('Investimentos')}</b>
+            <span>{ls.invested > 0
+              ? `${money(ls.invested)} ${ct('aplicados · rende (ou não) toda semana')}`
+              : ct('Carreira de pro é curta — bote o dinheiro pra trabalhar por você.')}</span>
+          </div>
+        </div>
+        {ls.invested > 0 && (
+          <div className="rtp-psych-stats">
+            <div><span>{ct('Aplicado')}</span><b>{money(ls.invested)}</b></div>
+            <div><span>{ct('Semana que vem')}</span><b className={nextRate >= 0 ? 'up' : 'down'}>{nextRate >= 0 ? '+' : ''}{(nextRate * 100).toFixed(1)}%</b></div>
+          </div>
+        )}
+        <div className="rtp-invest-row">
+          {INVEST_STEPS.map((v) => (
+            <button key={v} type="button" className="rtp-invest-btn rtp-lift" disabled={save.life.money < v} onClick={() => run(invest(save, v))}>
+              +{money(v)}
+            </button>
+          ))}
+          <button type="button" className="rtp-invest-btn rtp-invest-out" disabled={ls.invested <= 0} onClick={() => run(redeem(save))}>
+            {ct('Resgatar tudo')}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

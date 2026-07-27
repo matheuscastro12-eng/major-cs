@@ -9,7 +9,7 @@
 import { getToken } from './account';
 import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave, cloudOnLocalSave, syncSlot, localSavedAt, markSavedAt } from './cloud';
 import { captureError } from './errlog';
-import { RTP_SAVE_VERSION, ACTIONS_PER_WEEK, rebuildRealWorld, STARTER_SETUP } from '../engine/rtp/createSave';
+import { RTP_SAVE_VERSION, ACTIONS_PER_WEEK, rebuildRealWorld, STARTER_SETUP, STARTER_LIFESTYLE } from '../engine/rtp/createSave';
 import { buildLeague, circuitEventName } from '../engine/rtp/league';
 import { buildCircuit, computeObjective } from '../engine/rtp/circuit';
 import { computeWorldRank } from '../engine/rtp/standing';
@@ -168,6 +168,13 @@ const RTP_MIGRATIONS: Record<number, RtpMigration> = {
       _v: 15,
     };
   },
+  // v15 → v16 (RTP v16 vida de pro): backfill do lifestyle (moradia/casa da
+  // família/investimentos) — todo save antigo começa no quarto dos pais.
+  15: (save) => ({
+    ...save,
+    lifestyle: save.lifestyle ?? STARTER_LIFESTYLE(),
+    _v: 16,
+  }),
 };
 
 function migrateRtp(raw: Record<string, unknown>): RoadToProSave {

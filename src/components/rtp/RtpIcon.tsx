@@ -50,6 +50,7 @@ const P: Record<RtpIconName, React.ReactNode> = {
   chart: <path d="M4 4v16h16M8 16v-4M12 16V8M16 16v-6" />,
   users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.2a4 4 0 0 1 0 7.6" /></>,
   shop: <path d="M4 9l1-4h14l1 4M4 9h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9zM9 9v0a3 3 0 0 0 6 0M4 9a3 3 0 0 0 5 0M15 9a3 3 0 0 0 5 0" />,
+  home: <path d="M3 11l9-8 9 8M5 9.5V21h14V9.5M9 21v-6h6v6" />,
   chevR: <path d="M9 6l6 6-6 6" />,
   chevL: <path d="M15 6l-6 6 6 6" />,
   arrowUp: <path d="M12 19V5M6 11l6-6 6 6" />,

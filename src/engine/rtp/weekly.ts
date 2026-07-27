@@ -14,8 +14,9 @@ import { makeRng } from '../rng';
 import { ROLE_FOCUS, ACTIONS_PER_WEEK, WEEKS_PER_SEASON } from './createSave';
 import { proOvr } from './coreStats';
 import { setupTrainingMods, setupConditionMods, psychDef } from './setup';
+import { lifestyleWeeklyMods, investWeekTick } from './lifestyle';
 import { aggregatePassives } from './perks';
-import type { ProPlayer, RoadToProSave, SetupState } from './types';
+import type { ProPlayer, RoadToProSave, SetupState, LifestyleState } from './types';
 import type { RtpIconName } from './icons';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -351,7 +352,7 @@ export function ageUp(player: ProPlayer): ProPlayer {
 // Tick de tempo de uma semana: recuperação de energia, deriva de medidores pro
 // baseline, decaimento de fama, salário − custos. Puro. Compartilhado pelo
 // advanceWeek (fallback) e pelo concludeRound da liga (RTP4).
-export function weeklyTick(life: RoadToProSave['life'], wage: number, setup: SetupState): RoadToProSave['life'] {
+export function weeklyTick(life: RoadToProSave['life'], wage: number, setup: SetupState, lifestyle?: LifestyleState): RoadToProSave['life'] {
   // Lesão: decrementa a duração; ao zerar, recupera (cura) e devolve forma.
   const flags = { ...life.flags };
   let fitnessHeal = 0;
@@ -361,14 +362,17 @@ export function weeklyTick(life: RoadToProSave['life'], wage: number, setup: Set
     else flags.injured = { ...flags.injured, weeksLeft };
   }
   // Psicólogo: recuperação mental extra na deriva + mensalidade (retainer).
+  // Moradia/casa da família (RTP v16): dormir bem também é performance.
   const { recoveryBonus } = setupConditionMods(setup);
+  const ls = lifestyle ? lifestyleWeeklyMods(lifestyle) : { energyBonus: 0, recoveryBonus: 0 };
+  const recovery = recoveryBonus + ls.recoveryBonus;
   const psych = psychDef(setup.psychTier ?? 0);
   return {
     ...life,
-    energy: clamp(life.energy + WEEK_ENERGY_RECOVERY, 0, 100),
+    energy: clamp(life.energy + WEEK_ENERGY_RECOVERY + ls.energyBonus, 0, 100),
     fitness: clamp(life.fitness - 2 + fitnessHeal, 0, 100),
-    morale: clamp(life.morale + Math.round((60 - life.morale) * 0.2) + recoveryBonus, 0, 100),
-    focus: clamp(life.focus + Math.round((65 - life.focus) * 0.2) + recoveryBonus, 0, 100),
+    morale: clamp(life.morale + Math.round((60 - life.morale) * 0.2) + recovery, 0, 100),
+    focus: clamp(life.focus + Math.round((65 - life.focus) * 0.2) + recovery, 0, 100),
     fame: clamp(life.fame - 1, 0, 100),
     // piso 0: mesma invariante do applyLifeChoice — o jogo não modela dívida.
     money: Math.max(0, life.money + wage - livingCostFor(wage) - psych.retainer),
@@ -379,7 +383,7 @@ export function weeklyTick(life: RoadToProSave['life'], wage: number, setup: Set
 export function advanceWeek(save: RoadToProSave): { save: RoadToProSave; summary: WeekSummary } {
   // Contrato expirado = sem salário (espelha concludeCircuitRound).
   const wage = save.team.contract.weeksLeft > 0 ? save.team.contract.wage : 0;
-  const nextLife = weeklyTick(save.life, wage, save.setup);
+  const nextLife = weeklyTick(save.life, wage, save.setup, save.lifestyle);
   const psychRetainer = psychDef(save.setup.psychTier ?? 0).retainer;
 
   let { season, week } = save.world;
@@ -399,14 +403,14 @@ export function advanceWeek(save: RoadToProSave): { save: RoadToProSave; summary
 
   return {
     summary: { wagePaid: wage, livingCost: livingCostFor(wage), psychRetainer, newSeason, agedUp },
-    save: {
+    save: investWeekTick({
       ...save,
       player,
       life: nextLife,
       team: { ...save.team, contract },
       world: { ...save.world, season, week, actionsLeft: ACTIONS_PER_WEEK },
       rng: bumpTick(save),
-    },
+    }),
   };
 }
 

@@ -12,7 +12,7 @@ export type RtpIconName =
   | 'injury' | 'fire' | 'snow'
   | 'career' | 'health' | 'personal' | 'media' | 'team'
   | 'mouse' | 'keyboard' | 'monitor' | 'headset' | 'chair' | 'pc' | 'wifi' | 'pad'
-  | 'trophy' | 'calendar' | 'chart' | 'users' | 'shop'
+  | 'trophy' | 'calendar' | 'chart' | 'users' | 'shop' | 'home'
   // utilitários de navegação / status (P0)
   | 'chevR' | 'chevL' | 'arrowUp' | 'arrowDown' | 'grid' | 'close' | 'check'
   | 'balance' | 'party';

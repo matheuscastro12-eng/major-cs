@@ -41,7 +41,7 @@ export type PerkTree = Role | 'universal';
 export interface PerkDef {
   id: string;
   tree: PerkTree;
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4 | 5;
   reqLevel: number;
   reqPerk?: string;            // pré-requisito (perk anterior na mesma trilha)
   label: string;
@@ -106,6 +106,45 @@ export const PERKS: PerkDef[] = [
     desc: 'Comanda o time e enxerga o jogo de cima.', effect: { attr: { leadership: 1, gameSense: 1 } } },
   { id: 'i_eco', tree: 'IGL', tier: 3, reqLevel: 12, reqPerk: 'i_master', label: 'Antecipa o eco', icon: 'chart',
     desc: 'Adivinha a economia e o setup do adversário.', effect: { attr: { anticipation: 1 }, matchFactor: { label: 'Leitura de eco', delta: 7 } } },
+
+  // ── Tiers 4-5 (meio/fim de carreira) — a árvore não acaba na 3ª temporada ──
+  // T4 no nível 18 e T5 no nível 30: os pontos de perk continuam tendo destino
+  // depois que a trilha básica fecha. Efeitos na mesma régua dos T3 (nada de
+  // power creep — é EXTENSÃO da identidade, não uma segunda curva de poder).
+  { id: 'u_brand', tree: 'universal', tier: 4, reqLevel: 18, reqPerk: 'u_icon', label: 'Marca própria', icon: 'chart',
+    desc: 'Seu nome virou negócio: fama rende ainda mais e você não se abala fácil.', effect: { fameMult: 1.2, tiltResist: 0.1 } },
+  { id: 'u_immortal', tree: 'universal', tier: 5, reqLevel: 30, reqPerk: 'u_brand', label: 'Nome eterno', icon: 'trophy',
+    desc: 'Você joga pela história. Frieza e disciplina de quem já viu de tudo.', effect: { attr: { composure: 1, discipline: 1 }, matchFactor: { label: 'Legado', delta: 5 } } },
+
+  { id: 'e_tempo', tree: 'Entry', tier: 4, reqLevel: 18, reqPerk: 'e_spear', label: 'Dono do tempo', icon: 'focus',
+    desc: 'Você dita QUANDO o round começa — o peek sai na sua hora.', effect: { attr: { anticipation: 1, aimMovement: 1 } } },
+  { id: 'e_legend', tree: 'Entry', tier: 5, reqLevel: 30, reqPerk: 'e_tempo', label: 'Quebra-portão', icon: 'fire',
+    desc: 'Não existe site fechado pra você.', effect: { attr: { aim: 1 }, matchFactor: { label: 'Quebra-portão', delta: 6 } } },
+
+  { id: 'a_zone', tree: 'AWP', tier: 4, reqLevel: 18, reqPerk: 'a_flick', label: 'Zona de exclusão', icon: 'snow',
+    desc: 'Metade do mapa fica proibida enquanto sua AWP olha pra ela.', effect: { attr: { positioning: 1, gameSense: 1 } } },
+  { id: 'a_era', tree: 'AWP', tier: 5, reqLevel: 30, reqPerk: 'a_zone', label: 'A Era da AWP', icon: 'trophy',
+    desc: 'Seu nome entra na conversa de melhor sniper da geração.', effect: { attr: { awp: 1 }, matchFactor: { label: 'Era da AWP', delta: 6 } } },
+
+  { id: 'r_machine', tree: 'Rifler', tier: 4, reqLevel: 18, reqPerk: 'r_deadeye', label: 'Máquina de rounds', icon: 'gym',
+    desc: 'Rating alto virou rotina — o piso do seu jogo é o teto dos outros.', effect: { attr: { consistency: 1, stamina: 1 } } },
+  { id: 'r_prime', tree: 'Rifler', tier: 5, reqLevel: 30, reqPerk: 'r_machine', label: 'Prime absoluto', icon: 'spark',
+    desc: 'O rifle na sua mão é argumento técnico.', effect: { attr: { headshot: 1 }, matchFactor: { label: 'Prime', delta: 6 } } },
+
+  { id: 's_shotcall', tree: 'Support', tier: 4, reqLevel: 18, reqPerk: 's_self', label: 'Segundo caller', icon: 'brain',
+    desc: 'Você enxerga o que o IGL não viu — e corrige no meio do round.', effect: { attr: { decisions: 1, communication: 1 } } },
+  { id: 's_backbone', tree: 'Support', tier: 5, reqLevel: 30, reqPerk: 's_shotcall', label: 'Espinha dorsal', icon: 'team',
+    desc: 'Time com você de suporte simplesmente não desmorona.', effect: { tiltResist: 0.12, matchFactor: { label: 'Espinha dorsal', delta: 5 } } },
+
+  { id: 'l_ghost', tree: 'Lurker', tier: 4, reqLevel: 18, reqPerk: 'l_dna', label: 'Fantasma do mapa', icon: 'skull',
+    desc: 'O adversário joga com medo do flank que talvez nem venha.', effect: { attr: { offAngles: 1, composure: 1 } } },
+  { id: 'l_judge', tree: 'Lurker', tier: 5, reqLevel: 30, reqPerk: 'l_ghost', label: 'Juiz do round', icon: 'snow',
+    desc: 'Todo round apertado termina na sua decisão.', effect: { attr: { clutch: 1 }, matchFactor: { label: 'Juiz do round', delta: 6 } } },
+
+  { id: 'i_library', tree: 'IGL', tier: 4, reqLevel: 18, reqPerk: 'i_eco', label: 'Biblioteca viva', icon: 'brain',
+    desc: 'Você tem resposta pronta pra todo protocolo que já viu — e viu todos.', effect: { attr: { gameSense: 1, anticipation: 1 } } },
+  { id: 'i_dynasty', tree: 'IGL', tier: 5, reqLevel: 30, reqPerk: 'i_library', label: 'Arquiteto de dinastia', icon: 'trophy',
+    desc: 'Sistemas que você desenha viram meta. Times inteiros jogam sua ideia.', effect: { attr: { leadership: 1 }, matchFactor: { label: 'Arquiteto', delta: 6 } } },
 ];
 
 export function perkById(id: string): PerkDef | undefined {
@@ -361,6 +400,9 @@ export function legacyScore(save: RoadToProSave): number {
   const recordPts = rec
     ? rec.broken.length * 40 + rec.perfectSeasons * 35 + Math.min(60, rec.totalWeeksAtOne) + rec.bestTitleStreak * 8
     : 0;
+  // Vida de pro (RTP v16): o que você CONSTRUIU fora do servidor também conta —
+  // tirar a família do aluguel pesa mais que qualquer cobertura.
+  const lifePts = (save.lifestyle?.housing ?? 0) * 12 + (save.lifestyle?.familyHome ? 40 : 0);
   return Math.round(
     prog.level * 6 +
     h.trophies.length * 40 +
@@ -369,6 +411,7 @@ export function legacyScore(save: RoadToProSave): number {
     accoladePts +
     peakPts +
     recordPts +
+    lifePts +
     save.player.ovr +
     prog.traits.length * 12,
   );

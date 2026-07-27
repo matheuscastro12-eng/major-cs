@@ -28,6 +28,7 @@ import { TIER_NAME, TIER_ORDER, tierUp, tierDown, squadRoleFor, circuitEventName
 import { buildMajor, majorQualifies } from './major';
 import { generateOffers, weakestClubContext } from './transfers';
 import { weeklyTick, ageUp, RETIRE_AGE } from './weekly';
+import { investWeekTick } from './lifestyle';
 import { generateLifeEvent } from './lifeEvents';
 import { ACTIONS_PER_WEEK } from './createSave';
 import { computeWorldRank, deriveEventAward, makeAccolade } from './standing';
@@ -337,7 +338,7 @@ function withWeekStart(save: RoadToProSave): RoadToProSave {
     const weeksLeft = sp.weeksLeft - 1;
     if (weeksLeft > 0) sponsors.push({ ...sp, weeksLeft });
   }
-  let s: RoadToProSave = { ...save, life: { ...save.life, money }, sponsors };
+  let s: RoadToProSave = investWeekTick({ ...save, life: { ...save.life, money }, sponsors });
   // Histórico de caixa (RTP v14): alimenta o gráfico REAL de finanças do overview.
   s = { ...s, world: { ...s.world, cashHist: [...(s.world.cashHist ?? []), money].slice(-12) } };
   // Etapa no seed: a semana reseta pra 1 a cada campeonato — sem a etapa, os
@@ -376,7 +377,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
   // Contrato EXPIRADO (0 semanas) = salário congelado até renovar/assinar. A
   // renovação forçada (life event) segue nagando; agora ignorá-la custa o bolso.
   const wage = save.team.contract.weeksLeft > 0 ? save.team.contract.wage : 0;
-  const life = weeklyTick(save.life, wage, save.setup);
+  const life = weeklyTick(save.life, wage, save.setup, save.lifestyle);
   const contract = { ...save.team.contract, weeksLeft: Math.max(0, save.team.contract.weeksLeft - 1) };
 
   const adv = advanceCircuit(save, matchResult);

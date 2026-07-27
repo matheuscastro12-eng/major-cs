@@ -127,6 +127,13 @@ export interface SetupState {
   psychTier: GearTier;        // 0 = sem psicólogo
 }
 
+// RTP v16 — Vida de pro: gastos de longo prazo (efeitos em engine/rtp/lifestyle.ts).
+export interface LifestyleState {
+  housing: GearTier;       // 0 = quarto na casa dos pais
+  familyHome: boolean;     // casa própria comprada pra família
+  invested: number;        // R$ aplicados (fora do life.money até resgatar)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Estado de navegação da UI (aba ativa) — RTP v6 (persistido só pra retomar).
 export type RtpTabId = 'overview' | 'training' | 'league' | 'market' | 'profile';
@@ -477,6 +484,7 @@ export interface RoadToProSave {
   team: TeamContext;
   world: WorldState;
   setup: SetupState;              // RTP v6 — periféricos + psicólogo
+  lifestyle: LifestyleState;      // RTP v16 — moradia, casa da família, investimentos
   media?: MediaState;             // RTP v9 — mídia, manchetes e rival (opcional; migração backfilla)
   ui?: RtpUiState;               // RTP v6 — aba ativa (opcional; default na UI)
   inbox: LifeEvent[];
