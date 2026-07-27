@@ -362,6 +362,15 @@ function AccountChip({
   useEffect(() => {
     if (open && account && !account.paid) trackPaywallView('acct-chip');
   }, [open, account]);
+  // funil: botão "Criar conta" do header é visto por TODA sessão não logada
+  // (maior exposição do jogo), mas nunca tinha view nem valor explicado — só
+  // clique. src próprio (acct-chip-guest) pra não misturar com o item do
+  // dropdown de conta grátis logada acima.
+  useEffect(() => {
+    if (ready && !account) trackPaywallView('acct-chip-guest');
+  }, [ready, account]);
+  const founders = useFounders();
+  const foundersLeft = founders ? Math.max(0, founders.limit - founders.founders) : null;
   // Loading state
   if (!ready) {
     return (
@@ -390,7 +399,12 @@ function AccountChip({
     return (
       <button
         type="button"
-        onClick={() => { setCheckoutSrc('acct-chip'); onCreate?.(); }}
+        onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreate?.(); }}
+        title={
+          foundersLeft != null && foundersLeft > 0
+            ? `Conta vitalícia por R$20, pagamento único · restam ${foundersLeft} vagas de Fundador`
+            : 'Conta vitalícia por R$20, pagamento único'
+        }
         style={{
           display: 'inline-flex',
           alignItems: 'center',
