@@ -195,9 +195,14 @@ export function winProbOf(s: RoomState): number {
   return clamp(50 + edge, 5, 95);
 }
 
-// rating ao vivo estimado (ticker). Inclui o pending quando já resolvido.
-export function liveRatingOf(s: RoomState): number {
-  const all = [...s.outcomes, ...(s.pending && s.phase === 'resolved' ? [s.pending.outcome] : [])];
+// mesma banda do resolveMoment: [thr, thr+banda) = PARCIAL (meio-termo com
+// frag). Exportada pra needle da UI e testes lerem da MESMA fonte.
+export const partialBandOf = (threshold: number) => Math.min(0.18, (1 - threshold) * 0.7);
+
+// rating ao vivo estimado (ticker). includePending: a UI só conta o beat
+// corrente quando o resultado já está NA TELA (não durante a animação do roll).
+export function liveRatingOf(s: RoomState, includePending = true): number {
+  const all = [...s.outcomes, ...(includePending && s.pending && s.phase === 'resolved' ? [s.pending.outcome] : [])];
   if (!all.length) return 1.0;
   const avg = all.reduce((a, o) => a + o.value, 0) / all.length;
   return Math.round((0.55 + avg * 1.05) * 100) / 100;

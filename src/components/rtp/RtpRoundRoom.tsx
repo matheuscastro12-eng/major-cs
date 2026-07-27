@@ -1,46 +1,33 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { makeRng } from '../../engine/rng';
-import type { MapId } from '../../types';
 import { hashStr } from '../../state/hash';
+import type { MomentOption } from '../../engine/rtp/moments';
+import { feedForOutcome, outcomePills, type FeedRow } from '../../engine/rtp/roundModel';
 import {
-  resolveMoment, explainOdds, clutchStepMoment,
-  type MomentOption, type MomentOutcome, type OddsBreakdown,
-} from '../../engine/rtp/moments';
-import {
-  buildBeatPlan, ctxForBeat, feedForOutcome, outcomePills, bridgeToBeat, initialLiveScore, mergeMapClose,
-  resolveMapFromPlay, mapPlayOf,
-  type BeatSpec, type FeedRow, type LiveScore, type Interlude,
-} from '../../engine/rtp/roundModel';
-import { MINIGAMES, tierDifficulty } from '../../engine/rtp/minigames';
+  createRoom, currentBeat, currentMoment, currentCtx, inClutchOf, isLastBeat, pressureOf,
+  spotlightOf, execSeedOf, roomOdds, winProbOf, liveRatingOf, partialBandOf,
+  useRead as roomUseRead, lockIn as roomLockIn, advance as roomAdvance, skipRest as roomSkipRest,
+  execBoostOf, EXEC_NEUTRAL,
+  type RoomState, type ResolvedBeat,
+} from '../../engine/rtp/room';
+import { tierDifficulty } from '../../engine/rtp/minigames';
 import { GAME_COMPONENTS } from './minigames';
 import type { MatchPrep } from '../../engine/rtp/matchSim';
 import { matchAtmosphere, crowdBeatLine, interludeAmbientLine, pressureKicker } from '../../engine/rtp/atmosphere';
-import { MAP_LABELS } from '../../types';
-import { planStyleBias, gamePlanDef } from '../../engine/rtp/meta';
+import { MAP_LABELS, type MapId } from '../../types';
+import type { OddsBreakdown } from '../../engine/rtp/moments';
 import type { RoadToProSave } from '../../engine/rtp/types';
 import { RtpSituationBoard } from './RtpSituationBoard';
 import { RtpIcon } from './RtpIcon';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-// perf → pontos de atributo EFETIVO. 0.55 = neutro (o "instinto"); execução
-// perfeita ≈ +2.7 attr (~+8% de chance), o piso do scoreToPerf ≈ −0.9 (~−3%).
-const EXEC_NEUTRAL = 0.55;
-const execBoostOf = (perf: number) => (perf - EXEC_NEUTRAL) * 6;
 const execVerdict = (perf: number) =>
   perf >= 0.92 ? 'PERFEITA' : perf >= 0.78 ? 'ÓTIMA' : perf >= 0.62 ? 'BOA' : perf >= 0.5 ? 'NA MÉDIA' : 'RUIM';
 
+// Sub-estado de APRESENTAÇÃO por cima do RoomState lógico: o engine resolve
+// (decide→resolved→done) e a UI dá o ritmo (exec → rolling → result).
 type SubPhase = 'decide' | 'exec' | 'rolling' | 'result';
-
-interface LockedState {
-  opt: MomentOption; odds: OddsBreakdown; roll: number; outcome: MomentOutcome;
-  clutchFinal: boolean; newAlive: number;
-  execPerf: number | null;    // performance no minigame (null = beat sem execução)
-  baseTotal: number;          // odds ANTES da execução (o needle anima base→final)
-}
-interface ClutchState {
-  alive: number; step: number; hot: number; bombSecs: number | null; subs: MomentOutcome[];
-}
 
 // Cor do gauge na rampa verde→âmbar→vermelho.
 function oddsColor(pct: number): string {
@@ -54,98 +41,40 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
   prep: MatchPrep;
   // liveMaps: os mapas COMO A SALA FECHOU/EXIBIU (v17) — o card oficial usa
   // exatamente estes placares em vez de recomputar (Sala == card por construção).
-  onComplete: (outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]) => void;
+  onComplete: (outcomes: import('../../engine/rtp/moments').MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]) => void;
   major?: boolean;
 }) {
-  const beats = useMemo<BeatSpec[]>(
-    () => buildBeatPlan(save.player.role, prep.maps.map((m) => m.map), prep.matchSeed),
-    [save.player.role, prep.maps, prep.matchSeed],
-  );
-
-  const [idx, setIdx] = useState(0);
-  // PLACAR VIVO (v15): rounds do mapa + série de mapas. Os rounds ENTRE os
-  // momentos-chave acontecem via bridgeToBeat — nada de placar pulando 1-0 → 2-0.
-  const [live, setLive] = useState<LiveScore>(initialLiveScore);
-  // mapas fechados como exibidos (v17) — entregues no onComplete.
-  const closedMapsRef = useRef<{ map: MapId; score: [number, number]; won: boolean }[]>([]);
-  const [interlude, setInterlude] = useState<Interlude | null>(null);
-  const [outcomes, setOutcomes] = useState<MomentOutcome[]>([]);
+  // A REGRA DA SÉRIE vive em engine/rtp/room.ts (a Sala) — aqui só render/ritmo.
+  const [room, setRoom] = useState<RoomState>(() => createRoom(save, prep));
+  // resolução recém-rolada: o novo estado fica ESTAGIADO durante a animação do
+  // needle (o scorebug só avança quando o resultado aparece na tela).
+  const [staged, setStaged] = useState<{ state: RoomState; beat: ResolvedBeat } | null>(null);
   const [sub, setSub] = useState<SubPhase>('decide');
-  const [locked, setLocked] = useState<LockedState | null>(null);
-  // MOMENTO-CHAVE: a opção travada esperando a EXECUÇÃO (minigame) resolver.
   const [pendingOpt, setPendingOpt] = useState<MomentOption | null>(null);
   const execDone = useRef(false);
   const [feed, setFeed] = useState<FeedRow[]>([]);
-  // momentum inicial SEMEADO pela confiança (moral + sequência): entra na Sala
-  // embalado ou pressionado antes do 1º round.
-  const [momentum, setMomentum] = useState(() => clamp(0.5 + (prep.confidence ?? 0) * 0.14, 0.32, 0.68));
-  // sub-estado do clutch multi-step (null fora de um clutch)
-  const [clutch, setClutch] = useState<ClutchState | null>(null);
-  // "Ler o jogo" — leitura tática: recurso limitado (escala com game sense) que
-  // revela a tendência do adversário e melhora suas odds na decisão atual.
-  const [reads, setReads] = useState(() => clamp(1 + Math.round((prep.effAttrs.gameSense ?? 10) / 7), 1, 4));
-  const [readUsed, setReadUsed] = useState(false);
   // flash/shake cinematográfico no fechamento de um round-chave.
   const [flash, setFlash] = useState<{ k: number; type: 'win' | 'loss'; big: boolean } | null>(null);
 
-  // ATMOSFERA (iter41): o palco escala com tier/evento — ginásio vazio na
-  // academia, arena lotada na elite, o palco máximo no MAJOR. Só texto/CSS,
+  // ATMOSFERA (iter41): o palco escala com tier/evento — só texto/CSS,
   // determinístico pelo matchSeed; nunca toca em odds/beats/resultado.
   const atmo = useMemo(() => matchAtmosphere(save, prep, !!major), [save, prep, major]);
 
-  const beat = beats[idx];
-  const isLast = idx >= beats.length - 1;
-  const ctx = ctxForBeat(beat, live.mapScore, isLast);
-  const inClutch = beat.kind === 'clutch' && !!clutch;
-
-  // momento/contexto correntes: no clutch, é a etapa atual (1vX) com a bomba/vivos.
-  const currentMoment = inClutch ? clutchStepMoment(clutch!.alive, clutch!.bombSecs) : beat.moment;
-  const currentCtx = inClutch
-    ? { ...ctx, alive: [1, clutch!.alive] as [number, number], bomb: ctx.bomb ? { ...ctx.bomb, defuseSecs: clutch!.bombSecs ?? ctx.bomb.defuseSecs } : null }
-    : ctx;
-
-  // momentum aquece/esfria a SUA próxima decisão (acoplamento real e honesto).
-  const momMult = 1 + (momentum - 0.5) * 0.16;         // ±8%
+  const beat = currentBeat(room);
+  const isLast = isLastBeat(room);
+  const inClutch = inClutchOf(room);
+  const moment = currentMoment(room);
+  const ctx = currentCtx(room);
+  const pressure = pressureOf(room);
+  const live = room.live;
   const heroNick = save.player.nick;
   const oppNicks = prep.opp.players.map((p) => p.nick);
 
-  // atributo efetivo de uma opção: condição off-game (effAttrs) + momentum +
-  // hot-hand + leitura tática + plano de jogo + rivalidade (TODOS entram no roll
-  // real via resolveMoment — nada cosmético).
-  const planBias = (opt: MomentOption) => (prep.plan ? planStyleBias(prep.plan, opt.style) : 0);
-  // Confiança firma (ou faz tremer) nos rounds de PRESSÃO — clutch/map point.
-  const pressure = beat.kind === 'clutch' || beat.kind === 'mapPoint' || inClutch;
-  const confBoost = pressure ? (prep.confidence ?? 0) * 2 : 0;
-  const effFor = (opt: MomentOption) =>
-    clamp((prep.effAttrs[opt.attr] + (inClutch ? clutch!.hot : 0) + (readUsed ? 2 : 0) + planBias(opt) + (prep.grudge ?? 0) + confBoost) * momMult, 1, 20);
-  // atributo efetivo COM a execução do minigame (perf move o attr de verdade).
-  const effWith = (opt: MomentOption, execPerf: number | null) =>
-    clamp(effFor(opt) + (execPerf != null ? execBoostOf(execPerf) : 0), 1, 20);
-
-  // odds por opção, espelhando EXATAMENTE a fórmula do resolveMoment.
-  const oddsFor = (opt: MomentOption, execPerf: number | null = null): OddsBreakdown => {
-    const factors = [...prep.factors];
-    const mPct = Math.round((momMult - 1) * 100);
-    if (mPct !== 0) factors.push({ label: momentum >= 0.5 ? 'Embalado' : 'Pressionado', delta: mPct, good: mPct > 0 });
-    if (inClutch && clutch!.hot > 0) factors.push({ label: 'Embalo do clutch', delta: Math.round(clutch!.hot * 5), good: true });
-    if (readUsed) factors.push({ label: 'Leitura tática', delta: 8, good: true });
-    const pb = planBias(opt);
-    if (prep.plan && pb !== 0) factors.push({ label: gamePlanDef(prep.plan).label, delta: pb * 4, good: pb > 0 });
-    if (pressure && confBoost !== 0) factors.push({ label: confBoost > 0 ? 'Confiança' : 'Pressão', delta: Math.round(confBoost * 5), good: confBoost > 0 });
-    if (execPerf != null) {
-      const d = Math.round(execBoostOf(execPerf) * 3.1);   // ≈ % por ponto de attr
-      if (d !== 0) factors.push({ label: 'Execução', delta: d, good: d > 0 });
-    }
-    return explainOdds(opt, effWith(opt, execPerf), prep.opp.strength, factors);
-  };
-
-  // MOMENTO-CHAVE atual: beat com spotlight — no clutch, só o DUELO FINAL (1v1)
-  // é executado na sua mão; os passos anteriores mantêm o ritmo do dado.
-  const spotlightGame = beat.spotlight && (!inClutch || clutch!.alive === 1) ? MINIGAMES[beat.spotlight] : null;
-  const execSeed = (prep.matchSeed ^ ((idx + 1) * 0x51ed) ^ ((clutch?.step ?? 0) * 0xe1) ^ 0x9a3e) >>> 0;
+  const spotlightGame = spotlightOf(room);
+  const execSeed = execSeedOf(room);
   const reduced = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-  // tendência revelada pela leitura tática (determinística por beat).
+  // tendência revelada pela leitura tática (flavor determinístico por beat).
   const readTell = useMemo(() => {
     const tells = [
       'o adversário costuma forçar o duelo aqui',
@@ -155,29 +84,15 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
       'a AWP está de olho no meio',
       'eles apostam no flanco esquerdo',
     ];
-    return tells[hashStr(`tell:${idx}:${clutch?.step ?? 0}:${prep.matchSeed}`) % tells.length];
-  }, [idx, clutch?.step, prep.matchSeed]);
+    return tells[hashStr(`tell:${room.idx}:${room.clutch?.step ?? 0}:${prep.matchSeed}`) % tells.length];
+  }, [room.idx, room.clutch?.step, prep.matchSeed]);
 
-  const useRead = () => { if (reads <= 0 || readUsed) return; setReads((r) => r - 1); setReadUsed(true); };
+  const useRead = () => setRoom((r) => roomUseRead(r));
 
-  // RESOLVE de verdade: roll pré-comprometido (seed fixo) + threshold movido pela
-  // execução — a zona verde cresce/encolhe NA TELA, mas o dado já estava lançado.
+  // RESOLVE de verdade (engine): roll pré-comprometido + placar/momentum já
+  // aplicados no estado ESTAGIADO — a tela ainda anima antes de revelar.
   const resolveWith = (opt: MomentOption, execPerf: number | null) => {
-    const seed = (prep.matchSeed ^ ((idx + 1) * 0x9e3779b1) ^ ((clutch?.step ?? 0) * 0x85ebca6b)) >>> 0;
-    const roll = makeRng(seed)();                       // mesmo 1º valor que o resolveMoment usa
-    // execPerf viaja NO outcome: summarizeMoments agrega e o finish converte em
-    // boost real de rating (jogou bem os minigames → rating bom; mal → ruim).
-    const outcome: MomentOutcome = {
-      ...resolveMoment(currentMoment, opt, effWith(opt, execPerf), prep.opp.strength, makeRng(seed)),
-      ...(execPerf != null ? { execPerf } : {}),
-    };
-    let clutchFinal = true, newAlive = 0;
-    if (inClutch) {
-      const died = outcome.result === 'fail';
-      newAlive = clutch!.alive - (died ? 0 : 1);
-      clutchFinal = died || newAlive <= 0;
-    }
-    setLocked({ opt, odds: oddsFor(opt, execPerf), roll, outcome, clutchFinal, newAlive, execPerf, baseTotal: oddsFor(opt).total });
+    setStaged(roomLockIn(room, opt.id, execPerf));
     setPendingOpt(null);
     setSub('rolling');
   };
@@ -201,187 +116,70 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
     return () => clearTimeout(t);
   }, [sub]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A arena de execução pode nascer abaixo da dobra (o board da situação é alto)
-  // — traz o minigame pro centro da tela na hora do EXECUTE.
+  // A arena de execução pode nascer abaixo da dobra — centraliza no EXECUTE.
   useEffect(() => {
     if (sub !== 'exec') return;
     document.querySelector('.rtp-exec-head')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
   }, [sub, reduced]);
 
-  // rolling → result após a animação do needle
+  // rolling → result após a animação do needle: o estado estagiado assenta
+  // (scorebug/momentum avançam) e o killfeed/flash entram.
   useEffect(() => {
-    if (sub !== 'rolling' || !locked) return;
+    if (sub !== 'rolling' || !staged) return;
     const t = setTimeout(() => {
-      const out = locked.outcome;
-      setFeed(feedForOutcome(beat, locked.opt, out, heroNick, oppNicks, makeRng((prep.matchSeed ^ (idx * 131) ^ ((clutch?.step ?? 0) * 977)) >>> 0)));
-      // só pontua a rodada da BO3 num beat normal OU no FECHAMENTO do clutch.
-      if (!inClutch || locked.clutchFinal) {
-        // parcial = round raspado (não-derrota), CONSISTENTE com a needle e com o
-        // +1 frag/valor positivo. Antes o placar usava +0.09 hardcoded (≠ partialBand
-        // da needle), então um 'PARCIAL' às vezes ia pro inimigo no placar mesmo a UI
-        // mostrando parcial. Todo 'partial' já cai na banda por construção do resolveMoment.
-        const youWin = inClutch
-          ? out.result !== 'fail' && locked.newAlive <= 0
-          : out.result === 'success' || out.result === 'partial';
-        // v17 (bug do 15-8): o +1 do beat respeita o MESMO teto da ponte — um
-        // lado só chega a 12 (match point) se o outro estiver ≤11; 13 é
-        // exclusivo do FECHAMENTO do mapa. Sem o guard, beats depois do teto
-        // estouravam 13/14/15 sem o mapa fechar.
-        setLive((l) => {
-          const [you, them] = l.mapScore;
-          const next: [number, number] = youWin ? [you + 1, them] : [you, them + 1];
-          const grew = youWin ? next[0] : next[1];
-          const other = youWin ? next[1] : next[0];
-          if (grew > 12 || (grew === 12 && other >= 12)) return l; // teto: round acontece, placar segura
-          return { ...l, mapScore: next };
-        });
-        setMomentum((m) => clamp(m * 0.55 + out.value * 0.45, 0, 1));
-        // flash + shake nos rounds grandes (clutch, map point, ou derrota).
+      const { state, beat: rb } = staged;
+      setFeed(feedForOutcome(beat, rb.opt, rb.outcome, heroNick, oppNicks, makeRng((prep.matchSeed ^ (room.idx * 131) ^ ((room.clutch?.step ?? 0) * 977)) >>> 0)));
+      if (rb.scored) {
         const big = inClutch || beat.kind === 'clutch' || beat.kind === 'mapPoint';
-        setFlash({ k: idx * 10 + (clutch?.step ?? 0), type: youWin ? 'win' : 'loss', big });
+        setFlash({ k: room.idx * 10 + (room.clutch?.step ?? 0), type: rb.youWonRound ? 'win' : 'loss', big });
       }
+      setRoom(state);
       setSub('result');
     }, 1150);
     return () => clearTimeout(t);
   }, [sub]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // win-prob = estado derivado do PLACAR REAL (mapa + série) + momentum + força.
-  const winProb = useMemo(() => {
-    const edge = (live.mapScore[0] - live.mapScore[1]) * 2.2 + (live.seriesScore[0] - live.seriesScore[1]) * 14
-      + (momentum - 0.5) * 30 + (save.player.ovr - prep.opp.strength) * 0.8;
-    return clamp(50 + edge, 5, 95);
-  }, [live, momentum, save.player.ovr, prep.opp.strength]);
-
-  const initClutch = (b: BeatSpec): ClutchState => ({ alive: Math.max(1, b.alive[1]), step: 0, hot: 0, bombSecs: b.bomb?.defuseSecs ?? null, subs: [] });
+  const winProb = winProbOf(room);
+  const liveRating = liveRatingOf(room, sub === 'result');
 
   const next = () => {
-    if (!locked) return;
-    // CONTINUA o clutch: mais inimigos vivos e você sobreviveu
-    if (inClutch && !locked.clutchFinal) {
-      setClutch((c) => c && ({ alive: locked.newAlive, step: c.step + 1, hot: c.hot + 1.6, bombSecs: c.bombSecs != null ? Math.max(0, c.bombSecs - 7) : null, subs: [...c.subs, locked.outcome] }));
-      setLocked(null); setFeed([]); setReadUsed(false); setFlash(null); setInterlude(null); setSub('decide');
+    if (!staged) return;
+    const after = roomAdvance(room);
+    setStaged(null); setFeed([]);
+    if (after.phase === 'done') {
+      // o flash reflete o mapa que VOCÊ acabou de fechar (mapas virtuais do BO5
+      // vêm depois dele na lista) — primeiro fechado NESTE advance.
+      const justClosed = after.closedMaps[room.closedMaps.length];
+      if (justClosed) setFlash({ k: room.idx * 7 + 5, type: justClosed.won ? 'win' : 'loss', big: true });
+      setRoom(after);
+      onComplete(after.final!.outcomes, after.final!.liveMaps);
       return;
     }
-    // FINALIZA o beat (normal, ou clutch fechado/perdido)
-    let beatOutcome = locked.outcome;
-    if (inClutch && clutch) {
-      const subs = [...clutch.subs, locked.outcome];
-      const cleared = locked.outcome.result !== 'fail' && locked.newAlive <= 0;
-      beatOutcome = {
-        result: cleared ? 'success' : 'fail',
-        value: subs.reduce((s, o) => s + o.value, 0) / subs.length,
-        frags: subs.reduce((s, o) => s + o.frags, 0),
-        deaths: cleared ? 0 : 1,
-        openings: 0,
-        clutches: cleared ? 1 : 0,
-        narrative: cleared ? 'CLUTCH FECHADO! Você limpou o 1vX sozinho.' : 'O clutch escapou no último duelo.',
-      };
+    if (after.interlude?.mapClosed) {
+      setFlash({ k: room.idx * 7 + 3, type: after.interlude.mapClosed.won ? 'win' : 'loss', big: true });
+    } else {
+      setFlash(null);
     }
-    const acc = [...outcomes, beatOutcome];
-    setOutcomes(acc);
-    setLocked(null); setFeed([]);
-    // A JOGADA decide o mapa: fecho cada mapa pela SUA média de beats NELE, com a
-    // MESMA régua/seed do card (resolveMapFromPlay) → o placar vivo == o resultado.
-    // Placar NATURAL: 2-0 varre (para nos beats restantes); 2-1 vai à decisão.
-    const edge = save.player.ovr - prep.opp.strength;
-    const need = Math.ceil(prep.bestOf / 2);
-    const mapsIds = prep.maps.map((m) => m.map);
-    const allPlay = acc.length ? acc.reduce((s, o) => s + o.value, 0) / acc.length : 0.5;
-    // v17: fechamento FUNDIDO com o placar vivo (nunca encolhe o que o jogador
-    // viu; vencedor segue 100% da jogada). Mapas virtuais (BO5 sem beats) não
-    // têm vivo → merge com [0,0] (no-op).
-    const closeMap = (mi: number, play: number, liveMap: [number, number] = [0, 0]) =>
-      mergeMapClose(resolveMapFromPlay(play, edge, prep.matchSeed, mi), liveMap);
-
-    if (isLast) {
-      // fecha o mapa corrente (tem beats) + mapas virtuais do BO5 (4º/5º, sem beats
-      // no plano) pela jogada AGREGADA — idêntico ao fallback do resolveRoomSeries.
-      let sy = live.seriesScore[0], st = live.seriesScore[1];
-      const cm = closeMap(beat.mapIndex, mapPlayOf(acc, beats, beat.mapIndex, allPlay), live.mapScore);
-      closedMapsRef.current.push({ map: mapsIds[Math.min(beat.mapIndex, mapsIds.length - 1)] ?? 'mirage', score: cm.score, won: cm.won });
-      if (cm.won) sy++; else st++;
-      let mi = beat.mapIndex + 1;
-      while (sy < need && st < need) {
-        const r = closeMap(mi, allPlay);
-        closedMapsRef.current.push({ map: mapsIds[Math.min(mi, Math.max(0, mapsIds.length - 1))] ?? 'mirage', score: r.score, won: r.won });
-        if (r.won) sy++; else st++; mi++;
-      }
-      setFlash({ k: idx * 7 + 5, type: cm.won ? 'win' : 'loss', big: true });
-      setLive({ mapScore: cm.score, seriesScore: [sy, st], mapIndex: beat.mapIndex });
-      onComplete(acc, closedMapsRef.current);
-      return;
-    }
-
-    const nb = beats[idx + 1];
-    // TRANSIÇÃO DE MAPA: fecha o mapa que acabou pela sua jogada nele.
-    if (nb.mapIndex > beat.mapIndex) {
-      const { won, score } = closeMap(beat.mapIndex, mapPlayOf(acc, beats, beat.mapIndex, allPlay), live.mapScore);
-      const newSeries: [number, number] = won
-        ? [live.seriesScore[0] + 1, live.seriesScore[1]]
-        : [live.seriesScore[0], live.seriesScore[1] + 1];
-      const closeLine = won
-        ? `Vocês fecharam o mapa ${score[0]}–${score[1]} — série ${newSeries[0]}–${newSeries[1]}.`
-        : `Eles levaram o mapa ${score[1]}–${score[0]} — série ${newSeries[0]}–${newSeries[1]}.`;
-      closedMapsRef.current.push({ map: mapsIds[Math.min(beat.mapIndex, mapsIds.length - 1)] ?? 'mirage', score, won });
-      setFlash({ k: idx * 7 + 3, type: won ? 'win' : 'loss', big: true });
-      if (newSeries[0] >= need || newSeries[1] >= need) {
-        // série decidida (ex.: 2-0): NÃO joga os beats restantes — varreu.
-        setLive({ mapScore: score, seriesScore: newSeries, mapIndex: beat.mapIndex });
-        setInterlude({ bridged: [0, 0], lines: [closeLine], mapClosed: { map: beat.map, won, score } });
-        onComplete(acc, closedMapsRef.current);
-        return;
-      }
-      // série segue: abre o próximo mapa (bridge só a ABERTURA, sem novo fechamento).
-      const openLive: LiveScore = { mapScore: [0, 0], seriesScore: newSeries, mapIndex: nb.mapIndex };
-      const nbLastOfMap = idx + 2 >= beats.length || beats[idx + 2].mapIndex !== nb.mapIndex;
-      const bridge = bridgeToBeat(openLive, nb, null, momentum, edge, prep.matchSeed, mapsIds, nbLastOfMap);
-      setLive(bridge.live);
-      setInterlude({ bridged: bridge.interlude?.bridged ?? [0, 0], lines: [closeLine, ...(bridge.interlude?.lines ?? [])], mapClosed: { map: beat.map, won, score } });
-      setClutch(nb?.kind === 'clutch' ? initClutch(nb) : null);
-      setReadUsed(false);
-      setIdx(idx + 1); setSub('decide');
-      return;
-    }
-
-    // MESMO MAPA: os rounds entre este beat e o próximo acontecem (bridge intra-mapa).
-    const youWon = inClutch
-      ? beatOutcome.result === 'success'
-      : locked.outcome.result === 'success' || locked.outcome.result === 'partial';
-    const bridge = bridgeToBeat(live, nb, youWon, momentum, edge, prep.matchSeed, mapsIds, false);
-    setLive(bridge.live);
-    setInterlude(bridge.interlude);
-    setClutch(nb?.kind === 'clutch' ? initClutch(nb) : null);
-    setReadUsed(false); setFlash(null);
-    setIdx(idx + 1); setSub('decide');
+    setRoom(after);
+    setSub('decide');
   };
 
-  // PULAR: resolve os beats restantes (a partir do atual) no automático e vai direto
-  // ao resultado — pra quem não quer jogar rodada a rodada. Preserva os já jogados.
+  // PULAR: o engine resolve os beats restantes no automático (sem liveMaps —
+  // o fechamento natural fica pro card, como sempre foi no skip).
   const skipRest = () => {
-    const acc = [...outcomes];
-    for (let i = idx; i < beats.length; i++) {
-      const b = beats[i];
-      const opt = b.moment.options.find((o) => o.style === 'smart') ?? b.moment.options[0];
-      const seed = (prep.matchSeed ^ ((i + 1) * 0x9e3779b1)) >>> 0;
-      const eff = clamp(prep.effAttrs[opt.attr] + planBias(opt) + (prep.grudge ?? 0), 1, 20);
-      acc.push(resolveMoment(b.moment, opt, eff, prep.opp.strength, makeRng(seed)));
-    }
-    onComplete(acc);
+    const done = roomSkipRest(room);
+    onComplete(done.final!.outcomes);
   };
 
-  // rating ao vivo estimado (pra ticker)
-  const liveRating = useMemo(() => {
-    const all = [...outcomes, ...(locked && sub === 'result' ? [locked.outcome] : [])];
-    if (!all.length) return 1.0;
-    const avg = all.reduce((s, o) => s + o.value, 0) / all.length;
-    return Math.round((0.55 + avg * 1.05) * 100) / 100;
-  }, [outcomes, locked, sub]);
+  // dado da resolução em tela (needle/stinger) — vem ESTAGIADO do engine.
+  const locked = staged?.beat ?? null;
+  const interlude = room.interlude;
 
   // chave determinística do beat corrente (reações da torcida / kicker de pressão)
-  const beatSeedKey = `${idx}:${clutch?.step ?? 0}:${prep.matchSeed}`;
+  const beatSeedKey = `${room.idx}:${room.clutch?.step ?? 0}:${prep.matchSeed}`;
 
   return (
-    <div className={`rtp-room${momentum >= 0.62 ? ' mom-hot' : momentum <= 0.38 ? ' mom-cold' : ''}${pressure ? ' pres' : ''}`}>
+    <div className={`rtp-room${room.momentum >= 0.62 ? ' mom-hot' : room.momentum <= 0.38 ? ' mom-cold' : ''}${pressure ? ' pres' : ''}`}>
       {/* flash cinematográfico do fechamento de round-chave */}
       {flash && sub === 'result' && <div key={flash.k} className={`rtp-room-flash f-${flash.type}${flash.big ? ' big' : ''}`} aria-hidden />}
       {/* scorebug do round room — série (mapas) + placar do mapa atual */}
@@ -394,7 +192,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
         {prep.maps.length > 1 && <span className="rtp-room-bug-maps">{live.seriesScore[1]}</span>}
         <span className="rtp-room-bug-team">{prep.opp.tag}</span>
         <span className="rtp-room-bug-prog">
-          {prep.maps.length > 1 ? `MAPA ${Math.min(live.mapIndex + 1, prep.maps.length)}/${prep.maps.length} · ` : ''}MOMENTO {idx + 1}/{beats.length}
+          {prep.maps.length > 1 ? `MAPA ${Math.min(live.mapIndex + 1, prep.maps.length)}/${prep.maps.length} · ` : ''}MOMENTO {room.idx + 1}/{room.beats.length}
         </span>
       </div>
 
@@ -416,7 +214,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
         </div>
         <div className="rtp-room-side">
           <div className="rtp-momentum" title="Momentum">
-            <div className="rtp-momentum-track"><div className="rtp-momentum-knob" style={{ left: `${momentum * 100}%` }} /></div>
+            <div className="rtp-momentum-track"><div className="rtp-momentum-knob" style={{ left: `${room.momentum * 100}%` }} /></div>
             <span>MOMENTUM</span>
           </div>
           <div className="rtp-rating-tick" title="Seu rating ao vivo">
@@ -427,7 +225,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
       </div>
 
       <RtpSituationBoard
-        ctx={currentCtx}
+        ctx={ctx}
         seriesLabel={prep.maps.length > 1 ? `MD${prep.maps.length} · SÉRIE ${live.seriesScore[0]}–${live.seriesScore[1]}` : 'MD1'}
       />
 
@@ -448,7 +246,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
               <span className="rtp-interlude-score">placar chegou em {live.mapScore[0]}–{live.mapScore[1]}</span>
             )}
             {(() => {
-              const amb = interludeAmbientLine(atmo, `${idx}:${prep.matchSeed}`);
+              const amb = interludeAmbientLine(atmo, `${room.idx}:${prep.matchSeed}`);
               return amb ? <span className="rtp-atmo-amb">{amb}</span> : null;
             })()}
           </div>
@@ -456,7 +254,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
       )}
 
       {/* ABERTURA — antes do 1º beat: walkout (MAJOR) + o que está em jogo */}
-      {sub === 'decide' && idx === 0 && outcomes.length === 0 && (atmo.walkout || atmo.stakes) && (
+      {sub === 'decide' && room.idx === 0 && room.outcomes.length === 0 && (atmo.walkout || atmo.stakes) && (
         <div className="rtp-atmo-open">
           {atmo.walkout?.map((l, i) => <span key={i} className="rtp-atmo-walkout">{l}</span>)}
           {atmo.stakes && <span className="rtp-atmo-stakes"><b>EM JOGO</b> {atmo.stakes}</span>}
@@ -483,14 +281,14 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
               <span>decida → execute ({spotlightGame.title.toLowerCase()}) · execução move as odds em até ±8%</span>
             </div>
           )}
-          <h3 className="rtp-room-title">{currentMoment.title}</h3>
-          <p className="rtp-room-sit">{currentMoment.situation}</p>
+          <h3 className="rtp-room-title">{moment.title}</h3>
+          <p className="rtp-room-sit">{moment.situation}</p>
           <div className="rtp-room-read">
-            {readUsed ? (
+            {room.readUsed ? (
               <span className="rtp-read-active"><RtpIcon name="brain" size={13} /> LEITURA: {readTell}</span>
             ) : (
-              <button type="button" className="rtp-read-btn" disabled={reads <= 0} onClick={useRead}>
-                <RtpIcon name="brain" size={13} /> {reads > 0 ? `LER O JOGO · ${reads}` : 'SEM LEITURAS'}
+              <button type="button" className="rtp-read-btn" disabled={room.reads <= 0} onClick={useRead}>
+                <RtpIcon name="brain" size={13} /> {room.reads > 0 ? `LER O JOGO · ${room.reads}` : 'SEM LEITURAS'}
               </button>
             )}
             <button type="button" className="rtp-room-skip" onClick={skipRest} title="Resolve os momentos restantes no automático e vai pro resultado">
@@ -498,8 +296,8 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
             </button>
           </div>
           <div className="rtp-room-opts">
-            {currentMoment.options.map((opt) => {
-              const o = oddsFor(opt);
+            {moment.options.map((opt) => {
+              const o = roomOdds(room, opt);
               const pct = Math.round(o.total * 100);
               return (
                 <div key={opt.id} className={`rtp-opt s-${opt.style}`}>
@@ -645,9 +443,9 @@ function RollNeedle({ roll, threshold, from }: { roll: number; threshold: number
     const z = setTimeout(() => setZone(threshold), 140);
     return () => { timers.forEach(clearTimeout); clearTimeout(z); };
   }, [roll, threshold]);
-  // Mesma banda do resolveMoment: [thr, thr+banda) = PARCIAL (meio-termo com
-  // frag), não falha seca — antes o needle carimbava "FALHOU" nesses rolls.
-  const partialBand = Math.min(0.18, (1 - threshold) * 0.7);
+  // banda de PARCIAL lida da MESMA fonte do engine (partialBandOf) — antes era
+  // uma cópia literal da fórmula e já divergiu uma vez ("needle carimbava FALHOU").
+  const partialBand = partialBandOf(threshold);
   const verdict = roll < threshold ? 'win' : roll < threshold + partialBand ? 'part' : 'loss';
   return (
     <div className="rtp-needle">
