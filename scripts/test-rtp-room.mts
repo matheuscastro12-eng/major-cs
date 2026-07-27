@@ -17,12 +17,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createRoom, currentMoment, spotlightOf, useRead, lockIn, advance, skipRest,
-  effFor, winProbOf, liveRatingOf,
+  effFor, winProbOf, liveRatingOf, finishSeries,
   type RoomState,
 } from '../src/engine/rtp/room.ts';
 import { resolveRoomSeries } from '../src/engine/rtp/roundModel.ts';
 import { generateMoments } from '../src/engine/rtp/moments.ts';
 import { createRtpSave } from '../src/engine/rtp/createSave.ts';
+import { buildUserTeam } from '../src/engine/rtp/matchSim.ts';
 import { ALL_ATTRS } from '../src/engine/attributes.ts';
 import type { MatchPrep } from '../src/engine/rtp/matchSim.ts';
 import type { RoadToProSave } from '../src/engine/rtp/types.ts';
@@ -30,6 +31,7 @@ import type { MapId, Role } from '../src/types.ts';
 
 const ROLES: Role[] = ['Entry', 'AWP', 'Rifler', 'Support', 'Lurker', 'IGL'];
 const MAPS3: MapId[] = ['mirage', 'inferno', 'nuke'];
+const MAPS5: MapId[] = ['mirage', 'inferno', 'nuke', 'ancient', 'anubis'];
 
 function fixtureSave(role: Role): RoadToProSave {
   return createRtpSave({
@@ -39,13 +41,13 @@ function fixtureSave(role: Role): RoadToProSave {
   });
 }
 
-function fixturePrep(role: Role, matchSeed: number, over: Partial<MatchPrep> = {}): MatchPrep {
+function fixturePrep(role: Role, matchSeed: number, over: Partial<MatchPrep> = {}, mapsIds: MapId[] = MAPS3, bestOf: 1 | 3 | 5 = 3): MatchPrep {
   const effAttrs = Object.fromEntries(ALL_ATTRS.map((k, i) => [k, 8 + ((matchSeed + i) % 9)])) as MatchPrep['effAttrs'];
   return {
     matchSeed,
     opp: { name: 'Rival', tag: 'RVL', colors: ['#111', '#eee'], strength: 55 + (matchSeed % 20), players: [] },
-    maps: MAPS3.map((m, i) => ({ map: m, pickedBy: (i === 2 ? -1 : i % 2) as 0 | 1 | -1 })),
-    bestOf: 3,
+    maps: mapsIds.map((m, i) => ({ map: m, pickedBy: (i === mapsIds.length - 1 ? -1 : i % 2) as 0 | 1 | -1 })),
+    bestOf,
     conditionMod: 1,
     factors: [],
     effAttrs,
@@ -97,36 +99,118 @@ test('sala: determinismo — mesmas escolhas, série idêntica', () => {
   assert.equal(a.momentum, b.momentum);
 });
 
-test('sala: PARIDADE — mapas fechados batem com o placar natural (resolveRoomSeries)', () => {
+function assertParity(save: RoadToProSave, prep: MatchPrep, s: RoomState, tag: string) {
+  const mapsIds = prep.maps.map((m) => m.map);
+  const need = Math.ceil(prep.bestOf / 2);
+  assert.ok(s.final?.liveMaps?.length, `${tag}: sem liveMaps`);
+  const edge = save.player.ovr - prep.opp.strength;
+  const rs = resolveRoomSeries(save.player.role, s.final!.outcomes, edge, prep.matchSeed, mapsIds, prep.bestOf);
+  const played = s.final!.liveMaps!;
+  // mesmo nº de mapas, mesma ordem, MESMO VENCEDOR mapa a mapa e na série.
+  assert.equal(played.length, rs.maps.length, `${tag}: nº de mapas`);
+  for (let i = 0; i < played.length; i++) {
+    assert.equal(played[i].won, rs.maps[i].won, `${tag}: vencedor do mapa ${i}`);
+    assert.equal(played[i].map, rs.maps[i].map, `${tag}: id do mapa ${i}`);
+  }
+  const mapWins: [number, number] = [played.filter((m) => m.won).length, played.filter((m) => !m.won).length];
+  assert.deepEqual(mapWins, rs.mapWins, `${tag}: série`);
+  assert.equal(mapWins[0] > mapWins[1], rs.seriesWon);
+  // fechamento honesto: vencedor 13 (ou 16 na prorrogação), perdedor ≤11 (ou 14).
+  for (const m of played) {
+    const [w, l] = m.won ? [m.score[0], m.score[1]] : [m.score[1], m.score[0]];
+    assert.ok((w === 13 && l <= 11) || (w === 16 && l === 14), `${tag}: placar ${m.score[0]}-${m.score[1]}`);
+  }
+  // a série fecha em quem chegou a `need` primeiro, sem mapa sobrando.
+  assert.ok(Math.max(mapWins[0], mapWins[1]) === need && played.length === mapWins[0] + mapWins[1]);
+}
+
+test('sala: PARIDADE BO3 — mapas fechados batem com o placar natural (resolveRoomSeries)', () => {
   for (const role of ROLES) {
     const save = fixtureSave(role);
     for (let v = 0; v < 3; v++) {
       for (let k = 1; k <= 25; k++) {
         const prep = fixturePrep(role, k * 7919 + v);
         const s = playSeries(save, prep, v);
-        assert.ok(s.final?.liveMaps?.length, `${role}/${k}: sem liveMaps`);
-        const edge = save.player.ovr - prep.opp.strength;
-        const rs = resolveRoomSeries(role, s.final!.outcomes, edge, prep.matchSeed, MAPS3, 3);
-        const played = s.final!.liveMaps!;
-        // mesmo nº de mapas, mesma ordem, MESMO VENCEDOR mapa a mapa e na série.
-        assert.equal(played.length, rs.maps.length, `${role}/${k}/${v}: nº de mapas`);
-        for (let i = 0; i < played.length; i++) {
-          assert.equal(played[i].won, rs.maps[i].won, `${role}/${k}/${v}: vencedor do mapa ${i}`);
-          assert.equal(played[i].map, rs.maps[i].map, `${role}/${k}/${v}: id do mapa ${i}`);
-        }
-        const mapWins: [number, number] = [played.filter((m) => m.won).length, played.filter((m) => !m.won).length];
-        assert.deepEqual(mapWins, rs.mapWins, `${role}/${k}/${v}: série`);
-        assert.equal(mapWins[0] > mapWins[1], rs.seriesWon);
-        // fechamento honesto: vencedor 13 (ou 16 na prorrogação), perdedor ≤11 (ou 14).
-        for (const m of played) {
-          const [w, l] = m.won ? [m.score[0], m.score[1]] : [m.score[1], m.score[0]];
-          assert.ok((w === 13 && l <= 11) || (w === 16 && l === 14), `${role}/${k}/${v}: placar ${m.score[0]}-${m.score[1]}`);
-        }
-        // a série fecha em quem chegou a 2 primeiro (BO3): 2-0 ou 2-1.
-        assert.ok(Math.max(mapWins[0], mapWins[1]) === 2 && played.length === mapWins[0] + mapWins[1]);
+        assertParity(save, prep, s, `${role}/${k}/${v}`);
       }
     }
   }
+});
+
+test('sala: PARIDADE BO5 — mapas virtuais do 4º/5º inclusos, sem 2-2 fantasma', () => {
+  for (const role of ROLES) {
+    const save = fixtureSave(role);
+    for (let v = 0; v < 2; v++) {
+      for (let k = 1; k <= 10; k++) {
+        const prep = fixturePrep(role, k * 104729 + v, {}, MAPS5, 5);
+        const s = playSeries(save, prep, v);
+        assertParity(save, prep, s, `bo5:${role}/${k}/${v}`);
+      }
+    }
+  }
+});
+
+test('finishSeries: o card exibe EXATAMENTE os mapas que a Sala fechou', () => {
+  const save = fixtureSave('Rifler');
+  const opp = { ...buildUserTeam(fixtureSave('AWP'), fixtureSave('AWP').player.attrs, 0, 'opp'), strength: 62 };
+  for (let k = 1; k <= 8; k++) {
+    const prep = fixturePrep('Rifler', k * 331, { opp: { ...fixturePrep('Rifler', k * 331).opp, players: opp.players } });
+    const s = playSeries(save, prep, k % 3);
+    const { result, series } = finishSeries(save, prep, s.final!, opp);
+    // display = liveMaps da Sala, 1:1 (mapa, placar, vencedor).
+    assert.deepEqual(result.maps, s.final!.liveMaps);
+    const wins: [number, number] = [s.final!.liveMaps!.filter((m) => m.won).length, s.final!.liveMaps!.filter((m) => !m.won).length];
+    assert.deepEqual(result.mapScore, wins);
+    assert.equal(result.won, wins[0] > wins[1]);
+    // o sim interno foi forçado ao MESMO placar de mapas (scoreboard coerente).
+    assert.deepEqual(series.mapScore, wins);
+    // determinístico.
+    const again = finishSeries(save, prep, s.final!, opp);
+    assert.deepEqual(again.result.maps, result.maps);
+    assert.equal(again.result.heroRating, result.heroRating);
+  }
+});
+
+test('finishSeries: série PULADA cai no placar natural (resolveRoomSeries)', () => {
+  const save = fixtureSave('Entry');
+  const opp = { ...buildUserTeam(fixtureSave('IGL'), fixtureSave('IGL').player.attrs, 0, 'opp'), strength: 58 };
+  const prep = fixturePrep('Entry', 777);
+  const s = skipRest(createRoom(save, prep));
+  assert.equal(s.final!.liveMaps, undefined);
+  const { result } = finishSeries(save, prep, s.final!, opp);
+  const rs = resolveRoomSeries('Entry', s.final!.outcomes, save.player.ovr - prep.opp.strength, prep.matchSeed, MAPS3, 3);
+  assert.deepEqual(result.maps, rs.maps);
+  assert.equal(result.won, rs.seriesWon);
+});
+
+test('balanceamento: jogar bem (attrs+execução) vence mais que jogar mal', () => {
+  const save = fixtureSave('Rifler');
+  // edge NEUTRO (rival da sua força): o que varia é só a QUALIDADE da jogada —
+  // sem isso o OVR do herói domina o fechamento e mascara a diferença.
+  const wr = (attr: number, perf: number): number => {
+    let wins = 0;
+    const N = 120;
+    for (let k = 1; k <= N; k++) {
+      const effAttrs = Object.fromEntries(ALL_ATTRS.map((a) => [a, attr])) as MatchPrep['effAttrs'];
+      const prep = fixturePrep('Rifler', k * 613, { effAttrs, opp: { ...fixturePrep('Rifler', k * 613).opp, strength: save.player.ovr } });
+      let s = createRoom(save, prep);
+      let guard = 0;
+      while (s.phase !== 'done' && guard++ < 300) {
+        if (s.phase === 'decide') {
+          const m = currentMoment(s);
+          const opt = m.options.find((o) => o.style === 'smart') ?? m.options[0];
+          s = lockIn(s, opt.id, spotlightOf(s) ? perf : null).state;
+        } else s = advance(s);
+      }
+      const maps = s.final!.liveMaps!;
+      if (maps.filter((m) => m.won).length > maps.filter((m) => !m.won).length) wins++;
+    }
+    return wins / N;
+  };
+  const lo = wr(4, 0.15), hi = wr(17, 0.95);
+  assert.ok(hi > lo + 0.2, `jogar bem tem que pesar: lo=${lo} hi=${hi}`);
+  assert.ok(hi > 0.6, `attrs altos + execução perfeita devem vencer >60% (deu ${hi})`);
+  assert.ok(lo < 0.55, `attrs baixos + execução ruim não podem vencer mais que a moeda (deu ${lo})`);
 });
 
 test('sala: odds honestas — o resultado do roll respeita o total mostrado', () => {

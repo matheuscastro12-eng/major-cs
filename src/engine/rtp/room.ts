@@ -31,7 +31,13 @@ import {
 } from './roundModel';
 import { MINIGAMES, type MiniGameDef } from './minigames';
 import { planStyleBias, gamePlanDef, type GamePlan } from './meta';
-import type { MatchPrep } from './matchSim';
+import {
+  buildUserTeam, simulateSeriesForPlay, assembleProResult, execBoostOvr,
+  type MatchPrep, type ProMatchResult,
+} from './matchSim';
+import { summarizeMoments } from './moments';
+import { resolveRoomSeries } from './roundModel';
+import type { TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave } from './types';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -461,6 +467,36 @@ export function advance(s: RoomState): RoomState {
     readUsed: false,
     idx: s.idx + 1,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINALIZAÇÃO — o resultado oficial sai DAQUI (circuit e major consomem este
+// seam; antes cada um repetia o trio resolveRoomSeries + override de liveMaps +
+// simulateSeriesForPlay, e o placar era uma negociação a três).
+
+// Resolve o resultado oficial da série a partir do RoomFinal: o placar exibido
+// vem dos mapas COMO A SALA FECHOU (jogada) ou do placar natural
+// (resolveRoomSeries — skip/sim, mesma régua por construção). O sim de time
+// entra como detalhe interno, só pra gerar scoreboard/stats coerentes com esse
+// placar. `oppStored` é o time adversário como está no bracket (normalizado aqui).
+export function finishSeries(
+  save: RoadToProSave, prep: MatchPrep, final: RoomFinal, oppStored: TTeam,
+): { result: ProMatchResult; series: SeriesResult } {
+  const summary = summarizeMoments(final.outcomes);
+  // Decisões (±9) + EXECUÇÃO nos minigames (±4.5/−1.5) movem o herói no sim de
+  // verdade — jogou bem os momentos-chave, o rating sobe; jogou mal, cai.
+  const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg);
+  const userTeam = buildUserTeam(save, prep.effAttrs, momentBoost, 'user');
+  const oppTeam: TTeam = { ...oppStored, wins: 0, losses: 0, roundDiff: 0, status: 'alive', noEdge: true };
+  const maps = final.liveMaps && final.liveMaps.length
+    ? final.liveMaps
+    : resolveRoomSeries(save.player.role, final.outcomes, save.player.ovr - prep.opp.strength,
+        prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf).maps;
+  const mapWins: [number, number] = [maps.filter((m) => m.won).length, maps.filter((m) => !m.won).length];
+  const seriesWon = mapWins[0] > mapWins[1];
+  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins, seriesWon });
+  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, maps);
+  return { result, series };
 }
 
 // PULAR: resolve os beats restantes (a partir do atual) no automático e fecha a

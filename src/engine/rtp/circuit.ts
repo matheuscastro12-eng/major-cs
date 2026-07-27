@@ -13,13 +13,12 @@ import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslUserPlace }
 import { userLeagueMatch, leagueTeam, type League as GslLeague } from '../league';
 import { userPairing, getTeam, pairingBestOf, placementCode, resolveRound } from '../swiss';
 import {
-  buildUserTeam, conditionModifiers, assembleProResult, pickMaps, majorEffectiveAttrs, execBoostOvr,
+  buildUserTeam, conditionModifiers, pickMaps, majorEffectiveAttrs,
   neutralMapPrefs, NEUTRAL_COACH, applyMatchOutcome, matchConfidence,
-  simulateSeriesForPlay,
   type MatchPrep, type ProMatchResult, type MatchConsequence,
 } from './matchSim';
-import { resolveRoomSeries } from './roundModel';
-import { generateMoments, summarizeMoments, type MomentOutcome } from './moments';
+import { finishSeries } from './room';
+import { generateMoments, type MomentOutcome } from './moments';
 import { perkMatchFactors } from './perks';
 import { scoutReport } from './meta';
 import { isFacingRival, pushHeadline } from './media';
@@ -243,31 +242,16 @@ function flipSeries(s: SeriesResult): SeriesResult {
   };
 }
 
+// A verdade do placar vem do módulo Sala (finishSeries): mapas como ela fechou
+// (jogada) ou placar natural (skip). Aqui só o lookup do adversário no circuito
+// e a orientação da série pro bracket.
 export function finishCircuitMatch(save: RoadToProSave, prep: MatchPrep, outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]): { result: ProMatchResult; matchResult: SeriesResult } {
   const c = save.world.league!;
   const um = userMatch(c)!;
   const userIdx = um.a === 'user' ? 0 : 1;
   const oppId = userIdx === 0 ? um.b : um.a;
-  const oppStored = oppTeamOf(c, oppId);
-  const summary = summarizeMoments(outcomes);
-  // Decisões (±9) + EXECUÇÃO nos minigames (±4.5/−1.5) movem o herói no sim de
-  // verdade — jogou bem os momentos-chave, o rating sobe; jogou mal, cai.
-  const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg);
-  const userTeam = buildUserTeam(save, prep.effAttrs, momentBoost, 'user');
-  const oppTeam: TTeam = { ...oppStored, wins: 0, losses: 0, roundDiff: 0, status: 'alive', noEdge: true };
-  // A JOGADA decide: o placar da série sai da SUA jogada mapa a mapa (resolveRoomSeries
-  // — placar NATURAL 2-0/2-1/etc., a série para quando decide); o simulateSeries é
-  // re-semeado até bater esse placar, gerando só o scoreboard/stats. É a MESMA fonte
-  // que a Sala usa → o card nunca contradiz o que você jogou.
-  const room = resolveRoomSeries(save.player.role, outcomes, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf);
-  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins: room.mapWins, seriesWon: room.seriesWon });
-  // v17: quando a partida foi JOGADA na Sala, o card usa os mapas COMO ELA
-  // EXIBIU (fechamento fundido com o placar vivo) — Sala == card por
-  // construção. Skip/sim (sem Sala) seguem no resolveRoomSeries puro.
-  const displayMaps = liveMaps && liveMaps.length ? liveMaps : room.maps;
-  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, displayMaps);
-  const matchResult = userIdx === 0 ? series : flipSeries(series);
-  return { result, matchResult };
+  const { result, series } = finishSeries(save, prep, { outcomes, liveMaps }, oppTeamOf(c, oppId));
+  return { result, matchResult: userIdx === 0 ? series : flipSeries(series) };
 }
 
 // ── Avança o circuito após a série do herói (GSL round / playoff / idle ff) ───

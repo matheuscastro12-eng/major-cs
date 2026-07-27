@@ -31,7 +31,8 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
   const [phase, setPhase] = useState<Phase>('intro');
   const [outcomes, setOutcomes] = useState<MomentOutcome[]>([]);
   // v17: mapas como a Sala exibiu — o card oficial usa exatamente estes placares.
-  const liveMapsRef = useRef<{ map: MapId; score: [number, number]; won: boolean }[] | null>(null);
+  // Estado (não ref): o memo do resultado lê durante o render.
+  const [liveMaps, setLiveMaps] = useState<{ map: MapId; score: [number, number]; won: boolean }[] | null>(null);
   // Escolhas de pré-jogo (META): plano de jogo + mapas vetados.
   const [plan, setPlan] = useState<GamePlan>('default');
   const [vetoedMaps, setVetoedMaps] = useState<{ map: MapId; pickedBy: 0 | 1 | -1 }[] | null>(null);
@@ -46,11 +47,20 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
   // Resultado da série + a série orientada ao bracket (pairing/match) pra gravar.
   const finished = useMemo(() => {
     if (phase !== 'result' || !matchPrep) return null;
-    if (mode === 'major') { const r = finishMajorMatch(save, matchPrep, outcomes, liveMapsRef.current ?? undefined); return { result: r.result, write: r.pairingResult }; }
-    const r = finishCircuitMatch(save, matchPrep, outcomes, liveMapsRef.current ?? undefined);
+    if (mode === 'major') { const r = finishMajorMatch(save, matchPrep, outcomes, liveMaps ?? undefined); return { result: r.result, write: r.pairingResult }; }
+    const r = finishCircuitMatch(save, matchPrep, outcomes, liveMaps ?? undefined);
     return { result: r.result, write: r.matchResult };
-  }, [phase, save, matchPrep, outcomes, mode]);
+  }, [phase, save, matchPrep, outcomes, liveMaps, mode]);
   const result: ProMatchResult | null = finished?.result ?? null;
+
+  // Outcome aplicado UMA vez: o conclude usa o save resultante e a tela de
+  // resultado exibe a MESMA consequência (antes cada um re-executava o
+  // applyMatchOutcome por conta própria — display e mutação acoplados por
+  // re-execução em vez de por dado).
+  const applied = useMemo(
+    () => (result ? applyMatchOutcome(save, result, { leaguePrize: mode !== 'major' }) : null),
+    [result, save, mode],
+  );
 
   // Respostas dadas na entrevista pós-jogo (iter46): a consequência (fama/
   // seguidores/manchete que cita a fala) é aplicada AQUI, no CTA de concluir —
@@ -59,9 +69,9 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
   const itvAnswers = useRef<InterviewAnswer[]>([]);
 
   const conclude = () => {
-    if (!result || !finished?.write || !matchPrep) return;
+    if (!result || !finished?.write || !matchPrep || !applied) return;
     // No Major a premiação vem da resolução do torneio — sem prêmio por-série lá.
-    const { save: afterOutcome } = applyMatchOutcome(save, result, { leaguePrize: mode !== 'major' });
+    const afterOutcome = applied.save;
     // Entrevista: pequena e honesta, DEPOIS do outcome (a manchete da fala entra
     // por cima da manchete do jogo no feed). Nada de prêmio/RP/dificuldade.
     const afterItv = applyInterviewOutcome(afterOutcome, itvAnswers.current, {
@@ -111,12 +121,12 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
           save={save}
           prep={matchPrep}
           major={mode === 'major'}
-          onComplete={(outs, maps) => { setOutcomes(outs); liveMapsRef.current = maps ?? null; setPhase('result'); }}
+          onComplete={(outs, maps) => { setOutcomes(outs); setLiveMaps(maps ?? null); setPhase('result'); }}
         />
       )}
 
-      {phase === 'result' && result && matchPrep && (
-        <Result save={save} result={result} onConclude={conclude} mode={mode}
+      {phase === 'result' && result && matchPrep && applied && (
+        <Result save={save} result={result} conseq={applied.consequence} onConclude={conclude} mode={mode}
           matchSeed={matchPrep.matchSeed} grudge={(matchPrep.grudge ?? 0) > 0}
           onInterviewAnswer={(a) => { itvAnswers.current = [...itvAnswers.current, a]; }} />
       )}
@@ -127,11 +137,10 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Resultado: placar + linha do protagonista + scoreboard dos 10
 
-function Result({ save, result, onConclude, mode, matchSeed, grudge, onInterviewAnswer }: {
-  save: RoadToProSave; result: ProMatchResult; onConclude: () => void; mode: MatchMode;
+function Result({ save, result, conseq, onConclude, mode, matchSeed, grudge, onInterviewAnswer }: {
+  save: RoadToProSave; result: ProMatchResult; conseq: MatchConsequence; onConclude: () => void; mode: MatchMode;
   matchSeed: number; grudge: boolean; onInterviewAnswer: (a: InterviewAnswer) => void;
 }) {
-  const conseq = useMemo<MatchConsequence>(() => applyMatchOutcome(save, result, { leaguePrize: mode !== 'major' }).consequence, [save, result, mode]);
   const hero = result.userRows.find((r) => r.isHero);
   // Fechamento de ATMOSFERA (iter41): a arena reage ao veredito — tier-aware e
   // determinístico. "Apertada" = série no decider ou mapa decidido no detalhe.

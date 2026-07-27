@@ -13,13 +13,12 @@ import {
   userPairing, getTeam, pairingBestOf, placementCode,
 } from '../swiss';
 import {
-  buildUserTeam, conditionModifiers, assembleProResult, pickMaps, execBoostOvr,
+  buildUserTeam, conditionModifiers, pickMaps,
   majorEffectiveAttrs, neutralMapPrefs, NEUTRAL_COACH, applyMatchOutcome, matchConfidence,
-  simulateSeriesForPlay,
   type MatchPrep, type ProMatchResult, type MatchConsequence,
 } from './matchSim';
-import { resolveRoomSeries } from './roundModel';
-import { generateMoments, summarizeMoments, type MomentOutcome } from './moments';
+import { finishSeries } from './room';
+import { generateMoments, type MomentOutcome } from './moments';
 import { perkMatchFactors } from './perks';
 import { scoutReport } from './meta';
 import { isFacingRival, pushHeadline } from './media';
@@ -144,29 +143,16 @@ function flipSeries(s: SeriesResult): SeriesResult {
   };
 }
 
-// Resolve a série do herói (momentos já jogados). Devolve o ProMatchResult
-// (orientado ao usuário, índice 0) + a série orientada ao pairing pra gravar.
+// Resolve a série do herói (momentos já jogados). A verdade do placar vem do
+// módulo Sala (finishSeries — mesma régua do circuito); aqui só o lookup do
+// adversário no bracket e a orientação da série pro pairing.
 export function finishMajorMatch(save: RoadToProSave, prep: MatchPrep, outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]): { result: ProMatchResult; pairingResult: SeriesResult } {
   const t = save.world.major!.tournament;
   const up = userPairing(t)!;
   const userIdx = up.a === 'user' ? 0 : 1;
   const oppId = userIdx === 0 ? up.b : up.a;
-  const oppStored = getTeam(t, oppId);
-  const summary = summarizeMoments(outcomes);
-  const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg);
-  const userTeam = buildUserTeam(save, prep.effAttrs, momentBoost, 'user');
-  const oppTeam: TTeam = { ...oppStored, wins: 0, losses: 0, roundDiff: 0, status: 'alive', noEdge: true };
-  // A JOGADA decide (mesma régua do circuito): placar natural da série pela sua
-  // jogada mapa a mapa (resolveRoomSeries); o simulateSeries é forçado a bater.
-  const room = resolveRoomSeries(save.player.role, outcomes, save.player.ovr - prep.opp.strength, prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf);
-  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins: room.mapWins, seriesWon: room.seriesWon });
-  // v17: quando a partida foi JOGADA na Sala, o card usa os mapas COMO ELA
-  // EXIBIU (fechamento fundido com o placar vivo) — Sala == card por
-  // construção. Skip/sim (sem Sala) seguem no resolveRoomSeries puro.
-  const displayMaps = liveMaps && liveMaps.length ? liveMaps : room.maps;
-  const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, displayMaps);
-  const pairingResult = userIdx === 0 ? series : flipSeries(series);
-  return { result, pairingResult };
+  const { result, series } = finishSeries(save, prep, { outcomes, liveMaps }, getTeam(t, oppId));
+  return { result, pairingResult: userIdx === 0 ? series : flipSeries(series) };
 }
 
 // ── Conclusão da rodada do Major (avança o bracket; resolve no fim) ───────────
