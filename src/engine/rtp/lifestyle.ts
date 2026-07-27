@@ -84,8 +84,8 @@ export function investYield(invested: number, seed: number, tick: number): numbe
 }
 
 // Virada de semana dos investimentos: o rendimento COMPÕE no montante aplicado
-// (não pinga no bolso — resgatar é decisão sua). Chamado pelos dois caminhos de
-// virada (advanceWeek e withWeekStart do circuito), sempre pós-bump do tick.
+// (não pinga no bolso — resgatar é decisão sua). Chamado pelo turnWeek
+// (weekly.ts — a virada canônica), sempre pós-bump do tick.
 export function investWeekTick(save: RoadToProSave): RoadToProSave {
   const invested = save.lifestyle.invested;
   if (invested <= 0) return save;

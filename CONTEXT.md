@@ -31,10 +31,11 @@ Use estes nomes exatamente — em código, comentários, testes e discussões.
   efetivo); semeado pela confiança pré-jogo.
 - **Leitura tática** — recurso limitado (escala com game sense) que revela a
   tendência do adversário e soma +2 no atributo da decisão atual.
-- **Virada de semana** — o tick semanal (medidores, salário, custos, moradia,
-  investimentos) — `weeklyTick` em `weekly.ts`; a orquestração completa da
-  semana no circuito passa por `withWeekStart`/`concludeCircuitRound`
-  (`circuit.ts`).
+- **Virada de semana** — a virada canônica é `turnWeek` (`weekly.ts`):
+  patrocínio, investimentos, evento de vida e dinastia; `weeklyTick` é o tick
+  de medidores/salário/custos que a antecede. O circuito
+  (`concludeCircuitRound`) invoca ambos em todos os caminhos — não existem
+  duas definições de semana.
 - **Vida de pro** — os gastos de longo prazo da carreira (moradia, casa da
   família, investimentos) — `lifestyle.ts`.
 

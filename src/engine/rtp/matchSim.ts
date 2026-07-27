@@ -349,7 +349,7 @@ export function simulateSeriesForPlay(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Consequências (form, fama, $, moral, energia, histórico). NÃO vira a semana —
-// o caller compõe com advanceWeek.
+// o caller compõe com o concludeCircuitRound (weeklyTick + turnWeek).
 
 // Premiação por vitória, alinhada à união real de Tier (academy/access/
 // challenger/elite). O bug antigo usava 'tier1' (inexistente) e ignorava 'access'.

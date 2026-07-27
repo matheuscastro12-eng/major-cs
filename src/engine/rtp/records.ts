@@ -9,7 +9,7 @@
 //   - recordsAfterSeries    → cada série (applyMatchOutcome)
 //   - recordsAtEventEnd     → cada campeonato fechado (concludeCircuitRound)
 //   - recordsAtMajorEnd     → resolução do Major (applyResolution)
-//   - recordsWeekTick       → cada virada de semana do circuito (withWeekStart)
+//   - recordsWeekTick       → cada virada de semana do circuito (turnWeek)
 //   - applyRecordBreaks     → confere marcos quebrados e gera as manchetes
 
 import { pushHeadline } from './media';

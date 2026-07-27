@@ -11,7 +11,9 @@ import {
   MECHANICAL_KEYS, MENTAL_KEYS, PHYSICAL_KEYS, ATTR_LABEL, type AttrKey,
 } from '../attributes';
 import { makeRng } from '../rng';
-import { ROLE_FOCUS, ACTIONS_PER_WEEK, WEEKS_PER_SEASON } from './createSave';
+import { ROLE_FOCUS } from './createSave';
+import { generateLifeEvent } from './lifeEvents';
+import { defaultRecords, recordsWeekTick, applyRecordBreaks } from './records';
 import { proOvr } from './coreStats';
 import { setupTrainingMods, setupConditionMods, psychDef } from './setup';
 import { lifestyleWeeklyMods, investWeekTick } from './lifestyle';
@@ -42,14 +44,6 @@ export interface ActionResult {
   ok: boolean;
   reason?: string;                 // motivo quando ok=false (ex.: sem ações)
   feedback?: ActionFeedback;
-}
-
-export interface WeekSummary {
-  wagePaid: number;
-  livingCost: number;
-  psychRetainer: number;
-  newSeason: boolean;
-  agedUp: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -351,7 +345,7 @@ export function ageUp(player: ProPlayer): ProPlayer {
 
 // Tick de tempo de uma semana: recuperação de energia, deriva de medidores pro
 // baseline, decaimento de fama, salário − custos. Puro. Compartilhado pelo
-// advanceWeek (fallback) e pelo concludeRound da liga (RTP4).
+// concludeCircuitRound (medidores/salário) — a virada completa é o turnWeek.
 export function weeklyTick(life: RoadToProSave['life'], wage: number, setup: SetupState, lifestyle?: LifestyleState): RoadToProSave['life'] {
   // Lesão: decrementa a duração; ao zerar, recupera (cura) e devolve forma.
   const flags = { ...life.flags };
@@ -380,38 +374,36 @@ export function weeklyTick(life: RoadToProSave['life'], wage: number, setup: Set
   };
 }
 
-export function advanceWeek(save: RoadToProSave): { save: RoadToProSave; summary: WeekSummary } {
-  // Contrato expirado = sem salário (espelha concludeCircuitRound).
-  const wage = save.team.contract.weeksLeft > 0 ? save.team.contract.wage : 0;
-  const nextLife = weeklyTick(save.life, wage, save.setup, save.lifestyle);
-  const psychRetainer = psychDef(save.setup.psychTier ?? 0).retainer;
-
-  let { season, week } = save.world;
-  let newSeason = false;
-  let agedUp = false;
-  let player = save.player;
-  week += 1;
-  if (week > WEEKS_PER_SEASON) {
-    week = 1;
-    season += 1;
-    player = ageUp(player);      // +1 ano + declínio por idade + OVR
-    newSeason = true;
-    agedUp = true;
+// TURN WEEK — a virada de semana CANÔNICA (única): renda de patrocínio,
+// histórico de caixa, rendimento dos investimentos, evento de vida da semana e
+// o tick de dinastia (reinado no #1 + marcos quebrados viram manchete).
+// Chamada pelo concludeCircuitRound em TODOS os caminhos de virada, depois do
+// weeklyTick (medidores/salário) e do avanço de calendário do circuito.
+//
+// Histórico: existiam DOIS caminhos — este (que vivia como withWeekStart no
+// circuit.ts) e um advanceWeek "canônico" sem nenhum caller, que fazia MENOS
+// (sem patrocínio, sem evento de vida, sem records) — quem o usasse perdia
+// tudo isso em silêncio. O órfão foi deletado; esta é a única definição.
+export function turnWeek(save: RoadToProSave): RoadToProSave {
+  let money = save.life.money;
+  const sponsors: typeof save.sponsors = [];
+  for (const sp of save.sponsors) {
+    money += sp.perWeek;
+    const weeksLeft = sp.weeksLeft - 1;
+    if (weeksLeft > 0) sponsors.push({ ...sp, weeksLeft });
   }
-
-  const contract = { ...save.team.contract, weeksLeft: Math.max(0, save.team.contract.weeksLeft - 1) };
-
-  return {
-    summary: { wagePaid: wage, livingCost: livingCostFor(wage), psychRetainer, newSeason, agedUp },
-    save: investWeekTick({
-      ...save,
-      player,
-      life: nextLife,
-      team: { ...save.team, contract },
-      world: { ...save.world, season, week, actionsLeft: ACTIONS_PER_WEEK },
-      rng: bumpTick(save),
-    }),
-  };
+  let s: RoadToProSave = investWeekTick({ ...save, life: { ...save.life, money }, sponsors });
+  // Histórico de caixa (RTP v14): alimenta o gráfico REAL de finanças do overview.
+  s = { ...s, world: { ...s.world, cashHist: [...(s.world.cashHist ?? []), money].slice(-12) } };
+  // Etapa no seed: a semana reseta pra 1 a cada campeonato — sem a etapa, os
+  // rolls de evento de vida da semana N se repetiriam nas 3 etapas do ano.
+  const erng = makeRng((s.rng.seed ^ (s.world.season * 7717) ^ ((s.world.seasonEvent ?? 1) * 2749) ^ (s.world.week * 5381)) >>> 0);
+  const ev = generateLifeEvent(s, erng);
+  if (ev) s = { ...s, inbox: [...s.inbox, ev] };
+  // DINASTIA (RTP v15): semana no topo alimenta o reinado (semanas em #1); marcos
+  // de lenda quebrados nesta virada viram manchete (única — records.broken).
+  const rec = recordsWeekTick(s.history.records ?? defaultRecords(), s.world.worldRank === 1);
+  return applyRecordBreaks({ ...s, history: { ...s.history, records: rec } });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

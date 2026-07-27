@@ -26,12 +26,10 @@ import { divisionPool, allAcademyTeams, joinTeam, worldTeamById, type WorldTeam 
 import { TIER_NAME, TIER_ORDER, tierUp, tierDown, squadRoleFor, circuitEventName, type SeasonEndResult } from './league';
 import { buildMajor, majorQualifies } from './major';
 import { generateOffers, weakestClubContext } from './transfers';
-import { weeklyTick, ageUp, RETIRE_AGE } from './weekly';
-import { investWeekTick } from './lifestyle';
-import { generateLifeEvent } from './lifeEvents';
+import { weeklyTick, turnWeek, ageUp, RETIRE_AGE } from './weekly';
 import { ACTIONS_PER_WEEK } from './createSave';
 import { computeWorldRank, deriveEventAward, makeAccolade } from './standing';
-import { defaultRecords, recordsAtEventEnd, recordsWeekTick, applyRecordBreaks } from './records';
+import { defaultRecords, recordsAtEventEnd, applyRecordBreaks } from './records';
 import { MAP_LABELS } from '../../types';
 import type { MapId, Tournament, TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave, Tier, CircuitState, MajorState, TransferOffer, TeamContext, SeasonObjective, CareerLog, ProPlayer, Accolade, MediaState } from './types';
@@ -313,28 +311,8 @@ function updateStanding(save: RoadToProSave, history: CareerLog, player: ProPlay
 }
 export interface RoundConclusion { save: RoadToProSave; seasonEnd?: SeasonEndResult; eventEnd?: EventEnd; }
 
-// Início de semana: renda de patrocínio + rola um evento de vida pro inbox.
-function withWeekStart(save: RoadToProSave): RoadToProSave {
-  let money = save.life.money;
-  const sponsors: typeof save.sponsors = [];
-  for (const sp of save.sponsors) {
-    money += sp.perWeek;
-    const weeksLeft = sp.weeksLeft - 1;
-    if (weeksLeft > 0) sponsors.push({ ...sp, weeksLeft });
-  }
-  let s: RoadToProSave = investWeekTick({ ...save, life: { ...save.life, money }, sponsors });
-  // Histórico de caixa (RTP v14): alimenta o gráfico REAL de finanças do overview.
-  s = { ...s, world: { ...s.world, cashHist: [...(s.world.cashHist ?? []), money].slice(-12) } };
-  // Etapa no seed: a semana reseta pra 1 a cada campeonato — sem a etapa, os
-  // rolls de evento de vida da semana N se repetiriam nas 3 etapas do ano.
-  const erng = makeRng((s.rng.seed ^ (s.world.season * 7717) ^ ((s.world.seasonEvent ?? 1) * 2749) ^ (s.world.week * 5381)) >>> 0);
-  const ev = generateLifeEvent(s, erng);
-  if (ev) s = { ...s, inbox: [...s.inbox, ev] };
-  // DINASTIA (RTP v15): semana no topo alimenta o reinado (semanas em #1); marcos
-  // de lenda quebrados nesta virada viram manchete (única — records.broken).
-  const rec = recordsWeekTick(s.history.records ?? defaultRecords(), s.world.worldRank === 1);
-  return applyRecordBreaks({ ...s, history: { ...s.history, records: rec } });
-}
+// Início de semana: a virada CANÔNICA vive em weekly.turnWeek (patrocínio,
+// investimentos, evento de vida, dinastia) — o circuito só a invoca.
 
 // Manchetes de CARREIRA (RTP v14): a imprensa reage a título, prêmio individual,
 // corte, promoção/rebaixamento, salto no ranking e vaga no Major — não só a partidas.
@@ -369,7 +347,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
   if (!adv.done) {
     // circuito continua: próxima série, +ações, +1 semana.
     return {
-      save: withWeekStart({
+      save: turnWeek({
         ...save,
         life,
         team: { ...save.team, contract },
@@ -444,7 +422,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
     const midOffers = !replacement && !save.world.loanReturn && offerRng() < 0.3 ? generateOffers(save, place, offerRng) : [];
     return {
       eventEnd: { name: finishedName, place, won: wonEvent, nextName: nextCircuit.name, objLabel: obj?.label, objMet: verdict?.met, conf: confNext, sacked: !!replacement, newTeamName: replacement?.teamName, award: awardKind, eventRating: eventRatingOut, worldRank: st.worldRank, worldRankDelta: st.delta },
-      save: withWeekStart({
+      save: turnWeek({
         ...save,
         life: lifeNext,
         team: teamNext,
@@ -512,7 +490,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
     return {
       seasonEnd,
       // applyRecordBreaks: a última temporada ainda pode quebrar um marco de lenda
-      // (aqui não passa pelo withWeekStart) — marca antes de fechar o legado.
+      // (aqui não passa pelo turnWeek) — marca antes de fechar o legado.
       save: applyRecordBreaks({ ...save, player: agedPlayer, life, team: { ...save.team, contract }, history: historyEnd, world: { ...save.world, worldRank: st.worldRank, peakRank: st.peakRank, eventRatingSum: 0, eventSeries: 0 }, retired: true, rng: { seed: save.rng.seed, tick: save.rng.tick + 1 } }),
     };
   }
@@ -541,7 +519,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
   });
   return {
     seasonEnd,
-    save: withWeekStart({
+    save: turnWeek({
       ...save,
       player: agedPlayer,
       life: lifeEnd,

@@ -4,7 +4,7 @@
 // Pattern: registry module-level + hook React.
 //
 // 1) Telas registram atalhos imperativamente:
-//      const off = registerShortcut({ key: 'n', label: 'Avançar semana', onPress: advanceWeek });
+//      const off = registerShortcut({ key: 'n', label: 'Avançar semana', onPress: goNextWeek });
 //      // off() pra desregistrar (ex.: no cleanup do useEffect).
 // 2) O hook `useKeyboardShortcuts()` instala UM listener no document, despacha
 //    para o callback correto baseado em key + modificadores.
