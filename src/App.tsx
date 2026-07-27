@@ -990,7 +990,7 @@ export default function App() {
          momentos emocionais acontecem (split, promoção, título) — os 3 dispatches
          do CareerScreen iam pro vazio. O overlay já é dismissível (clique fora ou
          ✕), então não bloqueia o jogo. */}
-      {!account?.paid && <UpsellCard onUpgrade={startCheckout} />}
+      {!account?.paid && <UpsellCard onUpgrade={startCheckout} onPixPaid={async () => { setPaidToast(true); await refreshAccount(); }} />}
       {authOpen && !account && (
         <AccountModal
           initialMode={authMode}
