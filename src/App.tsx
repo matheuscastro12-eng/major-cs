@@ -1108,6 +1108,7 @@ export default function App() {
           onBack={() => setScreen('home')}
           guest={!account}
           onCreateAccount={() => { setCheckoutSrc('ultimate-guest'); setScreen('landing'); }}
+          onUpgrade={() => setScreen('landing')}
         />
       )}
 
