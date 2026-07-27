@@ -5,6 +5,8 @@ import { Button, Panel } from './ds';
 import type { Account } from '../state/account';
 import { getLadder, getChampions, fetchMyRank, type RankRow, type MyRank, type Champion } from '../state/ranking';
 import { ct } from '../state/career-i18n';
+import { trackPaywallView } from '../state/track';
+import { FounderCounter } from './FounderCounter';
 
 const DIV_COLOR: Record<string, string> = {
   Calibrando: 'var(--em-muted)',
@@ -38,6 +40,8 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
 
   useEffect(() => { void getLadder().then(setData); void getChampions().then(setChamps); }, []);
   useEffect(() => { if (paid) void fetchMyRank(account?.nick).then(setMine); }, [paid, account?.nick]);
+  // funil: CTA de vitalícia visto na tela de Ranking (src já existe em App.tsx, faltava a view)
+  useEffect(() => { if (!paid) trackPaywallView('leaderboard'); }, [paid]);
 
   const myNick = (mine && account?.nick) || account?.nick;
   return (
@@ -128,6 +132,7 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
           {!paid && (
             <Panel title={ct('Entre no ranking')} accent="gold">
               <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5 }}>{ct('Você joga ranqueada de graça. A conta de R$20 cobre a infraestrutura que mantém MMR e histórico entre sessões.')}</p>
+              <FounderCounter style={{ marginBottom: '10px', display: 'block' }} />
               <Button variant="gold" style={{ width: '100%' }} onClick={onUpgrade}>{ct('Ativar ranking persistente (R$20)')}</Button>
             </Panel>
           )}
