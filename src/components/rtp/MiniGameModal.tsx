@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ct } from '../../state/career-i18n';
 import { RtpIcon } from './RtpIcon';
-import { miniSeed, AUTO_PERF, type MiniGameDef } from '../../engine/rtp/minigames';
+import { miniSeed, AUTO_PERF, tierDifficulty, TIER_DIFF_LABEL, type MiniGameDef } from '../../engine/rtp/minigames';
 import { GAME_COMPONENTS } from './minigames';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
@@ -38,6 +38,7 @@ export function MiniGameModal({ def, save, onApply, onCancel }: {
   onCancel: () => void;              // fecha SEM consumir ação
 }) {
   const seed = miniSeed(save);
+  const difficulty = tierDifficulty(save.team.tier);
   const reduced = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const [phase, setPhase] = useState<Phase>(reduced ? 'play' : 'intro');
   const [count, setCount] = useState(3);
@@ -82,6 +83,9 @@ export function MiniGameModal({ def, save, onApply, onCancel }: {
         {phase === 'intro' && (
           <div className="rtp-mini-arena rtp-mini-count">
             <p className="rtp-mini-blurb">{def.blurb}</p>
+            {difficulty > 0 && (
+              <span className="rtp-mini-diff">{ct('NÍVEL')} {TIER_DIFF_LABEL[save.team.tier]}</span>
+            )}
             <div className="rtp-mini-countnum" key={count}>{count > 0 ? count : ct('JÁ!')}</div>
             <button type="button" className="rtp-mini-skip" onClick={() => onApply(AUTO_PERF)}>
               {ct('Pular minijogo')} · {Math.round(AUTO_PERF * 100)}%
@@ -91,7 +95,7 @@ export function MiniGameModal({ def, save, onApply, onCancel }: {
 
         {phase === 'play' && (
           <div className="rtp-mini-arena">
-            <Game seed={seed} durationMs={def.durationMs} reducedMotion={reduced} onFinish={finish} />
+            <Game seed={seed} durationMs={def.durationMs} difficulty={difficulty} reducedMotion={reduced} onFinish={finish} />
           </div>
         )}
 

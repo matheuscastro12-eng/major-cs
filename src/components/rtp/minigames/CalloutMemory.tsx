@@ -1,22 +1,25 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ct } from '../../../state/career-i18n';
-import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
+import { miniRng, diffLerp, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 // Memória de calls (demos): uma sequência pisca numa grade 3×3; repita clicando.
 // Score = passos corretos / total. Erro encerra a entrada na hora.
+// Dificuldade (tier): sequência mais longa + piscada mais rápida.
 
 const CELLS = 9;
 
-function buildSeq(seed: number): number[] {
+function buildSeq(seed: number, extra: number): number[] {
   const rng = miniRng((seed ^ 0xca11) >>> 0);
-  const len = 4 + Math.floor(rng() * 3);    // 4..6
+  const len = 4 + extra + Math.floor(rng() * 3);    // 4..6 (elite: 6..8)
   return Array.from({ length: len }, () => Math.floor(rng() * CELLS));
 }
 
 type Phase = 'show' | 'input' | 'over';
 
-export function CalloutMemory({ seed, durationMs, onFinish }: MiniGameProps) {
-  const seq = useMemo(() => buildSeq(seed), [seed]);
+export function CalloutMemory({ seed, durationMs, difficulty, onFinish }: MiniGameProps) {
+  const seq = useMemo(() => buildSeq(seed, Math.round(difficulty * 2)), [seed, difficulty]);
+  const stepMs = diffLerp(620, 470, difficulty);   // cadência da piscada
+  const litMs = diffLerp(420, 310, difficulty);
   const [phase, setPhase] = useState<Phase>('show');
   const [lit, setLit] = useState<number | null>(null);
   const [step, setStep] = useState(0);          // posição atual na entrada
@@ -37,8 +40,8 @@ export function CalloutMemory({ seed, durationMs, onFinish }: MiniGameProps) {
     let t = 350;
     seq.forEach((cell) => {
       ts.push(setTimeout(() => setLit(cell), t));
-      ts.push(setTimeout(() => setLit(null), t + 420));
-      t += 620;
+      ts.push(setTimeout(() => setLit(null), t + litMs));
+      t += stepMs;
     });
     ts.push(setTimeout(() => setPhase('input'), t + 150));
     ts.push(setTimeout(() => finish(correct.current), durationMs));

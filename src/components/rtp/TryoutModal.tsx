@@ -121,7 +121,7 @@ export function TryoutModal({ country, seed, ovr, onDone, onCancel }: {
           const Game = GAME_COMPONENTS[id]!;
           return (
             <div className="rtp-mini-arena">
-              <Game seed={(seed ^ ((stage as number) * 0x9e3779b1)) >>> 0} durationMs={def.durationMs} reducedMotion={reduced} onFinish={finishStation} />
+              <Game seed={(seed ^ ((stage as number) * 0x9e3779b1)) >>> 0} durationMs={def.durationMs} difficulty={0} reducedMotion={reduced} onFinish={finishStation} />
             </div>
           );
         })()}

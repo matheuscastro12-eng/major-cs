@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ct } from '../../../state/career-i18n';
-import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
+import { miniRng, diffLerp, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 // Prefire nos ângulos (mecânica/entry): a mira varre o corredor sozinha (ida e
 // volta). 5 cabeças aparecem em ângulos semeados — DISPARE (clique/toque em
@@ -10,9 +10,9 @@ import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 const SIZE = 320;
 const N = 5;
-const GATE_W = 30;        // meia-janela de acerto (px) ao redor da cabeça
-const PASS_MS = 2700;     // duração de UMA passada (L→R ou R→L)
+const GATE_W = 30;        // meia-janela MÁXIMA (px) — o layout espaça por ela
 const PASSES = 3;
+// Dificuldade (tier): linha varre mais rápido + janela de acerto menor.
 
 function buildGates(seed: number): { x: number; y: number }[] {
   const rng = miniRng((seed ^ 0x9ef1) >>> 0);
@@ -24,8 +24,10 @@ function buildGates(seed: number): { x: number; y: number }[] {
   }));
 }
 
-export function PrefireRun({ seed, durationMs, onFinish }: MiniGameProps) {
+export function PrefireRun({ seed, durationMs, difficulty, onFinish }: MiniGameProps) {
   const gates = useMemo(() => buildGates(seed), [seed]);
+  const gateW = diffLerp(GATE_W, 22, difficulty);
+  const passMs = diffLerp(2700, 2150, difficulty);
   const [lineX, setLineX] = useState(0);
   const [hits, setHits] = useState<number[]>(Array(N).fill(-1)); // -1 = viva
   const [missView, setMissView] = useState(0);
@@ -46,7 +48,7 @@ export function PrefireRun({ seed, durationMs, onFinish }: MiniGameProps) {
   useEffect(() => {
     const start = performance.now();
     const loop = (now: number) => {
-      const t = (now - start) / PASS_MS;
+      const t = (now - start) / passMs;
       if (t >= PASSES) { finish(); return; }
       // ida e volta: passada par vai L→R, ímpar volta R→L
       const p = t % 1;
@@ -65,7 +67,7 @@ export function PrefireRun({ seed, durationMs, onFinish }: MiniGameProps) {
     if (finished.current) return;
     const x = lineRef.current;
     // cabeça viva mais próxima dentro da janela
-    let best = -1; let bestD = GATE_W + 1;
+    let best = -1; let bestD = gateW + 1;
     hitsRef.current.forEach((h, i) => {
       if (h >= 0) return;
       const d = Math.abs(gates[i].x - x);
@@ -76,7 +78,7 @@ export function PrefireRun({ seed, durationMs, onFinish }: MiniGameProps) {
       setMissView(misses.current);
       return;
     }
-    const sc = Math.max(0.3, 1 - (bestD / GATE_W) * 0.7); // centro=1.0, borda=0.3
+    const sc = Math.max(0.3, 1 - (bestD / gateW) * 0.7); // centro=1.0, borda=0.3
     const next = [...hitsRef.current];
     next[best] = sc;
     hitsRef.current = next;

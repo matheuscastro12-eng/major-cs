@@ -1,25 +1,29 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ct } from '../../../state/career-i18n';
-import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
+import { miniRng, diffLerp, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 // Treino de mira (mecânica): 8 alvos aparecem um a um em posições semeadas.
 // Clique rápido e preciso. Score por alvo = velocidade; clicar no vazio penaliza.
 // Auto-resolve no teto de tempo (alvos não alcançados contam 0).
+// Dificuldade (tier): alvo menor + janela de velocidade mais curta.
 
 const N = 8;
 const SIZE = 320;
-const R = 24;
+const R_MAX = 24;   // margem de spawn usa o raio máximo — layout independe do tier
 
 function buildTargets(seed: number): { x: number; y: number }[] {
   const rng = miniRng((seed ^ 0xf11c) >>> 0);
   return Array.from({ length: N }, () => ({
-    x: R + rng() * (SIZE - 2 * R),
-    y: R + rng() * (SIZE - 2 * R),
+    x: R_MAX + rng() * (SIZE - 2 * R_MAX),
+    y: R_MAX + rng() * (SIZE - 2 * R_MAX),
   }));
 }
 
-export function CrosshairFlick({ seed, durationMs, onFinish }: MiniGameProps) {
+export function CrosshairFlick({ seed, durationMs, difficulty, onFinish }: MiniGameProps) {
   const targets = useMemo(() => buildTargets(seed), [seed]);
+  const R = diffLerp(R_MAX, 17, difficulty);            // elite: alvo ~30% menor
+  const grace = diffLerp(280, 210, difficulty);         // ms "de graça" antes de descontar
+  const span = diffLerp(1100, 820, difficulty);         // janela até o score zerar
   const [idx, setIdx] = useState(0);
   const [missView, setMissView] = useState(0);
   const scores = useRef<number[]>([]);
@@ -46,7 +50,7 @@ export function CrosshairFlick({ seed, durationMs, onFinish }: MiniGameProps) {
     e.stopPropagation();
     if (finished.current) return;
     const dt = performance.now() - shownAt.current;
-    const sc = Math.max(0, Math.min(1, 1 - (dt - 280) / 1100));   // <280ms≈1.0, >1380ms≈0
+    const sc = Math.max(0, Math.min(1, 1 - (dt - grace) / span));
     scores.current.push(sc);
     if (scores.current.length >= N) { finish(); return; }
     setIdx((v) => v + 1);

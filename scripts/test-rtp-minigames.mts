@@ -11,14 +11,17 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MINIGAMES, ACTION_GAMES, gameForAction, AUTO_PERF, type MiniGameId } from '../src/engine/rtp/minigames.ts';
+import {
+  MINIGAMES, ACTION_GAMES, gameForAction, AUTO_PERF, TIER_DIFFICULTY, tierDifficulty, diffLerp,
+  type MiniGameId,
+} from '../src/engine/rtp/minigames.ts';
 import { buildBeatPlan } from '../src/engine/rtp/roundModel.ts';
 import type { Role, MapId } from '../src/types.ts';
 
 const IDS = Object.keys(MINIGAMES) as MiniGameId[];
 
 test('todo minigame tem def coerente', () => {
-  assert.equal(IDS.length, 8); // 5 originais + prefire/nade/holdangle
+  assert.equal(IDS.length, 9); // 5 originais + prefire/nade/holdangle + igl
   for (const id of IDS) {
     const def = MINIGAMES[id];
     assert.equal(def.id, id);
@@ -65,6 +68,32 @@ test('gameForAction: rotação determinística por variant', () => {
     for (const id of pool) assert.ok(MINIGAMES[id], `pool referencia ${id} inexistente`);
   }
   assert.ok(AUTO_PERF > 0.5 && AUTO_PERF < 1);
+});
+
+test('gameForAction: IGL ganha o minigame de call no pool mental', () => {
+  // pool mental do IGL vira [tempo, igl] — rotaciona; demais roles seguem só tempo
+  assert.equal(gameForAction('train:mental', 0, 'IGL')?.id, 'tempo');
+  assert.equal(gameForAction('train:mental', 1, 'IGL')?.id, 'igl');
+  assert.equal(gameForAction('train:mental', 2, 'IGL')?.id, 'tempo');
+  for (const role of ['AWP', 'Entry', 'Rifler', 'Support', 'Lurker'] as const) {
+    assert.equal(gameForAction('train:mental', 1, role)?.id, 'tempo', `${role} não treina call`);
+  }
+  // o pool mecânico do IGL não muda
+  assert.equal(gameForAction('train:mechanical', 1, 'IGL')?.id, 'prefire');
+});
+
+test('dificuldade por tier: escada monotônica 0→1 e lerp coerente', () => {
+  assert.equal(tierDifficulty('academy'), 0);
+  assert.equal(tierDifficulty('elite'), 1);
+  const ladder = ['academy', 'access', 'challenger', 'elite'] as const;
+  for (let i = 1; i < ladder.length; i++) {
+    assert.ok(TIER_DIFFICULTY[ladder[i]] > TIER_DIFFICULTY[ladder[i - 1]], `${ladder[i]} não sobe`);
+  }
+  // diffLerp: base em d=0, hard em d=1, clampa fora do range
+  assert.equal(diffLerp(720, 540, 0), 720);
+  assert.equal(diffLerp(720, 540, 1), 540);
+  assert.equal(diffLerp(720, 540, 2), 540);
+  assert.ok(diffLerp(720, 540, 0.5) < 720 && diffLerp(720, 540, 0.5) > 540);
 });
 
 test('buildBeatPlan: spotlights válidos, ≥5 execuções, situação casa com o jogo', () => {

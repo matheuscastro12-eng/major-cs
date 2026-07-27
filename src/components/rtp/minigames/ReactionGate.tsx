@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ct } from '../../../state/career-i18n';
-import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
+import { miniRng, diffLerp, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 // Tempo de reação (físico): 5 rodadas. Espere o vermelho virar verde e clique.
 // Adiantar (clicar no vermelho) zera a rodada. Score por rodada = velocidade.
+// Dificuldade (tier): a régua de velocidade aperta (elite exige reflexo real).
 
 const ROUNDS = 5;
 type State = 'wait' | 'go' | 'early';
 
-export function ReactionGate({ seed, durationMs, onFinish }: MiniGameProps) {
+export function ReactionGate({ seed, durationMs, difficulty, onFinish }: MiniGameProps) {
+  const span = diffLerp(350, 260, difficulty);   // janela do score (150ms → 150+span)
   const delays = useMemo(
     () => Array.from({ length: ROUNDS }, (_, i) => 650 + miniRng(((seed ^ ((i + 1) * 0x9e3779b1)) >>> 0))() * 1500),
     [seed],
@@ -61,7 +63,7 @@ export function ReactionGate({ seed, durationMs, onFinish }: MiniGameProps) {
       timer.current = setTimeout(() => advance(0), 420);
     } else if (state === 'go') {
       const rt = performance.now() - goAt.current;
-      const sc = Math.max(0, Math.min(1, 1 - (rt - 150) / 350));   // 150ms≈1.0, 500ms≈0
+      const sc = Math.max(0, Math.min(1, 1 - (rt - 150) / span));  // 150ms≈1.0
       advance(sc);
     }
   };

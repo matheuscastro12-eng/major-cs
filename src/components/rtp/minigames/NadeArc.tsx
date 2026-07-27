@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ct } from '../../../state/career-i18n';
-import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
+import { miniRng, diffLerp, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 // Utilitária perfeita (retake/estudo): estilingue de granada. Segure perto do
 // lançador, arraste pra trás pra mirar (a linha mostra o começo do arco) e
@@ -12,8 +12,8 @@ const THROWS = 3;
 const START = { x: 46, y: 268 };   // posição do lançador (canto inferior esq.)
 const G = 640;                     // gravidade (px/s²)
 const POWER = 3.4;                 // multiplicador do vetor de arrasto
-const R_IN = 17;                   // acerto cheio
-const R_MID = 38;                  // acerto parcial
+const R_MID = 38;                  // raio VISUAL do alvo (o desenho não muda)
+// Dificuldade (tier): o "na cabeça" e o acerto parcial exigem pouso mais preciso.
 
 function buildTargets(seed: number): { x: number; y: number }[] {
   const rng = miniRng((seed ^ 0xade5) >>> 0);
@@ -25,8 +25,10 @@ function buildTargets(seed: number): { x: number; y: number }[] {
 
 type Flight = { x: number; y: number; done: boolean; land?: { x: number; y: number; score: number } };
 
-export function NadeArc({ seed, durationMs, onFinish }: MiniGameProps) {
+export function NadeArc({ seed, durationMs, difficulty, onFinish }: MiniGameProps) {
   const targets = useMemo(() => buildTargets(seed), [seed]);
+  const rIn = diffLerp(17, 12, difficulty);
+  const rMid = diffLerp(R_MID, 29, difficulty);
   const [throwIdx, setThrowIdx] = useState(0);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const [flight, setFlight] = useState<Flight | null>(null);
@@ -80,7 +82,7 @@ export function NadeArc({ seed, durationMs, onFinish }: MiniGameProps) {
       const out = px < -20 || px > SIZE + 20 || py > SIZE + 20;
       const landed = vy > 0 && py >= START.y; // voltou à altura do chão descendo
       if (out || landed) {
-        const score = minD <= R_IN ? 1 : minD <= R_MID ? Math.max(0.35, 1 - (minD - R_IN) / (R_MID - R_IN) * 0.65) : minD <= 70 ? 0.2 : 0;
+        const score = minD <= rIn ? 1 : minD <= rMid ? Math.max(0.35, 1 - (minD - rIn) / (rMid - rIn) * 0.65) : minD <= 70 ? 0.2 : 0;
         scores.current.push(score);
         setHudPct(Math.round((scores.current.reduce((a, b) => a + b, 0) / scores.current.length) * 100));
         setFlight({ x: px, y: Math.min(py, SIZE - 8), done: true, land: { x: px, y: Math.min(py, SIZE - 8), score } });

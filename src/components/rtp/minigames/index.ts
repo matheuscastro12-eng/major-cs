@@ -11,6 +11,7 @@ import { TempoLock } from './TempoLock';
 import { PrefireRun } from './PrefireRun';
 import { NadeArc } from './NadeArc';
 import { AngleHold } from './AngleHold';
+import { IglCall } from './IglCall';
 
 export const GAME_COMPONENTS: Record<MiniGameId, ComponentType<MiniGameProps>> = {
   flick: CrosshairFlick,
@@ -21,4 +22,5 @@ export const GAME_COMPONENTS: Record<MiniGameId, ComponentType<MiniGameProps>> =
   prefire: PrefireRun,
   nade: NadeArc,
   holdangle: AngleHold,
+  igl: IglCall,
 };

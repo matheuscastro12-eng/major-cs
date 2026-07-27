@@ -11,7 +11,7 @@ import {
   resolveMapFromPlay, mapPlayOf,
   type BeatSpec, type FeedRow, type LiveScore, type Interlude,
 } from '../../engine/rtp/roundModel';
-import { MINIGAMES } from '../../engine/rtp/minigames';
+import { MINIGAMES, tierDifficulty } from '../../engine/rtp/minigames';
 import { GAME_COMPONENTS } from './minigames';
 import type { MatchPrep } from '../../engine/rtp/matchSim';
 import { matchAtmosphere, crowdBeatLine, interludeAmbientLine, pressureKicker } from '../../engine/rtp/atmosphere';
@@ -537,7 +537,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
               <span className="rtp-exec-blurb">{spotlightGame.blurb}</span>
             </div>
             <div className="rtp-mini-arena rtp-exec-arena">
-              <Game key={execSeed} seed={execSeed} durationMs={spotlightGame.durationMs} reducedMotion={reduced} onFinish={finishExec} />
+              <Game key={execSeed} seed={execSeed} durationMs={spotlightGame.durationMs} difficulty={tierDifficulty(save.team.tier)} reducedMotion={reduced} onFinish={finishExec} />
             </div>
             <button type="button" className="rtp-btn-ghost rtp-exec-instinct" onClick={() => finishExec(EXEC_NEUTRAL)}>
               {`Resolver no instinto · sem bônus`}

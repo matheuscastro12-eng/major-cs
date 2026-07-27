@@ -1,21 +1,24 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ct } from '../../../state/career-i18n';
-import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
+import { miniRng, diffLerp, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 // Timing (mental): uma barra varre a faixa; pare na zona-alvo. 4 rodadas, a zona
 // encolhe a cada rodada. Score por rodada = proximidade do centro da zona.
+// Dificuldade (tier): agulha mais rápida + zona menor desde a largada.
 
 const ROUNDS = 4;
 const W = 320;
 
-export function TempoLock({ seed, durationMs, onFinish }: MiniGameProps) {
+export function TempoLock({ seed, durationMs, difficulty, onFinish }: MiniGameProps) {
   const zones = useMemo(() => {
     const rng = miniRng((seed ^ 0x7e3) >>> 0);
+    const baseHalf = diffLerp(0.13, 0.105, difficulty);
     return Array.from({ length: ROUNDS }, (_, i) => ({
       center: 0.2 + rng() * 0.6,
-      half: 0.13 - i * 0.022,
+      half: baseHalf - i * 0.022,
     }));
-  }, [seed]);
+  }, [seed, difficulty]);
+  const speed = diffLerp(1.05, 1.35, difficulty);
   const [round, setRound] = useState(0);
   const [pos, setPos] = useState(0);
   const posRef = useRef(0);
@@ -34,7 +37,6 @@ export function TempoLock({ seed, durationMs, onFinish }: MiniGameProps) {
 
   useEffect(() => {
     let last = performance.now();
-    const speed = 1.05;
     const loop = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;

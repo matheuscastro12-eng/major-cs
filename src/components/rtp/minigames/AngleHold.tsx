@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ct } from '../../../state/career-i18n';
-import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
+import { miniRng, diffLerp, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 // Segure o ângulo (pós-plant/estudo): 3 portas na sua mira. Inimigos peekam em
 // janelas curtas — CLIQUE NA PORTA certa antes de recuarem. Mas o seu aliado
@@ -8,8 +8,8 @@ import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
 // velocidade nos inimigos − fogo amigo − tiro no vazio.
 
 const N_PEEKS = 8;
-const PEEK_MS = 720;        // janela em que o peek fica visível
 const ALLY_EVERY = 4;       // ~1 em cada 4 peeks é o aliado
+// Dificuldade (tier): o peek recua mais rápido — menos tempo pra decidir e atirar.
 
 type Peek = { at: number; door: 0 | 1 | 2; ally: boolean };
 type DoorView = { kind: 'enemy' | 'ally'; peekIdx: number } | null;
@@ -31,8 +31,9 @@ function buildPeeks(seed: number): Peek[] {
   return peeks;
 }
 
-export function AngleHold({ seed, durationMs, onFinish }: MiniGameProps) {
+export function AngleHold({ seed, durationMs, difficulty, onFinish }: MiniGameProps) {
   const peeks = useMemo(() => buildPeeks(seed), [seed]);
+  const peekMs = diffLerp(720, 540, difficulty);
   const [doors, setDoors] = useState<DoorView[]>([null, null, null]);
   const [hud, setHud] = useState({ hits: 0, ff: 0 });
   const scores = useRef<number[]>([]);       // score por inimigo abatido
@@ -63,7 +64,7 @@ export function AngleHold({ seed, durationMs, onFinish }: MiniGameProps) {
           setDoors((d) => { const n = [...d]; if (n[p.door]?.peekIdx === i) n[p.door] = null; return n; });
           handled.current.add(i);
           if (handled.current.size >= N_PEEKS) finish();
-        }, PEEK_MS));
+        }, peekMs));
       }, p.at));
     });
     const cap = setTimeout(finish, durationMs);
@@ -87,7 +88,7 @@ export function AngleHold({ seed, durationMs, onFinish }: MiniGameProps) {
       setHud((h) => ({ ...h, ff: h.ff + 1 }));
     } else {
       const dt = performance.now() - (shownAt.current[view.peekIdx] ?? performance.now());
-      const sc = Math.max(0.35, Math.min(1, 1 - (dt - 200) / (PEEK_MS - 150)));
+      const sc = Math.max(0.35, Math.min(1, 1 - (dt - 200) / (peekMs - 150)));
       scores.current.push(sc);
       setHud((h) => ({ ...h, hits: h.hits + 1 }));
     }

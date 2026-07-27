@@ -9,9 +9,11 @@
 import { makeRng, type Rng } from '../rng';
 import type { ActionKind } from './weekly';
 import type { RtpIconName } from './icons';
+import type { Tier } from './types';
+import type { Role } from '../../types';
 
 export type MiniGameId = 'flick' | 'reaction' | 'spray' | 'memory' | 'tempo'
-  | 'prefire' | 'nade' | 'holdangle';
+  | 'prefire' | 'nade' | 'holdangle' | 'igl';
 
 export interface MiniGameDef {
   id: MiniGameId;
@@ -52,13 +54,38 @@ export const MINIGAMES: Record<MiniGameId, MiniGameDef> = {
   prefire:   { id: 'prefire',   title: 'Prefire nos ângulos', icon: 'mech',     blurb: 'Dispare quando a mira cruzar cada cabeça — sem atrasar.',      durationMs: 11000, scoreToPerf: curve(0.45) },
   nade:      { id: 'nade',      title: 'Utilitária perfeita', icon: 'bomb',     blurb: 'Puxe, mire o arco e solte — a granada tem que cair no alvo.',  durationMs: 13000, scoreToPerf: curve(0.40) },
   holdangle: { id: 'holdangle', title: 'Segure o ângulo',     icon: 'skull',    blurb: 'Atire em quem peekar — mas NUNCA no seu aliado.',              durationMs: 10000, scoreToPerf: curve(0.45) },
+  igl:       { id: 'igl',       title: 'Call do IGL',         icon: 'brain',    blurb: 'Leia a rotação no radar e cante o site certo antes do smoke fechar.', durationMs: 14000, scoreToPerf: curve(0.45) },
 };
+
+// ── Dificuldade progressiva por tier ─────────────────────────────────────────
+// O mundo pro exige mais: academy joga o jogo "de base" (0) e elite joga a
+// versão apertada (1) — alvo menor, janela mais curta, sequência maior. Cada
+// componente interpola seus knobs com este fator; o floor do scoreToPerf não
+// muda (a ação nunca vira inútil) e o skip (AUTO_PERF) segue constante.
+export const TIER_DIFFICULTY: Record<Tier, number> = {
+  academy: 0, access: 1 / 3, challenger: 2 / 3, elite: 1,
+};
+export function tierDifficulty(tier: Tier): number { return TIER_DIFFICULTY[tier]; }
+
+// Rótulo curto pra UI (chip no intro do modal).
+export const TIER_DIFF_LABEL: Record<Tier, string> = {
+  academy: 'BASE', access: 'ACESSO', challenger: 'CHALLENGER', elite: 'ELITE',
+};
+
+// interpolação padrão dos knobs: base (d=0) → hard (d=1)
+export function diffLerp(base: number, hard: number, d: number): number {
+  const t = Math.max(0, Math.min(1, d));
+  return base + (hard - base) * t;
+}
 
 // variant tipicamente = save.rng.tick (semana): o pool rotaciona sozinho e o
 // auto-sim segue determinístico. Sem variant, cai no primeiro do pool.
-export function gameForAction(kind: ActionKind, variant = 0): MiniGameDef | null {
-  const pool = ACTION_GAMES[kind];
+// role: o IGL treina o mental TAMBÉM cantando a call — o pool de train:mental
+// dele ganha o minigame próprio ('igl') na rotação.
+export function gameForAction(kind: ActionKind, variant = 0, role?: Role): MiniGameDef | null {
+  let pool = ACTION_GAMES[kind];
   if (!pool || pool.length === 0) return null;
+  if (role === 'IGL' && kind === 'train:mental') pool = [...pool, 'igl'];
   return MINIGAMES[pool[Math.abs(variant) % pool.length]];
 }
 
@@ -77,6 +104,7 @@ export function miniRng(seed: number): Rng { return makeRng(seed); }
 export interface MiniGameProps {
   seed: number;
   durationMs: number;
+  difficulty: number;                // 0..1 — tierDifficulty(save.team.tier)
   reducedMotion: boolean;
   onFinish: (raw: number) => void;   // raw 0..1 (cru); o modal aplica scoreToPerf
 }

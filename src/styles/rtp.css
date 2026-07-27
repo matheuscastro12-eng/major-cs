@@ -1346,6 +1346,29 @@ html:has(main.page-rtp) { background: #070b11; }
 }
 .rtp .rtp-psych-cta small { font-weight: 600; font-size: .66rem; opacity: .82; }
 .rtp .rtp-psych-cta:disabled { background: var(--rtp-deck-2); color: var(--rtp-ink-faint); cursor: not-allowed; }
+
+/* Vida de pro (RTP v16): moradia, casa da família, investimentos */
+.rtp .rtp-lifestyle { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.rtp .rtp-lifestyle-kicker {
+  display: flex; align-items: center; gap: 7px; margin-top: 6px;
+  font-family: var(--rtp-mono); font-size: .68rem; letter-spacing: 1.4px; text-transform: uppercase; color: var(--rtp-ink-dim);
+}
+.rtp .rtp-life-card {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 15px; border-radius: var(--rtp-r-lg); background: var(--rtp-well);
+  border: 1px solid var(--rtp-line); border-left: 3px solid var(--rtp-line-hot);
+}
+.rtp .rtp-life-card.done { border-left-color: var(--rtp-win); }
+.rtp .rtp-psych-stats b.up { color: var(--rtp-win); }
+.rtp .rtp-psych-stats b.down { color: var(--rtp-loss); }
+.rtp .rtp-invest-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.rtp .rtp-invest-btn {
+  flex: 1; min-width: 92px; padding: 10px 8px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--rtp-line-hot); background: var(--rtp-deck-2); color: inherit;
+  font-weight: 700; font-size: .78rem;
+}
+.rtp .rtp-invest-btn:disabled { color: var(--rtp-ink-faint); cursor: not-allowed; }
+.rtp .rtp-invest-out { border-color: color-mix(in srgb, var(--rtp-warn) 45%, transparent); }
 @media (max-width: 560px) { .rtp .rtp-setup-grid { grid-template-columns: 1fr 1fr; } }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -1377,6 +1400,7 @@ html:has(main.page-rtp) { background: #070b11; }
 /* intro */
 .rtp-mini-count { gap: 18px; }
 .rtp-mini-blurb { color: var(--rtp-ink-dim); text-align: center; font-size: .9rem; margin: 0; max-width: 280px; }
+.rtp-mini-diff { font-family: var(--rtp-mono); font-size: .62rem; letter-spacing: 1.2px; color: var(--rtp-warn); border: 1px solid color-mix(in srgb, var(--rtp-warn) 40%, transparent); border-radius: 999px; padding: 3px 10px; }
 .rtp-mini-countnum { font-family: var(--rtp-display); font-weight: 800; font-size: 4rem; color: var(--rtp-signal); animation: rtp-pop .3s var(--rtp-ease); }
 @keyframes rtp-pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .rtp-mini-skip { background: none; border: 1px solid var(--rtp-line); color: var(--rtp-ink-dim); padding: 7px 14px; border-radius: 999px; font-size: .76rem; cursor: pointer; }
@@ -1481,6 +1505,19 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp-hold-fig.f-enemy { background: color-mix(in srgb, var(--rtp-live) 72%, #000); border: 1px solid var(--rtp-live); }
 .rtp-hold-fig.f-ally { background: color-mix(in srgb, var(--rtp-win) 55%, #000); border: 1px solid var(--rtp-win); color: #dff7ea; }
 .rtp-hold-floor { position: absolute; left: 0; right: 0; bottom: 0; height: 20%; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--rtp-deck-2) 80%, transparent)); pointer-events: none; }
+
+/* Call do IGL — radar de rotação + smoke + call A/B */
+.rtp-mini-igl { position: relative; border-radius: 10px; background: var(--rtp-well); border: 1px solid var(--rtp-line); overflow: hidden; }
+.rtp-igl-site { position: absolute; width: 60px; height: 60px; border-radius: 50%; border: 1px dashed var(--rtp-line-hot); display: flex; align-items: center; justify-content: center; font-family: var(--rtp-mono); font-size: 1rem; color: var(--rtp-ink-dim); pointer-events: none; }
+.rtp-igl-dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--rtp-live); box-shadow: 0 0 10px color-mix(in srgb, var(--rtp-live) 55%, transparent); pointer-events: none; }
+.rtp-igl-smoke { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: color-mix(in srgb, var(--rtp-deck-2) 88%, transparent); backdrop-filter: blur(3px); animation: rtp-pop .12s var(--rtp-ease); }
+.rtp-igl-ask { font-family: var(--rtp-mono); font-size: .72rem; letter-spacing: 1.2px; color: var(--rtp-ink-dim); }
+.rtp-igl-btns { display: flex; gap: 14px; }
+.rtp-igl-btn { width: 84px; height: 84px; border-radius: 14px; border: 1px solid var(--rtp-line-hot); background: var(--rtp-deck-2); color: inherit; font-family: var(--rtp-mono); font-size: 1.6rem; cursor: pointer; transition: border-color .1s, box-shadow .1s, transform .08s; }
+.rtp-igl-btn:hover { border-color: var(--rtp-signal); box-shadow: 0 0 16px var(--rtp-signal-glow); transform: scale(1.04); }
+.rtp-igl-verdict { font-family: var(--rtp-mono); font-size: .95rem; letter-spacing: 1px; }
+.rtp-igl-verdict.v-hit { color: var(--rtp-win); }
+.rtp-igl-verdict.v-miss { color: var(--rtp-live); }
 
 @media (pointer: coarse) {
   .rtp-mini-target { transform: scale(1.25); }

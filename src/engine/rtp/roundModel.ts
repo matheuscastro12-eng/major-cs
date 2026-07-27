@@ -117,11 +117,11 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
     pistol: 'reaction',     // reflexo decide o pistol
     entry: 'prefire',       // abrir o site = prefire nos ângulos
     duel: 'flick',          // duelo de mira
-    igl: 'memory',          // a call certa no mid-round
+    igl: 'igl',             // a call certa no mid-round — leitura de radar
     retake: 'nade',         // a utilitária certa abre o retake
     clutch: 'flick',        // o ÚLTIMO duelo do 1vX (a sala só dispara no closing)
     mapPoint: 'tempo',      // segurar o nervo no match point
-    timeout: 'memory',      // sair do pause com a leitura certa
+    timeout: 'igl',         // sair do pause com a leitura certa
     postPlant: 'holdangle', // segurar o ângulo no pós-plant 1vX
     lastHalf: 'prefire',    // o pick de fim de half sai no prefire
     // forcedEco/antiEco/saveCall: decisões puras, sem execução

@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ct } from '../../../state/career-i18n';
-import { miniRng, type MiniGameProps } from '../../../engine/rtp/minigames';
+import { miniRng, diffLerp, type MiniGameProps } from '../../../engine/rtp/minigames';
 
 // Controle de spray (gym): um ponto desce seguindo uma curva de recuo semeada.
 // Mantenha o cursor colado nele. Score = fração do tempo dentro da tolerância.
+// Dificuldade (tier): tolerância menor + recuo mais rápido.
 
 const SIZE = 320;
-const DUR = 4200;
-const TOL = 34;
 
 function buildPath(seed: number): { x: number; y: number }[] {
   const rng = miniRng((seed ^ 0x59a7) >>> 0);
@@ -22,8 +21,10 @@ function buildPath(seed: number): { x: number; y: number }[] {
   return pts;
 }
 
-export function SprayTracer({ seed, durationMs, onFinish }: MiniGameProps) {
+export function SprayTracer({ seed, durationMs, difficulty, onFinish }: MiniGameProps) {
   const path = useMemo(() => buildPath(seed), [seed]);
+  const DUR = diffLerp(4200, 3500, difficulty);
+  const TOL = diffLerp(34, 25, difficulty);
   const [frame, setFrame] = useState({ dx: SIZE / 2, dy: 40, pct: 0, near: false });
   const [cur, setCur] = useState({ x: SIZE / 2, y: SIZE / 2 });
   const cursorRef = useRef({ x: SIZE / 2, y: SIZE / 2 });
