@@ -140,9 +140,10 @@ function LifestyleSection({ save, onUpdate, onFlash }: {
     onFlash(res.feedback ?? ct('Feito!'), null);
     onUpdate(res.save);
   };
-  // taxa da PRÓXIMA virada (mesmo seed/tick que o investWeekTick vai usar) — o
-  // jogador vê a régua honesta do que está contratando, não uma promessa.
-  const nextRate = investRate(save.rng.seed, save.rng.tick + 1);
+  // rendimento da ÚLTIMA virada (tick atual = o que o investWeekTick acabou de
+  // usar) — mostrar a taxa "da próxima" seria mentira: partida e ações ainda
+  // bumpam o tick antes da virada, então o número exibido não seria o aplicado.
+  const lastRate = investRate(save.rng.seed, save.rng.tick);
 
   return (
     <div className="rtp-lifestyle">
@@ -207,7 +208,7 @@ function LifestyleSection({ save, onUpdate, onFlash }: {
         {ls.invested > 0 && (
           <div className="rtp-psych-stats">
             <div><span>{ct('Aplicado')}</span><b>{money(ls.invested)}</b></div>
-            <div><span>{ct('Semana que vem')}</span><b className={nextRate >= 0 ? 'up' : 'down'}>{nextRate >= 0 ? '+' : ''}{(nextRate * 100).toFixed(1)}%</b></div>
+            <div><span>{ct('Última semana')}</span><b className={lastRate >= 0 ? 'up' : 'down'}>{lastRate >= 0 ? '+' : ''}{(lastRate * 100).toFixed(1)}%</b></div>
           </div>
         )}
         <div className="rtp-invest-row">

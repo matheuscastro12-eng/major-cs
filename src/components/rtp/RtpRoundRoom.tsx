@@ -1,21 +1,21 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { makeRng } from '../../engine/rng';
 import { hashStr } from '../../state/hash';
-import type { MomentOption } from '../../engine/rtp/moments';
+import type { MomentOption, MomentOutcome, OddsBreakdown } from '../../engine/rtp/moments';
 import { feedForOutcome, outcomePills, type FeedRow } from '../../engine/rtp/roundModel';
 import {
   createRoom, currentBeat, currentMoment, currentCtx, inClutchOf, isLastBeat, pressureOf,
   spotlightOf, execSeedOf, roomOdds, winProbOf, liveRatingOf, partialBandOf,
   useRead as roomUseRead, lockIn as roomLockIn, advance as roomAdvance, skipRest as roomSkipRest,
   execBoostOf, EXEC_NEUTRAL,
-  type RoomState, type ResolvedBeat,
+  type RoomState, type ResolvedBeat, type ClosedMap,
 } from '../../engine/rtp/room';
 import { tierDifficulty } from '../../engine/rtp/minigames';
 import { GAME_COMPONENTS } from './minigames';
 import type { MatchPrep } from '../../engine/rtp/matchSim';
 import { matchAtmosphere, crowdBeatLine, interludeAmbientLine, pressureKicker } from '../../engine/rtp/atmosphere';
-import { MAP_LABELS, type MapId } from '../../types';
-import type { OddsBreakdown } from '../../engine/rtp/moments';
+import { MAP_LABELS } from '../../types';
+
 import type { RoadToProSave } from '../../engine/rtp/types';
 import { RtpSituationBoard } from './RtpSituationBoard';
 import { RtpIcon } from './RtpIcon';
@@ -41,7 +41,7 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
   prep: MatchPrep;
   // liveMaps: os mapas COMO A SALA FECHOU/EXIBIU (v17) — o card oficial usa
   // exatamente estes placares em vez de recomputar (Sala == card por construção).
-  onComplete: (outcomes: import('../../engine/rtp/moments').MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]) => void;
+  onComplete: (outcomes: MomentOutcome[], liveMaps?: ClosedMap[]) => void;
   major?: boolean;
 }) {
   // A REGRA DA SÉRIE vive em engine/rtp/room.ts (a Sala) — aqui só render/ritmo.
