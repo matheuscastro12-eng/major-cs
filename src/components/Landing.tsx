@@ -84,6 +84,13 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
           <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')}</Button>
           <Button size="big" variant="gold" onClick={onAccount}>{ct('Save na nuvem por R$20')}</Button>
         </div>
+        {/* funil: dado real (rtm_accounts) mostra a vaga de Fundador quase no fim,
+            mas o contador só aparecia depois de rolar até o Plano ou abrir o modal
+            — nunca no CTA de maior exposição do funil (Hero da landing, ~25% de
+            todo o paywall_view). Mesmo componente, mesma prova social real. */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
+          <FounderCounter />
+        </div>
         <div style={{ display: 'flex', gap: '22px', justifyContent: 'center', marginTop: '24px', flexWrap: 'wrap', color: 'var(--rtm-faint)', fontSize: '13px' }}>
           <span><b style={{ color: 'var(--rtm-text-strong)' }}>16</b> {ct('times')}</span>
           <span><b style={{ color: 'var(--rtm-text-strong)' }}>5</b> {ct('eras de CS')}</span>
