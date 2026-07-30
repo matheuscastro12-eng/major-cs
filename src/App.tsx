@@ -1107,8 +1107,17 @@ export default function App() {
         <UltimateSquadScreen
           onBack={() => setScreen('home')}
           guest={!account}
-          onCreateAccount={() => { setCheckoutSrc('ultimate-guest'); setScreen('landing'); }}
-          onUpgrade={() => setScreen('landing')}
+          /* funil: o botão do mkt-lock (Mercado P2P) foi adicionado em 27/07 pra
+             sair de 0% de conversão, mas continuava mandando pra landing inteira
+             — 87 paywall_view/28d e 0 checkout_open, mesmo depois do botão existir.
+             Convidado vai direto pro cadastro; conta grátis vai direto pro checkout
+             (mesmo atalho do onUpgrade abaixo). */
+          onCreateAccount={() => {
+            setCheckoutSrc('ultimate-guest');
+            if (account) startCheckout();
+            else { setAuthMode('signup'); setAuthOpen(true); }
+          }}
+          onUpgrade={() => startCheckout()}
         />
       )}
 
