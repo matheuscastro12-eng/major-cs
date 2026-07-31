@@ -296,13 +296,40 @@ export default async function handler(
   }
 
   // ── Reset de senha ─────────────────────────────────────────────────────────
-  // resetRequest: gera código de 6 dígitos e manda por e-mail (Resend). Resposta
-  // SEMPRE {ok:true} quando o envio está configurado — não vaza se o e-mail tem
-  // conta (anti-enumeração). Sem RESEND_API_KEY: 503 honesto.
+  // resetRequest: gera código de 6 dígitos e manda por e-mail. Dois provedores
+  // GRÁTIS, na ordem: Resend (RESEND_API_KEY — 3k/mês no free tier) ou Gmail
+  // SMTP (GMAIL_USER + GMAIL_APP_PASSWORD — senha de app, sem domínio próprio).
+  // Resposta SEMPRE {ok:true} quando o envio está configurado — não vaza se o
+  // e-mail tem conta (anti-enumeração). Nenhum provedor configurado: 503 honesto.
   if (action === 'resetRequest') {
     if (!/\S+@\S+\.\S+/.test(email)) { res.status(400).json({ error: 'E-mail inválido.' }); return; }
-    const apiKey = (process.env.RESEND_API_KEY ?? '').trim();
-    if (!apiKey) { res.status(503).json({ error: 'Recuperação de senha temporariamente indisponível. Fale com a gente no suporte.' }); return; }
+    const resendKey = (process.env.RESEND_API_KEY ?? '').trim();
+    const gmailUser = (process.env.GMAIL_USER ?? '').trim();
+    const gmailPass = (process.env.GMAIL_APP_PASSWORD ?? '').trim();
+    if (!resendKey && !(gmailUser && gmailPass)) {
+      res.status(503).json({ error: 'Recuperação de senha temporariamente indisponível. Fale com a gente no suporte.' });
+      return;
+    }
+    const sendResetEmail = async (code: string): Promise<boolean> => {
+      const subject = `Seu código pra trocar a senha: ${code}`;
+      const text = `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no MAJOR//CS.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`;
+      if (resendKey) {
+        const from = (process.env.RESET_EMAIL_FROM ?? 'MAJOR//CS <nao-responda@roadtomajor.com.br>').trim();
+        const r = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${resendKey}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ from, to: [email], subject, text }),
+        }).catch(() => null);
+        return !!r && r.ok;
+      }
+      // Gmail SMTP (import dinâmico: só paga o peso quando este caminho roda)
+      try {
+        const { createTransport } = await import('nodemailer');
+        const transport = createTransport({ service: 'gmail', auth: { user: gmailUser, pass: gmailPass } });
+        await transport.sendMail({ from: `MAJOR//CS <${gmailUser}>`, to: email, subject, text });
+        return true;
+      } catch { return false; }
+    };
     // só gera/envia se o e-mail EXISTE (conta ativa ou cadastro pendente) — mas a
     // resposta é idêntica nos dois casos.
     const known = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email} UNION SELECT 1 FROM rtm_pending_signups WHERE email=${email}`;
@@ -314,19 +341,8 @@ export default async function handler(
         await sql`INSERT INTO rtm_password_resets (email, code_hash, expires_at, attempts, created_at)
                   VALUES (${email}, ${hashPw(code)}, now() + interval '30 minutes', 0, now())
                   ON CONFLICT (email) DO UPDATE SET code_hash=EXCLUDED.code_hash, expires_at=EXCLUDED.expires_at, attempts=0, created_at=now()`;
-        const from = (process.env.RESET_EMAIL_FROM ?? 'MAJOR//CS <nao-responda@roadtomajor.com.br>').trim();
-        const send = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-          body: JSON.stringify({
-            from,
-            to: [email],
-            subject: `Seu código pra trocar a senha: ${code}`,
-            text: `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no MAJOR//CS.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`,
-          }),
-        }).catch(() => null);
         // envio falhou: derruba o código (não deixa um reset "fantasma" ativo).
-        if (!send || !send.ok) {
+        if (!(await sendResetEmail(code))) {
           await sql`DELETE FROM rtm_password_resets WHERE email=${email}`;
           res.status(502).json({ error: 'Não conseguimos enviar o e-mail agora. Tente de novo em instantes.' });
           return;
