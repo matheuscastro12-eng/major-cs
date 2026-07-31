@@ -6,6 +6,7 @@ import { AdBanner } from './components/AdBanner';
 import { Draft } from './components/Draft';
 import { AppFrame } from './components/ds';
 import { Home } from './components/Home';
+import { DailyScreen } from './components/daily/DailyScreen';
 import { Hub } from './components/Hub';
 import { MatchScreen } from './components/MatchScreen';
 import { Onboarding, shouldOnboard } from './components/Onboarding';
@@ -143,6 +144,7 @@ type Screen =
   | 'online'
   | 'ultimate'
   | 'rtp'
+  | 'daily'
   | 'career'
   | 'careerSaves'
   | 'careerCRM'
@@ -161,6 +163,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   online: '/online',
   ultimate: '/ultimate',
   rtp: '/road-to-pro',
+  daily: '/diario',
   career: '/carreira',
   careerSaves: '/carreira/saves',
   hall: '/hall',
@@ -1040,6 +1043,7 @@ export default function App() {
           onHall={() => setScreen('hall')}
           onUltimate={ULTIMATE_ENABLED ? () => { if (account || utGuest) setScreen('ultimate'); else { setCheckoutSrc('home-ultimate'); setUtGateOpen(true); } } : undefined}
           onRoadToPro={RTP_ENABLED ? () => setScreen('rtp') : undefined}
+          onDaily={() => setScreen('daily')}
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
@@ -1114,6 +1118,8 @@ export default function App() {
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
       {RTP_ENABLED && account?.paid && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
+      {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
+      {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (

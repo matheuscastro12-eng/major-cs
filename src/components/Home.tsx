@@ -22,6 +22,8 @@ interface Props {
   onDiscardCampaign?: () => void;
   onUltimate?: () => void;
   onRoadToPro?: () => void;
+  /** Abre o DIÁRIO (minigames diários — grátis, sem conta) */
+  onDaily?: () => void;
   /** Trava o Road to Pro (exclusivo de conta vitalícia). Card continua visível
    *  (isca de conversão), mas o clique leva ao checkout via onCreateAccount. */
   premiumLocked?: boolean;
@@ -57,6 +59,7 @@ export function Home({
   teamCount,
   onUltimate,
   onRoadToPro,
+  onDaily,
   premiumLocked,
   ultimateLocked,
   onCareer,
@@ -199,6 +202,23 @@ export function Home({
                     <span className="rtm-modecard-foot">
                       <span className="rtm-modecard-meta">{premiumLocked ? ct('Exclusivo · conta vitalícia') : ct('1 jogador · você é o atleta')}</span>
                       <span className="rtm-modecard-go">{premiumLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>
+                    </span>
+                  </span>
+                </button>
+              )}
+
+              {onDaily && (
+                <button className="rtm-modecard" data-tone="blue" onClick={onDaily}>
+                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/inferno.jpg)' }} />
+                  <span className="rtm-modecard-scrim" />
+                  <span className="rtm-modecard-bar" />
+                  <span className="rtm-modecard-body">
+                    <span className="rtm-modecard-kicker">{ct('Novo · todo dia')}</span>
+                    <span className="rtm-modecard-title">{ct('Diário')}</span>
+                    <span className="rtm-modecard-desc">{ct('Lines Históricas: uma escalação icônica por dia — você lembra os 5? Grátis, sem conta, e o desafio é o mesmo pra todo mundo.')}</span>
+                    <span className="rtm-modecard-foot">
+                      <span className="rtm-modecard-meta">{ct('1 jogador · 2 min')}</span>
+                      <span className="rtm-modecard-go">{ct('Jogar o de hoje')} →</span>
                     </span>
                   </span>
                 </button>
