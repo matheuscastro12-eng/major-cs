@@ -29,6 +29,15 @@ export async function signup(email: string, password: string, nick: string): Pro
   const d = await post({ action: 'signup', email, password, nick });
   setToken(String(d.token)); return toAcct(d);
 }
+// Reset de senha em 2 passos: pede o código por e-mail e confirma com a nova
+// senha. As duas lançam Error com mensagem amigável do servidor.
+export async function requestPasswordReset(email: string): Promise<void> {
+  await post({ action: 'resetRequest', email });
+}
+export async function confirmPasswordReset(email: string, code: string, password: string): Promise<void> {
+  await post({ action: 'resetConfirm', email, code, password });
+}
+
 export async function login(email: string, password: string): Promise<Account> {
   const d = await post({ action: 'login', email, password });
   setToken(String(d.token)); return toAcct(d);

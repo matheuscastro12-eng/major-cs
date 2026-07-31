@@ -131,28 +131,28 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
         <p>{line.context}</p>
       </div>
 
-      {/* os 5 slots */}
+      {/* os 5 slots — scoreboard estilo HLTV */}
       <div className="rtm-lines-slots">
-        {order.map((idx) => {
+        {order.map((idx, pos) => {
           const pl = line.players[idx];
           const found = progress.found.includes(idx);
           const revealed = progress.done && !found;
           return (
-            <div key={idx} className={`rtm-lines-slot${found ? ' hit' : ''}${revealed ? ' missed' : ''}${popIdx === idx ? ' pop' : ''}`}>
+            <div key={idx} data-pos={String(pos + 1).padStart(2, '0')} className={`rtm-lines-slot${found ? ' hit' : ''}${revealed ? ' missed' : ''}${popIdx === idx ? ' pop' : ''}`}>
               <span className="rtm-lines-flag">{flagOf(pl.country)}</span>
               {found || revealed
                 ? <b className="rtm-lines-nick">{pl.nick}</b>
-                : <b className="rtm-lines-nick hidden">{'?'.repeat(Math.min(pl.nick.length, 8))}</b>}
+                : <b className="rtm-lines-nick hidden">{'▒'.repeat(Math.min(pl.nick.length, 8))}</b>}
               <span className="rtm-lines-role">{ROLE_LABEL[pl.role] ?? pl.role}</span>
             </div>
           );
         })}
       </div>
 
-      {/* vidas */}
+      {/* vidas como pente de munição: cada erro gasta um cartucho */}
       <div className="rtm-lines-lives" title={ct('Chutes errados restantes')}>
         {Array.from({ length: MAX_ERRORS }, (_, i) => (
-          <span key={i} className={i < livesLeft ? 'on' : 'off'}>{i < livesLeft ? '●' : '✕'}</span>
+          <span key={i} className={`rtm-lines-bullet${i >= livesLeft ? ' spent' : ''}`} />
         ))}
       </div>
 
@@ -160,17 +160,19 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
       {!progress.done ? (
         <>
           <div key={shake} className="rtm-lines-inputrow shakeable">
-            <input
-              ref={inputRef}
-              value={guess}
-              onChange={(e) => setGuess(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-              placeholder={ct('Digite um nick… (ex.: fallen)')}
-              autoFocus
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
+            <div className="rtm-lines-prompt">
+              <input
+                ref={inputRef}
+                value={guess}
+                onChange={(e) => setGuess(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                placeholder={ct('digite um nick (ex.: fallen)')}
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </div>
             <button type="button" className="rtm-lines-go" onClick={submit}>{ct('Chutar')}</button>
           </div>
           <button type="button" className="rtm-lines-giveup" onClick={doGiveUp}>{ct('Desistir e revelar')}</button>
@@ -179,8 +181,8 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
         <div className="rtm-lines-result">
           <b className={progress.won ? 'w' : 'l'}>
             {progress.won
-              ? (progress.errors === 0 ? ct('PERFEITO! Sem errar nenhum.') : ct('Mandou bem — lembrou os 5!'))
-              : ct('Essa line te pegou…')}
+              ? (progress.errors === 0 ? 'ACE! 5/5 SEM ERRAR' : ct('LINE COMPLETA!'))
+              : ct('ELIMINADO')}
           </b>
           <span className="rtm-lines-result-sub">
             {progress.won

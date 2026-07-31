@@ -9,7 +9,7 @@ import { Button, Modal } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
-import { login, signup, beginPix, fetchMe, type PixCharge } from '../state/account';
+import { login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, type PixCharge } from '../state/account';
 import { ct } from '../state/career-i18n';
 
 const M = '/maps/';
@@ -254,7 +254,11 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
 const nudgeShownThisSession = new Set<string>();
 
 export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signup' }: { onClose: () => void; onCheckout: (email: string, nick: string) => Promise<void>; onPlay: () => void; initialMode?: 'signup' | 'login' }) {
-  const [mode, setMode] = useState<'signup' | 'login'>(initialMode);
+  const [mode, setMode] = useState<'signup' | 'login' | 'reset'>(initialMode);
+  // reset de senha em 2 passos: pedir o código por e-mail → código + senha nova.
+  const [resetStep, setResetStep] = useState<'ask' | 'code'>('ask');
+  const [code, setCode] = useState('');
+  const [info, setInfo] = useState('');
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -360,9 +364,31 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const title = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <BrandMark size={22} />
-      <span>{mode === 'signup' ? ct('Criar conta') : ct('Entrar')}</span>
+      <span>{mode === 'signup' ? ct('Criar conta') : mode === 'reset' ? ct('Recuperar senha') : ct('Entrar')}</span>
     </span>
   );
+
+  // ── reset de senha ──────────────────────────────────────────────────────────
+  const sendResetCode = async () => {
+    if (!/\S+@\S+\.\S+/.test(email) || busy) return;
+    setBusy(true); setErr('');
+    try {
+      await requestPasswordReset(email.trim());
+      setResetStep('code'); setCode(''); setPw('');
+      setInfo(ct('Se este e-mail tem conta, o código chegou na caixa de entrada (vale 30 minutos).'));
+    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); }
+    setBusy(false);
+  };
+  const confirmReset = async () => {
+    if (!/^\d{6}$/.test(code.trim()) || pw.length < 6 || busy) return;
+    setBusy(true); setErr('');
+    try {
+      await confirmPasswordReset(email.trim(), code.trim(), pw);
+      setMode('login'); setResetStep('ask'); setCode(''); setPw('');
+      setInfo(ct('Senha trocada! Entre com a senha nova.'));
+    } catch (e) { setErr(e instanceof Error ? e.message : ct('Erro. Tente de novo.')); }
+    setBusy(false);
+  };
   return (
     <Modal open onClose={requestClose} title={title} size="sm">
       {mode === 'signup' && (
@@ -381,11 +407,45 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <FounderCounter style={{ marginTop: '8px' }} />
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
-        <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
-        <div><label style={lbl}>{ct('Senha')}</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} /></div>
-      </div>
+      {info && mode !== 'signup' && <p style={{ color: '#5ed88a', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
+      {mode !== 'reset' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
+          <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
+          <div><label style={lbl}>{ct('Senha')}</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} /></div>
+          {mode === 'login' && (
+            <button type="button" onClick={() => { setMode('reset'); setResetStep('ask'); setErr(''); setInfo(''); }}
+              style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, color: 'var(--em-muted)', cursor: 'pointer', fontSize: '0.76rem', textDecoration: 'underline', fontFamily: 'inherit' }}>
+              {ct('Esqueci minha senha')}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div><label style={lbl}>{ct('E-mail da conta')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" disabled={resetStep === 'code'} /></div>
+          {resetStep === 'code' && (
+            <>
+              <div><label style={lbl}>{ct('Código (6 dígitos, chegou no e-mail)')}</label><input style={input} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" inputMode="numeric" autoComplete="one-time-code" /></div>
+              <div><label style={lbl}>{ct('Senha nova')}</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type="password" autoComplete="new-password" onKeyDown={(e) => e.key === 'Enter' && confirmReset()} /></div>
+            </>
+          )}
+          {resetStep === 'ask' ? (
+            <Button variant="gold" disabled={!/\S+@\S+\.\S+/.test(email) || busy} style={{ width: '100%' }} onClick={sendResetCode}>
+              {busy ? ct('Aguarde…') : ct('Enviar código por e-mail')}
+            </Button>
+          ) : (
+            <>
+              <Button variant="gold" disabled={!/^\d{6}$/.test(code) || pw.length < 6 || busy} style={{ width: '100%' }} onClick={confirmReset}>
+                {busy ? ct('Aguarde…') : ct('Trocar a senha')}
+              </Button>
+              <button type="button" onClick={sendResetCode} disabled={busy}
+                style={{ background: 'none', border: 'none', color: 'var(--em-muted)', cursor: 'pointer', fontSize: '0.74rem', textDecoration: 'underline', fontFamily: 'inherit' }}>
+                {ct('Não chegou? Reenviar código')}
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {mode === 'signup' && (
         <label className="checkout-legal-accept">
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
@@ -407,9 +467,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             {busy ? ct('Aguarde…') : ct('Ativar com cartão (Stripe)')}
           </Button>
         </>
-      ) : (
+      ) : mode === 'login' ? (
         <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : ct('Entrar')}</Button>
-      )}
+      ) : null}
       {pix && (
         <div style={{ marginTop: '14px', background: 'rgba(94,216,138,.08)', border: '1px solid rgba(94,216,138,.35)', borderRadius: '6px', padding: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
@@ -465,8 +525,14 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         </div>
       )}
       <p style={{ fontSize: '0.8rem', color: 'var(--em-muted)', textAlign: 'center', margin: '14px 0 0' }}>
-        {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
-        <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
+        {mode === 'reset' ? (
+          <button type="button" onClick={() => { setMode('login'); setResetStep('ask'); setErr(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>← {ct('Voltar pro login')}</button>
+        ) : (
+          <>
+            {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
+            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
+          </>
+        )}
       </p>
       <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', opacity: 0.75, textAlign: 'center', margin: '10px 0 0' }}>{ct('Cartão pelo Stripe ou Pix pelo Woovi. Todo o jogo permanece gratuito; a conta paga apenas mantém dados na nuvem.')}</p>
     </Modal>

@@ -63,6 +63,9 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       // uma restauração; SUM(coins) por e-mail nunca passa do SUM dos pedidos claimed.
       sql`CREATE TABLE IF NOT EXISTS rtm_coin_restores (id BIGSERIAL PRIMARY KEY, email TEXT NOT NULL, coins INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE INDEX IF NOT EXISTS rtm_coin_restores_email_idx ON rtm_coin_restores (email)`,
+      // reset de senha: código de 6 dígitos por e-mail (hash scrypt, igual à senha),
+      // 30min de validade, 5 tentativas, 1 código ativo por e-mail.
+      sql`CREATE TABLE IF NOT EXISTS rtm_password_resets (email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, attempts INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now())`,
     ]).then(() => undefined).catch((error) => {
       accountSchemaPromise = null;
       throw error;
@@ -289,6 +292,78 @@ export default async function handler(
     const paid = await resolvePaid(email, Boolean(r[0].paid), true);
     if (!paid) { res.status(403).json({ error: 'Esta conta ainda não foi ativada. Finalize o pagamento do save na nuvem.', url: checkoutUrl(email) }); return; }
     res.status(200).json({ token: sign(email), email, nick: r[0].nick, paid: true, ...(await founderOf(email)) });
+    return;
+  }
+
+  // ── Reset de senha ─────────────────────────────────────────────────────────
+  // resetRequest: gera código de 6 dígitos e manda por e-mail (Resend). Resposta
+  // SEMPRE {ok:true} quando o envio está configurado — não vaza se o e-mail tem
+  // conta (anti-enumeração). Sem RESEND_API_KEY: 503 honesto.
+  if (action === 'resetRequest') {
+    if (!/\S+@\S+\.\S+/.test(email)) { res.status(400).json({ error: 'E-mail inválido.' }); return; }
+    const apiKey = (process.env.RESEND_API_KEY ?? '').trim();
+    if (!apiKey) { res.status(503).json({ error: 'Recuperação de senha temporariamente indisponível. Fale com a gente no suporte.' }); return; }
+    // só gera/envia se o e-mail EXISTE (conta ativa ou cadastro pendente) — mas a
+    // resposta é idêntica nos dois casos.
+    const known = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email} UNION SELECT 1 FROM rtm_pending_signups WHERE email=${email}`;
+    if (known.length) {
+      // throttle: 1 código por minuto (reenvio silencioso — resposta igual).
+      const recent = await sql`SELECT 1 FROM rtm_password_resets WHERE email=${email} AND created_at > now() - interval '60 seconds'`;
+      if (!recent.length) {
+        const code = String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(6, '0');
+        await sql`INSERT INTO rtm_password_resets (email, code_hash, expires_at, attempts, created_at)
+                  VALUES (${email}, ${hashPw(code)}, now() + interval '30 minutes', 0, now())
+                  ON CONFLICT (email) DO UPDATE SET code_hash=EXCLUDED.code_hash, expires_at=EXCLUDED.expires_at, attempts=0, created_at=now()`;
+        const from = (process.env.RESET_EMAIL_FROM ?? 'MAJOR//CS <nao-responda@roadtomajor.com.br>').trim();
+        const send = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            from,
+            to: [email],
+            subject: `Seu código pra trocar a senha: ${code}`,
+            text: `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no MAJOR//CS.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`,
+          }),
+        }).catch(() => null);
+        // envio falhou: derruba o código (não deixa um reset "fantasma" ativo).
+        if (!send || !send.ok) {
+          await sql`DELETE FROM rtm_password_resets WHERE email=${email}`;
+          res.status(502).json({ error: 'Não conseguimos enviar o e-mail agora. Tente de novo em instantes.' });
+          return;
+        }
+      }
+    }
+    res.status(200).json({ ok: true });
+    return;
+  }
+
+  // resetConfirm: valida o código e troca a senha (conta ativa E/OU cadastro
+  // pendente). Código é de uso único; 5 erros queimam o código.
+  if (action === 'resetConfirm') {
+    const code = String(body.code ?? '').trim();
+    if (!/^\d{6}$/.test(code)) { res.status(400).json({ error: 'Código inválido — são 6 dígitos.' }); return; }
+    if (password.length < 6) { res.status(400).json({ error: 'A nova senha precisa de pelo menos 6 caracteres.' }); return; }
+    const r = await sql`SELECT code_hash, expires_at, attempts FROM rtm_password_resets WHERE email=${email}`;
+    if (!r.length || new Date(String(r[0].expires_at)).getTime() < Date.now()) {
+      await sql`DELETE FROM rtm_password_resets WHERE email=${email}`;
+      res.status(410).json({ error: 'Código expirado ou inexistente. Peça um novo.' });
+      return;
+    }
+    if (Number(r[0].attempts) >= 5) {
+      await sql`DELETE FROM rtm_password_resets WHERE email=${email}`;
+      res.status(429).json({ error: 'Muitas tentativas. Peça um código novo.' });
+      return;
+    }
+    if (!verifyPw(code, String(r[0].code_hash))) {
+      await sql`UPDATE rtm_password_resets SET attempts = attempts + 1 WHERE email=${email}`;
+      res.status(401).json({ error: 'Código incorreto.' });
+      return;
+    }
+    const newHash = hashPw(password);
+    await sql`UPDATE rtm_accounts SET pass_hash=${newHash} WHERE email=${email}`;
+    await sql`UPDATE rtm_pending_signups SET pass_hash=${newHash} WHERE email=${email}`;
+    await sql`DELETE FROM rtm_password_resets WHERE email=${email}`;
+    res.status(200).json({ ok: true });
     return;
   }
 

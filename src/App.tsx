@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { AdminGate } from './components/AdminGate';
 import { BrandMark } from './components/brand';
 import { DonateButton, DonateModal } from './components/Donate';
-import { AdBanner } from './components/AdBanner';
 import { Draft } from './components/Draft';
 import { AppFrame } from './components/ds';
 import { Home } from './components/Home';
@@ -874,7 +873,6 @@ export default function App() {
     return (
       <>
         <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP} />
-        {!bannerPreview && <AdBanner />}
       </>
     );
   }
@@ -1247,13 +1245,6 @@ export default function App() {
       </Suspense>
       </main>
 
-      {/* patrocinador sempre visível no rodapé (G4 Skins). Some sozinho se o asset
-          ainda não estiver no ar. Não aparece no modo de preview de banners.
-          Antes era escondido na carreira (screen !== 'career'), mas é onde o user
-          passa 95% do tempo — sem isso o banner 'sumia' do dia-a-dia. O
-          body.has-ad-footer já reserva o padding-bottom necessário pro UI da
-          carreira não ser engolido pelo banner fixed. */}
-      {!bannerPreview && <AdBanner />}
     </>
   );
 }
