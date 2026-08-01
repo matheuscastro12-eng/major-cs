@@ -23,6 +23,13 @@ const ALLOWED_TYPES = new Set([
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
+// CUSTO NEON: o DDL (CREATE TABLE IF NOT EXISTS) e a retenção (DELETE de 1 dia)
+// rodavam em TODA request de presence — queries extras que mantinham o compute
+// ocupado à toa. Agora: DDL 1x por instância; retenção no máx. 1x/10min.
+let presenceSchemaReady = false;
+let lastRetentionAt = 0;
+const RETENTION_MS = 10 * 60_000;
+
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: {
@@ -63,13 +70,16 @@ export default async function handler(
       const uaHeader = req.headers?.['user-agent'];
       const userAgent = String(Array.isArray(uaHeader) ? uaHeader[0] : (uaHeader ?? '')).slice(0, 240);
       const path = String(payload.path ?? '').slice(0, 120);
-      await sql`
-        CREATE TABLE IF NOT EXISTS online_sessions (
-          sid text PRIMARY KEY,
-          last_seen timestamptz NOT NULL DEFAULT now(),
-          path text,
-          user_agent text
-        )`;
+      if (!presenceSchemaReady) {
+        await sql`
+          CREATE TABLE IF NOT EXISTS online_sessions (
+            sid text PRIMARY KEY,
+            last_seen timestamptz NOT NULL DEFAULT now(),
+            path text,
+            user_agent text
+          )`;
+        presenceSchemaReady = true;
+      }
       await sql`
         INSERT INTO online_sessions (sid, last_seen, path, user_agent)
         VALUES (${sid}, now(), ${path}, ${userAgent})
@@ -77,7 +87,10 @@ export default async function handler(
         SET last_seen = now(),
             path = EXCLUDED.path,
             user_agent = EXCLUDED.user_agent`;
-      await sql`DELETE FROM online_sessions WHERE last_seen < now() - interval '1 day'`;
+      if (Date.now() - lastRetentionAt > RETENTION_MS) {
+        lastRetentionAt = Date.now();
+        await sql`DELETE FROM online_sessions WHERE last_seen < now() - interval '1 day'`;
+      }
       res.status(200).json({ ok: true });
       return;
     }

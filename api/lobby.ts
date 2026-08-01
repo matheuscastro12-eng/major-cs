@@ -146,8 +146,27 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     sql`CREATE TABLE IF NOT EXISTS mm_queue (nick text PRIMARY KEY, elo int DEFAULT 1000, enqueued_at timestamptz DEFAULT now(), last_seen timestamptz DEFAULT now(), matched_code text)`,
     sql`CREATE INDEX IF NOT EXISTS mm_queue_open_idx ON mm_queue (matched_code, last_seen)`,
     sql`CREATE INDEX IF NOT EXISTS lobby_players_code_idx ON lobby_players (code)`,
+    // CUSTO NEON: os sweeps filtram por COALESCE(last_ping/last_seen, ...) — sem
+    // índice de expressão viravam SEQ SCAN em todo poll (milhões/mês, CPU que
+    // fazia o autoscaler subir). Índices casam EXATAMENTE com os predicados.
+    sql`CREATE INDEX IF NOT EXISTS lobbies_activity_idx ON lobbies ((COALESCE(last_ping, updated_at)))`,
+    sql`CREATE INDEX IF NOT EXISTS lobbies_created_idx ON lobbies (created_at)`,
+    sql`CREATE INDEX IF NOT EXISTS lobby_players_seen_idx ON lobby_players (code, (COALESCE(last_seen, joined_at)))`,
   ]);
   schemaReady = true;
+}
+
+// CUSTO NEON: os garbage-collects (salas mortas, tickets órfãos) rodavam em TODA
+// request de list/create/queueJoin — DELETEs varrendo a tabela a cada poll de
+// 2,5s. Throttle por instância: no máx. 1 sweep/60s (as janelas de expiração são
+// de 90s-6h, então 60s de atraso não muda nenhum comportamento visível).
+const SWEEP_MS = 60_000;
+const lastSweepAt = new Map<string, number>();
+function shouldSweep(kind: string): boolean {
+  const now = Date.now();
+  if (now - (lastSweepAt.get(kind) ?? 0) < SWEEP_MS) return false;
+  lastSweepAt.set(kind, now);
+  return true;
 }
 
 // janela em que um jogador é considerado "presente" (heartbeat recente). Quem
@@ -342,7 +361,9 @@ export default async function handler(
       // Sala RANQUEADA recente sobrevive 15min mesmo sem ping: o report do
       // resultado valida contra a linha do lobby e a carência do pareamento é
       // de 10min (api/ranking.ts) — GC precoce fazia report legítimo dar 404.
-      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes' AND NOT (COALESCE(ranked, false) = true AND created_at > now() - interval '15 minutes')`;
+      if (shouldSweep('lobbies')) {
+        await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes' AND NOT (COALESCE(ranked, false) = true AND created_at > now() - interval '15 minutes')`;
+      }
       // só lista salas com alguém ativo (ping nos últimos 60s)
       const rows = await sql`
         SELECT l.code, l.mode, l.pool, l.host, l.name, l.created_at, COALESCE(l.ranked, false) AS ranked,
@@ -507,8 +528,10 @@ export default async function handler(
       // fecha salas inativas: ninguém com a aba aberta há mais de 2min (sem
       // heartbeat). Backstop de 6h pra qualquer resíduo. Sala RANQUEADA recente
       // sobrevive 15min sem ping — o report valida contra o lobby (ver ?list).
-      await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes' AND NOT (COALESCE(ranked, false) = true AND created_at > now() - interval '15 minutes')`;
-      await sql`DELETE FROM lobbies WHERE created_at < now() - interval '6 hours'`;
+      if (shouldSweep('lobbies-create')) {
+        await sql`DELETE FROM lobbies WHERE COALESCE(last_ping, updated_at) < now() - interval '4 minutes' AND NOT (COALESCE(ranked, false) = true AND created_at > now() - interval '15 minutes')`;
+        await sql`DELETE FROM lobbies WHERE created_at < now() - interval '6 hours'`;
+      }
       // tenta alguns códigos até achar um livre
       for (let attempt = 0; attempt < 5; attempt++) {
         const newCode = genCode();
@@ -530,7 +553,9 @@ export default async function handler(
       // limpa tickets mortos (sem heartbeat) e casados que nunca foram coletados.
       // 90s de folga: no mobile trocar de app (ex.: WhatsApp pra combinar) PAUSA o
       // poll — não dá pra ceifar o ticket rápido demais senão some da fila ao voltar.
-      await sql`DELETE FROM mm_queue WHERE (matched_code IS NULL AND last_seen < now() - interval '90 seconds') OR last_seen < now() - interval '5 minutes'`;
+      if (shouldSweep('mm-queue')) {
+        await sql`DELETE FROM mm_queue WHERE (matched_code IS NULL AND last_seen < now() - interval '90 seconds') OR last_seen < now() - interval '5 minutes'`;
+      }
       await dropQueueTicket(sql, nick); // reset (com compensação se tinha par não-coletado)
       // ticket entra ANTES do pareamento: fecha a janela check-then-insert em
       // que dois queueJoin simultâneos não se enxergavam.
