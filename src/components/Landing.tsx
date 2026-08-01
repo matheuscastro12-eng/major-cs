@@ -269,13 +269,14 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [nudge, setNudge] = useState(false);
-  // funil: dado real (checkout_abandon) mostra abandono só depois de 45s–300s de
-  // QR aberto, nunca em segundos — contradiz a promessa de "aprovado em segundos".
-  // Passado 1min sem confirmar, troca a expectativa por uma reassurance honesta.
+  // funil: refinando o achado anterior — de 60 checkout_abandon (pix) nos últimos
+  // 28 dias, 18 (30%) fecham em menos de 60s, e 11 desses entre 15s–60s, ou seja,
+  // ANTES da reassurance de espera aparecer (ela só ligava aos 60s). Antecipar pra
+  // 25s cobre boa parte desse grupo sem incomodar quem confirma rápido.
   const [pixWaitLong, setPixWaitLong] = useState(false);
   useEffect(() => {
     if (!pix) { setPixWaitLong(false); return; }
-    const t = window.setTimeout(() => setPixWaitLong(true), 60_000);
+    const t = window.setTimeout(() => setPixWaitLong(true), 25_000);
     return () => window.clearTimeout(t);
   }, [pix]);
   useEffect(() => {
@@ -477,7 +478,11 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
           </div>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-            {ct('Pagamento aprovado em segundos — esta tela confirma sozinha, não precisa recarregar.')}
+            {/* funil: a mediana real de espera do Pix é ~133s — "aprovado em
+                segundos" prometia rápido demais e pode ter puxado parte dos 30%
+                de abandonos que saem em menos de 1min. Troca por expectativa
+                honesta desde o primeiro segundo, sem depender só do timer acima. */}
+            {ct('Esta tela confirma sozinha assim que o Pix cair — não precisa recarregar. Costuma levar de 1 a 3 minutos.')}
           </p>
           {pix.charge.qrCodeImage && (
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
