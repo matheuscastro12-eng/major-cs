@@ -556,7 +556,7 @@ function TweetBand() {
 }
 
 export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void; onCheckout: (email: string, nick: string) => Promise<void>; openSignup?: boolean }) {
-  const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar abre direto o cadastro
+  const [acct, setAcct] = useState(!!openSignup); // deep-link /?criar OU clique numa trava dentro do app: pula a landing e abre direto o cadastro
   const [acctMode, setAcctMode] = useState<'signup' | 'login'>('signup');
   const ref = useReveal();
   // funil: CTA da landing abrindo o modal de conta — first-touch, então quem
