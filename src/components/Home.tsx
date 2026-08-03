@@ -440,9 +440,17 @@ function AccountChip({
           cursor: 'pointer',
           boxShadow: '0 4px 14px rgba(232,193,112,0.35)',
           letterSpacing: '0.3px',
+          whiteSpace: 'nowrap',
         }}
       >
-        ★ Criar conta
+        {/* funil: este botão (src acct-chip-guest) é visto por TODA sessão não
+            logada — maior volume do funil (917 paywall_view/28d) — mas convertia
+            0,22% em checkout_open, bem abaixo de upsell-card (2,26%), home-ultimate
+            (1,99%) e landing (1,21%). O valor (R$20, vitalícia) só existia no
+            atributo title, que não aparece em toque/mobile. Deixa o preço visível
+            no próprio texto, igual o resto do app já faz (rtm-supporter-pill,
+            modecard do Road to Pro). */}
+        ★ Criar conta · R$20
       </button>
     );
   }
