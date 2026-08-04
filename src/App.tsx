@@ -1003,7 +1003,12 @@ export default function App() {
       {utGateOpen && !account && (
         <UltimateGate
           onClose={() => setUtGateOpen(false)}
-          onSignup={() => { setUtGateOpen(false); setScreen('landing'); }}
+          /* funil: dado real mostra home-ultimate/home-rtp com paywall_view alto
+             e checkout_open baixo (~0,4-0,6%) contra ~1% do upsell-card — a
+             diferença é que "Entrar" já abre o AccountModal na hora (authOpen)
+             enquanto "Criar conta" mandava pra landing inteira, exigindo achar
+             o CTA de novo. Alinha o cadastro ao mesmo atalho do login. */
+          onSignup={() => { setUtGateOpen(false); setAuthMode('signup'); setAuthOpen(true); }}
           onLogin={() => { setUtGateOpen(false); setAuthMode('login'); setAuthOpen(true); }}
           onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
         />
@@ -1057,7 +1062,10 @@ export default function App() {
           account={account}
           accountReady={accountReady}
           onAccount={() => setScreen(manager ? 'profile' : 'setup')}
-          onCreateAccount={() => setScreen('landing')}
+          /* funil: mesmo ajuste do UltimateGate acima — abre o AccountModal na
+             hora em vez de mandar pro landing inteiro (src = home-rtp/home-pill,
+             maior volume de paywall_view do funil e o de pior conversão). */
+          onCreateAccount={() => { setAuthMode('signup'); setAuthOpen(true); }}
           onLogout={() => { logout(); setCloudEnabled(false); }}
           onAdmin={account?.admin ? () => setScreen('admin') : undefined}
           onAchievements={() => setAchOpen(true)}
