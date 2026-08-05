@@ -1138,3 +1138,11 @@
 .pp-listing-btn { padding: 8px 10px; border-radius: 7px; border: 1px solid var(--em-border); background: transparent; color: var(--em-text); cursor: pointer; font-family: inherit; font-size: 0.78rem; font-weight: 700; text-align: left; }
 .pp-listing-btn:hover { border-color: var(--em-gold); }
 .pp-listing-btn.off { border-color: var(--em-red); color: var(--em-red); }
+/* #22 — foco de treino */
+.pp-focus-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-focus-btn { position: relative; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--em-border); background: transparent; color: var(--em-text); cursor: pointer; font-family: inherit; font-size: 0.76rem; font-weight: 700; }
+.pp-focus-btn:hover { border-color: var(--em-gold); }
+.pp-focus-btn.on { border-color: var(--em-gold); background: rgba(216,169,67,.1); color: var(--em-gold); }
+.pp-focus-btn em { font-style: normal; margin-left: 5px; color: var(--em-green); font-size: 0.68rem; }
+.pp-focus-reco { display: block; font-size: 0.58rem; letter-spacing: 0.5px; color: var(--em-gold); text-transform: uppercase; margin-top: 2px; }
+.pp-focus-hint { margin: 8px 0 0; font-size: 0.7rem; color: var(--em-muted); line-height: 1.4; }

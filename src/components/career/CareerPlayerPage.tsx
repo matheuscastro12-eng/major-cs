@@ -221,6 +221,10 @@ export function CareerPlayerPage({
   listedPrice = null,
   marketValue,
   onList,
+  focusAttr = null,
+  focusSuggested,
+  focusOptions,
+  onFocusAttr,
   form,
   cur,
   seasonGames,
@@ -268,6 +272,10 @@ export function CareerPlayerPage({
   listedPrice?: number | null; // #15: preço pedido se listado à venda
   marketValue?: number; // #15: valor de mercado atual (base das ofertas de listagem)
   onList?: (price: number | null) => void; // #15: listar (preço) / retirar (null)
+  focusAttr?: string | null; // #22: atributo em foco no treino
+  focusSuggested?: string; // #22: sugestão do staff (maior lacuna × relevância da role)
+  focusOptions?: { id: string; label: string; biased: number }[]; // #22: catálogo + viés já acumulado
+  onFocusAttr?: (attr: string | null) => void; // #22: definir/limpar o foco
   /** Forma recente (janela de ratings por série) — chip colorido no Status. */
   form?: FormStatus;
   cur?: { rating: number; kd: number; adr: number; maps?: number };
@@ -569,6 +577,27 @@ export function CareerPlayerPage({
                 <span className={`pp-role-big ${player.role}`}>{player.role}</span>
                 {player.role2 && <span className="pp-role-big alt">{player.role2}</span>}
               </Panel>
+              {/* #22: FOCO DE TREINO — qual atributo este jogador trabalha */}
+              {onFocusAttr && focusOptions && focusOptions.length > 0 && (
+                <Panel title="Foco de treino" icon="brain">
+                  <div className="pp-focus-grid">
+                    {focusOptions.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        className={`pp-focus-btn${focusAttr === o.id ? ' on' : ''}`}
+                        onClick={() => onFocusAttr(focusAttr === o.id ? null : o.id)}
+                        title={o.biased > 0 ? `${ct('Especialização acumulada')}: +${o.biased}` : undefined}
+                      >
+                        {ct(o.label)}
+                        {o.biased > 0 && <em>+{o.biased}</em>}
+                        {focusSuggested === o.id && <span className="pp-focus-reco">★ {ct('recomendado')}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="pp-focus-hint">{ct('Split de desenvolvimento com foco = +1 extra no atributo escolhido (até +4). O staff marca a maior lacuna da função.')}</p>
+                </Panel>
+              )}
               {/* #15: LISTAR À VENDA — a IA dá lances a cada fechamento de split */}
               {onList && marketValue != null && (
                 <Panel title="Mercado" icon="chart-bar">

@@ -28,6 +28,7 @@ import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/care
 import { tryBreakthrough } from '../engine/career/breakthrough';
 import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
 import { tickListedSales, LISTING_MAX_RATIO } from '../engine/career/listedSales';
+import { applyFocusBias, suggestFocus, TRAINING_FOCUS_LABEL, CORE_STATS, type CoreStat } from '../engine/career/training';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -1199,6 +1200,8 @@ interface CareerSave {
   dynamicPotBonus?: Record<string, number>; // #17: teto FURADO por performance (potencial scouted + isto = teto real)
   coachBond?: Record<string, number>; // #31: vínculo jogador↔treinador (0-100, default 50) — eixo separado da moral
   listedPrices?: Record<string, number>; // #15: jogadores SEUS listados à venda (playerId → preço pedido)
+  trainingFocusAttr?: Record<string, CoreStat>; // #22: atributo em foco por jogador (treino direcionado)
+  evoAttrBias?: Record<string, Partial<Record<CoreStat, number>>>; // #22: viés acumulado do foco (+1/split, cap +4)
   satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
@@ -1325,6 +1328,8 @@ const emptySave = (): CareerSave => ({
   coachBond: {},
   satisfaction: {},
   listedPrices: {},
+  trainingFocusAttr: {},
+  evoAttrBias: {},
   objective: null,
   lastObjective: null,
   fired: false,
@@ -3333,16 +3338,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     player = applyBo3PlayerEdit(player, bo3Edits);
     const basePlayer = player;
     const d = save.evo?.[player.id] ?? signingDrift(player, save.split, save.youthDebut);
-    if (!d) return { player, from, basePlayer };
+    // #22: viés do FOCO DE TREINO — o atributo trabalhado abre distância do resto.
+    const bias = save.evoAttrBias?.[player.id];
+    if (!d && !bias) return { player, from, basePlayer };
     const clamp = (v: number) => Math.max(40, Math.min(99, v));
     return {
       player: {
         ...player,
-        aim: clamp(player.aim + d),
-        consistency: clamp(player.consistency + d),
-        clutch: clamp(player.clutch + d),
-        awp: clamp(player.awp + d),
-        igl: clamp(player.igl + d),
+        aim: clamp(player.aim + d + (bias?.aim ?? 0)),
+        consistency: clamp(player.consistency + d + (bias?.consistency ?? 0)),
+        clutch: clamp(player.clutch + d + (bias?.clutch ?? 0)),
+        awp: clamp(player.awp + d + (bias?.awp ?? 0)),
+        igl: clamp(player.igl + d + (bias?.igl ?? 0)),
       },
       from,
       basePlayer,
@@ -3523,12 +3530,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
   // evolução da janela: cada jogador do elenco sobe/cai conforme a fase da
   // carreira (em ascensão / no auge / em declínio). Roda ao fechar o split.
-  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo' | 'dynamicPotBonus'> => {
+  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo' | 'dynamicPotBonus' | 'evoAttrBias'> => {
     // só jogadores do elenco ATUAL carregam evolução: quem foi vendido volta
     // aos atributos base (evita recomprar barato um jogador ainda evoluído)
     const evo: Record<string, number> = {};
     const lastEvo: CareerSave['lastEvo'] = [];
     const dynamicPotBonus: Record<string, number> = { ...(s.dynamicPotBonus ?? {}) };
+    const evoAttrBias: CareerSave['evoAttrBias'] = { ...(s.evoAttrBias ?? {}) };
     for (const sig of s.squad) {
       const f = findSigning(sig);
       if (!f) continue;
@@ -3577,9 +3585,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       if (d > 0) d = Math.min(d, Math.max(0, pot - ovr));
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
+      // #22: FOCO DE TREINO — split de desenvolvimento com foco definido acumula
+      // +1 no atributo escolhido (cap no engine). Veterano em declínio não especializa.
+      const focusAttr = s.trainingFocusAttr?.[sig.playerId];
+      if (focusAttr && d > 0 && !atCeiling) {
+        evoAttrBias[sig.playerId] = applyFocusBias(evoAttrBias[sig.playerId], focusAttr);
+      }
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age), ...(breakthrough ? { breakthrough } : {}) });
     }
-    return { evo, lastEvo, dynamicPotBonus };
+    return { evo, lastEvo, dynamicPotBonus, evoAttrBias };
   };
 
   // #16/#31 — tick de FELICIDADE do fechamento: satisfação composta (5 fatores)
@@ -6334,6 +6348,20 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     if (price == null) delete listedPrices[oid];
                     else listedPrices[oid] = Math.min(price, Math.round(playerValue(p) * LISTING_MAX_RATIO));
                     const next = { ...s, listedPrices };
+                    persist(next);
+                    return next;
+                  });
+                },
+                // #22: foco de treino por atributo (com sugestão do staff)
+                focusAttr: save.trainingFocusAttr?.[oid] ?? null,
+                focusSuggested: suggestFocus(p, save.evoAttrBias?.[oid]),
+                focusOptions: CORE_STATS.map((k) => ({ id: k, label: TRAINING_FOCUS_LABEL[k], biased: save.evoAttrBias?.[oid]?.[k] ?? 0 })),
+                onFocusAttr: (attr: string | null) => {
+                  setSave((s) => {
+                    const trainingFocusAttr = { ...(s.trainingFocusAttr ?? {}) };
+                    if (attr == null) delete trainingFocusAttr[oid];
+                    else trainingFocusAttr[oid] = attr as CoreStat;
+                    const next = { ...s, trainingFocusAttr };
                     persist(next);
                     return next;
                   });
