@@ -225,6 +225,7 @@ export function CareerPlayerPage({
   focusSuggested,
   focusOptions,
   onFocusAttr,
+  watch = null,
   form,
   cur,
   seasonGames,
@@ -276,6 +277,19 @@ export function CareerPlayerPage({
   focusSuggested?: string; // #22: sugestão do staff (maior lacuna × relevância da role)
   focusOptions?: { id: string; label: string; biased: number }[]; // #22: catálogo + viés já acumulado
   onFocusAttr?: (attr: string | null) => void; // #22: definir/limpar o foco
+  /** #41: observatório de scouting — só pra jogador de FORA do elenco.
+   *  level 0 = não acompanhado (mostra o botão Acompanhar). */
+  watch?: {
+    level: number;
+    maxLevel: number;
+    band: number;             // ± da faixa de OVR aparente (0 = exato)
+    apparent: number;         // centro da faixa (OVR aparente do relatório)
+    showPersonality: boolean;
+    showSubRole: boolean;
+    showPotential: boolean;
+    hasScout: boolean;        // com olheiro o nível sobe todo split
+    onToggle: () => void;
+  } | null;
   /** Forma recente (janela de ratings por série) — chip colorido no Status. */
   form?: FormStatus;
   cur?: { rating: number; kd: number; adr: number; maps?: number };
@@ -621,6 +635,38 @@ export function CareerPlayerPage({
                           {o.label} · {fmtPrice(Math.round(marketValue * o.mult))}
                         </button>
                       ))}
+                    </div>
+                  )}
+                </Panel>
+              )}
+              {/* #41: OBSERVATÓRIO — scouting progressivo de alvo fora do elenco */}
+              {watch && (
+                <Panel title="Observatório" icon="search">
+                  {watch.level <= 0 ? (
+                    <div className="pp-listing">
+                      <p className="pp-listing-hint">{ct('Marque este jogador pra acompanhar. A cada fechamento de split o relatório fica mais preciso — com olheiro contratado, duas vezes mais rápido.')}</p>
+                      <button type="button" className="pp-listing-btn" onClick={watch.onToggle}>
+                        🔭 {ct('Acompanhar jogador')}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="pp-listing">
+                      <p className="pp-listing-on">
+                        🔭 {ct('Nível de relatório')} <b>{watch.level}/{watch.maxLevel}</b>
+                        <span> · {watch.hasScout ? ct('olheiro no caso: sobe todo split') : ct('sem olheiro: sobe a cada 2 splits')}</span>
+                      </p>
+                      <p className="pp-listing-hint">
+                        {ct('OVR estimado')}: <b>{watch.band > 0 ? `${watch.apparent - watch.band}–${watch.apparent + watch.band}` : String(watch.apparent)}</b>
+                        {watch.showPotential && <span> · {ct('Potencial')}: <b>{pot}</b> ({potTier})</span>}
+                      </p>
+                      <p className="pp-listing-hint">
+                        {ct('Revelado')}: {ct('função')}
+                        {watch.showPersonality ? ` · ${ct('personalidade')}` : ''}
+                        {watch.showSubRole ? ` · ${ct('sub-função')}` : ''}
+                        {watch.showPotential ? ` · ${ct('potencial')}` : ''}
+                        {watch.level < watch.maxLevel ? ` — ${ct('próximo relatório afina a leitura')}` : ` — ${ct('dossiê completo')}`}
+                      </p>
+                      <button type="button" className="pp-listing-btn off" onClick={watch.onToggle}>{ct('Parar de acompanhar')}</button>
                     </div>
                   )}
                 </Panel>

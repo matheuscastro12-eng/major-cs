@@ -33,6 +33,10 @@ import {
   judgePlayerPromises, hasOpenPromise, PLAYER_PROMISE_LABEL, PROMISE_MADE, PROMISE_KEPT, PROMISE_BROKEN,
   PROMISE_DEADLINE_SPLITS, type PlayerPromise, type PlayerPromiseKind,
 } from '../engine/career/playerPromises';
+import {
+  addToWatchlist, removeFromWatchlist, watchOf, tickWatchlist, revealOf, apparentOvr, REVEAL_MAX,
+  type WatchlistEntry,
+} from '../engine/career/watchlist';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -1206,6 +1210,7 @@ interface CareerSave {
   listedPrices?: Record<string, number>; // #15: jogadores SEUS listados à venda (playerId → preço pedido)
   trainingFocusAttr?: Record<string, CoreStat>; // #22: atributo em foco por jogador (treino direcionado)
   playerPromises?: Record<string, PlayerPromise[]>; // #10: promessas SUAS a jogadores (das conversas), com prazo e cobrança
+  watchlist?: WatchlistEntry[]; // #41: alvos acompanhados — o conhecimento (revealLevel) sobe a cada fechamento
   splitStart?: { split: number; cash: number; ovr: Record<string, number> } | null; // #39: snapshot do INÍCIO do split (review de fechamento)
   evoAttrBias?: Record<string, Partial<Record<CoreStat, number>>>; // #22: viés acumulado do foco (+1/split, cap +4)
   satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
@@ -1337,6 +1342,7 @@ const emptySave = (): CareerSave => ({
   trainingFocusAttr: {},
   evoAttrBias: {},
   playerPromises: {},
+  watchlist: [],
   splitStart: null,
   objective: null,
   lastObjective: null,
@@ -5213,6 +5219,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   ...teamEventTick,
                   ...agingPatchMajor,
                   ...scoutingPatchMajor,
+                  watchlist: tickWatchlist(save.watchlist, save.split, !!save.hiredScoutId), // #41
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
                   majorResult: null, // limpa o resultado reidratável (já consumido)
                   pendingSplit: null,
@@ -5770,6 +5777,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     ...teamEventTick,
                     ...agingPatch,
                     ...scoutingPatch,
+                    watchlist: tickWatchlist(save.watchlist, save.split, !!save.hiredScoutId), // #41
                     league: null,
                     circuit: null,
                     playoff: null,
@@ -6460,7 +6468,34 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   });
                 },
               };
-            })() : {})}
+            })() : (() => {
+              // #41: OBSERVATÓRIO — scouting progressivo pra jogador de FORA do elenco
+              const entry = watchOf(save.watchlist, oid);
+              const level = entry?.revealLevel ?? 0;
+              const rev = revealOf(Math.max(1, level));
+              return {
+                watch: {
+                  level,
+                  maxLevel: REVEAL_MAX,
+                  band: rev.ovrBand,
+                  apparent: apparentOvr(ovr, oid, Math.max(1, level)),
+                  showPersonality: level > 0 && rev.showPersonality,
+                  showSubRole: level > 0 && rev.showSubRole,
+                  showPotential: level > 0 && rev.showPotential,
+                  hasScout: !!save.hiredScoutId,
+                  onToggle: () => {
+                    setSave((s) => {
+                      const watchlist = watchOf(s.watchlist, oid)
+                        ? removeFromWatchlist(s.watchlist, oid)
+                        : addToWatchlist(s.watchlist, oid, p.nick, s.split);
+                      const next = { ...s, watchlist };
+                      persist(next);
+                      return next;
+                    });
+                  },
+                },
+              };
+            })())}
             form={formStatus(save.recentRatings?.[oid])}
             cur={cur}
             seasonGames={cur?.maps ?? 0}
