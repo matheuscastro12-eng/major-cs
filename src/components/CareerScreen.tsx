@@ -25,6 +25,7 @@ import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry } from '../engine/career/boardApproval';
 import { evaluatePromise, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
 import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/career/seasonStats';
+import { tryBreakthrough } from '../engine/career/breakthrough';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -1121,7 +1122,7 @@ interface CareerSave {
   majorResult?: MajorResult | null; // resultado do Major persistido: reidrata a tela de resultado no F5 (evita re-simular a final)
   pendingSplit?: SplitRecord | null; // circuito concluído antes do Major; precisa sobreviver a F5 durante o torneio
   evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
-  lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
+  lastEvo: { nick: string; delta: number; phase: PlayerPhase; breakthrough?: { from: PotTier; to: PotTier } }[]; // última janela (#17: furo de teto marcado)
   sponsorUntil: Record<string, number>; // patrocinador id -> split até onde o contrato vale
   // T3.5: oferta dinâmica gerada pelo engine na virada de split. Quando != null,
   // a UI dispara confirmDialog pra user aceitar/recusar. Expira na próxima virada.
@@ -1193,6 +1194,7 @@ interface CareerSave {
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
   seasonStats?: SeasonStats; // #13: uma linha por jogador POR EVENTO (split/etapa/colocação) — histórico consultável pra sempre
+  dynamicPotBonus?: Record<string, number>; // #17: teto FURADO por performance (potencial scouted + isto = teto real)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
   // snapshot de careerStats no início do ano corrente — o delta vs careerStats
@@ -1314,6 +1316,7 @@ const emptySave = (): CareerSave => ({
   promise: null,
   lastPromise: null,
   seasonStats: {},
+  dynamicPotBonus: {},
   objective: null,
   lastObjective: null,
   fired: false,
@@ -1413,6 +1416,7 @@ function splitNews(ctx: {
   tierChange: 'up' | 'down' | null; tierName?: string;
   releases: string[]; offer: PoachOffer | null;
   risers: string[]; sliders: string[]; unhappy: string[];
+  breakthroughs?: { nick: string; from: string; to: string }[]; // #17: furos de teto do split
   major?: { placement: number | string; champion: boolean } | null;
   boardConfidence?: number;
   star?: { nick: string; rating: number } | null;
@@ -1443,6 +1447,13 @@ function splitNews(ctx: {
     add('star', hot ? '⭐' : '🎯', hot ? 'good' : 'info', 'result', newsroom.storyStar(seed('star'), ctx.star.nick, ctx.star.rating));
   }
   if (ctx.majorNext) add('majorhype', '🌍', 'info', 'scene', newsroom.storyMajorHype(seed('majorhype'), ctx.majorNext));
+  // #17: FUROU O TETO — a manchete de scouting mais gostosa do jogo
+  for (const bt of ctx.breakthroughs ?? []) {
+    add(`bt:${bt.nick}`, '🚀', 'good', 'scout', {
+      title: `${bt.nick} ${ct('está furando o teto')} (${bt.from} → ${bt.to})`,
+      body: `${ct('Os relatórios de scouting subestimaram')} ${bt.nick}${ct(': a sequência recente forçou a reavaliação do potencial. O teto de desenvolvimento subiu — e o treino já respeita o novo limite.')}`,
+    });
+  }
   if (ctx.risers.length) add('rise', '📈', 'good', 'board', newsroom.storyRisers(seed('rise'), ctx.risers.join(', ')));
   if (ctx.sliders.length) add('slide', '📉', 'info', 'board', newsroom.storySliders(seed('slide'), ctx.sliders.join(', '), ctx.sliders.length > 1));
   if (ctx.unhappy.length) add('mood', '😟', 'bad', 'board', newsroom.storyUnhappy(seed('mood'), ctx.unhappy.join(', '), ctx.unhappy.length > 1));
@@ -3504,11 +3515,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
   // evolução da janela: cada jogador do elenco sobe/cai conforme a fase da
   // carreira (em ascensão / no auge / em declínio). Roda ao fechar o split.
-  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo'> => {
+  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo' | 'dynamicPotBonus'> => {
     // só jogadores do elenco ATUAL carregam evolução: quem foi vendido volta
     // aos atributos base (evita recomprar barato um jogador ainda evoluído)
     const evo: Record<string, number> = {};
     const lastEvo: CareerSave['lastEvo'] = [];
+    const dynamicPotBonus: Record<string, number> = { ...(s.dynamicPotBonus ?? {}) };
     for (const sig of s.squad) {
       const f = findSigning(sig);
       if (!f) continue;
@@ -3525,7 +3537,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       // e prospectos contratados no OVR de mercado — potBaseAge resolve a idade de
       // estreia correta pra cada tipo (regen id / youthDebut / dataset).
       const baseAgeForPot = potBaseAge(f.basePlayer, s.youthAge, s.youthDebut);
-      const pot = playerPotentialOvr(f.basePlayer, baseAgeForPot);
+      const potBase = playerPotentialOvr(f.basePlayer, baseAgeForPot);
+      // #17 POTENCIAL DINÂMICO: quem joga muito acima do previsto FURA O TETO.
+      // Avaliado antes do teto valer nesta virada — o breakthrough abre espaço já.
+      const bonus0 = dynamicPotBonus[sig.playerId] ?? 0;
+      const gained = tryBreakthrough({
+        playerId: sig.playerId, split: s.split, age, ovr,
+        pot: Math.min(99, potBase + bonus0),
+        ratings: s.recentRatings?.[sig.playerId],
+        currentBonus: bonus0,
+      });
+      const bonus = bonus0 + gained;
+      if (bonus > 0) dynamicPotBonus[sig.playerId] = bonus;
+      const pot = Math.min(99, potBase + bonus);
+      const breakthrough = gained > 0
+        ? { from: potentialTier(Math.min(99, potBase + bonus0)), to: potentialTier(pot) }
+        : undefined;
       const atCeiling = ovr >= pot;
       let d = evoDelta(sig.playerId, s.split, age, atCeiling);
       // foco de treino: o jogador escolhido desenvolve mais rápido. Jovem/auge
@@ -3542,9 +3569,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       if (d > 0) d = Math.min(d, Math.max(0, pot - ovr));
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
-      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age) });
+      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age), ...(breakthrough ? { breakthrough } : {}) });
     }
-    return { evo, lastEvo };
+    return { evo, lastEvo, dynamicPotBonus };
   };
 
   // evolui os prospectos da academia ao virar o split: jovens sobem rumo ao
@@ -5003,6 +5030,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   tierChange: null, releases: [], offer: null,
                   risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                   sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
+                  breakthroughs: (evo.lastEvo ?? []).filter((e) => e.breakthrough).map((e) => ({ nick: e.nick, ...e.breakthrough! })),
                   unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                   major: { placement: mr.placement, champion: mr.champion },
                   boardConfidence: majBoard,
@@ -5489,6 +5517,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     releases: [], offer,
                     risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                     sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
+                    breakthroughs: (evo.lastEvo ?? []).filter((e) => e.breakthrough).map((e) => ({ nick: e.nick, ...e.breakthrough! })),
                     unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                     boardConfidence: newBoard,
                     star: userSplitStar(me, save.split),
@@ -6142,7 +6171,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const age = isAcademyEntry
           ? Math.max(15, Math.round(p.age ?? 18))
           : effectiveAge(p, save.split, save.youthAge, save.youthDebut);
-        const pot = playerPotentialOvr(p, age);
+        // #17: potencial EFETIVO = scouted + teto furado por performance
+        const potBoost = save.dynamicPotBonus?.[oid] ?? 0;
+        const pot = Math.min(99, playerPotentialOvr(p, age) + potBoost);
         const tier = potentialTier(pot);
         const phase = playerPhase(oid, age);
         const ovr = playerOvr(p);
@@ -6193,6 +6224,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             trainingLevel={normalizeFacilities(save.facilities).training}
             career={deriveCareer(save.careerStats?.[rid])}
             seasonLines={seasonLinesOf(save.seasonStats, rid)}
+            potBoost={save.dynamicPotBonus?.[oid] ?? 0}
             form={formStatus(save.recentRatings?.[oid])}
             cur={cur}
             seasonGames={cur?.maps ?? 0}
@@ -6265,7 +6297,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           };
           const age = effectiveAge(pl, save.split, save.youthAge, save.youthDebut);
           teamAges[pid] = age;
-          teamPotentialMap[pid] = playerPotentialOvr(pl, age);
+          teamPotentialMap[pid] = Math.min(99, playerPotentialOvr(pl, age) + (save.dynamicPotBonus?.[pid] ?? 0));
         }
         return (
           <CareerTeamPage

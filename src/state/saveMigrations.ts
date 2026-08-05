@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 19;
+export const SAVE_VERSION = 20;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -200,6 +200,13 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     seasonStats: save.seasonStats ?? {},
     _v: 19,
+  }),
+  // v19 → v20 (#17 potencial dinâmico): teto furado por performance — save
+  // antigo começa sem nenhum breakthrough.
+  19: (save) => ({
+    ...save,
+    dynamicPotBonus: save.dynamicPotBonus ?? {},
+    _v: 20,
   }),
 };
 

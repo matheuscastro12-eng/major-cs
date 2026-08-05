@@ -207,6 +207,7 @@ export function CareerPlayerPage({
   trainingLevel,
   career,
   seasonLines,
+  potBoost = 0,
   form,
   cur,
   seasonGames,
@@ -248,6 +249,7 @@ export function CareerPlayerPage({
   trainingLevel: number;
   career: CareerDerived | null;
   seasonLines?: SeasonEventLine[]; // #13/#26: linhas por evento (mais recente primeiro)
+  potBoost?: number; // #17: pontos de teto FURADOS por performance (0 = potencial scouted puro)
   /** Forma recente (janela de ratings por série) — chip colorido no Status. */
   form?: FormStatus;
   cur?: { rating: number; kd: number; adr: number; maps?: number };
@@ -580,7 +582,7 @@ export function CareerPlayerPage({
                   <div><span>{ct('Contrato')}</span><b>{contractLeft}</b></div>
                   <div><span>{ct('Time atual')}</span><b>{orgName || '—'}</b></div>
                   <div><span>{ct('Satisfação')}</span><b>{morale}/100</b></div>
-                  <div><span>{ct('Potencial')}</span><b>{pot} ({potTier})</b></div>
+                  <div><span>{ct('Potencial')}</span><b>{pot} ({potTier}){potBoost > 0 && <span className="pp-bt-chip" title={ct('Teto furado por performance')}> 🚀 +{potBoost}</span>}</b></div>
                 </div>
               </Panel>
             </div>

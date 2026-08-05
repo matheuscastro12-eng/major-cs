@@ -1129,3 +1129,5 @@
 .pp-seasons tr:last-child td { border-bottom: none; }
 .pp-seasons .n { text-align: right; font-variant-numeric: tabular-nums; }
 .pp-seasons .ev { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* #17 — chip de teto furado */
+.pp-bt-chip { font-size: 0.72rem; color: var(--em-gold); font-weight: 800; }
