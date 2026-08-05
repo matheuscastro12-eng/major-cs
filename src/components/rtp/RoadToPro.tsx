@@ -17,6 +17,7 @@ import { TIER_NAME, type SeasonEndResult } from '../../engine/rtp/league';
 import { applyLifeChoice } from '../../engine/rtp/lifeEvents';
 import { acceptOffer, negotiateOffer, declineOffers } from '../../engine/rtp/transfers';
 import { RtpLegacy } from './RtpLegacy';
+import { RtpDailySeries } from './RtpDailySeries';
 import { makeRng } from '../../engine/rng';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
@@ -65,6 +66,7 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
   const [booted, setBooted] = useState(false);
   const [playing, setPlaying] = useState(false);   // hub vs partida (liga)
   const [playingMajor, setPlayingMajor] = useState(false);   // partida do Major
+  const [dailyOpen, setDailyOpen] = useState(false);         // SÉRIE DO DIA (desafio global)
   const [notice, setNotice] = useState<RtpNotice | null>(null);
   // Resultado do SIMULAR (modal com placar + stats — não só uma notificação).
   const [simResult, setSimResult] = useState<{ result: ProMatchResult; consequence: MatchConsequence } | null>(null);
@@ -142,6 +144,10 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
   // Carreira encerrada (aposentadoria): tela de legado. Tem prioridade sobre tudo.
   if (save.retired) {
     return <RtpLegacy save={save} onExit={onExit} onReset={() => { deleteRtp(); setSave(null); }} />;
+  }
+  // SÉRIE DO DIA: desafio global diário — fixture próprio, não toca no seu save.
+  if (dailyOpen) {
+    return <RtpDailySeries onExit={() => setDailyOpen(false)} />;
   }
   if (playing) {
     return (
@@ -234,6 +240,7 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
         onRetire={handleRetire}
         onUpdate={handleUpdate}
         onPlayMatch={() => { setNotice(null); setPlaying(true); }}
+        onDaily={() => setDailyOpen(true)}
         onAutoSim={handleAutoSim}
         onResolveEvent={(eventId, optionId) => handleUpdate(applyLifeChoice(save, eventId, optionId))}
         notice={saveError

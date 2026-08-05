@@ -57,8 +57,20 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // aplicado quando os dois lados batem (ver api/_reportPairing.ts).
     sql`CREATE TABLE IF NOT EXISTS rtm_match_reports (code TEXT, email TEXT, nick TEXT, won BOOLEAN NOT NULL, status TEXT DEFAULT 'pending', reported_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (code, email))`,
     sql`CREATE INDEX IF NOT EXISTS rtm_match_reports_email_idx ON rtm_match_reports (email, status)`,
+    // SÉRIE DO DIA (RtP): 1 resultado por conta por dia — o PRIMEIRO vale (sem
+    // re-jogar pra farmar rating). day = nº do desafio (época 2026-08-01).
+    sql`CREATE TABLE IF NOT EXISTS rtm_daily_series (day INT, email TEXT, nick TEXT, rating REAL NOT NULL, won BOOLEAN NOT NULL, map_a INT DEFAULT 0, map_b INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (day, email))`,
+    sql`CREATE INDEX IF NOT EXISTS rtm_daily_series_day_idx ON rtm_daily_series (day, rating DESC)`,
   ]);
   schemaReady = true;
+}
+
+// dia corrente da Série do Dia (mesma época do Diário: 2026-08-01 = dia 1).
+// UTC no servidor; o cliente usa data local — aceita ±1 de folga no report.
+function dailyDayNow(): number {
+  const now = new Date();
+  const days = Math.round((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - Date.UTC(2026, 7, 1)) / 86_400_000);
+  return Math.max(1, days + 1);
 }
 
 export default async function handler(
@@ -94,6 +106,22 @@ export default async function handler(
     return;
   }
 
+  // ── SÉRIE DO DIA ────────────────────────────────────────────────────────────
+  // ladder do dia (público, cacheado no edge). ?day=N (default: hoje).
+  if (action === 'dailyLadder') {
+    const reqDay = Number(q('day') ?? body.day ?? 0) || dailyDayNow();
+    const day = Math.max(1, Math.min(dailyDayNow() + 1, reqDay));
+    const rows = await sql`SELECT nick, rating, won, map_a, map_b FROM rtm_daily_series WHERE day=${day} ORDER BY rating DESC, won DESC, map_a - map_b DESC, created_at ASC LIMIT 50`;
+    const total = await sql`SELECT count(*)::int AS n FROM rtm_daily_series WHERE day=${day}`;
+    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120');
+    res.status(200).json({
+      day,
+      total: total[0]?.n ?? 0,
+      ladder: rows.map((r, i) => ({ rank: i + 1, nick: String(r.nick ?? 'pro'), rating: Number(r.rating), won: !!r.won, mapScore: [Number(r.map_a), Number(r.map_b)] })),
+    });
+    return;
+  }
+
   // campeões da temporada passada (arquivo). Público.
   if (action === 'champions') {
     const prev = season.no - 1;
@@ -111,6 +139,32 @@ export default async function handler(
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
   if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O ranking persistente faz parte da conta com save na nuvem.' }); return; }
   const nick = String((body.nick as string) || acc[0].nick || 'manager').slice(0, 40);
+
+  // report da SÉRIE DO DIA: 1 por conta por dia, o PRIMEIRO vale (ON CONFLICT
+  // DO NOTHING). Sanidade: dia = hoje (±1 de fuso) e rating na faixa real do
+  // motor (0..2.5). Devolve a posição do jogador no dia.
+  if (action === 'dailyReport') {
+    const day = Math.round(Number(body.day) || 0);
+    const rating = Math.round((Number(body.rating) || 0) * 100) / 100;
+    const won = !!body.won;
+    const mapA = Math.max(0, Math.min(3, Math.round(Number(body.mapA) || 0)));
+    const mapB = Math.max(0, Math.min(3, Math.round(Number(body.mapB) || 0)));
+    if (Math.abs(day - dailyDayNow()) > 1) { res.status(400).json({ error: 'dia inválido' }); return; }
+    if (!(rating >= 0 && rating <= 2.5)) { res.status(400).json({ error: 'rating inválido' }); return; }
+    const ins = await sql`INSERT INTO rtm_daily_series (day, email, nick, rating, won, map_a, map_b)
+                          VALUES (${day}, ${email}, ${nick}, ${rating}, ${won}, ${mapA}, ${mapB})
+                          ON CONFLICT (day, email) DO NOTHING RETURNING day`;
+    const mine = await sql`SELECT rating, won FROM rtm_daily_series WHERE day=${day} AND email=${email}`;
+    const better = await sql`SELECT count(*)::int AS n FROM rtm_daily_series WHERE day=${day} AND (rating > ${Number(mine[0]?.rating ?? rating)} OR (rating = ${Number(mine[0]?.rating ?? rating)} AND won AND NOT ${!!(mine[0]?.won ?? won)}))`;
+    res.status(200).json({
+      ok: true,
+      accepted: ins.length > 0,
+      duplicate: ins.length === 0,
+      rating: Number(mine[0]?.rating ?? rating),
+      rank: Number(better[0]?.n ?? 0) + 1,
+    });
+    return;
+  }
 
   // garante a linha do jogador na temporada atual (faz reset lazy se preciso) e devolve o estado fresco.
   const ensureRow = async () => {

@@ -38,11 +38,12 @@ const METERS: { key: LifeMeterKey; label: string; icon: RtpIconName }[] = [
 ];
 const meterColor = (v: number) => (v >= 66 ? 'var(--rtp-win)' : v >= 33 ? 'var(--rtp-warn)' : 'var(--rtp-loss)');
 
-export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onAutoSim, onGoTab }: {
+export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onDaily, onAutoSim, onGoTab }: {
   save: RoadToProSave;
   notice: RtpNotice | null;
   onDismissNotice: () => void;
   onPlayMatch: () => void;
+  onDaily?: () => void;
   onAutoSim: () => void;
   onGoTab?: (id: 'training' | 'market') => void;
 }) {
@@ -100,6 +101,17 @@ export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onAuto
           <span>{notice.text}</span>
           <button type="button" className="rtp-notice-x" onClick={onDismissNotice} aria-label={ct('Fechar')}><RtpIcon name="close" size={14} /></button>
         </div>
+      )}
+      {/* SÉRIE DO DIA — o desafio global diário (mesma série pra todo mundo) */}
+      {onDaily && (
+        <button type="button" className="rtp-daily-banner" onClick={onDaily}>
+          <span className="rtp-daily-banner-badge">{ct('NOVO')}</span>
+          <span className="rtp-daily-banner-body">
+            <b>SÉRIE DO DIA</b>
+            <span>{ct('A mesma série pra todo mundo, um rating pra provar quem joga mais. Uma chance por dia.')}</span>
+          </span>
+          <span className="rtp-daily-banner-go">{ct('Jogar')} →</span>
+        </button>
       )}
       {life.flags.injured && (
         <div className="rtp-injury">

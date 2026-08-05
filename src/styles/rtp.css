@@ -1372,6 +1372,72 @@ html:has(main.page-rtp) { background: #070b11; }
 @media (max-width: 560px) { .rtp .rtp-setup-grid { grid-template-columns: 1fr 1fr; } }
 
 /* ════════════════════════════════════════════════════════════════════════════
+   SÉRIE DO DIA — desafio global diário (mesma série pra todo mundo)
+   ════════════════════════════════════════════════════════════════════════════ */
+.rtp-daily { max-width: 720px; margin: 0 auto; padding: 16px 14px 40px; display: flex; flex-direction: column; gap: 14px; color: var(--rtp-ink); }
+.rtp-daily-topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rtp-daily-chip {
+  font-family: var(--rtp-mono); font-size: .68rem; letter-spacing: 1.6px; font-weight: 800;
+  color: #1a1205; background: var(--rtp-gold); padding: 5px 12px;
+  clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
+}
+.rtp-daily-topnote { font-size: .78rem; color: var(--rtp-ink-dim); }
+.rtp-daily-head { display: flex; align-items: center; gap: 14px; }
+.rtp-daily-title { display: flex; flex-direction: column; gap: 2px; }
+.rtp-daily-title b { font-family: var(--rtp-display); font-size: 1.35rem; letter-spacing: 2px; }
+.rtp-daily-title b span { color: var(--rtp-gold); font-family: var(--rtp-mono); font-size: 1rem; }
+.rtp-daily-title > span { font-size: .76rem; color: var(--rtp-ink-dim); }
+.rtp-daily-brief {
+  border: 1px solid var(--rtp-line); background: var(--rtp-deck);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+  padding: 18px; display: flex; flex-direction: column; gap: 14px;
+}
+.rtp-daily-brief-row { display: flex; align-items: center; gap: 14px; }
+.rtp-daily-brief-cell { flex: 1; display: flex; flex-direction: column; gap: 3px; text-align: center; }
+.rtp-daily-brief-cell span { font-family: var(--rtp-mono); font-size: .6rem; letter-spacing: 1.6px; color: var(--rtp-ink-faint); }
+.rtp-daily-brief-cell b { font-family: var(--rtp-display); font-size: 1.15rem; }
+.rtp-daily-brief-cell em { font-style: normal; font-size: .72rem; color: var(--rtp-ink-dim); }
+.rtp-daily-brief-vs { font-family: var(--rtp-display); font-size: 1.3rem; color: var(--rtp-gold); }
+.rtp-daily-go { align-self: center; padding: 13px 30px; }
+.rtp-daily-once { margin: 0; text-align: center; font-size: .72rem; color: var(--rtp-ink-faint); }
+.rtp-daily-result {
+  border: 1px solid var(--rtp-line); border-left: 4px solid var(--rtp-win); background: var(--rtp-deck);
+  padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+}
+.rtp-daily-result.l { border-left-color: var(--rtp-loss); }
+.rtp-daily-rating b { font-family: var(--rtp-display); font-size: 2.6rem; line-height: 1; color: var(--rtp-gold); display: block; }
+.rtp-daily-rating span { font-family: var(--rtp-mono); font-size: .6rem; letter-spacing: 2px; color: var(--rtp-ink-faint); }
+.rtp-daily-result-meta { display: flex; flex-direction: column; gap: 3px; font-size: .84rem; }
+.rtp-daily-tomorrow { font-family: var(--rtp-mono); font-size: .64rem; color: var(--rtp-ink-faint); }
+.rtp-daily-ladder { border: 1px solid var(--rtp-line); background: var(--rtp-deck); padding: 14px 16px; }
+.rtp-daily-ladder-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.rtp-daily-ladder-head b { font-family: var(--rtp-display); letter-spacing: 1.4px; font-size: .95rem; }
+.rtp-daily-ladder-head span { font-size: .72rem; color: var(--rtp-ink-dim); }
+.rtp-daily-ladder table { width: 100%; border-collapse: collapse; }
+.rtp-daily-ladder td { padding: 6px 4px; border-bottom: 1px solid var(--rtp-line); font-size: .82rem; }
+.rtp-daily-ladder tr:last-child td { border-bottom: none; }
+.rtp-daily-ladder .rk { font-family: var(--rtp-mono); color: var(--rtp-ink-faint); width: 44px; }
+.rtp-daily-ladder .nk { font-weight: 700; }
+.rtp-daily-ladder .sc { text-align: right; color: var(--rtp-ink-dim); font-family: var(--rtp-mono); font-size: .74rem; }
+.rtp-daily-ladder .rt { text-align: right; font-family: var(--rtp-mono); font-weight: 800; color: var(--rtp-gold); width: 60px; }
+.rtp-daily-empty { margin: 4px 0 0; font-size: .78rem; color: var(--rtp-ink-dim); }
+/* banner de entrada no overview */
+.rtp-daily-banner {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--rtp-gold) 45%, transparent); background: linear-gradient(100deg, color-mix(in srgb, var(--rtp-gold) 10%, var(--rtp-deck)), var(--rtp-deck) 55%);
+  color: inherit; font-family: inherit; padding: 13px 16px; margin-bottom: 12px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  transition: border-color .12s, transform .1s;
+}
+.rtp-daily-banner:hover { border-color: var(--rtp-gold); transform: translateY(-1px); }
+.rtp-daily-banner-badge { font-family: var(--rtp-mono); font-size: .58rem; letter-spacing: 1.4px; font-weight: 800; color: #1a1205; background: var(--rtp-gold); padding: 3px 8px; }
+.rtp-daily-banner-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.rtp-daily-banner-body b { font-family: var(--rtp-display); letter-spacing: 1.6px; }
+.rtp-daily-banner-body span { font-size: .74rem; color: var(--rtp-ink-dim); }
+.rtp-daily-banner-go { font-weight: 800; color: var(--rtp-gold); font-size: .82rem; flex-shrink: 0; }
+
+/* ════════════════════════════════════════════════════════════════════════════
    P4 — MINIJOGOS (treino gamificado)
    ════════════════════════════════════════════════════════════════════════════ */
 .rtp-mini-overlay { z-index: 60; }
