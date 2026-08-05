@@ -1206,6 +1206,7 @@ interface CareerSave {
   listedPrices?: Record<string, number>; // #15: jogadores SEUS listados à venda (playerId → preço pedido)
   trainingFocusAttr?: Record<string, CoreStat>; // #22: atributo em foco por jogador (treino direcionado)
   playerPromises?: Record<string, PlayerPromise[]>; // #10: promessas SUAS a jogadores (das conversas), com prazo e cobrança
+  splitStart?: { split: number; cash: number; ovr: Record<string, number> } | null; // #39: snapshot do INÍCIO do split (review de fechamento)
   evoAttrBias?: Record<string, Partial<Record<CoreStat, number>>>; // #22: viés acumulado do foco (+1/split, cap +4)
   satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
@@ -1336,6 +1337,7 @@ const emptySave = (): CareerSave => ({
   trainingFocusAttr: {},
   evoAttrBias: {},
   playerPromises: {},
+  splitStart: null,
   objective: null,
   lastObjective: null,
   fired: false,
@@ -3602,6 +3604,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     return { evo, lastEvo, dynamicPotBonus, evoAttrBias };
   };
 
+
+  // #39 — snapshot do INÍCIO do split novo (OVR resolvido por jogador + caixa):
+  // é a régua contra a qual o PRÓXIMO fechamento mede evolução e lucro.
+  const snapshotSplitStart = (s: CareerSave, split: number, cash: number): CareerSave['splitStart'] => {
+    const ovr: Record<string, number> = {};
+    for (const sig of s.squad) {
+      const f = findSigning(sig);
+      if (f) ovr[sig.playerId] = playerOvr(f.player);
+    }
+    return { split, cash: Math.max(0, Math.round(cash)), ovr };
+  };
+
   // #10 — cobrança das PROMESSAS A JOGADORES no fechamento: cumpriu = moral e
   // vínculo sobem com notícia boa; prazo estourado = despenca com manchete.
   const judgePromisesPatch = (
@@ -5229,6 +5243,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   satisfaction: hap.satisfaction,
                   coachBond: pj.coachBond,
                   playerPromises: pj.playerPromises,
+                  splitStart: snapshotSplitStart(save, save.split + 1, save.budget),
                   // FIM DE TEMPORADA (pós-Major): pré-temporada longa, quase zera a
                   // fadiga — é o reset que evita a espiral de burnout em carreira longa.
                   fatigue: recoverFatigue(save.fatigue, 70, normalizeFacilities(save.facilities).psychologist * 4),
@@ -5436,6 +5451,37 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               {ct('Premiação:')} <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · {ct('Folha:')}{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
+            {/* #39: SPLIT REVIEW — o arco do split em números que importam */}
+            {lastEvent && save.splitStart && save.splitStart.split === save.split && (() => {
+              const start = save.splitStart!;
+              const movers = save.squad
+                .map((sig) => {
+                  const f = findSigning(sig);
+                  if (!f || start.ovr[sig.playerId] == null) return null;
+                  return { nick: f.player.nick, delta: playerOvr(f.player) - start.ovr[sig.playerId] };
+                })
+                .filter((x): x is { nick: string; delta: number } => !!x && x.delta !== 0)
+                .sort((a, b) => b.delta - a.delta);
+              const improved = movers.filter((m) => m.delta > 0).slice(0, 3);
+              const declined = movers.filter((m) => m.delta < 0).slice(-3).reverse();
+              const endCash = Math.max(0, save.budget + prize - payroll);
+              const profit = endCash - start.cash;
+              if (!improved.length && !declined.length && profit === 0) return null;
+              return (
+                <div className="prize-banner" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px', justifyContent: 'center' }}>
+                  <b>{ct('REVIEW DO SPLIT')}</b>
+                  {improved.length > 0 && (
+                    <span>📈 {improved.map((m) => `${m.nick} +${m.delta}`).join(' · ')}</span>
+                  )}
+                  {declined.length > 0 && (
+                    <span>📉 {declined.map((m) => `${m.nick} ${m.delta}`).join(' · ')}</span>
+                  )}
+                  <span style={{ color: profit >= 0 ? 'var(--em-green)' : 'var(--em-red)' }}>
+                    💰 {ct('caixa')} {formatMoney(start.cash)} → {formatMoney(endCash)} ({profit >= 0 ? '+' : ''}{formatMoney(profit)})
+                  </span>
+                </div>
+              );
+            })()}
             {/* #10: veredito da promessa formal — a palavra dada tem cobrança pública */}
             {promise && (
               <div className="prize-banner" style={{ borderColor: promiseMet ? 'var(--em-green)' : 'var(--em-red)' }}>
@@ -5745,6 +5791,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     satisfaction: hap.satisfaction,
                     coachBond: pj.coachBond,
                     playerPromises: pj.playerPromises,
+                    splitStart: snapshotSplitStart(save, save.split + 1, Math.max(0, rawBudget)),
                     // offseason de split (não-Major): descanso de verdade entre splits
                     fatigue: recoverFatigue(save.fatigue, 40, normalizeFacilities(save.facilities).psychologist * 3),
                     restingPlayers: [],
