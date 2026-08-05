@@ -11,6 +11,7 @@ import { CareerIcon, type CareerIconName } from './CareerIcon';
 import { IconChevronLeft } from './DashIcons';
 import { AttributeColumn } from './AttributeColumn';
 import { deriveEventLine, type SeasonEventLine } from '../../engine/career/seasonStats';
+import { HAPPINESS_FACTOR_LABEL, type HappinessBreakdown } from '../../engine/career/happiness';
 import { SubRoleStars } from './SubRoleStars';
 
 type PlayerTab = 'card' | 'overview' | 'personal' | 'performance' | 'career';
@@ -208,6 +209,8 @@ export function CareerPlayerPage({
   career,
   seasonLines,
   potBoost = 0,
+  happiness = null,
+  bond,
   form,
   cur,
   seasonGames,
@@ -250,6 +253,8 @@ export function CareerPlayerPage({
   career: CareerDerived | null;
   seasonLines?: SeasonEventLine[]; // #13/#26: linhas por evento (mais recente primeiro)
   potBoost?: number; // #17: pontos de teto FURADOS por performance (0 = potencial scouted puro)
+  happiness?: HappinessBreakdown | null; // #16: satisfação composta (5 fatores legíveis)
+  bond?: number; // #31: vínculo com você (0-100)
   /** Forma recente (janela de ratings por série) — chip colorido no Status. */
   form?: FormStatus;
   cur?: { rating: number; kd: number; adr: number; maps?: number };
@@ -498,20 +503,39 @@ export function CareerPlayerPage({
                 </div>
               </Panel>
               <Panel title="Felicidade & vínculo">
-                <div className="pp-happy-score"><b>{Math.round((morale + fitness) / 2)}</b><span>/100</span></div>
+                {/* #16: satisfação COMPOSTA — 5 fatores legíveis explicam o porquê */}
+                <div className="pp-happy-score"><b>{happiness ? happiness.overall : Math.round((morale + fitness) / 2)}</b><span>/100</span></div>
                 <div className="pp-bar-list">
-                  {[
-                    { label: ct('Moral'), pct: morale },
-                    { label: ct('Condição física'), pct: fitness },
-                    { label: ct('Desenvolvimento'), pct: developmentProgress },
-                    { label: ct('Centro de treino'), pct: Math.min(100, trainingLevel * 25) },
-                  ].map((b) => (
-                    <div key={b.label} className="pp-bar-item">
-                      <span>{b.label}</span>
-                      <div className="pp-bar-track"><i style={{ width: `${b.pct}%` }} /></div>
-                      <b>{b.pct}%</b>
+                  {happiness ? (
+                    (Object.keys(happiness.factors) as (keyof typeof happiness.factors)[]).map((k) => (
+                      <div key={k} className="pp-bar-item">
+                        <span>{ct(HAPPINESS_FACTOR_LABEL[k])}</span>
+                        <div className="pp-bar-track"><i style={{ width: `${happiness.factors[k]}%` }} /></div>
+                        <b>{happiness.factors[k]}%</b>
+                      </div>
+                    ))
+                  ) : (
+                    [
+                      { label: ct('Moral'), pct: morale },
+                      { label: ct('Condição física'), pct: fitness },
+                      { label: ct('Desenvolvimento'), pct: developmentProgress },
+                      { label: ct('Centro de treino'), pct: Math.min(100, trainingLevel * 25) },
+                    ].map((b) => (
+                      <div key={b.label} className="pp-bar-item">
+                        <span>{b.label}</span>
+                        <div className="pp-bar-track"><i style={{ width: `${b.pct}%` }} /></div>
+                        <b>{b.pct}%</b>
+                      </div>
+                    ))
+                  )}
+                  {/* #31: a relação com VOCÊ é um eixo próprio — conversas constroem, atritos corroem */}
+                  {bond != null && (
+                    <div className="pp-bar-item pp-bond">
+                      <span>{ct('Vínculo com você')}</span>
+                      <div className="pp-bar-track"><i style={{ width: `${bond}%` }} /></div>
+                      <b>{Math.round(bond)}%</b>
                     </div>
-                  ))}
+                  )}
                 </div>
               </Panel>
               <Panel title="Função principal">

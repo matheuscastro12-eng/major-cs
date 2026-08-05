@@ -26,6 +26,7 @@ import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry 
 import { evaluatePromise, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
 import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/career/seasonStats';
 import { tryBreakthrough } from '../engine/career/breakthrough';
+import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -1195,6 +1196,8 @@ interface CareerSave {
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
   seasonStats?: SeasonStats; // #13: uma linha por jogador POR EVENTO (split/etapa/colocação) — histórico consultável pra sempre
   dynamicPotBonus?: Record<string, number>; // #17: teto FURADO por performance (potencial scouted + isto = teto real)
+  coachBond?: Record<string, number>; // #31: vínculo jogador↔treinador (0-100, default 50) — eixo separado da moral
+  satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
   // snapshot de careerStats no início do ano corrente — o delta vs careerStats
@@ -1317,6 +1320,8 @@ const emptySave = (): CareerSave => ({
   lastPromise: null,
   seasonStats: {},
   dynamicPotBonus: {},
+  coachBond: {},
+  satisfaction: {},
   objective: null,
   lastObjective: null,
   fired: false,
@@ -3574,6 +3579,40 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     return { evo, lastEvo, dynamicPotBonus };
   };
 
+  // #16/#31 — tick de FELICIDADE do fechamento: satisfação composta (5 fatores)
+  // suavizada + vínculo estabilizado pelo psicólogo + drift leve da moral rumo à
+  // satisfação. Recebe a moral JÁ processada pelos eventos do fechamento — o
+  // drift estrutural entra por cima, nunca no lugar.
+  const tickHappiness = (
+    s: CareerSave,
+    results01: number,
+    moraleIn: Record<string, number>,
+  ): { satisfaction: Record<string, number>; coachBond: Record<string, number>; morale: Record<string, number> } => {
+    const satisfaction: Record<string, number> = { ...(s.satisfaction ?? {}) };
+    const coachBond: Record<string, number> = { ...(s.coachBond ?? {}) };
+    const morale: Record<string, number> = { ...moraleIn };
+    const psych = normalizeFacilities(s.facilities).psychologist;
+    const ids = s.squad.map((x) => x.playerId);
+    const chemPair = ids.length >= 2 ? averageStarterChemistry({ pairChem: s.pairChem }, ids) : 50;
+    for (const sig of s.squad) {
+      const oid = sig.playerId;
+      const bond = stabilizeBond(coachBond[oid] ?? BOND_DEFAULT, psych);
+      coachBond[oid] = bond;
+      const until = s.contracts?.[oid];
+      const { overall } = computeHappiness({
+        ratings: s.recentRatings?.[oid],
+        results01,
+        contractSplitsLeft: until != null ? until - s.split : null,
+        bond,
+        chemistry: Math.round(((s.playbookXp ?? 50) + chemPair) / 2),
+      });
+      satisfaction[oid] = tickSatisfaction(satisfaction[oid], overall);
+      const m = morale[oid] ?? MORALE_DEFAULT;
+      morale[oid] = Math.max(0, Math.min(100, m + satisfactionMoraleDrift(m, satisfaction[oid])));
+    }
+    return { satisfaction, coachBond, morale };
+  };
+
   // evolui os prospectos da academia ao virar o split: jovens sobem rumo ao
   // potencial; o que está em foco 🎯 desenvolve mais rápido. Cresce nos atributos
   // base guardados (eles não vêm do dataset, então a evolução fica neles mesmos).
@@ -5021,7 +5060,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const until = save.contracts?.[sg.playerId];
                   return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                 });
-                const morale = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }), normalizeFacilities(save.facilities).psychologist);
+                const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }), normalizeFacilities(save.facilities).psychologist);
+                // #16: campanha de Major como fator de resultados (1º=1.0 … fundo=0.45)
+                const majResults01 = mr.champion ? 1 : typeof mr.placement === 'number' ? (mr.placement <= 4 ? 0.8 : mr.placement <= 8 ? 0.6 : 0.45) : 0.6;
+                const hap = tickHappiness(save, majResults01, morale0);
+                const morale = hap.morale;
                 const peakOvr = { ...(save.peakOvr ?? {}) };
                 for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                 const items = splitNews({
@@ -5124,6 +5167,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   objective: null,
                   renewals,
                   morale,
+                  satisfaction: hap.satisfaction,
+                  coachBond: hap.coachBond,
                   // FIM DE TEMPORADA (pós-Major): pré-temporada longa, quase zera a
                   // fadiga — é o reset que evita a espiral de burnout em carreira longa.
                   fatigue: recoverFatigue(save.fatigue, 70, normalizeFacilities(save.facilities).psychologist * 4),
@@ -5507,7 +5552,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     const until = save.contracts?.[sg.playerId];
                     return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                   });
-                  const morale = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }), normalizeFacilities(save.facilities).psychologist);
+                  const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }), normalizeFacilities(save.facilities).psychologist);
+                  // #16: campanha do split como fator de resultados (winrate da liga)
+                  const splitResults01 = me.wins + me.losses > 0 ? me.wins / (me.wins + me.losses) : 0.5;
+                  const hap = tickHappiness(save, splitResults01, morale0);
+                  const morale = hap.morale;
                   const peakOvr = { ...(save.peakOvr ?? {}) };
                   for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                   const items = splitNews({
@@ -5605,6 +5654,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     pendingOffer: offer,
                     renewals,
                     morale,
+                    satisfaction: hap.satisfaction,
+                    coachBond: hap.coachBond,
                     // offseason de split (não-Major): descanso de verdade entre splits
                     fatigue: recoverFatigue(save.fatigue, 40, normalizeFacilities(save.facilities).psychologist * 3),
                     restingPlayers: [],
@@ -6225,6 +6276,25 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             career={deriveCareer(save.careerStats?.[rid])}
             seasonLines={seasonLinesOf(save.seasonStats, rid)}
             potBoost={save.dynamicPotBonus?.[oid] ?? 0}
+            {...(save.squad.some((sg) => sg.playerId === oid) ? (() => {
+              // #16/#31: fatores AO VIVO (a satisfação persistida é a suavizada do tick)
+              const last = save.history[save.history.length - 1];
+              const results01 = last && last.wins + last.losses > 0 ? last.wins / (last.wins + last.losses) : 0.5;
+              const bondNow = save.coachBond?.[oid] ?? BOND_DEFAULT;
+              const ids = save.squad.map((x) => x.playerId);
+              const chemPair = ids.length >= 2 ? averageStarterChemistry({ pairChem: save.pairChem }, ids) : 50;
+              const until = save.contracts?.[oid];
+              return {
+                happiness: computeHappiness({
+                  ratings: save.recentRatings?.[oid],
+                  results01,
+                  contractSplitsLeft: until != null ? until - save.split : null,
+                  bond: bondNow,
+                  chemistry: Math.round(((save.playbookXp ?? 50) + chemPair) / 2),
+                }),
+                bond: bondNow,
+              };
+            })() : {})}
             form={formStatus(save.recentRatings?.[oid])}
             cur={cur}
             seasonGames={cur?.maps ?? 0}
@@ -6547,17 +6617,23 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             age: talkPlayer.age,
             lastTalkAtSplit: save.lastTalkAt?.[talkPlayer.oid],
             playerId: talkPlayer.oid, // T3.2 — personalityTalkResponse precisa do id
+            currentBond: save.coachBond?.[talkPlayer.oid] ?? BOND_DEFAULT, // #31 — vínculo gateia a firmeza
           }}
           onResolve={(result: TalkResult) => {
-            // Aplica delta no morale específico + estampa lastTalkAt
+            // Aplica delta no morale + VÍNCULO (#31) + estampa lastTalkAt
             setSave((s) => {
               const oid = talkPlayer.oid;
               const cur = s.morale?.[oid] ?? MORALE_DEFAULT;
+              const curBond = s.coachBond?.[oid] ?? BOND_DEFAULT;
               const next: CareerSave = {
                 ...s,
                 morale: {
                   ...(s.morale ?? {}),
                   [oid]: Math.max(0, Math.min(100, cur + result.outcome.moraleDelta)),
+                },
+                coachBond: {
+                  ...(s.coachBond ?? {}),
+                  [oid]: Math.max(0, Math.min(100, curBond + result.outcome.bondDelta)),
                 },
                 lastTalkAt: { ...(s.lastTalkAt ?? {}), [oid]: s.split },
               };
