@@ -10,6 +10,7 @@ import { Flag, PlayerAvatar, TeamBadge } from '../ui';
 import { CareerIcon, type CareerIconName } from './CareerIcon';
 import { IconChevronLeft } from './DashIcons';
 import { AttributeColumn } from './AttributeColumn';
+import { deriveEventLine, type SeasonEventLine } from '../../engine/career/seasonStats';
 import { SubRoleStars } from './SubRoleStars';
 
 type PlayerTab = 'card' | 'overview' | 'personal' | 'performance' | 'career';
@@ -205,6 +206,7 @@ export function CareerPlayerPage({
   reducedLoad,
   trainingLevel,
   career,
+  seasonLines,
   form,
   cur,
   seasonGames,
@@ -245,6 +247,7 @@ export function CareerPlayerPage({
   reducedLoad: boolean;
   trainingLevel: number;
   career: CareerDerived | null;
+  seasonLines?: SeasonEventLine[]; // #13/#26: linhas por evento (mais recente primeiro)
   /** Forma recente (janela de ratings por série) — chip colorido no Status. */
   form?: FormStatus;
   cur?: { rating: number; kd: number; adr: number; maps?: number };
@@ -644,6 +647,36 @@ export function CareerPlayerPage({
                 <p className="pp-empty">{ct('Nenhum campeonato disputado ainda.')}</p>
               )}
             </Panel>
+
+            {/* #13/#26: histórico POR EVENTO — como o jogador foi em CADA campeonato */}
+            {seasonLines && seasonLines.length > 0 && (
+              <Panel title={ct('Temporadas')} icon="chart">
+                <table className="pp-seasons">
+                  <thead>
+                    <tr>
+                      <th>{ct('Split')}</th><th>{ct('Campeonato')}</th>
+                      <th className="n">{ct('Mapas')}</th><th className="n">K–D</th>
+                      <th className="n">Rating</th><th className="n">{ct('Colocação')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {seasonLines.slice(0, 12).map((l, i) => {
+                      const d = deriveEventLine(l);
+                      return (
+                        <tr key={`${l.split}:${l.event}:${i}`}>
+                          <td>{l.split}.{l.event}</td>
+                          <td className="ev">{l.eventName}</td>
+                          <td className="n">{l.maps}</td>
+                          <td className="n">{l.k}–{l.d}</td>
+                          <td className="n"><b>{d ? d.rating.toFixed(2) : '—'}</b></td>
+                          <td className="n">{l.champion ? '🏆' : l.placement != null ? `${l.placement}º` : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </Panel>
+            )}
           </div>
         )}
 

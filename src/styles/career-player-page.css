@@ -1121,3 +1121,11 @@
     flex-shrink: 0;
   }
 }
+
+/* #13/#26 — tabela Temporadas (histórico por evento) */
+.pp-seasons { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.pp-seasons th { text-align: left; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.7px; color: var(--em-muted); padding: 4px 6px; border-bottom: 1px solid var(--em-border); }
+.pp-seasons td { padding: 6px; border-bottom: 1px solid var(--em-border); }
+.pp-seasons tr:last-child td { border-bottom: none; }
+.pp-seasons .n { text-align: right; font-variant-numeric: tabular-nums; }
+.pp-seasons .ev { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

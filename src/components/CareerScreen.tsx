@@ -24,6 +24,7 @@ import { applyFatigueForm, careerPlayerId, recoverFatigue, updateMatchFatigue } 
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry } from '../engine/career/boardApproval';
 import { evaluatePromise, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
+import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/career/seasonStats';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -1191,6 +1192,7 @@ interface CareerSave {
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
+  seasonStats?: SeasonStats; // #13: uma linha por jogador POR EVENTO (split/etapa/colocação) — histórico consultável pra sempre
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
   // snapshot de careerStats no início do ano corrente — o delta vs careerStats
@@ -1311,6 +1313,7 @@ const emptySave = (): CareerSave => ({
   boardLog: [],
   promise: null,
   lastPromise: null,
+  seasonStats: {},
   objective: null,
   lastObjective: null,
   fired: false,
@@ -3663,13 +3666,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
   // contabiliza as stats de cada evento UMA vez só. A chave split:event protege
   // contra F5 na tela de resultado sem descartar as etapas 2 e 3.
-  const bankStats = (s: CareerSave): Pick<CareerSave, 'careerStats' | 'careerStatsThru' | 'careerStatsEvent'> => {
+  const bankStats = (
+    s: CareerSave,
+    ev?: { placement: number; champion: boolean },
+  ): Pick<CareerSave, 'careerStats' | 'careerStatsThru' | 'careerStatsEvent' | 'seasonStats'> => {
     const eventKey = careerEventKey(s.split, s.eventInSplit);
     if (!s.league || s.careerStatsEvent === eventKey) {
       return {
         careerStats: s.careerStats ?? {},
         careerStatsThru: s.careerStatsThru ?? 0,
         careerStatsEvent: s.careerStatsEvent,
+        seasonStats: s.seasonStats ?? {},
       };
     }
     const firstEventInSplit = (s.eventInSplit ?? 1) === 1;
@@ -3677,6 +3684,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       careerStats: accumulateCareerStats(s.careerStats, s.league, firstEventInSplit),
       careerStatsThru: s.split,
       careerStatsEvent: eventKey,
+      // #13/#29: histórico por EVENTO (mesmo gate de dedupe do careerStats).
+      // Colocação: a do SEU time (a cena mundial fica em currentEra — fora do save).
+      seasonStats: bankSeasonEvent(s.seasonStats, s.league, {
+        split: s.split,
+        event: s.eventInSplit ?? 1,
+        eventName: s.circuit?.name ?? s.league.name,
+        tier: s.circuit?.tier ?? s.tier,
+        placements: ev ? { user: ev.placement } : undefined,
+        championTeamId: ev?.champion ? 'user' : null,
+      }),
     };
   };
 
@@ -5402,7 +5419,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                       pendingSplit: circuitRecord,
                       // acumula as stats da liga já aqui (o split do Major fecha
                       // depois, mas a liga regular terminou); evita perder o split
-                      ...bankStats(save),
+                      ...bankStats(save, { placement: finalPos, champion: isChampion }),
                     };
                     persist(next);
                     setSave(next);
@@ -5439,7 +5456,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                         endTier: save.tier,
                         wonMajor: false,
                       }),
-                      ...bankStats(save),
+                      ...bankStats(save, { placement: finalPos, champion: isChampion }),
                       // folga curta entre etapas: compensa ~um campeonato jogado
                       fatigue: recoverFatigue(save.fatigue, 16, normalizeFacilities(save.facilities).psychologist * 2),
                       restingPlayers: [],
@@ -5549,7 +5566,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     scenario: applyScenarioProgress(save.scenario, {
                       isChampion, circuitTier, finalPos, qualified, endTier: tierResult.tier, wonMajor: false,
                     }),
-                    ...bankStats(save),
+                    ...bankStats(save, { placement: finalPos, champion: isChampion }),
                     ...evo,
                     ...windowPatch,
                     ...boardPatch,
@@ -6175,6 +6192,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             reducedLoad={save.restingPlayers?.includes(oid) ?? false}
             trainingLevel={normalizeFacilities(save.facilities).training}
             career={deriveCareer(save.careerStats?.[rid])}
+            seasonLines={seasonLinesOf(save.seasonStats, rid)}
             form={formStatus(save.recentRatings?.[oid])}
             cur={cur}
             seasonGames={cur?.maps ?? 0}
