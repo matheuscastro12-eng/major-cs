@@ -1131,3 +1131,10 @@
 .pp-seasons .ev { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* #17 — chip de teto furado */
 .pp-bt-chip { font-size: 0.72rem; color: var(--em-gold); font-weight: 800; }
+/* #15 — listagem de venda */
+.pp-listing { display: flex; flex-direction: column; gap: 7px; }
+.pp-listing-hint, .pp-listing-on { margin: 0; font-size: 0.76rem; color: var(--em-muted); line-height: 1.45; }
+.pp-listing-on b { color: var(--em-gold); }
+.pp-listing-btn { padding: 8px 10px; border-radius: 7px; border: 1px solid var(--em-border); background: transparent; color: var(--em-text); cursor: pointer; font-family: inherit; font-size: 0.78rem; font-weight: 700; text-align: left; }
+.pp-listing-btn:hover { border-color: var(--em-gold); }
+.pp-listing-btn.off { border-color: var(--em-red); color: var(--em-red); }

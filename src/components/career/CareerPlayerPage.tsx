@@ -35,6 +35,13 @@ const TABS: { id: PlayerTab; label: string; icon: CareerIconName }[] = [
   { id: 'career', label: 'Carreira', icon: 'trophy' },
 ];
 
+// #15: preço curto pra UI de listagem (R$ 1,2M / R$ 850k)
+function fmtPrice(v: number): string {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1).replace('.', ',')}M`;
+  if (v >= 1_000) return `R$ ${Math.round(v / 1_000)}k`;
+  return `R$ ${v}`;
+}
+
 function fmScale(v: number): number {
   return Math.round(((Math.max(40, Math.min(99, v)) - 40) / 59) * 20 * 10) / 10;
 }
@@ -211,6 +218,9 @@ export function CareerPlayerPage({
   potBoost = 0,
   happiness = null,
   bond,
+  listedPrice = null,
+  marketValue,
+  onList,
   form,
   cur,
   seasonGames,
@@ -255,6 +265,9 @@ export function CareerPlayerPage({
   potBoost?: number; // #17: pontos de teto FURADOS por performance (0 = potencial scouted puro)
   happiness?: HappinessBreakdown | null; // #16: satisfação composta (5 fatores legíveis)
   bond?: number; // #31: vínculo com você (0-100)
+  listedPrice?: number | null; // #15: preço pedido se listado à venda
+  marketValue?: number; // #15: valor de mercado atual (base das ofertas de listagem)
+  onList?: (price: number | null) => void; // #15: listar (preço) / retirar (null)
   /** Forma recente (janela de ratings por série) — chip colorido no Status. */
   form?: FormStatus;
   cur?: { rating: number; kd: number; adr: number; maps?: number };
@@ -556,6 +569,33 @@ export function CareerPlayerPage({
                 <span className={`pp-role-big ${player.role}`}>{player.role}</span>
                 {player.role2 && <span className="pp-role-big alt">{player.role2}</span>}
               </Panel>
+              {/* #15: LISTAR À VENDA — a IA dá lances a cada fechamento de split */}
+              {onList && marketValue != null && (
+                <Panel title="Mercado" icon="chart-bar">
+                  {listedPrice != null ? (
+                    <div className="pp-listing">
+                      <p className="pp-listing-on">
+                        🏷️ {ct('Listado por')} <b>{fmtPrice(listedPrice)}</b>
+                        <span> · {ct('a IA avalia a cada fechamento de split')}</span>
+                      </p>
+                      <button type="button" className="pp-listing-btn off" onClick={() => onList(null)}>{ct('Retirar do mercado')}</button>
+                    </div>
+                  ) : (
+                    <div className="pp-listing">
+                      <p className="pp-listing-hint">{ct('Valor de mercado')}: <b>{fmtPrice(marketValue)}</b>. {ct('Preço baixo vende rápido; ganância encalha.')}</p>
+                      {[
+                        { label: ct('Venda rápida'), mult: 0.8 },
+                        { label: ct('Preço justo'), mult: 1.0 },
+                        { label: ct('Valorizado'), mult: 1.3 },
+                      ].map((o) => (
+                        <button key={o.mult} type="button" className="pp-listing-btn" onClick={() => onList(Math.round(marketValue * o.mult))}>
+                          {o.label} · {fmtPrice(Math.round(marketValue * o.mult))}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </Panel>
+              )}
             </aside>
           </div>
         )}

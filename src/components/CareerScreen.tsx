@@ -27,6 +27,7 @@ import { evaluatePromise, type BoardPromise, type PromiseOutcome } from '../engi
 import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/career/seasonStats';
 import { tryBreakthrough } from '../engine/career/breakthrough';
 import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
+import { tickListedSales, LISTING_MAX_RATIO } from '../engine/career/listedSales';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -1197,6 +1198,7 @@ interface CareerSave {
   seasonStats?: SeasonStats; // #13: uma linha por jogador POR EVENTO (split/etapa/colocação) — histórico consultável pra sempre
   dynamicPotBonus?: Record<string, number>; // #17: teto FURADO por performance (potencial scouted + isto = teto real)
   coachBond?: Record<string, number>; // #31: vínculo jogador↔treinador (0-100, default 50) — eixo separado da moral
+  listedPrices?: Record<string, number>; // #15: jogadores SEUS listados à venda (playerId → preço pedido)
   satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
@@ -1322,6 +1324,7 @@ const emptySave = (): CareerSave => ({
   dynamicPotBonus: {},
   coachBond: {},
   satisfaction: {},
+  listedPrices: {},
   objective: null,
   lastObjective: null,
   fired: false,
@@ -5613,6 +5616,32 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
                   // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                   const { marketNews, ...windowPatch } = applyTransferWindow(save);
+                  // #15: jogadores LISTADOS à venda — a IA dá o lance no fechamento.
+                  // Venda fechada entra no trilho existente (pendingSales → janela).
+                  const alreadySelling = new Set((save.pendingSales ?? []).map((x) => x.playerId));
+                  const listedHits = tickListedSales({
+                    listed: save.listedPrices ?? {},
+                    split: save.split,
+                    valueOf: (pid) => {
+                      const sig = save.squad.find((x) => x.playerId === pid);
+                      const f = sig ? findSigning(sig) : null;
+                      return f ? playerValue(f.player) : null;
+                    },
+                    buyers: oppEra.filter((t) => t.id !== save.takeoverId).map((t) => ({ id: t.id, name: t.team, tag: t.tag })),
+                    exclude: alreadySelling,
+                  });
+                  const listedSales = listedHits.map((h) => {
+                    const sig = save.squad.find((x) => x.playerId === h.playerId);
+                    const f = sig ? findSigning(sig) : null;
+                    return { playerId: h.playerId, nick: f?.player.nick ?? h.playerId, fee: h.fee, toTag: h.buyer.tag, toId: h.buyer.id };
+                  });
+                  const listedPricesLeft = { ...(save.listedPrices ?? {}) };
+                  for (const h of listedHits) delete listedPricesLeft[h.playerId];
+                  const listedNews: NewsItem[] = listedSales.map((sv) => ({
+                    id: `${save.split}:listed:${sv.playerId}`, split: save.split, icon: '💰', tone: 'good', cat: 'transfer',
+                    title: `${ct('Proposta aceita:')} ${sv.nick} → ${sv.toTag}`,
+                    body: `${ct('O clube topou o preço pedido')} (${formatMoney(sv.fee)}). ${ct('A transferência se concretiza na janela do próximo split.')}`,
+                  }));
                   // #8: fechar o split no vermelho (receitas não cobriram a folha)
                   // também corrói a confiança — a diretoria vê o caixa, não só a tabela.
                   const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
@@ -5662,7 +5691,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    ...pushNews(save, [...items, ...listedNews, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    // #15: vendas de jogadores LISTADOS entram no trilho da janela
+                    pendingSales: [...(save.pendingSales ?? []), ...listedSales],
+                    listedPrices: listedPricesLeft,
                   };
                   const fin = consummateDeals(next);
                   persist(fin);
@@ -6293,6 +6325,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   chemistry: Math.round(((save.playbookXp ?? 50) + chemPair) / 2),
                 }),
                 bond: bondNow,
+                // #15: listagem de venda — só pro seu elenco
+                listedPrice: save.listedPrices?.[oid] ?? null,
+                marketValue: playerValue(p),
+                onList: (price: number | null) => {
+                  setSave((s) => {
+                    const listedPrices = { ...(s.listedPrices ?? {}) };
+                    if (price == null) delete listedPrices[oid];
+                    else listedPrices[oid] = Math.min(price, Math.round(playerValue(p) * LISTING_MAX_RATIO));
+                    const next = { ...s, listedPrices };
+                    persist(next);
+                    return next;
+                  });
+                },
               };
             })() : {})}
             form={formStatus(save.recentRatings?.[oid])}
