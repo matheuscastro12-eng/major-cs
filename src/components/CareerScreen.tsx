@@ -23,6 +23,7 @@ import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career
 import { applyFatigueForm, careerPlayerId, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry } from '../engine/career/boardApproval';
+import { evaluatePromise, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -1183,6 +1184,8 @@ interface CareerSave {
   boardLog?: BoardLogEntry[]; // #8: histórico dos ajustes de confiança (ring de 12), mais recente primeiro
   objective?: BoardObjective | null; // meta da diretoria pro split atual
   lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
+  promise?: BoardPromise | null; // #10: promessa FORMAL firmada por você (aporte agora, julgamento no fim do split)
+  lastPromise?: PromiseOutcome | null; // resultado da última promessa (dashboard/news citam)
   fired?: boolean; // demitido pela diretoria (confiança no chão)
   contracts?: Record<string, number>; // playerId -> split em que o contrato termina (inclusive)
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
@@ -1306,6 +1309,8 @@ const emptySave = (): CareerSave => ({
   tierChange: null,
   board: 60,
   boardLog: [],
+  promise: null,
+  lastPromise: null,
   objective: null,
   lastObjective: null,
   fired: false,
@@ -5228,14 +5233,27 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       ? applyBoardDelta(drifted, save.boardLog, save.split, boardDelta,
           objMet ? `${ct('Objetivo cumprido:')} ${ct(obj.text)}` : `${ct('Objetivo falhou:')} ${ct(obj.text)}`)
       : { board: Math.max(0, Math.min(100, drifted)), boardLog: save.boardLog ?? [] };
-    const newBoard = boardObj.board;
+    // PROMESSA FORMAL (#10): julgada aqui junto com a meta — o aporte já caiu no
+    // caixa ao firmar; agora é a hora de pagar (ou não) a conta da palavra dada.
+    const promise = save.promise && save.promise.split === save.split ? save.promise : null;
+    const promiseMet = promise
+      ? evaluatePromise(promise, { isChampion, qualifiedMajor: qualified, finalPos, tierChange: tierResult.tierChange })
+      : null;
+    const boardProm = promise
+      ? applyBoardDelta(boardObj.board, boardObj.boardLog, save.split,
+          promiseMet ? promise.keepDelta : promise.breakDelta,
+          promiseMet ? `${ct('Promessa CUMPRIDA:')} ${ct(promise.text)}` : `${ct('Promessa QUEBRADA:')} ${ct(promise.text)}`)
+      : boardObj;
+    const newBoard = boardProm.board;
     const objBonus = obj && objMet ? obj.bonus : 0;
     const fired = !!obj && newBoard <= 12; // confiança no chão -> demitido
     const boardPatch = {
       board: newBoard,
-      boardLog: boardObj.boardLog,
+      boardLog: boardProm.boardLog,
       lastObjective: obj ? { text: obj.text, met: objMet, delta: boardDelta } : null,
       objective: null,
+      promise: null,
+      lastPromise: promise ? ({ text: promise.text, met: !!promiseMet, split: save.split } satisfies PromiseOutcome) : (save.lastPromise ?? null),
       fired,
     };
 
@@ -5268,6 +5286,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               {ct('Premiação:')} <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · {ct('Folha:')}{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
+            {/* #10: veredito da promessa formal — a palavra dada tem cobrança pública */}
+            {promise && (
+              <div className="prize-banner" style={{ borderColor: promiseMet ? 'var(--em-green)' : 'var(--em-red)' }}>
+                {promiseMet
+                  ? <>🤝 <b>{ct('Promessa CUMPRIDA:')}</b> {ct(promise.text)} — {ct('a diretoria não esquece quem honra a palavra.')}</>
+                  : <>💥 <b style={{ color: 'var(--em-red)' }}>{ct('Promessa QUEBRADA:')}</b> {ct(promise.text)} — {ct('você deu a palavra. A conta chegou.')}</>}
+              </div>
+            )}
             {!lastEvent && (
               <div className="tier-banner up">
                 ✔ {ct('Etapa')} {ev}/{EVENTS_PER_SPLIT} {ct('concluída.')} {ct('Faltam')} {EVENTS_PER_SPLIT - ev} {ct('etapa(s) pra fechar o split — aí entra o offseason (mercado, evolução, renovações). Até lá, mesmo elenco.')}
