@@ -28,15 +28,20 @@ interface Props {
   /** Aplica o resultado no save (atualiza morale + lastTalkAt). */
   onResolve: (result: TalkResult) => void;
   onClose: () => void;
+  /** #10: promessa FORMAL que a conversa destrava, POR TÓPICO. null = indisponível/já prometida. */
+  promiseOfferFor?: (topic: TalkTopicId) => { kind: string; label: string } | null;
+  /** #10: firmar a promessa (chamado no outcome, uma vez). */
+  onPromise?: (kind: string) => void;
 }
 
 type Stage = 'topic' | 'tone' | 'outcome' | 'cooldown';
 
-export function PlayerTalkModal({ playerNick, playerState, onResolve, onClose }: Props) {
+export function PlayerTalkModal({ playerNick, playerState, onResolve, onClose, promiseOfferFor, onPromise }: Props) {
   const initialStage: Stage = canTalkNow(playerState) ? 'topic' : 'cooldown';
   const [stage, setStage] = useState<Stage>(initialStage);
   const [topic, setTopic] = useState<TalkTopicId | null>(null);
   const [result, setResult] = useState<TalkResult | null>(null);
+  const [promised, setPromised] = useState(false);   // #10: promessa firmada nesta conversa
 
   const pickTone = (tone: TalkTone) => {
     if (!topic) return;
@@ -138,6 +143,25 @@ export function PlayerTalkModal({ playerNick, playerState, onResolve, onClose }:
             {result.outcome.outcome}
           </p>
           <MoraleDeltaChip delta={result.outcome.moraleDelta} tone={result.outcome.tone} />
+          {/* #10: a conversa abriu espaço pra uma PROMESSA formal — com prazo e cobrança */}
+          {(() => { const promiseOffer = promiseOfferFor?.(result.topic) ?? null; return promiseOffer && onPromise && (
+            promised ? (
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#5ed88a' }}>
+                🤝 Prometido. Ele vai cobrar — o prazo é de 2 splits.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setPromised(true); onPromise(promiseOffer.kind); }}
+                style={{ padding: '9px 12px', borderRadius: 6, border: '1px solid var(--em-gold)', background: 'rgba(216,169,67,.08)', color: 'var(--em-gold)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.82rem', textAlign: 'left' }}
+              >
+                🤝 {promiseOffer.label}
+                <span style={{ display: 'block', fontWeight: 400, fontSize: '0.7rem', color: 'var(--em-muted)', marginTop: 2 }}>
+                  Moral e vínculo sobem AGORA. Prazo de 2 splits — quebrar cobra caro (-15 moral, -18 vínculo).
+                </span>
+              </button>
+            )
+          ); })()}
           <div style={{ textAlign: 'right', marginTop: 6 }}>
             <Button variant="primary" onClick={closeAfterOutcome}>Continuar</Button>
           </div>

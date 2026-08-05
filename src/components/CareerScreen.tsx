@@ -29,6 +29,10 @@ import { tryBreakthrough } from '../engine/career/breakthrough';
 import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
 import { tickListedSales, LISTING_MAX_RATIO } from '../engine/career/listedSales';
 import { applyFocusBias, suggestFocus, TRAINING_FOCUS_LABEL, CORE_STATS, type CoreStat } from '../engine/career/training';
+import {
+  judgePlayerPromises, hasOpenPromise, PLAYER_PROMISE_LABEL, PROMISE_MADE, PROMISE_KEPT, PROMISE_BROKEN,
+  PROMISE_DEADLINE_SPLITS, type PlayerPromise, type PlayerPromiseKind,
+} from '../engine/career/playerPromises';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -1201,6 +1205,7 @@ interface CareerSave {
   coachBond?: Record<string, number>; // #31: vínculo jogador↔treinador (0-100, default 50) — eixo separado da moral
   listedPrices?: Record<string, number>; // #15: jogadores SEUS listados à venda (playerId → preço pedido)
   trainingFocusAttr?: Record<string, CoreStat>; // #22: atributo em foco por jogador (treino direcionado)
+  playerPromises?: Record<string, PlayerPromise[]>; // #10: promessas SUAS a jogadores (das conversas), com prazo e cobrança
   evoAttrBias?: Record<string, Partial<Record<CoreStat, number>>>; // #22: viés acumulado do foco (+1/split, cap +4)
   satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
@@ -1330,6 +1335,7 @@ const emptySave = (): CareerSave => ({
   listedPrices: {},
   trainingFocusAttr: {},
   evoAttrBias: {},
+  playerPromises: {},
   objective: null,
   lastObjective: null,
   fired: false,
@@ -3596,6 +3602,41 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     return { evo, lastEvo, dynamicPotBonus, evoAttrBias };
   };
 
+  // #10 — cobrança das PROMESSAS A JOGADORES no fechamento: cumpriu = moral e
+  // vínculo sobem com notícia boa; prazo estourado = despenca com manchete.
+  const judgePromisesPatch = (
+    s: CareerSave,
+    moraleIn: Record<string, number>,
+    bondIn: Record<string, number>,
+  ): { playerPromises: CareerSave['playerPromises']; morale: Record<string, number>; coachBond: Record<string, number>; news: NewsItem[] } => {
+    const { promises, outcomes } = judgePlayerPromises(s.playerPromises, {
+      split: s.split,
+      contractUntil: (pid) => s.contracts?.[pid] ?? null,
+      squadIds: s.squad.map((x) => x.playerId),
+      fatigue: (pid) => s.fatigue?.[pid] ?? 0,
+    });
+    const morale = { ...moraleIn };
+    const coachBond = { ...bondIn };
+    const news: NewsItem[] = [];
+    const clampV = (v: number) => Math.max(0, Math.min(100, v));
+    for (const o of outcomes) {
+      const f = findSigning(s.squad.find((x) => x.playerId === o.playerId) ?? { playerId: o.playerId, fromId: '' } as Signing);
+      const nick = f?.player.nick ?? o.playerId;
+      const eff = o.kept ? PROMISE_KEPT : PROMISE_BROKEN;
+      morale[o.playerId] = clampV((morale[o.playerId] ?? MORALE_DEFAULT) + eff.morale);
+      coachBond[o.playerId] = clampV((coachBond[o.playerId] ?? BOND_DEFAULT) + eff.bond);
+      news.push({
+        id: `${s.split}:pprom:${o.playerId}:${o.kind}`, split: s.split, icon: o.kept ? '🤝' : '💔',
+        tone: o.kept ? 'good' : 'bad', cat: 'board',
+        title: o.kept ? `${ct('Palavra cumprida com')} ${nick}` : `${ct('Promessa quebrada com')} ${nick}`,
+        body: o.kept
+          ? `"${ct(PLAYER_PROMISE_LABEL[o.kind])}" — ${ct('você cumpriu. O vestiário nota quem honra o que fala.')}`
+          : `"${ct(PLAYER_PROMISE_LABEL[o.kind])}" — ${ct('o prazo estourou. A relação azedou, e o vestiário conversa.')}`,
+      });
+    }
+    return { playerPromises: promises, morale, coachBond, news };
+  };
+
   // #16/#31 — tick de FELICIDADE do fechamento: satisfação composta (5 fatores)
   // suavizada + vínculo estabilizado pelo psicólogo + drift leve da moral rumo à
   // satisfação. Recebe a moral JÁ processada pelos eventos do fechamento — o
@@ -5081,7 +5122,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 // #16: campanha de Major como fator de resultados (1º=1.0 … fundo=0.45)
                 const majResults01 = mr.champion ? 1 : typeof mr.placement === 'number' ? (mr.placement <= 4 ? 0.8 : mr.placement <= 8 ? 0.6 : 0.45) : 0.6;
                 const hap = tickHappiness(save, majResults01, morale0);
-                const morale = hap.morale;
+                const pj = judgePromisesPatch(save, hap.morale, hap.coachBond);
+                const morale = pj.morale;
                 const peakOvr = { ...(save.peakOvr ?? {}) };
                 for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                 const items = splitNews({
@@ -5185,7 +5227,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   renewals,
                   morale,
                   satisfaction: hap.satisfaction,
-                  coachBond: hap.coachBond,
+                  coachBond: pj.coachBond,
+                  playerPromises: pj.playerPromises,
                   // FIM DE TEMPORADA (pós-Major): pré-temporada longa, quase zera a
                   // fadiga — é o reset que evita a espiral de burnout em carreira longa.
                   fatigue: recoverFatigue(save.fatigue, 70, normalizeFacilities(save.facilities).psychologist * 4),
@@ -5193,7 +5236,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                  ...pushNews(save, [...items, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
+                  ...pushNews(save, [...items, ...pj.news, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
                 const fin = consummateDeals(next);
                 persist(fin);
@@ -5573,7 +5616,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   // #16: campanha do split como fator de resultados (winrate da liga)
                   const splitResults01 = me.wins + me.losses > 0 ? me.wins / (me.wins + me.losses) : 0.5;
                   const hap = tickHappiness(save, splitResults01, morale0);
-                  const morale = hap.morale;
+                  // #10: cobrança das promessas a jogadores (em cima do tick de felicidade)
+                  const pj = judgePromisesPatch(save, hap.morale, hap.coachBond);
+                  const morale = pj.morale;
                   const peakOvr = { ...(save.peakOvr ?? {}) };
                   for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                   const items = splitNews({
@@ -5698,14 +5743,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     renewals,
                     morale,
                     satisfaction: hap.satisfaction,
-                    coachBond: hap.coachBond,
+                    coachBond: pj.coachBond,
+                    playerPromises: pj.playerPromises,
                     // offseason de split (não-Major): descanso de verdade entre splits
                     fatigue: recoverFatigue(save.fatigue, 40, normalizeFacilities(save.facilities).psychologist * 3),
                     restingPlayers: [],
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...listedNews, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    ...pushNews(save, [...items, ...listedNews, ...pj.news, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
                     // #15: vendas de jogadores LISTADOS entram no trilho da janela
                     pendingSales: [...(save.pendingSales ?? []), ...listedSales],
                     listedPrices: listedPricesLeft,
@@ -6691,6 +6737,41 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             lastTalkAtSplit: save.lastTalkAt?.[talkPlayer.oid],
             playerId: talkPlayer.oid, // T3.2 — personalityTalkResponse precisa do id
             currentBond: save.coachBond?.[talkPlayer.oid] ?? BOND_DEFAULT, // #31 — vínculo gateia a firmeza
+          }}
+          // #10: tópicos que destravam promessa FORMAL (com prazo e cobrança)
+          promiseOfferFor={(topic) => {
+            const kind: PlayerPromiseKind | null =
+              topic === 'extension' ? 'extension'
+              : topic === 'playtime' ? 'signing'
+              : topic === 'effort' || topic === 'behavior' ? 'workload'
+              : null;
+            if (!kind || hasOpenPromise(save.playerPromises, talkPlayer.oid, kind)) return null;
+            return { kind, label: ct(PLAYER_PROMISE_LABEL[kind]) };
+          }}
+          onPromise={(kindRaw) => {
+            const kind = kindRaw as PlayerPromiseKind;
+            setSave((s) => {
+              const oid = talkPlayer.oid;
+              const p: PlayerPromise = {
+                kind,
+                madeAtSplit: s.split,
+                deadlineSplit: s.split + PROMISE_DEADLINE_SPLITS,
+                contractUntilAt: kind === 'extension' ? (s.contracts?.[oid] ?? null) : undefined,
+                squadIdsAt: kind === 'signing' ? s.squad.map((x) => x.playerId) : undefined,
+                status: 'open',
+              };
+              const cur = s.morale?.[oid] ?? MORALE_DEFAULT;
+              const curBond = s.coachBond?.[oid] ?? BOND_DEFAULT;
+              const next: CareerSave = {
+                ...s,
+                playerPromises: { ...(s.playerPromises ?? {}), [oid]: [...(s.playerPromises?.[oid] ?? []), p] },
+                // a esperança conta na hora (+6 moral, +3 vínculo)
+                morale: { ...(s.morale ?? {}), [oid]: Math.max(0, Math.min(100, cur + PROMISE_MADE.morale)) },
+                coachBond: { ...(s.coachBond ?? {}), [oid]: Math.max(0, Math.min(100, curBond + PROMISE_MADE.bond)) },
+              };
+              persist(next);
+              return next;
+            });
           }}
           onResolve={(result: TalkResult) => {
             // Aplica delta no morale + VÍNCULO (#31) + estampa lastTalkAt
