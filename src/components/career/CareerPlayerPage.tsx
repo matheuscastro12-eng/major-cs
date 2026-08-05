@@ -12,6 +12,7 @@ import { IconChevronLeft } from './DashIcons';
 import { AttributeColumn } from './AttributeColumn';
 import { deriveEventLine, type SeasonEventLine } from '../../engine/career/seasonStats';
 import { HAPPINESS_FACTOR_LABEL, type HappinessBreakdown } from '../../engine/career/happiness';
+import { physicalStatus, satisfactionStatus, disciplineStatus, reputationStatus } from '../../engine/career/playerStatus';
 import { SubRoleStars } from './SubRoleStars';
 
 type PlayerTab = 'card' | 'overview' | 'personal' | 'performance' | 'career';
@@ -195,7 +196,6 @@ export function CareerPlayerPage({
   personalityLabel,
   personalityDesc,
   morale,
-  moraleLabel,
   moraleIcon,
   fatigue,
   valueLabel,
@@ -495,10 +495,24 @@ export function CareerPlayerPage({
                       <b>{cur ? cur.rating.toFixed(2) : ct('Sem dados')}</b>
                     )}
                   </div>
-                  <div><span>{ct('Físico')}</span><b>{fitness}/100</b></div>
-                  <div><span>{ct('Satisfação')}</span><b>{moraleLabel} {satisfaction}/100</b></div>
-                  <div><span>{ct('Disciplina')}</span><b>{morale >= 60 ? ct('Boa') : ct('Instável')}</b></div>
-                  <div><span>{ct('Fadiga')}</span><b>{fatigue}/100</b></div>
+                  {/* #32: números crus viram TIERS legíveis (pill com cor) */}
+                  {(() => {
+                    const phys = physicalStatus(fatigue);
+                    const sat = satisfactionStatus(happiness ? happiness.overall : satisfaction);
+                    const disc = disciplineStatus(player);
+                    const rep = reputationStatus(peakOvr, titles);
+                    const pill = (s: { label: string; color: string; value: number }) => (
+                      <b style={{ color: s.color }} title={`${s.value}/100`}>{ct(s.label)}</b>
+                    );
+                    return (
+                      <>
+                        <div><span>{ct('Físico')}</span>{pill(phys)}</div>
+                        <div><span>{ct('Satisfação')}</span>{pill(sat)}</div>
+                        <div><span>{ct('Disciplina')}</span>{pill(disc)}</div>
+                        <div><span>{ct('Reputação')}</span>{pill(rep)}</div>
+                      </>
+                    );
+                  })()}
                   <div><span>{ct('Treino')}</span><b>{focused ? ct('Ativo') : ct('Inativo')}</b></div>
                 </div>
               </Panel>
