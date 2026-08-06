@@ -136,3 +136,38 @@ test('classic: rodada determinística, resposta consistente, regras de 2 picks',
   assert.deepEqual(applyClassicPick(r, freshClassic(), 'x-9-9').picks, []);
   assert.ok(shareTextOfClassic(key(2), r, won, 0).includes('DE PRIMEIRA'));
 });
+
+test('dia perfeito: status agrega, streak encadeia por dia e é idempotente', async () => {
+  // localStorage fake pro módulo de state rodar no Node
+  const store = new Map<string, string>();
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+    removeItem: (k: string) => { store.delete(k); },
+  };
+  const { saveDailyProgress, dailyDayStatus, syncPerfectStreak, PERFECT_KEY, loadDailyStreak } =
+    await import('../src/state/daily.ts');
+  const ids = ['lines', 'whois', 'impostor', 'classic'];
+  const d1 = key(0), d2 = key(1);
+  // 3 vitórias + 1 aberto = não perfeito
+  for (const id of ids.slice(0, 3)) saveDailyProgress(id, d1, { done: true, won: true });
+  let st = dailyDayStatus(ids, d1);
+  assert.deepEqual([st.done, st.won, st.perfect], [3, 3, false]);
+  assert.equal(syncPerfectStreak(ids, d1).streak, 0);
+  // fecha o 4º com vitória = perfeito; sync repetido não conta 2x
+  saveDailyProgress('classic', d1, { done: true, won: true });
+  assert.equal(dailyDayStatus(ids, d1).perfect, true);
+  assert.equal(syncPerfectStreak(ids, d1).streak, 1);
+  assert.equal(syncPerfectStreak(ids, d1).streak, 1);
+  // dia seguinte perfeito encadeia (🔥 2)
+  for (const id of ids) saveDailyProgress(id, d2, { done: true, won: true });
+  assert.equal(syncPerfectStreak(ids, d2).streak, 2);
+  assert.equal(loadDailyStreak(PERFECT_KEY).best, 2);
+  // derrota em 1 jogo no d3 = dia não perfeito, streak não avança (fica em 2 até quebrar)
+  const d3 = key(2);
+  for (const id of ids.slice(0, 3)) saveDailyProgress(id, d3, { done: true, won: true });
+  saveDailyProgress('classic', d3, { done: true, won: false });
+  assert.equal(dailyDayStatus(ids, d3).perfect, false);
+  assert.equal(syncPerfectStreak(ids, d3).streak, 2);
+  delete (globalThis as Record<string, unknown>).localStorage;
+});

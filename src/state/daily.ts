@@ -68,3 +68,50 @@ export function saveDailyProgress(gameId: string, dateKey: string, p: DailyProgr
 export function loadDailyStreak(gameId: string): DailyStreak {
   return load().streaks[gameId] ?? { lastDate: '', streak: 0, best: 0, plays: 0, wins: 0 };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DIA PERFEITO — o meta-loop do hub: venceu os 4 jogos do dia = ✨. Tem streak
+// própria (chave reservada 'perfect', fora do namespace dos jogos).
+
+export const PERFECT_KEY = 'perfect';
+
+export interface DailyDayStatus {
+  perGame: Record<string, DailyProgressBase | null>;
+  done: number;      // jogos fechados hoje
+  won: number;       // jogos vencidos hoje
+  total: number;
+  perfect: boolean;  // venceu TODOS
+}
+
+export function dailyDayStatus(gameIds: string[], dateKey: string): DailyDayStatus {
+  const s = load();
+  const perGame: Record<string, DailyProgressBase | null> = {};
+  let done = 0, won = 0;
+  for (const id of gameIds) {
+    const cur = s.progress[id];
+    const p = cur && cur.dateKey === dateKey ? cur.p : null;
+    perGame[id] = p;
+    if (p?.done) done += 1;
+    if (p?.done && p.won) won += 1;
+  }
+  return { perGame, done, won, total: gameIds.length, perfect: gameIds.length > 0 && won === gameIds.length };
+}
+
+// chama após QUALQUER jogo fechar: se o dia ficou perfeito, avança a streak
+// global (mesma regra dos jogos: ontem encadeia; repetido no dia é no-op).
+export function syncPerfectStreak(gameIds: string[], dateKey: string): DailyStreak {
+  const s = load();
+  const st = s.streaks[PERFECT_KEY] ?? { lastDate: '', streak: 0, best: 0, plays: 0, wins: 0 };
+  const status = dailyDayStatus(gameIds, dateKey);
+  if (status.perfect && st.lastDate !== dateKey) {
+    const yesterday = dateKeyOf(new Date(new Date(`${dateKey}T12:00:00`).getTime() - 86_400_000));
+    st.streak = st.lastDate === yesterday ? st.streak + 1 : 1;
+    st.best = Math.max(st.best, st.streak);
+    st.wins += 1;
+    st.plays += 1;
+    st.lastDate = dateKey;
+    s.streaks[PERFECT_KEY] = st;
+    save(s);
+  }
+  return st;
+}

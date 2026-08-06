@@ -1120,7 +1120,7 @@ export default function App() {
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
       {RTP_ENABLED && account?.paid && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
-      {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} />}
+      {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (

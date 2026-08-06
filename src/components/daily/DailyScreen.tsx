@@ -24,8 +24,9 @@ import {
   type ClassicProgress,
 } from '../../engine/daily/classics';
 import { CS2_REAL_2026 } from '../../data/bo3';
-import { loadDailyProgress, saveDailyProgress, loadDailyStreak } from '../../state/daily';
+import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY } from '../../state/daily';
 import { pingDailyGame, fetchDailyGamesStats, type DailyGamesStats } from '../../state/dailyGamesApi';
+import { ultimateIndex, ultimateTotw } from '../../state/ultimate';
 import '../../styles/daily.css';
 
 // ISO alpha-2 → emoji de bandeira (regional indicators)
@@ -37,7 +38,7 @@ const ROLE_LABEL: Record<string, string> = {
   IGL: 'IGL', AWP: 'AWP', Rifler: 'Rifle', Entry: 'Entry', Support: 'Suporte', Lurker: 'Lurker', Coach: 'Coach',
 };
 
-export function DailyScreen({ onExit }: { onExit: () => void }) {
+export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGoUltimate?: () => void }) {
   const [view, setView] = useState<'hub' | 'lines' | 'whois' | 'impostor' | 'classic'>('hub');
   const dateKey = dateKeyOf(new Date());
   const day = dayNumberOf(dateKey);
@@ -49,6 +50,30 @@ export function DailyScreen({ onExit }: { onExit: () => void }) {
     void fetchDailyGamesStats(day).then((s) => { if (alive) setStats(s); });
     return () => { alive = false; };
   }, [day]);
+  // ✨ DIA PERFEITO — recomputado sempre que volta pro hub (idempotente)
+  const gameIds = DAILY_GAMES.map((g) => g.id);
+  const dayStatus = view === 'hub' ? dailyDayStatus(gameIds, dateKey) : null;
+  useEffect(() => {
+    if (view === 'hub') syncPerfectStreak(gameIds, dateKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, dateKey]);
+  const perfectStreak = loadDailyStreak(PERFECT_KEY);
+  const [dayCopied, setDayCopied] = useState(false);
+
+  const shareDay = async () => {
+    if (!dayStatus) return;
+    const cells = DAILY_GAMES.map((g) => {
+      const p = dayStatus.perGame[g.id];
+      return `${g.icon}${p?.done ? (p.won ? '✅' : '❌') : '▫️'}`;
+    }).join(' ');
+    const perfect = dayStatus.perfect
+      ? `\n✨ DIA PERFEITO${perfectStreak.streak >= 2 ? ` · 🔥 ${perfectStreak.streak} dias perfeitos seguidos` : ''}`
+      : '';
+    const text = `DIÁRIO #${day} · MAJOR//CS\n${cells} — ${dayStatus.won}/${dayStatus.total}${perfect}\nroadtomajor.com.br/diario`;
+    track('daily_share', { game: 'day', day, won: dayStatus.perfect });
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
+    try { await navigator.clipboard.writeText(text); setDayCopied(true); setTimeout(() => setDayCopied(false), 1800); } catch { /* sem clipboard */ }
+  };
 
   return (
     <div className="rtm-daily">
@@ -86,6 +111,47 @@ export function DailyScreen({ onExit }: { onExit: () => void }) {
               </button>
             );
           })}
+          {/* ✨ SEU DIA — o meta-loop de completar os 4 */}
+          {dayStatus && dayStatus.done > 0 && (
+            <div className={`rtm-daily-dayrow${dayStatus.perfect ? ' perfect' : ''}`}>
+              <span className="rtm-daily-daycells">
+                {DAILY_GAMES.map((g) => {
+                  const p = dayStatus.perGame[g.id];
+                  return <span key={g.id}>{g.icon}{p?.done ? (p.won ? '✅' : '❌') : '▫️'}</span>;
+                })}
+              </span>
+              <b>
+                {dayStatus.perfect
+                  ? <>✨ {ct('DIA PERFEITO')}{perfectStreak.streak >= 2 ? ` · 🔥 ${perfectStreak.streak}` : ''}</>
+                  : `${dayStatus.won}/${dayStatus.total}`}
+              </b>
+              <button type="button" onClick={() => { void shareDay(); }}>
+                {dayCopied ? ct('Copiado! 😉') : ct('Compartilhar meu dia')}
+              </button>
+            </div>
+          )}
+          {/* vitrine: o TOTW da semana do ULTIMATE (cross-sell grátis → pago) */}
+          {(() => {
+            try {
+              const totw = ultimateTotw();
+              if (totw.weekIndex < 0) return null;
+              const idx = ultimateIndex();
+              const nicks = totw.playerIds.map((pid) => idx.get(`${pid}:totw`)?.nick).filter(Boolean).join(' · ');
+              if (!nicks) return null;
+              return (
+                <div className="rtm-daily-totw">
+                  <b>⚡ {ct('TIME DA SEMANA no ULTIMATE')}</b>
+                  <span className="rtm-daily-totw-names">{nicks}</span>
+                  <span className="rtm-daily-totw-sub">{ct('7 in-forms novos toda segunda — colecione cartas no Ultimate Squad.')}</span>
+                  {onGoUltimate && (
+                    <button type="button" onClick={() => { track('daily_totw_cta', { day }); onGoUltimate(); }}>
+                      {ct('Conhecer o Ultimate')} →
+                    </button>
+                  )}
+                </div>
+              );
+            } catch { return null; } // catálogo indisponível — o Diário nunca quebra por causa da vitrine
+          })()}
           <p className="rtm-daily-soon">{ct('Quatro desafios por dia, os mesmos pra todo mundo — prove que você manja de CS e cole o resultado no grupo.')}</p>
         </div>
       )}

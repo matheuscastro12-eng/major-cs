@@ -213,3 +213,32 @@
 .rtm-classic-opt:disabled { cursor: default; }
 .rtm-classic-opt.wrong { border-left-color: var(--dl-loss); background: color-mix(in srgb, var(--dl-loss) 8%, var(--dl-panel)); opacity: .85; }
 .rtm-classic-opt.ans { border-left-color: var(--dl-win); background: color-mix(in srgb, var(--dl-win) 10%, var(--dl-panel)); }
+
+/* ── SEU DIA (✨ dia perfeito) + vitrine TOTW no hub */
+.rtm-daily-dayrow {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border: 1px solid var(--dl-line); border-left: 3px solid var(--dl-t);
+  background: var(--dl-panel); font-size: 0.9rem;
+}
+.rtm-daily-dayrow.perfect { border-left-color: var(--dl-win); background: color-mix(in srgb, var(--dl-win) 7%, var(--dl-panel)); }
+.rtm-daily-daycells { display: flex; gap: 10px; font-size: 1rem; }
+.rtm-daily-dayrow b { font-family: var(--dl-cond); letter-spacing: 1px; }
+.rtm-daily-dayrow button {
+  margin-left: auto; padding: 8px 14px; cursor: pointer; border: none;
+  background: var(--dl-t); color: #1a1205; font-weight: 800; font-size: 0.74rem;
+  font-family: var(--dl-cond); letter-spacing: 1.4px; text-transform: uppercase;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+.rtm-daily-totw {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 13px 14px; border: 1px solid var(--dl-line); border-left: 3px solid #38bdf8;
+  background: color-mix(in srgb, #38bdf8 6%, var(--dl-panel));
+}
+.rtm-daily-totw b { font-family: var(--dl-cond); letter-spacing: 1.2px; font-size: 0.86rem; }
+.rtm-daily-totw-names { font-family: var(--dl-mono); font-size: 0.76rem; color: var(--dl-dim); }
+.rtm-daily-totw-sub { font-size: 0.78rem; color: var(--dl-dim); }
+.rtm-daily-totw button {
+  align-self: flex-start; margin-top: 4px; padding: 8px 14px; cursor: pointer;
+  border: 1px solid #38bdf8; background: none; color: #38bdf8; font-weight: 800;
+  font-size: 0.74rem; font-family: var(--dl-cond); letter-spacing: 1.4px; text-transform: uppercase;
+}
