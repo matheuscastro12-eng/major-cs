@@ -2,7 +2,11 @@
 // localStorage puro, um namespace só ('rtm-daily-v1'), tolerante a corrupção.
 // Sem cloud de propósito: o Diário é grátis e sem conta — atrito zero.
 
-import { dateKeyOf, type LinesProgress } from '../engine/daily/lines';
+import { dateKeyOf } from '../engine/daily/lines';
+
+// forma mínima que o store precisa entender — cada jogo tem seu shape completo
+// (LinesProgress, WhoisProgress, ImpostorProgress…), todos com done/won.
+export interface DailyProgressBase { done: boolean; won: boolean }
 
 const KEY = 'rtm-daily-v1';
 
@@ -16,7 +20,7 @@ export interface DailyStreak {
 
 interface DailyStore {
   // progresso por jogo/dia — só guardamos o dia corrente (histórico não importa)
-  progress: Record<string, { dateKey: string; p: LinesProgress }>;
+  progress: Record<string, { dateKey: string; p: DailyProgressBase }>;
   streaks: Record<string, DailyStreak>;
 }
 
@@ -32,13 +36,13 @@ function save(s: DailyStore): void {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* sem storage */ }
 }
 
-export function loadDailyProgress(gameId: string, dateKey: string): LinesProgress | null {
+export function loadDailyProgress<T extends DailyProgressBase = DailyProgressBase>(gameId: string, dateKey: string): T | null {
   const s = load();
   const cur = s.progress[gameId];
-  return cur && cur.dateKey === dateKey ? cur.p : null;
+  return cur && cur.dateKey === dateKey ? (cur.p as T) : null;
 }
 
-export function saveDailyProgress(gameId: string, dateKey: string, p: LinesProgress): void {
+export function saveDailyProgress(gameId: string, dateKey: string, p: DailyProgressBase): void {
   const s = load();
   s.progress[gameId] = { dateKey, p };
   // fechou o dia com vitória → streak (ontem completa a sequência; hoje repetido é no-op)

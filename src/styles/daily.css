@@ -179,3 +179,24 @@
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
 }
 .rtm-lines-tomorrow { font-family: var(--dl-mono); font-size: 0.66rem; letter-spacing: 0.5px; color: var(--dl-dim); }
+
+/* ── QUEM É O PRO? — tabela de dicas por chute */
+.rtm-whois-rows { display: flex; flex-direction: column; gap: 4px; }
+.rtm-whois-row {
+  display: grid; grid-template-columns: 1fr 44px 44px 52px 44px; align-items: center;
+  padding: 7px 12px; border: 1px solid var(--dl-line); border-left: 3px solid var(--dl-line);
+  background: var(--dl-panel); font-family: var(--dl-mono); font-size: 0.8rem; text-align: center;
+}
+.rtm-whois-row b { text-align: left; font-family: var(--dl-cond); letter-spacing: 0.8px; font-size: 0.9rem; }
+.rtm-whois-row.rtm-whois-head {
+  border: none; background: none; padding: 2px 12px;
+  font-size: 0.6rem; letter-spacing: 1px; text-transform: uppercase; color: var(--dl-dim);
+}
+.rtm-whois-row.rtm-whois-head span:first-child { text-align: left; }
+.rtm-whois-unknown { align-self: center; font-family: var(--dl-mono); font-size: 0.68rem; color: var(--dl-loss); }
+.rtm-whois-count { align-self: center; font-family: var(--dl-mono); font-size: 0.7rem; letter-spacing: 1px; color: var(--dl-dim); }
+
+/* ── O IMPOSTOR — slots viram botões de suspeita */
+.rtm-imp-slot { cursor: pointer; text-align: left; font: inherit; color: inherit; width: 100%; }
+.rtm-imp-slot:disabled { cursor: default; opacity: 0.92; }
+.rtm-imp-slot:not(:disabled):hover { border-left-color: var(--dl-t); }

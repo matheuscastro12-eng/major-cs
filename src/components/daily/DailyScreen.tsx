@@ -11,6 +11,15 @@ import {
   applyGuess, freshProgress, giveUp, shareTextOf, MAX_ERRORS,
   type LinesProgress,
 } from '../../engine/daily/lines';
+import {
+  whoisPool, whoisOfDay, findInPool, applyWhoisGuess, freshWhois, giveUpWhois,
+  shareTextOfWhois, WHOIS_MAX, type WhoisProgress, type ClueCell, type OvrClue,
+} from '../../engine/daily/whois';
+import {
+  impostorOfDay, applyPick, freshImpostor, shareTextOfImpostor, IMPOSTOR_TRIES,
+  type ImpostorProgress,
+} from '../../engine/daily/impostor';
+import { CS2_REAL_2026 } from '../../data/bo3';
 import { loadDailyProgress, saveDailyProgress, loadDailyStreak } from '../../state/daily';
 import '../../styles/daily.css';
 
@@ -24,10 +33,10 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export function DailyScreen({ onExit }: { onExit: () => void }) {
-  const [view, setView] = useState<'hub' | 'lines'>('hub');
+  const [view, setView] = useState<'hub' | 'lines' | 'whois' | 'impostor'>('hub');
   const dateKey = dateKeyOf(new Date());
   const day = dayNumberOf(dateKey);
-  const streak = loadDailyStreak('lines');
+  const streak = loadDailyStreak(view === 'hub' ? 'lines' : view);
 
   return (
     <div className="rtm-daily">
@@ -46,7 +55,7 @@ export function DailyScreen({ onExit }: { onExit: () => void }) {
             const p = loadDailyProgress(g.id, dateKey);
             const status = p?.done ? (p.won ? ct('completo · volte amanhã') : ct('foi por pouco · volte amanhã')) : p ? ct('em andamento') : ct('novo desafio disponível');
             return (
-              <button key={g.id} type="button" className="rtm-daily-card" data-done={p?.done ? '' : undefined} onClick={() => setView('lines')}>
+              <button key={g.id} type="button" className="rtm-daily-card" data-done={p?.done ? '' : undefined} onClick={() => setView(g.id as 'lines' | 'whois' | 'impostor')}>
                 <span className="rtm-daily-card-icon">{g.icon}</span>
                 <span className="rtm-daily-card-body">
                   <b>{g.title}</b>
@@ -57,11 +66,13 @@ export function DailyScreen({ onExit }: { onExit: () => void }) {
               </button>
             );
           })}
-          <p className="rtm-daily-soon">{ct('Mais minigames diários em breve — todo dia, um jeito novo de provar que você manja de CS.')}</p>
+          <p className="rtm-daily-soon">{ct('Três desafios por dia, os mesmos pra todo mundo — prove que você manja de CS e cole o resultado no grupo.')}</p>
         </div>
       )}
 
       {view === 'lines' && <LinesGame dateKey={dateKey} streakNow={streak.streak} />}
+      {view === 'whois' && <WhoisGame dateKey={dateKey} />}
+      {view === 'impostor' && <ImpostorGame dateKey={dateKey} />}
     </div>
   );
 }
@@ -73,7 +84,7 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
   const line = useMemo(() => lineOfDay(dateKey), [dateKey]);
   const order = useMemo(() => slotOrderOf(dateKey, line), [dateKey, line]);
   const [progress, setProgress] = useState<LinesProgress>(() => {
-    const saved = loadDailyProgress('lines', dateKey);
+    const saved = loadDailyProgress<LinesProgress>('lines', dateKey);
     if (!saved) track('daily_play', { game: 'lines', day: dayNumberOf(dateKey), lineId: line.id });
     return saved ?? freshProgress();
   });
@@ -193,6 +204,201 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
           <span className="rtm-lines-tomorrow">{ct('Próxima line à meia-noite.')}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QUEM É O PRO? — caça ao jogador misterioso com dicas por dimensão
+
+const CLUE_EMOJI: Record<ClueCell, string> = { hit: '🟩', near: '🟨', miss: '🟥' };
+const OVR_EMOJI: Record<OvrClue, string> = { hit: '🟩', up: '⬆️', down: '⬇️' };
+
+function WhoisGame({ dateKey }: { dateKey: string }) {
+  const pool = useMemo(() => whoisPool(CS2_REAL_2026), []);
+  const target = useMemo(() => whoisOfDay(dateKey, pool), [dateKey, pool]);
+  const [progress, setProgress] = useState<WhoisProgress>(() => {
+    const saved = loadDailyProgress<WhoisProgress>('whois', dateKey);
+    if (!saved) track('daily_play', { game: 'whois', day: dayNumberOf(dateKey) });
+    return saved ?? freshWhois();
+  });
+  const [guess, setGuess] = useState('');
+  const [unknown, setUnknown] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const commit = (p: WhoisProgress) => {
+    setProgress(p);
+    saveDailyProgress('whois', dateKey, p);
+    if (p.done) track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length });
+  };
+
+  const submit = () => {
+    if (!guess.trim() || progress.done) return;
+    const entry = findInPool(pool, guess);
+    if (!entry) { setUnknown(true); setTimeout(() => setUnknown(false), 1600); return; } // desconhecido não gasta chute
+    commit(applyWhoisGuess(target, progress, entry));
+    setGuess('');
+    inputRef.current?.focus();
+  };
+
+  const doShare = async () => {
+    const st = loadDailyStreak('whois');
+    const text = shareTextOfWhois(dateKey, progress, st.streak);
+    track('daily_share', { game: 'whois', day: dayNumberOf(dateKey), won: progress.won });
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* sem clipboard */ }
+  };
+
+  return (
+    <div className="rtm-lines">
+      <div className="rtm-lines-brief">
+        <span className="rtm-lines-kicker">{ct('CACE O PRO')}</span>
+        <b>{ct('Um jogador do cenário 2026')}</b>
+        <p>{ct('Chute nicks: cada erro compara TIME · PAÍS · FUNÇÃO · OVR com o alvo. 🟩 igual, 🟨 quente, ⬆️⬇️ o alvo está acima/abaixo.')}</p>
+      </div>
+
+      {/* histórico de chutes — a tabela de dicas é o jogo */}
+      {progress.guesses.length > 0 && (
+        <div className="rtm-whois-rows">
+          <div className="rtm-whois-row rtm-whois-head">
+            <span>{ct('Chute')}</span><span>{ct('Time')}</span><span>{ct('País')}</span><span>{ct('Função')}</span><span>OVR</span>
+          </div>
+          {progress.guesses.map((g, i) => (
+            <div key={i} className="rtm-whois-row">
+              <b>{g.nick}</b>
+              <span>{CLUE_EMOJI[g.team]}</span>
+              <span>{CLUE_EMOJI[g.country]}</span>
+              <span>{CLUE_EMOJI[g.role]}</span>
+              <span>{OVR_EMOJI[g.ovr]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!progress.done ? (
+        <>
+          <div className="rtm-lines-inputrow">
+            <div className="rtm-lines-prompt">
+              <input
+                ref={inputRef}
+                value={guess}
+                onChange={(e) => setGuess(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                placeholder={ct('digite um nick do cenário 2026')}
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </div>
+            <button type="button" className="rtm-lines-go" onClick={submit}>{ct('Chutar')}</button>
+          </div>
+          {unknown && <span className="rtm-whois-unknown">{ct('Nick não reconhecido no cenário 2026 — esse não gasta chute.')}</span>}
+          <span className="rtm-whois-count">{progress.guesses.length}/{WHOIS_MAX} {ct('chutes')}</span>
+          <button type="button" className="rtm-lines-giveup" onClick={() => { if (window.confirm(ct('Desistir revela o pro e zera sua sequência. Certeza?'))) commit(giveUpWhois(progress)); }}>
+            {ct('Desistir e revelar')}
+          </button>
+        </>
+      ) : (
+        <div className="rtm-lines-result">
+          <b className={progress.won ? 'w' : 'l'}>
+            {progress.won ? `${ct('ERA')} ${target.nick.toUpperCase()}!` : `${ct('ERA')} ${target.nick.toUpperCase()} (${target.team})`}
+          </b>
+          <span className="rtm-lines-result-sub">
+            {progress.won
+              ? `${ct('Cravado em')} ${progress.guesses.length}/${WHOIS_MAX} — ${target.team} · ${target.role} · OVR ${target.ovr}`
+              : ct('Amanhã tem outro pro misterioso.')}
+          </span>
+          <button type="button" className="rtm-lines-share" onClick={doShare}>
+            {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
+          </button>
+          <span className="rtm-lines-tomorrow">{ct('Próximo pro à meia-noite.')}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O IMPOSTOR — a line histórica com um infiltrado
+
+function ImpostorGame({ dateKey }: { dateKey: string }) {
+  const round = useMemo(() => impostorOfDay(dateKey), [dateKey]);
+  const [progress, setProgress] = useState<ImpostorProgress>(() => {
+    const saved = loadDailyProgress<ImpostorProgress>('impostor', dateKey);
+    if (!saved) track('daily_play', { game: 'impostor', day: dayNumberOf(dateKey) });
+    return saved ?? freshImpostor();
+  });
+  const [copied, setCopied] = useState(false);
+
+  const pickSuspect = (idx: number) => {
+    if (progress.done || progress.picks.includes(idx)) return;
+    const next = applyPick(round, progress, idx);
+    setProgress(next);
+    saveDailyProgress('impostor', dateKey, next);
+    if (next.done) track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length });
+  };
+
+  const doShare = async () => {
+    const st = loadDailyStreak('impostor');
+    const text = shareTextOfImpostor(dateKey, round, progress, st.streak);
+    track('daily_share', { game: 'impostor', day: dayNumberOf(dateKey), won: progress.won });
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* sem clipboard */ }
+  };
+
+  return (
+    <div className="rtm-lines">
+      <div className="rtm-lines-brief">
+        <span className="rtm-lines-kicker">{ct('ACHE O INFILTRADO')}</span>
+        <b>{round.team} · {round.year}</b>
+        <p>{round.context} {ct('Um destes 5 NUNCA jogou nessa line — aponte o impostor em até')} {IMPOSTOR_TRIES} {ct('tentativas.')}</p>
+      </div>
+
+      <div className="rtm-lines-slots">
+        {round.players.map((pl, idx) => {
+          const picked = progress.picks.includes(idx);
+          const isImp = idx === round.impostorIdx;
+          const revealImp = progress.done && isImp;
+          const wrongPick = picked && !isImp;
+          return (
+            <button
+              key={idx}
+              type="button"
+              className={`rtm-lines-slot rtm-imp-slot${revealImp ? ' missed' : ''}${wrongPick ? ' hit' : ''}`}
+              onClick={() => pickSuspect(idx)}
+              disabled={progress.done || picked}
+              title={progress.done ? undefined : ct('Apontar como impostor')}
+            >
+              <span className="rtm-lines-flag">{flagOf(pl.country)}</span>
+              <b className="rtm-lines-nick">{pl.nick}</b>
+              <span className="rtm-lines-role">
+                {revealImp ? `🎭 ${round.from.team} ${round.from.year}` : wrongPick ? `✔ ${ct('era da line')}` : ROLE_LABEL[pl.role] ?? pl.role}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {!progress.done ? (
+        <span className="rtm-whois-count">{progress.picks.length}/{IMPOSTOR_TRIES} {ct('tentativas')}</span>
+      ) : (
+        <div className="rtm-lines-result">
+          <b className={progress.won ? 'w' : 'l'}>
+            {progress.won
+              ? (progress.picks.length === 1 ? ct('DE PRIMEIRA! 🕵️') : ct('IMPOSTOR ENCONTRADO!'))
+              : ct('O IMPOSTOR ESCAPOU')}
+          </b>
+          <span className="rtm-lines-result-sub">
+            {round.players[round.impostorIdx].nick} {ct('era da')} {round.from.team} {round.from.year} — {ct('nunca jogou na')} {round.team} {round.year}.
+          </span>
+          <button type="button" className="rtm-lines-share" onClick={doShare}>
+            {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
+          </button>
+          <span className="rtm-lines-tomorrow">{ct('Próximo impostor à meia-noite.')}</span>
         </div>
       )}
     </div>

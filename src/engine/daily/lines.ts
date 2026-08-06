@@ -26,7 +26,18 @@ export const DAILY_GAMES: DailyGameDef[] = [
     blurb: 'Uma escalação icônica por dia — você lembra os 5?',
     icon: '🖐️',
   },
-  // futuros: 'quem-e-o-pro' (carreira em 3 dicas), 'placar-do-classico', …
+  {
+    id: 'whois',
+    title: 'Quem é o Pro?',
+    blurb: 'Um pro misterioso do cenário 2026 — cace pelas dicas em 8 chutes.',
+    icon: '🕵️',
+  },
+  {
+    id: 'impostor',
+    title: 'O Impostor',
+    blurb: 'Uma line histórica com UM infiltrado — ache ele em 2 tentativas.',
+    icon: '🎭',
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
