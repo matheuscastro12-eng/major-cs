@@ -24,7 +24,7 @@ import {
   type ClassicProgress,
 } from '../../engine/daily/classics';
 import { CS2_REAL_2026 } from '../../data/bo3';
-import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY, setDailyFlag, dailyBadgeFacts } from '../../state/daily';
+import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY, setDailyFlag, dailyBadgeFacts, bankDailyDay, loadDailyDays } from '../../state/daily';
 import { pingDailyGame, fetchDailyGamesStats, type DailyGamesStats } from '../../state/dailyGamesApi';
 import { ultimateIndex, ultimateTotw } from '../../state/ultimate';
 import { evaluateDailyBadges } from '../../engine/daily/badges';
@@ -131,6 +131,44 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
               </button>
             </div>
           )}
+          {/* 📆 SUA FITA — heatmap das últimas 8 semanas (estilo GitHub) */}
+          {(() => {
+            const days = loadDailyDays();
+            if (Object.keys(days).length === 0) return null;
+            // 8 colunas de semanas (seg→dom), terminando na semana corrente
+            const today = new Date(`${dateKey}T12:00:00`);
+            const dow = (today.getDay() + 6) % 7; // 0 = segunda
+            const weeks: { key: string; won: number; done: number; future: boolean }[][] = [];
+            for (let w = 7; w >= 0; w--) {
+              const col: { key: string; won: number; done: number; future: boolean }[] = [];
+              for (let r = 0; r < 7; r++) {
+                const d = new Date(today.getTime() - (w * 7 + dow - r) * 86_400_000);
+                const k = dateKeyOf(d);
+                const rec = days[k];
+                col.push({ key: k, won: rec?.won ?? 0, done: rec?.done ?? 0, future: k > dateKey });
+              }
+              weeks.push(col);
+            }
+            return (
+              <div className="rtm-daily-heat">
+                <b>📆 {ct('SUAS ÚLTIMAS 8 SEMANAS')}</b>
+                <div className="rtm-daily-heat-grid">
+                  {weeks.map((col, i) => (
+                    <div key={i} className="rtm-daily-heat-col">
+                      {col.map((c) => (
+                        <span
+                          key={c.key}
+                          className={`rtm-daily-heat-cell${c.future ? ' future' : c.done === 0 ? '' : c.won >= DAILY_GAMES.length ? ' perfect' : c.won > 0 ? ' some' : ' zero'}`}
+                          title={c.future ? '' : `${c.key} — ${c.done ? `${c.won}/${DAILY_GAMES.length}` : ct('não jogou')}`}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <span className="rtm-daily-heat-legend">{ct('cinza = não jogou · vermelho = zerou · âmbar = parcial · dourado = dia perfeito')}</span>
+              </div>
+            );
+          })()}
           {/* 🏅 SALA DE TROFÉUS — badges colecionáveis (conquistado × bloqueado) */}
           {(() => {
             const badges = evaluateDailyBadges(dailyBadgeFacts(gameIds));
@@ -204,7 +242,7 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
   const commit = (p: LinesProgress) => {
     setProgress(p);
     saveDailyProgress('lines', dateKey, p);
-    if (p.done) { track('daily_done', { game: 'lines', day: dayNumberOf(dateKey), won: p.won, errors: p.errors, found: p.found.length }); pingDailyGame('lines', dayNumberOf(dateKey), p.won); if (p.won && p.errors === 0) setDailyFlag('ace'); }
+    if (p.done) { track('daily_done', { game: 'lines', day: dayNumberOf(dateKey), won: p.won, errors: p.errors, found: p.found.length }); pingDailyGame('lines', dayNumberOf(dateKey), p.won); if (p.won && p.errors === 0) setDailyFlag('ace'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); }
   };
 
   const submit = () => {
@@ -339,7 +377,7 @@ function WhoisGame({ dateKey }: { dateKey: string }) {
   const commit = (p: WhoisProgress) => {
     setProgress(p);
     saveDailyProgress('whois', dateKey, p);
-    if (p.done) { track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length }); pingDailyGame('whois', dayNumberOf(dateKey), p.won); if (p.won && p.guesses.length === 1) setDailyFlag('sniper'); }
+    if (p.done) { track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length }); pingDailyGame('whois', dayNumberOf(dateKey), p.won); if (p.won && p.guesses.length === 1) setDailyFlag('sniper'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); }
   };
 
   const submit = () => {
@@ -446,7 +484,7 @@ function ImpostorGame({ dateKey }: { dateKey: string }) {
     const next = applyPick(round, progress, idx);
     setProgress(next);
     saveDailyProgress('impostor', dateKey, next);
-    if (next.done) { track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('impostor', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('detetive'); }
+    if (next.done) { track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('impostor', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('detetive'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); }
   };
 
   const doShare = async () => {
@@ -529,7 +567,7 @@ function ClassicGame({ dateKey }: { dateKey: string }) {
     const next = applyClassicPick(round, progress, key);
     setProgress(next);
     saveDailyProgress('classic', dateKey, next);
-    if (next.done) { track('daily_done', { game: 'classic', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('classic', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('historiador'); }
+    if (next.done) { track('daily_done', { game: 'classic', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('classic', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('historiador'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); }
   };
 
   const doShare = async () => {

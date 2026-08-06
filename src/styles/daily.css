@@ -261,3 +261,22 @@
 .rtm-daily-badge.t2:not(.locked) { border-color: color-mix(in srgb, var(--dl-t) 60%, var(--dl-line)); }
 .rtm-daily-badge.t3:not(.locked) { border-color: var(--dl-t); background: color-mix(in srgb, var(--dl-t) 8%, var(--dl-panel)); }
 .rtm-daily-badge.locked { opacity: 0.45; }
+
+/* ── SUAS ÚLTIMAS 8 SEMANAS (heatmap) */
+.rtm-daily-heat {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 13px 14px; border: 1px solid var(--dl-line); border-left: 3px solid var(--dl-t);
+  background: var(--dl-panel);
+}
+.rtm-daily-heat > b { font-family: var(--dl-cond); letter-spacing: 1.2px; font-size: 0.86rem; }
+.rtm-daily-heat-grid { display: flex; gap: 4px; }
+.rtm-daily-heat-col { display: flex; flex-direction: column; gap: 4px; }
+.rtm-daily-heat-cell {
+  width: 16px; height: 16px; border-radius: 3px;
+  background: color-mix(in srgb, var(--dl-line) 55%, var(--dl-panel));
+}
+.rtm-daily-heat-cell.zero { background: color-mix(in srgb, var(--dl-loss) 45%, var(--dl-panel)); }
+.rtm-daily-heat-cell.some { background: color-mix(in srgb, var(--dl-warn, #ffc14d) 55%, var(--dl-panel)); }
+.rtm-daily-heat-cell.perfect { background: var(--dl-t); box-shadow: 0 0 6px color-mix(in srgb, var(--dl-t) 55%, transparent); }
+.rtm-daily-heat-cell.future { opacity: 0.15; }
+.rtm-daily-heat-legend { font-family: var(--dl-mono); font-size: 0.62rem; color: var(--dl-dim); }

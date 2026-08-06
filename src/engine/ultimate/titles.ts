@@ -18,6 +18,7 @@ const ERA_TITLE_LABEL: Record<string, string> = {
   'hist-fnatic15': 'Bi de Major',
   'hist-vp14': 'Golden Five',
   'hist-sk16': 'Era Brasileira',
+  'hist-c9-18': 'O Milagre de Boston',
   'hist-astralis18': 'Dinastia',
   'hist-fr-era': 'La Casa Blanche',
   'hist-cis-era': 'Muralha do Leste',

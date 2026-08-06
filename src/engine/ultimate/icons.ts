@@ -68,6 +68,12 @@ export const ICONS: IconDef[] = [
   icon('felps', 'felps', 'br', 'samerica', 'Entry', 'sk16', 'SK Gaming 2016', 91),
   // ── mibr 1.6 — a raiz
   icon('cogu', 'cogu', 'br', 'samerica', 'Rifler', 'mibr06', 'mibr 2006', 93, { clutch: 96 }),
+  // ── Cloud9 Boston 2018 — o milagre americano
+  icon('stewie', 'Stewie2K', 'us', 'namerica', 'Entry', 'c9-18', 'Cloud9 2018', 93, { clutch: 96 }),
+  icon('autimatic', 'autimatic', 'us', 'namerica', 'Rifler', 'c9-18', 'Cloud9 2018', 93, { consistency: 95 }),
+  icon('tarik', 'tarik', 'us', 'namerica', 'Rifler', 'c9-18', 'Cloud9 2018', 92),
+  icon('skadoodle', 'Skadoodle', 'us', 'namerica', 'AWP', 'c9-18', 'Cloud9 2018', 91),
+  icon('rush', 'RUSH', 'us', 'namerica', 'Support', 'c9-18', 'Cloud9 2018', 90),
   // ── Astralis — a dinastia dinamarquesa
   icon('dupreeh', 'dupreeh', 'dk', 'europe', 'Entry', 'astralis18', 'Astralis 2018', 94),
   icon('xyp9x', 'Xyp9x', 'dk', 'europe', 'Support', 'astralis18', 'Astralis 2018', 92, { clutch: 99 }),

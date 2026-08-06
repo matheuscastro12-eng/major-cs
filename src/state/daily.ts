@@ -144,3 +144,31 @@ export function dailyBadgeFacts(gameIds: string[]): { bestStreak: Record<string,
   }
   return { bestStreak, totalWins, flags: s.flags ?? {} };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HISTÓRICO POR DIA (heatmap do hub) — resumo won/done de cada dia jogado,
+// capado nos últimos ~140 dias (o heatmap mostra 8 semanas; a folga é margem).
+
+interface DailyStoreWithDays extends DailyStore { days?: Record<string, { won: number; done: number }> }
+
+const DAYS_CAP = 140;
+
+// chamada junto do fechamento de qualquer jogo: reconsolida o resumo do dia a
+// partir do progresso corrente (os 4 jogos do dia vivem no store).
+export function bankDailyDay(gameIds: string[], dateKey: string): void {
+  const s = load() as DailyStoreWithDays;
+  let won = 0, done = 0;
+  for (const id of gameIds) {
+    const cur = s.progress[id];
+    if (cur?.dateKey === dateKey && cur.p.done) { done += 1; if (cur.p.won) won += 1; }
+  }
+  if (!done) return;
+  s.days = { ...(s.days ?? {}), [dateKey]: { won, done } };
+  const keys = Object.keys(s.days).sort();
+  while (keys.length > DAYS_CAP) delete s.days[keys.shift()!];
+  save(s);
+}
+
+export function loadDailyDays(): Record<string, { won: number; done: number }> {
+  return (load() as DailyStoreWithDays).days ?? {};
+}

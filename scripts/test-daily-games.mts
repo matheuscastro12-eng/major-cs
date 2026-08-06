@@ -190,3 +190,36 @@ test('badges: avaliação por streak/vitórias/flags cobre todos os defs', async
   assert.ok(!onlyPerfect.find((b) => b.def.id === 'streak-7')!.earned);
   assert.ok(onlyPerfect.find((b) => b.def.id === 'perfect-7')!.earned);
 });
+
+test('histórico de dias: consolida won/done, capa em 140 e ignora dia vazio', async () => {
+  const store = new Map<string, string>();
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+    removeItem: (k: string) => { store.delete(k); },
+  };
+  const { saveDailyProgress, bankDailyDay, loadDailyDays } = await import('../src/state/daily.ts');
+  const ids = ['lines', 'whois', 'impostor', 'classic'];
+  // nada fechado no dia → não grava
+  bankDailyDay(ids, key(0));
+  assert.deepEqual(loadDailyDays(), {});
+  // 2 fechados (1 vitória) → resumo do dia
+  saveDailyProgress('lines', key(0), { done: true, won: true });
+  saveDailyProgress('whois', key(0), { done: true, won: false });
+  bankDailyDay(ids, key(0));
+  assert.deepEqual(loadDailyDays()[key(0)], { won: 1, done: 2 });
+  // reconsolida no mesmo dia (3º jogo fecha)
+  saveDailyProgress('impostor', key(0), { done: true, won: true });
+  bankDailyDay(ids, key(0));
+  assert.deepEqual(loadDailyDays()[key(0)], { won: 2, done: 3 });
+  // cap: 150 dias gravados → só os 140 mais recentes ficam
+  for (let d = 1; d <= 150; d++) {
+    saveDailyProgress('lines', key(d), { done: true, won: true });
+    bankDailyDay(ids, key(d));
+  }
+  const daysNow = loadDailyDays();
+  assert.equal(Object.keys(daysNow).length, 140);
+  assert.equal(daysNow[key(0)], undefined);       // o mais antigo caiu
+  assert.ok(daysNow[key(150)]);                    // o mais novo ficou
+  delete (globalThis as Record<string, unknown>).localStorage;
+});
