@@ -76,7 +76,10 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
   // ── partida (a Sala de sempre, com o fixture do dia) ──
   if (phase === 'play') {
     return (
-      <div className="rtp-daily">
+      // root .rtp OBRIGATÓRIO: a Série do Dia renderiza FORA do RtpShell (early
+      // return no RoadToPro) — sem esta classe, todas as vars --rtp-*/--em-*
+      // resolvem vazias e a Sala vira texto cru com círculos pretos.
+      <div className="rtp rtp-screen rtp-daily" data-fx="on">
         <div className="rtp-daily-topbar">
           <span className="rtp-daily-chip">SÉRIE DO DIA #{ch.day}</span>
           <span className="rtp-daily-topnote">{ct('Hoje você é')} <b>{ch.heroNick}</b> · {ROLE_LABEL[ch.role]}</span>
@@ -87,7 +90,7 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
   }
 
   return (
-    <div className="rtp-daily">
+    <div className="rtp rtp-screen rtp-daily" data-fx="on">
       <div className="rtp-daily-head">
         <button type="button" className="rtp-btn-ghost" onClick={onExit}><RtpIcon name="chevL" size={14} /> {ct('Voltar')}</button>
         <div className="rtp-daily-title">
