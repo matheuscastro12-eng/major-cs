@@ -15,9 +15,9 @@ import {
 
 const key = (d: number) => dateKeyOf(new Date(2026, 7, 1 + d)); // dias a partir da época local
 
-test('registry: os 3 jogos diários registrados com ids únicos', () => {
-  assert.deepEqual(DAILY_GAMES.map((g) => g.id), ['lines', 'whois', 'impostor']);
-  assert.equal(new Set(DAILY_GAMES.map((g) => g.id)).size, 3);
+test('registry: os 4 jogos diários registrados com ids únicos', () => {
+  assert.deepEqual(DAILY_GAMES.map((g) => g.id), ['lines', 'whois', 'impostor', 'classic']);
+  assert.equal(new Set(DAILY_GAMES.map((g) => g.id)).size, 4);
 });
 
 test('whois: pool respeitável, dia determinístico, ciclo sem repetição', () => {
@@ -90,4 +90,49 @@ test('impostor: 2 tentativas, acerto fecha, share reflete', () => {
   // pick após done / fora da faixa = no-op
   assert.equal(applyPick(r, p, r.impostorIdx), p);
   assert.deepEqual(applyPick(r, freshImpostor(), 9).picks, []);
+});
+
+test('classic: dataset íntegro (ids únicos, campeão em teamA, placar 2-0/2-1)', async () => {
+  const { CLASSIC_FINALS } = await import('../src/engine/daily/classics.ts');
+  assert.ok(CLASSIC_FINALS.length >= 15);
+  assert.equal(new Set(CLASSIC_FINALS.map((f) => f.id)).size, CLASSIC_FINALS.length);
+  for (const f of CLASSIC_FINALS) {
+    assert.equal(f.score[0], 2, `${f.id}: campeão (teamA) tem de ter 2 mapas`);
+    assert.ok(f.score[1] === 0 || f.score[1] === 1, `${f.id}: placar ${f.score.join('-')}`);
+    assert.notEqual(f.teamA, f.teamB);
+  }
+});
+
+test('classic: rodada determinística, resposta consistente, regras de 2 picks', async () => {
+  const { classicOfDay, applyClassicPick, freshClassic, classicHint, shareTextOfClassic, CLASSIC_FINALS } =
+    await import('../src/engine/daily/classics.ts');
+  for (let d = 0; d < 25; d++) {
+    const r = classicOfDay(key(d));
+    assert.deepEqual(classicOfDay(key(d)), r);                     // determinístico
+    assert.equal(r.options.length, 4);
+    assert.ok(r.options.some((o) => o.key === r.answerKey), `dia ${d}: resposta fora das opções`);
+    // a resposta aponta pro CAMPEÃO real do dataset
+    const f = CLASSIC_FINALS.find((x) => x.id === r.id)!;
+    const [ti, a, b] = r.answerKey.split('-').map(Number);
+    assert.equal(r.teams[ti], f.teamA);
+    assert.deepEqual([a, b], f.score);
+  }
+  const r = classicOfDay(key(2));
+  // acerto de primeira fecha
+  const won = applyClassicPick(r, freshClassic(), r.answerKey);
+  assert.deepEqual([won.done, won.won], [true, true]);
+  // dica: mesmo time = wrong-score; outro time = wrong-team
+  const [ansTi] = r.answerKey.split('-');
+  const sameTeamWrong = r.options.find((o) => o.key !== r.answerKey && o.key.startsWith(ansTi))!;
+  const otherTeam = r.options.find((o) => !o.key.startsWith(ansTi))!;
+  assert.equal(classicHint(r, sameTeamWrong.key), 'wrong-score');
+  assert.equal(classicHint(r, otherTeam.key), 'wrong-team');
+  // 2 erros = eliminado; pick inválido é no-op
+  let p = applyClassicPick(r, freshClassic(), sameTeamWrong.key);
+  assert.equal(p.done, false);
+  p = applyClassicPick(r, p, otherTeam.key);
+  assert.deepEqual([p.done, p.won], [true, false]);
+  assert.equal(applyClassicPick(r, p, r.answerKey), p);
+  assert.deepEqual(applyClassicPick(r, freshClassic(), 'x-9-9').picks, []);
+  assert.ok(shareTextOfClassic(key(2), r, won, 0).includes('DE PRIMEIRA'));
 });

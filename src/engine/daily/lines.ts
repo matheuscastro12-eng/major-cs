@@ -38,6 +38,12 @@ export const DAILY_GAMES: DailyGameDef[] = [
     blurb: 'Uma line histórica com UM infiltrado — ache ele em 2 tentativas.',
     icon: '🎭',
   },
+  {
+    id: 'classic',
+    title: 'Placar do Clássico',
+    blurb: 'Uma final histórica de Major — crave o campeão E o placar.',
+    icon: '🏆',
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

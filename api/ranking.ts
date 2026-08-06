@@ -61,6 +61,9 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // re-jogar pra farmar rating). day = nº do desafio (época 2026-08-01).
     sql`CREATE TABLE IF NOT EXISTS rtm_daily_series (day INT, email TEXT, nick TEXT, rating REAL NOT NULL, won BOOLEAN NOT NULL, map_a INT DEFAULT 0, map_b INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (day, email))`,
     sql`CREATE INDEX IF NOT EXISTS rtm_daily_series_day_idx ON rtm_daily_series (day, rating DESC)`,
+    // DIÁRIO (grátis, sem conta): contadores AGREGADOS por jogo/dia — prova
+    // social ("N jogaram hoje"). Anônimo de propósito: nada de PII, só counts.
+    sql`CREATE TABLE IF NOT EXISTS rtm_daily_games (day INT, game TEXT, plays INT DEFAULT 0, wins INT DEFAULT 0, PRIMARY KEY (day, game))`,
   ]);
   schemaReady = true;
 }
@@ -119,6 +122,30 @@ export default async function handler(
       total: total[0]?.n ?? 0,
       ladder: rows.map((r, i) => ({ rank: i + 1, nick: String(r.nick ?? 'pro'), rating: Number(r.rating), won: !!r.won, mapScore: [Number(r.map_a), Number(r.map_b)] })),
     });
+    return;
+  }
+
+  // ── DIÁRIO (grátis) ─────────────────────────────────────────────────────────
+  // stats agregadas do dia (público, cacheado no edge): plays/wins por jogo.
+  if (action === 'dailyGamesStats') {
+    const day = Math.max(1, Math.min(dailyDayNow() + 1, Number(q('day') ?? body.day ?? 0) || dailyDayNow()));
+    const rows = await sql`SELECT game, plays, wins FROM rtm_daily_games WHERE day=${day}`;
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    res.status(200).json({ day, games: Object.fromEntries(rows.map((r) => [String(r.game), { plays: Number(r.plays), wins: Number(r.wins) }])) });
+    return;
+  }
+  // ping anônimo de conclusão (1 UPDATE agregado — sem PII, sem linha por
+  // jogador). Sanidade: jogo na allowlist e dia ±1 do corrente; o localStorage
+  // do cliente já impede re-jogar o dia (abuso só infla um contador público).
+  if (action === 'dailyGamesPing') {
+    const game = String(body.game ?? '');
+    const day = Math.round(Number(body.day) || 0);
+    const won = !!body.won;
+    if (!['lines', 'whois', 'impostor', 'classic'].includes(game)) { res.status(400).json({ error: 'jogo inválido' }); return; }
+    if (Math.abs(day - dailyDayNow()) > 1) { res.status(400).json({ error: 'dia inválido' }); return; }
+    await sql`INSERT INTO rtm_daily_games (day, game, plays, wins) VALUES (${day}, ${game}, 1, ${won ? 1 : 0})
+              ON CONFLICT (day, game) DO UPDATE SET plays = rtm_daily_games.plays + 1, wins = rtm_daily_games.wins + ${won ? 1 : 0}`;
+    res.status(200).json({ ok: true });
     return;
   }
 

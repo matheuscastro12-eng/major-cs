@@ -200,3 +200,16 @@
 .rtm-imp-slot { cursor: pointer; text-align: left; font: inherit; color: inherit; width: 100%; }
 .rtm-imp-slot:disabled { cursor: default; opacity: 0.92; }
 .rtm-imp-slot:not(:disabled):hover { border-left-color: var(--dl-t); }
+
+/* ── PLACAR DO CLÁSSICO — as 4 opções (time + placar) */
+.rtm-classic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rtm-classic-opt {
+  padding: 16px 12px; cursor: pointer; text-align: center;
+  border: 1px solid var(--dl-line); border-left: 3px solid var(--dl-line);
+  background: var(--dl-panel); color: inherit;
+  font-family: var(--dl-cond); font-size: 1rem; letter-spacing: 1px; font-weight: 700;
+}
+.rtm-classic-opt:not(:disabled):hover { border-left-color: var(--dl-t); }
+.rtm-classic-opt:disabled { cursor: default; }
+.rtm-classic-opt.wrong { border-left-color: var(--dl-loss); background: color-mix(in srgb, var(--dl-loss) 8%, var(--dl-panel)); opacity: .85; }
+.rtm-classic-opt.ans { border-left-color: var(--dl-win); background: color-mix(in srgb, var(--dl-win) 10%, var(--dl-panel)); }

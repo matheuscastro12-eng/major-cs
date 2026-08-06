@@ -3,7 +3,7 @@
 // de volta (loop tipo Wordle). A lógica vive em engine/daily/lines.ts; aqui é
 // render + localStorage (state/daily.ts).
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { track } from '../../state/track';
 import {
@@ -19,8 +19,13 @@ import {
   impostorOfDay, applyPick, freshImpostor, shareTextOfImpostor, IMPOSTOR_TRIES,
   type ImpostorProgress,
 } from '../../engine/daily/impostor';
+import {
+  classicOfDay, applyClassicPick, freshClassic, classicHint, shareTextOfClassic, CLASSIC_TRIES,
+  type ClassicProgress,
+} from '../../engine/daily/classics';
 import { CS2_REAL_2026 } from '../../data/bo3';
 import { loadDailyProgress, saveDailyProgress, loadDailyStreak } from '../../state/daily';
+import { pingDailyGame, fetchDailyGamesStats, type DailyGamesStats } from '../../state/dailyGamesApi';
 import '../../styles/daily.css';
 
 // ISO alpha-2 → emoji de bandeira (regional indicators)
@@ -33,10 +38,17 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export function DailyScreen({ onExit }: { onExit: () => void }) {
-  const [view, setView] = useState<'hub' | 'lines' | 'whois' | 'impostor'>('hub');
+  const [view, setView] = useState<'hub' | 'lines' | 'whois' | 'impostor' | 'classic'>('hub');
   const dateKey = dateKeyOf(new Date());
   const day = dayNumberOf(dateKey);
   const streak = loadDailyStreak(view === 'hub' ? 'lines' : view);
+  // prova social: contadores agregados do dia (anônimos, cacheados no edge)
+  const [stats, setStats] = useState<DailyGamesStats | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchDailyGamesStats(day).then((s) => { if (alive) setStats(s); });
+    return () => { alive = false; };
+  }, [day]);
 
   return (
     <div className="rtm-daily">
@@ -55,24 +67,33 @@ export function DailyScreen({ onExit }: { onExit: () => void }) {
             const p = loadDailyProgress(g.id, dateKey);
             const status = p?.done ? (p.won ? ct('completo · volte amanhã') : ct('foi por pouco · volte amanhã')) : p ? ct('em andamento') : ct('novo desafio disponível');
             return (
-              <button key={g.id} type="button" className="rtm-daily-card" data-done={p?.done ? '' : undefined} onClick={() => setView(g.id as 'lines' | 'whois' | 'impostor')}>
+              <button key={g.id} type="button" className="rtm-daily-card" data-done={p?.done ? '' : undefined} onClick={() => setView(g.id as 'lines' | 'whois' | 'impostor' | 'classic')}>
                 <span className="rtm-daily-card-icon">{g.icon}</span>
                 <span className="rtm-daily-card-body">
                   <b>{g.title}</b>
                   <span>{g.blurb}</span>
-                  <em>{status}</em>
+                  <em>
+                    {status}
+                    {(() => {
+                      const st = stats?.[g.id];
+                      if (!st || st.plays < 3) return null; // sem público ainda — não mostrar "2 jogaram"
+                      const pct = Math.round((st.wins / Math.max(1, st.plays)) * 100);
+                      return <> · 🔥 {st.plays} {ct('jogaram hoje')} · {pct}% {ct('venceram')}</>;
+                    })()}
+                  </em>
                 </span>
                 <span className="rtm-daily-card-go">{p?.done ? '✓' : '→'}</span>
               </button>
             );
           })}
-          <p className="rtm-daily-soon">{ct('Três desafios por dia, os mesmos pra todo mundo — prove que você manja de CS e cole o resultado no grupo.')}</p>
+          <p className="rtm-daily-soon">{ct('Quatro desafios por dia, os mesmos pra todo mundo — prove que você manja de CS e cole o resultado no grupo.')}</p>
         </div>
       )}
 
       {view === 'lines' && <LinesGame dateKey={dateKey} streakNow={streak.streak} />}
       {view === 'whois' && <WhoisGame dateKey={dateKey} />}
       {view === 'impostor' && <ImpostorGame dateKey={dateKey} />}
+      {view === 'classic' && <ClassicGame dateKey={dateKey} />}
     </div>
   );
 }
@@ -97,7 +118,7 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
   const commit = (p: LinesProgress) => {
     setProgress(p);
     saveDailyProgress('lines', dateKey, p);
-    if (p.done) track('daily_done', { game: 'lines', day: dayNumberOf(dateKey), won: p.won, errors: p.errors, found: p.found.length });
+    if (p.done) { track('daily_done', { game: 'lines', day: dayNumberOf(dateKey), won: p.won, errors: p.errors, found: p.found.length }); pingDailyGame('lines', dayNumberOf(dateKey), p.won); }
   };
 
   const submit = () => {
@@ -232,7 +253,7 @@ function WhoisGame({ dateKey }: { dateKey: string }) {
   const commit = (p: WhoisProgress) => {
     setProgress(p);
     saveDailyProgress('whois', dateKey, p);
-    if (p.done) track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length });
+    if (p.done) { track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length }); pingDailyGame('whois', dayNumberOf(dateKey), p.won); }
   };
 
   const submit = () => {
@@ -339,7 +360,7 @@ function ImpostorGame({ dateKey }: { dateKey: string }) {
     const next = applyPick(round, progress, idx);
     setProgress(next);
     saveDailyProgress('impostor', dateKey, next);
-    if (next.done) track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length });
+    if (next.done) { track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('impostor', dayNumberOf(dateKey), next.won); }
   };
 
   const doShare = async () => {
@@ -399,6 +420,91 @@ function ImpostorGame({ dateKey }: { dateKey: string }) {
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
           <span className="rtm-lines-tomorrow">{ct('Próximo impostor à meia-noite.')}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLACAR DO CLÁSSICO — a final histórica: campeão + placar em 2 tentativas
+
+function ClassicGame({ dateKey }: { dateKey: string }) {
+  const round = useMemo(() => classicOfDay(dateKey), [dateKey]);
+  const [progress, setProgress] = useState<ClassicProgress>(() => {
+    const saved = loadDailyProgress<ClassicProgress>('classic', dateKey);
+    if (!saved) track('daily_play', { game: 'classic', day: dayNumberOf(dateKey), finalId: round.id });
+    return saved ?? freshClassic();
+  });
+  const [copied, setCopied] = useState(false);
+
+  const pick = (key: string) => {
+    if (progress.done || progress.picks.includes(key)) return;
+    const next = applyClassicPick(round, progress, key);
+    setProgress(next);
+    saveDailyProgress('classic', dateKey, next);
+    if (next.done) { track('daily_done', { game: 'classic', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('classic', dayNumberOf(dateKey), next.won); }
+  };
+
+  const doShare = async () => {
+    const st = loadDailyStreak('classic');
+    const text = shareTextOfClassic(dateKey, round, progress, st.streak);
+    track('daily_share', { game: 'classic', day: dayNumberOf(dateKey), won: progress.won });
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* sem clipboard */ }
+  };
+
+  const answerLabel = round.options.find((o) => o.key === round.answerKey)?.label ?? '';
+  // dica após o 1º erro (só enquanto o jogo está aberto)
+  const hint = !progress.done && progress.picks.length === 1 ? classicHint(round, progress.picks[0]) : null;
+
+  return (
+    <div className="rtm-lines">
+      <div className="rtm-lines-brief">
+        <span className="rtm-lines-kicker">{ct('CRAVE O PLACAR')}</span>
+        <b>{round.event}</b>
+        <p>{round.context} <b>{round.teams[0]}</b> × <b>{round.teams[1]}</b> — {ct('quem levantou a taça, e por quanto?')}</p>
+      </div>
+
+      <div className="rtm-classic-grid">
+        {round.options.map((o) => {
+          const picked = progress.picks.includes(o.key);
+          const isAns = o.key === round.answerKey;
+          const revealAns = progress.done && isAns;
+          return (
+            <button
+              key={o.key}
+              type="button"
+              className={`rtm-classic-opt${revealAns ? ' ans' : ''}${picked && !isAns ? ' wrong' : ''}`}
+              onClick={() => pick(o.key)}
+              disabled={progress.done || picked}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {hint && (
+        <span className="rtm-whois-unknown">
+          {hint === 'wrong-score' ? ct('🔥 Quente: o campeão está certo — só o placar que não.') : ct('❄️ Frio: nem o campeão era esse. Última chance.')}
+        </span>
+      )}
+
+      {!progress.done ? (
+        <span className="rtm-whois-count">{progress.picks.length}/{CLASSIC_TRIES} {ct('tentativas')}</span>
+      ) : (
+        <div className="rtm-lines-result">
+          <b className={progress.won ? 'w' : 'l'}>
+            {progress.won
+              ? (progress.picks.length === 1 ? ct('CRAVADO DE PRIMEIRA! 🏆') : ct('CRAVADO!'))
+              : ct('ERROU O CLÁSSICO')}
+          </b>
+          <span className="rtm-lines-result-sub">{answerLabel} — {round.event}.</span>
+          <button type="button" className="rtm-lines-share" onClick={doShare}>
+            {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
+          </button>
+          <span className="rtm-lines-tomorrow">{ct('Próximo clássico à meia-noite.')}</span>
         </div>
       )}
     </div>
