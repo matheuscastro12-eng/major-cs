@@ -29,6 +29,7 @@ import { tryBreakthrough } from '../engine/career/breakthrough';
 import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
 import { tickListedSales, LISTING_MAX_RATIO } from '../engine/career/listedSales';
 import { unhappyDiscountFor } from '../engine/career/unhappyMarket';
+import { buyoutFloorOf } from '../engine/career/buyout';
 import { applyFocusBias, suggestFocus, TRAINING_FOCUS_LABEL, CORE_STATS, type CoreStat } from '../engine/career/training';
 import {
   judgePlayerPromises, hasOpenPromise, PLAYER_PROMISE_LABEL, PROMISE_MADE, PROMISE_KEPT, PROMISE_BROKEN,
@@ -6798,7 +6799,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
       {/* T1.4: aba History extraída em src/pages/career/HistoryTab.tsx */}
       {hubTab === 'history' && (
-        <HistoryTab save={save} org={org} identity={save.org ? { name: save.org.name, tag: save.org.tag } : undefined} />
+        <HistoryTab save={save} org={org} identity={save.org ? { name: save.org.name, tag: save.org.tag } : undefined} awards={save.yearAwardsHistory} />
       )}
       </>
       )}
@@ -9276,12 +9277,13 @@ function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: 
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyerStrength, freeAgents, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
   swapPool?: Player[]; // seus jogadores disponíveis pra incluir na troca (habilita swap)
   // contexto do decideOffer (gap #14) — todos opcionais/degradáveis
   sellerForm?: number;      // formOf(save, from.id)
   unhappyDiscount?: number; // #38: 0..0.30 — alvo infeliz sai mais barato
+  buyoutFloor?: number;     // #37: multa da cláusula (piso absoluto; 0 = sem cláusula)
   buyerStrength?: number;   // força do SEU elenco (média top-5 de OVR)
   freeAgents?: Player[];    // pool livre atual (reposição de role do vendedor)
   onClose: () => void; onAgree: (fee: number, outIds: string[]) => void;
@@ -9289,7 +9291,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
   const ask = askingPrice(player, from.teamwork);
   // contexto multifatorial do clube vendedor — from.players já é o elenco
   // ATUAL (currentEra vem pós-applyMoves)
-  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount };
+  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount, buyoutFloor };
   const mkt = playerValue(player);
   const wage = playerWage(player);
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
@@ -9350,6 +9352,18 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
           <NegoFigure label={ct('Pedida do clube')} value={formatMoney(ask)} accent="#e8c170" />
           <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="#e58a8a" />
         </div>
+
+        {/* #37/#38: avisos de contexto — cláusula segura o preço, infeliz derruba */}
+        {(buyoutFloor > 0 || unhappyDiscount > 0) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem', padding: '9px 12px', border: '1px solid var(--em-border)', borderLeft: '3px solid var(--em-gold)', borderRadius: 4, background: 'rgba(216,169,67,.05)' }}>
+            {buyoutFloor > 0 && (
+              <span>🔒 {ct('Cláusula de rescisão ativa')}: <b style={{ color: 'var(--em-text)' }}>{formatMoney(buyoutFloor)}</b> — {ct('o clube não solta por menos que a multa.')}</span>
+            )}
+            {unhappyDiscount > 0 && (
+              <span>🔥 {ct('O jogador quer sair')} — {ct('o clube aceita até')} <b style={{ color: 'var(--em-gold)' }}>-{Math.round(unhappyDiscount * 100)}%</b> {ct('da pedida.')}</span>
+            )}
+          </div>
+        )}
 
         {/* Swap pool (só se habilitado) */}
         {swapPool && swapPool.length > 0 && (
@@ -9646,6 +9660,9 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   // #38: desconto por infelicidade (determinístico por janela). Free agent não tem clube → 0.
   const discountOf = (player: Player, from: TeamSeason): number =>
     from.id === FREE_TEAM_ID || !clubFormOf ? 0 : unhappyDiscountFor(player, from.players, split, clubFormOf(from.id));
+  // #37: multa da cláusula (0 = sem cláusula / free agent)
+  const buyoutOf = (player: Player, from: TeamSeason): number =>
+    from.id === FREE_TEAM_ID ? 0 : buyoutFloorOf(playerValue(player), player.id, split);
   // as OPORTUNIDADES da janela: os maiores descontos do mercado filtrável
   const unhappyStrip = filteredMarket
     .map((m) => ({ ...m, discount: discountOf(m.player, m.from) }))
@@ -9761,6 +9778,9 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               {discountOf(m.player, m.from) > 0 && (
                 <div className="meta small" style={{ color: 'var(--em-gold)', fontWeight: 700 }}>🔥 {ct('quer sair')} · -{Math.round(discountOf(m.player, m.from) * 100)}%</div>
               )}
+              {buyoutOf(m.player, m.from) > 0 && (
+                <div className="meta small" style={{ color: 'var(--em-muted)', fontWeight: 700 }}>🔒 {ct('cláusula')} {formatMoney(buyoutOf(m.player, m.from))}</div>
+              )}
             </button>
           ))}
           {filteredMarket.length > negoLimit && (
@@ -9786,6 +9806,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
           swapPool={swapPool}
           sellerForm={clubFormOf?.(target.from.id)}
           unhappyDiscount={discountOf(target.player, target.from)}
+          buyoutFloor={buyoutOf(target.player, target.from)}
           buyerStrength={squadPlayers.length > 0 ? squadStrength(squadPlayers) : undefined}
           freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
           onClose={() => setTarget(null)}

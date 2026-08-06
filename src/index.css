@@ -6569,3 +6569,16 @@ button.t20-row {
 .nego-unhappy-card:hover { border-color: var(--em-gold); }
 .nego-unhappy-card b { font-size: 0.86rem; }
 .nego-unhappy-card em { font-style: normal; font-size: 0.72rem; font-weight: 800; color: var(--em-gold); }
+
+/* #27 — galeria de prêmios (aba Histórico) */
+.hist-awards { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.hist-awards-year > b { display: block; font-size: 0.74rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--em-gold); margin-bottom: 6px; }
+.hist-awards-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.hist-award {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 12px;
+  border: 1px solid var(--em-border); border-left: 3px solid var(--em-gold); border-radius: 4px;
+  background: color-mix(in srgb, var(--em-gold) 4%, transparent);
+}
+.hist-award-label { font-size: 0.64rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--em-muted); font-weight: 800; }
+.hist-award b { font-size: 0.86rem; }
+.hist-award em { font-style: normal; font-size: 0.72rem; color: var(--em-muted); }

@@ -75,3 +75,39 @@ test('unhappyDiscountFor: atalho por roster resolve rank por OVR', () => {
   assert.ok(worstHits >= bestHits, `${worstHits} < ${bestHits}`);
   assert.ok(worstHits > 0);
 });
+
+test('#37 cláusula: contrato derivado decresce por split, multa escalona, piso segura no decideOffer', async () => {
+  const { aiContractSplitsLeft, buyoutFloorOf, BUYOUT_MIN_SPLITS } = await import('../src/engine/career/buyout.ts');
+  // consistência temporal: a cada split o contrato cai 1 (mod ciclo)
+  for (const id of ['a', 'b', 'zywoo']) {
+    for (let sp = 1; sp < 12; sp++) {
+      const now = aiContractSplitsLeft(id, sp);
+      const next = aiContractSplitsLeft(id, sp + 1);
+      assert.ok(now === next + 1 || (now === 0 && next === 5), `${id}@${sp}: ${now}→${next}`);
+    }
+  }
+  // multa: 0 sem cláusula; escalona com splits restantes; determinística
+  let sawZero = false, sawFloor = false;
+  for (let sp = 1; sp <= 6; sp++) {
+    const f = buyoutFloorOf(1_000_000, 'p-test', sp);
+    const left = aiContractSplitsLeft('p-test', sp);
+    if (left < BUYOUT_MIN_SPLITS) { assert.equal(f, 0); sawZero = true; }
+    else { assert.equal(f, Math.round(1_000_000 * (1 + 0.2 * Math.min(left, 4)))); sawFloor = true; }
+  }
+  assert.ok(sawZero && sawFloor, 'ciclo de 6 tem de passar por com e sem cláusula');
+  // decideOffer: com a cláusula, oferta que seria aceita passa a ser contraproposta ≥ multa
+  const team = CS2_REAL_2026[8];
+  const p = [...team.players].sort((a, b) => playerOvr(a) - playerOvr(b))[0]; // pior do elenco (não-core)
+  const mkt = 300_000;
+  const base = { asking: 350_000, marketValue: mkt, player: p, fromTeamwork: team.teamwork, round: 0 } as const;
+  const floor = Math.round(mkt * 1.8);
+  const noClause = decideOffer({ ...base, offer: 360_000 });
+  assert.equal(noClause.kind, 'accept');
+  const withClause = decideOffer({ ...base, offer: 360_000, ctx: { buyoutFloor: floor } });
+  assert.notEqual(withClause.kind, 'accept');
+  if (withClause.kind === 'counter') assert.ok(withClause.value >= Math.round(floor * (1 - 0.0)) * 0.9);
+  // pagando a multa, sai — e a razão cita a cláusula
+  const paid = decideOffer({ ...base, offer: floor, ctx: { buyoutFloor: floor } });
+  assert.equal(paid.kind, 'accept');
+  assert.ok(String(paid.reason ?? '').includes('Cláusula'));
+});

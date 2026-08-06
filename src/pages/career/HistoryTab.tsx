@@ -8,6 +8,7 @@ import { ct } from '../../state/career-i18n';
 import { formatMoney } from '../../engine/ratings';
 import { shareCareerCard, type CareerShareData } from '../../state/careerShareCard';
 import { track } from '../../state/track';
+import type { YearAwards } from '../../engine/awards';
 
 interface OrgAggregate {
   circuitTitles: number;
@@ -22,9 +23,11 @@ interface Props {
   org: OrgAggregate;
   /** identidade da org pro card de share (nome/tag) */
   identity?: { name: string; tag?: string };
+  /** #27: noites de premiação passadas (galeria consultável) */
+  awards?: YearAwards[];
 }
 
-export function HistoryTab({ save, org, identity }: Props) {
+export function HistoryTab({ save, org, identity, awards }: Props) {
   const [sharing, setSharing] = useState<'idle' | 'busy' | 'saved'>('idle');
 
   const doShareCard = async () => {
@@ -73,6 +76,28 @@ export function HistoryTab({ save, org, identity }: Props) {
         >
           {sharing === 'busy' ? ct('Gerando…') : sharing === 'saved' ? ct('PNG salvo + texto copiado 😉') : `📸 ${ct('Minha carreira em 1 print')}`}
         </button>
+      )}
+      {/* #27: GALERIA DE PRÊMIOS — as noites de premiação da sua era, pra sempre */}
+      {awards && awards.length > 0 && (
+        <>
+          <div className="muted small section-label">🏆 {ct('Galeria de Prêmios')}</div>
+          <div className="hist-awards">
+            {[...awards].sort((a, b) => b.year - a.year).map((y) => (
+              <div key={y.year} className="hist-awards-year">
+                <b>{ct('Temporada')} {y.year}</b>
+                <div className="hist-awards-list">
+                  {y.winners.map((w, i) => (
+                    <div key={i} className="hist-award">
+                      <span className="hist-award-label">{w.label}</span>
+                      <b>{w.playerNick ?? w.coachNick ?? (w.lineup ? w.lineup.map((s) => s.nick).join(' · ') : '—')}</b>
+                      <em>{w.reason}</em>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
       <div className="muted small section-label">{ct('Linha do tempo')}</div>
       {/* #51: narrativa visual por temporada (chips de marco); tabela detalhada abaixo */}
