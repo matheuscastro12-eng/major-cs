@@ -21,6 +21,7 @@ import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/c
 import { buildFullCatalog } from '../engine/ultimate/catalog';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
+import { totwForWeek, weekIndex, type WeeklyTotw } from '../engine/ultimate/totw';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import { pickStarterCards } from '../engine/ultimate/cards';
@@ -163,7 +164,9 @@ export async function syncUltimateFromCloud(): Promise<'restored' | 'pushed' | '
 let _catalog: UltCard[] | null = null;
 let _index: Map<string, UltCard> | null = null;
 let _promo: MonthlyPromo | null = null;
+let _totw: WeeklyTotw | null = null;
 let _catalogMonth = -1;
+let _catalogWeek = -99; // semana do TOTW corrente embutida no memo (vira no meio do mês)
 let _catalogLoKey = ''; // id+params da promo AGENDADA que o memo atual embute ('' = nenhuma)
 
 // seed determinística a partir do id do evento (djb2) — todo cliente sorteia os
@@ -176,15 +179,17 @@ function liveopsSeed(id: string): number {
 
 function ensureCatalog(): void {
   const mi = monthIndex(new Date());
-  // memo key = mês + promo agendada (live-ops): se um agendamento entra/sai/muda
-  // NO MEIO da sessão, a chave muda e o catálogo/promo é reconstruído na hora.
+  const wi = weekIndex(new Date()); // TOTW vira semanalmente (no meio do mês)
+  // memo key = mês + semana + promo agendada (live-ops): se um agendamento
+  // entra/sai/muda NO MEIO da sessão, a chave muda e tudo é reconstruído na hora.
   const lo = scheduledPromo();
   const loKey = lo ? `${lo.id}:${lo.payload.filterKey}:${lo.payload.ovrBoost}` : '';
-  if (_catalog && _catalogMonth === mi && _catalogLoKey === loKey) return;
+  if (_catalog && _catalogMonth === mi && _catalogWeek === wi && _catalogLoKey === loKey) return;
   // derivação compartilhada com o servidor (engine/ultimate/catalog.ts) — a
   // fase 2 da economia rola packs server-side sobre o MESMO catálogo.
   const { base, catalog } = buildFullCatalog(CS2_REAL_2026, mi);
   _promo = promoForMonth(base, mi);
+  _totw = totwForWeek(base, wi);
   _catalog = catalog;
   // promo AGENDADA sobrepõe a mensal: tema resolvido por filterKey (allowlist →
   // filtro compilado de promos.ts), flavor (nome/desc/cor) e boost do payload.
@@ -218,6 +223,7 @@ function ensureCatalog(): void {
   }
   _index = catalogIndex(_catalog);
   _catalogMonth = mi;
+  _catalogWeek = wi;
   _catalogLoKey = loKey;
 }
 export function ultimateCatalog(): UltCard[] {
@@ -233,6 +239,11 @@ export function ultimateIndex(): Map<string, UltCard> {
 export function ultimatePromo(): MonthlyPromo {
   ensureCatalog();
   return _promo!;
+}
+// o TOTW da semana CORRENTE (os 7 in-forms + fim da semana) — alimenta a Loja.
+export function ultimateTotw(): WeeklyTotw {
+  ensureCatalog();
+  return _totw!;
 }
 // o Pacote Promo em vigor: o padrão, ou com o custo do agendamento ativo.
 export function ultimatePromoPack(): PackDef {

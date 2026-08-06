@@ -5,7 +5,9 @@
 // Puro/determinístico: mesma (dataset, monthIndex) ⇒ mesmo catálogo.
 import type { TeamSeason } from '../../types';
 import { appendSpecials, buildCatalog, type SpecialSpec, type UltCard } from './cards';
+import { iconCards } from './icons';
 import { promoSpecsThrough } from './promos';
+import { totwSpecsThroughMonth } from './totw';
 
 export const TOTS_SIZE = 11;
 export const TOTS_BOOST = 2;
@@ -26,10 +28,12 @@ export function majorSpecs(dataset: TeamSeason[]): SpecialSpec[] {
 }
 
 // Catálogo completo do mês `mi` (monthIndex): base + tots + major + promos de
-// todos os meses desde a época. Devolve também a base (o chamador costuma
-// precisar dela pra promoForMonth/tema da Loja).
+// todos os meses desde a época + in-forms TOTW das semanas que começam até o
+// fim do mês + ícones históricos (standalone: playerIds fora do dataset).
+// Devolve também a base (o chamador costuma precisar dela pra promoForMonth/
+// totwForWeek/tema da Loja).
 export function buildFullCatalog(dataset: TeamSeason[], mi: number): { base: UltCard[]; catalog: UltCard[] } {
   const base = buildCatalog(dataset);
-  const specials = [...totsSpecs(base), ...majorSpecs(dataset), ...promoSpecsThrough(base, mi)];
-  return { base, catalog: appendSpecials(dataset, base, specials) };
+  const specials = [...totsSpecs(base), ...majorSpecs(dataset), ...promoSpecsThrough(base, mi), ...totwSpecsThroughMonth(base, mi)];
+  return { base, catalog: [...appendSpecials(dataset, base, specials), ...iconCards()] };
 }

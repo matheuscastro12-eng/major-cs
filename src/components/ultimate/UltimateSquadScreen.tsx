@@ -5,10 +5,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
-import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, useUltimate } from '../../state/ultimate';
+import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
-import { PACK_DEFS, packById, type PackDef } from '../../engine/ultimate/packs';
+import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
 // nas actions marketListCard/marketCardSold/marketCardReturned/marketBuyApply.
@@ -528,12 +528,28 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   }, [account]);
   // tick de baixa frequência: countdown do daily/missões vira na hora certa
   // (sem isso, "PRÓXIMA EM Xh Ym" e o dia das missões congelavam até um re-render).
-  const [, setClock] = useState(0);
+  const [clock, setClock] = useState(0);
   useEffect(() => {
     const t = window.setInterval(() => { setClock((c) => c + 1); syncMissions(dateKey(new Date())); syncWeekly(weekKey(new Date())); }, 60_000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // TOTW da semana (Loja): derivado no memo (relógio/catálogo fora do render) e
+  // re-derivado pelo tick do relógio — o countdown anda e a virada fecha o card.
+  const totwView = useMemo(() => {
+    // impureza deliberada: relógio/catálogo-cache re-lidos a cada tick do clock
+    // eslint-disable-next-line react-hooks/purity
+    const [totw, now] = [ultimateTotw(), Date.now()];
+    if (totw.weekIndex < 0 || now >= totw.endsAt) return null; // antes da época / virada pendente
+    const left = Math.max(0, totw.endsAt - now);
+    const idx = ultimateIndex();
+    return {
+      dd: Math.floor(left / 86400000),
+      hh: Math.floor((left % 86400000) / 3_600_000),
+      nicks: totw.playerIds.map((pid) => idx.get(`${pid}:totw`)?.nick).filter(Boolean).join(' · '),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clock]);
   // reavalia títulos quando algum fato muda (vitórias, coleção, pico, sequência)
   useEffect(() => {
     const newly = syncTitles();
@@ -2347,6 +2363,35 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Termina em')} {dd}d {hh}h</div>
                 <button className="ut-pack__buy" onClick={() => buy(promoPack)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
                   {packBusy === promoPack.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(promoPack.cost)}</>}
+                </button>
+              </div>
+            );
+          })()}
+          {/* Pacote TOTW — os 7 in-forms da semana (rotaciona toda segunda). O card
+              lista os nicks da semana e a contagem até a rotação. */}
+          {totwView && (
+            <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${TOTW_PACK.color} 0%, ${TOTW_PACK.color}dd 55%, ${TOTW_PACK.color}aa 100%)`, marginBottom: 12 }}>
+              <div className="ut-pack__shine" />
+              <div className="ut-pack__art"><Zap size={44} strokeWidth={1.4} /></div>
+              <div className="ut-pack__name">{ct('Pacote TOTW')} · {ct('Time da Semana')}</div>
+              <div className="ut-pack__desc">{ct('Os 7 in-forms da semana (+2 OVR), 1 garantido no pack:')} {totwView.nicks}</div>
+              <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Rotaciona em')} {totwView.dd}d {totwView.hh}h</div>
+              <button className="ut-pack__buy" onClick={() => buy(TOTW_PACK)} disabled={credits < TOTW_PACK.cost || packBusy != null} title={credits >= TOTW_PACK.cost ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                {packBusy === TOTW_PACK.id ? ct('Abrindo…') : <>{credits >= TOTW_PACK.cost ? <Coins size={15} /> : <Lock size={14} />} {fmt(TOTW_PACK.cost)}</>}
+              </button>
+            </div>
+          )}
+          {/* Pacote Ícone — permanente: o ÚNICO lugar onde as lendas históricas caem */}
+          {(() => {
+            const afford = credits >= ICON_PACK.cost;
+            return (
+              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${ICON_PACK.color} 0%, ${ICON_PACK.color}dd 55%, ${ICON_PACK.color}aa 100%)`, marginBottom: 12 }}>
+                <div className="ut-pack__shine" />
+                <div className="ut-pack__art"><Trophy size={44} strokeWidth={1.4} /></div>
+                <div className="ut-pack__name">{ct('Pacote Ícone')} · {ct('Lendas do CS')}</div>
+                <div className="ut-pack__desc">{ct('GeT_RiGhT, cogu, kennyS, NEO… as lendas aposentadas do CS como Ícones Históricos — e elas SÓ caem aqui. 1 Ícone garantido.')}</div>
+                <button className="ut-pack__buy" onClick={() => buy(ICON_PACK)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                  {packBusy === ICON_PACK.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(ICON_PACK.cost)}</>}
                 </button>
               </div>
             );
