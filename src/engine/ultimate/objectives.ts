@@ -15,6 +15,8 @@ export interface ObjectiveFact {
   iconsOwned: number;
   sbcDone: number;
   peakElo: number;
+  histIconsOwned: number;  // Ícones HISTÓRICOS (lendas) distintos no clube
+  erasComplete: number;    // squads de época completos (icons.ts/countCompletedEras)
 }
 
 export type ObjectiveGroup = 'competir' | 'colecionar' | 'montar';
@@ -49,6 +51,13 @@ export const OBJECTIVES: ObjectiveDef[] = [
   // batendo a raridade do feito. (Sem carta: quem tem Ícone já detém a carta mais
   // rara — o prêmio certo é um windfall de credits, não outro faucet de carta.)
   { id: 'icon-1', name: 'Lenda viva', desc: 'Possua 1 carta Ícone', metric: 'iconsOwned', target: 1, reward: { credits: 16000 }, group: 'colecionar' },
+  // ÍCONES HISTÓRICOS (o endgame da coleção): as lendas só caem no Pacote Ícone
+  // (90k) ou na SBC Panteão — cada degrau custa MUITO mais que o prêmio devolve
+  // (sink, não faucet), o objetivo é o marco, não a renda.
+  { id: 'hist-1', name: 'Porta do Panteão', desc: 'Possua 1 Ícone Histórico', metric: 'histIconsOwned', target: 1, reward: { credits: 12000 }, group: 'colecionar' },
+  { id: 'hist-5', name: 'Caçador de lendas', desc: 'Possua 5 Ícones Históricos', metric: 'histIconsOwned', target: 5, reward: { credits: 30000 }, group: 'colecionar' },
+  { id: 'era-1', name: 'Uma era inteira', desc: 'Complete um squad de época (todas as lendas de uma era)', metric: 'erasComplete', target: 1, reward: { credits: 60000 }, group: 'colecionar' },
+  { id: 'era-3', name: 'Museu do CS', desc: 'Complete 3 squads de época', metric: 'erasComplete', target: 3, reward: { credits: 150000 }, group: 'colecionar' },
   // montar
   { id: 'ovr-80', name: 'Time de respeito', desc: 'Monte um squad 80+ OVR', metric: 'squadOvr', target: 80, reward: { credits: 6000 }, group: 'montar' },
   { id: 'chem-12', name: 'Entrosados', desc: 'Química 12+ no squad ativo', metric: 'chem', target: 12, reward: { credits: 4000 }, group: 'montar' },

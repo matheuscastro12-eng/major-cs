@@ -24,9 +24,10 @@ import {
   type ClassicProgress,
 } from '../../engine/daily/classics';
 import { CS2_REAL_2026 } from '../../data/bo3';
-import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY } from '../../state/daily';
+import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY, setDailyFlag, dailyBadgeFacts } from '../../state/daily';
 import { pingDailyGame, fetchDailyGamesStats, type DailyGamesStats } from '../../state/dailyGamesApi';
 import { ultimateIndex, ultimateTotw } from '../../state/ultimate';
+import { evaluateDailyBadges } from '../../engine/daily/badges';
 import '../../styles/daily.css';
 
 // ISO alpha-2 → emoji de bandeira (regional indicators)
@@ -130,6 +131,25 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
               </button>
             </div>
           )}
+          {/* 🏅 SALA DE TROFÉUS — badges colecionáveis (conquistado × bloqueado) */}
+          {(() => {
+            const badges = evaluateDailyBadges(dailyBadgeFacts(gameIds));
+            const earned = badges.filter((b) => b.earned).length;
+            if (earned === 0) return null; // sem troféu ainda — o painel nasce com a 1ª conquista
+            return (
+              <div className="rtm-daily-badges">
+                <b>🏅 {ct('SALA DE TROFÉUS')} <span>{earned}/{badges.length}</span></b>
+                <div className="rtm-daily-badges-grid">
+                  {badges.map(({ def, earned: ok }) => (
+                    <span key={def.id} className={`rtm-daily-badge t${def.tier}${ok ? '' : ' locked'}`} title={`${def.title} — ${def.desc}`}>
+                      <em>{ok ? def.icon : '🔒'}</em>
+                      <i>{def.title}</i>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {/* vitrine: o TOTW da semana do ULTIMATE (cross-sell grátis → pago) */}
           {(() => {
             try {
@@ -184,7 +204,7 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
   const commit = (p: LinesProgress) => {
     setProgress(p);
     saveDailyProgress('lines', dateKey, p);
-    if (p.done) { track('daily_done', { game: 'lines', day: dayNumberOf(dateKey), won: p.won, errors: p.errors, found: p.found.length }); pingDailyGame('lines', dayNumberOf(dateKey), p.won); }
+    if (p.done) { track('daily_done', { game: 'lines', day: dayNumberOf(dateKey), won: p.won, errors: p.errors, found: p.found.length }); pingDailyGame('lines', dayNumberOf(dateKey), p.won); if (p.won && p.errors === 0) setDailyFlag('ace'); }
   };
 
   const submit = () => {
@@ -319,7 +339,7 @@ function WhoisGame({ dateKey }: { dateKey: string }) {
   const commit = (p: WhoisProgress) => {
     setProgress(p);
     saveDailyProgress('whois', dateKey, p);
-    if (p.done) { track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length }); pingDailyGame('whois', dayNumberOf(dateKey), p.won); }
+    if (p.done) { track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length }); pingDailyGame('whois', dayNumberOf(dateKey), p.won); if (p.won && p.guesses.length === 1) setDailyFlag('sniper'); }
   };
 
   const submit = () => {
@@ -426,7 +446,7 @@ function ImpostorGame({ dateKey }: { dateKey: string }) {
     const next = applyPick(round, progress, idx);
     setProgress(next);
     saveDailyProgress('impostor', dateKey, next);
-    if (next.done) { track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('impostor', dayNumberOf(dateKey), next.won); }
+    if (next.done) { track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('impostor', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('detetive'); }
   };
 
   const doShare = async () => {
@@ -509,7 +529,7 @@ function ClassicGame({ dateKey }: { dateKey: string }) {
     const next = applyClassicPick(round, progress, key);
     setProgress(next);
     saveDailyProgress('classic', dateKey, next);
-    if (next.done) { track('daily_done', { game: 'classic', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('classic', dayNumberOf(dateKey), next.won); }
+    if (next.done) { track('daily_done', { game: 'classic', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('classic', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('historiador'); }
   };
 
   const doShare = async () => {

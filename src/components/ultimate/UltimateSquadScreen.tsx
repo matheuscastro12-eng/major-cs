@@ -8,6 +8,7 @@ import { Flag, PlayerAvatar } from '../ui';
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
+import { countCompletedEras } from '../../engine/ultimate/icons';
 import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -787,6 +788,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     for (const k of uniq) if (index.get(k)?.rarity === 'icon') n++;
     return n;
   }, [state.inventory, index]);
+  // lendas: Ícones Históricos distintos + eras de época completas
+  const { histIconsOwned, erasComplete } = useMemo(() => {
+    const owned = new Set<string>();
+    for (const o of state.inventory) {
+      const c = index.get(o.cardKey);
+      if (c?.rarity === 'histIcon') owned.add(c.playerId);
+    }
+    return { histIconsOwned: owned.size, erasComplete: countCompletedEras(owned) };
+  }, [state.inventory, index]);
   // "únicas" p/ objetivos = JOGADORES distintos (por cardKey) — não os grupos
   // carta+boost do club (senão evoluir uma duplicata inflaria a métrica).
   const uniquePlayers = new Set(state.inventory.map((o) => o.cardKey)).size;
@@ -794,7 +804,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     wins: state.profile.w, packsOpened: state.profile.packSeedCounter,
     uniqueCards: uniquePlayers, totalCards, squadOvr: avgOvr, chem: chem.total,
     streak: state.profile.streak, iconsOwned, sbcDone: state.profile.sbcDone.length,
-    peakElo: state.profile.peakElo,
+    peakElo: state.profile.peakElo, histIconsOwned, erasComplete,
   });
   const claimedSet = new Set(state.profile.objectivesClaimed);
   const objClaimable = objectives.filter((o) => o.done && !claimedSet.has(o.def.id));

@@ -242,3 +242,22 @@
   border: 1px solid #38bdf8; background: none; color: #38bdf8; font-weight: 800;
   font-size: 0.74rem; font-family: var(--dl-cond); letter-spacing: 1.4px; text-transform: uppercase;
 }
+
+/* ── SALA DE TROFÉUS (badges) */
+.rtm-daily-badges {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 13px 14px; border: 1px solid var(--dl-line); border-left: 3px solid var(--dl-win);
+  background: var(--dl-panel);
+}
+.rtm-daily-badges > b { font-family: var(--dl-cond); letter-spacing: 1.2px; font-size: 0.86rem; }
+.rtm-daily-badges > b span { color: var(--dl-dim); font-family: var(--dl-mono); font-size: 0.72rem; margin-left: 6px; }
+.rtm-daily-badges-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.rtm-daily-badge {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center;
+  padding: 9px 6px; border: 1px solid var(--dl-line); background: var(--dl-panel);
+}
+.rtm-daily-badge em { font-style: normal; font-size: 1.25rem; }
+.rtm-daily-badge i { font-style: normal; font-size: 0.6rem; letter-spacing: 0.4px; text-transform: uppercase; color: var(--dl-dim); }
+.rtm-daily-badge.t2:not(.locked) { border-color: color-mix(in srgb, var(--dl-t) 60%, var(--dl-line)); }
+.rtm-daily-badge.t3:not(.locked) { border-color: var(--dl-t); background: color-mix(in srgb, var(--dl-t) 8%, var(--dl-panel)); }
+.rtm-daily-badge.locked { opacity: 0.45; }

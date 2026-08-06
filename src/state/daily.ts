@@ -115,3 +115,32 @@ export function syncPerfectStreak(gameIds: string[], dateKey: string): DailyStre
   }
   return st;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FLAGS de feitos especiais (badges) — setadas pelos jogos no fechamento.
+
+interface DailyStoreWithFlags extends DailyStore { flags?: Record<string, boolean> }
+
+export function setDailyFlag(id: string): void {
+  const s = load() as DailyStoreWithFlags;
+  if (s.flags?.[id]) return;
+  s.flags = { ...(s.flags ?? {}), [id]: true };
+  save(s);
+}
+
+export function loadDailyFlags(): Record<string, boolean> {
+  return (load() as DailyStoreWithFlags).flags ?? {};
+}
+
+// fatos consolidados pros badges (engine/daily/badges.ts avalia).
+export function dailyBadgeFacts(gameIds: string[]): { bestStreak: Record<string, number>; totalWins: number; flags: Record<string, boolean> } {
+  const s = load() as DailyStoreWithFlags;
+  const bestStreak: Record<string, number> = {};
+  let totalWins = 0;
+  for (const id of [...gameIds, PERFECT_KEY]) {
+    const st = s.streaks[id];
+    bestStreak[id === PERFECT_KEY ? 'perfect' : id] = st?.best ?? 0;
+    if (id !== PERFECT_KEY) totalWins += st?.wins ?? 0;
+  }
+  return { bestStreak, totalWins, flags: s.flags ?? {} };
+}

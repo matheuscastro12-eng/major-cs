@@ -109,3 +109,17 @@ test('packs: Pacote Ícone garante histIcon; Pacote TOTW garante in-form', () =>
     assert.ok(!totwPull.some((c) => c.rarity === 'histIcon'));
   }
 });
+
+test('eras: só squads 4+, contagem de completas exige TODOS os integrantes', async () => {
+  const { iconEras, countCompletedEras, ICONS } = await import('../src/engine/ultimate/icons.ts');
+  const eras = iconEras();
+  assert.ok(eras.every((e) => e.size >= 4), 'era completável tem 4+ lendas');
+  assert.ok(!eras.some((e) => e.eraId === 'hist-mibr06'), 'cogu solo não é era completável');
+  assert.equal(countCompletedEras(new Set()), 0);
+  // completa a NiP 2013 inteira = 1 era; faltando 1 integrante = 0
+  const nip = ICONS.filter((d) => d.eraId === 'hist-nip13').map((d) => d.id);
+  assert.equal(countCompletedEras(new Set(nip)), 1);
+  assert.equal(countCompletedEras(new Set(nip.slice(1))), 0);
+  // todas as eras = total
+  assert.equal(countCompletedEras(new Set(ICONS.map((d) => d.id))), eras.length);
+});

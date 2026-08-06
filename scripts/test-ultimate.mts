@@ -456,7 +456,7 @@ test('migrateUltimate: lixo vira default; parcial é preenchido; inventário vá
 });
 
 test('evaluateObjectives: pct 0..100, done quando value>=target, cobre todos os defs', () => {
-  const facts = { wins: 5, packsOpened: 2, uniqueCards: 25, totalCards: 40, squadOvr: 79, chem: 12, streak: 0, iconsOwned: 0, sbcDone: 1, peakElo: 1000 };
+  const facts = { wins: 5, packsOpened: 2, uniqueCards: 25, totalCards: 40, squadOvr: 79, chem: 12, streak: 0, iconsOwned: 0, sbcDone: 1, peakElo: 1000, histIconsOwned: 0, erasComplete: 0 };
   const prog = evaluateObjectives(facts);
   assert.equal(prog.length, OBJECTIVES.length);
   const win5 = prog.find((p) => p.def.id === 'win-5')!;

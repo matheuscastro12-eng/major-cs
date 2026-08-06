@@ -85,6 +85,25 @@ export const ICONS: IconDef[] = [
   icon('dosia', 'Dosia', 'ru', 'cis', 'Support', 'cis-era', 'Lendas da CIS', 90),
 ];
 
+// eras COMPLETÁVEIS (4+ integrantes — cogu solo não conta como "era completa")
+// e contagem de eras que o jogador fechou. Alimenta os objetivos de coleção.
+export interface IconEra { eraId: string; era: string; size: number; playerIds: string[] }
+
+export function iconEras(): IconEra[] {
+  const by = new Map<string, IconEra>();
+  for (const d of ICONS) {
+    const e = by.get(d.eraId) ?? { eraId: d.eraId, era: d.era, size: 0, playerIds: [] };
+    e.size += 1;
+    e.playerIds.push(d.id);
+    by.set(d.eraId, e);
+  }
+  return [...by.values()].filter((e) => e.size >= 4);
+}
+
+export function countCompletedEras(ownedPlayerIds: Set<string>): number {
+  return iconEras().filter((e) => e.playerIds.every((id) => ownedPlayerIds.has(id))).length;
+}
+
 // as cartas prontas pro catálogo — key `${id}:histIcon` (estável pra sempre).
 export function iconCards(): UltCard[] {
   return ICONS.map((d) => ({

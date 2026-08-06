@@ -171,3 +171,22 @@ test('dia perfeito: status agrega, streak encadeia por dia e é idempotente', as
   assert.equal(syncPerfectStreak(ids, d3).streak, 2);
   delete (globalThis as Record<string, unknown>).localStorage;
 });
+
+test('badges: avaliação por streak/vitórias/flags cobre todos os defs', async () => {
+  const { DAILY_BADGES, evaluateDailyBadges } = await import('../src/engine/daily/badges.ts');
+  assert.equal(new Set(DAILY_BADGES.map((b) => b.id)).size, DAILY_BADGES.length);
+  const none = evaluateDailyBadges({ bestStreak: {}, totalWins: 0, flags: {} });
+  assert.equal(none.length, DAILY_BADGES.length);
+  assert.ok(none.every((b) => !b.earned));
+  const some = evaluateDailyBadges({
+    bestStreak: { lines: 7, whois: 1, impostor: 0, classic: 2, perfect: 1 },
+    totalWins: 12,
+    flags: { ace: true },
+  });
+  const earned = new Set(some.filter((b) => b.earned).map((b) => b.def.id));
+  assert.deepEqual([...earned].sort(), ['ace', 'perfect-1', 'streak-3', 'streak-7', 'wins-10']);
+  // streak do perfect NÃO conta como streak de jogo
+  const onlyPerfect = evaluateDailyBadges({ bestStreak: { perfect: 9 }, totalWins: 0, flags: {} });
+  assert.ok(!onlyPerfect.find((b) => b.def.id === 'streak-7')!.earned);
+  assert.ok(onlyPerfect.find((b) => b.def.id === 'perfect-7')!.earned);
+});
