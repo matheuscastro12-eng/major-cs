@@ -52,6 +52,11 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
   // funil: conta grátis jogando o Major da Semana vê o convite de vitalícia
   // (tela ficou 100% grátis pra todos — mas nunca tinha CTA nem instrumentação)
   useEffect(() => { if (account && !account.paid) trackPaywallView('wl-free'); }, [account]);
+  // funil: visitante SEM conta (ex.: guest do Ultimate) chega aqui direto pelo
+  // convite abaixo — mas nunca tinha instrumentação nem src próprio, então essa
+  // ponta do funil ficava invisível (0 paywall_view/checkout_open registrados,
+  // mesmo com tráfego real vindo do modo convidado). Mede como 'wl-guest'.
+  useEffect(() => { if (!account) trackPaywallView('wl-guest'); }, [account]);
 
   // relógio do countdown (30s de passo é suficiente pra "fecha em Xh Ymin")
   useEffect(() => {
@@ -100,7 +105,22 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--em-muted)', lineHeight: 1.5, maxWidth: '420px' }}>
               {ct('Torneio semanal (quarta a sábado) valendo coins — 70.000 pro campeão. Crie uma conta grátis pra entrar.')}
             </p>
-            <a href="/" style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Criar conta grátis / entrar →')}</a>
+            {/* funil: era um <a href="/"> cru — reload da página inteira, sem
+                setCheckoutSrc, sem abrir o modal de conta direto. Troca pelo
+                mesmo padrão de botão já usado no convite abaixo (conta grátis)
+                e no resto do app; sem onCreateAccount (rota antiga do Online
+                Mode, hoje sem uso), mantém o link como fallback. */}
+            {onCreateAccount ? (
+              <button
+                type="button"
+                onClick={() => { setCheckoutSrc('wl-guest'); onCreateAccount(); }}
+                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                {ct('Criar conta grátis / entrar →')}
+              </button>
+            ) : (
+              <a href="/" style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Criar conta grátis / entrar →')}</a>
+            )}
           </div>
         </Panel>
       </div>
