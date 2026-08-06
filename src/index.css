@@ -6582,3 +6582,16 @@ button.t20-row {
 .hist-award-label { font-size: 0.64rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--em-muted); font-weight: 800; }
 .hist-award b { font-size: 0.86rem; }
 .hist-award em { font-style: normal; font-size: 0.72rem; color: var(--em-muted); }
+
+/* #33 — hall da fama de aposentados */
+.hist-hof { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.hist-hof-card { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border: 1px solid var(--em-border); border-left: 3px solid #e58a8a; border-radius: 4px; }
+.hist-hof-card b { font-size: 0.86rem; }
+.hist-hof-card span { font-size: 0.7rem; color: var(--em-muted); }
+.hist-hof-card i { font-style: normal; color: var(--em-gold); font-weight: 800; }
+
+/* #40 — passagens no perfil */
+.pp-stints { display: flex; flex-direction: column; gap: 6px; }
+.pp-stint { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border: 1px solid var(--em-border); border-left: 3px solid var(--em-gold); border-radius: 4px; }
+.pp-stint b { font-size: 0.82rem; }
+.pp-stint span { font-size: 0.7rem; color: var(--em-muted); }

@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 25;
+export const SAVE_VERSION = 26;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -243,6 +243,21 @@ const MIGRATIONS: Record<number, Migration> = {
     watchlist: save.watchlist ?? [],
     _v: 25,
   }),
+  // v25 → v26 (#40 passagens + #35 bootcamp): abre a passagem ATIVA de cada
+  // membro do elenco atual (from=1 — o histórico anterior é desconhecido;
+  // startOvr=0 = "desde o início registrado") e zera o uso do bootcamp.
+  25: (save) => {
+    // cópia — migração nunca muta o objeto de entrada
+    const stints = { ...((save.stints as Record<string, unknown> | undefined) ?? {}) };
+    const orgName = String((save.org as { name?: string } | null | undefined)?.name ?? 'Sua org');
+    const squad = Array.isArray(save.squad) ? (save.squad as { playerId?: string }[]) : [];
+    for (const sig of squad) {
+      const pid = sig?.playerId;
+      if (typeof pid !== 'string' || pid in stints) continue;
+      stints[pid] = [{ team: orgName, from: 1, to: null, startOvr: 0 }];
+    }
+    return { ...save, stints, _v: 26 };
+  },
 };
 
 // Versão atual de um save. Save legado (sem `_v`) é tratado como v1.

@@ -225,6 +225,7 @@ export function CareerPlayerPage({
   focusSuggested,
   focusOptions,
   onFocusAttr,
+  stints,
   watch = null,
   form,
   cur,
@@ -277,6 +278,8 @@ export function CareerPlayerPage({
   focusSuggested?: string; // #22: sugestão do staff (maior lacuna × relevância da role)
   focusOptions?: { id: string; label: string; biased: number }[]; // #22: catálogo + viés já acumulado
   onFocusAttr?: (attr: string | null) => void; // #22: definir/limpar o foco
+  /** #40: passagens do jogador pelo SEU clube (entrada/saída com OVR) */
+  stints?: { team: string; from: number; to: number | null; startOvr: number; endOvr?: number }[];
   /** #41: observatório de scouting — só pra jogador de FORA do elenco.
    *  level 0 = não acompanhado (mostra o botão Acompanhar). */
   watch?: {
@@ -610,6 +613,22 @@ export function CareerPlayerPage({
                     ))}
                   </div>
                   <p className="pp-focus-hint">{ct('Split de desenvolvimento com foco = +1 extra no atributo escolhido (até +4). O staff marca a maior lacuna da função.')}</p>
+                </Panel>
+              )}
+              {/* #40: PASSAGENS — a biografia do jogador na sua org */}
+              {stints && stints.length > 0 && (
+                <Panel title="Passagens" icon="calendar">
+                  <div className="pp-stints">
+                    {[...stints].reverse().map((st, i) => (
+                      <div key={i} className="pp-stint">
+                        <b>{st.team}</b>
+                        <span>
+                          {ct('split')} {st.from} → {st.to == null ? ct('atual') : `${ct('split')} ${st.to}`}
+                          {st.startOvr > 0 && <> · OVR {st.startOvr}{st.endOvr != null ? ` → ${st.endOvr}` : ''}</>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </Panel>
               )}
               {/* #15: LISTAR À VENDA — a IA dá lances a cada fechamento de split */}
