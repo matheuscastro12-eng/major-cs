@@ -123,3 +123,24 @@ test('eras: só squads 4+, contagem de completas exige TODOS os integrantes', as
   // todas as eras = total
   assert.equal(countCompletedEras(new Set(ICONS.map((d) => d.id))), eras.length);
 });
+
+test('títulos de era: um por squad completável + Curador do Panteão', async () => {
+  const { ERA_TITLES, TITLES, evaluateTitles, titleBySlug } = await import('../src/engine/ultimate/titles.ts');
+  const { iconEras, completedEraIds, ICONS } = await import('../src/engine/ultimate/icons.ts');
+  const eras = iconEras();
+  assert.equal(ERA_TITLES.length, eras.length);
+  assert.ok(ERA_TITLES.every((t) => TITLES.some((x) => x.slug === t.slug)));
+  assert.ok(titleBySlug('pantheon-curator'));
+  const base = { wins: 0, peakElo: 1000, streak: 0, uniqueCards: 0, iconsOwned: 0, onboarded: false };
+  // sem o fato (compat) e sem era = nenhum título de era
+  assert.deepEqual(evaluateTitles(base), []);
+  // NiP 2013 completa = só o título dela (rótulo de lore, não o nome do time)
+  const nip = ICONS.filter((d) => d.eraId === 'hist-nip13').map((d) => d.id);
+  const one = evaluateTitles({ ...base, completedEraIds: completedEraIds(new Set(nip)) });
+  assert.deepEqual(one, ['era-hist-nip13']);
+  assert.equal(titleBySlug('era-hist-nip13')?.label, 'Herdeiro do 87-0');
+  // TODAS as eras = todos os títulos + Curador
+  const all = evaluateTitles({ ...base, completedEraIds: completedEraIds(new Set(ICONS.map((d) => d.id))) });
+  assert.equal(all.filter((s) => s.startsWith('era-')).length, eras.length);
+  assert.ok(all.includes('pantheon-curator'));
+});

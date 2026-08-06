@@ -27,6 +27,7 @@ import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/format
 import { pickStarterCards } from '../engine/ultimate/cards';
 import { dateKey } from '../engine/ultimate/daily';
 import { evaluateTitles } from '../engine/ultimate/titles';
+import { completedEraIds } from '../engine/ultimate/icons';
 import { checkSbc, sbcById, type SbcReward } from '../engine/ultimate/sbc';
 import { objectiveById } from '../engine/ultimate/objectives';
 import { SEASON_MILESTONE, seasonTierById } from '../engine/ultimate/seasonRewards';
@@ -553,7 +554,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     const idx = ultimateIndex();
     const uniq = new Set(st.inventory.map((o) => o.cardKey));
     let icons = 0;
-    for (const key of uniq) if (idx.get(key)?.rarity === 'icon') icons++;
+    const histOwned = new Set<string>();
+    for (const key of uniq) {
+      const c = idx.get(key);
+      if (c?.rarity === 'icon') icons++;
+      if (c?.rarity === 'histIcon') histOwned.add(c.playerId);
+    }
     const earned = evaluateTitles({
       wins: st.profile.w,
       peakElo: st.profile.peakElo,
@@ -561,6 +567,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       uniqueCards: uniq.size,
       iconsOwned: icons,
       onboarded: st.profile.onboarded,
+      completedEraIds: completedEraIds(histOwned), // títulos de ERA (lendas)
     });
     const r = _mergeTitles(st, earned);
     if (r.newly.length) { persist(r.state); set({ state: r.state }); }

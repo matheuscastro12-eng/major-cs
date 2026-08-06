@@ -100,8 +100,12 @@ export function iconEras(): IconEra[] {
   return [...by.values()].filter((e) => e.size >= 4);
 }
 
+export function completedEraIds(ownedPlayerIds: Set<string>): string[] {
+  return iconEras().filter((e) => e.playerIds.every((id) => ownedPlayerIds.has(id))).map((e) => e.eraId);
+}
+
 export function countCompletedEras(ownedPlayerIds: Set<string>): number {
-  return iconEras().filter((e) => e.playerIds.every((id) => ownedPlayerIds.has(id))).length;
+  return completedEraIds(ownedPlayerIds).length;
 }
 
 // as cartas prontas pro catálogo — key `${id}:histIcon` (estável pra sempre).
