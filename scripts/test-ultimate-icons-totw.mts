@@ -9,6 +9,7 @@ import { buildFullCatalog } from '../src/engine/ultimate/catalog.ts';
 import { ICONS, iconCards } from '../src/engine/ultimate/icons.ts';
 import { ICON_PACK, rollPack, TOTW_PACK } from '../src/engine/ultimate/packs.ts';
 import { rarityInfo } from '../src/engine/ultimate/rarities.ts';
+import { checkSbc, sbcById } from '../src/engine/ultimate/sbc.ts';
 import { totwForWeek, totwSpecsThroughMonth, TOTW_BOOST, TOTW_SIZE, weekEndMs, weekStartMs } from '../src/engine/ultimate/totw.ts';
 
 const AUG26 = 2026 * 12 + 7; // agosto/2026 (mês de estreia do TOTW)
@@ -76,6 +77,23 @@ test('totw: acúmulo mensal com dedup e época respeitada', () => {
   assert.ok(sep.length >= aug.length);
   assert.ok(aug.every((s) => sep.some((x) => x.playerId === s.playerId)));
   assert.ok(augIds.size > 0);
+});
+
+test('sbc Panteão: 2 Ícones exatos viram lenda; specials e lendas barrados como insumo', () => {
+  const { catalog } = buildFullCatalog(CS2_REAL_2026, AUG26);
+  const def = sbcById('pantheon');
+  assert.ok(def, 'SBC pantheon registrada');
+  assert.equal(def!.reward.card, 'histIcon');
+  const icons2 = catalog.filter((c) => c.rarity === 'icon').slice(0, 2);
+  assert.equal(icons2.length, 2, 'catálogo tem ao menos 2 Ícones base');
+  assert.equal(checkSbc(icons2, def!.req).ok, true);
+  // insumo tier ≠ 7 barrado: special (tots, tier 8) e a própria lenda (tier 10)
+  const tots = catalog.find((c) => c.rarity === 'tots')!;
+  const hist = catalog.find((c) => c.rarity === 'histIcon')!;
+  assert.equal(checkSbc([icons2[0], tots], def!.req).ok, false);
+  assert.equal(checkSbc([icons2[0], hist], def!.req).ok, false);
+  // pool da recompensa existe (as 31 lendas)
+  assert.ok(catalog.filter((c) => c.rarity === def!.reward.card).length >= 25);
 });
 
 test('packs: Pacote Ícone garante histIcon; Pacote TOTW garante in-form', () => {
