@@ -1,10 +1,13 @@
 // Aba History — T1.4. Saiu de inline no CareerScreen (hubTab === 'history').
 
+import { useState } from 'react';
 import { DashCard } from '../../components/ds';
 import { CareerTimeline } from '../../components/career/CareerTimeline';
 import { PLACE_SHORT, type SplitRecord } from '../../components/CareerScreen';
 import { ct } from '../../state/career-i18n';
 import { formatMoney } from '../../engine/ratings';
+import { shareCareerCard, type CareerShareData } from '../../state/careerShareCard';
+import { track } from '../../state/track';
 
 interface OrgAggregate {
   circuitTitles: number;
@@ -17,9 +20,38 @@ interface OrgAggregate {
 interface Props {
   save: { split: number; history: SplitRecord[] };
   org: OrgAggregate;
+  /** identidade da org pro card de share (nome/tag) */
+  identity?: { name: string; tag?: string };
 }
 
-export function HistoryTab({ save, org }: Props) {
+export function HistoryTab({ save, org, identity }: Props) {
+  const [sharing, setSharing] = useState<'idle' | 'busy' | 'saved'>('idle');
+
+  const doShareCard = async () => {
+    if (sharing === 'busy') return;
+    setSharing('busy');
+    const data: CareerShareData = {
+      orgName: identity?.name || 'Minha org',
+      tag: identity?.tag,
+      splits: Math.max(save.split - 1, save.history.length),
+      titles: org.circuitTitles,
+      majorsWon: org.majorTitles,
+      majorsPlayed: org.majorApps,
+      prizeLabel: formatMoney(org.totalPrize),
+      bestLabel: String(org.bestPlacement),
+      seq: save.history.map((h) => ({
+        champion: h.champion,
+        top4: h.position > 0 && h.position <= 4,
+        bottom: h.position >= 9,
+        major: h.major ? (h.major.champion ? 'won' as const : 'played' as const) : undefined,
+      })),
+    };
+    track('career_share_card', { splits: data.splits, titles: data.titles, majors: data.majorsWon });
+    const how = await shareCareerCard(data);
+    setSharing(how === 'saved' ? 'saved' : 'idle');
+    if (how === 'saved') setTimeout(() => setSharing('idle'), 2200);
+  };
+
   return (
     <DashCard title={ct('Histórico da carreira')}>
       <div className="career-statgrid">
@@ -30,6 +62,18 @@ export function HistoryTab({ save, org }: Props) {
         <div className="cstat"><b>{formatMoney(org.totalPrize)}</b><span>{ct('Prêmios na história')}</span></div>
         <div className="cstat"><b>{org.bestPlacement}</b><span>{ct('Melhor campanha')}</span></div>
       </div>
+      {/* card "minha carreira em 1 print" — a fita da carreira como imagem */}
+      {save.history.length > 0 && (
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ margin: '10px 0 4px', padding: '8px 14px', border: '1px solid var(--em-gold)', borderRadius: 6, background: 'rgba(216,169,67,.07)', color: 'var(--em-gold)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.8rem' }}
+          onClick={() => { void doShareCard(); }}
+          disabled={sharing === 'busy'}
+        >
+          {sharing === 'busy' ? ct('Gerando…') : sharing === 'saved' ? ct('PNG salvo + texto copiado 😉') : `📸 ${ct('Minha carreira em 1 print')}`}
+        </button>
+      )}
       <div className="muted small section-label">{ct('Linha do tempo')}</div>
       {/* #51: narrativa visual por temporada (chips de marco); tabela detalhada abaixo */}
       <CareerTimeline history={save.history} />

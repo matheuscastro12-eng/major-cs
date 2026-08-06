@@ -6794,7 +6794,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
       {/* T1.4: aba History extraída em src/pages/career/HistoryTab.tsx */}
       {hubTab === 'history' && (
-        <HistoryTab save={save} org={org} />
+        <HistoryTab save={save} org={org} identity={save.org ? { name: save.org.name, tag: save.org.tag } : undefined} />
       )}
       </>
       )}
