@@ -1,5 +1,6 @@
 // Aba VRS — T1.4. Saiu de inline no CareerScreen (hubTab === 'vrs').
 
+import { Fragment } from 'react';
 import { DashCard } from '../../components/ds';
 import { OrgFlag } from '../../components/flags';
 import { TeamBadge } from '../../components/ui';
@@ -35,6 +36,9 @@ interface Props {
   vrsAll: VrsTeamRow[];
   vrsByRegion: VrsRegionGroup[];
   openTeamProfile: (teamId: string) => void;
+  /** #42 corrida ao Major: tamanho do corte (top N vão) + splits até o Major (0 = é agora) */
+  majorCut?: number;
+  splitsToMajor?: number;
 }
 
 export function VrsTab({
@@ -44,9 +48,42 @@ export function VrsTab({
   vrsAll,
   vrsByRegion,
   openTeamProfile,
+  majorCut = 0,
+  splitsToMajor = 0,
 }: Props) {
+  // #42 — a CORRIDA: sua distância em pontos até a vaga (ou a gordura de quem
+  // já está dentro). O "rival do corte" é quem está do outro lado da linha.
+  const race = (() => {
+    if (!majorCut || myVrsRank <= 0 || vrsAll.length <= majorCut) return null;
+    const me = vrsAll.find((t) => t.isUser);
+    if (!me) return null;
+    const inside = myVrsRank <= majorCut;
+    const bubble = inside ? vrsAll[majorCut] : vrsAll[majorCut - 1]; // 1º de fora / último de dentro
+    if (!bubble) return null;
+    const delta = Math.abs(me.vrs - bubble.vrs);
+    return { inside, bubble, delta };
+  })();
+
   return (
     <DashCard title={ct('Ranking VRS')}>
+      {/* #42 — CORRIDA AO MAJOR: a linha de corte vira drama permanente */}
+      {race && (
+        <div className={`vrs-race${race.inside ? ' in' : ' out'}`}>
+          <b>
+            {race.inside
+              ? <>🎫 {ct('NA ZONA DE MAJOR')} — #{myVrsRank} {ct('de')} {majorCut}</>
+              : <>🏁 {ct('CORRIDA AO MAJOR')} — #{myVrsRank}, {ct('corte no top')} {majorCut}</>}
+          </b>
+          <span>
+            {race.inside
+              ? <>{ct('Sua gordura sobre')} <i>{race.bubble.name}</i> ({ct('1º de fora')}): <b>{race.delta}</b> {ct('pts de VRS')}.</>
+              : <>{ct('Faltam')} <b>{race.delta}</b> {ct('pts de VRS pra alcançar')} <i>{race.bubble.name}</i> ({ct('último de dentro')}).</>}
+            {' '}{splitsToMajor > 0
+              ? <>{ct('O corte fecha em')} <b>{splitsToMajor}</b> {splitsToMajor === 1 ? ct('split') : ct('splits')}.</>
+              : <>{ct('O Major é NESTE split — o corte é agora.')}</>}
+          </span>
+        </div>
+      )}
       <div className="t20-head">
         <div className="muted small section-label" style={{ marginTop: 0 }}>
           {vrsMode === 'geral' ? ct('Ranking mundial de VRS · geral') : ct('Ranking mundial de VRS · por região')}
@@ -73,8 +110,14 @@ export function VrsTab({
         <table className="stats vrs-geral">
           <tbody>
             {vrsAll.map((t, i) => (
+              <Fragment key={t.id}>
+              {/* #42: a LINHA DE CORTE do Major, desenhada no ranking */}
+              {majorCut > 0 && i === majorCut && (
+                <tr className="vrs-cutline" aria-hidden>
+                  <td colSpan={3}>✂️ {ct('LINHA DE CORTE DO MAJOR — top')} {majorCut} {ct('garantem vaga')}</td>
+                </tr>
+              )}
               <tr
-                key={t.id}
                 className={`${t.isUser ? 'human-row' : ''} clickable-row`}
                 onClick={() => openTeamProfile(t.id)}
                 role="button"
@@ -96,6 +139,7 @@ export function VrsTab({
                 </td>
                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{t.vrs}</td>
               </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>

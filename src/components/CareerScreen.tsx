@@ -28,6 +28,7 @@ import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/care
 import { tryBreakthrough } from '../engine/career/breakthrough';
 import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
 import { tickListedSales, LISTING_MAX_RATIO } from '../engine/career/listedSales';
+import { unhappyDiscountFor } from '../engine/career/unhappyMarket';
 import { applyFocusBias, suggestFocus, TRAINING_FOCUS_LABEL, CORE_STATS, type CoreStat } from '../engine/career/training';
 import {
   judgePlayerPromises, hasOpenPromise, PLAYER_PROMISE_LABEL, PROMISE_MADE, PROMISE_KEPT, PROMISE_BROKEN,
@@ -6648,6 +6649,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
           budget={save.budget}
           clubFormOf={(id) => formOf(save, id)}
+          split={save.split}
           pendingDeals={save.pendingDeals ?? []}
           pendingSales={save.pendingSales ?? []}
           offers={incomingOffers}
@@ -6761,6 +6763,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           vrsAll={vrsAll}
           vrsByRegion={vrsByRegion}
           openTeamProfile={openTeamProfile}
+          majorCut={MAJOR_VRS_CUT}
+          splitsToMajor={isMajorSplit(save.split) ? 0 : MAJOR_EVERY - (save.split % MAJOR_EVERY)}
         />
       )}
 
@@ -9272,11 +9276,12 @@ function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: 
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, swapPool, sellerForm, buyerStrength, freeAgents, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyerStrength, freeAgents, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
   swapPool?: Player[]; // seus jogadores disponíveis pra incluir na troca (habilita swap)
   // contexto do decideOffer (gap #14) — todos opcionais/degradáveis
   sellerForm?: number;      // formOf(save, from.id)
+  unhappyDiscount?: number; // #38: 0..0.30 — alvo infeliz sai mais barato
   buyerStrength?: number;   // força do SEU elenco (média top-5 de OVR)
   freeAgents?: Player[];    // pool livre atual (reposição de role do vendedor)
   onClose: () => void; onAgree: (fee: number, outIds: string[]) => void;
@@ -9284,7 +9289,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, buyerStr
   const ask = askingPrice(player, from.teamwork);
   // contexto multifatorial do clube vendedor — from.players já é o elenco
   // ATUAL (currentEra vem pós-applyMoves)
-  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents };
+  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount };
   const mkt = playerValue(player);
   const wage = playerWage(player);
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
@@ -9589,11 +9594,12 @@ function ActionGold({ label, onClick, disabled }: { label: string; onClick: () =
 }
 
 // ---------- negociações durante a temporada (acordos pendentes p/ a janela) ----------
-function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf }: {
+function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf, split = 0 }: {
   market: { player: Player; from: TeamSeason; price: number }[];
   squadPlayers: Player[];
   budget: number;
   clubFormOf?: (teamId: string) => number; // forma REAL do clube (teamForm) pro decideOffer
+  split?: number; // #38: seed da infelicidade (a lista de oportunidades muda por janela)
   pendingDeals: PendingDeal[];
   pendingSales: { playerId: string; nick: string; fee: number; toTag: string; toId: string }[];
   offers: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toId: string; toName: string }[];
@@ -9637,6 +9643,15 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   );
   const list = filteredMarket.slice(0, negoLimit);
   const filtersActive = !!(q.trim() || roleFilter || countryFilter || marketSort !== 'ovr-desc');
+  // #38: desconto por infelicidade (determinístico por janela). Free agent não tem clube → 0.
+  const discountOf = (player: Player, from: TeamSeason): number =>
+    from.id === FREE_TEAM_ID || !clubFormOf ? 0 : unhappyDiscountFor(player, from.players, split, clubFormOf(from.id));
+  // as OPORTUNIDADES da janela: os maiores descontos do mercado filtrável
+  const unhappyStrip = filteredMarket
+    .map((m) => ({ ...m, discount: discountOf(m.player, m.from) }))
+    .filter((m) => m.discount > 0)
+    .sort((a, b) => b.discount - a.discount)
+    .slice(0, 6);
   return (
     <DashCard title={ct('Mercado')}>
         <div className="muted small" style={{ marginBottom: 12 }}>
@@ -9685,6 +9700,22 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
             ))}
           </div>
         )}
+        {/* #38: OPORTUNIDADES — infelizes na janela saem com desconto no decideOffer */}
+        {unhappyStrip.length > 0 && (
+          <>
+            <div className="muted small section-label">🔥 {ct('Oportunidades da janela · jogadores que querem sair')}</div>
+            <div className="nego-unhappy">
+              {unhappyStrip.map((m) => (
+                <button key={m.player.id} type="button" className="nego-unhappy-card" onClick={() => setTarget({ player: m.player, from: m.from })}>
+                  <OvrBadge ovr={playerOvr(m.player)} />
+                  <b>{m.player.nick}</b>
+                  <span className="muted small">{m.from.tag} · {m.player.role}</span>
+                  <em>-{Math.round(m.discount * 100)}% {ct('na pedida')}</em>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <div className="muted small section-label">
           {ct('Mercado · negocie com os clubes')} · {filteredMarket.length} {ct(filteredMarket.length === 1 ? 'jogador' : 'jogadores')}
         </div>
@@ -9727,6 +9758,9 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
                 <TeamBadge tag={m.from.tag} colors={m.from.colors} size={16} logoUrl={m.from.logoUrl ?? logoForTeam(m.from)} /> {m.from.team}
               </div>
               <div className="meta small"><span className="muted">{ct('pedida')}</span> {m.from.id === '__free__' ? ct('Livre (só salário)') : formatMoney(askingPrice(m.player, m.from.teamwork))}</div>
+              {discountOf(m.player, m.from) > 0 && (
+                <div className="meta small" style={{ color: 'var(--em-gold)', fontWeight: 700 }}>🔥 {ct('quer sair')} · -{Math.round(discountOf(m.player, m.from) * 100)}%</div>
+              )}
             </button>
           ))}
           {filteredMarket.length > negoLimit && (
@@ -9751,6 +9785,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
           budget={dealBudget}
           swapPool={swapPool}
           sellerForm={clubFormOf?.(target.from.id)}
+          unhappyDiscount={discountOf(target.player, target.from)}
           buyerStrength={squadPlayers.length > 0 ? squadStrength(squadPlayers) : undefined}
           freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
           onClose={() => setTarget(null)}

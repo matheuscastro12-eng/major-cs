@@ -6538,3 +6538,34 @@ button.t20-row {
 /* Top 20 HLTV — títulos do ano (chips) */
 .cer-titles { display: flex; flex-wrap: wrap; gap: 5px; }
 .cer-title-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: var(--gold-2, #f4d27a); background: rgba(216,169,67,.12); border: 1px solid var(--gold-soft, rgba(216,169,67,.4)); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+
+/* #42 — corrida ao Major (aba VRS) */
+.vrs-race {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;
+  padding: 11px 14px; border: 1px solid var(--em-border);
+  border-left: 3px solid var(--em-gold); background: color-mix(in srgb, var(--em-gold) 6%, transparent);
+  font-size: 0.86rem; line-height: 1.45;
+}
+.vrs-race.in { border-left-color: var(--em-green, #39c07a); background: color-mix(in srgb, #39c07a 6%, transparent); }
+.vrs-race b { letter-spacing: 0.4px; }
+.vrs-race span { color: var(--em-muted); }
+.vrs-race span b { color: var(--em-text); }
+.vrs-cutline td {
+  padding: 6px 8px !important; text-align: center !important;
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--em-gold); border-top: 2px dashed var(--em-gold) !important;
+  background: color-mix(in srgb, var(--em-gold) 5%, transparent);
+}
+
+/* #38 — oportunidades da janela (alvos infelizes) */
+.nego-unhappy { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.nego-unhappy-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 10px 12px; cursor: pointer; text-align: left; font-family: inherit; color: var(--em-text);
+  border: 1px solid color-mix(in srgb, var(--em-gold) 45%, var(--em-border));
+  border-radius: 6px; background: color-mix(in srgb, var(--em-gold) 6%, transparent);
+  transition: border-color .12s;
+}
+.nego-unhappy-card:hover { border-color: var(--em-gold); }
+.nego-unhappy-card b { font-size: 0.86rem; }
+.nego-unhappy-card em { font-style: normal; font-size: 0.72rem; font-weight: 800; color: var(--em-gold); }
