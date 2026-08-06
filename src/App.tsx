@@ -14,6 +14,7 @@ import { UltimateGate } from './components/ultimate/UltimateGate';
 import { Loader } from './components/ui';
 import { AchievementsModal, AchievementToast } from './components/Achievements';
 import { recordGameEnd, type AchDef } from './state/achievements';
+import { captureGhostFromUrl } from './state/ghost';
 
 // Deploy novo troca os hashes dos chunks; uma aba aberta tenta carregar um chunk
 // antigo que sumiu do servidor → "Failed to fetch dynamically imported module".
@@ -325,6 +326,8 @@ export default function App() {
   }, [screen, accountReady, account?.paid]);
   const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
+  // desafio de fantasma: captura ?desafio=… UMA vez no boot (Série do Dia consome)
+  useEffect(() => { captureGhostFromUrl(); }, []);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);

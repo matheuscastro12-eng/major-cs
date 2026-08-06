@@ -88,3 +88,45 @@ export function dailyShareText(day: number, s: DailyScore, rank: number | null, 
   const streak = streakDays >= 2 ? ` · 🔥 ${streakDays} dias` : '';
   return `SÉRIE DO DIA #${day} · MAJOR//CS\nRating ${s.rating.toFixed(2)} — ${res}${pos}${streak}\nMesma série pra todo mundo. Consegue mais?\nroadtomajor.com.br`;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DESAFIO DE FANTASMA — o link que fecha o loop viral: você joga, manda o link,
+// o amigo joga a MESMA série (o fixture já é o mesmo — dividendo da Sala pura)
+// e o jogo compara os ratings. Quem abre sem vitalícia cai no funil.
+
+export interface GhostChallenge {
+  day: number;
+  nick: string;
+  rating: number;   // 2 casas, faixa real do motor (0..2.5)
+}
+
+// nick seguro pro param/render: só [a-z0-9_], até 20 chars (o link não é canal
+// de injeção nem de palavrão gigante).
+function safeNick(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) || 'anon';
+}
+
+// param compacto `day-rating100-nick` (ex.: "12-131-fallen") — sobrevive a
+// WhatsApp/Telegram sem escaping.
+export function ghostParamOf(g: GhostChallenge): string {
+  return `${g.day}-${Math.round(g.rating * 100)}-${safeNick(g.nick)}`;
+}
+
+export function ghostLinkOf(g: GhostChallenge): string {
+  return `https://roadtomajor.com.br/?desafio=${ghostParamOf(g)}`;
+}
+
+export function parseGhostParam(raw: string | null | undefined): GhostChallenge | null {
+  if (!raw) return null;
+  const m = /^(\d{1,5})-(\d{1,3})-([a-z0-9_]{1,20})$/.exec(raw.trim());
+  if (!m) return null;
+  const day = Number(m[1]);
+  const rating = Number(m[2]) / 100;
+  if (day < 1 || !(rating >= 0 && rating <= 2.5)) return null;
+  return { day, nick: m[3], rating };
+}
+
+// convite que vai junto do link (o texto é o desafio; o link é a armadilha).
+export function ghostInviteText(g: GhostChallenge): string {
+  return `🥊 Te desafio na SÉRIE DO DIA #${g.day} do MAJOR//CS.\nFiz ${g.rating.toFixed(2)} de rating na MESMA série que você vai jogar. Me supera:\n${ghostLinkOf(g)}`;
+}

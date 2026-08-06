@@ -10,8 +10,11 @@ import { RtpIcon } from './RtpIcon';
 import { RtpRoundRoom } from './RtpRoundRoom';
 import {
   dailyChallengeOf, finishDailySeries, dailyScoreOf, dailyShareText, dateKeyOf,
+  ghostInviteText, type GhostChallenge,
 } from '../../engine/rtp/dailySeries';
 import { fetchDailyLadder, reportDailySeries, loadDailyPlayed, saveDailyPlayed, type DailyLadder, type DailyPlayed } from '../../state/dailySeriesApi';
+import { loadGhost } from '../../state/ghost';
+import { useAccount } from '../../state/account';
 import type { MomentOutcome } from '../../engine/rtp/moments';
 import type { MapId } from '../../types';
 
@@ -28,6 +31,10 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
   const [phase, setPhase] = useState<Phase>(played ? 'result' : 'brief');
   const [ladder, setLadder] = useState<DailyLadder | null>(null);
   const [copied, setCopied] = useState(false);
+  const [invited, setInvited] = useState(false);
+  const { account } = useAccount();
+  // fantasma pendente do DIA (link de desafio aberto antes) — some após expirar
+  const [ghost] = useState<GhostChallenge | null>(() => loadGhost(ch.day));
 
   useEffect(() => {
     let alive = true;
@@ -53,6 +60,19 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* sem clipboard */ }
   };
 
+  // desafio de fantasma: convite com o SEU rating + link — quem abrir joga a
+  // mesma série e o jogo compara.
+  const invite = async () => {
+    if (!played) return;
+    const text = ghostInviteText({ day: ch.day, nick: account?.nick || 'um amigo', rating: played.rating });
+    track('ghost_invite', { day: ch.day, rating: played.rating });
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cancelado */ }
+    try { await navigator.clipboard.writeText(text); setInvited(true); setTimeout(() => setInvited(false), 1800); } catch { /* sem clipboard */ }
+  };
+
+  // resultado do duelo contra o fantasma (rating manda — mesma régua do ranking)
+  const ghostBeaten = ghost && played ? played.rating > ghost.rating : null;
+
   // ── partida (a Sala de sempre, com o fixture do dia) ──
   if (phase === 'play') {
     return (
@@ -75,6 +95,13 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
           <span>{ct('A MESMA série pra todo mundo — só a sua jogada muda o rating.')}</span>
         </div>
       </div>
+
+      {/* desafio de fantasma pendente — o motivo de estar aqui */}
+      {ghost && !played && (
+        <div className="rtp-daily-ghost">
+          🥊 <b>{ghost.nick}</b> {ct('te desafiou')}: {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('nesta série. Jogue a MESMA série e supere.')}
+        </div>
+      )}
 
       {/* briefing do desafio */}
       <div className="rtp-daily-brief">
@@ -113,7 +140,18 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
             {played.rank != null && played.rank > 0 && <span>{ct('Posição no dia')}: <b>#{played.rank}</b></span>}
             {played.streak >= 2 && <span>🔥 {played.streak} {ct('dias seguidos')}</span>}
           </div>
-          <button type="button" className="rtp-cta" onClick={share}>{copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}</button>
+          {/* veredito do duelo contra o fantasma */}
+          {ghost && ghostBeaten != null && (
+            <div className={`rtp-daily-ghost ${ghostBeaten ? 'won' : 'lost'}`}>
+              {ghostBeaten
+                ? <>🥊 {ct('DESAFIO VENCIDO')}: {played.rating.toFixed(2)} × {ghost.rating.toFixed(2)} {ct('de')} <b>{ghost.nick}</b></>
+                : <>🥊 <b>{ghost.nick}</b> {ct('segura o desafio')}: {ghost.rating.toFixed(2)} × {played.rating.toFixed(2)} {ct('seu')}</>}
+            </div>
+          )}
+          <div className="rtp-daily-share-row">
+            <button type="button" className="rtp-cta" onClick={share}>{copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}</button>
+            <button type="button" className="rtp-cta rtp-cta-ghostduel" onClick={invite}>{invited ? ct('Link copiado! Manda pro alvo 🥊') : ct('Desafiar um amigo')}</button>
+          </div>
           <span className="rtp-daily-tomorrow">{ct('Próxima série à meia-noite.')}</span>
         </div>
       )}

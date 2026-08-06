@@ -80,3 +80,22 @@ test('série do dia: share text tem dia, rating e link', () => {
   assert.ok(t.includes('🔥 3'));
   assert.ok(t.includes('roadtomajor.com.br'));
 });
+
+test('desafio de fantasma: param compacto, parse com validação, convite com link', async () => {
+  const { ghostParamOf, ghostLinkOf, parseGhostParam, ghostInviteText } = await import('../src/engine/rtp/dailySeries.ts');
+  const g = { day: 12, nick: 'FalleN', rating: 1.31 };
+  const param = ghostParamOf(g);
+  assert.equal(param, '12-131-fallen');                       // nick sanitizado
+  assert.deepEqual(parseGhostParam(param), { day: 12, nick: 'fallen', rating: 1.31 });
+  assert.ok(ghostLinkOf(g).includes(`?desafio=${param}`));
+  // inválidos: lixo, rating fora da faixa, dia zero, injeção no nick
+  assert.equal(parseGhostParam('lixo'), null);
+  assert.equal(parseGhostParam('12-999-x'), null);
+  assert.equal(parseGhostParam('0-100-x'), null);
+  assert.equal(parseGhostParam('12-100-<script>'), null);
+  assert.equal(parseGhostParam(null), null);
+  // nick 100% inválido cai no fallback 'anon'
+  assert.equal(ghostParamOf({ day: 3, nick: '???', rating: 0.5 }), '3-50-anon');
+  const invite = ghostInviteText(g);
+  assert.ok(invite.includes('#12') && invite.includes('1.31') && invite.includes('desafio='));
+});

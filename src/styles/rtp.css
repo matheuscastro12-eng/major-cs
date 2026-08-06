@@ -2081,3 +2081,13 @@ html:has(main.page-rtp) { background: #070b11; }
 @media (prefers-reduced-motion: reduce) {
   .rtp .rtp-itv, .rtp .rtp-itv-rep, .rtp .rtp-itv-fx { animation: none; }
 }
+
+/* ── desafio de fantasma (Série do Dia) */
+.rtp-daily-ghost {
+  padding: 10px 14px; border: 1px solid var(--rtp-line); border-left: 3px solid var(--rtp-gold);
+  background: color-mix(in srgb, var(--rtp-gold) 7%, var(--rtp-deck)); font-size: .86rem; line-height: 1.45;
+}
+.rtp-daily-ghost.won { border-left-color: var(--rtp-win); background: color-mix(in srgb, var(--rtp-win) 8%, var(--rtp-deck)); }
+.rtp-daily-ghost.lost { border-left-color: var(--rtp-loss); background: color-mix(in srgb, var(--rtp-loss) 8%, var(--rtp-deck)); }
+.rtp-daily-share-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.rtp-cta-ghostduel { background: transparent; border: 1px solid var(--rtp-gold); color: var(--rtp-gold); }
