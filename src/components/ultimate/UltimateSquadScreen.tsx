@@ -1370,7 +1370,16 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const five = draftCards
       .map((c) => pool.find((p) => p.id === c.playerId))
       .filter((p): p is PoolPlayer => !!p);
-    if (five.length < 5) return;
+    if (five.length < 5) {
+      // RECOVERY (caça-bugs): run antigo draftou uma LENDA (playerId hist_*)
+      // que não existe no pool online — a partida nunca começava e o clique
+      // era MUDO, com a inscrição presa. Encerra o run e devolve a inscrição
+      // inteira (draftRecord paga o prêmio da tabela; o resto vem por ajuste).
+      const r = draftRecord(false);
+      addCredits(Math.max(0, DRAFT_ENTRY - r.credits));
+      flash(ct('Este run tinha uma LENDA no draft (fora do pool de partidas) — run encerrado e inscrição devolvida. Drafts novos não oferecem lendas.'), 4500);
+      return;
+    }
     const userTeam = buildOnlineTeam(ct('Seu Draft'), five, 'ut-draft');
     // química do draft: slots na ordem dos DRAFT_ROLES (formação standard)
     const dNodes: ChemNode[] = draftCards.map((c, i) => ({ slot: i, slotRole: DRAFT_ROLES[i], card: c }));
@@ -1504,6 +1513,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // mapa e química — o replay só começa no "COMEÇAR PARTIDA".
     if (live.intro) {
       const oppOvr = live.opp.length ? Math.round(live.opp.reduce((a, p) => a + p.ovr, 0) / live.opp.length) : 0;
+      // BUG FIX (caça-bugs): no DRAFT o lado "meu" mostrava o squad do CLUBE
+      // (form.slots) — cartas/OVR/química erradas na intro (o run joga com o
+      // squad EMPRESTADO). Deriva a exibição do modo.
+      const isDraftIntro = live.result.mode === 'draft';
+      const introCards: UltCard[] = isDraftIntro ? draftCards : form.slots.map((fs) => slotCard(fs.slot)?.card).filter((c): c is UltCard => !!c);
+      const introChem = isDraftIntro
+        ? computeChemistry(formationById('standard').adjacency, draftCards.map((c, i): ChemNode => ({ slot: i, slotRole: DRAFT_ROLES[i], card: c })))
+        : chem;
+      const introAvg = isDraftIntro
+        ? (draftCards.length ? Math.round(draftCards.reduce((a, c) => a + c.ovr, 0) / draftCards.length) : 0)
+        : avgOvr;
       // TALE OF THE TAPE (iter42): leitura seeded do confronto derivada dos
       // dados CANÔNICOS compartilhados (nomes+rosters) — byte-idêntica nos 2
       // clientes do PvP; a UI só espelha os lados via myIdx.
@@ -1525,24 +1545,30 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             <div className="ut-vs__grid">
               <div className="ut-vs__side">
                 <div className="ut-vs__team">{live.teams[live.myIdx].name}</div>
-                <div className="ut-vs__meta">{avgOvr} OVR · {ct('química')} {chem.total}/15</div>
+                <div className="ut-vs__meta">{introAvg} OVR · {ct('química')} {introChem.total}/15</div>
                 <div className="ut-vs__best">{bestLine(taleMine)}</div>
                 <div className="ut-vs__cards">
-                  {form.slots.map((fs, wi) => {
-                    const sc = slotCard(fs.slot);
-                    return sc ? (
-                      <div key={fs.slot} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
-                        <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} />
-                        <DuelChips card={sc.card} styleId={sc.owned.style} />
-                      </div>
-                    ) : null;
-                  })}
+                  {isDraftIntro
+                    ? introCards.map((c, wi) => (
+                        <div key={c.key} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
+                          <UltCardView card={c} size={82} />
+                        </div>
+                      ))
+                    : form.slots.map((fs, wi) => {
+                        const sc = slotCard(fs.slot);
+                        return sc ? (
+                          <div key={fs.slot} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
+                            <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} />
+                            <DuelChips card={sc.card} styleId={sc.owned.style} />
+                          </div>
+                        ) : null;
+                      })}
                 </div>
               </div>
               <div className="ut-vs__mid">
                 <div className="ut-vs__map">{live.result.mapName}</div>
                 <div className="ut-vs__vs">VS</div>
-                <div className="ut-vs__fmt">MD1 · {(chem.multiplier * duel.multiplier).toFixed(2)}× {ct('força')}</div>
+                <div className="ut-vs__fmt">MD1 · {(introChem.multiplier * duel.multiplier).toFixed(2)}× {ct('força')}</div>
                 <button className="ut-jogar" style={{ padding: '13px 26px', fontSize: '1rem' }} onClick={() => setLive({ ...live, intro: false })}><Zap size={17} /> {ct('COMEÇAR PARTIDA')}</button>
                 <button className="ut-vs__skip" onClick={finishMatch}>{ct('Pular direto pro resultado')}</button>
               </div>

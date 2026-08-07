@@ -144,3 +144,18 @@ test('títulos de era: um por squad completável + Curador do Panteão', async (
   assert.equal(all.filter((s) => s.startsWith('era-')).length, eras.length);
   assert.ok(all.includes('pantheon-curator'));
 });
+
+test('draft: LENDAS nunca são ofertadas (não existem no pool online de partidas)', async () => {
+  const { draftOptions, DRAFT_ROLES } = await import('../src/engine/ultimate/draft.ts');
+  const { catalog } = buildFullCatalog(CS2_REAL_2026, AUG26);
+  for (let seed = 1; seed <= 30; seed++) {
+    const picked: string[] = [];
+    for (let stage = 0; stage < DRAFT_ROLES.length; stage++) {
+      const opts = draftOptions(catalog, seed, stage, picked);
+      assert.ok(opts.length > 0, `seed ${seed} stage ${stage}: sem opções`);
+      assert.ok(opts.every((c) => c.rarity !== 'histIcon'), `seed ${seed} stage ${stage}: lenda ofertada`);
+      assert.ok(opts.every((c) => !c.playerId.startsWith('hist_')));
+      picked.push(opts[0].playerId);
+    }
+  }
+});
