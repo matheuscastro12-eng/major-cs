@@ -24,10 +24,11 @@ import {
   type ClassicProgress,
 } from '../../engine/daily/classics';
 import { CS2_REAL_2026 } from '../../data/bo3';
-import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY, setDailyFlag, dailyBadgeFacts, bankDailyDay, loadDailyDays } from '../../state/daily';
+import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY, setDailyFlag, dailyBadgeFacts, bankDailyDay, loadDailyDays, loadMarathon, saveMarathon, type MarathonRecord } from '../../state/daily';
 import { pingDailyGame, fetchDailyGamesStats, type DailyGamesStats } from '../../state/dailyGamesApi';
 import { ultimateIndex, ultimateTotw } from '../../state/ultimate';
 import { evaluateDailyBadges } from '../../engine/daily/badges';
+import { MARATHON_ORDER, marathonGrade, marathonShareText, fmtDuration } from '../../engine/daily/marathon';
 import '../../styles/daily.css';
 
 // ISO alpha-2 → emoji de bandeira (regional indicators)
@@ -76,6 +77,46 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
     try { await navigator.clipboard.writeText(text); setDayCopied(true); setTimeout(() => setDayCopied(false), 1800); } catch { /* sem clipboard */ }
   };
 
+  // 🏁 MARATONA — moldura sobre os 4 jogos: ordem fixa + cronômetro + nota
+  const [marathon, setMarathon] = useState<MarathonRecord | null>(() => loadMarathon(dateKey));
+  const marathonActive = !!marathon && marathon.finishedAt == null;
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    if (!marathonActive) return;
+    const t = window.setInterval(() => setClockTick((c) => c + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [marathonActive]);
+  // fim da maratona: detectado no HUB quando os 4 fecharam
+  useEffect(() => {
+    if (!marathonActive || view !== 'hub' || !dayStatus || dayStatus.done < dayStatus.total) return;
+    const rec: MarathonRecord = { ...marathon!, finishedAt: Date.now(), wins: dayStatus.won };
+    saveMarathon(rec);
+    setMarathon(rec);
+    track('daily_marathon_done', { day, wins: dayStatus.won, seconds: Math.round((rec.finishedAt! - rec.startedAt) / 1000) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marathonActive, view, dayStatus?.done]);
+  const startMarathon = () => {
+    const rec: MarathonRecord = { dateKey, startedAt: Date.now(), finishedAt: null };
+    saveMarathon(rec);
+    setMarathon(rec);
+    track('daily_marathon_start', { day });
+    setView(MARATHON_ORDER[0]);
+  };
+  // próximo jogo ainda aberto na ordem da maratona
+  const marathonNext = marathonActive && dayStatus
+    ? MARATHON_ORDER.find((id) => !dayStatus.perGame[id]?.done) ?? null
+    : null;
+  const [marCopied, setMarCopied] = useState(false);
+  const shareMarathon = async () => {
+    if (!marathon || marathon.finishedAt == null) return;
+    const secs = Math.round((marathon.finishedAt - marathon.startedAt) / 1000);
+    const wins = marathon.wins ?? 0;
+    const text = marathonShareText(day, wins, secs, marathonGrade(wins, secs));
+    track('daily_share', { game: 'marathon', day, won: wins >= 4 });
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
+    try { await navigator.clipboard.writeText(text); setMarCopied(true); setTimeout(() => setMarCopied(false), 1800); } catch { /* sem clipboard */ }
+  };
+
   return (
     <div className="rtm-daily">
       <header className="rtm-daily-head">
@@ -84,6 +125,9 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
           <b>{ct('DIÁRIO')} <span className="rtm-daily-num">#{day}</span></b>
           <span>{ct('Um desafio novo por dia — mesmo pra todo mundo.')}</span>
         </div>
+        {marathonActive && marathon && (
+          <span className="rtm-daily-streak" style={{ borderColor: 'var(--dl-t)' }}>🏁 {fmtDuration((Date.now() - marathon.startedAt) / 1000)}</span>
+        )}
         {streak.streak >= 2 && <span className="rtm-daily-streak">🔥 {streak.streak}</span>}
       </header>
 
@@ -112,6 +156,48 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
               </button>
             );
           })}
+          {/* 🏁 MARATONA — os 4 em sequência, contra o relógio */}
+          {dayStatus && (() => {
+            // resultado do dia (maratona concluída)
+            if (marathon && marathon.finishedAt != null) {
+              const secs = Math.round((marathon.finishedAt - marathon.startedAt) / 1000);
+              const wins = marathon.wins ?? 0;
+              const grade = marathonGrade(wins, secs);
+              return (
+                <div className={`rtm-daily-marathon done g${grade}`}>
+                  <b>🏁 {ct('MARATONA')} · {ct('NOTA')} {grade}</b>
+                  <span>{wins}/4 {ct('em')} {fmtDuration(secs)}</span>
+                  <button type="button" onClick={() => { void shareMarathon(); }}>
+                    {marCopied ? ct('Copiado! 😉') : ct('Compartilhar a nota')}
+                  </button>
+                </div>
+              );
+            }
+            // em andamento: CTA pro próximo desafio da ordem
+            if (marathonActive) {
+              const nextDef = DAILY_GAMES.find((g) => g.id === marathonNext);
+              return nextDef ? (
+                <div className="rtm-daily-marathon">
+                  <b>🏁 {ct('MARATONA EM ANDAMENTO')}</b>
+                  <span>{ct('Próximo')}: {nextDef.icon} {nextDef.title}</span>
+                  <button type="button" onClick={() => setView(nextDef.id as 'lines' | 'whois' | 'impostor' | 'classic')}>
+                    {ct('CONTINUAR')} →
+                  </button>
+                </div>
+              ) : null;
+            }
+            // start: só com o dia ZERADO (senão a nota não seria comparável)
+            if (dayStatus.done === 0) {
+              return (
+                <div className="rtm-daily-marathon">
+                  <b>🏁 {ct('MODO MARATONA')}</b>
+                  <span>{ct('Os 4 desafios em sequência, contra o relógio — uma NOTA única no fim (4/4 em menos de 5min = S). Uma por dia.')}</span>
+                  <button type="button" onClick={startMarathon}>{ct('COMEÇAR MARATONA')} →</button>
+                </div>
+              );
+            }
+            return null;
+          })()}
           {/* ✨ SEU DIA — o meta-loop de completar os 4 */}
           {dayStatus && dayStatus.done > 0 && (
             <div className={`rtm-daily-dayrow${dayStatus.perfect ? ' perfect' : ''}`}>

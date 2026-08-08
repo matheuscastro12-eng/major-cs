@@ -223,3 +223,18 @@ test('histórico de dias: consolida won/done, capa em 140 e ignora dia vazio', a
   assert.ok(daysNow[key(150)]);                    // o mais novo ficou
   delete (globalThis as Record<string, unknown>).localStorage;
 });
+
+test('maratona: nota S exige 4/4 rápido, formato de tempo e share', async () => {
+  const { marathonGrade, fmtDuration, marathonShareText, MARATHON_ORDER } = await import('../src/engine/daily/marathon.ts');
+  // a ordem cobre exatamente os 4 jogos do registry
+  assert.deepEqual([...MARATHON_ORDER].sort(), [...DAILY_GAMES.map((g) => g.id)].sort());
+  assert.equal(marathonGrade(4, 299), 'S');
+  assert.equal(marathonGrade(4, 301), 'A');   // 4/4 lento não é S
+  assert.equal(marathonGrade(3, 60), 'B');    // rápido não compensa derrota
+  assert.equal(marathonGrade(2, 60), 'C');
+  assert.equal(marathonGrade(0, 60), 'D');
+  assert.equal(fmtDuration(59), '59s');
+  assert.equal(fmtDuration(222), '3m42s');
+  const t = marathonShareText(9, 4, 222, 'S');
+  assert.ok(t.includes('#9') && t.includes('4/4') && t.includes('3m42s') && t.includes('NOTA S') && t.includes('roadtomajor'));
+});

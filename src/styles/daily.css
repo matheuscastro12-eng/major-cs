@@ -280,3 +280,21 @@
 .rtm-daily-heat-cell.perfect { background: var(--dl-t); box-shadow: 0 0 6px color-mix(in srgb, var(--dl-t) 55%, transparent); }
 .rtm-daily-heat-cell.future { opacity: 0.15; }
 .rtm-daily-heat-legend { font-family: var(--dl-mono); font-size: 0.62rem; color: var(--dl-dim); }
+
+/* ── MARATONA */
+.rtm-daily-marathon {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 13px 14px; border: 1px solid var(--dl-line); border-left: 3px solid var(--dl-t);
+  background: color-mix(in srgb, var(--dl-t) 6%, var(--dl-panel));
+}
+.rtm-daily-marathon b { font-family: var(--dl-cond); letter-spacing: 1.2px; font-size: 0.9rem; }
+.rtm-daily-marathon span { font-size: 0.8rem; color: var(--dl-dim); line-height: 1.45; }
+.rtm-daily-marathon button {
+  align-self: flex-start; margin-top: 4px; padding: 9px 16px; cursor: pointer; border: none;
+  background: var(--dl-t); color: #1a1205; font-weight: 800; font-size: 0.76rem;
+  font-family: var(--dl-cond); letter-spacing: 1.6px; text-transform: uppercase;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+.rtm-daily-marathon.done.gS { border-left-color: var(--dl-t); box-shadow: 0 0 14px color-mix(in srgb, var(--dl-t) 30%, transparent); }
+.rtm-daily-marathon.done.gA { border-left-color: var(--dl-win); }
+.rtm-daily-marathon.done.gD { border-left-color: var(--dl-loss); }

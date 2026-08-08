@@ -172,3 +172,26 @@ export function bankDailyDay(gameIds: string[], dateKey: string): void {
 export function loadDailyDays(): Record<string, { won: number; done: number }> {
   return (load() as DailyStoreWithDays).days ?? {};
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARATONA — um registro por dia (o primeiro tempo vale; sem replay).
+
+export interface MarathonRecord {
+  dateKey: string;
+  startedAt: number;            // epoch ms
+  finishedAt: number | null;    // null = em andamento
+  wins?: number;                // preenchido no fim
+}
+
+interface DailyStoreWithMarathon extends DailyStore { marathon?: MarathonRecord }
+
+export function loadMarathon(dateKey: string): MarathonRecord | null {
+  const s = load() as DailyStoreWithMarathon;
+  return s.marathon && s.marathon.dateKey === dateKey ? s.marathon : null;
+}
+
+export function saveMarathon(rec: MarathonRecord): void {
+  const s = load() as DailyStoreWithMarathon;
+  s.marathon = rec;
+  save(s);
+}
