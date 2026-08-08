@@ -8,7 +8,7 @@ import { Flag, PlayerAvatar } from '../ui';
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
-import { countCompletedEras } from '../../engine/ultimate/icons';
+import { countCompletedEras, legendPlayers } from '../../engine/ultimate/icons';
 import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -620,7 +620,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   );
 
   // ── ranqueada vs IA ──
-  const pool = useMemo(() => buildPool(CS2_REAL_2026), []);
+  // BUG FIX (mesma classe do draft): o pool online não tinha as LENDAS
+  // (playerId hist_*) — escalar uma no squad travava squadComplete e a
+  // ranqueada/gauntlet/PvP nunca liberavam. As lendas entram materializadas
+  // como Player + TeamSeason da era (legendPlayers) — e de quebra ganham
+  // sinergia de time de origem quando escaladas juntas.
+  const pool = useMemo(() => [
+    ...buildPool(CS2_REAL_2026),
+    ...legendPlayers().map(({ player, from, ovr }): PoolPlayer => ({
+      id: player.id, nick: player.nick, country: player.country, role: player.role, ovr, player, from,
+    })),
+  ], []);
   const poolById = useMemo(() => new Map(pool.map((p) => [p.id, p] as const)), [pool]);
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);

@@ -159,3 +159,28 @@ test('draft: LENDAS nunca são ofertadas (não existem no pool online de partida
     }
   }
 });
+
+test('lendas no pool online: Player/TeamSeason íntegros e time de era montável', async () => {
+  const { legendPlayers, legendTeamSeasons, ICONS } = await import('../src/engine/ultimate/icons.ts');
+  const { buildUserTeam, playerOvr } = await import('../src/engine/ratings.ts');
+  const lps = legendPlayers();
+  assert.equal(lps.length, ICONS.length);
+  const eras = legendTeamSeasons();
+  assert.ok(eras.length >= 8);
+  for (const { player, from, ovr } of lps) {
+    assert.ok(player.id.startsWith('hist_'));
+    for (const k of ['aim', 'clutch', 'consistency', 'awp', 'igl'] as const) {
+      assert.ok(player[k] >= 1 && player[k] <= 99, `${player.nick}.${k}=${player[k]}`);
+    }
+    // o OVR derivado dos atributos fica PERTO do curado (a carta manda no pool)
+    assert.ok(Math.abs(playerOvr(player) - ovr) <= 6, `${player.nick}: ${playerOvr(player)} vs ${ovr}`);
+    assert.ok(eras.some((t) => t.id === from.id));
+  }
+  // NiP 2013 inteira como TIME REAL: monta sem NaN e com sinergia de era
+  const nip = lps.filter((l) => l.from.id === 'hist-nip13');
+  assert.equal(nip.length, 5);
+  const team = buildUserTeam('NiP 2013', nip.map(({ player, from }) => ({ player, from })), eras[0].coach);
+  assert.ok(Number.isFinite(team.strength) && team.strength > 60, `strength ${team.strength}`);
+  assert.equal(team.players.length, 5);
+  assert.ok(team.players.every((tp) => tp.originTeamId === 'hist-nip13'));
+});

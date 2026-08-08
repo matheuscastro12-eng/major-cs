@@ -5,7 +5,7 @@
 // 2013 inteira dá química cheia, como montar o dream team de uma era.
 // Puro/determinístico. NOTA: imports com extensão .js (padrão dos módulos do
 // Ultimate que podem rodar no servidor — ver promos.ts).
-import type { Role } from '../../types.js';
+import type { Coach, Game, Player, Role, TeamSeason } from '../../types.js';
 import { deriveStats, type UltCard } from './cards.js';
 import type { RegionKey } from '../../data/regions.js';
 
@@ -112,6 +112,44 @@ export function completedEraIds(ownedPlayerIds: Set<string>): string[] {
 
 export function countCompletedEras(ownedPlayerIds: Set<string>): number {
   return completedEraIds(ownedPlayerIds).length;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LENDAS NO POOL DE PARTIDAS — o online (ranqueada/gauntlet/PvP/draft antigo)
+// monta times via {player: Player, from: TeamSeason} do dataset 2026; a lenda
+// (playerId hist_*) não existe lá, e escalar uma no squad TRAVAVA a ranqueada
+// (squadComplete nunca fechava). Estes helpers materializam a lenda como
+// Player real + TeamSeason da ERA — de quebra, lendas do mesmo squad de época
+// ganham a sinergia de time de origem (originTeamId) no draftSynergy.
+
+const LEGEND_COACH: Coach = { nick: 'legend-coach', name: 'Técnico', country: 'br', rating: 78, style: 'tactical' };
+
+function eraGameOf(eraId: string): Game {
+  return eraId === 'hist-mibr06' ? 'CS 1.6' : 'CS:GO';
+}
+
+// uma TeamSeason "fantasma" por era (id = eraId — vira o eixo de sinergia).
+export function legendTeamSeasons(): TeamSeason[] {
+  const by = new Map<string, TeamSeason>();
+  for (const d of ICONS) {
+    if (by.has(d.eraId)) continue;
+    by.set(d.eraId, {
+      id: d.eraId, team: d.era, tag: d.era.replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'LEND',
+      era: d.era.replace(/\D/g, '') || 'lendas', game: eraGameOf(d.eraId), country: d.country,
+      teamwork: 88, honors: 'Lendas do CS', colors: ['#ffd700', '#141821'], mapPrefs: {}, coach: LEGEND_COACH, players: [],
+    });
+  }
+  return [...by.values()];
+}
+
+// a lenda como Player jogável + a era de origem + o OVR curado da carta.
+export function legendPlayers(): { player: Player; from: TeamSeason; ovr: number }[] {
+  const eras = new Map(legendTeamSeasons().map((t) => [t.id, t] as const));
+  return ICONS.map((d) => ({
+    player: { id: d.id, nick: d.nick, name: d.nick, country: d.country, role: d.role, role2: d.role2, ...rawAttrs(d) },
+    from: eras.get(d.eraId)!,
+    ovr: d.ovr,
+  }));
 }
 
 // as cartas prontas pro catálogo — key `${id}:histIcon` (estável pra sempre).
