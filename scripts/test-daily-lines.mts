@@ -26,7 +26,8 @@ test('dataset: lines válidas, sem ambiguidade interna', () => {
     assert.ok(!ids.has(line.id), `id duplicado: ${line.id}`);
     ids.add(line.id);
     assert.equal(line.players.length, 5, `${line.id}: precisa de 5 jogadores`);
-    assert.ok(line.context.length > 10 && line.year >= 2012, line.id);
+    // leva 2 (2026-08) abriu o pool pro 1.6 raiz — fnatic 2009 / Na'Vi 2010
+    assert.ok(line.context.length > 10 && line.year >= 2003, line.id);
     // dentro da MESMA line, nenhuma resposta (nick ou alias) pode colidir entre
     // dois jogadores — senão o palpite certo acerta o slot errado.
     const seen = new Map<string, string>();
