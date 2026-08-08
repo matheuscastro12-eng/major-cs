@@ -38,7 +38,67 @@ function fixture(money = 5_000_000): RoadToProSave {
 test('lifestyle: save novo nasce no quarto dos pais com zero investido', () => {
   const s = fixture();
   assert.deepEqual(s.lifestyle, STARTER_LIFESTYLE());
-  assert.deepEqual(lifestyleWeeklyMods(s.lifestyle), { energyBonus: 0, recoveryBonus: 0 });
+  assert.deepEqual(lifestyleWeeklyMods(s.lifestyle), { energyBonus: 0, recoveryBonus: 0, upkeep: 0 });
+});
+
+// ── CUSTO FIXO DA MORADIA (v16.1) ───────────────────────────────────────────
+// Comprar é evento único; MORAR é compromisso. Sem o upkeep a moradia saturava
+// igual aos periféricos e o dinheiro voltava a não ter função no late-game.
+
+test('upkeep: sobe junto com o nível e cabe no salário do tier correspondente', () => {
+  // TIER_WAGE (transfers.ts): academy 1k / access 3k / challenger 9k / elite 26k.
+  // Cada casa tem que ser sustentável no tier em que faz sentido — se o upkeep
+  // encostar no salário cheio, o jogador de elite fecha no vermelho toda semana.
+  const teto: Record<number, number> = { 1: 3000, 2: 9000, 3: 26000, 4: 26000 };
+  for (let t = 1; t <= 4; t++) {
+    const cur = HOUSING_TIERS[t].upkeep;
+    assert.ok(cur > HOUSING_TIERS[t - 1].upkeep, `upkeep sobe no nível ${t}`);
+    assert.ok(cur <= teto[t] * 0.25, `upkeep do nível ${t} não come o salário do tier`);
+  }
+});
+
+test('weeklyTick: o custo fixo sai do bolso, exatamente uma vez', () => {
+  const s = fixture(1_000_000);
+  const semCasa = weeklyTick(s.life, 26_000, s.setup, s.lifestyle);
+  const comCasa = weeklyTick(s.life, 26_000, s.setup, { ...s.lifestyle, housing: 4 as GearTier });
+  assert.equal(semCasa.money - comCasa.money, HOUSING_TIERS[4].upkeep);
+});
+
+test('weeklyTick: elite com mansão AINDA fecha a semana no positivo', () => {
+  // Regressão de balance: com upkeep mal calibrado (o 22k que eu tinha chutado
+  // antes de olhar a TIER_WAGE), o topo da progressão virava armadilha — o
+  // jogador comprava a mansão e sangrava pra sempre.
+  const s = fixture(500_000);
+  const elite = weeklyTick(s.life, 26_000, s.setup, { ...s.lifestyle, housing: 4 as GearTier });
+  assert.ok(elite.money > s.life.money, 'salário de elite cobre mansão + custo de vida');
+});
+
+test('weeklyTick: não fechar a conta zera o conforto e cobra moral/foco', () => {
+  const s = fixture(0);
+  const life = { ...s.life, money: 0, morale: 50, focus: 50 };
+  const mansao = { ...s.lifestyle, housing: 4 as GearTier };
+  // salário de academia contra custo fixo de mansão: não fecha.
+  const duro = weeklyTick(life, 1000, s.setup, mansao);
+  const semCasa = weeklyTick(life, 1000, s.setup, s.lifestyle);
+
+  assert.equal(duro.money, 0, 'piso de caixa preservado — o jogo não modela dívida');
+  assert.ok(duro.morale < semCasa.morale, 'o aperto cobra moral');
+  assert.ok(duro.focus < semCasa.focus, 'e foco');
+  assert.equal(duro.energy, semCasa.energy, 'o conforto que não foi pago não vale');
+});
+
+test('weeklyTick: quem NÃO tem custo fixo não é punido por estar duro', () => {
+  // O gate `upkeep > 0` impede a punição de vazar pro jogador comum que só ficou
+  // sem dinheiro (academia, ou recém-cortado com salário 0) — isso mudaria o
+  // balance de TODO save que nem casa tem.
+  const s = fixture(0);
+  const life = { ...s.life, money: 0, morale: 50, focus: 50 };
+  const duro = weeklyTick(life, 0, s.setup, s.lifestyle);
+  assert.equal(duro.money, 0);
+  assert.ok(duro.morale > life.morale, 'moral segue derivando pro baseline, sem desconto');
+  assert.ok(duro.focus > life.focus);
+  // e o caller antigo (sem lifestyle) continua idêntico
+  assert.deepEqual(weeklyTick(life, 0, s.setup), duro);
 });
 
 test('buyHousing: escada 0→4 com débito correto; trava no topo e sem dinheiro', () => {
