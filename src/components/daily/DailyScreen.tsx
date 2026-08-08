@@ -26,6 +26,7 @@ import {
 import { CS2_REAL_2026 } from '../../data/bo3';
 import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY, setDailyFlag, dailyBadgeFacts, bankDailyDay, loadDailyDays } from '../../state/daily';
 import { pingDailyGame, fetchDailyGamesStats, type DailyGamesStats } from '../../state/dailyGamesApi';
+import { canInstall, promptInstall, dismissInstall, onInstallChange } from '../../state/pwa';
 import { ultimateIndex, ultimateTotw } from '../../state/ultimate';
 import { evaluateDailyBadges } from '../../engine/daily/badges';
 import '../../styles/daily.css';
@@ -131,6 +132,10 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
               </button>
             </div>
           )}
+          {/* 📱 INSTALAR — só depois de jogar pelo menos um jogo do dia: pedir
+              antes de o jogador saber o que é o Diário só queima o convite (o
+              beforeinstallprompt só vem uma vez por visita). */}
+          {dayStatus && dayStatus.done > 0 && <InstallPrompt />}
           {/* 📆 SUA FITA — heatmap das últimas 8 semanas (estilo GitHub) */}
           {(() => {
             const days = loadDailyDays();
@@ -631,6 +636,31 @@ function ClassicGame({ dateKey }: { dateKey: string }) {
           <span className="rtm-lines-tomorrow">{ct('Próximo clássico à meia-noite.')}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+// 📱 Convite pra instalar na home. Só aparece quando o browser convidou
+// (beforeinstallprompt), o app ainda não está instalado e o jogador não
+// dispensou — ver state/pwa.ts. Some sozinho depois de aceito ou recusado.
+function InstallPrompt() {
+  const [, force] = useState(0);
+  useEffect(() => onInstallChange(() => force((v) => v + 1)), []);
+  if (!canInstall()) return null;
+  return (
+    <div className="rtm-daily-install">
+      <div className="rtm-daily-install-txt">
+        <b>📱 {ct('Põe o Diário na sua tela inicial')}</b>
+        <span>{ct('Um toque pra jogar amanhã — sem procurar o link.')}</span>
+      </div>
+      <div className="rtm-daily-install-acts">
+        <button type="button" className="rtm-daily-install-go" onClick={() => { void promptInstall(); }}>
+          {ct('Instalar')}
+        </button>
+        <button type="button" className="rtm-daily-install-no" onClick={dismissInstall}>
+          {ct('agora não')}
+        </button>
+      </div>
     </div>
   );
 }

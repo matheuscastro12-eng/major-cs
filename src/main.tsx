@@ -9,6 +9,7 @@ import './styles/play-hub.css'
 import './styles/rtp.css'
 import App from './App.tsx'
 import { installErrorLogging } from './state/errlog'
+import { installPwa } from './state/pwa'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ToastProvider } from './components/ds'
 import { ConfirmDialogHost } from './components/ConfirmDialog'
@@ -26,6 +27,7 @@ import { TrophyRoomHost } from './components/TrophyRoomHost'
 import { CoachProfileHost } from './components/CoachProfileHost'
 
 installErrorLogging() // captura crash de runtime em producao (fire-and-forget)
+installPwa()          // registra o SW e guarda o convite de instalacao (ver state/pwa.ts)
 
 // BrowserRouter envolve a app desde T1.2 do roadmap em
 // .claude/plans/faca-um-planejamento-para-piped-quilt.md. Por enquanto fica
