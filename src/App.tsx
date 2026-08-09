@@ -318,7 +318,9 @@ export default function App() {
     if (!RTP_ENABLED && screen === 'rtp') { setScreen('home'); return; } // kill-switch: deep link /road-to-pro cai na home
     // Ultimate: conta logada OU convidado entram. Road to Pro (rtp) segue
     // EXCLUSIVO de conta vitalícia — o modo convidado não afrouxa esse gate.
-    if (accountReady && ((screen === 'ultimate' && !account && !utGuest) || (screen === 'rtp' && !account?.paid))) setScreen('landing');
+    // RtP SEM vitalícia agora entra em modo DEMO (peneira + primeiras semanas)
+    // — a conversão acontece DENTRO do jogo (RtpDemoGate), não mais na porta.
+    if (accountReady && screen === 'ultimate' && !account && !utGuest) setScreen('landing');
   }, [screen, accountReady, account?.paid, utGuest]);
   // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
   useEffect(() => {
@@ -1118,7 +1120,7 @@ export default function App() {
       )}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
-      {RTP_ENABLED && account?.paid && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
+      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={() => setScreen('landing')} />}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
       {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} />}
 

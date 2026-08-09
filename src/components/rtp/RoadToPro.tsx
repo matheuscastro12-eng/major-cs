@@ -18,6 +18,7 @@ import { applyLifeChoice } from '../../engine/rtp/lifeEvents';
 import { acceptOffer, negotiateOffer, declineOffers } from '../../engine/rtp/transfers';
 import { RtpLegacy } from './RtpLegacy';
 import { RtpDailySeries } from './RtpDailySeries';
+import { RtpDemoGate, DEMO_WEEKS } from './RtpDemoGate';
 import { makeRng } from '../../engine/rng';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
@@ -61,7 +62,10 @@ function eventMessage(ev: EventEnd): string {
 
 // Entrada única do modo Road to Pro. Decide entre criação e hub conforme exista
 // (ou não) um save. App.tsx só precisa montar este componente numa screen.
-export function RoadToPro({ onExit }: { onExit: () => void }) {
+// `demo`: modo DEGUSTAÇÃO (conta grátis/deslogado) — peneira + DEMO_WEEKS
+// semanas jogáveis; depois a RtpDemoGate trava com o CTA da vitalícia. O save
+// é o mesmo formato do completo: comprou → continua daqui (e sobe pra nuvem).
+export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => void; demo?: boolean; onUpgrade?: () => void }) {
   const [save, setSave] = useState<RoadToProSave | null>(() => loadRtp());
   const [booted, setBooted] = useState(false);
   const [playing, setPlaying] = useState(false);   // hub vs partida (liga)
@@ -144,6 +148,11 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
   // Carreira encerrada (aposentadoria): tela de legado. Tem prioridade sobre tudo.
   if (save.retired) {
     return <RtpLegacy save={save} onExit={onExit} onReset={() => { deleteRtp(); setSave(null); }} />;
+  }
+  // DEMO: a trava fecha quando a degustação acaba (ou quando o convidado
+  // tenta abrir a Série do Dia — exclusiva da vitalícia).
+  if (demo && (save.world.week > DEMO_WEEKS || dailyOpen)) {
+    return <RtpDemoGate save={save} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
   }
   // SÉRIE DO DIA: desafio global diário — fixture próprio, não toca no seu save.
   if (dailyOpen) {

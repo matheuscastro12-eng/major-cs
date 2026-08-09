@@ -181,12 +181,12 @@ export function Home({
                   className="rtm-modecard"
                   data-tone="purple"
                   data-locked={premiumLocked ? '' : undefined}
-                  onClick={() => (premiumLocked ? (setCheckoutSrc('home-rtp'), onCreateAccount?.()) : onRoadToPro())}
+                  onClick={() => onRoadToPro()}
                 >
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/train.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
                   <span className="rtm-modecard-bar" />
-                  {premiumLocked && <span className="rtm-modecard-lock">🔒 {ct('Vitalícia')}</span>}
+                  {premiumLocked && <span className="rtm-modecard-lock" style={{ background: 'rgba(39,224,176,.12)', borderColor: 'rgba(39,224,176,.5)', color: '#27e0b0' }}>🧪 {ct('DEMO GRÁTIS')}</span>}
                   <span className="rtm-modecard-body">
                     <span className="rtm-modecard-kicker">{ct('Novo')}</span>
                     <span className="rtm-modecard-title">Road to Pro</span>
@@ -201,7 +201,7 @@ export function Home({
                     )}
                     <span className="rtm-modecard-foot">
                       <span className="rtm-modecard-meta">{premiumLocked ? ct('Exclusivo · conta vitalícia') : ct('1 jogador · você é o atleta')}</span>
-                      <span className="rtm-modecard-go">{premiumLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>
+                      <span className="rtm-modecard-go">{premiumLocked ? <>🧪 {ct('Jogar a demo grátis')} →</> : <>{ct('Jogar')} →</>}</span>
                     </span>
                   </span>
                 </button>
