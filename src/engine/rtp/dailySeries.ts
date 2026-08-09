@@ -90,6 +90,21 @@ export function dailyShareText(day: number, s: DailyScore, rank: number | null, 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SEMANA da Série do Dia — o ladder ACUMULADO: soma de rating dos dias jogados
+// na semana (jogar todo dia é a única forma de brigar pelo topo). Semana 1 =
+// dias 1-7 da época do Diário; determinístico e compartilhado com o servidor.
+
+export function dailyWeekOf(day: number): number {
+  return Math.max(1, Math.floor((day - 1) / 7) + 1);
+}
+
+// faixa de dias [primeiro, último] de uma semana do Diário.
+export function dailyWeekRange(week: number): [number, number] {
+  const start = (Math.max(1, week) - 1) * 7 + 1;
+  return [start, start + 6];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DESAFIO DE FANTASMA — o link que fecha o loop viral: você joga, manda o link,
 // o amigo joga a MESMA série (o fixture já é o mesmo — dividendo da Sala pura)
 // e o jogo compara os ratings. Quem abre sem vitalícia cai no funil.

@@ -15,6 +15,18 @@ export async function fetchDailyLadder(day?: number): Promise<DailyLadder | null
   } catch { return null; }
 }
 
+// ladder SEMANAL (acumulado da semana — soma de rating + dias jogados)
+export interface DailyWeekRow { rank: number; nick: string; pts: number; days: number; wins: number }
+export interface DailyWeekLadder { week: number; dayA: number; dayB: number; total: number; ladder: DailyWeekRow[] }
+
+export async function fetchDailyWeekLadder(week?: number): Promise<DailyWeekLadder | null> {
+  try {
+    const r = await fetch(`/api/ranking?action=dailyWeekLadder${week ? `&week=${week}` : ''}`, { signal: AbortSignal.timeout(9000) });
+    if (!r.ok) return null;
+    return (await r.json()) as DailyWeekLadder;
+  } catch { return null; }
+}
+
 export async function reportDailySeries(day: number, rating: number, won: boolean, mapScore: [number, number]): Promise<{ rank: number; duplicate: boolean } | null> {
   const token = getToken();
   if (!token) return null;

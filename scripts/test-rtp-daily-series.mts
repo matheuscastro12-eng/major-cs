@@ -99,3 +99,19 @@ test('desafio de fantasma: param compacto, parse com validação, convite com li
   const invite = ghostInviteText(g);
   assert.ok(invite.includes('#12') && invite.includes('1.31') && invite.includes('desafio='));
 });
+
+test('semana do Diário: faixas de 7 dias, sem buracos nem sobreposição', async () => {
+  const { dailyWeekOf, dailyWeekRange } = await import('../src/engine/rtp/dailySeries.ts');
+  assert.equal(dailyWeekOf(1), 1);
+  assert.equal(dailyWeekOf(7), 1);
+  assert.equal(dailyWeekOf(8), 2);
+  assert.equal(dailyWeekOf(70), 10);
+  assert.deepEqual(dailyWeekRange(1), [1, 7]);
+  assert.deepEqual(dailyWeekRange(2), [8, 14]);
+  // consistência: todo dia cai exatamente na semana cuja faixa o contém
+  for (let d = 1; d <= 60; d++) {
+    const w = dailyWeekOf(d);
+    const [a, b] = dailyWeekRange(w);
+    assert.ok(d >= a && d <= b, `dia ${d} fora da faixa da semana ${w}`);
+  }
+});

@@ -2115,3 +2115,11 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp-demogate-cta { padding: 14px 18px; font-size: 1rem; display: flex; flex-direction: column; gap: 2px; align-items: center; }
 .rtp-demogate-cta span { font-size: 0.68rem; font-weight: 600; opacity: 0.8; }
 .rtp-demogate-keep { font-size: 0.72rem; color: var(--rtp-ink-faint); text-align: center; }
+
+/* ── ladder Dia × Semana (Série do Dia) */
+.rtp-daily-ladder-tabs { display: inline-flex; gap: 4px; }
+.rtp-daily-ladder-tabs button {
+  padding: 4px 12px; cursor: pointer; border: 1px solid var(--rtp-line); background: none;
+  color: var(--rtp-ink-dim); font-family: inherit; font-weight: 800; font-size: 0.68rem; letter-spacing: 1.2px;
+}
+.rtp-daily-ladder-tabs button.on { border-color: var(--rtp-gold); color: var(--rtp-gold); background: color-mix(in srgb, var(--rtp-gold) 8%, transparent); }

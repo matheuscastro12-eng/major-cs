@@ -12,7 +12,7 @@ import {
   dailyChallengeOf, finishDailySeries, dailyScoreOf, dailyShareText, dateKeyOf,
   ghostInviteText, type GhostChallenge,
 } from '../../engine/rtp/dailySeries';
-import { fetchDailyLadder, reportDailySeries, loadDailyPlayed, saveDailyPlayed, type DailyLadder, type DailyPlayed } from '../../state/dailySeriesApi';
+import { fetchDailyLadder, fetchDailyWeekLadder, reportDailySeries, loadDailyPlayed, saveDailyPlayed, type DailyLadder, type DailyWeekLadder, type DailyPlayed } from '../../state/dailySeriesApi';
 import { loadGhost } from '../../state/ghost';
 import { useAccount } from '../../state/account';
 import type { MomentOutcome } from '../../engine/rtp/moments';
@@ -30,6 +30,8 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
   const [played, setPlayed] = useState<DailyPlayed | null>(() => loadDailyPlayed(ch.day));
   const [phase, setPhase] = useState<Phase>(played ? 'result' : 'brief');
   const [ladder, setLadder] = useState<DailyLadder | null>(null);
+  const [weekLadder, setWeekLadder] = useState<DailyWeekLadder | null>(null);
+  const [ladderMode, setLadderMode] = useState<'dia' | 'semana'>('dia');
   const [copied, setCopied] = useState(false);
   const [invited, setInvited] = useState(false);
   const { account } = useAccount();
@@ -39,6 +41,7 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
   useEffect(() => {
     let alive = true;
     void fetchDailyLadder(ch.day).then((l) => { if (alive) setLadder(l); });
+    void fetchDailyWeekLadder().then((l) => { if (alive) setWeekLadder(l); });
     return () => { alive = false; };
   }, [ch.day, played]);
 
@@ -159,27 +162,56 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
         </div>
       )}
 
-      {/* ranking do dia */}
+      {/* ranking: DIA (a série de hoje) × SEMANA (acumulado — jogue todo dia) */}
       <div className="rtp-daily-ladder">
         <div className="rtp-daily-ladder-head">
-          <b>{ct('RANKING DO DIA')}</b>
-          <span>{ladder ? `${ladder.total} ${ct('jogaram hoje')}` : '…'}</span>
+          <div className="rtp-daily-ladder-tabs">
+            <button type="button" className={ladderMode === 'dia' ? 'on' : ''} onClick={() => setLadderMode('dia')}>{ct('DIA')}</button>
+            <button type="button" className={ladderMode === 'semana' ? 'on' : ''} onClick={() => setLadderMode('semana')}>{ct('SEMANA')}</button>
+          </div>
+          <span>
+            {ladderMode === 'dia'
+              ? (ladder ? `${ladder.total} ${ct('jogaram hoje')}` : '…')
+              : (weekLadder ? `${ct('semana')} ${weekLadder.week} · ${weekLadder.total} ${ct('na disputa')}` : '…')}
+          </span>
         </div>
-        {ladder && ladder.ladder.length > 0 ? (
-          <table>
-            <tbody>
-              {ladder.ladder.slice(0, 10).map((r) => (
-                <tr key={r.rank}>
-                  <td className="rk">#{r.rank}</td>
-                  <td className="nk">{r.nick}</td>
-                  <td className="sc">{r.won ? `${r.mapScore[0]}–${r.mapScore[1]}` : `${r.mapScore[0]}–${r.mapScore[1]}`}</td>
-                  <td className="rt">{r.rating.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {ladderMode === 'dia' ? (
+          ladder && ladder.ladder.length > 0 ? (
+            <table>
+              <tbody>
+                {ladder.ladder.slice(0, 10).map((r) => (
+                  <tr key={r.rank}>
+                    <td className="rk">#{r.rank}</td>
+                    <td className="nk">{r.nick}</td>
+                    <td className="sc">{`${r.mapScore[0]}–${r.mapScore[1]}`}</td>
+                    <td className="rt">{r.rating.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="rtp-daily-empty">{ct('Ninguém jogou ainda — seja o primeiro do dia.')}</p>
+          )
+        ) : weekLadder && weekLadder.ladder.length > 0 ? (
+          <>
+            <table>
+              <tbody>
+                {weekLadder.ladder.slice(0, 10).map((r) => (
+                  <tr key={r.rank}>
+                    <td className="rk">#{r.rank}</td>
+                    <td className="nk">{r.nick}</td>
+                    <td className="sc">{r.days}/7 {ct('dias')}</td>
+                    <td className="rt">{r.pts.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="rtp-daily-empty" style={{ padding: '8px 0 0' }}>
+              {ct('Pontos = SOMA dos ratings da semana — quem falta um dia fica pra trás. A semana vira na segunda.')}
+            </p>
+          </>
         ) : (
-          <p className="rtp-daily-empty">{ct('Ninguém jogou ainda — seja o primeiro do dia.')}</p>
+          <p className="rtp-daily-empty">{ct('Semana zerada — o primeiro rating de hoje abre a disputa.')}</p>
         )}
       </div>
     </div>

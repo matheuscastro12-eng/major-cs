@@ -149,6 +149,27 @@ export default async function handler(
     return;
   }
 
+  // ladder SEMANAL da Série do Dia (público, cacheado): soma de rating dos
+  // dias jogados na semana + dias/vitórias. Semana 1 = dias 1-7 da época.
+  // ?week=N (default: semana corrente). Jogar todo dia é o único caminho pro topo.
+  if (action === 'dailyWeekLadder') {
+    const curWeek = Math.max(1, Math.floor((dailyDayNow() - 1) / 7) + 1);
+    const week = Math.max(1, Math.min(curWeek, Number(q('week') ?? body.week ?? 0) || curWeek));
+    const dayA = (week - 1) * 7 + 1;
+    const dayB = dayA + 6;
+    const rows = await sql`SELECT email, max(nick) AS nick, sum(rating)::real AS pts, count(*)::int AS days, sum(CASE WHEN won THEN 1 ELSE 0 END)::int AS wins
+                           FROM rtm_daily_series WHERE day BETWEEN ${dayA} AND ${dayB}
+                           GROUP BY email ORDER BY pts DESC, wins DESC LIMIT 50`;
+    const total = await sql`SELECT count(DISTINCT email)::int AS n FROM rtm_daily_series WHERE day BETWEEN ${dayA} AND ${dayB}`;
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    res.status(200).json({
+      week, dayA, dayB,
+      total: total[0]?.n ?? 0,
+      ladder: rows.map((r, i) => ({ rank: i + 1, nick: String(r.nick ?? 'pro'), pts: Math.round(Number(r.pts) * 100) / 100, days: Number(r.days), wins: Number(r.wins) })),
+    });
+    return;
+  }
+
   // campeões da temporada passada (arquivo). Público.
   if (action === 'champions') {
     const prev = season.no - 1;
