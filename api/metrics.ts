@@ -36,7 +36,7 @@ export default async function handler(
         path text,
         user_agent text
       )`;
-    const [totals, visitsByDay, games, byDifficulty, byPool, online, recent, hall, byCountry] = await Promise.all([
+    const [totals, visitsByDay, games, byDifficulty, byPool, online, recent, hall, byCountry, rtpDemoFunnel] = await Promise.all([
       sql`SELECT
             COUNT(*) FILTER (WHERE type = 'visit') AS visits,
             COUNT(DISTINCT sid) FILTER (WHERE type = 'visit') AS unique_visitors,
@@ -82,6 +82,32 @@ export default async function handler(
           FROM events
           WHERE type = 'visit' AND COALESCE(data->>'country', '') <> ''
           GROUP BY 1 ORDER BY 3 DESC LIMIT 40`,
+      // FUNIL DA DEMO DO RtP — sessões distintas em cada degrau, 30 dias.
+      // Contado por sid (não por evento) porque o que interessa é "quantas
+      // pessoas chegaram até aqui", não quantas vezes dispararam. Usa
+      // idx_events_type_time nos ramos por tipo.
+      sql`SELECT 'entrou na demo' AS etapa, 1 AS ord, COUNT(DISTINCT sid) AS sids
+            FROM events WHERE type = 'rtp_demo' AND data->>'step' = 'open'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'criou o jogador', 2, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'rtp_demo' AND data->>'step' = 'created'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'semana ' || (data->>'week'), 2 + (data->>'week')::int, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'rtp_demo' AND data->>'step' = 'week'
+              AND created_at > now() - interval '30 days'
+              AND (data->>'week') ~ '^[0-9]{1,3}$'
+            GROUP BY data->>'week'
+          UNION ALL
+          SELECT 'bateu na trava', 900, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'paywall_view' AND data->>'src' = 'rtp-demo-gate'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'abriu o checkout', 901, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'checkout_open' AND data->>'src' = 'rtp-demo'
+              AND created_at > now() - interval '30 days'
+          ORDER BY ord`,
     ]);
     res.status(200).json({
       totals: totals[0],
@@ -93,6 +119,7 @@ export default async function handler(
       last24h: recent,
       hall: hall[0],
       byCountry,
+      rtpDemoFunnel,
     });
   } catch (e) {
     res.status(500).json({ error: String(e) });

@@ -19,6 +19,7 @@ import { acceptOffer, negotiateOffer, declineOffers } from '../../engine/rtp/tra
 import { RtpLegacy } from './RtpLegacy';
 import { RtpDailySeries } from './RtpDailySeries';
 import { RtpDemoGate, DEMO_WEEKS } from './RtpDemoGate';
+import { trackRtpDemo } from '../../state/track';
 import { makeRng } from '../../engine/rng';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
@@ -104,14 +105,24 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
     return () => { alive = false; };
   }, [account]);
 
+  // FUNIL DA DEMO — 'open' é o DENOMINADOR que faltava: quantos de fato entraram
+  // na degustação. Até aqui só a trava emitia evento, então dava pra contar quem
+  // BATIA nela sem saber de quantos. Roda 1x por sessão (dedupe no track).
+  useEffect(() => { if (demo) trackRtpDemo('open'); }, [demo]);
+
   const handleCreated = (next: RoadToProSave) => {
     setSaveError(!saveRtp(next));
     setSave(loadRtp()); // recarrega já estampado (createdAt/_v)
+    if (demo) trackRtpDemo('created'); // passou a peneira — o gargalo mais provável
   };
 
   // Atualização in-game (treino, ações, virada de semana): persiste e re-renderiza.
   const handleUpdate = (next: RoadToProSave) => {
     setSaveError(!saveRtp(next));
+    // FUNIL DA DEMO: só quando a semana REALMENTE vira — handleUpdate roda em
+    // treino, ação, transferência etc. É esta série que desenha a curva de
+    // desistência dentro da degustação (semana 2, 3 e a virada que trava).
+    if (demo && next.world.week !== save?.world.week) trackRtpDemo('week', next.world.week);
     setSave(next);
   };
 

@@ -26,6 +26,8 @@ interface Metrics {
   last24h: { type: string; n: string }[];
   hall: { campaigns: string; titles: string };
   byCountry?: { country: string; visits: string; visitors: string }[];
+  // funil da DEMO do RtP: sessões distintas por degrau, já ordenado pelo backend
+  rtpDemoFunnel?: { etapa: string; ord: number; sids: string }[];
 }
 
 const COUNTRY_NAME: Record<string, string> = {
@@ -187,6 +189,29 @@ export function MetricsPanel() {
                   <span className="country-name">{COUNTRY_NAME[c.country] ? ct(COUNTRY_NAME[c.country]) : c.country.toUpperCase()}</span>
                   <span className="country-bar"><i style={{ width: `${(Number(c.visitors) / max) * 100}%` }} /></span>
                   <span className="country-n">{c.visitors}</span>
+                </div>
+              ));
+            })()}
+            <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '14px 0 6px' }}>
+              🧪 {ct('Funil da DEMO do Road to Pro (30 dias)')}
+            </div>
+            {(() => {
+              const list = data.rtpDemoFunnel ?? [];
+              // percentual sempre contra quem ENTROU (degrau 1) — é o denominador
+              // que a demo não tinha. Sem ele, "bateu na trava" é um número solto.
+              const base = Number(list.find((s) => s.ord === 1)?.sids ?? 0);
+              if (list.length === 0 || list.every((s) => Number(s.sids) === 0)) {
+                return <div className="muted small">{ct('Sem dados da demo ainda — os degraus começam a contar depois do deploy desta versão.')}</div>;
+              }
+              return list.map((s) => (
+                <div key={s.ord} className="synergy-list">
+                  <div className="item">
+                    <span className="muted">{s.etapa}</span>
+                    <span className="pos">
+                      {s.sids}
+                      {base > 0 && s.ord !== 1 ? ` · ${Math.round((Number(s.sids) / base) * 100)}%` : ''}
+                    </span>
+                  </div>
                 </div>
               ));
             })()}
