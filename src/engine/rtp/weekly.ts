@@ -78,6 +78,9 @@ function livingCostFor(wage: number): number {
   return Math.max(LIVING_COST_MIN, Math.round(wage * LIVING_COST_WAGE_FRAC));
 }
 const WEEK_ENERGY_RECOVERY = 30;  // energia recuperada ao virar a semana
+// Preço mental de fechar a semana sem conseguir pagar o custo fixo da moradia.
+const BROKE_MORALE = 8;
+const BROKE_FOCUS = 5;
 
 const CATEGORY_LABEL: Record<TrainFocus, string> = {
   mechanical: 'Mecânica', mental: 'Mental', physical: 'Físico',
@@ -358,18 +361,30 @@ export function weeklyTick(life: RoadToProSave['life'], wage: number, setup: Set
   // Psicólogo: recuperação mental extra na deriva + mensalidade (retainer).
   // Moradia/casa da família (RTP v16): dormir bem também é performance.
   const { recoveryBonus } = setupConditionMods(setup);
-  const ls = lifestyle ? lifestyleWeeklyMods(lifestyle) : { energyBonus: 0, recoveryBonus: 0 };
-  const recovery = recoveryBonus + ls.recoveryBonus;
+  const ls = lifestyle ? lifestyleWeeklyMods(lifestyle) : { energyBonus: 0, recoveryBonus: 0, upkeep: 0 };
   const psych = psychDef(setup.psychTier ?? 0);
+
+  // CONTA NÃO PAGA (v16.1): a moradia cobra TODA semana, e o jogo não modela
+  // dívida (piso 0) — sem consequência, morar acima do próprio salário sairia de
+  // graça, bastava encostar no zero. Quem não fecha a conta perde o conforto que
+  // não pagou (bônus da casa zerado) e leva o preço mental do aperto.
+  //
+  // O gate `ls.upkeep > 0` é ESSENCIAL: sem ele a punição pegaria quem só ficou
+  // sem dinheiro (jogador de academia, recém-cortado com salário 0) e mudaria em
+  // silêncio o balance de todo save que nem casa tem. Só cobra quem ASSUMIU o
+  // custo fixo.
+  const balance = life.money + wage - livingCostFor(wage) - psych.retainer - ls.upkeep;
+  const broke = balance < 0 && ls.upkeep > 0;
+  const recovery = recoveryBonus + (broke ? 0 : ls.recoveryBonus);
   return {
     ...life,
-    energy: clamp(life.energy + WEEK_ENERGY_RECOVERY + ls.energyBonus, 0, 100),
+    energy: clamp(life.energy + WEEK_ENERGY_RECOVERY + (broke ? 0 : ls.energyBonus), 0, 100),
     fitness: clamp(life.fitness - 2 + fitnessHeal, 0, 100),
-    morale: clamp(life.morale + Math.round((60 - life.morale) * 0.2) + recovery, 0, 100),
-    focus: clamp(life.focus + Math.round((65 - life.focus) * 0.2) + recovery, 0, 100),
+    morale: clamp(life.morale + Math.round((60 - life.morale) * 0.2) + recovery - (broke ? BROKE_MORALE : 0), 0, 100),
+    focus: clamp(life.focus + Math.round((65 - life.focus) * 0.2) + recovery - (broke ? BROKE_FOCUS : 0), 0, 100),
     fame: clamp(life.fame - 1, 0, 100),
     // piso 0: mesma invariante do applyLifeChoice — o jogo não modela dívida.
-    money: Math.max(0, life.money + wage - livingCostFor(wage) - psych.retainer),
+    money: Math.max(0, balance),
     flags,
   };
 }

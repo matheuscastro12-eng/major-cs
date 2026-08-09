@@ -298,3 +298,31 @@
 .rtm-daily-marathon.done.gS { border-left-color: var(--dl-t); box-shadow: 0 0 14px color-mix(in srgb, var(--dl-t) 30%, transparent); }
 .rtm-daily-marathon.done.gA { border-left-color: var(--dl-win); }
 .rtm-daily-marathon.done.gD { border-left-color: var(--dl-loss); }
+
+/* 📱 Convite de instalação na home (state/pwa.ts) — aparece só depois do
+   jogador ter jogado algo no dia. */
+.rtm-daily-install {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(216, 169, 67, .08);
+  border: 1px solid rgba(216, 169, 67, .32);
+}
+.rtm-daily-install-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rtm-daily-install-txt b { font-size: .92rem; }
+.rtm-daily-install-txt span { font-size: .76rem; opacity: .75; }
+.rtm-daily-install-acts { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.rtm-daily-install-go {
+  padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  border: none; background: var(--em-gold, #d8a943); color: #171a1e;
+  font-weight: 800; font-size: .82rem; font-family: inherit;
+}
+.rtm-daily-install-no {
+  background: none; border: none; padding: 4px; cursor: pointer;
+  color: inherit; opacity: .6; font-size: .76rem; font-family: inherit;
+  text-decoration: underline;
+}
+@media (max-width: 460px) {
+  .rtm-daily-install-acts { width: 100%; margin-left: 0; }
+  .rtm-daily-install-go { flex: 1; }
+}

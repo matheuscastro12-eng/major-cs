@@ -38,20 +38,28 @@ export interface HousingDef {
   icon: RtpIconName;
   blurb: string;
   price: number;           // custo pra COMPRAR este nível (0 = ponto de partida)
+  upkeep: number;          // R$/semana de custo fixo (aluguel, condomínio, contas)
   energyBonus: number;     // +energia na virada da semana
   recoveryBonus: number;   // +deriva semanal de moral/foco (soma ao do psicólogo)
 }
 
+// O `upkeep` é o que impede a moradia de saturar como os periféricos: comprar é
+// evento único, MORAR é compromisso. Calibrado em ~8-20% do TIER_WAGE do tier em
+// que aquela casa faz sentido (academy 1k / access 3k / challenger 9k / elite 26k
+// por semana, ver transfers.ts) — dá pra sustentar no tier certo e DÓI acima dele.
+// Deliberadamente longe do salário cheio: a mansão custando 22k/sem (o valor que
+// eu tinha chutado antes de olhar a tabela) deixava o elite no vermelho toda
+// semana, mesmo sem psicólogo.
 export const HOUSING_TIERS: HousingDef[] = [
-  { tier: 0, label: 'Quarto na casa dos pais', icon: 'home', price: 0, energyBonus: 0, recoveryBonus: 0,
+  { tier: 0, label: 'Quarto na casa dos pais', icon: 'home', price: 0, upkeep: 0, energyBonus: 0, recoveryBonus: 0,
     blurb: 'Cama, PC e pôster na parede. Todo mundo começa de algum lugar.' },
-  { tier: 1, label: 'Kitnet própria', icon: 'home', price: 45000, energyBonus: 2, recoveryBonus: 1,
+  { tier: 1, label: 'Kitnet própria', icon: 'home', price: 45000, upkeep: 250, energyBonus: 2, recoveryBonus: 1,
     blurb: 'Seu primeiro canto. Silêncio pra dormir e treinar sem hora pra parar.' },
-  { tier: 2, label: 'Apê gamer', icon: 'home', price: 220000, energyBonus: 4, recoveryBonus: 2,
+  { tier: 2, label: 'Apê gamer', icon: 'home', price: 220000, upkeep: 800, energyBonus: 4, recoveryBonus: 2,
     blurb: 'Quarto de setup dedicado, ar-condicionado e cadeira que não range.' },
-  { tier: 3, label: 'Cobertura', icon: 'home', price: 750000, energyBonus: 6, recoveryBonus: 3,
+  { tier: 3, label: 'Cobertura', icon: 'home', price: 750000, upkeep: 2200, energyBonus: 6, recoveryBonus: 3,
     blurb: 'Vista da cidade, academia no prédio e paz de campeão.' },
-  { tier: 4, label: 'Mansão com sala de treino', icon: 'trophy', price: 2400000, energyBonus: 8, recoveryBonus: 4,
+  { tier: 4, label: 'Mansão com sala de treino', icon: 'trophy', price: 2400000, upkeep: 5000, energyBonus: 8, recoveryBonus: 4,
     blurb: 'Sala de treino profissional em casa. O bootcamp é no SEU endereço.' },
 ];
 
@@ -97,11 +105,12 @@ export function investWeekTick(save: RoadToProSave): RoadToProSave {
 // ─────────────────────────────────────────────────────────────────────────────
 // Efeitos semanais agregados (consumidos pelo weeklyTick)
 
-export function lifestyleWeeklyMods(ls: LifestyleState): { energyBonus: number; recoveryBonus: number } {
+export function lifestyleWeeklyMods(ls: LifestyleState): { energyBonus: number; recoveryBonus: number; upkeep: number } {
   const h = housingDef(ls.housing);
   return {
     energyBonus: h.energyBonus,
     recoveryBonus: h.recoveryBonus + (ls.familyHome ? FAMILY_HOME_RECOVERY : 0),
+    upkeep: h.upkeep,
   };
 }
 
