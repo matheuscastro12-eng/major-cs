@@ -13,6 +13,13 @@ const cut = (v: unknown, n: number) => String(v ?? '').slice(0, n);
 // cria a tabela 1x por instância, não em todo POST de telemetria (evita 1 round-trip
 // ao Neon por erro reportado). CREATE ... IF NOT EXISTS segue idempotente.
 let schemaReady = false;
+
+// CUSTO NEON: a retenção de 90 dias vinha grudada no INSERT, então cada erro
+// reportado varria client_errors inteira (36k linhas, 38 MB, sem índice em ts)
+// pra apagar ZERO linha — ~661 MILHÕES de tuplas lidas à toa. Agora: throttled
+// 1x/12h por instância, apoiada em idx_client_errors_ts.
+let lastRetentionAt = 0;
+const RETENTION_MS = 12 * 60 * 60_000;
 async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
   if (schemaReady) return;
   await sql`CREATE TABLE IF NOT EXISTS client_errors (
@@ -42,11 +49,12 @@ export default async function handler(
     const ccHeader = req.headers?.['x-vercel-ip-country'];
     const country = cut(Array.isArray(ccHeader) ? ccHeader[0] : ccHeader, 2).toLowerCase();
     try {
-      await sql`WITH inserted AS (
-        INSERT INTO client_errors (sid, kind, message, stack, page, ua, country)
-        VALUES (${cut(body.sid, 40)}, ${cut(body.kind, 20)}, ${message}, ${cut(body.stack, 2000)}, ${cut(body.url, 300)}, ${cut(body.ua, 300)}, ${country})
-        RETURNING 1
-      ) DELETE FROM client_errors WHERE ts < now() - interval '90 days'`;
+      await sql`INSERT INTO client_errors (sid, kind, message, stack, page, ua, country)
+        VALUES (${cut(body.sid, 40)}, ${cut(body.kind, 20)}, ${message}, ${cut(body.stack, 2000)}, ${cut(body.url, 300)}, ${cut(body.ua, 300)}, ${country})`;
+      if (Date.now() - lastRetentionAt > RETENTION_MS) {
+        lastRetentionAt = Date.now();
+        await sql`DELETE FROM client_errors WHERE ts < now() - interval '90 days'`;
+      }
       res.status(200).json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: String(e) });
