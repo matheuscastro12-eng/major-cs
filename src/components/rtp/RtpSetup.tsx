@@ -161,12 +161,14 @@ function LifestyleSection({ save, onUpdate, onFlash }: {
         <div className="rtp-psych-stats">
           <div><span>{ct('Energia/sem')}</span><b>+{house.energyBonus}</b></div>
           <div><span>{ct('Recuperação')}</span><b>+{house.recoveryBonus}</b></div>
-          <div><span>{ct('Nível')}</span><b>{ls.housing}/4</b></div>
+          {/* custo fixo no lugar do "nível": morar é compromisso, e o jogador
+              precisa VER a conta que assumiu — não descobrir na virada da semana */}
+          <div><span>{ct('Custo fixo')}</span><b>{house.upkeep > 0 ? `${money(house.upkeep)}/${ct('sem')}` : '—'}</b></div>
         </div>
         {nextHouse ? (
           <button type="button" className="rtp-psych-cta rtp-lift" disabled={save.life.money < nextHouse.price} onClick={() => run(buyHousing(save))}>
             {ct('Mudar pra')} {nextHouse.label} · {money(nextHouse.price)}
-            <small>+{nextHouse.energyBonus} {ct('energia')} · +{nextHouse.recoveryBonus} {ct('recuperação por semana')}</small>
+            <small>+{nextHouse.energyBonus} {ct('energia')} · {money(nextHouse.upkeep)}/{ct('sem')} {ct('de custo fixo')}</small>
           </button>
         ) : (
           <button type="button" className="rtp-psych-cta" disabled><RtpIcon name="check" size={13} /> {ct('Morando no topo')}</button>

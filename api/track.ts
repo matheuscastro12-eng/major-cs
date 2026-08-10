@@ -19,6 +19,9 @@ const ALLOWED_TYPES = new Set([
   'checkout_abandon', // {src, method, secondsOpen} — QR Pix fechado sem pagar
   'signup_start',     // {src} — submit do cadastro pré-pagamento
   'signup_done',      // {src} — cadastro criado (rtm_pending_signups/conta)
+  // funil da DEMO do Road to Pro (iter47): {step: 'open'|'created'|'week', week?}
+  // — o denominador que faltava pra medir a conversão da demo grátis
+  'rtp_demo',
 ]);
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();

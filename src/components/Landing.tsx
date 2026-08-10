@@ -264,6 +264,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  // confirmação + revelar: só no cadastro (ver comentário no campo)
+  const [pw2, setPw2] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [accepted, setAccepted] = useState(false);
@@ -317,7 +320,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   // então não precisamos mais de inline style nos campos.
   const input: CSSProperties = { width: '100%' };
   const lbl: CSSProperties = { fontSize: '0.72rem', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--em-muted)', display: 'block', marginBottom: '6px' };
-  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6 && (mode === 'login' || accepted);
+  const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
+  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6
+    && (mode === 'login' || (accepted && pw === pw2));
   const go = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
@@ -414,9 +419,38 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
           <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
-          <div><label style={lbl}>{ct('Senha')}</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} /></div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+              <label style={lbl}>{ct('Senha')}</label>
+              <button type="button" onClick={() => setShowPw((v) => !v)}
+                style={{ background: 'none', border: 'none', padding: 0, marginBottom: '6px', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.7rem', fontFamily: 'inherit' }}>
+                {showPw ? ct('ocultar') : ct('mostrar')}
+              </button>
+            </div>
+            <input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type={showPw ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} />
+          </div>
+          {/* Confirmação só no CADASTRO: um typo aqui cria uma conta com senha que
+              ninguém conhece. O reset por e-mail existe e resolve, mas obriga quem
+              acabou de PAGAR a passar por recuperação antes de jogar — atrito no
+              pior momento possível. Confirmar + revelar mata o erro na origem. */}
+          {mode === 'signup' && (
+            <div>
+              <label style={lbl}>{ct('Confirme a senha')}</label>
+              <input
+                style={{ ...input, ...(pwMismatch ? { borderColor: '#e2574c' } : null) }}
+                value={pw2}
+                onChange={(e) => setPw2(e.target.value)}
+                placeholder={ct('digite a senha de novo')}
+                type={showPw ? 'text' : 'password'}
+                autoComplete="new-password"
+                aria-invalid={pwMismatch}
+                onKeyDown={(e) => e.key === 'Enter' && go()}
+              />
+              {pwMismatch && <p style={{ color: '#e2574c', fontSize: '0.74rem', margin: '6px 0 0' }}>{ct('As senhas não são iguais.')}</p>}
+            </div>
+          )}
           {mode === 'login' && (
-            <button type="button" onClick={() => { setMode('reset'); setResetStep('ask'); setErr(''); setInfo(''); }}
+            <button type="button" onClick={() => { setMode('reset'); setResetStep('ask'); setErr(''); setInfo(''); setPw2(''); }}
               style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, color: 'var(--em-muted)', cursor: 'pointer', fontSize: '0.76rem', textDecoration: 'underline', fontFamily: 'inherit' }}>
               {ct('Esqueci minha senha')}
             </button>
@@ -532,7 +566,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         ) : (
           <>
             {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
-            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
+            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); setPw2(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
           </>
         )}
       </p>
