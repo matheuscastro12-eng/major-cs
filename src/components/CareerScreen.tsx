@@ -4,7 +4,7 @@
 // em três stages suíços mais Champions Stage. A interface usa PT como fonte e
 // traduz as strings da carreira com ct().
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
+import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles, orgRefSynergy } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
 import { teamSeasonToTTeam } from '../engine/ratings';
@@ -1873,7 +1873,19 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 // Com isso: time bom recém-montado entra no meio-baixo da tabela; temporada
 // ruim faz o save.vrs decair e o time DESPENCA pro piso; só chega a #1 quem
 // vence de verdade (Tier 1 + Major), não quem ganhou um campeonato de acesso.
-function userBaseVrsFor(teamwork: number): number {
+// Semente do VRS do jogador. Os dois caminhos da carreira precisam de curvas
+// DIFERENTES, porque `teamwork` significa coisas diferentes em cada um:
+//
+// TAKEOVER — você herda a posição REAL da org. Mesma expressão do aiTeamVrs e
+//   mesmo id, então assumir a Yawara te deixa EXATAMENTE onde ela estava (o
+//   jitter `hash % 55` importa: vrsCore tem piso em teamwork 61, e sem ele todo
+//   time fraco empata em 0 e o jogador cai pro último lugar).
+// DRAFT / org nova — mantém a curva própria, mais achatada. O teamwork de um
+//   elenco recém-montado NÃO é um rating holístico; passá-lo pelo vrsCore o
+//   leria como se a org já tivesse resultado, e um time novo (teamwork ~90)
+//   estrearia perto do #3 do mundo.
+function userBaseVrsFor(teamwork: number, takeoverOrg?: TeamSeason): number {
+  if (takeoverOrg) return Math.round(vrsCore(teamwork) + (hashStr(takeoverOrg.id) % 55));
   return Math.round(Math.max(0, teamwork - 60) * 14);
 }
 // LEGADO: dominância sustentada (Majors vencidos + títulos tier-1) deixa uma marca
@@ -1888,12 +1900,15 @@ function userLegacyVrs(save: CareerSave): number {
 // ranking. Versão self-contained pra telas que não têm o buildTeam no closure.
 function userVrsTotal(save: CareerSave, findSigning: (s: Signing) => ResolvedSigning | null, coaches: TeamSeason[]): number {
   const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
-  let teamwork = 78;
+  // mesma herança do buildTeam — este caminho alimenta o VRS dos patrocínios,
+  // e divergir dele faria a oferta usar um ranking diferente do exibido.
+  const org = save.takeoverId ? coaches.find((t) => t.id === save.takeoverId) : undefined;
+  let teamwork = org?.teamwork ?? 78;
   if (save.org && picks.length >= 5 && save.coachFromId) {
     const coach = coaches.find((t) => t.id === save.coachFromId)?.coach ?? ROOKIE_COACH;
-    teamwork = buildUserTeam(save.org.name, picks.slice(0, 5), coach).teamwork;
+    teamwork = buildUserTeam(save.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0).teamwork;
   }
-  return userBaseVrsFor(teamwork) + (save.vrs ?? 0) + userLegacyVrs(save);
+  return userBaseVrsFor(teamwork, org) + (save.vrs ?? 0) + userLegacyVrs(save);
 }
 // Região de circuito no modo carreira (Américas N/S/Central = uma só). Tipos e
 // helpers ficam em data/regions.ts (compartilhados com as bandeiras).
@@ -2915,7 +2930,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const roleOf = (oid: string): Role | undefined => save.roles?.[oid];
   const syncUser = (team: TTeam): TTeam => {
     if (!team.isUser) return team;
-    const t = resyncUserRoles(team, roleOf);
+    // herda o entrosamento da org assumida (ver buildTeam) — senão o resync
+    // reestampava o 78 do draft e desfazia o fix no meio do split.
+    const org = save.takeoverId ? currentEra.find((ct2) => ct2.id === save.takeoverId) : undefined;
+    const t = resyncUserRoles(team, roleOf, org?.teamwork, org ? orgRefSynergy(org) : 0);
     // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
     // meio do split — o snapshot da liga não saberia sozinho)
     const synced: TTeam = {
@@ -3473,7 +3491,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const coach = s.coachFromId === '__custom__' && s.customCoach
       ? s.customCoach
       : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
-    const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach);
+    // TAKEOVER herda o entrosamento real da org (o 78 do buildUserTeam é a
+    // premissa do draft). Sem isso, assumir a Yawara (teamwork 60) já a
+    // promovia no ranking sem jogar nada — o teamwork é a semente do VRS.
+    const org = s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined;
+    const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0);
     return {
       ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo,
       mapPrefs: { ...team.mapPrefs, ...(s.mapTraining ?? {}) }, // domínio treinado por mapa
@@ -4291,7 +4313,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       .filter((t) => t.id !== 'user' && t.id !== s.takeoverId)
       .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t) }))
       .sort((a, b) => b.vrs - a.vrs);
-    const userVrs = userBaseVrsFor(user.teamwork) + s.vrs + userLegacyVrs(s);
+    const userVrs = userBaseVrsFor(user.teamwork, s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined) + s.vrs + userLegacyVrs(s);
     const userRank = aiSorted.filter((x) => x.vrs > userVrs).length + 1; // posição mundial
     const userStage = userRank <= 8 ? 3 : userRank <= 16 ? 2 : 1;
     const field: TTeam[] = aiSorted.map((x) => x.tt).slice(0, 31);
@@ -4571,7 +4593,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const orgPlayers = ut?.players ?? [];
     if (orgPlayers.length && save.org) {
       const reg = save.region ?? macroRegionPlurality(orgPlayers.map((p) => p.country));
-      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userBaseVrsFor(ut?.teamwork ?? 78) + save.vrs + userLegacyVrs(save), isUser: true });
+      const takeoverOrg = save.takeoverId ? currentEra.find((t) => t.id === save.takeoverId) : undefined;
+      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userBaseVrsFor(ut?.teamwork ?? takeoverOrg?.teamwork ?? 78, takeoverOrg) + save.vrs + userLegacyVrs(save), isUser: true });
     }
     const groups = new Map<CareerRegion, Row[]>();
     for (const r of rows) {
@@ -5403,7 +5426,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // Some VRS vencendo partidas e indo longe; sua posição é base do elenco + ganhos.
     // Projeta o VRS já com o ganho DESTE split pra decidir a vaga no fim da temporada.
     const projectedEventVrs = applyCareerVrsDecay(save.vrs, vrsGain);
-    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? 78) + projectedEventVrs + userLegacyVrs(save);
+    const projOrg = save.takeoverId ? currentEra.find((t) => t.id === save.takeoverId) : undefined;
+    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? projOrg?.teamwork ?? 78, projOrg) + projectedEventVrs + userLegacyVrs(save);
     const worldRank = oppEra.filter((t) => aiTeamVrs(t) > userProjVrs).length + 1; // posição mundial projetada
     const rankQualified = worldRank <= MAJOR_VRS_CUT;
     const majorNow = isMajorSplit(save.split) && lastEvent; // Major só na última etapa do split de Major

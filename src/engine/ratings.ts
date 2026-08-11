@@ -162,6 +162,19 @@ export function teamStrengthFromPlayers(players: TPlayer[], teamwork: number): n
   return avgSkill * 0.72 + teamwork * 0.28 + awpBonus + iglBonus;
 }
 
+// Sinergia de REFERÊNCIA de uma org real (elenco titular original).
+//
+// O `teamwork` de um time da base já é holístico — ele embute composição, rotina
+// e entrosamento. Somar a sinergia do elenco EM CIMA dele conta duas vezes: era
+// por isso que assumir a Yawara (teamwork 60) devolvia 72, e não 60.
+//
+// Passando esta referência, o elenco INTACTO devolve exatamente o teamwork real
+// da org, e só o que o técnico MUDA no elenco move o número — pra cima ou pra
+// baixo. No draft a referência é 0, porque lá não existe elenco anterior.
+export function orgRefSynergy(t: TeamSeason): number {
+  return draftSynergy(t.players.slice(0, 5).map((p) => toTPlayer(p))).total;
+}
+
 export interface SynergyReport {
   total: number;
   items: { label: string; value: number }[];
@@ -265,7 +278,11 @@ export function coachBaseBonus(coach: Coach): number {
 // pré-jogo. Isto reescreve a função de cada jogador e recalcula sinergia/força
 // preservando o estado da temporada (vitórias, saldo, forma). O id de runtime é
 // "user__<idOriginal>", então a busca de função usa o id original.
-export function resyncUserRoles(user: TTeam, roleOf: (originalId: string) => Role | undefined): TTeam {
+// `baseTeamwork`: igual ao buildUserTeam — 78 é a premissa do draft, e quem
+// assumiu uma org passa o teamwork REAL dela. Sem este parâmetro, trocar a
+// função de um jogador no meio do split reestampava 78 e desfazia a herança do
+// takeover (o fix valeria no começo e regrediria na virada de temporada).
+export function resyncUserRoles(user: TTeam, roleOf: (originalId: string) => Role | undefined, baseTeamwork = 78, refSynergy = 0): TTeam {
   let changed = false;
   const players = user.players.map((p) => {
     const oid = p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id;
@@ -275,7 +292,7 @@ export function resyncUserRoles(user: TTeam, roleOf: (originalId: string) => Rol
   });
   if (!changed) return user;
   const synergy = draftSynergy(players);
-  const teamwork = 78 + Math.max(-14, Math.min(12, synergy.total * 1.2));
+  const teamwork = baseTeamwork + Math.max(-14, Math.min(12, (synergy.total - refSynergy) * 1.2));
   const strength = teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(user.coach) - DREAM_TEAM_MALUS;
   return { ...user, players, teamwork, strength };
 }
@@ -298,7 +315,13 @@ export function refreshUserTeam(user: TTeam): TTeam {
   };
 }
 
-export function buildUserTeam(name: string, picks: { player: Player; from: TeamSeason }[], coach: Coach): TTeam {
+// `baseTeamwork`: entrosamento de base do time. O default 78 é a premissa do
+// DRAFT — dream team recém-montado, sem rotina, que por isso também leva o
+// DREAM_TEAM_MALUS. Quem ASSUME uma org existente na carreira passa o teamwork
+// REAL dela aqui: antes o 78 era estampado em cima, então pegar um time fraco
+// (Yawara, teamwork 60) já promovia a org de graça no ranking mundial, antes de
+// jogar uma partida — o `teamwork` é a semente do VRS.
+export function buildUserTeam(name: string, picks: { player: Player; from: TeamSeason }[], coach: Coach, baseTeamwork = 78, refSynergy = 0): TTeam {
   const players = picks.map(({ player, from }) =>
     toTPlayer(player, {
       runtimeId: `user__${player.id}`,
@@ -310,7 +333,7 @@ export function buildUserTeam(name: string, picks: { player: Player; from: TeamS
     }),
   );
   const synergy = draftSynergy(players);
-  const teamwork = 78 + Math.max(-14, Math.min(12, synergy.total * 1.2));
+  const teamwork = baseTeamwork + Math.max(-14, Math.min(12, (synergy.total - refSynergy) * 1.2));
   const mapPrefs = fullMapPrefs('MIX', {});
   const strength = teamStrengthFromPlayers(players, teamwork) + synergy.total * 0.7 + coachBaseBonus(coach) - DREAM_TEAM_MALUS;
   // país do time = nacionalidade predominante do elenco (não fixo 'br'), pra a
