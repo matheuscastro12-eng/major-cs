@@ -5916,6 +5916,41 @@ tr.fin-expiring { background: rgba(212,164,65,0.1); }
 .account-delete-confirm { border: 0; border-radius: var(--rtm-radius); padding: 9px 18px; background: #8d3434; color: #fff; font: 700 13px var(--rtm-font-cond); text-transform: uppercase; letter-spacing: .8px; cursor: pointer; }
 .account-delete-confirm:disabled { opacity: .4; cursor: not-allowed; }
 
+/* banner de patrocínio real, fixo no rodapé (sempre visível). Removido junto com
+   a G4 em 70ac50d e restaurado para a COPA ACE — os seletores has-ad-footer da
+   carreira (career-dashboard.css) voltam a ter efeito com a classe no ar. */
+.ad-footer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(0deg, rgba(10,12,16,0.97), rgba(10,12,16,0.82));
+  border-top: 1px solid var(--gold);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  backface-visibility: hidden;
+  contain: layout paint;
+  isolation: isolate;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+.ad-footer-meta { width: min(970px, 100%); display: flex; align-items: center; justify-content: space-between; gap: 10px; line-height: 1; }
+.ad-footer-label {
+  font-size: 0.58rem; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--muted); opacity: 0.55; line-height: 1;
+}
+.ad-footer-link { display: block; line-height: 0; max-width: 100%; contain: paint; }
+.ad-footer-link img {
+  display: block; width: 970px; max-width: 100%; height: auto; border-radius: 6px;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+/* reserva espaço no rodapé só quando o banner está no ar (classe ligada pelo React).
+   Mantido nos 126px do G4 de propósito: sem a linha do aviso 18+ o bloco ficou
+   ~114px, então 126 deixa uma folga inofensiva. Apertar isso pro valor exato
+   troca "sobra um vão" por "corta 2px de conteúdo" — risco assimétrico à toa. */
+body.has-ad-footer { padding-bottom: 126px; }
+
 @media (max-width: 640px) {
   .landing-legal-footer { justify-content: center; text-align: center; }
   .landing-legal-footer > span:nth-child(2) { text-align: center; }
