@@ -1,18 +1,47 @@
 # Banners de patrocínio (rodapé sempre visível)
 
-Patrocinador atual: **G4 Skins** — código `RTMBRASIL`.
-Link de destino (constante `DEST` em `src/components/AdBanner.tsx`): https://g4skins.com/ref/RTMBRASIL
+Patrocinador atual: **COPA ACE** — campeonato de CS2 (R$1.500 de premiação,
+inscrição R$150, 16 times, formato suíço na FACEIT, início **20.08**).
 
-Arquivos usados pelo componente (caminhos referenciados em `AdBanner.tsx`):
+Componente: `src/components/AdBanner.tsx`. Constantes que você edita lá:
+
+| Constante | O que faz |
+|---|---|
+| `DEST` | link de destino. **Vazio = o banner não aparece** (banner sem link é poluição, e link errado manda o jogador pro lugar errado) |
+| `RETIRE_AFTER` | data ISO em que o banner se aposenta sozinho. `null` desliga |
+| `SPONSOR` | rótulo usado na telemetria (`ad_click`) |
+
+## Arquivos
+
+Ficam em `ads/<patrocinador>/`. Os do patrocinador atual:
 
 | Arquivo | Tamanho | Uso |
 |---|---|---|
-| `970x90.jpg` | 970×90 | desktop (obrigatório) |
-| `1940x180.jpg` | 1940×180 | desktop retina (2x) |
-| `728x90.jpg` | 728×90 | tablet / largura intermediária (≤820px) |
-| `320x50.jpg` | 320×50 | mobile (obrigatório) |
-| `650x100.jpg` | 650×100 | mobile retina (2x) |
+| `ace10/970x90.jpg` | 970×90 | desktop (obrigatório) |
+| `ace10/1940x180.jpg` | 1940×180 | desktop retina (2x) |
+| `ace10/728x90.jpg` | 728×90 | tablet / largura intermediária (≤820px) |
+| `ace10/320x50.jpg` | 320×50 | mobile (obrigatório) |
+| `ace10/640x100.jpg` | 640×100 | mobile retina (2x exato de 320×50) |
 
-- Mantenha cada arquivo abaixo de ~150KB (o `1940x180.jpg` está em ~270KB; ok, mas dá pra otimizar).
-- Se um arquivo referenciado faltar, o banner **se esconde sozinho** (nada quebra).
-- Para trocar de patrocinador: substitua as imagens e a constante `DEST` em `AdBanner.tsx`.
+Todos abaixo de 55KB — bem folgado no limite de ~150KB.
+
+## Convenções aprendidas
+
+- **O 2x tem que ser 2x exato.** O set antigo da G4 usava `650x100` como retina
+  de `320×50`, o que não fecha; o da Copa ACE usa `640x100`, que fecha.
+- **Se um arquivo referenciado faltar, o banner se esconde sozinho** (`onError`).
+  Nada quebra.
+- **Aviso etário é por patrocinador, não fixo.** O banner da G4 (site de caixas)
+  carregava "18+ · caixas com itens aleatórios · não destinado a menores". A Copa
+  ACE é campeonato, então esse aviso saiu. Se voltar um patrocinador de aposta ou
+  caixa, o aviso volta com ele.
+- O rótulo **"publicidade"** fica sempre, em qualquer patrocinador.
+- `body.has-ad-footer` reserva o `padding-bottom` (112px). Os seletores da
+  carreira em `career-dashboard.css` dependem dessa classe e ficam inertes
+  quando não há banner no ar.
+
+## Arquivos legados
+
+`320x50.jpg`, `650x100.jpg`, `728x90.jpg`, `970x90.jpg` e `1940x180.jpg` na raiz
+são criativos da **G4 Skins** (patrocínio encerrado, componente removido em
+`70ac50d`). Não são referenciados por nada — dá pra apagar quando quiser.
