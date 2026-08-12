@@ -3,6 +3,9 @@
 Patrocinador atual: **COPA ACE** — campeonato de CS2 (R$1.500 de premiação,
 inscrição R$150, 16 times, formato suíço na FACEIT, início **20.08**).
 
+- Destino: <https://aceprodutora.com.br/inscreva-se>
+- Aposenta em **2026-08-20** (data impressa no criativo)
+
 Componente: `src/components/AdBanner.tsx`. Constantes que você edita lá:
 
 | Constante | O que faz |

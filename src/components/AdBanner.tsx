@@ -17,9 +17,9 @@ import { useEffect, useState } from 'react';
 import { getLang } from '../state/i18n';
 import { track } from '../state/track';
 
-// ⚠️ PREENCHER: link de inscrição da Copa ACE. Enquanto estiver vazio o banner
-// não aparece (ver trava 2 acima).
-const DEST = '';
+// Link de inscrição da Copa ACE (fornecido pelo patrocinador). Se algum dia
+// ficar vazio, o banner simplesmente não aparece (ver trava 2 acima).
+const DEST = 'https://aceprodutora.com.br/inscreva-se';
 
 const SPONSOR = 'copa-ace';
 
