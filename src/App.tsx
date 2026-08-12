@@ -296,6 +296,15 @@ export default function App() {
   const [dataset, setDataset] = useState<TeamSeason[]>(() => loadDataset());
   const [screen, setScreen] = useState<Screen>(() => routeFromLocation().screen);
   const [bannerPreview, setBannerPreview] = useState(() => routeFromLocation().bannerPreview);
+  // funil: as travas dentro do app (home-rtp, home-ultimate, mkt-lock, perfil,
+  // leaderboard...) mandavam pra tela cheia da landing e o usuário precisava
+  // achar OUTRO botão pra abrir o modal de conta — um clique a mais que o
+  // upsell-card (que abre o pagamento inline) não tem. Dado real (paywall_view
+  // x checkout_open, 28d): essas travas convertem 0-1.6%, upsell-card 2.2%.
+  // landingAutoOpen pula esse passo: a landing já monta com o modal aberto.
+  const [landingAutoOpen, setLandingAutoOpen] = useState(false);
+  useEffect(() => { if (screen !== 'landing') setLandingAutoOpen(false); }, [screen]);
+  const goToCheckout = () => { setLandingAutoOpen(true); setScreen('landing'); };
   const { account, ready: accountReady, refresh: refreshAccount, logout } = useAccount();
   // Modo convidado do Ultimate: quem NÃO tem conta pode entrar e jogar mesmo
   // assim (o save do Ultimate é local), correndo o risco de perder o progresso.
@@ -878,7 +887,7 @@ export default function App() {
   if (screen === 'landing') {
     return (
       <>
-        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP} />
+        <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} />
         {!bannerPreview && <AdBanner />}
       </>
     );
@@ -902,7 +911,7 @@ export default function App() {
           account={account}
           onBack={() => setScreen('home')}
           onEdit={() => setScreen('setup')}
-          onUpgrade={() => { setCheckoutSrc('profile'); setScreen('landing'); }}
+          onUpgrade={() => { setCheckoutSrc('profile'); goToCheckout(); }}
           onManageSaves={account?.paid ? () => setScreen('careerSaves') : undefined}
           onAccountDeleted={() => {
             logout();
@@ -918,7 +927,7 @@ export default function App() {
   if (screen === 'leaderboard') {
     return (
       <main className="page" style={{ paddingTop: 24 }}>
-        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); setScreen('landing'); }} />
+        <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
       </main>
     );
   }
