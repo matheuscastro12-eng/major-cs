@@ -30,6 +30,8 @@ export type TalkTone = 'firm' | 'friendly' | 'motivational';
 export interface TalkOutcome {
   /** Delta na moral do player específico. */
   moraleDelta: number;
+  /** #31: delta no VÍNCULO com o treinador (coachBond) — a relação é um eixo à parte da moral. */
+  bondDelta: number;
   /** Narrativa do resultado (1-2 frases) */
   outcome: string;
   /** Ícone visual (emoji-free — usado por CareerIcon name='check'/'warning'/etc). */
@@ -55,6 +57,10 @@ export interface PlayerTalkState {
    *  Opcional pra retrocompat — se ausente, reação é "neutra" (sem
    *  personalityTalkResponse). */
   playerId?: string;
+  /** #31: vínculo atual com o treinador (0-100). Coach respeitado (≥60) pode
+   *  ser firme sem explodir; vínculo raso (<35) faz o tom firme sair MAIS caro.
+   *  Opcional pra retrocompat — sem valor, nenhum gate é aplicado. */
+  currentBond?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +155,20 @@ export function resolvePlayerTalk(
     delta = personalityTalkResponse(state.playerId, topic, tone, delta);
   }
 
+  // #31 — o VÍNCULO gateia a firmeza: coach respeitado pode cobrar sem explodir;
+  // coach sem crédito cobra e a conversa azeda.
+  const bond = state.currentBond;
+  if (bond != null && tone === 'firm') {
+    if (bond >= 60 && delta < 0) delta += 2;   // relação forte absorve a bronca
+    if (bond < 35) delta -= 2;                 // sem crédito, firmeza vira atrito
+  }
+
+  // #31 — a conversa também move a RELAÇÃO (eixo separado da moral): acertar o
+  // tom constrói vínculo; errar corrói. Elogio e defesa pública constroem mais.
+  let bondDelta = isIdeal ? 8 : delta >= 0 ? 3 : -4;
+  if (topic === 'praise' || topic === 'defend') bondDelta += 2;
+  if (bond != null && bond < 35 && tone === 'firm' && !isIdeal) bondDelta -= 2;
+
   const toneCat: TalkOutcome['tone'] = delta >= 4 ? 'positive' : delta <= -1 ? 'negative' : 'neutral';
   const outcomeText = buildOutcomeText(topic, tone, delta, state.playerId ? playerPersonality(state.playerId) : undefined, toneCat);
 
@@ -157,6 +177,7 @@ export function resolvePlayerTalk(
     toneUsed: tone,
     outcome: {
       moraleDelta: delta,
+      bondDelta,
       outcome: outcomeText,
       tone: toneCat,
     },

@@ -17,6 +17,9 @@ import { TIER_NAME, type SeasonEndResult } from '../../engine/rtp/league';
 import { applyLifeChoice } from '../../engine/rtp/lifeEvents';
 import { acceptOffer, negotiateOffer, declineOffers } from '../../engine/rtp/transfers';
 import { RtpLegacy } from './RtpLegacy';
+import { RtpDailySeries } from './RtpDailySeries';
+import { RtpDemoGate, DEMO_WEEKS } from './RtpDemoGate';
+import { trackRtpDemo } from '../../state/track';
 import { makeRng } from '../../engine/rng';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
@@ -60,11 +63,15 @@ function eventMessage(ev: EventEnd): string {
 
 // Entrada única do modo Road to Pro. Decide entre criação e hub conforme exista
 // (ou não) um save. App.tsx só precisa montar este componente numa screen.
-export function RoadToPro({ onExit }: { onExit: () => void }) {
+// `demo`: modo DEGUSTAÇÃO (conta grátis/deslogado) — peneira + DEMO_WEEKS
+// semanas jogáveis; depois a RtpDemoGate trava com o CTA da vitalícia. O save
+// é o mesmo formato do completo: comprou → continua daqui (e sobe pra nuvem).
+export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => void; demo?: boolean; onUpgrade?: () => void }) {
   const [save, setSave] = useState<RoadToProSave | null>(() => loadRtp());
   const [booted, setBooted] = useState(false);
   const [playing, setPlaying] = useState(false);   // hub vs partida (liga)
   const [playingMajor, setPlayingMajor] = useState(false);   // partida do Major
+  const [dailyOpen, setDailyOpen] = useState(false);         // SÉRIE DO DIA (desafio global)
   const [notice, setNotice] = useState<RtpNotice | null>(null);
   // Resultado do SIMULAR (modal com placar + stats — não só uma notificação).
   const [simResult, setSimResult] = useState<{ result: ProMatchResult; consequence: MatchConsequence } | null>(null);
@@ -98,14 +105,24 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
     return () => { alive = false; };
   }, [account]);
 
+  // FUNIL DA DEMO — 'open' é o DENOMINADOR que faltava: quantos de fato entraram
+  // na degustação. Até aqui só a trava emitia evento, então dava pra contar quem
+  // BATIA nela sem saber de quantos. Roda 1x por sessão (dedupe no track).
+  useEffect(() => { if (demo) trackRtpDemo('open'); }, [demo]);
+
   const handleCreated = (next: RoadToProSave) => {
     setSaveError(!saveRtp(next));
     setSave(loadRtp()); // recarrega já estampado (createdAt/_v)
+    if (demo) trackRtpDemo('created'); // passou a peneira — o gargalo mais provável
   };
 
   // Atualização in-game (treino, ações, virada de semana): persiste e re-renderiza.
   const handleUpdate = (next: RoadToProSave) => {
     setSaveError(!saveRtp(next));
+    // FUNIL DA DEMO: só quando a semana REALMENTE vira — handleUpdate roda em
+    // treino, ação, transferência etc. É esta série que desenha a curva de
+    // desistência dentro da degustação (semana 2, 3 e a virada que trava).
+    if (demo && next.world.week !== save?.world.week) trackRtpDemo('week', next.world.week);
     setSave(next);
   };
 
@@ -142,6 +159,15 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
   // Carreira encerrada (aposentadoria): tela de legado. Tem prioridade sobre tudo.
   if (save.retired) {
     return <RtpLegacy save={save} onExit={onExit} onReset={() => { deleteRtp(); setSave(null); }} />;
+  }
+  // DEMO: a trava fecha quando a degustação acaba (ou quando o convidado
+  // tenta abrir a Série do Dia — exclusiva da vitalícia).
+  if (demo && (save.world.week > DEMO_WEEKS || dailyOpen)) {
+    return <RtpDemoGate save={save} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
+  }
+  // SÉRIE DO DIA: desafio global diário — fixture próprio, não toca no seu save.
+  if (dailyOpen) {
+    return <RtpDailySeries onExit={() => setDailyOpen(false)} />;
   }
   if (playing) {
     return (
@@ -234,6 +260,7 @@ export function RoadToPro({ onExit }: { onExit: () => void }) {
         onRetire={handleRetire}
         onUpdate={handleUpdate}
         onPlayMatch={() => { setNotice(null); setPlaying(true); }}
+        onDaily={() => setDailyOpen(true)}
         onAutoSim={handleAutoSim}
         onResolveEvent={(eventId, optionId) => handleUpdate(applyLifeChoice(save, eventId, optionId))}
         notice={saveError

@@ -72,8 +72,30 @@ export const PROMO_PACK: PackDef = {
   guaranteed: [{ bucket: 'special', count: 1 }],
 };
 
+// Pacote TOTW — como o Promo, fora de PACK_DEFS: a Loja o renderiza à parte com
+// o countdown semanal de totw.ts. O bucket 'special' dos weights só tem 'totw',
+// então a garantia resolve SEMPRE num in-form (do pool acumulado de semanas).
+export const TOTW_PACK: PackDef = {
+  id: 'totw', name: 'Pacote TOTW', desc: '5 cartas · 1 in-form da semana garantido',
+  cost: 30000, cards: 5, color: '#38bdf8',
+  weights: { gold: 26, rareGold: 36, elite: 24, legendary: 9, totw: 5 },
+  guaranteed: [{ bucket: 'special', count: 1 }],
+};
+
+// Pacote Ícone — o sink de endgame: caro, permanente, e a garantia 'special'
+// só resolve em 'histIcon' (único special dos weights). É o caminho pra tirar
+// GeT_RiGhT, cogu e cia. — as lendas NÃO caem em nenhum outro pack.
+export const ICON_PACK: PackDef = {
+  id: 'iconpack', name: 'Pacote Ícone', desc: '5 cartas · 1 Ícone Histórico garantido',
+  cost: 90000, cards: 5, color: '#ffd700',
+  weights: { elite: 52, legendary: 32, icon: 12, histIcon: 4 },
+  guaranteed: [{ bucket: 'special', count: 1 }],
+};
+
 export function packById(id: string): PackDef | undefined {
   if (id === PROMO_PACK.id) return PROMO_PACK;
+  if (id === TOTW_PACK.id) return TOTW_PACK;
+  if (id === ICON_PACK.id) return ICON_PACK;
   return PACK_DEFS.find((p) => p.id === id);
 }
 

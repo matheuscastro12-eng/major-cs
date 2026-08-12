@@ -9,6 +9,8 @@ import type { DashTask } from '../../state/career-tasks';
 import { Flag, TeamBadge } from '../ui';
 import { draft5Author, draft5Category } from '../../engine/career/draft5';
 import { boardTone, type BoardLogEntry } from '../../engine/career/boardApproval';
+import type { BoardPromise } from '../../engine/career/promises';
+import { formatMoney } from '../../engine/ratings';
 import { PlayerLink } from './PlayerLink';
 import { DashCard } from './DashCard';
 import { SparkLine } from './DashCharts';
@@ -60,6 +62,7 @@ export function CareerOverview({
   onPlay, onSim, onSimSplit, onOpenTasks, onOpenCalendar, onOpenVrs, onOpenResults,
   onPickTeam, onPickPlayer, onSquad, gamePlanPicker, oppScoutStats,
   news, onOpenNews, board, boardLog,
+  promise, promiseOffers, onPromise,
 }: {
   save: { org?: { name?: string; tag?: string; colors?: [string, string]; logo?: string }; circuit?: { name?: string }; split: number; titles?: number; budget: number; tier?: number };
   league: League;
@@ -104,6 +107,9 @@ export function CareerOverview({
   onOpenNews?: () => void;
   board?: number; // confiança da diretoria (0-100)
   boardLog?: BoardLogEntry[]; // #8: histórico de ajustes (mais recente primeiro)
+  promise?: BoardPromise | null; // #10: promessa formal ativa (julgada no fim do split)
+  promiseOffers?: BoardPromise[] | null; // ofertas do split (null = já firmou/indisponível)
+  onPromise?: (p: BoardPromise) => void; // firmar a promessa (aporte cai na hora)
 }) {
   const eventName = save.circuit?.name ?? ct('Circuito');
   const oppPlayers = opp?.players ?? [];
@@ -363,6 +369,33 @@ export function CareerOverview({
                   ))}
                 </div>
               )}
+              {/* #10: PROMESSA FORMAL — sua palavra em troca de dinheiro agora */}
+              {promise ? (
+                <div style={{ marginTop: 10, padding: '9px 12px', borderRadius: 8, border: '1px solid var(--em-gold)', background: 'rgba(216,169,67,.07)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>🤝</span>
+                  <span style={{ flex: 1 }}><b>{ct('Promessa ativa:')}</b> {ct(promise.text)} <span style={{ color: 'var(--em-muted)' }}>· {ct('julgamento no fim do split')}</span></span>
+                </div>
+              ) : promiseOffers && promiseOffers.length > 0 && onPromise ? (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: '0.7rem', letterSpacing: '0.6px', textTransform: 'uppercase', color: 'var(--em-muted)', fontWeight: 700 }}>
+                    {ct('Fazer uma promessa formal')} <span style={{ textTransform: 'none', fontWeight: 400 }}>· {ct('o aporte cai no caixa AGORA; quebrar cobra caro')}</span>
+                  </span>
+                  {promiseOffers.map((p) => (
+                    <div key={p.type} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--em-border)', fontSize: '0.78rem' }}>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <b>{ct(p.text)}</b>
+                        <span style={{ display: 'block', color: 'var(--em-muted)', fontSize: '0.7rem' }}>
+                          {p.injection > 0 ? `+${formatMoney(p.injection)} ${ct('de aporte imediato')} · ` : ''}
+                          {ct('cumprir')} +{p.keepDelta} · {ct('quebrar')} {p.breakDelta}
+                        </span>
+                      </span>
+                      <button type="button" className="em-btn" style={{ flexShrink: 0 }} onClick={() => onPromise(p)}>
+                        🤝 {ct('Prometer')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </DashCard>
           );
         })()}

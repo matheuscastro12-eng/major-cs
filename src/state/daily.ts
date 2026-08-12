@@ -2,7 +2,11 @@
 // localStorage puro, um namespace só ('rtm-daily-v1'), tolerante a corrupção.
 // Sem cloud de propósito: o Diário é grátis e sem conta — atrito zero.
 
-import { dateKeyOf, type LinesProgress } from '../engine/daily/lines';
+import { dateKeyOf } from '../engine/daily/lines';
+
+// forma mínima que o store precisa entender — cada jogo tem seu shape completo
+// (LinesProgress, WhoisProgress, ImpostorProgress…), todos com done/won.
+export interface DailyProgressBase { done: boolean; won: boolean }
 
 const KEY = 'rtm-daily-v1';
 
@@ -16,7 +20,7 @@ export interface DailyStreak {
 
 interface DailyStore {
   // progresso por jogo/dia — só guardamos o dia corrente (histórico não importa)
-  progress: Record<string, { dateKey: string; p: LinesProgress }>;
+  progress: Record<string, { dateKey: string; p: DailyProgressBase }>;
   streaks: Record<string, DailyStreak>;
 }
 
@@ -32,13 +36,13 @@ function save(s: DailyStore): void {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* sem storage */ }
 }
 
-export function loadDailyProgress(gameId: string, dateKey: string): LinesProgress | null {
+export function loadDailyProgress<T extends DailyProgressBase = DailyProgressBase>(gameId: string, dateKey: string): T | null {
   const s = load();
   const cur = s.progress[gameId];
-  return cur && cur.dateKey === dateKey ? cur.p : null;
+  return cur && cur.dateKey === dateKey ? (cur.p as T) : null;
 }
 
-export function saveDailyProgress(gameId: string, dateKey: string, p: LinesProgress): void {
+export function saveDailyProgress(gameId: string, dateKey: string, p: DailyProgressBase): void {
   const s = load();
   s.progress[gameId] = { dateKey, p };
   // fechou o dia com vitória → streak (ontem completa a sequência; hoje repetido é no-op)
@@ -63,4 +67,131 @@ export function saveDailyProgress(gameId: string, dateKey: string, p: LinesProgr
 
 export function loadDailyStreak(gameId: string): DailyStreak {
   return load().streaks[gameId] ?? { lastDate: '', streak: 0, best: 0, plays: 0, wins: 0 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DIA PERFEITO — o meta-loop do hub: venceu os 4 jogos do dia = ✨. Tem streak
+// própria (chave reservada 'perfect', fora do namespace dos jogos).
+
+export const PERFECT_KEY = 'perfect';
+
+export interface DailyDayStatus {
+  perGame: Record<string, DailyProgressBase | null>;
+  done: number;      // jogos fechados hoje
+  won: number;       // jogos vencidos hoje
+  total: number;
+  perfect: boolean;  // venceu TODOS
+}
+
+export function dailyDayStatus(gameIds: string[], dateKey: string): DailyDayStatus {
+  const s = load();
+  const perGame: Record<string, DailyProgressBase | null> = {};
+  let done = 0, won = 0;
+  for (const id of gameIds) {
+    const cur = s.progress[id];
+    const p = cur && cur.dateKey === dateKey ? cur.p : null;
+    perGame[id] = p;
+    if (p?.done) done += 1;
+    if (p?.done && p.won) won += 1;
+  }
+  return { perGame, done, won, total: gameIds.length, perfect: gameIds.length > 0 && won === gameIds.length };
+}
+
+// chama após QUALQUER jogo fechar: se o dia ficou perfeito, avança a streak
+// global (mesma regra dos jogos: ontem encadeia; repetido no dia é no-op).
+export function syncPerfectStreak(gameIds: string[], dateKey: string): DailyStreak {
+  const s = load();
+  const st = s.streaks[PERFECT_KEY] ?? { lastDate: '', streak: 0, best: 0, plays: 0, wins: 0 };
+  const status = dailyDayStatus(gameIds, dateKey);
+  if (status.perfect && st.lastDate !== dateKey) {
+    const yesterday = dateKeyOf(new Date(new Date(`${dateKey}T12:00:00`).getTime() - 86_400_000));
+    st.streak = st.lastDate === yesterday ? st.streak + 1 : 1;
+    st.best = Math.max(st.best, st.streak);
+    st.wins += 1;
+    st.plays += 1;
+    st.lastDate = dateKey;
+    s.streaks[PERFECT_KEY] = st;
+    save(s);
+  }
+  return st;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FLAGS de feitos especiais (badges) — setadas pelos jogos no fechamento.
+
+interface DailyStoreWithFlags extends DailyStore { flags?: Record<string, boolean> }
+
+export function setDailyFlag(id: string): void {
+  const s = load() as DailyStoreWithFlags;
+  if (s.flags?.[id]) return;
+  s.flags = { ...(s.flags ?? {}), [id]: true };
+  save(s);
+}
+
+export function loadDailyFlags(): Record<string, boolean> {
+  return (load() as DailyStoreWithFlags).flags ?? {};
+}
+
+// fatos consolidados pros badges (engine/daily/badges.ts avalia).
+export function dailyBadgeFacts(gameIds: string[]): { bestStreak: Record<string, number>; totalWins: number; flags: Record<string, boolean> } {
+  const s = load() as DailyStoreWithFlags;
+  const bestStreak: Record<string, number> = {};
+  let totalWins = 0;
+  for (const id of [...gameIds, PERFECT_KEY]) {
+    const st = s.streaks[id];
+    bestStreak[id === PERFECT_KEY ? 'perfect' : id] = st?.best ?? 0;
+    if (id !== PERFECT_KEY) totalWins += st?.wins ?? 0;
+  }
+  return { bestStreak, totalWins, flags: s.flags ?? {} };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HISTÓRICO POR DIA (heatmap do hub) — resumo won/done de cada dia jogado,
+// capado nos últimos ~140 dias (o heatmap mostra 8 semanas; a folga é margem).
+
+interface DailyStoreWithDays extends DailyStore { days?: Record<string, { won: number; done: number }> }
+
+const DAYS_CAP = 140;
+
+// chamada junto do fechamento de qualquer jogo: reconsolida o resumo do dia a
+// partir do progresso corrente (os 4 jogos do dia vivem no store).
+export function bankDailyDay(gameIds: string[], dateKey: string): void {
+  const s = load() as DailyStoreWithDays;
+  let won = 0, done = 0;
+  for (const id of gameIds) {
+    const cur = s.progress[id];
+    if (cur?.dateKey === dateKey && cur.p.done) { done += 1; if (cur.p.won) won += 1; }
+  }
+  if (!done) return;
+  s.days = { ...(s.days ?? {}), [dateKey]: { won, done } };
+  const keys = Object.keys(s.days).sort();
+  while (keys.length > DAYS_CAP) delete s.days[keys.shift()!];
+  save(s);
+}
+
+export function loadDailyDays(): Record<string, { won: number; done: number }> {
+  return (load() as DailyStoreWithDays).days ?? {};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARATONA — um registro por dia (o primeiro tempo vale; sem replay).
+
+export interface MarathonRecord {
+  dateKey: string;
+  startedAt: number;            // epoch ms
+  finishedAt: number | null;    // null = em andamento
+  wins?: number;                // preenchido no fim
+}
+
+interface DailyStoreWithMarathon extends DailyStore { marathon?: MarathonRecord }
+
+export function loadMarathon(dateKey: string): MarathonRecord | null {
+  const s = load() as DailyStoreWithMarathon;
+  return s.marathon && s.marathon.dateKey === dateKey ? s.marathon : null;
+}
+
+export function saveMarathon(rec: MarathonRecord): void {
+  const s = load() as DailyStoreWithMarathon;
+  s.marathon = rec;
+  save(s);
 }

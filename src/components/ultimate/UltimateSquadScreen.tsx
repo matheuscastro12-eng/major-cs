@@ -5,10 +5,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
-import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, useUltimate } from '../../state/ultimate';
+import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
-import { PACK_DEFS, packById, type PackDef } from '../../engine/ultimate/packs';
+import { countCompletedEras, legendPlayers } from '../../engine/ultimate/icons';
+import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
 // nas actions marketListCard/marketCardSold/marketCardReturned/marketBuyApply.
@@ -528,12 +529,28 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   }, [account]);
   // tick de baixa frequência: countdown do daily/missões vira na hora certa
   // (sem isso, "PRÓXIMA EM Xh Ym" e o dia das missões congelavam até um re-render).
-  const [, setClock] = useState(0);
+  const [clock, setClock] = useState(0);
   useEffect(() => {
     const t = window.setInterval(() => { setClock((c) => c + 1); syncMissions(dateKey(new Date())); syncWeekly(weekKey(new Date())); }, 60_000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // TOTW da semana (Loja): derivado no memo (relógio/catálogo fora do render) e
+  // re-derivado pelo tick do relógio — o countdown anda e a virada fecha o card.
+  const totwView = useMemo(() => {
+    // impureza deliberada: relógio/catálogo-cache re-lidos a cada tick do clock
+    // eslint-disable-next-line react-hooks/purity
+    const [totw, now] = [ultimateTotw(), Date.now()];
+    if (totw.weekIndex < 0 || now >= totw.endsAt) return null; // antes da época / virada pendente
+    const left = Math.max(0, totw.endsAt - now);
+    const idx = ultimateIndex();
+    return {
+      dd: Math.floor(left / 86400000),
+      hh: Math.floor((left % 86400000) / 3_600_000),
+      nicks: totw.playerIds.map((pid) => idx.get(`${pid}:totw`)?.nick).filter(Boolean).join(' · '),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clock]);
   // reavalia títulos quando algum fato muda (vitórias, coleção, pico, sequência)
   useEffect(() => {
     const newly = syncTitles();
@@ -603,7 +620,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   );
 
   // ── ranqueada vs IA ──
-  const pool = useMemo(() => buildPool(CS2_REAL_2026), []);
+  // BUG FIX (mesma classe do draft): o pool online não tinha as LENDAS
+  // (playerId hist_*) — escalar uma no squad travava squadComplete e a
+  // ranqueada/gauntlet/PvP nunca liberavam. As lendas entram materializadas
+  // como Player + TeamSeason da era (legendPlayers) — e de quebra ganham
+  // sinergia de time de origem quando escaladas juntas.
+  const pool = useMemo(() => [
+    ...buildPool(CS2_REAL_2026),
+    ...legendPlayers().map(({ player, from, ovr }): PoolPlayer => ({
+      id: player.id, nick: player.nick, country: player.country, role: player.role, ovr, player, from,
+    })),
+  ], []);
   const poolById = useMemo(() => new Map(pool.map((p) => [p.id, p] as const)), [pool]);
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
@@ -771,6 +798,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     for (const k of uniq) if (index.get(k)?.rarity === 'icon') n++;
     return n;
   }, [state.inventory, index]);
+  // lendas: Ícones Históricos distintos + eras de época completas
+  const { histIconsOwned, erasComplete } = useMemo(() => {
+    const owned = new Set<string>();
+    for (const o of state.inventory) {
+      const c = index.get(o.cardKey);
+      if (c?.rarity === 'histIcon') owned.add(c.playerId);
+    }
+    return { histIconsOwned: owned.size, erasComplete: countCompletedEras(owned) };
+  }, [state.inventory, index]);
   // "únicas" p/ objetivos = JOGADORES distintos (por cardKey) — não os grupos
   // carta+boost do club (senão evoluir uma duplicata inflaria a métrica).
   const uniquePlayers = new Set(state.inventory.map((o) => o.cardKey)).size;
@@ -778,7 +814,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     wins: state.profile.w, packsOpened: state.profile.packSeedCounter,
     uniqueCards: uniquePlayers, totalCards, squadOvr: avgOvr, chem: chem.total,
     streak: state.profile.streak, iconsOwned, sbcDone: state.profile.sbcDone.length,
-    peakElo: state.profile.peakElo,
+    peakElo: state.profile.peakElo, histIconsOwned, erasComplete,
   });
   const claimedSet = new Set(state.profile.objectivesClaimed);
   const objClaimable = objectives.filter((o) => o.done && !claimedSet.has(o.def.id));
@@ -1344,7 +1380,16 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const five = draftCards
       .map((c) => pool.find((p) => p.id === c.playerId))
       .filter((p): p is PoolPlayer => !!p);
-    if (five.length < 5) return;
+    if (five.length < 5) {
+      // RECOVERY (caça-bugs): run antigo draftou uma LENDA (playerId hist_*)
+      // que não existe no pool online — a partida nunca começava e o clique
+      // era MUDO, com a inscrição presa. Encerra o run e devolve a inscrição
+      // inteira (draftRecord paga o prêmio da tabela; o resto vem por ajuste).
+      const r = draftRecord(false);
+      addCredits(Math.max(0, DRAFT_ENTRY - r.credits));
+      flash(ct('Este run tinha uma LENDA no draft (fora do pool de partidas) — run encerrado e inscrição devolvida. Drafts novos não oferecem lendas.'), 4500);
+      return;
+    }
     const userTeam = buildOnlineTeam(ct('Seu Draft'), five, 'ut-draft');
     // química do draft: slots na ordem dos DRAFT_ROLES (formação standard)
     const dNodes: ChemNode[] = draftCards.map((c, i) => ({ slot: i, slotRole: DRAFT_ROLES[i], card: c }));
@@ -1478,6 +1523,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // mapa e química — o replay só começa no "COMEÇAR PARTIDA".
     if (live.intro) {
       const oppOvr = live.opp.length ? Math.round(live.opp.reduce((a, p) => a + p.ovr, 0) / live.opp.length) : 0;
+      // BUG FIX (caça-bugs): no DRAFT o lado "meu" mostrava o squad do CLUBE
+      // (form.slots) — cartas/OVR/química erradas na intro (o run joga com o
+      // squad EMPRESTADO). Deriva a exibição do modo.
+      const isDraftIntro = live.result.mode === 'draft';
+      const introCards: UltCard[] = isDraftIntro ? draftCards : form.slots.map((fs) => slotCard(fs.slot)?.card).filter((c): c is UltCard => !!c);
+      const introChem = isDraftIntro
+        ? computeChemistry(formationById('standard').adjacency, draftCards.map((c, i): ChemNode => ({ slot: i, slotRole: DRAFT_ROLES[i], card: c })))
+        : chem;
+      const introAvg = isDraftIntro
+        ? (draftCards.length ? Math.round(draftCards.reduce((a, c) => a + c.ovr, 0) / draftCards.length) : 0)
+        : avgOvr;
       // TALE OF THE TAPE (iter42): leitura seeded do confronto derivada dos
       // dados CANÔNICOS compartilhados (nomes+rosters) — byte-idêntica nos 2
       // clientes do PvP; a UI só espelha os lados via myIdx.
@@ -1499,24 +1555,30 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             <div className="ut-vs__grid">
               <div className="ut-vs__side">
                 <div className="ut-vs__team">{live.teams[live.myIdx].name}</div>
-                <div className="ut-vs__meta">{avgOvr} OVR · {ct('química')} {chem.total}/15</div>
+                <div className="ut-vs__meta">{introAvg} OVR · {ct('química')} {introChem.total}/15</div>
                 <div className="ut-vs__best">{bestLine(taleMine)}</div>
                 <div className="ut-vs__cards">
-                  {form.slots.map((fs, wi) => {
-                    const sc = slotCard(fs.slot);
-                    return sc ? (
-                      <div key={fs.slot} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
-                        <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} />
-                        <DuelChips card={sc.card} styleId={sc.owned.style} />
-                      </div>
-                    ) : null;
-                  })}
+                  {isDraftIntro
+                    ? introCards.map((c, wi) => (
+                        <div key={c.key} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
+                          <UltCardView card={c} size={82} />
+                        </div>
+                      ))
+                    : form.slots.map((fs, wi) => {
+                        const sc = slotCard(fs.slot);
+                        return sc ? (
+                          <div key={fs.slot} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
+                            <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} />
+                            <DuelChips card={sc.card} styleId={sc.owned.style} />
+                          </div>
+                        ) : null;
+                      })}
                 </div>
               </div>
               <div className="ut-vs__mid">
                 <div className="ut-vs__map">{live.result.mapName}</div>
                 <div className="ut-vs__vs">VS</div>
-                <div className="ut-vs__fmt">MD1 · {(chem.multiplier * duel.multiplier).toFixed(2)}× {ct('força')}</div>
+                <div className="ut-vs__fmt">MD1 · {(introChem.multiplier * duel.multiplier).toFixed(2)}× {ct('força')}</div>
                 <button className="ut-jogar" style={{ padding: '13px 26px', fontSize: '1rem' }} onClick={() => setLive({ ...live, intro: false })}><Zap size={17} /> {ct('COMEÇAR PARTIDA')}</button>
                 <button className="ut-vs__skip" onClick={finishMatch}>{ct('Pular direto pro resultado')}</button>
               </div>
@@ -2347,6 +2409,35 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Termina em')} {dd}d {hh}h</div>
                 <button className="ut-pack__buy" onClick={() => buy(promoPack)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
                   {packBusy === promoPack.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(promoPack.cost)}</>}
+                </button>
+              </div>
+            );
+          })()}
+          {/* Pacote TOTW — os 7 in-forms da semana (rotaciona toda segunda). O card
+              lista os nicks da semana e a contagem até a rotação. */}
+          {totwView && (
+            <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${TOTW_PACK.color} 0%, ${TOTW_PACK.color}dd 55%, ${TOTW_PACK.color}aa 100%)`, marginBottom: 12 }}>
+              <div className="ut-pack__shine" />
+              <div className="ut-pack__art"><Zap size={44} strokeWidth={1.4} /></div>
+              <div className="ut-pack__name">{ct('Pacote TOTW')} · {ct('Time da Semana')}</div>
+              <div className="ut-pack__desc">{ct('Os 7 in-forms da semana (+2 OVR), 1 garantido no pack:')} {totwView.nicks}</div>
+              <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Rotaciona em')} {totwView.dd}d {totwView.hh}h</div>
+              <button className="ut-pack__buy" onClick={() => buy(TOTW_PACK)} disabled={credits < TOTW_PACK.cost || packBusy != null} title={credits >= TOTW_PACK.cost ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                {packBusy === TOTW_PACK.id ? ct('Abrindo…') : <>{credits >= TOTW_PACK.cost ? <Coins size={15} /> : <Lock size={14} />} {fmt(TOTW_PACK.cost)}</>}
+              </button>
+            </div>
+          )}
+          {/* Pacote Ícone — permanente: o ÚNICO lugar onde as lendas históricas caem */}
+          {(() => {
+            const afford = credits >= ICON_PACK.cost;
+            return (
+              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${ICON_PACK.color} 0%, ${ICON_PACK.color}dd 55%, ${ICON_PACK.color}aa 100%)`, marginBottom: 12 }}>
+                <div className="ut-pack__shine" />
+                <div className="ut-pack__art"><Trophy size={44} strokeWidth={1.4} /></div>
+                <div className="ut-pack__name">{ct('Pacote Ícone')} · {ct('Lendas do CS')}</div>
+                <div className="ut-pack__desc">{ct('GeT_RiGhT, cogu, kennyS, NEO… as lendas aposentadas do CS como Ícones Históricos — e elas SÓ caem aqui. 1 Ícone garantido.')}</div>
+                <button className="ut-pack__buy" onClick={() => buy(ICON_PACK)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                  {packBusy === ICON_PACK.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(ICON_PACK.cost)}</>}
                 </button>
               </div>
             );

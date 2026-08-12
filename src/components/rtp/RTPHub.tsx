@@ -17,13 +17,14 @@ const money = (v: number) => `R$ ${v.toLocaleString('pt-BR')}`;
 // Hub do Road to Pro — dispatcher de abas (estilo dashboard da carreira). Cada
 // aba é um painel próprio; o LifeEventModal vive AQUI (sobre qualquer aba) pra
 // auto-abrir mesmo fora da Visão geral.
-export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch, onAutoSim, onResolveEvent, notice, onDismissNotice }: {
+export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch, onDaily, onAutoSim, onResolveEvent, notice, onDismissNotice }: {
   save: RoadToProSave;
   onExit: () => void;
   onReset: () => void;
   onUpdate: (next: RoadToProSave) => void;
   onRetire: () => void;
   onPlayMatch: () => void;
+  onDaily?: () => void;
   onAutoSim: () => void;
   onResolveEvent: (eventId: string, optionId: string) => void;
   notice: RtpNotice | null;
@@ -51,7 +52,7 @@ export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch,
       right={<span className="rtp-moneychip"><RtpIcon name="money" size={13} /> {money(life.money)}</span>}
     >
       {tab === 'overview' && (
-        <RtpOverview save={save} notice={notice} onDismissNotice={onDismissNotice} onPlayMatch={onPlayMatch} onAutoSim={onAutoSim} onGoTab={(id) => setTab(id)} />
+        <RtpOverview save={save} notice={notice} onDismissNotice={onDismissNotice} onPlayMatch={onPlayMatch} onDaily={onDaily} onAutoSim={onAutoSim} onGoTab={(id) => setTab(id)} />
       )}
       {tab === 'training' && <RtpTraining save={save} onUpdate={onUpdate} />}
       {tab === 'league' && <RtpLeague save={save} />}

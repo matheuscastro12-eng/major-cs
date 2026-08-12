@@ -16,7 +16,7 @@ export interface SbcReq {
   maxTier?: number;      // raridade (tier) MÁXIMA de TODAS as cartas — com minTier
                          // igual vira "tier exato". Protege o jogador de queimar
                          // carta acima do necessário (ex.: um Ícone no legend-trio,
-                         // que premia... um Ícone) e barra specials (tier 8-9).
+                         // que premia... um Ícone) e barra specials (tier 8-10).
   roles?: Role[];        // multiset de funções que precisa conter
 }
 
@@ -50,6 +50,13 @@ export const SBCS: SbcDef[] = [
   // endgame: consome o topo de uma coleção madura (6 Lendários+ distintos) em
   // troca da special mais rara do catálogo — o outro caminho é a ladder Elite.
   { id: 'road-legend', name: 'Rumo à Lenda', desc: '6 cartas Lendário ou melhor, OVR médio ≥ 90.', req: { count: 6, minTier: 6, minOvrAvg: 90 }, reward: { card: 'major' } },
+  // TETO da escada: o caminho determinístico até uma LENDA sem depender do
+  // Pacote Ícone — 2 Ícones (~2,7M de insumo) viram 1 Ícone Histórico
+  // (~1,4-2,6M, média ~1,8M). Sink de prestígio: paga-se um prêmio pela lenda.
+  // Tier EXATO (min=max=7): sem a trava, specials (tots/major/totw, tier 8-9)
+  // e o próprio histIcon (tier 10) contariam como insumo — queimar uma lenda
+  // pra sortear outra lenda é armadilha, não desafio.
+  { id: 'pantheon', name: 'Panteão', desc: '2 cartas Ícone (exatamente essa raridade).', req: { count: 2, minTier: 7, maxTier: 7 }, reward: { card: 'histIcon' } },
 ];
 
 export function sbcById(id: string): SbcDef | undefined {

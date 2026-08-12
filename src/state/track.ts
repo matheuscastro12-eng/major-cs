@@ -27,7 +27,7 @@ export function sessionId(): string {
 // FUNIL DE CONVERSÃO (visitante → vitalícia R$20): eventos raros e de alto
 // valor — liberados no cliente junto com 'visit'/'ad_click'. Volume é ínfimo
 // (1x por sessão por superfície), então não mexe no controle de custo do Neon.
-const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'signup_start', 'signup_done']);
+const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'signup_start', 'signup_done', 'rtp_demo']);
 
 // CORTE DE CUSTO: só 'visit', 'ad_click' e os eventos do FUNIL vão pro servidor.
 // Eventos de jogo (game_start, online_*, etc.) viram no-op pra não gerar
@@ -112,6 +112,30 @@ export function trackCheckoutOpen(method: 'stripe' | 'pix'): void {
 /** QR Pix da vitalícia fechado sem pagamento confirmado (best-effort). */
 export function trackCheckoutAbandon(method: 'stripe' | 'pix', secondsOpen: number): void {
   track('checkout_abandon', { src: getCheckoutSrc() || 'direto', method, secondsOpen: Math.round(secondsOpen) });
+}
+
+// ─── FUNIL DA DEMO DO RtP ────────────────────────────────────────────────────
+// A demo grátis (1a02084) é a maior alavanca de conversão do jogo, mas nasceu
+// cega: só a TRAVA emitia telemetria (paywall_view 'rtp-demo-gate'). Dava pra
+// ver quanta gente BATE na trava e nenhuma noção de quanta gente ENTROU — sem
+// denominador não existe taxa de conversão, só um número solto.
+//
+// Estes passos fecham o funil e, principalmente, mostram ONDE o jogador desiste:
+//   open    → abriu o RtP em modo demo               (denominador)
+//   created → passou a peneira e criou o jogador     (o gargalo mais provável)
+//   week N  → sobreviveu até a semana N (2..DEMO_WEEKS+1)
+//   ...então paywall_view 'rtp-demo-gate' (trava) e checkout_open src 'rtp-demo'.
+//
+// Custo: ~5 eventos por sessão de demo, todos dentro de uma janela em que o
+// compute do Neon já está acordado — não estende active_time, que é o que
+// realmente pesa na conta. Dedupe por sessão em cada passo.
+export type RtpDemoStep = 'open' | 'created' | 'week';
+
+export function trackRtpDemo(step: RtpDemoStep, week?: number): void {
+  const key = week === undefined ? `rtp_demo_${step}` : `rtp_demo_${step}_${week}`;
+  if (seenPaywalls.has(key)) return; // re-render/StrictMode não duplica
+  seenPaywalls.add(key);
+  track('rtp_demo', week === undefined ? { step } : { step, week });
 }
 
 /** Cadastro pré-pagamento: 'start' no submit (1x/sessão), 'done' no sucesso. */

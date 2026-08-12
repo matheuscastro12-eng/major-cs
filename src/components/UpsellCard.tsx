@@ -47,6 +47,18 @@ export function UpsellCard({ onUpgrade, onPixPaid }: { onUpgrade: () => void; on
   const [copied, setCopied] = useState(false);
   const pixOpenedAt = useRef(0);
   const pixConfirmed = useRef(false);
+  // funil: dado real (checkout_abandon, method=pix, 28d) mostra abandono
+  // concentrado bem depois dos primeiros segundos — mediana de ~79s pra fechar
+  // sem pagar — mas esta superfície (upsell in-game) nunca deu nenhuma
+  // reassurance de espera, diferente do modal de conta da Landing. Mesma
+  // lógica honesta aplicada aqui: depois de 1min sem confirmar, troca o
+  // silêncio por uma expectativa real de quanto falta.
+  const [pixWaitLong, setPixWaitLong] = useState(false);
+  useEffect(() => {
+    if (!pix) { setPixWaitLong(false); return; }
+    const t = window.setTimeout(() => setPixWaitLong(true), 60_000);
+    return () => window.clearTimeout(t);
+  }, [pix]);
 
   useEffect(() => {
     const onEvt = (e: Event) => {
@@ -159,6 +171,12 @@ export function UpsellCard({ onUpgrade, onPixPaid }: { onUpgrade: () => void; on
             <p style={{ fontSize: '0.72rem', opacity: 0.75, margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
               {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera sozinho.')}
             </p>
+            {pixWaitLong && (
+              /* reassurance honesta pra quem passou de 1min esperando (ver comentário acima) */
+              <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
+                {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
+              </p>
+            )}
           </div>
         )}
         <div className="upsell-foot">{ct('Pagamento único. Sem mensalidade. Apoia o desenvolvimento do jogo.')}</div>

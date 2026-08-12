@@ -11,6 +11,8 @@ import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
 import { login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, type PixCharge } from '../state/account';
 import { ct } from '../state/career-i18n';
+import { loadGhost } from '../state/ghost';
+import { dateKeyOf, dayNumberOf } from '../engine/daily/lines';
 
 const M = '/maps/';
 
@@ -83,6 +85,13 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '28px', flexWrap: 'wrap' }}>
           <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')}</Button>
           <Button size="big" variant="gold" onClick={onAccount}>{ct('Save na nuvem por R$20')}</Button>
+        </div>
+        {/* funil: dado real (rtm_accounts) mostra a vaga de Fundador quase no fim,
+            mas o contador só aparecia depois de rolar até o Plano ou abrir o modal
+            — nunca no CTA de maior exposição do funil (Hero da landing, ~25% de
+            todo o paywall_view). Mesmo componente, mesma prova social real. */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
+          <FounderCounter />
         </div>
         <div style={{ display: 'flex', gap: '22px', justifyContent: 'center', marginTop: '24px', flexWrap: 'wrap', color: 'var(--rtm-faint)', fontSize: '13px' }}>
           <span><b style={{ color: 'var(--rtm-text-strong)' }}>16</b> {ct('times')}</span>
@@ -262,6 +271,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  // confirmação + revelar: só no cadastro (ver comentário no campo)
+  const [pw2, setPw2] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [accepted, setAccepted] = useState(false);
@@ -269,13 +281,14 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const [pix, setPix] = useState<{ charge: PixCharge; email: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [nudge, setNudge] = useState(false);
-  // funil: dado real (checkout_abandon) mostra abandono só depois de 45s–300s de
-  // QR aberto, nunca em segundos — contradiz a promessa de "aprovado em segundos".
-  // Passado 1min sem confirmar, troca a expectativa por uma reassurance honesta.
+  // funil: refinando o achado anterior — de 60 checkout_abandon (pix) nos últimos
+  // 28 dias, 18 (30%) fecham em menos de 60s, e 11 desses entre 15s–60s, ou seja,
+  // ANTES da reassurance de espera aparecer (ela só ligava aos 60s). Antecipar pra
+  // 25s cobre boa parte desse grupo sem incomodar quem confirma rápido.
   const [pixWaitLong, setPixWaitLong] = useState(false);
   useEffect(() => {
     if (!pix) { setPixWaitLong(false); return; }
-    const t = window.setTimeout(() => setPixWaitLong(true), 60_000);
+    const t = window.setTimeout(() => setPixWaitLong(true), 25_000);
     return () => window.clearTimeout(t);
   }, [pix]);
   useEffect(() => {
@@ -315,7 +328,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   // então não precisamos mais de inline style nos campos.
   const input: CSSProperties = { width: '100%' };
   const lbl: CSSProperties = { fontSize: '0.72rem', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--em-muted)', display: 'block', marginBottom: '6px' };
-  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6 && (mode === 'login' || accepted);
+  const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
+  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6
+    && (mode === 'login' || (accepted && pw === pw2));
   const go = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
@@ -412,9 +427,38 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
           <div><label style={lbl}>{ct('E-mail')}</label><input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={ct("voce@email.com")} type="email" autoComplete="email" /></div>
-          <div><label style={lbl}>{ct('Senha')}</label><input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} /></div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+              <label style={lbl}>{ct('Senha')}</label>
+              <button type="button" onClick={() => setShowPw((v) => !v)}
+                style={{ background: 'none', border: 'none', padding: 0, marginBottom: '6px', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.7rem', fontFamily: 'inherit' }}>
+                {showPw ? ct('ocultar') : ct('mostrar')}
+              </button>
+            </div>
+            <input style={input} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={ct('mínimo 6 caracteres')} type={showPw ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={(e) => e.key === 'Enter' && go()} />
+          </div>
+          {/* Confirmação só no CADASTRO: um typo aqui cria uma conta com senha que
+              ninguém conhece. O reset por e-mail existe e resolve, mas obriga quem
+              acabou de PAGAR a passar por recuperação antes de jogar — atrito no
+              pior momento possível. Confirmar + revelar mata o erro na origem. */}
+          {mode === 'signup' && (
+            <div>
+              <label style={lbl}>{ct('Confirme a senha')}</label>
+              <input
+                style={{ ...input, ...(pwMismatch ? { borderColor: '#e2574c' } : null) }}
+                value={pw2}
+                onChange={(e) => setPw2(e.target.value)}
+                placeholder={ct('digite a senha de novo')}
+                type={showPw ? 'text' : 'password'}
+                autoComplete="new-password"
+                aria-invalid={pwMismatch}
+                onKeyDown={(e) => e.key === 'Enter' && go()}
+              />
+              {pwMismatch && <p style={{ color: '#e2574c', fontSize: '0.74rem', margin: '6px 0 0' }}>{ct('As senhas não são iguais.')}</p>}
+            </div>
+          )}
           {mode === 'login' && (
-            <button type="button" onClick={() => { setMode('reset'); setResetStep('ask'); setErr(''); setInfo(''); }}
+            <button type="button" onClick={() => { setMode('reset'); setResetStep('ask'); setErr(''); setInfo(''); setPw2(''); }}
               style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, color: 'var(--em-muted)', cursor: 'pointer', fontSize: '0.76rem', textDecoration: 'underline', fontFamily: 'inherit' }}>
               {ct('Esqueci minha senha')}
             </button>
@@ -477,7 +521,11 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
           </div>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-            {ct('Pagamento aprovado em segundos — esta tela confirma sozinha, não precisa recarregar.')}
+            {/* funil: a mediana real de espera do Pix é ~133s — "aprovado em
+                segundos" prometia rápido demais e pode ter puxado parte dos 30%
+                de abandonos que saem em menos de 1min. Troca por expectativa
+                honesta desde o primeiro segundo, sem depender só do timer acima. */}
+            {ct('Esta tela confirma sozinha assim que o Pix cair — não precisa recarregar. Costuma levar de 1 a 3 minutos.')}
           </p>
           {pix.charge.qrCodeImage && (
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
@@ -530,7 +578,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         ) : (
           <>
             {mode === 'signup' ? ct('Já tem conta? ') : ct('Não tem conta? ')}
-            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
+            <button type="button" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErr(''); setInfo(''); setPw2(''); }} style={{ background: 'none', border: 'none', color: 'var(--em-gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>{mode === 'signup' ? ct('Entrar') : ct('Criar conta')}</button>
           </>
         )}
       </p>
@@ -562,9 +610,18 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
   // funil: CTA da landing abrindo o modal de conta — first-touch, então quem
   // chegou de uma trava (home-rtp, wl-lock...) mantém a origem original.
   const openAcct = (mode: 'signup' | 'login' = 'signup') => { setCheckoutSrc('landing'); setAcctMode(mode); setAcct(true); };
+  // desafio de fantasma pendente (link aberto sem vitalícia): o motivo de
+  // comprar HOJE — o desafio expira à meia-noite.
+  const ghost = loadGhost(dayNumberOf(dateKeyOf(new Date())));
   return (
     <div ref={ref} className="lp-root">
       <Nav onAccount={() => openAcct('signup')} onLogin={() => openAcct('login')} onPlay={onPlay} />
+      {ghost && (
+        <div style={{ background: 'color-mix(in srgb, var(--rtm-gold) 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
+          🥊 <b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')} — {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite — a Série do Dia é da conta vitalícia (R$20, uma vez).')}{' '}
+          <button type="button" onClick={() => openAcct('signup')} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Aceitar o desafio')}</button>
+        </div>
+      )}
       <Hero onAccount={() => openAcct('signup')} onPlay={onPlay} />
       <Modes onPlay={onPlay} />
       <TweetBand />

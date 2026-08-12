@@ -19,6 +19,9 @@ const ALLOWED_TYPES = new Set([
   'checkout_abandon', // {src, method, secondsOpen} — QR Pix fechado sem pagar
   'signup_start',     // {src} — submit do cadastro pré-pagamento
   'signup_done',      // {src} — cadastro criado (rtm_pending_signups/conta)
+  // funil da DEMO do Road to Pro (iter47): {step: 'open'|'created'|'week', week?}
+  // — o denominador que faltava pra medir a conversão da demo grátis
+  'rtp_demo',
 ]);
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -29,6 +32,14 @@ const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 let presenceSchemaReady = false;
 let lastRetentionAt = 0;
 const RETENTION_MS = 10 * 60_000;
+
+// …e a mesma armadilha existia no INSERT de events: o DELETE de retenção de 24
+// MESES ia junto em TODA request, varrendo a tabela inteira (355k linhas, 82 MB,
+// sem índice em created_at) pra apagar ZERO linha — a tabela nasceu em jun/2026.
+// Isso respondia por ~41 BILHÕES de tuplas lidas, ~90% de todo o I/O do banco.
+// Agora a retenção é throttled (1x/12h por instância) e usa idx_events_created.
+let lastEventsRetentionAt = 0;
+const EVENTS_RETENTION_MS = 12 * 60 * 60_000;
 
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
@@ -94,10 +105,11 @@ export default async function handler(
       res.status(200).json({ ok: true });
       return;
     }
-    await sql`WITH inserted AS (
-      INSERT INTO events (type, sid, data) VALUES (${type}, ${sid}, ${data}::jsonb)
-      RETURNING 1
-    ) DELETE FROM events WHERE created_at < now() - interval '24 months'`;
+    await sql`INSERT INTO events (type, sid, data) VALUES (${type}, ${sid}, ${data}::jsonb)`;
+    if (Date.now() - lastEventsRetentionAt > EVENTS_RETENTION_MS) {
+      lastEventsRetentionAt = Date.now();
+      await sql`DELETE FROM events WHERE created_at < now() - interval '24 months'`;
+    }
     res.status(200).json({ ok: true });
   } catch {
     res.status(200).json({ ok: false }); // telemetria nunca quebra o jogo

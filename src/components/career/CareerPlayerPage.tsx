@@ -10,6 +10,9 @@ import { Flag, PlayerAvatar, TeamBadge } from '../ui';
 import { CareerIcon, type CareerIconName } from './CareerIcon';
 import { IconChevronLeft } from './DashIcons';
 import { AttributeColumn } from './AttributeColumn';
+import { deriveEventLine, type SeasonEventLine } from '../../engine/career/seasonStats';
+import { HAPPINESS_FACTOR_LABEL, type HappinessBreakdown } from '../../engine/career/happiness';
+import { physicalStatus, satisfactionStatus, disciplineStatus, reputationStatus } from '../../engine/career/playerStatus';
 import { SubRoleStars } from './SubRoleStars';
 
 type PlayerTab = 'card' | 'overview' | 'personal' | 'performance' | 'career';
@@ -31,6 +34,13 @@ const TABS: { id: PlayerTab; label: string; icon: CareerIconName }[] = [
   { id: 'performance', label: 'Desempenho', icon: 'chart-bar' },
   { id: 'career', label: 'Carreira', icon: 'trophy' },
 ];
+
+// #15: preço curto pra UI de listagem (R$ 1,2M / R$ 850k)
+function fmtPrice(v: number): string {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1).replace('.', ',')}M`;
+  if (v >= 1_000) return `R$ ${Math.round(v / 1_000)}k`;
+  return `R$ ${v}`;
+}
 
 function fmScale(v: number): number {
   return Math.round(((Math.max(40, Math.min(99, v)) - 40) / 59) * 20 * 10) / 10;
@@ -193,7 +203,6 @@ export function CareerPlayerPage({
   personalityLabel,
   personalityDesc,
   morale,
-  moraleLabel,
   moraleIcon,
   fatigue,
   valueLabel,
@@ -205,6 +214,19 @@ export function CareerPlayerPage({
   reducedLoad,
   trainingLevel,
   career,
+  seasonLines,
+  potBoost = 0,
+  happiness = null,
+  bond,
+  listedPrice = null,
+  marketValue,
+  onList,
+  focusAttr = null,
+  focusSuggested,
+  focusOptions,
+  onFocusAttr,
+  stints,
+  watch = null,
   form,
   cur,
   seasonGames,
@@ -245,6 +267,32 @@ export function CareerPlayerPage({
   reducedLoad: boolean;
   trainingLevel: number;
   career: CareerDerived | null;
+  seasonLines?: SeasonEventLine[]; // #13/#26: linhas por evento (mais recente primeiro)
+  potBoost?: number; // #17: pontos de teto FURADOS por performance (0 = potencial scouted puro)
+  happiness?: HappinessBreakdown | null; // #16: satisfação composta (5 fatores legíveis)
+  bond?: number; // #31: vínculo com você (0-100)
+  listedPrice?: number | null; // #15: preço pedido se listado à venda
+  marketValue?: number; // #15: valor de mercado atual (base das ofertas de listagem)
+  onList?: (price: number | null) => void; // #15: listar (preço) / retirar (null)
+  focusAttr?: string | null; // #22: atributo em foco no treino
+  focusSuggested?: string; // #22: sugestão do staff (maior lacuna × relevância da role)
+  focusOptions?: { id: string; label: string; biased: number }[]; // #22: catálogo + viés já acumulado
+  onFocusAttr?: (attr: string | null) => void; // #22: definir/limpar o foco
+  /** #40: passagens do jogador pelo SEU clube (entrada/saída com OVR) */
+  stints?: { team: string; from: number; to: number | null; startOvr: number; endOvr?: number }[];
+  /** #41: observatório de scouting — só pra jogador de FORA do elenco.
+   *  level 0 = não acompanhado (mostra o botão Acompanhar). */
+  watch?: {
+    level: number;
+    maxLevel: number;
+    band: number;             // ± da faixa de OVR aparente (0 = exato)
+    apparent: number;         // centro da faixa (OVR aparente do relatório)
+    showPersonality: boolean;
+    showSubRole: boolean;
+    showPotential: boolean;
+    hasScout: boolean;        // com olheiro o nível sobe todo split
+    onToggle: () => void;
+  } | null;
   /** Forma recente (janela de ratings por série) — chip colorido no Status. */
   form?: FormStatus;
   cur?: { rating: number; kd: number; adr: number; maps?: number };
@@ -485,34 +533,163 @@ export function CareerPlayerPage({
                       <b>{cur ? cur.rating.toFixed(2) : ct('Sem dados')}</b>
                     )}
                   </div>
-                  <div><span>{ct('Físico')}</span><b>{fitness}/100</b></div>
-                  <div><span>{ct('Satisfação')}</span><b>{moraleLabel} {satisfaction}/100</b></div>
-                  <div><span>{ct('Disciplina')}</span><b>{morale >= 60 ? ct('Boa') : ct('Instável')}</b></div>
-                  <div><span>{ct('Fadiga')}</span><b>{fatigue}/100</b></div>
+                  {/* #32: números crus viram TIERS legíveis (pill com cor) */}
+                  {(() => {
+                    const phys = physicalStatus(fatigue);
+                    const sat = satisfactionStatus(happiness ? happiness.overall : satisfaction);
+                    const disc = disciplineStatus(player);
+                    const rep = reputationStatus(peakOvr, titles);
+                    const pill = (s: { label: string; color: string; value: number }) => (
+                      <b style={{ color: s.color }} title={`${s.value}/100`}>{ct(s.label)}</b>
+                    );
+                    return (
+                      <>
+                        <div><span>{ct('Físico')}</span>{pill(phys)}</div>
+                        <div><span>{ct('Satisfação')}</span>{pill(sat)}</div>
+                        <div><span>{ct('Disciplina')}</span>{pill(disc)}</div>
+                        <div><span>{ct('Reputação')}</span>{pill(rep)}</div>
+                      </>
+                    );
+                  })()}
                   <div><span>{ct('Treino')}</span><b>{focused ? ct('Ativo') : ct('Inativo')}</b></div>
                 </div>
               </Panel>
               <Panel title="Felicidade & vínculo">
-                <div className="pp-happy-score"><b>{Math.round((morale + fitness) / 2)}</b><span>/100</span></div>
+                {/* #16: satisfação COMPOSTA — 5 fatores legíveis explicam o porquê */}
+                <div className="pp-happy-score"><b>{happiness ? happiness.overall : Math.round((morale + fitness) / 2)}</b><span>/100</span></div>
                 <div className="pp-bar-list">
-                  {[
-                    { label: ct('Moral'), pct: morale },
-                    { label: ct('Condição física'), pct: fitness },
-                    { label: ct('Desenvolvimento'), pct: developmentProgress },
-                    { label: ct('Centro de treino'), pct: Math.min(100, trainingLevel * 25) },
-                  ].map((b) => (
-                    <div key={b.label} className="pp-bar-item">
-                      <span>{b.label}</span>
-                      <div className="pp-bar-track"><i style={{ width: `${b.pct}%` }} /></div>
-                      <b>{b.pct}%</b>
+                  {happiness ? (
+                    (Object.keys(happiness.factors) as (keyof typeof happiness.factors)[]).map((k) => (
+                      <div key={k} className="pp-bar-item">
+                        <span>{ct(HAPPINESS_FACTOR_LABEL[k])}</span>
+                        <div className="pp-bar-track"><i style={{ width: `${happiness.factors[k]}%` }} /></div>
+                        <b>{happiness.factors[k]}%</b>
+                      </div>
+                    ))
+                  ) : (
+                    [
+                      { label: ct('Moral'), pct: morale },
+                      { label: ct('Condição física'), pct: fitness },
+                      { label: ct('Desenvolvimento'), pct: developmentProgress },
+                      { label: ct('Centro de treino'), pct: Math.min(100, trainingLevel * 25) },
+                    ].map((b) => (
+                      <div key={b.label} className="pp-bar-item">
+                        <span>{b.label}</span>
+                        <div className="pp-bar-track"><i style={{ width: `${b.pct}%` }} /></div>
+                        <b>{b.pct}%</b>
+                      </div>
+                    ))
+                  )}
+                  {/* #31: a relação com VOCÊ é um eixo próprio — conversas constroem, atritos corroem */}
+                  {bond != null && (
+                    <div className="pp-bar-item pp-bond">
+                      <span>{ct('Vínculo com você')}</span>
+                      <div className="pp-bar-track"><i style={{ width: `${bond}%` }} /></div>
+                      <b>{Math.round(bond)}%</b>
                     </div>
-                  ))}
+                  )}
                 </div>
               </Panel>
               <Panel title="Função principal">
                 <span className={`pp-role-big ${player.role}`}>{player.role}</span>
                 {player.role2 && <span className="pp-role-big alt">{player.role2}</span>}
               </Panel>
+              {/* #22: FOCO DE TREINO — qual atributo este jogador trabalha */}
+              {onFocusAttr && focusOptions && focusOptions.length > 0 && (
+                <Panel title="Foco de treino" icon="brain">
+                  <div className="pp-focus-grid">
+                    {focusOptions.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        className={`pp-focus-btn${focusAttr === o.id ? ' on' : ''}`}
+                        onClick={() => onFocusAttr(focusAttr === o.id ? null : o.id)}
+                        title={o.biased > 0 ? `${ct('Especialização acumulada')}: +${o.biased}` : undefined}
+                      >
+                        {ct(o.label)}
+                        {o.biased > 0 && <em>+{o.biased}</em>}
+                        {focusSuggested === o.id && <span className="pp-focus-reco">★ {ct('recomendado')}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="pp-focus-hint">{ct('Split de desenvolvimento com foco = +1 extra no atributo escolhido (até +4). O staff marca a maior lacuna da função.')}</p>
+                </Panel>
+              )}
+              {/* #40: PASSAGENS — a biografia do jogador na sua org */}
+              {stints && stints.length > 0 && (
+                <Panel title="Passagens" icon="calendar">
+                  <div className="pp-stints">
+                    {[...stints].reverse().map((st, i) => (
+                      <div key={i} className="pp-stint">
+                        <b>{st.team}</b>
+                        <span>
+                          {ct('split')} {st.from} → {st.to == null ? ct('atual') : `${ct('split')} ${st.to}`}
+                          {st.startOvr > 0 && <> · OVR {st.startOvr}{st.endOvr != null ? ` → ${st.endOvr}` : ''}</>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              )}
+              {/* #15: LISTAR À VENDA — a IA dá lances a cada fechamento de split */}
+              {onList && marketValue != null && (
+                <Panel title="Mercado" icon="chart-bar">
+                  {listedPrice != null ? (
+                    <div className="pp-listing">
+                      <p className="pp-listing-on">
+                        🏷️ {ct('Listado por')} <b>{fmtPrice(listedPrice)}</b>
+                        <span> · {ct('a IA avalia a cada fechamento de split')}</span>
+                      </p>
+                      <button type="button" className="pp-listing-btn off" onClick={() => onList(null)}>{ct('Retirar do mercado')}</button>
+                    </div>
+                  ) : (
+                    <div className="pp-listing">
+                      <p className="pp-listing-hint">{ct('Valor de mercado')}: <b>{fmtPrice(marketValue)}</b>. {ct('Preço baixo vende rápido; ganância encalha.')}</p>
+                      {[
+                        { label: ct('Venda rápida'), mult: 0.8 },
+                        { label: ct('Preço justo'), mult: 1.0 },
+                        { label: ct('Valorizado'), mult: 1.3 },
+                      ].map((o) => (
+                        <button key={o.mult} type="button" className="pp-listing-btn" onClick={() => onList(Math.round(marketValue * o.mult))}>
+                          {o.label} · {fmtPrice(Math.round(marketValue * o.mult))}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </Panel>
+              )}
+              {/* #41: OBSERVATÓRIO — scouting progressivo de alvo fora do elenco */}
+              {watch && (
+                <Panel title="Observatório" icon="search">
+                  {watch.level <= 0 ? (
+                    <div className="pp-listing">
+                      <p className="pp-listing-hint">{ct('Marque este jogador pra acompanhar. A cada fechamento de split o relatório fica mais preciso — com olheiro contratado, duas vezes mais rápido.')}</p>
+                      <button type="button" className="pp-listing-btn" onClick={watch.onToggle}>
+                        🔭 {ct('Acompanhar jogador')}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="pp-listing">
+                      <p className="pp-listing-on">
+                        🔭 {ct('Nível de relatório')} <b>{watch.level}/{watch.maxLevel}</b>
+                        <span> · {watch.hasScout ? ct('olheiro no caso: sobe todo split') : ct('sem olheiro: sobe a cada 2 splits')}</span>
+                      </p>
+                      <p className="pp-listing-hint">
+                        {ct('OVR estimado')}: <b>{watch.band > 0 ? `${watch.apparent - watch.band}–${watch.apparent + watch.band}` : String(watch.apparent)}</b>
+                        {watch.showPotential && <span> · {ct('Potencial')}: <b>{pot}</b> ({potTier})</span>}
+                      </p>
+                      <p className="pp-listing-hint">
+                        {ct('Revelado')}: {ct('função')}
+                        {watch.showPersonality ? ` · ${ct('personalidade')}` : ''}
+                        {watch.showSubRole ? ` · ${ct('sub-função')}` : ''}
+                        {watch.showPotential ? ` · ${ct('potencial')}` : ''}
+                        {watch.level < watch.maxLevel ? ` — ${ct('próximo relatório afina a leitura')}` : ` — ${ct('dossiê completo')}`}
+                      </p>
+                      <button type="button" className="pp-listing-btn off" onClick={watch.onToggle}>{ct('Parar de acompanhar')}</button>
+                    </div>
+                  )}
+                </Panel>
+              )}
             </aside>
           </div>
         )}
@@ -577,7 +754,7 @@ export function CareerPlayerPage({
                   <div><span>{ct('Contrato')}</span><b>{contractLeft}</b></div>
                   <div><span>{ct('Time atual')}</span><b>{orgName || '—'}</b></div>
                   <div><span>{ct('Satisfação')}</span><b>{morale}/100</b></div>
-                  <div><span>{ct('Potencial')}</span><b>{pot} ({potTier})</b></div>
+                  <div><span>{ct('Potencial')}</span><b>{pot} ({potTier}){potBoost > 0 && <span className="pp-bt-chip" title={ct('Teto furado por performance')}> 🚀 +{potBoost}</span>}</b></div>
                 </div>
               </Panel>
             </div>
@@ -644,6 +821,36 @@ export function CareerPlayerPage({
                 <p className="pp-empty">{ct('Nenhum campeonato disputado ainda.')}</p>
               )}
             </Panel>
+
+            {/* #13/#26: histórico POR EVENTO — como o jogador foi em CADA campeonato */}
+            {seasonLines && seasonLines.length > 0 && (
+              <Panel title={ct('Temporadas')} icon="chart">
+                <table className="pp-seasons">
+                  <thead>
+                    <tr>
+                      <th>{ct('Split')}</th><th>{ct('Campeonato')}</th>
+                      <th className="n">{ct('Mapas')}</th><th className="n">K–D</th>
+                      <th className="n">Rating</th><th className="n">{ct('Colocação')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {seasonLines.slice(0, 12).map((l, i) => {
+                      const d = deriveEventLine(l);
+                      return (
+                        <tr key={`${l.split}:${l.event}:${i}`}>
+                          <td>{l.split}.{l.event}</td>
+                          <td className="ev">{l.eventName}</td>
+                          <td className="n">{l.maps}</td>
+                          <td className="n">{l.k}–{l.d}</td>
+                          <td className="n"><b>{d ? d.rating.toFixed(2) : '—'}</b></td>
+                          <td className="n">{l.champion ? '🏆' : l.placement != null ? `${l.placement}º` : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </Panel>
+            )}
           </div>
         )}
 

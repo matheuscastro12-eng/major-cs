@@ -99,7 +99,11 @@ export function draftOptions(
   const rng = makeRng(((seed ^ (stage * 0x9e3779b1)) >>> 0) || 1);
   const taken = new Set(pickedPlayerIds);
   const weights = stage === 0 ? CAPTAIN_WEIGHTS : FIELD_WEIGHTS;
-  const eligible = catalog.filter((c) => fitsRole(c, role) && !taken.has(c.playerId));
+  // BUG FIX: LENDAS (histIcon, playerId hist_*) ficam FORA do draft — o run
+  // joga partidas com o pool online (dataset 2026) e a lenda não existe lá;
+  // um capitão-lenda travava o playDraftMatch em silêncio (five < 5). O tier
+  // 10 delas caía no bucket [8,99] dos specials do capitão.
+  const eligible = catalog.filter((c) => c.rarity !== 'histIcon' && fitsRole(c, role) && !taken.has(c.playerId));
   const byTier = (lo: number, hi: number) =>
     eligible.filter((c) => {
       const t = rarityInfo(c.rarity).tier;

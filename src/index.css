@@ -5916,6 +5916,41 @@ tr.fin-expiring { background: rgba(212,164,65,0.1); }
 .account-delete-confirm { border: 0; border-radius: var(--rtm-radius); padding: 9px 18px; background: #8d3434; color: #fff; font: 700 13px var(--rtm-font-cond); text-transform: uppercase; letter-spacing: .8px; cursor: pointer; }
 .account-delete-confirm:disabled { opacity: .4; cursor: not-allowed; }
 
+/* banner de patrocínio real, fixo no rodapé (sempre visível). Removido junto com
+   a G4 em 70ac50d e restaurado para a COPA ACE — os seletores has-ad-footer da
+   carreira (career-dashboard.css) voltam a ter efeito com a classe no ar. */
+.ad-footer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(0deg, rgba(10,12,16,0.97), rgba(10,12,16,0.82));
+  border-top: 1px solid var(--gold);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  backface-visibility: hidden;
+  contain: layout paint;
+  isolation: isolate;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+.ad-footer-meta { width: min(970px, 100%); display: flex; align-items: center; justify-content: space-between; gap: 10px; line-height: 1; }
+.ad-footer-label {
+  font-size: 0.58rem; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--muted); opacity: 0.55; line-height: 1;
+}
+.ad-footer-link { display: block; line-height: 0; max-width: 100%; contain: paint; }
+.ad-footer-link img {
+  display: block; width: 970px; max-width: 100%; height: auto; border-radius: 6px;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+/* reserva espaço no rodapé só quando o banner está no ar (classe ligada pelo React).
+   Mantido nos 126px do G4 de propósito: sem a linha do aviso 18+ o bloco ficou
+   ~114px, então 126 deixa uma folga inofensiva. Apertar isso pro valor exato
+   troca "sobra um vão" por "corta 2px de conteúdo" — risco assimétrico à toa. */
+body.has-ad-footer { padding-bottom: 126px; }
+
 @media (max-width: 640px) {
   .landing-legal-footer { justify-content: center; text-align: center; }
   .landing-legal-footer > span:nth-child(2) { text-align: center; }
@@ -6538,3 +6573,60 @@ button.t20-row {
 /* Top 20 HLTV — títulos do ano (chips) */
 .cer-titles { display: flex; flex-wrap: wrap; gap: 5px; }
 .cer-title-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: var(--gold-2, #f4d27a); background: rgba(216,169,67,.12); border: 1px solid var(--gold-soft, rgba(216,169,67,.4)); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+
+/* #42 — corrida ao Major (aba VRS) */
+.vrs-race {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;
+  padding: 11px 14px; border: 1px solid var(--em-border);
+  border-left: 3px solid var(--em-gold); background: color-mix(in srgb, var(--em-gold) 6%, transparent);
+  font-size: 0.86rem; line-height: 1.45;
+}
+.vrs-race.in { border-left-color: var(--em-green, #39c07a); background: color-mix(in srgb, #39c07a 6%, transparent); }
+.vrs-race b { letter-spacing: 0.4px; }
+.vrs-race span { color: var(--em-muted); }
+.vrs-race span b { color: var(--em-text); }
+.vrs-cutline td {
+  padding: 6px 8px !important; text-align: center !important;
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--em-gold); border-top: 2px dashed var(--em-gold) !important;
+  background: color-mix(in srgb, var(--em-gold) 5%, transparent);
+}
+
+/* #38 — oportunidades da janela (alvos infelizes) */
+.nego-unhappy { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.nego-unhappy-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 10px 12px; cursor: pointer; text-align: left; font-family: inherit; color: var(--em-text);
+  border: 1px solid color-mix(in srgb, var(--em-gold) 45%, var(--em-border));
+  border-radius: 6px; background: color-mix(in srgb, var(--em-gold) 6%, transparent);
+  transition: border-color .12s;
+}
+.nego-unhappy-card:hover { border-color: var(--em-gold); }
+.nego-unhappy-card b { font-size: 0.86rem; }
+.nego-unhappy-card em { font-style: normal; font-size: 0.72rem; font-weight: 800; color: var(--em-gold); }
+
+/* #27 — galeria de prêmios (aba Histórico) */
+.hist-awards { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.hist-awards-year > b { display: block; font-size: 0.74rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--em-gold); margin-bottom: 6px; }
+.hist-awards-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.hist-award {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 12px;
+  border: 1px solid var(--em-border); border-left: 3px solid var(--em-gold); border-radius: 4px;
+  background: color-mix(in srgb, var(--em-gold) 4%, transparent);
+}
+.hist-award-label { font-size: 0.64rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--em-muted); font-weight: 800; }
+.hist-award b { font-size: 0.86rem; }
+.hist-award em { font-style: normal; font-size: 0.72rem; color: var(--em-muted); }
+
+/* #33 — hall da fama de aposentados */
+.hist-hof { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.hist-hof-card { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border: 1px solid var(--em-border); border-left: 3px solid #e58a8a; border-radius: 4px; }
+.hist-hof-card b { font-size: 0.86rem; }
+.hist-hof-card span { font-size: 0.7rem; color: var(--em-muted); }
+.hist-hof-card i { font-style: normal; color: var(--em-gold); font-weight: 800; }
+
+/* #40 — passagens no perfil */
+.pp-stints { display: flex; flex-direction: column; gap: 6px; }
+.pp-stint { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border: 1px solid var(--em-border); border-left: 3px solid var(--em-gold); border-radius: 4px; }
+.pp-stint b { font-size: 0.82rem; }
+.pp-stint span { font-size: 0.7rem; color: var(--em-muted); }

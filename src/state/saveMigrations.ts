@@ -17,7 +17,7 @@
 // Convenção: a migration N leva DE v(N) PARA v(N+1). MIGRATIONS[1] roda em
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
-export const SAVE_VERSION = 17;
+export const SAVE_VERSION = 26;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -186,6 +186,78 @@ const MIGRATIONS: Record<number, Migration> = {
     boardLog: Array.isArray(save.boardLog) ? save.boardLog : [],
     _v: 17,
   }),
+  // v17 → v18 (#10 promessas formais): backfill dos campos de promessa à
+  // diretoria — save antigo nunca firmou nada.
+  17: (save) => ({
+    ...save,
+    promise: save.promise ?? null,
+    lastPromise: save.lastPromise ?? null,
+    _v: 18,
+  }),
+  // v18 → v19 (#13 seasonStats): histórico por jogador/evento — save antigo
+  // começa vazio e passa a acumular dos próximos eventos em diante.
+  18: (save) => ({
+    ...save,
+    seasonStats: save.seasonStats ?? {},
+    _v: 19,
+  }),
+  // v19 → v20 (#17 potencial dinâmico): teto furado por performance — save
+  // antigo começa sem nenhum breakthrough.
+  19: (save) => ({
+    ...save,
+    dynamicPotBonus: save.dynamicPotBonus ?? {},
+    _v: 20,
+  }),
+  // v20 → v21 (#16 felicidade + #31 vínculo): satisfação composta suavizada e
+  // coachBond — saves antigos começam neutros (o tick preenche em 1 split).
+  20: (save) => ({
+    ...save,
+    coachBond: save.coachBond ?? {},
+    satisfaction: save.satisfaction ?? {},
+    _v: 21,
+  }),
+  // v21 → v22 (#15 listagem de venda): preços pedidos por jogador — vazio.
+  21: (save) => ({
+    ...save,
+    listedPrices: save.listedPrices ?? {},
+    _v: 22,
+  }),
+  // v22 → v23 (#22 foco de treino por atributo): foco e viés — vazios.
+  22: (save) => ({
+    ...save,
+    trainingFocusAttr: save.trainingFocusAttr ?? {},
+    evoAttrBias: save.evoAttrBias ?? {},
+    _v: 23,
+  }),
+  // v23 → v24 (#10 promessas a jogadores): registro vazio.
+  23: (save) => ({
+    ...save,
+    playerPromises: save.playerPromises ?? {},
+    _v: 24,
+  }),
+  // v24 → v25 (#39 split review + #41 watchlist): snapshot do início de split
+  // (null = primeiro review sai no PRÓXIMO fechamento) e watchlist vazia.
+  24: (save) => ({
+    ...save,
+    splitStart: save.splitStart ?? null,
+    watchlist: save.watchlist ?? [],
+    _v: 25,
+  }),
+  // v25 → v26 (#40 passagens + #35 bootcamp): abre a passagem ATIVA de cada
+  // membro do elenco atual (from=1 — o histórico anterior é desconhecido;
+  // startOvr=0 = "desde o início registrado") e zera o uso do bootcamp.
+  25: (save) => {
+    // cópia — migração nunca muta o objeto de entrada
+    const stints = { ...((save.stints as Record<string, unknown> | undefined) ?? {}) };
+    const orgName = String((save.org as { name?: string } | null | undefined)?.name ?? 'Sua org');
+    const squad = Array.isArray(save.squad) ? (save.squad as { playerId?: string }[]) : [];
+    for (const sig of squad) {
+      const pid = sig?.playerId;
+      if (typeof pid !== 'string' || pid in stints) continue;
+      stints[pid] = [{ team: orgName, from: 1, to: null, startOvr: 0 }];
+    }
+    return { ...save, stints, _v: 26 };
+  },
 };
 
 // Versão atual de um save. Save legado (sem `_v`) é tratado como v1.

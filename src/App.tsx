@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { AdminGate } from './components/AdminGate';
 import { BrandMark } from './components/brand';
 import { DonateButton, DonateModal } from './components/Donate';
+import { AdBanner } from './components/AdBanner';
 import { Draft } from './components/Draft';
 import { AppFrame } from './components/ds';
 import { Home } from './components/Home';
@@ -14,6 +15,7 @@ import { UltimateGate } from './components/ultimate/UltimateGate';
 import { Loader } from './components/ui';
 import { AchievementsModal, AchievementToast } from './components/Achievements';
 import { recordGameEnd, type AchDef } from './state/achievements';
+import { captureGhostFromUrl } from './state/ghost';
 
 // Deploy novo troca os hashes dos chunks; uma aba aberta tenta carregar um chunk
 // antigo que sumiu do servidor → "Failed to fetch dynamically imported module".
@@ -326,7 +328,9 @@ export default function App() {
     if (!RTP_ENABLED && screen === 'rtp') { setScreen('home'); return; } // kill-switch: deep link /road-to-pro cai na home
     // Ultimate: conta logada OU convidado entram. Road to Pro (rtp) segue
     // EXCLUSIVO de conta vitalícia — o modo convidado não afrouxa esse gate.
-    if (accountReady && ((screen === 'ultimate' && !account && !utGuest) || (screen === 'rtp' && !account?.paid))) setScreen('landing');
+    // RtP SEM vitalícia agora entra em modo DEMO (peneira + primeiras semanas)
+    // — a conversão acontece DENTRO do jogo (RtpDemoGate), não mais na porta.
+    if (accountReady && screen === 'ultimate' && !account && !utGuest) setScreen('landing');
   }, [screen, accountReady, account?.paid, utGuest]);
   // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
   useEffect(() => {
@@ -334,6 +338,8 @@ export default function App() {
   }, [screen, accountReady, account?.paid]);
   const { manager, saveManager } = useManager();
   const [paidToast, setPaidToast] = useState(false);
+  // desafio de fantasma: captura ?desafio=… UMA vez no boot (Série do Dia consome)
+  useEffect(() => { captureGhostFromUrl(); }, []);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
@@ -882,6 +888,7 @@ export default function App() {
     return (
       <>
         <Landing onPlay={() => setScreen(manager ? 'home' : 'setup')} onCheckout={startCheckout} openSignup={WANTS_SIGNUP || landingAutoOpen} />
+        {!bannerPreview && <AdBanner />}
       </>
     );
   }
@@ -1012,7 +1019,12 @@ export default function App() {
       {utGateOpen && !account && (
         <UltimateGate
           onClose={() => setUtGateOpen(false)}
-          onSignup={() => { setUtGateOpen(false); goToCheckout(); }}
+          /* funil: dado real mostra home-ultimate/home-rtp com paywall_view alto
+             e checkout_open baixo (~0,4-0,6%) contra ~1% do upsell-card — a
+             diferença é que "Entrar" já abre o AccountModal na hora (authOpen)
+             enquanto "Criar conta" mandava pra landing inteira, exigindo achar
+             o CTA de novo. Alinha o cadastro ao mesmo atalho do login. */
+          onSignup={() => { setUtGateOpen(false); setAuthMode('signup'); setAuthOpen(true); }}
           onLogin={() => { setUtGateOpen(false); setAuthMode('login'); setAuthOpen(true); }}
           onGuest={() => { setUtGateOpen(false); enableUtGuest(); setScreen('ultimate'); }}
         />
@@ -1066,7 +1078,10 @@ export default function App() {
           account={account}
           accountReady={accountReady}
           onAccount={() => setScreen(manager ? 'profile' : 'setup')}
-          onCreateAccount={goToCheckout}
+          /* funil: mesmo ajuste do UltimateGate acima — abre o AccountModal na
+             hora em vez de mandar pro landing inteiro (src = home-rtp/home-pill,
+             maior volume de paywall_view do funil e o de pior conversão). */
+          onCreateAccount={() => { setAuthMode('signup'); setAuthOpen(true); }}
           onLogout={() => { logout(); setCloudEnabled(false); }}
           onAdmin={account?.admin ? () => setScreen('admin') : undefined}
           onAchievements={() => setAchOpen(true)}
@@ -1118,15 +1133,24 @@ export default function App() {
         <UltimateSquadScreen
           onBack={() => setScreen('home')}
           guest={!account}
-          onCreateAccount={() => { setCheckoutSrc('ultimate-guest'); goToCheckout(); }}
-          onUpgrade={goToCheckout}
+          /* funil: o botão do mkt-lock (Mercado P2P) foi adicionado em 27/07 pra
+             sair de 0% de conversão, mas continuava mandando pra landing inteira
+             — 87 paywall_view/28d e 0 checkout_open, mesmo depois do botão existir.
+             Convidado vai direto pro cadastro; conta grátis vai direto pro checkout
+             (mesmo atalho do onUpgrade abaixo). */
+          onCreateAccount={() => {
+            setCheckoutSrc('ultimate-guest');
+            if (account) startCheckout();
+            else { setAuthMode('signup'); setAuthOpen(true); }
+          }}
+          onUpgrade={() => startCheckout()}
         />
       )}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
-      {RTP_ENABLED && account?.paid && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} />}
+      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={() => setScreen('landing')} />}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
-      {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} />}
+      {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} />}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (
@@ -1254,6 +1278,13 @@ export default function App() {
       </Suspense>
       </main>
 
+      {/* Patrocinador sempre visível no rodapé (COPA ACE). Some sozinho se o
+          asset falhar, se o link não estiver definido ou depois do início do
+          campeonato. Não aparece no modo de preview de banners.
+          Aparece TAMBÉM na carreira de propósito: é onde o jogador passa 95% do
+          tempo, e sem isso o banner "sumia" do dia-a-dia. O body.has-ad-footer
+          reserva o padding-bottom pro UI da carreira não ser engolido. */}
+      {!bannerPreview && <AdBanner />}
     </>
   );
 }

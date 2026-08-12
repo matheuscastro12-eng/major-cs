@@ -346,4 +346,93 @@ export const HISTORIC_LINES: HistoricLine[] = [
       { nick: 'mezii', country: 'gb', role: 'Rifler' },
     ],
   },
+  // ── leva 2 (2026-08): a raiz do 1.6 + eras que faltavam ──
+  {
+    id: 'fnatic-2009', team: 'fnatic', year: 2009,
+    context: 'O 1.6 raiz: a fnatic sueca que dominou 2009 e definiu uma era.',
+    players: [
+      { nick: 'f0rest', aliases: ['forest'], country: 'se', role: 'Rifler' },
+      { nick: 'GeT_RiGhT', aliases: ['getright', 'get right'], country: 'se', role: 'Rifler' },
+      { nick: 'cArn', aliases: ['carn'], country: 'se', role: 'IGL' },
+      { nick: 'dsn', country: 'se', role: 'AWP' },
+      { nick: 'Gux', aliases: ['gux'], country: 'se', role: 'Rifler' },
+    ],
+  },
+  {
+    id: 'navi-2010', team: "Natus Vincere", year: 2010,
+    context: 'A Na’Vi de 1.6 que venceu TUDO em 2010 — o primeiro grand slam do CS.',
+    players: [
+      { nick: 'markeloff', country: 'ua', role: 'AWP' },
+      { nick: 'Edward', aliases: ['edward'], country: 'ua', role: 'Rifler' },
+      { nick: 'Zeus', aliases: ['zeus'], country: 'ua', role: 'IGL' },
+      { nick: 'starix', country: 'ua', role: 'Support' },
+      { nick: 'ceh9', country: 'ua', role: 'Entry' },
+    ],
+  },
+  {
+    id: 'g2-2017', team: 'G2 Esports', year: 2017,
+    context: 'O super-time francês: a G2 que juntou as estrelas da cena em 2017.',
+    players: [
+      { nick: 'shox', country: 'fr', role: 'Rifler' },
+      { nick: 'kennyS', aliases: ['kennys', 'kenny'], country: 'fr', role: 'AWP' },
+      { nick: 'apEX', aliases: ['apex'], country: 'fr', role: 'Entry' },
+      { nick: 'NBK-', aliases: ['nbk'], country: 'fr', role: 'Support' },
+      { nick: 'bodyy', country: 'fr', role: 'Rifler' },
+    ],
+  },
+  {
+    id: 'faze-2017', team: 'FaZe Clan', year: 2017,
+    context: 'A primeira super-equipe internacional: a FaZe estrelada de 2017.',
+    players: [
+      { nick: 'karrigan', country: 'dk', role: 'IGL' },
+      { nick: 'NiKo', aliases: ['niko'], country: 'ba', role: 'Rifler' },
+      { nick: 'olofmeister', aliases: ['olof'], country: 'se', role: 'Rifler' },
+      { nick: 'GuardiaN', aliases: ['guardian'], country: 'sk', role: 'AWP' },
+      { nick: 'rain', country: 'no', role: 'Entry' },
+    ],
+  },
+  {
+    id: 'furia-2019', team: 'FURIA', year: 2019,
+    context: 'A FURIA do rush infinito que assustou o mundo em 2019.',
+    players: [
+      { nick: 'arT', aliases: ['art'], country: 'br', role: 'IGL' },
+      { nick: 'KSCERATO', aliases: ['kscerato'], country: 'br', role: 'Rifler' },
+      { nick: 'yuurih', country: 'br', role: 'Rifler' },
+      { nick: 'VINI', aliases: ['vini'], country: 'br', role: 'Support' },
+      { nick: 'ableJ', aliases: ['ablej'], country: 'br', role: 'Entry' },
+    ],
+  },
+  {
+    id: 'mouz-2019', team: 'mousesports', year: 2019,
+    context: 'A mousesports de karrigan que fechou 2019 atropelando os favoritos.',
+    players: [
+      { nick: 'karrigan', country: 'dk', role: 'IGL' },
+      { nick: 'ropz', country: 'ee', role: 'Lurker' },
+      { nick: 'frozen', country: 'sk', role: 'Rifler' },
+      { nick: 'woxic', country: 'tr', role: 'AWP' },
+      { nick: 'chrisJ', aliases: ['chrisj'], country: 'nl', role: 'Support' },
+    ],
+  },
+  {
+    id: 'vitality-2019', team: 'Team Vitality', year: 2019,
+    context: 'O ano de estreia do prodígio ZywOo — e o mundo percebeu na hora.',
+    players: [
+      { nick: 'ZywOo', aliases: ['zywoo'], country: 'fr', role: 'AWP' },
+      { nick: 'apEX', aliases: ['apex'], country: 'fr', role: 'Entry' },
+      { nick: 'ALEX', aliases: ['alex'], country: 'gb', role: 'IGL' },
+      { nick: 'RpK', aliases: ['rpk'], country: 'fr', role: 'Support' },
+      { nick: 'shox', country: 'fr', role: 'Rifler' },
+    ],
+  },
+  {
+    id: 'mongolz-2025', team: 'The MongolZ', year: 2025,
+    context: 'A Mongólia no topo do mundo: o time que fez a Ásia inteira sonhar.',
+    players: [
+      { nick: 'bLitz', aliases: ['blitz'], country: 'mn', role: 'IGL' },
+      { nick: '910', country: 'mn', role: 'Rifler' },
+      { nick: 'Techno4K', aliases: ['techno4k', 'techno'], country: 'mn', role: 'Rifler' },
+      { nick: 'mzinho', country: 'mn', role: 'Support' },
+      { nick: 'Senzu', aliases: ['senzu'], country: 'mn', role: 'AWP' },
+    ],
+  },
 ];

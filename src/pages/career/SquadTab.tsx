@@ -75,6 +75,8 @@ interface Props {
   update: (patch: Record<string, unknown>) => void;
   openPlayerProfile: (p: Player) => void;
   doScrimVs: (oppId: string) => void;
+  onBootcamp?: () => void;   // #35: intensivo pago (1x/split)
+  bootcampUsed?: boolean;
   scrimOpponents: ScrimOpponentOption[];
   scrimReport: ScrimMatchReport | null;
   hireScout: (id: string) => void;
@@ -89,6 +91,8 @@ export function SquadTab({
   update,
   openPlayerProfile,
   doScrimVs,
+  onBootcamp,
+  bootcampUsed = false,
   scrimOpponents,
   scrimReport,
   hireScout,
@@ -185,6 +189,23 @@ export function SquadTab({
         report={scrimReport}
         onScrim={doScrimVs}
       />
+
+      {/* #35: bootcamp do time — o intensivo pré-campanha */}
+      {onBootcamp && (
+        <DashCard title={ct('Bootcamp do time')}>
+          <p className="muted small" style={{ margin: '0 0 10px' }}>
+            {ct('Duas semanas de imersão: +5 de moral pra todo o elenco e 30 de fadiga aliviada. Uma vez por split — chegue inteiro no momento decisivo.')}
+          </p>
+          <button
+            className="btn gold"
+            disabled={bootcampUsed || (save.budget ?? 0) < 60_000}
+            onClick={onBootcamp}
+            title={bootcampUsed ? ct('Bootcamp já usado neste split.') : undefined}
+          >
+            🏕️ {bootcampUsed ? ct('Bootcamp concluído neste split') : `${ct('Fazer bootcamp')} · R$ 60 mil`}
+          </button>
+        </DashCard>
+      )}
 
       {/* T3.12: scouting */}
       <ScoutingCard

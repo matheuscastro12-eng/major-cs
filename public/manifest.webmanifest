@@ -1,0 +1,29 @@
+{
+  "name": "Road to Major",
+  "short_name": "RtMajor",
+  "description": "Diário de CS, carreira, Ultimate e Road to Pro — simulador de Counter-Strike de todas as eras.",
+  "start_url": "/diario",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#181d23",
+  "theme_color": "#2d3844",
+  "lang": "pt-BR",
+  "categories": ["games", "sports"],
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Diário de hoje",
+      "short_name": "Diário",
+      "description": "Os jogos diários de hoje",
+      "url": "/diario"
+    }
+  ]
+}

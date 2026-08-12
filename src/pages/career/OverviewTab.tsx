@@ -16,10 +16,13 @@ import {
   scoutOppPlayerStats,
   effectiveAge,
   playerPotentialOvr,
+  isMajorSplit,
   type GamePlan,
   type SeasonStat,
   type Signing,
 } from '../../components/CareerScreen';
+import { promiseOffersFor, PROMISE_SIGN_DELTA, type BoardPromise } from '../../engine/career/promises';
+import { applyBoardDelta } from '../../engine/career/boardApproval';
 import type { YouthDebut } from '../../engine/career/playerAge';
 import type { VrsTeamRow } from './VrsTab';
 import { buildDashboardTasks } from '../../state/career-tasks';
@@ -201,6 +204,16 @@ export function OverviewTab({
       oppScoutStats={oppScoutStats}
       board={typeof save.board === 'number' ? (save.board as number) : undefined}
       boardLog={Array.isArray(save.boardLog) ? (save.boardLog as import('../../engine/career/boardApproval').BoardLogEntry[]) : []}
+      promise={(save.promise as BoardPromise | null | undefined) ?? null}
+      promiseOffers={!save.promise ? promiseOffersFor(save.tier ?? 3, save.split, isMajorSplit(save.split)) : null}
+      onPromise={(p) => {
+        // #10: firmar promessa — aporte cai no caixa AGORA; julgamento no fim do split.
+        const cur = typeof save.board === 'number' ? (save.board as number) : 60;
+        const log = Array.isArray(save.boardLog) ? (save.boardLog as import('../../engine/career/boardApproval').BoardLogEntry[]) : [];
+        const signed = applyBoardDelta(cur, log, save.split, PROMISE_SIGN_DELTA,
+          `${ct('Promessa firmada:')} ${ct(p.text)}${p.injection > 0 ? ` (+${formatMoney(p.injection)} ${ct('de aporte')})` : ''}`);
+        update({ promise: p, budget: save.budget + p.injection, board: signed.board, boardLog: signed.boardLog });
+      }}
       gamePlanPicker={
         <GamePlanPicker
           plan={save.gamePlan ?? 'disciplined'}

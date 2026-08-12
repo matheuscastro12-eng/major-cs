@@ -4,7 +4,7 @@
 // em três stages suíços mais Champions Stage. A interface usa PT como fonte e
 // traduz as strings da carreira com ct().
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles } from '../engine/ratings';
+import { formatMoney, playerValue, playerWage, buildUserTeam, playerOvr, resyncUserRoles, orgRefSynergy } from '../engine/ratings';
 import { leagueDone, leagueTable, leagueTeam, resolveLeagueRound, userLeagueMatch, type League, type LeagueMatch } from '../engine/league';
 import { createGSLStage, resolveGSLRound, gslDone, gslQualifiers, gslGroupView, GSL_ROUND_LABELS } from '../engine/gsl';
 import { teamSeasonToTTeam } from '../engine/ratings';
@@ -23,6 +23,24 @@ import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career
 import { applyFatigueForm, careerPlayerId, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry } from '../engine/career/boardApproval';
+import { evaluatePromise, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
+import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/career/seasonStats';
+import { tryBreakthrough } from '../engine/career/breakthrough';
+import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
+import { tickListedSales, LISTING_MAX_RATIO } from '../engine/career/listedSales';
+import { unhappyDiscountFor } from '../engine/career/unhappyMarket';
+import { buyoutFloorOf } from '../engine/career/buyout';
+import { openStint, closeStint, stintsOf, type StintsMap } from '../engine/career/stints';
+import { applyBootcamp, canBootcamp, BOOTCAMP_COST } from '../engine/career/bootcamp';
+import { applyFocusBias, suggestFocus, TRAINING_FOCUS_LABEL, CORE_STATS, type CoreStat } from '../engine/career/training';
+import {
+  judgePlayerPromises, hasOpenPromise, PLAYER_PROMISE_LABEL, PROMISE_MADE, PROMISE_KEPT, PROMISE_BROKEN,
+  PROMISE_DEADLINE_SPLITS, type PlayerPromise, type PlayerPromiseKind,
+} from '../engine/career/playerPromises';
+import {
+  addToWatchlist, removeFromWatchlist, watchOf, tickWatchlist, revealOf, apparentOvr, REVEAL_MAX,
+  type WatchlistEntry,
+} from '../engine/career/watchlist';
 import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/teamForm';
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
@@ -433,6 +451,7 @@ import {
   rejectOffer as rejectSponsorOffer,
   cleanupExpired as cleanupExpiredSponsors,
   placementBonusTotal as sponsorPlacementBonusTotal,
+  listActiveSponsors,
   type SponsorOffer,
   type SponsorState,
 } from '../engine/sponsors';
@@ -702,6 +721,23 @@ function applySponsorSplitTick(save: CareerSave, newSplit: number, rng: Rng): Pa
     pendingSponsorOffer: state.pendingSponsorOffer,
     sponsorCooldown: state.sponsorCooldown,
   };
+}
+
+// #48: aviso de EXPIRAÇÃO de patrocínio — sponsors com o ÚLTIMO split de
+// contrato ativo entram como news na abertura do split (renove/negocie antes
+// do caixa sentir). Puro; devolve [] quando nada expira.
+function sponsorExpiryWarnings(save: CareerSave, newSplit: number): NewsItem[] {
+  const expiring = listActiveSponsors(
+    { sponsors: save.sponsors, sponsorUntil: save.sponsorUntil, pendingSponsorOffer: null, sponsorCooldown: {} },
+    newSplit,
+  ).filter((v) => v.splitsLeft === 1);
+  if (!expiring.length) return [];
+  const names = expiring.map((v) => v.def.name).join(', ');
+  return [{
+    id: `${newSplit}:sponsor-exp`, split: newSplit, icon: '⚠️', tone: 'bad', cat: 'board',
+    title: ct('Patrocínio no último split'),
+    body: `${names} — ${ct('o contrato termina no fim deste split. A receita some se nada for renovado.')}`,
+  }];
 }
 export function formatFans(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -1119,7 +1155,7 @@ interface CareerSave {
   majorResult?: MajorResult | null; // resultado do Major persistido: reidrata a tela de resultado no F5 (evita re-simular a final)
   pendingSplit?: SplitRecord | null; // circuito concluído antes do Major; precisa sobreviver a F5 durante o torneio
   evo: Record<string, number>; // delta acumulado de evolução por jogador (id)
-  lastEvo: { nick: string; delta: number; phase: PlayerPhase }[]; // última janela
+  lastEvo: { nick: string; delta: number; phase: PlayerPhase; breakthrough?: { from: PotTier; to: PotTier } }[]; // última janela (#17: furo de teto marcado)
   sponsorUntil: Record<string, number>; // patrocinador id -> split até onde o contrato vale
   // T3.5: oferta dinâmica gerada pelo engine na virada de split. Quando != null,
   // a UI dispara confirmDialog pra user aceitar/recusar. Expira na próxima virada.
@@ -1183,11 +1219,25 @@ interface CareerSave {
   boardLog?: BoardLogEntry[]; // #8: histórico dos ajustes de confiança (ring de 12), mais recente primeiro
   objective?: BoardObjective | null; // meta da diretoria pro split atual
   lastObjective?: { text: string; met: boolean; delta: number } | null; // resultado do split passado
+  promise?: BoardPromise | null; // #10: promessa FORMAL firmada por você (aporte agora, julgamento no fim do split)
+  lastPromise?: PromiseOutcome | null; // resultado da última promessa (dashboard/news citam)
   fired?: boolean; // demitido pela diretoria (confiança no chão)
   contracts?: Record<string, number>; // playerId -> split em que o contrato termina (inclusive)
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
+  seasonStats?: SeasonStats; // #13: uma linha por jogador POR EVENTO (split/etapa/colocação) — histórico consultável pra sempre
+  dynamicPotBonus?: Record<string, number>; // #17: teto FURADO por performance (potencial scouted + isto = teto real)
+  coachBond?: Record<string, number>; // #31: vínculo jogador↔treinador (0-100, default 50) — eixo separado da moral
+  listedPrices?: Record<string, number>; // #15: jogadores SEUS listados à venda (playerId → preço pedido)
+  trainingFocusAttr?: Record<string, CoreStat>; // #22: atributo em foco por jogador (treino direcionado)
+  playerPromises?: Record<string, PlayerPromise[]>; // #10: promessas SUAS a jogadores (das conversas), com prazo e cobrança
+  watchlist?: WatchlistEntry[]; // #41: alvos acompanhados — o conhecimento (revealLevel) sobe a cada fechamento
+  stints?: StintsMap; // #40: passagens pelo SEU clube (entrada/saída com OVR)
+  bootcampSplit?: number; // #35: último split em que o bootcamp foi usado (1x por split)
+  splitStart?: { split: number; cash: number; ovr: Record<string, number> } | null; // #39: snapshot do INÍCIO do split (review de fechamento)
+  evoAttrBias?: Record<string, Partial<Record<CoreStat, number>>>; // #22: viés acumulado do foco (+1/split, cap +4)
+  satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
   // snapshot de careerStats no início do ano corrente — o delta vs careerStats
@@ -1306,6 +1356,19 @@ const emptySave = (): CareerSave => ({
   tierChange: null,
   board: 60,
   boardLog: [],
+  promise: null,
+  lastPromise: null,
+  seasonStats: {},
+  dynamicPotBonus: {},
+  coachBond: {},
+  satisfaction: {},
+  listedPrices: {},
+  trainingFocusAttr: {},
+  evoAttrBias: {},
+  playerPromises: {},
+  watchlist: [],
+  stints: {},
+  splitStart: null,
   objective: null,
   lastObjective: null,
   fired: false,
@@ -1405,6 +1468,7 @@ function splitNews(ctx: {
   tierChange: 'up' | 'down' | null; tierName?: string;
   releases: string[]; offer: PoachOffer | null;
   risers: string[]; sliders: string[]; unhappy: string[];
+  breakthroughs?: { nick: string; from: string; to: string }[]; // #17: furos de teto do split
   major?: { placement: number | string; champion: boolean } | null;
   boardConfidence?: number;
   star?: { nick: string; rating: number } | null;
@@ -1435,6 +1499,13 @@ function splitNews(ctx: {
     add('star', hot ? '⭐' : '🎯', hot ? 'good' : 'info', 'result', newsroom.storyStar(seed('star'), ctx.star.nick, ctx.star.rating));
   }
   if (ctx.majorNext) add('majorhype', '🌍', 'info', 'scene', newsroom.storyMajorHype(seed('majorhype'), ctx.majorNext));
+  // #17: FUROU O TETO — a manchete de scouting mais gostosa do jogo
+  for (const bt of ctx.breakthroughs ?? []) {
+    add(`bt:${bt.nick}`, '🚀', 'good', 'scout', {
+      title: `${bt.nick} ${ct('está furando o teto')} (${bt.from} → ${bt.to})`,
+      body: `${ct('Os relatórios de scouting subestimaram')} ${bt.nick}${ct(': a sequência recente forçou a reavaliação do potencial. O teto de desenvolvimento subiu — e o treino já respeita o novo limite.')}`,
+    });
+  }
   if (ctx.risers.length) add('rise', '📈', 'good', 'board', newsroom.storyRisers(seed('rise'), ctx.risers.join(', ')));
   if (ctx.sliders.length) add('slide', '📉', 'info', 'board', newsroom.storySliders(seed('slide'), ctx.sliders.join(', '), ctx.sliders.length > 1));
   if (ctx.unhappy.length) add('mood', '😟', 'bad', 'board', newsroom.storyUnhappy(seed('mood'), ctx.unhappy.join(', '), ctx.unhappy.length > 1));
@@ -1802,7 +1873,19 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 // Com isso: time bom recém-montado entra no meio-baixo da tabela; temporada
 // ruim faz o save.vrs decair e o time DESPENCA pro piso; só chega a #1 quem
 // vence de verdade (Tier 1 + Major), não quem ganhou um campeonato de acesso.
-function userBaseVrsFor(teamwork: number): number {
+// Semente do VRS do jogador. Os dois caminhos da carreira precisam de curvas
+// DIFERENTES, porque `teamwork` significa coisas diferentes em cada um:
+//
+// TAKEOVER — você herda a posição REAL da org. Mesma expressão do aiTeamVrs e
+//   mesmo id, então assumir a Yawara te deixa EXATAMENTE onde ela estava (o
+//   jitter `hash % 55` importa: vrsCore tem piso em teamwork 61, e sem ele todo
+//   time fraco empata em 0 e o jogador cai pro último lugar).
+// DRAFT / org nova — mantém a curva própria, mais achatada. O teamwork de um
+//   elenco recém-montado NÃO é um rating holístico; passá-lo pelo vrsCore o
+//   leria como se a org já tivesse resultado, e um time novo (teamwork ~90)
+//   estrearia perto do #3 do mundo.
+function userBaseVrsFor(teamwork: number, takeoverOrg?: TeamSeason): number {
+  if (takeoverOrg) return Math.round(vrsCore(teamwork) + (hashStr(takeoverOrg.id) % 55));
   return Math.round(Math.max(0, teamwork - 60) * 14);
 }
 // LEGADO: dominância sustentada (Majors vencidos + títulos tier-1) deixa uma marca
@@ -1817,12 +1900,15 @@ function userLegacyVrs(save: CareerSave): number {
 // ranking. Versão self-contained pra telas que não têm o buildTeam no closure.
 function userVrsTotal(save: CareerSave, findSigning: (s: Signing) => ResolvedSigning | null, coaches: TeamSeason[]): number {
   const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player; from: TeamSeason }[];
-  let teamwork = 78;
+  // mesma herança do buildTeam — este caminho alimenta o VRS dos patrocínios,
+  // e divergir dele faria a oferta usar um ranking diferente do exibido.
+  const org = save.takeoverId ? coaches.find((t) => t.id === save.takeoverId) : undefined;
+  let teamwork = org?.teamwork ?? 78;
   if (save.org && picks.length >= 5 && save.coachFromId) {
     const coach = coaches.find((t) => t.id === save.coachFromId)?.coach ?? ROOKIE_COACH;
-    teamwork = buildUserTeam(save.org.name, picks.slice(0, 5), coach).teamwork;
+    teamwork = buildUserTeam(save.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0).teamwork;
   }
-  return userBaseVrsFor(teamwork) + (save.vrs ?? 0) + userLegacyVrs(save);
+  return userBaseVrsFor(teamwork, org) + (save.vrs ?? 0) + userLegacyVrs(save);
 }
 // Região de circuito no modo carreira (Américas N/S/Central = uma só). Tipos e
 // helpers ficam em data/regions.ts (compartilhados com as bandeiras).
@@ -2154,6 +2240,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     'lastTalkAt', 'pairChem', 'extraOnTeam', 'academyPlayed', 'rivalries',
     'fatigue', 'facilities', 'mapStats', 'aiDrift', 'careerStatsYearStart',
     'recentRatings',
+    'stints',
   ].forEach(defaultInvalidRecord);
   [
     'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
@@ -2163,7 +2250,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
   [
     'budget', 'vrs', 'split', 'eventInSplit', 'titles', 'tier', 'board',
     'careerStatsThru', 'unread', 'playbookXp', 'academyTrophies',
-    'scrimsThisSplit',
+    'scrimsThisSplit', 'bootcampSplit',
   ].forEach(defaultInvalidNumber);
 
   const s = record as unknown as CareerSave;
@@ -2629,6 +2716,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       save.resolvedTeamEvents?.length, save.lastTalkAt, save.yearAwardsHistory?.length, save.pairChem, save.squad]);
 
   // T3.12: contrata/troca scout. Substitui o anterior (sem multa).
+
+  // #35: bootcamp do time — intensivo pago, 1x por split (+moral, -fadiga)
+  const doBootcamp = () => {
+    if (!canBootcamp(save.budget, save.split, save.bootcampSplit)) return;
+    const ids = save.squad.map((sg) => sg.playerId);
+    const r = applyBootcamp(ids, save.morale, save.fatigue, MORALE_DEFAULT);
+    update({ budget: save.budget - BOOTCAMP_COST, morale: r.morale, fatigue: r.fatigue, bootcampSplit: save.split });
+  };
   const hireScout = (scoutId: string) => {
     const def = scoutById(scoutId);
     if (!def) return;
@@ -2835,7 +2930,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const roleOf = (oid: string): Role | undefined => save.roles?.[oid];
   const syncUser = (team: TTeam): TTeam => {
     if (!team.isUser) return team;
-    const t = resyncUserRoles(team, roleOf);
+    // herda o entrosamento da org assumida (ver buildTeam) — senão o resync
+    // reestampava o 78 do draft e desfazia o fix no meio do split.
+    const org = save.takeoverId ? currentEra.find((ct2) => ct2.id === save.takeoverId) : undefined;
+    const t = resyncUserRoles(team, roleOf, org?.teamwork, org ? orgRefSynergy(org) : 0);
     // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
     // meio do split — o snapshot da liga não saberia sozinho)
     const synced: TTeam = {
@@ -3306,16 +3404,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     player = applyBo3PlayerEdit(player, bo3Edits);
     const basePlayer = player;
     const d = save.evo?.[player.id] ?? signingDrift(player, save.split, save.youthDebut);
-    if (!d) return { player, from, basePlayer };
+    // #22: viés do FOCO DE TREINO — o atributo trabalhado abre distância do resto.
+    const bias = save.evoAttrBias?.[player.id];
+    if (!d && !bias) return { player, from, basePlayer };
     const clamp = (v: number) => Math.max(40, Math.min(99, v));
     return {
       player: {
         ...player,
-        aim: clamp(player.aim + d),
-        consistency: clamp(player.consistency + d),
-        clutch: clamp(player.clutch + d),
-        awp: clamp(player.awp + d),
-        igl: clamp(player.igl + d),
+        aim: clamp(player.aim + d + (bias?.aim ?? 0)),
+        consistency: clamp(player.consistency + d + (bias?.consistency ?? 0)),
+        clutch: clamp(player.clutch + d + (bias?.clutch ?? 0)),
+        awp: clamp(player.awp + d + (bias?.awp ?? 0)),
+        igl: clamp(player.igl + d + (bias?.igl ?? 0)),
       },
       from,
       basePlayer,
@@ -3391,7 +3491,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const coach = s.coachFromId === '__custom__' && s.customCoach
       ? s.customCoach
       : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
-    const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach);
+    // TAKEOVER herda o entrosamento real da org (o 78 do buildUserTeam é a
+    // premissa do draft). Sem isso, assumir a Yawara (teamwork 60) já a
+    // promovia no ranking sem jogar nada — o teamwork é a semente do VRS.
+    const org = s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined;
+    const team = buildUserTeam(s.org.name, picks.slice(0, 5), coach, org?.teamwork, org ? orgRefSynergy(org) : 0);
     return {
       ...team, tag: s.org.tag, colors: s.org.colors, logoUrl: s.org.logo,
       mapPrefs: { ...team.mapPrefs, ...(s.mapTraining ?? {}) }, // domínio treinado por mapa
@@ -3496,11 +3600,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
   // evolução da janela: cada jogador do elenco sobe/cai conforme a fase da
   // carreira (em ascensão / no auge / em declínio). Roda ao fechar o split.
-  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo'> => {
+  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo' | 'dynamicPotBonus' | 'evoAttrBias'> => {
     // só jogadores do elenco ATUAL carregam evolução: quem foi vendido volta
     // aos atributos base (evita recomprar barato um jogador ainda evoluído)
     const evo: Record<string, number> = {};
     const lastEvo: CareerSave['lastEvo'] = [];
+    const dynamicPotBonus: Record<string, number> = { ...(s.dynamicPotBonus ?? {}) };
+    const evoAttrBias: CareerSave['evoAttrBias'] = { ...(s.evoAttrBias ?? {}) };
     for (const sig of s.squad) {
       const f = findSigning(sig);
       if (!f) continue;
@@ -3517,7 +3623,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       // e prospectos contratados no OVR de mercado — potBaseAge resolve a idade de
       // estreia correta pra cada tipo (regen id / youthDebut / dataset).
       const baseAgeForPot = potBaseAge(f.basePlayer, s.youthAge, s.youthDebut);
-      const pot = playerPotentialOvr(f.basePlayer, baseAgeForPot);
+      const potBase = playerPotentialOvr(f.basePlayer, baseAgeForPot);
+      // #17 POTENCIAL DINÂMICO: quem joga muito acima do previsto FURA O TETO.
+      // Avaliado antes do teto valer nesta virada — o breakthrough abre espaço já.
+      const bonus0 = dynamicPotBonus[sig.playerId] ?? 0;
+      const gained = tryBreakthrough({
+        playerId: sig.playerId, split: s.split, age, ovr,
+        pot: Math.min(99, potBase + bonus0),
+        ratings: s.recentRatings?.[sig.playerId],
+        currentBonus: bonus0,
+      });
+      const bonus = bonus0 + gained;
+      if (bonus > 0) dynamicPotBonus[sig.playerId] = bonus;
+      const pot = Math.min(99, potBase + bonus);
+      const breakthrough = gained > 0
+        ? { from: potentialTier(Math.min(99, potBase + bonus0)), to: potentialTier(pot) }
+        : undefined;
       const atCeiling = ovr >= pot;
       let d = evoDelta(sig.playerId, s.split, age, atCeiling);
       // foco de treino: o jogador escolhido desenvolve mais rápido. Jovem/auge
@@ -3534,9 +3655,96 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       if (d > 0) d = Math.min(d, Math.max(0, pot - ovr));
       const total = prev + d;
       if (total !== 0) evo[sig.playerId] = total;
-      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age) });
+      // #22: FOCO DE TREINO — split de desenvolvimento com foco definido acumula
+      // +1 no atributo escolhido (cap no engine). Veterano em declínio não especializa.
+      const focusAttr = s.trainingFocusAttr?.[sig.playerId];
+      if (focusAttr && d > 0 && !atCeiling) {
+        evoAttrBias[sig.playerId] = applyFocusBias(evoAttrBias[sig.playerId], focusAttr);
+      }
+      lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age), ...(breakthrough ? { breakthrough } : {}) });
     }
-    return { evo, lastEvo };
+    return { evo, lastEvo, dynamicPotBonus, evoAttrBias };
+  };
+
+
+  // #39 — snapshot do INÍCIO do split novo (OVR resolvido por jogador + caixa):
+  // é a régua contra a qual o PRÓXIMO fechamento mede evolução e lucro.
+  const snapshotSplitStart = (s: CareerSave, split: number, cash: number): CareerSave['splitStart'] => {
+    const ovr: Record<string, number> = {};
+    for (const sig of s.squad) {
+      const f = findSigning(sig);
+      if (f) ovr[sig.playerId] = playerOvr(f.player);
+    }
+    return { split, cash: Math.max(0, Math.round(cash)), ovr };
+  };
+
+  // #10 — cobrança das PROMESSAS A JOGADORES no fechamento: cumpriu = moral e
+  // vínculo sobem com notícia boa; prazo estourado = despenca com manchete.
+  const judgePromisesPatch = (
+    s: CareerSave,
+    moraleIn: Record<string, number>,
+    bondIn: Record<string, number>,
+  ): { playerPromises: CareerSave['playerPromises']; morale: Record<string, number>; coachBond: Record<string, number>; news: NewsItem[] } => {
+    const { promises, outcomes } = judgePlayerPromises(s.playerPromises, {
+      split: s.split,
+      contractUntil: (pid) => s.contracts?.[pid] ?? null,
+      squadIds: s.squad.map((x) => x.playerId),
+      fatigue: (pid) => s.fatigue?.[pid] ?? 0,
+    });
+    const morale = { ...moraleIn };
+    const coachBond = { ...bondIn };
+    const news: NewsItem[] = [];
+    const clampV = (v: number) => Math.max(0, Math.min(100, v));
+    for (const o of outcomes) {
+      const f = findSigning(s.squad.find((x) => x.playerId === o.playerId) ?? { playerId: o.playerId, fromId: '' } as Signing);
+      const nick = f?.player.nick ?? o.playerId;
+      const eff = o.kept ? PROMISE_KEPT : PROMISE_BROKEN;
+      morale[o.playerId] = clampV((morale[o.playerId] ?? MORALE_DEFAULT) + eff.morale);
+      coachBond[o.playerId] = clampV((coachBond[o.playerId] ?? BOND_DEFAULT) + eff.bond);
+      news.push({
+        id: `${s.split}:pprom:${o.playerId}:${o.kind}`, split: s.split, icon: o.kept ? '🤝' : '💔',
+        tone: o.kept ? 'good' : 'bad', cat: 'board',
+        title: o.kept ? `${ct('Palavra cumprida com')} ${nick}` : `${ct('Promessa quebrada com')} ${nick}`,
+        body: o.kept
+          ? `"${ct(PLAYER_PROMISE_LABEL[o.kind])}" — ${ct('você cumpriu. O vestiário nota quem honra o que fala.')}`
+          : `"${ct(PLAYER_PROMISE_LABEL[o.kind])}" — ${ct('o prazo estourou. A relação azedou, e o vestiário conversa.')}`,
+      });
+    }
+    return { playerPromises: promises, morale, coachBond, news };
+  };
+
+  // #16/#31 — tick de FELICIDADE do fechamento: satisfação composta (5 fatores)
+  // suavizada + vínculo estabilizado pelo psicólogo + drift leve da moral rumo à
+  // satisfação. Recebe a moral JÁ processada pelos eventos do fechamento — o
+  // drift estrutural entra por cima, nunca no lugar.
+  const tickHappiness = (
+    s: CareerSave,
+    results01: number,
+    moraleIn: Record<string, number>,
+  ): { satisfaction: Record<string, number>; coachBond: Record<string, number>; morale: Record<string, number> } => {
+    const satisfaction: Record<string, number> = { ...(s.satisfaction ?? {}) };
+    const coachBond: Record<string, number> = { ...(s.coachBond ?? {}) };
+    const morale: Record<string, number> = { ...moraleIn };
+    const psych = normalizeFacilities(s.facilities).psychologist;
+    const ids = s.squad.map((x) => x.playerId);
+    const chemPair = ids.length >= 2 ? averageStarterChemistry({ pairChem: s.pairChem }, ids) : 50;
+    for (const sig of s.squad) {
+      const oid = sig.playerId;
+      const bond = stabilizeBond(coachBond[oid] ?? BOND_DEFAULT, psych);
+      coachBond[oid] = bond;
+      const until = s.contracts?.[oid];
+      const { overall } = computeHappiness({
+        ratings: s.recentRatings?.[oid],
+        results01,
+        contractSplitsLeft: until != null ? until - s.split : null,
+        bond,
+        chemistry: Math.round(((s.playbookXp ?? 50) + chemPair) / 2),
+      });
+      satisfaction[oid] = tickSatisfaction(satisfaction[oid], overall);
+      const m = morale[oid] ?? MORALE_DEFAULT;
+      morale[oid] = Math.max(0, Math.min(100, m + satisfactionMoraleDrift(m, satisfaction[oid])));
+    }
+    return { satisfaction, coachBond, morale };
   };
 
   // evolui os prospectos da academia ao virar o split: jovens sobem rumo ao
@@ -3658,13 +3866,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
   // contabiliza as stats de cada evento UMA vez só. A chave split:event protege
   // contra F5 na tela de resultado sem descartar as etapas 2 e 3.
-  const bankStats = (s: CareerSave): Pick<CareerSave, 'careerStats' | 'careerStatsThru' | 'careerStatsEvent'> => {
+  const bankStats = (
+    s: CareerSave,
+    ev?: { placement: number; champion: boolean },
+  ): Pick<CareerSave, 'careerStats' | 'careerStatsThru' | 'careerStatsEvent' | 'seasonStats'> => {
     const eventKey = careerEventKey(s.split, s.eventInSplit);
     if (!s.league || s.careerStatsEvent === eventKey) {
       return {
         careerStats: s.careerStats ?? {},
         careerStatsThru: s.careerStatsThru ?? 0,
         careerStatsEvent: s.careerStatsEvent,
+        seasonStats: s.seasonStats ?? {},
       };
     }
     const firstEventInSplit = (s.eventInSplit ?? 1) === 1;
@@ -3672,6 +3884,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       careerStats: accumulateCareerStats(s.careerStats, s.league, firstEventInSplit),
       careerStatsThru: s.split,
       careerStatsEvent: eventKey,
+      // #13/#29: histórico por EVENTO (mesmo gate de dedupe do careerStats).
+      // Colocação: a do SEU time (a cena mundial fica em currentEra — fora do save).
+      seasonStats: bankSeasonEvent(s.seasonStats, s.league, {
+        split: s.split,
+        event: s.eventInSplit ?? 1,
+        eventName: s.circuit?.name ?? s.league.name,
+        tier: s.circuit?.tier ?? s.tier,
+        placements: ev ? { user: ev.placement } : undefined,
+        championTeamId: ev?.champion ? 'user' : null,
+      }),
     };
   };
 
@@ -3742,6 +3964,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // moves — real player voltava pro time original e academy/youth sumia.
     const moves = { ...(s.moves ?? {}) };
     const extraOnTeam = { ...(s.extraOnTeam ?? {}) };
+    let stints = { ...(s.stints ?? {}) }; // #40: fecha/abre passagens na janela
     const arrivals: string[] = [];
     const departures: string[] = [];
     const failedDeals: string[] = []; // acordos que caíram (sem caixa) — vão pro feed
@@ -3762,6 +3985,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       // pós-evo. Esse é o estado que vai pro extraOnTeam (academy/youth).
       const resolved = findSigning(sig);
       squad = squad.filter((x) => x.playerId !== sale.playerId);
+      stints = closeStint(stints, sale.playerId, s.split, resolved ? playerOvr(resolved.player) : undefined);
       delete contracts[sale.playerId]; delete morale[sale.playerId]; delete peakOvr[sale.playerId]; delete evo[sale.playerId];
       // BUG FIX (caça-bugs): fee não-finito (save antigo/parcial/cloud-merge)
       // tornava budget = NaN, que era persistido e no reload caía pra
@@ -3799,6 +4023,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const outSig = squad.find((x) => x.playerId === out);
         const outResolved = outSig ? findSigning(outSig) : null;
         squad = squad.filter((x) => x.playerId !== out);
+        stints = closeStint(stints, out, s.split, outResolved ? playerOvr(outResolved.player) : undefined);
         delete contracts[out]; delete morale[out]; delete peakOvr[out]; delete evo[out];
         if (baseHasPlayer(out)) {
           moves[out] = d.inFromId;
@@ -3817,11 +4042,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         ? signingWithSnapshot({ playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee }, resolved)
         : { playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee };
       squad.push(newSig);
+      stints = openStint(stints, d.inPlayerId, s.org?.name ?? 'Sua org', s.split, resolved ? playerOvr(resolved.player) : 0);
       contracts[d.inPlayerId] = s.split + CONTRACT_TERM - 1;
       budget -= dealFee;
       arrivals.push(d.inNick);
     }
-    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, moves, extraOnTeam, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
+    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, moves, extraOnTeam, stints, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
     const news: NewsItem[] = [];
     if (arrivals.length) news.push({ id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board', title: ct('Reforços confirmados na janela'), body: `${ct('Acordos fechados na temporada passada entraram em vigor:')} ${arrivals.join(', ')}.` });
     if (departures.length) news.push({ id: `${s.split}:sales`, split: s.split, icon: '💸', tone: 'info', cat: 'transfer', title: ct('Vendas confirmadas na janela'), body: `${ct('Saíram por proposta aceita:')} ${departures.join(', ')}.` });
@@ -4087,7 +4313,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       .filter((t) => t.id !== 'user' && t.id !== s.takeoverId)
       .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t) }))
       .sort((a, b) => b.vrs - a.vrs);
-    const userVrs = userBaseVrsFor(user.teamwork) + s.vrs + userLegacyVrs(s);
+    const userVrs = userBaseVrsFor(user.teamwork, s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined) + s.vrs + userLegacyVrs(s);
     const userRank = aiSorted.filter((x) => x.vrs > userVrs).length + 1; // posição mundial
     const userStage = userRank <= 8 ? 3 : userRank <= 16 ? 2 : 1;
     const field: TTeam[] = aiSorted.map((x) => x.tt).slice(0, 31);
@@ -4367,7 +4593,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const orgPlayers = ut?.players ?? [];
     if (orgPlayers.length && save.org) {
       const reg = save.region ?? macroRegionPlurality(orgPlayers.map((p) => p.country));
-      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userBaseVrsFor(ut?.teamwork ?? 78) + save.vrs + userLegacyVrs(save), isUser: true });
+      const takeoverOrg = save.takeoverId ? currentEra.find((t) => t.id === save.takeoverId) : undefined;
+      rows.push({ id: 'user', name: save.org.name, tag: save.org.tag, colors: save.org.colors, logoUrl: save.org.logo, players: orgPlayers, region: reg, vrs: userBaseVrsFor(ut?.teamwork ?? takeoverOrg?.teamwork ?? 78, takeoverOrg) + save.vrs + userLegacyVrs(save), isUser: true });
     }
     const groups = new Map<CareerRegion, Row[]>();
     for (const r of rows) {
@@ -4682,6 +4909,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             const peakOvr = { ...(save.peakOvr ?? {}) };
             const evo = { ...(save.evo ?? {}) };
             let budget = save.budget;
+            let stintsAcc = { ...(save.stints ?? {}) }; // #40
             const released: string[] = [];
             for (const r of save.renewals ?? []) {
               if (keep.has(r.playerId)) {
@@ -4689,11 +4917,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 budget = Math.max(0, budget - r.wage);
               } else {
                 squad = squad.filter((x) => x.playerId !== r.playerId); // libera de graça
+                stintsAcc = closeStint(stintsAcc, r.playerId, save.split, r.ovr);
                 delete contracts[r.playerId]; delete morale[r.playerId]; delete peakOvr[r.playerId]; delete evo[r.playerId];
                 released.push(r.nick);
               }
             }
-            let next: CareerSave = { ...save, squad, contracts, morale, peakOvr, evo, budget, renewals: [] };
+            let next: CareerSave = { ...save, squad, contracts, morale, peakOvr, evo, budget, stints: stintsAcc, renewals: [] };
             if (released.length) {
               next = { ...next, ...pushNews(next, [{
                 id: `${save.split}:rel`, split: save.split, icon: '👋', tone: 'info', cat: 'transfer',
@@ -4972,7 +5201,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const until = save.contracts?.[sg.playerId];
                   return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                 });
-                const morale = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }), normalizeFacilities(save.facilities).psychologist);
+                const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }), normalizeFacilities(save.facilities).psychologist);
+                // #16: campanha de Major como fator de resultados (1º=1.0 … fundo=0.45)
+                const majResults01 = mr.champion ? 1 : typeof mr.placement === 'number' ? (mr.placement <= 4 ? 0.8 : mr.placement <= 8 ? 0.6 : 0.45) : 0.6;
+                const hap = tickHappiness(save, majResults01, morale0);
+                const pj = judgePromisesPatch(save, hap.morale, hap.coachBond);
+                const morale = pj.morale;
                 const peakOvr = { ...(save.peakOvr ?? {}) };
                 for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                 const items = splitNews({
@@ -4981,6 +5215,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   tierChange: null, releases: [], offer: null,
                   risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                   sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
+                  breakthroughs: (evo.lastEvo ?? []).filter((e) => e.breakthrough).map((e) => ({ nick: e.nick, ...e.breakthrough! })),
                   unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                   major: { placement: mr.placement, champion: mr.champion },
                   boardConfidence: majBoard,
@@ -5047,6 +5282,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   ...teamEventTick,
                   ...agingPatchMajor,
                   ...scoutingPatchMajor,
+                  watchlist: tickWatchlist(save.watchlist, save.split, !!save.hiredScoutId), // #41
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
                   majorResult: null, // limpa o resultado reidratável (já consumido)
                   pendingSplit: null,
@@ -5074,6 +5310,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   objective: null,
                   renewals,
                   morale,
+                  satisfaction: hap.satisfaction,
+                  coachBond: pj.coachBond,
+                  playerPromises: pj.playerPromises,
+                  splitStart: snapshotSplitStart(save, save.split + 1, save.budget),
                   // FIM DE TEMPORADA (pós-Major): pré-temporada longa, quase zera a
                   // fadiga — é o reset que evita a espiral de burnout em carreira longa.
                   fatigue: recoverFatigue(save.fatigue, 70, normalizeFacilities(save.facilities).psychologist * 4),
@@ -5081,7 +5321,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                  ...pushNews(save, [...items, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
+                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
                 const fin = consummateDeals(next);
                 persist(fin);
@@ -5186,7 +5426,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // Some VRS vencendo partidas e indo longe; sua posição é base do elenco + ganhos.
     // Projeta o VRS já com o ganho DESTE split pra decidir a vaga no fim da temporada.
     const projectedEventVrs = applyCareerVrsDecay(save.vrs, vrsGain);
-    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? 78) + projectedEventVrs + userLegacyVrs(save);
+    const projOrg = save.takeoverId ? currentEra.find((t) => t.id === save.takeoverId) : undefined;
+    const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? projOrg?.teamwork ?? 78, projOrg) + projectedEventVrs + userLegacyVrs(save);
     const worldRank = oppEra.filter((t) => aiTeamVrs(t) > userProjVrs).length + 1; // posição mundial projetada
     const rankQualified = worldRank <= MAJOR_VRS_CUT;
     const majorNow = isMajorSplit(save.split) && lastEvent; // Major só na última etapa do split de Major
@@ -5228,14 +5469,27 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       ? applyBoardDelta(drifted, save.boardLog, save.split, boardDelta,
           objMet ? `${ct('Objetivo cumprido:')} ${ct(obj.text)}` : `${ct('Objetivo falhou:')} ${ct(obj.text)}`)
       : { board: Math.max(0, Math.min(100, drifted)), boardLog: save.boardLog ?? [] };
-    const newBoard = boardObj.board;
+    // PROMESSA FORMAL (#10): julgada aqui junto com a meta — o aporte já caiu no
+    // caixa ao firmar; agora é a hora de pagar (ou não) a conta da palavra dada.
+    const promise = save.promise && save.promise.split === save.split ? save.promise : null;
+    const promiseMet = promise
+      ? evaluatePromise(promise, { isChampion, qualifiedMajor: qualified, finalPos, tierChange: tierResult.tierChange })
+      : null;
+    const boardProm = promise
+      ? applyBoardDelta(boardObj.board, boardObj.boardLog, save.split,
+          promiseMet ? promise.keepDelta : promise.breakDelta,
+          promiseMet ? `${ct('Promessa CUMPRIDA:')} ${ct(promise.text)}` : `${ct('Promessa QUEBRADA:')} ${ct(promise.text)}`)
+      : boardObj;
+    const newBoard = boardProm.board;
     const objBonus = obj && objMet ? obj.bonus : 0;
     const fired = !!obj && newBoard <= 12; // confiança no chão -> demitido
     const boardPatch = {
       board: newBoard,
-      boardLog: boardObj.boardLog,
+      boardLog: boardProm.boardLog,
       lastObjective: obj ? { text: obj.text, met: objMet, delta: boardDelta } : null,
       objective: null,
+      promise: null,
+      lastPromise: promise ? ({ text: promise.text, met: !!promiseMet, split: save.split } satisfies PromiseOutcome) : (save.lastPromise ?? null),
       fired,
     };
 
@@ -5268,6 +5522,45 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               {ct('Premiação:')} <b>+{formatMoney(prize)}</b> · VRS: <b>+{vrsGain} pts</b> · {ct('Folha:')}{' '}
               <b className="neg">-{formatMoney(payroll)}</b>
             </div>
+            {/* #39: SPLIT REVIEW — o arco do split em números que importam */}
+            {lastEvent && save.splitStart && save.splitStart.split === save.split && (() => {
+              const start = save.splitStart!;
+              const movers = save.squad
+                .map((sig) => {
+                  const f = findSigning(sig);
+                  if (!f || start.ovr[sig.playerId] == null) return null;
+                  return { nick: f.player.nick, delta: playerOvr(f.player) - start.ovr[sig.playerId] };
+                })
+                .filter((x): x is { nick: string; delta: number } => !!x && x.delta !== 0)
+                .sort((a, b) => b.delta - a.delta);
+              const improved = movers.filter((m) => m.delta > 0).slice(0, 3);
+              const declined = movers.filter((m) => m.delta < 0).slice(-3).reverse();
+              const endCash = Math.max(0, save.budget + prize - payroll);
+              const profit = endCash - start.cash;
+              if (!improved.length && !declined.length && profit === 0) return null;
+              return (
+                <div className="prize-banner" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px', justifyContent: 'center' }}>
+                  <b>{ct('REVIEW DO SPLIT')}</b>
+                  {improved.length > 0 && (
+                    <span>📈 {improved.map((m) => `${m.nick} +${m.delta}`).join(' · ')}</span>
+                  )}
+                  {declined.length > 0 && (
+                    <span>📉 {declined.map((m) => `${m.nick} ${m.delta}`).join(' · ')}</span>
+                  )}
+                  <span style={{ color: profit >= 0 ? 'var(--em-green)' : 'var(--em-red)' }}>
+                    💰 {ct('caixa')} {formatMoney(start.cash)} → {formatMoney(endCash)} ({profit >= 0 ? '+' : ''}{formatMoney(profit)})
+                  </span>
+                </div>
+              );
+            })()}
+            {/* #10: veredito da promessa formal — a palavra dada tem cobrança pública */}
+            {promise && (
+              <div className="prize-banner" style={{ borderColor: promiseMet ? 'var(--em-green)' : 'var(--em-red)' }}>
+                {promiseMet
+                  ? <>🤝 <b>{ct('Promessa CUMPRIDA:')}</b> {ct(promise.text)} — {ct('a diretoria não esquece quem honra a palavra.')}</>
+                  : <>💥 <b style={{ color: 'var(--em-red)' }}>{ct('Promessa QUEBRADA:')}</b> {ct(promise.text)} — {ct('você deu a palavra. A conta chegou.')}</>}
+              </div>
+            )}
             {!lastEvent && (
               <div className="tier-banner up">
                 ✔ {ct('Etapa')} {ev}/{EVENTS_PER_SPLIT} {ct('concluída.')} {ct('Faltam')} {EVENTS_PER_SPLIT - ev} {ct('etapa(s) pra fechar o split — aí entra o offseason (mercado, evolução, renovações). Até lá, mesmo elenco.')}
@@ -5376,7 +5669,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                       pendingSplit: circuitRecord,
                       // acumula as stats da liga já aqui (o split do Major fecha
                       // depois, mas a liga regular terminou); evita perder o split
-                      ...bankStats(save),
+                      ...bankStats(save, { placement: finalPos, champion: isChampion }),
                     };
                     persist(next);
                     setSave(next);
@@ -5413,7 +5706,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                         endTier: save.tier,
                         wonMajor: false,
                       }),
-                      ...bankStats(save),
+                      ...bankStats(save, { placement: finalPos, champion: isChampion }),
                       // folga curta entre etapas: compensa ~um campeonato jogado
                       fatigue: recoverFatigue(save.fatigue, 16, normalizeFacilities(save.facilities).psychologist * 2),
                       restingPlayers: [],
@@ -5436,7 +5729,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     const until = save.contracts?.[sg.playerId];
                     return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                   });
-                  const morale = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }), normalizeFacilities(save.facilities).psychologist);
+                  const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }), normalizeFacilities(save.facilities).psychologist);
+                  // #16: campanha do split como fator de resultados (winrate da liga)
+                  const splitResults01 = me.wins + me.losses > 0 ? me.wins / (me.wins + me.losses) : 0.5;
+                  const hap = tickHappiness(save, splitResults01, morale0);
+                  // #10: cobrança das promessas a jogadores (em cima do tick de felicidade)
+                  const pj = judgePromisesPatch(save, hap.morale, hap.coachBond);
+                  const morale = pj.morale;
                   const peakOvr = { ...(save.peakOvr ?? {}) };
                   for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                   const items = splitNews({
@@ -5446,6 +5745,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     releases: [], offer,
                     risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                     sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
+                    breakthroughs: (evo.lastEvo ?? []).filter((e) => e.breakthrough).map((e) => ({ nick: e.nick, ...e.breakthrough! })),
                     unhappy: squadInfo.filter((si) => (morale[si.oid] ?? MORALE_DEFAULT) < 32).map((si) => nickByOid[si.oid] ?? si.oid),
                     boardConfidence: newBoard,
                     star: userSplitStar(me, save.split),
@@ -5492,6 +5792,32 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
                   // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                   const { marketNews, ...windowPatch } = applyTransferWindow(save);
+                  // #15: jogadores LISTADOS à venda — a IA dá o lance no fechamento.
+                  // Venda fechada entra no trilho existente (pendingSales → janela).
+                  const alreadySelling = new Set((save.pendingSales ?? []).map((x) => x.playerId));
+                  const listedHits = tickListedSales({
+                    listed: save.listedPrices ?? {},
+                    split: save.split,
+                    valueOf: (pid) => {
+                      const sig = save.squad.find((x) => x.playerId === pid);
+                      const f = sig ? findSigning(sig) : null;
+                      return f ? playerValue(f.player) : null;
+                    },
+                    buyers: oppEra.filter((t) => t.id !== save.takeoverId).map((t) => ({ id: t.id, name: t.team, tag: t.tag })),
+                    exclude: alreadySelling,
+                  });
+                  const listedSales = listedHits.map((h) => {
+                    const sig = save.squad.find((x) => x.playerId === h.playerId);
+                    const f = sig ? findSigning(sig) : null;
+                    return { playerId: h.playerId, nick: f?.player.nick ?? h.playerId, fee: h.fee, toTag: h.buyer.tag, toId: h.buyer.id };
+                  });
+                  const listedPricesLeft = { ...(save.listedPrices ?? {}) };
+                  for (const h of listedHits) delete listedPricesLeft[h.playerId];
+                  const listedNews: NewsItem[] = listedSales.map((sv) => ({
+                    id: `${save.split}:listed:${sv.playerId}`, split: save.split, icon: '💰', tone: 'good', cat: 'transfer',
+                    title: `${ct('Proposta aceita:')} ${sv.nick} → ${sv.toTag}`,
+                    body: `${ct('O clube topou o preço pedido')} (${formatMoney(sv.fee)}). ${ct('A transferência se concretiza na janela do próximo split.')}`,
+                  }));
                   // #8: fechar o split no vermelho (receitas não cobriram a folha)
                   // também corrói a confiança — a diretoria vê o caixa, não só a tabela.
                   const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
@@ -5515,6 +5841,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     ...teamEventTick,
                     ...agingPatch,
                     ...scoutingPatch,
+                    watchlist: tickWatchlist(save.watchlist, save.split, !!save.hiredScoutId), // #41
                     league: null,
                     circuit: null,
                     playoff: null,
@@ -5523,7 +5850,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     scenario: applyScenarioProgress(save.scenario, {
                       isChampion, circuitTier, finalPos, qualified, endTier: tierResult.tier, wonMajor: false,
                     }),
-                    ...bankStats(save),
+                    ...bankStats(save, { placement: finalPos, champion: isChampion }),
                     ...evo,
                     ...windowPatch,
                     ...boardPatch,
@@ -5533,13 +5860,20 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     pendingOffer: offer,
                     renewals,
                     morale,
+                    satisfaction: hap.satisfaction,
+                    coachBond: pj.coachBond,
+                    playerPromises: pj.playerPromises,
+                    splitStart: snapshotSplitStart(save, save.split + 1, Math.max(0, rawBudget)),
                     // offseason de split (não-Major): descanso de verdade entre splits
                     fatigue: recoverFatigue(save.fatigue, 40, normalizeFacilities(save.facilities).psychologist * 3),
                     restingPlayers: [],
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    // #15: vendas de jogadores LISTADOS entram no trilho da janela
+                    pendingSales: [...(save.pendingSales ?? []), ...listedSales],
+                    listedPrices: listedPricesLeft,
                   };
                   const fin = consummateDeals(next);
                   persist(fin);
@@ -6099,7 +6433,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const age = isAcademyEntry
           ? Math.max(15, Math.round(p.age ?? 18))
           : effectiveAge(p, save.split, save.youthAge, save.youthDebut);
-        const pot = playerPotentialOvr(p, age);
+        // #17: potencial EFETIVO = scouted + teto furado por performance
+        const potBoost = save.dynamicPotBonus?.[oid] ?? 0;
+        const pot = Math.min(99, playerPotentialOvr(p, age) + potBoost);
         const tier = potentialTier(pot);
         const phase = playerPhase(oid, age);
         const ovr = playerOvr(p);
@@ -6149,6 +6485,82 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             reducedLoad={save.restingPlayers?.includes(oid) ?? false}
             trainingLevel={normalizeFacilities(save.facilities).training}
             career={deriveCareer(save.careerStats?.[rid])}
+            seasonLines={seasonLinesOf(save.seasonStats, rid)}
+            potBoost={save.dynamicPotBonus?.[oid] ?? 0}
+            {...(save.squad.some((sg) => sg.playerId === oid) ? (() => {
+              // #16/#31: fatores AO VIVO (a satisfação persistida é a suavizada do tick)
+              const last = save.history[save.history.length - 1];
+              const results01 = last && last.wins + last.losses > 0 ? last.wins / (last.wins + last.losses) : 0.5;
+              const bondNow = save.coachBond?.[oid] ?? BOND_DEFAULT;
+              const ids = save.squad.map((x) => x.playerId);
+              const chemPair = ids.length >= 2 ? averageStarterChemistry({ pairChem: save.pairChem }, ids) : 50;
+              const until = save.contracts?.[oid];
+              return {
+                stints: stintsOf(save.stints, oid),
+                happiness: computeHappiness({
+                  ratings: save.recentRatings?.[oid],
+                  results01,
+                  contractSplitsLeft: until != null ? until - save.split : null,
+                  bond: bondNow,
+                  chemistry: Math.round(((save.playbookXp ?? 50) + chemPair) / 2),
+                }),
+                bond: bondNow,
+                // #15: listagem de venda — só pro seu elenco
+                listedPrice: save.listedPrices?.[oid] ?? null,
+                marketValue: playerValue(p),
+                onList: (price: number | null) => {
+                  setSave((s) => {
+                    const listedPrices = { ...(s.listedPrices ?? {}) };
+                    if (price == null) delete listedPrices[oid];
+                    else listedPrices[oid] = Math.min(price, Math.round(playerValue(p) * LISTING_MAX_RATIO));
+                    const next = { ...s, listedPrices };
+                    persist(next);
+                    return next;
+                  });
+                },
+                // #22: foco de treino por atributo (com sugestão do staff)
+                focusAttr: save.trainingFocusAttr?.[oid] ?? null,
+                focusSuggested: suggestFocus(p, save.evoAttrBias?.[oid]),
+                focusOptions: CORE_STATS.map((k) => ({ id: k, label: TRAINING_FOCUS_LABEL[k], biased: save.evoAttrBias?.[oid]?.[k] ?? 0 })),
+                onFocusAttr: (attr: string | null) => {
+                  setSave((s) => {
+                    const trainingFocusAttr = { ...(s.trainingFocusAttr ?? {}) };
+                    if (attr == null) delete trainingFocusAttr[oid];
+                    else trainingFocusAttr[oid] = attr as CoreStat;
+                    const next = { ...s, trainingFocusAttr };
+                    persist(next);
+                    return next;
+                  });
+                },
+              };
+            })() : (() => {
+              // #41: OBSERVATÓRIO — scouting progressivo pra jogador de FORA do elenco
+              const entry = watchOf(save.watchlist, oid);
+              const level = entry?.revealLevel ?? 0;
+              const rev = revealOf(Math.max(1, level));
+              return {
+                watch: {
+                  level,
+                  maxLevel: REVEAL_MAX,
+                  band: rev.ovrBand,
+                  apparent: apparentOvr(ovr, oid, Math.max(1, level)),
+                  showPersonality: level > 0 && rev.showPersonality,
+                  showSubRole: level > 0 && rev.showSubRole,
+                  showPotential: level > 0 && rev.showPotential,
+                  hasScout: !!save.hiredScoutId,
+                  onToggle: () => {
+                    setSave((s) => {
+                      const watchlist = watchOf(s.watchlist, oid)
+                        ? removeFromWatchlist(s.watchlist, oid)
+                        : addToWatchlist(s.watchlist, oid, p.nick, s.split);
+                      const next = { ...s, watchlist };
+                      persist(next);
+                      return next;
+                    });
+                  },
+                },
+              };
+            })())}
             form={formStatus(save.recentRatings?.[oid])}
             cur={cur}
             seasonGames={cur?.maps ?? 0}
@@ -6221,7 +6633,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           };
           const age = effectiveAge(pl, save.split, save.youthAge, save.youthDebut);
           teamAges[pid] = age;
-          teamPotentialMap[pid] = playerPotentialOvr(pl, age);
+          teamPotentialMap[pid] = Math.min(99, playerPotentialOvr(pl, age) + (save.dynamicPotBonus?.[pid] ?? 0));
         }
         return (
           <CareerTeamPage
@@ -6301,6 +6713,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
           budget={save.budget}
           clubFormOf={(id) => formOf(save, id)}
+          split={save.split}
           pendingDeals={save.pendingDeals ?? []}
           pendingSales={save.pendingSales ?? []}
           offers={incomingOffers}
@@ -6378,6 +6791,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           update={update as unknown as Parameters<typeof SquadTab>[0]['update']}
           openPlayerProfile={openPlayerProfile}
           doScrimVs={doScrimVs}
+          onBootcamp={doBootcamp}
+          bootcampUsed={save.bootcampSplit === save.split}
           scrimOpponents={scrimOpponents}
           scrimReport={scrimReport}
           hireScout={hireScout}
@@ -6414,6 +6829,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           vrsAll={vrsAll}
           vrsByRegion={vrsByRegion}
           openTeamProfile={openTeamProfile}
+          majorCut={MAJOR_VRS_CUT}
+          splitsToMajor={isMajorSplit(save.split) ? 0 : MAJOR_EVERY - (save.split % MAJOR_EVERY)}
         />
       )}
 
@@ -6447,7 +6864,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
       {/* T1.4: aba History extraída em src/pages/career/HistoryTab.tsx */}
       {hubTab === 'history' && (
-        <HistoryTab save={save} org={org} />
+        <HistoryTab save={save} org={org} identity={save.org ? { name: save.org.name, tag: save.org.tag } : undefined} awards={save.yearAwardsHistory}
+          hallOfFame={(save.retired ?? []).map((rid) => {
+            const sig = save.squad.find((sg) => sg.playerId === rid);
+            const f = sig ? findSigning(sig) : null;
+            const nick = f?.player.nick
+              ?? save.lastRetirees?.find((r) => r.id === rid)?.nick
+              ?? currentEra.flatMap((t) => t.players).find((pp) => pp.id === rid)?.nick
+              ?? rid;
+            return { id: rid, nick, peakOvr: save.peakOvr?.[rid] ?? 0 };
+          })}
+        />
       )}
       </>
       )}
@@ -6471,17 +6898,58 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             age: talkPlayer.age,
             lastTalkAtSplit: save.lastTalkAt?.[talkPlayer.oid],
             playerId: talkPlayer.oid, // T3.2 — personalityTalkResponse precisa do id
+            currentBond: save.coachBond?.[talkPlayer.oid] ?? BOND_DEFAULT, // #31 — vínculo gateia a firmeza
+          }}
+          // #10: tópicos que destravam promessa FORMAL (com prazo e cobrança)
+          promiseOfferFor={(topic) => {
+            const kind: PlayerPromiseKind | null =
+              topic === 'extension' ? 'extension'
+              : topic === 'playtime' ? 'signing'
+              : topic === 'effort' || topic === 'behavior' ? 'workload'
+              : null;
+            if (!kind || hasOpenPromise(save.playerPromises, talkPlayer.oid, kind)) return null;
+            return { kind, label: ct(PLAYER_PROMISE_LABEL[kind]) };
+          }}
+          onPromise={(kindRaw) => {
+            const kind = kindRaw as PlayerPromiseKind;
+            setSave((s) => {
+              const oid = talkPlayer.oid;
+              const p: PlayerPromise = {
+                kind,
+                madeAtSplit: s.split,
+                deadlineSplit: s.split + PROMISE_DEADLINE_SPLITS,
+                contractUntilAt: kind === 'extension' ? (s.contracts?.[oid] ?? null) : undefined,
+                squadIdsAt: kind === 'signing' ? s.squad.map((x) => x.playerId) : undefined,
+                status: 'open',
+              };
+              const cur = s.morale?.[oid] ?? MORALE_DEFAULT;
+              const curBond = s.coachBond?.[oid] ?? BOND_DEFAULT;
+              const next: CareerSave = {
+                ...s,
+                playerPromises: { ...(s.playerPromises ?? {}), [oid]: [...(s.playerPromises?.[oid] ?? []), p] },
+                // a esperança conta na hora (+6 moral, +3 vínculo)
+                morale: { ...(s.morale ?? {}), [oid]: Math.max(0, Math.min(100, cur + PROMISE_MADE.morale)) },
+                coachBond: { ...(s.coachBond ?? {}), [oid]: Math.max(0, Math.min(100, curBond + PROMISE_MADE.bond)) },
+              };
+              persist(next);
+              return next;
+            });
           }}
           onResolve={(result: TalkResult) => {
-            // Aplica delta no morale específico + estampa lastTalkAt
+            // Aplica delta no morale + VÍNCULO (#31) + estampa lastTalkAt
             setSave((s) => {
               const oid = talkPlayer.oid;
               const cur = s.morale?.[oid] ?? MORALE_DEFAULT;
+              const curBond = s.coachBond?.[oid] ?? BOND_DEFAULT;
               const next: CareerSave = {
                 ...s,
                 morale: {
                   ...(s.morale ?? {}),
                   [oid]: Math.max(0, Math.min(100, cur + result.outcome.moraleDelta)),
+                },
+                coachBond: {
+                  ...(s.coachBond ?? {}),
+                  [oid]: Math.max(0, Math.min(100, curBond + result.outcome.bondDelta)),
                 },
                 lastTalkAt: { ...(s.lastTalkAt ?? {}), [oid]: s.split },
               };
@@ -8884,11 +9352,13 @@ function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: 
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, swapPool, sellerForm, buyerStrength, freeAgents, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
   swapPool?: Player[]; // seus jogadores disponíveis pra incluir na troca (habilita swap)
   // contexto do decideOffer (gap #14) — todos opcionais/degradáveis
   sellerForm?: number;      // formOf(save, from.id)
+  unhappyDiscount?: number; // #38: 0..0.30 — alvo infeliz sai mais barato
+  buyoutFloor?: number;     // #37: multa da cláusula (piso absoluto; 0 = sem cláusula)
   buyerStrength?: number;   // força do SEU elenco (média top-5 de OVR)
   freeAgents?: Player[];    // pool livre atual (reposição de role do vendedor)
   onClose: () => void; onAgree: (fee: number, outIds: string[]) => void;
@@ -8896,7 +9366,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, buyerStr
   const ask = askingPrice(player, from.teamwork);
   // contexto multifatorial do clube vendedor — from.players já é o elenco
   // ATUAL (currentEra vem pós-applyMoves)
-  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents };
+  const negoCtx: DecideOfferCtx = { sellerRoster: from.players, sellerForm, buyerStrength, freeAgents, unhappyDiscount, buyoutFloor };
   const mkt = playerValue(player);
   const wage = playerWage(player);
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
@@ -8957,6 +9427,18 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, buyerStr
           <NegoFigure label={ct('Pedida do clube')} value={formatMoney(ask)} accent="#e8c170" />
           <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="#e58a8a" />
         </div>
+
+        {/* #37/#38: avisos de contexto — cláusula segura o preço, infeliz derruba */}
+        {(buyoutFloor > 0 || unhappyDiscount > 0) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem', padding: '9px 12px', border: '1px solid var(--em-border)', borderLeft: '3px solid var(--em-gold)', borderRadius: 4, background: 'rgba(216,169,67,.05)' }}>
+            {buyoutFloor > 0 && (
+              <span>🔒 {ct('Cláusula de rescisão ativa')}: <b style={{ color: 'var(--em-text)' }}>{formatMoney(buyoutFloor)}</b> — {ct('o clube não solta por menos que a multa.')}</span>
+            )}
+            {unhappyDiscount > 0 && (
+              <span>🔥 {ct('O jogador quer sair')} — {ct('o clube aceita até')} <b style={{ color: 'var(--em-gold)' }}>-{Math.round(unhappyDiscount * 100)}%</b> {ct('da pedida.')}</span>
+            )}
+          </div>
+        )}
 
         {/* Swap pool (só se habilitado) */}
         {swapPool && swapPool.length > 0 && (
@@ -9201,11 +9683,12 @@ function ActionGold({ label, onClick, disabled }: { label: string; onClick: () =
 }
 
 // ---------- negociações durante a temporada (acordos pendentes p/ a janela) ----------
-function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf }: {
+function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf, split = 0 }: {
   market: { player: Player; from: TeamSeason; price: number }[];
   squadPlayers: Player[];
   budget: number;
   clubFormOf?: (teamId: string) => number; // forma REAL do clube (teamForm) pro decideOffer
+  split?: number; // #38: seed da infelicidade (a lista de oportunidades muda por janela)
   pendingDeals: PendingDeal[];
   pendingSales: { playerId: string; nick: string; fee: number; toTag: string; toId: string }[];
   offers: { playerId: string; nick: string; ovr: number; country: string; fee: number; toTag: string; toId: string; toName: string }[];
@@ -9249,6 +9732,30 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   );
   const list = filteredMarket.slice(0, negoLimit);
   const filtersActive = !!(q.trim() || roleFilter || countryFilter || marketSort !== 'ovr-desc');
+  // #38/#37 — BUG FIX (caça-bugs): desconto e cláusula eram recomputados a
+  // CADA render de card (com sort do roster do vendedor dentro) — em mercado
+  // grande + busca digitada, isso é O(cards × roster·log) por tecla. Memo por
+  // (market, split): calcula UMA vez por janela.
+  const marketMeta = useMemo(() => {
+    const meta = new Map<string, { discount: number; buyout: number }>();
+    for (const m of market) {
+      const free = m.from.id === FREE_TEAM_ID;
+      meta.set(m.player.id, {
+        discount: free || !clubFormOf ? 0 : unhappyDiscountFor(m.player, m.from.players, split, clubFormOf(m.from.id)),
+        buyout: free ? 0 : buyoutFloorOf(playerValue(m.player), m.player.id, split),
+      });
+    }
+    return meta;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [market, split]);
+  const discountOf = (player: Player): number => marketMeta.get(player.id)?.discount ?? 0;
+  const buyoutOf = (player: Player): number => marketMeta.get(player.id)?.buyout ?? 0;
+  // as OPORTUNIDADES da janela: os maiores descontos do mercado filtrável
+  const unhappyStrip = filteredMarket
+    .map((m) => ({ ...m, discount: discountOf(m.player) }))
+    .filter((m) => m.discount > 0)
+    .sort((a, b) => b.discount - a.discount)
+    .slice(0, 6);
   return (
     <DashCard title={ct('Mercado')}>
         <div className="muted small" style={{ marginBottom: 12 }}>
@@ -9297,6 +9804,22 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
             ))}
           </div>
         )}
+        {/* #38: OPORTUNIDADES — infelizes na janela saem com desconto no decideOffer */}
+        {unhappyStrip.length > 0 && (
+          <>
+            <div className="muted small section-label">🔥 {ct('Oportunidades da janela · jogadores que querem sair')}</div>
+            <div className="nego-unhappy">
+              {unhappyStrip.map((m) => (
+                <button key={m.player.id} type="button" className="nego-unhappy-card" onClick={() => setTarget({ player: m.player, from: m.from })}>
+                  <OvrBadge ovr={playerOvr(m.player)} />
+                  <b>{m.player.nick}</b>
+                  <span className="muted small">{m.from.tag} · {m.player.role}</span>
+                  <em>-{Math.round(m.discount * 100)}% {ct('na pedida')}</em>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <div className="muted small section-label">
           {ct('Mercado · negocie com os clubes')} · {filteredMarket.length} {ct(filteredMarket.length === 1 ? 'jogador' : 'jogadores')}
         </div>
@@ -9339,6 +9862,12 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
                 <TeamBadge tag={m.from.tag} colors={m.from.colors} size={16} logoUrl={m.from.logoUrl ?? logoForTeam(m.from)} /> {m.from.team}
               </div>
               <div className="meta small"><span className="muted">{ct('pedida')}</span> {m.from.id === '__free__' ? ct('Livre (só salário)') : formatMoney(askingPrice(m.player, m.from.teamwork))}</div>
+              {discountOf(m.player) > 0 && (
+                <div className="meta small" style={{ color: 'var(--em-gold)', fontWeight: 700 }}>🔥 {ct('quer sair')} · -{Math.round(discountOf(m.player) * 100)}%</div>
+              )}
+              {buyoutOf(m.player) > 0 && (
+                <div className="meta small" style={{ color: 'var(--em-muted)', fontWeight: 700 }}>🔒 {ct('cláusula')} {formatMoney(buyoutOf(m.player))}</div>
+              )}
             </button>
           ))}
           {filteredMarket.length > negoLimit && (
@@ -9363,6 +9892,8 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
           budget={dealBudget}
           swapPool={swapPool}
           sellerForm={clubFormOf?.(target.from.id)}
+          unhappyDiscount={discountOf(target.player)}
+          buyoutFloor={buyoutOf(target.player)}
           buyerStrength={squadPlayers.length > 0 ? squadStrength(squadPlayers) : undefined}
           freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
           onClose={() => setTarget(null)}

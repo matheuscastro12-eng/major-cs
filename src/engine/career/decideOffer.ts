@@ -69,6 +69,13 @@ export interface DecideOfferCtx {
   sellerForm?: number;      // formOf(save, from.id) — 0-100, neutro 50
   buyerStrength?: number;   // força do comprador (média top-5 de OVR do user)
   freeAgents?: Player[];    // pool __free__ atual (reposição realista de role)
+  /** #38: desconto por infelicidade do alvo (0..0.30, unhappyMarket.ts).
+   *  Multiplica o alvo APÓS o clamp dos outros fatores — jogador que quer
+   *  sair sai mais barato, sem mexer no comportamento de quem está feliz. */
+  unhappyDiscount?: number;
+  /** #37: multa da cláusula de rescisão (buyout.ts). Piso ABSOLUTO do alvo —
+   *  nem o desconto de infeliz fura (o clube segura o papel do contrato). */
+  buyoutFloor?: number;
 }
 
 export interface DecideOfferArgs {
@@ -166,21 +173,34 @@ export function decideOffer(args: DecideOfferArgs): NegoReply {
     else if (form < TEAM_FORM_CRISIS) formF = 1 - (Math.min(TEAM_FORM_CRISIS - form, 20) / 20) * 0.15;
   }
 
-  // razão dominante (prioridade: core > sem reposição > crise > alta > prestígio)
+  // #38: infelicidade do alvo — desconto direto no alvo do vendedor
+  const unhappyF = 1 - clamp(ctx.unhappyDiscount ?? 0, 0, 0.30);
+
+  // razão dominante (prioridade: core > sem reposição > infeliz > crise > alta > prestígio)
   if (isCore) reason = ct('É o coração do time — só sai por proposta irrecusável.');
   else if (replacement === false) reason = ct('Sem reposição pra função no elenco — o clube pede ágio.');
+  else if (unhappyF < 1) reason = ct('O jogador quer sair — o clube facilita a saída.');
   else if (formF < 1) reason = ct('Time em crise precisa de caixa — disposto a facilitar.');
   else if (formF > 1) reason = ct('Time em grande fase não quer mexer no elenco.');
   else if (prestigeF > 1.02) reason = ct('Vender pra uma org menor custa mais caro.');
   else if (prestigeF < 0.98) reason = ct('A vitrine de uma org maior facilita a conversa.');
 
   // ── composição: piso ajustado + amolecimento por rodada + teto de sanidade ──
-  const adj = clamp(importanceF * replacementF * prestigeF * formF, 0.8, 1.45);
+  // unhappyF multiplica DEPOIS do clamp — com desconto 0 o comportamento
+  // antigo é preservado bit a bit; com desconto, o alvo cai de verdade.
+  const adj = clamp(importanceF * replacementF * prestigeF * formF, 0.8, 1.45) * unhappyF;
   const cap = Math.max(asking, Math.round(marketValue * COUNTER_CAP_RATIO));
   // alvo da rodada 0 (fixo entre rodadas — garante contraproposta monotônica)
   let target = Math.round(asking * adj);
   if (isCore) target = Math.max(target, Math.round(marketValue * FRANCHISE_CORE_RATIO));
-  target = Math.min(target, cap);
+  // #37: cláusula ativa = piso absoluto (aplicado DEPOIS do desconto de
+  // infeliz e ANTES do cap — a multa vale mesmo que passe de 2× o valor)
+  const buyout = Math.max(0, Math.round(ctx.buyoutFloor ?? 0));
+  if (buyout > 0 && target < buyout) {
+    target = buyout;
+    reason = ct('Cláusula de rescisão ativa — só sai pagando a multa do contrato.');
+  }
+  target = Math.min(target, Math.max(cap, buyout));
   // PISO: amolece no MÁXIMO ~12% em poucas rodadas e NUNCA abaixo disso —
   // insistir com a mesma oferta não derruba mais o preço (regra preservada)
   const floor = Math.round(target * (1 - 0.04 * Math.min(round, 3)));

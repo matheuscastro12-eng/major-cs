@@ -200,6 +200,8 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'acct-chip': 'Chip de conta (dropdown)',
   'upsell-card': 'Card de upsell',
   'wl-lock': 'Trava · Major da Semana',
+  'wl-free': 'Major da Semana · conta grátis',
+  'wl-guest': 'Major da Semana · sem conta',
   'hub-wl': 'Hub online · badge Sábado',
   'mkt-lock': 'Trava · Mercado P2P',
   profile: 'Perfil do manager',

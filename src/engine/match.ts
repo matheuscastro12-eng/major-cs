@@ -316,10 +316,22 @@ export interface StepMods {
   boostTeam?: 0 | 1 | null; // timeout tático
   stance?: { team: 0 | 1; mode: Stance };
   call?: Call; // chamada de round (one-shot)
+  siteCall?: SiteCall; // #20: tática de SITE do round (T = atacar X · CT = stackar X)
+}
+
+// #20 — TÁTICA POR SITE: o lado T escolhe (em segredo) o site do ataque; o CT
+// pode apostar num stack. Acertar o stack vale muito; errar deixa o site fraco.
+export type BombSite = 'A' | 'B';
+export interface SiteCall { team: 0 | 1; site: BombSite }
+export interface SiteRound {
+  round: number;
+  tSite: BombSite;             // onde o ataque FOI (revelado após o round)
+  ctStack: BombSite | null;    // onde o CT stackou (null = setup padrão)
+  correct: boolean | null;     // stack bateu com o ataque? (null = sem stack)
 }
 
 export interface MapSim {
-  step: (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call) => boolean; // joga 1 round; true quando o mapa terminou
+  step: (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call, siteCall?: SiteCall) => boolean; // joga 1 round; true quando o mapa terminou
   // estimativa read-only da prob de vitória do round ATUAL pra `forTeam`, com
   // stance/call hipotéticos. Pro HUD de decisão (mostra impacto ao vivo).
   peekWinProb: (forTeam: 0 | 1, stance?: { team: 0 | 1; mode: Stance }, call?: Call) => number;
@@ -334,6 +346,7 @@ export interface MapSim {
   buys: () => [BuyTier, BuyTier]; // compra do round atual (antes do step)
   side: () => ['ct' | 't', 'ct' | 't']; // lado de cada time no round atual
   round: () => number; // índice do round atual (0-based)
+  lastSite: () => SiteRound | null; // #20: leitura de site do ÚLTIMO round jogado
   stats: () => Record<string, PlayerMapStats>; // stats acumuladas ao vivo
   result: () => MapResult; // disponível quando done()
 }
@@ -349,6 +362,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
   let lastWinner: 0 | 1 | -1 = -1;
   const roundLog: (0 | 1)[] = [];
   const killFeed: KillEvent[] = [];
+  const siteLog: SiteRound[] = [];   // #20: leitura de site por round
   const buyLog: [BuyTier, BuyTier][] = [];
   const aStartsCt = rng() < 0.5;
   let halfScore = '';
@@ -412,6 +426,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     stance?: { team: 0 | 1; mode: Stance },
     call?: Call,
     boostTeam?: 0 | 1 | null,
+    siteDelta?: { team: 0 | 1; delta: number },
   ): { pA: number; buys: [BuyTier, BuyTier]; aSide: 'ct' | 't'; bSide: 'ct' | 't' } => {
     const [aSide, bSide] = sideOf(round);
     const isPistol = round === 0 || round === 12;
@@ -454,8 +469,17 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     const mo = momentumDelta();
     if (streakTeam === 0) effA += mo;
     else if (streakTeam === 1) effB += mo;
+
     const diff = isPistol ? (effA - effB) * 0.45 : effA - effB;
-    return { pA: sigmoid(diff / ROUND_DIV), buys, aSide, bSide };
+    let pA = sigmoid(diff / ROUND_DIV);
+    // #20: leitura de site (resolvida no step — informação oculta, fora do peek).
+    // Desvio direto de PROBABILIDADE (padrão Brasval ±0.16/−0.11): acertar o
+    // stack é a maior aposta de um round — tem que ser sentida.
+    if (siteDelta) {
+      const d = siteDelta.team === 0 ? siteDelta.delta : -siteDelta.delta;
+      pA = Math.max(0.03, Math.min(0.97, pA + d));
+    }
+    return { pA, buys, aSide, bSide };
   };
 
   // Estimativa read-only da prob de vitória do round ATUAL pra `forTeam`, dado um
@@ -471,7 +495,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     return forTeam === 0 ? pA : 1 - pA;
   };
 
-  const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call): boolean => {
+  const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call, siteCall?: SiteCall): boolean => {
     if (finished) return true;
 
     const isPistol = round === 0 || round === 12;
@@ -483,7 +507,25 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
       streakTeam = -1;
       streakLen = 0;
     }
-    const { pA, buys, aSide, bSide } = roundEffect(stance, call, boostTeam);
+    // #20 — camada de SITE (informação oculta do round). Os 3 rolls saem SEMPRE
+    // (com ou sem siteCall) pra manter o fluxo de RNG estável entre modos.
+    const rSite = rng(); const rStackDo = rng(); const rStackSite = rng();
+    const [aS0] = sideOf(round);
+    const tTeam: 0 | 1 = aS0 === 't' ? 0 : 1;
+    const ctTeam: 0 | 1 = tTeam === 0 ? 1 : 0;
+    const tSite: BombSite = siteCall && siteCall.team === tTeam ? siteCall.site : (rSite < 0.5 ? 'A' : 'B');
+    let ctStack: BombSite | null = null;
+    if (siteCall && siteCall.team === ctTeam) ctStack = siteCall.site;
+    else if (rStackDo < 0.3) ctStack = rStackSite < 0.5 ? 'A' : 'B';   // IA stacka às vezes
+    let siteDelta: { team: 0 | 1; delta: number } | undefined;
+    let siteCorrect: boolean | null = null;
+    if (ctStack) {
+      siteCorrect = ctStack === tSite;
+      // acertar o stack = ataque entra na muralha (+14pp); errar = site fraco (−9pp)
+      siteDelta = { team: ctTeam, delta: siteCorrect ? 0.14 : -0.09 };
+    }
+    siteLog.push({ round, tSite, ctStack, correct: siteCorrect });
+    const { pA, buys, aSide, bSide } = roundEffect(stance, call, boostTeam, siteDelta);
     buyLog.push(buys);
     eco[0].money = Math.max(0, eco[0].money - buyCost(buys[0]));
     eco[1].money = Math.max(0, eco[1].money - buyCost(buys[1]));
@@ -684,6 +726,7 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     buys: () => nextBuys,
     side: () => sideOf(round),
     round: () => round,
+    lastSite: () => (siteLog.length ? siteLog[siteLog.length - 1] : null),
     stats: () => stats,
     result: (): MapResult => ({
       map,

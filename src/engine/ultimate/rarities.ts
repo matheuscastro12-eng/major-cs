@@ -15,7 +15,9 @@ export type UltRarity =
   | 'icon'
   | 'tots'   // Time da Temporada (special)
   | 'major'  // Campeão de Major (special)
-  | 'promo'; // Promo do Mês (special rotativa — ver promos.ts)
+  | 'promo'  // Promo do Mês (special rotativa — ver promos.ts)
+  | 'totw'   // Time da Semana / in-form (special rotativa — ver totw.ts)
+  | 'histIcon'; // Ícone Histórico (lendas aposentadas curadas — ver icons.ts)
 
 export type RarityBucket = 'bronze' | 'silver' | 'gold' | 'special';
 
@@ -44,6 +46,8 @@ export const RARITIES: Record<UltRarity, RarityInfo> = {
   tots:      { id: 'tots',      label: 'Time da Temporada', tier: 8,  ovrMin: 84, ovrMax: 96, bucket: 'special', color: '#5ed88a', valueMult: 15, quickSellBase: 7000,  special: true },
   major:     { id: 'major',     label: 'Campeão de Major',  tier: 9,  ovrMin: 84, ovrMax: 97, bucket: 'special', color: '#e58a8a', valueMult: 18, quickSellBase: 10000, special: true },
   promo:     { id: 'promo',     label: 'Promo do Mês',      tier: 8,  ovrMin: 78, ovrMax: 96, bucket: 'special', color: '#f472b6', valueMult: 13, quickSellBase: 6000,  special: true },
+  totw:      { id: 'totw',      label: 'Time da Semana',    tier: 8,  ovrMin: 78, ovrMax: 97, bucket: 'special', color: '#38bdf8', valueMult: 14, quickSellBase: 6500,  special: true },
+  histIcon:  { id: 'histIcon',  label: 'Ícone Histórico',   tier: 10, ovrMin: 88, ovrMax: 97, bucket: 'special', color: '#ffd700', valueMult: 40, quickSellBase: 30000, special: true },
 };
 
 // tiers base (derivados por OVR), do mais fraco pro mais forte

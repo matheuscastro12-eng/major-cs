@@ -125,7 +125,12 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   useEffect(() => { stanceRef.current = stance; }, [stance]);
   const [pendingCall, setPendingCall] = useState<RoundCall | null>(null);
   const callRef = useRef<RoundCall | null>(null);
+  // #20 — tática de SITE do round (one-shot, como a call): T ataca X / CT stacka X
+  const [pendingSite, setPendingSite] = useState<'A' | 'B' | null>(null);
+  const siteRef = useRef<'A' | 'B' | null>(null);
+  const [lastSiteInfo, setLastSiteInfo] = useState<{ tSite: 'A' | 'B'; mine: 'A' | 'B'; correct: boolean | null; wasCt: boolean } | null>(null);
   useEffect(() => { callRef.current = pendingCall; }, [pendingCall]);
+  useEffect(() => { siteRef.current = pendingSite; }, [pendingSite]);
   // modo Tático: freezetime de 5s antes de cada round pra escolher a chamada
   const [tactical, setTactical] = useState(false);
   const [freeze, setFreeze] = useState(0);
@@ -278,7 +283,16 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     const boost = boostRounds > 0;
     buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
     const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
-    sim.step(boost ? userIdx : null, stanceMod, c);
+    // #20: tática de site vale 1 round e some (informação oculta — resolve no step)
+    const siteKind = siteRef.current;
+    const wasCt = sim.side()[userIdx] === 'ct';
+    sim.step(boost ? userIdx : null, stanceMod, c, siteKind ? { team: userIdx, site: siteKind } : undefined);
+    if (siteKind) {
+      const ls = sim.lastSite();
+      if (ls) setLastSiteInfo({ tSite: ls.tSite, mine: siteKind, correct: wasCt ? ls.correct : ls.tSite === siteKind, wasCt });
+      siteRef.current = null;
+      setPendingSite(null);
+    }
     if (boost) setBoostRounds((b) => Math.max(0, b - 1));
     if (c && callKind) {
       const log = sim.roundLog();
@@ -748,6 +762,30 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 );
               })}
               {pendingCall && <span className="call-armed-tag">{t('match.callArmed')}</span>}
+              {/* #20 — TÁTICA DE SITE: T escolhe onde atacar; CT aposta o stack */}
+              <span className="call-label" style={{ marginLeft: 10 }}>
+                {mySide === 'ct' ? `🛡 ${ct('Stackar site')}` : `💣 ${ct('Atacar site')}`}
+              </span>
+              {(['A', 'B'] as const).map((sSite) => (
+                <button
+                  key={sSite}
+                  className={`call-btn${pendingSite === sSite ? ' armed' : ''}`}
+                  disabled={!!pausedMsg}
+                  title={mySide === 'ct' ? ct('Aposta forte: acertou o stack, muralha; errou, site fraco.') : ct('Define o alvo do ataque deste round.')}
+                  onClick={() => setPendingSite(pendingSite === sSite ? null : sSite)}
+                >
+                  {sSite}
+                </button>
+              ))}
+              {lastSiteInfo && (
+                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: lastSiteInfo.correct === false ? '#e58a8a' : lastSiteInfo.correct ? '#5ed88a' : 'var(--em-muted, #8a99ab)' }}>
+                  {lastSiteInfo.wasCt
+                    ? (lastSiteInfo.correct
+                      ? `${ct('eles foram')} ${lastSiteInfo.tSite} — ${ct('leitura certa!')}`
+                      : `${ct('eles foram')} ${lastSiteInfo.tSite} — ${ct('stack furado')}`)
+                    : `${ct('ataque no')} ${lastSiteInfo.mine}`}
+                </span>
+              )}
             </div>
           </>
         )}
