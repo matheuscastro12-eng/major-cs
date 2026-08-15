@@ -1007,7 +1007,20 @@ export default function App() {
          momentos emocionais acontecem (split, promoção, título) — os 3 dispatches
          do CareerScreen iam pro vazio. O overlay já é dismissível (clique fora ou
          ✕), então não bloqueia o jogo. */}
-      {!account?.paid && <UpsellCard onUpgrade={startCheckout} onPixPaid={async () => { setPaidToast(true); await refreshAccount(); }} />}
+      {!account?.paid && (
+        <UpsellCard
+          onUpgrade={startCheckout}
+          /* funil: convidado (sem conta, sem token — o jogo joga local sem exigir
+             login) também dispara o upsell durante a partida, mas beginPix/
+             beginCheckout exigem token e estouram erro pra ele: os 2 botões do
+             card ficavam quebrados (Pix mostra erro em texto vermelho; Stripe
+             sequer captura o erro — falha muda e o clique não faz nada). Manda
+             pro mesmo caminho de convidado que a landing já usa (cadastro +
+             pagamento na mesma tela). */
+          onGuestUpgrade={goToCheckout}
+          onPixPaid={async () => { setPaidToast(true); await refreshAccount(); }}
+        />
+      )}
       {authOpen && !account && (
         <AccountModal
           initialMode={authMode}
