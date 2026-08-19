@@ -417,41 +417,54 @@ function AccountChip({
   // Não logado
   if (!account) {
     return (
-      <button
-        type="button"
-        onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreate?.(); }}
-        title={
-          foundersLeft != null && foundersLeft > 0
-            ? `Conta vitalícia por R$20, pagamento único · restam ${foundersLeft} vagas de Fundador`
-            : 'Conta vitalícia por R$20, pagamento único'
-        }
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 16px',
-          background: 'var(--em-gold)',
-          color: '#1a1205',
-          border: 'none',
-          borderRadius: 999,
-          fontFamily: 'inherit',
-          fontSize: '0.82rem',
-          fontWeight: 800,
-          cursor: 'pointer',
-          boxShadow: '0 4px 14px rgba(232,193,112,0.35)',
-          letterSpacing: '0.3px',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {/* funil: este botão (src acct-chip-guest) é visto por TODA sessão não
-            logada — maior volume do funil (917 paywall_view/28d) — mas convertia
-            0,22% em checkout_open, bem abaixo de upsell-card (2,26%), home-ultimate
-            (1,99%) e landing (1,21%). O valor (R$20, vitalícia) só existia no
-            atributo title, que não aparece em toque/mobile. Deixa o preço visível
-            no próprio texto, igual o resto do app já faz (rtm-supporter-pill,
-            modecard do Road to Pro). */}
-        ★ Criar conta · R$20
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+        <button
+          type="button"
+          onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreate?.(); }}
+          title={
+            foundersLeft != null && foundersLeft > 0
+              ? `Conta vitalícia por R$20, pagamento único · restam ${foundersLeft} vagas de Fundador`
+              : 'Conta vitalícia por R$20, pagamento único'
+          }
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 16px',
+            background: 'var(--em-gold)',
+            color: '#1a1205',
+            border: 'none',
+            borderRadius: 999,
+            fontFamily: 'inherit',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(232,193,112,0.35)',
+            letterSpacing: '0.3px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {/* funil: este botão (src acct-chip-guest) é visto por TODA sessão não
+              logada — maior volume do funil (917 paywall_view/28d) — mas convertia
+              0,22% em checkout_open, bem abaixo de upsell-card (2,26%), home-ultimate
+              (1,99%) e landing (1,21%). O valor (R$20, vitalícia) só existia no
+              atributo title, que não aparece em toque/mobile. Deixa o preço visível
+              no próprio texto, igual o resto do app já faz (rtm-supporter-pill,
+              modecard do Road to Pro). */}
+          ★ Criar conta · R$20
+        </button>
+        {/* funil (28d, iteração seguinte): mesmo com o preço no texto, o botão
+            segue convertendo pior que o resto do funil (2216 paywall_view →
+            10 signup_start, 0,45%) — é a maior audiência do jogo (metade de
+            todo visitante não logado) e a que menos converte. A vaga de
+            Fundador real está quase esgotada (482/500, restam 18) e esse dado
+            real só existia no atributo title, invisível em toque/mobile — a
+            mesma classe de problema que o preço tinha antes de sair do title.
+            FounderCounter já é usado em 4 outras superfícies (dado real do
+            servidor, nunca inventado); só faltava aqui, que é a de maior
+            exposição. */}
+        <FounderCounter style={{ fontSize: '10px' }} />
+      </div>
     );
   }
 
