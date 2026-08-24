@@ -34,7 +34,7 @@ const HOOKS: Record<string, string> = {
   default: 'Leve sua carreira pro próximo nível.',
 };
 
-export function UpsellCard({ onUpgrade, onPixPaid }: { onUpgrade: () => void; onPixPaid: () => void }) {
+export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade: () => void; onGuestUpgrade?: () => void; onPixPaid: () => void }) {
   const { account } = useAccount();
   const [open, setOpen] = useState(false);
   const [hook, setHook] = useState(HOOKS.default);
@@ -139,15 +139,29 @@ export function UpsellCard({ onUpgrade, onPixPaid }: { onUpgrade: () => void; on
         {/* prova social real: única superfície de venda com tráfego relevante que ainda não mostrava (iter48) */}
         <FounderCounter style={{ marginBottom: '4px' }} />
         <div className="upsell-actions">
-          {/* Pix vira o CTA primário aqui: dado real (checkout_open × rtm_paid_emails)
-              mostra Pix confirmando bem mais que o Stripe, e essa era a única
-              superfície de venda que nunca oferecia Pix (só o redirect pro Stripe). */}
-          <button className="btn gold big" disabled={pixBusy} onClick={payPix}>
-            {pixBusy ? ct('Aguarde…') : `${ct('Pagar com Pix')} · R$20`}
-          </button>
-          <button className="upsell-card-btn" disabled={pixBusy} onClick={() => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
-            {ct('Ativar com cartão (Stripe)')}
-          </button>
+          {account ? (
+            <>
+              {/* Pix vira o CTA primário aqui: dado real (checkout_open × rtm_paid_emails)
+                  mostra Pix confirmando bem mais que o Stripe, e essa era a única
+                  superfície de venda que nunca oferecia Pix (só o redirect pro Stripe). */}
+              <button className="btn gold big" disabled={pixBusy} onClick={payPix}>
+                {pixBusy ? ct('Aguarde…') : `${ct('Pagar com Pix')} · R$20`}
+              </button>
+              <button className="upsell-card-btn" disabled={pixBusy} onClick={() => { setCheckoutSrc('upsell-card'); close(); onUpgrade(); }}>
+                {ct('Ativar com cartão (Stripe)')}
+              </button>
+            </>
+          ) : (
+            /* funil: convidado (sem token) não consegue pagar direto — beginPix/
+               beginCheckout exigem login e os botões acima quebravam pra ele (28d:
+               154 checkout_open Stripe × 6 Pix nesta superfície, e o botão Pix
+               "primário" nunca decolou — sinal de que boa parte desse tráfego
+               nem tinha conta). Manda pro fluxo de cadastro+pagamento da landing,
+               que já lida com convidado do início ao fim. */
+            <button className="btn gold big" onClick={() => { setCheckoutSrc('upsell-card'); close(); (onGuestUpgrade ?? onUpgrade)(); }}>
+              {ct('Criar conta e ativar')} · R$20
+            </button>
+          )}
           <button className="upsell-later" onClick={close}>{ct('Agora não')}</button>
         </div>
         {pixErr && <p style={{ color: '#e2574c', fontSize: '0.78rem', margin: '10px 0 0' }}>{pixErr}</p>}
