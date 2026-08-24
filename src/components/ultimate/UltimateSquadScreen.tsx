@@ -27,7 +27,7 @@ import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, pa
 import { estimateCardValue, type UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
 import { dayNumberOf } from '../../engine/daily/lines';
-import { fetchUltDraftBoard, reportUltDraft, type UltDraftBoard } from '../../state/ultDraftApi';
+import { claimUltDraftPrizes, fetchUltDraftBoard, reportUltDraft, type UltDraftBoard } from '../../state/ultDraftApi';
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
 import { SBCS, checkSbc, type SbcDef } from '../../engine/ultimate/sbc';
 import { quickSellValue } from '../../engine/ultimate/quicksell';
@@ -1386,6 +1386,24 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     void fetchUltDraftBoard().then((b) => { if (!dead) setDraftBoard(b); });
     return () => { dead = true; };
   }, [tab, state.profile.draft.active]);
+  // pódio de dias FECHADOS: coleta o prêmio pendente e credita no save (mesmo
+  // padrão do claimPaidCoins — o servidor só marca o claim; o save é a verdade).
+  useEffect(() => {
+    if (!account) return;
+    let on = true;
+    void claimUltDraftPrizes().then((prizes) => {
+      if (!on || !prizes.length) return;
+      const total = prizes.reduce((a, p) => a + p.coins, 0);
+      addCredits(total);
+      const medal = (r: number) => (r === 1 ? '🥇' : r === 2 ? '🥈' : '🥉');
+      const first = prizes[0];
+      flash(prizes.length === 1
+        ? `${medal(first.rank)} PÓDIO no Draft do Dia #${first.day} — #${first.rank} do mundo: +${fmt(first.coins)} coins!`
+        : `🏆 ${prizes.length} pódios no Draft do Dia — +${fmt(total)} coins!`, 5200);
+    });
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
   const playDraftMatch = () => {
     const d = state.profile.draft;
     if (!d.active || draftCards.length < 5) return;
@@ -2819,6 +2837,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                       {isDailyNext
                         ? ct('sua PRÓXIMA run é a oficial: hoje o mundo inteiro drafta entre as MESMAS cartas, e o resultado entra no ranking do dia. Vencer com OVR menor rankeia acima.')
                         : ct('a run oficial de hoje você já jogou — as próximas são draft livre (seed aleatória). Amanhã tem outro.')}
+                      <div style={{ marginTop: 5, fontSize: '0.72rem', color: '#92600a', fontWeight: 700 }}>
+                        🥇 +25.000 · 🥈 +15.000 · 🥉 +8.000 {ct('coins — pagos no dia seguinte (pódio vale com 5+ jogadores no dia).')}
+                      </div>
                     </div>
                   );
                 })()}

@@ -16,6 +16,25 @@ export async function fetchUltDraftBoard(day?: number): Promise<UltDraftBoard | 
   } catch { return null; }
 }
 
+// Coleta prêmios de PÓDIO pendentes (dias fechados da última semana). O
+// servidor grava o claim (PK day+email — idempotente) e o CALLER aplica as
+// coins no save (addCredits) — mesmo padrão do claimPaidCoins.
+export interface UltDraftPrize { day: number; rank: number; coins: number }
+export async function claimUltDraftPrizes(): Promise<UltDraftPrize[]> {
+  const token = getToken();
+  if (!token) return [];
+  try {
+    const r = await fetch('/api/ranking', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'ultDraftClaim', token }),
+    });
+    if (!r.ok) return [];
+    const d = (await r.json()) as { prizes?: UltDraftPrize[] };
+    return Array.isArray(d.prizes) ? d.prizes : [];
+  } catch { return []; }
+}
+
 // Reporta o resultado do run diário. null = deslogado (convidado não rankeia)
 // ou rede fora — o run em si não depende disso (fire-and-forget do caller).
 export async function reportUltDraft(day: number, wins: number, ovr: number): Promise<{ rank: number; duplicate: boolean } | null> {

@@ -69,6 +69,10 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // Desempate por OVR ASC: vencer com squad mais fraco rankeia acima.
     sql`CREATE TABLE IF NOT EXISTS rtm_ult_draft (day INT, email TEXT, nick TEXT, wins INT NOT NULL, ovr INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (day, email))`,
     sql`CREATE INDEX IF NOT EXISTS rtm_ult_draft_day_idx ON rtm_ult_draft (day, wins DESC, ovr ASC)`,
+    // Pódio do DRAFT DO DIA: registro do PRÊMIO coletado (PK day+email = claim
+    // único). O prêmio é aplicado no SAVE pelo cliente (padrão coinsClaim) —
+    // creditar direto no ledger seria desfeito pela reconciliação local-vence.
+    sql`CREATE TABLE IF NOT EXISTS rtm_ult_draft_prizes (day INT, email TEXT, rank INT NOT NULL, coins INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (day, email))`,
   ]);
   schemaReady = true;
 }
@@ -251,6 +255,36 @@ export default async function handler(
     const better = await sql`SELECT count(*)::int AS n FROM rtm_ult_draft WHERE day=${day} AND email<>${email}
                              AND (wins > ${mw} OR (wins = ${mw} AND ovr < ${mo}) OR (wins = ${mw} AND ovr = ${mo} AND created_at < ${String(mine[0]?.created_at ?? new Date().toISOString())}))`;
     res.status(200).json({ ok: true, accepted: ins.length > 0, duplicate: ins.length === 0, wins: mw, rank: Number(better[0]?.n ?? 0) + 1 });
+    return;
+  }
+
+  // coleta prêmios de PÓDIO do Draft do Dia ainda não coletados (dias FECHADOS
+  // da última semana). Pódio final: wins DESC, ovr ASC, chegada — com pelo
+  // menos MIN_FIELD jogadores no dia (pódio de 2 pessoas não paga). Idempotente:
+  // só o INSERT que gravou a linha paga (PK day+email).
+  if (action === 'ultDraftClaim') {
+    const PRIZE: Record<number, number> = { 1: 25_000, 2: 15_000, 3: 8_000 };
+    const MIN_FIELD = 5;
+    const today = dailyDayNow();
+    const rows = await sql`
+      WITH closed AS (
+        SELECT day, email,
+               rank() OVER (PARTITION BY day ORDER BY wins DESC, ovr ASC, created_at ASC) AS rk,
+               count(*) OVER (PARTITION BY day) AS field
+        FROM rtm_ult_draft WHERE day BETWEEN ${today - 7} AND ${today - 1}
+      )
+      SELECT day, rk::int AS rank FROM closed
+      WHERE email=${email} AND rk <= 3 AND field >= ${MIN_FIELD}`;
+    const prizes: { day: number; rank: number; coins: number }[] = [];
+    for (const r of rows) {
+      const day = Number(r.day); const rank = Number(r.rank);
+      const coins = PRIZE[rank] ?? 0;
+      if (!coins) continue;
+      const ins = await sql`INSERT INTO rtm_ult_draft_prizes (day, email, rank, coins) VALUES (${day}, ${email}, ${rank}, ${coins})
+                            ON CONFLICT (day, email) DO NOTHING RETURNING day`;
+      if (ins.length) prizes.push({ day, rank, coins });
+    }
+    res.status(200).json({ ok: true, prizes, coins: prizes.reduce((a, p) => a + p.coins, 0) });
     return;
   }
 
