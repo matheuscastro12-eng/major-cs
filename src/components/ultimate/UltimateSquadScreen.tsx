@@ -26,6 +26,8 @@ import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, passSeasonId, type Ma
 import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, passTitleSlug, totalXpForLevel, xpForLevel, PASS_MAX_LEVEL, type PassReward, type PassTrack } from '../../engine/ultimate/seasonPass';
 import { estimateCardValue, type UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
+import { dayNumberOf } from '../../engine/daily/lines';
+import { fetchUltDraftBoard, reportUltDraft, type UltDraftBoard } from '../../state/ultDraftApi';
 import { TITLES, titleBySlug } from '../../engine/ultimate/titles';
 import { SBCS, checkSbc, type SbcDef } from '../../engine/ultimate/sbc';
 import { quickSellValue } from '../../engine/ultimate/quicksell';
@@ -318,7 +320,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   type MatchMode = 'rivals' | 'casual' | 'gauntlet' | 'pvp' | 'draft';
   // cerimônia pós-jogo (iter42): star = craque do duelo (determinístico, lado
   // JÁ na perspectiva do usuário: 0 = você); casterFinal = chamada final do caster.
-  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; draft?: { wins: number; completed: boolean; over: boolean; credits: number; card?: UltCard }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null };
+  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; draft?: { wins: number; completed: boolean; over: boolean; credits: number; card?: UltCard; daily?: boolean }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null };
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1; pvpCode?: string } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
   const [shareState, setShareState] = useState<'busy' | 'shared' | 'saved' | null>(null);
@@ -1374,6 +1376,16 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     () => state.profile.draft.picks.map((k) => index.get(k)).filter((c): c is UltCard => !!c),
     [state.profile.draft.picks, index],
   );
+  // DRAFT DO DIA — posição no ranking após o report (null = convidado/offline)
+  // e o board do dia, carregado quando a aba do draft abre.
+  const [draftDayRank, setDraftDayRank] = useState<number | null>(null);
+  const [draftBoard, setDraftBoard] = useState<UltDraftBoard | null>(null);
+  useEffect(() => {
+    if (tab !== 'draft') return;
+    let dead = false;
+    void fetchUltDraftBoard().then((b) => { if (!dead) setDraftBoard(b); });
+    return () => { dead = true; };
+  }, [tab, state.profile.draft.active]);
   const playDraftMatch = () => {
     const d = state.profile.draft;
     if (!d.active || draftCards.length < 5) return;
@@ -1409,7 +1421,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const won = series.winner === 0;
     const m0 = series.maps[0];
     const score = m0 ? `${m0.score[0]}-${m0.score[1]}` : `${series.mapScore[0]}-${series.mapScore[1]}`;
+    const wasDaily = !!state.profile.draft.daily;
     const r = draftRecord(won, score);
+    // DRAFT DO DIA: run acabou → reporta pro ranking (fire-and-forget; o
+    // servidor só aceita o 1º resultado do dia). OVR entra como desempate.
+    if (r.over && wasDaily) {
+      setDraftDayRank(null);
+      void reportUltDraft(dayNumberOf(dateKey(new Date())), r.wins, draftAvg)
+        .then((res) => { if (res) setDraftDayRank(res.rank); });
+    }
     const mapStats = m0?.stats ?? {};
     let mvp: LiveResult['mvp'];
     for (const c of draftCards) {
@@ -1425,7 +1445,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const resultData: LiveResult = {
       won, score, outcome: { eloDelta: 0, credits: r.credits }, mode: 'draft',
       divChange: 'same', divName: '',
-      draft: { wins: r.wins, completed: r.completed, over: r.over, credits: r.credits, card: r.grantedCard },
+      draft: { wins: r.wins, completed: r.completed, over: r.over, credits: r.credits, card: r.grantedCard, daily: wasDaily },
       mvp, roundLog, mapName, star, casterFinal: finalCallOf(script),
     };
     setResult(null);
@@ -2789,6 +2809,19 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     </div>
                   ))}
                 </div>
+                {/* DRAFT DO DIA — a 1ª run do dia usa a seed GLOBAL: mesmo draft pra todo mundo, resultado vale ranking */}
+                {(() => {
+                  const todayK = dateKey(new Date());
+                  const isDailyNext = state.profile.draft.date !== todayK;
+                  return (
+                    <div style={{ padding: '9px 12px', marginBottom: 10, borderRadius: 10, border: '1px solid rgba(201,166,60,0.45)', background: 'rgba(201,166,60,0.08)', fontSize: '0.78rem', lineHeight: 1.45 }}>
+                      <b>🗓️ {ct('DRAFT DO DIA')} #{dayNumberOf(todayK)}</b>{' — '}
+                      {isDailyNext
+                        ? ct('sua PRÓXIMA run é a oficial: hoje o mundo inteiro drafta entre as MESMAS cartas, e o resultado entra no ranking do dia. Vencer com OVR menor rankeia acima.')
+                        : ct('a run oficial de hoje você já jogou — as próximas são draft livre (seed aleatória). Amanhã tem outro.')}
+                    </div>
+                  );
+                })()}
                 <button
                   className="ut-jogar"
                   style={{ width: '100%', justifyContent: 'center', padding: '13px' }}
@@ -2799,6 +2832,22 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 </button>
                 {state.profile.credits < DRAFT_ENTRY && (
                   <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>{ct('Inscrição custa')} {fmt(DRAFT_ENTRY)} — {ct('você tem')} {fmt(state.profile.credits)}.</div>
+                )}
+                {/* ranking do dia (público) */}
+                {draftBoard && draftBoard.ladder.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--ut-muted)', marginBottom: 6 }}>
+                      🏆 {ct('Ranking do Draft do Dia')} · {draftBoard.total} {ct('jogaram')}
+                    </div>
+                    {draftBoard.ladder.slice(0, 10).map((r) => (
+                      <div key={r.rank} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '4px 2px', fontSize: '0.8rem', borderBottom: '1px solid var(--ut-line)' }}>
+                        <span style={{ fontFamily: 'var(--ut-font-mono)', fontWeight: 800, width: 26, color: r.rank <= 3 ? '#92600a' : 'var(--ut-muted)' }}>#{r.rank}</span>
+                        <b style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nick}</b>
+                        <span style={{ fontFamily: 'var(--ut-font-mono)', fontWeight: 700 }}>{r.wins}/{DRAFT_TARGET}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--ut-muted)' }}>OVR {r.ovr}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </>
             ) : d.stage < DRAFT_ROLES.length ? (
@@ -3027,6 +3076,25 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             )}
             {result.draft?.completed && (
               <div className="ut-divchange promoted"><Layers size={15} strokeWidth={2.5} /> {ct('CAMPANHA PERFEITA')} · {DRAFT_TARGET}/{DRAFT_TARGET}</div>
+            )}
+            {result.draft?.over && result.draft.daily && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.72rem', letterSpacing: '1.4px', textTransform: 'uppercase', color: '#92600a' }}>
+                  🗓️ {ct('DRAFT DO DIA')} #{dayNumberOf(dateKey(new Date()))}
+                  {draftDayRank != null && <> · <b>#{draftDayRank}</b> {ct('do dia')}</>}
+                </div>
+                {draftDayRank == null && (
+                  <div style={{ fontSize: '0.7rem', color: 'var(--ut-muted)' }}>{ct('Entre na sua conta pra valer no ranking do dia.')}</div>
+                )}
+                <Button onClick={() => {
+                  const day = dayNumberOf(dateKey(new Date()));
+                  const w = result.draft?.wins ?? 0;
+                  const marks = Array.from({ length: DRAFT_TARGET }, (_, i) => (i < w ? '🟩' : '🟥')).join('');
+                  const pos = draftDayRank != null ? ` · #${draftDayRank} do dia` : '';
+                  const txt = `🗓️ DRAFT DO DIA #${day} — ${marks} ${w}/${DRAFT_TARGET}${pos}\nTodo mundo no MESMO draft. Encara?\nhttps://roadtomajor.com.br/ultimate`;
+                  void navigator.clipboard?.writeText(txt).then(() => setToast(ct('Resultado copiado — cola no grupo!')));
+                }}>📋 {ct('Compartilhar')}</Button>
+              </div>
             )}
             <div className={result.won ? 'ut-score-pop' : 'ut-score-shake'} style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? '#16a34a' : '#dc2626' }}>{result.score}</div>
             {result.mapName && <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--ut-muted)', marginTop: -6 }}>{result.mapName}</div>}

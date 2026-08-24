@@ -217,13 +217,14 @@ export function draftStart(
   state: UltimateState,
   today: string,
   seed: number,
+  daily = false,
 ): { state: UltimateState; ok: boolean; reason?: string } {
   const d = state.profile.draft;
   if (d.active) return { state, ok: false, reason: 'Run em andamento' };
   if (state.profile.credits < DRAFT_ENTRY) return { state, ok: false, reason: `Inscrição custa ${DRAFT_ENTRY.toLocaleString('pt-BR')} credits` };
   const draft: DraftRunState = {
     date: today, seed: (seed >>> 0) || 1, stage: 0, picks: [],
-    wins: 0, active: true, best: d.best, runs: d.runs + 1,
+    wins: 0, active: true, best: d.best, runs: d.runs + 1, daily,
   };
   return {
     state: { ...state, profile: { ...state.profile, credits: state.profile.credits - DRAFT_ENTRY, draft } },
