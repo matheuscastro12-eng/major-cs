@@ -517,6 +517,22 @@ async function reconcileFlip(): Promise<void> {
       clearFlipDrift(); // convergiu — qualquer drift anotado já foi absorvido
       return;
     }
+    // Guarda anti-wipe (incidente Coala, 2026-08-10): um aparelho que bootou com
+    // save VELHO (PWA ressuscitada de background, localStorage evicted etc.)
+    // passa em todos os guards acima — não é pristine, a fila está vazia — e o
+    // "local vence" rebaixaria o servidor em dezenas de cartas/dezenas de
+    // milhares de coins de progresso real (foi -121k coins + 86 cartas).
+    // Downgrade GRANDE nunca é um jogador jogando: spend/quicksell/sbc chegam
+    // pela fila-sombra, não pela reconciliação. Acima dos limiares, NÃO aplica:
+    // mantém o servidor rico, registra pra triagem manual e deixa a flag de
+    // drift de pé (o próximo boot com o save certo reconcilia e limpa).
+    if (removes.length >= 10 || creditsDelta <= -20_000) {
+      captureError(
+        new Error(`ult-flip guard: downgrade bloqueado creditsΔ=${creditsDelta} removes=${removes.length} local=${localIds.size} server=${serverIds.size}`),
+        'ult-flip-guard',
+      );
+      return;
+    }
     // log só com TAMANHOS (nunca despeja cartas/coleção no errlog)
     captureError(
       new Error(`ult-flip divergência: creditsΔ=${creditsDelta} adds=${adds.length} removes=${removes.length} local=${localIds.size} server=${serverIds.size}`),
