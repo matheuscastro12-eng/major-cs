@@ -222,8 +222,10 @@ test('migração v15→v16: backfill do lifestyle em save antigo', () => {
 test('perks: toda trilha tem T4 (nível 18) e T5 (nível 30), encadeados no T3', () => {
   const trees = ['universal', 'Entry', 'AWP', 'Rifler', 'Support', 'Lurker', 'IGL'] as const;
   for (const tree of trees) {
-    const t4 = PERKS.filter((p) => p.tree === tree && p.tier === 4);
-    const t5 = PERKS.filter((p) => p.tree === tree && p.tier === 5);
+    // trilha BASE apenas — perks de ESTILO (RTP v17, p.style) têm contrato
+    // próprio em test-rtp-styles.mts e também usam tiers 2..4.
+    const t4 = PERKS.filter((p) => p.tree === tree && !p.style && p.tier === 4);
+    const t5 = PERKS.filter((p) => p.tree === tree && !p.style && p.tier === 5);
     assert.equal(t4.length, 1, `${tree}: sem T4`);
     assert.equal(t5.length, 1, `${tree}: sem T5`);
     assert.equal(t4[0].reqLevel, 18);
@@ -232,9 +234,10 @@ test('perks: toda trilha tem T4 (nível 18) e T5 (nível 30), encadeados no T3',
     const t3 = PERKS.find((p) => p.id === t4[0].reqPerk);
     assert.equal(t3?.tier, 3, `${tree}: T4 não encadeia no T3`);
   }
-  // cada jogador agora enxerga 10 perks compráveis (5 universais + 5 da role)
+  // cada jogador enxerga 16 perks compráveis: 5 universais + 5 da role + 6 de
+  // ESTILO (2 trilhas × 3; na prática compra no máx. 13 — estilos são exclusivos)
   for (const role of ['Entry', 'AWP', 'Rifler', 'Support', 'Lurker', 'IGL'] as Role[]) {
-    assert.equal(perkTreeFor(role).length, 10, `${role}`);
+    assert.equal(perkTreeFor(role).length, 16, `${role}`);
   }
   // ids únicos
   assert.equal(new Set(PERKS.map((p) => p.id)).size, PERKS.length);

@@ -10,6 +10,7 @@ import { ATTR_LABEL } from '../../engine/attributes';
 import {
   perkTreeFor, canUnlock, unlockPerk, perkById, TRAITS,
   xpToNext, legacyScore, legacyTier, MILESTONES, milestoneProgress, MAX_LEVEL,
+  stylesFor, styleById, chosenStyleId,
   type PerkDef, type PerkEffect, type PerkTree,
 } from '../../engine/rtp/perks';
 import { legendBoard, LEGEND_MARKS } from '../../engine/rtp/legends';
@@ -105,6 +106,9 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
           <span className="rtp-bio-tag">{player.age} {ct('anos')}</span>
           <span className="rtp-bio-tag">{PERSONALITY_LABEL[player.personality]}</span>
           <span className="rtp-bio-tag"><RtpIcon name={arch.icon} size={12} /> {arch.label}</span>
+          {(() => { const st = chosenStyleId(prog) ? styleById(chosenStyleId(prog)!) : undefined; return st
+            ? <span className="rtp-bio-tag rtp-bio-style"><RtpIcon name={st.icon} size={12} /> {st.label}</span>
+            : null; })()}
         </div>
       </DashCard>
 
@@ -138,7 +142,7 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
           <div className="rtp-feedback rtp-setup-flash"><b><RtpIcon name="spark" size={13} /> {ct('Perk desbloqueado')}: {perkFlash}</b></div>
         )}
         {groups.map((g) => {
-          const perks = tree.filter((p) => p.tree === g);
+          const perks = tree.filter((p) => p.tree === g && !p.style);
           if (!perks.length) return null;
           return (
             <div key={g} className="rtp-perkgroup">
@@ -147,6 +151,39 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
             </div>
           );
         })}
+
+        {/* ESTILOS DE JOGO (RTP v17) — dois caminhos exclusivos por função. O
+            primeiro perk desbloqueado COMPROMETE a carreira com o estilo. */}
+        {(() => {
+          const styles = stylesFor(player.role);
+          if (!styles.length) return null;
+          const chosen = chosenStyleId(prog);
+          return (
+            <div className="rtp-perkgroup">
+              <div className="rtp-perkgroup-h">{ct('Estilo de jogo')} <span className="rtp-style-note">{chosen ? ct('escolha feita — sem volta') : ct('escolher um TRANCA o outro')}</span></div>
+              <div className="rtp-stylegrid">
+                {styles.map((st) => {
+                  const stPerks = tree.filter((p) => p.style === st.id);
+                  const mine = chosen === st.id;
+                  const locked = !!chosen && !mine;
+                  return (
+                    <div key={st.id} className={`rtp-stylecard${mine ? ' mine' : ''}${locked ? ' locked' : ''}`}>
+                      <div className="rtp-stylecard-h">
+                        <RtpIcon name={st.icon} size={16} />
+                        <div>
+                          <b>{st.label}</b>
+                          {mine && <span className="rtp-style-badge"><RtpIcon name="check" size={11} /> {ct('seu estilo')}</span>}
+                          <p>{st.desc}</p>
+                        </div>
+                      </div>
+                      {stPerks.map((p) => <PerkRow key={p.id} perk={p} owned={prog.perks.includes(p.id)} check={canUnlock(save, p.id)} onUnlock={() => doUnlock(p.id)} />)}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </DashCard>
 
       {/* Traits — identidade emergente */}

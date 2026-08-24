@@ -44,10 +44,63 @@ export interface PerkDef {
   tier: 1 | 2 | 3 | 4 | 5;
   reqLevel: number;
   reqPerk?: string;            // pré-requisito (perk anterior na mesma trilha)
+  style?: string;              // RTP v17 — perk de ESTILO DE JOGO (StyleDef.id); estilos da mesma função são mutuamente exclusivos
   label: string;
   desc: string;
   icon: RtpIconName;
   effect: PerkEffect;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTILOS DE JOGO (RTP v17) — especializações mutuamente exclusivas por função.
+//
+// Cada função tem DOIS estilos com uma trilha de 3 perks cada. Desbloquear o
+// primeiro perk de um estilo COMPROMETE a carreira com ele: o estilo rival da
+// mesma função tranca (identidade > acúmulo — e replay value: a mesma função
+// rende duas carreiras diferentes). Efeitos na régua dos perks existentes;
+// nenhum toque no matchSim — tudo entra pelos mesmos agregadores.
+
+export interface StyleDef {
+  id: string;
+  role: Role;
+  label: string;
+  desc: string;
+  icon: RtpIconName;
+}
+
+export const STYLES: StyleDef[] = [
+  { id: 'st_e_rush', role: 'Entry', label: 'Cara do Rush', icon: 'fire',
+    desc: 'Explosão pura: você chega ANTES da granada. O site abre no peito.' },
+  { id: 'st_e_cirurgico', role: 'Entry', label: 'Abridor Cirúrgico', icon: 'brain',
+    desc: 'Entrada montada: flash do suporte, peek na hora certa, trade garantido.' },
+  { id: 'st_a_ataque', role: 'AWP', label: 'AWP de Ataque', icon: 'spark',
+    desc: 'A AWP como arma de pressão: peek agressivo, flick, re-peek.' },
+  { id: 'st_a_ancora', role: 'AWP', label: 'Âncora Absoluta', icon: 'snow',
+    desc: 'A AWP como muralha: o ângulo é seu e atravessar custa caro.' },
+  { id: 'st_r_estrela', role: 'Rifler', label: 'Estrela do Rifle', icon: 'fame',
+    desc: 'O rifle que decide: multi-kill, highlight, o round nas suas costas.' },
+  { id: 'st_r_motor', role: 'Rifler', label: 'Motor do Time', icon: 'gym',
+    desc: 'O rifle que sustenta: troca certa, posição certa, o piso que não cede.' },
+  { id: 'st_s_mago', role: 'Support', label: 'Mago do Utilitário', icon: 'bomb',
+    desc: 'Lineup de livro: sua granada vale um abate antes do primeiro tiro.' },
+  { id: 'st_s_guarda', role: 'Support', label: 'Guarda-costas', icon: 'team',
+    desc: 'A estrela joga solta porque você segura o mundo nas costas dela.' },
+  { id: 'st_l_info', role: 'Lurker', label: 'Fantasma de Informação', icon: 'brain',
+    desc: 'Você lurka por INFO: cada passo ouvido vira uma chamada certa.' },
+  { id: 'st_l_solo', role: 'Lurker', label: 'Executor Solo', icon: 'skull',
+    desc: 'Você lurka pra MATAR: flank fechado, faca no round, xeque-mate.' },
+  { id: 'st_i_lab', role: 'IGL', label: 'Cientista do CS', icon: 'chart',
+    desc: 'O jogo é um laboratório: demo, dado e anti-strat pra cada adversário.' },
+  { id: 'st_i_voz', role: 'IGL', label: 'Comandante de Vestiário', icon: 'team',
+    desc: 'O jogo é gente: voz firme, time blindado, ninguém tilta no seu turno.' },
+];
+
+export function styleById(id: string): StyleDef | undefined {
+  return STYLES.find((s) => s.id === id);
+}
+
+export function stylesFor(role: Role): StyleDef[] {
+  return STYLES.filter((s) => s.role === role);
 }
 
 export const PERKS: PerkDef[] = [
@@ -145,6 +198,105 @@ export const PERKS: PerkDef[] = [
     desc: 'Você tem resposta pronta pra todo protocolo que já viu — e viu todos.', effect: { attr: { gameSense: 1, anticipation: 1 } } },
   { id: 'i_dynasty', tree: 'IGL', tier: 5, reqLevel: 30, reqPerk: 'i_library', label: 'Arquiteto de dinastia', icon: 'trophy',
     desc: 'Sistemas que você desenha viram meta. Times inteiros jogam sua ideia.', effect: { attr: { leadership: 1 }, matchFactor: { label: 'Arquiteto', delta: 6 } } },
+
+  // ── ESTILOS DE JOGO (RTP v17) — 2 trilhas exclusivas por função, 3 perks cada.
+  // Níveis 8/15/24 (entre os T2/T3/T4 da trilha base). Mesma régua de efeito.
+
+  // Entry · Cara do Rush
+  { id: 'e_rush_1', tree: 'Entry', style: 'st_e_rush', tier: 2, reqLevel: 8, label: 'Pé na porta', icon: 'fire',
+    desc: 'Ninguém segura seu primeiro passo no site.', effect: { attr: { aimMovement: 1, reflexes: 1 } } },
+  { id: 'e_rush_2', tree: 'Entry', style: 'st_e_rush', tier: 3, reqLevel: 15, reqPerk: 'e_rush_1', label: 'Onda de choque', icon: 'spark',
+    desc: 'Seu rush desorganiza a defesa inteira — atrás de você vem o time.', effect: { attr: { stamina: 1 }, matchFactor: { label: 'Rush', delta: 6 } } },
+  { id: 'e_rush_3', tree: 'Entry', style: 'st_e_rush', tier: 4, reqLevel: 24, reqPerk: 'e_rush_2', label: 'Avalanche', icon: 'fire',
+    desc: 'Quando você decide entrar, o round já começou 2x1.', effect: { attr: { aim: 1 }, matchFactor: { label: 'Avalanche', delta: 7 } } },
+
+  // Entry · Abridor Cirúrgico
+  { id: 'e_cir_1', tree: 'Entry', style: 'st_e_cirurgico', tier: 2, reqLevel: 8, label: 'Peek de raio-X', icon: 'focus',
+    desc: 'Você já sabe onde o defensor está antes de aparecer.', effect: { attr: { preAim: 1, anticipation: 1 } } },
+  { id: 'e_cir_2', tree: 'Entry', style: 'st_e_cirurgico', tier: 3, reqLevel: 15, reqPerk: 'e_cir_1', label: 'Entrada montada', icon: 'team',
+    desc: 'Flash na cara, peek no timing, trade atrás: a entrada vira protocolo.', effect: { attr: { teamwork: 1 }, matchFactor: { label: 'Entrada montada', delta: 6 } } },
+  { id: 'e_cir_3', tree: 'Entry', style: 'st_e_cirurgico', tier: 4, reqLevel: 24, reqPerk: 'e_cir_2', label: 'Bisturi', icon: 'crosshair',
+    desc: 'Abertura limpa, sem troca: o site abre e você continua vivo.', effect: { attr: { headshot: 1, decisions: 1 } } },
+
+  // AWP · AWP de Ataque
+  { id: 'a_atk_1', tree: 'AWP', style: 'st_a_ataque', tier: 2, reqLevel: 8, label: 'Peek de AWP', icon: 'spark',
+    desc: 'A AWP peekando é heresia — até acertar. Você acerta.', effect: { attr: { aimMovement: 1, reflexes: 1 } } },
+  { id: 'a_atk_2', tree: 'AWP', style: 'st_a_ataque', tier: 3, reqLevel: 15, reqPerk: 'a_atk_1', label: 'Caçada', icon: 'crosshair',
+    desc: 'Você não espera o pick: vai buscar.', effect: { attr: { apm: 1 }, matchFactor: { label: 'Caçada', delta: 6 } } },
+  { id: 'a_atk_3', tree: 'AWP', style: 'st_a_ataque', tier: 4, reqLevel: 24, reqPerk: 'a_atk_2', label: 'Trovoada', icon: 'fire',
+    desc: 'Dois picks em cinco segundos. O round acabou antes de começar.', effect: { attr: { awp: 1 }, matchFactor: { label: 'Trovoada', delta: 7 } } },
+
+  // AWP · Âncora Absoluta
+  { id: 'a_anc_1', tree: 'AWP', style: 'st_a_ancora', tier: 2, reqLevel: 8, label: 'Muralha', icon: 'snow',
+    desc: 'Seu ângulo não é disputável. É um fato do mapa.', effect: { attr: { positioning: 1, concentration: 1 } } },
+  { id: 'a_anc_2', tree: 'AWP', style: 'st_a_ancora', tier: 3, reqLevel: 15, reqPerk: 'a_anc_1', label: 'Pedágio', icon: 'balance',
+    desc: 'Atravessar sua mira custa um jogador. Todo round.', effect: { attr: { discipline: 1 }, matchFactor: { label: 'Pedágio', delta: 6 } } },
+  { id: 'a_anc_3', tree: 'AWP', style: 'st_a_ancora', tier: 4, reqLevel: 24, reqPerk: 'a_anc_2', label: 'Território interditado', icon: 'snow',
+    desc: 'Metade do mapa sai do plano adversário só porque você existe.', effect: { attr: { preAim: 1 }, matchFactor: { label: 'Território', delta: 7 } } },
+
+  // Rifler · Estrela do Rifle
+  { id: 'r_est_1', tree: 'Rifler', style: 'st_r_estrela', tier: 2, reqLevel: 8, label: 'Fome de round', icon: 'fame',
+    desc: 'Um kill nunca basta. Você joga pro segundo e pro terceiro.', effect: { attr: { aim: 1, apm: 1 } } },
+  { id: 'r_est_2', tree: 'Rifler', style: 'st_r_estrela', tier: 3, reqLevel: 15, reqPerk: 'r_est_1', label: 'Modo highlight', icon: 'spark',
+    desc: 'O clip da semana costuma ter seu nick nele.', effect: { matchFactor: { label: 'Highlight', delta: 6 } } },
+  { id: 'r_est_3', tree: 'Rifler', style: 'st_r_estrela', tier: 4, reqLevel: 24, reqPerk: 'r_est_2', label: 'Hard carry', icon: 'trophy',
+    desc: 'Dia ruim do time é dia de 30 bombas seu.', effect: { attr: { consistency: 1 }, matchFactor: { label: 'Carry', delta: 7 } } },
+
+  // Rifler · Motor do Time
+  { id: 'r_mot_1', tree: 'Rifler', style: 'st_r_motor', tier: 2, reqLevel: 8, label: 'Troca garantida', icon: 'trade',
+    desc: 'Companheiro caiu, o adversário cai junto. Sempre.', effect: { attr: { teamwork: 1, positioning: 1 } } },
+  { id: 'r_mot_2', tree: 'Rifler', style: 'st_r_motor', tier: 3, reqLevel: 15, reqPerk: 'r_mot_1', label: 'Sempre no lugar certo', icon: 'brain',
+    desc: 'Ninguém nota até faltar: o round funciona porque você estava lá.', effect: { attr: { gameSense: 1 }, matchFactor: { label: 'Motor', delta: 5 } } },
+  { id: 'r_mot_3', tree: 'Rifler', style: 'st_r_motor', tier: 4, reqLevel: 24, reqPerk: 'r_mot_2', label: 'Turbina', icon: 'gym',
+    desc: 'Mapa 3 da série, overtime, e o seu nível não cai um milímetro.', effect: { attr: { stamina: 1, consistency: 1 }, tiltResist: 0.08 } },
+
+  // Support · Mago do Utilitário
+  { id: 's_mag_1', tree: 'Support', style: 'st_s_mago', tier: 2, reqLevel: 8, label: 'Lineup de livro', icon: 'bomb',
+    desc: 'Pixel, contagem, arco: sua granada cai onde a teoria manda.', effect: { attr: { coordination: 1, vision: 1 } } },
+  { id: 's_mag_2', tree: 'Support', style: 'st_s_mago', tier: 3, reqLevel: 15, reqPerk: 's_mag_1', label: 'Flash de deus', icon: 'spark',
+    desc: 'O defensor fecha o olho e o seu Entry agradece.', effect: { matchFactor: { label: 'Flash cega', delta: 6 } } },
+  { id: 's_mag_3', tree: 'Support', style: 'st_s_mago', tier: 4, reqLevel: 24, reqPerk: 's_mag_2', label: 'Arquiteto do round', icon: 'brain',
+    desc: 'Quatro granadas suas e o site já está aberto antes do primeiro tiro.', effect: { attr: { teamwork: 1 }, matchFactor: { label: 'Arquiteto do round', delta: 7 } } },
+
+  // Support · Guarda-costas
+  { id: 's_gua_1', tree: 'Support', style: 'st_s_guarda', tier: 2, reqLevel: 8, label: 'Escudo da estrela', icon: 'team',
+    desc: 'Sua posição existe pra estrela do time jogar sem medo.', effect: { attr: { positioning: 1, teamwork: 1 } } },
+  { id: 's_gua_2', tree: 'Support', style: 'st_s_guarda', tier: 3, reqLevel: 15, reqPerk: 's_gua_1', label: 'Sombra fiel', icon: 'trade',
+    desc: 'Quem abate seu companheiro não vive pra contar.', effect: { matchFactor: { label: 'Trade imediato', delta: 6 } } },
+  { id: 's_gua_3', tree: 'Support', style: 'st_s_guarda', tier: 4, reqLevel: 24, reqPerk: 's_gua_2', label: 'Anjo da guarda', icon: 'health',
+    desc: 'Com você na retaguarda o time simplesmente não entra em pânico.', effect: { attr: { composure: 1 }, tiltResist: 0.1 } },
+
+  // Lurker · Fantasma de Informação
+  { id: 'l_inf_1', tree: 'Lurker', style: 'st_l_info', tier: 2, reqLevel: 8, label: 'Ouvido no chão', icon: 'headset',
+    desc: 'Três passos e uma recarga: você já sabe a rotação inteira.', effect: { attr: { vision: 1, anticipation: 1 } } },
+  { id: 'l_inf_2', tree: 'Lurker', style: 'st_l_info', tier: 3, reqLevel: 15, reqPerk: 'l_inf_1', label: 'Mapa mental', icon: 'brain',
+    desc: 'Sua call de lurk vale mais que um abate: o time joga vendo tudo.', effect: { attr: { communication: 1 }, matchFactor: { label: 'Info limpa', delta: 6 } } },
+  { id: 'l_inf_3', tree: 'Lurker', style: 'st_l_info', tier: 4, reqLevel: 24, reqPerk: 'l_inf_2', label: 'Onisciência', icon: 'focus',
+    desc: 'O adversário ainda está decidindo e você já contou pro IGL.', effect: { attr: { decisions: 1 }, matchFactor: { label: 'Onisciência', delta: 7 } } },
+
+  // Lurker · Executor Solo
+  { id: 'l_sol_1', tree: 'Lurker', style: 'st_l_solo', tier: 2, reqLevel: 8, label: 'Caçador noturno', icon: 'skull',
+    desc: 'O flank não é rota de fuga: é o seu terreno de caça.', effect: { attr: { offAngles: 1, composure: 1 } } },
+  { id: 'l_sol_2', tree: 'Lurker', style: 'st_l_solo', tier: 3, reqLevel: 15, reqPerk: 'l_sol_1', label: 'Emboscada', icon: 'snow',
+    desc: 'A rotação adversária passa por você — e não chega.', effect: { matchFactor: { label: 'Emboscada', delta: 6 } } },
+  { id: 'l_sol_3', tree: 'Lurker', style: 'st_l_solo', tier: 4, reqLevel: 24, reqPerk: 'l_sol_2', label: 'Xeque-mate', icon: 'skull',
+    desc: 'Fim de round apertado com você vivo não é aperto: é execução.', effect: { attr: { clutch: 1 }, matchFactor: { label: 'Xeque-mate', delta: 7 } } },
+
+  // IGL · Cientista do CS
+  { id: 'i_lab_1', tree: 'IGL', style: 'st_i_lab', tier: 2, reqLevel: 8, label: 'Caderno de demos', icon: 'demos',
+    desc: 'Cada demo assistida vira arma. Você estuda como ninguém.', effect: { trainingXpMult: 1.08, attr: { gameSense: 1 } } },
+  { id: 'i_lab_2', tree: 'IGL', style: 'st_i_lab', tier: 3, reqLevel: 15, reqPerk: 'i_lab_1', label: 'Anti-strat', icon: 'chart',
+    desc: 'O protocolo favorito deles morre no seu quadro branco.', effect: { matchFactor: { label: 'Anti-strat', delta: 6 } } },
+  { id: 'i_lab_3', tree: 'IGL', style: 'st_i_lab', tier: 4, reqLevel: 24, reqPerk: 'i_lab_2', label: 'Xadrez em 5D', icon: 'brain',
+    desc: 'Você chama a jogada que responde a jogada que eles ainda vão fazer.', effect: { attr: { anticipation: 1, decisions: 1 } } },
+
+  // IGL · Comandante de Vestiário
+  { id: 'i_voz_1', tree: 'IGL', style: 'st_i_voz', tier: 2, reqLevel: 8, label: 'Voz firme', icon: 'headset',
+    desc: 'Rádio limpo, ordem curta: no caos, o time ouve VOCÊ.', effect: { attr: { leadership: 1, communication: 1 } } },
+  { id: 'i_voz_2', tree: 'IGL', style: 'st_i_voz', tier: 3, reqLevel: 15, reqPerk: 'i_voz_1', label: 'Time blindado', icon: 'team',
+    desc: 'Derrota não vira crise no seu vestiário.', effect: { tiltResist: 0.12 } },
+  { id: 'i_voz_3', tree: 'IGL', style: 'st_i_voz', tier: 4, reqLevel: 24, reqPerk: 'i_voz_2', label: 'Discurso de final', icon: 'trophy',
+    desc: 'Intervalo, 12x3 contra — e o time volta acreditando. E vira.', effect: { attr: { composure: 1 }, matchFactor: { label: 'Discurso', delta: 6 } } },
 ];
 
 export function perkById(id: string): PerkDef | undefined {
@@ -154,6 +306,17 @@ export function perkById(id: string): PerkDef | undefined {
 // Árvore relevante pro jogador: universal + a da sua função.
 export function perkTreeFor(role: Role): PerkDef[] {
   return PERKS.filter((p) => p.tree === 'universal' || p.tree === role);
+}
+
+// Estilo com que a carreira se COMPROMETEU (primeiro perk de estilo desbloqueado
+// define; undefined = ainda não escolheu). Perks de estilo só existem na árvore
+// da própria função, então basta olhar os perks possuídos.
+export function chosenStyleId(prog: PlayerProgression): string | undefined {
+  for (const id of prog.perks) {
+    const st = perkById(id)?.style;
+    if (st) return st;
+  }
+  return undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -363,6 +526,13 @@ export function canUnlock(save: RoadToProSave, perkId: string): UnlockCheck {
   if (def.tree !== 'universal' && def.tree !== save.player.role) return { ok: false, reason: 'Fora da sua função.' };
   if (prog.perkPoints < 1) return { ok: false, reason: 'Sem pontos de perk.' };
   if (prog.level < def.reqLevel) return { ok: false, reason: `Requer nível ${def.reqLevel}.` };
+  // Estilos são exclusivos por função: comprometeu com um, o rival tranca.
+  if (def.style) {
+    const chosen = chosenStyleId(prog);
+    if (chosen && chosen !== def.style) {
+      return { ok: false, reason: `Seu estilo é ${styleById(chosen)?.label ?? chosen} — escolha definitiva.` };
+    }
+  }
   if (def.reqPerk && !prog.perks.includes(def.reqPerk)) {
     const pre = perkById(def.reqPerk);
     return { ok: false, reason: `Requer "${pre?.label ?? def.reqPerk}".` };

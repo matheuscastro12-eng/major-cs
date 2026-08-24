@@ -1733,6 +1733,19 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-perk-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 0 14px color-mix(in srgb, var(--rtp-frag) 28%, transparent); }
 .rtp .rtp-perk-btn:disabled { cursor: not-allowed; color: var(--rtp-ink-faint); background: var(--rtp-well); border-color: var(--rtp-line); font-size: .56rem; }
 
+/* estilos de jogo (RTP v17) — dois caminhos exclusivos por função */
+.rtp .rtp-style-note { font-weight: 600; letter-spacing: .5px; text-transform: none; color: var(--rtp-frag); margin-left: 6px; }
+.rtp .rtp-stylegrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+@media (max-width: 640px) { .rtp .rtp-stylegrid { grid-template-columns: 1fr; } }
+.rtp .rtp-stylecard { border: 1px solid var(--rtp-line); border-radius: 12px; padding: 10px; background: color-mix(in srgb, var(--rtp-well) 55%, transparent); }
+.rtp .rtp-stylecard.mine { border-color: color-mix(in srgb, var(--rtp-signal) 55%, var(--rtp-line)); box-shadow: 0 0 16px color-mix(in srgb, var(--rtp-signal) 12%, transparent); }
+.rtp .rtp-stylecard.locked { opacity: .55; filter: saturate(.5); }
+.rtp .rtp-stylecard-h { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 8px; color: var(--rtp-clutch); }
+.rtp .rtp-stylecard-h b { font-size: .84rem; color: var(--rtp-ink); }
+.rtp .rtp-stylecard-h p { margin: 2px 0 0; font-size: .7rem; color: var(--rtp-ink-dim); line-height: 1.35; }
+.rtp .rtp-style-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: 7px; font-family: var(--rtp-mono); font-size: .54rem; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--rtp-signal); border: 1px solid color-mix(in srgb, var(--rtp-signal) 40%, transparent); border-radius: 4px; padding: 0 5px; vertical-align: middle; }
+.rtp .rtp-bio-tag.rtp-bio-style { color: var(--rtp-signal); border-color: color-mix(in srgb, var(--rtp-signal) 45%, var(--rtp-line)); }
+
 /* traits — chips de identidade */
 .rtp .rtp-traits { display: flex; flex-wrap: wrap; gap: 7px; }
 .rtp .rtp-trait { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; font-weight: 600; color: var(--rtp-clutch); background: color-mix(in srgb, var(--rtp-clutch) 12%, var(--rtp-well)); border: 1px solid color-mix(in srgb, var(--rtp-clutch) 35%, var(--rtp-line)); border-radius: 999px; padding: 4px 11px; }
