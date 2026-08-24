@@ -294,12 +294,26 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   useEffect(() => {
     if (pixWaitLong) trackPaywallView('pix-wait-longo'); // funil: reassurance de espera longa exibida (evento existente, novo src)
   }, [pixWaitLong]);
+  // funil: dado real (28d) mostra ~51% de abandono do QR Pix aberto (44/86),
+  // uma taxa que não melhorou depois de duas rodadas de reassurance por texto
+  // (só reduziu o tempo médio até desistir, não a taxa). Hipótese: parte de
+  // quem desiste não está em dúvida sobre o prazo — está sem paciência ou sem
+  // o app do banco à mão. Oferece uma saída honesta pro cartão na mesma janela
+  // em que a reassurance já aparece (25s), sem fechar o modal nem perder o
+  // cadastro já feito.
+  const [cardSwitching, setCardSwitching] = useState(false);
+  useEffect(() => {
+    if (pixWaitLong) trackPaywallView('pix-troca-cartao'); // funil: saída pro cartão exibida (evento existente, novo src)
+  }, [pixWaitLong]);
   // funil: abandono do QR Pix — best-effort, dispara no desmonte do modal se o
   // QR chegou a abrir e o pagamento não foi confirmado pelo polling.
   const pixOpenedAt = useRef(0);
   const pixConfirmed = useRef(false);
+  // trocou pro cartão em vez de desistir (ver switchToCard mais abaixo) — não
+  // é abandono, é o mesmo usuário concluindo por outro método.
+  const pixSwitchedMethod = useRef(false);
   useEffect(() => () => {
-    if (pixOpenedAt.current && !pixConfirmed.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);
+    if (pixOpenedAt.current && !pixConfirmed.current && !pixSwitchedMethod.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);
   }, []);
   // polling: confere se a conta já virou paga (o webhook do Woovi é quem marca; este
   // poll só detecta pra liberar a tela). Guardas de custo: (1) pausa em aba oculta —
@@ -364,6 +378,15 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const copyBr = async () => {
     if (!pix?.charge.brCode) return;
     try { await navigator.clipboard.writeText(pix.charge.brCode); setCopied(true); setTimeout(() => setCopied(false), 2200); } catch { /* sem permissão */ }
+  };
+  // troca pro cartão sem perder o cadastro: a conta já foi criada no goPix, então
+  // só dispara o checkout do Stripe (mesmo onCheckout do botão "Ativar com
+  // cartão" acima) — não é um segundo cadastro.
+  const switchToCard = async () => {
+    if (!pix || cardSwitching) return;
+    setCardSwitching(true);
+    pixSwitchedMethod.current = true;
+    await onCheckout(pix.email, nick.trim());
   };
   // fechar com o QR Pix aberto e sem pagamento confirmado: UM nudge leve inline
   // (1x por sessão), honesto e descartável. Depois disso, fechar fecha mesmo.
@@ -547,10 +570,21 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
             {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
           </p>
           {pixWaitLong && (
-            /* reassurance honesta pra quem passou de 1min esperando (ver comentário acima) */
-            <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
-              {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
-            </p>
+            <>
+              {/* reassurance honesta pra quem passou de 1min esperando (ver comentário acima) */}
+              <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
+                {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
+              </p>
+              {/* saída honesta pro cartão (ver comentário no effect acima) */}
+              <button
+                type="button"
+                onClick={() => void switchToCard()}
+                disabled={cardSwitching}
+                style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
+              >
+                {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
+              </button>
+            </>
           )}
           {nudge && (
             /* nudge anti-abandono (1x/sessão): inline, honesto, descartável */
