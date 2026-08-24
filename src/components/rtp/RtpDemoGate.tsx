@@ -12,6 +12,7 @@ import { ct } from '../../state/career-i18n';
 import { trackPaywallView, setCheckoutSrc } from '../../state/track';
 import { TIER_NAME } from '../../engine/rtp/league';
 import type { RoadToProSave } from '../../engine/rtp/types';
+import { FounderCounter } from '../FounderCounter';
 
 export const DEMO_WEEKS = 3; // semanas jogáveis na demo (a trava fecha na 4ª)
 
@@ -49,6 +50,12 @@ export function RtpDemoGate({ save, onUpgrade, onExit }: {
           <li>✔ {ct('Save na nuvem (5 slots) — jogue no PC e no celular')}</li>
           <li>✔ {ct('E TUDO do jogo: modo Carreira de manager + Ultimate Squad')}</li>
         </ul>
+
+        {/* funil: a demo (lançada em 09/08) é a trava mais nova do jogo e a
+            única entre as de maior intenção (mkt-lock, Hero, Pricing, upsell-card)
+            que ainda não mostrava a prova social real dos Fundadores — mesmo
+            componente, dado real do servidor, sem número inventado. */}
+        <FounderCounter style={{ marginBottom: '2px' }} />
 
         <button type="button" className="rtp-cta rtp-demogate-cta" onClick={goUpgrade}>
           {ct('GARANTIR A VITALÍCIA')} · R$ 20 <span>{ct('pagamento único, pra sempre')}</span>
