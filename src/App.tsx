@@ -1079,9 +1079,18 @@ export default function App() {
           accountReady={accountReady}
           onAccount={() => setScreen(manager ? 'profile' : 'setup')}
           /* funil: mesmo ajuste do UltimateGate acima — abre o AccountModal na
-             hora em vez de mandar pro landing inteiro (src = home-rtp/home-pill,
-             maior volume de paywall_view do funil e o de pior conversão). */
+             hora em vez de mandar pro landing inteiro. Só serve pra quem ainda
+             NÃO tem conta (convidado) — quem já tem conta grátis usa onUpgrade
+             abaixo, que vai direto pro pagamento com a sessão existente. */
           onCreateAccount={() => { setAuthMode('signup'); setAuthOpen(true); }}
+          /* funil: pill "Vire Fundador" e item "Upgrade vitalício" do dropdown de
+             conta (src home-pill/acct-chip) chamavam onCreateAccount mesmo já
+             logados — caíam no formulário de CADASTRO, que falha com o e-mail já
+             em uso. home-pill registrava 0 checkout_open/28d apesar de impressão
+             real; era essa trava, não falta de intenção (quem clica já é usuário
+             pedindo pra pagar). onUpgrade reusa startCheckout (mesmo caminho do
+             onUpgrade do Ultimate) — sem repetir e-mail/senha. */
+          onUpgrade={startCheckout}
           onLogout={() => { logout(); setCloudEnabled(false); }}
           onAdmin={account?.admin ? () => setScreen('admin') : undefined}
           onAchievements={() => setAchOpen(true)}

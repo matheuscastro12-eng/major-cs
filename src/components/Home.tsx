@@ -37,8 +37,11 @@ interface Props {
   accountReady?: boolean;
   /** Abre a tela de perfil/setup */
   onAccount?: () => void;
-  /** Abre a landing/checkout pra criar conta vitalícia */
+  /** Abre a landing/checkout pra criar conta vitalícia (convidado, sem conta) */
   onCreateAccount?: () => void;
+  /** Vai direto pro pagamento (conta grátis já logada, sem passar pelo formulário
+   *  de cadastro — usa a sessão já existente, igual ao onUpgrade do Ultimate). */
+  onUpgrade?: () => void;
   /** Logout (só faz sentido se account != null) */
   onLogout?: () => void;
   /** Abre o painel admin (só passado/visível quando account.admin) */
@@ -67,6 +70,7 @@ export function Home({
   accountReady,
   onAccount,
   onCreateAccount,
+  onUpgrade,
   onLogout,
   onAdmin,
 }: Props) {
@@ -119,6 +123,7 @@ export function Home({
           onClose={() => setAcctOpen(false)}
           onAccount={onAccount}
           onCreate={onCreateAccount}
+          onUpgrade={onUpgrade}
           onLogout={onLogout}
           onAdmin={onAdmin}
         />
@@ -134,11 +139,18 @@ export function Home({
             {/* Pill de ativação inline: free user logado vê a oportunidade de virar
                Fundador sem precisar abrir modal. Sticky no Home, clica e cai no fluxo.
                Cosmético/conveniência — zero pay-to-win. */}
+            {/* funil: dado real mostra 0 checkout_open/28d nesta pill mesmo com
+                impressões reais — porque onCreateAccount abre o formulário de
+                CADASTRO, e quem clica aqui já tem conta (condição acima exige
+                account != null). Cadastro com o mesmo e-mail falha silenciosamente
+                e a pessoa (maior intenção do funil: já é usuária, clicou pra
+                pagar) trava num formulário sem saída óbvia. Vai direto pro
+                pagamento com a sessão que já existe, sem pedir e-mail/senha de novo. */}
             {accountReady && account && !account.paid && (
               <>
                 <button
                   type="button"
-                  onClick={() => { setCheckoutSrc('home-pill'); onCreateAccount?.(); }}
+                  onClick={() => { setCheckoutSrc('home-pill'); onUpgrade?.(); }}
                   className="rtm-supporter-pill"
                   title={ct('Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras')}
                 >
@@ -365,6 +377,7 @@ function AccountChip({
   onClose,
   onAccount,
   onCreate,
+  onUpgrade,
   onLogout,
   onAdmin,
 }: {
@@ -375,6 +388,7 @@ function AccountChip({
   onClose: () => void;
   onAccount?: () => void;
   onCreate?: () => void;
+  onUpgrade?: () => void;
   onLogout?: () => void;
   onAdmin?: () => void;
 }) {
@@ -580,12 +594,15 @@ function AccountChip({
               />
             )}
             {!isPaid && (
+              // funil: mesmo problema da pill (ver comentário acima) — quem abre
+              // este item já tem conta, então vai direto pro pagamento em vez do
+              // formulário de cadastro (que falharia com o e-mail já em uso).
               <DropItem
                 label="✨ Upgrade vitalício"
                 hint="Até 5 saves + sincronização nuvem"
                 icon=""
                 accent="gold"
-                onClick={() => { setCheckoutSrc('acct-chip'); onClose(); onCreate?.(); }}
+                onClick={() => { setCheckoutSrc('acct-chip'); onClose(); onUpgrade?.(); }}
               />
             )}
             <DropItem
