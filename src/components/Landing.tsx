@@ -59,7 +59,12 @@ function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: (
         </nav>
         <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: '10px' }}>
           <Button variant="ghost" size="sm" onClick={onLogin}>{ct('Entrar')}</Button>
-          <Button variant="ghost" size="sm" onClick={onAccount}>{ct('Criar conta')}</Button>
+          {/* funil: único CTA de cadastro da página sem preço em lugar nenhum por
+              perto (o Hero, logo abaixo, só aparece depois de rolar/carregar) —
+              mesmo padrão que já ajudou o clique em outras superfícies do jogo
+              (acct-chip-guest, UltimateSquadScreen: preço no próprio texto do
+              botão, não só num elemento vizinho). */}
+          <Button variant="ghost" size="sm" onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
           <Button size="sm" onClick={onPlay}>{ct('Jogar agora')}</Button>
         </span>
       </div>
@@ -245,7 +250,10 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
           <p style={{ color: 'var(--rtm-dim)', fontSize: '16px', maxWidth: '520px', margin: '0 auto 24px' }}>{ct('Comece de graça agora. Quando quiser salvar tudo e disputar o ranking, é só criar a sua conta.')}</p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Button size="big" onClick={onPlay}>{ct('Jogar agora')}</Button>
-            <Button size="big" variant="gold" onClick={onAccount}>{ct('Ativar save na nuvem')}</Button>
+            {/* funil: CTA final da página (depois de Modos/Como funciona/FAQ) —
+                mesmo padrão do Nav acima: preço no texto do botão, não só na
+                seção de Planos que já ficou pra trás na rolagem. */}
+            <Button size="big" variant="gold" onClick={onAccount}>{ct('Ativar save na nuvem')} · R$20</Button>
           </div>
         </div>
       </div>
@@ -643,26 +651,30 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
   const ref = useReveal();
   // funil: CTA da landing abrindo o modal de conta — first-touch, então quem
   // chegou de uma trava (home-rtp, wl-lock...) mantém a origem original.
-  const openAcct = (mode: 'signup' | 'login' = 'signup') => { setCheckoutSrc('landing'); setAcctMode(mode); setAcct(true); };
+  // src por botão (28d): os 4 CTAs de cadastro da página (Nav, Hero, Pricing,
+  // FinalCta) caíam todos no mesmo 'landing' — 3181 paywall_view mas só 32
+  // checkout_open, sem dar pra saber qual CTA puxa o funil. Separa a atribuição
+  // por posição pra próxima iteração enxergar isso.
+  const openAcct = (mode: 'signup' | 'login' = 'signup', src: string = 'landing') => { setCheckoutSrc(src); setAcctMode(mode); setAcct(true); };
   // desafio de fantasma pendente (link aberto sem vitalícia): o motivo de
   // comprar HOJE — o desafio expira à meia-noite.
   const ghost = loadGhost(dayNumberOf(dateKeyOf(new Date())));
   return (
     <div ref={ref} className="lp-root">
-      <Nav onAccount={() => openAcct('signup')} onLogin={() => openAcct('login')} onPlay={onPlay} />
+      <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
       {ghost && (
         <div style={{ background: 'color-mix(in srgb, var(--rtm-gold) 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
           🥊 <b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')} — {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite — a Série do Dia é da conta vitalícia (R$20, uma vez).')}{' '}
-          <button type="button" onClick={() => openAcct('signup')} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Aceitar o desafio')}</button>
+          <button type="button" onClick={() => openAcct('signup', 'landing-ghost')} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Aceitar o desafio')}</button>
         </div>
       )}
-      <Hero onAccount={() => openAcct('signup')} onPlay={onPlay} />
+      <Hero onAccount={() => openAcct('signup', 'landing-hero')} onPlay={onPlay} />
       <Modes onPlay={onPlay} />
       <TweetBand />
-      <Pricing onAccount={() => openAcct('signup')} onPlay={onPlay} />
+      <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
       <How />
       <Faq />
-      <FinalCta onAccount={() => openAcct('signup')} onPlay={onPlay} />
+      <FinalCta onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
       {acct && <AccountModal onClose={() => setAcct(false)} onCheckout={onCheckout} onPlay={onPlay} initialMode={acctMode} />}
     </div>
   );

@@ -194,6 +194,11 @@ function CellBar({ value, max, tone }: { value: number; max: number; tone?: stri
 // superfície de venda gera views e checkouts.
 const FUNNEL_SRC_LABEL: Record<string, string> = {
   landing: 'Landing (pricing)',
+  'landing-nav': 'Landing · topo (nav)',
+  'landing-hero': 'Landing · hero',
+  'landing-pricing': 'Landing · seção Planos',
+  'landing-final': 'Landing · CTA final',
+  'landing-ghost': 'Landing · desafio de fantasma',
   'home-rtp': 'Home · card Road to Pro',
   'home-ultimate': 'Home · card Ultimate',
   'home-pill': 'Home · pill Fundador',
