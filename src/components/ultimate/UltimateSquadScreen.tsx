@@ -1724,6 +1724,13 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       {/* Jogador sem conta: joga aqui e agora, mas o progresso do Ultimate fica só
           neste navegador (localStorage). Banner honesto + CTA pra conta vitalícia,
           que salva na nuvem e libera jogar no PC e no celular com o mesmo squad. */}
+      {/* funil (28d): esta é a única superfície de venda do modo convidado do
+          Ultimate e a de maior exposição relativa (119 paywall_view), mas
+          convertia pior que o resto do funil (1 signup_start). O botão era o
+          único CTA do app que vendia a conta vitalícia sem citar o preço — dado
+          real (acct-chip-guest, upsell-card) já mostrou que repetir "R$20" no
+          próprio texto do botão, e não só num parágrafo ao lado, melhora clique
+          em telas pequenas. Aplica o mesmo padrão aqui. */}
       {guest && (
         <div className="ut-guest-warn" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 16px', background: 'rgba(232,193,112,0.10)', borderBottom: '1px solid rgba(232,193,112,0.35)', color: 'var(--em-text, #eadfce)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', lineHeight: 1.4, flex: '1 1 320px' }}>
@@ -1740,7 +1747,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 onClick={onCreateAccount}
                 style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', background: 'var(--em-gold, #e8c170)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'inherit' }}
               >
-                {ct('Criar conta vitalícia · salva na nuvem e joga no PC e no celular')}
+                {ct('Criar conta vitalícia · R$20 · salva na nuvem e joga no PC e no celular')}
               </button>
               {/* prova social real na única superfície de venda do modo convidado (iter42) */}
               <FounderCounter style={{ fontSize: '10px' }} />
@@ -2119,6 +2126,16 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 {/* funil: a trava tinha o preço mas nenhum botão — 0% de conversão em
                     81 sessões/28d (vs 1.3–2.6% nas travas com checkout direto). Botão
                     direto: convidado cria conta; conta grátis vai pro checkout. */}
+                {/* funil (28d, iteração seguinte): o botão saiu do ar mas seguiu em
+                    0% — 53 sessões, zero signup_start/checkout_open desde então. O
+                    preço já aparece no parágrafo acima, mas nenhum outro CTA do
+                    funil deixa o botão sem o preço (acct-chip-guest, upsell-card,
+                    RtP demo, home-pill todos repetem "R$20" no próprio texto do
+                    botão — dado real já validou que isso ajuda o clique, principalmente
+                    no mobile onde o parágrafo fica longe do botão). Heurística de
+                    baixo risco: aplica o mesmo padrão aqui — amostra pequena demais
+                    (53 sessões) pra provar que isso sozinho resolve, mas alinha esta
+                    trava ao resto do funil. */}
                 {(guest ? onCreateAccount : onUpgrade) ? (
                   <button
                     type="button"
@@ -2126,7 +2143,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     style={{ padding: '9px 20px', fontSize: '0.82rem', marginTop: 2 }}
                     onClick={() => { setCheckoutSrc('mkt-lock'); (guest ? onCreateAccount : onUpgrade)?.(); }}
                   >
-                    {ct('Virar Fundador · destravar o Mercado')}
+                    {ct('Virar Fundador · R$20 · destravar o Mercado')}
                   </button>
                 ) : (
                   <p className="muted small" style={{ margin: 0, maxWidth: 440 }}>
