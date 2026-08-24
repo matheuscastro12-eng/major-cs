@@ -43,6 +43,25 @@ export interface DraftRunState {
   active: boolean;
   best: number;          // recorde de vitórias
   runs: number;          // total de runs iniciados (stats)
+  daily?: boolean;       // DRAFT DO DIA: run com a seed GLOBAL do dia (1º run do dia) — vale ranking
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAFT DO DIA — a 1ª run do dia usa uma seed GLOBAL derivada da data: todo
+// jogador do mundo escolhe entre as MESMAS 5 cartas por vaga e o resultado
+// entra no ranking diário (api/ranking.ts, rtm_ult_draft). Runs seguintes no
+// mesmo dia voltam à seed aleatória (draft livre). Determinístico e puro.
+
+// FNV-1a 32-bit da chave do dia ('YYYY-MM-DD') + sal do modo — mesma conta em
+// qualquer client → mesmas opções pra todo mundo.
+export function dailyDraftSeed(dateKey: string): number {
+  let h = 0x811c9dc5;
+  const s = `ult-draft:${dateKey}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0) || 1;
 }
 
 export const DRAFT_DEFAULT: DraftRunState = {

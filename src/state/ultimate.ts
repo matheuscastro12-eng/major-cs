@@ -77,6 +77,7 @@ import {
   type SeasonRollover,
   type UltimateState,
 } from '../engine/ultimate/state';
+import { dailyDraftSeed } from '../engine/ultimate/draft';
 
 const KEY = 'rtm-ultimate-v1';
 const CLOUD_SLOT = 'ultimate';
@@ -757,8 +758,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
   // ── Ultimate Draft: inscrição → picks → run (mesmo padrão do gauntlet) ──
   draftStart: (today) => {
     const prev = get().state;
-    // seed do run fixado AGORA (anti-reroll: F5 não re-rola as opções)
-    const r = _draftStart(prev, today, Math.floor(Math.random() * 2147483647));
+    // DRAFT DO DIA: a 1ª run do dia usa a seed GLOBAL da data (todo mundo no
+    // MESMO draft; resultado vale ranking). Runs seguintes: seed aleatória,
+    // fixada AGORA (anti-reroll: F5 não re-rola as opções).
+    const daily = prev.profile.draft.date !== today;
+    const seed = daily ? dailyDraftSeed(today) : Math.floor(Math.random() * 2147483647);
+    const r = _draftStart(prev, today, seed, daily);
     if (!r.ok) return { ok: false, reason: r.reason };
     persist(r.state);
     set({ state: r.state });
