@@ -200,6 +200,7 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'landing-final': 'Landing · CTA final',
   'landing-ghost': 'Landing · desafio de fantasma',
   'home-rtp': 'Home · card Road to Pro',
+  'home-rtp-direto': 'Home · RtP, pulou a demo',
   'home-ultimate': 'Home · card Ultimate',
   'home-pill': 'Home · pill Fundador',
   'acct-chip': 'Chip de conta (dropdown)',

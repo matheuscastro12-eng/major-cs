@@ -189,11 +189,14 @@ export function Home({
               </button>
 
               {onRoadToPro && (
-                <button
+                <div
                   className="rtm-modecard"
                   data-tone="purple"
                   data-locked={premiumLocked ? '' : undefined}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onRoadToPro()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRoadToPro(); } }}
                 >
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/train.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
@@ -209,6 +212,25 @@ export function Home({
                         <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
                         {/* prova social real no card de maior tráfego do funil (iter41) */}
                         <FounderCounter style={{ display: 'block', marginTop: 6, fontSize: '11px' }} />
+                        {/* funil: este é o card com mais paywall_view do jogo inteiro
+                            (dado real: 2619 sids/28d) e o pior checkout_open (12 sids,
+                            0,46% — contra 3,8% do card Ultimate ao lado). O motivo:
+                            o CTA inteiro leva pra demo, sem nenhuma saída pra quem já
+                            quer comprar. Quem tem intenção alta só encontra o checkout
+                            depois de jogar a demo e bater no gate (rtp-demo-gate
+                            converte 9%, mas poucos chegam lá). Este botão dá o atalho
+                            direto, sem tirar a demo de quem quer testar primeiro. */}
+                        <button
+                          type="button"
+                          className="rtm-modecard-skip"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCheckoutSrc('home-rtp-direto');
+                            if (accountReady && account) onUpgrade?.(); else onCreateAccount?.();
+                          }}
+                        >
+                          {ct('Já quero virar Fundador · pular a demo')} →
+                        </button>
                       </span>
                     )}
                     <span className="rtm-modecard-foot">
@@ -216,7 +238,7 @@ export function Home({
                       <span className="rtm-modecard-go">{premiumLocked ? <>🧪 {ct('Jogar a demo grátis')} →</> : <>{ct('Jogar')} →</>}</span>
                     </span>
                   </span>
-                </button>
+                </div>
               )}
 
               {onDaily && (

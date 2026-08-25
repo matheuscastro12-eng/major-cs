@@ -245,6 +245,26 @@ body:has(.page-play) .app-header {
   font-weight: 800;
   color: rgba(223, 229, 236, 0.85);
 }
+/* atalho pra quem já quer comprar sem passar pela demo (ver comentário no Home.tsx) */
+.play-hub .rtm-modecard-skip {
+  display: block;
+  margin-top: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  color: rgba(232, 193, 112, 0.92);
+}
+.play-hub .rtm-modecard-skip:hover,
+.play-hub .rtm-modecard-skip:focus-visible {
+  color: #e8c170;
+}
 
 .play-hub .rtm-modecard[data-tone="gold"]:hover {
   border-color: rgba(216,169,67,.35);
