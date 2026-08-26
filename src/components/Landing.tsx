@@ -302,17 +302,17 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   useEffect(() => {
     if (pixWaitLong) trackPaywallView('pix-wait-longo'); // funil: reassurance de espera longa exibida (evento existente, novo src)
   }, [pixWaitLong]);
-  // funil: dado real (28d) mostra ~51% de abandono do QR Pix aberto (44/86),
-  // uma taxa que não melhorou depois de duas rodadas de reassurance por texto
-  // (só reduziu o tempo médio até desistir, não a taxa). Hipótese: parte de
-  // quem desiste não está em dúvida sobre o prazo — está sem paciência ou sem
-  // o app do banco à mão. Oferece uma saída honesta pro cartão na mesma janela
-  // em que a reassurance já aparece (25s), sem fechar o modal nem perder o
-  // cadastro já feito.
+  // funil: a troca pro cartão só aparecia junto da reassurance, aos 25s — mas o
+  // dado real (28d) mostra 16 dos 55 abandonos de Pix (29%) desistindo em MENOS
+  // de 30s, rápido demais pra terem saído da aba pro app do banco e voltado.
+  // Esse grupo nunca chega a ver nem a reassurance nem a troca de cartão: as
+  // duas ligam tarde demais pra quem já foi embora. Mostra a saída pro cartão
+  // desde o instante em que o QR abre (o cartão continua secundário na UI —
+  // Pix segue sendo o CTA primário e o QR não some), sem esperar o timer.
   const [cardSwitching, setCardSwitching] = useState(false);
   useEffect(() => {
-    if (pixWaitLong) trackPaywallView('pix-troca-cartao'); // funil: saída pro cartão exibida (evento existente, novo src)
-  }, [pixWaitLong]);
+    if (pix) trackPaywallView('pix-cartao-cedo'); // funil: saída pro cartão exibida desde a abertura do QR (src novo — mede o grupo que antes desistia sem ver essa opção)
+  }, [pix]);
   // funil: abandono do QR Pix — best-effort, dispara no desmonte do modal se o
   // QR chegou a abrir e o pagamento não foi confirmado pelo polling.
   const pixOpenedAt = useRef(0);
@@ -577,22 +577,22 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
             {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
           </p>
+          {/* saída honesta pro cartão — visível desde que o QR abre, não mais só
+              aos 25s (ver comentário no effect acima: 29% dos abandonos do Pix
+              desistem antes disso). O Pix continua o CTA primário e o QR não some. */}
+          <button
+            type="button"
+            onClick={() => void switchToCard()}
+            disabled={cardSwitching}
+            style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
+          >
+            {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
+          </button>
           {pixWaitLong && (
-            <>
-              {/* reassurance honesta pra quem passou de 1min esperando (ver comentário acima) */}
-              <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
-                {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
-              </p>
-              {/* saída honesta pro cartão (ver comentário no effect acima) */}
-              <button
-                type="button"
-                onClick={() => void switchToCard()}
-                disabled={cardSwitching}
-                style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
-              >
-                {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
-              </button>
-            </>
+            /* reassurance honesta pra quem passou de 25s esperando (ver comentário no effect acima) */
+            <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
+              {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
+            </p>
           )}
           {nudge && (
             /* nudge anti-abandono (1x/sessão): inline, honesto, descartável */
