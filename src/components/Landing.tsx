@@ -91,6 +91,15 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
           <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')}</Button>
           <Button size="big" variant="gold" onClick={onAccount}>{ct('Save na nuvem por R$20')}</Button>
         </div>
+        {/* funil (28d): o CTA do Hero é a maior exposição do funil inteiro
+            (paywall_view src=landing, ~2,5 mil sids/28d — ~23% de tudo), mas o
+            botão só diz "R$20", sem deixar claro que é pagamento único — a
+            mesma lacuna que o acct-chip-guest e o home-rtp tinham antes de
+            ganhar essa reassurance (dado real já mostrou que ela ajuda nas
+            outras superfícies). Texto abaixo do botão, sem mexer no CTA em si. */}
+        <p style={{ color: 'var(--rtm-faint)', fontSize: '12px', margin: '10px 0 0' }}>
+          {ct('Pagamento único · sem mensalidade')}
+        </p>
         {/* funil: dado real (rtm_accounts) mostra a vaga de Fundador quase no fim,
             mas o contador só aparecia depois de rolar até o Plano ou abrir o modal
             — nunca no CTA de maior exposição do funil (Hero da landing, ~25% de
