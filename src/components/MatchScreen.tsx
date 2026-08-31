@@ -138,6 +138,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   // impacto da última chamada: a call, a postura ativa, a chance que ENFRENTAVA
   // (odds antes do round) e se deu certo — pro card "decisão → resultado".
   const [lastCall, setLastCall] = useState<{ call: RoundCall; stance: Stance; won: boolean; round: number; odds: number } | null>(null);
+  // golpe escolhido no freezetime (quem executa + como se chama), pra a
+  // animação de resolução saber o que mostrar. Ref: é lido no passo do round.
+  type ChosenMove = { label: string; nick: string; icon: string; effect: 'super' | 'weak' | 'neutral'; attrLabel: string; attr: number };
+  const chosenMoveRef = useRef<ChosenMove | null>(null);
+  const [strike, setStrike] = useState<(ChosenMove & { won: boolean; round: number; odds: number }) | null>(null);
   // placar das suas calls NESTE mapa (reseta a cada mapa): mostra o impacto
   // acumulado das suas decisões, não só do round atual.
   const [callRecord, setCallRecord] = useState<{ made: number; won: number }>({ made: 0, won: 0 });
@@ -284,6 +289,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     const boost = boostRounds > 0;
     buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
     const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
+    // chance da chamada ESCOLHIDA, medida ANTES do step (a neutra não tem call,
+    // mas a animação do golpe precisa mostrar o que ela valia na hora da decisão
+    // — peekWinProb depois do round já é a do PRÓXIMO, e mentiria pro jogador).
+    const oddsShown = chosenMoveRef.current ? sim.peekWinProb(userIdx, stanceMod, c) : odds;
     // #20: tática de site vale 1 round e some (informação oculta — resolve no step)
     const siteKind = siteRef.current;
     const wasCt = sim.side()[userIdx] === 'ct';
@@ -303,6 +312,17 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       decisionLog.current.push({ mapIdx, call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
       callRef.current = null;
       setPendingCall(null);
+    }
+    // O GOLPE: animação de resolução do turno (o executor "ataca" e o veredito
+    // entra). FORA do if(call) de propósito — a opção NEUTRA ("jogar o padrão")
+    // não carrega RoundCall, mas é uma escolha do jogador como qualquer outra e
+    // precisa de resposta na tela. Puramente visual: não segura o sim.
+    const mv = chosenMoveRef.current;
+    if (mv) {
+      const log = sim.roundLog();
+      const wonRound = log[log.length - 1] === userIdx;
+      setStrike({ ...mv, won: wonRound, round: sim.round(), odds: oddsShown });
+      chosenMoveRef.current = null;
     }
     setTick((t) => t + 1);
     if (sim.done()) onMapEnded(sim);
@@ -477,6 +497,9 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const armMove = (m: CallMove) => {
     setStance(m.stance);
     setPendingCall(m.call);
+    // guarda QUEM vai executar pra animação do golpe saber o nome/ícone quando
+    // o round resolver (o pendingCall sozinho só carrega a mecânica).
+    chosenMoveRef.current = { label: m.label, nick: m.by.nick, icon: m.icon, effect: m.effect, attrLabel: m.attrLabel, attr: m.attr };
   };
 
   const playerById = useMemo(() => {
@@ -758,7 +781,14 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 </div>
               </div>
             )}
-            {lastCall && (
+            {strike && (
+              <ChamadaStrike
+                key={`golpe-${strike.round}-${strike.label}`}
+                strike={strike}
+                onDone={() => setStrike(null)}
+              />
+            )}
+            {lastCall && !strike && (
               <DecisionImpactCard
                 key={`${lastCall.round}-${lastCall.call}`}
                 lastCall={lastCall}
@@ -1021,6 +1051,45 @@ function MomentumMeter({ team, len, teams, userIdx }: {
 // CARD DE IMPACTO DA DECISÃO: cruza a chamada + postura + a CHANCE que enfrentava
 // com o resultado real. É o "ver o impacto da decisão" — não só deu/não deu certo,
 // mas se foi aposta corajosa, favoritismo confirmado ou tropeço.
+// ── O GOLPE ──────────────────────────────────────────────────────────────────
+// Animação de resolução do turno, no espírito da tela de batalha de RPG de
+// turno: o executor avança, o impacto estoura e o veredito entra. Some sozinha
+// (~1,6s) e NUNCA segura a simulação — é decoração por cima de um round que já
+// foi resolvido. Respeita prefers-reduced-motion (o CSS desliga o movimento).
+function ChamadaStrike({ strike, onDone }: {
+  strike: { label: string; nick: string; icon: string; effect: 'super' | 'weak' | 'neutral'; attrLabel: string; attr: number; won: boolean; round: number; odds: number };
+  onDone: () => void;
+}) {
+  useEffect(() => {
+    const id = window.setTimeout(onDone, 1600);
+    return () => window.clearTimeout(id);
+  }, [onDone]);
+  const pct = Math.round(strike.odds * 100);
+  // veredito no tom do que aconteceu: aposta improvável que entra é festa;
+  // favoritismo perdido dói. Mesma régua do DecisionImpactCard.
+  const verdict = strike.won
+    ? strike.odds < 0.4 ? ct('PEGOU!') : ct('FUNCIONOU')
+    : strike.odds >= 0.62 ? ct('TROPEÇOU') : ct('NÃO ROLOU');
+  return (
+    <div className={`golpe${strike.won ? ' win' : ' lose'}`} aria-live="polite">
+      <span className="golpe-icon">{strike.icon}</span>
+      <span className="golpe-body">
+        <b className="golpe-label">{strike.label}</b>
+        <span className="golpe-sub">
+          {strike.nick} · {strike.attrLabel} {strike.attr}
+          {strike.effect !== 'neutral' && (
+            <span className={`golpe-eff ${strike.effect}`}>
+              {strike.effect === 'super' ? ` · ${ct('SUPER EFETIVO')}` : ` · ${ct('POUCO EFETIVO')}`}
+            </span>
+          )}
+          <span className="golpe-odds"> · {ct('tinha')} {pct}%</span>
+        </span>
+      </span>
+      <span className="golpe-verdict">{strike.won ? '✓' : '✗'} {verdict}</span>
+    </div>
+  );
+}
+
 function DecisionImpactCard({ lastCall, t }: {
   lastCall: { call: RoundCall; stance: Stance; won: boolean; round: number; odds: number };
   t: (k: string) => string;

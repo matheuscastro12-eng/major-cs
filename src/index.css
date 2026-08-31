@@ -1296,6 +1296,77 @@ tr.qualify-row { background: rgba(95, 208, 138, 0.08); }
 .chamada-delta { font-family: "JetBrains Mono", monospace; font-weight: 800; }
 .chamada-desc { font-size: 10.5px; color: var(--muted); line-height: 1.35; }
 
+/* ── O GOLPE: animação de resolução do turno ──────────────────────────────────
+   Gramática de RPG de turno: o executor AVANÇA (o ícone desliza e cresce), o
+   impacto estoura em flash e o veredito entra por último. Curta de propósito
+   (~1,6s) — quem joga uma temporada vê isso dezenas de vezes. */
+.golpe {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  border-left-width: 4px;
+  position: relative;
+  overflow: hidden;
+  animation: golpe-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+.golpe.win { background: rgba(94, 216, 138, 0.09); border-color: rgba(94, 216, 138, 0.4); }
+.golpe.lose { background: rgba(229, 138, 138, 0.09); border-color: rgba(229, 138, 138, 0.4); animation: golpe-in 0.22s ease, golpe-shake 0.34s 0.2s ease; }
+/* onda de impacto varrendo o card no instante do acerto */
+.golpe::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: translateX(-100%);
+  animation: golpe-sweep 0.55s 0.12s ease-out;
+}
+.golpe-icon {
+  font-size: 1.7rem;
+  line-height: 1;
+  flex: 0 0 auto;
+  animation: golpe-hit 0.42s cubic-bezier(0.3, 1.6, 0.4, 1);
+}
+.golpe-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.golpe-label { font-size: 0.86rem; font-weight: 800; }
+.golpe-sub { font-size: 0.7rem; color: var(--em-muted, #8a99ab); font-weight: 700; }
+.golpe-eff.super { color: #5ed88a; }
+.golpe-eff.weak { color: #e58a8a; }
+.golpe-odds { font-family: "JetBrains Mono", monospace; }
+.golpe-verdict {
+  flex: 0 0 auto;
+  font-family: var(--rtp-mono, "JetBrains Mono"), monospace;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  animation: golpe-verdict 0.3s 0.38s backwards ease-out;
+}
+.golpe.win .golpe-verdict { color: #5ed88a; }
+.golpe.lose .golpe-verdict { color: #e58a8a; }
+
+@keyframes golpe-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+/* o executor "avança e bate": recua um toque, dispara pra frente, volta */
+@keyframes golpe-hit {
+  0% { transform: translateX(-10px) scale(0.85); }
+  45% { transform: translateX(7px) scale(1.32); }
+  100% { transform: none; }
+}
+@keyframes golpe-sweep { to { transform: translateX(100%); } }
+@keyframes golpe-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+@keyframes golpe-verdict { from { opacity: 0; transform: scale(1.5); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .golpe, .golpe.lose, .golpe-icon, .golpe-verdict { animation: none; }
+  .golpe::after { display: none; }
+}
+
 .call-armed-tag {
   font-size: 11px;
   font-weight: 700;
