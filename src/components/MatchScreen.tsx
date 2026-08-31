@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { LiveCanvasGame } from './LiveCanvasGame';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
+import { movesFor, isKeyRound, EFFECT_LABEL, type CallMove } from '../engine/career/battleCalls';
 import { narrateRound, type RoundNarration } from '../engine/narration';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
@@ -436,6 +437,48 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     ? (Object.entries(callDeltas).sort((a, b) => b[1] - a[1])[0]?.[0] as RoundCall)
     : null;
 
+  // ── A CHAMADA (turno inspirado em RPG de turno) ────────────────────────────
+  // No Tático as chamadas deixam de ser abstratas e viram GOLPES DO SEU ELENCO:
+  // cada opção nomeia quem executa, mostra o atributo que a alimenta e a
+  // efetividade (estilo × postura). A mecânica entregue ao sim é a MESMA de
+  // antes (stance + RoundCall) — muda de quem é a decisão na tela, não a
+  // matemática. A % de cada golpe sai do próprio peekWinProb (fonte única).
+  const myScore = userIdx === 0 ? sa : sb;
+  const oppScore = userIdx === 0 ? sb : sa;
+  const myBuy = buys[userIdx];
+  const myMoves: CallMove[] = useMemo(() => {
+    if (!tactical || finished) return [];
+    return movesFor(teams[userIdx].players, {
+      side: mySide,
+      round: sim.round(),
+      score: [myScore, oppScore],
+      money: sim.money()[userIdx],
+      isPistol: myBuy === 'pistol',
+      momentum: mom.team === -1 ? 0 : (mom.team === userIdx ? mom.len : -mom.len),
+      target: 13,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tactical, finished, mapIdx, tick, userIdx, mySide, myBuy]);
+
+  // round que MERECE virar turno (pistola, match point, sequência, OT). Nos
+  // demais o mapa corre no ritmo normal — 24 perguntas por mapa viraria trabalho.
+  const keyRound = tactical && !finished && isKeyRound({
+    side: mySide, round: sim.round(), score: [myScore, oppScore],
+    money: sim.money()[userIdx], isPistol: myBuy === 'pistol',
+    momentum: mom.team === -1 ? 0 : (mom.team === userIdx ? mom.len : -mom.len),
+    target: 13,
+  });
+
+  const moveProb = (m: CallMove): number => {
+    if (finished) return 0;
+    const st = m.stance !== 'default' ? { team: userIdx, mode: m.stance } : undefined;
+    return sim.peekWinProb(userIdx, st, m.call ? { team: userIdx, kind: m.call } : undefined);
+  };
+  const armMove = (m: CallMove) => {
+    setStance(m.stance);
+    setPendingCall(m.call);
+  };
+
   const playerById = useMemo(() => {
     const players = new Map<string, TPlayer>();
     for (const team of teams) {
@@ -735,7 +778,53 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                   </span>
                 )}
               </span>
-              {CALLS.map((c) => {
+              {/* A CHAMADA: no Tático, os golpes são do SEU elenco (nomeiam quem
+                  executa, mostram o atributo e a efetividade estilo × postura).
+                  Fora dele seguem as chamadas clássicas, compactas. */}
+              {tactical && myMoves.length > 0 ? (
+                <div className={`chamada-grid${keyRound ? ' key-round' : ''}`}>
+                  {keyRound && (
+                    <div className="chamada-key">⚡ {ct('ROUND DECISIVO')} — {ct('sua chamada pesa aqui')}</div>
+                  )}
+                  {myMoves.map((m) => {
+                    const p = moveProb(m);
+                    const d = p - baseProb;
+                    const armed = pendingCall === m.call && stance === m.stance;
+                    return (
+                      <button
+                        key={m.id}
+                        className={`chamada-move${armed ? ' armed' : ''} eff-${m.effect}`}
+                        disabled={!!pausedMsg}
+                        title={m.desc}
+                        onClick={() => armMove(m)}
+                      >
+                        <span className="chamada-top">
+                          <span className="chamada-icon">{m.icon}</span>
+                          <b className="chamada-label">{m.label}</b>
+                          <span className="chamada-prob">{Math.round(p * 100)}%</span>
+                        </span>
+                        <span className="chamada-meta">
+                          <span className="chamada-attr">
+                            {m.by.nick} · {m.attrLabel} <b>{m.attr}</b>{m.stab ? ' ★' : ''}
+                          </span>
+                          {m.effect !== 'neutral' && (
+                            <span className={`chamada-eff ${m.effect}`} title={EFFECT_LABEL[m.effect]}>
+                              {m.effect === 'super' ? ct('SUPER EFETIVO') : ct('POUCO EFETIVO')}
+                            </span>
+                          )}
+                          {m.cost === 'limited' && <span className="chamada-pp">{ct('aposta alta')}</span>}
+                          {Math.abs(d) >= 0.003 && (
+                            <span className="chamada-delta" style={{ color: d > 0 ? '#5ed88a' : '#e58a8a' }}>
+                              {d > 0 ? '+' : ''}{Math.round(d * 100)}%
+                            </span>
+                          )}
+                        </span>
+                        <span className="chamada-desc">{m.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : CALLS.map((c) => {
                 const d = callDeltas ? callDeltas[c.key] : null;
                 const best = callDeltas && c.key === bestCallKey && (callDeltas[c.key] ?? 0) > 0.003;
                 return (
