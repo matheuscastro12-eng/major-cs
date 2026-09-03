@@ -121,7 +121,7 @@ import { parseCareerTeamId, careerTeamPath, isCareerTeamPath } from './state/car
 import { getActiveSlot, setActiveSlot, slotKey, cloudSlot } from './state/careerSaves';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
-import { setCheckoutSrc, track, trackCheckoutOpen, trackPaywallView, trackVisit } from './state/track';
+import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackPaywallView, trackVisit } from './state/track';
 import { DIFFICULTY_OPP_BOOST } from './types';
 import type { Difficulty, DraftState, MapId, Pairing, SeriesResult, TeamSeason, Tournament, TournamentPool, TTeam } from './types';
 
@@ -457,6 +457,12 @@ export default function App() {
   // save na nuvem (conta vitalícia): liga o espelhamento e reconcilia no login.
   // Se a nuvem estiver mais nova, restaura no localStorage e atualiza a home.
   const [cloudToast, setCloudToast] = useState('');
+  // funil: startCheckout() não tinha try/catch — beginCheckout() podia rejeitar
+  // (sessão expirada, erro do Stripe) e o clique em "Upgrade"/"Ativar com
+  // cartão" simplesmente não fazia nada visível, sem chance de tentar de novo.
+  // Dado real (28d): checkout_open Stripe converte ~9% contra ~70% do Pix —
+  // parte dessa perda pode ser esse silêncio, não abandono de verdade.
+  const [checkoutErrToast, setCheckoutErrToast] = useState('');
   // já abre no cadastro quando veio do deep-link /?criar (pra divulgar no Twitter).
   const [authOpen, setAuthOpen] = useState(WANTS_SIGNUP); // modal de login/conta acessível do header
   const [authMode, setAuthMode] = useState<'login' | 'signup'>(WANTS_SIGNUP ? 'signup' : 'login');
@@ -875,12 +881,20 @@ export default function App() {
   // O backend liga o Payment Link à conta autenticada com uma referência opaca.
   const startCheckout = async () => {
     trackCheckoutOpen('stripe'); // funil: checkout Stripe da vitalícia abrindo (src = 1º CTA da sessão)
-    const url = await beginCheckout();
-    if (url) window.location.href = url;
-    else {
-      setPaidToast(true);
-      await refreshAccount();
-      setScreen(manager ? 'home' : 'setup');
+    try {
+      const url = await beginCheckout();
+      if (url) window.location.href = url;
+      else {
+        setPaidToast(true);
+        await refreshAccount();
+        setScreen(manager ? 'home' : 'setup');
+      }
+    } catch (e) {
+      // antes: sem catch, um erro aqui (sessão expirada, Stripe fora do ar)
+      // deixava o clique morto — sem mensagem, sem retry. Registra a falha
+      // real (checkout_error) e devolve o controle pro usuário.
+      trackCheckoutError('stripe', e instanceof Error ? e.message : 'erro');
+      setCheckoutErrToast(ct('Não deu pra abrir o pagamento agora. Tente de novo.'));
     }
   };
 
@@ -948,6 +962,13 @@ export default function App() {
         <div className="paid-toast" role="status">
           <span>{cloudToast}</span>
           <button onClick={() => setCloudToast('')} aria-label={ct('fechar')}>✕</button>
+        </div>
+      )}
+
+      {checkoutErrToast && (
+        <div className="paid-toast" role="status">
+          <span>{checkoutErrToast}</span>
+          <button onClick={() => setCheckoutErrToast('')} aria-label={ct('fechar')}>✕</button>
         </div>
       )}
 
