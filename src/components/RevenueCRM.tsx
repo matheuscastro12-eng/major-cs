@@ -209,6 +209,7 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'wl-guest': 'Major da Semana · sem conta',
   'hub-wl': 'Hub online · badge Sábado',
   'mkt-lock': 'Trava · Mercado P2P',
+  'upsell-pix-cartao-cedo': 'Upsell in-game · Pix→cartão (cedo)',
   profile: 'Perfil do manager',
   leaderboard: 'Leaderboard',
   direto: 'Direto (sem origem)',
