@@ -27,7 +27,7 @@ export function sessionId(): string {
 // FUNIL DE CONVERSÃO (visitante → vitalícia R$20): eventos raros e de alto
 // valor — liberados no cliente junto com 'visit'/'ad_click'. Volume é ínfimo
 // (1x por sessão por superfície), então não mexe no controle de custo do Neon.
-const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'signup_start', 'signup_done', 'rtp_demo']);
+const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo']);
 
 // CORTE DE CUSTO: só 'visit', 'ad_click' e os eventos do FUNIL vão pro servidor.
 // Eventos de jogo (game_start, online_*, etc.) viram no-op pra não gerar
@@ -112,6 +112,13 @@ export function trackCheckoutOpen(method: 'stripe' | 'pix'): void {
 /** QR Pix da vitalícia fechado sem pagamento confirmado (best-effort). */
 export function trackCheckoutAbandon(method: 'stripe' | 'pix', secondsOpen: number): void {
   track('checkout_abandon', { src: getCheckoutSrc() || 'direto', method, secondsOpen: Math.round(secondsOpen) });
+}
+
+/** beginCheckout()/beginPix() rejeitou (sessão expirada, erro do Stripe/Woovi):
+ *  o checkout_open já tinha sido contado, mas até aqui a falha ficava muda —
+ *  sem esse evento não dá pra separar "abriu e desistiu" de "nem chegou a abrir". */
+export function trackCheckoutError(method: 'stripe' | 'pix', reason: string): void {
+  track('checkout_error', { src: getCheckoutSrc() || 'direto', method, reason: reason.slice(0, 120) });
 }
 
 // ─── FUNIL DA DEMO DO RtP ────────────────────────────────────────────────────

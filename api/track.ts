@@ -17,6 +17,12 @@ const ALLOWED_TYPES = new Set([
   'paywall_view',     // {src} — superfície de venda vista (1x/sessão/src no cliente)
   'checkout_open',    // {src, method} — Stripe redirect ou QR Pix aberto (substitui o antigo checkout_start)
   'checkout_abandon', // {src, method, secondsOpen} — QR Pix fechado sem pagar
+  // dado real (28d): checkout_open Stripe converte ~9% em pago contra ~70% do
+  // Pix — e o startCheckout() do App.tsx não tinha try/catch: beginCheckout()
+  // podia rejeitar (sessão expirada, erro do Stripe) e o clique sumia sem
+  // feedback nem chance de retry. checkout_error separa essa falha muda de um
+  // abandono real do usuário.
+  'checkout_error',   // {src, method, reason} — beginCheckout()/beginPix() rejeitou
   'signup_start',     // {src} — submit do cadastro pré-pagamento
   'signup_done',      // {src} — cadastro criado (rtm_pending_signups/conta)
   // funil da DEMO do Road to Pro (iter47): {step: 'open'|'created'|'week', week?}

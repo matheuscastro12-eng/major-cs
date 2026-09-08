@@ -189,11 +189,14 @@ export function Home({
               </button>
 
               {onRoadToPro && (
-                <button
+                <div
                   className="rtm-modecard"
                   data-tone="purple"
                   data-locked={premiumLocked ? '' : undefined}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onRoadToPro()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRoadToPro(); } }}
                 >
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/train.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
@@ -209,6 +212,25 @@ export function Home({
                         <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
                         {/* prova social real no card de maior tráfego do funil (iter41) */}
                         <FounderCounter style={{ display: 'block', marginTop: 6, fontSize: '11px' }} />
+                        {/* funil: este é o card com mais paywall_view do jogo inteiro
+                            (dado real: 2619 sids/28d) e o pior checkout_open (12 sids,
+                            0,46% — contra 3,8% do card Ultimate ao lado). O motivo:
+                            o CTA inteiro leva pra demo, sem nenhuma saída pra quem já
+                            quer comprar. Quem tem intenção alta só encontra o checkout
+                            depois de jogar a demo e bater no gate (rtp-demo-gate
+                            converte 9%, mas poucos chegam lá). Este botão dá o atalho
+                            direto, sem tirar a demo de quem quer testar primeiro. */}
+                        <button
+                          type="button"
+                          className="rtm-modecard-skip"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCheckoutSrc('home-rtp-direto');
+                            if (accountReady && account) onUpgrade?.(); else onCreateAccount?.();
+                          }}
+                        >
+                          {ct('Já quero virar Fundador · pular a demo')} →
+                        </button>
                       </span>
                     )}
                     <span className="rtm-modecard-foot">
@@ -216,7 +238,7 @@ export function Home({
                       <span className="rtm-modecard-go">{premiumLocked ? <>🧪 {ct('Jogar a demo grátis')} →</> : <>{ct('Jogar')} →</>}</span>
                     </span>
                   </span>
-                </button>
+                </div>
               )}
 
               {onDaily && (
@@ -468,8 +490,8 @@ function AccountChip({
           ★ Criar conta · R$20
         </button>
         {/* funil (28d, iteração seguinte): mesmo com o preço no texto, o botão
-            segue convertendo pior que o resto do funil (2216 paywall_view →
-            10 signup_start, 0,45%) — é a maior audiência do jogo (metade de
+            segue convertendo pior que o resto do funil (2399 paywall_view →
+            13 signup_start, 0,54%) — é a maior audiência do jogo (metade de
             todo visitante não logado) e a que menos converte. A vaga de
             Fundador real está quase esgotada (482/500, restam 18) e esse dado
             real só existia no atributo title, invisível em toque/mobile — a
@@ -478,6 +500,16 @@ function AccountChip({
             servidor, nunca inventado); só faltava aqui, que é a de maior
             exposição. */}
         <FounderCounter style={{ fontSize: '10px' }} />
+        {/* funil (iteração seguinte): "pagamento único · sem mensalidade" já
+            aparece no corpo dos cards RtP/Ultimate (rtm-modecard, 3,7-8,3% de
+            conversão) mas nunca saiu do atributo title deste chip — mesma
+            classe de bug do preço, ainda sem correção aqui. Ninguém desconhecido
+            do jogo vê "R$20" isolado sem saber se é assinatura; a reassurance
+            de pagamento único existe no app inteiro, só não chegava na
+            superfície de maior audiência. */}
+        <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.2px', color: 'var(--em-muted, rgba(255,255,255,0.6))' }}>
+          {ct('pagamento único · sem mensalidade')}
+        </span>
       </div>
     );
   }

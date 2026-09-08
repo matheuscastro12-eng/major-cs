@@ -3,6 +3,7 @@ import { useAccount, beginPix, fetchMe, type PixCharge } from '../state/account'
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView } from '../state/track';
 import { ct } from '../state/career-i18n';
 import { FounderCounter } from './FounderCounter';
+import { useFounders } from '../state/founders';
 
 // Card de ativação (upsell) pra contas GRÁTIS. Abre em momentos estratégicos do
 // jogo (fim de split, título conquistado, etc.) via evento global, o usuário pode
@@ -36,6 +37,15 @@ const HOOKS: Record<string, string> = {
 
 export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade: () => void; onGuestUpgrade?: () => void; onPixPaid: () => void }) {
   const { account } = useAccount();
+  // funil: dado real (rtm_accounts) mostra os 500 Fundadores esgotados (500/500).
+  // A lista de benefícios prometia o selo de Fundador com número baixo pra
+  // QUALQUER comprador, contradizendo o FounderCounter logo abaixo (que já
+  // avisa "esgotada" honestamente) — a mesma tela dizia duas coisas opostas no
+  // momento decisivo da compra. Sem dado (fetch ainda não voltou) o item some
+  // por padrão, igual ao FounderCounter: número/promessa nunca aparece sem
+  // certeza.
+  const founderStats = useFounders();
+  const founderSlotsLeft = founderStats ? founderStats.founders < founderStats.limit : false;
   const [open, setOpen] = useState(false);
   const [hook, setHook] = useState(HOOKS.default);
   // Pix inline: contas já autenticadas (é o público do UpsellCard) não precisam de
@@ -153,7 +163,9 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
           <li><b>{ct('Até 5 carreiras')}</b> {ct('· toque várias orgs ao mesmo tempo')}</li>
           <li><b>{ct('Ranqueada com pontuação')}</b> {ct('· suba no ladder e dispute o topo')}</li>
           <li><b>{ct('Perfil e selo de apoiador')}</b> {ct('· identidade no jogo todo')}</li>
-          <li><b>{ct('Selo de Fundador #001–#500')}</b> {ct('· logo própria do clube + número baixo é troféu (500 primeiros)')}</li>
+          {founderSlotsLeft && (
+            <li><b>{ct('Selo de Fundador #001–#500')}</b> {ct('· logo própria do clube + número baixo é troféu (500 primeiros)')}</li>
+          )}
         </ul>
         {/* prova social real: única superfície de venda com tráfego relevante que ainda não mostrava (iter48) */}
         <FounderCounter style={{ marginBottom: '4px' }} />
