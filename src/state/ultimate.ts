@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot } from './cloud';
 import { captureError } from './errlog';
+import { writeWithQuotaRescue } from './storageQuota';
 // Fase 3a da economia server-side: cada mutação econômica (credits/cartas) é
 // ESPELHADA como tx idempotente pro servidor via mirrorUltimateChange — o save
 // local/cloud-save segue sendo a fonte da verdade; o espelho nunca bloqueia
@@ -107,13 +108,15 @@ function persist(s: UltimateState): void {
   const json = JSON.stringify(s);
   let prev: string | null = null;
   try { prev = localStorage.getItem(KEY); } catch { /* segue */ }
-  try {
-    localStorage.setItem(KEY, json);
-  } catch (e) {
+  // COTA: o save do Ultimate guarda COINS COMPRADOS com dinheiro real — perder
+  // a escrita é perder compra. Libera .corrupt/.bak e tenta de novo.
+  const w = writeWithQuotaRescue(KEY, json);
+  if (!w.ok) {
     /* storage cheio/indisponível — modo é opcional, não trava o app */
-    captureError(e, 'ultimate-persist');
+    captureError(w.error ?? new Error('quota'), 'ultimate-persist');
     return;
   }
+  if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra salvar ${KEY}`), 'ultimate-quota-rescue');
   // backup de um passo: se o save novo ficar ilegível, dá pra voltar pro anterior
   if (prev && prev !== json) {
     try { localStorage.setItem(KEY + '.bak', prev); } catch { /* best-effort */ }
