@@ -9,6 +9,7 @@
 import { getToken } from './account';
 import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave, cloudOnLocalSave, syncSlot, localSavedAt, markSavedAt } from './cloud';
 import { captureError } from './errlog';
+import { writeWithQuotaRescue } from './storageQuota';
 import { RTP_SAVE_VERSION, ACTIONS_PER_WEEK, rebuildRealWorld, STARTER_SETUP, STARTER_LIFESTYLE } from '../engine/rtp/createSave';
 import { buildLeague, circuitEventName } from '../engine/rtp/league';
 import { buildCircuit, computeObjective } from '../engine/rtp/circuit';
@@ -225,12 +226,13 @@ export function saveRtp(save: RoadToProSave): boolean {
   const data = JSON.stringify(stamped);
   let prev: string | null = null;
   try { prev = localStorage.getItem(KEY); } catch { /* segue */ }
-  try {
-    localStorage.setItem(KEY, data);
-  } catch (e) {
-    captureError(e, 'rtp-persist');
+  // COTA: libera .corrupt/.bak e tenta de novo antes de desistir do save.
+  const w = writeWithQuotaRescue(KEY, data);
+  if (!w.ok) {
+    captureError(w.error ?? new Error('quota'), 'rtp-persist');
     return false;
   }
+  if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra salvar ${KEY}`), 'rtp-quota-rescue');
   // backup de um passo: se o save novo ficar ilegível, dá pra voltar pro anterior
   if (prev && prev !== data) {
     try { localStorage.setItem(KEY + '.bak', prev); } catch { /* best-effort; quota não derruba o principal */ }

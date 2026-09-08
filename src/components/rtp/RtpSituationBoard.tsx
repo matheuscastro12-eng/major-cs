@@ -8,12 +8,29 @@ import type { RoundCtx } from '../../engine/rtp/roundModel';
 // pós-plant), strip de economia e contagem de vivos. Estático (sem loop de
 // canvas) — só CSS-pulses leves.
 
-const center = (z: ZoneRect): Vec2 => ({ x: z.cx, y: z.cy });
-const lerp = (a: Vec2, b: Vec2, t: number): Vec2 => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-const jitter = (p: Vec2, seed: number, amt: number): Vec2 => ({
-  x: p.x + (((seed * 9301 + 49297) % 233280) / 233280 - 0.5) * amt,
-  y: p.y + (((seed * 4099 + 7001) % 233280) / 233280 - 0.5) * amt,
-});
+// Helpers TOLERANTES a ponto ausente. Este board é DECORATIVO — um radar sem
+// uma âncora tem que desenhar torto, nunca derrubar a Sala (que é o loop
+// principal do modo pago). Dado real: 70 ocorrências de "Cannot read properties
+// of undefined (reading 'x')" em /road-to-pro, todas dentro deste arquivo
+// minificado — o `.x` cru de um Vec2 inexistente estourava e levava a tela.
+// O fallback é o centro do palco: visualmente neutro e sempre finito.
+const SAFE: Vec2 = { x: 800, y: 450 };
+const vec = (p: Vec2 | undefined | null): Vec2 =>
+  p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : SAFE;
+
+const center = (z: ZoneRect | undefined | null): Vec2 =>
+  z && Number.isFinite(z.cx) && Number.isFinite(z.cy) ? { x: z.cx, y: z.cy } : SAFE;
+const lerp = (a0: Vec2 | undefined, b0: Vec2 | undefined, t: number): Vec2 => {
+  const a = vec(a0), b = vec(b0);
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+};
+const jitter = (p0: Vec2 | undefined, seed: number, amt: number): Vec2 => {
+  const p = vec(p0);
+  return {
+    x: p.x + (((seed * 9301 + 49297) % 233280) / 233280 - 0.5) * amt,
+    y: p.y + (((seed * 4099 + 7001) % 233280) / 233280 - 0.5) * amt,
+  };
+};
 
 const BUY_GLYPH: Record<string, RtpIconName> = { eco: 'money', force: 'spark', full: 'crosshair' };
 
@@ -46,8 +63,10 @@ export function RtpSituationBoard({ ctx, seriesLabel }: { ctx: RoundCtx; seriesL
   const myAnchor = post === 'site' ? lerp(site, myMid, 0.35) : post === 'spawn' ? (mySpawn[2] ?? myMid) : myMid;
   const enemyAnchor = post === 'site' ? site : post === 'spawn' ? (enemySpawn[2] ?? enemyMid) : enemyMid;
 
-  // dots
-  const myAlive = ctx.alive[0], enAlive = ctx.alive[1];
+  // dots — `alive` vem do engine; blindado pelo mesmo motivo dos vetores acima
+  // (o board não pode assumir a forma do ctx pra desenhar cinco bolinhas).
+  const alive = Array.isArray(ctx.alive) ? ctx.alive : [5, 5];
+  const myAlive = alive[0] ?? 5, enAlive = alive[1] ?? 5;
   const myDots = Array.from({ length: 5 }, (_, i) => jitter(i === 0 ? myAnchor : (mySpawn[i] ? lerp(mySpawn[i], myAnchor, 0.5) : myAnchor), i + 1, 90)).map((p, i) => ({ p, hero: i === 0, dead: i >= myAlive }));
   const enDots = Array.from({ length: 5 }, (_, i) => jitter(enemyAnchor, i + 11, 110)).map((p, i) => ({ p, dead: i >= enAlive, known: i < (post === 'site' ? enAlive : Math.min(2, enAlive)) }));
 

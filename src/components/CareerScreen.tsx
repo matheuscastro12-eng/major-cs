@@ -57,7 +57,7 @@ import {
   youthDebutAtPromotion,
   type YouthDebut,
 } from '../engine/career/playerAge';
-import { applyCareerVrsDecay, careerEventKey } from '../engine/career/progress';
+import { applyCareerVrsDecay, aiRollingVrs, careerEventKey } from '../engine/career/progress';
 import * as newsroom from '../engine/career/newsroom';
 import type { SeriesAngle } from '../engine/career/newsroom';
 // academyLeague: usado pela AcademyTab; import movido pra page.
@@ -1848,8 +1848,16 @@ function vrsCore(tw: number): number {
   const elite = Math.max(0, tw - 82);
   return Math.max(0, tw - 61) * 25 + elite * elite * 10;
 }
-function aiTeamVrs(t: TeamSeason): number {
-  return Math.round(vrsCore(t.teamwork) + (hashStr(t.id) % 55));
+// VRS da org rival = núcleo pela qualidade do elenco + jitter estável + ROLANTE
+// do split (engine/career/progress.ts). O rolante é o que faz o mundo se MEXER:
+// sem ele o ranking era uma tabela congelada onde só o jogador andava, e passar
+// do #12 pro #11 era atravessar uma placa em vez de ganhar de alguém.
+// `split` opcional: chamadas legadas sem contexto de temporada seguem valendo o
+// número estático (nenhuma passa a mentir).
+function aiTeamVrs(t: TeamSeason, split?: number): number {
+  const core = vrsCore(t.teamwork);
+  const base = Math.round(core + (hashStr(t.id) % 55));
+  return split == null ? base : base + aiRollingVrs(t.id, core, split);
 }
 // "Opponent Network" do VRS real (Valve): o peso de um evento vem da FORÇA MÉDIA
 // dos adversários. Campo fraco (Tier 3) ~0.2; elite (Tier 1/Major) ~1.2. É isso
@@ -4311,7 +4319,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // 17-32 = Stage 1. Os stages antes do seu são AUTO-SIMULADOS.
     const aiSorted = oppEra
       .filter((t) => t.id !== 'user' && t.id !== s.takeoverId)
-      .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t) }))
+      .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t, s.split) }))
       .sort((a, b) => b.vrs - a.vrs);
     const userVrs = userBaseVrsFor(user.teamwork, s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined) + s.vrs + userLegacyVrs(s);
     const userRank = aiSorted.filter((x) => x.vrs > userVrs).length + 1; // posição mundial
@@ -4587,7 +4595,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     type Row = { id: string; name: string; tag: string; colors: [string, string]; logoUrl?: string; players: { country: string }[]; region: CareerRegion; vrs: number; isUser: boolean };
     const rows: Row[] = oppEra.map((t) => ({
       id: t.id, name: `${t.team}`, tag: t.tag, colors: t.colors, logoUrl: t.logoUrl ?? logoForTeam(t),
-      players: t.players, region: teamRegion(t), vrs: aiTeamVrs(t), isUser: false,
+      players: t.players, region: teamRegion(t), vrs: aiTeamVrs(t, save.split), isUser: false,
     }));
     const ut = buildTeam(save);
     const orgPlayers = ut?.players ?? [];
@@ -5428,7 +5436,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const projectedEventVrs = applyCareerVrsDecay(save.vrs, vrsGain);
     const projOrg = save.takeoverId ? currentEra.find((t) => t.id === save.takeoverId) : undefined;
     const userProjVrs = userBaseVrsFor(buildTeam(save)?.teamwork ?? projOrg?.teamwork ?? 78, projOrg) + projectedEventVrs + userLegacyVrs(save);
-    const worldRank = oppEra.filter((t) => aiTeamVrs(t) > userProjVrs).length + 1; // posição mundial projetada
+    const worldRank = oppEra.filter((t) => aiTeamVrs(t, save.split) > userProjVrs).length + 1; // posição mundial projetada
     const rankQualified = worldRank <= MAJOR_VRS_CUT;
     const majorNow = isMajorSplit(save.split) && lastEvent; // Major só na última etapa do split de Major
     const qualified = rankQualified && majorNow;

@@ -23,6 +23,7 @@ import { create } from 'zustand';
 import { cloudOnLocalSave, cloudEnabled, pushCloud } from './cloud';
 import { cloudSlot, getActiveSlot, slotKey } from './careerSaves';
 import { captureError } from './errlog';
+import { writeWithQuotaRescue } from './storageQuota';
 import {
   migrateSave,
   saveVersion,
@@ -94,7 +95,12 @@ function writeRawSlot(n: number, json: string): { ok: boolean; error?: string } 
     } catch {
       /* segue */
     }
-    localStorage.setItem(KEY, json);
+    // COTA (bug #1 do jogo: 210 jogadores distintos em 7 dias perdiam o save
+    // aqui): o principal é a última coisa que pode falhar — se a cota recusar,
+    // libera .corrupt/.bak e tenta de novo antes de desistir.
+    const w = writeWithQuotaRescue(KEY, json);
+    if (!w.ok) throw w.error ?? new Error('quota');
+    if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra salvar ${KEY}`), 'game-store-quota-rescue');
     cloudOnLocalSave(cloudSlot(n), KEY, () => json);
     // backup de um passo: se o save novo ficar ilegível, dá pra voltar pro anterior
     if (prev && prev !== json) {
