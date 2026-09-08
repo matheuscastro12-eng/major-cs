@@ -1170,7 +1170,15 @@ export default function App() {
       )}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
-      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={() => setScreen('landing')} />}
+      {/* funil: a trava da demo (RtpDemoGate, src 'rtp-demo') mandava crua pro
+          screen 'landing' — a MESMA armadilha que o goToCheckout já corrigiu em
+          19158f0 pras outras travas do app (home-rtp, mkt-lock, perfil...), só
+          que essa nasceu depois (1a02084) e nunca foi migrada. Dado real (28d):
+          rtp-demo-gate é vista por 15-40 sids/dia mas o checkout_open desse src
+          sumiu (0-1/dia desde 25/08, contra 3-6/dia antes) — quem bate na trava
+          cai na landing cheia e precisa achar OUTRO CTA pra abrir o pagamento.
+          goToCheckout pula esse passo, igual toda outra trava já faz. */}
+      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={goToCheckout} />}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
       {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} />}
 
