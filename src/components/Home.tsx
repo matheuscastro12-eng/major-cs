@@ -490,8 +490,8 @@ function AccountChip({
           ★ Criar conta · R$20
         </button>
         {/* funil (28d, iteração seguinte): mesmo com o preço no texto, o botão
-            segue convertendo pior que o resto do funil (2216 paywall_view →
-            10 signup_start, 0,45%) — é a maior audiência do jogo (metade de
+            segue convertendo pior que o resto do funil (2399 paywall_view →
+            13 signup_start, 0,54%) — é a maior audiência do jogo (metade de
             todo visitante não logado) e a que menos converte. A vaga de
             Fundador real está quase esgotada (482/500, restam 18) e esse dado
             real só existia no atributo title, invisível em toque/mobile — a
@@ -500,6 +500,16 @@ function AccountChip({
             servidor, nunca inventado); só faltava aqui, que é a de maior
             exposição. */}
         <FounderCounter style={{ fontSize: '10px' }} />
+        {/* funil (iteração seguinte): "pagamento único · sem mensalidade" já
+            aparece no corpo dos cards RtP/Ultimate (rtm-modecard, 3,7-8,3% de
+            conversão) mas nunca saiu do atributo title deste chip — mesma
+            classe de bug do preço, ainda sem correção aqui. Ninguém desconhecido
+            do jogo vê "R$20" isolado sem saber se é assinatura; a reassurance
+            de pagamento único existe no app inteiro, só não chegava na
+            superfície de maior audiência. */}
+        <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.2px', color: 'var(--em-muted, rgba(255,255,255,0.6))' }}>
+          {ct('pagamento único · sem mensalidade')}
+        </span>
       </div>
     );
   }
