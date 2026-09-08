@@ -69,6 +69,25 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
     const t = window.setTimeout(() => setPixWaitLong(true), 60_000);
     return () => window.clearTimeout(t);
   }, [pix]);
+  // funil: dado real (checkout_abandon, method=pix, 21d) mostra abandono
+  // concentrado bem antes dos 60s daqui de cima — boa parte desiste rápido
+  // demais pra ver a reassurance. A Landing já validou uma saída honesta pro
+  // cartão desde a abertura do QR (não só depois do timer), mas essa troca
+  // nunca chegou nesta superfície — que sozinha abre mais checkout do que
+  // qualquer outra (upsell-card lidera checkout_open no funil). Mesmo padrão
+  // aqui: Pix continua o CTA primário, o QR não some, só ganha uma saída.
+  const [cardSwitching, setCardSwitching] = useState(false);
+  const pixSwitchedMethod = useRef(false); // trocou pro cartão em vez de desistir — não conta como abandono
+  useEffect(() => {
+    if (pix) trackPaywallView('upsell-pix-cartao-cedo'); // funil: src próprio (mede esta superfície separada da troca já existente na Landing)
+  }, [pix]);
+  const switchToCard = () => {
+    if (cardSwitching) return;
+    setCardSwitching(true);
+    pixSwitchedMethod.current = true;
+    close();
+    onUpgrade();
+  };
 
   useEffect(() => {
     const onEvt = (e: Event) => {
@@ -109,7 +128,7 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
   if (!open || account?.paid) return null;
 
   const close = () => {
-    if (pix && !pixConfirmed.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);
+    if (pix && !pixConfirmed.current && !pixSwitchedMethod.current) trackCheckoutAbandon('pix', (Date.now() - pixOpenedAt.current) / 1000);
     setPix(null); setPixErr(''); setPixBusy(false);
     setOpen(false);
   };
@@ -197,6 +216,17 @@ export function UpsellCard({ onUpgrade, onGuestUpgrade, onPixPaid }: { onUpgrade
             <p style={{ fontSize: '0.72rem', opacity: 0.75, margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
               {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera sozinho.')}
             </p>
+            {/* saída honesta pro cartão — visível desde que o QR abre, mesmo padrão
+                já validado no modal de conta da Landing. Pix segue o CTA primário
+                e o QR não some; só quem não quer esperar tem pra onde ir. */}
+            <button
+              type="button"
+              onClick={switchToCard}
+              disabled={cardSwitching}
+              style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,.15)', color: 'var(--em-muted, #9aa4b2)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
+            >
+              {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
+            </button>
             {pixWaitLong && (
               /* reassurance honesta pra quem passou de 1min esperando (ver comentário acima) */
               <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>

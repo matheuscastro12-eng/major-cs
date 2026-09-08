@@ -213,6 +213,7 @@ const FUNNEL_SRC_LABEL: Record<string, string> = {
   'pix-cartao-cedo': 'Pix · troca pro cartão (cedo)',
   'pix-troca-cartao': 'Pix · troca pro cartão (aos 25s, antigo)',
   'pix-wait-longo': 'Pix · reassurance de espera',
+  'upsell-pix-cartao-cedo': 'Upsell in-game · Pix→cartão (cedo)',
   profile: 'Perfil do manager',
   leaderboard: 'Leaderboard',
   direto: 'Direto (sem origem)',
