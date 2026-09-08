@@ -76,6 +76,14 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 function matchShortcut(s: RegisteredShortcut, e: KeyboardEvent): boolean {
+  // e.key vem undefined em alguns teclados Android/IME e em eventos sintéticos de
+  // autofill — isso derrubava esse listener global (document, roda em toda tela,
+  // inclusive nos <input> de e-mail/senha do cadastro) com um TypeError não
+  // tratado a cada tecla digitada nesses casos. Achado no funil: checkout_open e
+  // signup_start desabaram ~70% desde 22-25/08, mesma janela em que esse erro
+  // (client_errors: 'toLowerCase' undefined, ~170 ocorrências/93 sessões) começou
+  // a aparecer nesse handler.
+  if (!e.key) return false;
   if (s.key.toLowerCase() !== e.key.toLowerCase()) return false;
   const ctrl = e.ctrlKey || e.metaKey;
   if ((s.ctrl ?? false) !== ctrl) return false;
