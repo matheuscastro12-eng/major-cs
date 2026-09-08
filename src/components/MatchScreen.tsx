@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { LiveCanvasGame } from './LiveCanvasGame';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
+import { movesFor, isKeyRound, EFFECT_LABEL, type CallMove } from '../engine/career/battleCalls';
 import { narrateRound, type RoundNarration } from '../engine/narration';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
@@ -137,6 +138,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   // impacto da última chamada: a call, a postura ativa, a chance que ENFRENTAVA
   // (odds antes do round) e se deu certo — pro card "decisão → resultado".
   const [lastCall, setLastCall] = useState<{ call: RoundCall; stance: Stance; won: boolean; round: number; odds: number } | null>(null);
+  // golpe escolhido no freezetime (quem executa + como se chama), pra a
+  // animação de resolução saber o que mostrar. Ref: é lido no passo do round.
+  type ChosenMove = { label: string; nick: string; icon: string; effect: 'super' | 'weak' | 'neutral'; attrLabel: string; attr: number };
+  const chosenMoveRef = useRef<ChosenMove | null>(null);
+  const [strike, setStrike] = useState<(ChosenMove & { won: boolean; round: number; odds: number }) | null>(null);
   // placar das suas calls NESTE mapa (reseta a cada mapa): mostra o impacto
   // acumulado das suas decisões, não só do round atual.
   const [callRecord, setCallRecord] = useState<{ made: number; won: number }>({ made: 0, won: 0 });
@@ -283,6 +289,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     const boost = boostRounds > 0;
     buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
     const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
+    // chance da chamada ESCOLHIDA, medida ANTES do step (a neutra não tem call,
+    // mas a animação do golpe precisa mostrar o que ela valia na hora da decisão
+    // — peekWinProb depois do round já é a do PRÓXIMO, e mentiria pro jogador).
+    const oddsShown = chosenMoveRef.current ? sim.peekWinProb(userIdx, stanceMod, c) : odds;
     // #20: tática de site vale 1 round e some (informação oculta — resolve no step)
     const siteKind = siteRef.current;
     const wasCt = sim.side()[userIdx] === 'ct';
@@ -302,6 +312,17 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       decisionLog.current.push({ mapIdx, call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
       callRef.current = null;
       setPendingCall(null);
+    }
+    // O GOLPE: animação de resolução do turno (o executor "ataca" e o veredito
+    // entra). FORA do if(call) de propósito — a opção NEUTRA ("jogar o padrão")
+    // não carrega RoundCall, mas é uma escolha do jogador como qualquer outra e
+    // precisa de resposta na tela. Puramente visual: não segura o sim.
+    const mv = chosenMoveRef.current;
+    if (mv) {
+      const log = sim.roundLog();
+      const wonRound = log[log.length - 1] === userIdx;
+      setStrike({ ...mv, won: wonRound, round: sim.round(), odds: oddsShown });
+      chosenMoveRef.current = null;
     }
     setTick((t) => t + 1);
     if (sim.done()) onMapEnded(sim);
@@ -435,6 +456,51 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const bestCallKey: RoundCall | null = callDeltas
     ? (Object.entries(callDeltas).sort((a, b) => b[1] - a[1])[0]?.[0] as RoundCall)
     : null;
+
+  // ── A CHAMADA (turno inspirado em RPG de turno) ────────────────────────────
+  // No Tático as chamadas deixam de ser abstratas e viram GOLPES DO SEU ELENCO:
+  // cada opção nomeia quem executa, mostra o atributo que a alimenta e a
+  // efetividade (estilo × postura). A mecânica entregue ao sim é a MESMA de
+  // antes (stance + RoundCall) — muda de quem é a decisão na tela, não a
+  // matemática. A % de cada golpe sai do próprio peekWinProb (fonte única).
+  const myScore = userIdx === 0 ? sa : sb;
+  const oppScore = userIdx === 0 ? sb : sa;
+  const myBuy = buys[userIdx];
+  const myMoves: CallMove[] = useMemo(() => {
+    if (!tactical || finished) return [];
+    return movesFor(teams[userIdx].players, {
+      side: mySide,
+      round: sim.round(),
+      score: [myScore, oppScore],
+      money: sim.money()[userIdx],
+      isPistol: myBuy === 'pistol',
+      momentum: mom.team === -1 ? 0 : (mom.team === userIdx ? mom.len : -mom.len),
+      target: 13,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tactical, finished, mapIdx, tick, userIdx, mySide, myBuy]);
+
+  // round que MERECE virar turno (pistola, match point, sequência, OT). Nos
+  // demais o mapa corre no ritmo normal — 24 perguntas por mapa viraria trabalho.
+  const keyRound = tactical && !finished && isKeyRound({
+    side: mySide, round: sim.round(), score: [myScore, oppScore],
+    money: sim.money()[userIdx], isPistol: myBuy === 'pistol',
+    momentum: mom.team === -1 ? 0 : (mom.team === userIdx ? mom.len : -mom.len),
+    target: 13,
+  });
+
+  const moveProb = (m: CallMove): number => {
+    if (finished) return 0;
+    const st = m.stance !== 'default' ? { team: userIdx, mode: m.stance } : undefined;
+    return sim.peekWinProb(userIdx, st, m.call ? { team: userIdx, kind: m.call } : undefined);
+  };
+  const armMove = (m: CallMove) => {
+    setStance(m.stance);
+    setPendingCall(m.call);
+    // guarda QUEM vai executar pra animação do golpe saber o nome/ícone quando
+    // o round resolver (o pendingCall sozinho só carrega a mecânica).
+    chosenMoveRef.current = { label: m.label, nick: m.by.nick, icon: m.icon, effect: m.effect, attrLabel: m.attrLabel, attr: m.attr };
+  };
 
   const playerById = useMemo(() => {
     const players = new Map<string, TPlayer>();
@@ -715,7 +781,14 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 </div>
               </div>
             )}
-            {lastCall && (
+            {strike && (
+              <ChamadaStrike
+                key={`golpe-${strike.round}-${strike.label}`}
+                strike={strike}
+                onDone={() => setStrike(null)}
+              />
+            )}
+            {lastCall && !strike && (
               <DecisionImpactCard
                 key={`${lastCall.round}-${lastCall.call}`}
                 lastCall={lastCall}
@@ -735,7 +808,53 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                   </span>
                 )}
               </span>
-              {CALLS.map((c) => {
+              {/* A CHAMADA: no Tático, os golpes são do SEU elenco (nomeiam quem
+                  executa, mostram o atributo e a efetividade estilo × postura).
+                  Fora dele seguem as chamadas clássicas, compactas. */}
+              {tactical && myMoves.length > 0 ? (
+                <div className={`chamada-grid${keyRound ? ' key-round' : ''}`}>
+                  {keyRound && (
+                    <div className="chamada-key">⚡ {ct('ROUND DECISIVO')} — {ct('sua chamada pesa aqui')}</div>
+                  )}
+                  {myMoves.map((m) => {
+                    const p = moveProb(m);
+                    const d = p - baseProb;
+                    const armed = pendingCall === m.call && stance === m.stance;
+                    return (
+                      <button
+                        key={m.id}
+                        className={`chamada-move${armed ? ' armed' : ''} eff-${m.effect}`}
+                        disabled={!!pausedMsg}
+                        title={m.desc}
+                        onClick={() => armMove(m)}
+                      >
+                        <span className="chamada-top">
+                          <span className="chamada-icon">{m.icon}</span>
+                          <b className="chamada-label">{m.label}</b>
+                          <span className="chamada-prob">{Math.round(p * 100)}%</span>
+                        </span>
+                        <span className="chamada-meta">
+                          <span className="chamada-attr">
+                            {m.by.nick} · {m.attrLabel} <b>{m.attr}</b>{m.stab ? ' ★' : ''}
+                          </span>
+                          {m.effect !== 'neutral' && (
+                            <span className={`chamada-eff ${m.effect}`} title={EFFECT_LABEL[m.effect]}>
+                              {m.effect === 'super' ? ct('SUPER EFETIVO') : ct('POUCO EFETIVO')}
+                            </span>
+                          )}
+                          {m.cost === 'limited' && <span className="chamada-pp">{ct('aposta alta')}</span>}
+                          {Math.abs(d) >= 0.003 && (
+                            <span className="chamada-delta" style={{ color: d > 0 ? '#5ed88a' : '#e58a8a' }}>
+                              {d > 0 ? '+' : ''}{Math.round(d * 100)}%
+                            </span>
+                          )}
+                        </span>
+                        <span className="chamada-desc">{m.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : CALLS.map((c) => {
                 const d = callDeltas ? callDeltas[c.key] : null;
                 const best = callDeltas && c.key === bestCallKey && (callDeltas[c.key] ?? 0) > 0.003;
                 return (
@@ -932,6 +1051,45 @@ function MomentumMeter({ team, len, teams, userIdx }: {
 // CARD DE IMPACTO DA DECISÃO: cruza a chamada + postura + a CHANCE que enfrentava
 // com o resultado real. É o "ver o impacto da decisão" — não só deu/não deu certo,
 // mas se foi aposta corajosa, favoritismo confirmado ou tropeço.
+// ── O GOLPE ──────────────────────────────────────────────────────────────────
+// Animação de resolução do turno, no espírito da tela de batalha de RPG de
+// turno: o executor avança, o impacto estoura e o veredito entra. Some sozinha
+// (~1,6s) e NUNCA segura a simulação — é decoração por cima de um round que já
+// foi resolvido. Respeita prefers-reduced-motion (o CSS desliga o movimento).
+function ChamadaStrike({ strike, onDone }: {
+  strike: { label: string; nick: string; icon: string; effect: 'super' | 'weak' | 'neutral'; attrLabel: string; attr: number; won: boolean; round: number; odds: number };
+  onDone: () => void;
+}) {
+  useEffect(() => {
+    const id = window.setTimeout(onDone, 1600);
+    return () => window.clearTimeout(id);
+  }, [onDone]);
+  const pct = Math.round(strike.odds * 100);
+  // veredito no tom do que aconteceu: aposta improvável que entra é festa;
+  // favoritismo perdido dói. Mesma régua do DecisionImpactCard.
+  const verdict = strike.won
+    ? strike.odds < 0.4 ? ct('PEGOU!') : ct('FUNCIONOU')
+    : strike.odds >= 0.62 ? ct('TROPEÇOU') : ct('NÃO ROLOU');
+  return (
+    <div className={`golpe${strike.won ? ' win' : ' lose'}`} aria-live="polite">
+      <span className="golpe-icon">{strike.icon}</span>
+      <span className="golpe-body">
+        <b className="golpe-label">{strike.label}</b>
+        <span className="golpe-sub">
+          {strike.nick} · {strike.attrLabel} {strike.attr}
+          {strike.effect !== 'neutral' && (
+            <span className={`golpe-eff ${strike.effect}`}>
+              {strike.effect === 'super' ? ` · ${ct('SUPER EFETIVO')}` : ` · ${ct('POUCO EFETIVO')}`}
+            </span>
+          )}
+          <span className="golpe-odds"> · {ct('tinha')} {pct}%</span>
+        </span>
+      </span>
+      <span className="golpe-verdict">{strike.won ? '✓' : '✗'} {verdict}</span>
+    </div>
+  );
+}
+
 function DecisionImpactCard({ lastCall, t }: {
   lastCall: { call: RoundCall; stance: Stance; won: boolean; round: number; odds: number };
   t: (k: string) => string;
