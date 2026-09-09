@@ -114,8 +114,8 @@ test('createRtpSave com heir: peneira/tier intactos, +1 em 2 atributos do mentor
   const mentor = legacyFromSave(retiredSave());
   const heirIn = heirFromLegacy(mentor, 2);
   assert.equal(heirIn.country, 'br');
-  assert.equal(heirIn.heir?.mentorNick, 'zr1');
-  assert.equal(heirIn.heir?.generation, 2);
+  assert.equal(heirIn.heir.mentorNick, 'zr1');
+  assert.equal(heirIn.heir.generation, 2);
 
   const input: CreateRtpInput = { ...BASE, role: 'Rifler', startTier: 'access', tryoutStrong: true };
   const plain = createRtpSave(input);

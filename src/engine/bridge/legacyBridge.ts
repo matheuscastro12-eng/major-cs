@@ -12,7 +12,7 @@ import type { Coach, Player, Role, TeamSeason } from '../../types';
 import type { PlayerPersonality } from '../career/personality';
 import type { HallCareer } from '../../state/rtpHall';
 import { hashStr } from '../../state/hash';
-import { ROLE_FOCUS, type CreateRtpInput } from '../rtp/createSave';
+import { ROLE_FOCUS } from '../rtp/createSave';
 import { coreStatsFromAttrs, type CoreStats } from '../rtp/coreStats';
 import { heroLegendMetrics } from '../rtp/legends';
 import { legacyScore, legacyTier } from '../rtp/perks';
@@ -263,7 +263,7 @@ export function heirBonusAttrs(role: Role): AttrKey[] {
   return ROLE_FOCUS[role].slice(0, 2);
 }
 
-export function heirFromLegacy(p: LegacyProfile, generation = 2): Pick<CreateRtpInput, 'country' | 'heir'> {
+export function heirFromLegacy(p: LegacyProfile, generation = 2): { country: string; heir: RtpHeir } {
   return {
     country: p.country,
     heir: {
