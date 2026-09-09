@@ -26,6 +26,11 @@
 
 import type { Playstyle, Role, TPlayer } from '../../types';
 import type { RoundCall, Stance } from '../match';
+// [W5] identidade tática: marca golpe "de casa", golpe lido pelo adversário e golpe que contra
+import {
+  identityRoundDelta, isCounterCall, IDENTITY_NOUN,
+  type IdentityCall, type IdentityEcon, type IdentityLabel,
+} from './teamIdentity';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Efetividade (o "tipo" do golpe)
@@ -57,6 +62,16 @@ export interface CallCtx {
   isPistol: boolean;
   momentum: number;           // >0 você embalado, <0 eles (len com sinal)
   target: number;             // rounds pra fechar o mapa (13 normal)
+  // [W5] identidade tática (opcional): a sua, a do adversário e quanto cada um
+  // estuda o outro (scoutingOf). Sem isso os golpes saem sem marca de identidade.
+  identity?: IdentityCtx;
+}
+
+export interface IdentityCtx {
+  mine: IdentityLabel;   // identityLabel(save.identity)
+  opp: IdentityLabel;    // identityLabel(derivedIdentity(adversário))
+  myScouting: number;    // 0..1 — quanto EU leio o adversário
+  oppScouting: number;   // 0..1 — quanto o adversário me lê
 }
 
 /** Round que MERECE virar turno. Espelha o BeatKind da transmissão do Ultimate
@@ -88,6 +103,11 @@ export interface CallMove {
   effect: Effectiveness;
   stab: boolean;              // função do executor casa com o golpe (bônus de identidade)
   cost: 'free' | 'limited';   // 'limited' gasta um uso do half (PP)
+  // [W5] identidade tática (só preenchidos com ctx.identity; default false/'')
+  home: boolean;              // chamada "de casa": o time treinou isso (bônus)
+  countered: boolean;         // o adversário estudou essa tendência (desconto)
+  counter: boolean;           // este golpe CONTRA a identidade do adversário
+  identityNote: string;       // explicação legível ("o adversário estudou o seu rush: −4%")
 }
 
 // atributo que "alimenta" cada tipo de chamada + a função natural dela (STAB).
@@ -128,7 +148,28 @@ function moveFrom(players: TPlayer[], call: RoundCall, stance: Stance, icon: str
     effect: effectivenessOf(by.playstyle, stance),
     stab: by.role === meta.role || by.role2 === meta.role,
     cost,
+    home: false, countered: false, counter: false, identityNote: '',
   };
+}
+
+/** [W5] Marca cada golpe com a leitura de identidade. Usa a MESMA função que o
+ *  motor aplica (identityRoundDelta) — o texto explica o que o peekWinProb já
+ *  contém; aqui não nasce nenhuma % nova. */
+function applyIdentity(moves: CallMove[], ctx: CallCtx): CallMove[] {
+  const id = ctx.identity;
+  if (!id) return moves;
+  const econ: IdentityEcon = ctx.isPistol ? 'pistol' : ctx.money < 4500 ? 'low' : 'full';
+  return moves.map((m) => {
+    const asCall: IdentityCall = { side: ctx.side, econ, call: m.call ?? 'default', stance: m.stance };
+    const d = identityRoundDelta(
+      { team: 0, label: id.mine, readBy: id.oppScouting, auto: false },
+      { ownerSide: ctx.side, ownerEcon: econ, ownerAction: { call: asCall.call, stance: asCall.stance }, oppAuto: true },
+    );
+    const counter = id.opp.strength > 0 && isCounterCall(id.opp, asCall);
+    const notes = [...d.notes];
+    if (counter) notes.push(`contra o ${IDENTITY_NOUN[id.opp.kind]} deles`);
+    return { ...m, home: d.home, countered: d.countered, counter, identityNote: notes.join(' · ') };
+  });
 }
 
 /**
@@ -205,10 +246,11 @@ export function movesFor(players: TPlayer[], ctx: CallCtx): CallMove[] {
       effect: 'neutral',
       stab: anchor.role === 'IGL',
       cost: 'free',
+      home: false, countered: false, counter: false, identityNote: '',
     });
   }
 
-  return out.slice(0, 4);
+  return applyIdentity(out.slice(0, 4), ctx);
 }
 
 /** Usos de chamada LIMITADA por half (o "PP" do golpe forte). */

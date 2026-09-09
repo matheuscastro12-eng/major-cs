@@ -8,6 +8,9 @@ import { Flag, TeamBadge } from '../ui';
 import { CareerIcon } from './CareerIcon';
 import { PlayerLink } from './PlayerLink';
 import { IconChevronLeft } from './DashIcons';
+// [W5] identidade tática: a do usuário vem do save; a da IA é derivada do elenco
+import { derivedIdentity, identityLabel, type TeamIdentity } from '../../engine/career/teamIdentity';
+import { IdentityCard } from './IdentityCard';
 
 type TeamTab = 'squad' | 'stats' | 'trophies';
 
@@ -59,6 +62,8 @@ export function CareerTeamPage({
   ages,
   onBack,
   onOpenPlayer,
+  identity,
+  identityReadBy,
 }: {
   team: TTeam;
   league?: League | null;
@@ -74,8 +79,17 @@ export function CareerTeamPage({
   ages: Record<string, number>;
   onBack: () => void;
   onOpenPlayer: (p: Player) => void;
+  // [W5] identidade tática do time do usuário (save.identity); IA deriva sozinha
+  identity?: TeamIdentity;
+  // [W5] quem te lê: próximo adversário e quanto ele estuda (scoutingOf)
+  identityReadBy?: { tag: string; scouting: number } | null;
 }) {
   const [tab, setTab] = useState<TeamTab>('squad');
+  // [W5] rótulo emergente: usuário = histórico real de chamadas; IA = derivado
+  const identityInfo = useMemo(
+    () => identityLabel(isUserTeam ? identity : derivedIdentity(team)),
+    [isUserTeam, identity, team],
+  );
 
   const roster = team.players;
   const avgOvr = roster.length
@@ -162,6 +176,19 @@ export function CareerTeamPage({
         <div className="tp-metric green"><span>{ct('Liga')}</span><b>{leagueRecord}</b></div>
         <div className="tp-metric gold"><span>{ct('Troféus')}</span><b>{titles}</b></div>
       </div>
+
+      {/* [W5] IDENTIDADE TÁTICA — o que as chamadas dizem sobre o time */}
+      <section
+        className="tp-identity-card"
+        style={{ padding: '12px 14px', marginBottom: 14, borderRadius: 10, background: 'var(--em-panel, #12161e)', border: '1px solid var(--em-border, #2a3340)' }}
+      >
+        <IdentityCard
+          title={ct('Identidade')}
+          label={identityInfo}
+          readBy={isUserTeam ? identityReadBy : null}
+          opponent={!isUserTeam}
+        />
+      </section>
 
       <nav className="tp-tabs">
         {TABS.map((t) => (
