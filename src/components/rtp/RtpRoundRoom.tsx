@@ -19,6 +19,7 @@ import { MAP_LABELS } from '../../types';
 import type { RoadToProSave } from '../../engine/rtp/types';
 import { RtpSituationBoard } from './RtpSituationBoard';
 import { RtpIcon } from './RtpIcon';
+import { DecisionReview } from '../DecisionReview';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -27,7 +28,9 @@ const execVerdict = (perf: number) =>
 
 // Sub-estado de APRESENTAÇÃO por cima do RoomState lógico: o engine resolve
 // (decide→resolved→done) e a UI dá o ritmo (exec → rolling → result).
-type SubPhase = 'decide' | 'exec' | 'rolling' | 'result';
+// 'review' (W3): a série fechou — o pós-jogo com evidência (SUAS DECISÕES)
+// aparece ANTES de entregar o onComplete, com o log que a Sala registrou.
+type SubPhase = 'decide' | 'exec' | 'rolling' | 'result' | 'review';
 
 // Cor do gauge na rampa verde→âmbar→vermelho.
 function oddsColor(pct: number): string {
@@ -152,7 +155,8 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
       const justClosed = after.closedMaps[room.closedMaps.length];
       if (justClosed) setFlash({ k: room.idx * 7 + 5, type: justClosed.won ? 'win' : 'loss', big: true });
       setRoom(after);
-      onComplete(after.final!.outcomes, after.final!.liveMaps);
+      // W3: mostra SUAS DECISÕES (evidência) antes do resultado oficial.
+      setSub('review');
       return;
     }
     if (after.interlude?.mapClosed) {
@@ -169,6 +173,12 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
   const skipRest = () => {
     const done = roomSkipRest(room);
     onComplete(done.final!.outcomes);
+  };
+
+  // W3: entrega o resultado depois da revisão das decisões.
+  const finishReview = () => {
+    if (!room.final) return;
+    onComplete(room.final.outcomes, room.final.liveMaps);
   };
 
   // dado da resolução em tela (needle/stinger) — vem ESTAGIADO do engine.
@@ -354,6 +364,21 @@ export function RtpRoundRoom({ save, prep, onComplete, major }: {
             </div>
           )}
           <RollNeedle roll={locked.roll} threshold={locked.odds.total} from={locked.baseTotal} />
+        </div>
+      )}
+
+      {/* REVIEW (W3) — a série fechou: o que você decidiu, com que odds, o que o dado deu */}
+      {sub === 'review' && room.final && (
+        <div className="rtp-room-review">
+          <DecisionReview
+            mode="rtp"
+            title="SUAS DECISÕES"
+            nick={heroNick}
+            events={room.log ?? []}
+            won={room.final.liveMaps ? live.seriesScore[0] > live.seriesScore[1] : null}
+            scoreLabel={`${live.seriesScore[0]} — ${live.seriesScore[1]} vs ${prep.opp.tag}`}
+          />
+          <button type="button" className="rtp-room-next" onClick={finishReview}>VER RESULTADO DA SÉRIE →</button>
         </div>
       )}
 
