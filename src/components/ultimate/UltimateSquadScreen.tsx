@@ -648,6 +648,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const poolById = useMemo(() => new Map(pool.map((p) => [p.id, p] as const)), [pool]);
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
+  // [W2] card LEGADO (pid rtp_legacy_*) só existe no SEU navegador: o adversário
+  // reconstrói o squad pelo pid a partir do dataset do build e não acha —
+  // trava a partida (mesma classe do bug da LENDA na ranqueada). Online fica
+  // trancado enquanto ele estiver escalado; os modos do clube seguem normais.
+  const squadHasLegacy = squadPool.some((p) => !!p && isLegacyCard({ playerId: p.id }));
+  const pvpReady = squadComplete && !squadHasLegacy;
   const div = divisionFor(state.profile.elo);
   const history = state.profile.history;
   const histDelta = history.reduce((a, h) => a + h.eloDelta, 0); // RP líquido das últimas partidas
@@ -2805,7 +2811,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {rankedMode === 'rivals' ? (
               // Rivals = PvP online de verdade: a fila pareia com outro manager por RP.
               <div style={{ marginTop: 12 }}>
-                <UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={squadComplete} onPlay={startPvpMatch} />
+                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} />
                 <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
                   {ct('Você enfrenta o squad de outro manager de verdade. Vitória sobe RP, pode promover de divisão e conta no ranking global. Derrota tira RP.')}
                 </div>
@@ -2954,7 +2960,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         <UtPanel label={<>{ct('Duelo Privado')} <em>· {ct('com amigo')}</em></>} icon={<Globe size={15} className="ut-panel__lead" />}
           right={<span style={{ fontFamily: 'var(--ut-font-mono)' }}>{pvpNick}</span>}
           info={ct('Crie uma sala ou entre com código pra enfrentar um amigo. Amistoso: não vale RP nem ranking global.')}>
-          <UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={squadComplete} onPlay={startPvpMatch} />
+          {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} />
         </UtPanel>
       )}
 
