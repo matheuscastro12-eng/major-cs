@@ -1,4 +1,5 @@
 import { normalizeFacilities } from './facilities';
+import type { CoachScar, ScarEvent } from './scars';
 
 export interface CareerDepthState {
   rivalries: Record<string, number>;
@@ -26,4 +27,15 @@ export function hydrateCareerDepth(value: Record<string, unknown> | undefined): 
       : [],
     facilities: normalizeFacilities(value?.facilities && typeof value.facilities === 'object' ? value.facilities as Record<string, number> : undefined),
   };
+}
+
+// [W4] leitores tolerantes dos campos opcionais de cicatrizes: save antigo (sem
+// os campos) abre com lista vazia, sem migração.
+export function hydrateScars(value: unknown): CoachScar[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((s): s is CoachScar => !!s && typeof s === 'object' && typeof (s as CoachScar).id === 'string' && typeof (s as CoachScar).since === 'number');
+}
+export function hydrateScarEvents(value: unknown): ScarEvent[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((e): e is ScarEvent => !!e && typeof e === 'object' && typeof (e as ScarEvent).split === 'number');
 }
