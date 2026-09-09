@@ -20,7 +20,8 @@ import { startTeam, startTeamForTier, joinTeam } from './world';
 import { STARTER_SETUP } from './setup';
 import { STARTER_LIFESTYLE } from './lifestyle';
 import { defaultProgression } from './perks';
-import { defaultMedia } from './media';
+import { defaultMedia, pushHeadline } from './media';
+import type { RtpHeir } from '../bridge/legacyBridge';
 import { defaultRecords } from './records';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +105,9 @@ export interface CreateRtpInput {
   // cai no comportamento antigo (startTeam → tier mais baixo da região).
   startTier?: import('./types').Tier;
   tryoutStrong?: boolean;
+  // [W2] Herança de carreira: discípulo de um pro aposentado. Bônus pequeno e
+  // determinístico aplicado DEPOIS dos rolls (não mexe na peneira/tier).
+  heir?: RtpHeir;
 }
 
 // Constrói os 28 atributos iniciais. Base baixa (moleque cru) + bônus de role +
@@ -166,6 +170,14 @@ export function createRtpSave(input: CreateRtpInput): RoadToProSave {
 
   const attrs = seedAttributes(input, rng);
   const potential = seedPotential(input, attrs, rng);
+  // [W2] herança: +1 em 2 atributos-chave da função do MENTOR (sem RNG — o time
+  // da peneira e o tier saem iguais com ou sem herdeiro). Teto acompanha.
+  if (input.heir) {
+    for (const k of ROLE_FOCUS[input.heir.mentorRole].slice(0, 2)) {
+      attrs[k] = clamp(attrs[k] + 1, 3, 16);
+      potential[k] = clamp(Math.max(potential[k], attrs[k] + 1), attrs[k], 20);
+    }
+  }
   const ovr = proOvr(attrs, input.role);
   const playstyle = input.playstyle ?? derivePlaystyle(input.role);
   const id = `rtp-hero-${hashStr(`${input.nick}:${seed}`)}`;
@@ -257,6 +269,19 @@ export function createRtpSave(input: CreateRtpInput): RoadToProSave {
   // RTP v13 — ranking mundial inicial (rookie de academia nasce lá no fim da fila).
   save.world.worldRank = computeWorldRank(save);
   save.world.peakRank = save.world.worldRank;
+  // [W2] herança: linhagem no save + manchete de estreia (rival herdado vira texto
+  // de intro) + relação inicial com o time do mentor, se você caiu nele.
+  if (input.heir) {
+    const h = input.heir;
+    save.lineage = { mentorId: h.mentorId, mentorNick: h.mentorNick, generation: h.generation, inheritedRival: h.rival?.playerNick };
+    const nick = save.player.nick;
+    const intro = h.rival
+      ? `${nick} chega como discípulo de ${h.mentorNick}. ${h.rival.playerNick} (${h.rival.tag}) já avisou que a rixa continua.`
+      : `${nick} chega como discípulo de ${h.mentorNick}. A pressão de carregar o nome vem junto.`;
+    save.media = pushHeadline(save.media ?? defaultMedia(8), intro, 'hype', 1, 1);
+    save.life.fame = clamp(save.life.fame + 2, 0, 100);
+    if (h.mentorTeamId && h.mentorTeamId === start.team.id) save.life.rel.team = clamp(save.life.rel.team + 10, 0, 100);
+  }
   return save;
 }
 

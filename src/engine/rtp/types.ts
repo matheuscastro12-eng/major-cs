@@ -494,6 +494,16 @@ export interface RoadToProSave {
   rng: { seed: number; tick: number };   // determinismo (engine/rng.ts)
   demoCliff?: DemoCliff;          // [W1] cliffhanger da demo (proposta forçada na última semana grátis)
   weeklyTitles?: WeeklyTitle[];   // [W1] selos do pódio SEMANAL da Série do Dia (cosmético do perfil)
+  lineage?: RtpLineage;           // [W2] herança de carreira (discípulo de um pro aposentado)
+}
+
+// [W2] Linhagem: este pro é discípulo de um aposentado (new game+). Só
+// identidade + geração; o bônus já foi aplicado nos atributos na criação.
+export interface RtpLineage {
+  mentorId: string;               // id no hall (`hof-…`)
+  mentorNick: string;
+  generation: number;             // 2 = discípulo direto
+  inheritedRival?: string;        // nick do rival herdado (só texto)
 }
 
 // Resumo leve pra listagem de slots (espelha SlotSummary da carreira).
