@@ -271,6 +271,7 @@ export interface MajorState {
     trophy?: string;
     award?: 'mvp' | 'evp' | null;   // RTP v13 — prêmio individual do Major
   };
+  eraYear?: number;                // [W6] ano da ERA que este Major fecha (2026, 2027…); ausente em saves antigos
 }
 
 // Proposta de outro time (RTP6). RTP v10: pode ser um EMPRÉSTIMO (kind='loan') —
@@ -492,6 +493,8 @@ export interface RoadToProSave {
   sponsors: PersonalSponsor[];
   retired?: boolean;              // RTP v10 — carreira encerrada (aposentadoria) → tela de legado
   rng: { seed: number; tick: number };   // determinismo (engine/rng.ts)
+  eras?: EraStamp[];              // [W6] carimbos das ERAS fechadas (um por ano; saves antigos começam a acumular na próxima virada)
+  pendingEraYear?: number;        // [W6] ano cujo FECHAMENTO DE ERA ainda não foi mostrado (a UI limpa ao continuar)
 }
 
 // Resumo leve pra listagem de slots (espelha SlotSummary da carreira).
@@ -504,4 +507,35 @@ export interface RtpSlotSummary {
   tier?: Tier;
   ovr?: number;
   season?: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [W6] ERA ANUAL — cada temporada é um ANO nomeado ("Era 2026", "Era 2027"…) que
+// fecha com o Major real do ano. Ao virar o ano, o save ganha um CARIMBO
+// permanente da era: onde você jogou, o que fez, e como foi no Major. Tudo o que
+// a tela de fechamento mostra deriva daqui (era.ts) — fonte única.
+
+export interface EraEvent {
+  eventName: string;
+  place: number;                  // 1=campeão, 2=vice, 3=semi, 5=3º grupo, 7=4º grupo
+  rating: number;                 // rating médio do herói no campeonato
+  award?: 'mvp' | 'evp';
+}
+
+export interface EraStamp {
+  year: number;                   // 2026 + season − 1
+  season: number;
+  tier: Tier;                     // tier em que o ano foi disputado
+  teamTag: string;                // time no fechamento do ano
+  teamName: string;
+  events: EraEvent[];             // etapas do ano (sem o Major), em ordem
+  series: number;                 // séries jogadas no ano
+  wins: number;                   // séries vencidas no ano
+  strongestTeam: { tag: string; name: string; isUser: boolean } | null;   // time mais forte do ano (ranking da última etapa)
+  headline: string;               // manchete da era (determinística)
+  majorName: string;              // Major real do ano (calendário em era.ts)
+  majorCity: string;
+  majorPlacement?: MajorPlacementCode | null;  // undefined = Major ainda em disputa; null = não classificou
+  majorAward?: 'mvp' | 'evp' | null;
+  worldRank?: number;             // ranking mundial ao fechar o ano
 }

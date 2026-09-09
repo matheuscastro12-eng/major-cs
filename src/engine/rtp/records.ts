@@ -101,3 +101,11 @@ export function applyRecordBreaks(save: RoadToProSave): RoadToProSave {
     history: { ...save.history, records: { ...r, broken: [...r.broken, ...fresh.map((m) => m.id)] } },
   };
 }
+
+// [W6] Placar do ANO em curso (séries jogadas/vencidas) — lido pelo carimbo da
+// era ANTES do reset de temporada do recordsAtEventEnd. Sem recordes (save
+// antigo sem backfill) = zero, nunca inventa.
+export function seasonTally(r: CareerRecords | undefined): { series: number; wins: number } {
+  if (!r) return { series: 0, wins: 0 };
+  return { series: r.seasonSeries, wins: Math.max(0, r.seasonSeries - r.seasonLosses) };
+}
