@@ -9,33 +9,17 @@
 
 import { useEffect, useState } from 'react';
 import { ct } from '../../state/career-i18n';
-import { setCheckoutSrc, trackRtpDemo } from '../../state/track';
+import { trackRtpDemo } from '../../state/track';
 import { TIER_NAME } from '../../engine/rtp/league';
 import { cliffCountdown } from '../../engine/rtp/demoCliff';
 import { RtpIcon } from './RtpIcon';
+import { goUpgradeFromCliff } from './demoCliffUi';
 import type { DemoCliff, RoadToProSave } from '../../engine/rtp/types';
 
 const SQUAD_LABEL: Record<string, string> = {
   star: ct('Estrela'), starter: ct('Titular'), rotation: ct('Rotação'), bench: ct('Reserva'),
 };
 const money = (v: number) => `R$ ${v.toLocaleString('pt-BR')}`;
-
-// relógio de parede pro countdown (tick a cada 30s — o prazo é em horas).
-export function useNow(intervalMs = 30_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), intervalMs);
-    return () => window.clearInterval(t);
-  }, [intervalMs]);
-  return now;
-}
-
-// O CTA do gancho: atribuição própria ('rtp-demo-cliff') pra medir contra a
-// trava antiga ('rtp-demo'). First-touch: quem clicou aqui primeiro fica aqui.
-export function goUpgradeFromCliff(onUpgrade: () => void): void {
-  setCheckoutSrc('rtp-demo-cliff');
-  onUpgrade();
-}
 
 // Card da proposta (clube · salário · função) — o mesmo na trava e no banner.
 export function RtpCliffOfferCard({ cliff, nick, now }: { cliff: DemoCliff; nick: string; now?: number }) {

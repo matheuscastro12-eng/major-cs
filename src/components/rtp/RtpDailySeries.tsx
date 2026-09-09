@@ -54,26 +54,28 @@ export function RtpDailySeries({ onExit, save, onUpdate }: { onExit: () => void;
   // [W1] pódio da última semana fechada (prova social) + claim dos SELOS
   // (1x por montagem; o servidor só devolve o que ainda não foi coletado).
   // O selo é aplicado no save NA HORA (padrão coinsClaim) — um claim gravado
-  // e não aplicado seria um título perdido.
+  // e não aplicado seria um título perdido. O callback do claim usa o
+  // save/onUpdate ATUAIS via ref (escrita só em efeito — nunca no render).
   const [podium, setPodium] = useState<WeekPodium | null>(null);
   const [newTitles, setNewTitles] = useState<WeeklyTitle[]>([]);
-  const saveRef = useRef(save); saveRef.current = save;
-  const onUpdateRef = useRef(onUpdate); onUpdateRef.current = onUpdate;
+  const latest = useRef<{ save?: RoadToProSave; onUpdate?: (next: RoadToProSave) => void }>({});
+  useEffect(() => { latest.current = { save, onUpdate }; }, [save, onUpdate]);
+  const canClaim = !!account?.paid && !!save && !!onUpdate;
   const claimed = useRef(false);
   useEffect(() => {
     let alive = true;
     void fetchWeekPodium().then((p) => { if (alive) setPodium(p); });
-    if (!claimed.current && account?.paid && saveRef.current && onUpdateRef.current) {
+    if (!claimed.current && canClaim) {
       claimed.current = true;
       void claimWeeklyTitles().then((titles) => {
         if (!alive || !titles.length) return;
-        const cur = saveRef.current; const upd = onUpdateRef.current;
+        const { save: cur, onUpdate: upd } = latest.current;
         if (cur && upd) upd(applyWeeklyTitles(cur, titles));
         setNewTitles(titles);
       });
     }
     return () => { alive = false; };
-  }, [account?.paid]);
+  }, [canClaim]);
 
   const onComplete = async (outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]) => {
     const result = finishDailySeries(ch, outcomes, liveMaps);

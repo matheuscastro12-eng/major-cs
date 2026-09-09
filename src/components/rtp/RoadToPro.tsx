@@ -69,7 +69,16 @@ function eventMessage(ev: EventEnd): string {
 // semanas jogáveis; depois a RtpDemoGate trava com o CTA da vitalícia. O save
 // é o mesmo formato do completo: comprou → continua daqui (e sobe pra nuvem).
 export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => void; demo?: boolean; onUpgrade?: () => void }) {
-  const [save, setSave] = useState<RoadToProSave | null>(() => loadRtp());
+  // [W1] save da demo carregado já na última semana grátis (ou além) sem o
+  // cliffhanger — chegou lá antes desta versão ou recarregou a página:
+  // materializa (e entrega, se a semana já virou) na hora de carregar.
+  const bootDemo = (s: RoadToProSave | null): RoadToProSave | null => {
+    if (!demo || !s || s.retired || s.demoCliff || s.world.week < DEMO_WEEKS) return s;
+    const next = deliverDemoCliff(ensureDemoCliff(s), Date.now());
+    if (next !== s) saveRtp(next);
+    return next;
+  };
+  const [save, setSave] = useState<RoadToProSave | null>(() => bootDemo(loadRtp()));
   const [booted, setBooted] = useState(false);
   const [playing, setPlaying] = useState(false);   // hub vs partida (liga)
   const [playingMajor, setPlayingMajor] = useState(false);   // partida do Major
@@ -98,7 +107,7 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
     (async () => {
       const r = await syncRtpFromCloud().catch(() => 'none' as const);
       if (alive && r === 'restored') {
-        setSave(loadRtp());
+        setSave(bootDemo(loadRtp()));
         setNotice({ kind: 'autosim', text: `☁ ${ct('Save do Road to Pro restaurado da nuvem.')}` });
       }
       if (alive && r === 'deleted') setSave(null);
@@ -135,14 +144,6 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
     if (demo && weekTurned) trackRtpDemo('week', next.world.week);
     setSave(next);
   };
-
-  // [W1] save da demo que já está na última semana (ou além) sem cliffhanger —
-  // chegou lá antes desta versão ou recarregou a página: materializa agora.
-  useEffect(() => {
-    if (!demo || !save || save.retired || save.demoCliff || save.world.week < DEMO_WEEKS) return;
-    const next = deliverDemoCliff(ensureDemoCliff(save), Date.now());
-    if (next !== save) { setSaveError(!saveRtp(next)); setSave(next); }
-  }, [demo, save]);
 
   const handleReset = async () => {
     const ok = await confirmDialog({

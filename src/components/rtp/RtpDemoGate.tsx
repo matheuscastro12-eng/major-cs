@@ -19,7 +19,8 @@ import { TIER_NAME } from '../../engine/rtp/league';
 import { DEMO_WEEKS, activeDemoCliff, isDemoCliffExpired, openDemoCliff, expireDemoCliff } from '../../engine/rtp/demoCliff';
 import type { RoadToProSave } from '../../engine/rtp/types';
 import { FounderCounter } from '../FounderCounter';
-import { RtpCliffOfferCard, goUpgradeFromCliff, useNow } from './RtpDemoCliff';
+import { RtpCliffOfferCard } from './RtpDemoCliff';
+import { goUpgradeFromCliff, useNow } from './demoCliffUi';
 
 export { DEMO_WEEKS }; // semanas jogáveis na demo (a trava fecha na 4ª) — vive no engine (demoCliff.ts)
 
