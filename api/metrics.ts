@@ -100,12 +100,24 @@ export default async function handler(
               AND (data->>'week') ~ '^[0-9]{1,3}$'
             GROUP BY data->>'week'
           UNION ALL
+          SELECT 'viu o cliffhanger', 890, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'rtp_demo' AND data->>'step' = 'cliff_view'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'cliffhanger expirou', 891, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'rtp_demo' AND data->>'step' = 'cliff_expired'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
           SELECT 'bateu na trava', 900, COUNT(DISTINCT sid)
             FROM events WHERE type = 'paywall_view' AND data->>'src' = 'rtp-demo-gate'
               AND created_at > now() - interval '30 days'
           UNION ALL
           SELECT 'abriu o checkout', 901, COUNT(DISTINCT sid)
             FROM events WHERE type = 'checkout_open' AND data->>'src' = 'rtp-demo'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'abriu o checkout (cliffhanger)', 902, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'checkout_open' AND data->>'src' = 'rtp-demo-cliff'
               AND created_at > now() - interval '30 days'
           ORDER BY ord`,
     ]);

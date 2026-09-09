@@ -8,7 +8,7 @@ import { type Rng } from '../rng';
 import { hashStr } from '../../state/hash';
 import { TIER_BASE, tierUp, TIER_NAME } from './league';
 import { buildCircuit, computeObjective } from './circuit';
-import { divisionPool, worldTeamById, joinTeam } from './world';
+import { divisionPool, worldTeamById, joinTeam, type WorldTeam } from './world';
 import type { RoadToProSave, TransferOffer, Tier, SquadRole, TeamContext, LoanReturn } from './types';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -92,23 +92,36 @@ export function generateOffers(save: RoadToProSave, placement: number, rng: Rng)
     // um grande paga sua multa — proposta premium.
     const isLoan = tier === up && up !== curTier && !fromAcademy && rng() < 0.4;
     const isClause = !isLoan && margin > 8 && rng() < 0.18;
-
-    const wageFactor = 1 + clamp(team.strength - TIER_BASE[tier], -8, 10) * 0.03 + rng() * 0.12;
-    let wage = Math.round((TIER_WAGE[tier] * wageFactor) / 100) * 100;
-    if (isClause) wage = Math.round((wage * 1.4) / 100) * 100;   // premium
-    const signingBonus = Math.round(wage * (isLoan ? 0.6 + rng() : 2 + rng() * 3) * (isClause ? 1.5 : 1));
-    offers.push({
-      id: `offer-${team.id}-${save.world.season}-${hashStr(`${team.id}:${save.rng.tick}`) % 9973}`,
-      orgId: team.id, realTeamId: team.id, orgName: team.name, tag: team.tag, colors: team.colors,
-      tier, wage, weeks: isLoan ? 26 : 52, buyout: wage * 40,
-      squadRole: squadRoleForTier(save.player.ovr, tier), signingBonus,
-      note: isLoan ? 'Empréstimo de uma temporada pra te desenvolver na elite.'
-        : isClause ? 'Pagaram sua multa: querem MUITO você. Proposta premium.'
-          : offerNote(save, tier, placement),
-      kind: isLoan ? 'loan' : 'transfer', clause: isClause,
-    });
+    offers.push(buildOffer(save, team, tier, rng, { isLoan, isClause, note: offerNote(save, tier, placement) }));
   }
   return offers;
+}
+
+// Monta UMA proposta de um time real com as regras normais de salário/luvas/
+// função (extraído do generateOffers sem mudar a ordem dos rolls — o `rng` é
+// consumido exatamente como antes: fator de salário, depois luvas). Reusado
+// pelo cliffhanger da demo (demoCliff.ts) pra a proposta forçada seguir a
+// MESMA economia do jogo pago.
+export function buildOffer(
+  save: RoadToProSave, team: WorldTeam, tier: Tier, rng: Rng,
+  opts: { isLoan?: boolean; isClause?: boolean; note: string },
+): TransferOffer {
+  const isLoan = !!opts.isLoan;
+  const isClause = !!opts.isClause;
+  const wageFactor = 1 + clamp(team.strength - TIER_BASE[tier], -8, 10) * 0.03 + rng() * 0.12;
+  let wage = Math.round((TIER_WAGE[tier] * wageFactor) / 100) * 100;
+  if (isClause) wage = Math.round((wage * 1.4) / 100) * 100;   // premium
+  const signingBonus = Math.round(wage * (isLoan ? 0.6 + rng() : 2 + rng() * 3) * (isClause ? 1.5 : 1));
+  return {
+    id: `offer-${team.id}-${save.world.season}-${hashStr(`${team.id}:${save.rng.tick}`) % 9973}`,
+    orgId: team.id, realTeamId: team.id, orgName: team.name, tag: team.tag, colors: team.colors,
+    tier, wage, weeks: isLoan ? 26 : 52, buyout: wage * 40,
+    squadRole: squadRoleForTier(save.player.ovr, tier), signingBonus,
+    note: isLoan ? 'Empréstimo de uma temporada pra te desenvolver na elite.'
+      : isClause ? 'Pagaram sua multa: querem MUITO você. Proposta premium.'
+        : opts.note,
+    kind: isLoan ? 'loan' : 'transfer', clause: isClause,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

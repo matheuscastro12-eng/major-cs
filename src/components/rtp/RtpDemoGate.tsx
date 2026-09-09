@@ -4,31 +4,82 @@
 // completa (localStorage): comprou → continua exatamente de onde parou e o
 // save sobe pra nuvem. Nada se perde — esse é o argumento.
 //
+// [W1] CLIFFHANGER: se a proposta do clube maior chegou (engine/rtp/demoCliff),
+// a trava vira o gancho — "O {clube} quer o {nick}. A proposta expira em 48h"
+// — com relógio de parede REAL: openedAt/expiresAt gravados no save na hora em
+// que a trava abre. Expirou → a proposta some e a trava volta ao texto normal.
+//
 // NOTA: root .rtp OBRIGATÓRIO (escopo das vars --rtp-*) — mesma lição do bug
 // da Série do Dia (tela fora do RtpShell renderiza crua sem ele).
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ct } from '../../state/career-i18n';
-import { trackPaywallView, setCheckoutSrc } from '../../state/track';
+import { trackPaywallView, setCheckoutSrc, trackRtpDemo } from '../../state/track';
 import { TIER_NAME } from '../../engine/rtp/league';
+import { DEMO_WEEKS, activeDemoCliff, isDemoCliffExpired, openDemoCliff, expireDemoCliff } from '../../engine/rtp/demoCliff';
 import type { RoadToProSave } from '../../engine/rtp/types';
 import { FounderCounter } from '../FounderCounter';
+import { RtpCliffOfferCard, goUpgradeFromCliff, useNow } from './RtpDemoCliff';
 
-export const DEMO_WEEKS = 3; // semanas jogáveis na demo (a trava fecha na 4ª)
+export { DEMO_WEEKS }; // semanas jogáveis na demo (a trava fecha na 4ª) — vive no engine (demoCliff.ts)
 
-export function RtpDemoGate({ save, onUpgrade, onExit }: {
+export function RtpDemoGate({ save, onUpgrade, onExit, onUpdate }: {
   save: RoadToProSave;
   onUpgrade: () => void;
   onExit: () => void;
+  onUpdate?: (next: RoadToProSave) => void;   // grava openedAt/expiração do cliffhanger
 }) {
-  useEffect(() => { trackPaywallView('rtp-demo-gate'); }, []);
+  const now = useNow();
+  const cliff = activeDemoCliff(save, now);
+  // 1x por montagem: telemetria da trava + relógio do cliffhanger (ou expiração).
+  const armed = useRef(false);
+  useEffect(() => {
+    if (armed.current) return;
+    armed.current = true;
+    trackPaywallView('rtp-demo-gate');
+    const c = save.demoCliff;
+    if (!c) return;
+    const t = Date.now();
+    if (isDemoCliffExpired(c, t)) {
+      trackRtpDemo('cliff_expired');
+      if (c.status !== 'expired') onUpdate?.(expireDemoCliff(save));
+      return;
+    }
+    trackRtpDemo('cliff_view');
+    if (!c.openedAt) onUpdate?.(openDemoCliff(save, t));
+  }, [save, onUpdate]);
+  // o relógio venceu com a trava aberta: vira "expirada" na hora (sem reload).
+  useEffect(() => {
+    const c = save.demoCliff;
+    if (c && c.status !== 'expired' && isDemoCliffExpired(c, now)) {
+      trackRtpDemo('cliff_expired');
+      onUpdate?.(expireDemoCliff(save));
+    }
+  }, [now, save, onUpdate]);
+
   const p = save.player;
-  const goUpgrade = () => { setCheckoutSrc('rtp-demo'); onUpgrade(); };
+  const goUpgrade = () => { if (cliff) goUpgradeFromCliff(onUpgrade); else { setCheckoutSrc('rtp-demo'); onUpgrade(); } };
   return (
     <div className="rtp rtp-screen rtp-demogate" data-fx="on">
       <div className="rtp-demogate-box">
-        <span className="rtp-demogate-kicker">🧪 {ct('FIM DA DEMO')}</span>
-        <h1>{ct('A carreira do')} <b>{p.nick}</b> {ct('está só começando.')}</h1>
+        {cliff ? (
+          <>
+            <span className="rtp-demogate-kicker">📩 {ct('PROPOSTA NA MESA')} · {ct('FIM DA DEMO')}</span>
+            <h1>{ct('O')} <b>{cliff.offer.orgName}</b> {ct('quer o')} <b>{p.nick}</b>. {ct('A proposta expira em 48h.')}</h1>
+            <RtpCliffOfferCard cliff={cliff} nick={p.nick} now={now} />
+            <p className="rtp-demogate-pitch">
+              {ct('Aceitar, negociar e virar a semana são da vitalícia. Compre agora e a proposta continua na mesa — exatamente esta, com o seu progresso intacto.')}
+            </p>
+          </>
+        ) : (
+          <>
+            <span className="rtp-demogate-kicker">🧪 {ct('FIM DA DEMO')}</span>
+            <h1>{ct('A carreira do')} <b>{p.nick}</b> {ct('está só começando.')}</h1>
+            {save.demoCliff?.status === 'expired' && (
+              <div className="rtp-note">⌛ {ct('A proposta do')} {save.demoCliff.offer.orgName} {ct('expirou — o mercado não espera. A próxima chega jogando.')}</div>
+            )}
+          </>
+        )}
 
         {/* o CARD do jogador criado — o motivo emocional de continuar */}
         <div className="rtp-demogate-card">
@@ -40,9 +91,11 @@ export function RtpDemoGate({ save, onUpgrade, onExit }: {
           </div>
         </div>
 
-        <p className="rtp-demogate-pitch">
-          {ct('Você viveu a peneira, assinou contrato e treinou as primeiras semanas. A vitalícia libera a carreira INTEIRA — e o seu progresso continua exatamente daqui.')}
-        </p>
+        {!cliff && (
+          <p className="rtp-demogate-pitch">
+            {ct('Você viveu a peneira, assinou contrato e treinou as primeiras semanas. A vitalícia libera a carreira INTEIRA — e o seu progresso continua exatamente daqui.')}
+          </p>
+        )}
         <ul className="rtp-demogate-list">
           <li>✔ {ct('Carreira completa: circuito, promoções, transferências e o MAJOR')}</li>
           <li>✔ {ct('SÉRIE DO DIA — o desafio global com ranking diário')}</li>
@@ -58,7 +111,7 @@ export function RtpDemoGate({ save, onUpgrade, onExit }: {
         <FounderCounter style={{ marginBottom: '2px' }} />
 
         <button type="button" className="rtp-cta rtp-demogate-cta" onClick={goUpgrade}>
-          {ct('GARANTIR A VITALÍCIA')} · R$ 20 <span>{ct('pagamento único, pra sempre')}</span>
+          {cliff ? ct('GARANTIR A VITALÍCIA E RESPONDER') : ct('GARANTIR A VITALÍCIA')} · R$ 20 <span>{ct('pagamento único, pra sempre')}</span>
         </button>
         <button type="button" className="rtp-btn-ghost" onClick={onExit}>{ct('Voltar pro menu')}</button>
         <span className="rtp-demogate-keep">💾 {ct('Seu save fica guardado neste navegador — o')} {p.nick} {ct('espera você voltar.')}</span>

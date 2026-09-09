@@ -19,6 +19,8 @@ import { acceptOffer, negotiateOffer, declineOffers } from '../../engine/rtp/tra
 import { RtpLegacy } from './RtpLegacy';
 import { RtpDailySeries } from './RtpDailySeries';
 import { RtpDemoGate, DEMO_WEEKS } from './RtpDemoGate';
+import { RtpDemoCliffBanner } from './RtpDemoCliff';
+import { ensureDemoCliff, deliverDemoCliff } from '../../engine/rtp/demoCliff';
 import { trackRtpDemo } from '../../state/track';
 import { makeRng } from '../../engine/rng';
 import type { RoadToProSave } from '../../engine/rtp/types';
@@ -118,13 +120,29 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
 
   // Atualização in-game (treino, ações, virada de semana): persiste e re-renderiza.
   const handleUpdate = (next: RoadToProSave) => {
+    const weekTurned = next.world.week !== save?.world.week;
+    // [W1] CLIFFHANGER: na virada pra última semana grátis a proposta do clube
+    // maior nasce (só na demo); na virada seguinte ela vai pra mesa — é o que o
+    // save promovido (comprou) vê. No-op pra save sem cliffhanger (jogo pago).
+    if (weekTurned) {
+      if (demo && next.world.week === DEMO_WEEKS) next = ensureDemoCliff(next);
+      next = deliverDemoCliff(next, Date.now());
+    }
     setSaveError(!saveRtp(next));
     // FUNIL DA DEMO: só quando a semana REALMENTE vira — handleUpdate roda em
     // treino, ação, transferência etc. É esta série que desenha a curva de
     // desistência dentro da degustação (semana 2, 3 e a virada que trava).
-    if (demo && next.world.week !== save?.world.week) trackRtpDemo('week', next.world.week);
+    if (demo && weekTurned) trackRtpDemo('week', next.world.week);
     setSave(next);
   };
+
+  // [W1] save da demo que já está na última semana (ou além) sem cliffhanger —
+  // chegou lá antes desta versão ou recarregou a página: materializa agora.
+  useEffect(() => {
+    if (!demo || !save || save.retired || save.demoCliff || save.world.week < DEMO_WEEKS) return;
+    const next = deliverDemoCliff(ensureDemoCliff(save), Date.now());
+    if (next !== save) { setSaveError(!saveRtp(next)); setSave(next); }
+  }, [demo, save]);
 
   const handleReset = async () => {
     const ok = await confirmDialog({
@@ -163,11 +181,11 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   // DEMO: a trava fecha quando a degustação acaba (ou quando o convidado
   // tenta abrir a Série do Dia — exclusiva da vitalícia).
   if (demo && (save.world.week > DEMO_WEEKS || dailyOpen)) {
-    return <RtpDemoGate save={save} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
+    return <RtpDemoGate save={save} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
   }
   // SÉRIE DO DIA: desafio global diário — fixture próprio, não toca no seu save.
   if (dailyOpen) {
-    return <RtpDailySeries onExit={() => setDailyOpen(false)} />;
+    return <RtpDailySeries onExit={() => setDailyOpen(false)} save={save} onUpdate={handleUpdate} />;
   }
   if (playing) {
     return (
@@ -271,6 +289,8 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
       {simResult && (
         <RtpSimResult result={simResult.result} consequence={simResult.consequence} onClose={() => setSimResult(null)} />
       )}
+      {/* [W1] última semana grátis: a proposta do clube maior, com resposta trancada */}
+      {demo && save.demoCliff?.status === 'teaser' && <RtpDemoCliffBanner save={save} onUpgrade={() => onUpgrade?.()} />}
     </>
   );
 }

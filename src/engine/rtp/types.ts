@@ -492,6 +492,8 @@ export interface RoadToProSave {
   sponsors: PersonalSponsor[];
   retired?: boolean;              // RTP v10 — carreira encerrada (aposentadoria) → tela de legado
   rng: { seed: number; tick: number };   // determinismo (engine/rng.ts)
+  demoCliff?: DemoCliff;          // [W1] cliffhanger da demo (proposta forçada na última semana grátis)
+  weeklyTitles?: WeeklyTitle[];   // [W1] selos do pódio SEMANAL da Série do Dia (cosmético do perfil)
 }
 
 // Resumo leve pra listagem de slots (espelha SlotSummary da carreira).
@@ -504,4 +506,26 @@ export interface RtpSlotSummary {
   tier?: Tier;
   ovr?: number;
   season?: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [W1] Road to Pro como negócio
+
+// Cliffhanger da DEMO: a proposta de um clube maior que chega na ÚLTIMA semana
+// grátis. Determinística pelo seed do save (engine/rtp/demoCliff.ts). Fica
+// visível na demo, mas aceitar/negociar só na vitalícia. O prazo é de relógio
+// de parede (48h a partir da hora em que a trava abriu).
+export interface DemoCliff {
+  offer: TransferOffer;
+  week: number;                   // semana em que a proposta chegou (DEMO_WEEKS)
+  status: 'teaser' | 'delivered' | 'expired';   // teaser = só visível; delivered = na mesa (pendingOffers)
+  openedAt?: number;              // epoch ms — quando a trava abriu com a proposta (UI grava)
+  expiresAt?: number;             // epoch ms — openedAt + 48h
+}
+
+// Selo do pódio semanal da Série do Dia (1º = campeão; 2º/3º = pódio). Vem do
+// servidor via claim (rtm_daily_week_prizes) e é aplicado no save pelo cliente.
+export interface WeeklyTitle {
+  week: number;
+  place: 1 | 2 | 3;
 }
