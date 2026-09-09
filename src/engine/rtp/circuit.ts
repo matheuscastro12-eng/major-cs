@@ -30,6 +30,7 @@ import { weeklyTick, turnWeek, ageUp, RETIRE_AGE } from './weekly';
 import { ACTIONS_PER_WEEK } from './createSave';
 import { computeWorldRank, deriveEventAward, makeAccolade } from './standing';
 import { defaultRecords, recordsAtEventEnd, applyRecordBreaks } from './records';
+import { buildEraStamp, stampEra, eraOf } from './era';
 import { MAP_LABELS } from '../../types';
 import type { MapId, Tournament, TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave, Tier, CircuitState, MajorState, TransferOffer, TeamContext, SeasonObjective, CareerLog, ProPlayer, Accolade, MediaState } from './types';
@@ -520,10 +521,19 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
   // DEMISSÃO no fechamento do ano (mesma régua do meio da temporada). A vaga no
   // Major protege — a org não corta quem acabou de classificá-la; aposentando,
   // não faz sentido assinar com clube novo.
-  const endSack = !retired && sackable && !returnTeam && !majorQualifies(place, oldTier)
+  const majorQualified = majorQualifies(place, oldTier);
+  const endSack = !retired && sackable && !returnTeam && !majorQualified
     ? weakestClubContext(save, newTier, season) : null;
   const finalTier = returnTeam ? returnTeam.tier : newTier;
   const st = updateStanding(save, historyEnd, agedPlayer, finalTier);
+  // [W6] CARIMBO DA ERA: o ano fecha AQUI (ponto único da virada — não existe
+  // segunda definição de ano). O Major do ano, se houver vaga, carimba a
+  // colocação depois (major.applyResolution). Aposentando, o carimbo também fica.
+  const topRow = save.world.league ? circuitRanking(save.world.league)[0] : undefined;
+  const eraPatch = stampEra(save, buildEraStamp(save, historyEnd, {
+    strongestTeam: topRow ? { tag: topRow.tag, name: topRow.name, isUser: topRow.isUser } : null,
+    worldRank: st.worldRank, majorQualified,
+  }));
   const seasonEnd: SeasonEndResult = { placement: place, promoted, relegated, oldTier, newTier, champion, award: awardKind, eventRating: eventRatingOut, worldRank: st.worldRank, worldRankDelta: st.delta, sacked: !!endSack, newTeamName: endSack?.teamName };
 
   // Aposentadoria natural: encerra a carreira (a UI mostra o legado). Não precisa
@@ -533,7 +543,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
       seasonEnd,
       // applyRecordBreaks: a última temporada ainda pode quebrar um marco de lenda
       // (aqui não passa pelo turnWeek) — marca antes de fechar o legado.
-      save: applyRecordBreaks({ ...save, player: agedPlayer, life, team: { ...save.team, contract }, history: historyEnd, world: { ...save.world, worldRank: st.worldRank, peakRank: st.peakRank, eventRatingSum: 0, eventSeries: 0 }, retired: true, rng: { seed: save.rng.seed, tick: save.rng.tick + 1 } }),
+      save: applyRecordBreaks({ ...save, ...eraPatch, player: agedPlayer, life, team: { ...save.team, contract }, history: historyEnd, world: { ...save.world, worldRank: st.worldRank, peakRank: st.peakRank, eventRatingSum: 0, eventSeries: 0 }, retired: true, rng: { seed: save.rng.seed, tick: save.rng.tick + 1 } }),
     };
   }
 
@@ -546,9 +556,10 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
   const offers = endSack ? [] : generateOffers({ ...saveForNext, world: { ...save.world, season } }, place, offerRng);
   let major: MajorState | null = null;
   let pendingOffers: TransferOffer[] = offers;
-  if (majorQualifies(place, oldTier)) {
+  if (majorQualified) {
     const saveForMajor = { ...save, world: { ...save.world, season } };
-    major = buildMajor(saveForMajor, oldTier, season, (save.rng.seed ^ (season * 8191) ^ 0x4d41) >>> 0);
+    // o Major FECHA a era que acabou de virar: identidade (nome/sede/ano) da era do save ANTES da virada.
+    major = buildMajor(saveForMajor, oldTier, season, (save.rng.seed ^ (season * 8191) ^ 0x4d41) >>> 0, eraOf(save));
     major.deferredOffers = offers;
     pendingOffers = [];
   }
@@ -563,6 +574,7 @@ export function concludeCircuitRound(save: RoadToProSave, matchResult: SeriesRes
     seasonEnd,
     save: turnWeek({
       ...save,
+      ...eraPatch,
       player: agedPlayer,
       life: lifeEnd,
       team: returnTeam ?? endSack ?? { ...save.team, tier: newTier, squadRole, contract },

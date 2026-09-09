@@ -21,6 +21,8 @@ import { RtpDailySeries } from './RtpDailySeries';
 import { RtpDemoGate, DEMO_WEEKS } from './RtpDemoGate';
 import { RtpDemoCliffBanner } from './RtpDemoCliff';
 import { ensureDemoCliff, deliverDemoCliff } from '../../engine/rtp/demoCliff';
+import { RtpEraClose } from './RtpEraClose';
+import { pendingEraStamp, dismissEraClose } from '../../engine/rtp/era';
 import { trackRtpDemo } from '../../state/track';
 import { makeRng } from '../../engine/rng';
 import type { RoadToProSave } from '../../engine/rtp/types';
@@ -234,6 +236,13 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
         onDismiss={() => { if (major.resolved) handleUpdate(dismissMajor(save)); else onExit(); }}
       />
     );
+  }
+
+  // [W6] FECHAMENTO DE ERA: o ano fechou (e o Major, se houve) → carimbo na tela,
+  // uma vez, antes da janela de transferências do ano novo.
+  const eraStamp = pendingEraStamp(save);
+  if (eraStamp) {
+    return <RtpEraClose stamp={eraStamp} nick={save.player.nick} onContinue={() => handleUpdate(dismissEraClose(save))} />;
   }
 
   // Janela de transferências aberta? Tem prioridade sobre o hub.
