@@ -39,6 +39,7 @@ import { summarizeMoments } from './moments';
 import { resolveRoomSeries } from './roundModel';
 import type { TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave } from './types';
+import type { DecisionEvent, Stakes } from '../roundLog';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -69,6 +70,7 @@ export interface RoomConfig {
   plan?: GamePlan;
   grudge?: number;
   confidence?: number;
+  heroNick?: string;            // [W3] quem executa (actor do DecisionEvent)
 }
 
 // O dado COMPLETO de uma resolução (o que a UI anima: needle, stinger, feed).
@@ -110,6 +112,9 @@ export interface RoomState {
   pending: ResolvedBeat | null; // resolução aguardando advance() (fase 'resolved')
   interlude: Interlude | null;  // ponte narrativa pro beat atual (display)
   final: RoomFinal | null;      // preenchido quando phase === 'done'
+  // [W3] PÓS-JOGO COM EVIDÊNCIA: um DecisionEvent por lock-in (odds mostrada +
+  // veredito do roll). ADITIVO: nada aqui muda placar, momentum ou outcome.
+  log: DecisionEvent[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,6 +133,7 @@ export function createRoom(save: RoadToProSave, prep: MatchPrep): RoomState {
     plan: prep.plan,
     grudge: prep.grudge,
     confidence: prep.confidence,
+    heroNick: save.player.nick,
   };
   const beats = buildBeatPlan(cfg.role, cfg.mapsIds, cfg.matchSeed);
   return {
@@ -147,8 +153,15 @@ export function createRoom(save: RoadToProSave, prep: MatchPrep): RoomState {
     pending: null,
     interlude: null,
     final: null,
+    log: [],
   };
 }
+
+// [W3] stakes do beat pro pós-jogo (só rótulo — não pesa em nada).
+const STAKES_OF: Partial<Record<BeatSpec['kind'], Stakes>> = {
+  pistol: 'pistol', mapPoint: 'matchpoint', clutch: 'clutch',
+  economy: 'eco', forcedEco: 'eco', antiEco: 'eco', saveCall: 'eco',
+};
 
 function initClutch(b: BeatSpec): ClutchState {
   return { alive: Math.max(1, b.alive[1]), step: 0, hot: 0, bombSecs: b.bomb?.defuseSecs ?? null, subs: [] };
@@ -318,7 +331,25 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
     baseTotal: roomOdds(s, opt).total,
     roll, outcome, clutchFinal, newAlive, execPerf, scored, youWonRound,
   };
-  return { state: { ...s, phase: 'resolved', pending: beat, live, momentum }, beat };
+  // [W3] evidência: o que foi decidido, a % NA TELA e o que o dado deu. `won`
+  // é o veredito literal do roll contra a % mostrada (partial fica em `result`).
+  const spec = currentBeat(s);
+  const event: DecisionEvent = {
+    source: 'rtp',
+    map: spec.map,
+    round: spec.round,
+    beat: spec.kind,
+    label: inClutch ? `${opt.label} · 1v${s.clutch!.alive}` : opt.label,
+    actor: s.cfg.heroNick,
+    pWin: beat.odds.total,
+    pBase: beat.baseTotal,
+    alternatives: moment.options.filter((o) => o.id !== opt.id).map((o) => roomOdds(s, o).total),
+    won: outcome.result === 'success',
+    result: outcome.result,
+    stakes: STAKES_OF[spec.kind] ?? 'normal',
+    ...(execPerf != null ? { execPerf } : {}),
+  };
+  return { state: { ...s, phase: 'resolved', pending: beat, live, momentum, log: [...(s.log ?? []), event] }, beat };
 }
 
 // AVANÇA após a resolução: continua o clutch, ou finaliza o beat (fecha mapa /

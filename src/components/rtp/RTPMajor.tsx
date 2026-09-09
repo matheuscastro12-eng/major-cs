@@ -4,6 +4,7 @@ import { RtpFrame } from './RtpFrame';
 import { RtpIcon } from './RtpIcon';
 import { DashCard } from '../career/DashCard';
 import { userPairing, getTeam, standings, pairingBestOf, phaseLabelDisplay } from '../../engine/swiss';
+import { eraOfSeason, majorOfYear } from '../../engine/rtp/era';
 import type { RoadToProSave, MajorState, MajorPlacementCode } from '../../engine/rtp/types';
 import type { Tournament, Pairing } from '../../types';
 
@@ -31,8 +32,11 @@ export function RTPMajor({ save, onPlay, onSimulate, onDismiss }: {
   const major = save.world.major!;
   const t = major.tournament;
   const resolved = major.resolved;
+  // [W6] o Major fecha a ERA: ano/sede reais (save antigo sem eraYear → era anterior à temporada corrente)
+  const eraYear = major.eraYear ?? eraOfSeason(save.world.season - 1).year;
+  const city = majorOfYear(eraYear).city;
 
-  if (resolved) return <ResultScreen major={major} onDismiss={onDismiss} />;
+  if (resolved) return <ResultScreen major={major} eraYear={eraYear} city={city} onDismiss={onDismiss} />;
 
   const userTeam = getTeam(t, 'user');
   const up = userPairing(t);
@@ -41,13 +45,13 @@ export function RTPMajor({ save, onPlay, onSimulate, onDismiss }: {
   const si = stageIndex(t);
 
   return (
-    <RtpFrame onExit={onDismiss} kicker={ct('MAJOR')}>
+    <RtpFrame onExit={onDismiss} kicker={`${ct('MAJOR')} · ERA ${eraYear}`}>
       <div className="rtp-major-head">
         <div className="rtp-major-title">
           <span className="rtp-major-trophy"><RtpIcon name="trophy" size={24} /></span>
           <div>
             <b>{major.name}</b>
-            <span>{phaseLabelDisplay(t)} · {ct('você')} {userTeam.wins}–{userTeam.losses}</span>
+            <span>{city} · {phaseLabelDisplay(t)} · {ct('você')} {userTeam.wins}–{userTeam.losses}</span>
           </div>
         </div>
         <div className="rtp-major-stepper">
@@ -159,15 +163,15 @@ function BrCell({ t, p }: { t: Tournament; p: Pairing }) {
 }
 
 // ── Tela de resultado do Major ───────────────────────────────────────────────
-function ResultScreen({ major, onDismiss }: { major: MajorState; onDismiss: () => void }) {
+function ResultScreen({ major, eraYear, city, onDismiss }: { major: MajorState; eraYear: number; city: string; onDismiss: () => void }) {
   const r = major.resolved!;
   const champ = r.placement === 'champion';
   return (
-    <RtpFrame onExit={onDismiss} kicker={ct('MAJOR')}>
+    <RtpFrame onExit={onDismiss} kicker={`${ct('MAJOR')} · ERA ${eraYear}`}>
       <div className={`rtp-major-result${champ ? ' champ' : ''}`}>
         <span className="rtp-major-result-trophy"><RtpIcon name={champ ? 'trophy' : 'chart'} size={48} /></span>
         <div className="rtp-major-result-place">{PLACE_LABEL[r.placement]}</div>
-        <div className="rtp-major-result-name">{major.name}</div>
+        <div className="rtp-major-result-name">{major.name} · {city}</div>
         <div className="rtp-major-result-stats">
           <div><span>{ct('Premiação')}</span><b>{money(r.prize)}</b></div>
           <div><span>{ct('Fama')}</span><b>+{r.fameDelta}</b></div>

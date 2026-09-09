@@ -4,8 +4,11 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { BrandMark } from './brand';
 import { Button } from './ds';
 import { Flag } from './ui';
-import { ACCENTS, SETUP_COUNTRIES, type Manager } from '../state/manager';
+import { ACCENTS, SETUP_COUNTRIES, type Manager, type ManagerOrigin } from '../state/manager';
 import { ct } from '../state/career-i18n';
+// [W2] LEGADO: pro aposentado do RtP chega aqui pré-preenchido como treinador
+import { clearPendingLegacyCoach, peekPendingLegacyCoach } from '../state/rtpHall';
+import { legacyChipLabel } from '../engine/bridge/legacyBridge';
 
 const NICKS = ['zera', 'taclocal', 'igl_diff', 'awp_main', 'clutchgod', 'br4z1l'];
 const ORGS = ['Your Dream Team', 'Selva Gaming', 'Capivara Esports', 'Aurora Major', 'Furacão CS'];
@@ -13,18 +16,23 @@ const rand = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 
 export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Manager) => void; initial?: Manager | null; defaultNick?: string }) {
   const nickEdited = useRef(false);
-  const [nick, setNick] = useState(initial?.nick ?? defaultNick ?? 'br4z1l_zera');
-  const [name, setName] = useState(initial?.name ?? '');
-  const [age, setAge] = useState(initial?.age ?? 24);
-  const [cc, setCc] = useState(initial?.country ?? 'br');
-  const [org, setOrg] = useState(initial?.org ?? 'Your Dream Team');
-  const [accent, setAccent] = useState(initial?.accent ?? ACCENTS[0]);
+  // [W2] ex-pro pendente (deixado pela tela de legado do RtP) vence o initial:
+  // identidade do aposentado + origem. Lido uma vez; consumido ao continuar.
+  const [legacy] = useState(() => peekPendingLegacyCoach());
+  const [origin, setOrigin] = useState<ManagerOrigin | undefined>(legacy?.origin ?? initial?.origin);
+  const [nick, setNick] = useState(legacy?.nick ?? initial?.nick ?? defaultNick ?? 'br4z1l_zera');
+  const [name, setName] = useState(legacy?.name ?? initial?.name ?? '');
+  const [age, setAge] = useState(legacy?.age ?? initial?.age ?? 24);
+  const [cc, setCc] = useState(legacy?.country ?? initial?.country ?? 'br');
+  const [org, setOrg] = useState((legacy?.org || initial?.org) ?? 'Your Dream Team');
+  const [accent, setAccent] = useState(legacy?.accent ?? initial?.accent ?? ACCENTS[0]);
+  const dropLegacy = () => { setOrigin(undefined); clearPendingLegacyCoach(); };
 
   // useAccount carrega async: na montagem account é null, então defaultNick chega
   // depois. Prefilla o nick com o da conta enquanto o usuário não tiver mexido.
   useEffect(() => {
-    if (!nickEdited.current && !initial?.nick && defaultNick) setNick(defaultNick);
-  }, [defaultNick, initial?.nick]);
+    if (!nickEdited.current && !initial?.nick && !legacy && defaultNick) setNick(defaultNick);
+  }, [defaultNick, initial?.nick, legacy]);
 
   // país salvo pode estar fora da lista curada (ex.: re-edição com 'de'); garante
   // que o <select> tenha a opção correspondente em vez de exibir o 1º item.
@@ -41,7 +49,10 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
     setOrg(rand(ORGS));
     setAccent(rand(ACCENTS));
   };
-  const start = () => onDone({ nick: nick.trim() || 'manager', name: name.trim(), age, country: cc, accent, org: org.trim() || 'Your Dream Team' });
+  const start = () => {
+    clearPendingLegacyCoach();
+    onDone({ nick: nick.trim() || 'manager', name: name.trim(), age, country: cc, accent, org: org.trim() || 'Your Dream Team', ...(origin ? { origin } : {}) });
+  };
 
   const label: CSSProperties = { fontSize: '10.5px', fontWeight: 700, letterSpacing: '.8px', textTransform: 'uppercase', color: 'var(--rtm-dim)', marginBottom: '6px', display: 'block' };
   const input: CSSProperties = { width: '100%', background: 'var(--rtm-bg-deep)', border: '1px solid var(--rtm-border-soft)', borderRadius: 'var(--rtm-radius)', color: 'var(--rtm-text)', padding: '10px 12px', fontSize: '14px', fontFamily: 'var(--font)' };
@@ -66,8 +77,20 @@ export function ManagerSetup({ onDone, initial, defaultNick }: { onDone: (m: Man
               <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '20px', color: 'var(--rtm-text-strong)' }}>{preview}</div>
               <div style={{ fontSize: '12px', color: 'var(--rtm-dim)', display: 'flex', alignItems: 'center', gap: '6px' }}><Flag cc={cc} /> {name || ct('Seu nome')} · {age}a</div>
               <div style={{ fontSize: '12px', color: 'var(--rtm-gold)', fontWeight: 700, marginTop: '2px' }}>{org}</div>
+              {origin && (
+                <div style={{ marginTop: '6px', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, letterSpacing: '.4px', padding: '3px 9px', borderRadius: '999px', border: '1px solid var(--rtm-gold)', color: 'var(--rtm-gold)', background: 'rgba(216,169,67,.12)' }} title={ct('Aposentou no Road to Pro e virou treinador. Pico OVR')+` ${origin.peakOvr} · ${origin.role}`}>
+                  🎓 {legacyChipLabel(origin)}
+                  <button type="button" onClick={dropLegacy} title={ct('Criar manager do zero')} style={{ background: 'none', border: 0, color: 'inherit', cursor: 'pointer', padding: 0, fontSize: '12px', lineHeight: 1 }}>✕</button>
+                </div>
+              )}
             </div>
           </div>
+          {origin && (
+            <p style={{ color: 'var(--rtm-dim)', fontSize: '12.5px', maxWidth: '440px', lineHeight: 1.5, marginTop: '12px' }}>
+              {ct('Ex-pro pendura o mouse e vai pro banco: o nick, o país e a idade de aposentadoria vêm do seu jogador do Road to Pro.')}
+              {origin.repBonus > 0 ? ` ${ct('A carreira de jogador te dá')} ${origin.repBonus} ${ct('degrau(s) de reputação inicial como técnico (o bônus fica registrado no perfil).')}` : ''}
+            </p>
+          )}
         </div>
       </div>
 

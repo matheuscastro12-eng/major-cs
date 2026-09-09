@@ -3,6 +3,7 @@ import { MAP_LABELS } from '../types';
 import { computeDisplay, mergeLines } from './match';
 import { draftSynergy } from './ratings';
 import { ct } from '../state/career-i18n';
+import { luckAdjusted, recordByStakes, bestCall, type DecisionEvent } from './roundLog';
 
 export interface SeriesInsight {
   verdict: string;
@@ -20,7 +21,10 @@ function expectedRating(ovr: number): number {
   return 0.95 + (ovr - 80) * 0.0155;
 }
 
-export function analyzeSeries(series: SeriesResult, teams: [TTeam, TTeam], povIdx: 0 | 1): SeriesInsight {
+// [W3] `events` (opcional): as decisões do jogador com a % que viu e o que o
+// dado deu. Só gera frase quando há evento que a sustente — nada de causa
+// inventada, só contagem do que o motor rolou.
+export function analyzeSeries(series: SeriesResult, teams: [TTeam, TTeam], povIdx: 0 | 1, events?: DecisionEvent[]): SeriesInsight {
   const me = teams[povIdx];
   const opp = teams[povIdx === 0 ? 1 : 0];
   const won = series.winner === povIdx;
@@ -169,6 +173,9 @@ export function analyzeSeries(series: SeriesResult, teams: [TTeam, TTeam], povId
     bullets.push({ icon: '⏱️', text: `${otMaps} ${ct('mapa(s) foram para overtime - faltou pouco. Detalhes de composição decidem exatamente esses rounds.')}`, tone: 'info' });
   }
 
+  // 7) [W3] EVIDÊNCIA das suas chamadas: só o que o log registrou.
+  for (const b of evidenceBullets(events ?? [])) bullets.push(b);
+
   if (bullets.length === 0) {
     bullets.push({ icon: 'ℹ️', text: won ? ct('Vitória sólida, sem ressalvas: o time funcionou em todas as frentes.') : ct('Derrota sem um vilão claro: o adversário simplesmente executou melhor.'), tone: 'info' });
   }
@@ -178,4 +185,43 @@ export function analyzeSeries(series: SeriesResult, teams: [TTeam, TTeam], povId
     : `${opp.name} ${ct('venceu por')} ${series.mapScore[povIdx === 0 ? 1 : 0]}-${series.mapScore[povIdx]}. ${ct('Entenda o porquê:')}`;
 
   return { verdict, bullets };
+}
+
+// [W3] Frases de evidência a partir do log de decisões. Cada frase exige o
+// evento que a sustenta (contagem por stakes, placar ajustado, maior upset);
+// sem evento, nada é dito. Exportada pra teste.
+export function evidenceBullets(events: DecisionEvent[]): SeriesInsight['bullets'] {
+  const out: SeriesInsight['bullets'] = [];
+  if (!events.length) return out;
+
+  const stakesLine = (stakes: 'pistol' | 'clutch' | 'matchpoint', name: string) => {
+    const r = recordByStakes(events, stakes);
+    if (r.made < 2) return;
+    const good = r.won / r.made >= 0.5;
+    out.push({
+      icon: stakes === 'pistol' ? '🔫' : stakes === 'clutch' ? '🧊' : '🎯',
+      text: `${ct('Venceu')} ${r.won} ${ct('das')} ${r.made} ${ct('chamadas de')} ${name}.`,
+      tone: good ? 'good' : 'bad',
+    });
+  };
+  stakesLine('pistol', 'pistol');
+  stakesLine('clutch', 'clutch');
+  stakesLine('matchpoint', 'match point');
+
+  const luck = luckAdjusted(events);
+  if (luck.n >= 3 && Math.abs(luck.deltaPct) >= 15) {
+    out.push({
+      icon: luck.deltaPct > 0 ? '🍀' : '🎲',
+      text: luck.deltaPct > 0
+        ? `${ct('O dado sorriu:')} ${luck.actual} ${ct('chamadas deram, quando as odds que você viu somavam')} ${luck.expected.toFixed(1)} (+${luck.deltaPct}%).`
+        : `${ct('O dado virou as costas:')} ${luck.actual} ${ct('chamadas deram, quando as odds que você viu somavam')} ${luck.expected.toFixed(1)} (${luck.deltaPct}%).`,
+      tone: 'info',
+    });
+  }
+
+  const best = bestCall(events);
+  if (best && best.pWin < 0.4) {
+    out.push({ icon: '⭐', text: `${ct('Maior aposta que pegou:')} ${best.label} ${ct('com')} ${Math.round(best.pWin * 100)}% ${ct('na tela.')}`, tone: 'good' });
+  }
+  return out;
 }

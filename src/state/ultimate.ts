@@ -79,6 +79,9 @@ import {
   type UltimateState,
 } from '../engine/ultimate/state';
 import { dailyDraftSeed } from '../engine/ultimate/draft';
+// [W2] cards do LEGADO (pro aposentado do RtP): entram só no índice do catálogo
+import { legacyCards, legacyCatalogKey } from './rtpHall';
+import { isLegacyCard } from '../engine/bridge/legacyBridge';
 
 const KEY = 'rtm-ultimate-v1';
 const CLOUD_SLOT = 'ultimate';
@@ -173,6 +176,7 @@ let _totw: WeeklyTotw | null = null;
 let _catalogMonth = -1;
 let _catalogWeek = -99; // semana do TOTW corrente embutida no memo (vira no meio do mês)
 let _catalogLoKey = ''; // id+params da promo AGENDADA que o memo atual embute ('' = nenhuma)
+let _catalogLegacyKey = ''; // [W2] ids dos legados embutidos no índice (muda ao aposentar um pro)
 
 // seed determinística a partir do id do evento (djb2) — todo cliente sorteia os
 // MESMOS 11 promovidos de uma promo agendada, igual ao seeded-por-mês da mensal.
@@ -189,7 +193,8 @@ function ensureCatalog(): void {
   // entra/sai/muda NO MEIO da sessão, a chave muda e tudo é reconstruído na hora.
   const lo = scheduledPromo();
   const loKey = lo ? `${lo.id}:${lo.payload.filterKey}:${lo.payload.ovrBoost}` : '';
-  if (_catalog && _catalogMonth === mi && _catalogWeek === wi && _catalogLoKey === loKey) return;
+  const legKey = legacyCatalogKey();
+  if (_catalog && _catalogMonth === mi && _catalogWeek === wi && _catalogLoKey === loKey && _catalogLegacyKey === legKey) return;
   // derivação compartilhada com o servidor (engine/ultimate/catalog.ts) — a
   // fase 2 da economia rola packs server-side sobre o MESMO catálogo.
   const { base, catalog } = buildFullCatalog(CS2_REAL_2026, mi);
@@ -227,9 +232,13 @@ function ensureCatalog(): void {
     }
   }
   _index = catalogIndex(_catalog);
+  // [W2] LEGADO: o card do seu pro aposentado resolve no índice (coleção/squad),
+  // mas NÃO entra no catálogo (pool de packs/SBC/draft/marcos nunca o sorteia).
+  for (const c of legacyCards()) _index.set(c.key, c);
   _catalogMonth = mi;
   _catalogWeek = wi;
   _catalogLoKey = loKey;
+  _catalogLegacyKey = legKey;
 }
 export function ultimateCatalog(): UltCard[] {
   ensureCatalog();
@@ -316,6 +325,9 @@ interface UltimateStore {
   // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
   unlockPremiumPaid: (orderId: string, orderSeason: number) => { ok: boolean; already?: boolean };
   claimPassLevel: (level: number, track: PassTrack) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
+  // [W2] LEGADO: concede o card do pro aposentado UMA vez por carreira (idempotente
+  // pela chave em objectivesClaimed — sobrevive a venda/SBC do card). Sem moeda.
+  claimLegacyCard: (cardKey: string) => { ok: boolean; already: boolean; card?: UltCard };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -455,6 +467,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
   },
   sell: (ownedId) => {
     const prev = get().state;
+    // [W2] card do legado não vira moeda (seria farm: aposentar → vender)
+    const owned = prev.inventory.find((o) => o.id === ownedId);
+    if (owned && isLegacyCard(ultimateIndex().get(owned.cardKey))) return { ok: false, credited: 0 };
     const res = _sellCard(prev, ownedId, ultimateIndex());
     if (res.ok) {
       persist(res.state);
@@ -472,6 +487,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     let sold = 0;
     let credited = 0;
     for (const id of ownedIds) {
+      const o = s.inventory.find((x) => x.id === id);
+      if (o && isLegacyCard(idx.get(o.cardKey))) continue;   // [W2] legado não se vende
       const r = _sellCard(s, id, idx);
       if (r.ok) { s = r.state; sold++; credited += r.credited; }
     }
@@ -994,6 +1011,20 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'pass', level, track });
     return { ok: true, reward, grantedCard, packCards };
+  },
+  claimLegacyCard: (cardKey) => {
+    const prev = get().state;
+    const marker = `legacy:${cardKey}`;
+    if (prev.profile.objectivesClaimed.includes(marker)) return { ok: false, already: true };
+    const card = ultimateIndex().get(cardKey);
+    if (!card || !isLegacyCard(card)) return { ok: false, already: false };
+    // id determinístico pela chave: reaplicar (F5 no meio) nunca duplica a cópia
+    let s = _grantCard(_markObjectiveClaimed(prev, marker), cardKey, 'reward', { id: `legacy_${cardKey.replace(/[^a-z0-9]/gi, '')}` });
+    s = _grantPassXp(s, 'objective', dateKey(new Date()));
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(prev, s, 'reward', { src: 'legacy', cardKey });
+    return { ok: true, already: false, card };
   },
   setState: (s) => {
     persist(s);

@@ -2136,3 +2136,41 @@ html:has(main.page-rtp) { background: #070b11; }
   color: var(--rtp-ink-dim); font-family: inherit; font-weight: 800; font-size: 0.68rem; letter-spacing: 1.2px;
 }
 .rtp-daily-ladder-tabs button.on { border-color: var(--rtp-gold); color: var(--rtp-gold); background: color-mix(in srgb, var(--rtp-gold) 8%, transparent); }
+
+/* [W3] PÓS-JOGO COM EVIDÊNCIA — o review das decisões na Sala e no modal do simular */
+.rtp .rtp-room-review { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 8px; animation: rtp-simres-in .4s var(--rtp-ease); }
+.rtp .rtp-simres-decisions { margin: 0 18px; }
+.rtp .rtp-simres-decisions .dr { margin: 0; }
+/* ════════════════════════════════════════════════════════════════════════════
+   [W6] ERA ANUAL — chip no hub, carimbos no overview e a tela de fechamento
+   ════════════════════════════════════════════════════════════════════════════ */
+.rtp .rtp-erachip { display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; padding: 4px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--rtp-gold) 40%, var(--rtp-line)); background: color-mix(in srgb, var(--rtp-gold) 10%, var(--rtp-well)); color: var(--rtp-gold); font-family: var(--rtp-mono); font-size: .64rem; font-weight: 800; letter-spacing: 1px; }
+.rtp .rtp-era-tag { color: var(--rtp-gold); letter-spacing: .5px; }
+.rtp .rtp-eras-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.rtp .rtp-era-stamp { display: flex; flex-direction: column; gap: 2px; min-width: 96px; padding: 8px 10px; border-radius: 10px; border: 1px dashed var(--rtp-line); background: var(--rtp-well); color: var(--rtp-ink); text-align: left; cursor: pointer; font-family: inherit; transition: border-color .15s, transform .15s; }
+.rtp .rtp-era-stamp:hover { border-color: var(--rtp-ink-dim); transform: translateY(-1px); }
+.rtp .rtp-era-stamp.gold { border-style: solid; border-color: color-mix(in srgb, var(--rtp-gold) 50%, var(--rtp-line)); background: color-mix(in srgb, var(--rtp-gold) 8%, var(--rtp-well)); }
+.rtp .rtp-era-stamp b { font-family: var(--rtp-display); font-size: 1.05rem; letter-spacing: 1px; }
+.rtp .rtp-era-stamp.gold b { color: var(--rtp-gold); }
+.rtp .rtp-era-stamp span { display: inline-flex; align-items: center; gap: 4px; font-size: .68rem; color: var(--rtp-ink-dim); }
+.rtp .rtp-era-stamp em { font-style: normal; font-size: .72rem; letter-spacing: 1px; }
+.rtp .rtp-era-close { max-width: 720px; margin: 0 auto; }
+.rtp .rtp-era-close-kicker { font-family: var(--rtp-mono); font-size: .64rem; letter-spacing: 2px; text-transform: uppercase; color: var(--rtp-ink-faint); }
+.rtp .rtp-era-close-headline { max-width: 560px; margin: 4px 0 0; font-family: var(--rtp-display); font-size: 1.25rem; line-height: 1.3; }
+.rtp .rtp-era-close-desk { max-width: 560px; margin: 0; color: var(--rtp-ink-dim); font-style: italic; font-size: .9rem; line-height: 1.45; }
+.rtp .rtp-era-close-form { font-size: 1.3rem; letter-spacing: 3px; }
+.rtp .rtp-era-close-stats { flex-wrap: wrap; justify-content: center; }
+.rtp .rtp-era-close-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; width: 100%; }
+.rtp .rtp-era-close-cell { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border-radius: 10px; background: var(--rtp-well); border: 1px solid var(--rtp-line); text-align: left; }
+.rtp .rtp-era-close-cell.major { border-color: color-mix(in srgb, var(--rtp-gold) 40%, var(--rtp-line)); }
+.rtp .rtp-era-close-cell span { font-size: .62rem; letter-spacing: .6px; text-transform: uppercase; color: var(--rtp-ink-faint); }
+.rtp .rtp-era-close-cell b { font-size: .92rem; }
+.rtp .rtp-era-close-cell em { font-style: normal; font-size: .76rem; color: var(--rtp-ink-dim); }
+.rtp .rtp-era-close-events { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 520px; }
+.rtp .rtp-era-close-ev { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--rtp-well); border: 1px solid var(--rtp-line); text-align: left; font-size: .82rem; }
+.rtp .rtp-era-close-ev.won { border-color: color-mix(in srgb, var(--rtp-gold) 45%, var(--rtp-line)); }
+.rtp .rtp-era-close-ev.won b { color: var(--rtp-gold); }
+.rtp .rtp-era-close-ev-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--rtp-stage); font-family: var(--rtp-mono); font-size: .66rem; color: var(--rtp-ink-dim); }
+.rtp .rtp-era-close-ev em { font-style: normal; color: var(--rtp-ink-dim); font-size: .74rem; }
+.rtp .rtp-era-close-next { margin: 6px 0 0; color: var(--rtp-ink-dim); font-size: .86rem; }
+.rtp .rtp-era-close-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }

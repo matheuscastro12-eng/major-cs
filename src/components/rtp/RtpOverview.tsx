@@ -16,10 +16,11 @@ import { conditionModifiers } from '../../engine/rtp/matchSim';
 import { rankTier, worldLadder } from '../../engine/rtp/standing';
 import { circuitEventName } from '../../engine/rtp/league';
 import { MAJOR_CUT } from '../../engine/rtp/major';
+import { eraOf, eraCloseOf } from '../../engine/rtp/era';
 import { playerOvr } from '../../engine/ratings';
 import { MAP_IMAGES } from '../../data/media';
 import { MAP_LABELS, type MapId } from '../../types';
-import type { RoadToProSave, LifeMeterKey, LifeState } from '../../engine/rtp/types';
+import type { RoadToProSave, LifeMeterKey, LifeState, EraStamp } from '../../engine/rtp/types';
 
 export interface RtpNotice { kind: 'season' | 'autosim'; text: string; }
 
@@ -38,7 +39,7 @@ const METERS: { key: LifeMeterKey; label: string; icon: RtpIconName }[] = [
 ];
 const meterColor = (v: number) => (v >= 66 ? 'var(--rtp-win)' : v >= 33 ? 'var(--rtp-warn)' : 'var(--rtp-loss)');
 
-export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onDaily, onAutoSim, onGoTab }: {
+export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onDaily, onAutoSim, onGoTab, onOpenEra }: {
   save: RoadToProSave;
   notice: RtpNotice | null;
   onDismissNotice: () => void;
@@ -46,9 +47,12 @@ export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onDail
   onDaily?: () => void;
   onAutoSim: () => void;
   onGoTab?: (id: 'training' | 'market') => void;
+  onOpenEra?: (stamp: EraStamp) => void;   // [W6] reabre o fechamento de uma era passada
 }) {
   const { player, life, team, world, history } = save;
   const circuit = world.league;
+  const era = eraOf(save);                                  // [W6] "Era 2026"
+  const eras = useMemo(() => [...(save.eras ?? [])].sort((a, b) => b.year - a.year), [save.eras]);
   const next = useMemo(() => circuitOpponent(save), [save]);
   const opp = next?.team ?? null;
   const condPct = useMemo(() => Math.round((conditionModifiers(life, save.setup).mod - 1) * 100), [life, save.setup]);
@@ -162,7 +166,7 @@ export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onDail
               )}
               <div className="em-nextup-meta">
                 <span>{team.teamName}</span>
-                <span>MD{next?.bestOf ?? 3} · {ct('Temporada')} {world.season}</span>
+                <span>MD{next?.bestOf ?? 3} · <b className="rtp-era-tag">ERA {era.year}</b> · {ct('Temporada')} {world.season}</span>
               </div>
               {opp && (
                 <>
@@ -361,7 +365,7 @@ export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onDail
           )}
 
           <DashCard title={ct('Roadmap da temporada')} className="em-cal-card">
-            <div className="em-cal-sub">{TIER_NAME[circuit?.tier ?? 'academy']} · {ct('Temporada')} {world.season}</div>
+            <div className="em-cal-sub">{TIER_NAME[circuit?.tier ?? 'academy']} · ERA {era.year} · {ct('Temporada')} {world.season}</div>
             <div className="rtp-road">
               {Array.from({ length: EVENTS_PER_SEASON }, (_, i) => i + 1).map((e) => {
                 const cur = e === (world.seasonEvent ?? 1);
@@ -380,7 +384,7 @@ export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onDail
               <div className={`rtp-road-step major${world.major ? ' cur' : ''}`}>
                 <span className="rtp-road-dot"><RtpIcon name="fame" size={11} /></span>
                 <div className="rtp-road-info">
-                  <b>{world.major ? world.major.name : 'Major'}</b>
+                  <b>{world.major ? world.major.name : era.majorName}</b>
                   <span>{world.major ? ct('CLASSIFICADO!') : (MAJOR_CUT[team.tier] ?? 0) > 0 ? `${ct('vaga: top')} ${MAJOR_CUT[team.tier]} ${ct('da última etapa')}` : ct('sem Major na academia')}</span>
                 </div>
               </div>
@@ -463,6 +467,25 @@ export function RtpOverview({ save, notice, onDismissNotice, onPlayMatch, onDail
               ))}
             </div>
           </DashCard>
+
+          {/* [W6] carimbos das ERAS passadas — compactos, clicáveis (reabrem o fechamento do ano) */}
+          {eras.length > 0 && (
+            <DashCard title={ct('Suas eras')} className="rtp-eras-card">
+              <div className="rtp-eras-row">
+                {eras.map((s) => {
+                  const c = eraCloseOf(s);
+                  const gold = c.titles > 0 || s.majorPlacement === 'champion';
+                  return (
+                    <button key={s.year} type="button" className={`rtp-era-stamp${gold ? ' gold' : ''}`} onClick={() => onOpenEra?.(s)} title={s.headline}>
+                      <b>{s.year}</b>
+                      <span>{s.teamTag} · {c.titles} <RtpIcon name="trophy" size={10} /></span>
+                      <em>{c.form || '—'}</em>
+                    </button>
+                  );
+                })}
+              </div>
+            </DashCard>
+          )}
 
           <DashCard title={ct('Forma recente')}>
             <div className="em-form-row">

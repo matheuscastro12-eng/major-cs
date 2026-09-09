@@ -9,7 +9,9 @@ import { RtpTeam } from './RtpTeam';
 import { RtpMarket } from './RtpMarket';
 import { RtpProfile } from './RtpProfile';
 import { LifeEventModal } from './LifeEventModal';
-import type { RoadToProSave } from '../../engine/rtp/types';
+import { RtpEraClose } from './RtpEraClose';
+import { eraOf } from '../../engine/rtp/era';
+import type { RoadToProSave, EraStamp } from '../../engine/rtp/types';
 
 type RtpTabId = 'overview' | 'training' | 'league' | 'team' | 'market' | 'profile';
 const money = (v: number) => `R$ ${v.toLocaleString('pt-BR')}`;
@@ -32,7 +34,11 @@ export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch,
 }) {
   const { life, world } = save;
   const [tab, setTab] = useState<RtpTabId>('overview');
+  const [eraView, setEraView] = useState<EraStamp | null>(null);   // [W6] carimbo aberto pra leitura
   const pendingEvent = save.inbox.find((e) => !e.resolved);
+  const era = eraOf(save);
+
+  if (eraView) return <RtpEraClose stamp={eraView} nick={save.player.nick} past onContinue={() => setEraView(null)} />;
 
   const tabs: RtpTab[] = [
     { id: 'overview', label: ct('Visão geral'), icon: 'grid', alert: !!life.flags.injured },
@@ -49,10 +55,10 @@ export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch,
       onTab={(id) => setTab(id as RtpTabId)}
       tabs={tabs}
       onExit={onExit}
-      right={<span className="rtp-moneychip"><RtpIcon name="money" size={13} /> {money(life.money)}</span>}
+      right={<><span className="rtp-erachip" title={era.majorName}><RtpIcon name="calendar" size={12} /> ERA {era.year}</span><span className="rtp-moneychip"><RtpIcon name="money" size={13} /> {money(life.money)}</span></>}
     >
       {tab === 'overview' && (
-        <RtpOverview save={save} notice={notice} onDismissNotice={onDismissNotice} onPlayMatch={onPlayMatch} onDaily={onDaily} onAutoSim={onAutoSim} onGoTab={(id) => setTab(id)} />
+        <RtpOverview save={save} notice={notice} onDismissNotice={onDismissNotice} onPlayMatch={onPlayMatch} onDaily={onDaily} onAutoSim={onAutoSim} onGoTab={(id) => setTab(id)} onOpenEra={setEraView} />
       )}
       {tab === 'training' && <RtpTraining save={save} onUpdate={onUpdate} />}
       {tab === 'league' && <RtpLeague save={save} />}

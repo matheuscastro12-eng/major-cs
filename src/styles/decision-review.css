@@ -1,0 +1,52 @@
+/* PÓS-JOGO COM EVIDÊNCIA — DecisionReview (compartilhado por Carreira e RtP).
+   Tokens com fallback: o componente vive tanto dentro de .rtp quanto no
+   MatchScreen da Carreira (em-*). Nunca cor hardcoded sem fallback de token. */
+.dr { border: 1px solid var(--rtp-line, var(--em-border, #243140)); border-radius: 12px; background: var(--rtp-deck, var(--panel, #141821)); padding: 14px 16px 12px; margin: 12px 0; display: flex; flex-direction: column; gap: 12px; }
+.dr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dr-kicker { font-family: var(--rtp-mono, 'JetBrains Mono', monospace); font-size: .62rem; font-weight: 800; letter-spacing: 2.2px; text-transform: uppercase; color: var(--rtp-ink-faint, var(--em-muted, #8a99ab)); }
+.dr-title { font-family: var(--rtp-display, 'Oswald', sans-serif); font-size: 1.15rem; font-weight: 800; letter-spacing: .6px; color: var(--rtp-ink, var(--em-text, #eef2f7)); }
+.dr-head .dr-spacer { flex: 1; }
+.dr-share { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--rtp-line, var(--em-border, #243140)); background: transparent; color: var(--rtp-ink, var(--em-text, #eef2f7)); font: 700 .74rem/1 inherit; cursor: pointer; }
+.dr-share:hover { border-color: var(--rtp-gold, var(--em-gold, #d9b84a)); }
+.dr-share:disabled { opacity: .6; cursor: default; }
+
+/* as duas réguas: SORTE (placar ajustado) e DECISÃO (nota), separadas */
+.dr-meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.dr-meter { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--rtp-line, var(--em-border, #243140)); background: color-mix(in srgb, var(--rtp-ink, #fff) 3%, transparent); display: flex; flex-direction: column; gap: 3px; }
+.dr-meter-big { font-family: var(--rtp-display, 'Oswald', sans-serif); font-size: 1.7rem; font-weight: 800; line-height: 1; color: var(--rtp-ink, var(--em-text, #eef2f7)); }
+.dr-meter-big.up { color: var(--rtp-win, #39c07a); } .dr-meter-big.down { color: var(--rtp-loss, #e05a5a); }
+.dr-meter-lbl { font-family: var(--rtp-mono, 'JetBrains Mono', monospace); font-size: .56rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--rtp-ink-faint, var(--em-muted, #8a99ab)); }
+.dr-meter-sub { font-size: .74rem; color: var(--rtp-ink-dim, var(--em-muted, #9fb4c8)); }
+.dr-grade { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; font-family: var(--rtp-display, 'Oswald', sans-serif); font-size: 1.6rem; font-weight: 900; color: #141821; }
+.dr-grade.g-S { background: var(--rtp-gold, #ecc75f); } .dr-grade.g-A { background: var(--rtp-win, #39c07a); }
+.dr-grade.g-B { background: #7fc8ff; } .dr-grade.g-C { background: #c9d1dc; } .dr-grade.g-D { background: var(--rtp-loss, #e05a5a); }
+.dr-meter.grade { flex-direction: row; align-items: center; gap: 12px; }
+.dr-meter.grade > div { display: flex; flex-direction: column; gap: 3px; }
+
+/* a tabela: beat/round × decisão × odds × execução × resultado */
+.dr-table-wrap { overflow-x: auto; }
+.dr-table { width: 100%; border-collapse: collapse; font-size: .8rem; min-width: 480px; }
+.dr-table th { text-align: left; font-family: var(--rtp-mono, 'JetBrains Mono', monospace); font-size: .56rem; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--rtp-ink-faint, var(--em-muted, #8a99ab)); padding: 4px 8px; border-bottom: 1px solid var(--rtp-line, var(--em-border, #243140)); }
+.dr-table td { padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--rtp-line, #243140) 60%, transparent); vertical-align: middle; color: var(--rtp-ink, var(--em-text, #eef2f7)); }
+.dr-table tr:last-child td { border-bottom: 0; }
+.dr-when { font-family: var(--rtp-mono, 'JetBrains Mono', monospace); font-size: .68rem; color: var(--rtp-ink-dim, var(--em-muted, #9fb4c8)); white-space: nowrap; }
+.dr-when b { color: var(--rtp-ink, var(--em-text, #eef2f7)); }
+.dr-stakes { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: .56rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; border: 1px solid var(--rtp-line, var(--em-border, #243140)); color: var(--rtp-ink-dim, var(--em-muted, #9fb4c8)); }
+.dr-stakes.s-clutch, .dr-stakes.s-matchpoint { border-color: var(--rtp-warn, #ffc14d); color: var(--rtp-warn, #ffc14d); }
+.dr-label { font-weight: 700; }
+.dr-actor { display: block; font-size: .7rem; color: var(--rtp-ink-dim, var(--em-muted, #9fb4c8)); }
+.dr-odds { font-family: var(--rtp-mono, 'JetBrains Mono', monospace); font-weight: 800; white-space: nowrap; }
+.dr-odds i { font-style: normal; font-weight: 500; color: var(--rtp-ink-faint, var(--em-muted, #8a99ab)); }
+.dr-exec { font-family: var(--rtp-mono, 'JetBrains Mono', monospace); font-size: .68rem; white-space: nowrap; }
+.dr-exec.e-good { color: var(--rtp-win, #39c07a); } .dr-exec.e-bad { color: var(--rtp-loss, #e05a5a); } .dr-exec.e-mid { color: var(--rtp-warn, #ffc14d); }
+.dr-res { font-weight: 800; white-space: nowrap; }
+.dr-res.won { color: var(--rtp-win, #39c07a); } .dr-res.lost { color: var(--rtp-loss, #e05a5a); } .dr-res.part { color: var(--rtp-warn, #ffc14d); }
+
+/* destaques: maior aposta que pegou / favorito que tropeçou */
+.dr-picks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.dr-pick { padding: 8px 12px; border-radius: 8px; font-size: .8rem; }
+.dr-pick.best { background: color-mix(in srgb, var(--rtp-win, #39c07a) 10%, transparent); border: 1px solid color-mix(in srgb, var(--rtp-win, #39c07a) 40%, transparent); }
+.dr-pick.worst { background: color-mix(in srgb, var(--rtp-loss, #e05a5a) 10%, transparent); border: 1px solid color-mix(in srgb, var(--rtp-loss, #e05a5a) 40%, transparent); }
+.dr-pick-k { display: block; font-size: .58rem; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--rtp-ink-faint, var(--em-muted, #8a99ab)); margin-bottom: 2px; }
+.dr-empty { font-size: .82rem; color: var(--rtp-ink-dim, var(--em-muted, #9fb4c8)); }
+.dr-note { font-size: .7rem; color: var(--rtp-ink-faint, var(--em-muted, #8a99ab)); line-height: 1.4; }

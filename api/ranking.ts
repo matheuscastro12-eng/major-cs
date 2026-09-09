@@ -5,7 +5,7 @@
 // volta): arquiva a colocação final e faz soft-reset do MMR rumo a 1000. As 5 primeiras
 // partidas da temporada são de COLOCAÇÃO (placement: K maior, divisão "Calibrando").
 //
-// Ações (POST body.action): me | ladder | report | champions.
+// Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
@@ -31,6 +31,9 @@ const DIVISIONS: [number, string][] = [[0, 'Prata'], [1200, 'Ouro Nova'], [1600,
 const PLACEMENT_GAMES = 5;
 const divFor = (mmr: number, games = PLACEMENT_GAMES) => (games < PLACEMENT_GAMES ? 'Calibrando' : ([...DIVISIONS].reverse().find(([m]) => mmr >= m)?.[1] ?? 'Prata'));
 const K_WIN = 25, K_LOSS = 20, K_PLACE = 40;
+// [W1] pódio semanal da Série do Dia só premia com campo mínimo (espelha
+// WEEK_PRIZE_MIN_FIELD em src/engine/rtp/weeklyTitles.ts).
+const WEEK_PRIZE_MIN_FIELD = 5;
 
 // temporada = mês. Número 1-indexado a partir de jan/2026 (Temporada 6 = jun/2026).
 function seasonNow() {
@@ -73,6 +76,10 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // único). O prêmio é aplicado no SAVE pelo cliente (padrão coinsClaim) —
     // creditar direto no ledger seria desfeito pela reconciliação local-vence.
     sql`CREATE TABLE IF NOT EXISTS rtm_ult_draft_prizes (day INT, email TEXT, rank INT NOT NULL, coins INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (day, email))`,
+    // [W1] Pódio SEMANAL da Série do Dia: registro do SELO coletado (PK week+
+    // email = claim único). Cosmético (campeão/pódio da semana N), aplicado no
+    // SAVE pelo cliente (weeklyTitles) — mesmo padrão do rtm_ult_draft_prizes.
+    sql`CREATE TABLE IF NOT EXISTS rtm_daily_week_prizes (week INT, email TEXT, place INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (week, email))`,
   ]);
   schemaReady = true;
 }
@@ -175,6 +182,32 @@ export default async function handler(
       week, dayA, dayB,
       total: total[0]?.n ?? 0,
       ladder: rows.map((r, i) => ({ rank: i + 1, nick: String(r.nick ?? 'pro'), pts: Math.round(Number(r.pts) * 100) / 100, days: Number(r.days), wins: Number(r.wins) })),
+    });
+    return;
+  }
+
+  // [W1] pódio da ÚLTIMA semana FECHADA da Série do Dia (público, cacheado):
+  // prova social na tela do desafio ("campeão da semana N: fulano"). Mesma
+  // régua do claim: pts DESC, vitórias DESC, primeiro report; só com o campo
+  // mínimo de participantes. ?week=N (default: semana passada).
+  if (action === 'dailyWeekChampions') {
+    const curWeek = Math.max(1, Math.floor((dailyDayNow() - 1) / 7) + 1);
+    const reqWeek = Number(q('week') ?? body.week ?? 0) || (curWeek - 1);
+    const week = Math.max(1, Math.min(curWeek - 1, reqWeek));
+    if (week < 1 || curWeek <= 1) { res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900'); res.status(200).json({ week: 0, total: 0, podium: [] }); return; }
+    const dayA = (week - 1) * 7 + 1;
+    const dayB = dayA + 6;
+    const rows = await sql`SELECT max(nick) AS nick, sum(rating)::real AS pts, count(*)::int AS days, sum(CASE WHEN won THEN 1 ELSE 0 END)::int AS wins, min(created_at) AS first_at
+                           FROM rtm_daily_series WHERE day BETWEEN ${dayA} AND ${dayB}
+                           GROUP BY email ORDER BY pts DESC, wins DESC, first_at ASC LIMIT 3`;
+    const total = await sql`SELECT count(DISTINCT email)::int AS n FROM rtm_daily_series WHERE day BETWEEN ${dayA} AND ${dayB}`;
+    const field = Number(total[0]?.n ?? 0);
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
+    res.status(200).json({
+      week, total: field,
+      podium: field >= WEEK_PRIZE_MIN_FIELD
+        ? rows.map((r, i) => ({ place: i + 1, nick: String(r.nick ?? 'pro'), pts: Math.round(Number(r.pts) * 100) / 100, days: Number(r.days), wins: Number(r.wins) }))
+        : [],
     });
     return;
   }
@@ -285,6 +318,43 @@ export default async function handler(
       if (ins.length) prizes.push({ day, rank, coins });
     }
     res.status(200).json({ ok: true, prizes, coins: prizes.reduce((a, p) => a + p.coins, 0) });
+    return;
+  }
+
+  // [W1] coleta os SELOS do pódio semanal da Série do Dia ainda não coletados
+  // (semanas FECHADAS, últimas 4). Pódio: pts DESC, vitórias DESC, primeiro
+  // report — com pelo menos WEEK_PRIZE_MIN_FIELD participantes na semana.
+  // Idempotente: só o INSERT que gravou a linha devolve o selo (PK week+email);
+  // o cliente aplica no save (weeklyTitles) — nunca creditamos nada direto.
+  if (action === 'dailyWeekClaim') {
+    const curWeek = Math.max(1, Math.floor((dailyDayNow() - 1) / 7) + 1);
+    const lastClosed = curWeek - 1;
+    if (lastClosed < 1) { res.status(200).json({ ok: true, titles: [] }); return; }
+    const firstWeek = Math.max(1, lastClosed - 3);
+    const dayA = (firstWeek - 1) * 7 + 1;
+    const dayB = lastClosed * 7;
+    const rows = await sql`
+      WITH wk AS (
+        SELECT email, ((day - 1) / 7) + 1 AS week, sum(rating) AS pts,
+               sum(CASE WHEN won THEN 1 ELSE 0 END) AS wins, min(created_at) AS first_at
+        FROM rtm_daily_series WHERE day BETWEEN ${dayA} AND ${dayB}
+        GROUP BY email, ((day - 1) / 7) + 1
+      ), ranked AS (
+        SELECT week, email,
+               rank() OVER (PARTITION BY week ORDER BY pts DESC, wins DESC, first_at ASC) AS rk,
+               count(*) OVER (PARTITION BY week) AS field
+        FROM wk
+      )
+      SELECT week, rk::int AS place FROM ranked
+      WHERE email=${email} AND rk <= 3 AND field >= ${WEEK_PRIZE_MIN_FIELD}`;
+    const titles: { week: number; place: number }[] = [];
+    for (const r of rows) {
+      const week = Number(r.week); const place = Number(r.place);
+      const ins = await sql`INSERT INTO rtm_daily_week_prizes (week, email, place) VALUES (${week}, ${email}, ${place})
+                            ON CONFLICT (week, email) DO NOTHING RETURNING week`;
+      if (ins.length) titles.push({ week, place });
+    }
+    res.status(200).json({ ok: true, titles });
     return;
   }
 

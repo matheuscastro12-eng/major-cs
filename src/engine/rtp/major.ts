@@ -25,7 +25,7 @@ import { isFacingRival, pushHeadline } from './media';
 import { divisionPool, type WorldTeam } from './world';
 import { computeWorldRank, deriveEventAward, makeAccolade } from './standing';
 import { defaultRecords, recordsAtMajorEnd, applyRecordBreaks } from './records';
-import { majorName } from '../../data/tournaments';
+import { eraOfSeason, stampMajorOnEra, type Era } from './era';
 import type { MapId, Tournament, TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave, Tier, MajorState, MajorPlacementCode } from './types';
 
@@ -43,9 +43,10 @@ const MAJOR_NAME_THEME: Record<Tier, string> = {
   academy: 'Copa das Promessas', access: 'Challenger Major',
   challenger: 'Intercontinental', elite: 'Major Mundial',
 };
-// Nome do Major: no elite é o Major REAL rotativo (PGL Copenhagen, IEM Rio…); nos
-// tiers de baixo, o "major" temático do degrau.
-const MAJOR_NAME = (tier: Tier, edition = 1): string => (tier === 'elite' ? majorName(edition) : MAJOR_NAME_THEME[tier]);
+// Nome do Major: no elite é o Major REAL do ano da ERA (calendário em era.ts —
+// "IEM Cologne Major 2026"…); nos tiers de baixo, o "major" temático do degrau
+// carimbado com o ano ("Challenger Major 2026").
+const MAJOR_NAME = (tier: Tier, era: Era): string => (tier === 'elite' ? era.majorName : `${MAJOR_NAME_THEME[tier]} ${era.year}`);
 const PRIZE_BY_TIER: Record<Tier, number> = { academy: 20_000, access: 60_000, challenger: 180_000, elite: 600_000 };
 const PRIZE_FRAC: Record<MajorPlacementCode, number> = { champion: 1, runnerup: 0.55, semi: 0.32, quarters: 0.18, top8: 0.1, swiss: 0.04 };
 const FAME_BY_PLACE: Record<MajorPlacementCode, number> = { champion: 18, runnerup: 11, semi: 7, quarters: 4, top8: 2, swiss: 1 };
@@ -85,15 +86,18 @@ function majorRivals(region: RoadToProSave['world']['region'], tier: Tier, seaso
   return out.slice(0, want);
 }
 
-export function buildMajor(save: RoadToProSave, tier: Tier, edition: number, seed: number): MajorState {
+// `era` [W6]: a ERA que este Major fecha (o ano que acabou de virar). Sem ela,
+// deriva da temporada ANTERIOR à do save (o Major é montado já na temporada nova).
+export function buildMajor(save: RoadToProSave, tier: Tier, edition: number, seed: number, era?: Era): MajorState {
   const region = save.world.region;
   const season = save.world.season;
   const rng = makeRng(seed >>> 0);
   const rivals = majorRivals(region, tier, season, save.team.realTeamId).map(worldTeamToTTeam);
   const userTT = buildUserTeam(save, save.player.attrs, 0, 'user');
-  const name = MAJOR_NAME(tier, edition);
+  const e = era ?? eraOfSeason(season - 1);
+  const name = MAJOR_NAME(tier, e);
   const tournament = createSwissStage([userTT, ...rivals], rng, name);
-  return { name, edition, tier, tournament, phaseStage: 'swiss', userTeamId: 'user' };
+  return { name, edition, tier, tournament, phaseStage: 'swiss', userTeamId: 'user', eraYear: e.year };
 }
 
 // ── Preparação / resolução da SÉRIE do herói ─────────────────────────────────
@@ -183,7 +187,7 @@ function resolveOutcome(save: RoadToProSave, t: Tournament, tier: Tier, name: st
   return { placement: place, prize, fameDelta, trophy, award };
 }
 
-function applyResolution(save: RoadToProSave, name: string, tier: Tier, res: NonNullable<MajorState['resolved']>): RoadToProSave {
+function applyResolution(save: RoadToProSave, name: string, tier: Tier, res: NonNullable<MajorState['resolved']>, eraYear: number): RoadToProSave {
   const trophies = res.trophy ? [...save.history.trophies, res.trophy] : save.history.trophies;
   const awards = res.placement === 'champion' || res.placement === 'runnerup'
     ? [...save.history.awards, `${name} — ${res.placement}`]
@@ -220,8 +224,9 @@ function applyResolution(save: RoadToProSave, name: string, tier: Tier, res: Non
     media = pushHeadline(media, `${save.player.nick} é o ${res.award.toUpperCase()} do ${name}.`, 'good', save.world.season, save.world.week);
   }
   // applyRecordBreaks: um marco de lenda quebrado NO Major (ex.: 3º seguido) sai
-  // na imprensa junto com a manchete do título.
-  return applyRecordBreaks({
+  // na imprensa junto com a manchete do título. [W6] O Major fecha a ERA: a
+  // colocação vai pro carimbo do ano (no-op em save sem carimbo).
+  return stampMajorOnEra(applyRecordBreaks({
     ...save,
     life: {
       ...save.life,
@@ -231,7 +236,7 @@ function applyResolution(save: RoadToProSave, name: string, tier: Tier, res: Non
     history,
     media,
     world: { ...save.world, worldRank, peakRank, eventRatingSum: 0, eventSeries: 0 },
-  });
+  }), eraYear, res.placement, res.award);
 }
 
 export function concludeMajorRound(save: RoadToProSave, pairingResult: SeriesResult): MajorConclusion {
@@ -291,7 +296,8 @@ function settleMajor(save: RoadToProSave, major: MajorState, t: Tournament): Maj
     world: { ...save.world, major: { ...major, tournament, phaseStage, resolved } },
     rng: { seed: save.rng.seed, tick: save.rng.tick + 1 },
   };
-  if (resolved) next = applyResolution(next, major.name, major.tier, resolved);
+  // saves antigos (sem eraYear): o Major roda já na temporada nova → a era é a anterior.
+  if (resolved) next = applyResolution(next, major.name, major.tier, resolved, major.eraYear ?? eraOfSeason(save.world.season - 1).year);
   return { save: next, resolved: !!resolved };
 }
 

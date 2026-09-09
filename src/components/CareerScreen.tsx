@@ -23,7 +23,9 @@ import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career
 import { applyFatigueForm, careerPlayerId, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry } from '../engine/career/boardApproval';
-import { evaluatePromise, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
+import { evaluatePromise, appendPromiseOutcome, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
+// [W4] cicatrizes: traits adquiridos do técnico (motor puro) + hooks de mercado/fechamento
+import { evaluateScars, scarsEarnedAt, scarEffects, applyScarsOnMarket, type CoachScar, type ScarEvent } from '../engine/career/scars';
 import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/career/seasonStats';
 import { tryBreakthrough } from '../engine/career/breakthrough';
 import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
@@ -35,7 +37,7 @@ import { applyBootcamp, canBootcamp, BOOTCAMP_COST } from '../engine/career/boot
 import { applyFocusBias, suggestFocus, TRAINING_FOCUS_LABEL, CORE_STATS, type CoreStat } from '../engine/career/training';
 import {
   judgePlayerPromises, hasOpenPromise, PLAYER_PROMISE_LABEL, PROMISE_MADE, PROMISE_KEPT, PROMISE_BROKEN,
-  PROMISE_DEADLINE_SPLITS, type PlayerPromise, type PlayerPromiseKind,
+  PROMISE_DEADLINE_SPLITS, tallyPlayerPromises, type PlayerPromise, type PlayerPromiseKind,
 } from '../engine/career/playerPromises';
 import {
   addToWatchlist, removeFromWatchlist, watchOf, tickWatchlist, revealOf, apparentOvr, REVEAL_MAX,
@@ -47,6 +49,7 @@ import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI'
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
+import { closeMatchIdentity, type TeamIdentity } from '../engine/career/teamIdentity';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries, type MarketSort } from '../engine/career/market';
 import {
@@ -471,7 +474,7 @@ import { PlayerTalkModal } from './PlayerTalkModal';
 // O modifier no match strength fica aplicado dentro do ChemistryMatrix (avg
 // visível). Integração no engine de match (multiplicar strength) é PR
 // separado — não muda o sigmoid do simulateSeries por enquanto.
-import { tickPairChemAfterMatch, decayPairChemOnSplitChange, averageStarterChemistry } from '../engine/chemistry';
+import { tickPairChemAfterMatch, decayPairChemOnSplitChange, averageStarterChemistry, pairKey } from '../engine/chemistry';
 import { recordSaveTick, type SaveSnapshot } from '../state/achievements';
 import {
   activeStint as activeCoachStint,
@@ -481,7 +484,7 @@ import {
 } from '../engine/coachCareer';
 import { tickAging, type AgingState } from '../engine/aging';
 import { canScrimNow, runScrimVs, listScrimOpponents, type ScrimMatchReport } from '../engine/scrim';
-import { listJobOffers, applyForJob, rejectionReason, type JobOffer } from '../engine/career/jobHunt';
+import { listJobOffers, applyForJob, rejectionReason, offerPitch, type JobOffer } from '../engine/career/jobHunt';
 import { playerAttributes } from '../engine/attributes';
 import {
   generateScoutReports,
@@ -1280,6 +1283,10 @@ interface CareerSave {
   customCoach?: { nick: string; name: string; country: string; rating: number; style: 'tactical' | 'aggressive' | 'discipline' } | null;
   restingPlayers?: string[]; // ate dois jogadores em carga reduzida na proxima serie
   facilities?: Record<string, number>; // centro de treino, analista e psicologo (nivel 0-3)
+  scars?: CoachScar[]; // [W4] cicatrizes: traits adquiridos do técnico (ativos + expirados, histórico)
+  scarEvents?: ScarEvent[]; // [W4] eventos pontuais que o fechamento não reconstrói (dispensa de estrela infeliz)
+  identity?: TeamIdentity; // [W5] identidade tática emergente (histograma decaído das suas chamadas)
+  promiseLog?: PromiseOutcome[]; // [W4] promessas à diretoria já julgadas (append-only, teto 24) — fita e cicatrizes leem
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -3692,7 +3699,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     s: CareerSave,
     moraleIn: Record<string, number>,
     bondIn: Record<string, number>,
-  ): { playerPromises: CareerSave['playerPromises']; morale: Record<string, number>; coachBond: Record<string, number>; news: NewsItem[] } => {
+  ): { playerPromises: CareerSave['playerPromises']; morale: Record<string, number>; coachBond: Record<string, number>; news: NewsItem[]; hits: { nick: string; ovr: number; kept: boolean }[] } => {
     const { promises, outcomes } = judgePlayerPromises(s.playerPromises, {
       split: s.split,
       contractUntil: (pid) => s.contracts?.[pid] ?? null,
@@ -3702,6 +3709,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const morale = { ...moraleIn };
     const coachBond = { ...bondIn };
     const news: NewsItem[] = [];
+    const hits: { nick: string; ovr: number; kept: boolean }[] = [];
     const clampV = (v: number) => Math.max(0, Math.min(100, v));
     for (const o of outcomes) {
       const f = findSigning(s.squad.find((x) => x.playerId === o.playerId) ?? { playerId: o.playerId, fromId: '' } as Signing);
@@ -3709,16 +3717,46 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const eff = o.kept ? PROMISE_KEPT : PROMISE_BROKEN;
       morale[o.playerId] = clampV((morale[o.playerId] ?? MORALE_DEFAULT) + eff.morale);
       coachBond[o.playerId] = clampV((coachBond[o.playerId] ?? BOND_DEFAULT) + eff.bond);
+      hits.push({ nick, ovr: f ? playerOvr(f.player) : 0, kept: o.kept });
+      // [W4] a redação LEMBRA: cita o split da promessa e o que foi prometido
+      const story = newsroom.storyPromiseCalledBack(`${s.split}:pprom:${o.playerId}`, nick, o.madeAtSplit, s.split, o.kind, o.kept);
       news.push({
         id: `${s.split}:pprom:${o.playerId}:${o.kind}`, split: s.split, icon: o.kept ? '🤝' : '💔',
         tone: o.kept ? 'good' : 'bad', cat: 'board',
-        title: o.kept ? `${ct('Palavra cumprida com')} ${nick}` : `${ct('Promessa quebrada com')} ${nick}`,
-        body: o.kept
-          ? `"${ct(PLAYER_PROMISE_LABEL[o.kind])}" — ${ct('você cumpriu. O vestiário nota quem honra o que fala.')}`
-          : `"${ct(PLAYER_PROMISE_LABEL[o.kind])}" — ${ct('o prazo estourou. A relação azedou, e o vestiário conversa.')}`,
+        title: story.title,
+        body: `"${ct(PLAYER_PROMISE_LABEL[o.kind])}" — ${story.body}`,
       });
     }
-    return { playerPromises: promises, morale, coachBond, news };
+    return { playerPromises: promises, morale, coachBond, news, hits };
+  };
+
+  // [W4] CICATRIZES no fechamento: avalia os traits com o que o save já sabe
+  // (histórico, promessas, núcleo do elenco, jovens, dispensas) e gera manchete
+  // pra cada trait novo. Determinístico; nunca duplica trait ativo.
+  const scarsAtClose = (
+    s: CareerSave,
+    hits: { nick: string; ovr: number; kept: boolean }[],
+    history: SplitRecord[],
+    boardOutcome: PromiseOutcome | null | undefined,
+  ): { scars: CoachScar[]; promiseLog: PromiseOutcome[]; news: NewsItem[] } => {
+    const promiseLog = appendPromiseOutcome(s.promiseLog, boardOutcome);
+    const scars = evaluateScars({
+      split: s.split,
+      history: history.map((h) => ({ split: h.split, champion: h.champion, majorChampion: h.major?.champion })),
+      boardPromises: promiseLog,
+      promiseHitsNow: hits,
+      promiseTally: tallyPlayerPromises(s.playerPromises),
+      squadIds: s.squad.map((x) => x.playerId),
+      splitsPlayed: (pid) => (s.seasonStats?.[`user__${pid}`] ?? []).map((l) => l.split),
+      youthPromoted: Object.keys(s.youthDebut ?? {}).length,
+      breakthroughs: Object.values(s.dynamicPotBonus ?? {}).filter((b) => b > 0).length,
+      events: s.scarEvents ?? [],
+    }, s.scars);
+    const news: NewsItem[] = scarsEarnedAt(scars, s.split).map((sc) => {
+      const story = newsroom.storyScarEarned(`${s.split}:scar:${sc.id}`, sc);
+      return { id: `${s.split}:scar:${sc.id}`, split: s.split, icon: sc.tone === 'good' ? '🏷️' : '🩹', tone: sc.tone, cat: 'board' as NewsCat, title: story.title, body: story.body };
+    });
+    return { scars, promiseLog, news };
   };
 
   // #16/#31 — tick de FELICIDADE do fechamento: satisfação composta (5 fatores)
@@ -4695,13 +4733,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         // #19 — job hunt: a demissão vira arco de carreira, não game-over
         () => {
           setJobRejections({});
-          setJobOffers(listJobOffers(
+          const offers = listJobOffers(
             currentEra.map((t) => ({ t, tier: teamTier(t) })),
             save.org?.name ?? '',
             save.tier ?? 3,
             (save.coachStints ?? []) as Parameters<typeof listJobOffers>[3],
             save.split,
-          ));
+            save.scars, // [W4] cicatrizes movem a chance e entram no texto
+          );
+          setJobOffers(offers);
+          // [W4] newsroom com memória: o clube que cita a cicatriz vira manchete
+          const cited = offers.find((o) => o.citedScar);
+          const scar = cited && (save.scars ?? []).find((x) => x.id === cited.citedScar!.id);
+          if (cited && scar) {
+            const story = newsroom.storyScarCited(`${save.split}:scarcited:${cited.teamId}`, cited.name, scar);
+            update(pushNews(save, [{ id: `${save.split}:scarcited:${cited.teamId}`, split: save.split, icon: '🗞️', tone: scar.tone, cat: 'scene', title: story.title, body: story.body }]));
+          }
         },
       );
     }
@@ -4770,6 +4817,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                         {ct(TIER_NAMES[o.tier])}{o.dream ? ` · ${ct('aposta alta')}` : ''}
                         {rejected ? ` — ${ct('Recusou:')} ${rejected}` : ''}
                       </div>
+                      {/* [W4] a proposta cita a cicatriz do técnico */}
+                      {!rejected && offerPitch(o) && (
+                        <div style={{ fontSize: '0.7rem', color: (o.citedScar?.delta ?? 0) > 0 ? 'var(--em-green)' : 'var(--em-red)', fontStyle: 'italic' }}>{offerPitch(o)}</div>
+                      )}
                     </div>
                     {!rejected && (
                       <>
@@ -5056,7 +5107,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           }
           // org do zero (sem região ainda): define a região pelo core do 1º elenco
           const region = save.region ?? macroRegionPlurality(stableSquad.map((s) => findSigning(s)?.player.country ?? '').filter(Boolean));
-          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus };
+          // [W4] cicatrizes na janela: registra dispensa de estrela infeliz e aplica
+          // o vínculo/química inicial de quem chega conforme os traits ativos
+          const wasIn = new Set(save.squad.map((x) => x.playerId));
+          const scarMarket = applyScarsOnMarket({
+            split: save.split, scars: save.scars, events: save.scarEvents,
+            departed: save.squad.filter((x) => !ids.has(x.playerId)).map((x) => { const f = findSigning(x); return { nick: f?.player.nick ?? x.playerId, ovr: f ? playerOvr(f.player) : 0, morale: save.morale?.[x.playerId] ?? MORALE_DEFAULT }; }),
+            arrivedIds: stableSquad.filter((x) => !wasIn.has(x.playerId)).map((x) => x.playerId),
+            squadIds: stableSquad.map((x) => x.playerId),
+            coachBond: save.coachBond, pairChem: save.pairChem, bondDefault: BOND_DEFAULT, chemDefault: 30, pairKey,
+          });
+          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -5215,6 +5276,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 const hap = tickHappiness(save, majResults01, morale0);
                 const pj = judgePromisesPatch(save, hap.morale, hap.coachBond);
                 const morale = pj.morale;
+                const sc = scarsAtClose(save, pj.hits, [...save.history, finished], save.lastPromise); // [W4]
                 const peakOvr = { ...(save.peakOvr ?? {}) };
                 for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                 const items = splitNews({
@@ -5290,7 +5352,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   ...teamEventTick,
                   ...agingPatchMajor,
                   ...scoutingPatchMajor,
-                  watchlist: tickWatchlist(save.watchlist, save.split, !!save.hiredScoutId), // #41
+                  watchlist: tickWatchlist(save.watchlist, save.split, !!save.hiredScoutId || scarEffects(save.scars, save.split).scoutEveryClose), // #41 (+W4 Formador)
+                  scars: sc.scars, promiseLog: sc.promiseLog, // [W4]
                   majorT: null, // o Major acabou: não persiste o bracket finalizado
                   majorResult: null, // limpa o resultado reidratável (já consumido)
                   pendingSplit: null,
@@ -5329,7 +5392,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
+                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...sc.news, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
                 const fin = consummateDeals(next);
                 persist(fin);
@@ -5744,6 +5807,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   // #10: cobrança das promessas a jogadores (em cima do tick de felicidade)
                   const pj = judgePromisesPatch(save, hap.morale, hap.coachBond);
                   const morale = pj.morale;
+                  const sc = scarsAtClose(save, pj.hits, [...save.history, baseRecord()], boardPatch.lastPromise); // [W4]
                   const peakOvr = { ...(save.peakOvr ?? {}) };
                   for (const sg of save.squad) { const f = findSigning(sg); if (f) peakOvr[sg.playerId] = Math.max(peakOvr[sg.playerId] ?? 0, playerOvr(f.player)); }
                   const items = splitNews({
@@ -5849,7 +5913,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     ...teamEventTick,
                     ...agingPatch,
                     ...scoutingPatch,
-                    watchlist: tickWatchlist(save.watchlist, save.split, !!save.hiredScoutId), // #41
+                    watchlist: tickWatchlist(save.watchlist, save.split, !!save.hiredScoutId || scarEffects(save.scars, save.split).scoutEveryClose), // #41 (+W4 Formador)
+                    scars: sc.scars, promiseLog: sc.promiseLog, // [W4]
                     league: null,
                     circuit: null,
                     playoff: null,
@@ -5878,7 +5943,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...sc.news, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
                     // #15: vendas de jogadores LISTADOS entram no trilho da janela
                     pendingSales: [...(save.pendingSales ?? []), ...listedSales],
                     listedPrices: listedPricesLeft,
@@ -6046,6 +6111,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         bestOf={matchCtx.bestOf}
         onFinish={finish}
         onDecided={commitDecided}
+        identity={save.identity}
+        // [W5] fecha a partida na identidade: decai o passado, grava as chamadas de hoje.
+        // Update funcional (roda DEPOIS do commitDecided no mesmo lote) — não perde o resultado travado.
+        onCalls={(calls) => setSave((s) => { const next = { ...s, identity: closeMatchIdentity(s.identity, calls) }; persist(next); return next; })}
       />
     );
   }
@@ -6416,6 +6485,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         openCoachProfile({
           stints: save.coachStints ?? [],
           activeCoachNick: active?.coachNick,
+          scars: save.scars, split: save.split, // [W4]
         });
       }}
       formStreak={formStreak}
@@ -6657,6 +6727,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             contracts={save.contracts ?? {}}
             potentialMap={teamPotentialMap}
             ages={teamAges}
+            identity={isUserTeam ? save.identity : undefined}
             onBack={closeTeamProfile}
             onOpenPlayer={openPlayerProfile}
           />
@@ -6873,6 +6944,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       {/* T1.4: aba History extraída em src/pages/career/HistoryTab.tsx */}
       {hubTab === 'history' && (
         <HistoryTab save={save} org={org} identity={save.org ? { name: save.org.name, tag: save.org.tag } : undefined} awards={save.yearAwardsHistory}
+          // [W4] fita clicável: detalhe do split com promessas, cicatrizes e passagens
+          timelineExtras={{ promiseLog: save.promiseLog, playerPromises: save.playerPromises, scars: save.scars, stints: save.stints, currentSplit: save.split,
+            nickOf: (pid) => { const sig = save.squad.find((sg) => sg.playerId === pid); const f = sig ? findSigning(sig) : null; return f?.player.nick ?? save.youth?.[pid]?.nick ?? currentEra.flatMap((t) => t.players).find((pp) => pp.id === pid)?.nick ?? pid; } }}
           hallOfFame={(save.retired ?? []).map((rid) => {
             const sig = save.squad.find((sg) => sg.playerId === rid);
             const f = sig ? findSigning(sig) : null;

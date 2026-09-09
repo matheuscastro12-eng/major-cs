@@ -18,7 +18,8 @@ import {
   type CreateRtpInput,
 } from '../../engine/rtp/createSave';
 import { proOvr } from '../../engine/rtp/coreStats';
-import { bestHallCareer } from '../../state/rtpHall';
+import { bestHallCareer, clearPendingHeir, peekPendingHeir } from '../../state/rtpHall';
+import { heirBonusAttrs } from '../../engine/bridge/legacyBridge';
 import type { RoadToProSave, Tier } from '../../engine/rtp/types';
 
 const ROLES: { role: Role; desc: string }[] = [
@@ -53,8 +54,13 @@ export function RTPCreate({ onExit, onCreated }: {
   onExit: () => void;
   onCreated: (save: RoadToProSave) => void;
 }) {
+  // [W2] herdeiro pendente (deixado pela tela de legado): país do mentor +
+  // bônus herdado. Descartável com ✕; consumido ao criar/cancelar.
+  const [pendingHeir, setPendingHeirState] = useState(() => peekPendingHeir());
+  const heir = pendingHeir?.heir;
+  const dropHeir = () => { setPendingHeirState(null); clearPendingHeir(); };
   const [nick, setNick] = useState('');
-  const [country, setCountry] = useState('br');
+  const [country, setCountry] = useState(pendingHeir?.country ?? 'br');
   const [role, setRole] = useState<Role>('Rifler');
   const [playstyle, setPlaystyle] = useState<Playstyle | null>(null);
   const [personality, setPersonality] = useState<PlayerPersonality>('prodigy');
@@ -84,13 +90,15 @@ export function RTPCreate({ onExit, onCreated }: {
     };
     const rng = makeRng(input.seed!);
     const attrs = seedAttributes(input, rng);
+    // mesmo bônus que o createRtpSave aplica (a prévia tem que bater com o save)
+    if (heir) for (const k of heirBonusAttrs(heir.mentorRole)) attrs[k] = Math.min(16, attrs[k] + 1);
     const ovr = proOvr(attrs, role);
     const catAvg = CAT_META.map((c) => ({
       ...c,
       avg: Math.round((c.attrs.reduce((a, k) => a + attrs[k], 0) / c.attrs.length) * 5),
     }));
     return { ovr, catAvg };
-  }, [nick, country, role, playstyle, personality, archetype, age, points]);
+  }, [nick, country, role, playstyle, personality, archetype, age, points, heir]);
 
   const canCreate = nick.trim().length >= 2 && remaining === 0;
 
@@ -105,6 +113,7 @@ export function RTPCreate({ onExit, onCreated }: {
   const baseInput = (): CreateRtpInput => ({
     nick: nick.trim(), country, role, playstyle: playstyle ?? undefined,
     personality, archetype, age, categoryPoints: points,
+    heir: heir ?? undefined,
   });
 
   // "Criar" agora ABRE A PENEIRA; o save só nasce quando ela termina (com o tier).
@@ -118,6 +127,7 @@ export function RTPCreate({ onExit, onCreated }: {
     if (!t) return;
     const save = createRtpSave({ ...baseInput(), seed: t.seed, startTier, tryoutStrong });
     setTryout(null);
+    clearPendingHeir();
     onCreated(save);
   };
 
@@ -126,6 +136,15 @@ export function RTPCreate({ onExit, onCreated }: {
       <div className="rtp-create-head">
         <h1>{ct('Crie seu jogador')}</h1>
         <p>{ct('Comece como uma promessa de academia. Suas escolhas dentro e fora do servidor definem até onde você chega.')}</p>
+        {heir && (
+          <div className="rtp-chips" style={{ marginTop: 8 }}>
+            <span className="rtp-chip on" title={ct('Herança de carreira: +1 em 2 atributos-chave da função do mentor. Não mexe na peneira.')}>
+              ⏭️ {ct('Discípulo de')} {heir.mentorNick} · {ct('geração')} {heir.generation} · +1 {heirBonusAttrs(heir.mentorRole).join(' / ')}
+              {heir.rival ? ` · ${ct('rixa herdada com')} ${heir.rival.playerNick}` : ''}
+              <button type="button" onClick={dropHeir} title={ct('Começar sem herança')} style={{ marginLeft: 8, background: 'none', border: 0, color: 'inherit', cursor: 'pointer', padding: 0 }}>✕</button>
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="rtp-create-grid">
@@ -317,7 +336,7 @@ export function RTPCreate({ onExit, onCreated }: {
           )}
 
           <div className="rtp-footer-actions">
-            <button type="button" className="rtp-btn-ghost" onClick={onExit}>{ct('Cancelar')}</button>
+            <button type="button" className="rtp-btn-ghost" onClick={() => { clearPendingHeir(); onExit(); }}>{ct('Cancelar')}</button>
           </div>
         </div>
       </div>

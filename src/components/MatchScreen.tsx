@@ -3,6 +3,10 @@ import { LiveCanvasGame } from './LiveCanvasGame';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import { movesFor, isKeyRound, EFFECT_LABEL, type CallMove } from '../engine/career/battleCalls';
+// [W5] identidade tática: a sua (save.identity) + a derivada do adversário; opt-in no sim
+import { derivedIdentity, identityCallOf, identityLabel, scoutingOf, type IdentityCall, type IdentityMod, type TeamIdentity } from '../engine/career/teamIdentity';
+import type { DecisionEvent } from '../engine/roundLog';
+import { DecisionReview } from './DecisionReview';
 import { narrateRound, type RoundNarration } from '../engine/narration';
 import type { Rng } from '../engine/rng';
 import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, Playstyle, SeriesResult, TPlayer, TTeam } from '../types';
@@ -23,6 +27,10 @@ interface Props {
   bestOf?: 1 | 3 | 5;
   onFinish: (series: SeriesResult) => void;
   onDecided?: (series: SeriesResult) => void; // dispara ao DECIDIR a série (antes do Continuar): trava o resultado
+  // [W5] identidade tática do SEU time (save.identity). Sem ela o mapa é o de sempre.
+  identity?: TeamIdentity;
+  // [W5] as chamadas que você fez na série (uma por round jogado) — a Carreira acumula no save.
+  onCalls?: (calls: IdentityCall[]) => void;
 }
 
 const TIMEOUTS_PER_MAP = 2;
@@ -90,7 +98,24 @@ const BUY_LABEL: Record<BuyTier, string> = {
   full: 'FULL BUY',
 };
 
-export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish, onDecided }: Props) {
+export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish, onDecided, identity, onCalls }: Props) {
+  // [W5] identidade nos dois sentidos: a sua (rotulada do save) e a do adversário
+  // (derivada do elenco/coach/playbook). Cada um lê o outro com scoutingOf.
+  const idOpp: 0 | 1 = userIdx === 0 ? 1 : 0;
+  const identityMods = useMemo<IdentityMod[]>(() => {
+    const mine = identityLabel(identity);
+    const opp = identityLabel(derivedIdentity(teams[idOpp]));
+    return [
+      { team: userIdx, label: mine, readBy: scoutingOf(teams[idOpp]), auto: false },
+      { team: idOpp, label: opp, readBy: scoutingOf(teams[userIdx]), auto: true },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, teams, userIdx, idOpp]);
+  const identityCtx = useMemo(() => ({
+    mine: identityMods[0].label, opp: identityMods[1].label,
+    myScouting: identityMods[1].readBy, oppScouting: identityMods[0].readBy,
+  }), [identityMods]);
+  const callsRef = useRef<IdentityCall[]>([]);
   const { t, lang } = useLang();
   const L = LOCAL[(lang as 'pt' | 'en' | 'es')] ?? LOCAL.pt;
   const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
@@ -140,7 +165,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const [lastCall, setLastCall] = useState<{ call: RoundCall; stance: Stance; won: boolean; round: number; odds: number } | null>(null);
   // golpe escolhido no freezetime (quem executa + como se chama), pra a
   // animação de resolução saber o que mostrar. Ref: é lido no passo do round.
-  type ChosenMove = { label: string; nick: string; icon: string; effect: 'super' | 'weak' | 'neutral'; attrLabel: string; attr: number };
+  type ChosenMove = { label: string; nick: string; icon: string; effect: 'super' | 'weak' | 'neutral'; attrLabel: string; attr: number; alternatives?: number[] };
   const chosenMoveRef = useRef<ChosenMove | null>(null);
   const [strike, setStrike] = useState<(ChosenMove & { won: boolean; round: number; odds: number }) | null>(null);
   // placar das suas calls NESTE mapa (reseta a cada mapa): mostra o impacto
@@ -151,6 +176,14 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const decisionLog = useRef<{ mapIdx: number; call: RoundCall; stance: Stance; won: boolean; round: number; odds: number }[]>([]);
   const endedMapsRef = useRef<Set<number>>(new Set());
   const mapTransitionRef = useRef<number | null>(null);
+  // [W3] PÓS-JOGO COM EVIDÊNCIA: um DecisionEvent por escolha sua (golpe da
+  // Chamada ou call solta), com a % do peekWinProb ANTES do round e o que o
+  // roundLog do sim deu. Alimenta o painel SUAS CHAMADAS e o InsightPanel.
+  const eventsLog = useRef<DecisionEvent[]>([]);
+  // snapshot do log pro render do pós-jogo (ref não se lê durante o render).
+  const [events, setEvents] = useState<DecisionEvent[]>([]);
+  const stakesOf = (isPistol: boolean, score: [number, number], round: number): DecisionEvent['stakes'] =>
+    isPistol ? 'pistol' : round >= 24 ? 'overtime' : (score[0] === 12 || score[1] === 12) ? 'matchpoint' : 'normal';
 
   useEffect(() => () => {
     if (mapTransitionRef.current !== null) window.clearTimeout(mapTransitionRef.current);
@@ -180,14 +213,14 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   useEffect(() => {
     if (!finished) return;
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (!decidedRef.current) { decidedRef.current = true; onDecided?.(buildSeries()); }
+    if (!decidedRef.current) { decidedRef.current = true; onDecided?.(buildSeries()); onCalls?.(callsRef.current); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
   const getSim = (idx: number): MapSim => {
     const safe = Math.min(idx, maps.length - 1); // guarda defensiva contra índice além do veto
     if (!simsRef.current[safe]) {
-      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy);
+      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy, { identity: identityMods });
     }
     return simsRef.current[safe];
   };
@@ -205,6 +238,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     if (seriesOver()) {
       const s = buildSeries();
       setSeries(s);
+      setEvents([...eventsLog.current]);
       setFinished(true);
     } else {
       const next = maps[mapIdx + 1];
@@ -249,6 +283,8 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         const c = callKind ? ({ team: userIdx, kind: callKind } as const) : undefined;
         buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
         const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
+        const preScore: [number, number] = userIdx === 0 ? sim.score() : [sim.score()[1], sim.score()[0]];
+        callsRef.current.push(identityCallOf(sim.side()[userIdx], sim.buys()[userIdx], stanceMod?.mode, callKind)); // [W5]
         if (boostRounds - boostsUsed > 0) {
           sim.step(userIdx, stanceMod, c);
           boostsUsed++;
@@ -261,6 +297,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           setLastCall({ call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
           setCallRecord((r) => ({ made: r.made + 1, won: r.won + (won ? 1 : 0) }));
           decisionLog.current.push({ mapIdx, call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
+          eventsLog.current.push({
+            source: 'career', map: maps[Math.min(mapIdx, maps.length - 1)].map, round: sim.round(),
+            label: t(CALLS.find((x) => x.key === callKind)!.labelKey), pWin: odds, won,
+            stakes: stakesOf(buysByRound.current[`${mapIdx}:${sim.round() - 1}`]?.[userIdx] === 'pistol', preScore, sim.round() - 1),
+          });
           callRef.current = null;
           setPendingCall(null);
         }
@@ -296,6 +337,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     // #20: tática de site vale 1 round e some (informação oculta — resolve no step)
     const siteKind = siteRef.current;
     const wasCt = sim.side()[userIdx] === 'ct';
+    // [W3] contexto ANTES do round (o step muda placar/round) — pro DecisionEvent.
+    const preRound = sim.round();
+    const preScore: [number, number] = userIdx === 0 ? sim.score() : [sim.score()[1], sim.score()[0]];
+    const preStakes = stakesOf(sim.buys()[userIdx] === 'pistol', preScore, preRound);
+    callsRef.current.push(identityCallOf(sim.side()[userIdx], sim.buys()[userIdx], stanceMod?.mode, c?.kind ?? null)); // [W5]
     sim.step(boost ? userIdx : null, stanceMod, c, siteKind ? { team: userIdx, site: siteKind } : undefined);
     if (siteKind) {
       const ls = sim.lastSite();
@@ -323,6 +369,18 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       const wonRound = log[log.length - 1] === userIdx;
       setStrike({ ...mv, won: wonRound, round: sim.round(), odds: oddsShown });
       chosenMoveRef.current = null;
+      eventsLog.current.push({
+        source: 'career', map: maps[Math.min(mapIdx, maps.length - 1)].map, round: preRound + 1,
+        label: mv.label, actor: mv.nick, pWin: oddsShown, won: wonRound, stakes: preStakes,
+        ...(mv.alternatives?.length ? { alternatives: mv.alternatives } : {}),
+      });
+    } else if (c && callKind) {
+      // call solta (sem golpe): mesma evidência, sem executor nomeado.
+      const log = sim.roundLog();
+      eventsLog.current.push({
+        source: 'career', map: maps[Math.min(mapIdx, maps.length - 1)].map, round: preRound + 1,
+        label: t(CALLS.find((x) => x.key === callKind)!.labelKey), pWin: odds, won: log[log.length - 1] === userIdx, stakes: preStakes,
+      });
     }
     setTick((t) => t + 1);
     if (sim.done()) onMapEnded(sim);
@@ -399,6 +457,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     setMapIdx(Math.min(idx, maps.length - 1));
     const s = buildSeries();
     setSeries(s);
+    setEvents([...eventsLog.current]);
     setFinished(true);
     setPausedMsg('');
   };
@@ -476,9 +535,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       isPistol: myBuy === 'pistol',
       momentum: mom.team === -1 ? 0 : (mom.team === userIdx ? mom.len : -mom.len),
       target: 13,
+      identity: identityCtx,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tactical, finished, mapIdx, tick, userIdx, mySide, myBuy]);
+  }, [tactical, finished, mapIdx, tick, userIdx, mySide, myBuy, identityCtx]);
 
   // round que MERECE virar turno (pistola, match point, sequência, OT). Nos
   // demais o mapa corre no ritmo normal — 24 perguntas por mapa viraria trabalho.
@@ -499,7 +559,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     setPendingCall(m.call);
     // guarda QUEM vai executar pra animação do golpe saber o nome/ícone quando
     // o round resolver (o pendingCall sozinho só carrega a mecânica).
-    chosenMoveRef.current = { label: m.label, nick: m.by.nick, icon: m.icon, effect: m.effect, attrLabel: m.attrLabel, attr: m.attr };
+    chosenMoveRef.current = {
+      label: m.label, nick: m.by.nick, icon: m.icon, effect: m.effect, attrLabel: m.attrLabel, attr: m.attr,
+      // [W3] a % das OUTRAS opções do leque na hora — a régua da nota de decisão.
+      alternatives: myMoves.filter((x) => x.id !== m.id).map(moveProb),
+    };
   };
 
   const playerById = useMemo(() => {
@@ -964,7 +1028,19 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         <DecisionRecapPanel decisions={decisionLog.current} series={series} maps={maps} teams={teams} userIdx={userIdx} />
       )}
 
-      {finished && series && <InsightPanel series={series} teams={teams} userIdx={userIdx} />}
+      {/* [W3] SUAS CHAMADAS — o pós-jogo com evidência (mesma tabela da Sala do RtP) */}
+      {finished && series && (
+        <DecisionReview
+          mode="career"
+          title={ct('SUAS CHAMADAS')}
+          nick={teams[userIdx].tag ? `[${teams[userIdx].tag}] ${teams[userIdx].name}` : teams[userIdx].name}
+          events={events}
+          won={series.winner === userIdx}
+          scoreLabel={`${series.mapScore[userIdx]} — ${series.mapScore[userIdx === 0 ? 1 : 0]} vs ${teams[userIdx === 0 ? 1 : 0].tag || teams[userIdx === 0 ? 1 : 0].name}`}
+        />
+      )}
+
+      {finished && series && <InsightPanel series={series} teams={teams} userIdx={userIdx} events={events} />}
 
       {finished && series && (
         <>
@@ -1349,9 +1425,9 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
   );
 }
 
-function InsightPanel({ series, teams, userIdx }: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1 }) {
+function InsightPanel({ series, teams, userIdx, events }: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; events?: DecisionEvent[] }) {
   const { t } = useLang();
-  const insight = useMemo(() => analyzeSeries(series, teams, userIdx), [series, teams, userIdx]);
+  const insight = useMemo(() => analyzeSeries(series, teams, userIdx, events), [series, teams, userIdx, events]);
   return (
     <div className="panel insight-panel fade-in">
       <div className="panel-head">{t('match.seriesAnalysis')}</div>

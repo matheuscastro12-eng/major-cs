@@ -1,11 +1,18 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { Flag } from '../ui';
 import { RtpIcon } from './RtpIcon';
 import { legacyScore, legacyTier, traitById } from '../../engine/rtp/perks';
 import { archetypeDef } from '../../engine/rtp/createSave';
 import { LEGEND_MARKS, legendBoard } from '../../engine/rtp/legends';
-import { recordCareerInHall, type HallCareer } from '../../state/rtpHall';
+import {
+  recordCareerInHall, saveLegacyProfile, setPendingHeir, setPendingLegacyCoach, type HallCareer,
+} from '../../state/rtpHall';
+import { getManager } from '../../state/manager';
+import { useUltimate } from '../../state/ultimate';
+import {
+  coachFromLegacy, heirFromLegacy, iconFromLegacy, legacyCardKey, legacyFromSave,
+} from '../../engine/bridge/legacyBridge';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
 // Tela de LEGADO (RTP v10): encerra a carreira na aposentadoria. Resumo dos
@@ -32,8 +39,39 @@ export function RtpLegacy({ save, onReset, onExit }: {
 
   // Arquiva no hall entre carreiras no primeiro render (lazy init — roda uma vez;
   // idempotente por id, então re-montar a tela não duplica a entrada).
-  const [hall] = useState<HallCareer[]>(() => recordCareerInHall(save));
+  // [W2] LEGADO: o perfil completo (stats reais, traits, rival) fica gravado
+  // junto do hall — é dele que saem o treinador, o card e o discípulo.
+  const profile = useMemo(() => legacyFromSave(save), [save]);
+  const [hall] = useState<HallCareer[]>(() => { saveLegacyProfile(profile); return recordCareerInHall(save); });
   const hallId = `hof-${save.createdAt || save.rng.seed}`;
+
+  // Card do Ultimate: concedido UMA vez por carreira (marca em objectivesClaimed).
+  const card = useMemo(() => iconFromLegacy(profile), [profile]);
+  const cardKey = legacyCardKey(profile.id);
+  const claimLegacyCard = useUltimate((st) => st.claimLegacyCard);
+  const cardClaimed = useUltimate((st) => st.state.profile.objectivesClaimed.includes(`legacy:${cardKey}`));
+  const [cardMsg, setCardMsg] = useState<string | null>(null);
+  const claimCard = () => {
+    const r = claimLegacyCard(cardKey);
+    setCardMsg(r.ok ? ct('Card na sua coleção do Ultimate. Vai lá escalar.') : r.already ? ct('Esse card já é seu.') : ct('Não deu pra gerar o card agora.'));
+  };
+
+  // Treinador na Carreira: deixa o ex-pro pendente e abre o ManagerSetup
+  // (rota /criar-manager — o App sincroniza a tela pelo popstate).
+  const becomeCoach = () => {
+    setPendingLegacyCoach(coachFromLegacy(profile, getManager()?.org ?? ''));
+    window.history.pushState({}, '', '/criar-manager');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  // Próxima geração: um discípulo herda país, +1 em 2 atributos da função do
+  // mentor e a rivalidade (texto). O save atual é apagado (onReset) e a criação
+  // abre já com o herdeiro pendente.
+  const nextGeneration = () => {
+    const gen = (save.lineage?.generation ?? 1) + 1;
+    setPendingHeir(heirFromLegacy(profile, gen));
+    onReset();
+  };
 
   const verdict = legacy >= 700
     ? ct('Uma LENDA do Counter-Strike. Seu nome fica gravado na história do jogo.')
@@ -162,6 +200,37 @@ export function RtpLegacy({ save, onReset, onExit }: {
             </div>
           </div>
         )}
+
+        {/* [W2] LEGADO — a ponte: o aposentado segue vivo nos outros modos */}
+        <div className="rtp-legacy-section">
+          <div className="rtp-legacy-section-h">{ct('Seu legado continua')}</div>
+          <div className="rtp-tl rtp-tl-legacy">
+            <div className="rtp-tl-row">
+              <span className="rtp-tl-when">🎓</span>
+              <div className="rtp-tl-info">
+                <b>{ct('Virar treinador com')} {player.nick}</b>
+                <span>{ct('Abre a Carreira com o ex-pro no banco: nick, país e idade de aposentadoria já preenchidos.')}{profile.majors > 0 || profile.titles > 0 ? ` ${ct('Ex-pro')} · ${profile.majors} Major(s) · ${profile.titles} ${ct('título(s)')}.` : ''}</span>
+              </div>
+              <button type="button" className="rtp-btn-ghost" onClick={becomeCoach}>{ct('Ir pro banco')} →</button>
+            </div>
+            <div className="rtp-tl-row">
+              <span className="rtp-tl-when">🃏</span>
+              <div className="rtp-tl-info">
+                <b>{ct('Card LEGADO no Ultimate')} · {card.ovr} OVR · {card.role}</b>
+                <span>{ct('Gerado dos seus números reais (pico')} {profile.peakOvr}). {ct('Uma vez por carreira, sem moeda. Aparece no Squad Builder com a moldura LEGADO.')}{cardMsg ? ` ${cardMsg}` : ''}</span>
+              </div>
+              <button type="button" className="rtp-btn-ghost" onClick={claimCard} disabled={cardClaimed}>{cardClaimed ? ct('Já é seu') : ct('Pegar card')}</button>
+            </div>
+            <div className="rtp-tl-row">
+              <span className="rtp-tl-when">⏭️</span>
+              <div className="rtp-tl-info">
+                <b>{ct('Próxima geração: um discípulo de')} {player.nick}</b>
+                <span>{ct('Nova carreira com herança: +1 em 2 atributos de')} {profile.role}{profile.rival ? `, ${ct('e a rixa com')} ${profile.rival.playerNick} ${ct('vem junto')}` : ''}. {ct('Apaga este save.')}</span>
+              </div>
+              <button type="button" className="rtp-btn-ghost" onClick={nextGeneration}>{ct('Passar o bastão')} →</button>
+            </div>
+          </div>
+        </div>
 
         <div className="rtp-legacy-actions">
           <button type="button" className="rtp-cta" onClick={onReset}>{ct('Começar nova carreira')} →</button>

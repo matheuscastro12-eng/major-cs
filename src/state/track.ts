@@ -133,10 +133,17 @@ export function trackCheckoutError(method: 'stripe' | 'pix', reason: string): vo
 //   week N  → sobreviveu até a semana N (2..DEMO_WEEKS+1)
 //   ...então paywall_view 'rtp-demo-gate' (trava) e checkout_open src 'rtp-demo'.
 //
+// [W1] CLIFFHANGER: na última semana grátis chega uma proposta de clube maior
+// que só a vitalícia deixa aceitar (engine/rtp/demoCliff.ts). Dois degraus a
+// mais medem o gancho contra a trava antiga:
+//   cliff_view    → o jogador VIU a proposta (banner da semana 3 ou trava)
+//   cliff_expired → voltou depois das 48h e achou a proposta expirada
+// e o checkout que nasce do gancho leva src 'rtp-demo-cliff' (vs 'rtp-demo').
+//
 // Custo: ~5 eventos por sessão de demo, todos dentro de uma janela em que o
 // compute do Neon já está acordado — não estende active_time, que é o que
 // realmente pesa na conta. Dedupe por sessão em cada passo.
-export type RtpDemoStep = 'open' | 'created' | 'week';
+export type RtpDemoStep = 'open' | 'created' | 'week' | 'cliff_view' | 'cliff_expired';
 
 export function trackRtpDemo(step: RtpDemoStep, week?: number): void {
   const key = week === undefined ? `rtp_demo_${step}` : `rtp_demo_${step}_${week}`;

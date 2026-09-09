@@ -4,6 +4,7 @@
 // montava as props derivadas (squadPlayers, avg, form, chem, tasks, recentMatches,
 // potentialMap, ages, oppScoutStats). Esta page faz o mesmo.
 
+import type { TeamIdentity } from '../../engine/career/teamIdentity';
 import {
   CareerOverview,
   type OverviewNewsRow,
@@ -50,6 +51,7 @@ interface OverviewTabSave {
   youthDebut?: Record<string, YouthDebut>;
   gamePlan?: GamePlan;
   news?: OverviewNewsRow[];
+  identity?: TeamIdentity; // [W5]
   [key: string]: unknown;
 }
 
@@ -178,6 +180,7 @@ export function OverviewTab({
       fam={fam}
       tasks={tasks}
       vrsRanking={vrsAll}
+      identity={save.identity}
       recentMatches={recentMatches.reverse().slice(0, 6)}
       oppRank={oppRank}
       contracts={save.contracts ?? {}}

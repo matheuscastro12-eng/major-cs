@@ -2,7 +2,24 @@
 // Setup e usada no MainMenu, no perfil e como semente da org na carreira.
 import { useCallback, useState } from 'react';
 
-export interface Manager { nick: string; name: string; age: number; country: string; accent: string; org: string; }
+export interface Manager {
+  nick: string; name: string; age: number; country: string; accent: string; org: string;
+  // [W2] de onde este manager veio: ex-pro aposentado do Road to Pro (ponte de
+  // legado). Opcional — manager antigo abre sem ele. Ver engine/bridge/legacyBridge.ts.
+  origin?: ManagerOrigin;
+}
+export interface ManagerOrigin {
+  kind: 'rtp-legacy';
+  legacyId: string;
+  role: string;
+  peakOvr: number;
+  titles: number;
+  majors: number;
+  legacy: number;
+  tierLabel: string;
+  retiredYear: number;
+  repBonus: number;   // degraus de reputação inicial (0..2) — a Carreira ainda não lê
+}
 
 const KEY = 'rtm-manager-v1';
 export const ACCENTS = ['#4382b6', '#d8a943', '#6fd06f', '#c792ea', '#e25a5a', '#6fc3df'];

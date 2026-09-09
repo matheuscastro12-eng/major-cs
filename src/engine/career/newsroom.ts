@@ -10,6 +10,8 @@
 // i18n: os textos usam ct() — sem tradução cadastrada caem no pt (padrão do
 // projeto pra flavor text).
 import { ct } from '../../state/career-i18n';
+import type { PlayerPromiseKind } from './playerPromises';
+import type { CoachScar } from './scars';
 
 const hash = (s: string) => {
   let h = 5381;
@@ -358,5 +360,53 @@ export function storyWorldChampion(seed: string, champ: string, league: string, 
   return pick(seed, [
     { title: `${champ} ${ct('campeão na')} ${region}`, body: `${champ} ${ct('venceu o')} ${league}${runnerUp ? ` ${ct('sobre')} ${runnerUp}` : ''}. ${ct('A cena segue fervendo enquanto você disputa a sua região.')}` },
     { title: `${region}: ${ct('a taça do')} ${league} ${ct('ficou com a')} ${champ}`, body: `${runnerUp ? `${ct('Final contra')} ${runnerUp} ${ct('e ')}` : ''}${ct('mais um capítulo na corrida mundial por vagas de Major.')}` },
+  ]);
+}
+
+// ------------------------------------------------- memória (W4: cicatrizes)
+// A redação LEMBRA: na hora da consequência, cita a decisão antiga com os
+// dados reais (split da promessa, nome, o que aconteceu).
+
+const PROMISE_KIND_TEXT: Record<PlayerPromiseKind, string> = {
+  extension: 'renovar o contrato',
+  signing: 'trazer reforço',
+  workload: 'aliviar a carga de jogo',
+};
+
+export function storyPromiseCalledBack(seed: string, nick: string, splitPromised: number, splitNow: number, kind: PlayerPromiseKind, kept: boolean): Story {
+  const what = ct(PROMISE_KIND_TEXT[kind]);
+  const gap = Math.max(0, splitNow - splitPromised);
+  if (kept) return pick(seed, [
+    { title: `${nick}: ${ct('a promessa do Split')} ${splitPromised} ${ct('foi cumprida')}`, body: `${ct('No Split')} ${splitPromised} ${ct('a comissão prometeu')} ${what} ${ct('a')} ${nick}. ${ct('No Split')} ${splitNow}${ct(', palavra honrada. O vestiário anota quem cumpre.')}` },
+    { title: `${ct('Palavra é palavra:')} ${nick} ${ct('cobrou e recebeu')}`, body: `${ct('A promessa de')} ${what} ${ct('foi feita no Split')} ${splitPromised}. ${gap} split${gap === 1 ? '' : 's'} ${ct('depois, no Split')} ${splitNow}${ct(', ela virou fato.')}` },
+  ]);
+  return pick(seed, [
+    { title: `${nick} ${ct('lembra: a promessa do Split')} ${splitPromised} ${ct('caiu no vazio')}`, body: `${ct('No Split')} ${splitPromised} ${ct('a comissão prometeu')} ${what} ${ct('a')} ${nick}. ${ct('Chegou o Split')} ${splitNow} ${ct('e nada. A relação azedou — e o vestiário conversa.')}` },
+    { title: `${ct('Promessa vencida:')} ${nick} ${ct('cobra a comissão')}`, body: `${ct('Foi no Split')} ${splitPromised}: ${what}. ${gap} split${gap === 1 ? '' : 's'} ${ct('depois, no Split')} ${splitNow}${ct(', o prazo estourou sem resposta. Fontes do elenco falam em confiança quebrada.')}` },
+  ]);
+}
+
+export function storyScarEarned(seed: string, scar: CoachScar): Story {
+  const good = scar.tone === 'good';
+  const term = scar.expires == null ? ct('marca permanente') : `${ct('vale até o Split')} ${scar.expires}`;
+  if (good) return pick(seed, [
+    { title: `${ct('Perfil do técnico ganha selo:')} "${scar.name}"`, body: `${scar.origin}. ${ct('No cenário, o rótulo já circula — ')}${term}.` },
+    { title: `"${scar.name}": ${ct('a marca que o técnico construiu')}`, body: `${scar.description} ${ct('Origem:')} ${scar.origin} (${term}).` },
+  ]);
+  return pick(seed, [
+    { title: `${ct('Cicatriz no currículo:')} "${scar.name}"`, body: `${scar.origin}. ${ct('O mercado não esquece rápido — ')}${term}.` },
+    { title: `"${scar.name}": ${ct('a fama que gruda no técnico')}`, body: `${scar.description} ${ct('Origem:')} ${scar.origin} (${term}).` },
+  ]);
+}
+
+export function storyScarCited(seed: string, orgName: string, scar: CoachScar): Story {
+  const good = scar.tone === 'good';
+  if (good) return pick(seed, [
+    { title: `${orgName} ${ct('cita')} "${scar.name}" ${ct('ao sondar o técnico')}`, body: `${ct('Na mesa, o argumento da')} ${orgName} ${ct('foi direto:')} ${scar.origin.toLowerCase()}. ${ct('É o tipo de histórico que abre porta.')}` },
+    { title: `${ct('O currículo fala por si:')} ${orgName} ${ct('quer o técnico')}`, body: `"${scar.name}" ${ct('pesou na conversa com a')} ${orgName}. ${scar.description}` },
+  ]);
+  return pick(seed, [
+    { title: `${orgName} ${ct('lembra de')} "${scar.name}" ${ct('antes de fechar')}`, body: `${ct('Fontes da')} ${orgName} ${ct('citaram o episódio:')} ${scar.origin.toLowerCase()}. ${ct('A desconfiança entrou na negociação.')}` },
+    { title: `"${scar.name}" ${ct('pesa contra o técnico na')} ${orgName}`, body: `${scar.description} ${ct('Na')} ${orgName}${ct(', o histórico virou argumento pra segurar a proposta.')}` },
   ]);
 }

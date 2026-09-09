@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { RTPCreate } from './RTPCreate';
 import { RTPHub } from './RTPHub';
 import { RTPMatch } from './RTPMatch';
@@ -19,6 +19,10 @@ import { acceptOffer, negotiateOffer, declineOffers } from '../../engine/rtp/tra
 import { RtpLegacy } from './RtpLegacy';
 import { RtpDailySeries } from './RtpDailySeries';
 import { RtpDemoGate, DEMO_WEEKS } from './RtpDemoGate';
+import { RtpDemoCliffBanner } from './RtpDemoCliff';
+import { ensureDemoCliff, deliverDemoCliff } from '../../engine/rtp/demoCliff';
+import { RtpEraClose } from './RtpEraClose';
+import { pendingEraStamp, dismissEraClose } from '../../engine/rtp/era';
 import { trackRtpDemo } from '../../state/track';
 import { makeRng } from '../../engine/rng';
 import type { RoadToProSave } from '../../engine/rtp/types';
@@ -67,7 +71,16 @@ function eventMessage(ev: EventEnd): string {
 // semanas jogáveis; depois a RtpDemoGate trava com o CTA da vitalícia. O save
 // é o mesmo formato do completo: comprou → continua daqui (e sobe pra nuvem).
 export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => void; demo?: boolean; onUpgrade?: () => void }) {
-  const [save, setSave] = useState<RoadToProSave | null>(() => loadRtp());
+  // [W1] save da demo carregado já na última semana grátis (ou além) sem o
+  // cliffhanger — chegou lá antes desta versão ou recarregou a página:
+  // materializa (e entrega, se a semana já virou) na hora de carregar.
+  const bootDemo = useCallback((s: RoadToProSave | null): RoadToProSave | null => {
+    if (!demo || !s || s.retired || s.demoCliff || s.world.week < DEMO_WEEKS) return s;
+    const next = deliverDemoCliff(ensureDemoCliff(s), Date.now());
+    if (next !== s) saveRtp(next);
+    return next;
+  }, [demo]);
+  const [save, setSave] = useState<RoadToProSave | null>(() => bootDemo(loadRtp()));
   const [booted, setBooted] = useState(false);
   const [playing, setPlaying] = useState(false);   // hub vs partida (liga)
   const [playingMajor, setPlayingMajor] = useState(false);   // partida do Major
@@ -96,14 +109,14 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
     (async () => {
       const r = await syncRtpFromCloud().catch(() => 'none' as const);
       if (alive && r === 'restored') {
-        setSave(loadRtp());
+        setSave(bootDemo(loadRtp()));
         setNotice({ kind: 'autosim', text: `☁ ${ct('Save do Road to Pro restaurado da nuvem.')}` });
       }
       if (alive && r === 'deleted') setSave(null);
       if (alive) setBooted(true);
     })();
     return () => { alive = false; };
-  }, [account]);
+  }, [account, bootDemo]);
 
   // FUNIL DA DEMO — 'open' é o DENOMINADOR que faltava: quantos de fato entraram
   // na degustação. Até aqui só a trava emitia evento, então dava pra contar quem
@@ -118,11 +131,19 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
 
   // Atualização in-game (treino, ações, virada de semana): persiste e re-renderiza.
   const handleUpdate = (next: RoadToProSave) => {
+    const weekTurned = next.world.week !== save?.world.week;
+    // [W1] CLIFFHANGER: na virada pra última semana grátis a proposta do clube
+    // maior nasce (só na demo); na virada seguinte ela vai pra mesa — é o que o
+    // save promovido (comprou) vê. No-op pra save sem cliffhanger (jogo pago).
+    if (weekTurned) {
+      if (demo && next.world.week === DEMO_WEEKS) next = ensureDemoCliff(next);
+      next = deliverDemoCliff(next, Date.now());
+    }
     setSaveError(!saveRtp(next));
     // FUNIL DA DEMO: só quando a semana REALMENTE vira — handleUpdate roda em
     // treino, ação, transferência etc. É esta série que desenha a curva de
     // desistência dentro da degustação (semana 2, 3 e a virada que trava).
-    if (demo && next.world.week !== save?.world.week) trackRtpDemo('week', next.world.week);
+    if (demo && weekTurned) trackRtpDemo('week', next.world.week);
     setSave(next);
   };
 
@@ -163,11 +184,11 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   // DEMO: a trava fecha quando a degustação acaba (ou quando o convidado
   // tenta abrir a Série do Dia — exclusiva da vitalícia).
   if (demo && (save.world.week > DEMO_WEEKS || dailyOpen)) {
-    return <RtpDemoGate save={save} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
+    return <RtpDemoGate save={save} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
   }
   // SÉRIE DO DIA: desafio global diário — fixture próprio, não toca no seu save.
   if (dailyOpen) {
-    return <RtpDailySeries onExit={() => setDailyOpen(false)} />;
+    return <RtpDailySeries onExit={() => setDailyOpen(false)} save={save} onUpdate={handleUpdate} />;
   }
   if (playing) {
     return (
@@ -215,6 +236,13 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
         onDismiss={() => { if (major.resolved) handleUpdate(dismissMajor(save)); else onExit(); }}
       />
     );
+  }
+
+  // [W6] FECHAMENTO DE ERA: o ano fechou (e o Major, se houve) → carimbo na tela,
+  // uma vez, antes da janela de transferências do ano novo.
+  const eraStamp = pendingEraStamp(save);
+  if (eraStamp) {
+    return <RtpEraClose stamp={eraStamp} nick={save.player.nick} onContinue={() => handleUpdate(dismissEraClose(save))} />;
   }
 
   // Janela de transferências aberta? Tem prioridade sobre o hub.
@@ -271,6 +299,8 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
       {simResult && (
         <RtpSimResult result={simResult.result} consequence={simResult.consequence} onClose={() => setSimResult(null)} />
       )}
+      {/* [W1] última semana grátis: a proposta do clube maior, com resposta trancada */}
+      {demo && save.demoCliff?.status === 'teaser' && <RtpDemoCliffBanner save={save} onUpgrade={() => onUpgrade?.()} />}
     </>
   );
 }

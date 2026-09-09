@@ -16,7 +16,7 @@ import { generateAnalystReport, deskTacticalLine } from '../analystReport';
 import { matchStakes } from './atmosphere';
 import { heroMapComfort } from './meta';
 import type { MatchPrep } from './matchSim';
-import type { RoadToProSave } from './types';
+import type { RoadToProSave, EraStamp } from './types';
 
 const pickBy = <T,>(pool: readonly T[], key: string): T => pool[hashStr(key) % pool.length];
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -187,4 +187,57 @@ export function walkoutCue(matchSeed: number, oppName: string): string {
     `As equipes já caminham pro palco — o túnel do Major espera vocês e o ${oppName}…`,
     `A produção encerra a bancada: as equipes caminham pro palco. É agora.`,
   ] as const, `cue:${matchSeed}`);
+}
+
+// ── [W6] Fechamento de ERA: a bancada encerra o ano ──────────────────────────
+// Falas do fechamento — abertura da bancada + veredito do ano + gancho pro
+// próximo. Camada de apresentação: só reembala o carimbo (EraStamp).
+// Determinístico por (ano, nick); nunca consome RNG do jogo.
+
+export interface EraCloseDesk {
+  opener: string;    // a bancada abre o fechamento
+  verdict: string;   // veredito do ano
+  next: string;      // gancho pro ano seguinte
+}
+
+export function eraCloseDesk(stamp: EraStamp, nick: string): EraCloseDesk {
+  const key = `eraclose:${stamp.year}:${nick}`;
+  const titles = stamp.events.filter((e) => e.place === 1).length;
+  const best = stamp.events.length ? Math.min(...stamp.events.map((e) => e.place)) : 7;
+  const tag = stamp.teamTag;
+  const opener = pickBy([
+    `Luzes baixas, ${stamp.year} acabou. A bancada fecha o ano de ${nick}.`,
+    `Fim de ${stamp.year}. Hora de olhar pra trás — o que ${nick} deixou na mesa?`,
+    `Encerra ${stamp.year}. A mesa revê o ano de ${nick} no ${tag}.`,
+  ] as const, `${key}:open`);
+  const verdict = stamp.majorPlacement === 'champion'
+    ? pickBy([
+        `Campeão do ${stamp.majorName}. Não tem outra palavra pra ${stamp.year}: histórico.`,
+        `${nick} fecha ${stamp.year} com o Major. É disso que carreira é feita.`,
+      ] as const, `${key}:verd`)
+    : titles >= 2
+      ? pickBy([
+          `${titles} troféus num ano. Quem duvidava de ${nick} está calado.`,
+          `Ano de dono: ${titles} títulos e um ${tag} temido em todo lugar.`,
+        ] as const, `${key}:verd`)
+      : titles === 1
+        ? pickBy([
+            `Um título é pouco pra quem quer ser lenda — mas é o primeiro passo, e ${nick} deu.`,
+            `${nick} levantou taça em ${stamp.year}. A mesa quer ver se vira hábito.`,
+          ] as const, `${key}:verd`)
+        : best <= 3
+          ? pickBy([
+              `Playoffs, sem taça. ${stamp.year} foi de encostar no topo sem sentar nele.`,
+              `A mesa viu evolução — faltou a série decisiva. ${nick} sabe disso.`,
+            ] as const, `${key}:verd`)
+          : pickBy([
+              `Ano difícil. ${nick} vai lembrar de ${stamp.year} como o ano que ensinou.`,
+              `Pouca coisa pra comemorar em ${stamp.year}. Mas ${nick} ainda está aqui — e isso conta.`,
+            ] as const, `${key}:verd`);
+  const next = pickBy([
+    `${stamp.year + 1} começa em branco. A régua sobe.`,
+    `Novo ano, novo Major na mira. A mesa acompanha.`,
+    `O ${tag} vira a página. ${nick} também precisa.`,
+  ] as const, `${key}:next`);
+  return { opener, verdict, next };
 }

@@ -3,7 +3,7 @@
 // pro ranking diário. 1 jogada por dia por conta (o servidor garante; o
 // localStorage evita re-abrir). A partida em si é a Sala de sempre.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { track } from '../../state/track';
 import { RtpIcon } from './RtpIcon';
@@ -15,8 +15,11 @@ import {
 import { fetchDailyLadder, fetchDailyWeekLadder, reportDailySeries, loadDailyPlayed, saveDailyPlayed, type DailyLadder, type DailyWeekLadder, type DailyPlayed } from '../../state/dailySeriesApi';
 import { loadGhost } from '../../state/ghost';
 import { useAccount } from '../../state/account';
+import { claimWeeklyTitles, fetchWeekPodium, type WeekPodium } from '../../state/dailyWeekPrizesApi';
+import { applyWeeklyTitles, weeklyTitleClaimText, WEEK_PRIZE_MIN_FIELD } from '../../engine/rtp/weeklyTitles';
 import type { MomentOutcome } from '../../engine/rtp/moments';
 import type { MapId } from '../../types';
+import type { RoadToProSave, WeeklyTitle } from '../../engine/rtp/types';
 
 const ROLE_LABEL: Record<string, string> = {
   Rifler: 'Rifler', AWP: 'AWPer', Entry: 'Entry fragger', IGL: 'Capitão (IGL)', Lurker: 'Lurker', Support: 'Suporte',
@@ -24,7 +27,10 @@ const ROLE_LABEL: Record<string, string> = {
 
 type Phase = 'brief' | 'play' | 'result';
 
-export function RtpDailySeries({ onExit }: { onExit: () => void }) {
+// [W1] `save`/`onUpdate` (opcionais): o pódio SEMANAL vira selo no perfil —
+// o claim (servidor, idempotente) devolve os selos novos e o cliente aplica
+// no save. Sem save (tela avulsa) só mostra o pódio público.
+export function RtpDailySeries({ onExit, save, onUpdate }: { onExit: () => void; save?: RoadToProSave; onUpdate?: (next: RoadToProSave) => void }) {
   const dateKey = dateKeyOf(new Date());
   const ch = useMemo(() => dailyChallengeOf(dateKey), [dateKey]);
   const [played, setPlayed] = useState<DailyPlayed | null>(() => loadDailyPlayed(ch.day));
@@ -44,6 +50,32 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
     void fetchDailyWeekLadder().then((l) => { if (alive) setWeekLadder(l); });
     return () => { alive = false; };
   }, [ch.day, played]);
+
+  // [W1] pódio da última semana fechada (prova social) + claim dos SELOS
+  // (1x por montagem; o servidor só devolve o que ainda não foi coletado).
+  // O selo é aplicado no save NA HORA (padrão coinsClaim) — um claim gravado
+  // e não aplicado seria um título perdido. O callback do claim usa o
+  // save/onUpdate ATUAIS via ref (escrita só em efeito — nunca no render).
+  const [podium, setPodium] = useState<WeekPodium | null>(null);
+  const [newTitles, setNewTitles] = useState<WeeklyTitle[]>([]);
+  const latest = useRef<{ save?: RoadToProSave; onUpdate?: (next: RoadToProSave) => void }>({});
+  useEffect(() => { latest.current = { save, onUpdate }; }, [save, onUpdate]);
+  const canClaim = !!account?.paid && !!save && !!onUpdate;
+  const claimed = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    void fetchWeekPodium().then((p) => { if (alive) setPodium(p); });
+    if (!claimed.current && canClaim) {
+      claimed.current = true;
+      void claimWeeklyTitles().then((titles) => {
+        if (!alive || !titles.length) return;
+        const { save: cur, onUpdate: upd } = latest.current;
+        if (cur && upd) upd(applyWeeklyTitles(cur, titles));
+        setNewTitles(titles);
+      });
+    }
+    return () => { alive = false; };
+  }, [canClaim]);
 
   const onComplete = async (outcomes: MomentOutcome[], liveMaps?: { map: MapId; score: [number, number]; won: boolean }[]) => {
     const result = finishDailySeries(ch, outcomes, liveMaps);
@@ -106,6 +138,15 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
       {ghost && !played && (
         <div className="rtp-daily-ghost">
           🥊 <b>{ghost.nick}</b> {ct('te desafiou')}: {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('nesta série. Jogue a MESMA série e supere.')}
+        </div>
+      )}
+
+      {/* [W1] selo do pódio semanal recém-coletado — já guardado no perfil */}
+      {newTitles.length > 0 && (
+        <div className="rtp-daily-ghost won">
+          {newTitles.map((t) => (
+            <div key={t.week}>{t.place === 1 ? '🏆' : t.place === 2 ? '🥈' : '🥉'} <b>{weeklyTitleClaimText(t)}</b> {ct('Selo guardado no seu perfil.')}</div>
+          ))}
         </div>
       )}
 
@@ -212,6 +253,17 @@ export function RtpDailySeries({ onExit }: { onExit: () => void }) {
           </>
         ) : (
           <p className="rtp-daily-empty">{ct('Semana zerada — o primeiro rating de hoje abre a disputa.')}</p>
+        )}
+        {/* [W1] o que está em jogo na semana + quem levou a última */}
+        {ladderMode === 'semana' && (
+          <div className="rtp-daily-empty" style={{ padding: '6px 0 0' }}>
+            🏆 {ct('O 1º da semana ganha o selo CAMPEÃO DA SEMANA no perfil; 2º e 3º levam o pódio.')} ({ct('mín.')} {WEEK_PRIZE_MIN_FIELD} {ct('na disputa')})
+            {podium && podium.week > 0 && podium.podium.length > 0 && (
+              <div style={{ marginTop: 4 }}>
+                {ct('Semana')} {podium.week}: {podium.podium.map((r) => `${r.place === 1 ? '🏆' : r.place === 2 ? '🥈' : '🥉'} ${r.nick} (${r.pts.toFixed(2)})`).join(' · ')}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

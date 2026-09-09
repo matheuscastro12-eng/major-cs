@@ -52,6 +52,7 @@ interface SquadTabSave {
   playbookMem?: Partial<Record<Playbook, number>>;
   pairChem?: Record<string, number>;
   coachStints?: Array<{ coachNick?: string; [k: string]: unknown }>;
+  scars?: import('../../engine/career/scars').CoachScar[]; // [W4]
   scrimsThisSplit?: number;
   hiredScoutId?: string | null;
   scoutReports?: unknown[];
@@ -179,6 +180,8 @@ export function SquadTab({
         stints={(save.coachStints ?? []) as any}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         coachNick={activeCoachStint((save.coachStints ?? []) as any)?.coachNick}
+        scars={save.scars}
+        split={save.split}
       />
 
       {/* T3.8 → #6: scrim contra adversário real (escolha o sparring) */}
@@ -349,8 +352,8 @@ export function SquadTab({
             title={
               <>
                 {ct('Treino de mapa')}{' '}
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 <span className="muted small" style={{ fontWeight: 400 }}>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   ({mapFocusList(save as any).length}/{MAP_FOCUS_MAX} em foco)
                 </span>
               </>
