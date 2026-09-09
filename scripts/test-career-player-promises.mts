@@ -25,7 +25,7 @@ test('extension: renovar (contrato estendido vs snapshot) cumpre; prazo estourad
   // split 5 (deadline) sem renovar = QUEBRADA
   const broke = judgePlayerPromises(p, ctx());
   assert.equal(broke.promises.p1[0].status, 'broken');
-  assert.deepEqual(broke.outcomes, [{ playerId: 'p1', kind: 'extension', kept: false }]);
+  assert.deepEqual(broke.outcomes, [{ playerId: 'p1', kind: 'extension', kept: false, madeAtSplit: 3, deadlineSplit: 5 }]); // [W4] outcome carrega os splits
   // renovou (contrato agora vai até 9 > snapshot 6) = CUMPRIDA — e ANTES do prazo conta
   const kept = judgePlayerPromises(p, ctx({ split: 4, contractUntil: () => 9 }));
   assert.equal(kept.promises.p1[0].status, 'kept');

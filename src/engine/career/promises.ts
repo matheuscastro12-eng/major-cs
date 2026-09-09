@@ -77,3 +77,13 @@ export function evaluatePromise(p: BoardPromise, ctx: PromiseCtx): boolean {
     case 'noRelegation': return ctx.tierChange !== 'down';
   }
 }
+
+// [W4] LOG das promessas julgadas (append-only, teto de 24). O save só guardava
+// a ÚLTIMA (lastPromise); a fita da carreira e as cicatrizes precisam de todas.
+export const PROMISE_LOG_CAP = 24;
+export function appendPromiseOutcome(log: PromiseOutcome[] | undefined, outcome: PromiseOutcome | null | undefined): PromiseOutcome[] {
+  const cur = log ?? [];
+  if (!outcome) return cur;
+  if (cur.some((o) => o.split === outcome.split && o.text === outcome.text)) return cur; // F5 na tela de fechamento
+  return [...cur, outcome].slice(-PROMISE_LOG_CAP);
+}

@@ -43,7 +43,9 @@ export interface PromiseJudgeCtx {
   fatigue: (pid: string) => number;
 }
 
-export interface PromiseOutcomeHit { playerId: string; kind: PlayerPromiseKind; kept: boolean }
+// [W4] madeAtSplit/deadlineSplit viajam junto pra newsroom citar a decisão antiga
+// ("você prometeu no split 3") e pro evaluateScars saber o que foi quebrado.
+export interface PromiseOutcomeHit { playerId: string; kind: PlayerPromiseKind; kept: boolean; madeAtSplit: number; deadlineSplit: number }
 
 function isFulfilled(pid: string, p: PlayerPromise, ctx: PromiseJudgeCtx): boolean {
   switch (p.kind) {
@@ -75,10 +77,10 @@ export function judgePlayerPromises(
       if (p.status !== 'open') { next.push(p); continue; }
       if (isFulfilled(pid, p, ctx)) {
         next.push({ ...p, status: 'kept' });
-        outcomes.push({ playerId: pid, kind: p.kind, kept: true });
+        outcomes.push({ playerId: pid, kind: p.kind, kept: true, madeAtSplit: p.madeAtSplit, deadlineSplit: p.deadlineSplit });
       } else if (ctx.split >= p.deadlineSplit) {
         next.push({ ...p, status: 'broken' });
-        outcomes.push({ playerId: pid, kind: p.kind, kept: false });
+        outcomes.push({ playerId: pid, kind: p.kind, kept: false, madeAtSplit: p.madeAtSplit, deadlineSplit: p.deadlineSplit });
       } else {
         next.push(p);   // ainda no prazo
       }
@@ -91,4 +93,29 @@ export function judgePlayerPromises(
 // promessa aberta de um tipo já existe? (não deixa empilhar a mesma promessa)
 export function hasOpenPromise(promises: Record<string, PlayerPromise[]> | undefined, pid: string, kind: PlayerPromiseKind): boolean {
   return (promises?.[pid] ?? []).some((p) => p.status === 'open' && p.kind === kind);
+}
+
+// [W4] placar da carreira: quantas promessas a jogadores foram cumpridas e
+// quebradas (insumo de "Palavra de ferro" / "Palavra quebrada" em scars.ts).
+export function tallyPlayerPromises(promises: Record<string, PlayerPromise[]> | undefined): { kept: number; broken: number } {
+  let kept = 0, broken = 0;
+  for (const list of Object.values(promises ?? {})) {
+    for (const p of list) { if (p.status === 'kept') kept++; else if (p.status === 'broken') broken++; }
+  }
+  return { kept, broken };
+}
+
+// [W4] promessas a jogadores que tocam um split (feitas OU julgadas nele) — a
+// fita da carreira usa pra mostrar "prometeu X a Y" no quadrado do split.
+export function playerPromisesTouching(promises: Record<string, PlayerPromise[]> | undefined, split: number): { playerId: string; promise: PlayerPromise; role: 'made' | 'judged' }[] {
+  const out: { playerId: string; promise: PlayerPromise; role: 'made' | 'judged' }[] = [];
+  for (const [pid, list] of Object.entries(promises ?? {})) {
+    for (const p of list) {
+      if (p.madeAtSplit === split) out.push({ playerId: pid, promise: p, role: 'made' });
+      // julgada: quebrada no prazo; cumprida em algum split ≤ prazo (não guardamos
+      // o split exato do cumprimento — só o prazo é certo)
+      else if (p.status === 'broken' && p.deadlineSplit === split) out.push({ playerId: pid, promise: p, role: 'judged' });
+    }
+  }
+  return out;
 }

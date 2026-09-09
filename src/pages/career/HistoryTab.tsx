@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { DashCard } from '../../components/ds';
-import { CareerTimeline } from '../../components/career/CareerTimeline';
+import { CareerTimeline, type TimelineExtras } from '../../components/career/CareerTimeline';
 import { PLACE_SHORT, type SplitRecord } from '../../components/CareerScreen';
 import { ct } from '../../state/career-i18n';
 import { formatMoney } from '../../engine/ratings';
@@ -20,6 +20,8 @@ interface OrgAggregate {
 
 interface Props {
   save: { split: number; history: SplitRecord[] };
+  /** [W4] dados do save pro detalhe clicável da fita (promessas, cicatrizes, passagens) */
+  timelineExtras?: TimelineExtras;
   org: OrgAggregate;
   /** identidade da org pro card de share (nome/tag) */
   identity?: { name: string; tag?: string };
@@ -29,7 +31,7 @@ interface Props {
   hallOfFame?: { id: string; nick: string; peakOvr: number }[];
 }
 
-export function HistoryTab({ save, org, identity, awards, hallOfFame }: Props) {
+export function HistoryTab({ save, org, identity, awards, hallOfFame, timelineExtras }: Props) {
   const [sharing, setSharing] = useState<'idle' | 'busy' | 'saved'>('idle');
 
   const doShareCard = async () => {
@@ -147,7 +149,7 @@ export function HistoryTab({ save, org, identity, awards, hallOfFame }: Props) {
       )}
       <div className="muted small section-label">{ct('Linha do tempo')}</div>
       {/* #51: narrativa visual por temporada (chips de marco); tabela detalhada abaixo */}
-      <CareerTimeline history={save.history} />
+      <CareerTimeline history={save.history} extras={timelineExtras} />
       {save.history.length === 0 ? (
         <p className="muted small">{ct('Sua organização ainda não encerrou nenhum split. A história começa agora.')}</p>
       ) : (

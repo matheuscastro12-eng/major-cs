@@ -13,6 +13,8 @@
 //
 // Storage: `save.coachStints: CoachStint[]` (mais antigo primeiro).
 
+import { activeScars, type CoachScar } from './career/scars';
+
 export interface CoachStint {
   /** Id do coach (= coachFromId). */
   coachId: string;
@@ -111,9 +113,11 @@ export interface CoachSummary {
   reputation: number;
   /** Tier MÉDIO dos clubes treinados (proxy de "topo dos topos") */
   averageTier: number;
+  /** [W4] cicatrizes ATIVAS no split informado (vazio se não passado) */
+  scars: CoachScar[];
 }
 
-export function summarizeCoach(stints: CoachStint[]): CoachSummary {
+export function summarizeCoach(stints: CoachStint[], scars?: CoachScar[], split?: number): CoachSummary {
   const totalStints = stints.length;
   const totalTrophies = stints.reduce((a, s) => a + s.trophies.length, 0);
   const totalWins = stints.reduce((a, s) => a + s.wins, 0);
@@ -142,6 +146,7 @@ export function summarizeCoach(stints: CoachStint[]): CoachSummary {
     winRate,
     reputation,
     averageTier,
+    scars: split != null ? activeScars(scars, split) : (scars ?? []),
   };
 }
 

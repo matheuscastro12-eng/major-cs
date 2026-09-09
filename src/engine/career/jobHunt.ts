@@ -8,6 +8,7 @@
 import type { TeamSeason } from '../../types';
 import { hashStr } from '../../state/hash';
 import { summarizeCoach, type CoachStint } from '../coachCareer';
+import { scarEffects, scarCitedForTier, type CoachScar } from './scars';
 
 export interface JobOffer {
   teamId: string;
@@ -16,8 +17,11 @@ export interface JobOffer {
   colors: [string, string];
   logoUrl?: string;
   tier: number;        // 1-3 (tier do clube)
-  chance: number;      // 0-1, chance HONESTA de contratação
+  chance: number;      // 0-1, chance HONESTA de contratação (já com a cicatriz)
   dream: boolean;      // clube acima do seu nível (aposta longa)
+  // [W4] a cicatriz do técnico que este clube cita na conversa (a que mais pesa
+  // pro tier dele) e quanto ela moveu a chance. undefined = ninguém citou nada.
+  citedScar?: { id: CoachScar['id']; name: string; tone: CoachScar['tone']; delta: number; origin: string };
 }
 
 const MAX_OFFERS = 5;
@@ -43,8 +47,11 @@ export function listJobOffers(
   firedTier: number,
   stints: CoachStint[],
   split: number,
+  scars?: CoachScar[],
 ): JobOffer[] {
   const rep = summarizeCoach(stints ?? []).reputation;
+  // [W4] cicatrizes ativas movem a chance por tier e entram no texto da proposta
+  const fx = scarEffects(scars, split);
   const candidates = world
     .filter(({ t }) => t.team !== firedFromName && t.players.length >= 5)
     .map(({ t, tier }) => ({
@@ -69,16 +76,21 @@ export function listJobOffers(
     }
   }
 
-  const toOffer = (x: { t: TeamSeason; tier: number }, isDream: boolean): JobOffer => ({
-    teamId: x.t.id,
-    name: x.t.team,
-    tag: x.t.tag,
-    colors: x.t.colors,
-    logoUrl: x.t.logoUrl,
-    tier: x.tier,
-    chance: jobChance(rep, x.tier, firedTier),
-    dream: isDream,
-  });
+  const toOffer = (x: { t: TeamSeason; tier: number }, isDream: boolean): JobOffer => {
+    const tierKey = Math.max(1, Math.min(3, x.tier)) as 1 | 2 | 3;
+    const cited = scarCitedForTier(scars, split, x.tier);
+    return {
+      teamId: x.t.id,
+      name: x.t.team,
+      tag: x.t.tag,
+      colors: x.t.colors,
+      logoUrl: x.t.logoUrl,
+      tier: x.tier,
+      chance: Math.max(0.05, Math.min(0.92, jobChance(rep, x.tier, firedTier) + fx.jobChanceByTier[tierKey])),
+      dream: isDream,
+      ...(cited ? { citedScar: { id: cited.scar.id, name: cited.scar.name, tone: cited.scar.tone, delta: cited.delta, origin: cited.scar.origin } } : {}),
+    };
+  };
   return [...(dream ? [toOffer(dream, true)] : []), ...viable.map((v) => toOffer(v, false))];
 }
 
@@ -90,6 +102,16 @@ export function applyForJob(offer: JobOffer, split: number): boolean {
 
 /** Texto de recusa (varia por clube, determinístico). */
 export function rejectionReason(offer: JobOffer): string {
+  // [W4] cicatriz negativa citada pelo clube: a recusa nomeia o episódio
+  if (offer.citedScar && offer.citedScar.delta < 0) {
+    const c = offer.citedScar;
+    const variants = [
+      `não engoliram "${c.name}" — ${c.origin.toLowerCase()}.`,
+      `citaram "${c.name}" na reunião e recuaram.`,
+      `o histórico pesou: "${c.name}" (${c.origin.toLowerCase()}).`,
+    ];
+    return variants[hashStr(`rej:${offer.teamId}:${c.id}`) % variants.length];
+  }
   const variants = offer.dream
     ? [
         'buscam um nome com mais peso internacional agora.',
@@ -102,4 +124,23 @@ export function rejectionReason(offer: JobOffer): string {
         'congelaram a vaga por ora — timing ruim.',
       ];
   return variants[hashStr(`rej:${offer.teamId}`) % variants.length];
+}
+
+/** [W4] Texto da PROPOSTA quando o clube cita uma cicatriz (positiva ou negativa). */
+export function offerPitch(offer: JobOffer): string | null {
+  const c = offer.citedScar;
+  if (!c) return null;
+  const pp = `${c.delta > 0 ? '+' : ''}${Math.round(c.delta * 100)}pp`;
+  if (c.delta > 0) {
+    const variants = [
+      `Querem exatamente isso: "${c.name}" (${pp} na chance).`,
+      `"${c.name}" abriu a porta — ${c.origin.toLowerCase()} (${pp}).`,
+    ];
+    return variants[hashStr(`pitch:${offer.teamId}:${c.id}`) % variants.length];
+  }
+  const variants = [
+    `Desconfiam por "${c.name}" (${pp} na chance).`,
+    `"${c.name}" está na pauta deles — ${c.origin.toLowerCase()} (${pp}).`,
+  ];
+  return variants[hashStr(`pitch:${offer.teamId}:${c.id}`) % variants.length];
 }

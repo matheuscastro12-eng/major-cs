@@ -11,15 +11,20 @@ import {
   reputationLabel,
   type CoachStint,
 } from '../engine/coachCareer';
+import type { CoachScar } from '../engine/career/scars';
+import { ScarPills } from '../components/career/ScarPills';
 
 interface Props {
   stints: CoachStint[];
   /** nick do coach ativo (pra header, se houver) */
   activeCoachNick?: string;
+  /** [W4] cicatrizes do técnico + split atual (ativas em destaque, expiradas apagadas) */
+  scars?: CoachScar[];
+  split?: number;
   onClose?: () => void;
 }
 
-export function CoachProfilePage({ stints, activeCoachNick, onClose }: Props) {
+export function CoachProfilePage({ stints, activeCoachNick, scars, split, onClose }: Props) {
   const summary = useMemo(() => summarizeCoach(stints), [stints]);
   const ordered = useMemo(() => [...stints].reverse(), [stints]); // recente primeiro
   const repColor =
@@ -70,6 +75,16 @@ export function CoachProfilePage({ stints, activeCoachNick, onClose }: Props) {
         <Kpi label="Derrotas" value={summary.totalLosses} icon="x" accent="#e58a8a" />
         <Kpi label="Win rate" value={`${Math.round(summary.winRate * 100)}%`} icon="chart" accent={summary.winRate >= 0.5 ? '#5ed88a' : '#e58a8a'} />
       </div>
+
+      {/* [W4] Cicatrizes — traits adquiridos, com tooltip de origem/efeito/prazo */}
+      {scars && scars.length > 0 && (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <h3 style={{ margin: 0, fontSize: '0.72rem', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--em-muted)' }}>
+            Cicatrizes
+          </h3>
+          <ScarPills scars={scars} split={split ?? Number.MAX_SAFE_INTEGER} showExpired />
+        </section>
+      )}
 
       {/* Timeline de passagens */}
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

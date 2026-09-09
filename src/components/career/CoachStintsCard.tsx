@@ -12,13 +12,18 @@ import {
   summarizeCoach,
   type CoachStint,
 } from '../../engine/coachCareer';
+import type { CoachScar } from '../../engine/career/scars';
+import { ScarPills } from './ScarPills';
 
 interface Props {
   stints: CoachStint[];
   coachNick?: string;
+  /** [W4] cicatrizes do técnico (pills com tooltip) e split atual pra ativo/expirado */
+  scars?: CoachScar[];
+  split?: number;
 }
 
-export function CoachStintsCard({ stints, coachNick }: Props) {
+export function CoachStintsCard({ stints, coachNick, scars, split }: Props) {
   const summary = useMemo(() => summarizeCoach(stints), [stints]);
   const repColor = reputationColor(summary.reputation);
   const repLabel = reputationLabel(summary.reputation);
@@ -38,6 +43,14 @@ export function CoachStintsCard({ stints, coachNick }: Props) {
           <span style={{ color: 'var(--em-text)', fontSize: '0.72rem', fontWeight: 600 }}>{repLabel}</span>
         </div>
       </header>
+
+      {/* [W4] traits adquiridos — o que a carreira gravou no técnico */}
+      {scars && scars.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ ...kickerStyle, fontSize: '0.62rem' }}>Cicatrizes</span>
+          <ScarPills scars={scars} split={split ?? Number.MAX_SAFE_INTEGER} compact />
+        </div>
+      )}
 
       <div style={statsRowStyle}>
         <StatChip label="Stints" value={summary.totalStints} />
