@@ -2,14 +2,20 @@ import { ct } from '../../state/career-i18n';
 import { RtpIcon } from './RtpIcon';
 import { MAP_LABELS } from '../../types';
 import type { ProMatchResult, MatchConsequence } from '../../engine/rtp/matchSim';
+import type { DecisionEvent } from '../../engine/roundLog';
+import { DecisionReview } from '../DecisionReview';
 
 // Resultado do SIMULAR (v15): em vez de uma notificação seca, um modal de
 // transmissão — placar, mapas, a SUA linha (K-D/ADR/rating) e as consequências.
 // O usuário vê a partida que aconteceu, mesmo sem jogá-la.
-export function RtpSimResult({ result, consequence, onClose }: {
+export function RtpSimResult({ result, consequence, onClose, events }: {
   result: ProMatchResult;
   consequence: MatchConsequence;
   onClose: () => void;
+  // [W3] PÓS-JOGO COM EVIDÊNCIA: log de decisões da Sala (RoomState.log). Só
+  // renderiza a seção SUAS DECISÕES quando houver evento — o simular puro não
+  // tem decisão do jogador e segue igual.
+  events?: DecisionEvent[];
 }) {
   const hero = result.userRows.find((r) => r.isHero);
   const ratingTone = result.heroRating >= 1.1 ? 'good' : result.heroRating >= 0.9 ? 'mid' : 'bad';
@@ -45,6 +51,19 @@ export function RtpSimResult({ result, consequence, onClose }: {
         <div className="rtp-cond-chips rtp-simres-deltas">
           {consequence.deltas.map((d, i) => <span key={i} className="rtp-feedback-chip">{d.label} {d.value}</span>)}
         </div>
+
+        {events && events.length > 0 && (
+          <div className="rtp-simres-decisions">
+            <DecisionReview
+              mode="rtp"
+              title={ct('SUAS DECISÕES')}
+              nick={hero?.nick ?? ''}
+              events={events}
+              won={result.won}
+              scoreLabel={`${result.mapScore[0]} — ${result.mapScore[1]} vs ${result.oppTag}`}
+            />
+          </div>
+        )}
 
           <button type="button" className="rtp-cta rtp-simres-cta" onClick={onClose}>{ct('Continuar')} →</button>
         </div>
