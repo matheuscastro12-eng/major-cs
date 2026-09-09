@@ -14,6 +14,7 @@ import {
   type PerkDef, type PerkEffect, type PerkTree,
 } from '../../engine/rtp/perks';
 import { legendBoard, LEGEND_MARKS } from '../../engine/rtp/legends';
+import { weeklyTitleLabel } from '../../engine/rtp/weeklyTitles';
 import type { RoadToProSave } from '../../engine/rtp/types';
 
 // Descreve um efeito de perk/trait em chips curtos e legíveis.
@@ -74,6 +75,7 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
   ];
   const accolades = history.accolades ?? [];
   const timeline = history.timeline ?? [];
+  const weeklyTitles = save.weeklyTitles ?? [];   // [W1] save antigo: sem selos
   // Dinastia & Lendas (RTP v15): placar vs o panteão + recordes vivos.
   const board = legendBoard(save);
   const records = history.records;
@@ -273,10 +275,14 @@ export function RtpProfile({ save, onExit, onReset, onUpdate, onRetire }: {
       </DashCard>
 
       <DashCard title={ct('Conquistas')}>
-        {history.trophies.length === 0 && history.awards.length === 0 ? (
+        {history.trophies.length === 0 && history.awards.length === 0 && weeklyTitles.length === 0 ? (
           <div className="rtp-soon"><RtpIcon name="trophy" size={16} /> {ct('Sem títulos ainda. Suba de divisão e brilhe nos Majors.')}</div>
         ) : (
           <div className="rtp-trophies">
+            {/* [W1] selos do pódio SEMANAL da Série do Dia (mais recente primeiro) */}
+            {[...weeklyTitles].reverse().map((t) => (
+              <span key={`w${t.week}`} className={`rtp-trophy${t.place === 1 ? '' : ' award'}`} title={ct('Série do Dia — pódio semanal')}>{weeklyTitleLabel(t)}</span>
+            ))}
             {history.trophies.map((t, i) => (
               <span key={`t${i}`} className="rtp-trophy"><RtpIcon name="trophy" size={13} /> {t}</span>
             ))}
