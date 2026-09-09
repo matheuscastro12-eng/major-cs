@@ -9,6 +9,9 @@ import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, u
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
 import { countCompletedEras, legendPlayers } from '../../engine/ultimate/icons';
+// [W2] LEGADO: card do pro aposentado do RtP (moldura própria + pool de partidas)
+import { isLegacyCard } from '../../engine/bridge/legacyBridge';
+import { legacyPoolPlayers } from '../../state/rtpHall';
 import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -172,12 +175,17 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
   const foil = FOIL_RARITIES.has(card.rarity);
   const s = cardSkin(card.rarity);
   const px = Math.round(size * 0.06);
+  // [W2] LEGADO: moldura própria (borda dupla âmbar + faixa "LEGADO") sobre a pele de lenda
+  const legacy = isLegacyCard(card);
   return (
     <div style={{ width: size, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: qs != null ? 6 : 0 }}>
-      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: s.bg, border: `1.5px solid ${evo > 0 ? '#22c55e' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px #22c55e, 0 0 20px rgba(34,197,94,0.4)` : s.glow }}>
+      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: legacy ? 'linear-gradient(165deg, #2a1d05 0%, #141821 55%, #3a2a08 100%)' : s.bg, border: `1.5px solid ${evo > 0 ? '#22c55e' : legacy ? '#f3cf6b' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px #22c55e, 0 0 20px rgba(34,197,94,0.4)` : legacy ? `${s.glow}, 0 0 0 2px rgba(243,207,107,0.35)` : s.glow }}>
         <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${s.inner}`, pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${legacy ? 'rgba(243,207,107,0.55)' : s.inner}`, pointerEvents: 'none' }} />
         {foil && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
+        {legacy && (
+          <span style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, letterSpacing: '1px', padding: '1px 6px', borderRadius: 6, background: '#f3cf6b', color: '#141821' }}>LEGADO</span>
+        )}
         {evo > 0 && (
           <span style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, display: 'inline-flex', alignItems: 'center', gap: 1, fontSize: '0.56rem', fontWeight: 900, padding: '1px 6px', borderRadius: 10, background: '#16a34a', color: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>✦{evo}</span>
         )}
@@ -214,7 +222,7 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
           )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 2 }}>
             <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 800, color: s.ink, opacity: 0.72 }}>{REGION_CODE[card.region] ?? 'GLB'}</span>
-            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 900, color: s.label, letterSpacing: '0.2px' }}>· {info.label}</span>
+            <span style={{ fontSize: `${(size / 140) * 0.54}rem`, fontWeight: 900, color: s.label, letterSpacing: '0.2px' }}>· {legacy ? 'Legado do RtP' : info.label}</span>
           </div>
         </div>
         {!compact && (
@@ -630,6 +638,10 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const pool = useMemo(() => [
     ...buildPool(CS2_REAL_2026),
     ...legendPlayers().map(({ player, from, ovr }): PoolPlayer => ({
+      id: player.id, nick: player.nick, country: player.country, role: player.role, ovr, player, from,
+    })),
+    // [W2] seus aposentados do RtP — mesma materialização das lendas
+    ...legacyPoolPlayers().map(({ player, from, ovr }): PoolPlayer => ({
       id: player.id, nick: player.nick, country: player.country, role: player.role, ovr, player, from,
     })),
   ], []);

@@ -492,6 +492,16 @@ export interface RoadToProSave {
   sponsors: PersonalSponsor[];
   retired?: boolean;              // RTP v10 — carreira encerrada (aposentadoria) → tela de legado
   rng: { seed: number; tick: number };   // determinismo (engine/rng.ts)
+  lineage?: RtpLineage;           // [W2] herança de carreira (discípulo de um pro aposentado)
+}
+
+// [W2] Linhagem: este pro é discípulo de um aposentado (new game+). Só
+// identidade + geração; o bônus já foi aplicado nos atributos na criação.
+export interface RtpLineage {
+  mentorId: string;               // id no hall (`hof-…`)
+  mentorNick: string;
+  generation: number;             // 2 = discípulo direto
+  inheritedRival?: string;        // nick do rival herdado (só texto)
 }
 
 // Resumo leve pra listagem de slots (espelha SlotSummary da carreira).
