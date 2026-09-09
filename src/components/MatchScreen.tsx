@@ -3,6 +3,8 @@ import { LiveCanvasGame } from './LiveCanvasGame';
 import { analyzeSeries } from '../engine/insights';
 import { createMapSim, playbookLean, type BuyTier, type MapSim, type RoundCall, type Stance } from '../engine/match';
 import { movesFor, isKeyRound, EFFECT_LABEL, type CallMove } from '../engine/career/battleCalls';
+// [W5] identidade tática: a sua (save.identity) + a derivada do adversário; opt-in no sim
+import { derivedIdentity, identityCallOf, identityLabel, scoutingOf, type IdentityCall, type IdentityMod, type TeamIdentity } from '../engine/career/teamIdentity';
 import type { DecisionEvent } from '../engine/roundLog';
 import { DecisionReview } from './DecisionReview';
 import { narrateRound, type RoundNarration } from '../engine/narration';
@@ -25,6 +27,10 @@ interface Props {
   bestOf?: 1 | 3 | 5;
   onFinish: (series: SeriesResult) => void;
   onDecided?: (series: SeriesResult) => void; // dispara ao DECIDIR a série (antes do Continuar): trava o resultado
+  // [W5] identidade tática do SEU time (save.identity). Sem ela o mapa é o de sempre.
+  identity?: TeamIdentity;
+  // [W5] as chamadas que você fez na série (uma por round jogado) — a Carreira acumula no save.
+  onCalls?: (calls: IdentityCall[]) => void;
 }
 
 const TIMEOUTS_PER_MAP = 2;
@@ -92,7 +98,24 @@ const BUY_LABEL: Record<BuyTier, string> = {
   full: 'FULL BUY',
 };
 
-export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish, onDecided }: Props) {
+export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3, onFinish, onDecided, identity, onCalls }: Props) {
+  // [W5] identidade nos dois sentidos: a sua (rotulada do save) e a do adversário
+  // (derivada do elenco/coach/playbook). Cada um lê o outro com scoutingOf.
+  const idOpp: 0 | 1 = userIdx === 0 ? 1 : 0;
+  const identityMods = useMemo<IdentityMod[]>(() => {
+    const mine = identityLabel(identity);
+    const opp = identityLabel(derivedIdentity(teams[idOpp]));
+    return [
+      { team: userIdx, label: mine, readBy: scoutingOf(teams[idOpp]), auto: false },
+      { team: idOpp, label: opp, readBy: scoutingOf(teams[userIdx]), auto: true },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, teams, userIdx, idOpp]);
+  const identityCtx = useMemo(() => ({
+    mine: identityMods[0].label, opp: identityMods[1].label,
+    myScouting: identityMods[1].readBy, oppScouting: identityMods[0].readBy,
+  }), [identityMods]);
+  const callsRef = useRef<IdentityCall[]>([]);
   const { t, lang } = useLang();
   const L = LOCAL[(lang as 'pt' | 'en' | 'es')] ?? LOCAL.pt;
   const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2
@@ -190,14 +213,14 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   useEffect(() => {
     if (!finished) return;
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (!decidedRef.current) { decidedRef.current = true; onDecided?.(buildSeries()); }
+    if (!decidedRef.current) { decidedRef.current = true; onDecided?.(buildSeries()); onCalls?.(callsRef.current); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
   const getSim = (idx: number): MapSim => {
     const safe = Math.min(idx, maps.length - 1); // guarda defensiva contra índice além do veto
     if (!simsRef.current[safe]) {
-      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy);
+      simsRef.current[safe] = createMapSim(rng, teams[0], teams[1], maps[safe].map, maps[safe].pickedBy, { identity: identityMods });
     }
     return simsRef.current[safe];
   };
@@ -261,6 +284,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
         const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
         const preScore: [number, number] = userIdx === 0 ? sim.score() : [sim.score()[1], sim.score()[0]];
+        callsRef.current.push(identityCallOf(sim.side()[userIdx], sim.buys()[userIdx], stanceMod?.mode, callKind)); // [W5]
         if (boostRounds - boostsUsed > 0) {
           sim.step(userIdx, stanceMod, c);
           boostsUsed++;
@@ -317,6 +341,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     const preRound = sim.round();
     const preScore: [number, number] = userIdx === 0 ? sim.score() : [sim.score()[1], sim.score()[0]];
     const preStakes = stakesOf(sim.buys()[userIdx] === 'pistol', preScore, preRound);
+    callsRef.current.push(identityCallOf(sim.side()[userIdx], sim.buys()[userIdx], stanceMod?.mode, c?.kind ?? null)); // [W5]
     sim.step(boost ? userIdx : null, stanceMod, c, siteKind ? { team: userIdx, site: siteKind } : undefined);
     if (siteKind) {
       const ls = sim.lastSite();
@@ -510,9 +535,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       isPistol: myBuy === 'pistol',
       momentum: mom.team === -1 ? 0 : (mom.team === userIdx ? mom.len : -mom.len),
       target: 13,
+      identity: identityCtx,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tactical, finished, mapIdx, tick, userIdx, mySide, myBuy]);
+  }, [tactical, finished, mapIdx, tick, userIdx, mySide, myBuy, identityCtx]);
 
   // round que MERECE virar turno (pistola, match point, sequência, OT). Nos
   // demais o mapa corre no ritmo normal — 24 perguntas por mapa viraria trabalho.

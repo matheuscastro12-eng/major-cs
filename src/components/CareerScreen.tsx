@@ -49,6 +49,7 @@ import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI'
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
+import { closeMatchIdentity, type TeamIdentity } from '../engine/career/teamIdentity';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries, type MarketSort } from '../engine/career/market';
 import {
@@ -1284,6 +1285,7 @@ interface CareerSave {
   facilities?: Record<string, number>; // centro de treino, analista e psicologo (nivel 0-3)
   scars?: CoachScar[]; // [W4] cicatrizes: traits adquiridos do técnico (ativos + expirados, histórico)
   scarEvents?: ScarEvent[]; // [W4] eventos pontuais que o fechamento não reconstrói (dispensa de estrela infeliz)
+  identity?: TeamIdentity; // [W5] identidade tática emergente (histograma decaído das suas chamadas)
   promiseLog?: PromiseOutcome[]; // [W4] promessas à diretoria já julgadas (append-only, teto 24) — fita e cicatrizes leem
 }
 
@@ -6109,6 +6111,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         bestOf={matchCtx.bestOf}
         onFinish={finish}
         onDecided={commitDecided}
+        identity={save.identity}
+        // [W5] fecha a partida na identidade: decai o passado, grava as chamadas de hoje.
+        // Update funcional (roda DEPOIS do commitDecided no mesmo lote) — não perde o resultado travado.
+        onCalls={(calls) => setSave((s) => { const next = { ...s, identity: closeMatchIdentity(s.identity, calls) }; persist(next); return next; })}
       />
     );
   }
@@ -6721,6 +6727,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             contracts={save.contracts ?? {}}
             potentialMap={teamPotentialMap}
             ages={teamAges}
+            identity={isUserTeam ? save.identity : undefined}
             onBack={closeTeamProfile}
             onOpenPlayer={openPlayerProfile}
           />
