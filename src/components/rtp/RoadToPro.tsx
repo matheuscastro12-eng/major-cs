@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { RTPCreate } from './RTPCreate';
 import { RTPHub } from './RTPHub';
 import { RTPMatch } from './RTPMatch';
@@ -74,12 +74,12 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   // [W1] save da demo carregado já na última semana grátis (ou além) sem o
   // cliffhanger — chegou lá antes desta versão ou recarregou a página:
   // materializa (e entrega, se a semana já virou) na hora de carregar.
-  const bootDemo = (s: RoadToProSave | null): RoadToProSave | null => {
+  const bootDemo = useCallback((s: RoadToProSave | null): RoadToProSave | null => {
     if (!demo || !s || s.retired || s.demoCliff || s.world.week < DEMO_WEEKS) return s;
     const next = deliverDemoCliff(ensureDemoCliff(s), Date.now());
     if (next !== s) saveRtp(next);
     return next;
-  };
+  }, [demo]);
   const [save, setSave] = useState<RoadToProSave | null>(() => bootDemo(loadRtp()));
   const [booted, setBooted] = useState(false);
   const [playing, setPlaying] = useState(false);   // hub vs partida (liga)
@@ -116,7 +116,7 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
       if (alive) setBooted(true);
     })();
     return () => { alive = false; };
-  }, [account]);
+  }, [account, bootDemo]);
 
   // FUNIL DA DEMO — 'open' é o DENOMINADOR que faltava: quantos de fato entraram
   // na degustação. Até aqui só a trava emitia evento, então dava pra contar quem
