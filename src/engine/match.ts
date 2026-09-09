@@ -3,6 +3,8 @@ import { derivePlaystyle } from '../types';
 import type { Rng } from './rng';
 import { weightedIndex } from './rng';
 import { ct } from '../state/career-i18n';
+// [W5] identidade tática: desvio de prob. opt-in (só quando o caller passa `identity`)
+import { econOf, identityRoundDelta, type IdentityAction, type IdentityMod } from './career/teamIdentity';
 
 const playstyleOf = (p: TPlayer): Playstyle => p.playstyle ?? derivePlaystyle(p.role);
 
@@ -317,6 +319,12 @@ export interface StepMods {
   stance?: { team: 0 | 1; mode: Stance };
   call?: Call; // chamada de round (one-shot)
   siteCall?: SiteCall; // #20: tática de SITE do round (T = atacar X · CT = stackar X)
+  identity?: IdentityMod[]; // [W5] identidade tática por time (opt-in; passada no createMapSim)
+}
+
+// [W5] opções da simulação (todas opcionais — sem elas o mapa é bit-a-bit o de sempre)
+export interface MapSimOpts {
+  identity?: IdentityMod[]; // identidade tática de cada time + quanto o outro lê
 }
 
 // #20 — TÁTICA POR SITE: o lado T escolhe (em segredo) o site do ataque; o CT
@@ -351,8 +359,9 @@ export interface MapSim {
   result: () => MapResult; // disponível quando done()
 }
 
-export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 0 | 1 | -1): MapSim {
+export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 0 | 1 | -1, opts?: MapSimOpts): MapSim {
   const stats: Record<string, PlayerMapStats> = {};
+  const identityMods = opts?.identity ?? []; // [W5] vazio = nada muda
   for (const p of [...a.players, ...b.players]) stats[p.id] = emptyStats();
 
   let scoreA = 0;
@@ -432,6 +441,9 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     const isPistol = round === 0 || round === 12;
     const secondHalf = round >= 12;
     const buys = computeBuys();
+    // [W5] faixa econômica NATURAL do round (antes da chamada) — é a que a
+    // identidade registra e lê (mesma régua do leque da Chamada).
+    const naturalEcon = [econOf(buys[0]), econOf(buys[1])] as const;
     // chamada de economia (force/save) sobrescreve a compra do time que chamou.
     // Force exige dinheiro de verdade: sem caixa para um force real, a chamada
     // não inventa armas (senão seria upgrade grátis de eco -7 para force -2.6).
@@ -478,6 +490,27 @@ export function createMapSim(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy:
     if (siteDelta) {
       const d = siteDelta.team === 0 ? siteDelta.delta : -siteDelta.delta;
       pA = Math.max(0.03, Math.min(0.97, pA + d));
+    }
+    // [W5] IDENTIDADE TÁTICA (opt-in): chamada de casa soma (+HOME_PP × força),
+    // adversário que estudou a tendência desconta (−COUNTER_PP × força × scouting).
+    // Desvio direto de probabilidade, como o site — explicável e limitado (±3/±6pp
+    // no máximo). Sem mods a lista é vazia e pA fica intocado (bit-a-bit igual).
+    for (const mod of identityMods) {
+      const t = mod.team;
+      const o: 0 | 1 = t === 0 ? 1 : 0;
+      const actionOf = (team: 0 | 1): IdentityAction | undefined =>
+        (call && call.team === team) || (stance && stance.team === team)
+          ? { call: call && call.team === team ? call.kind : 'default', stance: stance && stance.team === team ? stance.mode : 'default' }
+          : undefined;
+      const oppMod = identityMods.find((m) => m.team === o);
+      const d = identityRoundDelta(mod, {
+        ownerSide: t === 0 ? aSide : bSide,
+        ownerEcon: naturalEcon[t],
+        ownerAction: actionOf(t),
+        oppAction: actionOf(o),
+        oppAuto: oppMod?.auto ?? !teams[o].isUser,
+      });
+      if (d.pp !== 0) pA = Math.max(0.03, Math.min(0.97, pA + (t === 0 ? d.pp : -d.pp)));
     }
     return { pA, buys, aSide, bSide };
   };

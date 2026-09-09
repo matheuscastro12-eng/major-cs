@@ -19,6 +19,9 @@ import {
   IconExternal, IconFastForward, IconPlay, IconSwords, IconTrophy,
   IconTriangleDown, IconTriangleUp, StarRating,
 } from './DashIcons';
+// [W5] identidade tática: a sua (save) e a do próximo adversário (derivada)
+import { derivedIdentity, identityLabel, scoutingOf, type TeamIdentity } from '../../engine/career/teamIdentity';
+import { IdentityCard } from './IdentityCard';
 
 export type OverviewPlayerStat = {
   id: string; nick: string; country: string; role: string;
@@ -63,6 +66,7 @@ export function CareerOverview({
   onPickTeam, onPickPlayer, onSquad, gamePlanPicker, oppScoutStats,
   news, onOpenNews, board, boardLog,
   promise, promiseOffers, onPromise,
+  identity,
 }: {
   save: { org?: { name?: string; tag?: string; colors?: [string, string]; logo?: string }; circuit?: { name?: string }; split: number; titles?: number; budget: number; tier?: number };
   league: League;
@@ -110,7 +114,12 @@ export function CareerOverview({
   promise?: BoardPromise | null; // #10: promessa formal ativa (julgada no fim do split)
   promiseOffers?: BoardPromise[] | null; // ofertas do split (null = já firmou/indisponível)
   onPromise?: (p: BoardPromise) => void; // firmar a promessa (aporte cai na hora)
+  identity?: TeamIdentity; // [W5] save.identity — histograma das suas chamadas
 }) {
+  // [W5] rótulos emergentes (puros; sem % nova — só apresentação)
+  const myIdentity = identityLabel(identity);
+  const oppIdentity = opp ? identityLabel(derivedIdentity(opp)) : null;
+  const oppScouting = opp ? scoutingOf(opp) : 0;
   const eventName = save.circuit?.name ?? ct('Circuito');
   const oppPlayers = opp?.players ?? [];
   const oppTop = [...oppPlayers].sort((a, b) => playerOvr(b) - playerOvr(a)).slice(0, 2);
@@ -290,6 +299,21 @@ export function CareerOverview({
             </div>
           </DashCard>
         )}
+
+        {/* [W5] IDENTIDADE — o que as suas chamadas dizem, e quem te lê */}
+        <DashCard title={ct('Identidade tática')} className="em-identity-dash-card" info={ct('Rótulo emergente das chamadas que você faz. Chamada de casa dá bônus; quem te estuda contra.')}>
+          <div style={{ display: 'grid', gridTemplateColumns: oppIdentity ? 'repeat(auto-fit, minmax(240px, 1fr))' : '1fr', gap: 14 }}>
+            <IdentityCard
+              title={ct('Você')}
+              label={myIdentity}
+              readBy={opp ? { tag: opp.tag, scouting: oppScouting } : null}
+              compact
+            />
+            {opp && oppIdentity && (
+              <IdentityCard title={`${ct('Leitura:')} ${opp.tag}`} label={oppIdentity} opponent compact />
+            )}
+          </div>
+        </DashCard>
 
         <div className="em-row-2">
           <DashCard title={ct('Finanças')} className="em-fin-card">
