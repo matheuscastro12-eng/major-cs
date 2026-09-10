@@ -91,6 +91,14 @@ export function Home({
     if (premiumLocked && onRoadToPro) trackPaywallView('home-rtp');       // card RtP com cadeado
     if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
     if (accountReady && account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
+    // funil: dado real (28d) mostra a Home dominada por CONVIDADOS (2206 sids
+    // vendo o chip do header, a maior audiência única do jogo), mas a pill
+    // "Vire Fundador" — CTA mais visível do menu, com preço/benefícios/prova
+    // social — só aparecia pra quem já tinha conta grátis. Convidado ficava só
+    // com o chip pequeno do canto (acct-chip-guest), que converte pior que
+    // qualquer outra superfície de peso (0,6% vs 2-7% do resto do funil).
+    // src próprio (home-pill-guest) pra medir separado do chip e da pill de conta grátis.
+    if (accountReady && !account) trackPaywallView('home-pill-guest'); // mesma pill, agora também pro convidado
   }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account]);
 
   // prova social real: contador de Fundadores (null = sem dado → não mostra nada)
@@ -146,11 +154,21 @@ export function Home({
                 e a pessoa (maior intenção do funil: já é usuária, clicou pra
                 pagar) trava num formulário sem saída óbvia. Vai direto pro
                 pagamento com a sessão que já existe, sem pedir e-mail/senha de novo. */}
-            {accountReady && account && !account.paid && (
+            {/* funil (iteração seguinte): a MESMA pill acima só existia pra quem já
+                tinha conta grátis — convidado (maior audiência única da Home, dado
+                real 28d) não via nenhuma versão dela e ficava só com o chip pequeno
+                do header, que converte bem abaixo do resto do funil. Reaproveita o
+                componente já validado (preço, benefícios, prova social real) e só
+                troca o destino do clique: convidado vai pro cadastro (onCreateAccount),
+                conta grátis vai direto pro pagamento (onUpgrade) como já fazia. */}
+            {accountReady && (account ? !account.paid : true) && (
               <>
                 <button
                   type="button"
-                  onClick={() => { setCheckoutSrc('home-pill'); onUpgrade?.(); }}
+                  onClick={() => {
+                    if (account) { setCheckoutSrc('home-pill'); onUpgrade?.(); }
+                    else { setCheckoutSrc('home-pill-guest'); onCreateAccount?.(); }
+                  }}
                   className="rtm-supporter-pill"
                   title={ct('Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras')}
                 >
