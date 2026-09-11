@@ -22,12 +22,13 @@ import { makeRng } from '../src/engine/rng.js';
 import type { UltCard } from '../src/engine/ultimate/cards.js';
 import { packById, rollPack, type PackDef } from '../src/engine/ultimate/packs.js';
 import { monthIndex } from '../src/engine/ultimate/promos.js';
+import { weeklyPackPool } from '../src/engine/ultimate/packPool.js';
 import { ULT_CATALOG_MONTHS, ULT_SNAPSHOT_FIRST_MONTH, ULT_SNAPSHOT_LAST_MONTH, type SnapCard } from './ultimate-catalog.snapshot.js';
 import { applyUltTransaction, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
 
 // versão do motor de roll gravada no ledger — se as odds/engine mudarem um dia,
 // dá pra saber COM QUAL versão cada pack foi rolado.
-export const ULT_PACK_ENGINE_VERSION = 'ult-pack-v1';
+export const ULT_PACK_ENGINE_VERSION = 'ult-pack-v2-weekly';
 
 // ------------------------------------------------------------------ catálogo
 
@@ -74,10 +75,11 @@ export function randomSeed32(): number {
 
 // Roll determinístico: mesma (packId, seed, catálogo) ⇒ mesmas cartas, na
 // mesma ordem. É EXATAMENTE o rollPack do cliente com o rng seedado.
-export function rollPackServer(args: { packId: string; seed: number; catalog: UltCard[] }): UltCard[] | null {
+export function rollPackServer(args: { packId: string; seed: number; catalog: UltCard[]; now?: Date }): UltCard[] | null {
   const pack = serverPackDef(args.packId);
   if (!pack) return null;
-  return rollPack(args.catalog, pack, makeRng(args.seed >>> 0));
+  const pool = pack.id === 'totw' ? (args.now ? weeklyPackPool(args.catalog, args.now) : null) : args.catalog;
+  return pool ? rollPack(pool, pack, makeRng(args.seed >>> 0)) : null;
 }
 
 // ------------------------------------------------------------------ packOpen
@@ -91,6 +93,7 @@ export interface PackOpenCard {
 export type PackOpenResult =
   | { ok: true; replayed: boolean; credits: number; packId: string; cost: number; seed: number; cards: PackOpenCard[] }
   | { ok: false; error: 'unknown_pack' }
+  | { ok: false; error: 'pack_unavailable' }
   | { ok: false; error: 'insufficient_credits'; credits: number }
   | { ok: false; error: 'op_conflict' }; // op_id já usado por outra tx que não é pack
 
@@ -115,7 +118,21 @@ export async function openPack(
   const seed = (opts?.seed ?? randomSeed32()) >>> 0;
   const uuid = opts?.uuid ?? randomUUID;
 
-  const rolled = rollPack(catalog, pack, makeRng(seed));
+  const rolled = rollPackServer({ packId: pack.id, seed, catalog, now });
+  if (!rolled) {
+    // Mesmo com pool expirado, retry de operação já paga deve recuperar o
+    // ledger original. Não criar transação nem debitar em abertura nova.
+    const prior = await sql`SELECT kind, cards, meta FROM rtm_ult_ledger WHERE email=${email} AND op_id=${req.opId}`;
+    const row = prior[0];
+    if (!row) return { ok: false, error: 'pack_unavailable' };
+    const meta = (row.meta ?? {}) as Record<string, unknown>;
+    if (row.kind !== 'pack' || meta.packId !== pack.id) return { ok: false, error: 'op_conflict' };
+    const wallet = await sql`SELECT credits FROM rtm_ult_wallet WHERE email=${email}`;
+    const ops = (Array.isArray(row.cards) ? row.cards : []) as { cardId: string; cardKey: string }[];
+    return { ok: true, replayed: true, credits: Number(wallet[0]?.credits ?? 0), packId: pack.id, cost: pack.cost,
+      seed: Number(meta.seed ?? 0) >>> 0,
+      cards: ops.map((op) => ({ ...op, card: index.get(op.cardKey) ?? null })) };
+  }
   const cardOps: UltCardOp[] = rolled.map((c) => ({
     op: 'add',
     cardId: uuid(),

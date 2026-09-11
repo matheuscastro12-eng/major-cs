@@ -411,7 +411,7 @@ async function postPackOpen(opId: string, packId: string): Promise<{ status: num
 // crash reenvia o MESMO op_id e recebe as mesmas cartas (replay idempotente).
 // 'op_conflict' (op_id já usado por tx que NÃO é pack — registro corrompido):
 // descarta o pendente, gera op_id novo e tenta UMA vez.
-export async function openPackOnServer(packId: string): Promise<ServerPackResult | null> {
+export async function openPackOnServer(packId: string): Promise<ServerPackResult | { unavailable: true } | null> {
   try {
     if (!cloudEnabled()) return null;
     let pending = readPendingOpen();
@@ -426,6 +426,10 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
       opId = makeOpId();
       writePendingOpen({ opId, packId, t: Date.now() });
       r = await postPackOpen(opId, packId);
+    }
+    if (r.status === 409 && r.data?.error === 'pack_unavailable') {
+      clearPendingOpen();
+      return { unavailable: true };
     }
     if (r.status >= 200 && r.status < 300 && r.data) {
       const rawCards = Array.isArray(r.data.cards) ? r.data.cards : [];

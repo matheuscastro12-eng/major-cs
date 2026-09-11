@@ -13,6 +13,8 @@ import { countCompletedEras, legendPlayers } from '../../engine/ultimate/icons';
 import { isLegacyCard } from '../../engine/bridge/legacyBridge';
 import { legacyPoolPlayers } from '../../state/rtpHall';
 import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
+import { packOddsLine } from '../../engine/ultimate/packOdds'; // [U01] garantia + odds efetivas derivadas da definição
+import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
 // nas actions marketListCard/marketCardSold/marketCardReturned/marketBuyApply.
@@ -1509,7 +1511,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         const res = await openPackCloud(pack.id);
         if (!res.ok) {
           if (res.reason === 'busy') return; // double-click com request em voo — ignora em silêncio
-          flash(res.reason === 'insufficient' ? ct('Créditos insuficientes.') : ct('Não foi possível abrir.'));
+          flash(res.reason === 'insufficient' ? ct('Créditos insuficientes.') : res.reason === 'unavailable' ? ct('Pacote temporariamente indisponível. Nenhum coin foi gasto.') : ct('Não foi possível abrir.'));
           return;
         }
         setPackFromCloud(res.source === 'server');
@@ -2459,7 +2461,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               ))}
             </div>
             <p className="ut-coinshop__note">
-              {ct('Referência: 30.000 abre um pack TOTS ou 2 Packs Ouro; 120.000 rende 3 Premium ou 4 TOTS. Tudo aqui também é conquistável jogando — comprar só acelera.')}
+              {COIN_PACKS.map((offer) => {
+                const tots = PACK_DEFS.find((p) => p.id === 'tots')!;
+                const gold = PACK_DEFS.find((p) => p.id === 'gold')!;
+                return <span key={offer.tier} style={{ display: 'block' }}>
+                  {fmt(offer.coins)} coins: {Math.floor(offer.coins / gold.cost)} × {gold.name}
+                  {offer.coins >= tots.cost ? ` ${ct('ou')} ${Math.floor(offer.coins / tots.cost)} × ${tots.name}` : ` · ${tots.name}: ${fmt(tots.cost)} coins`}.
+                </span>;
+              })}
+              {ct('Tudo aqui também é conquistável jogando — comprar só acelera.')}
             </p>
           </div>
           {/* Pacote Promo — só vende no mês do tema (rotaciona todo mês). O card
@@ -2479,6 +2489,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 <div className="ut-pack__art"><Sparkles size={44} strokeWidth={1.4} /></div>
                 <div className="ut-pack__name">{ct('Pacote Promo')} · {promo.theme.name}</div>
                 <div className="ut-pack__desc">{ct(promo.theme.desc)} — {ct('11 cartas promo (+2 OVR) este mês, 1 garantida no pack.')}</div>
+                <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(ultimatePromoPack())}</div>
                 <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Termina em')} {dd}d {hh}h</div>
                 <button className="ut-pack__buy" onClick={() => buy(promoPack)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
                   {packBusy === promoPack.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(promoPack.cost)}</>}
@@ -2494,7 +2505,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               <div className="ut-pack__art"><Zap size={44} strokeWidth={1.4} /></div>
               <div className="ut-pack__name">{ct('Pacote TOTW')} · {ct('Time da Semana')}</div>
               <div className="ut-pack__desc">{ct('Os 7 in-forms da semana (+2 OVR), 1 garantido no pack:')} {totwView.nicks}</div>
-              <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Rotaciona em')} {totwView.dd}d {totwView.hh}h</div>
+              <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Rotaciona em')} {totwView.dd}d {totwView.hh}h · {ct('segunda-feira, 00:00 UTC')}</div>
+              <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(TOTW_PACK)}</div>
               <button className="ut-pack__buy" onClick={() => buy(TOTW_PACK)} disabled={credits < TOTW_PACK.cost || packBusy != null} title={credits >= TOTW_PACK.cost ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
                 {packBusy === TOTW_PACK.id ? ct('Abrindo…') : <>{credits >= TOTW_PACK.cost ? <Coins size={15} /> : <Lock size={14} />} {fmt(TOTW_PACK.cost)}</>}
               </button>
@@ -2509,6 +2521,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 <div className="ut-pack__art"><Trophy size={44} strokeWidth={1.4} /></div>
                 <div className="ut-pack__name">{ct('Pacote Ícone')} · {ct('Lendas do CS')}</div>
                 <div className="ut-pack__desc">{ct('GeT_RiGhT, cogu, kennyS, NEO… as lendas aposentadas do CS como Ícones Históricos — e elas SÓ caem aqui. 1 Ícone garantido.')}</div>
+                <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(ICON_PACK)}</div>
                 <button className="ut-pack__buy" onClick={() => buy(ICON_PACK)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
                   {packBusy === ICON_PACK.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(ICON_PACK.cost)}</>}
                 </button>
@@ -2524,6 +2537,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   <div className="ut-pack__art"><Package size={44} strokeWidth={1.4} /></div>
                   <div className="ut-pack__name">{pack.name}</div>
                   <div className="ut-pack__desc">{pack.desc}</div>
+                  <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }} title={ct('Chance de sair pelo menos 1 carta dessa raridade no pack, contando as garantias. Calculado da definição do pack.')}>{packOddsLine(pack)}</div>
                   <button className="ut-pack__buy" onClick={() => buy(pack)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
                     {packBusy === pack.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(pack.cost)}</>}
                   </button>
@@ -2822,8 +2836,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   <Zap size={17} /> {ctaLabel}
                 </button>
                 <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
-                  {rankedMode === 'casual' ? ct('Sem risco de RP — treina e ganha credits (500 vitória / 150 derrota).')
-                    : ct('Recompensa cresce a cada vitória (800 → 6.000) + carta Elite ao completar 5/5.')}
+                  {rankedMode === 'casual' ? `${ct('Sem risco de RP — treina e ganha credits')} (${FRIENDLY_CREDITS.win} ${ct('vitória')} / ${FRIENDLY_CREDITS.loss} ${ct('derrota')}).`
+                    : `${ct('Recompensa cresce a cada vitória')} (${fmt(Math.min(...GAUNTLET_WIN_CREDITS))} → ${fmt(Math.max(...GAUNTLET_WIN_CREDITS))}) + ${ct('carta Elite ao completar 5/5.')}`}
                 </div>
               </>
             )}

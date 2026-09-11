@@ -152,6 +152,7 @@ export default async function handler(
     if (!r.ok) {
       if (r.error === 'unknown_pack') { res.status(400).json({ error: 'pack desconhecido' }); return; }
       if (r.error === 'op_conflict') { res.status(409).json({ error: 'op_conflict' }); return; }
+      if (r.error === 'pack_unavailable') { res.status(409).json({ error: 'pack_unavailable' }); return; }
       res.status(409).json({ error: r.error, credits: r.credits });
       return;
     }

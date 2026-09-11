@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { totwForWeek, weekIndex } from '../src/engine/ultimate/totw.js';
+import { BASE_RARITY_ORDER } from '../src/engine/ultimate/rarities.js';
+import { weeklyPackPool } from '../src/engine/ultimate/packPool.js';
 import { FakeDb } from './ultimate-economy.mock.js';
 import { applyUltTransaction } from './ultimate-economy.js';
 import {
@@ -12,6 +15,48 @@ import {
 } from './ultimate-pack.js';
 
 const NOW = new Date('2026-07-04T12:00:00Z');
+
+test('TOTW só sorteia destaques vigentes, inclusive na virada UTC e do mês', () => {
+  for (const stamp of ['2026-08-30T23:59:59Z', '2026-08-31T00:00:00Z', '2026-09-01T00:00:00Z', '2026-09-14T00:00:00Z']) {
+    const now = new Date(stamp);
+    const catalog = buildServerCatalog(now);
+    const before = catalog.map((c) => c.key);
+    const base = catalog.filter((c) => BASE_RARITY_ORDER.includes(c.rarity));
+    const ids = new Set(totwForWeek(base, weekIndex(now)).playerIds);
+    assert.equal(ids.size, 7);
+    for (let seed = 1; seed <= 100; seed++) {
+      const cards = rollPackServer({ packId: 'totw', seed, catalog, now });
+      assert.ok(cards);
+      const specials = cards.filter((c) => c.rarity === 'totw');
+      assert.ok(specials.length >= 1);
+      assert.ok(specials.every((c) => ids.has(c.playerId)));
+    }
+    assert.deepEqual(catalog.map((c) => c.key), before, 'não modifica catálogo de propriedade');
+  }
+  assert.equal(weekIndex(new Date('2026-08-31T00:00:00Z')), weekIndex(new Date('2026-08-30T23:59:59Z')) + 1);
+});
+
+test('TOTW incompleto fica indisponível em vez de usar fallback de raridade', () => {
+  const now = new Date('2026-09-11T12:00:00Z');
+  const catalog = buildServerCatalog(now).filter((c) => c.rarity !== 'totw');
+  assert.equal(weeklyPackPool(catalog, now), null);
+  assert.equal(rollPackServer({ packId: 'totw', seed: 1, catalog, now }), null);
+});
+
+test('TOTW indisponível não debita; retry depois da rotação preserva cartas e saldo', async () => {
+  const db = new FakeDb();
+  await grant(db, 100_000);
+  const req = { opId: 'weekly', packId: 'totw' };
+  const unavailable = await openPack(db.sql, EMAIL, req, { now: NOW });
+  assert.deepEqual(unavailable, { ok: false, error: 'pack_unavailable' });
+  assert.equal(db.ledger.filter((l) => l.kind === 'pack').length, 0);
+  const first = await openPack(db.sql, EMAIL, req, { now: new Date('2026-09-11T12:00:00Z'), seed: 5 });
+  const retry = await openPack(db.sql, EMAIL, req, { now: new Date('2026-09-14T12:00:00Z'), seed: 8 });
+  assert.ok(first.ok && retry.ok);
+  assert.deepEqual(retry.cards.map((c) => c.cardKey), first.cards.map((c) => c.cardKey));
+  assert.equal(retry.credits, first.credits);
+  assert.equal(db.ledger.filter((l) => l.kind === 'pack').length, 1);
+});
 
 // ------------------------------------------------------------------ catálogo
 
