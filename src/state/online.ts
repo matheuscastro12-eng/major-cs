@@ -104,6 +104,10 @@ export interface UltimatePvpSquad {
   elo: number;
   chem: number; // multiplicador de química (0.8–1.2)
   cards: { pid: string; ovr: number }[];
+  // [U03] contrato versionado: v2 acrescenta a ABORDAGEM pré-jogo. Só vale quando os
+  // DOIS snapshots são v≥2 (cliente antigo ignora o campo — o novo também tem que ignorar).
+  v?: number;
+  approach?: 'aggressive' | 'control' | 'adaptive' | null;
 }
 
 // O Ultimate Team mistura cartas históricas com o elenco atual de 2026. As duas

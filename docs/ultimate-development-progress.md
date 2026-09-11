@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 11/09/2026 (U00, U01 e U02 concluídos).
+Última atualização: 11/09/2026 (U00–U03 concluídos).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -17,8 +17,8 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U00 Baseline e contratos | Concluído (11/09) | Baseline verde; contratos e riscos documentados abaixo |
 | U01 Loja/pools | Implementado e verificado (11/09) | Branch `ult/u01-loja-pools`; ver seção U01 |
 | U02 Funil | Implementado e verificado (11/09) | Branch `ult/u02-funil`; baseline começa a contar após o deploy |
-| U03 Elenco/táticas | Pendente — **próximo** | U00/U02 feitos; mapeamento técnico em andamento |
-| U04 Pós-jogo | Pendente | U03 |
+| U03 Elenco/táticas | Implementado e verificado (11/09) | Branch `ult/u03-elenco-taticas`; evolução em PvP e dupla contagem ficam documentadas, não alteradas |
+| U04 Pós-jogo | Pendente — **próximo** | U03 feito |
 | U05 Primeira sessão | Pendente | U03/U04 |
 | U06 Timeout real | Pendente | U03/U04; novo contrato de execução |
 | U07 Alvo e estreia | Pendente | U03/U05 |
@@ -30,9 +30,7 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 
 ## Próxima ação exata
 
-Executar U03 (avaliador de elenco e tática pré-jogo): (1) adaptador único do Ultimate para preparar times (`squadAnalysis.ts`), mapeando a cadeia atributos → strength e os multiplicadores (química, evolução, estilos/traits) sem dupla contagem; (2) perfil de elenco só com dados existentes (aim/clutch/consistency/awp/igl/role/playstyle/traits) — até 2 pontos fortes e 1 fragilidade com causa; (3) três abordagens iniciais (agressividade/controle/adaptação) como opção explícita do `createMapSim`, com teto definido após simular baseline em `scripts/`; (4) IA com perfis variados e composição válida; (5) PvP: snapshot versionado com a escolha, validado no servidor, sem esconder bônus novo em `chem`. Aceite: mesmo seed/versão ⇒ mesmo resultado; inverter perspectiva preserva vencedor; nenhuma tática vence em todos os cenários da bateria.
-
-Depois do deploy do U02, ler o funil no MetricsPanel por alguns dias ANTES de comparar versões (baseline).
+Executar U04 (pós-jogo com evidências): relatório a partir dos eventos reais da série (`roundLog`, `stats` por jogador, `PlayerLine`, `RoundTally`) e dos modificadores APLICADOS (química, evolução, estilos, abordagem via `playbookLean`, IA com abordagem) — separar "aconteceu" de "efeito modelado"; até 3 insights com ação (ajuste/tática/coleção); auditar `liveDrama`/`liveFrags` para que narração não vire prova; comparação do reforço sem prometer que teria revertido a derrota; relatório idêntico ao reabrir; fallback honesto sem dado. Reaproveitar `DecisionReview`/`roundLog.ts` (PR #51) onde couber.
 
 ## Descoberta que não pode ser esquecida
 
@@ -114,6 +112,24 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: sem save nem schema novos (tabela `events` já existe); resposta do `coinsClaim` é aditiva (`coins` preservado).
 - Pendências: limitação de identificação — `sid` é por navegador (visitante anônimo ≠ conta); coorte D1/D7 e "recompra em 30 dias por comprador" ainda sem consulta; capturar baseline antes de comparar versões.
 - Próxima ação exata: U03.
+
+## U03 — avaliador de elenco e tática pré-jogo — 11/09/2026
+
+- Estado: **implementado e verificado** (primeira versão, escopo delimitado abaixo).
+- Branch/commit: `ult/u03-elenco-taticas` (a partir de `196b15f`).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/squadAnalysis.ts` (novo, puro): **adaptador único** `prepareUltimateTeam` (buildUserTeam → × química × evolução `EVO_PCT` × estilos só se `duel.total>0` → `playbook` da abordagem); `effectiveMultiplier` (a UI mostra o MESMO número que o motor usa — o "×força" do pré-jogo omitia a evolução); `squadProfile` (4 eixos: abertura, suporte/troca, controle, fechamento) derivado só de `aim/clutch/consistency/igl/role/role2/playstyle`, com `basis` explicando a origem, até 2 forças (≥80) e 1 fragilidade (<72 ou 8 abaixo do topo); `buildAiOpponent` (janela em torno do alvo, 1 IGL + 1 AWP + 1 Entry + 1 Support/Lurker + 1 livre, sorteado pelo rng da partida, abordagem própria); contrato PvP `PVP_SNAPSHOT_VERSION = 2` + `pvpApproachesApply` (só aplica se os DOIS snapshots forem v≥2).
+  - **Abordagens** `aggressive | control | adaptive` → `TTeam.playbook` (`aggressive | controlled | tactical`) com `APPROACH_FAM = 0.7`. O custo/benefício é o `playbookLean` que o motor já tinha (lado, pistol, eco, 2º half, mapa próprio): **nenhum percentual novo foi inventado**; a magnitude é ±1.7 × 0.7 pontos de força por round.
+  - `UltimateSquadScreen.tsx`: playMatch e playDraftMatch usam o adaptador e a IA válida (a IA também joga com abordagem); seletor de abordagem + "LEITURA DO ELENCO" na aba Ranqueada, **antes** do botão de jogar (a escolha trava antes da simulação; preferência por navegador em `rtm-ult-approach-v1`); pré-jogo mostra a abordagem e o multiplicador honesto. PvP: snapshot v2 com `approach`; `startPvpMatch` aplica nos dois lados só quando ambos são v2.
+  - `src/state/online.ts`: `UltimatePvpSquad.v?/approach?`. `api/lobby.ts`: clamp `v` 1..9 e whitelist de `approach` (fora dela = null).
+  - `scripts/test-ultimate-squad-analysis.mts` (6 testes): determinismo do adaptador e igualdade UI×motor; perfil só de dados existentes (sem IGL → fragilidade de controle); IA com composição válida, |avg−alvo| ≤ 6, varia com o seed e repete com o mesmo seed; **matriz 3 confrontos × 40 seeds × 4 opções**: spread de win rate entre abordagens ≤ 25 pp e a melhor abordagem muda entre confrontos; PvP v2 só com os dois lados; ordem canônica preserva o vencedor.
+- Decisões tomadas e motivo: ligar o playbook existente em vez de criar tabela nova de tática (reuso, sem balanceamento inventado); IA sem multiplicadores de química/estilo (como antes) mas com composição válida — muda a dificuldade efetiva um pouco para cima em Rivals porque a IA deixa de sofrer as penalidades de "sem IGL/AWP"; dificuldade continua explícita pelo `target` (elo/OVR); preferência de abordagem fora do save (não é patrimônio, não sincroniza).
+- **Auditoria de dupla contagem (documentada, NÃO alterada neste lote):** sinergia entra 2× em `buildUserTeam` (`teamwork` e `+synergy*0.7`, `ratings.ts:336-338`, `refSynergy=0` no Ultimate); país e função contam em `draftSynergy` E em `computeChemistry`; AWP/IGL contam em stat, sinergia e penalidade de round; estilos/traits são multiplicador sobre atributos que já geraram a força (bounded ≤1.03). Mudar isso altera a força de todos os elencos existentes — fica para decisão explícita (plano §5 U03: "sem invalidar silenciosamente elencos").
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` **330/330** (+6) · `npm run lint` 189 = baseline.
+- Verificação visual e ambiente: não exercitada nesta rodada (seletor e leitura do elenco cobertos por typecheck e testes de engine). Pendente: conferir a aba Ranqueada em mobile.
+- Compatibilidade/migração/flag: sem campo novo em save; snapshot PvP aditivo e versionado; cliente antigo × novo simulam igual (abordagem ignorada por ambos). Draft: squad emprestado segue sem abordagem do usuário (só a IA).
+- Pendências: **evolução não entra na força em PvP** (o `ovr` do snapshot é cosmético; `buildOnlineTeam` lê o `Player` cru) — precisa viajar `boost` por carta no snapshot v3 e ser clampado no servidor; identidade tática (`MapSimOpts.identity`) não exposta por `simulateSeries`; coach fixo 70/tactical; `AI_EDGE` não se aplica ao Ultimate porque a IA nasce `isUser:true`.
+- Próxima ação exata: U04.
 
 ## Modelo de atualização por lote
 

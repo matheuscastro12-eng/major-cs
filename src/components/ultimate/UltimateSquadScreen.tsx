@@ -14,6 +14,8 @@ import { isLegacyCard } from '../../engine/bridge/legacyBridge';
 import { legacyPoolPlayers } from '../../state/rtpHall';
 import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../engine/ultimate/packs';
 import { packOddsLine } from '../../engine/ultimate/packOdds'; // [U01] garantia + odds efetivas derivadas da definição
+// [U03] adaptador único de preparação de time + perfil de elenco + abordagem + IA com composição válida
+import { APPROACH_DEFS, APPROACH_IDS, AXIS_LABEL, buildAiOpponent, effectiveMultiplier, isApproach, prepareUltimateTeam, PVP_SNAPSHOT_VERSION, pvpApproachesApply, squadProfile, type Approach } from '../../engine/ultimate/squadAnalysis';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -367,6 +369,10 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   }, [tab]);
   // 1ª e 2ª partida são degraus distintos (denominadores do plano U02)
   const matchesStartedRef = useRef(0);
+  // [U03] ABORDAGEM pré-jogo: travada ANTES da simulação (o resultado nasce no clique).
+  // Preferência do navegador (rtm-ult-approach-v1); ausente = comportamento antigo.
+  const [approach, setApproachState] = useState<Approach | null>(() => { try { const v = localStorage.getItem('rtm-ult-approach-v1'); return isApproach(v) ? v : null; } catch { return null; } });
+  const setApproach = (a: Approach | null) => { setApproachState(a); try { if (a) localStorage.setItem('rtm-ult-approach-v1', a); else localStorage.removeItem('rtm-ult-approach-v1'); } catch { /* sem storage */ } };
   const noteMatchStart = (mode: string) => { matchesStartedRef.current += 1; trackUltFunnel(matchesStartedRef.current >= 2 ? 'second_match_started' : 'match_started', { mode }); };
   const noteMatchDone = (mode: string, won: boolean) => { trackUltFunnel('match_completed', { mode, won }); };
 
@@ -663,6 +669,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const poolById = useMemo(() => new Map(pool.map((p) => [p.id, p] as const)), [pool]);
   const squadPool = form.slots.map((fs) => { const sc = slotCard(fs.slot); return sc ? poolById.get(sc.card.playerId) ?? null : null; });
   const squadComplete = squadPool.every((p): p is PoolPlayer => p != null);
+  // [U03] evolução total do squad (a UI e o motor leem o MESMO número) + leitura do elenco
+  const evoBoostTotal = form.slots.reduce((a, fs) => a + (slotCard(fs.slot)?.owned.boost ?? 0), 0);
+  const squadProfileInfo = squadComplete ? squadProfile((squadPool as PoolPlayer[]).map((p) => p.player)) : null; // barato (5 jogadores), sem memo
   // [W2] card LEGADO (pid rtp_legacy_*) só existe no SEU navegador: o adversário
   // reconstrói o squad pelo pid a partir do dataset do build e não acha —
   // trava a partida (mesma classe do bug da LENDA na ranqueada). Online fica
@@ -1212,11 +1221,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     noteMatchStart(mode); // [U02]
     if (!squadComplete) return;
     const five = squadPool as PoolPlayer[];
-    const userTeam = buildOnlineTeam(ct('Seu Squad'), five, 'ut-user');
-    userTeam.strength = userTeam.strength * chem.multiplier; // química influencia a força
-    const totalBoost = form.slots.reduce((a, fs) => a + (slotCard(fs.slot)?.owned.boost ?? 0), 0);
-    if (totalBoost > 0) userTeam.strength *= 1 + totalBoost * 0.01; // evolução: +1% de força por nível
-    if (duel.total > 0) userTeam.strength *= duel.multiplier; // estilos+traits (iter33): teto 1.03
+    // [U03] composição ÚNICA da força (química × evolução × estilos) + abordagem → playbook do motor
+    const userTeam = prepareUltimateTeam({ name: ct('Seu Squad'), picks: five, idPrefix: 'ut-user', mult: { chem: chem.multiplier, evoBoost: evoBoostTotal, duelTotal: duel.total, duelMult: duel.multiplier }, approach });
     // rivals: rival escala pela divisão (elo); amistoso: justo pelo OVR; gauntlet:
     // sobe a dificuldade a cada vitória do run.
     const target = mode === 'rivals'
@@ -1225,16 +1231,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         ? Math.max(60, Math.min(97, (avgOvr || 75) + gauntletWins * 3))
         : Math.max(60, Math.min(96, avgOvr || 75));
     const mineIds = new Set(five.map((p) => p.id));
-    const oppFive = pool.filter((p) => !mineIds.has(p.id))
-      .sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5)
-      .sort((a, b) => b.ovr - a.ovr);
-    const oppTeam = buildOnlineTeam(ct('Esquadrão IA'), oppFive, 'ut-opp');
-    const oppOvr = oppFive.length ? Math.round(oppFive.reduce((a, p) => a + p.ovr, 0) / oppFive.length) : Math.round(target);
+    // [U03] IA com composição válida (IGL/AWP/Entry/Support) e perfil variado pelo seed da
+    // partida; a dificuldade continua sendo o `target` explícito. A IA também joga com uma abordagem.
+    const rng = makeRng(Math.floor(Math.random() * 2147483647));
+    const ai = buildAiOpponent(pool, mineIds, target, rng);
+    const oppFive = ai.five;
+    const oppTeam = prepareUltimateTeam({ name: ct('Esquadrão IA'), picks: oppFive, idPrefix: 'ut-opp', approach: ai.approach });
+    const oppOvr = ai.avgOvr;
     // ELO do rival RELATIVO ao SEU squad: bater um time acima do seu OVR paga mais
     // e perder pra um mais fraco custa mais — a recompensa acompanha a dificuldade real.
     const myOvr = avgOvr || oppOvr;
     const oppElo = Math.max(300, Math.round(state.profile.elo + (oppOvr - myOvr) * 22));
-    const rng = makeRng(Math.floor(Math.random() * 2147483647));
     const maps = autoVeto([userTeam, oppTeam], rng, 1);
     const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
     // COMMIT-ON-START (anti loss-dodge): o resultado é registrado e persistido
@@ -1297,8 +1304,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // novo no protocolo. Teto combinado: 1.10 (química) × 1.03 (duelo) = 1.133.
     chem: chem.multiplier * duel.multiplier,
     cards: form.slots.map((fs) => slotCard(fs.slot)).filter((sc): sc is NonNullable<typeof sc> => !!sc).map((sc) => ({ pid: sc.card.playerId, ovr: sc.card.ovr })),
+    // [U03] contrato v2: a abordagem viaja como campo próprio (não escondida no chem)
+    v: PVP_SNAPSHOT_VERSION,
+    approach,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [displayName, state.profile.elo, chem.multiplier, duel.multiplier, state.squads, state.inventory]);
+  }), [displayName, state.profile.elo, chem.multiplier, duel.multiplier, state.squads, state.inventory, approach]);
 
   const startPvpMatch = useCallback((args: DuelPlayArgs): boolean => {
     noteMatchStart(args.ranked ? 'ranked' : 'private'); // [U02]
@@ -1311,10 +1321,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     if (mineFive.length < 5 || oppFive.length < 5) { flash(ct('Squad do rival incompatível com esta versão.')); return false; }
     const firstSq = args.myFirst ? args.mySquad : args.oppSquad;
     const secondSq = args.myFirst ? args.oppSquad : args.mySquad;
-    const tA = buildOnlineTeam(firstSq.name || 'A', args.myFirst ? mineFive : oppFive, 'ut-pvp-a');
-    const tB = buildOnlineTeam(secondSq.name || 'B', args.myFirst ? oppFive : mineFive, 'ut-pvp-b');
-    tA.strength *= firstSq.chem;
-    tB.strength *= secondSq.chem;
+    // [U03] os dois lados só aplicam a abordagem se os DOIS snapshots forem v2 (cliente
+    // antigo ignora o campo → o novo também ignora, senão os placares divergem)
+    const useApproach = pvpApproachesApply(firstSq, secondSq);
+    const tA = prepareUltimateTeam({ name: firstSq.name || 'A', picks: args.myFirst ? mineFive : oppFive, idPrefix: 'ut-pvp-a', mult: { chem: firstSq.chem }, approach: useApproach && isApproach(firstSq.approach) ? firstSq.approach : null });
+    const tB = prepareUltimateTeam({ name: secondSq.name || 'B', picks: args.myFirst ? oppFive : mineFive, idPrefix: 'ut-pvp-b', mult: { chem: secondSq.chem }, approach: useApproach && isApproach(secondSq.approach) ? secondSq.approach : null });
     const rng = makeRng(((args.runSeed ^ 0x554c54) >>> 0) || 1);
     const maps = autoVeto([tA, tB], rng, 1);
     const series = simulateSeries(rng, tA, tB, maps, 1);
@@ -1469,11 +1480,10 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const draftAvg = Math.round(draftCards.reduce((a, c) => a + c.ovr, 0) / draftCards.length);
     const target = draftOppTarget(draftAvg, d.wins);
     const mineIds = new Set(five.map((p) => p.id));
-    const oppFive = pool.filter((p) => !mineIds.has(p.id))
-      .sort((a, b) => Math.abs(a.ovr - target) - Math.abs(b.ovr - target)).slice(0, 5)
-      .sort((a, b) => b.ovr - a.ovr);
-    const oppTeam = buildOnlineTeam(ct('Esquadrão IA'), oppFive, 'ut-opp');
     const rng = makeRng(Math.floor(Math.random() * 2147483647));
+    const ai = buildAiOpponent(pool, mineIds, target, rng); // [U03] composição válida + variedade
+    const oppFive = ai.five;
+    const oppTeam = prepareUltimateTeam({ name: ct('Esquadrão IA'), picks: oppFive, idPrefix: 'ut-opp', approach: ai.approach });
     const maps = autoVeto([userTeam, oppTeam], rng, 1);
     const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
     // COMMIT-ON-START (anti loss-dodge): resultado registrado ANTES do replay.
@@ -1658,7 +1668,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               <div className="ut-vs__mid">
                 <div className="ut-vs__map">{live.result.mapName}</div>
                 <div className="ut-vs__vs">VS</div>
-                <div className="ut-vs__fmt">MD1 · {(introChem.multiplier * duel.multiplier).toFixed(2)}× {ct('força')}</div>
+                <div className="ut-vs__fmt">MD1 · {(isDraftIntro ? introChem.multiplier : effectiveMultiplier({ chem: introChem.multiplier, evoBoost: evoBoostTotal, duelTotal: duel.total, duelMult: duel.multiplier })).toFixed(2)}× {ct('força')}</div>
+                {!isDraftIntro && approach && <div className="ut-vs__fmt" style={{ opacity: .85 }}>{ct('Abordagem')}: <b>{APPROACH_DEFS[approach].name}</b></div>}
                 <button className="ut-jogar" style={{ padding: '13px 26px', fontSize: '1rem' }} onClick={() => setLive({ ...live, intro: false })}><Zap size={17} /> {ct('COMEÇAR PARTIDA')}</button>
                 <button className="ut-vs__skip" onClick={finishMatch}>{ct('Pular direto pro resultado')}</button>
               </div>
@@ -2854,6 +2865,21 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               </div>
             ) : (
               <>
+                {/* [U03] perfil do elenco + ABORDAGEM (travada aqui, antes da simulação) */}
+                {squadProfileInfo && (
+                  <div style={{ marginTop: 12, padding: '10px 12px', border: '1px solid var(--ut-line, #e5e2d8)', borderRadius: 10, fontSize: '0.78rem' }}>
+                    <div style={{ fontWeight: 800, letterSpacing: .5, marginBottom: 4 }}>{ct('LEITURA DO ELENCO')}</div>
+                    {squadProfileInfo.strengths.map((a) => <div key={a.axis} title={a.basis}>▲ <b>{AXIS_LABEL[a.axis]}</b> {a.score} · <span style={{ color: 'var(--ut-muted)' }}>{a.basis}</span></div>)}
+                    {squadProfileInfo.weakness && <div title={squadProfileInfo.weakness.basis}>▼ <b>{AXIS_LABEL[squadProfileInfo.weakness.axis]}</b> {squadProfileInfo.weakness.score} · <span style={{ color: 'var(--ut-muted)' }}>{squadProfileInfo.weakness.basis}</span></div>}
+                    {!squadProfileInfo.strengths.length && !squadProfileInfo.weakness && <div style={{ color: 'var(--ut-muted)' }}>{ct('Elenco equilibrado: nenhum eixo se destaca nem falha.')}</div>}
+                    <div style={{ fontWeight: 800, letterSpacing: .5, margin: '10px 0 4px' }}>{ct('ABORDAGEM')} <span style={{ fontWeight: 400, color: 'var(--ut-muted)' }}>· {ct('custo e benefício mudam com lado, pistol e economia do round')}</span></div>
+                    <div className="ut-tabs">
+                      <button onClick={() => setApproach(null)} style={tabBtn(approach === null)} title={ct('Sem esquema: o time joga o padrão')}>{ct('Padrão')}</button>
+                      {APPROACH_IDS.map((a) => <button key={a} onClick={() => setApproach(a)} style={tabBtn(approach === a)} title={`${APPROACH_DEFS[a].desc} ${ct('Forte')}: ${APPROACH_DEFS[a].strong}. ${ct('Fraco')}: ${APPROACH_DEFS[a].weak}.`}>{APPROACH_DEFS[a].name}</button>)}
+                    </div>
+                    {approach && <div style={{ marginTop: 6, color: 'var(--ut-muted)' }}>{APPROACH_DEFS[approach].desc} <b>{ct('Forte')}:</b> {APPROACH_DEFS[approach].strong}. <b>{ct('Fraco')}:</b> {APPROACH_DEFS[approach].weak}.</div>}
+                  </div>
+                )}
                 <button className="ut-jogar" style={{ width: '100%', justifyContent: 'center', marginTop: 12, padding: '13px' }} onClick={() => startMatch(rankedMode)} disabled={ctaDisabled}>
                   <Zap size={17} /> {ctaLabel}
                 </button>

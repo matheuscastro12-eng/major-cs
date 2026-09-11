@@ -1046,6 +1046,9 @@ export default async function handler(
             name: String(rawSquad.name ?? '').slice(0, 24),
             elo: Math.max(0, Math.min(5000, Math.round(Number(rawSquad.elo) || 0))),
             chem: Math.max(0.8, Math.min(1.2, Number(rawSquad.chem) || 1)),
+            // [U03] snapshot v2: versão + abordagem pré-jogo (whitelist; fora dela = null)
+            v: Math.max(1, Math.min(9, Math.round(Number(rawSquad.v) || 1))),
+            approach: rawSquad.approach === 'aggressive' || rawSquad.approach === 'control' || rawSquad.approach === 'adaptive' ? rawSquad.approach : null,
             cards: Array.isArray(rawSquad.cards)
               ? rawSquad.cards.slice(0, 5).map((entry) => {
                   const c = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
