@@ -28,6 +28,8 @@ const ALLOWED_TYPES = new Set([
   // funil da DEMO do Road to Pro (iter47): {step: 'open'|'created'|'week', week?}
   // — o denominador que faltava pra medir a conversão da demo grátis
   'rtp_demo',
+  // [U02] funil do Ultimate: {step, mode?, won?, product_kind?, src?, method?, orderId?} — marcos por sessão, sem evento por round
+  'ult_funnel',
 ]);
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();

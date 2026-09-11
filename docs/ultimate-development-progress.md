@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 11/09/2026 (U00 e U01 concluídos).
+Última atualização: 11/09/2026 (U00, U01 e U02 concluídos).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -16,8 +16,8 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 |---|---|---|
 | U00 Baseline e contratos | Concluído (11/09) | Baseline verde; contratos e riscos documentados abaixo |
 | U01 Loja/pools | Implementado e verificado (11/09) | Branch `ult/u01-loja-pools`; ver seção U01 |
-| U02 Funil | Pendente — **próximo** | U00 feito; hoje só `paywall_view` sai do Ultimate |
-| U03 Elenco/táticas | Pendente | U00/U02 |
+| U02 Funil | Implementado e verificado (11/09) | Branch `ult/u02-funil`; baseline começa a contar após o deploy |
+| U03 Elenco/táticas | Pendente — **próximo** | U00/U02 feitos; mapeamento técnico em andamento |
 | U04 Pós-jogo | Pendente | U03 |
 | U05 Primeira sessão | Pendente | U03/U04 |
 | U06 Timeout real | Pendente | U03/U04; novo contrato de execução |
@@ -30,9 +30,9 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 
 ## Próxima ação exata
 
-Executar U02 (funil enxuto do Ultimate): eventos `ultimate_enter`, `starter_claimed`, `match_started`, `match_completed`, `squad_adjusted`, `second_match_started`, `offer_viewed`, `purchase_intent` (+ reusar `checkout_open`/`checkout_error`/`paywall_view`), com dedupe por sessão e sem chamada por round; `purchase_fulfilled` só de confirmação autoritativa (claim server-side, dedupe por `correlation_id`). Liberar os tipos no filtro de `src/state/track.ts` e na allowlist de `api/track.ts`; consulta reproduzível no `MetricsPanel`/`api/metrics.ts` com os denominadores do plano. Capturar baseline antes de comparar.
+Executar U03 (avaliador de elenco e tática pré-jogo): (1) adaptador único do Ultimate para preparar times (`squadAnalysis.ts`), mapeando a cadeia atributos → strength e os multiplicadores (química, evolução, estilos/traits) sem dupla contagem; (2) perfil de elenco só com dados existentes (aim/clutch/consistency/awp/igl/role/playstyle/traits) — até 2 pontos fortes e 1 fragilidade com causa; (3) três abordagens iniciais (agressividade/controle/adaptação) como opção explícita do `createMapSim`, com teto definido após simular baseline em `scripts/`; (4) IA com perfis variados e composição válida; (5) PvP: snapshot versionado com a escolha, validado no servidor, sem esconder bônus novo em `chem`. Aceite: mesmo seed/versão ⇒ mesmo resultado; inverter perspectiva preserva vencedor; nenhuma tática vence em todos os cenários da bateria.
 
-Histórico da ação anterior (U01): retomar U01 a partir do diff não commitado (packPool.ts + ganchos em server/ultimate-pack.ts e state/ultimate.ts): (1) rodar `server/ultimate-pack.test.ts` e o test:sim; (2) trocar o texto fixo da coinshop ("30,000 opens one TOTS pack… 120,000 gets you 3 Premium or 4 TOTS") por comparações derivadas de `PACK_DEFS` com arredondamento para baixo (TOTS custa 38k, Premium 40k); (3) decidir comportamento de pool vazio na UI (indisponível, sem débito) e cobrir fronteira de semana/mês com fuso explícito; (4) só depois commitar. Em paralelo, U02 pode começar pelo funil enxuto, porque hoje o Ultimate emite apenas `paywall_view` (ver U00 §4).
+Depois do deploy do U02, ler o funil no MetricsPanel por alguns dias ANTES de comparar versões (baseline).
 
 ## Descoberta que não pode ser esquecida
 
@@ -97,6 +97,23 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: sem campo novo em save; `ULT_PACK_ENGINE_VERSION` gravada no ledger distingue rolls antigos; catálogo de propriedade intocado (cartas TOTW antigas seguem indexáveis). Sem flag — comportamento anterior (TOTW sorteando semanas acumuladas) era o bug.
 - Pendências ou falhas preexistentes: lint vermelho pré-existente (189); Promo continua roll local (nunca foi server-side); live-ops override de promo não altera o pool do TOTW (não há interseção).
 - Próxima ação exata: U02.
+
+## U02 — funil e baseline de negócio — 11/09/2026
+
+- Estado: **implementado e verificado** (não publicado até o deploy do master; os degraus só contam depois).
+- Branch/commit: `ult/u02-funil` (a partir de `c7f1fcc`).
+- Mudanças e arquivos:
+  - `src/state/track.ts`: tipo `ult_funnel` liberado no filtro do cliente + `trackUltFunnel(step, data)` com dedupe por sessão por degrau (e por `orderId` em `purchase_fulfilled`). Steps: `enter`, `starter_claimed`, `match_started`, `match_completed`, `squad_adjusted`, `second_match_started`, `offer_viewed`, `purchase_intent`, `purchase_fulfilled`. `product_kind` ∈ coins/pass; `mode` ∈ rivals/casual/gauntlet/draft/ranked/private; `method` ∈ pix/card; `src` ∈ store/passe. Nenhum e-mail, token ou valor.
+  - `api/track.ts`: `ult_funnel` na allowlist. `api/account.ts`: `coinsClaim` devolve também `orders[{orderId, coins}]` (RETURNING correlation_id) para o dedupe por pedido.
+  - `src/state/account.ts`: `purchase_fulfilled` disparado **só** quando o servidor confirma o claim (`claimPaidCoins`/`claimPaidPassOrders`), um evento por pedido — é a confirmação autoritativa; eventos de UI não contam como receita.
+  - `UltimateSquadScreen.tsx`: `enter` no mount (com `guest`), `offer_viewed` ao abrir Loja/Passe, `purchase_intent` nos cliques de Pix/cartão de coins e passe (inclusive quando bloqueado por falta de conta — mede a intenção perdida), `starter_claimed`, `match_started`/`second_match_started`/`match_completed` em playMatch, startPvpMatch e playDraftMatch (contador de partidas da sessão), `squad_adjusted` ao trocar/remover carta do slot.
+  - `api/metrics.ts` + `src/components/MetricsPanel.tsx`: bloco "Funil do ULTIMATE (30 dias)" — sids distintos por degrau, % contra `enter`; compras confirmadas contam pedidos distintos (sem %). Reutiliza o painel existente; nenhum painel novo.
+- Decisões tomadas e motivo: um tipo só com `step` (padrão do `rtp_demo`) para caber na allowlist e nos índices por tipo; dedupe por sessão em vez de por partida (marcos, não volume — ≤ ~10 eventos/sessão); 1ª e 2ª partida como degraus distintos porque são os denominadores do plano; retenção segue a política atual da tabela `events` (30 dias na consulta). `target_selected` fica para o U07 (não há alvo ainda). D1/D7 por coorte: possível por `sid` (persistido em localStorage) mas não implementado no painel — consulta a fazer quando houver dados.
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` 324/324 · `npm run lint` 189 = baseline (zero novos; arquivos tocados sem novos erros).
+- Verificação visual e ambiente: não exercitada com backend (sem `/api` local); o filtro do cliente e a allowlist foram conferidos por leitura e typecheck.
+- Compatibilidade/migração/flag: sem save nem schema novos (tabela `events` já existe); resposta do `coinsClaim` é aditiva (`coins` preservado).
+- Pendências: limitação de identificação — `sid` é por navegador (visitante anônimo ≠ conta); coorte D1/D7 e "recompra em 30 dias por comprador" ainda sem consulta; capturar baseline antes de comparar versões.
+- Próxima ação exata: U03.
 
 ## Modelo de atualização por lote
 

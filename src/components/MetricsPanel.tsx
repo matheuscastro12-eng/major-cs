@@ -28,6 +28,8 @@ interface Metrics {
   byCountry?: { country: string; visits: string; visitors: string }[];
   // funil da DEMO do RtP: sessões distintas por degrau, já ordenado pelo backend
   rtpDemoFunnel?: { etapa: string; ord: number; sids: string }[];
+  // [U02] funil do Ultimate: sids distintos por degrau (compras = pedidos distintos)
+  ultFunnel?: { etapa: string; ord: number; n: string }[];
 }
 
 const COUNTRY_NAME: Record<string, string> = {
@@ -210,6 +212,30 @@ export function MetricsPanel() {
                     <span className="pos">
                       {s.sids}
                       {base > 0 && s.ord !== 1 ? ` · ${Math.round((Number(s.sids) / base) * 100)}%` : ''}
+                    </span>
+                  </div>
+                </div>
+              ));
+            })()}
+            <div className="muted small" style={{ textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, margin: '14px 0 6px' }}>
+              🃏 {ct('Funil do ULTIMATE (30 dias)')}
+            </div>
+            {(() => {
+              const list = data.ultFunnel ?? [];
+              // % sempre contra quem ENTROU (ord 1). Compras confirmadas são PEDIDOS
+              // distintos, não pessoas — por isso sem %. Sem meta nem causalidade:
+              // com pouca amostra, é leitura, não estatística.
+              const base = Number(list.find((s) => s.ord === 1)?.n ?? 0);
+              if (list.length === 0 || list.every((s) => Number(s.n) === 0)) {
+                return <div className="muted small">{ct('Sem dados do Ultimate ainda — os degraus começam a contar depois do deploy desta versão.')}</div>;
+              }
+              return list.map((s) => (
+                <div key={`${s.ord}:${s.etapa}`} className="synergy-list">
+                  <div className="item">
+                    <span className="muted">{s.etapa}</span>
+                    <span className="pos">
+                      {s.n}
+                      {base > 0 && s.ord !== 1 && s.ord !== 9 ? ` · ${Math.round((Number(s.n) / base) * 100)}%` : ''}
                     </span>
                   </div>
                 </div>

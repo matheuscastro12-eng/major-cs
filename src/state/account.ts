@@ -1,5 +1,6 @@
 // Conta do jogador (e-mail + senha) + entitlement da conta vitalícia R$20.
 // Token fica no localStorage; o backend (api/account.ts) valida e diz se é paga.
+import { trackUltFunnel } from './track';
 import { useCallback, useEffect, useState } from 'react';
 import { ct } from './career-i18n';
 
@@ -104,7 +105,14 @@ export async function beginCoinsCheckout(tier: CoinTierId): Promise<string> {
 // Retorna o total de coins a creditar agora (0 se nada novo).
 export async function claimPaidCoins(): Promise<number> {
   const token = getToken(); if (!token) return 0;
-  try { const d = await post({ action: 'coinsClaim', token }); return Number(d.coins) || 0; } catch { return 0; }
+  try {
+    const d = await post({ action: 'coinsClaim', token });
+    // [U02] purchase_fulfilled só aqui: o servidor acabou de marcar o pedido como
+    // 'claimed' (confirmação autoritativa, 1x por pedido). Sem valor pago, sem e-mail.
+    const orders = Array.isArray(d.orders) ? (d.orders as { orderId?: unknown }[]) : [];
+    for (const o of orders) if (o.orderId) trackUltFunnel('purchase_fulfilled', { product_kind: 'coins', orderId: String(o.orderId) });
+    return Number(d.coins) || 0;
+  } catch { return 0; }
 }
 
 // ── Passe Premium do Ultimate (R$ 30,00 · dinheiro real) ────────────────────
@@ -142,9 +150,11 @@ export async function claimPaidPassOrders(): Promise<PaidPassOrder[]> {
   try {
     const d = await post({ action: 'passClaim', token });
     const arr = Array.isArray(d.orders) ? (d.orders as { orderId?: unknown; season?: unknown }[]) : [];
-    return arr
+    const orders = arr
       .map((o) => ({ orderId: String(o.orderId ?? ''), season: Number(o.season) || 0 }))
       .filter((o) => o.orderId && o.season > 0);
+    for (const o of orders) trackUltFunnel('purchase_fulfilled', { product_kind: 'pass', orderId: o.orderId }); // [U02] confirmação do servidor
+    return orders;
   } catch { return []; }
 }
 
