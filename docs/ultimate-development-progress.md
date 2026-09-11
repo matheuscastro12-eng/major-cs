@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 11/09/2026 (U00–U05 concluídos).
+Última atualização: 11/09/2026 (U00–U06 casual concluídos).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -20,8 +20,8 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U03 Elenco/táticas | Implementado e verificado (11/09) | Branch `ult/u03-elenco-taticas`; evolução em PvP e dupla contagem ficam documentadas, não alteradas |
 | U04 Pós-jogo | Implementado e verificado (11/09) | Branch `ult/u04-pos-jogo`; comparação do reforço fica para U07 |
 | U05 Primeira sessão | Implementado e verificado (11/09) | Branch `ult/u05-primeira-sessao`; mobile pendente |
-| U06 Timeout real | Pendente — **próximo** | Levantamento técnico em andamento; casual primeiro |
-| U07 Alvo e estreia | Pendente | U03/U05 |
+| U06 Timeout real | **Casual implementado e verificado (11/09)**; PvP pendente | Branch `ult/u06-timeout-casual`; Rivals/Gauntlet/Draft seguem pré-calculados |
+| U07 Alvo e estreia | Pendente — **próximo** | U03/U05 feitos |
 | U08 Compra/oferta inicial | Pendente | U01/U02/U07 |
 | U09 Passe | Pendente | U02/U08; U10 para cosméticos novos |
 | U10 Identidade/coleções | Pendente | U07/U08 para produtos pagos |
@@ -30,7 +30,9 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 
 ## Próxima ação exata
 
-Executar U06 (timeout interativo real) — **casual primeiro**: execução incremental com `createMapSim.step()` round a round no replay do Ultimate, estado de partida persistível (seed/tick do RNG, cursor de round, placar, economia, elencos travados, decisões, versão, status), no máximo 1 timeout por lado/mapa entre rounds (`step(boostTeam)` já existe no motor: +2.0 de força no round), término idempotente por `matchId` e recompensa registrada UMA vez no fim (não mais commit-on-start — mas recarregar não pode re-rolar: o estado da partida em andamento fica persistido). PvP fica registrado como pendente se o custo/contrato de checkpoint autoritativo não couber no lote.
+Executar U07 (jogador dos sonhos e estreia do reforço): alvo persistente no save (campo opcional em `UltimateProfile`, default no `migrateUltimate`), caminhos reais de obtenção (mercado P2P por `cardKey`, packs cujo `weights` contém a raridade, promo/TOTW quando em circulação — sem inventar chance individual), saldo faltante e alternativas, troca de alvo sem perda; comparação titular × reforço com `squadProfile`/`computeChemistry` (preview sem consumir), e "escalar e estrear" ao adquirir (sem substituir carta travada/listada). A etapa `goal` da jornada (U05) passa a apontar para selecionar o alvo.
+
+**PvP do U06 fica registrado como PENDENTE** (não concluído): exige checkpoint autoritativo no servidor, decisões ordenadas com prazo comum e escolha padrão neutra por ausência, tratamento de desconexão/abandono/expiração da sala e protocolo habilitado só para pares compatíveis. Hoje o PvP é reexecução idêntica com seed canônico e sem estado de partida no servidor (`lobbies`/`lobby_players` não têm round/placar).
 
 ## Descoberta que não pode ser esquecida
 
@@ -162,6 +164,23 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: sem campo em save; veterano é dispensado automaticamente; "Pular" persiste.
 - Pendências: mobile; a etapa `goal` deve apontar para o alvo do U07; refresh **durante** uma partida ainda perde o replay (o resultado já está registrado — é o U06 que muda isso).
 - Próxima ação exata: U06 (casual).
+
+## U06 — timeout interativo real (casual) — 11/09/2026
+
+- Estado: **casual implementado e verificado**; **PvP pendente** (registrado, não concluído). Rivals (PvP), Gauntlet e Draft continuam no executor pré-calculado (commit-on-start) até decisão explícita.
+- Branch/commit: `ult/u06-timeout-casual` (a partir de `6860bcf`).
+- Descoberta confirmada no levantamento: `simulateSeries` rodava a série inteira e `recordMatch` era chamado ANTES do replay (`COMMIT-ON-START`); o ⚡ do replay é só velocidade 8×; `liveDrama`/`liveFrags` semeiam pelo hash do roundLog/killFeed COMPLETOS (não incrementais); `makeRng` não é retomável por tick; `createMapSim` já é round a round (`step(boostTeam,…)`, `peekWinProb`, `done`, `result`) e o boost de timeout (+2.0) já existe no motor (`match.ts`).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/matchSession.ts` (novo, puro): `MatchSession` persistível (versão, matchId, seed, times travados, mapa, cursor, decisões, status). Como o RNG não retoma por tick, `viewSession`/`advanceSession` **reexecutam do zero até o cursor** (≤30 rounds, barato) — mesma seed + mesmas decisões ⇒ mesmos rounds. `callTimeout` só entre rounds, a partir do próximo, `TIMEOUTS_PER_SIDE = 1` e `TIMEOUT_ROUNDS = 3`; dois lados no mesmo intervalo anulam (simétrico, sem vantagem por ordem). `aiWantsTimeout`: regra explícita (3 derrotas seguidas após o 4º round ou 4 atrás). `skipToEnd`, `sessionSeries` (MD1 no formato do resto do jogo), `normalizeSession` (versão estranha → null).
+  - `src/components/ultimate/UltimateLiveSession.tsx` (novo): palco round a round — placar, bolinhas, leitura pré-round (`peekWinProb`), botão ⏸ TIMEOUT (real), velocidade, killfeed do último round, "Pular pro fim". Sem caster (a transmissão exige roundLog completo — fica para uma versão incremental do drama).
+  - `UltimateSquadScreen.tsx`: `playMatch('casual')` cria a sessão (nada simulado nem gravado) e persiste em `rtm-ult-live-match-v1`; `finalizeSession` monta mvp/relatório/cerimônia do `MapResult` completo e grava a recompensa **uma vez por matchId** (ledger `rtm-ult-match-done-v1`, cap 50); banner "PARTIDA EM ANDAMENTO · Retomar" no hub; CTA do Amistoso vira "RETOMAR PARTIDA"; `startMatch('casual')` retoma em vez de abrir outra. Seed/matchId nascem fora do escopo de render (`freshSessionIds`) pela regra do React Compiler.
+  - `scripts/test-ultimate-match-session.mts` (5 testes): reprodução determinística; avançar 1 a 1 = correr até o fim; **timeout altera apenas o futuro** (rounds já resolvidos idênticos) e a retomada por JSON dá a mesma continuação; limite 1 por lado; dois lados anulam; IA determinística; `normalizeSession`.
+- Decisões tomadas e motivo: casual primeiro (plano §U06); reexecução em vez de snapshot do sim (não há `snapshot/restore` no `MapSim` e a reexecução é determinística e barata); recompensa no fim com ledger em vez de commit-on-start (F5 retoma da mesma seed — não há re-roll possível); abandono = sessão fica guardada e retoma na próxima entrada (não há expiração por tempo nesta versão); sem caster no palco incremental para não "tremer" as falas.
+- Comandos/testes e resultados reais: `npm run build` verde (2×) · `npm test` 131/131 · `npm run test:sim` **341/341** (+5) · `npm run lint` **189 = baseline** (3 `impure function during render` novos foram eliminados antes do commit).
+- Verificação visual e ambiente: não exercitada (palco novo coberto por typecheck e pelos testes do motor). Pendente: conferir o palco em mobile e o fluxo de retomada após F5 no navegador.
+- Compatibilidade/migração/flag: sem campo em save; sessão só em localStorage; sessão de versão diferente é descartada (`normalizeSession` → null). Sem flag: casual pré-calculado deixou de existir; os outros modos não mudam.
+- Pendências: **PvP** (checkpoint autoritativo, decisões ordenadas no servidor, prazo/ausência, desconexão/abandono, pares compatíveis, orçamento de tráfego); Gauntlet/Draft incrementais; caster incremental; expiração de sessão abandonada; medição de custo por partida (não há servidor envolvido no casual — custo zero de rede).
+- Próxima ação exata: U07.
 
 ## Modelo de atualização por lote
 

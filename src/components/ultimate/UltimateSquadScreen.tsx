@@ -18,6 +18,9 @@ import { packOddsLine } from '../../engine/ultimate/packOdds'; // [U01] garantia
 import { APPROACH_DEFS, APPROACH_IDS, AXIS_LABEL, buildAiOpponent, effectiveMultiplier, isApproach, prepareUltimateTeam, PVP_SNAPSHOT_VERSION, pvpApproachesApply, squadProfile, type Approach } from '../../engine/ultimate/squadAnalysis';
 import { buildMatchEvidence, type MatchEvidence } from '../../engine/ultimate/matchEvidence'; // [U04] pós-jogo com evidências (só MapResult)
 import { completeStep, dismissJourney, emptyJourney, journeyProgress, JOURNEY_STEPS, nextStep, normalizeJourney, seedFromProfile, STEP_INFO, type JourneyStep } from '../../engine/ultimate/firstSession'; // [U05]
+// [U06] partida INCREMENTAL (casual): sessão persistível, timeout real, recompensa 1x no fim
+import { createSession, normalizeSession, sessionSeries, type MatchSession } from '../../engine/ultimate/matchSession';
+import { UltimateLiveSession } from './UltimateLiveSession';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -77,6 +80,9 @@ import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQ
 import '../../styles/ultimate.css';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
+// [U06] identidade de uma sessão casual nova (seed + matchId + relógio). Fora do componente
+// de propósito: o React Compiler trata o corpo dos handlers como escopo de render.
+const freshSessionIds = () => { const seed = Math.floor(Math.random() * 2147483647) >>> 0; const now = Date.now(); return { seed, now, matchId: `casual-${now.toString(36)}-${seed.toString(36)}` }; };
 // codinomes das temporadas (cicla pela lista conforme season.n cresce)
 const SEASON_NAMES = ['Inception', 'Ascension', 'Dynasty', 'Legacy', 'Overtime', 'Eternal'];
 
@@ -381,6 +387,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const saveJourney = (j: typeof journey) => { setJourneyState(j); try { localStorage.setItem('rtm-ult-journey-v1', JSON.stringify(j)); } catch { /* sem storage */ } };
   const journeyDone = (step: JourneyStep) => { const j = completeStep(journey, step); if (j !== journey) saveJourney(j); };
   const journeyNext = nextStep(journey);
+  // [U06] SESSÃO DE PARTIDA (casual) — persistida em rtm-ult-live-match-v1: F5 retoma do round em que
+  // parou, com a mesma seed e as mesmas decisões (não re-rola). Recompensa só no fim, 1x por matchId.
+  const [liveSession, setLiveSessionState] = useState<MatchSession | null>(() => { try { return normalizeSession(JSON.parse(localStorage.getItem('rtm-ult-live-match-v1') ?? 'null')); } catch { return null; } });
+  const setLiveSession = (s: MatchSession | null) => { setLiveSessionState(s); try { if (s) localStorage.setItem('rtm-ult-live-match-v1', JSON.stringify(s)); else localStorage.removeItem('rtm-ult-live-match-v1'); } catch { /* sem storage */ } };
+  const matchLedgerHas = (id: string) => { try { return (JSON.parse(localStorage.getItem('rtm-ult-match-done-v1') ?? '[]') as string[]).includes(id); } catch { return false; } };
+  const matchLedgerAdd = (id: string) => { try { const a = (JSON.parse(localStorage.getItem('rtm-ult-match-done-v1') ?? '[]') as string[]); localStorage.setItem('rtm-ult-match-done-v1', JSON.stringify([...a.filter((x) => x !== id), id].slice(-50))); } catch { /* sem storage */ } };
   const noteMatchStart = (mode: string) => { matchesStartedRef.current += 1; trackUltFunnel(matchesStartedRef.current >= 2 ? 'second_match_started' : 'match_started', { mode }); };
   const noteMatchDone = (mode: string, won: boolean) => {
     trackUltFunnel('match_completed', { mode, won });
@@ -1261,6 +1273,14 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const myOvr = avgOvr || oppOvr;
     const oppElo = Math.max(300, Math.round(state.profile.elo + (oppOvr - myOvr) * 22));
     const maps = autoVeto([userTeam, oppTeam], rng, 1);
+    // [U06] CASUAL = partida incremental: nada é simulado nem gravado aqui. A sessão (seed, times
+    // travados, mapa) vai pro localStorage e cada round nasce no palco; a recompensa entra no fim.
+    if (mode === 'casual') {
+      const fresh = freshSessionIds();
+      const sess = createSession({ matchId: fresh.matchId, seed: fresh.seed, teams: [userTeam, oppTeam], map: maps[0].map, pickedBy: maps[0].pickedBy, now: fresh.now });
+      setResult(null); setLive(null); setLiveSession(sess);
+      return;
+    }
     const series = simulateSeries(rng, userTeam, oppTeam, maps, 1);
     // COMMIT-ON-START (anti loss-dodge): o resultado é registrado e persistido
     // AGORA — o replay é só exibição. F5 no meio da partida não desfaz derrota
@@ -1547,7 +1567,40 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     setLive({ series, teams: [userTeam, oppTeam], result: resultData, opp: oppFive, intro: true, myIdx: 0 });
   };
 
+  // [U06] fim da sessão incremental: monta o resultado (mvp/relatório/cerimônia a partir do MapResult
+  // completo) e grava a recompensa UMA vez por matchId (ledger local) — F5/retry/reabrir não pagam de novo.
+  const finalizeSession = (s: MatchSession) => {
+    const series = sessionSeries(s);
+    if (!series) return;
+    const [userTeam, oppTeam] = s.teams;
+    const won = series.winner === 0;
+    const m0 = series.maps[0];
+    const score = `${m0.score[0]}-${m0.score[1]}`;
+    const mapStats = m0.stats;
+    let mvp: LiveResult['mvp'];
+    for (const fs of form.slots) {
+      const sc = slotCard(fs.slot);
+      const line = sc ? mapStats[sc.card.playerId]?.both : undefined;
+      if (!sc || !line) continue;
+      if (!mvp || line.kills > mvp.kills || (line.kills === mvp.kills && line.deaths < mvp.deaths)) mvp = { card: sc.card, kills: line.kills, deaths: line.deaths };
+    }
+    const roundLog = m0.roundLog;
+    const dramaStars: [DramaStar[], DramaStar[]] = [starsFromPlayers(userTeam.players), starsFromPlayers(oppTeam.players)];
+    const script = buildDramaScript(roundLog, [userTeam.name, oppTeam.name], dramaStars);
+    const star = pickMatchStar(script, dramaStars, won ? 0 : 1) ?? undefined;
+    const evidence = buildMatchEvidence(series, [userTeam, oppTeam], 0, { chem: chem.multiplier, chemTotal: chem.total, evoBoost: evoBoostTotal, duelTotal: duel.total, duelMult: duel.multiplier, approach, oppApproach: null });
+    const oppOvr = Math.round(oppTeam.players.reduce((a, p) => a + p.ovr, 0) / Math.max(1, oppTeam.players.length));
+    const myOvr = avgOvr || oppOvr;
+    const oppElo = Math.max(300, Math.round(state.profile.elo + (oppOvr - myOvr) * 22));
+    const already = matchLedgerHas(s.matchId);
+    const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, oppElo, false, score);
+    if (!already) { matchLedgerAdd(s.matchId); noteMatchDone('casual', won); }
+    setLiveSession(null);
+    setResult({ won, score, outcome, mode: 'casual', divChange: 'same', divName: divisionFor(state.profile.elo).def.name, mvp, roundLog, mapName: MAP_LABELS[m0.map] ?? m0.map, star, casterFinal: finalCallOf(script), evidence, repeat: already });
+  };
   const startMatch = (mode: MatchMode) => {
+    // [U06] partida casual em andamento: retoma em vez de abrir outra
+    if (mode === 'casual' && liveSession) { if (liveSession.status === 'done') finalizeSession(liveSession); return; }
     if (mode === 'gauntlet') {
       const g = state.profile.gauntlet;
       const today = dateKey(new Date());
@@ -1631,6 +1684,10 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     );
   }
 
+  // [U06] partida INCREMENTAL rolando (casual): cada round nasce agora; timeout real.
+  if (liveSession && !result) {
+    return <UltimateLiveSession session={liveSession} onSession={setLiveSession} onFinish={finalizeSession} />;
+  }
   // partida rolando: substitui a tela pelo replay round-a-round (reusa MatchReplay).
   if (live) {
     // INTRO DE CONFRONTO (pré-jogo estilo transmissão): suas cartas vs o rival,
@@ -1914,6 +1971,13 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
 
       {tab === 'hub' && (
         <>
+          {/* [U06] partida casual em andamento — retomar (a seed e as decisões estão guardadas) */}
+          {liveSession && (
+            <section style={{ borderRadius: 14, border: '1px solid #2563eb55', background: 'rgba(37,99,235,.06)', padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <div><div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: '#2563eb' }}>⏱ {ct('PARTIDA EM ANDAMENTO')}</div><div style={{ fontWeight: 800 }}>{liveSession.teams[0].name} vs {liveSession.teams[1].name} · {ct('round')} {liveSession.cursor + 1}</div></div>
+              <button className="ut-jogar" style={{ padding: '10px 18px' }} onClick={() => { if (liveSession.status === 'done') finalizeSession(liveSession); else { setResult(null); setLive(null); go('hub'); setLiveSessionState({ ...liveSession }); } }}><Zap size={15} /> {ct('Retomar')}</button>
+            </section>
+          )}
           {/* [U05] PRIMEIRA SESSÃO — próximo passo explícito até a 2ª partida; dispensável */}
           {journeyNext && (() => {
             const step = journeyNext; const info = STEP_INFO[step]; const prog = journeyProgress(journey);
@@ -2839,7 +2903,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         const gWins = gActive ? g.wins : 0;
         const ctaDisabled = !squadComplete || (rankedMode === 'gauntlet' && gDoneToday);
         const ctaLabel = rankedMode === 'rivals' ? ct('ENTRAR NA FILA')
-          : rankedMode === 'casual' ? ct('JOGAR AMISTOSO')
+          : rankedMode === 'casual' ? (liveSession ? ct('RETOMAR PARTIDA') : ct('JOGAR AMISTOSO'))
           : gActive ? `${ct('PRÓXIMA')} · ${gWins}/${GAUNTLET_TARGET}`
           : gDoneToday ? ct('VOLTE AMANHÃ')
           : ct('INICIAR GAUNTLET');
