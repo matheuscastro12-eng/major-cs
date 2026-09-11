@@ -188,6 +188,8 @@ export function claimSeasonReward(state: UltimateState, id: string): UltimateSta
 // ── Elite Gauntlet: desafio diário de sequência de vitórias ──
 export const GAUNTLET_TARGET = 5;
 export const GAUNTLET_WIN_CREDITS = [800, 1200, 2000, 3200, 4500]; // credits por vitória (index = wins-1); topo aparado (era 6000)
+// [U01] amistoso (Friendly) — treino, não farm. A UI deriva o texto daqui (era '500/150' fixo, mentindo).
+export const FRIENDLY_CREDITS = { win: 90, loss: 25 } as const;
 
 // inicia um run do Gauntlet (1 por dia). No-op se já iniciou hoje.
 export function gauntletStart(state: UltimateState, today: string): UltimateState {

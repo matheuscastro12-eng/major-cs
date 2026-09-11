@@ -23,6 +23,7 @@ import { buildFullCatalog } from '../engine/ultimate/catalog';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
 import { totwForWeek, weekIndex, type WeeklyTotw } from '../engine/ultimate/totw';
+import { weeklyPackPool } from '../engine/ultimate/packPool';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import { pickStarterCards } from '../engine/ultimate/cards';
@@ -47,6 +48,7 @@ import {
   draftPick as _draftPick,
   draftRecord as _draftRecord,
   GAUNTLET_WIN_CREDITS,
+  FRIENDLY_CREDITS,
   STARTING_ELO,
   pushHistory as _pushHistory,
   ensureMissions as _ensureMissions,
@@ -268,10 +270,10 @@ export function ultimatePromoPack(): PackDef {
 interface UltimateStore {
   state: UltimateState;
   grant: (cardKey: string, via: AcquiredVia) => void;
-  openPack: (packId: string) => { ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' };
+  openPack: (packId: string) => { ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' | 'unavailable' };
   // fase 3b: abre no SERVIDOR quando conta paga+logada (roll autoritativo);
   // free/offline/Promo caem no openPack local. source diz de onde veio o roll.
-  openPackCloud: (packId: string) => Promise<{ ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' | 'busy'; source: 'server' | 'local' }>;
+  openPackCloud: (packId: string) => Promise<{ ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' | 'busy' | 'unavailable'; source: 'server' | 'local' }>;
   sell: (ownedId: string) => { ok: boolean; credited: number };
   sellMany: (ownedIds: string[]) => { sold: number; credited: number };
   spend: (n: number) => boolean;
@@ -393,7 +395,8 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     // meses passados pra resolver inventário antigo — não podem sair do pack).
     const cat = pack.id === PROMO_PACK.id
       ? ultimateCatalog().filter((c) => c.rarity !== 'promo' || ultimatePromo().playerIds.includes(c.playerId))
-      : ultimateCatalog();
+      : pack.id === 'totw' ? weeklyPackPool(ultimateCatalog(), new Date()) : ultimateCatalog();
+    if (!cat) return { ok: false, cards: [], reason: 'unavailable' };
     const cards = rollPack(cat, pack, rng);
     let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
     for (const c of cards) s = _grantCard(s, c.key, 'pack');
@@ -425,6 +428,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     let r: Awaited<ReturnType<typeof openPackOnServer>>;
     try { r = await openPackOnServer(pack.id); } finally { _packOpenInFlight = false; }
     if (!r) return localRoll(); // fallback: roll local (espelhado como sempre) — drift já anotado
+    if ('unavailable' in r) return { ok: false, cards: [], reason: 'unavailable' as const, source: 'server' as const };
     const prev = get().state;
     // O roll do SERVIDOR substitui o local INTEIRO: as cópias entram com o
     // uuid gerado lá (mesmo id em rtm_ult_cards) — a reconciliação do boot
@@ -540,7 +544,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // amistoso é TREINO, não farm: recompensa simbólica (era 500/150, dava pra
       // spammar até um time 95+ em ~20min). Renda de verdade vem de rivals (PvP),
       // daily, gauntlet — capados. ~90/vitória → 300+ jogos por um pack Elite.
-      const credits = won ? 90 : 25;
+      const credits = won ? FRIENDLY_CREDITS.win : FRIENDLY_CREDITS.loss;
       const prev = get().state;
       let s = _addCredits(prev, credits);
       s = _pushHistory(s, rec('casual', 0, credits));

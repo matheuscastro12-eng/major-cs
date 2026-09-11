@@ -20,10 +20,10 @@ export const TOTW_BOOST = 2;   // +OVR da versão in-form
 export const TOTW_SIZE = 7;    // jogadores in-form por semana
 const WEEK_MS = 7 * 86400000;
 
-// âncora da semana 0: segunda-feira 03/08/2026, 00:00 local (estreia do TOTW).
+// Rotação global: segunda-feira 00:00 UTC, igual no navegador e servidor.
 // Antes disso não existe TOTW.
 function anchorMs(): number {
-  return new Date(2026, 7, 3).getTime();
+  return Date.UTC(2026, 7, 3);
 }
 
 // índice absoluto da semana (0 = semana de estreia; negativo = antes da época).
