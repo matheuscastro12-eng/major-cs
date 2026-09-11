@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 11/09/2026 (U00–U04 concluídos).
+Última atualização: 11/09/2026 (U00–U05 concluídos).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -19,8 +19,8 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U02 Funil | Implementado e verificado (11/09) | Branch `ult/u02-funil`; baseline começa a contar após o deploy |
 | U03 Elenco/táticas | Implementado e verificado (11/09) | Branch `ult/u03-elenco-taticas`; evolução em PvP e dupla contagem ficam documentadas, não alteradas |
 | U04 Pós-jogo | Implementado e verificado (11/09) | Branch `ult/u04-pos-jogo`; comparação do reforço fica para U07 |
-| U05 Primeira sessão | Pendente — **próximo** | U03/U04 feitos |
-| U06 Timeout real | Pendente | U03/U04; novo contrato de execução |
+| U05 Primeira sessão | Implementado e verificado (11/09) | Branch `ult/u05-primeira-sessao`; mobile pendente |
+| U06 Timeout real | Pendente — **próximo** | Levantamento técnico em andamento; casual primeiro |
 | U07 Alvo e estreia | Pendente | U03/U05 |
 | U08 Compra/oferta inicial | Pendente | U01/U02/U07 |
 | U09 Passe | Pendente | U02/U08; U10 para cosméticos novos |
@@ -30,7 +30,7 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 
 ## Próxima ação exata
 
-Executar U05 (primeira sessão guiada): jornada persistente e retomável — receber time → conhecer força (leitura do elenco, U03) → treino curto vs IA (amistoso, identificado como IA, sem ladder) → relatório (U04) → ajuste gratuito no squad → segunda partida → escolher objetivo (o alvo em si é U07; aqui só o passo). Reaproveitar `claimStarter` sem nova concessão para quem já está `onboarded`; tutorial dispensável; CTA pós-reveal contextual (escalar/estrear em vez de só "ver coleção"); refresh retoma a etapa (estado da jornada em localStorage por sid, sem mexer no save); mobile sem instrução externa.
+Executar U06 (timeout interativo real) — **casual primeiro**: execução incremental com `createMapSim.step()` round a round no replay do Ultimate, estado de partida persistível (seed/tick do RNG, cursor de round, placar, economia, elencos travados, decisões, versão, status), no máximo 1 timeout por lado/mapa entre rounds (`step(boostTeam)` já existe no motor: +2.0 de força no round), término idempotente por `matchId` e recompensa registrada UMA vez no fim (não mais commit-on-start — mas recarregar não pode re-rolar: o estado da partida em andamento fica persistido). PvP fica registrado como pendente se o custo/contrato de checkpoint autoritativo não couber no lote.
 
 ## Descoberta que não pode ser esquecida
 
@@ -146,6 +146,22 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: campo opcional em `LiveResult` (estado de sessão, não save).
 - Pendências: comparação de desempenho do reforço (depende do alvo do U07); relatório de séries MD3+ lê só o 1º mapa (o Ultimate joga MD1); persistir o relatório no histórico se um dia "reabrir partida antiga" existir.
 - Próxima ação exata: U05.
+
+## U05 — primeira sessão guiada — 11/09/2026
+
+- Estado: **implementado e verificado**.
+- Branch/commit: `ult/u05-primeira-sessao` (a partir de `495c4ab`).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/firstSession.ts` (novo, puro): jornada `starter → strength → training → report → adjust → second → goal`, cada etapa marcada por um FATO (recebeu o time, abriu a leitura do elenco, concluiu a 1ª partida, chegou ao relatório, trocou um slot, concluiu a 2ª, abriu Loja/Coleção). `completeStep` só avança em ordem (idempotente), `nextStep`, `dismissJourney`, `normalizeJourney` (refresh retoma), `seedFromProfile` (onboarded começa em `strength`; veterano com ≥3 partidas é dispensado sozinho). Estado em `localStorage` `rtm-ult-journey-v1` — não é patrimônio, não sincroniza.
+  - `src/state/ultimate.ts`: **guarda em `claimStarter`** — quem já está `onboarded` não recebe starter de novo (antes a única defesa era o gate de render); devolve as cartas escaladas para o reveal não quebrar.
+  - `UltimateSquadScreen.tsx`: card "PRIMEIRA SESSÃO · n/7" no topo do hub com título, dica, CTA da etapa e "Pular"; barra de 7 etapas. CTA pós-reveal do time inicial vira "Conhecer a força e treinar →" (abre a Ranqueada em Amistoso, onde está a leitura do elenco/abordagem do U03) com "Ver coleção" secundário. Etapas avançam por eventos: `journeyDone('training'|'second')` em `noteMatchDone`, `'report'` em `finishMatch`, `'adjust'` ao trocar slot, `'strength'`/`'goal'` no `go()` (handler, não effect — regra `set-state-in-effect`). Treino e 2ª partida usam o Amistoso vs IA (identificado como IA, não conta no ladder).
+  - `scripts/test-ultimate-first-session.mts` (3 testes): ordem/idempotência, normalização (refresh), veterano/novato/convidado.
+- Decisões tomadas e motivo: jornada fora do save (compatibilidade e zero migração); "escolher objetivo" nesta versão = abrir Loja/Coleção (o alvo persistente é o U07 — a etapa passará a ser "selecionar alvo" quando ele existir); Amistoso como treino porque já é vs IA e sem RP; não dependemos de adversário online.
+- Comandos/testes e resultados reais: `npm run build` verde (2×, após o ajuste do lint) · `npm test` 131/131 · `npm run test:sim` **336/336** (+3) · `npm run lint` **189 = baseline** (um `set-state-in-effect` novo foi introduzido e removido antes do commit).
+- Verificação visual e ambiente: não exercitada (card, barra e CTA cobertos por typecheck). **Pendente: completar em mobile sem instrução externa** — critério de aceite do plano ainda não demonstrado.
+- Compatibilidade/migração/flag: sem campo em save; veterano é dispensado automaticamente; "Pular" persiste.
+- Pendências: mobile; a etapa `goal` deve apontar para o alvo do U07; refresh **durante** uma partida ainda perde o replay (o resultado já está registrado — é o U06 que muda isso).
+- Próxima ação exata: U06 (casual).
 
 ## Modelo de atualização por lote
 
