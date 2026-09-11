@@ -17,6 +17,7 @@ import { packOddsLine } from '../../engine/ultimate/packOdds'; // [U01] garantia
 // [U03] adaptador único de preparação de time + perfil de elenco + abordagem + IA com composição válida
 import { APPROACH_DEFS, APPROACH_IDS, AXIS_LABEL, buildAiOpponent, effectiveMultiplier, isApproach, prepareUltimateTeam, PVP_SNAPSHOT_VERSION, pvpApproachesApply, squadProfile, type Approach } from '../../engine/ultimate/squadAnalysis';
 import { buildMatchEvidence, type MatchEvidence } from '../../engine/ultimate/matchEvidence'; // [U04] pós-jogo com evidências (só MapResult)
+import { completeStep, dismissJourney, emptyJourney, journeyProgress, JOURNEY_STEPS, nextStep, normalizeJourney, seedFromProfile, STEP_INFO, type JourneyStep } from '../../engine/ultimate/firstSession'; // [U05]
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -374,8 +375,19 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // Preferência do navegador (rtm-ult-approach-v1); ausente = comportamento antigo.
   const [approach, setApproachState] = useState<Approach | null>(() => { try { const v = localStorage.getItem('rtm-ult-approach-v1'); return isApproach(v) ? v : null; } catch { return null; } });
   const setApproach = (a: Approach | null) => { setApproachState(a); try { if (a) localStorage.setItem('rtm-ult-approach-v1', a); else localStorage.removeItem('rtm-ult-approach-v1'); } catch { /* sem storage */ } };
+  // [U05] JORNADA DA PRIMEIRA SESSÃO — persistida por navegador (rtm-ult-journey-v1), retomável no refresh,
+  // dispensável. Veterano com histórico é dispensado sozinho (seedFromProfile).
+  const [journey, setJourneyState] = useState(() => { let j = emptyJourney(); try { j = normalizeJourney(JSON.parse(localStorage.getItem('rtm-ult-journey-v1') ?? 'null')); } catch { /* sem storage */ } return seedFromProfile(j, state.profile.onboarded, state.profile.history.length); });
+  const saveJourney = (j: typeof journey) => { setJourneyState(j); try { localStorage.setItem('rtm-ult-journey-v1', JSON.stringify(j)); } catch { /* sem storage */ } };
+  const journeyDone = (step: JourneyStep) => { const j = completeStep(journey, step); if (j !== journey) saveJourney(j); };
+  const journeyNext = nextStep(journey);
   const noteMatchStart = (mode: string) => { matchesStartedRef.current += 1; trackUltFunnel(matchesStartedRef.current >= 2 ? 'second_match_started' : 'match_started', { mode }); };
-  const noteMatchDone = (mode: string, won: boolean) => { trackUltFunnel('match_completed', { mode, won }); };
+  const noteMatchDone = (mode: string, won: boolean) => {
+    trackUltFunnel('match_completed', { mode, won });
+    // [U05] 1ª partida concluída = 'training'; a seguinte, depois do ajuste, = 'second'
+    if (journeyNext === 'training') journeyDone('training');
+    else if (journeyNext === 'second') journeyDone('second');
+  };
 
   // Major da Semana: status/ranking pro banner + ranking do hub (best-effort)
   useEffect(() => {
@@ -413,7 +425,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     document.addEventListener('click', h);
     return () => document.removeEventListener('click', h);
   }, [navMenu]);
-  const go = (t: typeof tab) => { setTab(t); setNavMenu(null); };
+  const go = (t: typeof tab) => {
+    setTab(t); setNavMenu(null);
+    // [U05] fatos de navegação (no handler, não em effect): viu a leitura do elenco; escolheu objetivo
+    if (t === 'ranked' && journeyNext === 'strength') journeyDone('strength');
+    if ((t === 'store' || t === 'club') && journeyNext === 'goal') journeyDone('goal');
+  };
   const onJogar = () => { if (squadComplete) { setRankedMode('rivals'); setTab('ranked'); } else setTab('squad'); };
   // contagem regressiva até a próxima recompensa (meia-noite local)
   const msToMidnight = (() => { const d = new Date(); const n = new Date(d); n.setHours(24, 0, 0, 0); return n.getTime() - d.getTime(); })();
@@ -1406,6 +1423,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     setLive(null);
     setShareState(null);
     setResult(r);
+    if (journeyNext === 'report') journeyDone('report'); // [U05] chegou ao relatório
   };
 
   // card de compartilhamento (iter42): mesmo padrão canvas→PNG do FinalScreen
@@ -1604,7 +1622,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               ))}
             </div>
             <div style={{ marginTop: 16, textAlign: 'center' }}>
-              <button className="ut-jogar" style={{ padding: '12px 26px', fontSize: '1rem' }} onClick={() => { const cards = claimStarter(onbForm); trackUltFunnel('starter_claimed'); setReveal([...cards].sort((a, b) => b.ovr - a.ovr)); }}><Gift size={17} /> {ct('Receber meu time inicial')}</button>
+              <button className="ut-jogar" style={{ padding: '12px 26px', fontSize: '1rem' }} onClick={() => { const cards = claimStarter(onbForm); trackUltFunnel('starter_claimed'); journeyDone('starter'); setReveal([...cards].sort((a, b) => b.ovr - a.ovr)); }}><Gift size={17} /> {ct('Receber meu time inicial')}</button>
             </div>
           </UtPanel>
           <div style={{ textAlign: 'center' }}><button onClick={onBack} className="ut-btn ut-btn--ghost">← {ct('Voltar')}</button></div>
@@ -1896,6 +1914,35 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
 
       {tab === 'hub' && (
         <>
+          {/* [U05] PRIMEIRA SESSÃO — próximo passo explícito até a 2ª partida; dispensável */}
+          {journeyNext && (() => {
+            const step = journeyNext; const info = STEP_INFO[step]; const prog = journeyProgress(journey);
+            const act = () => {
+              if (step === 'strength') { setRankedMode('casual'); go('ranked'); }
+              else if (step === 'training' || step === 'second') { if (squadComplete) { setRankedMode('casual'); startMatch('casual'); } else go('squad'); }
+              else if (step === 'report') { if (result) return; go('ranked'); }
+              else if (step === 'adjust') go('squad');
+              else if (step === 'goal') go('store');
+            };
+            return (
+              <section style={{ borderRadius: 14, border: '1px solid rgba(201,166,60,.45)', background: 'rgba(201,166,60,.08)', padding: '14px 18px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: '#92600a' }}>🎓 {ct('PRIMEIRA SESSÃO')} · {prog.done}/{prog.total}</div>
+                    <div style={{ fontWeight: 900, fontSize: '1.05rem' }}>{ct(info.title)}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--ut-muted)' }}>{ct(info.hint)}{step === 'training' || step === 'second' ? ` ${ct('Adversário: IA (não conta no ladder).')}` : ''}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button className="ut-jogar" style={{ padding: '10px 18px' }} onClick={act}><Zap size={15} /> {ct(info.cta)}</button>
+                    <button className="ut-btn ut-btn--ghost" onClick={() => saveJourney(dismissJourney(journey))} title={ct('Já conheço o modo')}>{ct('Pular')}</button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                  {JOURNEY_STEPS.map((s) => <span key={s} title={ct(STEP_INFO[s].title)} style={{ width: 26, height: 6, borderRadius: 3, background: journey.done.includes(s) ? '#c9a63c' : s === step ? '#92600a' : '#e5e2d8' }} />)}
+                </div>
+              </section>
+            );
+          })()}
           {/* Major da Semana — destaque no topo do hub (exposição + ranking) */}
           {(() => {
             const wlWin = wlWindowNow();
@@ -3348,7 +3395,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 {cands.map(({ o, card, n }) => {
                   const fits = roleFitsSlot(card.role, slotRole);
                   return (
-                    <button key={o.id} onClick={() => { placeInSquad(pickSlot, o.id); trackUltFunnel('squad_adjusted'); setPickSlot(null); }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: fits ? 1 : 0.72 }}>
+                    <button key={o.id} onClick={() => { placeInSquad(pickSlot, o.id); trackUltFunnel('squad_adjusted'); if (journeyNext === 'adjust') journeyDone('adjust'); setPickSlot(null); }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: fits ? 1 : 0.72 }}>
                       <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} />
                       {!fits && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(229,138,138,0.85)', color: '#fff' }}>{ct('fora')}</span>}
                       {o.locked === 'squad' && <span style={{ position: 'absolute', bottom: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
@@ -3623,7 +3670,10 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               ? <><Button variant="ghost" onClick={() => setRevealIdx(wo.length)}>{ct('Pular')}</Button><Button variant="primary" onClick={() => setRevealIdx((i) => i + 1)}>{isBest ? ct('Concluir') : `${ct('Próxima')} (${revealIdx + 2}/${wo.length})`}</Button></>
               // "Fechar" ao lado: resgates do Passe/Hub abriam o reveal e o único
               // caminho era "Ver coleção" — que arrancava o usuário da aba atual.
-              : <><Button variant="ghost" onClick={() => setReveal(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { setReveal(null); setTab('club'); }}>{ct('Ver coleção')}</Button></>}>
+              // [U05] depois do TIME INICIAL o próximo passo é jogar, não olhar a coleção
+              : journeyNext === 'strength'
+                ? <><Button variant="ghost" onClick={() => { setReveal(null); setTab('club'); }}>{ct('Ver coleção')}</Button><Button variant="primary" onClick={() => { setReveal(null); setRankedMode('casual'); go('ranked'); }}>{ct('Conhecer a força e treinar')} →</Button></>
+                : <><Button variant="ghost" onClick={() => setReveal(null)}>{ct('Fechar')}</Button><Button variant="primary" onClick={() => { setReveal(null); setTab('club'); }}>{ct('Ver coleção')}</Button></>}>
             {inWalkout ? (
               <div className="ult-wo" style={{ '--wo': info.color } as CSSProperties} onClick={() => setRevealIdx((i) => i + 1)}>
                 <div className="ult-wo__flash" key={`f${revealIdx}`} />

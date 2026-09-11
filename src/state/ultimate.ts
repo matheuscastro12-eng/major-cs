@@ -605,9 +605,16 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       return { state: s };
     }),
   claimStarter: (formationId) => {
+    const prev = get().state;
+    // [U05] guarda: quem já está onboarded NUNCA ganha starter de novo (antes a única
+    // defesa era a UI). Devolve as cartas escaladas atuais pra o reveal não quebrar.
+    if (prev.profile.onboarded) {
+      const idx = ultimateIndex();
+      const sq = prev.squads.find((q) => q.active) ?? prev.squads[0];
+      return (sq?.slots ?? []).map((sl) => { const o = prev.inventory.find((x) => x.id === sl.ownedId); return o ? idx.get(o.cardKey) : undefined; }).filter((c): c is UltCard => !!c);
+    }
     const roles = formationSlotRoles(formationId);
     const cards = pickStarterCards(ultimateCatalog(), roles, 76);
-    const prev = get().state;
     let s = _ensureSquad(prev, formationId, roles);
     cards.forEach((c, i) => {
       const id = `starter_${i}_${Math.random().toString(36).slice(2, 9)}`;
