@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 11/09/2026 (U00–U03 concluídos).
+Última atualização: 11/09/2026 (U00–U04 concluídos).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -18,8 +18,8 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U01 Loja/pools | Implementado e verificado (11/09) | Branch `ult/u01-loja-pools`; ver seção U01 |
 | U02 Funil | Implementado e verificado (11/09) | Branch `ult/u02-funil`; baseline começa a contar após o deploy |
 | U03 Elenco/táticas | Implementado e verificado (11/09) | Branch `ult/u03-elenco-taticas`; evolução em PvP e dupla contagem ficam documentadas, não alteradas |
-| U04 Pós-jogo | Pendente — **próximo** | U03 feito |
-| U05 Primeira sessão | Pendente | U03/U04 |
+| U04 Pós-jogo | Implementado e verificado (11/09) | Branch `ult/u04-pos-jogo`; comparação do reforço fica para U07 |
+| U05 Primeira sessão | Pendente — **próximo** | U03/U04 feitos |
 | U06 Timeout real | Pendente | U03/U04; novo contrato de execução |
 | U07 Alvo e estreia | Pendente | U03/U05 |
 | U08 Compra/oferta inicial | Pendente | U01/U02/U07 |
@@ -30,7 +30,7 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 
 ## Próxima ação exata
 
-Executar U04 (pós-jogo com evidências): relatório a partir dos eventos reais da série (`roundLog`, `stats` por jogador, `PlayerLine`, `RoundTally`) e dos modificadores APLICADOS (química, evolução, estilos, abordagem via `playbookLean`, IA com abordagem) — separar "aconteceu" de "efeito modelado"; até 3 insights com ação (ajuste/tática/coleção); auditar `liveDrama`/`liveFrags` para que narração não vire prova; comparação do reforço sem prometer que teria revertido a derrota; relatório idêntico ao reabrir; fallback honesto sem dado. Reaproveitar `DecisionReview`/`roundLog.ts` (PR #51) onde couber.
+Executar U05 (primeira sessão guiada): jornada persistente e retomável — receber time → conhecer força (leitura do elenco, U03) → treino curto vs IA (amistoso, identificado como IA, sem ladder) → relatório (U04) → ajuste gratuito no squad → segunda partida → escolher objetivo (o alvo em si é U07; aqui só o passo). Reaproveitar `claimStarter` sem nova concessão para quem já está `onboarded`; tutorial dispensável; CTA pós-reveal contextual (escalar/estrear em vez de só "ver coleção"); refresh retoma a etapa (estado da jornada em localStorage por sid, sem mexer no save); mobile sem instrução externa.
 
 ## Descoberta que não pode ser esquecida
 
@@ -130,6 +130,22 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: sem campo novo em save; snapshot PvP aditivo e versionado; cliente antigo × novo simulam igual (abordagem ignorada por ambos). Draft: squad emprestado segue sem abordagem do usuário (só a IA).
 - Pendências: **evolução não entra na força em PvP** (o `ovr` do snapshot é cosmético; `buildOnlineTeam` lê o `Player` cru) — precisa viajar `boost` por carta no snapshot v3 e ser clampado no servidor; identidade tática (`MapSimOpts.identity`) não exposta por `simulateSeries`; coach fixo 70/tactical; `AI_EDGE` não se aplica ao Ultimate porque a IA nasce `isUser:true`.
 - Próxima ação exata: U04.
+
+## U04 — pós-jogo com evidências — 11/09/2026
+
+- Estado: **implementado e verificado**.
+- Branch/commit: `ult/u04-pos-jogo` (a partir de `122a99f`).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/matchEvidence.ts` (novo, puro): `buildMatchEvidence(series, teams, myIdx, mods)` lê **só o MapResult** (roundLog, killFeed, stats por jogador) e devolve `observed` (placar, halves, pistols, aberturas, mortes trocadas, headshots, melhor/pior do seu squad, clutches, melhor deles), `modeled` (química, evolução, estilos, sua abordagem, abordagem da IA — "efeito modelado, não prova de causa") e até 3 `insights`, cada um com `evidence` numérica e uma ação (`ajuste` | `tatica` | `colecao`). Regras: aberturas perdidas (≤1/3 de ≥6), pistols 0/2, domínio do 1º half e queda no 2º, química ≤6/15, pior jogador ≥6 K-D abaixo da média com ≥12 rounds, trocas <25% com ≥10 mortes; vitória sem padrão elogia o melhor; sem padrão diz que não há padrão.
+  - `UltimateSquadScreen.tsx`: `LiveResult.evidence` calculado **junto com a simulação** nos três executores (casual/gauntlet, PvP, draft) — reabrir a partida mostra o mesmo relatório; modal de resultado ganha o bloco "RELATÓRIO · o que aconteceu" (insights) com `<details>` "ver evidências e modificadores" (observado e modelado separados). No PvP o `chem` do snapshot embute química×estilos e as abordagens só entram se os dois lados forem v2.
+  - `scripts/test-ultimate-match-evidence.mts` (3 testes): relatório idêntico para a mesma série; números batem com o MapResult (placar, pistols, aberturas) e a perspectiva invertida troca o placar sem mudar o fato; fallback sem killFeed (sem insight de duelo/troca; "nenhum aplicado" sem modificadores).
+- Auditoria da transmissão (`liveDrama.ts`, `liveFrags.ts`, `showtime.ts`): falas do caster, "momento de estrela" e "craque do duelo" são derivados de roundLog + **traits das cartas** (apresentação), não de eventos do motor; `liveFrags` usa o killFeed real. Por isso o relatório não lê `DramaScript`/`MatchStar` — a cerimônia continua no modal, mas separada do relatório.
+- Decisões tomadas e motivo: sem frases contrafactuais ("teria vencido com…"); insights de tática só apontam o que cada abordagem favorece (texto derivado das regras do `playbookLean`); relatório não é persistido no histórico (`MatchRecord` guarda só placar) — reabrir na sessão usa o objeto da partida.
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` **333/333** (+3) · `npm run lint` 189 = baseline.
+- Verificação visual e ambiente: não exercitada (bloco novo no modal coberto por typecheck; layout pendente de conferência em mobile).
+- Compatibilidade/migração/flag: campo opcional em `LiveResult` (estado de sessão, não save).
+- Pendências: comparação de desempenho do reforço (depende do alvo do U07); relatório de séries MD3+ lê só o 1º mapa (o Ultimate joga MD1); persistir o relatório no histórico se um dia "reabrir partida antiga" existir.
+- Próxima ação exata: U05.
 
 ## Modelo de atualização por lote
 

@@ -2,7 +2,7 @@
 // cartas do dataset real, moeda `credits`. Padrão em-*/DashCard/Modal/Button.
 // Ver docs-but-map.md. Sub-fases futuras: Squad Builder (P2), partida vs IA (P3).
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
@@ -16,6 +16,7 @@ import { ICON_PACK, PACK_DEFS, packById, TOTW_PACK, type PackDef } from '../../e
 import { packOddsLine } from '../../engine/ultimate/packOdds'; // [U01] garantia + odds efetivas derivadas da definição
 // [U03] adaptador único de preparação de time + perfil de elenco + abordagem + IA com composição válida
 import { APPROACH_DEFS, APPROACH_IDS, AXIS_LABEL, buildAiOpponent, effectiveMultiplier, isApproach, prepareUltimateTeam, PVP_SNAPSHOT_VERSION, pvpApproachesApply, squadProfile, type Approach } from '../../engine/ultimate/squadAnalysis';
+import { buildMatchEvidence, type MatchEvidence } from '../../engine/ultimate/matchEvidence'; // [U04] pós-jogo com evidências (só MapResult)
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -332,7 +333,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   type MatchMode = 'rivals' | 'casual' | 'gauntlet' | 'pvp' | 'draft';
   // cerimônia pós-jogo (iter42): star = craque do duelo (determinístico, lado
   // JÁ na perspectiva do usuário: 0 = você); casterFinal = chamada final do caster.
-  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; draft?: { wins: number; completed: boolean; over: boolean; credits: number; card?: UltCard; daily?: boolean }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null };
+  type LiveResult = { won: boolean; score: string; outcome: MatchOutcome; mode: MatchMode; divChange: DivisionChange; divName: string; gaunt?: { wins: number; completed: boolean; over: boolean; card?: UltCard }; draft?: { wins: number; completed: boolean; over: boolean; credits: number; card?: UltCard; daily?: boolean }; mvp?: { card: UltCard; kills: number; deaths: number }; roundLog: (0 | 1)[]; mapName: string; oppName?: string; repeat?: boolean; star?: MatchStar; casterFinal?: string | null; evidence?: MatchEvidence };
   const [live, setLive] = useState<{ series: SeriesResult; teams: [TTeam, TTeam]; result: LiveResult; opp: PoolPlayer[]; intro: boolean; myIdx: 0 | 1; pvpCode?: string } | null>(null);
   const [result, setResult] = useState<LiveResult | null>(null);
   const [shareState, setShareState] = useState<'busy' | 'shared' | 'saved' | null>(null);
@@ -1267,19 +1268,21 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const dramaStars: [DramaStar[], DramaStar[]] = [starsFromPlayers(userTeam.players), starsFromPlayers(oppTeam.players)];
     const script = buildDramaScript(roundLog, [userTeam.name, oppTeam.name], dramaStars);
     const star = pickMatchStar(script, dramaStars, won ? 0 : 1) ?? undefined;
+    // [U04] relatório com evidências: nasce junto com a simulação (reabrir = mesmo relatório)
+    const evidence = buildMatchEvidence(series, [userTeam, oppTeam], 0, { chem: chem.multiplier, chemTotal: chem.total, evoBoost: evoBoostTotal, duelTotal: duel.total, duelMult: duel.multiplier, approach, oppApproach: ai.approach });
     const casterFinal = finalCallOf(script);
     let resultData: LiveResult;
     if (mode === 'gauntlet') {
       const r = gauntletRecord(won, score);
       noteMatchDone('gauntlet', won); // [U02]
-      resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard }, mvp, roundLog, mapName, star, casterFinal };
+      resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard }, mvp, roundLog, mapName, star, casterFinal, evidence };
     } else {
       // Amistoso (casual): sem risco de RP, sem ladder — só credits. O ranqueado
       // (Rivals) virou PvP online de verdade e passa pelo startPvpMatch; contra IA
       // sobra só o Gauntlet e este treino amistoso, que NÃO alimentam o ranking.
       const outcome = recordMatch(won, oppElo, false, score);
       noteMatchDone(mode, won); // [U02]
-      resultData = { won, score, outcome, mode, divChange: 'same', divName: divisionFor(eloBefore).def.name, mvp, roundLog, mapName, star, casterFinal };
+      resultData = { won, score, outcome, mode, divChange: 'same', divName: divisionFor(eloBefore).def.name, mvp, roundLog, mapName, star, casterFinal, evidence };
     }
     setResult(null);
     setLiveRound(0);
@@ -1378,7 +1381,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     setLiveRound(0);
     setLive({
       series, teams: [tA, tB], opp: oppFive, intro: true, myIdx, pvpCode: args.code,
-      result: { won, score, outcome, mode: 'pvp', divChange: already ? 'same' : divisionChange(eloBefore, eloAfter), divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName, oppName: args.oppNick, repeat: already, star, casterFinal },
+      result: { won, score, outcome, mode: 'pvp', divChange: already ? 'same' : divisionChange(eloBefore, eloAfter), divName: divisionFor(eloAfter).def.name, mvp, roundLog, mapName, oppName: args.oppNick, repeat: already, star, casterFinal,
+        // [U04] PvP: o chem do snapshot embute química×estilos; abordagens só se os dois lados forem v2
+        evidence: buildMatchEvidence(series, [tA, tB], myIdx, { chem: args.mySquad.chem, approach: useApproach && isApproach(args.mySquad.approach) ? args.mySquad.approach : null, oppApproach: useApproach && isApproach(args.oppSquad.approach) ? args.oppSquad.approach : null }) },
     });
     return true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1517,6 +1522,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       divChange: 'same', divName: '',
       draft: { wins: r.wins, completed: r.completed, over: r.over, credits: r.credits, card: r.grantedCard, daily: wasDaily },
       mvp, roundLog, mapName, star, casterFinal: finalCallOf(script),
+      evidence: buildMatchEvidence(series, [userTeam, oppTeam], 0, { chem: dChem.multiplier, chemTotal: dChem.total, oppApproach: ai.approach }), // [U04]
     };
     setResult(null);
     setLiveRound(0);
@@ -3235,6 +3241,29 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+            {/* [U04] RELATÓRIO COM EVIDÊNCIAS — só o que o motor registrou; observado ≠ modelado */}
+            {result.evidence && (
+              <div style={{ width: '100%', maxWidth: 360, textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--ut-line, #e5e2d8)', fontSize: '0.78rem' }}>
+                <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.66rem', letterSpacing: '1.4px', color: 'var(--ut-muted)', marginBottom: 6 }}>{ct('RELATÓRIO')} · {ct('o que aconteceu')}</div>
+                {result.evidence.insights.map((i, k) => (
+                  <div key={k} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                    <span>{i.icon}</span>
+                    <div><div style={{ color: i.tone === 'bad' ? '#b91c1c' : i.tone === 'good' ? '#15803d' : 'var(--ut-ink)' }}>{ct(i.text)}</div><div style={{ color: 'var(--ut-muted)', fontSize: '0.7rem' }}>{ct('evidência')}: {i.evidence} · {i.action === 'tatica' ? ct('tática') : i.action === 'colecao' ? ct('coleção') : ct('ajuste')}</div></div>
+                  </div>
+                ))}
+                <details style={{ marginTop: 4 }}>
+                  <summary style={{ cursor: 'pointer', color: 'var(--ut-muted)', fontSize: '0.72rem' }}>{ct('ver evidências e modificadores')}</summary>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 10px', marginTop: 6, fontFamily: 'var(--ut-font-mono)', fontSize: '0.7rem' }}>
+                    {result.evidence.observed.map((f, k) => <Fragment key={`o${k}`}><span style={{ color: 'var(--ut-muted)' }}>{ct(f.label)}</span><span style={{ color: f.tone === 'bad' ? '#b91c1c' : f.tone === 'good' ? '#15803d' : 'inherit' }}>{f.value}</span></Fragment>)}
+                  </div>
+                  <div style={{ color: 'var(--ut-muted)', fontSize: '0.66rem', margin: '8px 0 2px', letterSpacing: '1px' }}>{ct('MODIFICADORES APLICADOS')} <span style={{ letterSpacing: 0 }}>· {ct('efeito modelado, não prova de causa')}</span></div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 10px', fontFamily: 'var(--ut-font-mono)', fontSize: '0.7rem' }}>
+                    {result.evidence.modeled.map((f, k) => <Fragment key={`m${k}`}><span style={{ color: 'var(--ut-muted)' }}>{ct(f.label)}</span><span>{f.value}</span></Fragment>)}
+                  </div>
+                  {!result.evidence.hasKillFeed && <div style={{ color: 'var(--ut-muted)', fontSize: '0.68rem', marginTop: 6 }}>{ct('Sem killfeed nesta partida: duelos e trocas não foram registrados.')}</div>}
+                </details>
               </div>
             )}
             {result.mvp && (
