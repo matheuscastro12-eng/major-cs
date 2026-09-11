@@ -36,7 +36,7 @@ export default async function handler(
         path text,
         user_agent text
       )`;
-    const [totals, visitsByDay, games, byDifficulty, byPool, online, recent, hall, byCountry, rtpDemoFunnel] = await Promise.all([
+    const [totals, visitsByDay, games, byDifficulty, byPool, online, recent, hall, byCountry, rtpDemoFunnel, ultFunnel] = await Promise.all([
       sql`SELECT
             COUNT(*) FILTER (WHERE type = 'visit') AS visits,
             COUNT(DISTINCT sid) FILTER (WHERE type = 'visit') AS unique_visitors,
@@ -120,6 +120,48 @@ export default async function handler(
             FROM events WHERE type = 'checkout_open' AND data->>'src' = 'rtp-demo-cliff'
               AND created_at > now() - interval '30 days'
           ORDER BY ord`,
+      // [U02] FUNIL DO ULTIMATE — sids distintos por degrau, 30 dias. Mesmo
+      // desenho do funil da demo: contar PESSOAS (sid), não disparos. As
+      // compras confirmadas contam PEDIDOS distintos (orderId), não sids.
+      sql`SELECT 'entrou no Ultimate' AS etapa, 1 AS ord, COUNT(DISTINCT sid) AS n
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'enter'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'recebeu o time inicial', 2, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'starter_claimed'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'começou a 1ª partida', 3, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'match_started'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'concluiu a 1ª partida', 4, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'match_completed'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'ajustou o squad', 5, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'squad_adjusted'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'começou a 2ª partida', 6, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'second_match_started'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'viu oferta: ' || COALESCE(data->>'product_kind', '?'), 7, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'offer_viewed'
+              AND created_at > now() - interval '30 days'
+            GROUP BY data->>'product_kind'
+          UNION ALL
+          SELECT 'clicou em comprar: ' || COALESCE(data->>'product_kind', '?'), 8, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'purchase_intent'
+              AND created_at > now() - interval '30 days'
+            GROUP BY data->>'product_kind'
+          UNION ALL
+          SELECT 'compra confirmada (pedidos): ' || COALESCE(data->>'product_kind', '?'), 9, COUNT(DISTINCT data->>'orderId')
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'purchase_fulfilled'
+              AND created_at > now() - interval '30 days'
+            GROUP BY data->>'product_kind'
+          ORDER BY ord, etapa`,
     ]);
     res.status(200).json({
       totals: totals[0],
@@ -132,6 +174,7 @@ export default async function handler(
       hall: hall[0],
       byCountry,
       rtpDemoFunnel,
+      ultFunnel,
     });
   } catch (e) {
     res.status(500).json({ error: String(e) });

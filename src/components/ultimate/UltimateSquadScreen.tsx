@@ -45,7 +45,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
-import { setCheckoutSrc, track, trackPaywallView } from '../../state/track';
+import { setCheckoutSrc, track, trackPaywallView, trackUltFunnel } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
 import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
@@ -359,6 +359,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // funil: convidado viu o aviso/CTA de conta vitalícia no topo do Ultimate
   // (única superfície de venda do modo convidado, aberto desde o guest mode)
   useEffect(() => { if (guest) trackPaywallView('ultimate-guest'); }, [guest]);
+  // [U02] funil do Ultimate: 'enter' é o DENOMINADOR (1x/sessão); oferta vista = Loja/Passe abertos
+  useEffect(() => { trackUltFunnel('enter', { guest }); }, [guest]);
+  useEffect(() => {
+    if (tab === 'store') trackUltFunnel('offer_viewed', { product_kind: 'coins', src: 'store' });
+    if (tab === 'passe') trackUltFunnel('offer_viewed', { product_kind: 'pass', src: 'passe' });
+  }, [tab]);
+  // 1ª e 2ª partida são degraus distintos (denominadores do plano U02)
+  const matchesStartedRef = useRef(0);
+  const noteMatchStart = (mode: string) => { matchesStartedRef.current += 1; trackUltFunnel(matchesStartedRef.current >= 2 ? 'second_match_started' : 'match_started', { mode }); };
+  const noteMatchDone = (mode: string, won: boolean) => { trackUltFunnel('match_completed', { mode, won }); };
+
   // Major da Semana: status/ranking pro banner + ranking do hub (best-effort)
   useEffect(() => {
     if (!account || (tab !== 'hub' && tab !== 'major-semana')) return;
@@ -412,6 +423,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
 
   // ── Coins via Pix ─────────────────────────────────────────────────────────
   const buyCoins = (pack: CoinPack) => {
+    trackUltFunnel('purchase_intent', { product_kind: 'coins', method: 'pix', src: 'store', tier: pack.tier }); // [U02] (mesmo bloqueado por conta)
     if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar coins.')}`, 2800); return; }
     setCoinModal({ pack, charge: null });
     beginCoinsPix(pack.tier)
@@ -422,6 +434,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // pro checkout do Stripe; na volta (/ultimate?coins=ok) os coins são creditados.
   const [cardBusy, setCardBusy] = useState(false);
   const buyCoinsCard = (pack: CoinPack) => {
+    trackUltFunnel('purchase_intent', { product_kind: 'coins', method: 'card', src: 'store', tier: pack.tier }); // [U02]
     if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar coins.')}`, 2800); return; }
     setCardBusy(true);
     flash(ct('Abrindo o checkout do cartão…'), 2400);
@@ -727,6 +740,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const openPassPurchase = () => {
     if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar o Passe Premium.')}`, 2800); return; }
     setPassModal({ charge: null });
+    trackUltFunnel('purchase_intent', { product_kind: 'pass', method: 'pix', src: 'passe' }); // [U02]
     beginPassPix(pass.seasonId)
       .then((charge) => {
         // already: pedido desta temporada JÁ está pago — só coleta e desbloqueia.
@@ -740,6 +754,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar o Passe Premium.')}`, 2800); return; }
     setCardBusy(true);
     flash(ct('Abrindo o checkout do cartão…'), 2400);
+    trackUltFunnel('purchase_intent', { product_kind: 'pass', method: 'card', src: 'passe' }); // [U02]
     beginPassCheckout(pass.seasonId)
       .then((url) => {
         if (url) { window.location.href = url; return; }
@@ -1194,6 +1209,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   };
 
   const playMatch = (mode: MatchMode = 'rivals', gauntletWins = 0) => {
+    noteMatchStart(mode); // [U02]
     if (!squadComplete) return;
     const five = squadPool as PoolPlayer[];
     const userTeam = buildOnlineTeam(ct('Seu Squad'), five, 'ut-user');
@@ -1248,12 +1264,14 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     let resultData: LiveResult;
     if (mode === 'gauntlet') {
       const r = gauntletRecord(won, score);
+      noteMatchDone('gauntlet', won); // [U02]
       resultData = { won, score, outcome: { eloDelta: 0, credits: r.credits }, mode, divChange: 'same', divName: '', gaunt: { wins: r.wins, completed: r.completed, over: r.over, card: r.grantedCard }, mvp, roundLog, mapName, star, casterFinal };
     } else {
       // Amistoso (casual): sem risco de RP, sem ladder — só credits. O ranqueado
       // (Rivals) virou PvP online de verdade e passa pelo startPvpMatch; contra IA
       // sobra só o Gauntlet e este treino amistoso, que NÃO alimentam o ranking.
       const outcome = recordMatch(won, oppElo, false, score);
+      noteMatchDone(mode, won); // [U02]
       resultData = { won, score, outcome, mode, divChange: 'same', divName: divisionFor(eloBefore).def.name, mvp, roundLog, mapName, star, casterFinal };
     }
     setResult(null);
@@ -1283,6 +1301,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   }), [displayName, state.profile.elo, chem.multiplier, duel.multiplier, state.squads, state.inventory]);
 
   const startPvpMatch = useCallback((args: DuelPlayArgs): boolean => {
+    noteMatchStart(args.ranked ? 'ranked' : 'private'); // [U02]
     // reconstrói os DOIS times do dataset (pids compartilhados) com o OVR do
     // snapshot; ordem CANÔNICA (nick menor primeiro) → série idêntica nos 2 lados.
     const buildFive = (sq: UltimatePvpSquad): PoolPlayer[] =>
@@ -1336,6 +1355,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const eloBefore = state.profile.elo;
     // sala da FILA (ranked) vale RP + ladder; sala PRIVADA é amistoso (só credits).
     const outcome = already ? { eloDelta: 0, credits: 0 } : recordMatch(won, args.oppSquad.elo, args.ranked, score);
+    noteMatchDone(args.ranked ? 'ranked' : 'private', won); // [U02]
     // só a ranqueada alimenta o ranking global (report POR PARTIDA). Nick do
     // ladder = displayName; participante no lobby = pvpNick (tem sufixo #XXXX).
     if (!already && args.ranked) void reportResult(won, displayName, args.code, pvpNick);
@@ -1425,6 +1445,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account]);
   const playDraftMatch = () => {
+    noteMatchStart('draft'); // [U02]
     const d = state.profile.draft;
     if (!d.active || draftCards.length < 5) return;
     const five = draftCards
@@ -1461,6 +1482,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const score = m0 ? `${m0.score[0]}-${m0.score[1]}` : `${series.mapScore[0]}-${series.mapScore[1]}`;
     const wasDaily = !!state.profile.draft.daily;
     const r = draftRecord(won, score);
+    noteMatchDone('draft', won); // [U02]
     // DRAFT DO DIA: run acabou → reporta pro ranking (fire-and-forget; o
     // servidor só aceita o 1º resultado do dia). OVR entra como desempate.
     if (r.over && wasDaily) {
@@ -1566,7 +1588,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               ))}
             </div>
             <div style={{ marginTop: 16, textAlign: 'center' }}>
-              <button className="ut-jogar" style={{ padding: '12px 26px', fontSize: '1rem' }} onClick={() => { const cards = claimStarter(onbForm); setReveal([...cards].sort((a, b) => b.ovr - a.ovr)); }}><Gift size={17} /> {ct('Receber meu time inicial')}</button>
+              <button className="ut-jogar" style={{ padding: '12px 26px', fontSize: '1rem' }} onClick={() => { const cards = claimStarter(onbForm); trackUltFunnel('starter_claimed'); setReveal([...cards].sort((a, b) => b.ovr - a.ovr)); }}><Gift size={17} /> {ct('Receber meu time inicial')}</button>
             </div>
           </UtPanel>
           <div style={{ textAlign: 'center' }}><button onClick={onBack} className="ut-btn ut-btn--ghost">← {ct('Voltar')}</button></div>
@@ -3263,7 +3285,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         const current = slotCard(pickSlot);
         return (
           <Modal open onClose={() => setPickSlot(null)} title={`${ct('Escolher')} · ${slotRole}`} size="lg"
-            footer={current ? <Button variant="ghost" onClick={() => { placeInSquad(pickSlot, null); setPickSlot(null); }}>{ct('Remover do slot')}</Button> : undefined}>
+            footer={current ? <Button variant="ghost" onClick={() => { placeInSquad(pickSlot, null); trackUltFunnel('squad_adjusted'); setPickSlot(null); }}>{ct('Remover do slot')}</Button> : undefined}>
             {cands.length === 0 ? (
               <p className="muted small">{ct('Sem cartas. Abra pacotes na Loja.')}</p>
             ) : (
@@ -3271,7 +3293,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 {cands.map(({ o, card, n }) => {
                   const fits = roleFitsSlot(card.role, slotRole);
                   return (
-                    <button key={o.id} onClick={() => { placeInSquad(pickSlot, o.id); setPickSlot(null); }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: fits ? 1 : 0.72 }}>
+                    <button key={o.id} onClick={() => { placeInSquad(pickSlot, o.id); trackUltFunnel('squad_adjusted'); setPickSlot(null); }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: fits ? 1 : 0.72 }}>
                       <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} />
                       {!fits && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(229,138,138,0.85)', color: '#fff' }}>{ct('fora')}</span>}
                       {o.locked === 'squad' && <span style={{ position: 'absolute', bottom: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}

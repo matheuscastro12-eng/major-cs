@@ -27,7 +27,7 @@ export function sessionId(): string {
 // FUNIL DE CONVERSÃO (visitante → vitalícia R$20): eventos raros e de alto
 // valor — liberados no cliente junto com 'visit'/'ad_click'. Volume é ínfimo
 // (1x por sessão por superfície), então não mexe no controle de custo do Neon.
-const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo']);
+const FUNNEL_TYPES = new Set(['paywall_view', 'checkout_open', 'checkout_abandon', 'checkout_error', 'signup_start', 'signup_done', 'rtp_demo', 'ult_funnel']);
 
 // CORTE DE CUSTO: só 'visit', 'ad_click' e os eventos do FUNIL vão pro servidor.
 // Eventos de jogo (game_start, online_*, etc.) viram no-op pra não gerar
@@ -150,6 +150,39 @@ export function trackRtpDemo(step: RtpDemoStep, week?: number): void {
   if (seenPaywalls.has(key)) return; // re-render/StrictMode não duplica
   seenPaywalls.add(key);
   track('rtp_demo', week === undefined ? { step } : { step, week });
+}
+
+// [U02] FUNIL DO ULTIMATE — eventos de MARCO, um tipo só ('ult_funnel') com
+// {step,...}, mesmo desenho do rtp_demo. Nada por round; dedupe por sessão em
+// cada degrau (a 1ª e a 2ª partida são degraus distintos de propósito:
+// "concluiu a 1ª" e "começou a 2ª" são os denominadores do plano).
+//   enter                → abriu o Ultimate (denominador)           {guest}
+//   starter_claimed      → recebeu o time inicial
+//   match_started        → começou a 1ª partida                     {mode}
+//   match_completed      → a 1ª partida foi decidida                {mode, won}
+//   squad_adjusted       → mexeu no squad (slot) depois do starter
+//   second_match_started → começou a 2ª partida                     {mode}
+//   offer_viewed         → viu a Loja / o Passe                     {product_kind, src}
+//   purchase_intent      → clicou em comprar (coins/passe)          {product_kind, src, method}
+//   purchase_fulfilled   → claim CONFIRMADO pelo servidor            {product_kind, orderId?}
+//     (o servidor marca 'claimed' uma vez por pedido — é a confirmação
+//     autoritativa; evento de UI sozinho não conta como receita).
+// Nunca leva e-mail, token ou valor pago. Denominadores (plano U02): conclusão
+// da 1ª partida por 'enter'; 2ª partida por 'match_completed'; 1ª compra por
+// 'enter'. Custo: ≤ ~10 eventos por sessão, com o compute do Neon já acordado.
+export type UltFunnelStep =
+  | 'enter' | 'starter_claimed' | 'match_started' | 'match_completed' | 'squad_adjusted'
+  | 'second_match_started' | 'offer_viewed' | 'purchase_intent' | 'purchase_fulfilled';
+export type UltProductKind = 'coins' | 'pass' | 'account';
+
+export function trackUltFunnel(step: UltFunnelStep, data: Record<string, string | number | boolean> = {}): void {
+  // purchase_fulfilled deduplica pelo PEDIDO (um evento por pedido confirmado);
+  // os demais, 1x por sessão por degrau (+ product_kind, quando houver).
+  const suffix = step === 'purchase_fulfilled' ? String(data.orderId ?? '') : String(data.product_kind ?? '');
+  const key = `ult_funnel_${step}${suffix ? `_${suffix}` : ''}`;
+  if (seenPaywalls.has(key)) return;
+  seenPaywalls.add(key);
+  track('ult_funnel', { step, ...data });
 }
 
 /** Cadastro pré-pagamento: 'start' no submit (1x/sessão), 'done' no sucesso. */

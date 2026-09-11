@@ -568,9 +568,10 @@ export default async function handler(
   if (action === 'coinsClaim') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' AND tier NOT LIKE 'pass-s%' RETURNING coins`;
+    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' AND tier NOT LIKE 'pass-s%' RETURNING correlation_id, coins`;
     const coins = rows.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
-    res.status(200).json({ coins });
+    // [U02] orders: o cliente deduplica o evento purchase_fulfilled por pedido (nunca por UI)
+    res.status(200).json({ coins, orders: rows.map((r) => ({ orderId: String(r.correlation_id), coins: Number(r.coins) || 0 })) });
     return;
   }
 
