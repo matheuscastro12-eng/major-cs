@@ -1710,6 +1710,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         @keyframes ult-pop { from { opacity:0; transform: translateY(14px) scale(.82) rotateY(35deg); } to { opacity:1; transform:none; } }
       `}</style>
 
+      {/* funil: o aviso de convidado (único CTA de venda do modo, ver comentário
+          abaixo) ficava fora do fluxo sticky da nav — sumia da tela assim que o
+          convidado rolava pra montar o squad ou abrir a loja, e nunca mais
+          voltava. Dado real (28d): 109 paywall_view 'ultimate-guest' e ZERO
+          signup_start — o único src do funil inteiro em 0%, mesmo já tendo
+          preço e prova social no botão (iter42). Agrupa nav + aviso num mesmo
+          wrapper sticky: o convidado carrega o CTA colado no topo em qualquer
+          aba, sem mexer no layout de quem já paga (não vê o aviso). */}
+      <div className="ut-sticky-head">
       {/* ===== TOP NAV (full-width) ===== */}
       <nav className="ut-topbar">
         <div className="ut-topbar__inner">
@@ -1780,13 +1789,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       {/* Jogador sem conta: joga aqui e agora, mas o progresso do Ultimate fica só
           neste navegador (localStorage). Banner honesto + CTA pra conta vitalícia,
           que salva na nuvem e libera jogar no PC e no celular com o mesmo squad. */}
-      {/* funil (28d): esta é a única superfície de venda do modo convidado do
-          Ultimate e a de maior exposição relativa (119 paywall_view), mas
-          convertia pior que o resto do funil (1 signup_start). O botão era o
-          único CTA do app que vendia a conta vitalícia sem citar o preço — dado
-          real (acct-chip-guest, upsell-card) já mostrou que repetir "R$20" no
-          próprio texto do botão, e não só num parágrafo ao lado, melhora clique
-          em telas pequenas. Aplica o mesmo padrão aqui. */}
       {guest && (
         <div className="ut-guest-warn" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 16px', background: 'rgba(232,193,112,0.10)', borderBottom: '1px solid rgba(232,193,112,0.35)', color: 'var(--em-text, #eadfce)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', lineHeight: 1.4, flex: '1 1 320px' }}>
@@ -1811,6 +1813,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           )}
         </div>
       )}
+      </div>
 
       {/* ===== SEASON STRIP ===== */}
       {(() => {
