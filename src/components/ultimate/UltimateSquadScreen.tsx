@@ -21,6 +21,9 @@ import { completeStep, dismissJourney, emptyJourney, journeyProgress, JOURNEY_ST
 // [U06] partida INCREMENTAL (casual): sessão persistível, timeout real, recompensa 1x no fim
 import { createSession, normalizeSession, sessionSeries, type MatchSession } from '../../engine/ultimate/matchSession';
 import { UltimateLiveSession } from './UltimateLiveSession';
+// [U07] jogador dos sonhos: alvo persistente, caminhos reais, preview de escalação
+import { bestSlotFor, missingCredits, targetPaths, type SwapPreview } from '../../engine/ultimate/dreamTarget';
+import { PROMO_PACK } from '../../engine/ultimate/packs';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -323,7 +326,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
@@ -387,6 +390,26 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const saveJourney = (j: typeof journey) => { setJourneyState(j); try { localStorage.setItem('rtm-ult-journey-v1', JSON.stringify(j)); } catch { /* sem storage */ } };
   const journeyDone = (step: JourneyStep) => { const j = completeStep(journey, step); if (j !== journey) saveJourney(j); };
   const journeyNext = nextStep(journey);
+  // [U07] JOGADOR DOS SONHOS — alvo no save (profile.target); caminhos derivados do catálogo; mercado consultado à parte
+  const [targetPick, setTargetPick] = useState(false);
+  const [targetQuery, setTargetQuery] = useState('');
+  const [targetMkt, setTargetMkt] = useState<{ cardKey: string; cheapest: number | null; n: number } | null>(null);
+  const targetCard = state.profile.target ? ultimateIndex().get(state.profile.target.cardKey) ?? null : null;
+  const targetOwnedCopies = targetCard ? state.inventory.filter((o) => o.cardKey === targetCard.key) : [];
+  const targetInfo = targetCard ? targetPaths(targetCard, {
+    catalog: ultimateCatalog(), packs: [...PACK_DEFS, TOTW_PACK, ICON_PACK, PROMO_PACK],
+    promoPlayerIds: ultimatePromo().playerIds,
+    totwPool: (() => { const ids = new Set(ultimateTotw().playerIds); const cat = ultimateCatalog(); return ids.size ? cat.filter((c) => c.rarity !== 'totw' || ids.has(c.playerId)) : null; })(),
+    owned: targetOwnedCopies.length > 0,
+  }) : null;
+  useEffect(() => {
+    if (!targetCard || !account?.paid) { return; }
+    let on = true;
+    void mktBrowse({ cardKey: targetCard.key, sort: 'cheap' }).then((r) => { if (!on) return; if (r.ok) setTargetMkt({ cardKey: targetCard.key, cheapest: r.listings.length ? Math.min(...r.listings.map((l) => l.price)) : null, n: r.listings.length }); });
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetCard?.key, account?.paid]);
+  const chooseTarget = (key: string | null) => { setTarget(key); setTargetPick(false); setTargetQuery(''); if (key) { trackUltFunnel('target_selected', { cardKey: key }); if (journeyNext === 'goal') journeyDone('goal'); } };
   // [U06] SESSÃO DE PARTIDA (casual) — persistida em rtm-ult-live-match-v1: F5 retoma do round em que
   // parou, com a mesma seed e as mesmas decisões (não re-rola). Recompensa só no fim, 1x por matchId.
   const [liveSession, setLiveSessionState] = useState<MatchSession | null>(() => { try { return normalizeSession(JSON.parse(localStorage.getItem('rtm-ult-live-match-v1') ?? 'null')); } catch { return null; } });
@@ -1986,7 +2009,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               else if (step === 'training' || step === 'second') { if (squadComplete) { setRankedMode('casual'); startMatch('casual'); } else go('squad'); }
               else if (step === 'report') { if (result) return; go('ranked'); }
               else if (step === 'adjust') go('squad');
-              else if (step === 'goal') go('store');
+              else if (step === 'goal') setTargetPick(true);
             };
             return (
               <section style={{ borderRadius: 14, border: '1px solid rgba(201,166,60,.45)', background: 'rgba(201,166,60,.08)', padding: '14px 18px', marginBottom: 16 }}>
@@ -2004,6 +2027,59 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                   {JOURNEY_STEPS.map((s) => <span key={s} title={ct(STEP_INFO[s].title)} style={{ width: 26, height: 6, borderRadius: 3, background: journey.done.includes(s) ? '#c9a63c' : s === step ? '#92600a' : '#e5e2d8' }} />)}
                 </div>
+              </section>
+            );
+          })()}
+          {/* [U07] JOGADOR DOS SONHOS — alvo persistente + caminhos reais + estreia */}
+          {(() => {
+            const nodes: ChemNode[] = form.slots.map((fs) => { const sc = slotCard(fs.slot); return { slot: fs.slot, slotRole: fs.role, card: sc ? { ...sc.card, nick: sc.card.nick } as ChemNode['card'] & { ovr: number; nick: string } : null }; });
+            const freeCopy = targetOwnedCopies.find((o) => o.locked !== 'squad');
+            const preview: SwapPreview | null = targetCard && freeCopy ? bestSlotFor(form.adjacency, nodes, targetCard) : null;
+            const falta = targetInfo ? missingCredits(credits, targetMkt?.cardKey === targetCard?.key && targetMkt?.cheapest != null ? Math.min(targetMkt.cheapest, targetInfo.cheapestPackCost ?? Infinity) : targetInfo.cheapestPackCost) : null;
+            return (
+              <section style={{ borderRadius: 14, border: '1px solid rgba(201,166,60,.35)', padding: '14px 18px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: '#92600a' }}>⭐ {ct('JOGADOR DOS SONHOS')}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="ut-btn ut-btn--ghost" onClick={() => setTargetPick(true)}>{targetCard ? ct('Trocar alvo') : ct('Escolher alvo')}</button>
+                    {targetCard && <button className="ut-btn ut-btn--ghost" onClick={() => chooseTarget(null)}>{ct('Remover')}</button>}
+                  </div>
+                </div>
+                {!targetCard && <div style={{ fontSize: '0.8rem', color: 'var(--ut-muted)', marginTop: 6 }}>{ct('Escolha uma carta para perseguir. O jogo mostra o que falta e por onde ela pode chegar — sem inventar chance.')}</div>}
+                {targetCard && targetInfo && (
+                  <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                    <UltCardView card={targetCard} size={110} />
+                    <div style={{ flex: 1, minWidth: 220, fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div><b>{targetCard.nick}</b> · {targetCard.ovr} OVR · {rarityInfo(targetCard.rarity).label}{targetOwnedCopies.length > 0 && <span style={{ color: '#15803d', fontWeight: 800 }}> · {ct('VOCÊ TEM')} ({targetOwnedCopies.length})</span>}</div>
+                      <div style={{ color: targetInfo.circulation === 'fora' ? '#b91c1c' : 'var(--ut-muted)' }}>{targetInfo.circulation === 'sempre' ? '🟢' : targetInfo.circulation === 'agora' ? '🟡' : '🔴'} {ct(targetInfo.circulationNote)}</div>
+                      {targetInfo.packs.length > 0 && <div>📦 {ct('Packs que podem sortear a raridade')}: {targetInfo.packs.map((p) => `${p.name} (${fmt(p.cost)} · ${Math.round(p.pRarity * 100)}% de ≥1 ${targetCard.rarity} entre ${p.rarityPoolSize} cartas)`).join(' · ')}</div>}
+                      {targetInfo.rarityRewards.map((r, i) => <div key={i} style={{ color: 'var(--ut-muted)' }}>🎁 {r}</div>)}
+                      <div>🏷️ {ct('Mercado')}: {!account?.paid ? ct('conta vitalícia necessária') : targetMkt?.cardKey === targetCard.key ? (targetMkt.n ? `${targetMkt.n} ${ct('listagem(ns)')} · ${ct('a partir de')} ${fmt(targetMkt.cheapest ?? 0)}` : ct('nenhuma listagem agora')) : ct('consultando…')}</div>
+                      {!targetOwnedCopies.length && falta != null && <div style={{ fontWeight: 800 }}>{falta > 0 ? `${ct('Faltam')} ${fmt(falta)} coins ${ct('pro caminho mais barato')}` : ct('Você tem saldo pro caminho mais barato')} · <button className="ut-btn ut-btn--ghost" style={{ padding: '2px 8px' }} onClick={() => go('store')}>{ct('Ir à Loja')}</button> <button className="ut-btn ut-btn--ghost" style={{ padding: '2px 8px' }} onClick={() => go('mercado')}>{ct('Mercado')}</button></div>}
+                      {preview && freeCopy && (
+                        <div style={{ marginTop: 4, padding: '8px 10px', borderRadius: 8, background: 'rgba(21,128,61,.08)', border: '1px solid rgba(21,128,61,.3)' }}>
+                          <div style={{ fontWeight: 800 }}>🎯 {ct('Estreia')} · {ct('slot')} {preview.slot + 1} ({preview.slotRole}){preview.outNick ? ` ${ct('no lugar de')} ${preview.outNick}` : ''}</div>
+                          <div style={{ color: 'var(--ut-muted)' }}>{ct('função')}: {preview.roleFit ? '✔' : '✖'} · {ct('química')} {preview.chemBefore}→{preview.chemAfter}/15 (×{preview.multBefore.toFixed(2)}→×{preview.multAfter.toFixed(2)}) · OVR {preview.ovrBefore ?? '—'}→{preview.ovrAfter}</div>
+                          <button className="ut-jogar" style={{ padding: '8px 14px', marginTop: 6 }} onClick={() => { placeInSquad(preview.slot, freeCopy.id); trackUltFunnel('squad_adjusted'); flash(`⭐ ${targetCard.nick} ${ct('escalado. Estreia na próxima partida!')}`, 2600); }}>{ct('Escalar e estrear')}</button>
+                        </div>
+                      )}
+                      {targetOwnedCopies.length > 0 && !freeCopy && <div style={{ color: 'var(--ut-muted)' }}>{ct('Já está escalado.')}</div>}
+                    </div>
+                  </div>
+                )}
+                {targetPick && (
+                  <Modal open onClose={() => setTargetPick(false)} title={ct('Escolher jogador dos sonhos')} size="lg">
+                    <input value={targetQuery} onChange={(e) => setTargetQuery(e.target.value)} placeholder={ct('Buscar por nick…')} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--ut-line, #e5e2d8)', marginBottom: 10 }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10, maxHeight: 420, overflow: 'auto' }}>
+                      {ultimateCatalog().filter((c) => !targetQuery.trim() || c.nick.toLowerCase().includes(targetQuery.trim().toLowerCase())).sort((a, b) => b.ovr - a.ovr).slice(0, 60).map((c) => (
+                        <button key={c.key} onClick={() => chooseTarget(c.key)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={`${c.nick} · ${c.ovr} · ${rarityInfo(c.rarity).label}`}>
+                          <UltCardView card={c} size={110} count={state.inventory.filter((o) => o.cardKey === c.key).length || undefined} />
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: '0.7rem', color: 'var(--ut-muted)' }}>{ct('Mostrando até 60 cartas por OVR. O alvo é seu: trocar não perde nada.')}</div>
+                  </Modal>
+                )}
               </section>
             );
           })()}

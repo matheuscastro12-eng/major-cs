@@ -172,7 +172,7 @@ export function trackRtpDemo(step: RtpDemoStep, week?: number): void {
 // 'enter'. Custo: ≤ ~10 eventos por sessão, com o compute do Neon já acordado.
 export type UltFunnelStep =
   | 'enter' | 'starter_claimed' | 'match_started' | 'match_completed' | 'squad_adjusted'
-  | 'second_match_started' | 'offer_viewed' | 'purchase_intent' | 'purchase_fulfilled';
+  | 'second_match_started' | 'offer_viewed' | 'purchase_intent' | 'purchase_fulfilled' | 'target_selected';
 export type UltProductKind = 'coins' | 'pass' | 'account';
 
 export function trackUltFunnel(step: UltFunnelStep, data: Record<string, string | number | boolean> = {}): void {
