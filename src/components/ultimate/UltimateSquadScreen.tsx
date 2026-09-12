@@ -449,7 +449,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     clearDuelInvite();
     const t = window.setTimeout(() => { setTab('duelo'); flash(`⚔️ ${ct('Convite de duelo')} · ${duelInvite}`, 2600); }, 0);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duelInvite]);
   useEffect(() => {
     if (tab !== 'duelo' || !account?.paid) return;
@@ -576,7 +575,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // Retorno do Stripe (/ultimate?coins=ok): o webhook marca o pedido pago de forma
   // assíncrona, então faz um curto poll pra creditar assim que cair, e limpa a URL.
   useEffect(() => {
-    let ok = false;
+    let ok: boolean;
     try { ok = new URLSearchParams(window.location.search).get('coins') === 'ok'; } catch { ok = false; }
     if (!ok || !account) return;
     flash(ct('Confirmando o pagamento do cartão…'), 3000);
@@ -714,7 +713,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // re-derivado pelo tick do relógio — o countdown anda e a virada fecha o card.
   const totwView = useMemo(() => {
     // impureza deliberada: relógio/catálogo-cache re-lidos a cada tick do clock
-    // eslint-disable-next-line react-hooks/purity
     const [totw, now] = [ultimateTotw(), Date.now()];
     if (totw.weekIndex < 0 || now >= totw.endsAt) return null; // antes da época / virada pendente
     const left = Math.max(0, totw.endsAt - now);
@@ -936,7 +934,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   }, [passModal?.charge]);
   // Retorno do Stripe (/ultimate?pass=ok): curto poll até o webhook confirmar, e limpa a URL.
   useEffect(() => {
-    let ok = false;
+    let ok: boolean;
     try { ok = new URLSearchParams(window.location.search).get('pass') === 'ok'; } catch { ok = false; }
     if (!ok || !account) return;
     flash(ct('Confirmando o pagamento do cartão…'), 3000);
@@ -1197,7 +1195,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       }
       setMktRows(r.listings);
     } finally { setMktLoading(false); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mktQuery, mktMaxPrice, mktSort]);
 
   // abrir a seção (ou trocar a ordenação) recarrega vitrine + minhas listagens
@@ -1455,7 +1452,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // ── Duelo Online (PvP): identidade + snapshot + partida determinística ──
   // nick único: displayName + sufixo persistente (dois "Manager" não colidem).
   const pvpNick = useMemo(() => {
-    let suf = '';
+    let suf: string;
     try {
       suf = localStorage.getItem('rtm-ult-pvp-suffix') ?? '';
       if (!suf) { suf = Math.random().toString(36).slice(2, 6).toUpperCase(); localStorage.setItem('rtm-ult-pvp-suffix', suf); }

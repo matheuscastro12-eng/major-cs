@@ -143,7 +143,7 @@ export function createLiveCanvasSim(opts: LiveSimOptions): LiveCanvasSim {
   const totalRounds = roundsFromKillFeed(mapResult);
   const roundsScript = buildRoundsScript(mapResult, totalRounds);
 
-  let state: LiveState = {
+  const state: LiveState = {
     map: layout,
     agents: buildAgents(teams, layout),
     spike: createInitialSpike(),

@@ -2707,6 +2707,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       return next;
     });
     void startSplit; // referenciado pra TS não reclamar de unused
+    // intencional: prêmios do ano fecham só na virada de split (deps = split).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.split]);
 
   // T3.11: no mount, garante que existe stint ativo do coach atual.
@@ -2727,6 +2729,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const snap = buildAchievementSnapshot(save, starterIds);
     recordSaveTick(snap);
     lastSplitTickedRef.current = save.split;
+    // intencional: lista explícita de campos que mudam conquistas (não o save inteiro).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.split, save.tier, save.budget, save.board, save.sponsors.length,
       save.resolvedTeamEvents?.length, save.lastTalkAt, save.yearAwardsHistory?.length, save.pairChem, save.squad]);
 
@@ -2829,7 +2833,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         return next;
       });
     });
-  }, [save.pendingSponsorOffer]);
+  }, [save.pendingSponsorOffer, setSave]);
 
   useEffect(() => {
     initCareerNav(window.location.pathname);
@@ -2892,7 +2896,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       if (clone.champion) setStage('seasonEnd');
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [save, stage]);
+  }, [save, stage, setSave]);
 
   useEffect(() => {
     if (!majorResult || !save.org) return;
@@ -3096,7 +3100,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const onRestored = () => setSave(loadSave());
     window.addEventListener('rtm:cloud-restored', onRestored);
     return () => window.removeEventListener('rtm:cloud-restored', onRestored);
-  }, []);
+  }, [setSave]);
   const currentEra = useMemo(
     // aplica as transferências já realizadas (save.moves) por cima da base, e o
     // ENVELHECIMENTO da IA por split (pulando seus jogadores, que evoluem pelo evo).
@@ -3980,7 +3984,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const noise = (hashStr(`drift:${t.id}:${s.split}`) % 31) - 15; // -15..+15
       const roll = (forms[t.id] ?? 50) + noise;
       const prev = aiDrift[t.id] ?? 0;
-      let next = prev;
+      let next: number;
       if (roll >= 62) next = Math.min(6, prev + 1);
       else if (roll <= 38) next = Math.max(-6, prev - 1);
       else next = prev > 0 ? prev - 1 : prev < 0 ? prev + 1 : 0; // decai rumo a 0

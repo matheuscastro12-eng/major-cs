@@ -109,7 +109,6 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       { team: userIdx, label: mine, readBy: scoutingOf(teams[idOpp]), auto: false },
       { team: idOpp, label: opp, readBy: scoutingOf(teams[userIdx]), auto: true },
     ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, teams, userIdx, idOpp]);
   const identityCtx = useMemo(() => ({
     mine: identityMods[0].label, opp: identityMods[1].label,

@@ -87,7 +87,7 @@ export function InteractiveTour({ steps, onClose }: Props) {
     }
     const r = targetRect;
     const place = step.placement ?? 'bottom';
-    let top = 0, left = 0;
+    let top: number, left: number;
     switch (place) {
       case 'top':
         top = r.top - TIP_GAP - 200;
