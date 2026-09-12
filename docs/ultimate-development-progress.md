@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 12/09/2026 (U00–U08 e U10 concluídos; U06 PvP e oferta inicial pendentes de decisão).
+Última atualização: 12/09/2026 (U00–U10 concluídos; U06 PvP, oferta inicial e preço do passe pendentes de decisão).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -23,14 +23,14 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U06 Timeout real | **Casual implementado e verificado (11/09)**; PvP pendente | Branch `ult/u06-timeout-casual`; Rivals/Gauntlet/Draft seguem pré-calculados |
 | U07 Alvo e estreia | Implementado e verificado (12/09) | Branch `ult/u07-alvo-estreia` |
 | U08 Compra/oferta inicial | Parcial: retomada + saldo implementados; oferta inicial ESPECIFICADA e desligada (12/09) | Branch `ult/u08-compra-contextual`; ativar exige preço + tier + sandbox |
-| U09 Passe | Pendente — **próximo** | U10 feito (molduras disponíveis para o passe); simulação econômica em andamento |
+| U09 Passe | Implementado e verificado (12/09) — preço/valores novos pendentes de decisão | Branch `ult/u09-passe`; economia documentada abaixo |
 | U10 Identidade/coleções | Implementado e verificado (12/09) | Branch `ult/u10-identidade-colecoes`; escudo via LogoBuilder da Carreira |
-| U11 Rivalidades | Pendente | Contrato de partidas estabilizado |
+| U11 Rivalidades | Pendente — **próximo** | Levantamento em andamento |
 | U12 Eventos | Pendente | U03/U11 e economia validada |
 
 ## Próxima ação exata
 
-Executar U09 (passe com identidade e valor imediato): simular a economia atual (XP por atividade, valor das trilhas free/premium em credits+packs+cartas, custo em partidas para casual/ativo) e comparar com 120k coins por R$30; propor benefício imediato principalmente cosmético (moldura exclusiva do passe via `cosmetics.ts` + título), escolhas em marcos, preview do resgatável, regra de compra tardia com prazo/progresso visíveis; versionar trilhas preservando resgates legados e passes pagos no rollover. Preço permanece o atual até decisão documentada. Ativar valores novos só com o equilíbrio documentado.
+Executar U11 (rivalidades e convites): convite por link/código para duelo privado (precedente do link de desafio do RtP), histórico de confrontos entre CONTAS (não apelidos), comparação de confrontos e card compartilhável com destino funcional; convidado deslogado vê explicação e caminho; sem bônus por convite; sem sala temporária como única fonte de histórico.
 
 **Oferta inicial (U08) fica PENDENTE DE DECISÃO DO PROPRIETÁRIO**: `starterOffer.ts` fixa o contrato (2 opções de conteúdo conhecido, janela de partidas, elegibilidade única por conta via `tier` + `status`), com `enabled=false` e `priceCents=null`. Ativar = definir preço, criar o tier em `COIN_TIERS` (e no mirror do webhook Woovi), fulfillment com escolha registrada no pedido, e sandbox de sucesso/falhas. **Webhooks não foram alterados** (sem sandbox nesta rodada): continua sem checagem de valor pago vs `cents` no caminho de coins/passe — item aberto de U00.
 
@@ -234,6 +234,25 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: campos opcionais com default; sem schema no servidor; cosméticos fora do ledger (só save/cloud).
 - Pendências: escudo no pré-jogo/PvP (requer campo no snapshot v3); coleções por "descoberta histórica" (não existe registro de "já teve"); moldura `founder-s1` só via oferta inicial (U08, desligada).
 - Próxima ação exata: U09.
+
+## U09 — passe com identidade e valor imediato — 12/09/2026
+
+- Estado: **implementado e verificado** (sem mudança de preço nem de valores de trilha — decisão pendente do proprietário, com a simulação abaixo).
+- Branch/commit: `ult/u09-passe` (a partir de `0b782b8`).
+- **Simulação da economia atual (código, não estimativa):** temporada 30 dias; 35 níveis; XP por nível `25+(n−1)·5`; total 3.850 XP. XP: ranqueada 40/15, amistoso 20/8, gauntlet 25/estágio, daily 30, missão 20, semanal 80, objetivo 60, SBC 50, pack 10 (cap 5/dia). **Casual** (1 ranqueada/dia + daily = 57,5 XP/dia) chega ao **nível 22** em 30 dias e precisaria de 67 dias para maxar; **ativo** (5 ranqueadas + daily + 3 missões + semanais ≈ 274 XP/dia) maxa no **dia 14** e fica 16 dias sem progressão. Valor free: 10.900 credits + Prata (6k) + Ouro (14k) + Ouro Raro ≈ 30.900; premium extra: 17.500 + Promo (25k) + Elite + TOTS + título ≈ 42.500 (52.500 com cartas a quicksell). R$30 em coins = 120.000 (4.000/R$); passe premium ≈ 1.417/R$ e só se realiza subindo. Renda/dia: casual ≈ 4.700 coins, ativo ≈ 11.000–23.000. **Compra tardia hoje não perde nem ganha nada** (XP independe do premium); **nível atingido e não resgatado era perdido no rollover**.
+- Mudanças e arquivos:
+  - `seasonPass.ts`: `PASS_TRACK_VERSION = 2` gravado em `PassState.trackVersion` (versionamento das trilhas para preservar direitos em mudanças futuras); `premiumPreview(pass)` — o que vem NA HORA ao comprar (níveis premium já alcançados: credits, packs, cartas, título) e o que ainda depende de subir (níveis/XP); `pickRewardCard(catalog, rarity, preferRole, pick)` — **escolha no marco**: a carta de recompensa pode preferir uma função (sorteio dentro da raridade restrito à função; sem pool cai no funil antigo).
+  - `cosmetics.ts`: moldura **Premium** (`pass-premium`), **benefício imediato e permanente** concedido no `unlockPremiumPaid` (equipa se não houver outra).
+  - `src/state/ultimate.ts`: `claimPassLevel(level, track, preferRole)`; `tickSeason` **auto-resgata** todos os níveis alcançados e não resgatados (free e premium) ANTES do rollover apagar o passe — direito preservado; `unlockPremiumPaid` concede a moldura.
+  - `UltimateSquadScreen.tsx`: modal de compra mostra "Na hora: moldura Premium + N níveis = X coins + packs/cartas/título", "ainda depende de subir: N níveis (XP)", prazo da temporada e aviso vermelho a ≤5 dias; aba Passe ganha seletor "Cartas do passe: função" usado nos resgates.
+  - `scripts/test-ultimate-pass-v2.mts` (3 testes): preview em 0/25/35 com resgates parciais; preferência de função e fallback; versão da trilha, moldura e XP inalterado.
+- Decisões tomadas e motivo: preço permanece R$30 (`PASS_PRICE_CENTS`) e a tabela de recompensas não mudou — mudar valores exige a decisão documentada do proprietário; o benefício imediato é cosmético (moldura permanente) e não econômico, para não inflar a comparação com os coins; compra tardia continua permitida, mas transparente; auto-resgate no rollover em vez de "perder" (o plano exige que rollover não apague direitos).
+- **Proposta para decisão (não implementada):** (a) XP do casual: subir daily para 45 e casual win/loss para 30/12 fecha o nível 35 em ~30 dias para 1 partida/dia (hoje nível 22); (b) valor premium: adicionar a moldura Premium + um pack Ouro no nível 5 (14k) aproxima 56.500 e antecipa valor sem tocar no preço; (c) regra de compra tardia: manter compra até o último dia, com o preview já implementado; (d) recompensa nos 16 dias ociosos do ativo: "níveis prestígio" cosméticos após o 35.
+- Comandos/testes e resultados reais: `npm run build` verde (2×) · `npm test` 131/131 · `npm run test:sim` **353/353** (+3) · `npm run lint` **189 = baseline** (um `impure function during render` foi eliminado antes do commit).
+- Verificação visual e ambiente: não exercitada (modal e seletor cobertos por typecheck).
+- Compatibilidade/migração/flag: `trackVersion` opcional (ausente = 1); moldura e preview não mudam economia; auto-resgate roda no mesmo `tickSeason` já existente.
+- Pendências: decisão de preço/valores; níveis prestígio; migração de trilha quando `PASS_TRACK_VERSION` mudar (honrar `claimedPremium` da versão antiga).
+- Próxima ação exata: U11.
 
 ## Modelo de atualização por lote
 

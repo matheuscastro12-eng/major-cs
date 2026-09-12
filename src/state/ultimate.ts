@@ -21,6 +21,7 @@ import { makeRng } from '../engine/rng';
 import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { buildFullCatalog } from '../engine/ultimate/catalog';
 import { COLLECTIONS, collectionKey, evaluateCollections, mergeFrames, normalizeClub } from '../engine/ultimate/cosmetics'; // [U10]
+import { pickRewardCard, claimableLevels } from '../engine/ultimate/seasonPass'; // [U09]
 import type { LogoConfig } from '../lib/logoBuilder';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
@@ -333,7 +334,7 @@ interface UltimateStore {
   marketBuyApply: (cardId: string, cardKey: string, price: number) => void; // comprou: debita + adiciona
   // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
   unlockPremiumPaid: (orderId: string, orderSeason: number) => { ok: boolean; already?: boolean };
-  claimPassLevel: (level: number, track: PassTrack) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
+  claimPassLevel: (level: number, track: PassTrack, preferRole?: string | null) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
   // [W2] LEGADO: concede o card do pro aposentado UMA vez por carreira (idempotente
   // pela chave em objectivesClaimed — sobrevive a venda/SBC do card). Sem moeda.
   claimLegacyCard: (cardKey: string) => { ok: boolean; already: boolean; card?: UltCard };
@@ -696,8 +697,15 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     return { ok: true, reward: def.reward, grantedCard };
   },
   tickSeason: () => {
+    // [U09] direitos preservados: antes do rollover apagar o passe, resgata TUDO o que
+    // já foi atingido e não resgatado (free e premium). Nível alcançado não se perde.
+    const now = Date.now();
+    const pre = get().state;
+    if (pre.profile.season && now > pre.profile.season.endsAt) {
+      for (const track of ['free', 'premium'] as const) for (const lvl of claimableLevels(pre.profile.pass, track)) get().claimPassLevel(lvl, track);
+    }
     const prev = get().state;
-    const r = _applySeasonRollover(prev, Date.now());
+    const r = _applySeasonRollover(prev, now);
     // só grava se o estado mudou (evita write no localStorage a cada mount).
     if (r.state !== prev) {
       persist(r.state);
@@ -1001,7 +1009,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     const seasonNow = passSeasonId(prev.profile);
     const pass = ensurePass(prev.profile.pass, seasonNow);
     if (pass.premium) return { ok: true, already: true };
-    const s = _setPassPremium({ ...prev, profile: { ...prev.profile, pass } }, 'coins');
+    let s = _setPassPremium({ ...prev, profile: { ...prev.profile, pass } }, 'coins');
+    // [U09] benefício IMEDIATO e permanente: moldura Premium (cosmético) equipada se não houver outra
+    s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, ['pass-premium']), equippedFrame: s.profile.equippedFrame ?? 'pass-premium' } };
     persist(s);
     set({ state: s });
     // creditsDelta = 0 — o 'grant' registra o desbloqueio no ledger-sombra.
@@ -1015,7 +1025,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     });
     return { ok: true };
   },
-  claimPassLevel: (level, track) => {
+  claimPassLevel: (level, track, preferRole = null) => {
     const st = get().state;
     const def = passLevelDef(level);
     if (!def) return { ok: false, reason: 'unknown' as const };
@@ -1030,11 +1040,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     let grantedCard: UltCard | undefined;
     if (reward.card) {
       // mesmo funil de carta aleatória por raridade dos outros claims
-      const pool = ultimateCatalog().filter((c) => c.rarity === reward.card);
-      if (pool.length) {
-        grantedCard = pool[Math.floor(Math.random() * pool.length)];
-        s = _grantCard(s, grantedCard.key, 'reward', { id: `pass_${Math.random().toString(36).slice(2, 9)}` });
-      }
+      // [U09] escolha no marco: preferir função (sorteio dentro da raridade); sem pool cai no funil antigo
+      grantedCard = pickRewardCard(ultimateCatalog(), reward.card, preferRole, (n) => Math.floor(Math.random() * n));
+      if (grantedCard) s = _grantCard(s, grantedCard.key, 'reward', { id: `pass_${Math.random().toString(36).slice(2, 9)}` });
     }
     let packCards: UltCard[] = [];
     if (reward.pack) {

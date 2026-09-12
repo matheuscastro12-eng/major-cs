@@ -25,6 +25,7 @@ export const FRAMES: FrameDef[] = [
   { id: 'verde-amarelo', name: 'Verde-amarelo', desc: 'Cinco brasileiros no clube.', border: '#16a34a', inner: 'rgba(250,204,21,.8)', badge: 'BR', badgeBg: '#facc15', how: 'Coleção "Seleção Brasileira"' },
   { id: 'lenda-de-era', name: 'Lenda de era', desc: 'Uma era do CS completa no clube.', border: '#f3cf6b', inner: 'rgba(243,207,107,.7)', badge: 'ERA', badgeBg: '#f3cf6b', how: 'Coleção "Panteão de uma era"' },
   { id: 'sniper-elite', name: 'Sniper elite', desc: 'Trio de AWPs 85+.', border: '#6fc3df', inner: 'rgba(111,195,223,.7)', badge: 'AWP', badgeBg: '#6fc3df', how: 'Coleção "Trio de AWPs"' },
+  { id: 'pass-premium', name: 'Premium', desc: 'Moldura do Passe Premium — liberada na hora da compra, fica pra sempre.', border: '#7c3aed', inner: 'rgba(236,199,95,.8)', badge: 'PASSE', badgeBg: '#ecc75f', how: 'Comprar o Passe Premium (benefício imediato)' },
   { id: 'founder-s1', name: 'Fundador S1', desc: 'Identidade da 1ª temporada.', border: '#c792ea', inner: 'rgba(199,146,234,.8)', badge: 'S1', badgeBg: '#c792ea', how: 'Oferta inicial (ainda não ativa)' },
 ];
 export function frameById(id: string | null | undefined): FrameDef | null { return FRAMES.find((f) => f.id === id) ?? null; }

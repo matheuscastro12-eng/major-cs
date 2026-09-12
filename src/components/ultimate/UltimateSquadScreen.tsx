@@ -27,6 +27,7 @@ import { PROMO_PACK } from '../../engine/ultimate/packs';
 import { clearIntent, peekIntent, saveIntent } from '../../state/purchaseIntent'; // [U08] retomar a compra depois do login
 // [U10] identidade do clube (escudo do LogoBuilder da Carreira), molduras equipáveis e coleções temáticas
 import { FRAMES, evaluateCollections, frameById } from '../../engine/ultimate/cosmetics';
+import { premiumPreview } from '../../engine/ultimate/seasonPass'; // [U09]
 import { buildLogoDataUrl } from '../../lib/logoBuilder';
 import { openLogoBuilder } from '../LogoBuilderHost';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
@@ -90,6 +91,8 @@ import '../../styles/ultimate.css';
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 // [U06] identidade de uma sessão casual nova (seed + matchId + relógio). Fora do componente
 // de propósito: o React Compiler trata o corpo dos handlers como escopo de render.
+// [U09] dias até o fim da temporada (relógio fora do escopo de render, regra do React Compiler)
+const seasonDaysLeft = (endsAt: number) => Math.max(0, Math.ceil((endsAt - Date.now()) / 86400000));
 const freshSessionIds = () => { const seed = Math.floor(Math.random() * 2147483647) >>> 0; const now = Date.now(); return { seed, now, matchId: `casual-${now.toString(36)}-${seed.toString(36)}` }; };
 // codinomes das temporadas (cicla pela lista conforme season.n cresce)
 const SEASON_NAMES = ['Inception', 'Ascension', 'Dynasty', 'Legacy', 'Overtime', 'Eternal'];
@@ -416,6 +419,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const journeyNext = nextStep(journey);
   // [U07] JOGADOR DOS SONHOS — alvo no save (profile.target); caminhos derivados do catálogo; mercado consultado à parte
   const [targetPick, setTargetPick] = useState(false);
+  // [U09] escolha no marco: função preferida para as cartas do passe (null = qualquer)
+  const [passRolePref, setPassRolePref] = useState<string | null>(null);
   const [targetQuery, setTargetQuery] = useState('');
   const [targetMkt, setTargetMkt] = useState<{ cardKey: string; cheapest: number | null; n: number } | null>(null);
   const targetCard = state.profile.target ? ultimateIndex().get(state.profile.target.cardKey) ?? null : null;
@@ -903,7 +908,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, tab]);
   const doClaimPass = (level: number, track: PassTrack) => {
-    const r = claimPassLevel(level, track);
+    const r = claimPassLevel(level, track, passRolePref); // [U09] preferência de função nas cartas
     if (!r.ok) {
       flash(r.reason === 'locked' ? ct('Desbloqueie o Premium pra resgatar essa trilha.') : r.reason === 'unreached' ? ct('Nível ainda não alcançado.') : ct('Já resgatado.'));
       return;
@@ -925,7 +930,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     const runs: [PassTrack, number[]][] = [['free', passFreeClaimable], ['premium', passPremClaimable]];
     for (const [track, lvls] of runs) {
       for (const lvl of lvls) {
-        const r = claimPassLevel(lvl, track);
+        const r = claimPassLevel(lvl, track, passRolePref); // [U09]
         if (!r.ok) continue;
         n++;
         creditsSum += r.reward?.credits ?? 0;
@@ -3346,6 +3351,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     <Crown size={15} /> {ct('Desbloquear Premium')} — R$ 30,00
                   </button>
                 )}
+                <label style={{ fontSize: '0.72rem', color: 'var(--ut-muted)', display: 'inline-flex', gap: 6, alignItems: 'center', marginRight: 10 }}>{ct('Cartas do passe: função')}
+                  <select value={passRolePref ?? ''} onChange={(e) => setPassRolePref(e.target.value || null)} style={{ font: 'inherit' }}>
+                    <option value="">{ct('qualquer')}</option>{['AWP', 'IGL', 'Entry', 'Support', 'Lurker', 'Rifler'].map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </label>
                 {passClaimableCount > 1 && (
                   <button className="ut-btn ut-btn--green" onClick={doClaimAllPass}>
                     <Gift size={15} /> {ct('Resgatar tudo')} ({passClaimableCount})
@@ -3414,6 +3424,18 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             <p className="muted small" style={{ margin: 0 }}>
               {ct('As recompensas premium dos níveis que você JÁ alcançou ficam liberadas na hora. O premium vale só nesta temporada.')}
             </p>
+            {/* [U09] transparência da compra tardia: o que vem NA HORA, o que ainda depende de subir, e o prazo */}
+            {(() => {
+              const pv = premiumPreview(pass);
+              const season = state.profile.season; const daysLeft = season ? seasonDaysLeft(season.endsAt) : null;
+              return (
+                <div style={{ fontSize: '0.78rem', padding: '8px 10px', borderRadius: 8, background: 'rgba(124,58,237,.08)', border: '1px solid rgba(124,58,237,.3)' }}>
+                  <div><b>{ct('Na hora')}:</b> {ct('moldura Premium (pra sempre)')}{pv.levelsNow.length ? ` + ${pv.levelsNow.length} ${ct('níveis já alcançados')} = ${fmt(pv.creditsNow)} coins${pv.packsNow.length ? ` + ${pv.packsNow.length} pack(s)` : ''}${pv.cardsNow.length ? ` + ${pv.cardsNow.length} carta(s)` : ''}${pv.titleNow ? ` + ${ct('título')}` : ''}` : ` (${ct('você está no nível')} ${pv.level}; ${ct('sem nível premium pendente')})`}</div>
+                  <div style={{ color: 'var(--ut-muted)' }}>{ct('Ainda depende de subir')}: {pv.levelsLeft} {ct('níveis')} ({fmt(pv.xpLeft)} XP){daysLeft != null ? ` · ${ct('temporada termina em')} ${daysLeft} ${daysLeft === 1 ? ct('dia') : ct('dias')}` : ''}. {ct('Nível alcançado e não resgatado é resgatado automaticamente na virada.')}</div>
+                  {daysLeft != null && daysLeft <= 5 && <div style={{ color: '#b91c1c', fontWeight: 800 }}>⚠ {ct('Fim de temporada próximo: o que você não alcançar até lá não vem.')}</div>}
+                </div>
+              );
+            })()}
           </div>
           {passModal.error ? (
             <div className="ut-coinpay">
