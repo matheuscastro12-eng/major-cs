@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 12/09/2026 (U00–U11 concluídos; U06 PvP, oferta inicial e preço do passe pendentes de decisão).
+Última atualização: 12/09/2026 — **U00–U12 concluídos (primeira versão de cada lote)**; pendentes de decisão: U06 PvP, oferta inicial (U08), preço/valores do passe (U09).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -26,11 +26,16 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U09 Passe | Implementado e verificado (12/09) — preço/valores novos pendentes de decisão | Branch `ult/u09-passe`; economia documentada abaixo |
 | U10 Identidade/coleções | Implementado e verificado (12/09) | Branch `ult/u10-identidade-colecoes`; escudo via LogoBuilder da Carreira |
 | U11 Rivalidades | Implementado e verificado (12/09) | Branch `ult/u11-rivalidades`; pequenos campeonatos ficam para depois |
-| U12 Eventos | Pendente — **próximo** (último lote) | Levantamento em andamento |
+| U12 Eventos | Implementado e verificado (12/09) | Branch `ult/u12-eventos`; operação via CRM de live-ops |
 
 ## Próxima ação exata
 
-Executar U12 (eventos com elencos variados e operação): configuração versionada de evento (janela com timezone explícito, regra de elegibilidade — teto de OVR / região / funções / eras —, recompensas, estado publicado/encerrado) sobre o modelo do Major da Semana e do live-ops existente; elegibilidade validada no servidor ao entrar e elenco travado (snapshot do lobby); recompensa idempotente (padrão `wl:<windowId>`); alternativa casual identificada quando a fila estiver vazia (sem simular humano); live-ops com preview/agendar/publicar/encerrar preservando runs iniciadas. Começar com 1–2 eventos rotativos para não fragmentar a fila.
+**O backlog U00–U12 está executado em primeira versão.** O que falta é decisão do proprietário e validação em ambiente real, nesta ordem:
+1. **Deploy do master** e leitura do funil do Ultimate (U02) por alguns dias antes de comparar qualquer coisa (baseline).
+2. **Decisões comerciais**: ativar (ou não) a oferta inicial (U08: preço, tier, sandbox), mudar (ou não) preço/valores do passe (U09: proposta documentada), ligar o primeiro evento no CRM (U12: uma configuração pequena, ex. "Copa 82" por 4 dias).
+3. **U06 PvP** (checkpoint autoritativo) só se o custo/complexidade justificar depois de medir o casual incremental.
+4. **Verificação visual mobile** de todos os lotes (pendência recorrente: nenhuma rodada exercitou o browser em mobile) e sandbox de pagamentos (webhooks sem checagem de valor — item aberto desde U00).
+5. Dívidas técnicas registradas por lote (dupla contagem de força, evolução no PvP, caster incremental, rival no histórico local, pequenos campeonatos).
 
 **Oferta inicial (U08) fica PENDENTE DE DECISÃO DO PROPRIETÁRIO**: `starterOffer.ts` fixa o contrato (2 opções de conteúdo conhecido, janela de partidas, elegibilidade única por conta via `tier` + `status`), com `enabled=false` e `priceCents=null`. Ativar = definir preço, criar o tier em `COIN_TIERS` (e no mirror do webhook Woovi), fulfillment com escolha registrada no pedido, e sandbox de sucesso/falhas. **Webhooks não foram alterados** (sem sandbox nesta rodada): continua sem checagem de valor pago vs `cents` no caminho de coins/passe — item aberto de U00.
 
@@ -270,6 +275,24 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: tabelas novas via `CREATE TABLE IF NOT EXISTS` (aditivas); nenhum campo em save.
 - Pendências: pequenos campeonatos (bracket com regras de abandono/avanço); rival no `MatchRecord` local; revanche direta a partir do painel (hoje: criar sala + link).
 - Próxima ação exata: U12.
+
+## U12 — eventos com elencos variados e operação — 12/09/2026
+
+- Estado: **implementado e verificado** (primeira versão; nenhum evento publicado — publicar é operação do CRM).
+- Branch/commit: `ult/u12-eventos` (a partir de `d92a544`).
+- Descobertas confirmadas: o Major da Semana é o único "evento" (janela quarta→sábado com UTC-3 hardcoded, pareamento por espelho da ranqueada, prêmio idempotente `wl:<windowId>`); live-ops só tinha `promo|sbc|notice` sem versão; a fila (`mm_queue`) pareia só por elo; `ruleset` do lobby é validado só no `create` e o `pick` não valida regra nenhuma; o snapshot do catálogo do servidor tem `role/region/country` por carta (índice só por key).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/events.ts` (puro): regras `ovrcap | region | country | roles | rarity-max`, `eventEligibility(cards, rule)` com motivo legível, `describeRule`, `eventRewardFor` (a maior faixa alcançada paga — padrão do Major da Semana). Teste `scripts/test-ultimate-events.mts`.
+  - **Configuração versionada** como item de live-ops kind `event` (`server/liveops.ts`: `validateEventPayload` — `version`, nome, descrição, regra por allowlist com limites, `winTiers` ≤ 60k por faixa, `maxMatches` 1..200; janela do item em **UTC** com o `validateLiveopsWindow` existente). CRM (`LiveopsCRM.tsx`) ganha o tipo Evento com formulário, preview e o mesmo fluxo agendar/publicar/encerrar/desligar (`enabled` + janela). Cliente: `scheduledEvents()` em `state/liveops.ts`. Teste no `server/liveops.test.ts`.
+  - **Servidor valida ao entrar e trava o elenco** (`api/lobby.ts`): coluna `lobbies.event_id`; sala privada de evento (`create` com `eventId`, só se o evento estiver ativo); fila segmentada por `mm_queue.bucket` (`ev:<id>` × `open`, `tryMatchUltimate` só pareia no mesmo bucket e cria a sala com `ruleset 'event'`); no `pick`, se a sala é de evento, a regra é validada com `role/region/country/tier` do catálogo do servidor (índice pid → atributos, tier = maior raridade do pid) e o OVR declarado no snapshot (clamp 1..99) — `400 ineligible` com motivo; elenco fica travado porque o pick só é aceito em `drafting` e o snapshot não muda depois.
+  - **Recompensa idempotente** (`api/ranking.ts`): `rtm_event_entries` (event_id, email, wins, losses, version, claimed_at) alimentada no pareamento do report ranqueado quando a sala tem `event_id` (cap `maxMatches`, 1× por lado via `status='applied'`); ações `eventStatus` e `eventClaim` (só com janela fechada ou cap atingido; **pay-first** em `applyUltTransaction` com `opId ev:<id>:<version>` e depois `claimed_at` — replay nunca paga duas vezes).
+  - Cliente: `state/events.ts` (`fetchEventStatus`, `claimEvent`); aba Ranqueada mostra os eventos ativos (nome, versão, regra, janela em UTC, faixas de prêmio, meu placar), **elegibilidade local com motivo** (região pelo país, tier pela raridade), "Entrar no evento" (fila com `eventId`) e "Resgatar"; `UltimateDuel` recebe `eventId` (queueJoin) e avisa **fila vazia** após 20s com a alternativa identificada ("Amistoso vs IA neste formato — não vale o evento"), sem simular humano.
+- Decisões tomadas e motivo: evento = item de live-ops (reuso de agendamento, cache e CRM; nada de painel novo); 1 bucket por evento na fila (poucos eventos rotativos para não fragmentar — regra do plano); OVR validado pelo snapshot declarado (o dataset por pid tem várias raridades) e atributos pelo servidor; prêmio só ao fechar (janela ou cap) para o orçamento ser conhecido; timezone explícito (UTC) no item e na UI.
+- Comandos/testes e resultados reais: `npm run build` verde (2×) · `npm test` **134/134** (+1) · `npm run test:sim` **357/357** (+2) · `npm run lint` **189 = baseline** (um "refs during render" novo foi eliminado antes do commit).
+- Verificação visual e ambiente: não exercitada (exige dois clientes + servidor + evento publicado no CRM).
+- Compatibilidade/migração/flag: colunas aditivas (`lobbies.event_id`, `mm_queue.bucket`), tabela nova, kind novo em live-ops (itens antigos intocados); `enabled`/janela do item é a flag de publicação; runs iniciadas: `activeEventById` só bloqueia **novas** entradas/picks depois do fim — reports de salas já criadas continuam contando até o cap.
+- Pendências: publicar o 1º evento e observar custo/participação/tempo de espera; alternativa vs IA aplicando a regra ao adversário da IA (hoje só orienta); `era` como regra (ícones não estão no snapshot do servidor); painel de operação com métricas do evento.
+- Próxima ação exata: ver "Próxima ação exata" (decisões e validação real).
 
 ## Modelo de atualização por lote
 

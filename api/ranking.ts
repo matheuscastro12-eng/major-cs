@@ -10,6 +10,8 @@ import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
+import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
+import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'; // [U12]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -69,6 +71,8 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     sql`CREATE INDEX IF NOT EXISTS rtm_rivalries_b_idx ON rtm_rivalries (email_b)`,
     sql`CREATE TABLE IF NOT EXISTS rtm_rivalry_matches (code TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE TABLE IF NOT EXISTS rtm_duel_reports (code TEXT, email TEXT, nick TEXT, won BOOLEAN NOT NULL, reported_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (code, email))`,
+    // [U12] EVENTOS: vitórias/derrotas por conta por evento (cap maxMatches) e prêmio pago 1x (ledger opId ev:<id>:<version>)
+    sql`CREATE TABLE IF NOT EXISTS rtm_event_entries (event_id TEXT, email TEXT, wins INT DEFAULT 0, losses INT DEFAULT 0, version INT DEFAULT 1, claimed_at TIMESTAMPTZ, updated_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (event_id, email))`,
     // SÉRIE DO DIA (RtP): 1 resultado por conta por dia — o PRIMEIRO vale (sem
     // re-jogar pra farmar rating). day = nº do desafio (época 2026-08-01).
     sql`CREATE TABLE IF NOT EXISTS rtm_daily_series (day INT, email TEXT, nick TEXT, rating REAL NOT NULL, won BOOLEAN NOT NULL, map_a INT DEFAULT 0, map_b INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (day, email))`,
@@ -405,6 +409,34 @@ export default async function handler(
               VALUES (${pair}, ${ea}, ${eb}, ${nickA}, ${nickB}, ${winner === ea ? 1 : 0}, ${winner === eb ? 1 : 0}, 1, now(), ${code})
               ON CONFLICT (pair) DO UPDATE SET nick_a=EXCLUDED.nick_a, nick_b=EXCLUDED.nick_b, wins_a=rtm_rivalries.wins_a+EXCLUDED.wins_a, wins_b=rtm_rivalries.wins_b+EXCLUDED.wins_b, games=rtm_rivalries.games+1, last_at=now(), last_code=EXCLUDED.last_code`;
   };
+  // [U12] evento: status da minha conta e resgate do prêmio (idempotente pelo ledger)
+  const eventDef = async (id: string) => {
+    const rows = await sql`SELECT payload, ends_at FROM rtm_liveops WHERE id = ${id} AND kind = 'event' AND enabled = true LIMIT 1`;
+    const p = rows[0]?.payload as Record<string, unknown> | undefined; if (!p) return null;
+    return { winTiers: Array.isArray(p.winTiers) ? (p.winTiers as { wins: number; credits: number }[]) : [], maxMatches: Number(p.maxMatches) || 20, version: Number(p.version) || 1, endsAt: new Date(String(rows[0].ends_at)).getTime() };
+  };
+  if (action === 'eventStatus') {
+    const id = String(body.eventId ?? '').slice(0, 64);
+    const def = await eventDef(id); if (!def) { res.status(404).json({ error: 'evento' }); return; }
+    const me = await sql`SELECT wins, losses, claimed_at FROM rtm_event_entries WHERE event_id=${id} AND email=${email}`;
+    const wins = Number(me[0]?.wins ?? 0); const losses = Number(me[0]?.losses ?? 0);
+    res.status(200).json({ wins, losses, claimed: !!me[0]?.claimed_at, reward: eventRewardFor(wins, def.winTiers), maxMatches: def.maxMatches, closed: Date.now() > def.endsAt });
+    return;
+  }
+  if (action === 'eventClaim') {
+    const id = String(body.eventId ?? '').slice(0, 64);
+    const def = await eventDef(id); if (!def) { res.status(404).json({ error: 'evento' }); return; }
+    const me = await sql`SELECT wins, losses, claimed_at FROM rtm_event_entries WHERE event_id=${id} AND email=${email}`;
+    const wins = Number(me[0]?.wins ?? 0); const losses = Number(me[0]?.losses ?? 0);
+    const done = Date.now() > def.endsAt || wins + losses >= def.maxMatches;
+    if (!done) { res.status(400).json({ error: 'em andamento' }); return; }
+    const credits = eventRewardFor(wins, def.winTiers);
+    // pay-first no ledger (opId único por evento+versão) e só então claimed_at — padrão Major da Semana
+    const tx = await applyUltTransaction(sql as unknown as SqlTag, email, { opId: `ev:${id}:${def.version}`, kind: 'reward', creditsDelta: credits, cards: [], meta: { src: 'event', eventId: id, wins } });
+    await sql`INSERT INTO rtm_event_entries (event_id, email, wins, losses, version, claimed_at) VALUES (${id}, ${email}, ${wins}, ${losses}, ${def.version}, now()) ON CONFLICT (event_id, email) DO UPDATE SET claimed_at = COALESCE(rtm_event_entries.claimed_at, now())`;
+    res.status(200).json({ ok: true, credits, replayed: !!(tx as { replayed?: boolean }).replayed });
+    return;
+  }
   // [U11] meus rivais (por conta), mais recentes primeiro
   if (action === 'rivals') {
     const rows = await sql`SELECT * FROM rtm_rivalries WHERE email_a=${email.toLowerCase()} OR email_b=${email.toLowerCase()} ORDER BY last_at DESC NULLS LAST LIMIT 20`;
@@ -558,6 +590,17 @@ export default async function handler(
     }
     // [U11] head-to-head por conta: os dois reports desta partida (idempotente por código)
     if (mine && other.length) await bumpRivalry(code, { email, nick: lobbyNick, won }, { email: String(other[0].email), nick: String(other[0].nick ?? ''), won: !!other[0].won });
+    // [U12] sala de EVENTO: conta vitória/derrota de cada lado aplicado (cap maxMatches); 1x por (code,email) via status 'applied'
+    const evLobby = await sql`SELECT event_id FROM lobbies WHERE code=${code}`;
+    const evId = evLobby[0]?.event_id ? String(evLobby[0].event_id) : '';
+    if (evId) {
+      const def = await eventDef(evId);
+      if (def) for (const row of claimed) {
+        const w = row.won ? 1 : 0; const l = w ? 0 : 1;
+        await sql`INSERT INTO rtm_event_entries (event_id, email, wins, losses, version) VALUES (${evId}, ${String(row.email)}, ${w}, ${l}, ${def.version})
+                  ON CONFLICT (event_id, email) DO UPDATE SET wins = rtm_event_entries.wins + ${w}, losses = rtm_event_entries.losses + ${l}, updated_at = now() WHERE rtm_event_entries.wins + rtm_event_entries.losses < ${def.maxMatches}`;
+      }
+    }
     if (!mine) { res.status(200).json({ applied: claimed.length === 0, raced: claimed.length === 0, delta: 0, me: await myRow(), ...seasonInfo }); return; }
     const divisionBefore = divFor(mine.before, mine.gamesBefore);
     const divisionAfter = divFor(mine.after, mine.gamesAfter);

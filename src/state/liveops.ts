@@ -8,6 +8,7 @@
 // Formas de payload ESPELHAM server/liveops.ts (a validação forte é do servidor;
 // aqui só um guard estrutural pra nunca renderizar lixo de um cache antigo).
 
+import { EVENT_RULE_KINDS, type EventRule } from '../engine/ultimate/events';
 import type { SbcDef } from '../engine/ultimate/sbc';
 import type { UltRarity } from '../engine/ultimate/rarities';
 
@@ -33,17 +34,27 @@ export interface LiveopsSbcPayload {
 }
 
 export interface LiveopsNoticePayload { title: string; body: string }
+// [U12] evento com elenco restrito (regra validada no servidor; aqui só para orientar e exibir)
+export interface LiveopsEventPayload {
+  version: number;
+  name: string;
+  desc: string;
+  rule: EventRule;
+  winTiers: { wins: number; credits: number }[];
+  maxMatches: number;
+}
 
 export type LiveopsItem =
   | { id: string; kind: 'promo'; payload: LiveopsPromoPayload; startsAt: string; endsAt: string }
   | { id: string; kind: 'sbc'; payload: LiveopsSbcPayload; startsAt: string; endsAt: string }
-  | { id: string; kind: 'notice'; payload: LiveopsNoticePayload; startsAt: string; endsAt: string };
+  | { id: string; kind: 'notice'; payload: LiveopsNoticePayload; startsAt: string; endsAt: string }
+  | { id: string; kind: 'event'; payload: LiveopsEventPayload; startsAt: string; endsAt: string };
 
 // linha completa do CRM (inclui enabled/janela de itens fora do ar)
 export interface LiveopsRow {
   id: string;
-  kind: 'promo' | 'sbc' | 'notice';
-  payload: LiveopsPromoPayload | LiveopsSbcPayload | LiveopsNoticePayload;
+  kind: 'promo' | 'sbc' | 'notice' | 'event';
+  payload: LiveopsPromoPayload | LiveopsSbcPayload | LiveopsNoticePayload | LiveopsEventPayload;
   startsAt: string;
   endsAt: string;
   enabled: boolean;
@@ -76,6 +87,11 @@ function parseItem(raw: unknown): LiveopsItem | null {
   if (raw.kind === 'notice') {
     if (!str(p.title) || !str(p.body)) return null;
     return { ...base, kind: 'notice', payload: { title: p.title, body: p.body } };
+  }
+  if (raw.kind === 'event') { // [U12]
+    if (!str(p.name) || !str(p.desc) || !isObj(p.rule) || !str(p.rule.kind) || !Array.isArray(p.winTiers)) return null;
+    if (!(EVENT_RULE_KINDS as readonly string[]).includes(String(p.rule.kind))) return null;
+    return { ...base, kind: 'event', payload: { version: int(p.version) ? p.version : 1, name: p.name, desc: p.desc, rule: p.rule as unknown as EventRule, winTiers: (p.winTiers as { wins: number; credits: number }[]).filter((t) => isObj(t) && int(t.wins) && int(t.credits)), maxMatches: int(p.maxMatches) ? p.maxMatches : 20 } };
   }
   return null;
 }
@@ -196,6 +212,12 @@ export function scheduledSbcs(items: LiveopsItem[] = liveopsSnapshot()): Schedul
     });
   }
   return out;
+}
+
+// [U12] eventos ATIVOS agora (janela do item), mais cedo primeiro
+export interface ScheduledEvent { id: string; payload: LiveopsEventPayload; startsAt: string; endsAt: string }
+export function scheduledEvents(items: LiveopsItem[] = liveopsSnapshot()): ScheduledEvent[] {
+  return items.filter((it): it is Extract<LiveopsItem, { kind: 'event' }> => it.kind === 'event').map((it) => ({ id: it.id, payload: it.payload, startsAt: it.startsAt, endsAt: it.endsAt }));
 }
 
 // resolve uma SBC agendada pelo id 'lo-<slug>' (usado pelo submitSbc da store).
