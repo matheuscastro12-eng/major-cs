@@ -78,8 +78,14 @@ export type PassXpSource = keyof typeof PASS_XP;
 export const PASS_PACK_XP_DAILY_CAP = 5; // packs que dão XP por dia
 
 // ── estado persistido (dentro de UltimateProfile.pass) ──────────────────────
+// [U09] versão das TRILHAS (recompensas por nível). Um passe criado numa versão
+// mantém o número gravado; mudar a tabela no futuro exige honrar resgates da
+// versão antiga (direitos preservados) — por isso o campo existe desde já.
+export const PASS_TRACK_VERSION = 2;
+
 export interface PassState {
   seasonId: number;            // = profile.season.n — reset no rollover
+  trackVersion?: number;       // [U09] versão da trilha em que o passe nasceu (ausente = 1)
   xp: number;
   premium: boolean;
   premiumVia: PassPremiumMethod | null;
@@ -92,6 +98,7 @@ export interface PassState {
 export function defaultPassState(seasonId: number): PassState {
   return {
     seasonId,
+    trackVersion: PASS_TRACK_VERSION,
     xp: 0,
     premium: false,
     premiumVia: null,
@@ -232,6 +239,48 @@ export function markPassClaimed(pass: PassState, level: number, track: PassTrack
 // está em TITLES (titles.ts); a UI da fase B precisa de fallback de rótulo
 // (ver passTitleLabel). mergeTitles aceita qualquer slug, então o grant é
 // barato sem mexer na avaliação por TitleFacts.
+// [U09] PREVIEW da compra tardia: o que fica resgatável NA HORA ao comprar premium
+// agora (níveis já alcançados e não resgatados na trilha premium), e o que
+// ainda depende de subir. Texto honesto para o modal de compra.
+export interface PremiumPreview {
+  level: number;
+  levelsNow: number[];       // níveis premium resgatáveis imediatamente
+  creditsNow: number;
+  packsNow: string[];
+  cardsNow: UltRarity[];
+  titleNow: boolean;
+  levelsLeft: number;        // níveis até o 35
+  xpLeft: number;            // XP até o 35
+}
+export function premiumPreview(pass: PassState | null | undefined): PremiumPreview {
+  const xp = pass?.xp ?? 0;
+  const level = levelForXp(xp);
+  const claimed = pass?.claimedPremium ?? [];
+  const levelsNow: number[] = [];
+  let creditsNow = 0; const packsNow: string[] = []; const cardsNow: UltRarity[] = []; let titleNow = false;
+  for (let n = 1; n <= level; n++) {
+    if (claimed.includes(n)) continue;
+    const def = passLevelDef(n); if (!def) continue;
+    levelsNow.push(n);
+    creditsNow += def.premium.credits ?? 0;
+    if (def.premium.pack) packsNow.push(def.premium.pack);
+    if (def.premium.card) cardsNow.push(def.premium.card);
+    if (def.premium.title) titleNow = true;
+  }
+  return { level, levelsNow, creditsNow, packsNow, cardsNow, titleNow, levelsLeft: Math.max(0, PASS_MAX_LEVEL - level), xpLeft: Math.max(0, totalXpForLevel(PASS_MAX_LEVEL) - xp) };
+}
+
+// [U09] ESCOLHA NO MARCO: a carta de recompensa (Elite/TOTS/Ouro Raro) pode preferir
+// uma FUNÇÃO — o sorteio continua aleatório dentro da raridade, mas restrito à
+// função quando houver pool. Sem função (ou pool vazia) cai no funil antigo.
+export function pickRewardCard<T extends { rarity: UltRarity; role: string }>(catalog: T[], rarity: UltRarity, preferRole: string | null, pick: (n: number) => number): T | undefined {
+  const byRarity = catalog.filter((c) => c.rarity === rarity);
+  const pool = preferRole ? byRarity.filter((c) => c.role === preferRole) : [];
+  const from = pool.length ? pool : byRarity;
+  if (!from.length) return undefined;
+  return from[Math.max(0, Math.min(from.length - 1, pick(from.length)))];
+}
+
 export function passTitleSlug(seasonId: number): string {
   return `passe-s${seasonId}`;
 }
