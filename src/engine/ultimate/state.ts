@@ -86,6 +86,7 @@ export interface UltimateProfile {
   missions: MissionsState | null; // missões diárias rotativas
   weekly: WeeklyState | null;     // missões semanais renováveis
   pass: PassState | null;         // Passe de Temporada (reset no rollover; premium NÃO carrega)
+  target?: { cardKey: string; setAt: number } | null; // [U07] jogador dos sonhos (carta-alvo); opcional — save antigo abre sem
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -459,6 +460,7 @@ export function migrateUltimate(raw: unknown): UltimateState {
     packSeedCounter: num(p.packSeedCounter, 0),
     titles: Array.isArray(p.titles) ? p.titles.filter((x): x is string => typeof x === 'string') : [],
     equippedTitle: typeof p.equippedTitle === 'string' ? p.equippedTitle : null,
+    target: p.target && typeof p.target === 'object' && typeof (p.target as { cardKey?: unknown }).cardKey === 'string' ? { cardKey: String((p.target as { cardKey: string }).cardKey), setAt: Number((p.target as { setAt?: unknown }).setAt) || 0 } : null, // [U07]
     season: p.season && typeof p.season === 'object' && typeof p.season.startedAt === 'number'
       ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [], n: Math.max(1, num(p.season.n, 1)), w: Math.max(0, num(p.season.w, 0)) }
       : null,

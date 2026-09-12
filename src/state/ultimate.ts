@@ -288,6 +288,7 @@ interface UltimateStore {
   claimDaily: () => DailyClaim;
   syncTitles: () => string[]; // slugs recém-conquistados
   equipTitle: (slug: string | null) => void;
+  setTarget: (cardKey: string | null) => void; // [U07] jogador dos sonhos
   claimStarter: (formationId: string) => UltCard[];
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
@@ -601,6 +602,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
   equipTitle: (slug) =>
     set((st) => {
       const s = _equipTitle(st.state, slug);
+      persist(s);
+      return { state: s };
+    }),
+  setTarget: (cardKey) =>
+    set((st) => {
+      const s = { ...st.state, profile: { ...st.state.profile, target: cardKey ? { cardKey, setAt: Date.now() } : null } };
       persist(s);
       return { state: s };
     }),

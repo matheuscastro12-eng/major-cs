@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 11/09/2026 (U00–U06 casual concluídos).
+Última atualização: 12/09/2026 (U00–U07 concluídos; U06 PvP pendente).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -21,8 +21,8 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U04 Pós-jogo | Implementado e verificado (11/09) | Branch `ult/u04-pos-jogo`; comparação do reforço fica para U07 |
 | U05 Primeira sessão | Implementado e verificado (11/09) | Branch `ult/u05-primeira-sessao`; mobile pendente |
 | U06 Timeout real | **Casual implementado e verificado (11/09)**; PvP pendente | Branch `ult/u06-timeout-casual`; Rivals/Gauntlet/Draft seguem pré-calculados |
-| U07 Alvo e estreia | Pendente — **próximo** | U03/U05 feitos |
-| U08 Compra/oferta inicial | Pendente | U01/U02/U07 |
+| U07 Alvo e estreia | Implementado e verificado (12/09) | Branch `ult/u07-alvo-estreia` |
+| U08 Compra/oferta inicial | Pendente — **próximo** | U01/U02/U07 feitos; levantamento em andamento |
 | U09 Passe | Pendente | U02/U08; U10 para cosméticos novos |
 | U10 Identidade/coleções | Pendente | U07/U08 para produtos pagos |
 | U11 Rivalidades | Pendente | Contrato de partidas estabilizado |
@@ -30,7 +30,7 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 
 ## Próxima ação exata
 
-Executar U07 (jogador dos sonhos e estreia do reforço): alvo persistente no save (campo opcional em `UltimateProfile`, default no `migrateUltimate`), caminhos reais de obtenção (mercado P2P por `cardKey`, packs cujo `weights` contém a raridade, promo/TOTW quando em circulação — sem inventar chance individual), saldo faltante e alternativas, troca de alvo sem perda; comparação titular × reforço com `squadProfile`/`computeChemistry` (preview sem consumir), e "escalar e estrear" ao adquirir (sem substituir carta travada/listada). A etapa `goal` da jornada (U05) passa a apontar para selecionar o alvo.
+Executar U08 (compra contextual e oferta inicial com escolha): (1) intenção de compra persistida (produto + aba + origem) para retomar após login/cadastro e voltar ao contexto no cancelamento — sem cobrar antes da confirmação; (2) saldo insuficiente na Loja com "quanto falta" e opções ganhar/comprar (já existe `missingCredits` do U07); (3) especificar a oferta inicial (conteúdo conhecido, escolha entre reforços equilibrados e cosmético, preço CONFIGURÁVEL ainda a definir — não ativar venda sem decisão do proprietário); (4) elegibilidade única por conta no servidor (reusar dup-check por `tier`/`correlation_id` de `rtm_coin_orders`), versão/conteúdo/preço registrados no pedido; (5) matriz de falhas (webhook repetido, atraso, sessão expirada, duas abas, estorno) definida antes de ativar. Sandbox apenas; nenhum pagamento real.
 
 **PvP do U06 fica registrado como PENDENTE** (não concluído): exige checkpoint autoritativo no servidor, decisões ordenadas com prazo comum e escolha padrão neutra por ausência, tratamento de desconexão/abandono/expiração da sala e protocolo habilitado só para pares compatíveis. Hoje o PvP é reexecução idêntica com seed canônico e sem estado de partida no servidor (`lobbies`/`lobby_players` não têm round/placar).
 
@@ -181,6 +181,22 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: sem campo em save; sessão só em localStorage; sessão de versão diferente é descartada (`normalizeSession` → null). Sem flag: casual pré-calculado deixou de existir; os outros modos não mudam.
 - Pendências: **PvP** (checkpoint autoritativo, decisões ordenadas no servidor, prazo/ausência, desconexão/abandono, pares compatíveis, orçamento de tráfego); Gauntlet/Draft incrementais; caster incremental; expiração de sessão abandonada; medição de custo por partida (não há servidor envolvido no casual — custo zero de rede).
 - Próxima ação exata: U07.
+
+## U07 — jogador dos sonhos e estreia do reforço — 12/09/2026
+
+- Estado: **implementado e verificado**.
+- Branch/commit: `ult/u07-alvo-estreia` (a partir de `075cc92`).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/dreamTarget.ts` (novo, puro): `targetPaths(card, ctx)` — circulação (`sempre` para base; `agora`/`fora` para TOTW da semana e Promo do mês; nota para TOTS/Major/Ícone), packs cujo `weights` contém a raridade **e** cuja pool contém a carta, cada um com **P(≥1 carta da raridade)** do `packOdds` e o **tamanho do pool da raridade** — dois números, nunca multiplicados como "chance da carta" (regra do plano); recompensas por raridade (SBCs) marcadas "não específica"; `missingCredits`; `slotSwapPreview`/`bestSlotFor` (preview de química e função via `computeChemistry`/`roleFitsSlot`, sem consumir nada).
+  - Save: `UltimateProfile.target?: { cardKey, setAt } | null` (opcional, default `null` no `migrateUltimate`); store `setTarget`. Sobrevive a reload; sincroniza com o save (cloud/espelho não tratam como economia).
+  - `UltimateSquadScreen.tsx`: painel "⭐ JOGADOR DOS SONHOS" no hub — escolher/trocar/remover alvo (modal com busca por nick sobre o catálogo completo, até 60 por OVR, com contador de cópias), circulação, packs com custo/P/pool, recompensas por raridade, mercado (listagens e menor preço via `mktBrowse` só com conta vitalícia; convidado vê "conta necessária"), "faltam N coins pro caminho mais barato" (mín. entre pack e mercado) com atalhos Loja/Mercado; quando possui cópia livre: **"Escalar e estrear"** com preview do melhor slot (função ✔/✖, química antes→depois, OVR antes→depois, quem sai) — não substitui carta travada no squad (usa cópia `locked !== 'squad'`) nem lista. Etapa `goal` da jornada (U05) agora abre o seletor de alvo; evento de funil `target_selected` (U02).
+  - `scripts/test-ultimate-dream-target.mts` (4 testes): base sempre em circulação e packs só com a raridade; TOTW da semana `agora` vs fora `fora` (sem pack); preview bate com `computeChemistry` e escolhe slot que aceita a função; `normalizeTarget`.
+- Decisões tomadas e motivo: chance por carta NÃO é exibida (o roll sorteia a raridade e depois uma carta uniformemente na pool — exibir P×1/N seria coerente com o motor, mas o plano proíbe "chance individual" sem garantia; mostramos os dois fatores separados); alvo indisponível continua visível com o status correto; troca de alvo não mexe em patrimônio; comparação de desempenho do reforço em partida (U04 pendência) segue pendente — só o preview de escalação.
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` **345/345** (+4) · `npm run lint` 189 = baseline.
+- Verificação visual e ambiente: não exercitada (painel e modal cobertos por typecheck); mercado só testável com conta paga e backend.
+- Compatibilidade/migração/flag: campo opcional no save com default; sem schema no servidor.
+- Pendências: comparação de desempenho do reforço após a estreia (cruzar `matchEvidence` com o alvo); alvo em rotação pode ficar sem caminho de pack — mostrado como "só mercado".
+- Próxima ação exata: U08.
 
 ## Modelo de atualização por lote
 
