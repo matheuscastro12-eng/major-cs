@@ -9,6 +9,7 @@
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
+import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -60,6 +61,14 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // aplicado quando os dois lados batem (ver api/_reportPairing.ts).
     sql`CREATE TABLE IF NOT EXISTS rtm_match_reports (code TEXT, email TEXT, nick TEXT, won BOOLEAN NOT NULL, status TEXT DEFAULT 'pending', reported_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (code, email))`,
     sql`CREATE INDEX IF NOT EXISTS rtm_match_reports_email_idx ON rtm_match_reports (email, status)`,
+    // [U11] RIVALIDADE por CONTA: head-to-head agregado (par canônico de e-mails); rtm_rivalry_matches
+    // garante que cada partida conta UMA vez (o primeiro INSERT vence). Duelo privado reporta em
+    // rtm_duel_reports (não vale RP) e pareia do mesmo jeito.
+    sql`CREATE TABLE IF NOT EXISTS rtm_rivalries (pair TEXT PRIMARY KEY, email_a TEXT NOT NULL, email_b TEXT NOT NULL, nick_a TEXT, nick_b TEXT, wins_a INT DEFAULT 0, wins_b INT DEFAULT 0, games INT DEFAULT 0, last_at TIMESTAMPTZ, last_code TEXT)`,
+    sql`CREATE INDEX IF NOT EXISTS rtm_rivalries_a_idx ON rtm_rivalries (email_a)`,
+    sql`CREATE INDEX IF NOT EXISTS rtm_rivalries_b_idx ON rtm_rivalries (email_b)`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_rivalry_matches (code TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`CREATE TABLE IF NOT EXISTS rtm_duel_reports (code TEXT, email TEXT, nick TEXT, won BOOLEAN NOT NULL, reported_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (code, email))`,
     // SÉRIE DO DIA (RtP): 1 resultado por conta por dia — o PRIMEIRO vale (sem
     // re-jogar pra farmar rating). day = nº do desafio (época 2026-08-01).
     sql`CREATE TABLE IF NOT EXISTS rtm_daily_series (day INT, email TEXT, nick TEXT, rating REAL NOT NULL, won BOOLEAN NOT NULL, map_a INT DEFAULT 0, map_b INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (day, email))`,
@@ -384,6 +393,41 @@ export default async function handler(
     await sql`UPDATE rtm_ranking SET nick=${nick}, mmr=${reset}, wins=0, losses=0, season=${season.no}, season_games=0 WHERE email=${email}`;
   };
 
+  // [U11] contabiliza um duelo decidido (winner ≠ loser) no head-to-head do par, UMA vez por código.
+  const bumpRivalry = async (code: string, a: { email: string; nick: string; won: boolean }, b: { email: string; nick: string; won: boolean }) => {
+    if (a.won === b.won) return;
+    const once = await sql`INSERT INTO rtm_rivalry_matches (code) VALUES (${code}) ON CONFLICT (code) DO NOTHING RETURNING code`;
+    if (!once.length) return;
+    const { pair, a: ea, b: eb } = rivalryPair(a.email, b.email);
+    const winner = (a.won ? a.email : b.email).toLowerCase();
+    const nickA = ea === a.email.toLowerCase() ? a.nick : b.nick; const nickB = eb === b.email.toLowerCase() ? b.nick : a.nick;
+    await sql`INSERT INTO rtm_rivalries (pair, email_a, email_b, nick_a, nick_b, wins_a, wins_b, games, last_at, last_code)
+              VALUES (${pair}, ${ea}, ${eb}, ${nickA}, ${nickB}, ${winner === ea ? 1 : 0}, ${winner === eb ? 1 : 0}, 1, now(), ${code})
+              ON CONFLICT (pair) DO UPDATE SET nick_a=EXCLUDED.nick_a, nick_b=EXCLUDED.nick_b, wins_a=rtm_rivalries.wins_a+EXCLUDED.wins_a, wins_b=rtm_rivalries.wins_b+EXCLUDED.wins_b, games=rtm_rivalries.games+1, last_at=now(), last_code=EXCLUDED.last_code`;
+  };
+  // [U11] meus rivais (por conta), mais recentes primeiro
+  if (action === 'rivals') {
+    const rows = await sql`SELECT * FROM rtm_rivalries WHERE email_a=${email.toLowerCase()} OR email_b=${email.toLowerCase()} ORDER BY last_at DESC NULLS LAST LIMIT 20`;
+    res.status(200).json({ rivals: rows.map((r) => rivalryFor({ pair: String(r.pair), email_a: String(r.email_a), email_b: String(r.email_b), nick_a: String(r.nick_a ?? ''), nick_b: String(r.nick_b ?? ''), wins_a: Number(r.wins_a) || 0, wins_b: Number(r.wins_b) || 0, games: Number(r.games) || 0, last_at: r.last_at ? new Date(String(r.last_at)).getTime() : 0, last_code: String(r.last_code ?? '') }, email)) });
+    return;
+  }
+  // [U11] report de DUELO PRIVADO: não mexe em RP; só alimenta o head-to-head. 1 por conta por partida.
+  if (action === 'duelReport') {
+    const code = String(body.code ?? '').trim().slice(0, 12);
+    const won = !!body.won;
+    const lobbyNick = String((body.lobbyNick as string) || nick).slice(0, 60);
+    if (!code) { res.status(400).json({ error: 'código' }); return; }
+    const lb = await sql`SELECT ranked, mode FROM lobbies WHERE code=${code}`;
+    if (!lb.length) { res.status(404).json({ error: 'partida não encontrada' }); return; }
+    if (String(lb[0].mode) !== 'ultimate') { res.status(400).json({ error: 'modo' }); return; }
+    const inLobby = await sql`SELECT 1 FROM lobby_players WHERE code=${code} AND lower(nick)=lower(${lobbyNick}) AND COALESCE(spectator, false) = false`;
+    if (!inLobby.length) { res.status(403).json({ error: 'você não jogou essa partida' }); return; }
+    await sql`INSERT INTO rtm_duel_reports (code, email, nick, won) VALUES (${code}, ${email}, ${lobbyNick}, ${won}) ON CONFLICT (code, email) DO NOTHING`;
+    const other = await sql`SELECT email, nick, won FROM rtm_duel_reports WHERE code=${code} AND email<>${email} LIMIT 1`;
+    if (other.length) await bumpRivalry(code, { email, nick: lobbyNick, won }, { email: String(other[0].email), nick: String(other[0].nick ?? ''), won: !!other[0].won });
+    res.status(200).json({ ok: true, paired: other.length > 0 });
+    return;
+  }
   const myRow = async () => {
     const r = await sql`SELECT mmr, wins, losses, peak, season_games FROM rtm_ranking WHERE email=${email}`;
     if (!r.length) return null;
@@ -482,7 +526,7 @@ export default async function handler(
       return;
     }
 
-    const other = await sql`SELECT email, won, status FROM rtm_match_reports WHERE code=${code} AND email<>${email} LIMIT 1`;
+    const other = await sql`SELECT email, nick, won, status FROM rtm_match_reports WHERE code=${code} AND email<>${email} LIMIT 1`;
     const outcome = decidePair(
       won,
       other.length ? !!other[0].won : null,
@@ -512,6 +556,8 @@ export default async function handler(
       const applied = await applyRanked(String(row.email), !!row.won);
       if (String(row.email) === email) mine = applied;
     }
+    // [U11] head-to-head por conta: os dois reports desta partida (idempotente por código)
+    if (mine && other.length) await bumpRivalry(code, { email, nick: lobbyNick, won }, { email: String(other[0].email), nick: String(other[0].nick ?? ''), won: !!other[0].won });
     if (!mine) { res.status(200).json({ applied: claimed.length === 0, raced: claimed.length === 0, delta: 0, me: await myRow(), ...seasonInfo }); return; }
     const divisionBefore = divFor(mine.before, mine.gamesBefore);
     const divisionAfter = divFor(mine.after, mine.gamesAfter);

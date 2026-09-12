@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 12/09/2026 (U00–U10 concluídos; U06 PvP, oferta inicial e preço do passe pendentes de decisão).
+Última atualização: 12/09/2026 (U00–U11 concluídos; U06 PvP, oferta inicial e preço do passe pendentes de decisão).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -25,12 +25,12 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U08 Compra/oferta inicial | Parcial: retomada + saldo implementados; oferta inicial ESPECIFICADA e desligada (12/09) | Branch `ult/u08-compra-contextual`; ativar exige preço + tier + sandbox |
 | U09 Passe | Implementado e verificado (12/09) — preço/valores novos pendentes de decisão | Branch `ult/u09-passe`; economia documentada abaixo |
 | U10 Identidade/coleções | Implementado e verificado (12/09) | Branch `ult/u10-identidade-colecoes`; escudo via LogoBuilder da Carreira |
-| U11 Rivalidades | Pendente — **próximo** | Levantamento em andamento |
-| U12 Eventos | Pendente | U03/U11 e economia validada |
+| U11 Rivalidades | Implementado e verificado (12/09) | Branch `ult/u11-rivalidades`; pequenos campeonatos ficam para depois |
+| U12 Eventos | Pendente — **próximo** (último lote) | Levantamento em andamento |
 
 ## Próxima ação exata
 
-Executar U11 (rivalidades e convites): convite por link/código para duelo privado (precedente do link de desafio do RtP), histórico de confrontos entre CONTAS (não apelidos), comparação de confrontos e card compartilhável com destino funcional; convidado deslogado vê explicação e caminho; sem bônus por convite; sem sala temporária como única fonte de histórico.
+Executar U12 (eventos com elencos variados e operação): configuração versionada de evento (janela com timezone explícito, regra de elegibilidade — teto de OVR / região / funções / eras —, recompensas, estado publicado/encerrado) sobre o modelo do Major da Semana e do live-ops existente; elegibilidade validada no servidor ao entrar e elenco travado (snapshot do lobby); recompensa idempotente (padrão `wl:<windowId>`); alternativa casual identificada quando a fila estiver vazia (sem simular humano); live-ops com preview/agendar/publicar/encerrar preservando runs iniciadas. Começar com 1–2 eventos rotativos para não fragmentar a fila.
 
 **Oferta inicial (U08) fica PENDENTE DE DECISÃO DO PROPRIETÁRIO**: `starterOffer.ts` fixa o contrato (2 opções de conteúdo conhecido, janela de partidas, elegibilidade única por conta via `tier` + `status`), com `enabled=false` e `priceCents=null`. Ativar = definir preço, criar o tier em `COIN_TIERS` (e no mirror do webhook Woovi), fulfillment com escolha registrada no pedido, e sandbox de sucesso/falhas. **Webhooks não foram alterados** (sem sandbox nesta rodada): continua sem checagem de valor pago vs `cents` no caminho de coins/passe — item aberto de U00.
 
@@ -253,6 +253,23 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: `trackVersion` opcional (ausente = 1); moldura e preview não mudam economia; auto-resgate roda no mesmo `tickSeason` já existente.
 - Pendências: decisão de preço/valores; níveis prestígio; migração de trilha quando `PASS_TRACK_VERSION` mudar (honrar `claimedPremium` da versão antiga).
 - Próxima ação exata: U11.
+
+## U11 — rivalidades e convites — 12/09/2026
+
+- Estado: **implementado e verificado** (pequenos campeonatos: não iniciados — dependem de mapear capacidade e regras de abandono, como pede o plano).
+- Branch/commit: `ult/u11-rivalidades` (a partir de `4edac7e`).
+- Descobertas confirmadas: o lobby é 100% anônimo por `nick` (sem e-mail/token em `lobbies`/`lobby_players`); só a ranqueada escreve `rtm_match_reports` (uma linha por jogador, sem oponente); duelo privado não deixava rastro; não existia link de convite (só código copiado); `MatchRecord` local não guarda o rival.
+- Mudanças e arquivos:
+  - `src/engine/ultimate/duelInvite.ts` (puro): `parseDuelInvite` (5 chars do alfabeto do lobby, sem 0/O/1/I/L), `duelInviteUrl` (`/ultimate?duelo=CODE`), `duelInviteText`, `h2hText`. `src/state/duelInvite.ts`: captura no boot (limpa a URL), TTL 6h (vida máxima da sala), `loadDuelInvite`/`clearDuelInvite`. Precedente: `?desafio=` da Série do Dia.
+  - `server/rivalry.ts` (puro) + `server/rivalry.test.ts`: par canônico por **e-mail** (case-insensitive) — identidade é a conta, não o apelido; `applyRivalry`, `rivalryFor`. `api/ranking.ts`: tabelas `rtm_rivalries` (pair PK, wins_a/wins_b/games/last_at/last_code/nicks "último visto"), `rtm_rivalry_matches` (cada partida conta UMA vez — o primeiro INSERT vence) e `rtm_duel_reports` (report do duelo privado, PK code+email); `bumpRivalry` chamado no pareamento da ranqueada (dentro do fluxo existente `decidePair`/`applyRanked`) e na nova ação `duelReport` (exige lobby `ultimate`, participante não-espectador; **não mexe em RP**); ação `rivals` (20 mais recentes, visão do próprio lado).
+  - Cliente: `src/state/rivals.ts` (`fetchRivals`, `reportDuel`); `startPvpMatch` reporta o duelo privado (conta paga) ao lado do report ranqueado; `UltimateDuel` ganha `initialJoinCode` (auto-join uma vez por convite; sala expirada cai na mensagem existente "A sala expirou") e botão "🔗 link" na sala (Web Share ou clipboard, texto com código + URL); aba Duelo ganha painel "RIVAIS" (W–L por conta, nº de duelos, data, "Compartilhar confronto"); `App.tsx` captura o convite no carregamento e, com conta ou convidado, abre o Ultimate (a aba Duelo abre com o código); sem conta abre o gate conta × convidado; `Landing.tsx` mostra o banner do convite com "Entrar e aceitar".
+  - Testes: `scripts/test-ultimate-duel-invite.mts` (2) e `server/rivalry.test.ts` (2).
+- Decisões tomadas e motivo: histórico por conta gravado no **servidor** no pareamento (não depende da sala temporária nem do apelido); duelo privado só alimenta o head-to-head (sem RP); **nenhum bônus por convite**; convidado sem conta pode entrar pelo gate (histórico exige conta); compartilhar é ação explícita (Web Share/clipboard), sem mensagem automática a terceiros.
+- Comandos/testes e resultados reais: `npm run build` verde (2×) · `npm test` **133/133** (+2) · `npm run test:sim` **355/355** (+2) · `npm run lint` 189 = baseline (uma dependência de efeito e um acesso a ref em render foram corrigidos antes do commit).
+- Verificação visual e ambiente: não exercitada (fluxo com dois clientes e servidor); auto-join e banner cobertos por typecheck.
+- Compatibilidade/migração/flag: tabelas novas via `CREATE TABLE IF NOT EXISTS` (aditivas); nenhum campo em save.
+- Pendências: pequenos campeonatos (bracket com regras de abandono/avanço); rival no `MatchRecord` local; revanche direta a partir do painel (hoje: criar sala + link).
+- Próxima ação exata: U12.
 
 ## Modelo de atualização por lote
 

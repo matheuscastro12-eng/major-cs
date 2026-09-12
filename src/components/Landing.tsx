@@ -12,6 +12,7 @@ import { LEGAL_PATHS } from '../legal';
 import { login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, type PixCharge } from '../state/account';
 import { ct } from '../state/career-i18n';
 import { loadGhost } from '../state/ghost';
+import { loadDuelInvite } from '../state/duelInvite';
 import { dateKeyOf, dayNumberOf } from '../engine/daily/lines';
 
 const M = '/maps/';
@@ -668,9 +669,17 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
   // desafio de fantasma pendente (link aberto sem vitalícia): o motivo de
   // comprar HOJE — o desafio expira à meia-noite.
   const ghost = loadGhost(dayNumberOf(dateKeyOf(new Date())));
+  const duelInvite = loadDuelInvite(); // [U11]
   return (
     <div ref={ref} className="lp-root">
       <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
+      {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
+      {duelInvite && (
+        <div style={{ background: 'color-mix(in srgb, #4382b6 14%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
+          ⚔️ {ct('Você foi convidado pra um DUELO no Ultimate')} — {ct('sala')} <b style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{duelInvite}</b>. {ct('A sala expira em algumas horas.')}{' '}
+          <button type="button" onClick={onPlay} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>{ct('Entrar e aceitar')} →</button>
+        </div>
+      )}
       {ghost && (
         <div style={{ background: 'color-mix(in srgb, var(--rtm-gold) 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
           🥊 <b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')} — {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite — a Série do Dia é da conta vitalícia (R$20, uma vez).')}{' '}
