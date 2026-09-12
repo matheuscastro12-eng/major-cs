@@ -24,6 +24,7 @@ import { UltimateLiveSession } from './UltimateLiveSession';
 // [U07] jogador dos sonhos: alvo persistente, caminhos reais, preview de escalação
 import { bestSlotFor, missingCredits, targetPaths, type SwapPreview } from '../../engine/ultimate/dreamTarget';
 import { PROMO_PACK } from '../../engine/ultimate/packs';
+import { clearIntent, peekIntent, saveIntent } from '../../state/purchaseIntent'; // [U08] retomar a compra depois do login
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -309,6 +310,18 @@ function PassRewardChip({ r }: { r: PassReward }) {
 // chip minúsculo de trait/estilo (emoji + tooltip) — usado na escalação do
 // confronto, no pitch e na coleção. Reusa a linguagem dos chips existentes.
 const duelChip: CSSProperties = { fontSize: '0.62rem', lineHeight: 1, padding: '2px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.16)', cursor: 'default' };
+// [U08] saldo insuficiente: diz QUANTO falta e oferece os dois caminhos (ganhar jogando /
+// comprar coins). Nunca inicia cobrança — "Comprar" só rola até a coinshop.
+function ShortfallLine({ missing, onEarn, onBuy }: { missing: number; onEarn: () => void; onBuy: () => void }) {
+  return (
+    <div style={{ marginTop: 6, fontSize: '0.68rem', color: 'rgba(255,255,255,.85)', display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+      <span>{ct('faltam')} <b>{fmt(Math.max(0, missing))}</b></span>
+      <button type="button" onClick={onEarn} style={{ background: 'rgba(255,255,255,.18)', border: 'none', color: 'inherit', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', font: 'inherit' }}>{ct('ganhar jogando')}</button>
+      <button type="button" onClick={onBuy} style={{ background: 'rgba(255,255,255,.18)', border: 'none', color: 'inherit', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', font: 'inherit' }}>{ct('comprar coins')}</button>
+    </div>
+  );
+}
+
 function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId; light?: boolean }) {
   const st = styleById(styleId);
   const tr = traitsFor(card);
@@ -481,9 +494,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   };
 
   // ── Coins via Pix ─────────────────────────────────────────────────────────
+  // [U08] convidado quer comprar: guarda a INTENÇÃO (produto/aba) e abre a conta; ao voltar logado, a Loja reabre no produto
+  const guestWantsToBuy = (product_kind: 'coins' | 'pass', tier: string | undefined, method: 'pix' | 'card') => {
+    saveIntent({ product_kind, tier, method, tab: product_kind === 'coins' ? 'store' : 'passe', src: product_kind === 'coins' ? 'store' : 'passe' });
+    if (onCreateAccount) { flash(`🔒 ${ct('Crie sua conta — a compra reabre aqui quando você voltar.')}`, 2600); onCreateAccount(); }
+    else flash(`🔒 ${ct('Entre na sua conta pra comprar. A compra reabre aqui quando você voltar.')}`, 2800);
+  };
   const buyCoins = (pack: CoinPack) => {
     trackUltFunnel('purchase_intent', { product_kind: 'coins', method: 'pix', src: 'store', tier: pack.tier }); // [U02] (mesmo bloqueado por conta)
-    if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar coins.')}`, 2800); return; }
+    if (!account) { guestWantsToBuy('coins', pack.tier, 'pix'); return; }
     setCoinModal({ pack, charge: null });
     beginCoinsPix(pack.tier)
       .then((charge) => setCoinModal((m) => (m && m.pack.tier === pack.tier ? { ...m, charge } : m)))
@@ -494,7 +513,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const [cardBusy, setCardBusy] = useState(false);
   const buyCoinsCard = (pack: CoinPack) => {
     trackUltFunnel('purchase_intent', { product_kind: 'coins', method: 'card', src: 'store', tier: pack.tier }); // [U02]
-    if (!account) { flash(`🔒 ${ct('Entre na sua conta (tela inicial) pra comprar coins.')}`, 2800); return; }
+    if (!account) { guestWantsToBuy('coins', pack.tier, 'card'); return; }
     setCardBusy(true);
     flash(ct('Abrindo o checkout do cartão…'), 2400);
     beginCoinsCheckout(pack.tier)
@@ -519,6 +538,25 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     tick();
     try { const u = new URL(window.location.href); u.searchParams.delete('coins'); window.history.replaceState({}, '', u.pathname + u.search + u.hash); } catch { /* sem history */ }
     return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
+  // [U08] RETOMADA da intenção: voltou logado com intenção viva → reabre a aba e o produto.
+  // Nunca cobra sozinho: coins abrem o modal do Pix (o usuário ainda confirma); passe só abre a aba.
+  useEffect(() => {
+    if (!account) return;
+    const intent = peekIntent();
+    if (!intent) return;
+    clearIntent();
+    // fora do corpo do effect (timeout): a retomada é um evento, não sincronização de render
+    const t = window.setTimeout(() => {
+      setTab(intent.tab);
+      flash(`↩ ${ct('Bem-vindo de volta — retomando a compra que você começou.')}`, 3000);
+      if (intent.product_kind === 'coins') {
+        const pack = COIN_PACKS.find((p) => p.tier === intent.tier);
+        if (pack) window.setTimeout(() => { if (intent.method === 'card') buyCoinsCard(pack); else buyCoins(pack); }, 350);
+      }
+    }, 0);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account]);
   // credita pedidos pagos fora do fluxo do modal: no mount e ao visitar a Loja
@@ -2736,6 +2774,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               <button className="ut-pack__buy" onClick={() => buy(TOTW_PACK)} disabled={credits < TOTW_PACK.cost || packBusy != null} title={credits >= TOTW_PACK.cost ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
                 {packBusy === TOTW_PACK.id ? ct('Abrindo…') : <>{credits >= TOTW_PACK.cost ? <Coins size={15} /> : <Lock size={14} />} {fmt(TOTW_PACK.cost)}</>}
               </button>
+              {credits < TOTW_PACK.cost && <ShortfallLine missing={TOTW_PACK.cost - credits} onEarn={() => { setRankedMode('casual'); go('ranked'); }} onBuy={() => document.querySelector('.ut-coinshop')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />}
             </div>
           )}
           {/* Pacote Ícone — permanente: o ÚNICO lugar onde as lendas históricas caem */}
@@ -2767,6 +2806,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   <button className="ut-pack__buy" onClick={() => buy(pack)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
                     {packBusy === pack.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(pack.cost)}</>}
                   </button>
+                  {!afford && <ShortfallLine missing={pack.cost - credits} onEarn={() => { setRankedMode('casual'); go('ranked'); }} onBuy={() => document.querySelector('.ut-coinshop')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />}
                 </div>
               );
             })}
