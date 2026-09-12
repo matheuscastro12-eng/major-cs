@@ -309,3 +309,10 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Próxima ação exata:
 
 Nunca preencher teste como aprovado sem executar. Se interrompido, registrar alterações não commitadas e processos/servidores iniciados para o próximo agente retomar com segurança.
+
+## Lint zero (2026-09-12)
+
+- Baseline de lint caiu de 189 problemas para **0**. O gate dos próximos lotes passa a ser `npm run lint` sem nenhum item (não mais "== 189, sem novos").
+- Corrigidos no código: 6 `no-useless-assignment`, 1 `prefer-const`, 4 diretivas `eslint-disable` sobrando, 6 avisos `exhaustive-deps` (3 incluindo `setSave` — é `useCallback` estável; `App.tsx` depende de `account`; 2 efeitos da Carreira com lista de deps intencional receberam disable comentado).
+- Decisão de configuração em `eslint.config.js`: desligadas as regras do React Compiler (`react-hooks/refs`, `set-state-in-effect`, `purity`, `preserve-manual-memoization`, `immutability`, `static-components`) porque o build Vite não usa o React Compiler; desligada `react-refresh/only-export-components` (só afeta HMR em dev); `no-unused-vars` ignora prefixo `_`. `rules-of-hooks` e `exhaustive-deps` continuam ligadas.
+- Verificação: build ok, `npm test` 134/134, `npm run test:sim` 357/357.

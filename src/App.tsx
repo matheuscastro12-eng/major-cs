@@ -335,7 +335,7 @@ export default function App() {
     // RtP SEM vitalícia agora entra em modo DEMO (peneira + primeiras semanas)
     // — a conversão acontece DENTRO do jogo (RtpDemoGate), não mais na porta.
     if (accountReady && screen === 'ultimate' && !account && !utGuest) setScreen('landing');
-  }, [screen, accountReady, account?.paid, utGuest]);
+  }, [screen, accountReady, account, utGuest]);
   // funil: grátis/deslogado vendo a landing (pricing R$20) conta como paywall_view
   useEffect(() => {
     if (screen === 'landing' && accountReady && !account?.paid) trackPaywallView('landing');

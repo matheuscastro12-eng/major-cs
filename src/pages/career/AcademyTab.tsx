@@ -195,7 +195,6 @@ export function AcademyTab({
       window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'academy-rename', force: true } }));
       return;
     }
-    // eslint-disable-next-line no-alert
     const next = window.prompt(ct('Novo nick (max 12 chars):'), currentNick)?.trim();
     if (!next || next === currentNick) return;
     const nick = next.slice(0, 12);
