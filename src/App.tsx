@@ -1,3 +1,4 @@
+import { hasIntent } from './state/purchaseIntent';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { AdminGate } from './components/AdminGate';
 import { BrandMark } from './components/brand';
@@ -346,7 +347,7 @@ export default function App() {
     if (sp.get('conta') !== 'ok') return;
     const cs = sp.get('cs') ?? '';
     void (async () => {
-      if (cs) { const ok = await claimAccount(cs); if (ok) { setPaidToast(true); await refreshAccount(); } }
+      if (cs) { const ok = await claimAccount(cs); if (ok) { setPaidToast(true); await refreshAccount(); if (hasIntent()) setScreen('ultimate'); } } // [U08] retorno do checkout com intenção viva
       const url = new URL(window.location.href);
       url.searchParams.delete('conta'); url.searchParams.delete('cs');
       window.history.replaceState({}, '', url.pathname + url.search + url.hash);
@@ -1047,7 +1048,7 @@ export default function App() {
           initialMode={authMode}
           onClose={() => { setAuthOpen(false); setAuthMode('login'); }}
           onCheckout={startCheckout}
-          onPlay={async () => { setAuthOpen(false); await refreshAccount(); setScreen(manager ? 'home' : 'setup'); }}
+          onPlay={async () => { setAuthOpen(false); await refreshAccount(); setScreen(hasIntent() ? 'ultimate' : manager ? 'home' : 'setup'); }} /* [U08] intenção de compra viva → volta pro Ultimate */
         />
       )}
       {utGateOpen && !account && (

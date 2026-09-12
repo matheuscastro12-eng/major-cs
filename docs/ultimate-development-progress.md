@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 12/09/2026 (U00–U07 concluídos; U06 PvP pendente).
+Última atualização: 12/09/2026 (U00–U08 concluídos; U06 PvP e oferta inicial pendentes de decisão).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -22,15 +22,17 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U05 Primeira sessão | Implementado e verificado (11/09) | Branch `ult/u05-primeira-sessao`; mobile pendente |
 | U06 Timeout real | **Casual implementado e verificado (11/09)**; PvP pendente | Branch `ult/u06-timeout-casual`; Rivals/Gauntlet/Draft seguem pré-calculados |
 | U07 Alvo e estreia | Implementado e verificado (12/09) | Branch `ult/u07-alvo-estreia` |
-| U08 Compra/oferta inicial | Pendente — **próximo** | U01/U02/U07 feitos; levantamento em andamento |
+| U08 Compra/oferta inicial | Parcial: retomada + saldo implementados; oferta inicial ESPECIFICADA e desligada (12/09) | Branch `ult/u08-compra-contextual`; ativar exige preço + tier + sandbox |
 | U09 Passe | Pendente | U02/U08; U10 para cosméticos novos |
-| U10 Identidade/coleções | Pendente | U07/U08 para produtos pagos |
+| U10 Identidade/coleções | Pendente — **próximo** (antecede U09) | Levantamento em andamento |
 | U11 Rivalidades | Pendente | Contrato de partidas estabilizado |
 | U12 Eventos | Pendente | U03/U11 e economia validada |
 
 ## Próxima ação exata
 
-Executar U08 (compra contextual e oferta inicial com escolha): (1) intenção de compra persistida (produto + aba + origem) para retomar após login/cadastro e voltar ao contexto no cancelamento — sem cobrar antes da confirmação; (2) saldo insuficiente na Loja com "quanto falta" e opções ganhar/comprar (já existe `missingCredits` do U07); (3) especificar a oferta inicial (conteúdo conhecido, escolha entre reforços equilibrados e cosmético, preço CONFIGURÁVEL ainda a definir — não ativar venda sem decisão do proprietário); (4) elegibilidade única por conta no servidor (reusar dup-check por `tier`/`correlation_id` de `rtm_coin_orders`), versão/conteúdo/preço registrados no pedido; (5) matriz de falhas (webhook repetido, atraso, sessão expirada, duas abas, estorno) definida antes de ativar. Sandbox apenas; nenhum pagamento real.
+Executar U10 (identidade do clube e coleções temáticas) antes do U09, como manda a ordem do plano: moldura de carta e escudo/cor do clube como cosméticos com inventário/equipamento persistentes no perfil (campos opcionais), preview antes de equipar, visibilidade no hub/pré-jogo/share; coleções temáticas sobre `objectives.ts` (posse atual por identidade de carta, prêmio idempotente por id). Cosmético nunca altera força.
+
+**Oferta inicial (U08) fica PENDENTE DE DECISÃO DO PROPRIETÁRIO**: `starterOffer.ts` fixa o contrato (2 opções de conteúdo conhecido, janela de partidas, elegibilidade única por conta via `tier` + `status`), com `enabled=false` e `priceCents=null`. Ativar = definir preço, criar o tier em `COIN_TIERS` (e no mirror do webhook Woovi), fulfillment com escolha registrada no pedido, e sandbox de sucesso/falhas. **Webhooks não foram alterados** (sem sandbox nesta rodada): continua sem checagem de valor pago vs `cents` no caminho de coins/passe — item aberto de U00.
 
 **PvP do U06 fica registrado como PENDENTE** (não concluído): exige checkpoint autoritativo no servidor, decisões ordenadas com prazo comum e escolha padrão neutra por ausência, tratamento de desconexão/abandono/expiração da sala e protocolo habilitado só para pares compatíveis. Hoje o PvP é reexecução idêntica com seed canônico e sem estado de partida no servidor (`lobbies`/`lobby_players` não têm round/placar).
 
@@ -197,6 +199,24 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: campo opcional no save com default; sem schema no servidor.
 - Pendências: comparação de desempenho do reforço após a estreia (cruzar `matchEvidence` com o alvo); alvo em rotação pode ficar sem caminho de pack — mostrado como "só mercado".
 - Próxima ação exata: U08.
+
+## U08 — compra contextual e oferta inicial com escolha — 12/09/2026
+
+- Estado: **retomada de intenção e saldo insuficiente implementados e verificados; oferta inicial especificada e DESLIGADA**.
+- Branch/commit: `ult/u08-compra-contextual` (a partir de `df87c47`).
+- Mudanças e arquivos:
+  - `src/state/purchaseIntent.ts` (novo): intenção `{product_kind, tier, method, tab, src, at}` em `rtm-ult-intent-v1`, TTL 24h, `normalizeIntent` tolerante. Sem e-mail. Nunca cobra sozinho.
+  - `UltimateSquadScreen.tsx`: convidado que clica em comprar coins (Pix/cartão) deixa de ver só um toast "vá à tela inicial": a intenção é guardada e a conta é aberta (`onCreateAccount`); ao voltar logado, a Loja **reabre na aba e no produto** (modal do Pix ou checkout do cartão) — o usuário ainda confirma. `ShortfallLine` sob cada pack bloqueado: "faltam N" + "ganhar jogando" (Amistoso) + "comprar coins" (rola até a coinshop).
+  - `src/App.tsx`: depois de login/cadastro (`onPlay`) e no retorno do checkout da vitalícia (`?conta=ok`), se há intenção viva volta para a tela do Ultimate em vez do hub.
+  - `src/engine/ultimate/starterOffer.ts` (novo, puro): contrato da oferta inicial — `STARTER_OFFER` v1 com 2 opções de conteúdo conhecido ("Dois reforços pro seu esquema": 2 Ouro Raro com função dos slots mais fracos; "Identidade do clube": moldura + escudo, sem força), janela após a 1ª e até a 10ª partida, `starterOfferEligible(def, orders, matches)` reusando a regra do dup-check do passe (`tier` + `status IN ('paid','claimed')`). `enabled=false`, `priceCents=null`.
+  - `scripts/test-ultimate-purchase-intent.mts` (2 testes): TTL/forma da intenção; oferta desligada por padrão, só com preço, única por conta, janela.
+- Decisões tomadas e motivo: retomada por localStorage (intenção não é patrimônio); intenção reabre a tela de compra mas exige o clique final (regra "não gerar cobrança antes da confirmação"); oferta inicial sem preço nem tier no servidor até decisão comercial; catálogo de coins intacto.
+- Matriz de falhas (definida, a validar em sandbox quando a oferta ligar): webhook repetido → no-op pelo `UPDATE … status='pending'` + `ON CONFLICT DO NOTHING`; pagamento atrasado → pedido `pending` vira `paid` quando o webhook chegar e o claim no mount credita; sessão expirada → `pending` órfão apagado no rollback existente; duas abas → claim atômico (`UPDATE … RETURNING`) e listener de `storage`; troca de aparelho → `coinsRestore` (1× por coin); estorno → **sem tratamento hoje** (não há reversão de `claimed`), item aberto.
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` **347/347** (+2) · `npm run lint` 189 = baseline.
+- Verificação visual e ambiente: não exercitada (fluxo de conta exige backend); retomada coberta por typecheck e teste da intenção.
+- Compatibilidade/migração/flag: sem save/schema; `STARTER_OFFER.enabled` é a flag.
+- Pendências: sandbox de pagamentos; checagem de valor nos webhooks; estorno; ativar a oferta inicial (decisão do proprietário).
+- Próxima ação exata: U10.
 
 ## Modelo de atualização por lote
 
