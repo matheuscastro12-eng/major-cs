@@ -3,6 +3,9 @@
 // então o servidor guarda o estado do lobby, os picks e a barreira coletiva de
 // cada etapa do Major (todos prontos antes de avançar).
 import { neon } from '@neondatabase/serverless';
+import { eventEligibility, type EventRule } from '../src/engine/ultimate/events.js'; // [U12]
+import { serverCatalogIndex } from '../server/ultimate-pack.js';
+import { rarityInfo } from '../src/engine/ultimate/rarities.js';
 import { createHash } from 'node:crypto';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -134,6 +137,7 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS major_vetos jsonb DEFAULT '{}'::jsonb`,
     sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS run_roster jsonb DEFAULT NULL`,
     sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS stage_results jsonb DEFAULT '{}'::jsonb`,
+    sql`ALTER TABLE lobbies ADD COLUMN IF NOT EXISTS event_id text DEFAULT NULL`, // [U12] sala de EVENTO (regra validada no pick)
     sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS ready_stage int DEFAULT -1`,
     sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS strategy jsonb DEFAULT '{}'::jsonb`,
     sql`ALTER TABLE lobby_players ADD COLUMN IF NOT EXISTS lineup jsonb DEFAULT '{}'::jsonb`,
@@ -145,6 +149,7 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // atomicamente por quem parear (claim). Índices pros hot paths do polling.
     sql`CREATE TABLE IF NOT EXISTS mm_queue (nick text PRIMARY KEY, elo int DEFAULT 1000, enqueued_at timestamptz DEFAULT now(), last_seen timestamptz DEFAULT now(), matched_code text)`,
     sql`CREATE INDEX IF NOT EXISTS mm_queue_open_idx ON mm_queue (matched_code, last_seen)`,
+    sql`ALTER TABLE mm_queue ADD COLUMN IF NOT EXISTS bucket text DEFAULT 'open'`, // [U12] fila por evento ('open' = ranqueada normal)
     sql`CREATE INDEX IF NOT EXISTS lobby_players_code_idx ON lobby_players (code)`,
     // CUSTO NEON: os sweeps filtram por COALESCE(last_ping/last_seen, ...) — sem
     // índice de expressão viravam SEQ SCAN em todo poll (milhões/mês, CPU que
@@ -277,12 +282,35 @@ function mmWindow(waitedMs: number): number {
 // 4) MEU ticket recebe o mesmo matched_code (não é deletado): a coleta vira
 //    idempotente por poll (resposta perdida ≠ match perdido). Se um TERCEIRO
 //    me claimou no meio, desfaço ESTE par e colho o dele no próximo poll.
-async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, myElo: number, enqueuedAtMs: number): Promise<string | null> {
+// [U12] evento ATIVO agora (kind 'event', enabled, dentro da janela) → payload
+async function activeEventById(sql: ReturnType<typeof neon>, id: string): Promise<{ rule: EventRule; winTiers: { wins: number; credits: number }[]; maxMatches: number; version: number } | null> {
+  try {
+    const rows = await sql`SELECT payload FROM rtm_liveops WHERE id = ${id} AND kind = 'event' AND enabled = true AND starts_at <= now() AND ends_at > now() LIMIT 1`;
+    const p = rows[0]?.payload as Record<string, unknown> | undefined;
+    if (!p || !p.rule || typeof p.rule !== 'object') return null;
+    return { rule: p.rule as EventRule, winTiers: Array.isArray(p.winTiers) ? (p.winTiers as { wins: number; credits: number }[]) : [], maxMatches: Number(p.maxMatches) || 20, version: Number(p.version) || 1 };
+  } catch { return null; }
+}
+// índice pid → {region, country, role, tier} do catálogo do servidor (o snapshot é por card key)
+let _byPid: Map<string, { region?: string; country?: string; role?: string; tier?: number }> | null = null; let _byPidMonth = -1;
+function serverCatalogByPid(): Map<string, { region?: string; country?: string; role?: string; tier?: number }> {
+  const mi = new Date().getUTCFullYear() * 12 + new Date().getUTCMonth();
+  if (_byPid && _byPidMonth === mi) return _byPid;
+  const m = new Map<string, { region?: string; country?: string; role?: string; tier?: number }>();
+  for (const c of serverCatalogIndex().values()) {
+    const cur = m.get(c.playerId); const tier = rarityInfo(c.rarity).tier;
+    if (!cur || (cur.tier ?? 0) < tier) m.set(c.playerId, { region: c.region, country: c.country, role: c.role, tier });
+  }
+  _byPid = m; _byPidMonth = mi; return m;
+}
+// [U12] `bucket` segmenta a fila: 'open' (ranqueada) ou 'ev:<eventId>' (evento) — só pareia no mesmo bucket.
+async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, myElo: number, enqueuedAtMs: number, bucket = 'open'): Promise<string | null> {
   const windowRp = mmWindow(Date.now() - enqueuedAtMs);
   const myEnqueuedIso = new Date(enqueuedAtMs).toISOString();
   const cands = await sql`
     SELECT nick FROM mm_queue
     WHERE matched_code IS NULL AND lower(nick) <> ${meNick.toLowerCase()}
+      AND COALESCE(bucket, 'open') = ${bucket}
       AND last_seen > now() - interval '8 seconds'
       AND abs(elo - ${myElo}) <= ${windowRp}
       AND (enqueued_at < ${myEnqueuedIso}::timestamptz OR (enqueued_at = ${myEnqueuedIso}::timestamptz AND nick < ${meNick}))
@@ -294,7 +322,7 @@ async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, my
       const exists = await sql`SELECT 1 FROM lobbies WHERE code = ${newCode}`;
       if (exists.length > 0) continue;
       const seed = Math.floor(Math.random() * 2147483647);
-      await sql`INSERT INTO lobbies (code, mode, host, status, seed, run_seed, pool, is_public, ranked, ruleset) VALUES (${newCode}, 'ultimate', ${candNick}, 'drafting', ${seed}, ${seed}, 'world', false, true, 'open')`;
+      await sql`INSERT INTO lobbies (code, mode, host, status, seed, run_seed, pool, is_public, ranked, ruleset, event_id) VALUES (${newCode}, 'ultimate', ${candNick}, 'drafting', ${seed}, ${seed}, 'world', false, true, ${bucket === 'open' ? 'open' : 'event'}, ${bucket.startsWith('ev:') ? bucket.slice(3) : null})`;
       await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${candNick}), (${newCode}, ${meNick})`;
       const claimed = await sql`UPDATE mm_queue SET matched_code = ${newCode} WHERE nick = ${candNick} AND matched_code IS NULL RETURNING nick`;
       if (claimed.length === 0) {
@@ -520,6 +548,9 @@ export default async function handler(
       const mode = body.mode === 'party' ? 'party' : body.mode === 'ultimate' ? 'ultimate' : 'duel';
       const pool = body.pool === 'br' ? 'br' : 'world';
       const ruleset = RULESETS.has(String(body.ruleset)) ? String(body.ruleset) : 'open';
+      // [U12] sala privada de EVENTO: exige evento ativo; a regra é validada no pick
+      const evId = typeof body.eventId === 'string' ? body.eventId.slice(0, 64) : '';
+      if (evId && !(await activeEventById(sql, evId))) { res.status(400).json({ error: 'evento indisponível' }); return; }
       const name = (typeof body.name === 'string' ? body.name : '').trim().slice(0, 40) || null;
       const isPublic = body.isPublic === true;
       const ranked = body.ranked === true;
@@ -537,7 +568,7 @@ export default async function handler(
         const newCode = genCode();
         const exists = await sql`SELECT 1 FROM lobbies WHERE code = ${newCode}`;
         if (exists.length > 0) continue;
-        await sql`INSERT INTO lobbies (code, mode, host, seed, run_seed, pool, name, is_public, ranked, ruleset, draft_rollouts) VALUES (${newCode}, ${mode}, ${nick}, ${seed}, ${seed}, ${pool}, ${name}, ${isPublic}, ${ranked}, ${ruleset}, ${draftRollouts})`;
+        await sql`INSERT INTO lobbies (code, mode, host, seed, run_seed, pool, name, is_public, ranked, ruleset, draft_rollouts, event_id) VALUES (${newCode}, ${mode}, ${nick}, ${seed}, ${seed}, ${pool}, ${name}, ${isPublic}, ${ranked}, ${evId ? 'event' : ruleset}, ${draftRollouts}, ${evId || null})`;
         await sql`INSERT INTO lobby_players (code, nick) VALUES (${newCode}, ${nick})`;
         res.status(200).json({ ok: true, code: newCode });
         return;
@@ -559,8 +590,12 @@ export default async function handler(
       await dropQueueTicket(sql, nick); // reset (com compensação se tinha par não-coletado)
       // ticket entra ANTES do pareamento: fecha a janela check-then-insert em
       // que dois queueJoin simultâneos não se enxergavam.
-      await sql`INSERT INTO mm_queue (nick, elo) VALUES (${nick}, ${elo}) ON CONFLICT (nick) DO UPDATE SET elo = ${elo}, last_seen = now(), matched_code = NULL, enqueued_at = now()`;
-      const matchedCode = await tryMatchUltimate(sql, nick, elo, Date.now());
+      // [U12] fila de evento: só entra se o evento estiver ATIVO agora (kind 'event', janela)
+      const evId = typeof body.eventId === 'string' ? body.eventId.slice(0, 64) : '';
+      if (evId) { const ev = await activeEventById(sql, evId); if (!ev) { res.status(400).json({ error: 'evento indisponível' }); return; } }
+      const bucket = evId ? `ev:${evId}` : 'open';
+      await sql`INSERT INTO mm_queue (nick, elo, bucket) VALUES (${nick}, ${elo}, ${bucket}) ON CONFLICT (nick) DO UPDATE SET elo = ${elo}, bucket = ${bucket}, last_seen = now(), matched_code = NULL, enqueued_at = now()`;
+      const matchedCode = await tryMatchUltimate(sql, nick, elo, Date.now(), bucket);
       if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       // posso ter sido claimado por outro DURANTE o tryMatch — colhe na hora
       const mineNow = await sql`SELECT matched_code FROM mm_queue WHERE nick = ${nick}`;
@@ -585,7 +620,7 @@ export default async function handler(
       // pareia a CADA poll (query indexada e barata). A antiga alternância (polls
       // pares) cortava queries sob carga mas DOBRAVA o tempo de match numa fila
       // fina de lançamento — aqui achar partida > economizar query.
-      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs);
+      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo, String((await sql`SELECT bucket FROM mm_queue WHERE nick = ${nick}`)[0]?.bucket ?? 'open')) || 1000, enqueuedMs);
       if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       const open = await sql`SELECT COUNT(*)::int AS n FROM mm_queue WHERE matched_code IS NULL AND last_seen > now() - interval '30 seconds'`;
       res.status(200).json({ ok: true, queued: true, waiting: Number(open[0]?.n ?? 1), waitedMs, window: mmWindow(waitedMs) });
@@ -1015,6 +1050,22 @@ export default async function handler(
         const cardsOk = sq && Array.isArray(sq.cards) && sq.cards.length === 5
           && sq.cards.every((c) => c && typeof c === 'object' && String((c as Record<string, unknown>).pid ?? '').length > 0);
         if (!cardsOk) { res.status(400).json({ error: 'squad incompleto (5 cartas obrigatórias)' }); return; }
+        // [U12] sala de EVENTO: a regra é validada AQUI, no servidor, com o dataset do catálogo
+        // (role/region/country/tier por pid) e o OVR declarado no snapshot (clamp 1..99). Elenco
+        // travado: o pick só é aceito em 'drafting' e o snapshot não muda depois.
+        const evRow = await sql`SELECT event_id FROM lobbies WHERE code = ${code}`;
+        const evId = evRow[0]?.event_id ? String(evRow[0].event_id) : '';
+        if (evId) {
+          const ev = await activeEventById(sql, evId);
+          if (!ev) { res.status(409).json({ error: 'evento encerrado' }); return; }
+          const byPid = serverCatalogByPid();
+          const cards = (sq!.cards as Record<string, unknown>[]).map((c) => {
+            const pid = String(c.pid ?? ''); const base = byPid.get(pid);
+            return { pid, ovr: Math.max(1, Math.min(99, Math.round(Number(c.ovr) || 60))), region: base?.region, country: base?.country, role: base?.role, tier: base?.tier };
+          });
+          const elig = eventEligibility(cards, ev.rule);
+          if (!elig.ok) { res.status(400).json({ error: 'ineligible', reason: elig.reason }); return; }
+        }
       }
       const picks = JSON.stringify(
         Array.isArray(body.picks) ? body.picks.filter((p) => typeof p === 'string').slice(0, 5) : [],

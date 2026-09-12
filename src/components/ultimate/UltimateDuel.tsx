@@ -35,10 +35,13 @@ function watchedMatch(key: string): boolean {
   try { return (JSON.parse(localStorage.getItem(LEDGER_KEY) ?? '[]') as string[]).includes(key); } catch { return false; }
 }
 
-export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', initialJoinCode }: {
+export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', initialJoinCode, eventId = null, onQueueEmpty }: {
   nick: string;
   // [U11] convite por link (?duelo=CODE): entra na sala uma vez ao montar
   initialJoinCode?: string | null;
+  // [U12] fila de EVENTO (bucket próprio no servidor) e aviso de fila vazia (alternativa vs IA)
+  eventId?: string | null;
+  onQueueEmpty?: (waitedMs: number) => void;
   squad: UltimatePvpSquad;
   ready: boolean;               // squad completo (5 cartas)?
   onPlay: (args: DuelPlayArgs) => boolean; // false = não conseguiu montar a partida
@@ -81,7 +84,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
   const enterQueue = async () => {
     setBusy(true); setError(''); matchedRef.current = false;
     try {
-      const r = await lobbyApi({ action: 'queueJoin', nick, elo: squad.elo });
+      const r = await lobbyApi({ action: 'queueJoin', nick, elo: squad.elo, ...(eventId ? { eventId } : {}) });
       if (r.matched && r.code) { matchedRef.current = true; setCode(r.code); setView('room'); setState(null); }
       else if (r.queued) setQueue({ since: Date.now(), window: r.window });
       else setError(r.error ?? ct('Não foi possível entrar na fila.'));
@@ -110,7 +113,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', 
         const r = await lobbyApi({ action: 'queuePoll', nick, elo: squad.elo });
         if (!alive) return;
         if (r.matched && r.code) { matchedRef.current = true; setQueue(null); setCode(r.code); setView('room'); setState(null); }
-        else if (r.queued) setQueue((q) => (q ? { ...q, waiting: r.waiting, window: r.window } : q));
+        else if (r.queued) { setQueue((q) => (q ? { ...q, waiting: r.waiting, window: r.window } : q)); if (onQueueEmpty && queue && Number(r.waiting ?? 0) <= 0 && Date.now() - queue.since >= 20_000) onQueueEmpty(Date.now() - queue.since); }
         else { setQueue(null); setError(ct('Você saiu da fila por inatividade — entre de novo.')); }
       } catch { /* transiente — próximo tick tenta de novo */ }
     };

@@ -14,7 +14,7 @@
 
 // ------------------------------------------------------------------ constantes
 
-export const LIVEOPS_KINDS = ['promo', 'sbc', 'notice'] as const;
+export const LIVEOPS_KINDS = ['promo', 'sbc', 'notice', 'event'] as const; // [U12] 'event' = evento com elenco restrito
 export type LiveopsKind = (typeof LIVEOPS_KINDS)[number];
 
 // máx. de eventos ativos devolvidos ao jogo (payload pequeno e previsível)
@@ -82,7 +82,21 @@ export interface LiveopsNoticePayload {
   body: string;  // ≤280
 }
 
-export type LiveopsPayload = LiveopsPromoPayload | LiveopsSbcPayload | LiveopsNoticePayload;
+// [U12] EVENTO: regra de elegibilidade (validada no servidor no pick), janela em UTC
+// (starts/ends do item), prêmios por faixa de vitórias (orçamento explícito), versão.
+export const LIVEOPS_EVENT_RULE_KINDS = ['ovrcap', 'region', 'country', 'roles', 'rarity-max'] as const;
+export const LIVEOPS_EVENT_REGIONS = ['europe', 'cis', 'samerica', 'namerica', 'asia', 'oceania', 'africa'] as const;
+export const LIVEOPS_EVENT_ROLES = ['IGL', 'AWP', 'Entry', 'Support', 'Rifler', 'Lurker'] as const;
+export const LIVEOPS_EVENT_MAX_TIER_CREDITS = 60_000;
+export interface LiveopsEventPayload {
+  version: number;                 // versão da configuração (mudou regra/prêmio = versão nova)
+  name: string;
+  desc: string;
+  rule: { kind: 'ovrcap'; max: number } | { kind: 'region'; region: string } | { kind: 'country'; country: string } | { kind: 'roles'; roles: string[] } | { kind: 'rarity-max'; maxTier: number };
+  winTiers: { wins: number; credits: number }[];   // a MAIOR faixa alcançada paga (padrão Major da Semana)
+  maxMatches: number;              // cap de partidas contadas por conta
+}
+export type LiveopsPayload = LiveopsPromoPayload | LiveopsSbcPayload | LiveopsNoticePayload | LiveopsEventPayload;
 
 export interface LiveopsRow {
   id: string;
@@ -227,8 +241,43 @@ export function validateNoticePayload(raw: unknown): LiveopsValidation<LiveopsNo
   return { ok: true, payload: { title, body } };
 }
 
+export function validateEventPayload(raw: unknown): LiveopsValidation<LiveopsEventPayload> {
+  if (!isPlainObject(raw)) return bad('payload', 'payload precisa ser um objeto');
+  const version = Math.floor(Number(raw.version));
+  if (!Number.isFinite(version) || version < 1 || version > 999) return bad('version', 'version 1..999');
+  const name = readStr(raw.name, 40);
+  if (!name) return bad('name', 'nome obrigatório (1..40)');
+  const desc = readStr(raw.desc, 140);
+  if (!desc) return bad('desc', 'descrição obrigatória (1..140)');
+  const r = isPlainObject(raw.rule) ? raw.rule : null;
+  if (!r) return bad('rule', 'regra obrigatória');
+  let rule: LiveopsEventPayload['rule'];
+  const kind = String(r.kind ?? '');
+  if (kind === 'ovrcap') { const max = Math.floor(Number(r.max)); if (!Number.isFinite(max) || max < 60 || max > 99) return bad('rule', 'ovrcap.max 60..99'); rule = { kind, max }; }
+  else if (kind === 'region') { const region = String(r.region ?? ''); if (!(LIVEOPS_EVENT_REGIONS as readonly string[]).includes(region)) return bad('rule', `region precisa ser um de: ${LIVEOPS_EVENT_REGIONS.join(', ')}`); rule = { kind, region }; }
+  else if (kind === 'country') { const country = String(r.country ?? '').toLowerCase(); if (!/^[a-z]{2}$/.test(country)) return bad('rule', 'country = código ISO de 2 letras'); rule = { kind, country }; }
+  else if (kind === 'roles') { const roles = Array.isArray(r.roles) ? r.roles.map(String).filter((x) => (LIVEOPS_EVENT_ROLES as readonly string[]).includes(x)) : []; if (!roles.length || roles.length > 5) return bad('rule', 'roles: 1..5 funções válidas'); rule = { kind, roles: [...new Set(roles)] }; }
+  else if (kind === 'rarity-max') { const maxTier = Math.floor(Number(r.maxTier)); if (!Number.isFinite(maxTier) || maxTier < 1 || maxTier > 10) return bad('rule', 'rarity-max.maxTier 1..10'); rule = { kind, maxTier }; }
+  else return bad('rule', `rule.kind precisa ser um de: ${LIVEOPS_EVENT_RULE_KINDS.join(', ')}`);
+  const tiersRaw = Array.isArray(raw.winTiers) ? raw.winTiers : [];
+  const winTiers: { wins: number; credits: number }[] = [];
+  for (const t of tiersRaw.slice(0, 6)) {
+    if (!isPlainObject(t)) return bad('winTiers', 'faixa inválida');
+    const wins = Math.floor(Number(t.wins)); const credits = Math.floor(Number(t.credits));
+    if (!Number.isFinite(wins) || wins < 1 || wins > 99) return bad('winTiers', 'wins 1..99');
+    if (!Number.isFinite(credits) || credits < 0 || credits > LIVEOPS_EVENT_MAX_TIER_CREDITS) return bad('winTiers', `credits 0..${LIVEOPS_EVENT_MAX_TIER_CREDITS}`);
+    winTiers.push({ wins, credits });
+  }
+  if (!winTiers.length) return bad('winTiers', 'pelo menos 1 faixa de vitórias');
+  winTiers.sort((a, b) => a.wins - b.wins);
+  const maxMatches = Math.floor(Number(raw.maxMatches ?? 20));
+  if (!Number.isFinite(maxMatches) || maxMatches < 1 || maxMatches > 200) return bad('maxMatches', 'maxMatches 1..200');
+  return { ok: true, payload: { version, name, desc, rule, winTiers, maxMatches } };
+}
+
 // dispatcher por kind — o upsert e a rota usam este.
 export function validateLiveopsPayload(kind: string, raw: unknown): LiveopsValidation<LiveopsPayload> {
+  if (kind === 'event') return validateEventPayload(raw); // [U12]
   if (kind === 'promo') return validatePromoPayload(raw);
   if (kind === 'sbc') return validateSbcPayload(raw);
   if (kind === 'notice') return validateNoticePayload(raw);

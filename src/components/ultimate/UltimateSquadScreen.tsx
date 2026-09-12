@@ -34,6 +34,11 @@ import { openLogoBuilder } from '../LogoBuilderHost';
 import { clearDuelInvite, loadDuelInvite } from '../../state/duelInvite';
 import { fetchRivals, reportDuel } from '../../state/rivals';
 import { h2hText, type H2H } from '../../engine/ultimate/duelInvite';
+// [U12] eventos com elenco restrito: elegibilidade local (orientação), fila por evento, prêmio idempotente
+import { scheduledEvents } from '../../state/liveops';
+import { describeRule, eventEligibility } from '../../engine/ultimate/events';
+import { claimEvent, fetchEventStatus, type EventStatus } from '../../state/events';
+import { regionOf } from '../../data/regions';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -428,6 +433,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // [U11] convite pendente (link ?duelo=CODE): abre a aba Duelo com o código; rivais por conta
   const [duelInvite] = useState<string | null>(() => loadDuelInvite());
   const [rivals, setRivals] = useState<H2H[] | null>(null);
+  // [U12] evento selecionado para a fila ranqueada (null = ranqueada normal) + status por conta
+  const [rankedEvent, setRankedEvent] = useState<string | null>(null);
+  const [eventStatus, setEventStatus] = useState<Record<string, EventStatus>>({});
+  const liveEvents = scheduledEvents();
+  useEffect(() => {
+    if (tab !== 'ranked' || !account?.paid || !liveEvents.length) return;
+    let on = true;
+    void Promise.all(liveEvents.map((ev) => fetchEventStatus(ev.id).then((st) => [ev.id, st] as const))).then((rows) => { if (!on) return; const next: Record<string, EventStatus> = {}; for (const [id, st] of rows) if (st) next[id] = st; setEventStatus(next); });
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, account?.paid, liveEvents.length]);
   useEffect(() => {
     if (!duelInvite) return;
     clearDuelInvite();
@@ -800,6 +816,18 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // [U03] evolução total do squad (a UI e o motor leem o MESMO número) + leitura do elenco
   const evoBoostTotal = form.slots.reduce((a, fs) => a + (slotCard(fs.slot)?.owned.boost ?? 0), 0);
   const squadProfileInfo = squadComplete ? squadProfile((squadPool as PoolPlayer[]).map((p) => p.player)) : null; // barato (5 jogadores), sem memo
+  // [U12] cartas do squad no formato da regra de evento (região pelo país; tier pela raridade)
+  // [U12] resgate do prêmio do evento (handler no topo do componente; pay-first no servidor, crédito no save)
+  const doClaimEvent = (eventId: string, name: string) => {
+    // sem `flash` aqui (ele toca um ref): toast direto por estado — regra do React Compiler
+    void claimEvent(eventId).then((r) => {
+      if (!r.ok) { setToast(ct('Ainda não dá pra resgatar (evento em andamento).')); window.setTimeout(() => setToast(''), 2400); return; }
+      addCredits(r.credits);
+      setToast(`🏆 ${name}: +${fmt(r.credits)} coins`); window.setTimeout(() => setToast(''), 3000);
+      setEventStatus((m) => (m[eventId] ? { ...m, [eventId]: { ...m[eventId], claimed: true } } : m));
+    });
+  };
+  const squadEventCards = squadComplete ? (squadPool as PoolPlayer[]).map((p, i) => { const sc = slotCard(form.slots[i].slot); return { pid: p.id, ovr: sc?.card.ovr ?? p.ovr, region: regionOf(p.player.country), country: p.player.country, role: p.player.role, tier: sc ? rarityInfo(sc.card.rarity).tier : undefined }; }) : [];
   // [W2] card LEGADO (pid rtp_legacy_*) só existe no SEU navegador: o adversário
   // reconstrói o squad pelo pid a partir do dataset do build e não acha —
   // trava a partida (mesma classe do bug da LENDA na ranqueada). Online fica
@@ -3104,6 +3132,31 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           : ct('INICIAR GAUNTLET');
         return (
           <UtPanel label={<>{ct('Ranqueada')} <em>· {rankedMode === 'rivals' ? 'Divisão Rivals' : rankedMode === 'casual' ? ct('Amistoso') : 'Elite Gauntlet'}</em></>} icon={<Swords size={15} className="ut-panel__lead" />}>
+            {/* [U12] EVENTOS ativos: regra, janela (UTC), meu placar, elegibilidade do squad, entrar na fila do evento */}
+            {liveEvents.length > 0 && rankedMode === 'rivals' && (
+              <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                {liveEvents.map((ev) => {
+                  const cards = squadEventCards;
+                  const elig = squadComplete ? eventEligibility(cards, ev.payload.rule) : { ok: false, reason: ct('Complete o squad.') };
+                  const st = eventStatus[ev.id]; const on = rankedEvent === ev.id;
+                  const ends = new Date(ev.endsAt);
+                  return (
+                    <div key={ev.id} style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${on ? '#29c47a' : 'var(--ut-line, #e5e2d8)'}`, background: on ? 'rgba(41,196,122,.06)' : 'transparent', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div><div style={{ fontWeight: 900 }}>🏟️ {ev.payload.name} <span style={{ fontWeight: 400, color: 'var(--ut-muted)' }}>· v{ev.payload.version}</span></div><div style={{ color: 'var(--ut-muted)' }}>{ev.payload.desc} · <b>{describeRule(ev.payload.rule)}</b> · {ct('até')} {ends.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC · {ct('prêmios')}: {ev.payload.winTiers.map((t) => `${t.wins}V→${fmt(t.credits)}`).join(' · ')}</div></div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {st && <span style={{ fontFamily: 'var(--ut-font-mono)' }}>{st.wins}V–{st.losses}D / {st.maxMatches}</span>}
+                          {st && (st.closed || st.wins + st.losses >= st.maxMatches) && !st.claimed && st.reward > 0 && <button className="ut-jogar" style={{ padding: '6px 12px' }} onClick={() => doClaimEvent(ev.id, ev.payload.name)}>{ct('Resgatar')} {fmt(st.reward)}</button>}
+                          {!(st && (st.closed || st.wins + st.losses >= st.maxMatches)) && <button className="ut-btn ut-btn--ghost" disabled={!elig.ok} title={elig.ok ? ct('Fila só com quem está neste formato') : (elig.reason ?? '')} onClick={() => setRankedEvent(on ? null : ev.id)} style={{ borderColor: on ? '#29c47a' : undefined }}>{on ? ct('Na fila do evento ✓') : ct('Entrar no evento')}</button>}
+                        </div>
+                      </div>
+                      {!elig.ok && <div style={{ color: '#b91c1c', marginTop: 4 }}>✖ {elig.reason}</div>}
+                      {!account?.paid && <div style={{ color: 'var(--ut-muted)', marginTop: 4 }}>{ct('Placar e prêmio do evento ficam na conta vitalícia.')}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {/* seletor de modo */}
             <div className="ut-tabs" style={{ marginBottom: 14 }}>
               <button onClick={() => setRankedMode('rivals')} style={tabBtn(rankedMode === 'rivals')}><Swords size={13} style={{ verticalAlign: '-2px' }} /> {ct('Rivals')} <span style={{ opacity: 0.7 }}>· {ct('vale rank')}</span></button>
@@ -3170,7 +3223,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {rankedMode === 'rivals' ? (
               // Rivals = PvP online de verdade: a fila pareia com outro manager por RP.
               <div style={{ marginTop: 12 }}>
-                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} />
+                {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="ranked" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} eventId={rankedEvent} onQueueEmpty={() => flash(`${ct('Fila vazia por enquanto.')} ${ct('Alternativa: jogue um Amistoso vs IA neste formato (não vale o evento).')}`, 3600)} />
                 <div style={{ textAlign: 'center', marginTop: 7, fontSize: '0.72rem', color: 'var(--ut-muted)' }}>
                   {ct('Você enfrenta o squad de outro manager de verdade. Vitória sobe RP, pode promover de divisão e conta no ranking global. Derrota tira RP.')}
                 </div>

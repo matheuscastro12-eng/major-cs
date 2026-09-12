@@ -278,3 +278,17 @@ describe('upsertLiveop + activeLiveops + delete (FakeDb)', () => {
     assert.equal((await listLiveops(db.sql)).length, 0);
   });
 });
+
+// [U12] evento: payload validado estritamente (regra allowlist, faixas, cap)
+describe('event payload (U12)', () => {
+  it('aceita regra válida, ordena faixas e rejeita lixo', async () => {
+    const { validateEventPayload } = await import('./liveops.js');
+    const ok = validateEventPayload({ version: 1, name: 'Copa 82', desc: 'Teto de 82 OVR', rule: { kind: 'ovrcap', max: 82 }, winTiers: [{ wins: 3, credits: 6000 }, { wins: 1, credits: 2000 }], maxMatches: 20 });
+    assert.equal(ok.ok, true);
+    if (ok.ok) { assert.deepEqual(ok.payload.winTiers.map((t) => t.wins), [1, 3]); assert.deepEqual(ok.payload.rule, { kind: 'ovrcap', max: 82 }); }
+    assert.equal(validateEventPayload({ version: 1, name: 'x', desc: 'y', rule: { kind: 'ovrcap', max: 40 }, winTiers: [{ wins: 1, credits: 100 }] }).ok, false);
+    assert.equal(validateEventPayload({ version: 1, name: 'x', desc: 'y', rule: { kind: 'region', region: 'marte' }, winTiers: [{ wins: 1, credits: 100 }] }).ok, false);
+    assert.equal(validateEventPayload({ version: 1, name: 'x', desc: 'y', rule: { kind: 'roles', roles: ['IGL'] }, winTiers: [] }).ok, false);
+    assert.equal(validateEventPayload({ version: 1, name: 'x', desc: 'y', rule: { kind: 'country', country: 'br' }, winTiers: [{ wins: 1, credits: 999999 }] }).ok, false);
+  });
+});
