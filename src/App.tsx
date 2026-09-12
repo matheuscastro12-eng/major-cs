@@ -818,6 +818,16 @@ export default function App() {
     if (!draft) return;
     const nextSeason = career.season + 1;
     track('season_start', { season: nextSeason, pool: draft.pool });
+    // funil: o gancho 'market' já existia em HOOKS (UpsellCard.tsx) — texto
+    // pronto pra "montando seu elenco" — mas nenhuma tela chamava. Dado real
+    // (28d) mostra o card de upsell como a superfície que mais converte
+    // paywall_view em checkout_open do funil inteiro (~2%, contra 0,4-0,6%
+    // das travas de tela cheia); só perde pra falta de exposição. A janela de
+    // transferências é o único momento do Draft grátis (fim de temporada, o
+    // jogador acabou de mexer no elenco) sem nenhum gancho de ativação. Usa o
+    // mesmo cooldown global de 45min do UpsellCard — não aumenta a frequência
+    // de exibição pra quem já vê os outros ganchos (draft-win/save-risk).
+    if (!account?.paid) window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'market' } }));
     setCareer((c) => ({ ...c, season: nextSeason, budget: c.budget - cost, lastPrize: undefined }));
     rngRef.current = makeRng(randomSeed());
     const t = createTournament(
