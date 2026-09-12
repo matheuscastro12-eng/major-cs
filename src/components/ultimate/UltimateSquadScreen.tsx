@@ -25,6 +25,10 @@ import { UltimateLiveSession } from './UltimateLiveSession';
 import { bestSlotFor, missingCredits, targetPaths, type SwapPreview } from '../../engine/ultimate/dreamTarget';
 import { PROMO_PACK } from '../../engine/ultimate/packs';
 import { clearIntent, peekIntent, saveIntent } from '../../state/purchaseIntent'; // [U08] retomar a compra depois do login
+// [U10] identidade do clube (escudo do LogoBuilder da Carreira), molduras equipáveis e coleções temáticas
+import { FRAMES, evaluateCollections, frameById } from '../../engine/ultimate/cosmetics';
+import { buildLogoDataUrl } from '../../lib/logoBuilder';
+import { openLogoBuilder } from '../LogoBuilderHost';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -193,11 +197,18 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
   const px = Math.round(size * 0.06);
   // [W2] LEGADO: moldura própria (borda dupla âmbar + faixa "LEGADO") sobre a pele de lenda
   const legacy = isLegacyCard(card);
+  // [U10] moldura EQUIPADA do clube: só cosmética, por cima da pele de raridade (não no LEGADO)
+  const equippedFrameId = useUltimate((st) => st.state.profile.equippedFrame ?? null);
+  const frame = legacy ? null : frameById(equippedFrameId);
   return (
     <div style={{ width: size, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: qs != null ? 6 : 0 }}>
       <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: legacy ? 'linear-gradient(165deg, #2a1d05 0%, #141821 55%, #3a2a08 100%)' : s.bg, border: `1.5px solid ${evo > 0 ? '#22c55e' : legacy ? '#f3cf6b' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px #22c55e, 0 0 20px rgba(34,197,94,0.4)` : legacy ? `${s.glow}, 0 0 0 2px rgba(243,207,107,0.35)` : s.glow }}>
         <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${legacy ? 'rgba(243,207,107,0.55)' : s.inner}`, pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${legacy ? 'rgba(243,207,107,0.55)' : frame ? frame.inner : s.inner}`, pointerEvents: 'none' }} />
+        {frame && <div style={{ position: 'absolute', inset: 0, borderRadius: 14, border: `2px solid ${frame.border}`, pointerEvents: 'none' }} />}
+        {frame?.badge && !legacy && (
+          <span style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.48}rem`, fontWeight: 900, letterSpacing: '1px', padding: '1px 5px', borderRadius: 6, background: frame.badgeBg ?? frame.border, color: '#141821' }}>{frame.badge}</span>
+        )}
         {foil && <div className="ult-foil" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
         {legacy && (
           <span style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, letterSpacing: '1px', padding: '1px 6px', borderRadius: 6, background: '#f3cf6b', color: '#141821' }}>LEGADO</span>
@@ -339,7 +350,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
@@ -1515,6 +1526,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     track('share_card', { mode: 'ultimate' });
     const t = r.star ? traitById(r.star.trait) : null;
     const outcome = await shareUltimateResult({
+      clubName: state.profile.club?.name || undefined, // [U10]
       won: r.won, score: r.score, mapName: r.mapName, mode: r.mode, oppName: r.oppName,
       mvp: r.mvp ? { nick: r.mvp.card.nick, kills: r.mvp.kills, deaths: r.mvp.deaths } : undefined,
       star: r.star && t ? { nick: r.star.nick, traitName: t.name, traitIcon: t.icon } : undefined,
@@ -2022,7 +2034,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           <header className="ut-greet">
             <div>
               <div className="ut-greet__kicker">ROAD TO MAJOR · {ct('HUB ONLINE')}</div>
-              <h1 className="ut-greet__title">{ct('Olá')}, <span>{displayName}</span></h1>
+              <h1 className="ut-greet__title">{ct('Olá')}, <span>{displayName}</span>{state.profile.club?.name ? <span style={{ fontSize: '0.55em', color: 'var(--ut-muted)', marginLeft: 10 }}>· {state.profile.club.name}</span> : null}</h1>
             </div>
             <button className="ut-outbtn" onClick={() => go('ranking')}><ListOrdered size={15} /> {ct('Leaderboard global')}</button>
           </header>
@@ -2065,6 +2077,46 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                   {JOURNEY_STEPS.map((s) => <span key={s} title={ct(STEP_INFO[s].title)} style={{ width: 26, height: 6, borderRadius: 3, background: journey.done.includes(s) ? '#c9a63c' : s === step ? '#92600a' : '#e5e2d8' }} />)}
                 </div>
+              </section>
+            );
+          })()}
+          {/* [U10] IDENTIDADE DO CLUBE + COLEÇÕES — cosmético; prêmio de coleção idempotente */}
+          {(() => {
+            const club = state.profile.club ?? null;
+            const logoUrl = club?.logo ? buildLogoDataUrl(club.logo) : null;
+            const ownedFrames = state.profile.frames ?? [];
+            const idx = ultimateIndex();
+            const ownedCards = state.inventory.map((o) => idx.get(o.cardKey)).filter((c): c is UltCard => !!c);
+            const cols = evaluateCollections(ownedCards, state.profile.objectivesClaimed);
+            const editLogo = () => openLogoBuilder({ initial: club?.logo ?? undefined, onSave: (_url, cfg) => { setClub({ name: club?.name ?? displayName.slice(0, 24), logo: cfg }); flash(`🛡️ ${ct('Escudo do clube salvo.')}`, 2200); } });
+            return (
+              <section style={{ borderRadius: 14, border: '1px solid var(--ut-line, #e5e2d8)', padding: '14px 18px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                  <button type="button" onClick={editLogo} title={ct('Editar escudo')} style={{ width: 64, height: 64, borderRadius: 14, border: '1px dashed var(--ut-line, #e5e2d8)', background: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
+                    {logoUrl ? <img src={logoUrl} alt="" style={{ width: 56, height: 56 }} /> : <span style={{ fontSize: '0.62rem', color: 'var(--ut-muted)' }}>{ct('escudo')}</span>}
+                  </button>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: 'var(--ut-muted)' }}>🛡️ {ct('IDENTIDADE DO CLUBE')} <span style={{ fontWeight: 400, letterSpacing: 0 }}>· {ct('cosmético, nunca altera força')}</span></div>
+                    <input value={club?.name ?? ''} placeholder={displayName} maxLength={24} onChange={(e) => setClub({ name: e.target.value, logo: club?.logo ?? null })} style={{ fontWeight: 900, fontSize: '1.05rem', border: 'none', borderBottom: '1px solid var(--ut-line, #e5e2d8)', background: 'transparent', padding: '2px 0', width: '100%', maxWidth: 280 }} />
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--ut-muted)' }}>{ct('Moldura')}:</span>
+                      <button onClick={() => equipFrame(null)} style={tabBtn(!state.profile.equippedFrame)}>{ct('Padrão')}</button>
+                      {FRAMES.map((f) => { const has = ownedFrames.includes(f.id); return <button key={f.id} onClick={() => has && equipFrame(f.id)} disabled={!has} title={has ? f.desc : `${f.desc} · ${f.how}`} style={{ ...tabBtn(state.profile.equippedFrame === f.id), opacity: has ? 1 : .45, borderLeft: `4px solid ${f.border}` }}>{f.name}{!has ? ' 🔒' : ''}</button>; })}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                  {cols.map((p) => (
+                    <div key={p.def.id} style={{ padding: '8px 10px', borderRadius: 10, border: `1px solid ${p.claimed ? '#c9a63c' : 'var(--ut-line, #e5e2d8)'}`, fontSize: '0.76rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b>{p.def.name}</b><span style={{ fontFamily: 'var(--ut-font-mono)' }}>{p.have}/{p.def.need}</span></div>
+                      <div style={{ color: 'var(--ut-muted)' }}>{p.def.desc} · {p.def.reward.credits ? `${fmt(p.def.reward.credits)} coins` : ''}{p.def.reward.frame ? ` + ${ct('moldura')} ${frameById(p.def.reward.frame)?.name}` : ''}</div>
+                      <div style={{ height: 4, borderRadius: 2, background: '#e5e2d8', marginTop: 6 }}><div style={{ width: `${Math.round((p.have / p.def.need) * 100)}%`, height: '100%', borderRadius: 2, background: p.claimed ? '#c9a63c' : '#2563eb' }} /></div>
+                      {p.done && !p.claimed && <button className="ut-jogar" style={{ padding: '6px 12px', marginTop: 6 }} onClick={() => { const r = claimCollection(p.def.id); if (r.ok) flash(`🏆 ${p.def.name}: +${fmt(r.credits ?? 0)} coins${r.frame ? ` · ${ct('moldura')} ${frameById(r.frame)?.name}` : ''}`, 3000); }}>{ct('Resgatar')}</button>}
+                      {p.claimed && <div style={{ color: '#92600a', fontWeight: 800, marginTop: 4 }}>✔ {ct('resgatada')}</div>}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 6, fontSize: '0.66rem', color: 'var(--ut-muted)' }}>{ct('Progresso conta a posse atual (vender ou listar reduz). Prêmio resgatado não volta.')}</div>
               </section>
             );
           })()}

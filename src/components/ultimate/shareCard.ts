@@ -13,6 +13,7 @@ export interface UltShareData {
   star?: { nick: string; traitName: string; traitIcon: string };
   casterLine?: string | null;  // chamada final do caster (determinística)
   divName?: string;
+  clubName?: string;           // [U10] identidade do clube (cosmético)
 }
 
 const MODE_LABEL: Record<UltShareData['mode'], string> = {
@@ -51,7 +52,7 @@ export function drawUltimateShareCard(d: UltShareData): string {
   ctx.fillText('ROAD TO MAJOR', 40, 64);
   ctx.fillStyle = '#ecc75f';
   ctx.font = '700 22px Oswald, Arial Narrow, sans-serif';
-  ctx.fillText('✦ ULTIMATE', 40, 94);
+  ctx.fillText(d.clubName ? `✦ ULTIMATE · ${d.clubName.slice(0, 24)}` : '✦ ULTIMATE', 40, 94);
   ctx.font = '500 16px Inter, Arial, sans-serif';
   ctx.fillStyle = '#8b8577';
   ctx.textAlign = 'right';

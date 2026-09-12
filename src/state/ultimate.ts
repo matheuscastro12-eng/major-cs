@@ -20,6 +20,8 @@ import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
 import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { buildFullCatalog } from '../engine/ultimate/catalog';
+import { COLLECTIONS, collectionKey, evaluateCollections, mergeFrames, normalizeClub } from '../engine/ultimate/cosmetics'; // [U10]
+import type { LogoConfig } from '../lib/logoBuilder';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
 import { totwForWeek, weekIndex, type WeeklyTotw } from '../engine/ultimate/totw';
@@ -289,6 +291,10 @@ interface UltimateStore {
   syncTitles: () => string[]; // slugs recém-conquistados
   equipTitle: (slug: string | null) => void;
   setTarget: (cardKey: string | null) => void; // [U07] jogador dos sonhos
+  // [U10] identidade do clube e coleções (cosmético; prêmio idempotente por col:<id>)
+  setClub: (club: { name: string; logo: LogoConfig | null } | null) => void;
+  equipFrame: (id: string | null) => void;
+  claimCollection: (id: string) => { ok: boolean; credits?: number; frame?: string };
   claimStarter: (formationId: string) => UltCard[];
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
@@ -605,6 +611,28 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       persist(s);
       return { state: s };
     }),
+  setClub: (club) =>
+    set((st) => { const s = { ...st.state, profile: { ...st.state.profile, club: normalizeClub(club) } }; persist(s); return { state: s }; }),
+  equipFrame: (id) =>
+    set((st) => { const owned = st.state.profile.frames ?? []; const next = id && owned.includes(id) ? id : null; const s = { ...st.state, profile: { ...st.state.profile, equippedFrame: next } }; persist(s); return { state: s }; }),
+  claimCollection: (id) => {
+    const def = COLLECTIONS.find((c) => c.id === id);
+    if (!def) return { ok: false };
+    const st = get().state;
+    const key = collectionKey(id);
+    if (st.profile.objectivesClaimed.includes(key)) return { ok: false };
+    const idx = ultimateIndex();
+    const owned = st.inventory.map((o) => idx.get(o.cardKey)).filter((c): c is UltCard => !!c);
+    const prog = evaluateCollections(owned, st.profile.objectivesClaimed).find((p) => p.def.id === id);
+    if (!prog?.done) return { ok: false };
+    let s = _markObjectiveClaimed(st, key);
+    if (def.reward.credits) s = _addCredits(s, def.reward.credits);
+    if (def.reward.frame) s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, [def.reward.frame]), equippedFrame: s.profile.equippedFrame ?? def.reward.frame } };
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'collection', id });
+    return { ok: true, credits: def.reward.credits, frame: def.reward.frame };
+  },
   setTarget: (cardKey) =>
     set((st) => {
       const s = { ...st.state, profile: { ...st.state.profile, target: cardKey ? { cardKey, setAt: Date.now() } : null } };
@@ -628,7 +656,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       s = _grantCard(s, c.key, 'starter', { id });
       s = _setSlot(s, i, id);
     });
-    s = { ...s, profile: { ...s.profile, onboarded: true } };
+    s = { ...s, profile: { ...s.profile, onboarded: true, frames: mergeFrames(s.profile.frames, ['rookie']), equippedFrame: s.profile.equippedFrame ?? 'rookie' } }; // [U10] moldura Rookie grátis
     s = _mergeTitles(s, ['rookie']).state;
     persist(s);
     set({ state: s });
