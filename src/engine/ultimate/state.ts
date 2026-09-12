@@ -2,6 +2,7 @@
 // Sem DOM/localStorage aqui (a persistência mora em src/state/ultimate.ts) →
 // 100% testável. Ver docs-but-map.md §4/§6.
 
+import { frameById, mergeFrames, normalizeClub } from './cosmetics';
 import { quickSellValue } from './quicksell';
 import { DRAFT_DEFAULT, DRAFT_ENTRY, DRAFT_REWARDS, DRAFT_ROLES, DRAFT_TARGET, type DraftRunState } from './draft';
 import { computeNextDaily, dailyCredits } from './daily';
@@ -87,6 +88,10 @@ export interface UltimateProfile {
   weekly: WeeklyState | null;     // missões semanais renováveis
   pass: PassState | null;         // Passe de Temporada (reset no rollover; premium NÃO carrega)
   target?: { cardKey: string; setAt: number } | null; // [U07] jogador dos sonhos (carta-alvo); opcional — save antigo abre sem
+  // [U10] identidade do clube (nome + escudo) e molduras equipáveis — cosmético, nunca altera força
+  club?: { name: string; logo: import('../../lib/logoBuilder').LogoConfig | null } | null;
+  frames?: string[];
+  equippedFrame?: string | null;
 }
 
 export const ULTIMATE_VERSION = 1;
@@ -461,6 +466,9 @@ export function migrateUltimate(raw: unknown): UltimateState {
     titles: Array.isArray(p.titles) ? p.titles.filter((x): x is string => typeof x === 'string') : [],
     equippedTitle: typeof p.equippedTitle === 'string' ? p.equippedTitle : null,
     target: p.target && typeof p.target === 'object' && typeof (p.target as { cardKey?: unknown }).cardKey === 'string' ? { cardKey: String((p.target as { cardKey: string }).cardKey), setAt: Number((p.target as { setAt?: unknown }).setAt) || 0 } : null, // [U07]
+    club: normalizeClub(p.club), // [U10]
+    frames: mergeFrames([], Array.isArray(p.frames) ? p.frames.filter((f): f is string => typeof f === 'string') : []), // [U10]
+    equippedFrame: typeof p.equippedFrame === 'string' && frameById(p.equippedFrame) ? p.equippedFrame : null, // [U10]
     season: p.season && typeof p.season === 'object' && typeof p.season.startedAt === 'number'
       ? { startedAt: p.season.startedAt, endsAt: num(p.season.endsAt, p.season.startedAt), wl0: num(p.season.wl0, 0), peak: num(p.season.peak, STARTING_ELO), claimed: Array.isArray(p.season.claimed) ? p.season.claimed.filter((x): x is string => typeof x === 'string') : [], n: Math.max(1, num(p.season.n, 1)), w: Math.max(0, num(p.season.w, 0)) }
       : null,

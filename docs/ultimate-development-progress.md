@@ -1,6 +1,6 @@
 # Ultimate — registro de continuidade
 
-Última atualização: 12/09/2026 (U00–U08 concluídos; U06 PvP e oferta inicial pendentes de decisão).
+Última atualização: 12/09/2026 (U00–U08 e U10 concluídos; U06 PvP e oferta inicial pendentes de decisão).
 Plano: `docs/ultimate-development-plan.md`.
 Base da inspeção: `74de16f` (`master`).
 
@@ -23,14 +23,14 @@ U00 (baseline e contratos) concluído em 11/09/2026 — ver seção abaixo. Nenh
 | U06 Timeout real | **Casual implementado e verificado (11/09)**; PvP pendente | Branch `ult/u06-timeout-casual`; Rivals/Gauntlet/Draft seguem pré-calculados |
 | U07 Alvo e estreia | Implementado e verificado (12/09) | Branch `ult/u07-alvo-estreia` |
 | U08 Compra/oferta inicial | Parcial: retomada + saldo implementados; oferta inicial ESPECIFICADA e desligada (12/09) | Branch `ult/u08-compra-contextual`; ativar exige preço + tier + sandbox |
-| U09 Passe | Pendente | U02/U08; U10 para cosméticos novos |
-| U10 Identidade/coleções | Pendente — **próximo** (antecede U09) | Levantamento em andamento |
+| U09 Passe | Pendente — **próximo** | U10 feito (molduras disponíveis para o passe); simulação econômica em andamento |
+| U10 Identidade/coleções | Implementado e verificado (12/09) | Branch `ult/u10-identidade-colecoes`; escudo via LogoBuilder da Carreira |
 | U11 Rivalidades | Pendente | Contrato de partidas estabilizado |
 | U12 Eventos | Pendente | U03/U11 e economia validada |
 
 ## Próxima ação exata
 
-Executar U10 (identidade do clube e coleções temáticas) antes do U09, como manda a ordem do plano: moldura de carta e escudo/cor do clube como cosméticos com inventário/equipamento persistentes no perfil (campos opcionais), preview antes de equipar, visibilidade no hub/pré-jogo/share; coleções temáticas sobre `objectives.ts` (posse atual por identidade de carta, prêmio idempotente por id). Cosmético nunca altera força.
+Executar U09 (passe com identidade e valor imediato): simular a economia atual (XP por atividade, valor das trilhas free/premium em credits+packs+cartas, custo em partidas para casual/ativo) e comparar com 120k coins por R$30; propor benefício imediato principalmente cosmético (moldura exclusiva do passe via `cosmetics.ts` + título), escolhas em marcos, preview do resgatável, regra de compra tardia com prazo/progresso visíveis; versionar trilhas preservando resgates legados e passes pagos no rollover. Preço permanece o atual até decisão documentada. Ativar valores novos só com o equilíbrio documentado.
 
 **Oferta inicial (U08) fica PENDENTE DE DECISÃO DO PROPRIETÁRIO**: `starterOffer.ts` fixa o contrato (2 opções de conteúdo conhecido, janela de partidas, elegibilidade única por conta via `tier` + `status`), com `enabled=false` e `priceCents=null`. Ativar = definir preço, criar o tier em `COIN_TIERS` (e no mirror do webhook Woovi), fulfillment com escolha registrada no pedido, e sandbox de sucesso/falhas. **Webhooks não foram alterados** (sem sandbox nesta rodada): continua sem checagem de valor pago vs `cents` no caminho de coins/passe — item aberto de U00.
 
@@ -217,6 +217,23 @@ O Ultimate pré-calcula a partida e registra resultado antes do replay. Timeout 
 - Compatibilidade/migração/flag: sem save/schema; `STARTER_OFFER.enabled` é a flag.
 - Pendências: sandbox de pagamentos; checagem de valor nos webhooks; estorno; ativar a oferta inicial (decisão do proprietário).
 - Próxima ação exata: U10.
+
+## U10 — identidade do clube e coleções temáticas — 12/09/2026
+
+- Estado: **implementado e verificado**.
+- Branch/commit: `ult/u10-identidade-colecoes` (a partir de `b7828c1`).
+- Mudanças e arquivos:
+  - `src/engine/ultimate/cosmetics.ts` (novo, puro): catálogo `FRAMES` (5 molduras: Rookie grátis; Verde-amarelo, Sniper elite e Lenda de era por coleção; Fundador S1 reservada à oferta inicial, ainda não ativa), `mergeFrames`, `frameById`; `ClubIdentity {name, logo: LogoConfig|null}` + `normalizeClub`; `COLLECTIONS` (5 coleções: Seleção Brasileira 5 BR → 8k + moldura; Trio de AWPs 85+ → 6k + moldura; Conselho de IGLs → 6k; Núcleo europeu → 8k; Padrão Ouro 11 Ouro Raro+ → 12k — régua dos objetivos existentes) e `evaluateCollections` por **posse atual de playerId distinto**, prêmio idempotente pela chave `col:<id>` em `objectivesClaimed` (precedente do card LEGADO).
+  - Save: `UltimateProfile.club?`, `frames?`, `equippedFrame?` (opcionais, normalizados no `migrateUltimate`; molduras desconhecidas descartadas). `claimStarter` concede a moldura Rookie. Store: `setClub`, `equipFrame` (só moldura possuída), `claimCollection` (revalida posse no clique, marca a chave, credita, concede moldura e equipa se nenhuma).
+  - `UltCardView`: moldura equipada aplicada por cima da pele de raridade (borda + borda interna + faixa curta) — cosmético; o LEGADO mantém a própria moldura. Vale para todos os cards que o jogador vê no seu cliente; o adversário do PvP não recebe nada (snapshot inalterado).
+  - Hub: painel "IDENTIDADE DO CLUBE" — escudo pelo **LogoBuilder da Carreira** (`openLogoBuilder`, config JSON serializável, preview no próprio builder), nome do clube (24 chars) com preview no título do hub, seletor de moldura (bloqueadas mostram como obter); grade de coleções com progresso, barra, "Resgatar" e "resgatada". Share card ganha `clubName` na assinatura.
+  - `scripts/test-ultimate-cosmetics.mts` (3 testes): catálogo íntegro (molduras de coleção existem), progresso por playerId distinto e claimed por chave, campos do perfil opcionais com default e sobrevivendo ao migrate.
+- Decisões tomadas e motivo: coleção = posse atual (regra declarada na UI: "vender ou listar reduz; prêmio resgatado não volta") — sem consumo implícito de cartas; escudo reaproveita asset próprio (sem asset novo); moldura equipada é preferência do clube, não da carta (evita tocar em `OwnedCard`/espelho); PvP não transporta cosméticos nesta versão (protocolo v2 intacto).
+- Comandos/testes e resultados reais: `npm run build` verde · `npm test` 131/131 · `npm run test:sim` **350/350** (+3) · `npm run lint` 189 = baseline.
+- Verificação visual e ambiente: não exercitada (moldura, painel e builder cobertos por typecheck; layout mobile pendente).
+- Compatibilidade/migração/flag: campos opcionais com default; sem schema no servidor; cosméticos fora do ledger (só save/cloud).
+- Pendências: escudo no pré-jogo/PvP (requer campo no snapshot v3); coleções por "descoberta histórica" (não existe registro de "já teve"); moldura `founder-s1` só via oferta inicial (U08, desligada).
+- Próxima ação exata: U09.
 
 ## Modelo de atualização por lote
 
