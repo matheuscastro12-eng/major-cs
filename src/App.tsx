@@ -1,4 +1,5 @@
 import { hasIntent } from './state/purchaseIntent';
+import { captureDuelInviteFromUrl, hasDuelInvite } from './state/duelInvite';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { AdminGate } from './components/AdminGate';
 import { BrandMark } from './components/brand';
@@ -286,6 +287,8 @@ try {
 // Lido UMA vez no carregamento (nível de módulo) pra sobreviver ao remount do
 // StrictMode em dev — se fosse lido no efeito, a limpeza da URL no 1º mount faria
 // o 2º mount não reabrir.
+// [U11] captura ?duelo=CODE uma vez, no carregamento (limpa a URL)
+captureDuelInviteFromUrl();
 const WANTS_SIGNUP = (() => {
   try {
     return new URLSearchParams(window.location.search).get('criar') !== null
@@ -341,6 +344,14 @@ export default function App() {
   const [paidToast, setPaidToast] = useState(false);
   // desafio de fantasma: captura ?desafio=… UMA vez no boot (Série do Dia consome)
   useEffect(() => { captureGhostFromUrl(); }, []);
+  // [U11] convite de duelo (?duelo=CODE): capturado no boot (nível de módulo); com conta ou convidado
+  // vai pro Ultimate (que abre a aba Duelo com o código); sem conta abre o gate (conta × convidado).
+  useEffect(() => {
+    if (!accountReady || !hasDuelInvite()) return;
+    const t = window.setTimeout(() => { if (account || utGuest) setScreen('ultimate'); else setUtGateOpen(true); }, 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountReady]);
   // retorno do Stripe: /jogar?conta=ok&cs=SESSION → confirma o pagamento e libera a conta
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);

@@ -4,6 +4,7 @@
 // (action pick + coluna squad) → status 'done' → os DOIS clientes simulam a
 // MESMA série com o run_seed da sala (determinístico) → replay no palco do
 // Ultimate (o pai cuida via onPlay). Revanche = nextSeason (novo run_seed).
+import { duelInviteText } from '../../engine/ultimate/duelInvite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchLobby, lobbyApi, listOpenLobbies, type LobbyState, type OpenRoom, type UltimatePvpSquad } from '../../state/online';
 import { ct } from '../../state/career-i18n';
@@ -34,8 +35,10 @@ function watchedMatch(key: string): boolean {
   try { return (JSON.parse(localStorage.getItem(LEDGER_KEY) ?? '[]') as string[]).includes(key); } catch { return false; }
 }
 
-export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }: {
+export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private', initialJoinCode }: {
   nick: string;
+  // [U11] convite por link (?duelo=CODE): entra na sala uma vez ao montar
+  initialJoinCode?: string | null;
   squad: UltimatePvpSquad;
   ready: boolean;               // squad completo (5 cartas)?
   onPlay: (args: DuelPlayArgs) => boolean; // false = não conseguiu montar a partida
@@ -45,7 +48,8 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
 }) {
   const [view, setView] = useState<'menu' | 'room'>(duelSession.view);
   const [code, setCode] = useState(duelSession.code);
-  const [joinCode, setJoinCode] = useState('');
+  const [joinCode, setJoinCode] = useState(initialJoinCode ?? '');
+  const autoJoined = useRef(false);
   const [roomName, setRoomName] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [rooms, setRooms] = useState<OpenRoom[]>([]);
@@ -154,7 +158,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
     const ms = status === 'waiting' || status === 'drafting' ? 3500 : 12000;
     const t = window.setInterval(poll, ms);
     return () => { alive = false; window.clearInterval(t); };
-  }, [view, code, state?.lobby.status, state?.lobby.code]);
+  }, [view, code, state?.lobby.status, state?.lobby.code, variant]);
 
   // ── heartbeat (presença) ──
   useEffect(() => {
@@ -232,6 +236,22 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
     setBusy(false);
   };
 
+  // [U11] auto-join do convite (1x) — falha vira a mensagem normal (sala expirada/cheia)
+  const joinRef = useRef(join);
+  useEffect(() => { joinRef.current = join; });
+  useEffect(() => {
+    if (!initialJoinCode || autoJoined.current || variant !== 'private') return;
+    autoJoined.current = true;
+    const t = window.setTimeout(() => { void joinRef.current(initialJoinCode); }, 0);
+    return () => window.clearTimeout(t);
+  }, [initialJoinCode, variant]);
+  const shareInvite = () => {
+    if (!code) return;
+    const text = duelInviteText(code, nick.replace(/#.*$/, ''));
+    const nav = navigator as Navigator & { share?: (d: { text: string }) => Promise<void> };
+    if (nav.share) { void nav.share({ text }).catch(() => { void navigator.clipboard?.writeText(text); }); }
+    else void navigator.clipboard?.writeText(text);
+  };
   const startDuel = async () => {
     setBusy(true); setError('');
     const r = await lobbyApi({ action: 'start', nick, code }).catch(() => ({ ok: false, error: ct('Sem conexão.') } as { ok: boolean; error?: string }));
@@ -263,6 +283,7 @@ export function UltimateDuel({ nick, squad, ready, onPlay, variant = 'private' }
           <span className="ut-duel__code" title={ct('Compartilhe este código com o rival')}>
             {code}
             <button className="ut-duel__copy" onClick={() => { void navigator.clipboard?.writeText(code); }} title={ct('Copiar código')}><Copy size={13} /></button>
+            <button className="ut-duel__copy" onClick={shareInvite} title={ct('Convidar por link — o rival cai direto na sala')} style={{ marginLeft: 4, fontSize: '0.7rem' }}>🔗 {ct('link')}</button>
           </span>
           <span className="ut-duel__status">
             {status === 'waiting' ? (players.length < 2 ? ct('Aguardando rival entrar…') : isHost ? ct('Rival na sala — inicie o duelo!') : ct('Aguardando o host iniciar…'))

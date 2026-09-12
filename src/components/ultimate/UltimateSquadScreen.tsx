@@ -30,6 +30,10 @@ import { FRAMES, evaluateCollections, frameById } from '../../engine/ultimate/co
 import { premiumPreview } from '../../engine/ultimate/seasonPass'; // [U09]
 import { buildLogoDataUrl } from '../../lib/logoBuilder';
 import { openLogoBuilder } from '../LogoBuilderHost';
+// [U11] rivalidades: convite por link, head-to-head por conta, report do duelo privado
+import { clearDuelInvite, loadDuelInvite } from '../../state/duelInvite';
+import { fetchRivals, reportDuel } from '../../state/rivals';
+import { h2hText, type H2H } from '../../engine/ultimate/duelInvite';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
@@ -421,6 +425,23 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const [targetPick, setTargetPick] = useState(false);
   // [U09] escolha no marco: função preferida para as cartas do passe (null = qualquer)
   const [passRolePref, setPassRolePref] = useState<string | null>(null);
+  // [U11] convite pendente (link ?duelo=CODE): abre a aba Duelo com o código; rivais por conta
+  const [duelInvite] = useState<string | null>(() => loadDuelInvite());
+  const [rivals, setRivals] = useState<H2H[] | null>(null);
+  useEffect(() => {
+    if (!duelInvite) return;
+    clearDuelInvite();
+    const t = window.setTimeout(() => { setTab('duelo'); flash(`⚔️ ${ct('Convite de duelo')} · ${duelInvite}`, 2600); }, 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duelInvite]);
+  useEffect(() => {
+    if (tab !== 'duelo' || !account?.paid) return;
+    let on = true;
+    void fetchRivals().then((r) => { if (on) setRivals(r); });
+    return () => { on = false; };
+  }, [tab, account?.paid]);
+  const shareH2h = (r: H2H) => { const t = h2hText(r, displayName); const nav = navigator as Navigator & { share?: (d: { text: string }) => Promise<void> }; if (nav.share) void nav.share({ text: t }).catch(() => { void navigator.clipboard?.writeText(t); }); else { void navigator.clipboard?.writeText(t); flash(ct('Confronto copiado.'), 2000); } };
   const [targetQuery, setTargetQuery] = useState('');
   const [targetMkt, setTargetMkt] = useState<{ cardKey: string; cheapest: number | null; n: number } | null>(null);
   const targetCard = state.profile.target ? ultimateIndex().get(state.profile.target.cardKey) ?? null : null;
@@ -1490,6 +1511,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // espelho do Major da Semana: duelo ranqueado do Ultimate também conta pro
     // run da semana (gate local de inscrição; fire-and-forget, servidor valida).
     if (!already && args.ranked) { const [rf, ra] = score.split('-').map((n) => parseInt(n, 10) || 0); wlMirrorReport(won, args.code, args.oppNick, rf, ra); }
+    if (!already && !args.ranked && account?.paid) void reportDuel(won, args.code, pvpNick); // [U11] head-to-head do duelo privado (não vale RP)
     const eloAfter = eloBefore + outcome.eloDelta;
     setResult(null);
     setLiveRound(0);
@@ -3312,7 +3334,26 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         <UtPanel label={<>{ct('Duelo Privado')} <em>· {ct('com amigo')}</em></>} icon={<Globe size={15} className="ut-panel__lead" />}
           right={<span style={{ fontFamily: 'var(--ut-font-mono)' }}>{pvpNick}</span>}
           info={ct('Crie uma sala ou entre com código pra enfrentar um amigo. Amistoso: não vale RP nem ranking global.')}>
-          {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} />
+          {squadHasLegacy && <div style={{ color: 'var(--ut-muted)', fontSize: '0.8rem', marginTop: 6 }}>{ct('Card LEGADO só joga nos modos do seu clube — troque-o no squad pra jogar online.')}</div>}<UltimateDuel variant="private" nick={pvpNick} squad={pvpSquad} ready={pvpReady} onPlay={startPvpMatch} initialJoinCode={duelInvite} />
+          {/* [U11] RIVAIS por conta: head-to-head, revanche (nova sala + link) e share do confronto */}
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: 'var(--ut-muted)', marginBottom: 6 }}>⚔️ {ct('RIVAIS')} <span style={{ fontWeight: 400, letterSpacing: 0 }}>· {ct('por conta, ranqueada e duelo privado')}</span></div>
+            {!account?.paid && <div style={{ fontSize: '0.78rem', color: 'var(--ut-muted)' }}>{ct('Histórico de confrontos fica na conta vitalícia.')}</div>}
+            {account?.paid && rivals === null && <div style={{ fontSize: '0.78rem', color: 'var(--ut-muted)' }}>{ct('carregando…')}</div>}
+            {account?.paid && rivals && rivals.length === 0 && <div style={{ fontSize: '0.78rem', color: 'var(--ut-muted)' }}>{ct('Nenhum confronto ainda. Um duelo decidido (ranqueada ou privado, ambos reportando) cria o rival.')}</div>}
+            {account?.paid && rivals && rivals.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                {rivals.map((r) => (
+                  <div key={r.oppNick + r.lastAt} style={{ padding: '8px 10px', borderRadius: 10, border: '1px solid var(--ut-line, #e5e2d8)', fontSize: '0.78rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{r.oppNick}</b><span style={{ fontFamily: 'var(--ut-font-mono)', color: r.wins > r.losses ? '#15803d' : r.wins < r.losses ? '#b91c1c' : 'inherit' }}>{r.wins}–{r.losses}</span></div>
+                    <div style={{ color: 'var(--ut-muted)' }}>{r.games} {ct('duelo(s)')}{r.lastAt ? ` · ${new Date(r.lastAt).toLocaleDateString('pt-BR')}` : ''}</div>
+                    <button className="ut-btn ut-btn--ghost" style={{ padding: '3px 8px', marginTop: 4, fontSize: '0.72rem' }} onClick={() => shareH2h(r)}>📋 {ct('Compartilhar confronto')}</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: '0.66rem', color: 'var(--ut-muted)', marginTop: 6 }}>{ct('Revanche: crie uma sala acima e mande o 🔗 link — o rival cai direto nela. Sem bônus por convite.')}</div>
+          </div>
         </UtPanel>
       )}
 
