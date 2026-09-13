@@ -323,6 +323,23 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   useEffect(() => {
     if (pix) trackPaywallView('pix-cartao-cedo'); // funil: saída pro cartão exibida desde a abertura do QR (src novo — mede o grupo que antes desistia sem ver essa opção)
   }, [pix]);
+  // funil: o maior bucket de checkout_abandon (pix, 28d) não é o começo — é
+  // 302-738s de QR aberto (9 de 46, o maior grupo), bem depois da reassurance
+  // dos 25s. A tela nunca dizia quanto tempo o código ainda valia: expiresIn
+  // vem de verdade na resposta da Woovi mas ficava sem uso. Sem essa referência,
+  // quem passa dos 2-3min não sabe se ainda vale esperar ou se o QR já morreu —
+  // contagem regressiva honesta (valor real, não inventado) tira essa dúvida.
+  const [pixSecondsLeft, setPixSecondsLeft] = useState<number | null>(null);
+  useEffect(() => {
+    if (!pix || pix.charge.expiresIn == null) { setPixSecondsLeft(null); return; }
+    setPixSecondsLeft(pix.charge.expiresIn);
+    const t = window.setInterval(() => setPixSecondsLeft((s) => (s === null ? null : Math.max(0, s - 1))), 1000);
+    return () => window.clearInterval(t);
+  }, [pix]);
+  const pixExpired = pixSecondsLeft === 0;
+  useEffect(() => {
+    if (pixExpired) trackPaywallView('pix-expirado'); // funil: QR ficou visivelmente expirado na tela (denominador novo pro grupo que espera até morrer)
+  }, [pixExpired]);
   // funil: abandono do QR Pix — best-effort, dispara no desmonte do modal se o
   // QR chegou a abrir e o pagamento não foi confirmado pelo polling.
   const pixOpenedAt = useRef(0);
@@ -405,6 +422,14 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
     setCardSwitching(true);
     pixSwitchedMethod.current = true;
     await onCheckout(pix.email, nick.trim());
+  };
+  // gera um Pix novo no lugar do que expirou — mesmo fluxo do goPix, só que sem
+  // pedir e-mail/senha de novo (a conta já existe da primeira tentativa).
+  const regeneratePix = async () => {
+    if (busy) return;
+    setPix(null);
+    setPixSecondsLeft(null);
+    await goPix();
   };
   // fechar com o QR Pix aberto e sem pagamento confirmado: UM nudge leve inline
   // (1x por sessão), honesto e descartável. Depois disso, fechar fecha mesmo.
@@ -568,41 +593,62 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
                 honesta desde o primeiro segundo, sem depender só do timer acima. */}
             {ct('Esta tela confirma sozinha assim que o Pix cair — não precisa recarregar. Costuma levar de 1 a 3 minutos.')}
           </p>
-          {pix.charge.qrCodeImage && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
-              <img src={pix.charge.qrCodeImage} alt="QR Pix" style={{ width: '200px', height: '200px', background: '#fff', padding: '8px', borderRadius: '8px' }} />
-            </div>
-          )}
-          {pix.charge.brCode && (
-            <>
-              <label style={lbl}>{ct('Pix copia e cola')}</label>
-              <textarea readOnly value={pix.charge.brCode} rows={3} onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-                style={{ ...input, fontFamily: 'monospace', fontSize: '0.72rem', resize: 'none', wordBreak: 'break-all' }} />
-              <button type="button" onClick={copyBr}
-                style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'rgba(94,216,138,.2)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                {copied ? ct('Copiado!') : ct('Copiar código Pix')}
-              </button>
-            </>
-          )}
-          <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
-            {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
-          </p>
-          {/* saída honesta pro cartão — visível desde que o QR abre, não mais só
-              aos 25s (ver comentário no effect acima: 29% dos abandonos do Pix
-              desistem antes disso). O Pix continua o CTA primário e o QR não some. */}
-          <button
-            type="button"
-            onClick={() => void switchToCard()}
-            disabled={cardSwitching}
-            style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
-          >
-            {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
-          </button>
-          {pixWaitLong && (
-            /* reassurance honesta pra quem passou de 25s esperando (ver comentário no effect acima) */
-            <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
-              {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
+          {pixSecondsLeft !== null && !pixExpired && (
+            /* contagem real (expiresIn da Woovi), não inventada — cobre a dúvida
+               de quem passa dos 2-3min sem saber se o código ainda vale. */
+            <p style={{ fontSize: '0.7rem', color: 'var(--em-muted)', textAlign: 'center', margin: '0 0 10px' }}>
+              {ct('Esse código expira em')} {String(Math.floor(pixSecondsLeft / 60)).padStart(2, '0')}:{String(pixSecondsLeft % 60).padStart(2, '0')}
             </p>
+          )}
+          {pixExpired ? (
+            <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+              <p style={{ fontSize: '0.78rem', color: 'var(--em-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                {ct('Esse Pix expirou antes de confirmar. Gere um código novo pra continuar.')}
+              </p>
+              <button type="button" onClick={() => void regeneratePix()} disabled={busy}
+                style={{ width: '100%', padding: '9px', borderRadius: '6px', cursor: busy ? 'default' : 'pointer', background: 'var(--em-gold)', border: 'none', color: '#1a1205', fontWeight: 800, fontSize: '0.78rem', fontFamily: 'inherit', opacity: busy ? 0.7 : 1 }}>
+                {busy ? ct('Gerando…') : ct('Gerar novo Pix')}
+              </button>
+            </div>
+          ) : (
+            <>
+              {pix.charge.qrCodeImage && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                  <img src={pix.charge.qrCodeImage} alt="QR Pix" style={{ width: '200px', height: '200px', background: '#fff', padding: '8px', borderRadius: '8px' }} />
+                </div>
+              )}
+              {pix.charge.brCode && (
+                <>
+                  <label style={lbl}>{ct('Pix copia e cola')}</label>
+                  <textarea readOnly value={pix.charge.brCode} rows={3} onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                    style={{ ...input, fontFamily: 'monospace', fontSize: '0.72rem', resize: 'none', wordBreak: 'break-all' }} />
+                  <button type="button" onClick={copyBr}
+                    style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'rgba(94,216,138,.2)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                    {copied ? ct('Copiado!') : ct('Copiar código Pix')}
+                  </button>
+                </>
+              )}
+              <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '10px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
+                {ct('Pague no app do banco. Estamos checando: assim que o Pix cair, o acesso libera nesta tela.')}
+              </p>
+              {/* saída honesta pro cartão — visível desde que o QR abre, não mais só
+                  aos 25s (ver comentário no effect acima: 29% dos abandonos do Pix
+                  desistem antes disso). O Pix continua o CTA primário e o QR não some. */}
+              <button
+                type="button"
+                onClick={() => void switchToCard()}
+                disabled={cardSwitching}
+                style={{ display: 'block', width: '100%', marginTop: '10px', padding: '8px', borderRadius: '6px', cursor: cardSwitching ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--em-border)', color: 'var(--em-muted)', fontWeight: 700, fontSize: '0.74rem', fontFamily: 'inherit', opacity: cardSwitching ? 0.6 : 1 }}
+              >
+                {cardSwitching ? ct('Abrindo pagamento…') : ct('Prefere não esperar? Pagar com cartão')}
+              </button>
+              {pixWaitLong && (
+                /* reassurance honesta pra quem passou de 25s esperando (ver comentário no effect acima) */
+                <p style={{ fontSize: '0.72rem', color: 'var(--em-gold, #e8c170)', margin: '8px 0 0', textAlign: 'center', lineHeight: 1.5, fontWeight: 600 }}>
+                  {ct('Alguns bancos demoram alguns minutos pra confirmar o Pix — pode deixar essa aba aberta, o acesso libera sozinho assim que cair.')}
+                </p>
+              )}
+            </>
           )}
           {nudge && (
             /* nudge anti-abandono (1x/sessão): inline, honesto, descartável */
