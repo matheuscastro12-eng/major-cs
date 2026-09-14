@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ct } from './career-i18n';
 
 const TOKEN_KEY = 'rtm-acct-token-v1';
-export interface Account { email: string; nick: string; paid: boolean; founder: boolean; founderNo: number | null; admin: boolean; }
+// notifyRival [URG-3]: e-mail quando um rival me passa no ranking (padrão ligado).
+export interface Account { email: string; nick: string; paid: boolean; founder: boolean; founderNo: number | null; admin: boolean; notifyRival: boolean; }
 
 export function getToken(): string | null { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } }
 function setToken(t: string) { try { localStorage.setItem(TOKEN_KEY, t); } catch { /* sem storage */ } }
@@ -17,7 +18,14 @@ async function post(body: Record<string, unknown>): Promise<Record<string, unkno
   if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : ct('Erro de conexão. Tente de novo.'));
   return data as Record<string, unknown>;
 }
-const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid, founder: !!d.founder, founderNo: d.founderNo != null ? Number(d.founderNo) : null, admin: !!d.admin });
+const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid, founder: !!d.founder, founderNo: d.founderNo != null ? Number(d.founderNo) : null, admin: !!d.admin, notifyRival: d.notifyRival !== false });
+
+/** [URG-3] Liga/desliga "me avisar por e-mail quando um rival me passar". Lança com mensagem do servidor. */
+export async function setNotifyRival(value: boolean): Promise<boolean> {
+  const token = getToken(); if (!token) throw new Error(ct('Entre na sua conta pra mudar essa preferência.'));
+  const d = await post({ action: 'setNotifyRival', token, value });
+  return d.notifyRival !== false;
+}
 
 // Conta admin troca o token pela chave do CRM (ADMIN_PASSWORD). Devolve null se
 // não for admin (ou offline). O AdminGate usa isso pra destravar sem senha digitada.

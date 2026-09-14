@@ -168,13 +168,15 @@ export function trackRtpDemo(step: RtpDemoStep, week?: number): void {
 //   season_pack_open     → abriu o Pacote da Temporada [URG-1]        {season}
 //     (o servidor marca 'claimed' uma vez por pedido — é a confirmação
 //     autoritativa; evento de UI sozinho não conta como receita).
+//   rival_overtaken_seen → [URG-3] viu no Hub o bloco "fulano te passou"  {count}
+//     (gatilho de retorno: mede quantas visitas nascem de uma ultrapassagem)
 // Nunca leva e-mail, token ou valor pago. Denominadores (plano U02): conclusão
 // da 1ª partida por 'enter'; 2ª partida por 'match_completed'; 1ª compra por
 // 'enter'. Custo: ≤ ~10 eventos por sessão, com o compute do Neon já acordado.
 export type UltFunnelStep =
   | 'enter' | 'starter_claimed' | 'match_started' | 'match_completed' | 'squad_adjusted'
   | 'second_match_started' | 'offer_viewed' | 'purchase_intent' | 'purchase_fulfilled' | 'target_selected'
-  | 'streak_at_risk_seen' | 'season_pack_open'; // [URG-4] viu o aviso vermelho "você perde N dias em Xh" {days, hoursLeft}
+  | 'streak_at_risk_seen' | 'season_pack_open' | 'rival_overtaken_seen'; // [URG-4] viu o aviso vermelho "você perde N dias em Xh" {days, hoursLeft}
 export type UltProductKind = 'coins' | 'pass' | 'account';
 
 export function trackUltFunnel(step: UltFunnelStep, data: Record<string, string | number | boolean> = {}): void {
