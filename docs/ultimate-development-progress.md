@@ -334,3 +334,24 @@ Nunca preencher teste como aprovado sem executar. Se interrompido, registrar alt
 - Comandos/testes e resultados reais: ver PR (build, `npm test`, `npm run test:sim`, `npm run lint` = 0).
 - Compatibilidade/migração/flag: colunas novas com default; save antigo do Ultimate abre sem mudanças (`frames`/`objectivesClaimed` já existiam); cliente sem conta funciona só com o local.
 - Pendências: chip do streak no card só recalcula ao montar a Home; `hoursLeft` arredonda pra cima (mínimo 1h).
+
+## URG-1 Temporada com fim (data 2026-09-14)
+
+- Estado: **implementado e verificado** (engine + store + UI + espelho; sem verificação visual).
+- Branch: `urg/temporada`.
+- O que foi feito:
+  - **Edição da temporada** ("em forma"): campo aditivo `OwnedCard.ed?: number`. Enquanto `season.n === ed` a cópia vale **+2 OVR** (e +2 nos 6 atributos, mesmo contrato do `boostCard` da evolução) e mostra o selo laranja `S3`; na virada o bônus some e o selo vira `LEGADO S3` (cinza) com OVR base — a carta continua jogável. Nada é reescrito no inventário: o estado "em forma/legado" é DERIVADO de `season.n`.
+  - **Pacote da Temporada** (`SEASON_PACK`, id `season`, 20.000 credits, 7 cartas, 2 Ouro+ garantidas, pesos entre o Ouro e o Premium): TODAS as cartas saem com `ed = season.n`. Só aparece na Loja enquanto a temporada está ativa, com o contador "Some em Xd Yh". Fica fora de `PACK_DEFS`/`packById` de propósito (roll sempre LOCAL — o servidor não carimba `ed`).
+  - **10% por carta em pacote comum** (`SEASON_EDITION_CHANCE`): `stampPackEditions` consome 1 `rng()` por carta DEPOIS do `rollPack`, no mesmo rng do seed anti-reroll → reproduzível por seed. No roll do servidor (conta paga) o carimbo usa `makeRng(seed do ledger)`.
+  - **Fim de temporada com consequência**: bloco "A TEMPORADA ACABA EM Xd Yh" no Hub e na Loja com quantas cópias vão perder o +2 e o aviso de que o pacote some (vermelho a ≤7 dias); anda com o tick de 60s do relógio. `applySeasonRollover` devolve `legacyCount/prevN/newN` e o modal "Nova temporada!" mostra "N cartas suas viraram Legado S{n-1}" e "Edição S{n} disponível na Loja".
+  - **Migração**: `migrateUltimate` e `grantCard` saneiam `ed` (inteiro ≥ 1; qualquer outra coisa é descartada). Save antigo sem `ed` fica idêntico.
+  - **Servidor**: `rtm_ult_cards.meta` é JSONB livre — o espelho (`mirrorUltimateChange`, migração one-time e o caminho de replay em `ultimateShadow.ts`) passou a incluir `ed` no meta. Sem coluna nova, sem migration.
+  - **Funil**: step `season_pack_open` em `ult_funnel` (`{season}`) quando o Pacote da Temporada abre.
+  - PvP: `slotCard` passa por `viewCard` (evolução + edição) → o snapshot `UltimatePvpSquad.cards[].ovr` já viaja com o +2; o servidor só clampa 1..99 (sem mudança de protocolo).
+- Arquivos: `src/engine/ultimate/seasonEdition.ts` (novo, puro), `src/engine/ultimate/state.ts`, `src/state/ultimate.ts`, `src/state/ultimateShadow.ts`, `src/state/track.ts`, `src/components/ultimate/UltimateSquadScreen.tsx`, `server/ultimate-economy.ts` (comentário), `scripts/test-ultimate-season-edition.mts` (novo).
+- Decisões e motivo: bônus derivado (não gravado) para a virada ser instantânea e reversível por `season.n`; pacote fora do `packById` para o roll do servidor nunca aceitar `season` sem carimbar; carimbo depois do `rollPack` para não alterar nenhuma sequência de cartas existente (mesmo seed ⇒ mesmas cartas de antes); custo 20k = entre Ouro (14k) e Promo (25k), paga-se pelo carimbo.
+- Testes: `scripts/test-ultimate-season-edition.mts` (6 testes: boost só com `ed === season.n`; rollover conta legados; pacote da temporada carimba 7/7; 10% determinístico por seed e ~10% no agregado; normalize aceita/ignora lixo; `seasonEnding`).
+- Pendências:
+  - Roll no SERVIDOR (conta paga): a tx do `packOpen` já foi gravada pelo servidor sem `ed` — o carimbo dos 10% fica só no save local/cloud-save; `rtm_ult_cards.meta` dessas cópias não tem `ed`. Para fechar: o servidor carimbar no `openPack` (mesma regra, mesmo seed) e devolver `ed` em `ServerPackCard`.
+  - Mercado entre jogadores: cancelar/expirar devolve a cópia COM `ed` (stash de escrow local, como boost/style). O comprador recebe a cópia sem `ed` — mesmo comportamento já existente para boost/style (o `marketBuyApply` só recebe `cardId/cardKey`). Fechar quando o servidor devolver `meta` na compra.
+  - Verificação visual (selo sobre moldura equipada + LEGADO do W2; contador no mobile) não foi feita.
