@@ -26,6 +26,8 @@
     "api/ultimate-economy.ts",
     "api/weekend-league.ts",
     "server/liveops.ts",
+    "server/communityGoal.ts",
+    "server/communityGoal.test.ts",
     "server/liveops.test.ts",
     "server/payments.ts",
     "server/payments.test.ts",

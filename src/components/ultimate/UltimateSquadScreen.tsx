@@ -40,6 +40,8 @@ import { h2hText, type H2H } from '../../engine/ultimate/duelInvite';
 import { scheduledEvents } from '../../state/liveops';
 import { describeRule, eventEligibility } from '../../engine/ultimate/events';
 import { claimEvent, fetchEventStatus, type EventStatus } from '../../state/events';
+import { claimCommunityGoal as claimCommunityGoalOnServer, fetchCommunityGoal, type CommunityGoalView } from '../../state/communityGoal'; // [URG-5]
+import { communityShareText, describeTimeLeft } from '../../engine/ultimate/communityGoal'; // [URG-5]
 import { regionOf } from '../../data/regions';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
@@ -390,7 +392,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId; ed?: EditionBadge }
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, claimCommunityGoal, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>(TAB_FROM_URL ?? 'hub');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
@@ -472,6 +474,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, account?.paid, liveEvents.length]);
+  // [URG-5] META COMUNITÁRIA da semana: busca leve ao abrir o Hub (público sem
+  // conta; com token traz a minha contribuição). `cgTick` força re-fetch após o claim.
+  const [cg, setCg] = useState<CommunityGoalView | null>(null);
+  const [cgTick, setCgTick] = useState(0);
+  const [cgBusy, setCgBusy] = useState(false);
+  useEffect(() => {
+    if (tab !== 'hub') return;
+    let on = true;
+    void fetchCommunityGoal().then((v) => { if (on && v) setCg(v); });
+    return () => { on = false; };
+  }, [tab, account?.email, cgTick]);
   useEffect(() => {
     if (!duelInvite) return;
     clearDuelInvite();
@@ -911,6 +924,30 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       addCredits(r.credits);
       setToast(`🏆 ${name}: +${fmt(r.credits)} coins`); window.setTimeout(() => setToast(''), 3000);
       setEventStatus((m) => (m[eventId] ? { ...m, [eventId]: { ...m[eventId], claimed: true } } : m));
+    });
+  };
+  // [URG-5] compartilhar a meta (texto pronto: share sheet no celular, clipboard no desktop) e resgatar
+  const doShareCommunityGoal = () => {
+    if (!cg) return;
+    const text = communityShareText(cg.week.total, { ...cg.week, reward: cg.week.reward });
+    trackUltFunnel('community_goal_share', { weekId: cg.week.id });
+    const nav = navigator as Navigator & { share?: (d: { text: string }) => Promise<void> };
+    if (nav.share) { void nav.share({ text }).catch(() => { void navigator.clipboard?.writeText(text); }); return; }
+    void navigator.clipboard?.writeText(text);
+    flash(ct('Texto copiado — cola no grupo e chama a galera.'), 2400);
+  };
+  const doClaimCommunityGoal = (weekId: string) => {
+    if (cgBusy) return;
+    setCgBusy(true);
+    void claimCommunityGoalOnServer(weekId).then((r) => {
+      setCgBusy(false);
+      if (!r.ok) { flash(r.error === 'in_progress' ? ct('A meta ainda não fechou.') : r.error === 'too_few_matches' ? ct('Precisa de 3+ partidas online na semana.') : ct('Não deu pra resgatar agora.'), 2600); return; }
+      if (r.replayed || r.credits <= 0) { flash(ct('Prêmio já resgatado.'), 2000); setCgTick((t) => t + 1); return; }
+      const got = claimCommunityGoal(weekId, r.credits, r.packTier);
+      trackUltFunnel('community_goal_claim', { weekId, packTier: r.packTier ?? '' });
+      flash(`🌍 ${ct('Meta da comunidade')}: +${fmt(got.credits)} coins${got.cards.length ? ` · ${ct('Pacote Ouro')}` : ''}`, 3200);
+      if (got.cards.length) setReveal([...got.cards].sort((a, b) => b.ovr - a.ovr));
+      setCgTick((t) => t + 1);
     });
   };
   const squadEventCards = squadComplete ? (squadPool as PoolPlayer[]).map((p, i) => { const sc = slotCard(form.slots[i].slot); return { pid: p.id, ovr: sc?.card.ovr ?? p.ovr, region: regionOf(p.player.country), country: p.player.country, role: p.player.role, tier: sc ? rarityInfo(sc.card.rarity).tier : undefined }; }) : [];
@@ -2365,6 +2402,43 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     ))}
                   </div>
                 )}
+              </section>
+            );
+          })()}
+          {/* [URG-5] META DA COMUNIDADE — a semana inteira joga junto; barra grande + compartilhar */}
+          {cg && (() => {
+            const w = cg.week; const mine = cg.mine; const lw = cg.lastWeek;
+            const done = w.reached;
+            const tone = done ? '#29c47a' : '#61a8dd';
+            const pendingLast = lw && lw.claimable && !lw.claimed;
+            const canClaim = !!mine && mine.claimable && !mine.claimed;
+            return (
+              <section style={{ borderRadius: '14px', border: `1px solid ${done ? '#29c47a' : '#24313f'}`, marginBottom: '16px', background: '#0e141b', padding: '16px 20px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '26px' }}>🌍</span>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ fontSize: '11px', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 800, color: tone }}>{ct('Meta da comunidade')} · {ct('semana')} {w.id.slice(-2)}</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#f2f5f9', margin: '2px 0' }}>{done ? `✅ ${ct('Meta batida!')}` : `${fmt(w.total)}/${fmt(w.target)} ${ct('partidas')}`}</div>
+                    <div style={{ fontSize: '12.5px', color: '#9aa4b0' }}>
+                      {done ? `${fmt(w.total)}/${fmt(w.target)} ${ct('partidas')} · ` : ''}{w.closed ? ct('semana encerrada') : `${ct('termina em')} ${describeTimeLeft(Date.now(), w.endsAt)}`}
+                      {mine ? ` · ${ct('você contribuiu com')} ${mine.myMatches}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {canClaim && <Button variant="gold" onClick={() => doClaimCommunityGoal(w.id)} disabled={cgBusy}>{ct('Resgatar')} 🎁</Button>}
+                    {pendingLast && lw && <Button variant="gold" onClick={() => doClaimCommunityGoal(lw.id)} disabled={cgBusy}>{ct('Resgatar semana passada')} 🎁</Button>}
+                    <Button variant="ghost" onClick={doShareCommunityGoal}>{ct('Compartilhar')} 📣</Button>
+                  </div>
+                </div>
+                <div style={{ marginTop: '12px', height: '14px', borderRadius: '999px', background: '#1a222c', overflow: 'hidden' }}>
+                  <div style={{ width: `${w.pct}%`, height: '100%', borderRadius: '999px', background: done ? 'linear-gradient(90deg,#1f8f5a,#29c47a)' : 'linear-gradient(90deg,#2f6f9e,#61a8dd)', transition: 'width .6s ease' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '12px', color: '#8a93a2', flexWrap: 'wrap', gap: '6px' }}>
+                  <span>{w.pct}% · {done ? ct('liberado pra quem jogou 3+') : `${ct('faltam')} ${fmt(w.remaining)}`}</span>
+                  <span>🪙 {fmt(w.reward.credits)} {ct('coins')} ({w.reward.minMatches}+ {ct('partidas')}) · 🎁 {ct('Pacote Ouro')} ({w.reward.packMinMatches}+)</span>
+                </div>
+                {mine?.claimed && <div style={{ marginTop: '6px', fontSize: '12px', color: '#29c47a' }}>✓ {ct('Prêmio desta semana resgatado.')}</div>}
+                {!mine && <div style={{ marginTop: '6px', fontSize: '12px', color: '#8a93a2' }}>{ct('Ranqueada, duelo e Major da Semana contam. Entre na conta pra sua contribuição valer.')}</div>}
               </section>
             );
           })()}

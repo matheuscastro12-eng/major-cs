@@ -5,7 +5,8 @@
 // volta): arquiva a colocação final e faz soft-reset do MMR rumo a 1000. As 5 primeiras
 // partidas da temporada são de COLOCAÇÃO (placement: K maior, divisão "Calibrando").
 //
-// Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions | dailyStreak [URG-4].
+// Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions | dailyStreak [URG-4]
+//   | communityGoal (público) | communityGoalClaim [URG-5].
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
@@ -15,6 +16,7 @@ import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'
 import { buildRivalMail, canMailRival, detectOvertakes, OVERTAKE_TOP } from '../server/rivalNotify.js'; // [URG-3]
 import { mailConfigured, sendMail } from '../server/mail.js'; // [URG-3]
 import { dayKey as spDayKey, mergeStreak, recordDailyPlay, type StreakState } from '../src/engine/daily/streak.js'; // [URG-4]
+import { bumpCommunityContrib, communityGoalClaim, communityGoalSchemaQueries, communityGoalStatus } from '../server/communityGoal.js'; // [URG-5]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -114,6 +116,8 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS streak_best INT DEFAULT 0`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS streak_last_day TEXT`,
   ]);
+  // [URG-5] meta comunitária da semana (contadores agregados por semana ISO e por conta)
+  for (const q of communityGoalSchemaQueries(sql as unknown as SqlTag)) await q;
   schemaReady = true;
 }
 
@@ -271,12 +275,34 @@ export default async function handler(
     return;
   }
 
+  // [URG-5] META COMUNITÁRIA — público (landing/hub deslogado): total, alvo e
+  // prazo da semana ISO corrente. Com token (POST) devolve também a minha
+  // contribuição e o prêmio pendente da semana passada. Só o GET anônimo é
+  // cacheado no edge (a resposta com token é por conta).
+  if (action === 'communityGoal') {
+    const who = req.method === 'POST' && body.token ? verifyToken(String(body.token)) : null;
+    const st = await communityGoalStatus(sql as unknown as SqlTag, Date.now(), who);
+    if (!who) res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120');
+    res.status(200).json({ ok: true, ...st });
+    return;
+  }
+
   const email = verifyToken(String(body.token ?? ''));
   if (!email) { res.status(401).json({ error: 'Entre na sua conta pra acessar o ranking.' }); return; }
 
   // só conta paga tem ranking salvo
   const acc = await sql`SELECT paid, nick, streak_current, streak_best, streak_last_day FROM rtm_accounts WHERE email=${email}`;
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
+  // [URG-5] resgate da meta comunitária: ANTES do gate de conta paga — o Major da
+  // Semana aceita conta grátis, então ela também contribui e também resgata.
+  // Padrão coinsClaim: o servidor só marca `claimed` (idempotente); o cliente
+  // credita os coins e abre o pacote no save.
+  if (action === 'communityGoalClaim') {
+    const r = await communityGoalClaim(sql as unknown as SqlTag, Date.now(), email, String(body.weekId ?? '').slice(0, 16));
+    if (!r.ok) { res.status(r.error === 'unknown_week' ? 404 : 400).json({ error: r.error }); return; }
+    res.status(200).json(r);
+    return;
+  }
 
   // [URG-4] streak do Diário da conta (o que está no banco, normalizado)
   const dbStreak = (): StreakState => {
@@ -502,7 +528,8 @@ export default async function handler(
     if (String(lb[0].mode) !== 'ultimate') { res.status(400).json({ error: 'modo' }); return; }
     const inLobby = await sql`SELECT 1 FROM lobby_players WHERE code=${code} AND lower(nick)=lower(${lobbyNick}) AND COALESCE(spectator, false) = false`;
     if (!inLobby.length) { res.status(403).json({ error: 'você não jogou essa partida' }); return; }
-    await sql`INSERT INTO rtm_duel_reports (code, email, nick, won) VALUES (${code}, ${email}, ${lobbyNick}, ${won}) ON CONFLICT (code, email) DO NOTHING`;
+    const dueIns = await sql`INSERT INTO rtm_duel_reports (code, email, nick, won) VALUES (${code}, ${email}, ${lobbyNick}, ${won}) ON CONFLICT (code, email) DO NOTHING RETURNING code`;
+    if (dueIns.length) await bumpCommunityContrib(sql as unknown as SqlTag, Date.now(), email); // [URG-5] 1 por jogador por duelo
     const other = await sql`SELECT email, nick, won FROM rtm_duel_reports WHERE code=${code} AND email<>${email} LIMIT 1`;
     if (other.length) await bumpRivalry(code, { email, nick: lobbyNick, won }, { email: String(other[0].email), nick: String(other[0].nick ?? ''), won: !!other[0].won });
     res.status(200).json({ ok: true, paired: other.length > 0 });
@@ -632,6 +659,9 @@ export default async function handler(
     // 1 report por jogador por partida (PK code+email) — refresh não duplica.
     const ins = await sql`INSERT INTO rtm_match_reports (code, email, nick, won) VALUES (${code}, ${email}, ${nick}, ${won}) ON CONFLICT (code, email) DO NOTHING RETURNING code`;
     if (!ins.length) { res.status(200).json({ applied: false, duplicate: true, delta: 0, me: await myRow(), ...seasonInfo }); return; }
+    // [URG-5] meta comunitária: todo report ranqueado ACEITO (inclui salas de
+    // evento) conta 1 partida pra semana e pra conta. Nunca falha o report.
+    await bumpCommunityContrib(sql as unknown as SqlTag, Date.now(), email);
 
     // pareamento zero-soma vale pros modos 1v1 (duelo do Ultimate e Ranked 1v1
     // 'duel' do online). Nos modos ranqueados NÃO-zero-soma (Major/gauntlet)

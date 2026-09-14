@@ -20,6 +20,7 @@ import {
   WL_PLACEMENT_PRIZES,
 } from '../server/weekend-league.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
+import { bumpCommunityContrib, communityGoalSchemaQueries } from '../server/communityGoal.js'; // [URG-5]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -119,7 +120,7 @@ export default async function handler(
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl) as unknown as SqlTag;
   if (!schemaReady) {
-    for (const q of [...ultEconomySchemaQueries(sql), ...wlSchemaQueries(sql)]) await q;
+    for (const q of [...ultEconomySchemaQueries(sql), ...wlSchemaQueries(sql), ...communityGoalSchemaQueries(sql)]) await q;
     schemaReady = true;
   }
 
@@ -161,6 +162,8 @@ export default async function handler(
       res.status(status).json({ error: r.error });
       return;
     }
+    // [URG-5] meta comunitária: report ACEITO (não duplicado) do Major da Semana conta 1 partida
+    if (r.outcome !== 'duplicate') await bumpCommunityContrib(sql, now.getTime(), email);
     res.status(200).json({ ok: true, outcome: r.outcome, entry: r.entry });
     return;
   }
