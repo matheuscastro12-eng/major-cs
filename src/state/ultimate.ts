@@ -297,6 +297,8 @@ interface UltimateStore {
   equipFrame: (id: string | null) => void;
   claimCollection: (id: string) => { ok: boolean; credits?: number; frame?: string };
   claimStarter: (formationId: string) => UltCard[];
+  // [URG-5] meta comunitária: coins + pacote (o servidor já marcou o claim — padrão coinsClaim)
+  claimCommunityGoal: (weekId: string, credits: number, packTier: 'gold' | null) => { credits: number; cards: UltCard[] };
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
   tickSeason: () => SeasonRollover;
@@ -941,6 +943,27 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'weekly-bonus', seed });
     return { ok: true, cards };
+  },
+  claimCommunityGoal: (weekId, credits, packTier) => {
+    // prêmio da META COMUNITÁRIA: o servidor marcou `claimed` (idempotente por
+    // semana+conta); aqui só aplica no save. O pacote abre NA HORA com o mesmo
+    // esquema anti-reroll do claimWeeklyBonus (seed incremental antes do reveal).
+    const st = get().state;
+    let s = credits > 0 ? _addCredits(st, credits) : st;
+    let cards: UltCard[] = [];
+    const pack = packTier ? packById(packTier) : undefined;
+    if (pack) {
+      const seed = s.profile.packSeedCounter + 1;
+      const rng = makeRng(((seed * 2654435761) >>> 0) || 1);
+      cards = rollPack(ultimateCatalog(), pack, rng);
+      s = { ...s, profile: { ...s.profile, packSeedCounter: seed } };
+      for (const c of cards) s = _grantCard(s, c.key, 'reward');
+    }
+    if (s === st) return { credits: 0, cards: [] };
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'community-goal', weekId, credits, packTier: packTier ?? '' });
+    return { credits, cards };
   },
   marketListCard: (ownedId) =>
     set((st) => {
