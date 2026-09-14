@@ -316,3 +316,21 @@ Nunca preencher teste como aprovado sem executar. Se interrompido, registrar alt
 - Corrigidos no código: 6 `no-useless-assignment`, 1 `prefer-const`, 4 diretivas `eslint-disable` sobrando, 6 avisos `exhaustive-deps` (3 incluindo `setSave` — é `useCallback` estável; `App.tsx` depende de `account`; 2 efeitos da Carreira com lista de deps intencional receberam disable comentado).
 - Decisão de configuração em `eslint.config.js`: desligadas as regras do React Compiler (`react-hooks/refs`, `set-state-in-effect`, `purity`, `preserve-manual-memoization`, `immutability`, `static-components`) porque o build Vite não usa o React Compiler; desligada `react-refresh/only-export-components` (só afeta HMR em dev); `no-unused-vars` ignora prefixo `_`. `rules-of-hooks` e `exhaustive-deps` continuam ligadas.
 - Verificação: build ok, `npm test` 134/134, `npm run test:sim` 357/357.
+
+## URG-4 Streak do Diário (data 2026-09-14)
+
+- Estado: implementado (PR aberto, não mergeado).
+- Branch: `urg/streak-diario`.
+- Mudanças e arquivos:
+  - `src/engine/daily/streak.ts` (novo, puro): `dayKey(nowMs)` no calendário de São Paulo (UTC-3 fixo), `recordDailyPlay` (mesmo dia no-op / dia seguinte +1 / pulou reinicia em 1 / best), `streakStatus` (`current`, `atRisk`, `hoursLeft`, `lost`, `previous`), `mergeStreak` (local × servidor: dia mais recente vence, best nunca regride), marcos 3/7/14/30/60/100 e prêmios (`STREAK_REWARDS`, chave `streak:<n>`).
+  - `src/state/dailyStreak.ts` (novo): localStorage `rtm-daily-streak` pra todo mundo; conta logada sincroniza com `dailyStreak` em `api/ranking.ts` e guarda o MAIOR.
+  - `api/ranking.ts`: colunas aditivas `streak_current/streak_best/streak_last_day` em `rtm_accounts` (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` no bootstrap); action `dailyStreak` (token, sem exigir conta paga); `dailyReport` da Série do Dia também registra o dia; `me` devolve `streak`.
+  - `src/engine/ultimate/cosmetics.ts`: molduras `streak-7` (Sete dias), `streak-30` (Um mês sem falhar), `streak-100` (Centurião).
+  - `src/state/ultimate.ts`: `claimStreakMilestone(days)` — coins (3d 1.000 / 7d 3.000 / 30d 15.000) + moldura, idempotente por `streak:<n>` em `objectivesClaimed`, espelhado no ledger (`reward`, src `streak`).
+  - UI: `DailyScreen.tsx` (chip + barra até o próximo marco no cabeçalho, aviso vermelho no hub, toast do marco, "streak mantida: N dias" no fim de cada jogo); `Home.tsx` (card Diário com "🔥 N dias" e "você perde N dias em Xh" em vermelho + funil `streak_at_risk_seen`); `UltimateSquadScreen.tsx` (linha discreta perto das molduras se N ≥ 3). Landing deslogada: nada.
+  - `src/state/track.ts`: degrau `streak_at_risk_seen` em `UltFunnelStep`.
+  - Testes: `scripts/test-daily-streak.mts` (dayKey na virada UTC-3, ramos do record, status, merge, marcos idempotentes).
+- Decisões tomadas e motivo: streak conta DIA JOGADO (qualquer jogo fechado), não vitória — o loop é "voltar todo dia"; as streaks por jogo de `state/daily.ts` seguem intactas. Fuso fixo UTC-3 sem `Intl` (determinístico e testável; o Brasil não tem horário de verão desde 2019). O prêmio é resgatado no cliente ao atingir o marco (padrão coinsClaim/coleções), nunca creditado direto pelo servidor.
+- Comandos/testes e resultados reais: ver PR (build, `npm test`, `npm run test:sim`, `npm run lint` = 0).
+- Compatibilidade/migração/flag: colunas novas com default; save antigo do Ultimate abre sem mudanças (`frames`/`objectivesClaimed` já existiam); cliente sem conta funciona só com o local.
+- Pendências: chip do streak no card só recalcula ao montar a Home; `hoursLeft` arredonda pra cima (mínimo 1h).

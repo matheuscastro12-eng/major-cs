@@ -5,13 +5,14 @@
 // volta): arquiva a colocação final e faz soft-reset do MMR rumo a 1000. As 5 primeiras
 // partidas da temporada são de COLOCAÇÃO (placement: K maior, divisão "Calibrando").
 //
-// Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions.
+// Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions | dailyStreak [URG-4].
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
 import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'; // [U12]
+import { dayKey as spDayKey, mergeStreak, recordDailyPlay, type StreakState } from '../src/engine/daily/streak.js'; // [URG-4]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -93,6 +94,12 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // email = claim único). Cosmético (campeão/pódio da semana N), aplicado no
     // SAVE pelo cliente (weeklyTitles) — mesmo padrão do rtm_ult_draft_prizes.
     sql`CREATE TABLE IF NOT EXISTS rtm_daily_week_prizes (week INT, email TEXT, place INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (week, email))`,
+    // [URG-4] STREAK DO DIÁRIO por conta (colunas aditivas em rtm_accounts): dias
+    // seguidos jogando o Diário. O cliente manda o local; o servidor guarda o
+    // MAIOR (mergeStreak) — vale pra qualquer conta logada, paga ou não.
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS streak_current INT DEFAULT 0`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS streak_best INT DEFAULT 0`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS streak_last_day TEXT`,
   ]);
   schemaReady = true;
 }
@@ -255,8 +262,32 @@ export default async function handler(
   if (!email) { res.status(401).json({ error: 'Entre na sua conta pra acessar o ranking.' }); return; }
 
   // só conta paga tem ranking salvo
-  const acc = await sql`SELECT paid, nick FROM rtm_accounts WHERE email=${email}`;
+  const acc = await sql`SELECT paid, nick, streak_current, streak_best, streak_last_day FROM rtm_accounts WHERE email=${email}`;
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
+
+  // [URG-4] streak do Diário da conta (o que está no banco, normalizado)
+  const dbStreak = (): StreakState => {
+    const lastDay = typeof acc[0].streak_last_day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(acc[0].streak_last_day) ? acc[0].streak_last_day : null;
+    const current = lastDay ? Math.max(0, Number(acc[0].streak_current) || 0) : 0;
+    return { current, best: Math.max(current, Number(acc[0].streak_best) || 0), lastDay };
+  };
+  const saveStreak = async (st: StreakState) => {
+    await sql`UPDATE rtm_accounts SET streak_current=${st.current}, streak_best=${st.best}, streak_last_day=${st.lastDay} WHERE email=${email}`;
+  };
+  // sincroniza o streak: recebe o local do cliente, funde com o do banco (o
+  // MAIOR vence) e devolve. Não exige conta paga — o Diário é grátis.
+  if (action === 'dailyStreak') {
+    const lastDay = typeof body.lastDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.lastDay) ? body.lastDay : null;
+    const today = spDayKey(Date.now());
+    // sanidade: dia local no futuro (relógio torto) não conta; streak sem dia não conta
+    const local: StreakState = lastDay && lastDay <= today
+      ? { current: Math.max(0, Math.min(10_000, Math.round(Number(body.current) || 0))), best: Math.max(0, Math.min(10_000, Math.round(Number(body.best) || 0))), lastDay }
+      : { current: 0, best: Math.max(0, Math.min(10_000, Math.round(Number(body.best) || 0))), lastDay: null };
+    const merged = mergeStreak(dbStreak(), local);
+    await saveStreak(merged);
+    res.status(200).json({ ok: true, streak: merged });
+    return;
+  }
   if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O ranking persistente faz parte da conta com save na nuvem.' }); return; }
   const nick = String((body.nick as string) || acc[0].nick || 'manager').slice(0, 40);
 
@@ -276,12 +307,16 @@ export default async function handler(
                           ON CONFLICT (day, email) DO NOTHING RETURNING day`;
     const mine = await sql`SELECT rating, won FROM rtm_daily_series WHERE day=${day} AND email=${email}`;
     const better = await sql`SELECT count(*)::int AS n FROM rtm_daily_series WHERE day=${day} AND (rating > ${Number(mine[0]?.rating ?? rating)} OR (rating = ${Number(mine[0]?.rating ?? rating)} AND won AND NOT ${!!(mine[0]?.won ?? won)}))`;
+    // [URG-4] jogar a Série do Dia também conta como dia jogado no streak do Diário
+    const streak = recordDailyPlay(dbStreak(), spDayKey(Date.now()));
+    await saveStreak(streak);
     res.status(200).json({
       ok: true,
       accepted: ins.length > 0,
       duplicate: ins.length === 0,
       rating: Number(mine[0]?.rating ?? rating),
       rank: Number(better[0]?.n ?? 0) + 1,
+      streak,
     });
     return;
   }
@@ -507,7 +542,8 @@ export default async function handler(
   if (action === 'me') {
     await ensureRow();
     await sweepSoloGrace();
-    res.status(200).json(await myRow());
+    const row = await myRow();
+    res.status(200).json(row ? { ...row, streak: dbStreak() } : row); // [URG-4] streak do Diário junto
     return;
   }
 
