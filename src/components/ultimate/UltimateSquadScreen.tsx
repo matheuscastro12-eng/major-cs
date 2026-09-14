@@ -72,7 +72,7 @@ import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { setCheckoutSrc, track, trackPaywallView, trackUltFunnel } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
-import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
+import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank, type OvertakenBy } from '../../state/ranking';
 import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
 import { WeekendLeague } from '../online/WeekendLeague';
 import { UtPanel, UtEmpty } from './UtPanel';
@@ -96,6 +96,21 @@ import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQUAD_DUEL_CAP, type StyleId } from '../../engine/ultimate/traits';
 import '../../styles/ultimate.css';
+
+// [URG-3] deep link do e-mail "rival te passou": /ultimate?tab=ranqueada abre a
+// aba Ranqueada. Lido UMA vez no carregamento do módulo (mesmo motivo do
+// ?duelo= em App.tsx: StrictMode) e limpo da URL.
+const TAB_FROM_URL = (() => {
+  try {
+    const u = new URL(window.location.href);
+    const t = u.searchParams.get('tab');
+    if (t === null) return null;
+    u.searchParams.delete('tab');
+    window.history.replaceState({}, '', u.pathname + u.search + u.hash);
+    return t === 'ranqueada' || t === 'ranked' ? ('ranked' as const) : null;
+  } catch { return null; }
+})();
+const LAST_SEEN_KEY = 'rtm-ult-last-seen';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 // [U06] identidade de uma sessão casual nova (seed + matchId + relógio). Fora do componente
@@ -364,7 +379,7 @@ interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: numbe
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
   const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
+  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>(TAB_FROM_URL ?? 'hub');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
@@ -518,6 +533,26 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     : undefined;
   const daily = computeNextDaily(state.profile.daily.streakDay, state.profile.daily.lastClaim, dateKey(new Date()));
   const displayName = account?.nick || account?.email?.split('@')[0] || 'Manager';
+
+  // [URG-3] "fulano te passou": ultrapassagens desde a última visita ao Hub
+  // (rtm-ult-last-seen). UMA consulta por sessão, só conta paga (ranking salvo);
+  // a última visita é carimbada assim que a resposta chega. Best-effort.
+  const [overtaken, setOvertaken] = useState<OvertakenBy[]>([]);
+  const overtakeCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!account?.paid || tab !== 'hub' || overtakeCheckedRef.current) return;
+    overtakeCheckedRef.current = true;
+    let since = 0; try { since = Number(localStorage.getItem(LAST_SEEN_KEY)) || 0; } catch { /* sem storage */ }
+    if (!since) since = Date.now() - 7 * 86_400_000; // 1ª visita: última semana
+    let alive = true;
+    void fetchMyRank(displayName, since).then((r) => {
+      try { localStorage.setItem(LAST_SEEN_KEY, String(Date.now())); } catch { /* sem storage */ }
+      if (!alive || !r?.overtakenBy?.length) return;
+      setOvertaken(r.overtakenBy);
+      trackUltFunnel('rival_overtaken_seen', { count: r.overtakenBy.length });
+    });
+    return () => { alive = false; };
+  }, [account, tab, displayName]);
   // navegação por dropdown fecha ao clicar fora
   useEffect(() => {
     if (!navMenu) return;
@@ -2096,6 +2131,19 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
 
       {tab === 'hub' && (
         <>
+          {/* [URG-3] rival te passou desde a última visita — gatilho de retorno pra ranqueada */}
+          {overtaken.length > 0 && (
+            <section style={{ borderRadius: 14, border: '1px solid #dc262655', background: 'rgba(220,38,38,.07)', padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: '#b91c1c' }}>⚠️ {ct('RIVAL NA SUA FRENTE')}</div>
+                <div style={{ fontWeight: 800 }}>{overtaken[0].nick} {ct('te passou')}. {ct('Você caiu pra')} {overtaken[0].pos}º{overtaken.length > 1 ? ` · +${overtaken.length - 1} ${ct('outro(s) te passaram')}` : ''}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="ut-jogar" style={{ padding: '10px 18px' }} onClick={() => { setOvertaken([]); setRankedMode('rivals'); go('ranked'); }}><Zap size={15} /> {ct('Jogar ranqueada')}</button>
+                <button className="ut-btn ut-btn--ghost" style={{ padding: '8px 12px', fontSize: '0.78rem' }} onClick={() => setOvertaken([])}>{ct('Fechar')}</button>
+              </div>
+            </section>
+          )}
           {/* [U06] partida casual em andamento — retomar (a seed e as decisões estão guardadas) */}
           {liveSession && (
             <section style={{ borderRadius: 14, border: '1px solid #2563eb55', background: 'rgba(37,99,235,.06)', padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>

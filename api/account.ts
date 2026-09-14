@@ -22,6 +22,7 @@ import {
   stripeClient,
 } from '../server/payments.js';
 import { restorableCoins } from '../server/coin-restore.js';
+import { mailConfigured, sendMail } from '../server/mail.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const APP_SECRET = () => cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
@@ -47,6 +48,8 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS payment_method TEXT`,
       // cargo de admin por CONTA: acesso ao CRM vem daqui (não mais por senha/rota secreta).
       sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false`,
+      // [URG-3] preferência: e-mail quando um rival me passa no ranking (padrão ligado; NULL = ligado).
+      sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS notify_rival BOOLEAN DEFAULT true`,
       sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
       sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
@@ -297,39 +300,21 @@ export default async function handler(
 
   // ── Reset de senha ─────────────────────────────────────────────────────────
   // resetRequest: gera código de 6 dígitos e manda por e-mail. Dois provedores
-  // GRÁTIS, na ordem: Resend (RESEND_API_KEY — 3k/mês no free tier) ou Gmail
-  // SMTP (GMAIL_USER + GMAIL_APP_PASSWORD — senha de app, sem domínio próprio).
-  // Resposta SEMPRE {ok:true} quando o envio está configurado — não vaza se o
-  // e-mail tem conta (anti-enumeração). Nenhum provedor configurado: 503 honesto.
+  // Provedor (Resend ou Gmail SMTP) escolhido em server/mail.ts — o mesmo helper
+  // manda o aviso de rival (api/ranking.ts). Resposta SEMPRE {ok:true} quando o
+  // envio está configurado — não vaza se o e-mail tem conta (anti-enumeração).
+  // Nenhum provedor configurado: 503 honesto.
   if (action === 'resetRequest') {
     if (!/\S+@\S+\.\S+/.test(email)) { res.status(400).json({ error: 'E-mail inválido.' }); return; }
-    const resendKey = (process.env.RESEND_API_KEY ?? '').trim();
-    const gmailUser = (process.env.GMAIL_USER ?? '').trim();
-    const gmailPass = (process.env.GMAIL_APP_PASSWORD ?? '').trim();
-    if (!resendKey && !(gmailUser && gmailPass)) {
+    if (!mailConfigured()) {
       res.status(503).json({ error: 'Recuperação de senha temporariamente indisponível. Fale com a gente no suporte.' });
       return;
     }
-    const sendResetEmail = async (code: string): Promise<boolean> => {
-      const subject = `Seu código pra trocar a senha: ${code}`;
-      const text = `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no MAJOR//CS.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`;
-      if (resendKey) {
-        const from = (process.env.RESET_EMAIL_FROM ?? 'MAJOR//CS <nao-responda@roadtomajor.com.br>').trim();
-        const r = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { authorization: `Bearer ${resendKey}`, 'content-type': 'application/json' },
-          body: JSON.stringify({ from, to: [email], subject, text }),
-        }).catch(() => null);
-        return !!r && r.ok;
-      }
-      // Gmail SMTP (import dinâmico: só paga o peso quando este caminho roda)
-      try {
-        const { createTransport } = await import('nodemailer');
-        const transport = createTransport({ service: 'gmail', auth: { user: gmailUser, pass: gmailPass } });
-        await transport.sendMail({ from: `MAJOR//CS <${gmailUser}>`, to: email, subject, text });
-        return true;
-      } catch { return false; }
-    };
+    const sendResetEmail = (code: string): Promise<boolean> => sendMail({
+      to: email,
+      subject: `Seu código pra trocar a senha: ${code}`,
+      text: `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no MAJOR//CS.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`,
+    });
     // só gera/envia se o e-mail EXISTE (conta ativa ou cadastro pendente) — mas a
     // resposta é idêntica nos dois casos.
     const known = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email} UNION SELECT 1 FROM rtm_pending_signups WHERE email=${email}`;
@@ -386,16 +371,26 @@ export default async function handler(
   if (action === 'me') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
-    let r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
+    let r = await sql`SELECT nick, paid, notify_rival FROM rtm_accounts WHERE email=${em}`;
     let paid = r.length ? Boolean(r[0].paid) : false;
     if (!paid) {
       // pode ser um cadastro pendente que acabou de pagar — resolvePaid promove
       paid = await resolvePaid(em, false, true);
-      r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
+      r = await sql`SELECT nick, paid, notify_rival FROM rtm_accounts WHERE email=${em}`;
     }
     if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
     await ensureReference(em);
-    res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)) });
+    res.status(200).json({ email: em, nick: r[0].nick, paid, notifyRival: r[0].notify_rival !== false, ...(await founderOf(em)) });
+    return;
+  }
+
+  // [URG-3] liga/desliga o aviso por e-mail "rival te passou no ranking".
+  if (action === 'setNotifyRival') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
+    const on = body.value !== false;
+    await sql`UPDATE rtm_accounts SET notify_rival=${on} WHERE email=${em}`;
+    res.status(200).json({ ok: true, notifyRival: on });
     return;
   }
 
