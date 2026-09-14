@@ -317,6 +317,44 @@ Nunca preencher teste como aprovado sem executar. Se interrompido, registrar alt
 - Decisão de configuração em `eslint.config.js`: desligadas as regras do React Compiler (`react-hooks/refs`, `set-state-in-effect`, `purity`, `preserve-manual-memoization`, `immutability`, `static-components`) porque o build Vite não usa o React Compiler; desligada `react-refresh/only-export-components` (só afeta HMR em dev); `no-unused-vars` ignora prefixo `_`. `rules-of-hooks` e `exhaustive-deps` continuam ligadas.
 - Verificação: build ok, `npm test` 134/134, `npm run test:sim` 357/357.
 
+## URG-4 Streak do Diário (data 2026-09-14)
+
+- Estado: implementado (PR aberto, não mergeado).
+- Branch: `urg/streak-diario`.
+- Mudanças e arquivos:
+  - `src/engine/daily/streak.ts` (novo, puro): `dayKey(nowMs)` no calendário de São Paulo (UTC-3 fixo), `recordDailyPlay` (mesmo dia no-op / dia seguinte +1 / pulou reinicia em 1 / best), `streakStatus` (`current`, `atRisk`, `hoursLeft`, `lost`, `previous`), `mergeStreak` (local × servidor: dia mais recente vence, best nunca regride), marcos 3/7/14/30/60/100 e prêmios (`STREAK_REWARDS`, chave `streak:<n>`).
+  - `src/state/dailyStreak.ts` (novo): localStorage `rtm-daily-streak` pra todo mundo; conta logada sincroniza com `dailyStreak` em `api/ranking.ts` e guarda o MAIOR.
+  - `api/ranking.ts`: colunas aditivas `streak_current/streak_best/streak_last_day` em `rtm_accounts` (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` no bootstrap); action `dailyStreak` (token, sem exigir conta paga); `dailyReport` da Série do Dia também registra o dia; `me` devolve `streak`.
+  - `src/engine/ultimate/cosmetics.ts`: molduras `streak-7` (Sete dias), `streak-30` (Um mês sem falhar), `streak-100` (Centurião).
+  - `src/state/ultimate.ts`: `claimStreakMilestone(days)` — coins (3d 1.000 / 7d 3.000 / 30d 15.000) + moldura, idempotente por `streak:<n>` em `objectivesClaimed`, espelhado no ledger (`reward`, src `streak`).
+  - UI: `DailyScreen.tsx` (chip + barra até o próximo marco no cabeçalho, aviso vermelho no hub, toast do marco, "streak mantida: N dias" no fim de cada jogo); `Home.tsx` (card Diário com "🔥 N dias" e "você perde N dias em Xh" em vermelho + funil `streak_at_risk_seen`); `UltimateSquadScreen.tsx` (linha discreta perto das molduras se N ≥ 3). Landing deslogada: nada.
+  - `src/state/track.ts`: degrau `streak_at_risk_seen` em `UltFunnelStep`.
+  - Testes: `scripts/test-daily-streak.mts` (dayKey na virada UTC-3, ramos do record, status, merge, marcos idempotentes).
+- Decisões tomadas e motivo: streak conta DIA JOGADO (qualquer jogo fechado), não vitória — o loop é "voltar todo dia"; as streaks por jogo de `state/daily.ts` seguem intactas. Fuso fixo UTC-3 sem `Intl` (determinístico e testável; o Brasil não tem horário de verão desde 2019). O prêmio é resgatado no cliente ao atingir o marco (padrão coinsClaim/coleções), nunca creditado direto pelo servidor.
+- Comandos/testes e resultados reais: ver PR (build, `npm test`, `npm run test:sim`, `npm run lint` = 0).
+- Compatibilidade/migração/flag: colunas novas com default; save antigo do Ultimate abre sem mudanças (`frames`/`objectivesClaimed` já existiam); cliente sem conta funciona só com o local.
+- Pendências: chip do streak no card só recalcula ao montar a Home; `hoursLeft` arredonda pra cima (mínimo 1h).
+
+## URG-1 Temporada com fim (data 2026-09-14)
+
+- Estado: **implementado e verificado** (engine + store + UI + espelho; sem verificação visual).
+- Branch: `urg/temporada`.
+- O que foi feito:
+  - **Edição da temporada** ("em forma"): campo aditivo `OwnedCard.ed?: number`. Enquanto `season.n === ed` a cópia vale **+2 OVR** (e +2 nos 6 atributos, mesmo contrato do `boostCard` da evolução) e mostra o selo laranja `S3`; na virada o bônus some e o selo vira `LEGADO S3` (cinza) com OVR base — a carta continua jogável. Nada é reescrito no inventário: o estado "em forma/legado" é DERIVADO de `season.n`.
+  - **Pacote da Temporada** (`SEASON_PACK`, id `season`, 20.000 credits, 7 cartas, 2 Ouro+ garantidas, pesos entre o Ouro e o Premium): TODAS as cartas saem com `ed = season.n`. Só aparece na Loja enquanto a temporada está ativa, com o contador "Some em Xd Yh". Fica fora de `PACK_DEFS`/`packById` de propósito (roll sempre LOCAL — o servidor não carimba `ed`).
+  - **10% por carta em pacote comum** (`SEASON_EDITION_CHANCE`): `stampPackEditions` consome 1 `rng()` por carta DEPOIS do `rollPack`, no mesmo rng do seed anti-reroll → reproduzível por seed. No roll do servidor (conta paga) o carimbo usa `makeRng(seed do ledger)`.
+  - **Fim de temporada com consequência**: bloco "A TEMPORADA ACABA EM Xd Yh" no Hub e na Loja com quantas cópias vão perder o +2 e o aviso de que o pacote some (vermelho a ≤7 dias); anda com o tick de 60s do relógio. `applySeasonRollover` devolve `legacyCount/prevN/newN` e o modal "Nova temporada!" mostra "N cartas suas viraram Legado S{n-1}" e "Edição S{n} disponível na Loja".
+  - **Migração**: `migrateUltimate` e `grantCard` saneiam `ed` (inteiro ≥ 1; qualquer outra coisa é descartada). Save antigo sem `ed` fica idêntico.
+  - **Servidor**: `rtm_ult_cards.meta` é JSONB livre — o espelho (`mirrorUltimateChange`, migração one-time e o caminho de replay em `ultimateShadow.ts`) passou a incluir `ed` no meta. Sem coluna nova, sem migration.
+  - **Funil**: step `season_pack_open` em `ult_funnel` (`{season}`) quando o Pacote da Temporada abre.
+  - PvP: `slotCard` passa por `viewCard` (evolução + edição) → o snapshot `UltimatePvpSquad.cards[].ovr` já viaja com o +2; o servidor só clampa 1..99 (sem mudança de protocolo).
+- Arquivos: `src/engine/ultimate/seasonEdition.ts` (novo, puro), `src/engine/ultimate/state.ts`, `src/state/ultimate.ts`, `src/state/ultimateShadow.ts`, `src/state/track.ts`, `src/components/ultimate/UltimateSquadScreen.tsx`, `server/ultimate-economy.ts` (comentário), `scripts/test-ultimate-season-edition.mts` (novo).
+- Decisões e motivo: bônus derivado (não gravado) para a virada ser instantânea e reversível por `season.n`; pacote fora do `packById` para o roll do servidor nunca aceitar `season` sem carimbar; carimbo depois do `rollPack` para não alterar nenhuma sequência de cartas existente (mesmo seed ⇒ mesmas cartas de antes); custo 20k = entre Ouro (14k) e Promo (25k), paga-se pelo carimbo.
+- Testes: `scripts/test-ultimate-season-edition.mts` (6 testes: boost só com `ed === season.n`; rollover conta legados; pacote da temporada carimba 7/7; 10% determinístico por seed e ~10% no agregado; normalize aceita/ignora lixo; `seasonEnding`).
+- Pendências:
+  - Roll no SERVIDOR (conta paga): a tx do `packOpen` já foi gravada pelo servidor sem `ed` — o carimbo dos 10% fica só no save local/cloud-save; `rtm_ult_cards.meta` dessas cópias não tem `ed`. Para fechar: o servidor carimbar no `openPack` (mesma regra, mesmo seed) e devolver `ed` em `ServerPackCard`.
+  - Mercado entre jogadores: cancelar/expirar devolve a cópia COM `ed` (stash de escrow local, como boost/style). O comprador recebe a cópia sem `ed` — mesmo comportamento já existente para boost/style (o `marketBuyApply` só recebe `cardId/cardKey`). Fechar quando o servidor devolver `meta` na compra.
+  - Verificação visual (selo sobre moldura equipada + LEGADO do W2; contador no mobile) não foi feita.
 ## URG-3 Aviso de rival (data 2026-09-14)
 
 - Estado: implementado (PR aberto, não mergeado).

@@ -21,12 +21,15 @@ import { makeRng } from '../engine/rng';
 import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { buildFullCatalog } from '../engine/ultimate/catalog';
 import { COLLECTIONS, collectionKey, evaluateCollections, mergeFrames, normalizeClub } from '../engine/ultimate/cosmetics'; // [U10]
+import { streakKey, streakRewardFor } from '../engine/daily/streak'; // [URG-4]
+import { loadStreakState } from './dailyStreak'; // [URG-4]
 import { pickRewardCard, claimableLevels } from '../engine/ultimate/seasonPass'; // [U09]
 import type { LogoConfig } from '../lib/logoBuilder';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
 import { monthIndex, promoForMonth, promoThemeById, PROMO_SIZE, type MonthlyPromo } from '../engine/ultimate/promos';
 import { totwForWeek, weekIndex, type WeeklyTotw } from '../engine/ultimate/totw';
 import { weeklyPackPool } from '../engine/ultimate/packPool';
+import { isSeasonPack, SEASON_PACK, stampPackEditions } from '../engine/ultimate/seasonEdition'; // [URG-1]
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, WEEKLY_BONUS_PACK } from '../engine/ultimate/weeklyMissions';
 import { DEFAULT_FORMATION, formationSlotRoles } from '../engine/ultimate/formations';
 import { pickStarterCards } from '../engine/ultimate/cards';
@@ -296,6 +299,8 @@ interface UltimateStore {
   setClub: (club: { name: string; logo: LogoConfig | null } | null) => void;
   equipFrame: (id: string | null) => void;
   claimCollection: (id: string) => { ok: boolean; credits?: number; frame?: string };
+  // [URG-4] marco do STREAK DO DIÁRIO (3/7/30/100 dias): coins + moldura, 1× por marco (chave streak:<n>)
+  claimStreakMilestone: (days: number) => { ok: boolean; credits?: number; frame?: string };
   claimStarter: (formationId: string) => UltCard[];
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
@@ -347,7 +352,7 @@ interface UltimateStore {
 // falhar, a carta devolvida perde só o cosmético local (o card_meta segue
 // íntegro no servidor pra quem comprar).
 const ESCROW_META_KEY = 'rtm-ult-mkt-escrow-v1';
-type EscrowMeta = { boost?: number; style?: StyleId };
+type EscrowMeta = { boost?: number; style?: StyleId; ed?: number }; // ed: edição da temporada [URG-1]
 
 function loadEscrowStash(): Record<string, EscrowMeta> {
   try {
@@ -391,9 +396,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     }),
   openPack: (packId) => {
     // Pacote Promo usa a def em vigor (custo pode vir de promo agendada do live-ops)
-    const pack = packId === PROMO_PACK.id ? ultimatePromoPack() : packById(packId);
+    // [URG-1] Pacote da Temporada só existe enquanto a temporada está ativa
+    const pack = packId === PROMO_PACK.id ? ultimatePromoPack() : isSeasonPack(packId) ? SEASON_PACK : packById(packId);
     if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' };
     const prev = get().state;
+    const season = prev.profile.season;
+    if (isSeasonPack(packId) && (!season || Date.now() > season.endsAt)) return { ok: false, cards: [], reason: 'unavailable' };
     const spent = _spendCredits(prev, pack.cost);
     if (!spent.ok) return { ok: false, cards: [], reason: 'insufficient' };
     // seed incremental gravado ANTES do reveal → reload não re-rola (anti-reroll)
@@ -406,8 +414,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       : pack.id === 'totw' ? weeklyPackPool(ultimateCatalog(), new Date()) : ultimateCatalog();
     if (!cat) return { ok: false, cards: [], reason: 'unavailable' };
     const cards = rollPack(cat, pack, rng);
+    // [URG-1] carimbo de edição: mesmo rng do pack (depois do roll) → reproduzível pelo seed
+    const eds = stampPackEditions(cards.length, rng, season?.n, isSeasonPack(packId));
     let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
-    for (const c of cards) s = _grantCard(s, c.key, 'pack');
+    cards.forEach((c, i) => { s = _grantCard(s, c.key, 'pack', { ed: eds[i] }); });
     s = _grantPassXp(s, 'pack', dateKey(new Date())); // XP do passe (cap diário em seasonPass.ts)
     persist(s);
     set({ state: s });
@@ -423,9 +433,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     //   - conta grátis/deslogada (zero rede, comportamento intocado);
     //   - Pacote Promo (custo de live-ops + catálogo filtrado por mês que o
     //     servidor não replica — roll server-side sairia com odds erradas);
+    //   - Pacote da Temporada [URG-1] (o carimbo `ed` é local; o servidor não o conhece);
     //   - qualquer falha de rede/rota (o jogo NUNCA bloqueia esperando rede).
     const localRoll = () => ({ ...get().openPack(packId), source: 'local' as const });
-    if (!cloudEnabled() || packId === PROMO_PACK.id) return localRoll();
+    if (!cloudEnabled() || packId === PROMO_PACK.id || isSeasonPack(packId)) return localRoll();
     const pack = packById(packId);
     if (!pack) return { ok: false, cards: [], reason: 'unknown_pack' as const, source: 'local' as const };
     if (get().state.profile.credits < pack.cost) return { ok: false, cards: [], reason: 'insufficient' as const, source: 'local' as const };
@@ -458,9 +469,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     let s = { ...spent.state, profile: { ...spent.state.profile, packSeedCounter: seed } };
     const idx = ultimateIndex();
     const revealed: UltCard[] = [];
-    for (const c of r.cards) {
+    // [URG-1] a chance de edição no roll do servidor sai do seed que ELE gravou
+    // no ledger (auditável); o carimbo em si é só local (ver pendência no doc).
+    const eds = stampPackEditions(r.cards.length, makeRng((r.seed >>> 0) || 1), prev.profile.season?.n, false);
+    for (const [i, c] of r.cards.entries()) {
       if (s.inventory.some((o) => o.id === c.cardId)) continue; // replay já aplicado — não duplica
-      s = _grantCard(s, c.cardKey, 'pack', { id: c.cardId });
+      s = _grantCard(s, c.cardKey, 'pack', { id: c.cardId, ed: eds[i] });
       const card = idx.get(c.cardKey);
       if (card) revealed.push(card);
     }
@@ -633,6 +647,21 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'collection', id });
     return { ok: true, credits: def.reward.credits, frame: def.reward.frame };
+  },
+  claimStreakMilestone: (days) => {
+    const def = streakRewardFor(days);
+    if (!def) return { ok: false };
+    const st = get().state;
+    const key = streakKey(days);
+    if (st.profile.objectivesClaimed.includes(key)) return { ok: false };
+    if (loadStreakState().best < days) return { ok: false }; // marco não atingido nesta máquina
+    let s = _markObjectiveClaimed(st, key);
+    if (def.coins) s = _addCredits(s, def.coins);
+    if (def.frame) s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, [def.frame]), equippedFrame: s.profile.equippedFrame ?? def.frame } };
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'streak', days });
+    return { ok: true, credits: def.coins, frame: def.frame };
   },
   setTarget: (cardKey) =>
     set((st) => {
@@ -949,7 +978,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // guarda boost/estilo da cópia num stash local: o servidor preserva o
       // card_meta no custódia, mas o retorno (cancel/expire) chega só com
       // cardId/cardKey — sem o stash a carta voltaria "pelada" na UI local.
-      stashEscrowMeta(owned.id, { boost: owned.boost, style: owned.style });
+      stashEscrowMeta(owned.id, { boost: owned.boost, style: owned.style, ed: owned.ed });
       const s = _removeOwnedCards(st.state, [ownedId]);
       persist(s);
       // SEM mirror: o mktList já gravou a perna 'escrow' (remove) no ledger.
@@ -969,11 +998,11 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       if (st.state.inventory.some((o) => o.id === cardId)) return {}; // já voltou (outra aba/poll)
       let s = _grantCard(st.state, cardKey, 'market', { id: cardId });
       const meta = takeEscrowMeta(cardId);
-      if (meta && (meta.boost || meta.style)) {
+      if (meta && (meta.boost || meta.style || meta.ed)) {
         s = {
           ...s,
           inventory: s.inventory.map((o) => (o.id === cardId
-            ? { ...o, ...(meta.boost ? { boost: meta.boost } : {}), ...(meta.style ? { style: meta.style } : {}) }
+            ? { ...o, ...(meta.boost ? { boost: meta.boost } : {}), ...(meta.style ? { style: meta.style } : {}), ...(meta.ed ? { ed: meta.ed } : {}) }
             : o)),
         };
       }

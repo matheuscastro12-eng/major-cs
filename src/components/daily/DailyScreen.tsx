@@ -27,7 +27,10 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import { loadDailyProgress, saveDailyProgress, loadDailyStreak, dailyDayStatus, syncPerfectStreak, PERFECT_KEY, setDailyFlag, dailyBadgeFacts, bankDailyDay, loadDailyDays, loadMarathon, saveMarathon, type MarathonRecord } from '../../state/daily';
 import { pingDailyGame, fetchDailyGamesStats, type DailyGamesStats } from '../../state/dailyGamesApi';
 import { canInstall, promptInstall, dismissInstall, onInstallChange } from '../../state/pwa';
-import { ultimateIndex, ultimateTotw } from '../../state/ultimate';
+import { ultimateIndex, ultimateTotw, useUltimate } from '../../state/ultimate';
+import { loadStreakState, recordStreakPlay, syncStreakWithServer } from '../../state/dailyStreak';
+import { frameById } from '../../engine/ultimate/cosmetics';
+import { nextMilestone, pendingMilestones, streakStatus, STREAK_MILESTONES, type StreakState } from '../../engine/daily/streak';
 import { evaluateDailyBadges } from '../../engine/daily/badges';
 import { MARATHON_ORDER, marathonGrade, marathonShareText, fmtDuration } from '../../engine/daily/marathon';
 import '../../styles/daily.css';
@@ -62,6 +65,40 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
   }, [view, dateKey]);
   const perfectStreak = loadDailyStreak(PERFECT_KEY);
   const [dayCopied, setDayCopied] = useState(false);
+
+  // [URG-4] STREAK DO DIÁRIO — dias seguidos jogando qualquer jogo. Local pra
+  // todo mundo; conta logada funde com o servidor (o maior vence) ao abrir.
+  const [dStreak, setDStreak] = useState<StreakState>(() => loadStreakState());
+  useEffect(() => {
+    let alive = true;
+    void syncStreakWithServer().then((st) => { if (alive) setDStreak(st); });
+    return () => { alive = false; };
+  }, []);
+  const dStatus = streakStatus(dStreak, Date.now());
+  const dNext = nextMilestone(dStatus.current);
+  const dPrev = [...STREAK_MILESTONES].reverse().find((m) => m <= dStatus.current) ?? 0;
+  const dPct = dNext ? Math.round(((dStatus.current - dPrev) / (dNext - dPrev)) * 100) : 100;
+  const { state: ultState, claimStreakMilestone } = useUltimate();
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef<number | undefined>(undefined);
+  const flash = (msg: string, ms = 3200) => {
+    setToast(msg);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(''), ms);
+  };
+  // qualquer jogo fechou: registra o dia, resgata marcos novos (idempotente
+  // pela chave streak:<n> no perfil do Ultimate) e avisa.
+  const onGameDone = () => {
+    const next = recordStreakPlay(Date.now());
+    setDStreak(next);
+    for (const m of pendingMilestones(next.current, ultState.profile.objectivesClaimed)) {
+      const r = claimStreakMilestone(m);
+      if (!r.ok) continue;
+      const parts = [r.credits ? `+${r.credits.toLocaleString('pt-BR')} coins no Ultimate` : '', r.frame ? `${ct('Moldura')} ${frameById(r.frame)?.name ?? r.frame} ${ct('liberada')}` : ''].filter(Boolean);
+      flash(`🔥 ${m} ${ct('dias seguidos!')} ${parts.join(' · ')}`, 4200);
+      track('daily_streak_milestone', { days: m, coins: r.credits ?? 0, frame: r.frame ?? '' });
+    }
+  };
 
   const shareDay = async () => {
     if (!dayStatus) return;
@@ -129,8 +166,22 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
         {marathonActive && marathon && (
           <span className="rtm-daily-streak" style={{ borderColor: 'var(--dl-t)' }}>🏁 {fmtDuration((Date.now() - marathon.startedAt) / 1000)}</span>
         )}
-        {streak.streak >= 2 && <span className="rtm-daily-streak">🔥 {streak.streak}</span>}
+        {dStatus.current >= 1 && (
+          <span className="rtm-daily-streakbox" title={dNext ? `${ct('Próximo marco')}: ${dNext} ${ct('dias')}` : ct('Todos os marcos batidos')}>
+            <span className="rtm-daily-streak">🔥 {dStatus.current} {dStatus.current === 1 ? ct('dia') : ct('dias')}</span>
+            {dNext && (
+              <span className="rtm-daily-streakbar" aria-label={`${dStatus.current}/${dNext}`}>
+                <i style={{ width: `${dPct}%` }} />
+                <small>{dNext}</small>
+              </span>
+            )}
+          </span>
+        )}
       </header>
+      {toast && <div className="rtm-daily-toast" role="status">{toast}</div>}
+      {dStatus.atRisk && view === 'hub' && (
+        <div className="rtm-daily-risk">⚠️ {ct('Você perde')} {dStatus.current} {ct('dias em')} {dStatus.hoursLeft}h — {ct('jogue qualquer um dos 4 pra manter.')}</div>
+      )}
 
       {view === 'hub' && (
         <div className="rtm-daily-hub">
@@ -305,10 +356,10 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
         </div>
       )}
 
-      {view === 'lines' && <LinesGame dateKey={dateKey} streakNow={streak.streak} />}
-      {view === 'whois' && <WhoisGame dateKey={dateKey} />}
-      {view === 'impostor' && <ImpostorGame dateKey={dateKey} />}
-      {view === 'classic' && <ClassicGame dateKey={dateKey} />}
+      {view === 'lines' && <LinesGame dateKey={dateKey} streakNow={streak.streak} onDone={onGameDone} streakDays={dStatus.current} />}
+      {view === 'whois' && <WhoisGame dateKey={dateKey} onDone={onGameDone} streakDays={dStatus.current} />}
+      {view === 'impostor' && <ImpostorGame dateKey={dateKey} onDone={onGameDone} streakDays={dStatus.current} />}
+      {view === 'classic' && <ClassicGame dateKey={dateKey} onDone={onGameDone} streakDays={dStatus.current} />}
     </div>
   );
 }
@@ -316,7 +367,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
 // ─────────────────────────────────────────────────────────────────────────────
 // LINES HISTÓRICAS
 
-function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number }) {
+function LinesGame({ dateKey, streakNow, onDone, streakDays }: { dateKey: string; streakNow: number; onDone: () => void; streakDays: number }) {
   const line = useMemo(() => lineOfDay(dateKey), [dateKey]);
   const order = useMemo(() => slotOrderOf(dateKey, line), [dateKey, line]);
   const [progress, setProgress] = useState<LinesProgress>(() => {
@@ -333,7 +384,7 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
   const commit = (p: LinesProgress) => {
     setProgress(p);
     saveDailyProgress('lines', dateKey, p);
-    if (p.done) { track('daily_done', { game: 'lines', day: dayNumberOf(dateKey), won: p.won, errors: p.errors, found: p.found.length }); pingDailyGame('lines', dayNumberOf(dateKey), p.won); if (p.won && p.errors === 0) setDailyFlag('ace'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); }
+    if (p.done) { track('daily_done', { game: 'lines', day: dayNumberOf(dateKey), won: p.won, errors: p.errors, found: p.found.length }); pingDailyGame('lines', dayNumberOf(dateKey), p.won); if (p.won && p.errors === 0) setDailyFlag('ace'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); onDone(); }
   };
 
   const submit = () => {
@@ -439,6 +490,7 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
+          <span className="rtm-daily-streak-kept">🔥 {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próxima line à meia-noite.')}</span>
         </div>
       )}
@@ -452,7 +504,7 @@ function LinesGame({ dateKey, streakNow }: { dateKey: string; streakNow: number 
 const CLUE_EMOJI: Record<ClueCell, string> = { hit: '🟩', near: '🟨', miss: '🟥' };
 const OVR_EMOJI: Record<OvrClue, string> = { hit: '🟩', up: '⬆️', down: '⬇️' };
 
-function WhoisGame({ dateKey }: { dateKey: string }) {
+function WhoisGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone: () => void; streakDays: number }) {
   const pool = useMemo(() => whoisPool(CS2_REAL_2026), []);
   const target = useMemo(() => whoisOfDay(dateKey, pool), [dateKey, pool]);
   const [progress, setProgress] = useState<WhoisProgress>(() => {
@@ -468,7 +520,7 @@ function WhoisGame({ dateKey }: { dateKey: string }) {
   const commit = (p: WhoisProgress) => {
     setProgress(p);
     saveDailyProgress('whois', dateKey, p);
-    if (p.done) { track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length }); pingDailyGame('whois', dayNumberOf(dateKey), p.won); if (p.won && p.guesses.length === 1) setDailyFlag('sniper'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); }
+    if (p.done) { track('daily_done', { game: 'whois', day: dayNumberOf(dateKey), won: p.won, guesses: p.guesses.length }); pingDailyGame('whois', dayNumberOf(dateKey), p.won); if (p.won && p.guesses.length === 1) setDailyFlag('sniper'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); onDone(); }
   };
 
   const submit = () => {
@@ -551,6 +603,7 @@ function WhoisGame({ dateKey }: { dateKey: string }) {
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
+          <span className="rtm-daily-streak-kept">🔥 {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo pro à meia-noite.')}</span>
         </div>
       )}
@@ -561,7 +614,7 @@ function WhoisGame({ dateKey }: { dateKey: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // O IMPOSTOR — a line histórica com um infiltrado
 
-function ImpostorGame({ dateKey }: { dateKey: string }) {
+function ImpostorGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone: () => void; streakDays: number }) {
   const round = useMemo(() => impostorOfDay(dateKey), [dateKey]);
   const [progress, setProgress] = useState<ImpostorProgress>(() => {
     const saved = loadDailyProgress<ImpostorProgress>('impostor', dateKey);
@@ -575,7 +628,7 @@ function ImpostorGame({ dateKey }: { dateKey: string }) {
     const next = applyPick(round, progress, idx);
     setProgress(next);
     saveDailyProgress('impostor', dateKey, next);
-    if (next.done) { track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('impostor', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('detetive'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); }
+    if (next.done) { track('daily_done', { game: 'impostor', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('impostor', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('detetive'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); onDone(); }
   };
 
   const doShare = async () => {
@@ -634,6 +687,7 @@ function ImpostorGame({ dateKey }: { dateKey: string }) {
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
+          <span className="rtm-daily-streak-kept">🔥 {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo impostor à meia-noite.')}</span>
         </div>
       )}
@@ -644,7 +698,7 @@ function ImpostorGame({ dateKey }: { dateKey: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PLACAR DO CLÁSSICO — a final histórica: campeão + placar em 2 tentativas
 
-function ClassicGame({ dateKey }: { dateKey: string }) {
+function ClassicGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone: () => void; streakDays: number }) {
   const round = useMemo(() => classicOfDay(dateKey), [dateKey]);
   const [progress, setProgress] = useState<ClassicProgress>(() => {
     const saved = loadDailyProgress<ClassicProgress>('classic', dateKey);
@@ -658,7 +712,7 @@ function ClassicGame({ dateKey }: { dateKey: string }) {
     const next = applyClassicPick(round, progress, key);
     setProgress(next);
     saveDailyProgress('classic', dateKey, next);
-    if (next.done) { track('daily_done', { game: 'classic', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('classic', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('historiador'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); }
+    if (next.done) { track('daily_done', { game: 'classic', day: dayNumberOf(dateKey), won: next.won, picks: next.picks.length }); pingDailyGame('classic', dayNumberOf(dateKey), next.won); if (next.won && next.picks.length === 1) setDailyFlag('historiador'); bankDailyDay(DAILY_GAMES.map((g) => g.id), dateKey); onDone(); }
   };
 
   const doShare = async () => {
@@ -719,6 +773,7 @@ function ClassicGame({ dateKey }: { dateKey: string }) {
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
+          <span className="rtm-daily-streak-kept">🔥 {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo clássico à meia-noite.')}</span>
         </div>
       )}
