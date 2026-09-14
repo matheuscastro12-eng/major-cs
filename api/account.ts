@@ -49,7 +49,6 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       // cargo de admin por CONTA: acesso ao CRM vem daqui (não mais por senha/rota secreta).
       sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false`,
       // [URG-3] preferência: e-mail quando um rival me passa no ranking (padrão ligado; NULL = ligado).
-      sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS notify_rival BOOLEAN DEFAULT true`,
       sql`CREATE UNIQUE INDEX IF NOT EXISTS rtm_accounts_stripe_ref_idx ON rtm_accounts (stripe_ref) WHERE stripe_ref IS NOT NULL`,
       sql`CREATE TABLE IF NOT EXISTS rtm_paid_emails (email TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now())`,
       sql`CREATE TABLE IF NOT EXISTS rtm_payment_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL, stripe_event_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`,
@@ -371,26 +370,16 @@ export default async function handler(
   if (action === 'me') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
-    let r = await sql`SELECT nick, paid, notify_rival FROM rtm_accounts WHERE email=${em}`;
+    let r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
     let paid = r.length ? Boolean(r[0].paid) : false;
     if (!paid) {
       // pode ser um cadastro pendente que acabou de pagar — resolvePaid promove
       paid = await resolvePaid(em, false, true);
-      r = await sql`SELECT nick, paid, notify_rival FROM rtm_accounts WHERE email=${em}`;
+      r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
     }
     if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
     await ensureReference(em);
-    res.status(200).json({ email: em, nick: r[0].nick, paid, notifyRival: r[0].notify_rival !== false, ...(await founderOf(em)) });
-    return;
-  }
-
-  // [URG-3] liga/desliga o aviso por e-mail "rival te passou no ranking".
-  if (action === 'setNotifyRival') {
-    const em = verifyToken(String(body.token ?? ''));
-    if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
-    const on = body.value !== false;
-    await sql`UPDATE rtm_accounts SET notify_rival=${on} WHERE email=${em}`;
-    res.status(200).json({ ok: true, notifyRival: on });
+    res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)) });
     return;
   }
 

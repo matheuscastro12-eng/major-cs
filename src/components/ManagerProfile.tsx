@@ -6,7 +6,7 @@ import { Flag } from './ui';
 import { Button, Panel } from './ds';
 import { DivBadge } from './Leaderboard';
 import { LegalLinks } from './Legal';
-import { deleteAccount, exportAccountData, setNotifyRival, type Account } from '../state/account';
+import { deleteAccount, exportAccountData, type Account } from '../state/account';
 import { fetchMyRank, type MyRank } from '../state/ranking';
 import type { Manager } from '../state/manager';
 import { ct } from '../state/career-i18n';
@@ -29,16 +29,6 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [dataError, setDataError] = useState('');
-  // [URG-3] aviso por e-mail "rival te passou": otimista, volta atrás se o servidor recusar
-  const [notifyRival, setNotifyRivalState] = useState(account?.notifyRival !== false);
-  const [notifyBusy, setNotifyBusy] = useState(false);
-  const toggleNotifyRival = async (value: boolean) => {
-    if (notifyBusy) return;
-    setNotifyBusy(true); setNotifyRivalState(value); setDataError('');
-    try { setNotifyRivalState(await setNotifyRival(value)); }
-    catch (e) { setNotifyRivalState(!value); setDataError(e instanceof Error ? e.message : ct('Não deu pra salvar a preferência.')); }
-    finally { setNotifyBusy(false); }
-  };
   useEffect(() => { if (paid) void fetchMyRank(manager.nick).then(setRank); }, [paid, manager.nick]);
   // funil: CTA de vitalícia visto na tela de Perfil (src já existe em App.tsx, faltava a view)
   useEffect(() => { if (!paid) trackPaywallView('profile'); }, [paid]);
@@ -162,10 +152,6 @@ export function ManagerProfile({ manager, account, onBack, onEdit, onUpgrade, on
                 {[ct('Pagamento único, acesso pra sempre'), ct('Até 5 carreiras salvas na nuvem'), ct('Ranking e MMR salvos no online'), ct('Histórico completo de partidas')].map((f, i) => (
                   <div key={i} style={{ display: 'flex', gap: '9px', fontSize: '13px', color: 'var(--rtm-dim)', padding: '4px 0' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{f}</div>
                 ))}
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', fontSize: '13px', color: 'var(--rtm-dim)', padding: '8px 0 2px', cursor: notifyBusy ? 'wait' : 'pointer' }}>
-                  <input type="checkbox" checked={notifyRival} disabled={notifyBusy} onChange={(e) => void toggleNotifyRival(e.target.checked)} style={{ marginTop: '2px', accentColor: 'var(--rtm-gold)' }} />
-                  <span>{ct('Me avisar por e-mail quando um rival me passar no ranking')}<br /><span style={{ fontSize: '11px' }}>{ct('No máximo 1 e-mail por dia.')}</span></span>
-                </label>
                 {onManageSaves && <Button variant="gold" size="sm" style={{ width: '100%', marginTop: '12px' }} onClick={onManageSaves}>{ct('Gerenciar minhas carreiras')}</Button>}
                 <div className="account-data-actions">
                   <Button variant="ghost" size="sm" onClick={downloadData} disabled={dataBusy}>{dataBusy ? ct('Aguarde…') : ct('Exportar meus dados')}</Button>

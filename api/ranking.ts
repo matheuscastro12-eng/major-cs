@@ -14,8 +14,7 @@ import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
 import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'; // [U12]
 import { weekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
-import { buildRivalMail, canMailRival, detectOvertakes, OVERTAKE_TOP } from '../server/rivalNotify.js'; // [URG-3]
-import { mailConfigured, sendMail } from '../server/mail.js'; // [URG-3]
+import { detectOvertakes, OVERTAKE_TOP } from '../server/rivalNotify.js'; // [URG-3]
 import { dayKey as spDayKey, mergeStreak, recordDailyPlay, type StreakState } from '../src/engine/daily/streak.js'; // [URG-4]
 import { bumpCommunityContrib, communityGoalClaim, communityGoalSchemaQueries, communityGoalStatus } from '../server/communityGoal.js'; // [URG-5]
 
@@ -105,11 +104,6 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // em DELETE SEPARADO e amostrado (2% dos reports) — nunca no caminho da escrita.
     sql`CREATE TABLE IF NOT EXISTS rtm_overtakes (id BIGSERIAL PRIMARY KEY, victim_email TEXT NOT NULL, by_email TEXT NOT NULL, by_nick TEXT, old_pos INT NOT NULL, new_pos INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`CREATE INDEX IF NOT EXISTS rtm_overtakes_victim_idx ON rtm_overtakes (victim_email, created_at DESC)`,
-    // último e-mail de rival por destinatário (rate limit: 1 a cada 24h).
-    sql`CREATE TABLE IF NOT EXISTS rtm_rival_mails (email TEXT PRIMARY KEY, sent_at TIMESTAMPTZ NOT NULL, by_email TEXT)`,
-    // preferência mora na conta (api/account.ts também declara; idempotente —
-    // IF EXISTS porque num banco zerado a tabela nasce em api/account.ts).
-    sql`ALTER TABLE IF EXISTS rtm_accounts ADD COLUMN IF NOT EXISTS notify_rival BOOLEAN DEFAULT true`,
     // [URG-4] STREAK DO DIÁRIO por conta (colunas aditivas em rtm_accounts): dias
     // seguidos jogando o Diário. O cliente manda o local; o servidor guarda o
     // MAIOR (mergeStreak) — vale pra qualquer conta logada, paga ou não.
@@ -634,24 +628,6 @@ export default async function handler(
       }
       // retenção (30 dias): DELETE separado e amostrado — nunca no caminho do INSERT.
       if (Math.random() < 0.02) await sql`DELETE FROM rtm_overtakes WHERE created_at < now() - interval '30 days'`;
-      if (!mailConfigured()) return;
-      const emails = victims.map((v) => v.email);
-      const accts = await sql`SELECT email, sent_at FROM rtm_accounts a LEFT JOIN rtm_rival_mails m USING (email) WHERE a.email = ANY(${emails}) AND a.paid AND a.notify_rival IS DISTINCT FROM false`;
-      const now = Date.now();
-      const sends = accts
-        .filter((a) => canMailRival(a.sent_at ? new Date(String(a.sent_at)).getTime() : null, now))
-        .map(async (a) => {
-          const to = String(a.email);
-          const v = victims.find((x) => x.email === to.toLowerCase()); if (!v) return;
-          // claim ANTES de enviar (dois reports quase simultâneos não mandam 2 e-mails).
-          const claim = await sql`INSERT INTO rtm_rival_mails (email, sent_at, by_email) VALUES (${to}, now(), ${em})
-                                  ON CONFLICT (email) DO UPDATE SET sent_at=now(), by_email=EXCLUDED.by_email
-                                  WHERE rtm_rival_mails.sent_at < now() - interval '24 hours' RETURNING email`;
-          if (!claim.length) return;
-          const mail = buildRivalMail({ byNick, oldPos: v.oldPos, newPos: v.newPos, byMmr: r.after });
-          await sendMail({ to, ...mail });
-        });
-      await Promise.allSettled(sends);
     } catch { /* aviso é best-effort: o report já foi aplicado */ }
   };
 

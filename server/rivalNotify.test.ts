@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildRivalMail, canMailRival, detectOvertakes, RANKED_LINK, RIVAL_MAIL_INTERVAL_MS } from './rivalNotify.js';
+import { detectOvertakes } from './rivalNotify.js';
 
 // ladder DEPOIS do report: eu (me@x) subi de 1010 pra 1060 e passei por cima de b, c e d.
 const ladder = [
@@ -42,21 +42,4 @@ test('fora do top N é ignorado', () => {
   big2[98] = { email: 'me@x', nick: 'Eu', mmr: 2000 - 98 * 5 };
   const out = detectOvertakes({ email: 'me@x', before: 0, after: big2[98].mmr }, big2, ['p101@x', 'p99@x']);
   assert.deepEqual(out.map((o) => o.email), ['p99@x']);
-});
-
-test('canMailRival: 1 e-mail por 24h', () => {
-  const now = 1_000_000_000_000;
-  assert.equal(canMailRival(null, now), true);
-  assert.equal(canMailRival(undefined, now), true);
-  assert.equal(canMailRival(now - RIVAL_MAIL_INTERVAL_MS + 1, now), false);
-  assert.equal(canMailRival(now - RIVAL_MAIL_INTERVAL_MS, now), true);
-  assert.equal(canMailRival(now - 60_000, now), false);
-});
-
-test('buildRivalMail: assunto e corpo com nick, posições e link; HTML escapa o nick', () => {
-  const m = buildRivalMail({ byNick: 'Zé <b>', oldPos: 4, newPos: 5, byMmr: 1234 });
-  assert.equal(m.subject, 'Zé <b> te passou no ranking do Road to Major');
-  assert.ok(m.text.includes('Zé <b>') && m.text.includes('4º pra 5º') && m.text.includes('1234 RP') && m.text.includes(RANKED_LINK));
-  assert.ok(m.text.includes('Desligue em Conta'));
-  assert.ok(m.html.includes('Zé &lt;b&gt;') && m.html.includes(RANKED_LINK) && !m.html.includes('Zé <b>'));
 });
