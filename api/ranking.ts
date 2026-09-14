@@ -5,7 +5,7 @@
 // volta): arquiva a colocação final e faz soft-reset do MMR rumo a 1000. As 5 primeiras
 // partidas da temporada são de COLOCAÇÃO (placement: K maior, divisão "Calibrando").
 //
-// Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions
+// Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions | dailyStreak [URG-4]
 //   | communityGoal (público) | communityGoalClaim [URG-5].
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -13,6 +13,9 @@ import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
 import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'; // [U12]
+import { buildRivalMail, canMailRival, detectOvertakes, OVERTAKE_TOP } from '../server/rivalNotify.js'; // [URG-3]
+import { mailConfigured, sendMail } from '../server/mail.js'; // [URG-3]
+import { dayKey as spDayKey, mergeStreak, recordDailyPlay, type StreakState } from '../src/engine/daily/streak.js'; // [URG-4]
 import { bumpCommunityContrib, communityGoalClaim, communityGoalSchemaQueries, communityGoalStatus } from '../server/communityGoal.js'; // [URG-5]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -95,6 +98,23 @@ async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
     // email = claim único). Cosmético (campeão/pódio da semana N), aplicado no
     // SAVE pelo cliente (weeklyTitles) — mesmo padrão do rtm_ult_draft_prizes.
     sql`CREATE TABLE IF NOT EXISTS rtm_daily_week_prizes (week INT, email TEXT, place INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (week, email))`,
+    // [URG-3] AVISO DE RIVAL: ultrapassagens no ladder (quem me passou, de onde
+    // pra onde) — lidas pelo 'me' com `since` pra mostrar o bloco no Hub. A
+    // conta é identificada por e-mail (PK de rtm_accounts). Retenção de 30 dias
+    // em DELETE SEPARADO e amostrado (2% dos reports) — nunca no caminho da escrita.
+    sql`CREATE TABLE IF NOT EXISTS rtm_overtakes (id BIGSERIAL PRIMARY KEY, victim_email TEXT NOT NULL, by_email TEXT NOT NULL, by_nick TEXT, old_pos INT NOT NULL, new_pos INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
+    sql`CREATE INDEX IF NOT EXISTS rtm_overtakes_victim_idx ON rtm_overtakes (victim_email, created_at DESC)`,
+    // último e-mail de rival por destinatário (rate limit: 1 a cada 24h).
+    sql`CREATE TABLE IF NOT EXISTS rtm_rival_mails (email TEXT PRIMARY KEY, sent_at TIMESTAMPTZ NOT NULL, by_email TEXT)`,
+    // preferência mora na conta (api/account.ts também declara; idempotente —
+    // IF EXISTS porque num banco zerado a tabela nasce em api/account.ts).
+    sql`ALTER TABLE IF EXISTS rtm_accounts ADD COLUMN IF NOT EXISTS notify_rival BOOLEAN DEFAULT true`,
+    // [URG-4] STREAK DO DIÁRIO por conta (colunas aditivas em rtm_accounts): dias
+    // seguidos jogando o Diário. O cliente manda o local; o servidor guarda o
+    // MAIOR (mergeStreak) — vale pra qualquer conta logada, paga ou não.
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS streak_current INT DEFAULT 0`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS streak_best INT DEFAULT 0`,
+    sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS streak_last_day TEXT`,
   ]);
   // [URG-5] meta comunitária da semana (contadores agregados por semana ISO e por conta)
   for (const q of communityGoalSchemaQueries(sql as unknown as SqlTag)) await q;
@@ -271,7 +291,7 @@ export default async function handler(
   if (!email) { res.status(401).json({ error: 'Entre na sua conta pra acessar o ranking.' }); return; }
 
   // só conta paga tem ranking salvo
-  const acc = await sql`SELECT paid, nick FROM rtm_accounts WHERE email=${email}`;
+  const acc = await sql`SELECT paid, nick, streak_current, streak_best, streak_last_day FROM rtm_accounts WHERE email=${email}`;
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
   // [URG-5] resgate da meta comunitária: ANTES do gate de conta paga — o Major da
   // Semana aceita conta grátis, então ela também contribui e também resgata.
@@ -281,6 +301,30 @@ export default async function handler(
     const r = await communityGoalClaim(sql as unknown as SqlTag, Date.now(), email, String(body.weekId ?? '').slice(0, 16));
     if (!r.ok) { res.status(r.error === 'unknown_week' ? 404 : 400).json({ error: r.error }); return; }
     res.status(200).json(r);
+    return;
+  }
+
+  // [URG-4] streak do Diário da conta (o que está no banco, normalizado)
+  const dbStreak = (): StreakState => {
+    const lastDay = typeof acc[0].streak_last_day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(acc[0].streak_last_day) ? acc[0].streak_last_day : null;
+    const current = lastDay ? Math.max(0, Number(acc[0].streak_current) || 0) : 0;
+    return { current, best: Math.max(current, Number(acc[0].streak_best) || 0), lastDay };
+  };
+  const saveStreak = async (st: StreakState) => {
+    await sql`UPDATE rtm_accounts SET streak_current=${st.current}, streak_best=${st.best}, streak_last_day=${st.lastDay} WHERE email=${email}`;
+  };
+  // sincroniza o streak: recebe o local do cliente, funde com o do banco (o
+  // MAIOR vence) e devolve. Não exige conta paga — o Diário é grátis.
+  if (action === 'dailyStreak') {
+    const lastDay = typeof body.lastDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.lastDay) ? body.lastDay : null;
+    const today = spDayKey(Date.now());
+    // sanidade: dia local no futuro (relógio torto) não conta; streak sem dia não conta
+    const local: StreakState = lastDay && lastDay <= today
+      ? { current: Math.max(0, Math.min(10_000, Math.round(Number(body.current) || 0))), best: Math.max(0, Math.min(10_000, Math.round(Number(body.best) || 0))), lastDay }
+      : { current: 0, best: Math.max(0, Math.min(10_000, Math.round(Number(body.best) || 0))), lastDay: null };
+    const merged = mergeStreak(dbStreak(), local);
+    await saveStreak(merged);
+    res.status(200).json({ ok: true, streak: merged });
     return;
   }
   if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O ranking persistente faz parte da conta com save na nuvem.' }); return; }
@@ -302,12 +346,16 @@ export default async function handler(
                           ON CONFLICT (day, email) DO NOTHING RETURNING day`;
     const mine = await sql`SELECT rating, won FROM rtm_daily_series WHERE day=${day} AND email=${email}`;
     const better = await sql`SELECT count(*)::int AS n FROM rtm_daily_series WHERE day=${day} AND (rating > ${Number(mine[0]?.rating ?? rating)} OR (rating = ${Number(mine[0]?.rating ?? rating)} AND won AND NOT ${!!(mine[0]?.won ?? won)}))`;
+    // [URG-4] jogar a Série do Dia também conta como dia jogado no streak do Diário
+    const streak = recordDailyPlay(dbStreak(), spDayKey(Date.now()));
+    await saveStreak(streak);
     res.status(200).json({
       ok: true,
       accepted: ins.length > 0,
       duplicate: ins.length === 0,
       rating: Number(mine[0]?.rating ?? rating),
       rank: Number(better[0]?.n ?? 0) + 1,
+      streak,
     });
     return;
   }
@@ -531,12 +579,62 @@ export default async function handler(
     }
   };
 
+  // [URG-3] quem me passou no ladder desde `since` (ms; o cliente guarda a última
+  // visita ao Hub em localStorage). Só consulta quando o cliente pede.
+  const overtakenSince = async (since: number) => {
+    if (!(since > 0)) return undefined;
+    const rows = await sql`SELECT by_nick, new_pos, created_at FROM rtm_overtakes WHERE victim_email=${email} AND created_at > ${new Date(since).toISOString()} ORDER BY created_at DESC LIMIT 5`;
+    return rows.map((r) => ({ nick: String(r.by_nick ?? 'rival'), pos: Number(r.new_pos), at: new Date(String(r.created_at)).getTime() }));
+  };
+
   if (action === 'me') {
     await ensureRow();
     await sweepSoloGrace();
-    res.status(200).json(await myRow());
+    const overtakenBy = await overtakenSince(Number(body.since) || 0); // [URG-3]
+    const row = await myRow();
+    res.status(200).json(row ? { ...row, streak: dbStreak(), ...(overtakenBy ? { overtakenBy } : {}) } : row); // [URG-4] streak do Diário junto
     return;
   }
+
+  // [URG-3] AVISO DE RIVAL: depois de aplicar RP, descobre quem `em` ultrapassou
+  // (rivais declarados + vizinho imediato, top 100), grava em rtm_overtakes (bloco
+  // no Hub) e manda no máximo 1 e-mail por vítima a cada 24h (opt-out em Conta).
+  // Custo: 1 SELECT do top 100 + 1 SELECT de rivalidades por report com subida.
+  // Nunca falha o report: tudo em try/catch, envios com Promise.allSettled.
+  const notifyOvertakes = async (em: string, r: { before: number; after: number }) => {
+    if (!(r.after > r.before)) return;
+    try {
+      const ladder = await sql`SELECT email, nick, mmr FROM rtm_ranking WHERE season=${season.no} ORDER BY mmr DESC, wins DESC LIMIT ${OVERTAKE_TOP}`;
+      const rivalRows = await sql`SELECT email_a, email_b FROM rtm_rivalries WHERE email_a=${em.toLowerCase()} OR email_b=${em.toLowerCase()}`;
+      const rivals = rivalRows.map((x) => (String(x.email_a) === em.toLowerCase() ? String(x.email_b) : String(x.email_a)));
+      const victims = detectOvertakes({ email: em, before: r.before, after: r.after }, ladder.map((x) => ({ email: String(x.email), nick: String(x.nick ?? 'manager'), mmr: Number(x.mmr) })), rivals);
+      if (!victims.length) return;
+      const byNick = String(ladder.find((x) => String(x.email).toLowerCase() === em.toLowerCase())?.nick ?? 'manager');
+      for (const v of victims) {
+        await sql`INSERT INTO rtm_overtakes (victim_email, by_email, by_nick, old_pos, new_pos) VALUES (${v.email}, ${em}, ${byNick}, ${v.oldPos}, ${v.newPos})`;
+      }
+      // retenção (30 dias): DELETE separado e amostrado — nunca no caminho do INSERT.
+      if (Math.random() < 0.02) await sql`DELETE FROM rtm_overtakes WHERE created_at < now() - interval '30 days'`;
+      if (!mailConfigured()) return;
+      const emails = victims.map((v) => v.email);
+      const accts = await sql`SELECT email, sent_at FROM rtm_accounts a LEFT JOIN rtm_rival_mails m USING (email) WHERE a.email = ANY(${emails}) AND a.paid AND a.notify_rival IS DISTINCT FROM false`;
+      const now = Date.now();
+      const sends = accts
+        .filter((a) => canMailRival(a.sent_at ? new Date(String(a.sent_at)).getTime() : null, now))
+        .map(async (a) => {
+          const to = String(a.email);
+          const v = victims.find((x) => x.email === to.toLowerCase()); if (!v) return;
+          // claim ANTES de enviar (dois reports quase simultâneos não mandam 2 e-mails).
+          const claim = await sql`INSERT INTO rtm_rival_mails (email, sent_at, by_email) VALUES (${to}, now(), ${em})
+                                  ON CONFLICT (email) DO UPDATE SET sent_at=now(), by_email=EXCLUDED.by_email
+                                  WHERE rtm_rival_mails.sent_at < now() - interval '24 hours' RETURNING email`;
+          if (!claim.length) return;
+          const mail = buildRivalMail({ byNick, oldPos: v.oldPos, newPos: v.newPos, byMmr: r.after });
+          await sendMail({ to, ...mail });
+        });
+      await Promise.allSettled(sends);
+    } catch { /* aviso é best-effort: o report já foi aplicado */ }
+  };
 
   if (action === 'report') {
     const won = !!body.won;
@@ -574,6 +672,7 @@ export default async function handler(
       const solo = await applyRanked(email, won);
       await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND email=${email}`;
       if (!solo) { res.status(200).json({ applied: false, delta: 0, me: await myRow(), ...seasonInfo }); return; }
+      await notifyOvertakes(email, solo); // [URG-3]
       const db = divFor(solo.before, solo.gamesBefore);
       const da = divFor(solo.after, solo.gamesAfter);
       res.status(200).json({
@@ -614,10 +713,14 @@ export default async function handler(
       ? await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND status='pending' RETURNING email, won`
       : await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND email=${email} AND status='pending' RETURNING email, won`;
     let mine: Awaited<ReturnType<typeof applyRanked>> = null;
+    const risen: { email: string; r: NonNullable<Awaited<ReturnType<typeof applyRanked>>> }[] = [];
     for (const row of claimed) {
       const applied = await applyRanked(String(row.email), !!row.won);
       if (String(row.email) === email) mine = applied;
+      if (applied && applied.after > applied.before) risen.push({ email: String(row.email), r: applied });
     }
+    // [URG-3] quem subiu nesta invocação (o vencedor — pode ser o oponente, no 'apply-both') avisa quem passou
+    for (const x of risen) await notifyOvertakes(x.email, x.r);
     // [U11] head-to-head por conta: os dois reports desta partida (idempotente por código)
     if (mine && other.length) await bumpRivalry(code, { email, nick: lobbyNick, won }, { email: String(other[0].email), nick: String(other[0].nick ?? ''), won: !!other[0].won });
     // [U12] sala de EVENTO: conta vitória/derrota de cada lado aplicado (cap maxMatches); 1x por (code,email) via status 'applied'

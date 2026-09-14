@@ -165,16 +165,20 @@ export function trackRtpDemo(step: RtpDemoStep, week?: number): void {
 //   offer_viewed         → viu a Loja / o Passe                     {product_kind, src}
 //   purchase_intent      → clicou em comprar (coins/passe)          {product_kind, src, method}
 //   purchase_fulfilled   → claim CONFIRMADO pelo servidor            {product_kind, orderId?}
+//   season_pack_open     → abriu o Pacote da Temporada [URG-1]        {season}
 //   community_goal_share → copiou/compartilhou a meta comunitária    {weekId} [URG-5]
 //   community_goal_claim → resgatou o prêmio da meta comunitária     {weekId, packTier?} [URG-5]
 //     (o servidor marca 'claimed' uma vez por pedido — é a confirmação
 //     autoritativa; evento de UI sozinho não conta como receita).
+//   rival_overtaken_seen → [URG-3] viu no Hub o bloco "fulano te passou"  {count}
+//     (gatilho de retorno: mede quantas visitas nascem de uma ultrapassagem)
 // Nunca leva e-mail, token ou valor pago. Denominadores (plano U02): conclusão
 // da 1ª partida por 'enter'; 2ª partida por 'match_completed'; 1ª compra por
 // 'enter'. Custo: ≤ ~10 eventos por sessão, com o compute do Neon já acordado.
 export type UltFunnelStep =
   | 'enter' | 'starter_claimed' | 'match_started' | 'match_completed' | 'squad_adjusted'
   | 'second_match_started' | 'offer_viewed' | 'purchase_intent' | 'purchase_fulfilled' | 'target_selected'
+  | 'streak_at_risk_seen' | 'season_pack_open' | 'rival_overtaken_seen' // [URG-4] viu o aviso vermelho "você perde N dias em Xh" {days, hoursLeft}
   | 'community_goal_share' | 'community_goal_claim';
 export type UltProductKind = 'coins' | 'pass' | 'account';
 
