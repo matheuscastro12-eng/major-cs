@@ -338,6 +338,8 @@ interface UltimateStore {
   // [W2] LEGADO: concede o card do pro aposentado UMA vez por carreira (idempotente
   // pela chave em objectivesClaimed — sobrevive a venda/SBC do card). Sem moeda.
   claimLegacyCard: (cardKey: string) => { ok: boolean; already: boolean; card?: UltCard };
+  // [URG-2] carta exclusiva do evento (concedida pelo servidor no eventClaim; aqui só o espelho local, 1x por evento)
+  grantEventCard: (eventId: string, cardKey: string) => { ok: boolean; already: boolean; card?: UltCard };
   setState: (s: UltimateState) => void;
   reset: () => void;
 }
@@ -1078,6 +1080,20 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     persist(s);
     set({ state: s });
     mirrorUltimateChange(prev, s, 'reward', { src: 'legacy', cardKey });
+    return { ok: true, already: false, card };
+  },
+  grantEventCard: (eventId, cardKey) => {
+    const prev = get().state;
+    // id determinístico por evento — o MESMO que o servidor gravou em rtm_ult_cards (ON CONFLICT no espelho);
+    // reaplicar (F5 no meio, replay do claim) nunca duplica a cópia
+    const id = `ev_${eventId.replace(/[^a-z0-9]/gi, '')}`;
+    if (prev.inventory.some((o) => o.id === id)) return { ok: false, already: true };
+    const card = ultimateIndex().get(cardKey);
+    if (!card) return { ok: false, already: false };
+    const s = _grantCard(prev, cardKey, 'reward', { id, ev: eventId });
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(prev, s, 'reward', { src: 'event-card', eventId, cardKey });
     return { ok: true, already: false, card };
   },
   setState: (s) => {

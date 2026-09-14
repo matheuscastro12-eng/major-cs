@@ -42,6 +42,8 @@ export interface LiveopsEventPayload {
   rule: EventRule;
   winTiers: { wins: number; credits: number }[];
   maxMatches: number;
+  exclusiveCardKey?: string; // [URG-2] carta exclusiva (concedida no resgate pelo servidor)
+  cardAtWins?: number;       // [URG-2] vitórias pra levar a carta
 }
 
 export type LiveopsItem =
@@ -91,7 +93,7 @@ function parseItem(raw: unknown): LiveopsItem | null {
   if (raw.kind === 'event') { // [U12]
     if (!str(p.name) || !str(p.desc) || !isObj(p.rule) || !str(p.rule.kind) || !Array.isArray(p.winTiers)) return null;
     if (!(EVENT_RULE_KINDS as readonly string[]).includes(String(p.rule.kind))) return null;
-    return { ...base, kind: 'event', payload: { version: int(p.version) ? p.version : 1, name: p.name, desc: p.desc, rule: p.rule as unknown as EventRule, winTiers: (p.winTiers as { wins: number; credits: number }[]).filter((t) => isObj(t) && int(t.wins) && int(t.credits)), maxMatches: int(p.maxMatches) ? p.maxMatches : 20 } };
+    return { ...base, kind: 'event', payload: { version: int(p.version) ? p.version : 1, name: p.name, desc: p.desc, rule: p.rule as unknown as EventRule, winTiers: (p.winTiers as { wins: number; credits: number }[]).filter((t) => isObj(t) && int(t.wins) && int(t.credits)), maxMatches: int(p.maxMatches) ? p.maxMatches : 20, ...(str(p.exclusiveCardKey) ? { exclusiveCardKey: p.exclusiveCardKey } : {}), ...(int(p.cardAtWins) ? { cardAtWins: p.cardAtWins } : {}) } };
   }
   return null;
 }

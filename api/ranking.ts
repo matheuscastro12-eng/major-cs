@@ -12,6 +12,7 @@ import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
 import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'; // [U12]
+import { weekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -410,17 +411,31 @@ export default async function handler(
               ON CONFLICT (pair) DO UPDATE SET nick_a=EXCLUDED.nick_a, nick_b=EXCLUDED.nick_b, wins_a=rtm_rivalries.wins_a+EXCLUDED.wins_a, wins_b=rtm_rivalries.wins_b+EXCLUDED.wins_b, games=rtm_rivalries.games+1, last_at=now(), last_code=EXCLUDED.last_code`;
   };
   // [U12] evento: status da minha conta e resgate do prêmio (idempotente pelo ledger)
+  // [URG-2] item manual vence; sem ele, o evento automático de fim de semana (reconstruído pelo id,
+  // mesmo com a janela já fechada — status e resgate acontecem depois de domingo)
   const eventDef = async (id: string) => {
     const rows = await sql`SELECT payload, ends_at FROM rtm_liveops WHERE id = ${id} AND kind = 'event' AND enabled = true LIMIT 1`;
-    const p = rows[0]?.payload as Record<string, unknown> | undefined; if (!p) return null;
-    return { winTiers: Array.isArray(p.winTiers) ? (p.winTiers as { wins: number; credits: number }[]) : [], maxMatches: Number(p.maxMatches) || 20, version: Number(p.version) || 1, endsAt: new Date(String(rows[0].ends_at)).getTime() };
+    const p = rows[0]?.payload as Record<string, unknown> | undefined;
+    if (!p) {
+      const w = weekendEventDef(id); if (!w) return null;
+      return { winTiers: w.winTiers, maxMatches: w.maxMatches, version: w.version, endsAt: w.endsAt, exclusiveCardKey: w.exclusiveCardKey, cardAtWins: w.cardAtWins };
+    }
+    const winTiers = Array.isArray(p.winTiers) ? (p.winTiers as { wins: number; credits: number }[]) : [];
+    const topWins = winTiers.reduce((m, t) => Math.max(m, Number(t.wins) || 0), 0);
+    return {
+      winTiers, maxMatches: Number(p.maxMatches) || 20, version: Number(p.version) || 1, endsAt: new Date(String(rows[0].ends_at)).getTime(),
+      exclusiveCardKey: typeof p.exclusiveCardKey === 'string' && p.exclusiveCardKey ? p.exclusiveCardKey : null,
+      cardAtWins: Number(p.cardAtWins) > 0 ? Number(p.cardAtWins) : topWins,
+    };
   };
+  // [URG-2] id da cópia da carta exclusiva — determinístico por evento (igual ao do cliente: 1 por conta, replay não duplica)
+  const eventCardId = (id: string) => `ev_${id.replace(/[^a-z0-9]/gi, '')}`;
   if (action === 'eventStatus') {
     const id = String(body.eventId ?? '').slice(0, 64);
     const def = await eventDef(id); if (!def) { res.status(404).json({ error: 'evento' }); return; }
     const me = await sql`SELECT wins, losses, claimed_at FROM rtm_event_entries WHERE event_id=${id} AND email=${email}`;
     const wins = Number(me[0]?.wins ?? 0); const losses = Number(me[0]?.losses ?? 0);
-    res.status(200).json({ wins, losses, claimed: !!me[0]?.claimed_at, reward: eventRewardFor(wins, def.winTiers), maxMatches: def.maxMatches, closed: Date.now() > def.endsAt });
+    res.status(200).json({ wins, losses, claimed: !!me[0]?.claimed_at, reward: eventRewardFor(wins, def.winTiers), maxMatches: def.maxMatches, closed: Date.now() > def.endsAt, exclusiveCardKey: def.exclusiveCardKey, cardAtWins: def.cardAtWins });
     return;
   }
   if (action === 'eventClaim') {
@@ -431,10 +446,14 @@ export default async function handler(
     const done = Date.now() > def.endsAt || wins + losses >= def.maxMatches;
     if (!done) { res.status(400).json({ error: 'em andamento' }); return; }
     const credits = eventRewardFor(wins, def.winTiers);
+    // [URG-2] carta exclusiva: só quem bateu `cardAtWins`; vai na MESMA tx do ledger (opId único por
+    // evento+versão ⇒ 1 cópia por conta; replay do claim não concede de novo). meta.ev vira o selo no cliente.
+    const cardKey = def.exclusiveCardKey && wins >= def.cardAtWins ? def.exclusiveCardKey : null;
+    const cards = cardKey ? [{ op: 'add' as const, cardId: eventCardId(id), cardKey, meta: { via: 'reward', ev: id } }] : [];
     // pay-first no ledger (opId único por evento+versão) e só então claimed_at — padrão Major da Semana
-    const tx = await applyUltTransaction(sql as unknown as SqlTag, email, { opId: `ev:${id}:${def.version}`, kind: 'reward', creditsDelta: credits, cards: [], meta: { src: 'event', eventId: id, wins } });
+    const tx = await applyUltTransaction(sql as unknown as SqlTag, email, { opId: `ev:${id}:${def.version}`, kind: 'reward', creditsDelta: credits, cards, meta: { src: 'event', eventId: id, wins, ...(cardKey ? { cardKey } : {}) } });
     await sql`INSERT INTO rtm_event_entries (event_id, email, wins, losses, version, claimed_at) VALUES (${id}, ${email}, ${wins}, ${losses}, ${def.version}, now()) ON CONFLICT (event_id, email) DO UPDATE SET claimed_at = COALESCE(rtm_event_entries.claimed_at, now())`;
-    res.status(200).json({ ok: true, credits, replayed: !!(tx as { replayed?: boolean }).replayed });
+    res.status(200).json({ ok: true, credits, replayed: !!(tx as { replayed?: boolean }).replayed, exclusiveCardKey: cardKey, cardId: cardKey ? eventCardId(id) : null });
     return;
   }
   // [U11] meus rivais (por conta), mais recentes primeiro

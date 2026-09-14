@@ -50,6 +50,7 @@ export interface OwnedCard {
   locked: 'squad' | null;  // travada num squad → não pode vender
   boost?: number;          // nível de evolução (+OVR/atributos por nível), 0..EVO_MAX
   style?: StyleId;         // estilo de química aplicado (iter33) — aditivo, migration-safe
+  ev?: string;             // [URG-2] id do evento que concedeu a carta exclusiva (selo "EVENTO wknd-…"); aditivo
 }
 
 export interface UltimateSquad {
@@ -388,7 +389,7 @@ export function grantCard(
   state: UltimateState,
   cardKey: string,
   via: AcquiredVia,
-  opts?: { id?: string; at?: number },
+  opts?: { id?: string; at?: number; ev?: string },
 ): UltimateState {
   const serial = maxSerialOf(state, cardKey) + 1;
   const owned: OwnedCard = {
@@ -398,6 +399,7 @@ export function grantCard(
     acquiredVia: via,
     acquiredAt: opts?.at ?? Date.now(),
     locked: null,
+    ...(opts?.ev ? { ev: opts.ev } : {}),
   };
   return { ...state, inventory: [...state.inventory, owned] };
 }
@@ -539,7 +541,9 @@ export function migrateUltimate(raw: unknown): UltimateState {
           const boost = (typeof b !== 'number' || !Number.isFinite(b) || b <= 0) ? undefined : Math.min(EVO_MAX, Math.floor(b));
           // estilo (iter33): campo aditivo — só sobrevive se for um StyleId conhecido
           const style = isStyleId(o.style) ? o.style : undefined;
-          return { ...o, boost, style };
+          // [URG-2] selo de evento: string curta ou nada (save antigo não tem o campo)
+          const ev = typeof o.ev === 'string' && o.ev.length > 0 && o.ev.length <= 64 ? o.ev : undefined;
+          return { ...o, boost, style, ev };
         })
     : [];
   // sanitiza squads: recomputeLocks itera sq.slots — um save corrompido com

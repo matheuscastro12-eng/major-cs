@@ -5,6 +5,7 @@
 import { neon } from '@neondatabase/serverless';
 import { eventEligibility, type EventRule } from '../src/engine/ultimate/events.js'; // [U12]
 import { serverCatalogIndex } from '../server/ultimate-pack.js';
+import { activeWeekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { rarityInfo } from '../src/engine/ultimate/rarities.js';
 import { createHash } from 'node:crypto';
 
@@ -287,7 +288,12 @@ async function activeEventById(sql: ReturnType<typeof neon>, id: string): Promis
   try {
     const rows = await sql`SELECT payload FROM rtm_liveops WHERE id = ${id} AND kind = 'event' AND enabled = true AND starts_at <= now() AND ends_at > now() LIMIT 1`;
     const p = rows[0]?.payload as Record<string, unknown> | undefined;
-    if (!p || !p.rule || typeof p.rule !== 'object') return null;
+    if (!p) {
+      // [URG-2] sem item manual: o evento automático de fim de semana (só na janela sex–dom UTC)
+      const w = activeWeekendEventDef(id);
+      return w ? { rule: w.rule, winTiers: w.winTiers, maxMatches: w.maxMatches, version: w.version } : null;
+    }
+    if (!p.rule || typeof p.rule !== 'object') return null;
     return { rule: p.rule as EventRule, winTiers: Array.isArray(p.winTiers) ? (p.winTiers as { wins: number; credits: number }[]) : [], maxMatches: Number(p.maxMatches) || 20, version: Number(p.version) || 1 };
   } catch { return null; }
 }

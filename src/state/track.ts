@@ -165,6 +165,7 @@ export function trackRtpDemo(step: RtpDemoStep, week?: number): void {
 //   offer_viewed         → viu a Loja / o Passe                     {product_kind, src}
 //   purchase_intent      → clicou em comprar (coins/passe)          {product_kind, src, method}
 //   purchase_fulfilled   → claim CONFIRMADO pelo servidor            {product_kind, orderId?}
+//   weekend_event_enter  → entrou na fila do evento de fim de semana  {eventId}
 //     (o servidor marca 'claimed' uma vez por pedido — é a confirmação
 //     autoritativa; evento de UI sozinho não conta como receita).
 // Nunca leva e-mail, token ou valor pago. Denominadores (plano U02): conclusão
@@ -172,7 +173,8 @@ export function trackRtpDemo(step: RtpDemoStep, week?: number): void {
 // 'enter'. Custo: ≤ ~10 eventos por sessão, com o compute do Neon já acordado.
 export type UltFunnelStep =
   | 'enter' | 'starter_claimed' | 'match_started' | 'match_completed' | 'squad_adjusted'
-  | 'second_match_started' | 'offer_viewed' | 'purchase_intent' | 'purchase_fulfilled' | 'target_selected';
+  | 'second_match_started' | 'offer_viewed' | 'purchase_intent' | 'purchase_fulfilled' | 'target_selected'
+  | 'weekend_event_enter'; // [URG-2] entrou na fila do evento de fim de semana {eventId}
 export type UltProductKind = 'coins' | 'pass' | 'account';
 
 export function trackUltFunnel(step: UltFunnelStep, data: Record<string, string | number | boolean> = {}): void {

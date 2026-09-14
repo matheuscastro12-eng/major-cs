@@ -14,6 +14,7 @@ import {
   upsertLiveop,
   type SqlTag,
 } from '../server/liveops.js';
+import { mergeWeekendEvent, serverWeekendCatalog } from '../server/weekendEvent.js'; // [URG-2]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -74,7 +75,9 @@ export default async function handler(
   // ---------------------------------------------------------------- pública
   if (action === 'active') {
     // só o que o jogo precisa: id/kind/payload/janela — nada de created_by/enabled.
-    const rows = await activeLiveops(sql, new Date());
+    // [URG-2] o evento automático de fim de semana entra aqui quando não há item manual com o mesmo id
+    const now = new Date();
+    const rows = mergeWeekendEvent(await activeLiveops(sql, now), now, serverWeekendCatalog);
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.status(200).json({
       items: rows.map((r) => ({ id: r.id, kind: r.kind, payload: r.payload, startsAt: r.startsAt, endsAt: r.endsAt })),

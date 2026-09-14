@@ -56,6 +56,12 @@ export function buildServerCatalog(now: Date = new Date()): SnapCard[] {
   return _catalog;
 }
 
+// [URG-2] catálogo do mês de uma data QUALQUER sem tocar o cache mensal (a carta
+// exclusiva do fim de semana é sorteada no snapshot do mês da sexta do evento).
+export function serverCatalogAt(at: Date): SnapCard[] {
+  return snapshotMonth(monthIndex(at));
+}
+
 export function serverCatalogIndex(now: Date = new Date()): Map<string, SnapCard> {
   buildServerCatalog(now);
   return _index!;

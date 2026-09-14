@@ -38,6 +38,9 @@ import { h2hText, type H2H } from '../../engine/ultimate/duelInvite';
 import { scheduledEvents } from '../../state/liveops';
 import { describeRule, eventEligibility } from '../../engine/ultimate/events';
 import { claimEvent, fetchEventStatus, type EventStatus } from '../../state/events';
+// [URG-2] evento de fim de semana automático: leitura única (servidor > local), contador, carta exclusiva
+import { formatCountdown, isWeekendEventId } from '../../engine/ultimate/weekendEvent';
+import { weekendEventView, weekendExclusiveCard } from '../../state/weekendEvent';
 import { regionOf } from '../../data/regions';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
@@ -200,7 +203,7 @@ function boostCard(base: UltCard, boost: number | undefined): UltCard {
 // placa do OVR, 6 substats, foil nas especiais e marca M//CS. `qs` = quick-sell.
 // React.memo: as rows do club têm referência estável entre renders → um toast
 // não re-renderiza a grade inteira de cartas (custo real em coleção grande).
-const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0 }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number }) {
+const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0, ev }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number; ev?: string }) {
   const info = rarityInfo(card.rarity);
   const compact = size < 116;
   const h = Math.round(size * 1.4);
@@ -212,9 +215,15 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
   // [U10] moldura EQUIPADA do clube: só cosmética, por cima da pele de raridade (não no LEGADO)
   const equippedFrameId = useUltimate((st) => st.state.profile.equippedFrame ?? null);
   const frame = legacy ? null : frameById(equippedFrameId);
+  // [URG-2] carta EXCLUSIVA de evento: moldura rosa dupla + selo "EVENTO wknd-…" (por cima da pele de raridade)
+  const evTag = ev ? ev.replace(/^wknd-/, '').toUpperCase() : null;
   return (
     <div style={{ width: size, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: qs != null ? 6 : 0 }}>
-      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: legacy ? 'linear-gradient(165deg, #2a1d05 0%, #141821 55%, #3a2a08 100%)' : s.bg, border: `1.5px solid ${evo > 0 ? '#22c55e' : legacy ? '#f3cf6b' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px #22c55e, 0 0 20px rgba(34,197,94,0.4)` : legacy ? `${s.glow}, 0 0 0 2px rgba(243,207,107,0.35)` : s.glow }}>
+      <div style={{ position: 'relative', width: size, height: h, borderRadius: 14, overflow: 'hidden', background: legacy ? 'linear-gradient(165deg, #2a1d05 0%, #141821 55%, #3a2a08 100%)' : s.bg, border: `1.5px solid ${evo > 0 ? '#22c55e' : ev ? '#f472b6' : legacy ? '#f3cf6b' : s.frame}`, boxShadow: evo > 0 ? `${s.glow}, 0 0 0 2px #22c55e, 0 0 20px rgba(34,197,94,0.4)` : ev ? `${s.glow}, 0 0 0 2px rgba(244,114,182,0.45), 0 0 18px rgba(244,114,182,0.4)` : legacy ? `${s.glow}, 0 0 0 2px rgba(243,207,107,0.35)` : s.glow }}>
+        {ev && <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: '1px dashed rgba(244,114,182,0.7)', pointerEvents: 'none', zIndex: 2 }} />}
+        {evTag && (
+          <span title={`Carta exclusiva do evento ${ev}`} style={{ position: 'absolute', bottom: 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.46}rem`, fontWeight: 900, letterSpacing: '0.6px', padding: '1px 5px', borderRadius: 6, background: '#f472b6', color: '#141821', whiteSpace: 'nowrap' }}>EVENTO {evTag}</span>
+        )}
         <div style={{ position: 'absolute', inset: 0, background: s.sheen, pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', inset: 3, borderRadius: 11, border: `1px solid ${legacy ? 'rgba(243,207,107,0.55)' : frame ? frame.inner : s.inner}`, pointerEvents: 'none' }} />
         {frame && <div style={{ position: 'absolute', inset: 0, borderRadius: 14, border: `2px solid ${frame.border}`, pointerEvents: 'none' }} />}
@@ -279,9 +288,10 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
 // pitch escuro ficava ilegível (nick/labels de baixo contraste, sem stats). Este
 // é um tile dedicado, escuro sólido, com OVR/borda na cor da raridade, NICK EM
 // BRANCO sobre faixa sólida (contraste garantido) + 3 stats visíveis.
-const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112 }: { card: UltCard; evo?: number; size?: number }) {
+const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112, ev }: { card: UltCard; evo?: number; size?: number; ev?: string }) {
   const info = rarityInfo(card.rarity);
-  const c = info.color;
+  // [URG-2] carta exclusiva de evento: borda rosa no tabuleiro também
+  const c = ev ? '#f472b6' : info.color;
   const k = size / 112;
   const stat = (v: number, label: string) => (
     <span key={label} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
@@ -359,10 +369,10 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 }
 
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
-interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId }
+interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId; ev?: string }
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
@@ -737,19 +747,20 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const club = useMemo<ClubRow[]>(() => {
     // agrupa por carta + nível de evolução + estilo (uma Prata +2 é distinta da
     // Prata base; uma cópia com estilo Fragger é distinta da sem estilo).
-    const byKey = new Map<string, { card: UltCard; evo: number; style?: StyleId; ownedIds: string[] }>();
+    const byKey = new Map<string, { card: UltCard; evo: number; style?: StyleId; ev?: string; ownedIds: string[] }>();
     for (const o of state.inventory) {
       const base = index.get(o.cardKey);
       if (!base) continue;
       const evo = Math.min(EVO_MAX, Math.max(0, o.boost ?? 0));
-      const key = `${o.cardKey}#${evo}#${o.style ?? ''}`;
+      // [URG-2] a cópia exclusiva de evento (selo) não se mistura com a cópia comum da mesma carta
+      const key = `${o.cardKey}#${evo}#${o.style ?? ''}#${o.ev ?? ''}`;
       const g = byKey.get(key);
       if (g) g.ownedIds.push(o.id);
-      else byKey.set(key, { card: boostCard(base, evo), evo, style: o.style, ownedIds: [o.id] });
+      else byKey.set(key, { card: boostCard(base, evo), evo, style: o.style, ev: o.ev, ownedIds: [o.id] });
     }
     const rows: ClubRow[] = [];
-    for (const { card, evo, style, ownedIds } of byKey.values()) {
-      rows.push({ card, evo, style, count: ownedIds.length, ownedIds });
+    for (const { card, evo, style, ev, ownedIds } of byKey.values()) {
+      rows.push({ card, evo, style, ev, count: ownedIds.length, ownedIds });
     }
     return rows.sort((a, b) => b.card.ovr - a.card.ovr);
   }, [state.inventory, index]);
@@ -821,10 +832,20 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     void claimEvent(eventId).then((r) => {
       if (!r.ok) { setToast(ct('Ainda não dá pra resgatar (evento em andamento).')); window.setTimeout(() => setToast(''), 2400); return; }
       addCredits(r.credits);
-      setToast(`🏆 ${name}: +${fmt(r.credits)} coins`); window.setTimeout(() => setToast(''), 3000);
+      // [URG-2] carta exclusiva: o servidor já gravou a cópia no ledger; aqui só o espelho local (idempotente por evento)
+      const g = r.exclusiveCardKey ? grantEventCard(eventId, r.exclusiveCardKey) : null;
+      setToast(g?.ok && g.card ? `🏆 ${name}: +${fmt(r.credits)} coins · 🎁 ${ct('carta exclusiva')} ${g.card.nick} (${g.card.ovr})` : `🏆 ${name}: +${fmt(r.credits)} coins`); window.setTimeout(() => setToast(''), 3600);
       setEventStatus((m) => (m[eventId] ? { ...m, [eventId]: { ...m[eventId], claimed: true } } : m));
     });
   };
+  // [URG-2] evento de fim de semana: leitura (servidor mesclado > local), carta exclusiva, entrar na fila (com funil)
+  const wknd = weekendEventView();
+  const wkndCard = weekendExclusiveCard(wknd);
+  const chooseEvent = (id: string | null) => {
+    setRankedEvent(id);
+    if (id && isWeekendEventId(id)) trackUltFunnel('weekend_event_enter', { eventId: id });
+  };
+  const enterWeekendEvent = () => { chooseEvent(wknd.id); setRankedMode('rivals'); go('ranked'); };
   const squadEventCards = squadComplete ? (squadPool as PoolPlayer[]).map((p, i) => { const sc = slotCard(form.slots[i].slot); return { pid: p.id, ovr: sc?.card.ovr ?? p.ovr, region: regionOf(p.player.country), country: p.player.country, role: p.player.role, tier: sc ? rarityInfo(sc.card.rarity).tier : undefined }; }) : [];
   // [W2] card LEGADO (pid rtp_legacy_*) só existe no SEU navegador: o adversário
   // reconstrói o squad pelo pid a partir do dataset do build e não acha —
@@ -1864,7 +1885,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                         const sc = slotCard(fs.slot);
                         return sc ? (
                           <div key={fs.slot} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
-                            <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} />
+                            <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} ev={sc.owned.ev} />
                             <DuelChips card={sc.card} styleId={sc.owned.style} />
                           </div>
                         ) : null;
@@ -2260,6 +2281,42 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     ))}
                   </div>
                 )}
+              </section>
+            );
+          })()}
+          {/* [URG-2] Evento de fim de semana — automático toda semana (sex–dom UTC), carta exclusiva que só cai ali */}
+          {(() => {
+            const remain = wknd.open ? wknd.endsAtMs - Date.now() : wknd.startsAtMs - Date.now();
+            const tone = wknd.open ? '#f472b6' : '#8a93a2';
+            return (
+              <section style={{ borderRadius: '14px', overflow: 'hidden', border: `1px solid ${tone}`, marginBottom: '16px', background: '#0e141b', position: 'relative' }}>
+                <span style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/de_inferno.png)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.14 }} />
+                <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(244,114,182,.18), rgba(13,17,22,.94) 62%)' }} />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 22px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '30px' }}>🎁</span>
+                  <span style={{ flex: 1, minWidth: '200px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 800, color: tone }}>
+                      {wknd.open && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: tone, boxShadow: `0 0 6px 1px ${tone}b0` }} />}
+                      {wknd.open ? ct('Evento de fim de semana · AO VIVO') : ct('Evento de fim de semana')}
+                    </span>
+                    <span style={{ display: 'block', margin: '2px 0', fontSize: '22px', fontWeight: 800, color: '#f2f5f9' }}>{wknd.name}</span>
+                    <span style={{ display: 'block', fontSize: '12.5px', color: '#9aa4b0' }}>
+                      {describeRule(wknd.rule)} · {wknd.open ? `${ct('termina em')} ${formatCountdown(remain)}` : `${ct('começa em')} ${formatCountdown(remain)} (${ct('sexta 00:00 UTC')})`} · {ct('prêmios')}: {wknd.winTiers.map((t) => `${t.wins}V→${fmt(t.credits)}`).join(' · ')}
+                    </span>
+                  </span>
+                  {wkndCard && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <UltCardView card={wkndCard} size={78} ev={wknd.id} />
+                      <span style={{ fontSize: '12px', color: '#9aa4b0', maxWidth: '170px', lineHeight: 1.35 }}>
+                        <b style={{ color: '#f2f5f9', fontSize: '13px' }}>{wkndCard.nick}</b> · {wkndCard.ovr} OVR · {rarityInfo(wkndCard.rarity).label}<br />
+                        {ct('carta exclusiva')} · {wknd.cardAtWins} {ct('vitórias')} · {ct('só neste fim de semana, nunca mais volta')}
+                      </span>
+                    </span>
+                  )}
+                  {wknd.open
+                    ? <button type="button" onClick={enterWeekendEvent} style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontWeight: 800, fontSize: '14px', color: '#141821', background: tone, whiteSpace: 'nowrap', border: 'none', cursor: 'pointer' }}>{ct('Entrar')} →</button>
+                    : <span style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontWeight: 800, fontSize: '13px', color: '#9aa4b0', border: '1px solid #2a323c', whiteSpace: 'nowrap' }}>{ct('Sexta a domingo')}</span>}
+                </div>
               </section>
             );
           })()}
@@ -2995,8 +3052,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                       const baseCard = index.get(row.card.key) ?? row.card;
                       const isDup = (keyCount.get(row.card.key) ?? row.count) > 1;
                       return (
-                        <div key={`${row.card.key}#${row.evo}#${row.style ?? ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                          <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} />
+                        <div key={`${row.card.key}#${row.evo}#${row.style ?? ''}#${row.ev ?? ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                          <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} ev={row.ev} />
                           <DuelChips card={row.card} styleId={row.style} light />
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
@@ -3086,7 +3143,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   {sc ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                       <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
-                        <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={narrow ? 84 : 112} />
+                        <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={narrow ? 84 : 112} ev={sc.owned.ev} />
                       </button>
                       <DuelChips card={sc.card} styleId={sc.owned.style} />
                     </div>
@@ -3144,9 +3201,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                           {st && <span style={{ fontFamily: 'var(--ut-font-mono)' }}>{st.wins}V–{st.losses}D / {st.maxMatches}</span>}
                           {st && (st.closed || st.wins + st.losses >= st.maxMatches) && !st.claimed && st.reward > 0 && <button className="ut-jogar" style={{ padding: '6px 12px' }} onClick={() => doClaimEvent(ev.id, ev.payload.name)}>{ct('Resgatar')} {fmt(st.reward)}</button>}
-                          {!(st && (st.closed || st.wins + st.losses >= st.maxMatches)) && <button className="ut-btn ut-btn--ghost" disabled={!elig.ok} title={elig.ok ? ct('Fila só com quem está neste formato') : (elig.reason ?? '')} onClick={() => setRankedEvent(on ? null : ev.id)} style={{ borderColor: on ? '#29c47a' : undefined }}>{on ? ct('Na fila do evento ✓') : ct('Entrar no evento')}</button>}
+                          {!(st && (st.closed || st.wins + st.losses >= st.maxMatches)) && <button className="ut-btn ut-btn--ghost" disabled={!elig.ok} title={elig.ok ? ct('Fila só com quem está neste formato') : (elig.reason ?? '')} onClick={() => chooseEvent(on ? null : ev.id)} style={{ borderColor: on ? '#29c47a' : undefined }}>{on ? ct('Na fila do evento ✓') : ct('Entrar no evento')}</button>}
                         </div>
                       </div>
+                      {/* [URG-2] carta exclusiva do evento: quem bate `cardAtWins` leva a cópia com selo; nunca volta */}
+                      {ev.payload.exclusiveCardKey && (() => { const c = index.get(ev.payload.exclusiveCardKey); const need = ev.payload.cardAtWins ?? ev.payload.winTiers.reduce((m, t) => Math.max(m, t.wins), 0); return c ? <div style={{ color: '#f472b6', marginTop: 4, fontWeight: 700 }}>🎁 {ct('Carta exclusiva')}: {c.nick} ({c.ovr} OVR · {rarityInfo(c.rarity).label}) {ct('com')} {need} {ct('vitórias')} · {ct('só neste evento')}{st && st.claimed && st.wins >= need ? ` · ${ct('sua')} ✓` : ''}</div> : null; })()}
                       {!elig.ok && <div style={{ color: '#b91c1c', marginTop: 4 }}>✖ {elig.reason}</div>}
                       {!account?.paid && <div style={{ color: 'var(--ut-muted)', marginTop: 4 }}>{ct('Placar e prêmio do evento ficam na conta vitalícia.')}</div>}
                     </div>
