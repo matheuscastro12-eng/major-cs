@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { type Difficulty, type TournamentPool } from '../types';
-import { setCheckoutSrc, trackPaywallView } from '../state/track';
+import { setCheckoutSrc, trackPaywallView, trackUltFunnel } from '../state/track';
+import { loadStreakState } from '../state/dailyStreak'; // [URG-4]
+import { streakStatus } from '../engine/daily/streak'; // [URG-4]
 import { useLang } from '../state/i18n';
 import { getManager } from '../state/manager';
 import { ct } from '../state/career-i18n';
@@ -92,6 +94,13 @@ export function Home({
     if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
     if (accountReady && account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
   }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account]);
+
+  // [URG-4] streak do Diário no card: "🔥 N dias" e, se ainda não jogou hoje,
+  // o aviso vermelho de perda (funil: streak_at_risk_seen, 1x/sessão)
+  const [dStreak] = useState(() => streakStatus(loadStreakState(), Date.now()));
+  useEffect(() => {
+    if (view === 'menu' && onDaily && dStreak.atRisk) trackUltFunnel('streak_at_risk_seen', { days: dStreak.current, hoursLeft: dStreak.hoursLeft });
+  }, [view, onDaily, dStreak]);
 
   // prova social real: contador de Fundadores (null = sem dado → não mostra nada)
   const founders = useFounders();
@@ -247,8 +256,14 @@ export function Home({
                   <span className="rtm-modecard-scrim" />
                   <span className="rtm-modecard-bar" />
                   <span className="rtm-modecard-body">
-                    <span className="rtm-modecard-kicker">{ct('Novo · todo dia')}</span>
+                    <span className="rtm-modecard-kicker">
+                      {ct('Novo · todo dia')}
+                      {dStreak.current >= 1 && <span className="rtm-modecard-streak">🔥 {dStreak.current} {dStreak.current === 1 ? ct('dia') : ct('dias')}</span>}
+                    </span>
                     <span className="rtm-modecard-title">{ct('Diário')}</span>
+                    {dStreak.atRisk && (
+                      <span className="rtm-modecard-streak risk">⚠️ {ct('você perde')} {dStreak.current} {ct('dias em')} {dStreak.hoursLeft}h</span>
+                    )}
                     <span className="rtm-modecard-desc">{ct('Lines Históricas: uma escalação icônica por dia — você lembra os 5? Grátis, sem conta, e o desafio é o mesmo pra todo mundo.')}</span>
                     <span className="rtm-modecard-foot">
                       <span className="rtm-modecard-meta">{ct('1 jogador · 2 min')}</span>

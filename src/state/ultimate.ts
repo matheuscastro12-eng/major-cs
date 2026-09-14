@@ -21,6 +21,8 @@ import { makeRng } from '../engine/rng';
 import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { buildFullCatalog } from '../engine/ultimate/catalog';
 import { COLLECTIONS, collectionKey, evaluateCollections, mergeFrames, normalizeClub } from '../engine/ultimate/cosmetics'; // [U10]
+import { streakKey, streakRewardFor } from '../engine/daily/streak'; // [URG-4]
+import { loadStreakState } from './dailyStreak'; // [URG-4]
 import { pickRewardCard, claimableLevels } from '../engine/ultimate/seasonPass'; // [U09]
 import type { LogoConfig } from '../lib/logoBuilder';
 import { packById, rollPack, PROMO_PACK, type PackDef } from '../engine/ultimate/packs';
@@ -297,6 +299,8 @@ interface UltimateStore {
   setClub: (club: { name: string; logo: LogoConfig | null } | null) => void;
   equipFrame: (id: string | null) => void;
   claimCollection: (id: string) => { ok: boolean; credits?: number; frame?: string };
+  // [URG-4] marco do STREAK DO DIÁRIO (3/7/30/100 dias): coins + moldura, 1× por marco (chave streak:<n>)
+  claimStreakMilestone: (days: number) => { ok: boolean; credits?: number; frame?: string };
   claimStarter: (formationId: string) => UltCard[];
   // SBC + season (P5)
   submitSbc: (sbcId: string, ownedIds: string[]) => { ok: boolean; reason?: string; reward?: SbcReward; grantedCard?: UltCard };
@@ -643,6 +647,21 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
     mirrorUltimateChange(st, s, 'reward', { src: 'collection', id });
     return { ok: true, credits: def.reward.credits, frame: def.reward.frame };
+  },
+  claimStreakMilestone: (days) => {
+    const def = streakRewardFor(days);
+    if (!def) return { ok: false };
+    const st = get().state;
+    const key = streakKey(days);
+    if (st.profile.objectivesClaimed.includes(key)) return { ok: false };
+    if (loadStreakState().best < days) return { ok: false }; // marco não atingido nesta máquina
+    let s = _markObjectiveClaimed(st, key);
+    if (def.coins) s = _addCredits(s, def.coins);
+    if (def.frame) s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, [def.frame]), equippedFrame: s.profile.equippedFrame ?? def.frame } };
+    persist(s);
+    set({ state: s });
+    mirrorUltimateChange(st, s, 'reward', { src: 'streak', days });
+    return { ok: true, credits: def.coins, frame: def.frame };
   },
   setTarget: (cardKey) =>
     set((st) => {

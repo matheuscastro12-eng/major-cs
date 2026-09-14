@@ -6,6 +6,8 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
+import { loadStreakState } from '../../state/dailyStreak'; // [URG-4]
+import { streakStatus } from '../../engine/daily/streak'; // [URG-4]
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
 import { countCompletedEras, legendPlayers } from '../../engine/ultimate/icons';
@@ -2209,6 +2211,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                       <button onClick={() => equipFrame(null)} style={tabBtn(!state.profile.equippedFrame)}>{ct('Padrão')}</button>
                       {FRAMES.map((f) => { const has = ownedFrames.includes(f.id); return <button key={f.id} onClick={() => has && equipFrame(f.id)} disabled={!has} title={has ? f.desc : `${f.desc} · ${f.how}`} style={{ ...tabBtn(state.profile.equippedFrame === f.id), opacity: has ? 1 : .45, borderLeft: `4px solid ${f.border}` }}>{f.name}{!has ? ' 🔒' : ''}</button>; })}
                     </div>
+                    {(() => { const ds = streakStatus(loadStreakState(), Date.now()); return ds.current >= 3 ? <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--ut-muted)' }}>🔥 {ct('Streak do Diário')}: {ds.current} {ct('dias')} · {ct('molduras em 7, 30 e 100')}</div> : null; })()}
                   </div>
                 </div>
                 <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
