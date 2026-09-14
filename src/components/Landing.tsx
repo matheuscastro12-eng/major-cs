@@ -18,6 +18,7 @@ import { dateKeyOf, dayNumberOf } from '../engine/daily/lines';
 import { fetchActiveLiveops } from '../state/liveops';
 import { weekendEventView, weekendExclusiveCard, type WeekendEventView } from '../state/weekendEvent';
 import { formatCountdown } from '../engine/ultimate/weekendEvent';
+import { useCommunityGoalPublic } from '../state/communityGoal'; // [URG-5]
 
 const M = '/maps/';
 
@@ -77,11 +78,29 @@ function Nav({ onAccount, onLogin, onPlay }: { onAccount: () => void; onLogin: (
   );
 }
 
+// [URG-5] META DA COMUNIDADE — barra fina acima da dobra, visível deslogado.
+// Número REAL do servidor (GET público cacheado no edge); sem dado, não renderiza.
+function CommunityGoalBar({ onPlay }: { onPlay: () => void }) {
+  const week = useCommunityGoalPublic();
+  if (!week) return null;
+  const done = week.reached;
+  return (
+    <button type="button" onClick={onPlay} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '8px 14px', border: 'none', borderBottom: '1px solid rgba(97,168,221,.25)', background: done ? 'rgba(41,196,122,.12)' : 'rgba(97,168,221,.1)', color: 'var(--rtm-text-strong)', fontSize: '13px', cursor: 'pointer', flexWrap: 'wrap' }}>
+      <span>🌍 <b>{ct('Meta da comunidade')}:</b> {week.total.toLocaleString('pt-BR')}/{week.target.toLocaleString('pt-BR')} {ct('partidas esta semana')}{done ? ` · ✅ ${ct('batida!')}` : ''}</span>
+      <span style={{ flex: '0 0 auto', width: '120px', height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
+        <span style={{ display: 'block', width: `${week.pct}%`, height: '100%', background: done ? 'var(--rtm-green-bright)' : '#61a8dd' }} />
+      </span>
+      <span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>{ct('Jogar no Ultimate')} →</span>
+    </button>
+  );
+}
+
 function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
   return (
     <section id="topo" style={{ position: 'relative', overflow: 'hidden', marginTop: '-66px', paddingTop: '66px' }}>
       <img src={M + 'mirage.jpg'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }} />
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(900px 500px at 50% 0, rgba(67,130,182,.25), transparent 70%), linear-gradient(180deg, rgba(13,17,22,.7) 0%, rgba(24,29,35,.96) 78%, var(--rtm-bg) 100%)' }} />
+      <div style={{ position: 'relative' }}><CommunityGoalBar onPlay={onPlay} /></div>
       <div className="lp-wrap" style={{ position: 'relative', textAlign: 'center', padding: '56px 22px 44px' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '999px', background: 'rgba(216,169,67,.12)', border: '1px solid var(--rtm-gold-soft)', color: 'var(--rtm-gold)', fontSize: '12px', fontWeight: 700, letterSpacing: '.5px' }}>
           <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--rtm-green-bright)' }} /> {ct('Beta aberto, joga de graça no navegador')}

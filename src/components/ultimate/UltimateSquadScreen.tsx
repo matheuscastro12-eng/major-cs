@@ -6,6 +6,8 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type
 import { Button, Modal } from '../ds';
 import { Flag, PlayerAvatar } from '../ui';
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
+import { loadStreakState } from '../../state/dailyStreak'; // [URG-4]
+import { streakStatus } from '../../engine/daily/streak'; // [URG-4]
 import { activeNotices, dismissNotice, fetchActiveLiveops, isNoticeDismissed, liveopsSnapshot, scheduledSbcs, subscribeLiveops, type LiveopsItem } from '../../state/liveops';
 import { setCloudEnabled } from '../../state/cloud';
 import { countCompletedEras, legendPlayers } from '../../engine/ultimate/icons';
@@ -41,6 +43,8 @@ import { claimEvent, fetchEventStatus, type EventStatus } from '../../state/even
 // [URG-2] evento de fim de semana automático: leitura única (servidor > local), contador, carta exclusiva
 import { formatCountdown, isWeekendEventId } from '../../engine/ultimate/weekendEvent';
 import { weekendEventView, weekendExclusiveCard } from '../../state/weekendEvent';
+import { claimCommunityGoal as claimCommunityGoalOnServer, fetchCommunityGoal, type CommunityGoalView } from '../../state/communityGoal'; // [URG-5]
+import { communityShareText, describeTimeLeft } from '../../engine/ultimate/communityGoal'; // [URG-5]
 import { regionOf } from '../../data/regions';
 import { FRIENDLY_CREDITS, GAUNTLET_WIN_CREDITS } from '../../engine/ultimate/state';
 import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
@@ -75,7 +79,7 @@ import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { setCheckoutSrc, track, trackPaywallView, trackUltFunnel } from '../../state/track';
 import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
-import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank } from '../../state/ranking';
+import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank, type OvertakenBy } from '../../state/ranking';
 import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
 import { WeekendLeague } from '../online/WeekendLeague';
 import { UtPanel, UtEmpty } from './UtPanel';
@@ -88,6 +92,7 @@ import {
 } from 'lucide-react';
 import { evaluateObjectives } from '../../engine/ultimate/objectives';
 import { evaluateSeasonMilestone, evaluateSeasonTiers, SEASON_MILESTONE } from '../../engine/ultimate/seasonRewards';
+import { applyEditionBoost, editionLabel, editionStatus, SEASON_EDITION_BOOST, SEASON_PACK, seasonEnding } from '../../engine/ultimate/seasonEdition'; // [URG-1]
 import { missionsForDay, missionProgress } from '../../engine/ultimate/missions';
 import { missionsForWeek, weeklyFactsOf, weeklyProgress, weekKey } from '../../engine/ultimate/weeklyMissions';
 import { UltimateDuel, type DuelPlayArgs } from './UltimateDuel';
@@ -99,6 +104,21 @@ import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQUAD_DUEL_CAP, type StyleId } from '../../engine/ultimate/traits';
 import '../../styles/ultimate.css';
+
+// [URG-3] deep link do e-mail "rival te passou": /ultimate?tab=ranqueada abre a
+// aba Ranqueada. Lido UMA vez no carregamento do módulo (mesmo motivo do
+// ?duelo= em App.tsx: StrictMode) e limpo da URL.
+const TAB_FROM_URL = (() => {
+  try {
+    const u = new URL(window.location.href);
+    const t = u.searchParams.get('tab');
+    if (t === null) return null;
+    u.searchParams.delete('tab');
+    window.history.replaceState({}, '', u.pathname + u.search + u.hash);
+    return t === 'ranqueada' || t === 'ranked' ? ('ranked' as const) : null;
+  } catch { return null; }
+})();
+const LAST_SEEN_KEY = 'rtm-ult-last-seen';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 // [U06] identidade de uma sessão casual nova (seed + matchId + relógio). Fora do componente
@@ -203,7 +223,9 @@ function boostCard(base: UltCard, boost: number | undefined): UltCard {
 // placa do OVR, 6 substats, foil nas especiais e marca M//CS. `qs` = quick-sell.
 // React.memo: as rows do club têm referência estável entre renders → um toast
 // não re-renderiza a grade inteira de cartas (custo real em coleção grande).
-const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0, ev }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number; ev?: string }) {
+// [URG-1] `ed` = selo de edição da temporada: em forma (S3, laranja, +OVR) ou Legado S3 (cinza, OVR base)
+type EditionBadge = { n: number; current: boolean } | null;
+const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo = 0, ev, ed = null }: { card: UltCard; size?: number; count?: number; qs?: number; evo?: number; ev?: string; ed?: EditionBadge }) {
   const info = rarityInfo(card.rarity);
   const compact = size < 116;
   const h = Math.round(size * 1.4);
@@ -239,6 +261,13 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
         )}
         {count != null && count > 1 && (
           <span style={{ position: 'absolute', top: evo > 0 ? 25 : 6, right: 6, zIndex: 2, fontSize: '0.6rem', fontWeight: 900, padding: '1px 6px', borderRadius: 10, background: 'rgba(0,0,0,0.55)', color: '#fff' }}>×{count}</span>
+        )}
+        {/* [URG-1] selo da edição: desce quando o LEGADO/moldura já ocupa o canto */}
+        {ed && (
+          <span title={ed.current ? `${ct('Edição da temporada')} ${editionLabel(ed.n)} · +${SEASON_EDITION_BOOST} OVR ${ct('até o fim da temporada')}` : `${ct('Legado')} ${editionLabel(ed.n)} · ${ct('a temporada acabou, OVR base')}`}
+            style={{ position: 'absolute', top: legacy || frame?.badge ? 25 : 6, left: 6, zIndex: 2, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, letterSpacing: '0.6px', padding: '1px 6px', borderRadius: 6, background: ed.current ? '#f97316' : 'rgba(100,100,110,0.85)', color: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
+            {ed.current ? editionLabel(ed.n) : `${ct('LEGADO')} ${editionLabel(ed.n)}`}
+          </span>
         )}
         <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: `${px}px ${px}px ${Math.round(size * 0.05)}px` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
@@ -288,7 +317,7 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
 // pitch escuro ficava ilegível (nick/labels de baixo contraste, sem stats). Este
 // é um tile dedicado, escuro sólido, com OVR/borda na cor da raridade, NICK EM
 // BRANCO sobre faixa sólida (contraste garantido) + 3 stats visíveis.
-const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112, ev }: { card: UltCard; evo?: number; size?: number; ev?: string }) {
+const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112, ev, ed = null }: { card: UltCard; evo?: number; size?: number; ev?: string; ed?: EditionBadge }) {
   const info = rarityInfo(card.rarity);
   // [URG-2] carta exclusiva de evento: borda rosa no tabuleiro também
   const c = ev ? '#f472b6' : info.color;
@@ -315,6 +344,7 @@ const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112, ev }: { c
       <div style={{ background: 'rgba(0,0,0,0.42)', padding: `${k * 3}px 6px`, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
         <span style={{ color: '#fff', fontWeight: 900, fontSize: `${k * 0.76}rem`, textTransform: 'uppercase', letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.nick}</span>
         {evo > 0 && <span style={{ fontSize: '0.52rem', fontWeight: 900, color: '#22c55e' }}>✦{evo}</span>}
+        {ed && <span style={{ fontSize: '0.5rem', fontWeight: 900, color: ed.current ? '#fb923c' : 'rgba(255,255,255,0.45)' }}>{ed.current ? editionLabel(ed.n) : `L·${editionLabel(ed.n)}`}</span>}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-around', padding: `${k * 5}px 6px ${k * 3}px` }}>
         {stat(card.stats.mira, 'MIR')}{stat(card.stats.reflexo, 'REF')}{stat(card.stats.clutch, 'CLU')}
@@ -369,12 +399,12 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 }
 
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
-interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId; ev?: string }
+interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId; ev?: string; ed?: EditionBadge }
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, claimCommunityGoal, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>('hub');
+  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>(TAB_FROM_URL ?? 'hub');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
@@ -403,7 +433,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // marco da temporada "Escolha um Lendário": modal do picker + carta escolhida
   const [msPick, setMsPick] = useState(false);
   const [msSel, setMsSel] = useState<string | null>(null);
-  const [seasonRoll, setSeasonRoll] = useState<{ credits: number; newElo: number } | null>(null);
+  const [seasonRoll, setSeasonRoll] = useState<{ credits: number; newElo: number; legacyCount: number; prevN: number; newN: number } | null>(null);
   const [toast, setToast] = useState<string>('');
   const [navMenu, setNavMenu] = useState<'clube' | 'mercado' | 'more' | null>(null);
   const [clubFilter, setClubFilter] = useState<'all' | 'bronze' | 'silver' | 'gold' | 'special'>('all');
@@ -454,6 +484,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, account?.paid, liveEvents.length]);
+  // [URG-5] META COMUNITÁRIA da semana: busca leve ao abrir o Hub (público sem
+  // conta; com token traz a minha contribuição). `cgTick` força re-fetch após o claim.
+  const [cg, setCg] = useState<CommunityGoalView | null>(null);
+  const [cgTick, setCgTick] = useState(0);
+  const [cgBusy, setCgBusy] = useState(false);
+  useEffect(() => {
+    if (tab !== 'hub') return;
+    let on = true;
+    void fetchCommunityGoal().then((v) => { if (on && v) setCg(v); });
+    return () => { on = false; };
+  }, [tab, account?.email, cgTick]);
   useEffect(() => {
     if (!duelInvite) return;
     clearDuelInvite();
@@ -528,6 +569,26 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     : undefined;
   const daily = computeNextDaily(state.profile.daily.streakDay, state.profile.daily.lastClaim, dateKey(new Date()));
   const displayName = account?.nick || account?.email?.split('@')[0] || 'Manager';
+
+  // [URG-3] "fulano te passou": ultrapassagens desde a última visita ao Hub
+  // (rtm-ult-last-seen). UMA consulta por sessão, só conta paga (ranking salvo);
+  // a última visita é carimbada assim que a resposta chega. Best-effort.
+  const [overtaken, setOvertaken] = useState<OvertakenBy[]>([]);
+  const overtakeCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!account?.paid || tab !== 'hub' || overtakeCheckedRef.current) return;
+    overtakeCheckedRef.current = true;
+    let since = 0; try { since = Number(localStorage.getItem(LAST_SEEN_KEY)) || 0; } catch { /* sem storage */ }
+    if (!since) since = Date.now() - 7 * 86_400_000; // 1ª visita: última semana
+    let alive = true;
+    void fetchMyRank(displayName, since).then((r) => {
+      try { localStorage.setItem(LAST_SEEN_KEY, String(Date.now())); } catch { /* sem storage */ }
+      if (!alive || !r?.overtakenBy?.length) return;
+      setOvertaken(r.overtakenBy);
+      trackUltFunnel('rival_overtaken_seen', { count: r.overtakenBy.length });
+    });
+    return () => { alive = false; };
+  }, [account, tab, displayName]);
   // navegação por dropdown fecha ao clicar fora
   useEffect(() => {
     if (!navMenu) return;
@@ -685,7 +746,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // Missões diárias/semanais abrem o dia/semana no mount também.
   useEffect(() => {
     const r = tickSeason();
-    if (r.rolled) setSeasonRoll({ credits: r.credits, newElo: r.newElo });
+    if (r.rolled) setSeasonRoll({ credits: r.credits, newElo: r.newElo, legacyCount: r.legacyCount, prevN: r.prevN, newN: r.newN });
     syncMissions(dateKey(new Date()));
     syncWeekly(weekKey(new Date()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -719,6 +780,35 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // [URG-1] fim da temporada: quanto falta e quantas cópias vão perder o +OVR.
+  // Re-derivado pelo tick do relógio (o contador "some em Xd Yh" anda sozinho).
+  const ending = useMemo(() => {
+    // impureza deliberada: relógio re-lido a cada tick do clock
+    void clock;
+    return seasonEnding(state.profile.season, state.inventory, Date.now());
+  }, [state.profile.season, state.inventory, clock]);
+  // bloco "A temporada acaba em Xd" — o MESMO bloco no Hub e na Loja
+  const seasonEndingBlock = (where: 'hub' | 'store') => {
+    if (!ending.active || ending.seasonN == null) return null;
+    const urgent = ending.days <= 7;
+    const color = urgent ? '#b91c1c' : '#c2410c';
+    return (
+      <section style={{ borderRadius: 14, border: `1px solid ${urgent ? 'rgba(185,28,28,.45)' : 'rgba(249,115,22,.45)'}`, background: urgent ? 'rgba(185,28,28,.07)' : 'rgba(249,115,22,.08)', padding: '12px 18px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color }}>⏳ {ct('A TEMPORADA ACABA EM')} {ending.dd}d {ending.hh}h</div>
+          <div style={{ fontWeight: 900, fontSize: '0.95rem' }}>
+            {ending.losing > 0
+              ? `${ending.losing} ${ending.losing === 1 ? ct('carta sua perde') : ct('cartas suas perdem')} +${SEASON_EDITION_BOOST} OVR ${ending.losing === 1 ? ct('e vira') : ct('e viram')} ${ct('Legado')} ${editionLabel(ending.seasonN)}`
+              : `${ct('Você ainda não tem nenhuma carta')} ${editionLabel(ending.seasonN)} ${ct('em forma')}`}
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--ut-muted)' }}>
+            {ct('O Pacote da Temporada some da Loja na virada. Cartas Legado continuam jogáveis, só sem o bônus.')}
+          </div>
+        </div>
+        {where === 'hub' && <button className="ut-jogar" style={{ padding: '10px 18px', background: '#f97316' }} onClick={() => go('store')}><Package size={15} /> {ct('Pacote da Temporada')}</button>}
+      </section>
+    );
+  };
   // TOTW da semana (Loja): derivado no memo (relógio/catálogo fora do render) e
   // re-derivado pelo tick do relógio — o countdown anda e a virada fecha o card.
   const totwView = useMemo(() => {
@@ -744,26 +834,36 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.profile.w, state.profile.peakElo, state.profile.streak, state.inventory.length, state.profile.onboarded]);
 
+  // [URG-1] temporada corrente: decide se uma cópia com `ed` está em forma (+OVR) ou é Legado
+  const seasonN = state.profile.season?.n;
+  const editionOf = useCallback((o: Pick<OwnedCard, 'ed'>): EditionBadge => {
+    const st = editionStatus(o, seasonN);
+    return st && o.ed != null ? { n: o.ed, current: st === 'current' } : null;
+  }, [seasonN]);
+  // carta COMO O JOGADOR A VÊ/JOGA: evolução + edição da temporada. Toda UI que
+  // mostra OVR de cópia possuída (e o snapshot do PvP) passa por aqui.
+  const viewCard = useCallback((base: UltCard, o: Pick<OwnedCard, 'boost' | 'ed'>): UltCard => applyEditionBoost(boostCard(base, o.boost), o, seasonN), [seasonN]);
+
   const club = useMemo<ClubRow[]>(() => {
-    // agrupa por carta + nível de evolução + estilo (uma Prata +2 é distinta da
-    // Prata base; uma cópia com estilo Fragger é distinta da sem estilo).
-    const byKey = new Map<string, { card: UltCard; evo: number; style?: StyleId; ev?: string; ownedIds: string[] }>();
+    // agrupa por carta + nível de evolução + estilo + edição (uma Prata +2 é distinta da
+    // Prata base; uma cópia com estilo Fragger é distinta da sem estilo; uma S3 da comum).
+    const byKey = new Map<string, { card: UltCard; evo: number; style?: StyleId; ev?: string; ed: EditionBadge; ownedIds: string[] }>();
     for (const o of state.inventory) {
       const base = index.get(o.cardKey);
       if (!base) continue;
       const evo = Math.min(EVO_MAX, Math.max(0, o.boost ?? 0));
-      // [URG-2] a cópia exclusiva de evento (selo) não se mistura com a cópia comum da mesma carta
-      const key = `${o.cardKey}#${evo}#${o.style ?? ''}#${o.ev ?? ''}`;
+      const ed = editionOf(o);
+      const key = `${o.cardKey}#${evo}#${o.style ?? ''}#${ed ? `${ed.n}${ed.current ? '+' : '-'}` : ''}#${o.ev ?? ''}`; // [URG-2] a cópia exclusiva de evento não se mistura com a comum
       const g = byKey.get(key);
       if (g) g.ownedIds.push(o.id);
-      else byKey.set(key, { card: boostCard(base, evo), evo, style: o.style, ev: o.ev, ownedIds: [o.id] });
+      else byKey.set(key, { card: viewCard(base, o), evo, style: o.style, ev: o.ev, ed, ownedIds: [o.id] });
     }
     const rows: ClubRow[] = [];
-    for (const { card, evo, style, ev, ownedIds } of byKey.values()) {
-      rows.push({ card, evo, style, ev, count: ownedIds.length, ownedIds });
+    for (const { card, evo, style, ev, ed, ownedIds } of byKey.values()) {
+      rows.push({ card, evo, style, ev, ed, count: ownedIds.length, ownedIds });
     }
     return rows.sort((a, b) => b.card.ovr - a.card.ovr);
-  }, [state.inventory, index]);
+  }, [state.inventory, index, editionOf, viewCard]);
 
   const totalCards = state.inventory.length;
   const uniqueCards = club.length;
@@ -785,7 +885,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     if (!entry?.ownedId) return null;
     const owned = ownedById.get(entry.ownedId);
     const base = owned ? index.get(owned.cardKey) : undefined;
-    return owned && base ? { owned, card: boostCard(base, owned.boost) } : null;
+    return owned && base ? { owned, card: viewCard(base, owned) } : null;
   };
   const nodes: ChemNode[] = form.slots.map((fs) => {
     const sc = slotCard(fs.slot);
@@ -846,6 +946,30 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     if (id && isWeekendEventId(id)) trackUltFunnel('weekend_event_enter', { eventId: id });
   };
   const enterWeekendEvent = () => { chooseEvent(wknd.id); setRankedMode('rivals'); go('ranked'); };
+  // [URG-5] compartilhar a meta (texto pronto: share sheet no celular, clipboard no desktop) e resgatar
+  const doShareCommunityGoal = () => {
+    if (!cg) return;
+    const text = communityShareText(cg.week.total, { ...cg.week, reward: cg.week.reward });
+    trackUltFunnel('community_goal_share', { weekId: cg.week.id });
+    const nav = navigator as Navigator & { share?: (d: { text: string }) => Promise<void> };
+    if (nav.share) { void nav.share({ text }).catch(() => { void navigator.clipboard?.writeText(text); }); return; }
+    void navigator.clipboard?.writeText(text);
+    flash(ct('Texto copiado — cola no grupo e chama a galera.'), 2400);
+  };
+  const doClaimCommunityGoal = (weekId: string) => {
+    if (cgBusy) return;
+    setCgBusy(true);
+    void claimCommunityGoalOnServer(weekId).then((r) => {
+      setCgBusy(false);
+      if (!r.ok) { flash(r.error === 'in_progress' ? ct('A meta ainda não fechou.') : r.error === 'too_few_matches' ? ct('Precisa de 3+ partidas online na semana.') : ct('Não deu pra resgatar agora.'), 2600); return; }
+      if (r.replayed || r.credits <= 0) { flash(ct('Prêmio já resgatado.'), 2000); setCgTick((t) => t + 1); return; }
+      const got = claimCommunityGoal(weekId, r.credits, r.packTier);
+      trackUltFunnel('community_goal_claim', { weekId, packTier: r.packTier ?? '' });
+      flash(`🌍 ${ct('Meta da comunidade')}: +${fmt(got.credits)} coins${got.cards.length ? ` · ${ct('Pacote Ouro')}` : ''}`, 3200);
+      if (got.cards.length) setReveal([...got.cards].sort((a, b) => b.ovr - a.ovr));
+      setCgTick((t) => t + 1);
+    });
+  };
   const squadEventCards = squadComplete ? (squadPool as PoolPlayer[]).map((p, i) => { const sc = slotCard(form.slots[i].slot); return { pid: p.id, ovr: sc?.card.ovr ?? p.ovr, region: regionOf(p.player.country), country: p.player.country, role: p.player.role, tier: sc ? rarityInfo(sc.card.rarity).tier : undefined }; }) : [];
   // [W2] card LEGADO (pid rtp_legacy_*) só existe no SEU navegador: o adversário
   // reconstrói o squad pelo pid a partir do dataset do build e não acha —
@@ -1268,7 +1392,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       ? Math.trunc(preferPrice)
       : Math.round((b.min + b.max) / 3); // sugestão ~valor estimado
     setMktPrice(String(Math.min(b.max, Math.max(b.min, suggested))));
-    setMktSellTarget({ o, card: boostCard(base, o.boost) });
+    setMktSellTarget({ o, card: viewCard(base, o) });
   };
 
   const doMktList = async () => {
@@ -1770,6 +1894,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           return;
         }
         setPackFromCloud(res.source === 'server');
+        if (pack.id === SEASON_PACK.id) trackUltFunnel('season_pack_open', { season: seasonN ?? 0 }); // [URG-1]
         setReveal([...res.cards].sort((a, b) => b.ovr - a.ovr));
       } finally { setPackBusy(null); }
     })();
@@ -1885,7 +2010,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                         const sc = slotCard(fs.slot);
                         return sc ? (
                           <div key={fs.slot} className="ut-vs__walk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, ['--wi' as string]: wi }}>
-                            <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} ev={sc.owned.ev} />
+                            <UltCardView card={sc.card} size={82} evo={sc.owned.boost ?? 0} ev={sc.owned.ev} ed={editionOf(sc.owned)} />
                             <DuelChips card={sc.card} styleId={sc.owned.style} />
                           </div>
                         ) : null;
@@ -2117,6 +2242,19 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
 
       {tab === 'hub' && (
         <>
+          {/* [URG-3] rival te passou desde a última visita — gatilho de retorno pra ranqueada */}
+          {overtaken.length > 0 && (
+            <section style={{ borderRadius: 14, border: '1px solid #dc262655', background: 'rgba(220,38,38,.07)', padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 800, fontSize: '0.68rem', letterSpacing: '1.4px', color: '#b91c1c' }}>⚠️ {ct('RIVAL NA SUA FRENTE')}</div>
+                <div style={{ fontWeight: 800 }}>{overtaken[0].nick} {ct('te passou')}. {ct('Você caiu pra')} {overtaken[0].pos}º{overtaken.length > 1 ? ` · +${overtaken.length - 1} ${ct('outro(s) te passaram')}` : ''}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="ut-jogar" style={{ padding: '10px 18px' }} onClick={() => { setOvertaken([]); setRankedMode('rivals'); go('ranked'); }}><Zap size={15} /> {ct('Jogar ranqueada')}</button>
+                <button className="ut-btn ut-btn--ghost" style={{ padding: '8px 12px', fontSize: '0.78rem' }} onClick={() => setOvertaken([])}>{ct('Fechar')}</button>
+              </div>
+            </section>
+          )}
           {/* [U06] partida casual em andamento — retomar (a seed e as decisões estão guardadas) */}
           {liveSession && (
             <section style={{ borderRadius: 14, border: '1px solid #2563eb55', background: 'rgba(37,99,235,.06)', padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
@@ -2124,6 +2262,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               <button className="ut-jogar" style={{ padding: '10px 18px' }} onClick={() => { if (liveSession.status === 'done') finalizeSession(liveSession); else { setResult(null); setLive(null); go('hub'); setLiveSessionState({ ...liveSession }); } }}><Zap size={15} /> {ct('Retomar')}</button>
             </section>
           )}
+          {/* [URG-1] fim de temporada com consequência: o que o jogador vai perder */}
+          {seasonEndingBlock('hub')}
           {/* [U05] PRIMEIRA SESSÃO — próximo passo explícito até a 2ª partida; dispensável */}
           {journeyNext && (() => {
             const step = journeyNext; const info = STEP_INFO[step]; const prog = journeyProgress(journey);
@@ -2176,6 +2316,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                       <button onClick={() => equipFrame(null)} style={tabBtn(!state.profile.equippedFrame)}>{ct('Padrão')}</button>
                       {FRAMES.map((f) => { const has = ownedFrames.includes(f.id); return <button key={f.id} onClick={() => has && equipFrame(f.id)} disabled={!has} title={has ? f.desc : `${f.desc} · ${f.how}`} style={{ ...tabBtn(state.profile.equippedFrame === f.id), opacity: has ? 1 : .45, borderLeft: `4px solid ${f.border}` }}>{f.name}{!has ? ' 🔒' : ''}</button>; })}
                     </div>
+                    {(() => { const ds = streakStatus(loadStreakState(), Date.now()); return ds.current >= 3 ? <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--ut-muted)' }}>🔥 {ct('Streak do Diário')}: {ds.current} {ct('dias')} · {ct('molduras em 7, 30 e 100')}</div> : null; })()}
                   </div>
                 </div>
                 <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
@@ -2317,6 +2458,43 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                     ? <button type="button" onClick={enterWeekendEvent} style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontWeight: 800, fontSize: '14px', color: '#141821', background: tone, whiteSpace: 'nowrap', border: 'none', cursor: 'pointer' }}>{ct('Entrar')} →</button>
                     : <span style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontWeight: 800, fontSize: '13px', color: '#9aa4b0', border: '1px solid #2a323c', whiteSpace: 'nowrap' }}>{ct('Sexta a domingo')}</span>}
                 </div>
+              </section>
+            );
+          })()}
+          {/* [URG-5] META DA COMUNIDADE — a semana inteira joga junto; barra grande + compartilhar */}
+          {cg && (() => {
+            const w = cg.week; const mine = cg.mine; const lw = cg.lastWeek;
+            const done = w.reached;
+            const tone = done ? '#29c47a' : '#61a8dd';
+            const pendingLast = lw && lw.claimable && !lw.claimed;
+            const canClaim = !!mine && mine.claimable && !mine.claimed;
+            return (
+              <section style={{ borderRadius: '14px', border: `1px solid ${done ? '#29c47a' : '#24313f'}`, marginBottom: '16px', background: '#0e141b', padding: '16px 20px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '26px' }}>🌍</span>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ fontSize: '11px', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 800, color: tone }}>{ct('Meta da comunidade')} · {ct('semana')} {w.id.slice(-2)}</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#f2f5f9', margin: '2px 0' }}>{done ? `✅ ${ct('Meta batida!')}` : `${fmt(w.total)}/${fmt(w.target)} ${ct('partidas')}`}</div>
+                    <div style={{ fontSize: '12.5px', color: '#9aa4b0' }}>
+                      {done ? `${fmt(w.total)}/${fmt(w.target)} ${ct('partidas')} · ` : ''}{w.closed ? ct('semana encerrada') : `${ct('termina em')} ${describeTimeLeft(Date.now(), w.endsAt)}`}
+                      {mine ? ` · ${ct('você contribuiu com')} ${mine.myMatches}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {canClaim && <Button variant="gold" onClick={() => doClaimCommunityGoal(w.id)} disabled={cgBusy}>{ct('Resgatar')} 🎁</Button>}
+                    {pendingLast && lw && <Button variant="gold" onClick={() => doClaimCommunityGoal(lw.id)} disabled={cgBusy}>{ct('Resgatar semana passada')} 🎁</Button>}
+                    <Button variant="ghost" onClick={doShareCommunityGoal}>{ct('Compartilhar')} 📣</Button>
+                  </div>
+                </div>
+                <div style={{ marginTop: '12px', height: '14px', borderRadius: '999px', background: '#1a222c', overflow: 'hidden' }}>
+                  <div style={{ width: `${w.pct}%`, height: '100%', borderRadius: '999px', background: done ? 'linear-gradient(90deg,#1f8f5a,#29c47a)' : 'linear-gradient(90deg,#2f6f9e,#61a8dd)', transition: 'width .6s ease' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '12px', color: '#8a93a2', flexWrap: 'wrap', gap: '6px' }}>
+                  <span>{w.pct}% · {done ? ct('liberado pra quem jogou 3+') : `${ct('faltam')} ${fmt(w.remaining)}`}</span>
+                  <span>🪙 {fmt(w.reward.credits)} {ct('coins')} ({w.reward.minMatches}+ {ct('partidas')}) · 🎁 {ct('Pacote Ouro')} ({w.reward.packMinMatches}+)</span>
+                </div>
+                {mine?.claimed && <div style={{ marginTop: '6px', fontSize: '12px', color: '#29c47a' }}>✓ {ct('Prêmio desta semana resgatado.')}</div>}
+                {!mine && <div style={{ marginTop: '6px', fontSize: '12px', color: '#8a93a2' }}>{ct('Ranqueada, duelo e Major da Semana contam. Entre na conta pra sua contribuição valer.')}</div>}
               </section>
             );
           })()}
@@ -2897,6 +3075,26 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               {ct('Tudo aqui também é conquistável jogando — comprar só acelera.')}
             </p>
           </div>
+          {seasonEndingBlock('store')}
+          {/* [URG-1] Pacote da Temporada — só vende enquanto a temporada está ativa.
+              TODAS as cartas saem em forma (+2 OVR) e o card mostra quando ele some. */}
+          {ending.active && ending.seasonN != null && (() => {
+            const afford = credits >= SEASON_PACK.cost;
+            return (
+              <div className="ut-pack" style={{ background: `linear-gradient(155deg, ${SEASON_PACK.color} 0%, ${SEASON_PACK.color}dd 55%, ${SEASON_PACK.color}aa 100%)`, marginBottom: 12 }}>
+                <div className="ut-pack__shine" />
+                <div className="ut-pack__art"><Flame size={44} strokeWidth={1.4} /></div>
+                <div className="ut-pack__name">{ct('Pacote da Temporada')} · {ct('Edição')} {editionLabel(ending.seasonN)}</div>
+                <div className="ut-pack__desc">{ct('7 cartas, 2 Ouro ou melhor garantidas — TODAS em forma: +2 OVR até o fim da temporada. Depois viram Legado')} {editionLabel(ending.seasonN)}.</div>
+                <div className="ut-pack__desc" style={{ opacity: .85, fontSize: '0.68rem' }}>{packOddsLine(SEASON_PACK)} · {ct('pacotes comuns: 10% por carta de sair em forma')}</div>
+                <div className="ut-pack__desc" style={{ fontWeight: 800 }}>⏳ {ct('Some em')} {ending.dd}d {ending.hh}h</div>
+                <button className="ut-pack__buy" onClick={() => buy(SEASON_PACK)} disabled={!afford || packBusy != null} title={afford ? ct('Abrir pacote') : ct('Créditos insuficientes.')}>
+                  {packBusy === SEASON_PACK.id ? ct('Abrindo…') : <>{afford ? <Coins size={15} /> : <Lock size={14} />} {fmt(SEASON_PACK.cost)}</>}
+                </button>
+                {!afford && <ShortfallLine missing={SEASON_PACK.cost - credits} onEarn={() => { setRankedMode('casual'); go('ranked'); }} onBuy={() => document.querySelector('.ut-coinshop')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />}
+              </div>
+            );
+          })()}
           {/* Pacote Promo — só vende no mês do tema (rotaciona todo mês). O card
               carrega o nome do tema e a contagem regressiva até a rotação. */}
           {(() => {
@@ -3053,7 +3251,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                       const isDup = (keyCount.get(row.card.key) ?? row.count) > 1;
                       return (
                         <div key={`${row.card.key}#${row.evo}#${row.style ?? ''}#${row.ev ?? ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                          <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} ev={row.ev} />
+                          <UltCardView card={row.card} count={row.count} size={140} qs={quickSellValue(baseCard.rarity, baseCard.ovr, isDup)} evo={row.evo} ev={row.ev} ed={row.ed} />
                           <DuelChips card={row.card} styleId={row.style} light />
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => sellOne(row)} style={sellBtn} title={ct('Quick-sell')}>
@@ -3143,7 +3341,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   {sc ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                       <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
-                        <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={narrow ? 84 : 112} ev={sc.owned.ev} />
+                        <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={narrow ? 84 : 112} ev={sc.owned.ev} ed={editionOf(sc.owned)} />
                       </button>
                       <DuelChips card={sc.card} styleId={sc.owned.style} />
                     </div>
@@ -3779,12 +3977,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         for (const o of state.inventory) {
           const b = index.get(o.cardKey);
           if (!b) continue;
-          const k = `${o.cardKey}#${o.boost ?? 0}`;
+          const k = `${o.cardKey}#${o.boost ?? 0}#${o.ed ?? ''}`;
           const g = groups.get(k);
           if (g) {
             g.n++;
             if (g.o.locked === 'squad' && o.locked !== 'squad') g.o = o; // prefere cópia livre
-          } else groups.set(k, { o, card: boostCard(b, o.boost), n: 1 });
+          } else groups.set(k, { o, card: viewCard(b, o), n: 1 });
         }
         const cands = [...groups.values()]
           .sort((a, b) => (Number(roleFitsSlot(b.card.role, slotRole)) - Number(roleFitsSlot(a.card.role, slotRole))) || b.card.ovr - a.card.ovr);
@@ -3800,7 +3998,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   const fits = roleFitsSlot(card.role, slotRole);
                   return (
                     <button key={o.id} onClick={() => { placeInSquad(pickSlot, o.id); trackUltFunnel('squad_adjusted'); if (journeyNext === 'adjust') journeyDone('adjust'); setPickSlot(null); }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: fits ? 1 : 0.72 }}>
-                      <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} />
+                      <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} ed={editionOf(o)} />
                       {!fits && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(229,138,138,0.85)', color: '#fff' }}>{ct('fora')}</span>}
                       {o.locked === 'squad' && <span style={{ position: 'absolute', bottom: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
                     </button>
@@ -3820,12 +4018,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         for (const o of state.inventory) {
           const b = index.get(o.cardKey);
           if (!b) continue;
-          const k = `${o.cardKey}#${o.boost ?? 0}#${o.style ?? ''}`;
+          const k = `${o.cardKey}#${o.boost ?? 0}#${o.style ?? ''}#${o.ed ?? ''}`;
           const g = groups.get(k);
           if (g) {
             g.n++;
             if (g.o.locked !== 'squad' && o.locked === 'squad') g.o = o; // prefere a escalada
-          } else groups.set(k, { o, card: boostCard(b, o.boost), n: 1 });
+          } else groups.set(k, { o, card: viewCard(b, o), n: 1 });
         }
         const cands = [...groups.values()].sort((a, b) =>
           (Number(b.o.locked === 'squad') - Number(a.o.locked === 'squad')) || (b.card.stats[def.stat] - a.card.stats[def.stat]) || b.card.ovr - a.card.ovr);
@@ -3842,7 +4040,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                   if (r.ok) { flash(`🧪 ${ct('Estilo')} ${def.name} ${ct('aplicado em')} ${card.nick} · -${fmt(r.cost ?? STYLE_COST)} 🪙`, 2400); setStylePick(null); }
                   else flash(r.reason === 'same' ? ct('Essa cópia já tem esse estilo.') : r.reason === 'insufficient' ? ct('Créditos insuficientes.') : ct('Não foi possível aplicar o estilo.'));
                 }} style={{ position: 'relative', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} />
+                  <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} ed={editionOf(o)} />
                   <span style={{ fontSize: '0.62rem', fontWeight: 800, color: bonusOf(card) >= 1.5 ? '#16a34a' : bonusOf(card) >= 1.0 ? '#92600a' : 'var(--em-muted,#8a99ab)' }}>
                     +{bonusOf(card).toFixed(1)} {ct('força eq.')}{o.style ? ` · ${ct('troca')} ${styleById(o.style)?.icon ?? ''}` : ''}
                   </span>
@@ -3951,6 +4149,13 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             <p className="muted small" style={{ margin: 0 }}>{ct('A temporada virou. Seu RP foi suavizado pra manter a disputa acirrada e você levou um bônus de fim de temporada.')}</p>
             <div style={{ fontSize: '0.95rem', fontWeight: 900 }}>{ct('Novo RP')}: <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{seasonRoll.newElo}</span></div>
             {seasonRoll.credits > 0 && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#92600a', fontWeight: 900 }}><Coins size={15} /> +{fmt(seasonRoll.credits)}</div>}
+            {/* [URG-1] a perda visível e a saída: cartas que viraram Legado + edição nova na Loja */}
+            {seasonRoll.legacyCount > 0 && (
+              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#6b7280' }}>
+                {seasonRoll.legacyCount} {seasonRoll.legacyCount === 1 ? ct('carta sua virou') : ct('cartas suas viraram')} {ct('Legado')} {editionLabel(seasonRoll.prevN)} ({ct('perderam o')} +{SEASON_EDITION_BOOST} OVR, {ct('continuam jogáveis')})
+              </div>
+            )}
+            <div style={{ fontSize: '0.82rem', fontWeight: 900, color: '#c2410c' }}>{ct('Edição')} {editionLabel(seasonRoll.newN)} {ct('disponível na Loja')} — {ct('Pacote da Temporada com todas as cartas em forma.')}</div>
           </div>
         </Modal>
       )}
@@ -4142,12 +4347,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         for (const o of state.inventory) {
           const b = index.get(o.cardKey);
           if (!b) continue;
-          const k = `${o.cardKey}#${o.boost ?? 0}#${o.style ?? ''}`;
+          const k = `${o.cardKey}#${o.boost ?? 0}#${o.style ?? ''}#${o.ed ?? ''}`;
           const g = groups.get(k);
           if (g) {
             g.n++;
             if (g.o.locked === 'squad' && o.locked !== 'squad') g.o = o; // prefere cópia livre
-          } else groups.set(k, { o, card: boostCard(b, o.boost), n: 1 });
+          } else groups.set(k, { o, card: viewCard(b, o), n: 1 });
         }
         const cands = [...groups.values()].sort((a, b) => b.card.ovr - a.card.ovr);
         return (
@@ -4173,7 +4378,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                       title={tip}
                       style={{ position: 'relative', border: 'none', background: 'transparent', cursor: blocked ? 'not-allowed' : 'pointer', padding: 0, opacity: blocked ? 0.45 : 1 }}
                     >
-                      <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} />
+                      <UltCardView card={card} size={116} evo={o.boost ?? 0} count={n} ed={editionOf(o)} />
                       {special && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#f2c078' }}>{ct('especial')}</span>}
                       {!special && locked && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: '0.55rem', fontWeight: 800, padding: '1px 5px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', color: '#9fd6ff' }}>{ct('escalado')}</span>}
                     </button>
@@ -4200,7 +4405,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               <Button variant="primary" onClick={() => void doMktList()} disabled={mktBusy || !inRange}>{mktBusy ? ct('Listando…') : ct('Listar no Mercado')}</Button>
             </>}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-              <UltCardView card={mktSellTarget.card} size={124} evo={mktSellTarget.o.boost ?? 0} />
+              <UltCardView card={mktSellTarget.card} size={124} evo={mktSellTarget.o.boost ?? 0} ed={editionOf(mktSellTarget.o)} />
               {mktBounds && (
                 <div className="muted small">{ct('Faixa permitida')}: <b style={{ fontFamily: 'var(--ut-font-mono)' }}>{fmt(mktBounds.min)}</b> – <b style={{ fontFamily: 'var(--ut-font-mono)' }}>{fmt(mktBounds.max)}</b> 🪙</div>
               )}

@@ -1,5 +1,6 @@
 // Painel de métricas do admin: acessos, jogos, conversão e dificuldade real.
 import { neon } from '@neondatabase/serverless';
+import { communityWeekId } from '../src/engine/ultimate/communityGoal.js'; // [URG-5]
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
@@ -161,8 +162,28 @@ export default async function handler(
             FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'purchase_fulfilled'
               AND created_at > now() - interval '30 days'
             GROUP BY data->>'product_kind'
+          UNION ALL
+          SELECT 'compartilhou a meta da comunidade', 10, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'community_goal_share'
+              AND created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'resgatou a meta da comunidade', 11, COUNT(DISTINCT sid)
+            FROM events WHERE type = 'ult_funnel' AND data->>'step' = 'community_goal_claim'
+              AND created_at > now() - interval '30 days'
           ORDER BY ord, etapa`,
     ]);
+    // [URG-5] META COMUNITÁRIA da semana corrente: total, alvo e contribuintes.
+    // Query separada e tolerante: a tabela nasce no primeiro report/leitura de
+    // api/ranking.ts — antes disso o painel não pode quebrar por causa dela.
+    const weekId = communityWeekId(Date.now());
+    let communityGoal: { week_id: string; target: number; total: number; contributors: number; claimed: number } | null = null;
+    try {
+      const cgRows = await sql`SELECT g.week_id, g.target, g.total,
+            (SELECT COUNT(*) FROM rtm_community_contrib c WHERE c.week_id = g.week_id) AS contributors,
+            (SELECT COUNT(*) FROM rtm_community_contrib c WHERE c.week_id = g.week_id AND c.claimed) AS claimed
+          FROM rtm_community_goal g WHERE g.week_id = ${weekId}`;
+      if (cgRows[0]) communityGoal = { week_id: String(cgRows[0].week_id), target: Number(cgRows[0].target), total: Number(cgRows[0].total), contributors: Number(cgRows[0].contributors), claimed: Number(cgRows[0].claimed) };
+    } catch { /* tabela ainda não existe */ }
     res.status(200).json({
       totals: totals[0],
       visitsByDay,
@@ -175,6 +196,7 @@ export default async function handler(
       byCountry,
       rtpDemoFunnel,
       ultFunnel,
+      communityGoal,
     });
   } catch (e) {
     res.status(500).json({ error: String(e) });

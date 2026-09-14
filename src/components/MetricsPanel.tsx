@@ -30,6 +30,8 @@ interface Metrics {
   rtpDemoFunnel?: { etapa: string; ord: number; sids: string }[];
   // [U02] funil do Ultimate: sids distintos por degrau (compras = pedidos distintos)
   ultFunnel?: { etapa: string; ord: number; n: string }[];
+  // [URG-5] meta comunitária da semana corrente (null antes do 1º report da semana)
+  communityGoal?: { week_id: string; target: number; total: number; contributors: number; claimed: number } | null;
 }
 
 const COUNTRY_NAME: Record<string, string> = {
@@ -124,6 +126,11 @@ export function MetricsPanel() {
           <Card label={ct('Cliques no banner (G4)')} value={t.ad_clicks} hint={`${t.ad_clicks_24h} ${ct('nas últimas 24h')}`} />
           <Card label={ct('Cards compartilhados')} value={t.share_cards} />
           <Card label={ct('Campanhas no Hall')} value={data.hall.campaigns} hint={`${data.hall.titles} ${ct('títulos')}`} />
+          <Card
+            label={ct('Meta da comunidade (semana)')}
+            value={data.communityGoal ? `${data.communityGoal.total}/${data.communityGoal.target}` : '—'}
+            hint={data.communityGoal ? `${data.communityGoal.contributors} ${ct('contribuintes')} · ${data.communityGoal.claimed} ${ct('resgates')}` : ct('sem partidas online reportadas ainda')}
+          />
         </div>
 
         <div className="muted small" style={{ margin: '18px 0 6px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>

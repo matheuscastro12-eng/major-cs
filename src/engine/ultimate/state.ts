@@ -10,6 +10,7 @@ import { divisionFor, DIV_TIER_MULT } from './divisions';
 import { defaultPassState, ensurePass, passAddXp, PASS_MAX_LEVEL, type PassState, type PassXpSource } from './seasonPass';
 import type { UltCard } from './cards';
 import { isStyleId, STYLE_COST, type StyleId } from './traits';
+import { countEditionCards, normalizeEdition } from './seasonEdition';
 import type { Role } from '../../types';
 
 // registro de partida (histórico das últimas HISTORY_MAX, todos os modos).
@@ -51,6 +52,7 @@ export interface OwnedCard {
   boost?: number;          // nível de evolução (+OVR/atributos por nível), 0..EVO_MAX
   style?: StyleId;         // estilo de química aplicado (iter33) — aditivo, migration-safe
   ev?: string;             // [URG-2] id do evento que concedeu a carta exclusiva (selo "EVENTO wknd-…"); aditivo
+  ed?: number;             // [URG-1] edição da temporada N: +OVR enquanto season.n === ed, depois "Legado S{ed}"
 }
 
 export interface UltimateSquad {
@@ -389,9 +391,10 @@ export function grantCard(
   state: UltimateState,
   cardKey: string,
   via: AcquiredVia,
-  opts?: { id?: string; at?: number; ev?: string },
+  opts?: { id?: string; at?: number; ev?: string; ed?: number },
 ): UltimateState {
   const serial = maxSerialOf(state, cardKey) + 1;
+  const ed = normalizeEdition(opts?.ed);
   const owned: OwnedCard = {
     id: opts?.id ?? uid(),
     cardKey,
@@ -400,6 +403,7 @@ export function grantCard(
     acquiredAt: opts?.at ?? Date.now(),
     locked: null,
     ...(opts?.ev ? { ev: opts.ev } : {}),
+    ...(ed != null ? { ed } : {}),
   };
   return { ...state, inventory: [...state.inventory, owned] };
 }
@@ -543,7 +547,9 @@ export function migrateUltimate(raw: unknown): UltimateState {
           const style = isStyleId(o.style) ? o.style : undefined;
           // [URG-2] selo de evento: string curta ou nada (save antigo não tem o campo)
           const ev = typeof o.ev === 'string' && o.ev.length > 0 && o.ev.length <= 64 ? o.ev : undefined;
-          return { ...o, boost, style, ev };
+          // [URG-1] edição da temporada: só sobrevive se for inteiro ≥ 1 (save antigo não tem)
+          const ed = normalizeEdition(o.ed);
+          return { ...o, boost, style, ev, ed };
         })
     : [];
   // sanitiza squads: recomputeLocks itera sq.slots — um save corrompido com
@@ -731,7 +737,9 @@ export function startSeason(nowMs: number, wl0 = 0, peak = STARTING_ELO, n = 1):
   return { startedAt: nowMs, endsAt: nowMs + SEASON_DAYS * 86400000, wl0, peak, claimed: [], n, w: 0 };
 }
 
-export interface SeasonRollover { rolled: boolean; credits: number; newElo: number }
+// [URG-1] legacyCount = cópias em forma da temporada que ACABOU (perderam o +OVR
+// e viraram "Legado S{prevN}"); newN = temporada que abriu (edição nova na Loja).
+export interface SeasonRollover { rolled: boolean; credits: number; newElo: number; legacyCount: number; prevN: number; newN: number }
 
 export function applySeasonRollover(state: UltimateState, nowMs: number): { state: UltimateState; result: SeasonRollover } {
   const p = state.profile;
@@ -740,9 +748,10 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
   if (!s) {
     // 1ª vez: abre a season marcando o baseline de jogos (não paga nada).
     // O passe abre junto (temporada 1), preservando XP já ganho antes do tick.
-    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow), pass: ensurePass(p.pass, 1) } }, result: { rolled: false, credits: 0, newElo: p.elo } };
+    return { state: { ...state, profile: { ...p, season: startSeason(nowMs, wlNow), pass: ensurePass(p.pass, 1) } }, result: { rolled: false, credits: 0, newElo: p.elo, legacyCount: 0, prevN: 1, newN: 1 } };
   }
-  if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: p.elo } };
+  const prevN = s.n ?? 1;
+  if (nowMs <= s.endsAt) return { state, result: { rolled: false, credits: 0, newElo: p.elo, legacyCount: 0, prevN, newN: prevN } };
   // só paga bônus se JOGOU nesta season (conta dormente não vira fonte de credits).
   // recompensa proporcional ao RP CONQUISTADO na season (elo atual, não pico eterno).
   const playedThisSeason = wlNow - (s.wl0 ?? 0) > 0;
@@ -761,5 +770,8 @@ export function applySeasonRollover(state: UltimateState, nowMs: number): { stat
     // carrega pra temporada nova (compra vale UMA season, como no BUT/FUT).
     pass: defaultPassState((s.n ?? 1) + 1),
   };
-  return { state: { ...state, profile }, result: { rolled: true, credits, newElo } };
+  // [URG-1] as cópias com `ed === prevN` perdem o +OVR só por `season.n` ter
+  // mudado — nada é reescrito no inventário (o selo "Legado" é derivado).
+  const legacyCount = countEditionCards(state.inventory, prevN);
+  return { state: { ...state, profile }, result: { rolled: true, credits, newElo, legacyCount, prevN, newN: prevN + 1 } };
 }

@@ -31,7 +31,7 @@ export interface UltCardOp {
   op: 'add' | 'remove';
   cardId: string; // uuid da cópia (OwnedCard.id)
   cardKey?: string; // → catálogo (obrigatório em 'add')
-  meta?: Record<string, unknown>; // boost, serial, acquiredVia…
+  meta?: Record<string, unknown>; // boost, serial, acquiredVia, ed (edição da temporada [URG-1])…
 }
 
 export interface UltTx {
