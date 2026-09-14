@@ -61,7 +61,7 @@ function windowStatus(r: LiveopsRow): { label: string; tone: string } {
 
 interface FormState {
   // [U12] evento
-  evVersion: string; ruleKind: string; ruleMax: string; ruleRegion: string; ruleCountry: string; ruleRoles: string; ruleMaxTier: string; winTiers: string; maxMatches: string;
+  evVersion: string; ruleKind: string; ruleMax: string; ruleRegion: string; ruleCountry: string; ruleRoles: string; ruleMaxTier: string; winTiers: string; maxMatches: string; exclusiveCardKey: string; cardAtWins: string; // [URG-2] carta exclusiva (opcional)
   isNew: boolean;
   id: string;
   kind: Kind;
@@ -86,7 +86,7 @@ function emptyForm(kind: Kind): FormState {
     count: '3', sameOrg: false, sameCountry: false, sameRegion: false, minOvrAvg: '', minTier: '', rewardCredits: '', rewardCard: '',
     title: '', body: '',
     // [U12] evento
-    evVersion: '1', ruleKind: 'ovrcap', ruleMax: '82', ruleRegion: 'samerica', ruleCountry: 'br', ruleRoles: 'IGL,AWP', ruleMaxTier: '7', winTiers: '1:2000,3:6000,5:12000', maxMatches: '20',
+    evVersion: '1', ruleKind: 'ovrcap', ruleMax: '82', ruleRegion: 'samerica', ruleCountry: 'br', ruleRoles: 'IGL,AWP', ruleMaxTier: '7', winTiers: '1:2000,3:6000,5:12000', maxMatches: '20', exclusiveCardKey: '', cardAtWins: '',
   };
 }
 
@@ -108,7 +108,7 @@ function formFromRow(r: LiveopsRow): FormState {
   if (r.kind === 'event') { // [U12]
     const p = r.payload as LiveopsEventPayload;
     const rl = p.rule as Record<string, unknown>;
-    return { ...f, name: p.name, desc: p.desc, evVersion: String(p.version), ruleKind: String(rl.kind), ruleMax: String(rl.max ?? '82'), ruleRegion: String(rl.region ?? 'samerica'), ruleCountry: String(rl.country ?? 'br'), ruleRoles: Array.isArray(rl.roles) ? (rl.roles as string[]).join(',') : 'IGL,AWP', ruleMaxTier: String(rl.maxTier ?? '7'), winTiers: p.winTiers.map((t) => `${t.wins}:${t.credits}`).join(','), maxMatches: String(p.maxMatches) };
+    return { ...f, name: p.name, desc: p.desc, evVersion: String(p.version), ruleKind: String(rl.kind), ruleMax: String(rl.max ?? '82'), ruleRegion: String(rl.region ?? 'samerica'), ruleCountry: String(rl.country ?? 'br'), ruleRoles: Array.isArray(rl.roles) ? (rl.roles as string[]).join(',') : 'IGL,AWP', ruleMaxTier: String(rl.maxTier ?? '7'), winTiers: p.winTiers.map((t) => `${t.wins}:${t.credits}`).join(','), maxMatches: String(p.maxMatches), exclusiveCardKey: p.exclusiveCardKey ?? '', cardAtWins: p.cardAtWins != null ? String(p.cardAtWins) : '' };
   }
   const p = r.payload as LiveopsNoticePayload;
   return { ...f, title: p.title, body: p.body };
@@ -139,7 +139,11 @@ function payloadFromForm(f: FormState): unknown {
     if (f.ruleKind === 'roles') rule.roles = f.ruleRoles.split(',').map((x) => x.trim()).filter(Boolean);
     if (f.ruleKind === 'rarity-max') rule.maxTier = Number(f.ruleMaxTier);
     const winTiers = f.winTiers.split(',').map((pair) => pair.split(':')).filter((x) => x.length === 2).map(([w, c]) => ({ wins: Number(w), credits: Number(c) }));
-    return { version: Number(f.evVersion), name: f.name, desc: f.desc, rule, winTiers, maxMatches: Number(f.maxMatches) };
+    const ev: Record<string, unknown> = { version: Number(f.evVersion), name: f.name, desc: f.desc, rule, winTiers, maxMatches: Number(f.maxMatches) };
+    // [URG-2] carta exclusiva: só entra se preenchida (o automático de fim de semana já traz a dele)
+    if (f.exclusiveCardKey.trim() !== '') ev.exclusiveCardKey = f.exclusiveCardKey.trim();
+    if (f.cardAtWins.trim() !== '') ev.cardAtWins = Number(f.cardAtWins);
+    return ev;
   }
   return { title: f.title, body: f.body };
 }
@@ -435,6 +439,9 @@ export function LiveopsCRM({ onExit }: { onExit: () => void }) {
                     {form.ruleKind === 'rarity-max' && <div className="field"><label>{ct('Tier máximo (1..10)')}</label><input value={form.ruleMaxTier} onChange={(e) => upd({ ruleMaxTier: e.target.value })} /></div>}
                     <div className="field" style={{ gridColumn: 'span 3' }}><label>{ct('Faixas de vitórias (vitórias:coins, vírgula) — a maior alcançada paga')}</label><input value={form.winTiers} style={errStyle('winTiers')} onChange={(e) => upd({ winTiers: e.target.value })} />{errFor('winTiers')}</div>
                     <div className="field"><label>{ct('Partidas contadas (máx.)')}</label><input value={form.maxMatches} style={errStyle('maxMatches')} onChange={(e) => upd({ maxMatches: e.target.value })} />{errFor('maxMatches')}</div>
+                    {/* [URG-2] carta exclusiva (opcional). Dica: o evento automático usa id wknd-AAAA-SS — agendar com o mesmo id sobrescreve ele. */}
+                    <div className="field" style={{ gridColumn: 'span 2' }}><label>{ct('Carta exclusiva (key playerId:raridade, opcional)')}</label><input value={form.exclusiveCardKey} placeholder="bo3_18452:elite" style={errStyle('exclusiveCardKey')} onChange={(e) => upd({ exclusiveCardKey: e.target.value })} />{errFor('exclusiveCardKey')}</div>
+                    <div className="field"><label>{ct('Vitórias pra carta (1..99)')}</label><input value={form.cardAtWins} style={errStyle('cardAtWins')} onChange={(e) => upd({ cardAtWins: e.target.value })} />{errFor('cardAtWins')}</div>
                     <div style={{ gridColumn: 'span 6', fontSize: '0.78rem', color: 'var(--rtm-dim)' }}>{ct('Preview')}: <b>{form.name || '—'}</b> · {form.ruleKind === 'ovrcap' ? `teto ${form.ruleMax} OVR` : form.ruleKind === 'region' ? `região ${form.ruleRegion}` : form.ruleKind === 'country' ? `país ${form.ruleCountry.toUpperCase()}` : form.ruleKind === 'roles' ? `funções ${form.ruleRoles}` : `tier ≤ ${form.ruleMaxTier}`} · {ct('janela em UTC')} · {ct('prêmios')}: {form.winTiers}</div>
                   </div>
                 )}

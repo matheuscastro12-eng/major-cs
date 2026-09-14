@@ -51,6 +51,7 @@ export interface OwnedCard {
   locked: 'squad' | null;  // travada num squad → não pode vender
   boost?: number;          // nível de evolução (+OVR/atributos por nível), 0..EVO_MAX
   style?: StyleId;         // estilo de química aplicado (iter33) — aditivo, migration-safe
+  ev?: string;             // [URG-2] id do evento que concedeu a carta exclusiva (selo "EVENTO wknd-…"); aditivo
   ed?: number;             // [URG-1] edição da temporada N: +OVR enquanto season.n === ed, depois "Legado S{ed}"
 }
 
@@ -390,7 +391,7 @@ export function grantCard(
   state: UltimateState,
   cardKey: string,
   via: AcquiredVia,
-  opts?: { id?: string; at?: number; ed?: number },
+  opts?: { id?: string; at?: number; ev?: string; ed?: number },
 ): UltimateState {
   const serial = maxSerialOf(state, cardKey) + 1;
   const ed = normalizeEdition(opts?.ed);
@@ -401,6 +402,7 @@ export function grantCard(
     acquiredVia: via,
     acquiredAt: opts?.at ?? Date.now(),
     locked: null,
+    ...(opts?.ev ? { ev: opts.ev } : {}),
     ...(ed != null ? { ed } : {}),
   };
   return { ...state, inventory: [...state.inventory, owned] };
@@ -543,9 +545,11 @@ export function migrateUltimate(raw: unknown): UltimateState {
           const boost = (typeof b !== 'number' || !Number.isFinite(b) || b <= 0) ? undefined : Math.min(EVO_MAX, Math.floor(b));
           // estilo (iter33): campo aditivo — só sobrevive se for um StyleId conhecido
           const style = isStyleId(o.style) ? o.style : undefined;
+          // [URG-2] selo de evento: string curta ou nada (save antigo não tem o campo)
+          const ev = typeof o.ev === 'string' && o.ev.length > 0 && o.ev.length <= 64 ? o.ev : undefined;
           // [URG-1] edição da temporada: só sobrevive se for inteiro ≥ 1 (save antigo não tem)
           const ed = normalizeEdition(o.ed);
-          return { ...o, boost, style, ed };
+          return { ...o, boost, style, ev, ed };
         })
     : [];
   // sanitiza squads: recomputeLocks itera sq.slots — um save corrompido com

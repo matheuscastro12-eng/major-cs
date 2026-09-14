@@ -14,6 +14,10 @@ import { ct } from '../state/career-i18n';
 import { loadGhost } from '../state/ghost';
 import { loadDuelInvite } from '../state/duelInvite';
 import { dateKeyOf, dayNumberOf } from '../engine/daily/lines';
+// [URG-2] evento de fim de semana: banner público (deslogado também) com contador e a carta exclusiva
+import { fetchActiveLiveops } from '../state/liveops';
+import { weekendEventView, weekendExclusiveCard, type WeekendEventView } from '../state/weekendEvent';
+import { formatCountdown } from '../engine/ultimate/weekendEvent';
 import { useCommunityGoalPublic } from '../state/communityGoal'; // [URG-5]
 
 const M = '/maps/';
@@ -689,6 +693,18 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
   // comprar HOJE — o desafio expira à meia-noite.
   const ghost = loadGhost(dayNumberOf(dateKeyOf(new Date())));
   const duelInvite = loadDuelInvite(); // [U11]
+  // [URG-2] evento de fim de semana: lê o live-ops público (o servidor mescla o automático) e
+  // recalcula a cada minuto pro contador; sem rede cai no cálculo local do mesmo engine.
+  const [wknd, setWknd] = useState<WeekendEventView | null>(null);
+  useEffect(() => {
+    let on = true;
+    const compute = () => { if (on) setWknd(weekendEventView()); };
+    void fetchActiveLiveops().then(compute, compute);
+    const t = window.setInterval(compute, 60_000);
+    return () => { on = false; window.clearInterval(t); };
+  }, []);
+  const wkndCard = wknd ? weekendExclusiveCard(wknd) : null;
+  const wkndRemain = wknd ? (wknd.open ? wknd.endsAtMs : wknd.startsAtMs) - Date.now() : 0;
   return (
     <div ref={ref} className="lp-root">
       <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
@@ -697,6 +713,15 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
         <div style={{ background: 'color-mix(in srgb, #4382b6 14%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
           ⚔️ {ct('Você foi convidado pra um DUELO no Ultimate')} — {ct('sala')} <b style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{duelInvite}</b>. {ct('A sala expira em algumas horas.')}{' '}
           <button type="button" onClick={onPlay} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>{ct('Entrar e aceitar')} →</button>
+        </div>
+      )}
+      {/* [URG-2] evento de fim de semana: discreto, acima da dobra, mesmo deslogado */}
+      {wknd && (
+        <div style={{ background: 'color-mix(in srgb, #f472b6 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '8px 22px', textAlign: 'center', fontSize: '13.5px', lineHeight: 1.5 }}>
+          🎁 {wknd.open
+            ? <>{ct('Evento até domingo')}: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>} · {ct('só neste fim de semana')} · {ct('termina em')} <b>{formatCountdown(wkndRemain)}</b></>
+            : <>{ct('Próximo evento em')} <b>{formatCountdown(wkndRemain)}</b>: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>}</>}{' '}
+          <button type="button" onClick={onPlay} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Jogar')} →</button>
         </div>
       )}
       {ghost && (

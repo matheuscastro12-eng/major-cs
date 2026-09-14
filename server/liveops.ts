@@ -95,6 +95,8 @@ export interface LiveopsEventPayload {
   rule: { kind: 'ovrcap'; max: number } | { kind: 'region'; region: string } | { kind: 'country'; country: string } | { kind: 'roles'; roles: string[] } | { kind: 'rarity-max'; maxTier: number };
   winTiers: { wins: number; credits: number }[];   // a MAIOR faixa alcançada paga (padrão Major da Semana)
   maxMatches: number;              // cap de partidas contadas por conta
+  exclusiveCardKey?: string;       // [URG-2] carta exclusiva concedida 1x por conta no resgate
+  cardAtWins?: number;             // [URG-2] vitórias pra levar a carta (default: faixa mais alta)
 }
 export type LiveopsPayload = LiveopsPromoPayload | LiveopsSbcPayload | LiveopsNoticePayload | LiveopsEventPayload;
 
@@ -154,6 +156,8 @@ function readInt(v: unknown, min: number, max: number): number | null {
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 // slug: minúsculas/dígitos/hífen, 2..64 chars, começa com alfanumérico
 const SLUG = /^[a-z0-9][a-z0-9-]{1,63}$/;
+// [URG-2] key de carta do catálogo: `<playerId>:<raridade>` (ex.: bo3_18452:elite)
+const CARD_KEY = /^[A-Za-z0-9_-]{1,80}:[A-Za-z]{1,20}$/;
 
 const bad = (field: string, error: string): { ok: false; field: string; error: string } => ({ ok: false, field, error });
 
@@ -272,7 +276,19 @@ export function validateEventPayload(raw: unknown): LiveopsValidation<LiveopsEve
   winTiers.sort((a, b) => a.wins - b.wins);
   const maxMatches = Math.floor(Number(raw.maxMatches ?? 20));
   if (!Number.isFinite(maxMatches) || maxMatches < 1 || maxMatches > 200) return bad('maxMatches', 'maxMatches 1..200');
-  return { ok: true, payload: { version, name, desc, rule, winTiers, maxMatches } };
+  const payload: LiveopsEventPayload = { version, name, desc, rule, winTiers, maxMatches };
+  // [URG-2] carta exclusiva (opcional): key do catálogo `<playerId>:<rarity>` + vitórias mínimas
+  if (raw.exclusiveCardKey !== undefined && raw.exclusiveCardKey !== null && raw.exclusiveCardKey !== '') {
+    const key = typeof raw.exclusiveCardKey === 'string' ? raw.exclusiveCardKey.trim() : '';
+    if (!CARD_KEY.test(key)) return bad('exclusiveCardKey', 'exclusiveCardKey precisa ser `<playerId>:<raridade>`');
+    payload.exclusiveCardKey = key;
+  }
+  if (raw.cardAtWins !== undefined && raw.cardAtWins !== null && raw.cardAtWins !== '') {
+    const cardAtWins = readInt(raw.cardAtWins, 1, 99);
+    if (cardAtWins == null) return bad('cardAtWins', 'cardAtWins 1..99');
+    payload.cardAtWins = cardAtWins;
+  }
+  return { ok: true, payload };
 }
 
 // dispatcher por kind — o upsert e a rota usam este.
