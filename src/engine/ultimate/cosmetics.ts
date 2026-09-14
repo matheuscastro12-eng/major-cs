@@ -27,6 +27,10 @@ export const FRAMES: FrameDef[] = [
   { id: 'sniper-elite', name: 'Sniper elite', desc: 'Trio de AWPs 85+.', border: '#6fc3df', inner: 'rgba(111,195,223,.7)', badge: 'AWP', badgeBg: '#6fc3df', how: 'Coleção "Trio de AWPs"' },
   { id: 'pass-premium', name: 'Premium', desc: 'Moldura do Passe Premium — liberada na hora da compra, fica pra sempre.', border: '#7c3aed', inner: 'rgba(236,199,95,.8)', badge: 'PASSE', badgeBg: '#ecc75f', how: 'Comprar o Passe Premium (benefício imediato)' },
   { id: 'founder-s1', name: 'Fundador S1', desc: 'Identidade da 1ª temporada.', border: '#c792ea', inner: 'rgba(199,146,234,.8)', badge: 'S1', badgeBg: '#c792ea', how: 'Oferta inicial (ainda não ativa)' },
+  // [URG-4] molduras do STREAK DO DIÁRIO — dias seguidos jogando qualquer jogo do Diário
+  { id: 'streak-7', name: 'Sete dias', desc: 'Uma semana inteira sem faltar ao Diário.', border: '#f97316', inner: 'rgba(249,115,22,.7)', badge: '7', badgeBg: '#f97316', how: 'Streak do Diário: 7 dias seguidos' },
+  { id: 'streak-30', name: 'Um mês sem falhar', desc: 'Trinta dias seguidos no Diário.', border: '#ef4444', inner: 'rgba(250,204,21,.85)', badge: '30', badgeBg: '#facc15', how: 'Streak do Diário: 30 dias seguidos' },
+  { id: 'streak-100', name: 'Centurião', desc: 'Cem dias seguidos no Diário. Poucos chegam aqui.', border: '#e11d48', inner: 'rgba(243,207,107,.9)', badge: 'C', badgeBg: '#f3cf6b', how: 'Streak do Diário: 100 dias seguidos' },
 ];
 export function frameById(id: string | null | undefined): FrameDef | null { return FRAMES.find((f) => f.id === id) ?? null; }
 export function mergeFrames(owned: string[] | undefined, add: string[]): string[] {
