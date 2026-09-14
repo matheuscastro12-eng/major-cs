@@ -254,7 +254,7 @@ export function mirrorUltimateChange(prev: UltimateState, next: UltimateState, k
         op: 'add',
         cardId: o.id,
         cardKey: o.cardKey,
-        meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}) },
+        meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}), ...(o.ed != null ? { ed: o.ed } : {}) }, // [URG-1] ed vai no JSON de meta (sem coluna nova)
       });
     }
     for (const o of prev.inventory) {
@@ -318,7 +318,7 @@ export async function migrateIfNeeded(): Promise<'done' | 'skipped' | 'failed'> 
           op: 'add' as const,
           cardId: o.id,
           cardKey: o.cardKey,
-          meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}) },
+          meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}), ...(o.ed != null ? { ed: o.ed } : {}) }, // [URG-1] ed vai no JSON de meta (sem coluna nova)
         })),
         meta: { migrate: 'v1', chunk: i, of: chunks },
       });
@@ -511,7 +511,7 @@ async function reconcileFlip(): Promise<void> {
         op: 'add' as const,
         cardId: o.id,
         cardKey: o.cardKey,
-        meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}) },
+        meta: { via: o.acquiredVia, ...(o.boost ? { boost: o.boost } : {}), ...(o.serial != null ? { serial: o.serial } : {}), ...(o.ed != null ? { ed: o.ed } : {}) }, // [URG-1] ed vai no JSON de meta (sem coluna nova)
       }));
     const removes: ShadowCardOp[] = server.cards
       .filter((c) => !localIds.has(c.cardId))
