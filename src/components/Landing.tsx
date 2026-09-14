@@ -31,6 +31,32 @@ function useReveal() {
   return ref;
 }
 
+// funil: 'landing-pricing' e 'landing-final' já têm src próprio no checkout
+// (openAcct em cada CTA) mas ZERO checkout_open/signup_start desde que a
+// atribuição por posição existe (iter 20260820, 28d+ de dado real) — contra
+// alguns poucos em landing-nav/landing-hero, que ficam bem mais no topo da
+// página. Sem saber se essas duas seções sequer são VISTAS (nunca houve
+// paywall_view por seção, só 1x/página no load), não dá pra separar "ninguém
+// rola até aqui" de "rola e não clica". Mede a entrada na viewport 1x/sessão
+// pra próxima iteração enxergar isso — mesmo padrão de dedupe do resto do funil.
+const seenSections = new Set<string>();
+function useSectionSeen(src: string) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!ref.current || seenSections.has(src)) return;
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) {
+        seenSections.add(src);
+        trackPaywallView(src);
+        io.disconnect();
+      }
+    }, { threshold: 0.4 });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [src]);
+  return ref;
+}
+
 function SectionHead({ kicker, title, sub }: { kicker: string; title: string; sub?: string }) {
   return (
     <div className="rtm-reveal" style={{ textAlign: 'center', marginBottom: '34px' }}>
@@ -158,8 +184,9 @@ function Modes({ onPlay }: { onPlay: () => void }) {
 function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
   const FREE = ['Todos os modos liberados', 'Save no navegador (localStorage)', 'Ranqueada online do Ultimate', 'Roleta, draft e Major completos'];
   const PAID = ['Todo o gameplay continua gratuito', 'Save na nuvem, joga de qualquer lugar', 'Compra de coins pra abrir mais packs', 'Histórico de todas as partidas', 'Selo de apoiador no perfil', 'Pagamento único, sem mensalidade'];
+  const seenRef = useSectionSeen('landing-pricing');
   return (
-    <section id="conta" className="lp-wrap" style={{ padding: '60px 22px' }}>
+    <section id="conta" ref={seenRef} className="lp-wrap" style={{ padding: '60px 22px' }}>
       <SectionHead kicker={ct('Conta e save')} title={ct('Grátis pra jogar, conta pra ir além')} sub={ct('Você joga tudo de graça com save no navegador — incluindo a ranqueada online do Ultimate. A conta guarda o seu progresso na nuvem, libera a compra de coins e mais.')} />
       <div className="rtm-reveal l-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: '18px', alignItems: 'stretch', maxWidth: '880px', margin: '0 auto' }}>
         <div style={{ background: 'var(--rtm-panel)', border: '1px solid var(--rtm-border-soft)', borderRadius: '12px', padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
@@ -184,7 +211,12 @@ function Pricing({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => v
           <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
             {PAID.map((f, i) => <span key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: i === 0 ? 'var(--rtm-dim)' : 'var(--rtm-text)' }}><span style={{ color: 'var(--rtm-gold)', fontWeight: 800 }}>✓</span>{ct(f)}</span>)}
           </div>
-          <Button variant="gold" style={{ marginTop: '22px', width: '100%' }} onClick={onAccount}>{ct('Ativar conta com save')}</Button>
+          {/* funil: único CTA "de venda" do funil inteiro sem o preço no próprio
+              texto do botão — Nav, Hero-adjacente, FinalCta, modecards e o
+              chip do header já ganharam esse tratamento em iterações
+              anteriores (dado real: ajuda o clique). Aqui o card já mostra
+              R$20 em destaque acima, mas o botão em si ficava mudo. */}
+          <Button variant="gold" style={{ marginTop: '22px', width: '100%' }} onClick={onAccount}>{ct('Ativar conta com save')} · R$20</Button>
         </div>
       </div>
       <p className="rtm-reveal" style={{ textAlign: 'center', color: 'var(--rtm-faint)', fontSize: '12.5px', marginTop: '18px' }}>
@@ -249,8 +281,9 @@ function Faq() {
 }
 
 function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void }) {
+  const seenRef = useSectionSeen('landing-final');
   return (
-    <section className="lp-wrap" style={{ padding: '40px 22px 70px' }}>
+    <section ref={seenRef} className="lp-wrap" style={{ padding: '40px 22px 70px' }}>
       <div className="rtm-reveal" style={{ position: 'relative', overflow: 'hidden', borderRadius: '14px', border: '1px solid var(--rtm-gold-soft)', textAlign: 'center', padding: '46px 26px' }}>
         <img src={M + 'nuke.jpg'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(700px 300px at 50% 0, rgba(216,169,67,.18), transparent 70%), rgba(13,17,22,.7)' }} />
