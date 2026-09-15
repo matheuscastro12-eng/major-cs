@@ -110,14 +110,21 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
                 mesmo padrão de botão já usado no convite abaixo (conta grátis)
                 e no resto do app; sem onCreateAccount (rota antiga do Online
                 Mode, hoje sem uso), mantém o link como fallback. */}
+            {/* funil (dado real, todo o histórico): 61 sessões viram este CTA
+                (src wl-guest) e NENHUMA sequer começou o cadastro — o único
+                src do funil inteiro travado em 0% de intenção, não só de
+                conversão. Esse CTA também é o ÚNICO conteúdo acionável da
+                tela pra convidado (sem outro elemento competindo), mas segue
+                estilizado como link de texto sem nenhum "peso" de botão —
+                mesmo padrão de invisibilidade por hierarquia visual já
+                identificado e corrigido no card do RtP (home-rtp-direto).
+                Troca pra Button real, mesmo componente usado no convite
+                pago logo abaixo nesta tela; copy não muda (continua "grátis",
+                sem preço — aqui não é paywall). */}
             {onCreateAccount ? (
-              <button
-                type="button"
-                onClick={() => { setCheckoutSrc('wl-guest'); onCreateAccount(); }}
-                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                {ct('Criar conta grátis / entrar →')}
-              </button>
+              <Button variant="primary" onClick={() => { setCheckoutSrc('wl-guest'); onCreateAccount(); }}>
+                {ct('Criar conta grátis / entrar')} →
+              </Button>
             ) : (
               <a href="/" style={{ color: 'var(--rtm-link)', fontWeight: 700, fontSize: '13px' }}>{ct('Criar conta grátis / entrar →')}</a>
             )}
