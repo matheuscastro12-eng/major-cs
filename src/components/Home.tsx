@@ -75,6 +75,7 @@ export function Home({
   onUpgrade,
   onLogout,
   onAdmin,
+  onLeaderboard,
 }: Props) {
   const { t, lang } = useLang();
   const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
@@ -122,8 +123,42 @@ export function Home({
           top: 76,
           right: 16,
           zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 6,
         }}
       >
+        {/* funil: a tela de Ranking (ladder + campeões + CTA de vitalícia) existe,
+            já tem paywall_view/checkout_open próprios (src 'leaderboard') e usa o
+            mesmo ranking da Ranqueada do Ultimate — mas ficou sem nenhum link
+            desde que o Online antigo saiu do menu (link só sobrevivia como prop
+            não usada aqui). Dado real: 0 paywall_view em 90 dias, ou seja, a
+            superfície inteira nunca abriu. Link discreto, não compete com o CTA
+            principal da pill/AccountChip logo abaixo. */}
+        {onLeaderboard && (
+          <button
+            type="button"
+            onClick={onLeaderboard}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '5px 12px',
+              background: 'rgba(0,0,0,0.45)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 999,
+              fontFamily: 'inherit',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              color: 'rgba(255,255,255,0.75)',
+              cursor: 'pointer',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            🏆 {ct('Ranking')}
+          </button>
+        )}
         <AccountChip
           account={account}
           ready={accountReady ?? false}
