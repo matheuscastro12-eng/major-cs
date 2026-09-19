@@ -245,25 +245,33 @@ body:has(.page-play) .app-header {
   font-weight: 800;
   color: rgba(223, 229, 236, 0.85);
 }
-/* atalho pra quem já quer comprar sem passar pela demo (ver comentário no Home.tsx) */
+/* atalho pra quem já quer comprar sem passar pela demo (ver comentário no Home.tsx).
+   funil: nasceu como link de texto sublinhado (iter25) e não gerou 1 checkout_open
+   sequer em 15 dias / ~4500 impressões no card de maior tráfego do jogo — some
+   encostado no "JOGAR A DEMO GRÁTIS" logo abaixo. Vira um botão de verdade
+   (pill com contorno dourado): visível como opção real pra quem já tem intenção
+   de pagar, mas sem preencher com cor sólida — continua secundário ao CTA grátis. */
 .play-hub .rtm-modecard-skip {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 8px;
-  padding: 0;
-  background: none;
-  border: none;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 193, 112, 0.55);
+  background: rgba(232, 193, 112, 0.08);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.2px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
   color: rgba(232, 193, 112, 0.92);
 }
 .play-hub .rtm-modecard-skip:hover,
 .play-hub .rtm-modecard-skip:focus-visible {
   color: #e8c170;
+  border-color: #e8c170;
+  background: rgba(232, 193, 112, 0.16);
 }
 
 .play-hub .rtm-modecard[data-tone="gold"]:hover {
