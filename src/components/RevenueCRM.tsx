@@ -759,6 +759,17 @@ function OrdersSection() {
   if (!data) return <div className="muted" style={{ padding: 16 }}>{busy ? ct('Carregando…') : ct('Sem dados.')}</div>;
   return (
     <>
+      {(coins?.attention ?? []).length > 0 && (
+        // [O0-24/O0-41] pagos que não creditaram nada: o jogador pagou e precisa de reembolso
+        <div className="crm-save-msg err" style={{ marginBottom: 12 }}>
+          <b>⚠ {ct('Pagamentos para reembolsar')}</b>
+          {(coins?.attention ?? []).map((o, i) => (
+            <div key={i} className="small">
+              {fmtWhen(o.at)} · {o.email} · {tierLabel(o.tier)} · {money(o.cents)} · {methodLabel(o.method)} · {o.status === 'duplicate' ? ct('passe já pago nesta temporada') : ct('valor diferente do pedido')}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="acc-stats">
         <Stat value={num(coins?.paidOrders ?? 0)} label={ct('Pedidos pagos')} />
         <Stat value={num(coins?.coinsSold ?? 0)} label={ct('Coins vendidos')} />

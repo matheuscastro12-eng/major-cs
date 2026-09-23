@@ -9,21 +9,25 @@ import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { ADMIN_SESSION_TTL_SEC, respondMissingSecret, signAccountToken, signAdminSession, verifyAccountToken } from '../server/auth.js';
 import {
   accountReference,
+  assignFounderNumbers,
+  checkoutBase,
   checkoutBelongsToAccount,
   checkoutHasExpectedPrice,
   checkoutIsPaid,
   checkoutUrl,
   cleanEnv,
+  COIN_TIERS,
   findPaidCheckoutForEmail,
   parsePassTier,
   passTier,
   PASS_PRICE_CENTS,
-  renumberFounders,
+  pixAccountPriceCents,
   retrieveCheckout,
   stripeClient,
 } from '../server/payments.js';
 import { restorableCoins } from '../server/coin-restore.js';
 import { mailConfigured, sendMail } from '../server/mail.js';
+import { findReusableCharge, rememberCharge } from '../server/order-settle.js';
 import { nickProblem, nickTaken, normalizeNick } from '../server/nick.js';
 import { clientIp, rateLimitHit, respondLimited, type RateRule, type RateSql } from '../server/rate-limit.js';
 
@@ -62,6 +66,10 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       // método do pedido de coins: 'pix' (Woovi) | 'stripe' (cartão). Métricas do CRM.
       sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS method TEXT DEFAULT 'pix'`,
       sql`CREATE INDEX IF NOT EXISTS rtm_coin_orders_email_idx ON rtm_coin_orders (email, status)`,
+      // [O0-41] cobrança do pedido pendente (QR/URL) e validade: o 2º clique no
+      // passe da mesma temporada devolve a MESMA cobrança (server/order-settle.ts).
+      sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS pay_ref TEXT`,
+      sql`ALTER TABLE rtm_coin_orders ADD COLUMN IF NOT EXISTS pay_expires_at TIMESTAMPTZ`,
       // re-emissões de coins comprados (jogador perdeu o save local): cada linha é
       // uma restauração; SUM(coins) por e-mail nunca passa do SUM dos pedidos claimed.
       sql`CREATE TABLE IF NOT EXISTS rtm_coin_restores (id BIGSERIAL PRIMARY KEY, email TEXT NOT NULL, coins INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`,
@@ -80,15 +88,17 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
   await accountSchemaPromise;
 }
 
+// backfill de número de Fundador pra quem pagou e ficou sem (ex.: webhook que
+// caiu no meio). Só PREENCHE — número já dado nunca muda (O0-42).
 async function auditFounderNumbers(sql: AccountSql): Promise<void> {
   const now = Date.now();
   if (now - founderAuditAt < 5 * 60_000) return;
   founderAuditAt = now;
   try {
-    const g = await sql`SELECT
-        (SELECT count(*) FILTER (WHERE is_founder) FROM rtm_accounts)::int AS have,
-        LEAST((SELECT count(*) FILTER (WHERE paid) FROM rtm_accounts)::int, ${FOUNDER_LIMIT})::int AS want`;
-    if (Number(g[0]?.have ?? 0) !== Number(g[0]?.want ?? 0)) await renumberFounders(sql, FOUNDER_LIMIT);
+    const g = await sql`SELECT EXISTS (
+        SELECT 1 FROM rtm_accounts WHERE paid AND founder_no IS NULL AND COALESCE(payment_method, '') <> 'admin'
+      ) AND COALESCE((SELECT MAX(founder_no) FROM rtm_accounts), 0) < ${FOUNDER_LIMIT} AS missing`;
+    if (g[0]?.missing) await assignFounderNumbers(sql, FOUNDER_LIMIT);
   } catch (error) {
     founderAuditAt = 0;
     throw error;
@@ -109,13 +119,8 @@ function verifyPw(pw: string, stored: string): boolean {
 // token de conta (HMAC com APP_SECRET, 180 dias) — implementação em server/auth.ts.
 const sign = signAccountToken;
 const verifyToken = verifyAccountToken;
-// Tiers de coins do Ultimate (Pix via Woovi). Valor cresce por real gasto pra
-// recompensar o tier maior: R$10 → 30k, R$15 → 50k (+11%), R$30 → 120k (+33%).
-const COIN_TIERS: Record<string, { cents: number; coins: number; label: string }> = {
-  p10: { cents: 1000, coins: 30000, label: 'Pacote Arsenal' },
-  p15: { cents: 1500, coins: 50000, label: 'Pacote Elite' },
-  p30: { cents: 3000, coins: 120000, label: 'Pacote Lendário' },
-};
+// Tiers de coins do Ultimate: COIN_TIERS em server/payments.ts (fonte única,
+// o woovi-webhook usa a mesma tabela).
 
 // Rate limit por IP e por e-mail (O0-35/SEGU-09), no Postgres (compartilhado
 // entre instâncias — ver server/rate-limit.ts). Janelas generosas pro jogador
@@ -147,7 +152,9 @@ export default async function handler(
       if (!foundersCache || Date.now() - foundersCache.at > 60_000) {
         const sql = neon(dbUrl);
         await ensureAccountSchema(sql);
-        const r = await sql`SELECT count(*) FILTER (WHERE is_founder)::int AS founders FROM rtm_accounts`;
+        // números EMITIDOS (o maior founder_no): número de conta revogada fica
+        // aposentado e não volta pra fila (O0-42), então "vagas" = teto − isso.
+        const r = await sql`SELECT COALESCE(MAX(founder_no), 0)::int AS founders FROM rtm_accounts`;
         foundersCache = { at: Date.now(), founders: Number(r[0]?.founders ?? 0) };
       }
       res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
@@ -165,9 +172,9 @@ export default async function handler(
   const sql = neon(dbUrl);
   await ensureAccountSchema(sql);
 
-  // Backfill de fundador: numera os pagantes antigos (que pagaram antes do selo
-  // existir / pelo webhook) por ordem de pagamento. Guardado por um SELECT barato
-  // pra rodar só quando há divergência — depois de numerar, fica quieto.
+  // Backfill de fundador: dá número a quem pagou e ficou sem (webhook que caiu no
+  // meio), na ordem do pagamento, sem mexer em número já dado. Guardado por um
+  // SELECT barato (1x a cada 5 min por instância) — sem pendência, fica quieto.
   await auditFounderNumbers(sql);
 
   let body: Record<string, unknown> = {};
@@ -253,11 +260,10 @@ export default async function handler(
     await sql.transaction(stmts);
     await claimFounder();
   };
-  // Edição Fundador: renumera TODOS os pagantes por ordem de pagamento (#001 = o
-  // primeiro do Stripe). Idempotente e determinístico (só toca o que muda), então
-  // serve tanto pra novo pagamento quanto pra backfill dos antigos.
+  // Edição Fundador: dá número a quem pagou e ainda não tem, na ordem do
+  // pagamento. Número já dado nunca muda (O0-42); idempotente.
   const claimFounder = async (): Promise<void> => {
-    await renumberFounders(sql, FOUNDER_LIMIT);
+    await assignFounderNumbers(sql, FOUNDER_LIMIT);
     founderAuditAt = Date.now();
   };
   const founderOf = async (em: string): Promise<{ founder: boolean; founderNo: number | null; admin: boolean }> => {
@@ -466,7 +472,7 @@ export default async function handler(
     const appId = cleanEnv(process.env.OPENPIX_APP_ID);
     if (!appId) { res.status(500).json({ error: 'Pix indisponível: OPENPIX_APP_ID não configurada.' }); return; }
     // valor em CENTAVOS (R$20 = 2000). Editável via PIX_PRICE_CENTS (mesma régua do Stripe).
-    const value = Number(cleanEnv(process.env.PIX_PRICE_CENTS) || '2000') || 2000;
+    const value = pixAccountPriceCents();
     const nick = String(((await sql`SELECT nick FROM rtm_accounts WHERE email=${em}`)[0]?.nick) ?? '').slice(0, 80) || em;
     try {
       const r = await fetch('https://api.openpix.com.br/api/v1/charge', {
@@ -554,8 +560,7 @@ export default async function handler(
     const pack = COIN_TIERS[tier];
     if (!pack) { res.status(400).json({ error: 'pacote inválido' }); return; }
     const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
-    const origin = String(body.origin ?? '').replace(/\/+$/, '');
-    const base = /^https:\/\/[\w.-]+/.test(origin) ? origin : 'https://roadtomajor.com.br';
+    const base = checkoutBase(body.origin); // [O0-40] allowlist; origin desconhecido cai no domínio oficial
     // pedido ANTES da sessão (mesma razão do Pix): pending órfão é inofensivo; o
     // inverso — cartão aprovado sem pedido — perderia os coins do jogador.
     await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, ${pack.coins}, ${pack.cents}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
@@ -664,6 +669,12 @@ export default async function handler(
       res.status(409).json({ error: 'Você já comprou o Passe Premium desta temporada.' });
       return;
     }
+    // [O0-41] Pix desta temporada ainda aberto → a MESMA cobrança, não uma 2ª.
+    const open = await findReusableCharge(sql, em, tier, 'pix');
+    if (open) {
+      res.status(200).json({ correlationID: open.correlationID, season, qrCodeImage: open.ref.qrCodeImage ?? null, brCode: open.ref.brCode ?? null, paymentLinkUrl: open.ref.paymentLinkUrl ?? null, expiresIn: open.expiresIn, reused: true });
+      return;
+    }
     const appId = cleanEnv(process.env.OPENPIX_APP_ID);
     if (!appId) { res.status(500).json({ error: 'Pix indisponível: OPENPIX_APP_ID não configurada.' }); return; }
     const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
@@ -690,6 +701,7 @@ export default async function handler(
       }
       const j = (await r.json()) as { charge?: Record<string, unknown> };
       const c = j?.charge ?? {};
+      await rememberCharge(sql, corr, { qrCodeImage: c.qrCodeImage ?? null, brCode: c.brCode ?? null, paymentLinkUrl: c.paymentLinkUrl ?? null }, Number(c.expiresIn));
       res.status(200).json({
         correlationID: corr,
         season,
@@ -716,9 +728,11 @@ export default async function handler(
       res.status(409).json({ error: 'Você já comprou o Passe Premium desta temporada.' });
       return;
     }
+    // [O0-41] checkout de cartão desta temporada ainda aberto → a MESMA sessão.
+    const open = await findReusableCharge(sql, em, tier, 'stripe');
+    if (open && typeof open.ref.url === 'string') { res.status(200).json({ url: open.ref.url, correlationID: open.correlationID, season, reused: true }); return; }
     const corr = `ultcoins:${tier}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
-    const origin = String(body.origin ?? '').replace(/\/+$/, '');
-    const base = /^https:\/\/[\w.-]+/.test(origin) ? origin : 'https://roadtomajor.com.br';
+    const base = checkoutBase(body.origin); // [O0-40] allowlist; origin desconhecido cai no domínio oficial
     await sql`INSERT INTO rtm_coin_orders (correlation_id, email, tier, coins, cents, method) VALUES (${corr}, ${em}, ${tier}, 0, ${PASS_PRICE_CENTS}, 'stripe') ON CONFLICT (correlation_id) DO NOTHING`;
     try {
       const session = await stripeClient().checkout.sessions.create({
@@ -742,6 +756,8 @@ export default async function handler(
         res.status(502).json({ error: 'Falha ao criar checkout. Tente de novo.' });
         return;
       }
+      // a sessão da Stripe expira em expires_at (24h por padrão)
+      await rememberCharge(sql, corr, { url: session.url }, session.expires_at ? session.expires_at - Math.floor(Date.now() / 1000) : NaN);
       res.status(200).json({ url: session.url, correlationID: corr, season });
     } catch (error) {
       await sql`DELETE FROM rtm_coin_orders WHERE correlation_id=${corr} AND status='pending'`;

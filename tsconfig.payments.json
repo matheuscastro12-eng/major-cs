@@ -70,6 +70,11 @@
     "server/cloud-save-policy.ts",
     "server/cloud-save-policy.test.ts",
     "server/internalError.ts",
-    "server/internal-error.test.ts"
+    "server/internal-error.test.ts",
+    "api/woovi-webhook.ts",
+    "server/woovi.ts",
+    "server/woovi-webhook.test.ts",
+    "server/order-settle.ts",
+    "server/payments-hardening.test.ts"
   ]
 }

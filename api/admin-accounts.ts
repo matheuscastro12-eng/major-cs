@@ -4,7 +4,8 @@
 // Ações (POST body.action): list | grant | revoke | stripe.
 import { neon } from '@neondatabase/serverless';
 import { randomBytes, scryptSync } from 'node:crypto';
-import { accountReference, cleanEnv, findPaidCheckoutForEmail, normalizeEmail, stripeClient } from '../server/payments.js';
+import { accountReference, assignFounderNumbers, cleanEnv, findPaidCheckoutForEmail, normalizeEmail, stripeClient } from '../server/payments.js';
+import { ATTENTION_STATUSES } from '../server/order-settle.js';
 import { requireAdmin } from '../server/admin-auth.js';
 import type { RateSql } from '../server/rate-limit.js';
 
@@ -76,7 +77,8 @@ export default async function handler(
     const counts = await sql`SELECT
         count(*)::int AS total,
         count(*) FILTER (WHERE paid)::int AS paid,
-        count(*) FILTER (WHERE is_founder)::int AS founders,
+        -- vagas de Fundador usadas = maior número emitido (número de revogado fica aposentado, O0-42)
+        COALESCE(max(founder_no), 0)::int AS founders,
         count(*) FILTER (WHERE stripe_ref IS NOT NULL)::int AS with_ref,
         count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS new7,
         count(*) FILTER (WHERE created_at > now() - interval '30 days')::int AS new30,
@@ -123,11 +125,10 @@ export default async function handler(
       sql`UPDATE rtm_accounts SET paid=true, payment_method=COALESCE(payment_method, 'admin') WHERE email=${email}`,
       sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
     ]);
-    // Edição Fundador: conceder acesso também atribui número de fundador (até o teto).
-    await sql`UPDATE rtm_accounts SET is_founder=true,
-        founder_no=(SELECT COALESCE(MAX(founder_no),0)+1 FROM rtm_accounts WHERE is_founder)
-      WHERE email=${email} AND paid=true AND is_founder=false
-        AND (SELECT count(*) FROM rtm_accounts WHERE is_founder) < ${FOUNDER_LIMIT}`;
+    // Edição Fundador (O0-42): acesso concedido NÃO consome vaga de Fundador
+    // (payment_method 'admin' fica fora da fila). Quem já tinha número de um
+    // pagamento anterior recupera o selo, com o MESMO número.
+    await assignFounderNumbers(sql, FOUNDER_LIMIT);
     const hasAccount = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email}`;
     res.status(200).json({ ok: true, email, applied: hasAccount.length > 0 });
     return;
@@ -137,7 +138,9 @@ export default async function handler(
     if (!emailValid) { res.status(400).json({ error: 'e-mail inválido' }); return; }
     await sql.transaction([
       sql`DELETE FROM rtm_paid_emails WHERE email=${email}`,
-      sql`UPDATE rtm_accounts SET paid=false WHERE email=${email}`,
+      // perde o selo; o founder_no fica aposentado (ninguém herda o número nem
+      // anda uma posição na fila — O0-42)
+      sql`UPDATE rtm_accounts SET paid=false, is_founder=false WHERE email=${email}`,
       sql`DELETE FROM rtm_pending_signups WHERE email=${email}`,
     ]);
     res.status(200).json({ ok: true, email });
@@ -206,6 +209,11 @@ export default async function handler(
     const coinRecent = await sql`
       SELECT email, tier, coins, cents, COALESCE(method, 'pix') AS method, status, COALESCE(paid_at, created_at) AS at
       FROM rtm_coin_orders WHERE status IN ('paid', 'claimed') AND cents > 0 ORDER BY COALESCE(paid_at, created_at) DESC LIMIT 25`;
+    // [O0-24/O0-41] dinheiro que entrou e NÃO creditou nada: passe pago 2× na
+    // mesma temporada ou valor divergente do pedido. O CRM mostra pra reembolsar.
+    const coinAttention = await sql`
+      SELECT email, tier, coins, cents, COALESCE(method, 'pix') AS method, status, COALESCE(paid_at, created_at) AS at
+      FROM rtm_coin_orders WHERE status = ANY(${[...ATTENTION_STATUSES]}) ORDER BY COALESCE(paid_at, created_at) DESC LIMIT 50`;
     const coinTrend = await sql`
       WITH days AS (
         SELECT generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day')::date AS day
@@ -235,6 +243,7 @@ export default async function handler(
         byMethod: coinByMethod.map((r) => ({ method: String(r.method), orders: Number(r.orders), coins: Number(r.coins), cents: Number(r.cents) })),
         byTier: coinByTier.map((r) => ({ tier: String(r.tier), orders: Number(r.orders), coins: Number(r.coins), cents: Number(r.cents) })),
         recent: coinRecent.map((r) => ({ email: String(r.email), tier: String(r.tier), coins: Number(r.coins), cents: Number(r.cents), method: String(r.method), status: String(r.status), at: r.at })),
+        attention: coinAttention.map((r) => ({ email: String(r.email), tier: String(r.tier), coins: Number(r.coins), cents: Number(r.cents), method: String(r.method), status: String(r.status), at: r.at })),
         trend: coinTrend.map((r) => ({ day: isoDay(r.day), orders: Number(r.orders), cents: Number(r.cents) })),
       },
     });

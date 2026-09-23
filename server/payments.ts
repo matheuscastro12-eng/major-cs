@@ -1,3 +1,4 @@
+import type { NeonQueryFunction } from '@neondatabase/serverless';
 import { createHmac } from 'node:crypto';
 import Stripe from 'stripe';
 import { appSecret } from './auth.js';
@@ -10,32 +11,38 @@ export const cleanEnv = (value?: string): string => value?.replace(/^\uFEFF/, ''
 // teto do selo de Fundador (numerados; o resto paga e joga, s\u00F3 n\u00E3o ganha n\u00FAmero).
 export const founderLimit = (): number => Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
 
-// cliente sql do neon usado como template tag (basta a forma de tagged template).
-type SqlTag = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Record<string, unknown>[]>;
+// cliente sql do neon (template tag + transaction), o mesmo das rotas.
+type FounderSql = NeonQueryFunction<false, false>;
 
-// Numera\u00E7\u00E3o de FUNDADOR por ORDEM DE PAGAMENTO: #001 = primeiro a pagar no Stripe.
-// Ordena pelo momento em que o e-mail virou pago (rtm_paid_emails.created_at, com
-// fallback no created_at da conta). Determin\u00EDstico e idempotente: s\u00F3 atualiza as
-// linhas que mudam, ent\u00E3o \u00E9 barato rodar a cada pagamento E como backfill do que
-// j\u00E1 existe. Antes os pagantes do webhook n\u00E3o recebiam n\u00FAmero nenhum.
-export async function renumberFounders(sql: SqlTag, limit = founderLimit()): Promise<void> {
-  await sql`
-    WITH ordered AS (
-      SELECT a.email,
-             row_number() OVER (
-               ORDER BY COALESCE(pe.created_at, a.created_at), a.created_at, a.email
-             ) AS rn
-      FROM rtm_accounts a
-      LEFT JOIN rtm_paid_emails pe ON pe.email = a.email
-      WHERE a.paid
-    )
-    UPDATE rtm_accounts a
-    SET is_founder = (o.rn <= ${limit}),
-        founder_no = CASE WHEN o.rn <= ${limit} THEN o.rn::int ELSE NULL END
-    FROM ordered o
-    WHERE a.email = o.email
-      AND (a.founder_no IS DISTINCT FROM (CASE WHEN o.rn <= ${limit} THEN o.rn::int ELSE NULL END)
-           OR a.is_founder IS DISTINCT FROM (o.rn <= ${limit}))`;
+// Numeração de FUNDADOR estável (O0-42/ECON-13). Antes o renumber reordenava
+// TODOS os pagos a cada pagamento, revogação ou grant: um revoke deslocava todo
+// mundo depois dele e podia tirar o selo do #500, que é o que foi vendido.
+// Agora:
+// - founder_no é atribuído UMA vez (MAX+1 sob advisory lock), na ordem do
+//   pagamento, só pra quem ainda não tem número; número dado nunca muda;
+// - o teto vale pro MAIOR número emitido: número de conta revogada fica
+//   aposentado (não volta pra fila) e o #500 é o último pra sempre;
+// - conta concedida pelo admin (payment_method 'admin') não consome vaga;
+// - quem tem número e voltou a ser pago recupera o selo (is_founder).
+// Idempotente e barato quando não há ninguém sem número (UPDATE de 0 linhas).
+export async function assignFounderNumbers(sql: FounderSql, limit = founderLimit()): Promise<void> {
+  await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(hashtext('rtm_founder_no'))`,
+    sql`
+      WITH base AS (SELECT COALESCE(MAX(founder_no), 0) AS top FROM rtm_accounts),
+      queue AS (
+        SELECT a.email,
+               row_number() OVER (ORDER BY COALESCE(pe.created_at, a.created_at), a.created_at, a.email) AS rn
+        FROM rtm_accounts a
+        LEFT JOIN rtm_paid_emails pe ON pe.email = a.email
+        WHERE a.paid AND a.founder_no IS NULL AND COALESCE(a.payment_method, '') <> 'admin'
+      )
+      UPDATE rtm_accounts a
+      SET founder_no = (base.top + q.rn)::int, is_founder = true
+      FROM queue q, base
+      WHERE a.email = q.email AND base.top + q.rn <= ${limit}`,
+    sql`UPDATE rtm_accounts SET is_founder = true WHERE paid AND founder_no IS NOT NULL AND NOT COALESCE(is_founder, false)`,
+  ]);
 }
 
 export function normalizeEmail(value: string | null | undefined): string {
@@ -105,6 +112,44 @@ export function parsePassTier(tier: string): number | null {
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isInteger(n) && n >= 1 ? n : null;
+}
+
+// Tiers de coins do Ultimate (Pix via Woovi ou cartão via Stripe). Valor cresce
+// por real gasto pra recompensar o tier maior: R$10 → 30k, R$15 → 50k (+11%),
+// R$30 → 120k (+33%). Fonte única: api/account.ts cobra e o woovi-webhook
+// reconstrói pedido órfão com os MESMOS valores (antes era uma cópia à mão).
+export const COIN_TIERS: Record<string, { cents: number; coins: number; label: string }> = {
+  p10: { cents: 1000, coins: 30000, label: 'Pacote Arsenal' },
+  p15: { cents: 1500, coins: 50000, label: 'Pacote Elite' },
+  p30: { cents: 3000, coins: 120000, label: 'Pacote Lendário' },
+};
+
+// preço da conta vitalícia no Pix, em CENTAVOS (R$20 = 2000). Editável por
+// PIX_PRICE_CENTS; a action 'pix' cobra isso e o webhook exige pelo menos isso.
+export const pixAccountPriceCents = (): number => Number(cleanEnv(process.env.PIX_PRICE_CENTS) || '2000') || 2000;
+
+// Base do success_url/cancel_url do checkout (O0-40/ECON-11). Antes qualquer
+// origin https do body servia: um link de golpe criava um checkout legítimo da
+// Stripe que, depois do pagamento, mandava a vítima pro domínio do golpista.
+// Agora só o domínio oficial, o próprio deploy (VERCEL_URL/VERCEL_BRANCH_URL,
+// que a Vercel injeta — cobre os previews), os de APP_ORIGINS (lista separada
+// por vírgula) e localhost fora de produção; o resto cai no oficial.
+export const OFFICIAL_ORIGIN = 'https://roadtomajor.com.br';
+export function checkoutBase(origin: unknown): string {
+  const raw = String(origin ?? '').trim().replace(/\/+$/, '');
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { return OFFICIAL_ORIGIN; }
+  // só a origem (sem path, query, user:senha@) — e comparada por igualdade exata
+  const clean = parsed.origin;
+  const allowed = new Set([
+    OFFICIAL_ORIGIN,
+    'https://www.roadtomajor.com.br',
+    ...[process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL].map(cleanEnv).filter(Boolean).map((h) => `https://${h}`),
+    ...cleanEnv(process.env.APP_ORIGINS).split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean),
+  ]);
+  if (allowed.has(clean)) return clean;
+  if (process.env.VERCEL_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(clean)) return clean;
+  return OFFICIAL_ORIGIN;
 }
 
 export async function findPaidCheckoutForEmail(
