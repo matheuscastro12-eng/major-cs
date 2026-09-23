@@ -91,6 +91,7 @@ import { CareerConfirmProvider, useCareerConfirm } from './career/ConfirmModal';
 // OrgFlag: usado pelas pages (WorldTab/VrsTab); import removido daqui.
 import { logoForTeam } from '../data/media';
 import { hashStr } from '../state/hash';
+import { careerMatchSeed } from '../engine/career/matchSeed';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits, applyBo3PlayerEdit, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
@@ -4224,7 +4225,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!p || !save.league) return;
     const m = poUserMatch(p);
     if (!m) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `po:${p.circuit}:${m.a}:${m.b}`));
     const pair = prepareTeams(leagueTeam(save.league, m.a), leagueTeam(save.league, m.b));
     if (!pair) return; // save corrompido (team id no match não está em league.teams)
     const [a, b] = pair;
@@ -4266,7 +4267,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!p || !save.league) return;
     const live = poUserMatch(p);
     if (!live) { applyPlayoff(structuredClone(p)); return; }
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `po:${p.circuit}:${live.a}:${live.b}`));
     const pair = prepareTeams(leagueTeam(save.league, live.a), leagueTeam(save.league, live.b));
     if (!pair) { applyPlayoff(structuredClone(p)); return; }
     const [a, b] = pair;
@@ -4293,7 +4294,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const l = structuredClone(save.league);
     const m = userLeagueMatch(l);
     if (!m) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `lg:${l.name}:${l.current}:${m.a}:${m.b}`));
     const pair = prepareTeams(leagueTeam(l, m.a), leagueTeam(l, m.b));
     if (!pair) return;
     const [a, b] = pair;
@@ -4312,7 +4313,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const simWholeSplit = () => {
     if (!save.league) return;
     const l = structuredClone(save.league);
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `split:${l.name}:${l.current}`));
     let guard = 0;
     const simulated: { series: SeriesResult; teams: [TTeam, TTeam]; userIdx: 0 | 1; label: string }[] = [];
     if (l.gsl) {
@@ -4354,7 +4355,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const playMajor = (s: CareerSave) => {
     const user = buildTeam(s);
     if (!user) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(s, 'major'));
     const rng = rngRef.current;
     // Major real (32 times, 3 stages de Swiss + playoffs). O field é ordenado por
     // VRS; o usuário entra no STAGE do seu tier: top 8 = Stage 3, 9-16 = Stage 2,
@@ -4510,7 +4511,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!pair) return;
     const [a, b] = pair;
     const bo = up.bestOf ?? 3;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `mj:${majorT.name}:${majorT.phase}:${majorT.swissRound}:${up.a}:${up.b}`));
     const series = simulateSeries(rngRef.current, a, b, autoVeto([a, b], rngRef.current, bo), bo);
     setQuickSim({
       series, teams: [a, b], userIdx: up.a === 'user' ? 0 : 1,
@@ -6165,7 +6166,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const myMatch = userLeagueMatch(league);
   const playMine = () => {
     if (!myMatch) return;
-    rngRef.current = makeRng(randomSeed());
+    rngRef.current = makeRng(careerMatchSeed(save, `lg:${league.name}:${league.current}:${myMatch.a}:${myMatch.b}`));
     const pair = prepareTeams(leagueTeam(league, myMatch.a), leagueTeam(league, myMatch.b));
     if (!pair) {
       // save com referência morta a um team que não está em league.teams.
