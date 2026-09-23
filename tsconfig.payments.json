@@ -46,6 +46,7 @@
     "server/ultimate-pack.ts",
     "server/ultimate-pack.test.ts",
     "server/weekend-league.ts",
-    "server/weekend-league.test.ts"
+    "server/weekend-league.test.ts",
+    "server/wlSettleCron.ts"
   ]
 }

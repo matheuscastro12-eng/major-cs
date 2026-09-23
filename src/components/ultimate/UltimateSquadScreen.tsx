@@ -82,6 +82,7 @@ import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoi
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank, type OvertakenBy } from '../../state/ranking';
 import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
 import { WeekendLeague } from '../online/WeekendLeague';
+import { WlResultBanner } from './WlResultBanner'; // [O0-22]
 import { UtPanel, UtEmpty } from './UtPanel';
 import { FounderCounter } from '../FounderCounter';
 import {
@@ -2387,6 +2388,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
               </section>
             );
           })()}
+          {/* [O0-22] resultado do último Major da Semana (fecho automático) — coleta no save */}
+          <WlResultBanner last={wlStatus?.lastSettle ?? null} onCredit={addCredits} />
           {/* Major da Semana — destaque no topo do hub (exposição + ranking) */}
           {(() => {
             const wlWin = wlWindowNow();
