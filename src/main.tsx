@@ -15,16 +15,17 @@ import { ToastProvider } from './components/ds'
 import { ConfirmDialogHost } from './components/ConfirmDialog'
 import { KeyboardHelpHost } from './components/KeyboardHelpOverlay'
 import { PatchNotesHost } from './components/PatchNotesModal'
-import { HowToPlayHost } from './components/HowToPlayHost'
-import { CompareHost } from './components/CompareHost'
-import { MetaPageHost } from './components/MetaPageHost'
-import { FiredModalHost } from './components/FiredModalHost'
-import { InfrastructurePageHost } from './components/InfrastructurePageHost'
-import { LockerRoomPageHost } from './components/LockerRoomPageHost'
-import { LogoBuilderHost } from './components/LogoBuilderHost'
-import { SeasonRecapModalHost } from './components/SeasonRecapModalHost'
-import { TrophyRoomHost } from './components/TrophyRoomHost'
-import { CoachProfileHost } from './components/CoachProfileHost'
+import { HowToPlayHost, closeHowToPlay } from './components/HowToPlayHost'
+import { CompareHost, closeCompare } from './components/CompareHost'
+import { MetaPageHost, closeMeta } from './components/MetaPageHost'
+import { FiredModalHost, closeFiredModal } from './components/FiredModalHost'
+import { InfrastructurePageHost, closeInfrastructure } from './components/InfrastructurePageHost'
+import { LockerRoomPageHost, closeLockerRoom } from './components/LockerRoomPageHost'
+import { LogoBuilderHost, closeLogoBuilder } from './components/LogoBuilderHost'
+import { SeasonRecapModalHost, closeSeasonRecap } from './components/SeasonRecapModalHost'
+import { TrophyRoomHost, closeTrophyRoom } from './components/TrophyRoomHost'
+import { CoachProfileHost, closeCoachProfile } from './components/CoachProfileHost'
+import { HostBoundary } from './components/HostBoundary'
 
 installErrorLogging() // captura crash de runtime em producao (fire-and-forget)
 installPwa()          // registra o SW e guarda o convite de instalacao (ver state/pwa.ts)
@@ -39,23 +40,25 @@ installPwa()          // registra o SW e guarda o convite de instalacao (ver sta
 // quebrar o sistema atual.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {/* ConfirmDialogHost vive FORA do ErrorBoundary porque ele precisa renderizar
-        mesmo quando a app crashou e o boundary mostra a tela de erro (que tem
-        botão "Reiniciar carreira" → chama confirm() global). Modal é portado
-        ao body, então a ordem na árvore não importa visualmente. */}
+    {/* ConfirmDialogHost vive FORA de qualquer boundary porque as telas de erro
+        (ErrorBoundary global e ModeErrorBoundary de cada modo) usam o confirm()
+        global no "Recomeçar". Modal é portado ao body, então a ordem na árvore
+        não importa visualmente. */}
     <ConfirmDialogHost />
-    <KeyboardHelpHost />
-    <PatchNotesHost />
-    <HowToPlayHost />
-    <CompareHost />
-    <MetaPageHost />
-    <FiredModalHost />
-    <InfrastructurePageHost />
-    <LockerRoomPageHost />
-    <LogoBuilderHost />
-    <SeasonRecapModalHost />
-    <TrophyRoomHost />
-    <CoachProfileHost />
+    {/* [O1-36] cada host de modal com boundary próprio: um crash fecha o modal
+        e avisa, em vez de desmontar a raiz inteira (tela branca). */}
+    <HostBoundary name="keyboard-help"><KeyboardHelpHost /></HostBoundary>
+    <HostBoundary name="patch-notes"><PatchNotesHost /></HostBoundary>
+    <HostBoundary name="how-to-play" onCrash={closeHowToPlay}><HowToPlayHost /></HostBoundary>
+    <HostBoundary name="compare" onCrash={closeCompare}><CompareHost /></HostBoundary>
+    <HostBoundary name="meta" onCrash={closeMeta}><MetaPageHost /></HostBoundary>
+    <HostBoundary name="fired" onCrash={closeFiredModal}><FiredModalHost /></HostBoundary>
+    <HostBoundary name="infrastructure" onCrash={closeInfrastructure}><InfrastructurePageHost /></HostBoundary>
+    <HostBoundary name="locker-room" onCrash={closeLockerRoom}><LockerRoomPageHost /></HostBoundary>
+    <HostBoundary name="logo-builder" onCrash={closeLogoBuilder}><LogoBuilderHost /></HostBoundary>
+    <HostBoundary name="season-recap" onCrash={closeSeasonRecap}><SeasonRecapModalHost /></HostBoundary>
+    <HostBoundary name="trophy-room" onCrash={closeTrophyRoom}><TrophyRoomHost /></HostBoundary>
+    <HostBoundary name="coach-profile" onCrash={closeCoachProfile}><CoachProfileHost /></HostBoundary>
     <ErrorBoundary>
       <BrowserRouter>
         <ToastProvider>

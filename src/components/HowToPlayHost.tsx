@@ -24,6 +24,12 @@ export function openHowToPlay(): void {
 }
 
 /** Host único — monta no main.tsx perto da raiz. */
+
+// [O1-36] fecha pelo lado de fora (HostBoundary, quando o conteúdo quebra).
+export function closeHowToPlay(): void {
+  setOpenAll(false);
+}
+
 export function HowToPlayHost() {
   const [open, setOpen] = useState(openState);
 
