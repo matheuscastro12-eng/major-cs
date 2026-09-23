@@ -2,6 +2,9 @@
 // last-write-wins por timestamp. O grátis ignora tudo isso (save só local).
 import { getToken } from './account';
 import { encodeCloudPayload, hashCloudPayload } from './cloudCodec';
+import { captureError } from './errlog';
+import { writeWithQuotaRescue } from './storageQuota';
+import { clearCloudBlock, getCloudBlock, setCloudBlock } from './saveHealth';
 
 const TS = (key: string) => `${key}.cloudts`;
 const FIRST_PUSH_DELAY_MS = 2500;
@@ -9,11 +12,43 @@ const MIN_PUSH_INTERVAL_MS = 30_000;
 export const localSavedAt = (key: string): number => { try { return Number(localStorage.getItem(TS(key)) || 0); } catch { return 0; } };
 export const markSavedAt = (key: string, ts = Date.now()): void => { try { localStorage.setItem(TS(key), String(ts)); } catch { /* sem storage */ } };
 
+// ── Trava de sincronização por chave (persistida em `${key}.cloudhold`) ──────
+// 'quota' [O0-27]: a nuvem tem um save MAIS NOVO que não coube no aparelho.
+//   Enquanto a trava existir, o autosave daquele slot não sobe (o save local é
+//   o velho) e o próximo sync ignora o timestamp local e tenta baixar de novo.
+//   Persistida porque o RtP e o Ultimate carimbam `.cloudts` a cada gravação:
+//   sem ela, o boot seguinte acharia o local "mais novo" e sobrescreveria a nuvem.
+// 'reset' [O0-12]: o jogador recomeçou o modo pela tela de erro. Sem lápide na
+//   nuvem: o sync não restaura (senão o save que quebrou voltaria) nem sobe
+//   nada, até o primeiro save novo daquele slot, que destrava e sobe normal.
+export type CloudHold = 'quota' | 'reset';
+const HOLD = (key: string) => `${key}.cloudhold`;
+const memHolds = new Map<string, CloudHold>(); // fallback quando nem 1 byte cabe no storage
+export function cloudHold(localKey: string): CloudHold | null {
+  try {
+    const v = localStorage.getItem(HOLD(localKey));
+    if (v === 'quota' || v === 'reset') return v;
+  } catch { /* sem storage */ }
+  return memHolds.get(localKey) ?? null;
+}
+export function setCloudHold(localKey: string, hold: CloudHold | null): void {
+  if (hold) {
+    memHolds.set(localKey, hold);
+    writeWithQuotaRescue(HOLD(localKey), hold); // best-effort; a memória cobre a sessão
+  } else {
+    memHolds.delete(localKey);
+    try { localStorage.removeItem(HOLD(localKey)); } catch { /* sem storage */ }
+  }
+}
+
 let enabled = false; // ligado só quando a conta é paga
 export function setCloudEnabled(v: boolean) { enabled = v; }
 export function cloudEnabled() { return enabled && !!getToken(); }
 
-async function post(body: Record<string, unknown>, keepalive = false): Promise<Record<string, unknown> | null> {
+// status 0 = nem chegou no servidor (offline). O corpo de erro pode não ser
+// JSON (ex.: 413 da própria plataforma quando o body passa do limite dela).
+type PostResult = { status: number; data: Record<string, unknown> | null };
+async function postRaw(body: Record<string, unknown>, keepalive = false): Promise<PostResult> {
   try {
     const r = await fetch('/api/cloud-save', {
       method: 'POST',
@@ -21,9 +56,13 @@ async function post(body: Record<string, unknown>, keepalive = false): Promise<R
       body: JSON.stringify(body),
       keepalive,
     });
-    if (!r.ok) return null;
-    return (await r.json().catch(() => null)) as Record<string, unknown> | null;
-  } catch { return null; }
+    const data = (await r.json().catch(() => null)) as Record<string, unknown> | null;
+    return { status: r.status, data };
+  } catch { return { status: 0, data: null }; }
+}
+async function post(body: Record<string, unknown>, keepalive = false): Promise<Record<string, unknown> | null> {
+  const r = await postRaw(body, keepalive);
+  return r.status >= 200 && r.status < 300 ? r.data : null;
 }
 
 // `since` (opcional): timestamp que o cliente já tem. Se o servidor não tiver nada
@@ -36,11 +75,39 @@ export async function pullCloud(slot: string, since = 0): Promise<{ data: string
   return { data: (d.data as string) ?? null, updatedAt: Number(d.updatedAt ?? 0) };
 }
 
-export async function pushCloud(slot: string, data: string, updatedAt: number, keepalive = false): Promise<boolean> {
-  if (!cloudEnabled()) return false;
+export type PushResult = { ok: true } | { ok: false; status: number; error: string; bytes: number };
+export async function pushCloudDetailed(slot: string, data: string, updatedAt: number, keepalive = false): Promise<PushResult> {
+  const bytes = new TextEncoder().encode(data).byteLength;
+  if (!cloudEnabled()) return { ok: false, status: 0, error: 'nuvem desligada', bytes };
   const wire = await encodeCloudPayload(data);
-  const d = await post({ action: 'push', token: getToken(), slot, updatedAt, ...wire }, keepalive);
-  return !!d?.ok;
+  const r = await postRaw({ action: 'push', token: getToken(), slot, updatedAt, ...wire }, keepalive);
+  if (r.status >= 200 && r.status < 300 && r.data?.ok) return { ok: true };
+  const error = typeof r.data?.error === 'string' ? r.data.error : `HTTP ${r.status}`;
+  return { ok: false, status: r.status, error, bytes };
+}
+
+export async function pushCloud(slot: string, data: string, updatedAt: number, keepalive = false): Promise<boolean> {
+  return (await pushCloudDetailed(slot, data, updatedAt, keepalive)).ok;
+}
+
+// [O0-14/DADO-02] 413 NÃO é transitório: o mesmo payload volta 413 pra sempre.
+// Antes o slot reenviava o save inteiro a cada 30s enquanto a aba vivesse
+// (~1.300 chamadas/dia, sem aviso). Agora: para de tentar nesta sessão, mostra
+// o aviso e registra a mensagem do servidor + o tamanho — o 413 cobre também
+// JSON/UTF-8/payload inválido, então a causa "save > 2 MB" precisa ser provada.
+export function isPermanentPushFailure(status: number): boolean {
+  return status === 413;
+}
+function blockTooLarge(slot: string, localKey: string, error: string, bytes: number): void {
+  cancelCloudSave(slot);
+  setCloudBlock({ slot, localKey, reason: 'too-large', message: error, bytes, at: Date.now() });
+  captureError(new Error(`cloud-save 413 [${slot}]: ${error} · ${bytes} bytes`), 'cloud-save-413');
+}
+// push fora da fila (reconciliação do sync): mesmo tratamento do 413.
+function pushTracked(slot: string, localKey: string, data: string, updatedAt: number): void {
+  void pushCloudDetailed(slot, data, updatedAt).then((r) => {
+    if (!r.ok && isPermanentPushFailure(r.status)) blockTooLarge(slot, localKey, r.error, r.bytes);
+  });
 }
 
 type PendingPush = { data: string; updatedAt: number; localKey: string };
@@ -102,10 +169,13 @@ async function flushPendingPush(slot: string, keepalive = false): Promise<void> 
       markSavedAt(pending.localKey, state.lastUploadedAt);
     }
   } else {
-    const ok = await pushCloud(slot, pending.data, pending.updatedAt, keepalive);
-    if (ok) {
+    const res = await pushCloudDetailed(slot, pending.data, pending.updatedAt, keepalive);
+    if (res.ok) {
       state.lastUploadedHash = hash ?? undefined;
       state.lastUploadedAt = pending.updatedAt;
+    } else if (isPermanentPushFailure(res.status)) {
+      // 413: parar. Reenviar o mesmo save só gasta invocação e banda.
+      blockTooLarge(slot, pending.localKey, res.error, res.bytes);
     } else {
       // Falha transitória: conserva o snapshot mais novo para uma tentativa futura.
       restoreFailedPush(slot, pending);
@@ -113,7 +183,7 @@ async function flushPendingPush(slot: string, keepalive = false): Promise<void> 
   }
 
   state.inFlight = false;
-  schedulePendingPush(slot);
+  if (!getCloudBlock(slot)) schedulePendingPush(slot);
 }
 
 function flushAllPending(keepalive: boolean): void {
@@ -140,6 +210,14 @@ export function cancelCloudSave(slot: string) {
 
 export function cloudOnLocalSave(slot: string, localKey: string, getData: () => string | null) {
   if (!cloudEnabled()) return;
+  // slot travado nesta sessão (413 ou restore que não coube): não sobe nada.
+  if (getCloudBlock(slot)) return;
+  const hold = cloudHold(localKey);
+  // restore pendente: o save local é o VELHO; subir agora apagaria o da nuvem.
+  if (hold === 'quota') return;
+  // primeiro save depois de recomeçar pela tela de erro: volta a sincronizar
+  // (é este save novo que substitui o da nuvem — a lápide nunca é gravada).
+  if (hold === 'reset') setCloudHold(localKey, null);
   const data = getData();
   if (!data) return;
   const ts = Date.now();
@@ -152,18 +230,50 @@ export function cloudOnLocalSave(slot: string, localKey: string, getData: () => 
 
 // no login (conta paga): reconcilia a nuvem com o local. Devolve o que aconteceu.
 // 'restored' = a nuvem era mais nova e foi gravada no localStorage (recarregar a tela).
-export async function syncSlot(slot: string, localKey: string): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
+// 'quota' = a nuvem era mais nova mas NÃO coube no aparelho [O0-27]: o slot fica
+// travado (nada sobe) e a UI pede pra liberar espaço.
+export type SyncResult = 'restored' | 'pushed' | 'none' | 'deleted' | 'quota';
+
+function restoreFailedByQuota(slot: string, localKey: string, error: unknown): SyncResult {
+  setCloudHold(localKey, 'quota');
+  cancelCloudSave(slot);
+  const message = error instanceof Error ? error.message : String(error ?? 'quota');
+  setCloudBlock({ slot, localKey, reason: 'quota', message, at: Date.now() });
+  captureError(new Error(`cloud restore sem espaço [${slot}]: ${message}`), 'cloud-restore-quota');
+  return 'quota';
+}
+
+// Grava o save baixado da nuvem com resgate de cota (libera .corrupt/.bak antes
+// de desistir). Exportado pro caminho legado do RtP usar a mesma regra.
+export function writeCloudRestore(slot: string, localKey: string, data: string, updatedAt: number): SyncResult {
+  const w = writeWithQuotaRescue(localKey, data);
+  if (!w.ok) return restoreFailedByQuota(slot, localKey, w.error);
+  if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra restaurar ${localKey}`), 'cloud-restore-quota-rescue');
+  markSavedAt(localKey, updatedAt);
+  if (cloudHold(localKey) === 'quota') setCloudHold(localKey, null);
+  if (getCloudBlock(slot)?.reason === 'quota') clearCloudBlock(slot);
+  return 'restored';
+}
+
+export async function syncSlot(slot: string, localKey: string): Promise<SyncResult> {
   if (!cloudEnabled()) return 'none';
+  const hold = cloudHold(localKey);
+  // recomeçou pela tela de erro: nem restaura o save que quebrou nem sobe nada.
+  if (hold === 'reset') return 'none';
+  // restore pendente por falta de espaço: o local é sabidamente o mais velho,
+  // então o timestamp dele não vale — pede o save inteiro e tenta de novo.
+  const restorePending = hold === 'quota';
   let localData: string | null = null;
   try { localData = localStorage.getItem(localKey); } catch { /* sem storage */ }
-  const localTs = localSavedAt(localKey);
+  const localTs = restorePending ? 0 : localSavedAt(localKey);
   const cloud = await pullCloud(slot, localTs); // manda o ts local -> pull condicional
+  if (restorePending && !cloud) return 'quota'; // sem rede: mantém a trava, tenta no próximo sync
 
   // nuvem sem novidade (tem versão <= a minha e não é tombstone): não restaura.
   // Só re-sobe se o local for ESTRITAMENTE mais novo (mantém o servidor em dia);
   // igual = nada. Evita baixar o save inteiro de novo quando já está sincronizado.
   if (cloud?.unchanged) {
-    if (localData && localTs > cloud.updatedAt) { markSavedAt(localKey, localTs); void pushCloud(slot, localData, localTs); return 'pushed'; }
+    if (localData && localTs > cloud.updatedAt) { markSavedAt(localKey, localTs); pushTracked(slot, localKey, localData, localTs); return 'pushed'; }
     return 'none';
   }
 
@@ -173,19 +283,24 @@ export async function syncSlot(slot: string, localKey: string): Promise<'restore
   if (isTombstone && cloud.updatedAt >= localTs) {
     try { localStorage.removeItem(localKey); localStorage.removeItem(localKey + '.bak'); } catch { /* sem storage */ }
     markSavedAt(localKey, cloud.updatedAt);
+    if (restorePending) { setCloudHold(localKey, null); clearCloudBlock(slot); }
     return 'deleted';
   }
 
   if (cloud?.data && (!localData || cloud.updatedAt > localTs)) {
-    try { localStorage.setItem(localKey, cloud.data); } catch { return 'none'; }
-    markSavedAt(localKey, cloud.updatedAt);
-    return 'restored';
+    return writeCloudRestore(slot, localKey, cloud.data, cloud.updatedAt);
+  }
+  if (restorePending) {
+    // a nuvem ficou vazia: não há o que baixar, destrava e segue com o local.
+    setCloudHold(localKey, null);
+    clearCloudBlock(slot);
+    return 'none';
   }
   // só re-sobe o local quando ele é genuinamente mais novo (inclusive que um tombstone).
   if (localData && (cloud?.data == null || localTs > cloud.updatedAt)) {
     const ts = localTs || Date.now();
     markSavedAt(localKey, ts);
-    void pushCloud(slot, localData, ts);
+    pushTracked(slot, localKey, localData, ts);
     return 'pushed';
   }
   return 'none';

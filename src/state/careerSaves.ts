@@ -1,7 +1,8 @@
 // Gerência de saves da carreira. Conta vitalícia (apoiador) pode ter até 5 saves
 // e apagar qualquer um quando quiser. O grátis usa só o slot 1 (save local único).
 import { getToken } from './account';
-import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave } from './cloud';
+import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave, cloudHold, setCloudHold } from './cloud';
+import { clearCloudBlock } from './saveHealth';
 
 export const CAREER_SLOTS = 5;
 const BASE = 'rtm-career-v1';      // slot 1 = chave legada (preserva o save de quem já jogava)
@@ -64,6 +65,9 @@ export function listSlots(): SlotSummary[] {
 // resumo do save na nuvem de um slot (null se vazio/tombstone ou sem conta)
 async function readCloudSlot(n: number): Promise<SlotSummary | null> {
   if (!cloudEnabled()) return null;
+  // recomeçado pela tela de erro: o save da nuvem (o que quebrou) não aparece
+  // como "continuar" — ele só é substituído quando um save novo subir.
+  if (cloudHold(slotKey(n)) === 'reset') return null;
   const c = await pullCloud(cloudSlot(n));
   if (!c?.data) return null; // '' = tombstone (apagado) → conta como vazio
   return { ...summaryFromRaw(n, c.data), fromCloud: true };
@@ -90,6 +94,8 @@ export function deleteSlot(n: number): void {
     localStorage.removeItem(key + '.corrupt');
     localStorage.removeItem(key + '.cloudts');
   } catch { /* sem storage */ }
+  setCloudHold(key, null);
+  clearCloudBlock(cloudSlot(n));
   if (getToken()) {
     cancelCloudSave(cloudSlot(n));               // mata push pendente do autosave
     void pushCloud(cloudSlot(n), '', Date.now()); // grava o tombstone na nuvem

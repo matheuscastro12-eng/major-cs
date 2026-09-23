@@ -7,7 +7,8 @@
 // RTP1: 1 slot local pra todo mundo (sem paywall). Cloud sync se logado.
 
 import { getToken } from './account';
-import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave, cloudOnLocalSave, syncSlot, localSavedAt, markSavedAt } from './cloud';
+import { pushCloud, pullCloud, cloudEnabled, cancelCloudSave, cloudOnLocalSave, syncSlot, localSavedAt, markSavedAt, writeCloudRestore, setCloudHold, type SyncResult } from './cloud';
+import { clearCloudBlock } from './saveHealth';
 import { captureError } from './errlog';
 import { writeWithQuotaRescue } from './storageQuota';
 import { RTP_SAVE_VERSION, ACTIONS_PER_WEEK, rebuildRealWorld, STARTER_SETUP, STARTER_LIFESTYLE } from '../engine/rtp/createSave';
@@ -18,7 +19,8 @@ import { deriveRecords } from '../engine/rtp/records';
 import { ALL_ATTRS } from '../engine/attributes';
 import type { RoadToProSave, RtpSlotSummary, Tier, CareerLog } from '../engine/rtp/types';
 
-const KEY = 'rtm-rtp-v1';
+export const RTP_KEY = 'rtm-rtp-v1';
+const KEY = RTP_KEY;
 const CLOUD_SLOT = 'rtp';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,10 +256,25 @@ export function deleteRtp(): void {
     localStorage.removeItem(KEY + '.corrupt');
     localStorage.removeItem(KEY + '.cloudts');
   } catch { /* sem storage */ }
+  setCloudHold(KEY, null);
+  clearCloudBlock(CLOUD_SLOT);
   if (getToken()) {
     cancelCloudSave(CLOUD_SLOT);
     void pushCloud(CLOUD_SLOT, '', Date.now()); // tombstone
   }
+}
+
+// [O0-12] "Recomeçar o Road to Pro" pela tela de erro: tira o save DESTE
+// aparelho (o principal vai pra `.corrupt`) sem lápide na nuvem. A trava
+// 'reset' impede o sync de trazer de volta o save que quebrou; o primeiro save
+// novo (peneira) destrava e é ele que substitui a cópia da nuvem.
+export function resetRtpLocal(): void {
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(KEY); } catch { /* sem storage */ }
+  if (raw) { try { localStorage.setItem(KEY + '.corrupt', raw); } catch { /* sem espaço pro diagnóstico */ } }
+  for (const k of [KEY, KEY + '.bak']) { try { localStorage.removeItem(k); } catch { /* sem storage */ } }
+  cancelCloudSave(CLOUD_SLOT);
+  setCloudHold(KEY, 'reset');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -265,7 +282,7 @@ export function deleteRtp(): void {
 // re-sobe ou apaga por tombstone — igual à carreira). 'restored'/'deleted'
 // pedem re-render do consumidor.
 
-export async function syncRtpFromCloud(): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
+export async function syncRtpFromCloud(): Promise<SyncResult> {
   if (!cloudEnabled()) return 'none';
   // Legado: saves gravados antes do `.cloudts` não têm timestamp local — o
   // last-write-wins escolheria às cegas. Desempata por progresso (temporada/
@@ -277,11 +294,9 @@ export async function syncRtpFromCloud(): Promise<'restored' | 'pushed' | 'none'
       try {
         const cloudSave = migrateRtp(JSON.parse(c.data) as Record<string, unknown>);
         const prog = (s: RoadToProSave) => (s.world?.season ?? 0) * 1000 + (s.world?.week ?? 0);
-        if (prog(cloudSave) > prog(local)) {
-          localStorage.setItem(KEY, c.data);
-          markSavedAt(KEY, c.updatedAt);
-          return 'restored';
-        }
+        // [O0-27] restore com resgate de cota: se nem assim couber, trava o
+        // slot ('quota') em vez de seguir no save velho e sobrescrever a nuvem.
+        if (prog(cloudSave) > prog(local)) return writeCloudRestore(CLOUD_SLOT, KEY, c.data, c.updatedAt);
       } catch { /* nuvem ilegível → mantém o local */ }
     }
     // local venceu (ou nuvem vazia): estampa agora pro syncSlot re-subir o local.

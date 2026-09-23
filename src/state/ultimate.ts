@@ -5,9 +5,10 @@
 // local — o save guarda coins pagos. Ver docs-but-map.md §4/§6.
 
 import { create } from 'zustand';
-import { cloudEnabled, cloudOnLocalSave, markSavedAt, syncSlot } from './cloud';
+import { cancelCloudSave, cloudEnabled, cloudHold, cloudOnLocalSave, markSavedAt, setCloudHold, syncSlot, type SyncResult } from './cloud';
 import { captureError } from './errlog';
 import { writeWithQuotaRescue } from './storageQuota';
+import { registerSaveRetry, reportLocalSave } from './saveHealth';
 // Fase 3a da economia server-side: cada mutação econômica (credits/cartas) é
 // ESPELHADA como tx idempotente pro servidor via mirrorUltimateChange — o save
 // local/cloud-save segue sendo a fonte da verdade; o espelho nunca bloqueia
@@ -115,6 +116,15 @@ function load(): UltimateState {
   }
 }
 
+// [O0-26] Erro da última gravação local, na store (persistError) e no banner
+// global. Guardado contra a TDZ: persist pode rodar antes de useUltimate existir.
+function reportPersist(error: string | null): void {
+  try {
+    if (useUltimate.getState().persistError !== error) useUltimate.setState({ persistError: error });
+  } catch { /* store ainda não criada (boot) */ }
+  reportLocalSave('ultimate', error);
+}
+
 function persist(s: UltimateState): void {
   const json = JSON.stringify(s);
   let prev: string | null = null;
@@ -125,8 +135,13 @@ function persist(s: UltimateState): void {
   if (!w.ok) {
     /* storage cheio/indisponível — modo é opcional, não trava o app */
     captureError(w.error ?? new Error('quota'), 'ultimate-persist');
+    reportPersist(w.error instanceof Error ? w.error.message : 'quota');
+    // [O0-26] falhou o LOCAL: ainda empurra pra nuvem (pagante não perde a
+    // compra no F5). Antes o return vinha antes do push.
+    if (!(isPristine(s) && cloudHold(KEY) === 'reset')) cloudOnLocalSave(CLOUD_SLOT, KEY, () => json);
     return;
   }
+  reportPersist(null);
   if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra salvar ${KEY}`), 'ultimate-quota-rescue');
   // backup de um passo: se o save novo ficar ilegível, dá pra voltar pro anterior
   if (prev && prev !== json) {
@@ -134,6 +149,9 @@ function persist(s: UltimateState): void {
   }
   // timestamp local + push debounced pra nuvem (no-op se deslogado/grátis).
   markSavedAt(KEY);
+  // depois de recomeçar pela tela de erro, o save virgem do boot não conta como
+  // "save novo": subir ele apagaria a coleção da nuvem sem o jogador jogar.
+  if (isPristine(s) && cloudHold(KEY) === 'reset') return;
   cloudOnLocalSave(CLOUD_SLOT, KEY, () => json);
 }
 
@@ -146,7 +164,7 @@ function isPristine(s: UltimateState): boolean {
 
 // Reconcilia o save do Ultimate com a nuvem no boot (após a conta carregar).
 // 'restored'/'deleted' já rehidratam a store — o consumidor só reage na UI.
-export async function syncUltimateFromCloud(): Promise<'restored' | 'pushed' | 'none' | 'deleted'> {
+export async function syncUltimateFromCloud(): Promise<SyncResult> {
   if (!cloudEnabled()) return 'none';
   // Save virgem persistido no boot NÃO pode vencer o save real da nuvem por
   // timestamp (sobrescreveria a coleção do jogador num aparelho novo).
@@ -275,6 +293,8 @@ export function ultimatePromoPack(): PackDef {
 
 interface UltimateStore {
   state: UltimateState;
+  // [O0-26] última falha de gravação local (null = gravou). O banner lê via saveHealth.
+  persistError: string | null;
   grant: (cardKey: string, via: AcquiredVia) => void;
   openPack: (packId: string) => { ok: boolean; cards: UltCard[]; reason?: 'unknown_pack' | 'insufficient' | 'unavailable' };
   // fase 3b: abre no SERVIDOR quando conta paga+logada (roll autoritativo);
@@ -391,6 +411,7 @@ function takeEscrowMeta(cardId: string): EscrowMeta | null {
 
 export const useUltimate = create<UltimateStore>((set, get) => ({
   state: load(),
+  persistError: null,
   grant: (cardKey, via) =>
     set((st) => {
       const s = _grantCard(st.state, cardKey, via);
@@ -1158,6 +1179,22 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set({ state: s });
   },
 }));
+
+// "Tentar de novo" do banner: regrava o estado da memória.
+registerSaveRetry('ultimate', () => persist(useUltimate.getState().state));
+
+// [O0-12] "Recomeçar o Ultimate" pela tela de erro: tira o save DESTE aparelho
+// (principal vai pra `.corrupt`), sem lápide na nuvem e sem persistir o estado
+// virgem por cima — a trava 'reset' segura o sync até o jogador jogar de novo.
+export function resetUltimateLocal(): void {
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(KEY); } catch { /* sem storage */ }
+  if (raw) { try { localStorage.setItem(KEY + '.corrupt', raw); } catch { /* sem espaço pro diagnóstico */ } }
+  for (const k of [KEY, KEY + '.bak']) { try { localStorage.removeItem(k); } catch { /* sem storage */ } }
+  cancelCloudSave(CLOUD_SLOT);
+  setCloudHold(KEY, 'reset');
+  useUltimate.setState({ state: defaultUltimateState(), persistError: null });
+}
 
 // Sync entre abas: outra aba do site persistiu → rehidrata esta store (evita
 // last-writer-wins sobrescrever resgates one-time feitos na outra aba).
