@@ -7,6 +7,8 @@
 // Ações (POST body.action): status | register | report | claim. Só conta PAGA.
 import { neon } from '@neondatabase/serverless';
 import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { requireAdmin } from '../server/admin-auth.js';
+import type { RateSql } from '../server/rate-limit.js';
 import {
   wlSchemaQueries,
   wlStatus,
@@ -21,8 +23,6 @@ import {
 } from '../server/weekend-league.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 import { bumpCommunityContrib, communityGoalSchemaQueries } from '../server/communityGoal.js'; // [URG-5]
-import { requireAdmin } from '../server/admin-auth.js';
-import type { RateSql } from '../server/rate-limit.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
