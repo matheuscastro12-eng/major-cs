@@ -10,8 +10,8 @@
 // escolhe sempre a mesma carta pra mesma semana, independente da ordem da lista.
 // O servidor mescla este evento nos itens de live-ops quando não existe um item
 // manual com o mesmo id (server/weekendEvent.ts) — o dono customiza se quiser.
-import { makeRng } from '../rng';
-import type { EventRule, EventWinTier } from './events';
+import { makeRng } from '../rng.js'; // [O0-01] .js obrigatório: o servidor carrega este arquivo em Node ESM puro
+import type { EventRule, EventWinTier } from './events.js';
 
 export const WEEKEND_EVENT_PREFIX = 'wknd-';
 export const WEEKEND_EVENT_VERSION = 1;

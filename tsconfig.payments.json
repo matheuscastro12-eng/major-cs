@@ -28,6 +28,8 @@
     "server/liveops.ts",
     "server/communityGoal.ts",
     "server/communityGoal.test.ts",
+    "server/esmImportGraph.ts",
+    "server/esm-imports.test.ts",
     "server/liveops.test.ts",
     "server/payments.ts",
     "server/payments.test.ts",
