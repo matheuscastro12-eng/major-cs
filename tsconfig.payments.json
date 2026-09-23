@@ -62,6 +62,10 @@
     "api/teams.ts",
     "server/admin-auth.test.ts",
     "server/nick.ts",
-    "server/nick.test.ts"
+    "server/nick.test.ts",
+    "server/hall.ts",
+    "server/hall.test.ts",
+    "api/hall.ts",
+    "api/track.ts"
   ]
 }

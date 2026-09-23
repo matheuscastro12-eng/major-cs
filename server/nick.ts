@@ -12,13 +12,14 @@ type SqlTag = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<R
 
 // NFKC (tira letra "fantasia" de largura total etc.), remove controle e
 // caracteres invisíveis (zero-width, bidi) e colapsa espaços.
-export function normalizeNick(raw: unknown): string {
+export function normalizeNick(raw: unknown, max = NICK_MAX): string {
   return String(raw ?? '')
+    .slice(0, 256) // corta ANTES de normalizar: string de MBs não vira CPU cara
     .normalize('NFKC')
     .replace(/[\p{Cc}\p{Cf}]/gu, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, NICK_MAX);
+    .slice(0, max);
 }
 
 // Esqueleto pra comparar com a lista: minúsculo, sem acento, leetspeak desfeito
@@ -51,16 +52,20 @@ const BLOCKED_WORDS = new Set([
 // Nomes que se passam pela casa.
 const RESERVED = ['admin', 'administrador', 'moderador', 'suporte', 'oficial', 'roadtomajor', 'majorcs', 'staff'];
 
+// Texto livre (nick, nome de time do Hall) com termo bloqueado?
+export function hasBlockedTerm(text: string): boolean {
+  const skel = nickSkeleton(text);
+  const words = text.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').split(/[^a-z0-9]+/).filter(Boolean);
+  return BLOCKED_ROOTS.some((r) => skel.includes(r)) || words.some((w) => BLOCKED_WORDS.has(w));
+}
+
 export function nickProblem(nick: string): string | null {
   if (nick.length < NICK_MIN) return `O nick precisa de pelo menos ${NICK_MIN} caracteres.`;
   if (nick.length > NICK_MAX) return `O nick pode ter no máximo ${NICK_MAX} caracteres.`;
   if (!/^[\p{L}\p{N} _.-]+$/u.test(nick)) return 'Use só letras, números, espaço, _ . e -.';
   const skel = nickSkeleton(nick);
   if (!skel && !/\p{N}/u.test(nick)) return 'O nick precisa ter letras ou números.';
-  const words = nick.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').split(/[^a-z0-9]+/).filter(Boolean);
-  if (BLOCKED_ROOTS.some((r) => skel.includes(r)) || words.some((w) => BLOCKED_WORDS.has(w))) {
-    return 'Esse nick não é permitido. Escolha outro.';
-  }
+  if (hasBlockedTerm(nick)) return 'Esse nick não é permitido. Escolha outro.';
   if (RESERVED.some((r) => skel === r || skel.startsWith(r))) return 'Esse nick é reservado. Escolha outro.';
   return null;
 }
