@@ -24,6 +24,7 @@ import {
 } from '../server/payments.js';
 import { restorableCoins } from '../server/coin-restore.js';
 import { mailConfigured, sendMail } from '../server/mail.js';
+import { nickProblem, nickTaken, normalizeNick } from '../server/nick.js';
 import { clientIp, rateLimitHit, respondLimited, type RateRule, type RateSql } from '../server/rate-limit.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -67,6 +68,9 @@ async function ensureAccountSchema(sql: AccountSql): Promise<void> {
       sql`CREATE INDEX IF NOT EXISTS rtm_coin_restores_email_idx ON rtm_coin_restores (email)`,
       // reset de senha: código de 6 dígitos por e-mail (hash scrypt, igual à senha),
       // 30min de validade, 5 tentativas, 1 código ativo por e-mail.
+      // [O1-10] unicidade do nick sem diferenciar maiúsculas (checada no código; o
+      // índice não é UNIQUE porque a base pode ter duplicatas antigas).
+      sql`CREATE INDEX IF NOT EXISTS rtm_accounts_nick_lower_idx ON rtm_accounts (lower(nick))`,
       sql`CREATE TABLE IF NOT EXISTS rtm_password_resets (email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, attempts INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT now())`,
     ]).then(() => undefined).catch((error) => {
       accountSchemaPromise = null;
@@ -123,6 +127,7 @@ const RATE = {
   me: { ip: [120, 60] },
   resetRequest: { ip: [10, 3600], email: [5, 3600] },
   resetConfirm: { ip: [30, 3600], email: [10, 3600] },
+  setNick: { ip: [20, 3600], email: [5, 86400] },
 } as const;
 // reconciliação com o Stripe (list de 100 sessões com expand) no máx. 1x a cada
 // 2 min por e-mail: o 'me' de um cadastro pendente não vira flood na API do Stripe.
@@ -170,7 +175,8 @@ export default async function handler(
   const action = String(body.action ?? '');
   const email = String(body.email ?? '').trim().toLowerCase().slice(0, 200);
   const password = String(body.password ?? '');
-  const nick = String(body.nick ?? '').trim().slice(0, 40);
+  // [O1-10] nick da conta normalizado (NFKC, sem invisíveis); validado no signup/setNick.
+  const nick = normalizeNick(body.nick);
   const ip = clientIp(req.headers);
   const rsql = sql as unknown as RateSql;
   // 429 quando QUALQUER regra (IP ou e-mail) da ação estourou. Devolve true se respondeu.
@@ -281,6 +287,12 @@ export default async function handler(
     if (!/\S+@\S+\.\S+/.test(email) || password.length < 6) { res.status(400).json({ error: 'E-mail inválido ou senha com menos de 6 caracteres.' }); return; }
     const exists = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email}`;
     if (exists.length) { res.status(409).json({ error: 'Já existe uma conta com esse e-mail. Faça login.' }); return; }
+    // [O1-10] nick opcional no cadastro, mas se vier: regras + unicidade.
+    if (nick) {
+      const problem = nickProblem(nick);
+      if (problem) { res.status(400).json({ error: problem, field: 'nick' }); return; }
+      if (await nickTaken(sql, nick, email)) { res.status(409).json({ error: 'Esse nick já está em uso. Escolha outro.', field: 'nick' }); return; }
+    }
     // REGRA: só pago tem conta. Se o e-mail já pagou (antes de cadastrar), cria a
     // conta direto. Senão, guarda como cadastro PENDENTE e manda pro pagamento — a
     // conta só nasce quando o pagamento confirma (claim/webhook promovem o pendente).
@@ -397,6 +409,22 @@ export default async function handler(
     if (!r.length) { res.status(401).json({ error: 'Conta não encontrada.' }); return; }
     await ensureReference(em);
     res.status(200).json({ email: em, nick: r[0].nick, paid, ...(await founderOf(em)) });
+    return;
+  }
+
+  // setNick: troca o nick da CONTA (o que aparece no ranking, na Série do Dia,
+  // no Draft e no aviso de rival — O1-10). Mesmas regras do cadastro; no máx.
+  // 5 trocas por dia por conta.
+  if (action === 'setNick') {
+    const em = verifyToken(String(body.token ?? ''));
+    if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
+    if (await limited('setNick', em)) return;
+    const problem = nickProblem(nick);
+    if (problem) { res.status(400).json({ error: problem, field: 'nick' }); return; }
+    if (await nickTaken(sql, nick, em)) { res.status(409).json({ error: 'Esse nick já está em uso. Escolha outro.', field: 'nick' }); return; }
+    const upd = await sql`UPDATE rtm_accounts SET nick=${nick} WHERE email=${em} RETURNING email`;
+    if (!upd.length) await sql`UPDATE rtm_pending_signups SET nick=${nick} WHERE email=${em}`;
+    res.status(200).json({ ok: true, nick });
     return;
   }
 

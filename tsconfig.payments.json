@@ -60,6 +60,8 @@
     "api/error.ts",
     "api/metrics.ts",
     "api/teams.ts",
-    "server/admin-auth.test.ts"
+    "server/admin-auth.test.ts",
+    "server/nick.ts",
+    "server/nick.test.ts"
   ]
 }
