@@ -88,9 +88,9 @@ export function UltimateLiveSession({ session, onSession, onFinish }: {
           <span style={{ color: '#2563eb' }}>{view.score[0]}</span><span style={{ opacity: .4 }}>–</span><span style={{ color: '#d97706' }}>{view.score[1]}</span>
         </div>
         <div style={{ textAlign: 'center', fontSize: '0.78rem', color: 'var(--ut-muted)' }}>
-          {view.done ? ct('Fim de mapa') : <>{ct('Round')} {view.round + 1}{pWin != null && <> · {ct('leitura pré-round')}: <b>{Math.round(pWin * 100)}%</b> {ct('de vencer')}</>}{boostActive && <> · <b style={{ color: '#92600a' }}>⏸ {ct('timeout em vigor')}</b></>}</>}
+          {view.done ? ct('Fim de mapa') : <>{ct('Round')} {view.round + 1}{pWin != null && <> · {ct('leitura pré-round')}: <b>{Math.round(pWin * 100)}%</b> {ct('de vencer')}</>}{boostActive && <> · <b style={{ color: 'var(--c-accent)' }}>⏸ {ct('timeout em vigor')}</b></>}</>}
         </div>
-        {(paused || flash) && <div style={{ textAlign: 'center', fontWeight: 800, color: '#92600a' }}>{paused || flash}</div>}
+        {(paused || flash) && <div style={{ textAlign: 'center', fontWeight: 800, color: 'var(--c-accent)' }}>{paused || flash}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button className="ut-jogar" style={{ padding: '9px 16px' }} onClick={myTimeout} disabled={view.done || view.timeoutsLeft[0] <= 0 || !!paused || boostActive} title={ct('Pede timeout: seu time joga os próximos rounds com foco (+força). Um por mapa. Só muda o que ainda não aconteceu.')}>
             ⏸ {ct('TIMEOUT')} ({Math.max(0, view.timeoutsLeft[0])})
