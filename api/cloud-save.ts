@@ -4,6 +4,7 @@
 import { neon } from '@neondatabase/serverless';
 import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
 import { CloudSavePayloadError, decodeCloudSavePayload } from '../server/cloud-save-codec.js';
+import { CLOUD_MAX_FUTURE_MS, clampUpdatedAt, cloudSlotAllowed } from '../server/cloud-save-policy.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -71,7 +72,9 @@ export default async function handler(
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
   if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'Este recurso faz parte da conta com save na nuvem.' }); return; }
 
+  // [O0-29] só slots conhecidos (career, career-2..5, rtp, online, ultimate).
   const slot = String(body.slot ?? 'career').slice(0, 40);
+  if (!cloudSlotAllowed(slot)) { res.status(400).json({ error: 'slot inválido' }); return; }
 
   if (action === 'pull') {
     const since = Number(body.since) || 0;
@@ -100,11 +103,24 @@ export default async function handler(
     // data vazio = tombstone (lápide) de exclusão. NÃO é erro: grava '' com o
     // timestamp pra que o last-write-wins marque o slot como apagado e ele não
     // ressuscite no próximo sync. Antes isso retornava 400 e o save voltava.
-    const updatedAt = Number(body.updatedAt) || Date.now();
-    await sql`
+    // [O0-29] timestamp do cliente limitado a agora+5min: relógio adiantado não
+    // tranca mais o slot pra sempre. Linha já envenenada (além da tolerância)
+    // aceita ser sobrescrita — é assim que ela se cura.
+    const now = Date.now();
+    const updatedAt = clampUpdatedAt(body.updatedAt, now);
+    const poisonedAfter = now + CLOUD_MAX_FUTURE_MS;
+    const written = await sql`
       INSERT INTO rtm_saves (email, slot, data, updated_at) VALUES (${email}, ${slot}, ${data}, ${updatedAt})
       ON CONFLICT (email, slot) DO UPDATE SET data=EXCLUDED.data, updated_at=EXCLUDED.updated_at
-      WHERE EXCLUDED.updated_at >= rtm_saves.updated_at`;
+      WHERE EXCLUDED.updated_at >= rtm_saves.updated_at OR rtm_saves.updated_at > ${poisonedAfter}
+      RETURNING updated_at`;
+    if (!written.length) {
+      // o servidor tem versão mais nova: antes respondia ok:true e o save sumia em
+      // silêncio. Agora 409 com o timestamp atual, pro cliente reconciliar (pull).
+      const cur = await sql`SELECT updated_at FROM rtm_saves WHERE email=${email} AND slot=${slot}`;
+      res.status(409).json({ error: 'conflict', conflict: true, updatedAt: Number(cur[0]?.updated_at ?? 0) });
+      return;
+    }
     res.status(200).json({ ok: true, updatedAt, deleted: !data });
     return;
   }

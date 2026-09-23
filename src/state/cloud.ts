@@ -21,7 +21,9 @@ async function post(body: Record<string, unknown>, keepalive = false): Promise<R
       body: JSON.stringify(body),
       keepalive,
     });
-    if (!r.ok) return null;
+    // 409 = o servidor já tem versão mais nova deste slot (O0-29): devolve o corpo
+    // ({conflict, updatedAt}) em vez de tratar como falha transitória.
+    if (!r.ok && r.status !== 409) return null;
     return (await r.json().catch(() => null)) as Record<string, unknown> | null;
   } catch { return null; }
 }
@@ -40,7 +42,10 @@ export async function pushCloud(slot: string, data: string, updatedAt: number, k
   if (!cloudEnabled()) return false;
   const wire = await encodeCloudPayload(data);
   const d = await post({ action: 'push', token: getToken(), slot, updatedAt, ...wire }, keepalive);
-  return !!d?.ok;
+  // conflito conta como "resolvido": re-tentar o mesmo snapshot a cada 30s não
+  // adianta (o servidor sempre vai recusar); o próximo sync/pull reconcilia.
+  // Antes do O0-29 o servidor respondia ok:true nesse caso — mesmo efeito aqui.
+  return !!d?.ok || !!d?.conflict;
 }
 
 type PendingPush = { data: string; updatedAt: number; localKey: string };

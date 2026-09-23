@@ -66,6 +66,8 @@
     "server/hall.ts",
     "server/hall.test.ts",
     "api/hall.ts",
-    "api/track.ts"
+    "api/track.ts",
+    "server/cloud-save-policy.ts",
+    "server/cloud-save-policy.test.ts"
   ]
 }
