@@ -64,11 +64,17 @@ body:has(main.page-ultimate) { background: var(--ut-page-bg) !important; backgro
 }
 .ut-root :where(h1, h2, h3) { margin: 0; }
 
-/* ---------------- TOP NAV (full-width) ---------------- */
-.ut-topbar {
+/* funil: nav + aviso de convidado (.ut-guest-warn, ver comentário no componente)
+   dividem um único wrapper sticky — antes só a nav grudava no topo e o aviso
+   (único CTA de venda do modo convidado) rolava junto com o conteúdo e sumia. */
+.ut-sticky-head {
   position: sticky;
   top: 0;
   z-index: 40;
+}
+
+/* ---------------- TOP NAV (full-width) ---------------- */
+.ut-topbar {
   background: linear-gradient(180deg, var(--ut-bar-1) 0%, var(--ut-bar-2) 100%);
   border-bottom: 2px solid var(--ut-gold-2);
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
