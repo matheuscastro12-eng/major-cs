@@ -125,6 +125,12 @@ export function DecisionReview({ events, title, nick, scoreLabel, won, mode }: {
                       {e.pBase != null && Math.round(e.pBase * 100) !== Math.round(e.pWin * 100)
                         ? <><i>{pct(e.pBase)} →</i> {pct(e.pWin)}</>
                         : pct(e.pWin)}
+                      {/* O1-47: informação oculta (leitura de site da defesa) moveu o dado */}
+                      {e.pRolled != null && Math.round(e.pRolled * 100) !== Math.round(e.pWin * 100) && (
+                        <span className="dr-hidden" title={ct('Informação oculta: a leitura de site da defesa mudou a chance real do round.')}>
+                          {ct('rolou')} {pct(e.pRolled)}
+                        </span>
+                      )}
                     </td>
                     <td>
                       {e.execPerf != null

@@ -281,7 +281,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
         const callKind = callRef.current;
         const c = callKind ? ({ team: userIdx, kind: callKind } as const) : undefined;
         buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
-        const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
+        const odds = c ? sim.peekWinProb(userIdx, stanceMod, c, boostRounds - boostsUsed > 0 ? userIdx : null) : 0; // chance ANTES do round
         const preScore: [number, number] = userIdx === 0 ? sim.score() : [sim.score()[1], sim.score()[0]];
         callsRef.current.push(identityCallOf(sim.side()[userIdx], sim.buys()[userIdx], stanceMod?.mode, callKind)); // [W5]
         if (boostRounds - boostsUsed > 0) {
@@ -298,7 +298,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
           decisionLog.current.push({ mapIdx, call: callKind, stance: stanceRef.current, won, round: sim.round(), odds });
           eventsLog.current.push({
             source: 'career', map: maps[Math.min(mapIdx, maps.length - 1)].map, round: sim.round(),
-            label: t(CALLS.find((x) => x.key === callKind)!.labelKey), pWin: odds, won,
+            label: t(CALLS.find((x) => x.key === callKind)!.labelKey), pWin: odds, pRolled: sim.lastRollP(userIdx) ?? odds, won,
             stakes: stakesOf(buysByRound.current[`${mapIdx}:${sim.round() - 1}`]?.[userIdx] === 'pistol', preScore, sim.round() - 1),
           });
           callRef.current = null;
@@ -328,11 +328,12 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
     const c = callKind ? ({ team: userIdx, kind: callKind } as const) : undefined;
     const boost = boostRounds > 0;
     buysByRound.current[`${mapIdx}:${sim.round()}`] = sim.buys(); // compra antes do round
-    const odds = c ? sim.peekWinProb(userIdx, stanceMod, c) : 0; // chance ANTES do round
+    const boostArg = boost ? userIdx : null;   // O1-47: a % da tela inclui o timeout
+    const odds = c ? sim.peekWinProb(userIdx, stanceMod, c, boostArg) : 0; // chance ANTES do round
     // chance da chamada ESCOLHIDA, medida ANTES do step (a neutra não tem call,
     // mas a animação do golpe precisa mostrar o que ela valia na hora da decisão
     // — peekWinProb depois do round já é a do PRÓXIMO, e mentiria pro jogador).
-    const oddsShown = chosenMoveRef.current ? sim.peekWinProb(userIdx, stanceMod, c) : odds;
+    const oddsShown = chosenMoveRef.current ? sim.peekWinProb(userIdx, stanceMod, c, boostArg) : odds;
     // #20: tática de site vale 1 round e some (informação oculta — resolve no step)
     const siteKind = siteRef.current;
     const wasCt = sim.side()[userIdx] === 'ct';
@@ -370,7 +371,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       chosenMoveRef.current = null;
       eventsLog.current.push({
         source: 'career', map: maps[Math.min(mapIdx, maps.length - 1)].map, round: preRound + 1,
-        label: mv.label, actor: mv.nick, pWin: oddsShown, won: wonRound, stakes: preStakes,
+        label: mv.label, actor: mv.nick, pWin: oddsShown, pRolled: sim.lastRollP(userIdx) ?? oddsShown, won: wonRound, stakes: preStakes,
         ...(mv.alternatives?.length ? { alternatives: mv.alternatives } : {}),
       });
     } else if (c && callKind) {
@@ -378,7 +379,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
       const log = sim.roundLog();
       eventsLog.current.push({
         source: 'career', map: maps[Math.min(mapIdx, maps.length - 1)].map, round: preRound + 1,
-        label: t(CALLS.find((x) => x.key === callKind)!.labelKey), pWin: odds, won: log[log.length - 1] === userIdx, stakes: preStakes,
+        label: t(CALLS.find((x) => x.key === callKind)!.labelKey), pWin: odds, pRolled: sim.lastRollP(userIdx) ?? odds, won: log[log.length - 1] === userIdx, stakes: preStakes,
       });
     }
     setTick((t) => t + 1);
@@ -488,8 +489,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const oppIdx: 0 | 1 = userIdx === 0 ? 1 : 0;
   const myStanceArg = stance !== 'default' ? ({ team: userIdx, mode: stance } as const) : undefined;
   const myCallArg = pendingCall ? ({ team: userIdx, kind: pendingCall } as const) : undefined;
-  const baseProb = finished ? 0 : sim.peekWinProb(userIdx);
-  const decisionProb = finished ? 0 : sim.peekWinProb(userIdx, myStanceArg, myCallArg);
+  // O1-47: com timeout pendente a % da tela já inclui o +2,0 que o round aplica.
+  const boostArg = boostRounds > 0 ? userIdx : null;
+  const baseProb = finished ? 0 : sim.peekWinProb(userIdx, undefined, undefined, boostArg);
+  const decisionProb = finished ? 0 : sim.peekWinProb(userIdx, myStanceArg, myCallArg, boostArg);
   const probDelta = decisionProb - baseProb;
   const enemyBuy = buys[oppIdx]; // leitura: compra provável do inimigo no round
   // leitura de eco do inimigo em texto (freezetime read estilo CS)
@@ -503,11 +506,11 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   // impacto de CADA chamada (rush/retake/force/save) sobre a chance do round,
   // relativo à postura atual sem call. Mostra TODAS as opções quantificadas no
   // freezetime + marca a melhor (💡). Só no Tático, onde há tempo de deliberar.
-  const stanceBaseProb = finished ? 0 : sim.peekWinProb(userIdx, myStanceArg);
+  const stanceBaseProb = finished ? 0 : sim.peekWinProb(userIdx, myStanceArg, undefined, boostArg);
   const callDeltas: Record<RoundCall, number> | null =
     tactical && !finished
       ? (CALLS.reduce((acc, c) => {
-          acc[c.key] = sim.peekWinProb(userIdx, myStanceArg, { team: userIdx, kind: c.key }) - stanceBaseProb;
+          acc[c.key] = sim.peekWinProb(userIdx, myStanceArg, { team: userIdx, kind: c.key }, boostArg) - stanceBaseProb;
           return acc;
         }, {} as Record<RoundCall, number>))
       : null;
@@ -551,7 +554,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const moveProb = (m: CallMove): number => {
     if (finished) return 0;
     const st = m.stance !== 'default' ? { team: userIdx, mode: m.stance } : undefined;
-    return sim.peekWinProb(userIdx, st, m.call ? { team: userIdx, kind: m.call } : undefined);
+    return sim.peekWinProb(userIdx, st, m.call ? { team: userIdx, kind: m.call } : undefined, boostArg);
   };
   const armMove = (m: CallMove) => {
     setStance(m.stance);

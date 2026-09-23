@@ -37,6 +37,8 @@
 .dr-actor { display: block; font-size: .7rem; color: var(--rtp-ink-dim, var(--em-muted, #9fb4c8)); }
 .dr-odds { font-family: var(--rtp-mono, 'JetBrains Mono', monospace); font-weight: 800; white-space: nowrap; }
 .dr-odds i { font-style: normal; font-weight: 500; color: var(--rtp-ink-faint, var(--em-muted, #8a99ab)); }
+/* O1-47: a % rolada divergiu da mostrada (informação oculta: leitura de site) */
+.dr-hidden { display: block; font-size: 0.72em; font-weight: 600; color: var(--rtp-warn, #e8c170); }
 .dr-exec { font-family: var(--rtp-mono, 'JetBrains Mono', monospace); font-size: .68rem; white-space: nowrap; }
 .dr-exec.e-good { color: var(--rtp-win, #39c07a); } .dr-exec.e-bad { color: var(--rtp-loss, #e05a5a); } .dr-exec.e-mid { color: var(--rtp-warn, #ffc14d); }
 .dr-res { font-weight: 800; white-space: nowrap; }

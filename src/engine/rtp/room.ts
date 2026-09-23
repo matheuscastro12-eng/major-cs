@@ -354,6 +354,7 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
     label: inClutch ? `${opt.label} · 1v${s.clutch!.alive}` : opt.label,
     actor: s.cfg.heroNick,
     pWin: beat.odds.total,
+    pRolled: beat.odds.total,       // Sala: % mostrado = % rolado, por construção
     pBase: beat.baseTotal,
     alternatives: moment.options.filter((o) => o.id !== opt.id).map((o) => roomOdds(s, o).total),
     won: outcome.result === 'success',

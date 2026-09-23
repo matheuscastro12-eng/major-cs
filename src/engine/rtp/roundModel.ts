@@ -255,7 +255,7 @@ export const capBeforeBeat = (beatsLeft: number): number => Math.min(WIN_ROUNDS 
 export function bridgeToBeat(
   live: LiveScore, to: BeatSpec, prevWon: boolean | null,
   // `maps` ficou por compatibilidade: o fechamento de mapa saiu da ponte (é da Sala).
-  momentum: number, edge: number, matchSeed: number, maps: MapId[],
+  momentum: number, edge: number, matchSeed: number, _maps: MapId[],
   beatsLeftInMap = 1,
 ): { live: LiveScore; interlude: Interlude | null } {
   const rng = makeRng((matchSeed ^ hashStr(`bridge:${to.kind}:${to.mapIndex}:${to.round}`)) >>> 0);
