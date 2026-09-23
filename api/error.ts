@@ -6,11 +6,15 @@
 // inválido dá 400 (antes 500); o GET de admin lê a credencial do header
 // x-admin-key (ou body.password), nunca mais de ?pw= na URL — que ia parar em
 // log de borda e histórico do navegador.
+//
+// Também recebe os relatórios da CSP Report-Only (O1-11, report-uri do
+// vercel.json): viram kind 'csp', deduplicados por instância (server/csp-report.ts).
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { requireAdmin } from '../server/admin-auth.js';
 import { parseJsonBody } from '../server/http.js';
 import { internalError } from '../server/internalError.js';
 import { clientIp, memoryRateHit, respondLimited, type RateSql } from '../server/rate-limit.js';
+import { cspReportToError, cspSeenRecently } from '../server/csp-report.js';
 
 interface Res {
   status: (code: number) => { json: (body: unknown) => void };
@@ -46,7 +50,7 @@ async function ensureSchema(sql: NeonQueryFunction<false, false>): Promise<void>
 }
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined> },
+  req: { method?: string; body?: Record<string, unknown> | string | Buffer; headers?: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   res.setHeader('Cache-Control', 'no-store');
@@ -63,8 +67,14 @@ export default async function handler(
   if (req.method === 'POST') {
     const ip = clientIp(req.headers);
     if (respondLimited(res, memoryRateHit({ key: `error:ip:${ip}`, limit: POST_LIMIT_PER_MIN, windowSec: 60 }), 'muitos erros reportados')) return;
-    const body = parseJsonBody(req.body);
-    if (!body) { res.status(400).json({ error: 'JSON inválido' }); return; }
+    // application/csp-report pode chegar como Buffer (o runtime só parseia JSON)
+    const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : req.body;
+    const parsed = parseJsonBody(raw);
+    if (!parsed) { res.status(400).json({ error: 'JSON inválido' }); return; }
+    // [O1-11] relatório da CSP Report-Only (report-uri do vercel.json)
+    const csp = cspReportToError(parsed);
+    if (csp && cspSeenRecently(csp.message)) { res.status(200).json({ ok: true, dedup: true }); return; }
+    const body: Record<string, unknown> = csp ? { kind: 'csp', message: csp.message, stack: csp.stack, url: csp.page, ua: req.headers?.['user-agent'] } : parsed;
     const message = cut(body.message, 500);
     if (!message) { res.status(400).json({ error: 'empty' }); return; }
     const ccHeader = req.headers?.['x-vercel-ip-country'];

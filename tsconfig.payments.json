@@ -58,6 +58,8 @@
     "server/woovi-webhook.test.ts",
     "server/order-settle.ts",
     "server/payments-hardening.test.ts",
+    "server/csp-report.ts",
+    "server/security-headers.test.ts",
     "server/liveops.ts",
     "server/communityGoal.ts",
     "server/communityGoal.test.ts",
