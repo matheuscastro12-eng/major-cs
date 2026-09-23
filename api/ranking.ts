@@ -8,7 +8,8 @@
 // Ações (POST body.action): me | ladder | report | champions | dailyWeekClaim | dailyWeekChampions | dailyStreak [URG-4]
 //   | communityGoal (público) | communityGoalClaim [URG-5].
 import { neon } from '@neondatabase/serverless';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { verifyAccountToken } from '../server/auth.js'; // [O0-15] token num módulo só, falha fechada
+import { normalizeNick } from '../server/nick.js'; // [O1-10]
 import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
@@ -20,19 +21,9 @@ import { bumpCommunityContrib, communityGoalClaim, communityGoalSchemaQueries, c
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
-const APP_SECRET = () => clean(process.env.APP_SECRET) || `fallback:${clean(process.env.DATABASE_URL) ?? 'dev'}`;
-
-function verifyToken(token: string): string | null {
-  const [b64, sig] = (token ?? '').split('.');
-  if (!b64 || !sig) return null;
-  const body = Buffer.from(b64, 'base64url').toString();
-  const expect = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
-  const sb = Buffer.from(sig); const eb = Buffer.from(expect);
-  if (sb.length !== eb.length || !timingSafeEqual(sb, eb)) return null;
-  const [email, exp] = body.split('|');
-  if (!email || Number(exp) < Math.floor(Date.now() / 1000)) return null;
-  return email;
-}
+// [O0-15] sem o fallback derivado de DATABASE_URL: sem APP_SECRET nenhum token
+// vale (server/auth.ts), e o ranking responde 401 em vez de aceitar forjado.
+const verifyToken = verifyAccountToken;
 
 // divisões estilo CS (do menor ao maior). Antes de calibrar, "Calibrando".
 const DIVISIONS: [number, string][] = [[0, 'Prata'], [1200, 'Ouro Nova'], [1600, 'Mestre Guardião'], [1900, 'Águia'], [2200, 'Global Elite']];
@@ -323,7 +314,9 @@ export default async function handler(
     return;
   }
   if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O ranking persistente faz parte da conta com save na nuvem.' }); return; }
-  const nick = String((body.nick as string) || acc[0].nick || 'manager').slice(0, 40);
+  // [O1-10] nick SEMPRE o da conta (único, filtrado no signup/setNick); body.nick
+  // é ignorado — antes dava pra aparecer no ladder e no aviso de rival como outro.
+  const nick = normalizeNick(acc[0].nick) || 'manager';
 
   // report da SÉRIE DO DIA: 1 por conta por dia, o PRIMEIRO vale (ON CONFLICT
   // DO NOTHING). Sanidade: dia = hoje (±1 de fuso) e rating na faixa real do
