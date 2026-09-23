@@ -444,7 +444,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // compra de coins: modal com QR Pix. charge=null enquanto gera; error=true
   // mostra o link estático do Woovi como fallback.
   const [coinModal, setCoinModal] = useState<{ pack: CoinPack; charge: CoinCharge | null; error?: boolean } | null>(null);
-  const { account } = useAccount();
+  const { account, ready: accountReady } = useAccount();
   // funil: convidado viu o aviso/CTA de conta vitalícia no topo do Ultimate
   // (única superfície de venda do modo convidado, aberto desde o guest mode)
   useEffect(() => { if (guest) trackPaywallView('ultimate-guest'); }, [guest]);
@@ -1214,7 +1214,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // chamada é try/catch com toast — o Mercado nunca trava a tela.
   const mktPaid = !!account?.paid;
   // funil: conta grátis abriu a aba Mercado e viu a trava da vitalícia
-  useEffect(() => { if (tab === 'mercado' && !mktPaid) trackPaywallView('mkt-lock'); }, [tab, mktPaid]);
+  useEffect(() => { if (accountReady && tab === 'mercado' && !mktPaid) trackPaywallView('mkt-lock'); }, [accountReady, tab, mktPaid]); // [O0-11] só depois do /me
   const [mktSub, setMktSub] = useState<'browse' | 'mine'>('browse');
   const [mktRows, setMktRows] = useState<MktBrowseItem[]>([]);
   const [mktMineRows, setMktMineRows] = useState<MktMineItem[]>([]);

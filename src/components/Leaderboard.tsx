@@ -2,7 +2,7 @@
 // campeões da temporada passada. Estilo da tabela espelha o RankingTeams.jsx do design.
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Button, Panel } from './ds';
-import type { Account } from '../state/account';
+import { useAccountStore, type Account } from '../state/account';
 import { getLadder, getChampions, fetchMyRank, type RankRow, type MyRank, type Champion } from '../state/ranking';
 import { ct } from '../state/career-i18n';
 import { trackPaywallView } from '../state/track';
@@ -41,7 +41,9 @@ export function Leaderboard({ account, onBack, onUpgrade }: { account: Account |
   useEffect(() => { void getLadder().then(setData); void getChampions().then(setChamps); }, []);
   useEffect(() => { if (paid) void fetchMyRank(account?.nick).then(setMine); }, [paid, account?.nick]);
   // funil: CTA de vitalícia visto na tela de Ranking (src já existe em App.tsx, faltava a view)
-  useEffect(() => { if (!paid) trackPaywallView('leaderboard'); }, [paid]);
+  // [O0-11] só depois do /me: antes disso o pagante ainda parece grátis
+  const accountReady = useAccountStore((s) => s.ready);
+  useEffect(() => { if (accountReady && !paid) trackPaywallView('leaderboard'); }, [accountReady, paid]);
 
   const myNick = (mine && account?.nick) || account?.nick;
   return (

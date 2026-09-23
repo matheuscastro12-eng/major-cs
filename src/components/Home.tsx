@@ -90,9 +90,12 @@ export function Home({
   // funil: superfícies de venda da vitalícia visíveis no menu (1x/sessão/src)
   useEffect(() => {
     if (view !== 'menu') return;
+    // [O0-11] premiumLocked é true enquanto o /me carrega: sem accountReady o
+    // 1º frame do pagante contava como paywall_view (dedupe grava esse frame).
+    if (!accountReady) return;
     if (premiumLocked && onRoadToPro) trackPaywallView('home-rtp');       // card RtP com cadeado
     if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
-    if (accountReady && account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
+    if (account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
   }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account]);
 
   // [URG-4] streak do Diário no card: "🔥 N dias" e, se ainda não jogou hoje,

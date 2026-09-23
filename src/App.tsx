@@ -1211,7 +1211,12 @@ export default function App() {
           sumiu (0-1/dia desde 25/08, contra 3-6/dia antes) — quem bate na trava
           cai na landing cheia e precisa achar OUTRO CTA pra abrir o pagamento.
           goToCheckout pula esse passo, igual toda outra trava já faz. */}
-      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={goToCheckout} />}
+      {/* [O0-11] demo só depois do /me: com a conta ainda carregando, o RtP
+          montava com demo=true, injetava o cliffhanger no save do pagante e
+          disparava a trava + paywall_view. Espera accountReady. */}
+      {RTP_ENABLED && screen === 'rtp' && (accountReady
+        ? <RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={goToCheckout} />
+        : <Loader text="…" />)}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
       {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} />}
 

@@ -74,11 +74,12 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   // [W1] save da demo carregado já na última semana grátis (ou além) sem o
   // cliffhanger — chegou lá antes desta versão ou recarregou a página:
   // materializa (e entrega, se a semana já virou) na hora de carregar.
+  // [O0-11] Só em MEMÓRIA: o boot nunca grava. Antes o saveRtp daqui gravava a
+  // proposta fantasma no save (e na nuvem) de quem ainda nem tinha a conta
+  // confirmada; agora ela só persiste na próxima ação da demo (handleUpdate).
   const bootDemo = useCallback((s: RoadToProSave | null): RoadToProSave | null => {
     if (!demo || !s || s.retired || s.demoCliff || s.world.week < DEMO_WEEKS) return s;
-    const next = deliverDemoCliff(ensureDemoCliff(s), Date.now());
-    if (next !== s) saveRtp(next);
-    return next;
+    return deliverDemoCliff(ensureDemoCliff(s), Date.now());
   }, [demo]);
   const [save, setSave] = useState<RoadToProSave | null>(() => bootDemo(loadRtp()));
   const [booted, setBooted] = useState(false);
@@ -100,11 +101,16 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   // deste filho — sem isto o sync rodava com cloudEnabled()=false, devolvia
   // 'none' e o RtP começava DO ZERO em outro aparelho (e o save fresco ainda
   // podia sobrescrever a nuvem no próximo push). Espera a conta carregar
-  // (deps [account]) em vez de rodar uma única vez às cegas.
-  const { account } = useAccount();
+  // (`ready`) em vez de rodar uma única vez às cegas: com account null por
+  // estar CARREGANDO (não deslogado), o guard anti-flash abria na hora e o
+  // pagante via a criação ou o save local velho antes do sync [FRON-M01].
+  const { account, ready: accountReady } = useAccount();
+  const logged = !!account;
+  const paid = !!account?.paid;
   useEffect(() => {
-    if (!account) { setBooted(true); return; } // deslogado: local puro (a rota já é gated)
-    setCloudEnabled(!!account.paid);
+    if (!accountReady) return;
+    if (!logged) { setBooted(true); return; } // deslogado: local puro (a rota já é gated)
+    setCloudEnabled(paid);
     let alive = true;
     (async () => {
       const r = await syncRtpFromCloud().catch(() => 'none' as const);
@@ -116,7 +122,7 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
       if (alive) setBooted(true);
     })();
     return () => { alive = false; };
-  }, [account, bootDemo]);
+  }, [accountReady, logged, paid, bootDemo]);
 
   // FUNIL DA DEMO — 'open' é o DENOMINADOR que faltava: quantos de fato entraram
   // na degustação. Até aqui só a trava emitia evento, então dava pra contar quem

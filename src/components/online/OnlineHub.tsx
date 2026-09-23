@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Panel, Button } from '../ds';
 import { Flag } from '../ui';
 import type { Manager } from '../../state/manager';
-import type { Account } from '../../state/account';
+import { useAccountStore, type Account } from '../../state/account';
 import { getLadder, type RankRow } from '../../state/ranking';
 import { rankFor, majorPlace, type OnlineStats } from './onlineData';
 import { ct } from '../../state/career-i18n';
@@ -28,7 +28,9 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
   const [ladder, setLadder] = useState<RankRow[]>([]);
   useEffect(() => { void getLadder().then((d) => setLadder(d.ladder)); }, []);
   // funil: conta grátis vê o badge de trava vitalícia no card do Major da Semana
-  useEffect(() => { if (!paid) trackPaywallView('hub-wl'); }, [paid]);
+  // [O0-11] só depois do /me: antes disso o pagante ainda parece grátis
+  const accountReady = useAccountStore((s) => s.ready);
+  useEffect(() => { if (accountReady && !paid) trackPaywallView('hub-wl'); }, [accountReady, paid]);
   // relógio pro banner ao vivo da Major da Semana (30s basta pro "fecha em Xh")
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
