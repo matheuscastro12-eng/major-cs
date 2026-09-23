@@ -6,7 +6,7 @@ import { RTPMajor } from './RTPMajor';
 import { RTPTransfer } from './RTPTransfer';
 import { confirm as confirmDialog } from '../ConfirmDialog';
 import { ct } from '../../state/career-i18n';
-import { loadRtp, saveRtp, deleteRtp, syncRtpFromCloud } from '../../state/rtpSaves';
+import { loadRtp, saveRtp, deleteRtp, syncRtpFromCloud, isRtpFromFuture } from '../../state/rtpSaves';
 import { useAccount } from '../../state/account';
 import { setCloudEnabled } from '../../state/cloud';
 import { type ProMatchResult, type MatchConsequence } from '../../engine/rtp/matchSim';
@@ -291,9 +291,11 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
         onDaily={() => setDailyOpen(true)}
         onAutoSim={handleAutoSim}
         onResolveEvent={(eventId, optionId) => handleUpdate(applyLifeChoice(save, eventId, optionId))}
-        notice={saveError
-          ? { kind: 'season', text: `⚠️ ${ct('Não consegui gravar seu progresso (armazenamento do navegador cheio ou indisponível). Libere espaço — sem isso, o que você jogar agora se perde ao fechar a página.')}` }
-          : notice}
+        notice={isRtpFromFuture(save)
+          ? { kind: 'season', text: `⚠️ ${ct('Este save veio de uma versão mais nova do jogo e abriu SOMENTE LEITURA. Atualize a página para continuar — nada do que você fizer agora será gravado.')}` }
+          : saveError
+            ? { kind: 'season', text: `⚠️ ${ct('Não consegui gravar seu progresso (armazenamento do navegador cheio ou indisponível). Libere espaço — sem isso, o que você jogar agora se perde ao fechar a página.')}` }
+            : notice}
         onDismissNotice={() => { setSaveError(false); setNotice(null); }}
       />
       {simResult && (

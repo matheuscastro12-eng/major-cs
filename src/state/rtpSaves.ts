@@ -25,7 +25,7 @@ const CLOUD_SLOT = 'rtp';
 // Migrations (registry próprio do RTP). Mesma política da Carreira: backfill,
 // nunca quebra save antigo. MIGRATIONS[N] leva de vN para vN+1.
 
-type RtpMigration = (save: Record<string, unknown>) => Record<string, unknown>;
+export type RtpMigration = (save: Record<string, unknown>) => Record<string, unknown>;
 
 const RTP_MIGRATIONS: Record<number, RtpMigration> = {
   // v1 → v2 (RTP2 treino): inicializa trainingXp (progresso fracionário por
@@ -178,15 +178,35 @@ const RTP_MIGRATIONS: Record<number, RtpMigration> = {
   }),
 };
 
-function migrateRtp(raw: Record<string, unknown>): RoadToProSave {
+// Save gravado por um client MAIS NOVO (ex.: nuvem sincronizada de outro
+// aparelho, aba antiga com bundle em cache). Abre SOMENTE LEITURA: o _v nunca é
+// rebaixado e nada é gravado até a página atualizar — senão o client novo
+// re-rodaria migrações já aplicadas sobre dados no shape novo (várias NÃO são
+// idempotentes: a 2 reconstrói a liga, a 4 o mundo real). Mesma política do
+// stampVersion da Carreira (saveMigrations.ts).
+export function isRtpFromFuture(save: { _v?: unknown } | null | undefined): boolean {
+  return !!save && typeof save._v === 'number' && save._v > RTP_SAVE_VERSION;
+}
+
+// Percorre a cadeia INTEIRA até `target`; uma lacuna no registro é bug de código
+// e LANÇA (antes o laço parava na lacuna e carimbava a versão final mesmo assim,
+// pulando a migração em silêncio). `registry`/`target` parametrizados pros testes.
+export function migrateRtpWith(
+  raw: Record<string, unknown>, registry: Record<number, RtpMigration>, target: number,
+): Record<string, unknown> {
+  const v0 = typeof raw._v === 'number' ? raw._v : 1;
+  if (v0 > target) return raw;                     // futuro: intocado (_v preservado)
   let save = raw;
-  let v = typeof save._v === 'number' ? save._v : 1;
-  while (v < RTP_SAVE_VERSION && RTP_MIGRATIONS[v]) {
-    save = RTP_MIGRATIONS[v](save);
-    v += 1;
+  for (let v = v0; v < target; v++) {
+    const step = registry[v];
+    if (!step) throw new Error(`rtp: migração v${v}→v${v + 1} ausente no registro`);
+    save = step(save);
   }
-  save._v = RTP_SAVE_VERSION;
-  return save as unknown as RoadToProSave;
+  return { ...save, _v: target };
+}
+
+export function migrateRtp(raw: Record<string, unknown>): RoadToProSave {
+  return migrateRtpWith(raw, RTP_MIGRATIONS, RTP_SAVE_VERSION) as unknown as RoadToProSave;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +238,12 @@ export function loadRtp(): RoadToProSave | null {
 // Devolve false quando o localStorage recusou a escrita (quota/indisponível) —
 // o consumidor avisa o jogador em vez de perder a sessão em silêncio.
 export function saveRtp(save: RoadToProSave): boolean {
+  // SOMENTE LEITURA: save de versão futura não é regravado (nem local nem nuvem)
+  // — a UI avisa pra atualizar a página (isRtpFromFuture).
+  if (isRtpFromFuture(save)) {
+    captureError(new Error(`rtp: save v${(save as { _v?: number })._v} > v${RTP_SAVE_VERSION} — gravação bloqueada`), 'rtp-future-version');
+    return false;
+  }
   const stamped: RoadToProSave = {
     ...save,
     _v: RTP_SAVE_VERSION,
