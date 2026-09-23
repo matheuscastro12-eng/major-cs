@@ -15,6 +15,7 @@
 // simplesmente passam a resolver e tudo reativa sozinho, sem mudar a rota.
 
 import type { MktCardInfo, MktCardLookup } from './ultimate-market.js';
+import type { UltQuicksellValuer } from './ultimate-economy.js';
 
 type PackModule = typeof import('./ultimate-pack.js');
 
@@ -41,6 +42,23 @@ export async function loadMktCardLookup(now: Date): Promise<MktCardLookup | null
       const c = idx.get(cardKey);
       if (!c) return null;
       return { ovr: c.ovr, rarity: c.rarity, value: c.value, special: c.special };
+    };
+  } catch {
+    return null;
+  }
+}
+
+// [O0-02] valor de quick-sell pelo catálogo do servidor (snapshot do mês):
+// raridade/OVR do snapshot + a MESMA regra do cliente (quicksell.ts, cadeia
+// runtime-safe). null se a cadeia não carregar — a rota responde 503 e a
+// fila-sombra do cliente re-tenta com o mesmo op_id.
+export async function loadQuicksellValuer(now: Date): Promise<UltQuicksellValuer | null> {
+  try {
+    const [pack, qs] = await Promise.all([import('./ultimate-pack.js'), import('../src/engine/ultimate/quicksell.js')]);
+    const idx = pack.serverCatalogIndex(now);
+    return (cardKey: string, isDuplicate: boolean): number | null => {
+      const c = idx.get(cardKey);
+      return c ? qs.quickSellValue(c.rarity, c.ovr, isDuplicate) : null;
     };
   } catch {
     return null;

@@ -1,18 +1,19 @@
-// Economia server-authoritative do Ultimate Squad (fase 1 — endpoint DORMENTE).
-// Carteira + coleção + ledger idempotente no Neon. O cliente ainda NÃO chama
-// esta rota (o cutover vem nas fases 2/3); ela só estabelece a fundação.
-// Ações (POST body.action): state | tx | packOpen. Só conta PAGA (mesmo gate
-// do cloud-save). packOpen (fase 2) rola o pack NO SERVIDOR com as mesmas odds
-// do engine do cliente — seed auditável no ledger, replay idempotente.
+// Economia server-authoritative do Ultimate Squad.
+// Carteira + coleção + ledger idempotente no Neon.
+// Ações (POST body.action): state | tx | packOpen | mkt*. packOpen rola o pack
+// NO SERVIDOR com as mesmas odds do engine do cliente — seed auditável no
+// ledger, replay idempotente. [O0-02] `tx` do cliente só grava SAÍDAS
+// (spend/pack/sbc/quicksell valorado no servidor); todo crédito positivo nasce
+// em fluxo do servidor. Carteira congelada (frozen_at) bloqueia mercado e packs.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
-  applyUltTransaction,
+  applyClientUltTx,
   getUltState,
+  isUltWalletFrozen,
   ultEconomySchemaQueries,
-  validateUltTx,
+  ultFrozenMessage,
   ULT_TX_MAX_OP_ID,
-  ULT_TX_SERVER_ONLY_KINDS,
   type SqlTag,
 } from '../server/ultimate-economy.js';
 import {
@@ -30,7 +31,7 @@ import {
 // importada em top-level — na Vercel ela quebra no runtime ESM (imports sem
 // extensão) e derrubava a rota INTEIRA no load (mercado "não conecta",
 // 2026-07-05). Ver server/ultimate-catalog-lazy.ts.
-import { loadMktCardLookup, loadPackModule } from '../server/ultimate-catalog-lazy.js';
+import { loadMktCardLookup, loadPackModule, loadQuicksellValuer } from '../server/ultimate-catalog-lazy.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -111,26 +112,25 @@ export default async function handler(
   if (!acc.length) { res.status(401).json({ error: 'conta não encontrada' }); return; }
   // Ultimate aberto a QUALQUER conta logada (grátis ou vitalícia) — sem gate de paid.
 
+  // [O0-02] carteira congelada pelo admin (varredura do ledger): mercado e
+  // packs pausados até a contestação. 423 + mensagem padrão pro jogador.
+  const frozenReply = () => res.status(423).json({ error: 'wallet_frozen', message: ultFrozenMessage(clean(process.env.SUPPORT_EMAIL)) });
+  const guardedAction = action === 'mktList' || action === 'mktBuy' || action === 'packOpen';
+  const frozen = action === 'state' || guardedAction ? await isUltWalletFrozen(sql, email) : false;
+  if (frozen && guardedAction) { frozenReply(); return; }
+
   if (action === 'state') {
     const state = await getUltState(sql, email);
-    res.status(200).json(state);
+    res.status(200).json(frozen ? { ...state, frozen: true, frozenMessage: ultFrozenMessage(clean(process.env.SUPPORT_EMAIL)) } : state);
     return;
   }
 
   if (action === 'tx') {
-    // validação de tamanho/forma ANTES de tocar no banco: op_id ≤ 64 chars,
-    // kind na allowlist, cards ≤ 200 entradas, delta inteiro seguro.
-    const parsed = validateUltTx(body.tx);
-    if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
-    // kinds do mercado P2P são SERVER-ONLY: aceitar 'trade'/'escrow' aqui
-    // deixaria o cliente forjar créditos de venda / custódia falsa.
-    if (ULT_TX_SERVER_ONLY_KINDS.includes(parsed.tx.kind)) {
-      res.status(400).json({ error: 'kind reservado ao servidor' });
-      return;
-    }
-    const result = await applyUltTransaction(sql, email, parsed.tx);
-    if (!result.ok) { res.status(409).json({ error: result.error, credits: result.credits }); return; }
-    res.status(200).json({ ok: true, replayed: result.replayed, credits: result.credits });
+    // [O0-02] forma + allowlist do cliente (só spend/pack/sbc/quicksell, sem
+    // op:'add', sem crédito positivo) + quicksell valorado NO SERVIDOR — ver
+    // applyClientUltTx. 'grant'/'reward'/'admin'/'escrow'/'trade' → 400.
+    const r = await applyClientUltTx(sql, email, body.tx, () => loadQuicksellValuer(new Date()));
+    res.status(r.status).json(r.body);
     return;
   }
 

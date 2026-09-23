@@ -43,6 +43,7 @@ export class FakeDb {
   cards = new Map<string, { cardId: string; cardKey: string; meta: Record<string, unknown>; acquiredAt: string }[]>();
   ledger: LedgerRow[] = [];
   listings: FakeListing[] = []; // rtm_ult_listings (mercado P2P)
+  frozen = new Set<string>(); // rtm_ult_wallet.frozen_at preenchido [O0-02]
   nextId = 1;
   nextListingId = 1;
   executed: string[] = [];
@@ -77,7 +78,11 @@ export class FakeDb {
     const { text, params } = q;
     this.executed.push(text);
     if (text.includes('pg_advisory_xact_lock')) return [];
-    if (text.startsWith('CREATE TABLE') || text.startsWith('CREATE INDEX')) return [];
+    if (text.startsWith('CREATE TABLE') || text.startsWith('CREATE INDEX') || text.startsWith('ALTER TABLE')) return [];
+    if (text.startsWith('SELECT frozen_at FROM rtm_ult_wallet WHERE')) {
+      const email = String(params[0]);
+      return this.frozen.has(email) ? [{ frozen_at: '2026-09-23T00:00:00.000Z' }] : (this.wallets.has(email) ? [{ frozen_at: null }] : []);
+    }
 
     // O statement transacional grande (WITH prior AS ...).
     if (text.startsWith('WITH prior AS')) {
@@ -87,10 +92,13 @@ export class FakeDb {
       const delta = Number(params[6]);
       const cardOps = JSON.parse(String(params[7])) as { op: string; cardId: string; cardKey?: string; meta?: Row }[];
       const meta = JSON.parse(String(params[8])) as Row;
+      // requireOwned (params[11]): toda cópia exigida tem que estar na coleção agora
+      const required = JSON.parse(String(params[11] ?? '[]')) as { cardId: string; cardKey: string }[];
+      const ownedOk = required.every((o) => this.cardsOf(email).some((x) => x.cardId === o.cardId && x.cardKey === o.cardKey));
       const prior = this.ledger.find((l) => l.email === email && l.opId === opId);
       const oldCredits = this.wallets.get(email) ?? 0;
-      if (prior) return [{ prior_id: prior.id, inserted_id: null, new_credits: null, old_credits: oldCredits }];
-      if (oldCredits + delta < 0) return [{ prior_id: null, inserted_id: null, new_credits: null, old_credits: oldCredits }];
+      if (prior) return [{ prior_id: prior.id, inserted_id: null, new_credits: null, old_credits: oldCredits, owned_ok: ownedOk }];
+      if (!ownedOk || oldCredits + delta < 0) return [{ prior_id: null, inserted_id: null, new_credits: null, old_credits: oldCredits, owned_ok: ownedOk }];
       const id = this.nextId++;
       this.ledger.push({ id, email, opId, kind, delta, cards: cardOps as unknown as Row[], meta, createdAt: new Date(1_700_000_000_000 + id * 1000).toISOString() });
       const newCredits = oldCredits + delta;
@@ -105,7 +113,7 @@ export class FakeDb {
           if (i >= 0) list.splice(i, 1);
         }
       }
-      return [{ prior_id: null, inserted_id: id, new_credits: newCredits, old_credits: oldCredits }];
+      return [{ prior_id: null, inserted_id: id, new_credits: newCredits, old_credits: oldCredits, owned_ok: ownedOk }];
     }
 
     // ------------------------------------------------ mercado P2P (listings)
