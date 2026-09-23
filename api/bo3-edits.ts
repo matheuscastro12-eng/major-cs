@@ -5,7 +5,8 @@
 // server/admin-auth.ts).
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { requireAdmin } from '../server/admin-auth.js';
-import { internalError, parseJsonBody } from '../server/http.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
 import type { RateSql } from '../server/rate-limit.js';
 
 interface Res {
@@ -51,7 +52,7 @@ export default async function handler(
       if (inm && (Array.isArray(inm) ? inm.includes(etag) : inm === etag)) { res.status(304).end(); return; }
       res.status(200).json({ edits: data });
     } catch (e) {
-      internalError(res, e, 'bo3_edits_get');
+      internalError(res, 'bo3_edits_get', e);
     }
     return;
   }
@@ -93,7 +94,7 @@ export default async function handler(
       // e revalida via ETag no próximo GET). Corta Fast Origin Transfer do POST.
       res.status(200).json({ ok: true });
     } catch (e) {
-      internalError(res, e, 'bo3_edits_post');
+      internalError(res, 'bo3_edits_post', e);
     }
     return;
   }

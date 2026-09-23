@@ -8,7 +8,8 @@
 // log de borda e histórico do navegador.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { requireAdmin } from '../server/admin-auth.js';
-import { internalError, parseJsonBody } from '../server/http.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
 import { clientIp, memoryRateHit, respondLimited, type RateSql } from '../server/rate-limit.js';
 
 interface Res {
@@ -79,7 +80,7 @@ export default async function handler(
       }
       res.status(200).json({ ok: true });
     } catch (e) {
-      internalError(res, e, 'client_error_insert');
+      internalError(res, 'client_error_insert', e);
     }
     return;
   }
@@ -92,6 +93,6 @@ export default async function handler(
     const rows = await sql`SELECT ts, kind, message, stack, page, ua, country FROM client_errors ORDER BY id DESC LIMIT 100`;
     res.status(200).json({ errors: rows });
   } catch (e) {
-    internalError(res, e, 'client_error_list');
+    internalError(res, 'client_error_list', e);
   }
 }

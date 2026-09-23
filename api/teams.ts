@@ -5,7 +5,8 @@
 //         ADMIN_PASSWORD (server/admin-auth.ts).
 import { neon } from '@neondatabase/serverless';
 import { requireAdmin } from '../server/admin-auth.js';
-import { internalError, parseJsonBody } from '../server/http.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
 import type { RateSql } from '../server/rate-limit.js';
 
 interface Res {
@@ -111,7 +112,7 @@ export default async function handler(
       const rows = (await sql`SELECT data FROM teams ORDER BY id`) as { data: unknown }[];
       res.status(200).json(rows.map((r) => r.data));
     } catch (e) {
-      internalError(res, e, 'teams_get');
+      internalError(res, 'teams_get', e);
     }
     return;
   }
@@ -178,7 +179,7 @@ export default async function handler(
       }
       res.status(200).json({ ok: true, teams: teams.length, version });
     } catch (e) {
-      internalError(res, e, 'teams_post', { ok: false });
+      internalError(res, 'teams_post', e);
     }
     return;
   }

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import account from '../api/account.js';
 import { signAccountToken } from './auth.js';
-import { FakeNeonHttp, rateLimitRoute, type Row } from './neon-http.mock.js';
+import { FakeNeonHttp, rateLimitRoute, type Row } from './neon-fetch.mock.js';
 import { __resetRateLimitForTests } from './rate-limit.js';
 
 process.env.APP_SECRET = 'test-secret';

@@ -5,7 +5,8 @@
 // (BETA_CODE) como atalho de liberação (compatibilidade).
 import { neon } from '@neondatabase/serverless';
 import { requireAdmin } from '../server/admin-auth.js';
-import { internalError, parseJsonBody } from '../server/http.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
 import type { RateSql } from '../server/rate-limit.js';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -117,6 +118,6 @@ export default async function handler(
 
     res.status(400).json({ error: 'ação inválida' });
   } catch (e) {
-    internalError(res, e, 'beta');
+    internalError(res, 'beta', e);
   }
 }

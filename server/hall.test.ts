@@ -6,7 +6,7 @@ import hall from '../api/hall.js';
 import track from '../api/track.js';
 import { signAccountToken } from './auth.js';
 import { HALL_JSON_MAX_BYTES, sanitizeHallEntry } from './hall.js';
-import { FakeNeonHttp, rateLimitRoute, type SeenQuery } from './neon-http.mock.js';
+import { FakeNeonHttp, rateLimitRoute, type SeenQuery } from './neon-fetch.mock.js';
 import { __resetRateLimitForTests } from './rate-limit.js';
 
 process.env.APP_SECRET = 'test-secret';

@@ -1,7 +1,8 @@
 // Lista pública de apoiadores (GET) e registro de doações pelo admin (POST).
 import { neon } from '@neondatabase/serverless';
 import { requireAdmin } from '../server/admin-auth.js';
-import { internalError, parseJsonBody } from '../server/http.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
 import type { RateSql } from '../server/rate-limit.js';
 
 interface Res {
@@ -31,7 +32,7 @@ export default async function handler(
       const total = await sql`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n FROM donors`;
       res.status(200).json({ donors: rows, total: Number(total[0].total), count: Number(total[0].n) });
     } catch (e) {
-      internalError(res, e, 'donors_get');
+      internalError(res, 'donors_get', e);
     }
     return;
   }
@@ -59,7 +60,7 @@ export default async function handler(
       await sql`INSERT INTO donors (name, amount, message, source) VALUES (${name}, ${amount}, ${message}, ${source})`;
       res.status(200).json({ ok: true });
     } catch (e) {
-      internalError(res, e, 'donors_post');
+      internalError(res, 'donors_post', e);
     }
     return;
   }

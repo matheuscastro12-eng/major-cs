@@ -9,7 +9,8 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
 import { sanitizeHallEntry } from '../server/hall.js';
-import { internalError, parseJsonBody } from '../server/http.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
 import { clientIp, rateLimitHit, respondLimited, type RateSql } from '../server/rate-limit.js';
 
 interface Res {
@@ -66,7 +67,7 @@ export default async function handler(
         SELECT COUNT(*) AS n FROM campaigns WHERE placement = '1'`;
       res.status(200).json({ campaigns: rows, totalTitles: Number(titles[0].n) });
     } catch (e) {
-      internalError(res, e, 'hall_list');
+      internalError(res, 'hall_list', e);
     }
     return;
   }
@@ -95,7 +96,7 @@ export default async function handler(
           champion = EXCLUDED.champion, mvp = EXCLUDED.mvp, roster = EXCLUDED.roster, records = EXCLUDED.records, created_at = now()`;
       res.status(200).json({ ok: true });
     } catch (e) {
-      internalError(res, e, 'hall_insert');
+      internalError(res, 'hall_insert', e);
     }
     return;
   }

@@ -49,7 +49,7 @@
     "server/rate-limit.ts",
     "server/rate-limit.mock.ts",
     "server/rate-limit.test.ts",
-    "server/neon-http.mock.ts",
+    "server/neon-fetch.mock.ts",
     "server/account-security.test.ts",
     "server/admin-auth.ts",
     "server/http.ts",
@@ -68,6 +68,8 @@
     "api/hall.ts",
     "api/track.ts",
     "server/cloud-save-policy.ts",
-    "server/cloud-save-policy.test.ts"
+    "server/cloud-save-policy.test.ts",
+    "server/internalError.ts",
+    "server/internal-error.test.ts"
   ]
 }

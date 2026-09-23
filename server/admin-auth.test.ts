@@ -7,7 +7,7 @@ import account from '../api/account.js';
 import adminLogin from '../api/admin-login.js';
 import errorRoute from '../api/error.js';
 import { signAccountToken, signAdminSession } from './auth.js';
-import { FakeNeonHttp, rateLimitRoute, type Row } from './neon-http.mock.js';
+import { FakeNeonHttp, rateLimitRoute, type Row } from './neon-fetch.mock.js';
 import { __resetRateLimitForTests } from './rate-limit.js';
 
 process.env.APP_SECRET = 'test-secret';

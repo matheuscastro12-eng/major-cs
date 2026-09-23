@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import account from '../api/account.js';
 import { signAccountToken } from './auth.js';
-import { FakeNeonHttp, rateLimitRoute } from './neon-http.mock.js';
+import { FakeNeonHttp, rateLimitRoute } from './neon-fetch.mock.js';
 import { accountNick, nickProblem, nickSkeleton, normalizeNick } from './nick.js';
 import { __resetRateLimitForTests } from './rate-limit.js';
 

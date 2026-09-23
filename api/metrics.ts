@@ -2,7 +2,8 @@
 import { neon } from '@neondatabase/serverless';
 import { communityWeekId } from '../src/engine/ultimate/communityGoal.js'; // [URG-5]
 import { requireAdmin } from '../server/admin-auth.js';
-import { internalError, parseJsonBody } from '../server/http.js';
+import { parseJsonBody } from '../server/http.js';
+import { internalError } from '../server/internalError.js';
 import type { RateSql } from '../server/rate-limit.js';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -199,6 +200,6 @@ export default async function handler(
       communityGoal,
     });
   } catch (e) {
-    internalError(res, e, 'metrics');
+    internalError(res, 'metrics', e);
   }
 }

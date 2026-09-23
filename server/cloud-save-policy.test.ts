@@ -5,7 +5,7 @@ import test from 'node:test';
 import cloudSave from '../api/cloud-save.js';
 import { signAccountToken } from './auth.js';
 import { CLOUD_MAX_FUTURE_MS, clampUpdatedAt, cloudSlotAllowed } from './cloud-save-policy.js';
-import { FakeNeonHttp, type SeenQuery } from './neon-http.mock.js';
+import { FakeNeonHttp, type SeenQuery } from './neon-fetch.mock.js';
 
 process.env.APP_SECRET = 'test-secret';
 process.env.DATABASE_URL = 'postgresql://user:pw@fake-neon.test/db';
