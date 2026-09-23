@@ -6,7 +6,7 @@ import { RTPMajor } from './RTPMajor';
 import { RTPTransfer } from './RTPTransfer';
 import { confirm as confirmDialog } from '../ConfirmDialog';
 import { ct } from '../../state/career-i18n';
-import { loadRtp, saveRtp, deleteRtp, syncRtpFromCloud } from '../../state/rtpSaves';
+import { loadRtp, saveRtp, deleteRtp, syncRtpFromCloud, RTP_KEY } from '../../state/rtpSaves';
 import { useAccount } from '../../state/account';
 import { setCloudEnabled } from '../../state/cloud';
 import { type ProMatchResult, type MatchConsequence } from '../../engine/rtp/matchSim';
@@ -123,6 +123,23 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
     })();
     return () => { alive = false; };
   }, [accountReady, logged, paid, bootDemo]);
+
+  // [O1-35] Sync entre abas: outra aba gravou (ou apagou) o save do RtP → esta
+  // re-hidrata do disco e sai de qualquer partida em curso. Sem isso a aba
+  // esquecida gravava o save velho com timestamp novo por cima do progresso
+  // (e o LWW da nuvem espalhava a perda). Espelha o listener do Ultimate.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== RTP_KEY) return;
+      setSave(e.newValue == null ? null : bootDemo(loadRtp()));
+      setPlaying(false);
+      setPlayingMajor(false);
+      setDailyOpen(false);
+      setSimResult(null);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [bootDemo]);
 
   // FUNIL DA DEMO — 'open' é o DENOMINADOR que faltava: quantos de fato entraram
   // na degustação. Até aqui só a trava emitia evento, então dava pra contar quem

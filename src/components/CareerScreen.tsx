@@ -3093,14 +3093,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     });
     return () => { alive = false; };
   }, []);
-  // BUG FIX (caça-bugs): quando o App restaura o save da nuvem (login pago com a
-  // carreira já aberta), re-hidrata o store a partir do disco já atualizado —
-  // senão o próximo autosave sobrescreve o save da nuvem com o estado velho.
-  useEffect(() => {
-    const onRestored = () => setSave(loadSave());
-    window.addEventListener('rtm:cloud-restored', onRestored);
-    return () => window.removeEventListener('rtm:cloud-restored', onRestored);
-  }, [setSave]);
+  // Restore da nuvem / lápide / outra aba: o App relê o store do disco e REMONTA
+  // esta tela (key={epoch} do gameStore). Antes só o save era re-hidratado e
+  // stage/majorT/hubTab ficavam do save velho e eram gravados de volta [O0-28].
   const currentEra = useMemo(
     // aplica as transferências já realizadas (save.moves) por cima da base, e o
     // ENVELHECIMENTO da IA por split (pulando seus jogadores, que evoluem pelo evo).

@@ -292,8 +292,11 @@ registerSaveRetry('career', () => useGame.getState().persistNow());
 // estado velho com timestamp novo e o LWW da nuvem espalhava a perda.
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    const slot = useGame.getState().loadedSlot;
+    const { loadedSlot: slot, save } = useGame.getState();
     if (slot < 1 || e.key !== slotKey(slot)) return;
+    // mesma coisa que já está na memória (migração re-gravada, save idêntico):
+    // não remonta a tela à toa no meio de uma partida.
+    if (save && e.newValue != null && e.newValue === JSON.stringify(save)) return;
     useGame.getState().reloadFromDisk();
   });
 }
