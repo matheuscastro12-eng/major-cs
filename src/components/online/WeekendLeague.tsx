@@ -191,7 +191,7 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
       </div>
 
       {error && (
-        <div style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--em-red, #c0392b)', background: 'rgba(192,57,43,.08)', color: 'var(--em-text)', fontSize: '12.5px' }}>{error}</div>
+        <div style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--em-red, #c0392b)', background: 'color-mix(in srgb, var(--c-loss) 8%, transparent)', color: 'var(--em-text)', fontSize: '12.5px' }}>{error}</div>
       )}
 
       {/* convite pra vitalícia — só conta grátis (não trava nada aqui, o Major da

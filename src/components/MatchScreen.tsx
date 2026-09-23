@@ -811,7 +811,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                   <span style={{ fontSize: '0.66rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--em-muted, #8a99ab)', minWidth: 96 }}>
                     {ct('Chance do round')}
                   </span>
-                  <div style={{ flex: 1, height: 14, borderRadius: 7, overflow: 'hidden', position: 'relative', background: 'rgba(229,138,138,0.25)' }}>
+                  <div style={{ flex: 1, height: 14, borderRadius: 7, overflow: 'hidden', position: 'relative', background: 'color-mix(in srgb, var(--c-loss) 25%, transparent)' }}>
                     <div style={{
                       position: 'absolute', inset: 0, width: `${Math.round(decisionProb * 100)}%`,
                       background: decisionProb >= 0.5 ? 'linear-gradient(90deg,#3a8f5a,#5ed88a)' : 'linear-gradient(90deg,#8f5a3a,#e8a93b)',
@@ -927,7 +927,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                     title={t(c.hintKey)}
                     disabled={!!pausedMsg}
                     onClick={() => setPendingCall(pendingCall === c.key ? null : c.key)}
-                    style={best ? { boxShadow: '0 0 0 1px rgba(94,216,138,0.6)', borderColor: 'rgba(94,216,138,0.6)' } : undefined}
+                    style={best ? { boxShadow: '0 0 0 1px color-mix(in srgb, var(--c-win) 60%, transparent)', borderColor: 'color-mix(in srgb, var(--c-win) 60%, transparent)' } : undefined}
                   >
                     {best && <span title={ct('melhor opção')}>💡 </span>}
                     {c.icon} {t(c.labelKey)}
@@ -1186,8 +1186,8 @@ function DecisionImpactCard({ lastCall, t }: {
       className="fade-in"
       style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', margin: '8px 0',
-        borderRadius: 8, background: won ? 'rgba(94,216,138,0.08)' : 'rgba(229,138,138,0.08)',
-        border: `1px solid ${won ? 'rgba(94,216,138,0.35)' : 'rgba(229,138,138,0.35)'}`,
+        borderRadius: 8, background: won ? 'color-mix(in srgb, var(--c-win) 8%, transparent)' : 'color-mix(in srgb, var(--c-loss) 8%, transparent)',
+        border: `1px solid ${won ? 'color-mix(in srgb, var(--c-win) 35%, transparent)' : 'color-mix(in srgb, var(--c-loss) 35%, transparent)'}`,
         borderLeft: `4px solid ${accent}`,
       }}
     >
@@ -1392,13 +1392,13 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8, marginBottom: 12 }}>
           {bestCall && bestCall.odds < 0.55 && (
-            <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(94,216,138,0.08)', border: '1px solid rgba(94,216,138,0.3)' }}>
+            <div style={{ padding: '8px 12px', borderRadius: 6, background: 'color-mix(in srgb, var(--c-win) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-win) 30%, transparent)' }}>
               <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>{ct('Melhor aposta')}</div>
               <div style={{ fontSize: '0.82rem', fontWeight: 700, marginTop: 2 }}>{icon(bestCall.call)} R{bestCall.round} · {ct('tinha')} {Math.round(bestCall.odds * 100)}% → <span style={{ color: '#5ed88a' }}>{ct('PEGOU')}</span></div>
             </div>
           )}
           {worstCall && worstCall.odds >= 0.5 && (
-            <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(229,138,138,0.08)', border: '1px solid rgba(229,138,138,0.3)' }}>
+            <div style={{ padding: '8px 12px', borderRadius: 6, background: 'color-mix(in srgb, var(--c-loss) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-loss) 30%, transparent)' }}>
               <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>{ct('Tropeço')}</div>
               <div style={{ fontSize: '0.82rem', fontWeight: 700, marginTop: 2 }}>{icon(worstCall.call)} R{worstCall.round} · {ct('era favorito')} ({Math.round(worstCall.odds * 100)}%) → <span style={{ color: '#e58a8a' }}>{ct('perdeu')}</span></div>
             </div>

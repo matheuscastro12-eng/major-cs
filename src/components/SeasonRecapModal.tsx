@@ -173,8 +173,8 @@ export function SeasonRecapModal({ data, onClose }: Props) {
         <div
           style={{
             padding: '14px 18px',
-            background: data.finance.net >= 0 ? 'rgba(94,216,138,0.12)' : 'rgba(229,138,138,0.12)',
-            border: `1px solid ${data.finance.net >= 0 ? 'rgba(94,216,138,0.45)' : 'rgba(229,138,138,0.45)'}`,
+            background: data.finance.net >= 0 ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'color-mix(in srgb, var(--c-loss) 12%, transparent)',
+            border: `1px solid ${data.finance.net >= 0 ? 'color-mix(in srgb, var(--c-win) 45%, transparent)' : 'color-mix(in srgb, var(--c-loss) 45%, transparent)'}`,
             borderRadius: 6,
             textAlign: 'center',
           }}

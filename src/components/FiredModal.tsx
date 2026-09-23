@@ -42,8 +42,8 @@ export function FiredModal({ data, onClose, onRestart, onJobHunt }: Props) {
           style={{
             margin: '-22px -22px 0',
             padding: '36px 32px 26px',
-            background: 'linear-gradient(180deg, rgba(192, 57, 43, 0.22) 0%, rgba(192, 57, 43, 0.04) 100%)',
-            borderBottom: '2px solid rgba(192, 57, 43, 0.5)',
+            background: 'linear-gradient(180deg, color-mix(in srgb, var(--c-loss) 22%, transparent) 0%, color-mix(in srgb, var(--c-loss) 4%, transparent) 100%)',
+            borderBottom: '2px solid color-mix(in srgb, var(--c-loss) 50%, transparent)',
             textAlign: 'center',
           }}
         >

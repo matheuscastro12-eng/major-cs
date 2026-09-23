@@ -69,7 +69,7 @@ function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
         {grid.map((g, i) => <polygon key={i} points={g} />)}
         {attrs.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} />; })}
       </g>
-      <polygon points={shape} fill="rgba(192,57,43,0.18)" stroke="var(--em-red)" strokeWidth="2" />
+      <polygon points={shape} fill="color-mix(in srgb, var(--c-loss) 18%, transparent)" stroke="var(--em-red)" strokeWidth="2" />
       {attrs.map((d, i) => {
         const [lx, ly] = pt(i, R + 18);
         return (
@@ -363,8 +363,8 @@ export function CareerPlayerPage({
           <span
             className="pp-coach-tag"
             style={{
-              background: 'rgba(229, 138, 138, 0.14)',
-              border: '1px solid rgba(229, 138, 138, 0.55)',
+              background: 'color-mix(in srgb, var(--c-loss) 14%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--c-loss) 55%, transparent)',
               color: '#e58a8a',
               fontWeight: 700,
               cursor: 'default',

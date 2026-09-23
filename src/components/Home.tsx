@@ -182,7 +182,7 @@ export function Home({
             )}
 
             <div className="rtm-modemenu">
-              <button className="rtm-modecard" data-tone="gold" onClick={() => (hasBeta ? onCareer?.() : onDonate())}>
+              <button className="rtm-modecard" data-tone="gold" data-mode="carreira" onClick={() => (hasBeta ? onCareer?.() : onDonate())}>
                 <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/nuke.jpg)' }} />
                 <span className="rtm-modecard-scrim" />
                 <span className="rtm-modecard-bar" />
@@ -201,6 +201,7 @@ export function Home({
                 <div
                   className="rtm-modecard"
                   data-tone="purple"
+                  data-mode="rtp"
                   data-locked={premiumLocked ? '' : undefined}
                   role="button"
                   tabIndex={0}
@@ -210,7 +211,7 @@ export function Home({
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/train.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
                   <span className="rtm-modecard-bar" />
-                  {premiumLocked && <span className="rtm-modecard-lock" style={{ background: 'rgba(39,224,176,.12)', borderColor: 'rgba(39,224,176,.5)', color: '#27e0b0' }}>🧪 {ct('DEMO GRÁTIS')}</span>}
+                  {premiumLocked && <span className="rtm-modecard-lock" style={{ background: 'var(--c-accent-soft)', borderColor: 'var(--c-accent-line)', color: 'var(--c-accent)' }}>🧪 {ct('DEMO GRÁTIS')}</span>}
                   <span className="rtm-modecard-body">
                     <span className="rtm-modecard-kicker">{ct('Novo')}</span>
                     <span className="rtm-modecard-title">Road to Pro</span>
@@ -251,7 +252,7 @@ export function Home({
               )}
 
               {onDaily && (
-                <button className="rtm-modecard" data-tone="blue" onClick={onDaily}>
+                <button className="rtm-modecard" data-tone="blue" data-mode="diario" onClick={onDaily}>
                   <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/inferno.jpg)' }} />
                   <span className="rtm-modecard-scrim" />
                   <span className="rtm-modecard-bar" />

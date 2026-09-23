@@ -196,7 +196,7 @@ function DeltaRow({ deltas }: { deltas: Deltas }) {
             gap: 6,
             padding: '4px 10px',
             background: 'var(--em-panel-2)',
-            border: `1px solid ${it.tone === 'pos' ? 'rgba(94,216,138,0.45)' : it.tone === 'neg' ? 'rgba(229,138,138,0.45)' : 'var(--em-border)'}`,
+            border: `1px solid ${it.tone === 'pos' ? 'color-mix(in srgb, var(--c-win) 45%, transparent)' : it.tone === 'neg' ? 'color-mix(in srgb, var(--c-loss) 45%, transparent)' : 'var(--em-border)'}`,
             borderRadius: 3,
             fontSize: '0.78rem',
             color: 'var(--em-text)',

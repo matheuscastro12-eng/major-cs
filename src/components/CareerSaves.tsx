@@ -153,9 +153,9 @@ function SlotHudPill({ used, total }: { used: number; total: number }) {
   const tone: 'green' | 'gold' | 'red' =
     pct < 0.6 ? 'green' : pct < 0.9 ? 'gold' : 'red';
   const colors: Record<typeof tone, { fg: string; bg: string; border: string }> = {
-    green: { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
+    green: { fg: '#5ed88a', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
     gold:  { fg: '#e8c170', bg: 'rgba(232,193,112,0.14)', border: 'rgba(232,193,112,0.45)' },
-    red:   { fg: '#e58a8a', bg: 'rgba(229,138,138,0.12)', border: 'rgba(229,138,138,0.4)' },
+    red:   { fg: '#e58a8a', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
   };
   const c = colors[tone];
   return (

@@ -166,12 +166,12 @@ body:has(main.page-career) {
   color: rgba(255, 255, 255, 0.80);
 }
 .career-dash--light .em-nextup .gp-chip:hover {
-  border-color: rgba(216, 169, 67, 0.70);
+  border-color: color-mix(in srgb, var(--c-accent) 70%, transparent);
   color: #fff;
 }
 .career-dash--light .em-nextup .gp-chip.on {
-  background: rgba(216, 169, 67, 0.22);
-  border-color: rgba(216, 169, 67, 0.80);
+  background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--c-accent) 80%, transparent);
   color: #ffd956;
 }
 /* muted/text dentro do nextup ficam brancos sobre a foto */
@@ -201,8 +201,8 @@ body:has(main.page-career) {
 }
 
 .career-dash--light .lang-btn.on {
-  background: rgba(192, 57, 43, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(192, 57, 43, 0.35);
+  background: color-mix(in srgb, var(--c-loss) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-loss) 35%, transparent);
   color: var(--em-red);
 }
 
@@ -249,9 +249,9 @@ body:has(main.page-career) {
 }
 
 .career-dash .lang-switch-compact .lang-btn.on {
-  background: rgba(192, 57, 43, 0.18);
+  background: color-mix(in srgb, var(--c-loss) 18%, transparent);
   color: var(--em-red);
-  box-shadow: inset 0 0 0 1px rgba(192, 57, 43, 0.35);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-loss) 35%, transparent);
 }
 
 .career-dash .lang-flag-svg {
@@ -395,7 +395,7 @@ body:has(main.page-career) {
 
 .em-nav-drop-item.on {
   color: var(--em-text);
-  background: rgba(192, 57, 43, 0.12);
+  background: color-mix(in srgb, var(--c-loss) 12%, transparent);
   border-left: 3px solid var(--em-red);
   padding-left: 15px;
 }
@@ -411,7 +411,7 @@ body:has(main.page-career) {
 }
 
 .career-dash--light .em-nav-drop-item.on {
-  background: rgba(192, 57, 43, 0.08);
+  background: color-mix(in srgb, var(--c-loss) 8%, transparent);
 }
 
 .em-main-nav::-webkit-scrollbar { display: none; }
@@ -781,8 +781,8 @@ body:has(main.page-career) {
   width: fit-content;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(192, 57, 43, 0.15);
-  border: 1px solid rgba(192, 57, 43, 0.35);
+  background: color-mix(in srgb, var(--c-loss) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-loss) 35%, transparent);
   color: #ffb1b1;
   font-size: 0.72rem;
   font-weight: 700;
@@ -875,14 +875,14 @@ body:has(main.page-career) {
 }
 
 .em-confirm-modal.danger {
-  border-color: rgba(192, 57, 43, 0.5);
+  border-color: color-mix(in srgb, var(--c-loss) 50%, transparent);
   box-shadow:
-    0 0 0 1px rgba(192, 57, 43, 0.2),
+    0 0 0 1px color-mix(in srgb, var(--c-loss) 20%, transparent),
     0 24px 80px rgba(0, 0, 0, 0.65);
 }
 
 .em-confirm-modal.danger.light {
-  border-color: rgba(192, 57, 43, 0.35);
+  border-color: color-mix(in srgb, var(--c-loss) 35%, transparent);
 }
 
 .em-confirm-close {
@@ -926,12 +926,12 @@ body:has(main.page-career) {
   height: 48px;
   margin-bottom: 14px;
   border-radius: 50%;
-  background: rgba(192, 57, 43, 0.15);
+  background: color-mix(in srgb, var(--c-loss) 15%, transparent);
   color: #e74c3c;
 }
 
 .em-confirm-icon-wrap.danger {
-  border: 1px solid rgba(192, 57, 43, 0.35);
+  border: 1px solid color-mix(in srgb, var(--c-loss) 35%, transparent);
 }
 
 .em-confirm-kicker {
@@ -1453,7 +1453,7 @@ body:has(main.page-career) {
 
 .em-cal-week.on {
   border-color: var(--em-red);
-  background: rgba(192, 57, 43, 0.12);
+  background: color-mix(in srgb, var(--c-loss) 12%, transparent);
 }
 
 .em-cal-week-h {
@@ -1530,7 +1530,7 @@ body:has(main.page-career) {
 
 .em-rank-you {
   border-bottom: 1px solid var(--em-border);
-  background: rgba(192, 57, 43, 0.1);
+  background: color-mix(in srgb, var(--c-loss) 10%, transparent);
 }
 
 .em-rank-you-head {
@@ -1550,7 +1550,7 @@ body:has(main.page-career) {
 }
 
 .career-dash--light .em-rank-you {
-  background: rgba(192, 57, 43, 0.06);
+  background: color-mix(in srgb, var(--c-loss) 6%, transparent);
 }
 
 .em-rank-you .em-rank-row.me {
@@ -1572,7 +1572,7 @@ body:has(main.page-career) {
 }
 
 .em-rank-row.me {
-  background: rgba(192, 57, 43, 0.2);
+  background: color-mix(in srgb, var(--c-loss) 20%, transparent);
   border-left: 3px solid var(--em-red);
 }
 
@@ -1643,8 +1643,8 @@ body:has(main.page-career) {
   font-weight: 800;
 }
 
-.em-form-chip.win { background: rgba(46, 204, 113, 0.2); color: var(--em-green); }
-.em-form-chip.loss { background: rgba(231, 76, 60, 0.2); color: var(--em-red); }
+.em-form-chip.win { background: color-mix(in srgb, var(--c-win) 20%, transparent); color: var(--em-green); }
+.em-form-chip.loss { background: color-mix(in srgb, var(--c-loss) 20%, transparent); color: var(--em-red); }
 
 .em-form-stats {
   display: flex;
@@ -1746,7 +1746,7 @@ body:has(main.page-career) {
 }
 
 .career-dash .gp-chip.on {
-  background: rgba(192, 57, 43, 0.15);
+  background: color-mix(in srgb, var(--c-loss) 15%, transparent);
   border-color: var(--em-red);
   color: var(--em-text);
 }
@@ -1817,8 +1817,8 @@ body:has(main.page-career) {
 }
 
 .career-dash .cal-major-banner.now {
-  border-color: rgba(192, 57, 43, 0.4);
-  background: rgba(192, 57, 43, 0.08);
+  border-color: color-mix(in srgb, var(--c-loss) 40%, transparent);
+  background: color-mix(in srgb, var(--c-loss) 8%, transparent);
 }
 
 .career-dash .mt-name {

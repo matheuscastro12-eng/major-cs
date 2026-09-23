@@ -170,7 +170,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     const won = outcome.won;
     return (
       <div style={{ maxWidth: '560px', margin: '50px auto 0', textAlign: 'center' }}>
-        <div style={{ fontFamily: 'inherit', fontSize: '64px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '4px', color: won ? '#29c47a' : '#e2574c', textShadow: `0 0 40px ${won ? 'rgba(111,208,111,.4)' : 'rgba(226,90,90,.4)'}` }}>{won ? ct('Vitória') : ct('Derrota')}</div>
+        <div style={{ fontFamily: 'inherit', fontSize: '64px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '4px', color: won ? '#29c47a' : '#e2574c', textShadow: `0 0 40px ${won ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : 'color-mix(in srgb, var(--c-loss) 40%, transparent)'}` }}>{won ? ct('Vitória') : ct('Derrota')}</div>
         <div style={{ fontSize: '15px', color: 'var(--em-muted)', marginTop: '4px' }}>vs {rival ? rival.nick : 'rival'}</div>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', margin: '24px auto 0', padding: '16px 28px', borderRadius: '10px', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>
           <div><div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--em-muted)', fontWeight: 700, letterSpacing: '.6px' }}>MMR</div><div style={{ fontFamily: 'inherit', fontSize: '28px', fontWeight: 800, color: 'var(--em-text)' }}>{stats.mmr}</div></div>

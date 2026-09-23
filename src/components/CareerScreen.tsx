@@ -8072,9 +8072,9 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             onClick={() => setAll('keep')}
             style={{
               padding: '6px 12px',
-              background: 'rgba(94,216,138,0.12)',
+              background: 'color-mix(in srgb, var(--c-win) 12%, transparent)',
               color: '#5ed88a',
-              border: '1px solid rgba(94,216,138,0.45)',
+              border: '1px solid color-mix(in srgb, var(--c-win) 45%, transparent)',
               borderRadius: 4,
               fontFamily: 'inherit',
               fontSize: '0.74rem',
@@ -8089,9 +8089,9 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             onClick={() => setAll('drop')}
             style={{
               padding: '6px 12px',
-              background: 'rgba(229,138,138,0.10)',
+              background: 'color-mix(in srgb, var(--c-loss) 10%, transparent)',
               color: '#e58a8a',
-              border: '1px solid rgba(229,138,138,0.45)',
+              border: '1px solid color-mix(in srgb, var(--c-loss) 45%, transparent)',
               borderRadius: 4,
               fontFamily: 'inherit',
               fontSize: '0.74rem',
@@ -8150,7 +8150,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
                       padding: '7px 14px',
                       background: isKeep ? '#5ed88a' : 'transparent',
                       color: isKeep ? '#0a1a0c' : '#5ed88a',
-                      border: `1px solid ${isKeep ? '#5ed88a' : 'rgba(94,216,138,0.45)'}`,
+                      border: `1px solid ${isKeep ? '#5ed88a' : 'color-mix(in srgb, var(--c-win) 45%, transparent)'}`,
                       borderRadius: 4,
                       fontFamily: 'inherit',
                       fontSize: '0.78rem',
@@ -8168,7 +8168,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
                       padding: '7px 14px',
                       background: isDrop ? '#c0392b' : 'transparent',
                       color: isDrop ? '#fff' : '#e58a8a',
-                      border: `1px solid ${isDrop ? '#c0392b' : 'rgba(229,138,138,0.45)'}`,
+                      border: `1px solid ${isDrop ? '#c0392b' : 'color-mix(in srgb, var(--c-loss) 45%, transparent)'}`,
                       borderRadius: 4,
                       fontFamily: 'inherit',
                       fontSize: '0.78rem',
@@ -8335,8 +8335,8 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
             flexDirection: 'column',
             justifyContent: 'center',
             padding: '14px 16px',
-            background: 'rgba(94,216,138,0.10)',
-            border: '1px solid rgba(94,216,138,0.45)',
+            background: 'color-mix(in srgb, var(--c-win) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--c-win) 45%, transparent)',
             borderRadius: 6,
           }}
         >
@@ -9619,13 +9619,13 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
             style={{
               padding: '10px 14px',
               background:
-                reply.kind === 'accept' ? 'rgba(94,216,138,0.12)' :
+                reply.kind === 'accept' ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' :
                 reply.kind === 'counter' ? 'rgba(232,193,112,0.12)' :
-                'rgba(229,138,138,0.12)',
+                'color-mix(in srgb, var(--c-loss) 12%, transparent)',
               border: `1px solid ${
-                reply.kind === 'accept' ? 'rgba(94,216,138,0.45)' :
+                reply.kind === 'accept' ? 'color-mix(in srgb, var(--c-win) 45%, transparent)' :
                 reply.kind === 'counter' ? 'rgba(232,193,112,0.45)' :
-                'rgba(229,138,138,0.45)'
+                'color-mix(in srgb, var(--c-loss) 45%, transparent)'
               }`,
               borderLeft: `3px solid ${
                 reply.kind === 'accept' ? '#5ed88a' :
@@ -10187,8 +10187,8 @@ function MarketScreen({
         <div
           style={{
             padding: '10px 14px',
-            background: 'rgba(229,138,138,0.10)',
-            border: '1px solid rgba(229,138,138,0.35)',
+            background: 'color-mix(in srgb, var(--c-loss) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--c-loss) 35%, transparent)',
             borderRadius: 4,
             color: 'var(--em-text)',
             fontSize: '0.86rem',
@@ -10231,8 +10231,8 @@ function MarketScreen({
                     alignItems: 'center',
                     gap: 6,
                     padding: '4px 10px',
-                    background: isUp ? 'rgba(94,216,138,0.12)' : isDown ? 'rgba(229,138,138,0.12)' : 'var(--em-panel-2)',
-                    border: `1px solid ${isUp ? 'rgba(94,216,138,0.4)' : isDown ? 'rgba(229,138,138,0.4)' : 'var(--em-border)'}`,
+                    background: isUp ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : isDown ? 'color-mix(in srgb, var(--c-loss) 12%, transparent)' : 'var(--em-panel-2)',
+                    border: `1px solid ${isUp ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : isDown ? 'color-mix(in srgb, var(--c-loss) 40%, transparent)' : 'var(--em-border)'}`,
                     borderRadius: 4,
                     fontSize: '0.78rem',
                     color: 'var(--em-text)',
@@ -10691,8 +10691,8 @@ function MarketScreen({
 
 function HudPill({ label, value, tone, mono }: { label: string; value: string; tone: 'green' | 'red' | 'neutral'; mono?: boolean }) {
   const colors: Record<string, { fg: string; bg: string; border: string }> = {
-    green:   { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
-    red:     { fg: '#e58a8a', bg: 'rgba(229,138,138,0.12)', border: 'rgba(229,138,138,0.4)' },
+    green:   { fg: '#5ed88a', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
+    red:     { fg: '#e58a8a', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];

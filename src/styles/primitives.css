@@ -700,7 +700,8 @@
 @media (max-width: 480px) {
   .ds-score__team { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); }
   .ds-score__name { font-size: var(--fs-4); }
-  .ds-score__mid { min-width: 72px; padding: var(--sp-2); }
+  .ds-score__mid { min-width: 72px; max-width: 34vw; padding: var(--sp-2); }
+  .ds-score__meta { white-space: normal; text-align: center; }
 }
 
 /* ── LowerThird (faixa de nome do caster/jogador) ────────────────────────── */

@@ -340,7 +340,7 @@ const chipLabel: React.CSSProperties = {
 function statChip(tone: 'gold' | 'green'): React.CSSProperties {
   const colors: Record<'gold' | 'green', { bg: string; border: string }> = {
     gold: { bg: 'rgba(232, 193, 112, 0.14)', border: 'rgba(232, 193, 112, 0.5)' },
-    green: { bg: 'rgba(94, 216, 138, 0.14)', border: 'rgba(94, 216, 138, 0.45)' },
+    green: { bg: 'color-mix(in srgb, var(--c-win) 14%, transparent)', border: 'color-mix(in srgb, var(--c-win) 45%, transparent)' },
   };
   return {
     display: 'inline-flex',

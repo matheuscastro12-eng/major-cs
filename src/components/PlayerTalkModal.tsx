@@ -173,7 +173,7 @@ export function PlayerTalkModal({ playerNick, playerState, onResolve, onClose, p
 
 function MoraleDeltaChip({ delta, tone }: { delta: number; tone: 'positive' | 'neutral' | 'negative' }) {
   const color = tone === 'positive' ? '#5ed88a' : tone === 'negative' ? '#e58a8a' : 'var(--em-text)';
-  const border = tone === 'positive' ? 'rgba(94,216,138,0.45)' : tone === 'negative' ? 'rgba(229,138,138,0.45)' : 'var(--em-border)';
+  const border = tone === 'positive' ? 'color-mix(in srgb, var(--c-win) 45%, transparent)' : tone === 'negative' ? 'color-mix(in srgb, var(--c-loss) 45%, transparent)' : 'var(--em-border)';
   return (
     <span style={{
       display: 'inline-flex',

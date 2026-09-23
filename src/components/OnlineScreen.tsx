@@ -1052,7 +1052,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             )}
           </Panel>
           {error && (
-            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
           )}
         </div>
       );
@@ -1154,7 +1154,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             </div>
           </Panel>
           {error && (
-            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
           )}
         </div>
       );
@@ -1228,7 +1228,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               <Button variant="gold" size="big" onClick={() => setMajorCreate(true)}>+ {ct('Criar minha sala')}</Button>
             </div>
             {error && (
-              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
             )}
           </div>
         );
@@ -1300,7 +1300,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <span style={{ flex: 1, minWidth: '180px', fontSize: '12px', color: 'var(--em-muted)', lineHeight: 1.45 }}>{OL.demoNote}</span>
           </div>
           {error && (
-            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">{error}</div>
           )}
         </div>
       );
@@ -1493,7 +1493,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               )}
             </Panel>
             {error && (
-              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'rgba(226,90,90,.12)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">
+              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: '6px', background: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: '1px solid var(--rtm-red, #e25a5a)', color: 'var(--rtm-red-bright, #e88)', fontSize: '13px' }} role="alert">
                 {error}
               </div>
             )}
@@ -2367,7 +2367,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <p style={{ color: 'var(--em-muted)', fontSize: '14px', margin: '0 0 14px' }}>{ct('Você entrará automaticamente no veto e poderá acompanhar todas as partidas.')}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
               {activePlayers.map((player) => (
-                <span key={player.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: player.done ? '#29c47a' : 'var(--em-muted)', background: player.done ? 'rgba(111,208,111,.12)' : 'var(--em-panel-2)', border: `1px solid ${player.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>
+                <span key={player.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: player.done ? '#29c47a' : 'var(--em-muted)', background: player.done ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${player.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>
               ))}
             </div>
           </div>
@@ -2404,7 +2404,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <p style={{ textAlign: 'center', color: 'var(--em-muted)', fontSize: '14px', marginTop: 0 }}>{tr('online.waitingOthers')}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
               {activePlayers.map((p) => (
-                <span key={p.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: p.done ? '#29c47a' : 'var(--em-muted)', background: p.done ? 'rgba(111,208,111,.12)' : 'var(--em-panel-2)', border: `1px solid ${p.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>
+                <span key={p.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: p.done ? '#29c47a' : 'var(--em-muted)', background: p.done ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${p.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>
                   {p.done ? '✔' : '·'} {p.nick}
                 </span>
               ))}

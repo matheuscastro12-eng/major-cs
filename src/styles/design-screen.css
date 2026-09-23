@@ -229,6 +229,9 @@
 .dsg-skel { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }
 .dsg-skel__lines { flex: 1; }
 
+@media (max-width: 480px) {
+  .dsg-bar .ds-tag { display: none; }
+}
 @media (max-width: 860px) {
   .dsg-hero { grid-template-columns: 1fr; gap: var(--sp-8); padding: var(--sp-8) var(--sp-4); }
   .dsg-main { padding: 0 var(--sp-4) var(--sp-12); }

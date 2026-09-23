@@ -236,8 +236,8 @@ function FacilityCard({
           <div
             style={{
               padding: '8px 10px',
-              background: 'rgba(94, 216, 138, 0.08)',
-              border: '1px solid rgba(94, 216, 138, 0.25)',
+              background: 'color-mix(in srgb, var(--c-win) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--c-win) 25%, transparent)',
               borderRadius: 4,
               fontSize: '0.76rem',
               color: 'var(--em-text)',
@@ -279,8 +279,8 @@ function FacilityCard({
 
 function HudPill({ label, value, tone }: { label: string; value: string; tone: 'green' | 'red' | 'neutral' }) {
   const colors: Record<string, { fg: string; bg: string; border: string }> = {
-    green: { fg: '#5ed88a', bg: 'rgba(94, 216, 138, 0.12)', border: 'rgba(94, 216, 138, 0.4)' },
-    red: { fg: '#e58a8a', bg: 'rgba(229, 138, 138, 0.12)', border: 'rgba(229, 138, 138, 0.4)' },
+    green: { fg: '#5ed88a', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)', border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
+    red: { fg: '#e58a8a', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];

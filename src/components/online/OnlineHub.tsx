@@ -72,7 +72,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       {/* banner do jogador */}
       <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--em-border-strong)', boxShadow: 'var(--rtm-shadow-banner)' }}>
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/dust2.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.24 }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(111,208,111,.14), rgba(13,17,22,.92) 60%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, color-mix(in srgb, var(--c-win) 14%, transparent), rgba(13,17,22,.92) 60%)' }} />
         <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>
           <span style={{ width: '70px', height: '70px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', fontWeight: 800, fontSize: '24px', color: '#fff', background: `linear-gradient(160deg, ${me.accent || 'var(--em-gold)'}, #20303f)`, boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.12)', flexShrink: 0 }}>{me.nick.slice(0, 2).toUpperCase()}</span>
           <div style={{ flex: 1, minWidth: '180px' }}>
@@ -106,7 +106,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
           <span style={{ fontSize: '28px', width: '52px', height: '52px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(216,169,67,.14)', border: '1px solid rgba(216,169,67,.4)', flexShrink: 0 }}>🏟️</span>
           <span style={{ flex: 1, minWidth: '200px' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 800, color: wlWin.open ? '#29c47a' : 'var(--em-gold)' }}>
-              {wlWin.open && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 6px 1px rgba(41,196,122,.7)' }} />}
+              {wlWin.open && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 6px 1px color-mix(in srgb, var(--c-win) 70%, transparent)' }} />}
               {wlWin.open ? ct('Ao vivo agora') : ct('Próxima janela')}
             </span>
             <span style={{ display: 'block', margin: '2px 0', fontFamily: 'inherit', fontSize: '22px', fontWeight: 800, color: 'var(--em-text)' }}>{ct('Major da Semana')}</span>

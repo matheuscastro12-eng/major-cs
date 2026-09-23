@@ -858,7 +858,7 @@ export function AcademyTab({
                       gap: 8,
                       padding: '7px 10px',
                       background: 'var(--em-panel-2)',
-                      border: `1px solid ${m.won ? 'rgba(94,216,138,0.4)' : 'rgba(229,138,138,0.35)'}`,
+                      border: `1px solid ${m.won ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : 'color-mix(in srgb, var(--c-loss) 35%, transparent)'}`,
                       borderLeftWidth: 3,
                       borderRadius: 4,
                     }}
@@ -1088,8 +1088,8 @@ export function AcademyTab({
                         alignItems: 'center',
                         gap: 6,
                         padding: '5px 8px',
-                        background: focused ? 'rgba(94,216,138,0.10)' : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${focused ? 'rgba(94,216,138,0.35)' : 'var(--em-border)'}`,
+                        background: focused ? 'color-mix(in srgb, var(--c-win) 10%, transparent)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${focused ? 'color-mix(in srgb, var(--c-win) 35%, transparent)' : 'var(--em-border)'}`,
                         borderRadius: 3,
                         fontSize: '0.68rem',
                       }}
@@ -1619,7 +1619,7 @@ function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner
 function HudPill({ label, value, tone }: { label: string; value: string; tone: 'gold' | 'green' | 'neutral' }) {
   const colors: Record<typeof tone, { fg: string; bg: string; border: string }> = {
     gold:    { fg: '#e8c170', bg: 'rgba(232,193,112,0.14)', border: 'rgba(232,193,112,0.45)' },
-    green:   { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
+    green:   { fg: '#5ed88a', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];
