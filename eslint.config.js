@@ -41,4 +41,17 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // Engine puro (CONTEXT.md): toda aleatoriedade vem de um Rng semeado e o
+    // tempo entra como parâmetro. rng.ts é a única exceção (randomSeed, usada
+    // pela UI para gerar a seed). Exceções pontuais pedem disable com motivo.
+    files: ['src/engine/**/*.{ts,tsx}'],
+    ignores: ['src/engine/rng.ts'],
+    rules: {
+      'no-restricted-properties': ['error',
+        { object: 'Math', property: 'random', message: 'Engine puro: use um Rng semeado (makeRng) recebido por parâmetro.' },
+        { object: 'Date', property: 'now', message: 'Engine puro: receba o tempo (now/at) por parâmetro.' },
+      ],
+    },
+  },
 ])

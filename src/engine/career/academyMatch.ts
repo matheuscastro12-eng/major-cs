@@ -12,6 +12,7 @@ import type { AcademyClub } from './academyLeague';
 import { clubStrength } from './academyLeague';
 import { derivePlaystyle, MAP_POOL, type MapId, type Playstyle, type Role, type TPlayer, type TTeam } from '../../types';
 import { hashStr } from '../../state/hash';
+import type { Rng } from '../rng';
 import type { AcademyEntry } from '../../components/CareerScreen';
 
 // Stats internas (skill/ovr/teamwork) batem com playerOvr() do ratings.ts:
@@ -251,13 +252,15 @@ export function buildAcademyPlayoff(
 }
 
 // auto-simula um confronto de playoff (MD3). Usado quando o user não joga.
-export function autoPlayoffResult(a: AcademyPlayoffSeed, b: AcademyPlayoffSeed): { winnerId: string; score: [number, number] } {
-  const noise = Math.floor(Math.random() * 21) - 10;
+// Puro: o rng vem de fora (seed do save + confronto), então o mesmo playoff dá
+// o mesmo placar em teste, em bug report e numa segunda tentativa.
+export function autoPlayoffResult(a: AcademyPlayoffSeed, b: AcademyPlayoffSeed, rng: Rng): { winnerId: string; score: [number, number] } {
+  const noise = Math.floor(rng() * 21) - 10;
   const edge = a.strength - b.strength + noise;
   let sa: number; let sb: number;
-  if (edge > 5) { sa = 2; sb = Math.random() < 0.65 ? 0 : 1; }
-  else if (edge < -5) { sa = Math.random() < 0.65 ? 0 : 1; sb = 2; }
-  else { const flip = Math.random() < 0.5; sa = flip ? 2 : 1; sb = flip ? 1 : 2; }
+  if (edge > 5) { sa = 2; sb = rng() < 0.65 ? 0 : 1; }
+  else if (edge < -5) { sa = rng() < 0.65 ? 0 : 1; sb = 2; }
+  else { const flip = rng() < 0.5; sa = flip ? 2 : 1; sb = flip ? 1 : 2; }
   return { winnerId: sa > sb ? a.id : b.id, score: [sa, sb] };
 }
 

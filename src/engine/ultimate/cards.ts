@@ -136,7 +136,8 @@ function niceRound(n: number): number {
 
 // 5 cartas iniciais (onboarding): uma por função da formação, OVR modesto e
 // jogadores distintos. Fallback pra qualquer não-usado se faltar da função.
-export function pickStarterCards(catalog: UltCard[], roles: Role[], targetOvr = 76, rng: () => number = Math.random): UltCard[] {
+// O rng é obrigatório (engine puro): quem chama decide a fonte de entropia.
+export function pickStarterCards(catalog: UltCard[], roles: Role[], targetOvr: number, rng: () => number): UltCard[] {
   const used = new Set<string>();
   const out: UltCard[] = [];
   const closeness = (c: UltCard) => Math.abs(c.ovr - targetOvr);
