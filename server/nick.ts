@@ -83,10 +83,20 @@ export async function nickTaken(sql: SqlTag, nick: string, ownerEmail: string): 
 }
 
 // O nick que as rotas públicas devem usar: o da conta, nunca o do body.
-// (Pra api/ranking.ts: `const nick = await accountNick(sql, email)` no lugar de
-// `body.nick || acc[0].nick`.)
 export async function accountNick(sql: SqlTag, email: string, fallback = 'manager'): Promise<string> {
   const r = await sql`SELECT nick FROM rtm_accounts WHERE email=${email}`;
   const nick = normalizeNick(r[0]?.nick);
   return nick || fallback;
+}
+
+// Conta antiga SEM nick (o nick do cadastro era opcional) mandava o nome do
+// manager no body de cada report. Pra ela não virar "manager" no ladder, o
+// primeiro nick válido que chegar é ADOTADO como nick da conta — uma vez só,
+// com as mesmas regras do signup (palavrões, reservados, unicidade). Depois
+// disso o body.nick volta a ser ignorado. Devolve '' se não deu pra adotar.
+export async function adoptNickIfMissing(sql: SqlTag, email: string, raw: unknown): Promise<string> {
+  const nick = normalizeNick(raw);
+  if (!nick || nickProblem(nick) || await nickTaken(sql, nick, email)) return '';
+  const r = await sql`UPDATE rtm_accounts SET nick=${nick} WHERE email=${email} AND COALESCE(nick, '') = '' RETURNING nick`;
+  return r.length ? normalizeNick(r[0].nick) : '';
 }

@@ -3,7 +3,7 @@ import test from 'node:test';
 import account from '../api/account.js';
 import { signAccountToken } from './auth.js';
 import { FakeNeonHttp, rateLimitRoute } from './neon-fetch.mock.js';
-import { accountNick, nickProblem, nickSkeleton, normalizeNick } from './nick.js';
+import { accountNick, adoptNickIfMissing, nickProblem, nickSkeleton, normalizeNick } from './nick.js';
 import { __resetRateLimitForTests } from './rate-limit.js';
 
 process.env.APP_SECRET = 'test-secret';
@@ -96,4 +96,25 @@ test('accountNick devolve o nick do banco (nunca o do body) com fallback', async
   const sql = async (_s: TemplateStringsArray, ...params: unknown[]) => (params[0] === 'a@b.com' ? [{ nick: ' ricardo ' }] : [{ nick: null }]);
   assert.equal(await accountNick(sql, 'a@b.com'), 'ricardo');
   assert.equal(await accountNick(sql, 'x@b.com'), 'manager');
+});
+
+test('adoptNickIfMissing: conta sem nick adota o do body uma vez, com as regras do signup', async () => {
+  const taken = new Set(['coldzera']);
+  const updates: unknown[][] = [];
+  const sql = async (s: TemplateStringsArray, ...params: unknown[]) => {
+    const text = s.join('?');
+    if (text.includes('lower(nick)')) {
+      const n = String(params[0] ?? '').toLowerCase();
+      return taken.has(n) ? [{ one: 1 }] : [];
+    }
+    if (text.trim().startsWith('UPDATE rtm_accounts SET nick')) { updates.push(params); return [{ nick: params[0] }]; }
+    return [];
+  };
+  assert.equal(await adoptNickIfMissing(sql, 'velho@x.com', ' Manager_Bom '), 'Manager_Bom');
+  assert.deepEqual(updates.at(-1), ['Manager_Bom', 'velho@x.com']);
+  // palavrão, curto demais ou nick de outra conta: não adota (fica 'manager' no ranking)
+  assert.equal(await adoptNickIfMissing(sql, 'velho@x.com', 'p0rra'), '');
+  assert.equal(await adoptNickIfMissing(sql, 'velho@x.com', 'x'), '');
+  assert.equal(await adoptNickIfMissing(sql, 'velho@x.com', 'ColdZera'), '');
+  assert.equal(updates.length, 1);
 });

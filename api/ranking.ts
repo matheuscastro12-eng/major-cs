@@ -9,7 +9,7 @@
 //   | communityGoal (público) | communityGoalClaim [URG-5].
 import { neon } from '@neondatabase/serverless';
 import { verifyAccountToken } from '../server/auth.js'; // [O0-15] token num módulo só, falha fechada
-import { normalizeNick } from '../server/nick.js'; // [O1-10]
+import { adoptNickIfMissing, normalizeNick } from '../server/nick.js'; // [O1-10]
 import { decidePair, GRACE_MS, rankedDelta } from './_reportPairing.js';
 import { rivalryFor, rivalryPair } from '../server/rivalry.js'; // [U11]
 import { eventRewardFor } from '../src/engine/ultimate/events.js'; // [U12]
@@ -316,7 +316,8 @@ export default async function handler(
   if (!acc[0].paid) { res.status(403).json({ error: 'unpaid', message: 'O ranking persistente faz parte da conta com save na nuvem.' }); return; }
   // [O1-10] nick SEMPRE o da conta (único, filtrado no signup/setNick); body.nick
   // é ignorado — antes dava pra aparecer no ladder e no aviso de rival como outro.
-  const nick = normalizeNick(acc[0].nick) || 'manager';
+  // Conta antiga sem nick adota o do body uma vez, com as regras do signup.
+  const nick = normalizeNick(acc[0].nick) || (await adoptNickIfMissing(sql, email, body.nick)) || 'manager';
 
   // report da SÉRIE DO DIA: 1 por conta por dia, o PRIMEIRO vale (ON CONFLICT
   // DO NOTHING). Sanidade: dia = hoje (±1 de fuso) e rating na faixa real do
