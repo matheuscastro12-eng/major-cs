@@ -497,7 +497,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     if (r.credits !== prev.profile.credits - pack.cost) {
       // saldo do servidor ≠ esperado → o ledger ainda não convergiu com o
       // local; informativo (esperado enquanto houver prêmio só local — O0-02).
-      markFlipDrift(`packOpen saldo server=${r.credits} esperado=${prev.profile.credits - pack.cost}`);
+      markFlipDrift(`packOpen saldo server=${r.credits} esperado=${prev.profile.credits - pack.cost}`, true);
     }
     persist(s);
     set({ state: s });

@@ -85,10 +85,13 @@ function saveQueue(): void {
   try { localStorage.setItem(QKEY, JSON.stringify(queue ?? [])); } catch { /* storage cheio — fila só em memória */ }
 }
 
-function markDrift(reason: string): void {
+// quiet: divergência ESPERADA desde o O0-02 (o save gasta prêmio que só existe
+// nele → o servidor responde saldo insuficiente). Só anota a flag, sem errlog —
+// senão todo jogador com prêmio local viraria um erro por gasto.
+function markDrift(reason: string, quiet = false): void {
   // txs foram descartadas → o ledger do servidor NÃO reflete mais o save local.
-  // A fase 3b usa esta flag pra saber que precisa de reconciliação completa.
   try { localStorage.setItem(DRIFT_KEY, '1'); } catch { /* best-effort */ }
+  if (quiet) return;
   captureError(new Error(`ultimate-shadow drift: ${reason}`), 'ult-shadow');
 }
 
@@ -205,11 +208,12 @@ export async function flushShadowQueue(): Promise<void> {
         continue;
       }
       if (status === 400 || status === 409) {
-        // replay de op_id devolve 200; 409 aqui é insufficient_credits — o ledger
-        // divergiu do save local (spend antes da migração etc.). Não tem retry útil.
+        // replay de op_id devolve 200; 409 aqui é insufficient_credits/not_owner —
+        // o ledger diverge do save (esperado até o O1-01: prêmio só local). Não
+        // tem retry útil. 400 = forma inválida (bug) → vai pro errlog.
         q.shift();
         saveQueue();
-        markDrift(`tx dropped status=${status} kind=${entry.kind}`);
+        markDrift(`tx dropped status=${status} kind=${entry.kind}`, status === 409);
         continue;
       }
       if (status === 401 || status === 403) return; // sem conta paga — fila espera
@@ -297,10 +301,11 @@ export function mirrorUltimateChange(prev: UltimateState, next: UltimateState, k
 
 // Flag de drift do FLIP: setada quando um packOpen server-side caiu pro
 // fallback local (o servidor PODE ter aplicado a tx) ou quando o saldo
-// devolvido divergiu do esperado. Puramente informativa — a reconciliação do
-// boot roda sempre e converge; a flag só é limpa quando os lados batem.
-export function markFlipDrift(reason: string): void {
+// devolvido divergiu do esperado. Puramente informativa; a flag só é limpa
+// quando os lados batem. quiet = divergência esperada (O0-02), sem errlog.
+export function markFlipDrift(reason: string, quiet = false): void {
   try { localStorage.setItem(FLIP_DRIFT_KEY, '1'); } catch { /* best-effort */ }
+  if (quiet) return;
   captureError(new Error(`ult-flip drift: ${reason}`), 'ult-flip');
 }
 
@@ -414,14 +419,14 @@ export async function openPackOnServer(packId: string): Promise<ServerPackResult
         cards,
       };
     }
-    // Falha de rede/timeout (0), 5xx/429, 401/403 ou 409 de saldo: NUNCA
-    // bloqueia — o chamador cai pro roll local (que espelha via shadow, como
-    // sempre). O servidor PODE ter aplicado a tx (timeout) ou estar divergido
-    // (409 insufficient): marca o drift e deixa a reconciliação do boot
-    // convergir. O pendente é limpo: esta op não será re-tentada — o roll
-    // local que sai agora é a versão que vale.
+    // Falha de rede/timeout (0), 5xx/429, 401/403, 409 de saldo ou 423
+    // (carteira congelada): NUNCA bloqueia — o chamador cai pro roll local
+    // (cartas só no save). O servidor PODE ter aplicado a tx (timeout) ou estar
+    // divergido (409 insufficient — esperado desde o O0-02 quando o save tem
+    // prêmio só local): marca o drift. O pendente é limpo: esta op não será
+    // re-tentada — o roll local que sai agora é a versão que vale.
     clearPendingOpen();
-    markFlipDrift(`packOpen fallback status=${r.status}`);
+    markFlipDrift(`packOpen fallback status=${r.status}`, r.status === 423 || (r.status === 409 && r.data?.error === 'insufficient_credits'));
     return null;
   } catch (e) {
     captureError(e, 'ult-flip');
