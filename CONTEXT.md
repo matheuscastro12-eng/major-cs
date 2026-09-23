@@ -38,8 +38,16 @@ Use estes nomes exatamente — em código, comentários, testes e discussões.
   12 e lado derivado do half (`sideAtRound`, com a regra de OT do CS2).
 - **Momentum** — 0..1, aquece/esfria a próxima decisão (±8% no atributo
   efetivo); semeado pela confiança pré-jogo.
+- **Postura / contra-jogo** — em cada beat o adversário joga de um jeito
+  (`postureAt`: vêm pra cima, jogam passivo ou armaram o setup), sorteado pelo
+  seed com o viés do elenco (`postureLeanOf`, a mesma tendência do scouting).
+  Pedra-papel-tesoura (`counterDeltaOf`, ±12pp): seguro vence o rush, agressivo
+  vence o passivo, inteligente vence o setup. Sem leitura as odds usam o
+  confronto esperado pela tendência; com leitura, o exato — o % mostrado segue
+  sendo o % rolado. Nenhum estilo fixo domina (`scripts/rtp-style-mc.mts`,
+  testado em `test-rtp-invariants.mts`); ler e contra-atacar é o que rende.
 - **Leitura tática** — recurso limitado (escala com game sense) que revela a
-  tendência do adversário e soma +2 no atributo da decisão atual.
+  postura do adversário no beat e soma +2 no atributo da decisão atual.
 - **Virada de semana** — a virada canônica é `turnWeek` (`weekly.ts`):
   patrocínio, investimentos, evento de vida e dinastia; `weeklyTick` é o tick
   de medidores/salário/custos que a antecede. O circuito

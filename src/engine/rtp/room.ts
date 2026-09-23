@@ -21,8 +21,8 @@ import { makeRng } from '../rng';
 import type { MapId, Role } from '../../types';
 import type { AttrKey } from '../attributes';
 import {
-  resolveMoment, explainOdds, clutchStepMoment,
-  type Moment, type MomentOption, type MomentOutcome, type OddsBreakdown,
+  resolveMoment, explainOdds, clutchStepMoment, counterDeltaOf, POSTURE_LABEL, EVEN_POSTURE,
+  type Moment, type MomentOption, type MomentOutcome, type OddsBreakdown, type OppPosture, type PostureWeights,
 } from './moments';
 import {
   buildBeatPlan, ctxForBeat, initialLiveScore, bridgeToBeat, closeMapFromLive,
@@ -30,12 +30,15 @@ import {
   type BeatSpec, type LiveScore, type Interlude, type RoundCtx,
 } from './roundModel';
 import { MINIGAMES, type MiniGameDef } from './minigames';
-import { planStyleBias, gamePlanDef, type GamePlan } from './meta';
+import { planStyleBias, gamePlanDef, postureLeanOf, type GamePlan } from './meta';
 import {
   buildUserTeam, simulateSeriesForPlay, assembleProResult, execBoostOvr,
   type MatchPrep, type ProMatchResult,
 } from './matchSim';
-import { summarizeMoments } from './moments';
+import { summarizeMoments, impactPerBeat, IMPACT_REF } from './moments';
+
+// OVR por ponto de impacto por beat acima/abaixo do neutro (O1-44).
+const IMPACT_OVR = 40;
 import { resolveRoomSeries } from './roundModel';
 import type { TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave } from './types';
@@ -71,6 +74,7 @@ export interface RoomConfig {
   grudge?: number;
   confidence?: number;
   heroNick?: string;            // [W3] quem executa (actor do DecisionEvent)
+  oppLean?: PostureWeights;     // O1-44: tendência de postura do adversário
 }
 
 // O dado COMPLETO de uma resolução (o que a UI anima: needle, stinger, feed).
@@ -83,6 +87,7 @@ export interface ResolvedBeat {
   clutchFinal: boolean;         // clutch: este passo fechou (ou perdeu) o 1vX
   newAlive: number;             // clutch: inimigos vivos após o passo
   execPerf: number | null;      // performance no minigame (null = beat sem execução)
+  posture: OppPosture;          // O1-44: como o adversário jogou o beat (revelado no resultado)
   scored: boolean;              // este passo pontuou a rodada no placar vivo
   youWonRound: boolean;         // (quando scored) a rodada foi sua
 }
@@ -134,6 +139,7 @@ export function createRoom(save: RoadToProSave, prep: MatchPrep): RoomState {
     grudge: prep.grudge,
     confidence: prep.confidence,
     heroNick: save.player.nick,
+    oppLean: postureLeanOf(prep.opp.players ?? []),
   };
   const beats = buildBeatPlan(cfg.role, cfg.mapsIds, cfg.matchSeed);
   return {
@@ -221,6 +227,30 @@ export function winProbOf(s: RoomState): number {
   return clamp(50 + edge, 5, 95);
 }
 
+// POSTURA do adversário no beat/passo corrente (O1-44): sorteio semeado pela
+// série com os pesos da tendência (o dado já está lançado; a Leitura só o
+// revela). Chave própria (não consome o roll do beat).
+export function postureAt(s: RoomState, idx = s.idx, step = s.clutch?.step ?? 0): OppPosture {
+  const lean = s.cfg.oppLean ?? EVEN_POSTURE;
+  const u = makeRng((s.cfg.matchSeed ^ Math.imul(idx + 1, 0x2c1b3c6d) ^ Math.imul(step + 1, 0x297a2d39) ^ 0x7057) >>> 0)();
+  const tot = lean.aggro + lean.safe + lean.smart || 1;
+  if (u < lean.aggro / tot) return 'aggro';
+  if (u < (lean.aggro + lean.safe) / tot) return 'safe';
+  return 'smart';
+}
+// a postura que o jogador CONHECE agora: só com a Leitura ativa.
+export function currentPosture(s: RoomState): OppPosture | null {
+  return s.readUsed ? postureAt(s) : null;
+}
+// confronto do estilo da opção com a postura (lida) ou com a tendência (esperado).
+export function counterFor(s: RoomState, opt: MomentOption): { delta: number; label: string } {
+  const known = currentPosture(s);
+  return {
+    delta: counterDeltaOf(opt.style, known, s.cfg.oppLean ?? EVEN_POSTURE),
+    label: known ? `Leitura: ${POSTURE_LABEL[known]}` : 'Tendência deles',
+  };
+}
+
 // mesma banda do resolveMoment: [thr, thr+banda) = PARCIAL (meio-termo com
 // frag). Exportada pra needle da UI e testes lerem da MESMA fonte.
 export const partialBandOf = (threshold: number) => Math.min(0.18, (1 - threshold) * 0.7);
@@ -274,13 +304,14 @@ export function roomOdds(s: RoomState, opt: MomentOption, execPerf: number | nul
     const d = Math.round(execBoostOf(execPerf) * 3.1);   // ≈ % por ponto de attr
     if (d !== 0) factors.push({ label: 'Execução', delta: d, good: d > 0 });
   }
-  return explainOdds(opt, effWith(s, opt, execPerf), s.cfg.oppStrength, factors);
+  return explainOdds(opt, effWith(s, opt, execPerf), s.cfg.oppStrength, factors, counterFor(s, opt));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Transições
 
-// Leitura tática: revela a tendência e soma +2 no atributo da decisão atual.
+// Leitura tática: revela a POSTURA do adversário no beat (as odds passam a usar
+// o confronto exato — O1-44) e soma +2 no atributo da decisão atual.
 export function useRead(s: RoomState): RoomState {
   if (s.reads <= 0 || s.readUsed || s.phase !== 'decide') return s;
   return { ...s, reads: s.reads - 1, readUsed: true };
@@ -301,7 +332,7 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
   // execPerf viaja NO outcome: summarizeMoments agrega e o finish converte em
   // boost real de rating (jogou bem os minigames → rating bom; mal → ruim).
   const outcome: MomentOutcome = {
-    ...resolveMoment(moment, opt, effWith(s, opt, execPerf), s.cfg.oppStrength, makeRng(seed)),
+    ...resolveMoment(moment, opt, effWith(s, opt, execPerf), s.cfg.oppStrength, makeRng(seed), counterFor(s, opt).delta),
     ...(execPerf != null ? { execPerf } : {}),
   };
 
@@ -342,6 +373,7 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
     odds: roomOdds(s, opt, execPerf),
     baseTotal: roomOdds(s, opt).total,
     roll, outcome, clutchFinal, newAlive, execPerf, scored, youWonRound,
+    posture: postureAt(s),
   };
   // [W3] evidência: o que foi decidido, a % NA TELA e o que o dado deu. `won`
   // é o veredito literal do roll contra a % mostrada (partial fica em `result`).
@@ -539,7 +571,11 @@ export function finishSeries(
   const summary = summarizeMoments(final.outcomes);
   // Decisões (±9) + EXECUÇÃO nos minigames (±4.5/−1.5) movem o herói no sim de
   // verdade — jogou bem os momentos-chave, o rating sobe; jogou mal, cai.
-  const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg);
+  // + IMPACTO (O1-44, ±4): os frags/aberturas que o estilo rendeu contam no
+  // rating — antes os frags extras do agressivo sumiam e o seguro dominava
+  // vitória E rating.
+  const impact = clamp((impactPerBeat(summary, final.outcomes.length) - IMPACT_REF) * IMPACT_OVR, -6, 6);
+  const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg) + impact;
   const userTeam = buildUserTeam(save, prep.effAttrs, momentBoost, 'user');
   const oppTeam: TTeam = { ...oppStored, wins: 0, losses: 0, roundDiff: 0, status: 'alive', noEdge: true };
   const maps = final.liveMaps && final.liveMaps.length
@@ -564,7 +600,9 @@ export function skipRest(s: RoomState): RoomState {
     const opt = b.moment.options.find((o) => o.style === 'smart') ?? b.moment.options[0];
     const seed = (s.cfg.matchSeed ^ ((i + 1) * 0x9e3779b1)) >>> 0;
     const eff = clamp(s.cfg.effAttrs[opt.attr] + planBiasOf(s, opt) + (s.cfg.grudge ?? 0), 1, 20);
-    acc.push(resolveMoment(b.moment, opt, eff, s.cfg.oppStrength, makeRng(seed)));
+    // no automático não há Leitura: o confronto é o esperado pela tendência.
+    const counter = counterDeltaOf(opt.style, null, s.cfg.oppLean ?? EVEN_POSTURE);
+    acc.push(resolveMoment(b.moment, opt, eff, s.cfg.oppStrength, makeRng(seed), counter));
   }
   return { ...s, phase: 'done', pending: null, outcomes: acc, final: { outcomes: acc } };
 }
