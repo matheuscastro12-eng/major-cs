@@ -876,7 +876,7 @@ function WlSection() {
       {err && <div className="crm-save-msg err">{err}</div>}
       {result && (
         <div className="crm-save-msg" style={{ background: 'rgba(22,163,74,.12)', border: '1px solid #16a34a' }}>
-          ✓ {ct('Pagos')}: {result.length === 0 ? ct('ninguém (ranking vazio ou tudo já pago antes)') : result.map((p) => `${p.rank}º ${p.nick} +${num(p.prize)}${p.replayed ? ` (${ct('já pago — não duplicou')})` : ''}`).join(' · ')}
+          ✓ {ct('Pagos')}: {result.length === 0 ? ct('ninguém (ranking vazio ou tudo já pago antes)') : result.map((p) => `${p.rank}º ${p.nick} +${num(p.prize)}${p.replayed ? (p.priorPrize != null ? ` (⚠ ${ct('já pago antes com')} ${num(p.priorPrize)} — ${ct('valor diferente do prêmio; não duplicou')})` : ` (${ct('já pago — não duplicou')})`) : ''}`).join(' · ')}
         </div>
       )}
       {data.board.length === 0 ? (

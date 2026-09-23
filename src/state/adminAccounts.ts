@@ -108,7 +108,7 @@ export interface WlAdminBoard {
 export async function getWlBoard(password: string, windowId?: string): Promise<WlAdminBoard | null> {
   try { return (await postWl({ action: 'adminBoard', password, ...(windowId ? { windowId } : {}) })) as unknown as WlAdminBoard; } catch { return null; }
 }
-export interface WlSettlePaid { rank: number; email: string; nick: string; prize: number; replayed: boolean; }
+export interface WlSettlePaid { rank: number; email: string; nick: string; prize: number; replayed: boolean; priorPrize?: number; } // priorPrize: valor pago antes, se diferente [O0-08]
 export async function settleWl(password: string, windowId: string, force: boolean): Promise<{ ok: boolean; paid?: WlSettlePaid[]; error?: string }> {
   try { const d = await postWl({ action: 'settle', password, windowId, force }); return { ok: !!d.ok, paid: d.paid as WlSettlePaid[] | undefined }; }
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'erro' }; }

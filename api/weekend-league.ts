@@ -1,10 +1,11 @@
 // "Major da Semana" — Weekend League do Ultimate (fase A: servidor).
 // Torneio semanal (qua 00:00 → sáb 23:59 America/Sao_Paulo): registro
 // por janela, até 10 partidas com reports PAREADOS (mesma filosofia anti-fraude
-// da ranqueada — resultado só conta quando os dois lados batem) e recompensa
-// por faixa de vitórias paga pela economia server-authoritative (ledger
-// idempotente, op_id wl:<windowId>). Lógica pura em server/weekend-league.ts.
-// Ações (POST body.action): status | register | report | claim. Só conta PAGA.
+// da ranqueada — resultado só conta quando os dois lados batem) e prêmio por
+// COLOCAÇÃO no top 10 pago pelo admin (settle) na economia server-authoritative
+// (ledger idempotente, op_id wl:<windowId>). Lógica pura em server/weekend-league.ts.
+// Ações (POST body.action): status | register | report. Só conta PAGA.
+// [O0-08] a ação legada 'claim' (faixa de vitórias) saiu — ver server.
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
@@ -12,7 +13,6 @@ import {
   wlStatus,
   wlRegister,
   wlReport,
-  wlClaim,
   wlBoard,
   wlSettle,
   weekendWindowFor,
@@ -61,7 +61,7 @@ function verifyToken(token: string): string | null {
 
 const WINDOW_ID_RE = /^wl-\d{4}-\d{2}-\d{2}$/;
 // limites por conta/minuto: report é o hot path da run; claim/register são raros.
-const ACTION_LIMITS: Record<string, number> = { status: 60, register: 10, report: 30, claim: 10 };
+const ACTION_LIMITS: Record<string, number> = { status: 60, register: 10, report: 30 };
 
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
@@ -165,19 +165,6 @@ export default async function handler(
     // [URG-5] meta comunitária: report ACEITO (não duplicado) do Major da Semana conta 1 partida
     if (r.outcome !== 'duplicate') await bumpCommunityContrib(sql, now.getTime(), email);
     res.status(200).json({ ok: true, outcome: r.outcome, entry: r.entry });
-    return;
-  }
-
-  if (action === 'claim') {
-    const windowId = String(body.windowId ?? '').trim();
-    if (!WINDOW_ID_RE.test(windowId)) { res.status(400).json({ error: 'windowId inválido' }); return; }
-    const r = await wlClaim(sql, email, windowId, now);
-    if (!r.ok) {
-      const status = r.error === 'bad_window' ? 400 : r.error === 'not_registered' ? 403 : 409;
-      res.status(status).json({ error: r.error });
-      return;
-    }
-    res.status(200).json({ ok: true, replayed: r.replayed, tier: r.tier, wins: r.wins, credits: r.credits });
     return;
   }
 

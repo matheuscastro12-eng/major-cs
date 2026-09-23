@@ -305,7 +305,7 @@ export class FakeDb {
       const opId = String(params[1]);
       return this.ledger
         .filter((l) => l.email === email && l.opId === opId)
-        .map((l) => ({ kind: l.kind, cards: l.cards, meta: l.meta }));
+        .map((l) => ({ kind: l.kind, cards: l.cards, meta: l.meta, credits_delta: l.delta }));
     }
     if (text.includes('FROM rtm_ult_ledger WHERE')) {
       const email = String(params[0]);
