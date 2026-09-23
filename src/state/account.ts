@@ -1,23 +1,152 @@
 // Conta do jogador (e-mail + senha) + entitlement da conta vitalícia R$20.
 // Token fica no localStorage; o backend (api/account.ts) valida e diz se é paga.
+//
+// [O0-10/O1-33] Estado da conta é UM só (store Zustand `useAccountStore`): um
+// /me deduplicado, refresh e logout globais e o último Account válido em cache.
+// O token só é apagado num 401 explícito do servidor ("Sessão inválida" /
+// "Conta não encontrada"). Rede caída, timeout ou 5xx do Neon mantêm o token e
+// o Account em cache (status 'offline'): o pagante não vira grátis por um blip,
+// e o polling do Pix continua de onde estava quando a rede volta.
 import { trackUltFunnel } from './track';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { create } from 'zustand';
 import { ct } from './career-i18n';
 
 const TOKEN_KEY = 'rtm-acct-token-v1';
+const CACHE_KEY = 'rtm-acct-cache-v1';
+const ME_TIMEOUT_MS = 10_000;
 export interface Account { email: string; nick: string; paid: boolean; founder: boolean; founderNo: number | null; admin: boolean; }
 
 export function getToken(): string | null { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } }
 function setToken(t: string) { try { localStorage.setItem(TOKEN_KEY, t); } catch { /* sem storage */ } }
 export function clearToken() { try { localStorage.removeItem(TOKEN_KEY); } catch { /* sem storage */ } }
 
-async function post(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const r = await fetch('/api/account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+// Erro do /api/account com o status HTTP. status 0 = nem chegou no servidor
+// (offline, troca de rede, timeout). Quem chama decide o que fazer com cada um.
+export class AccountError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'AccountError';
+    this.status = status;
+  }
+}
+
+async function post(body: Record<string, unknown>, timeoutMs = 0): Promise<Record<string, unknown>> {
+  const ctrl = timeoutMs > 0 && typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  let r: Response;
+  try {
+    r = await fetch('/api/account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: ctrl?.signal });
+  } catch {
+    throw new AccountError(ct('Erro de conexão. Tente de novo.'), 0);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(typeof data?.error === 'string' ? data.error : ct('Erro de conexão. Tente de novo.'));
+  if (!r.ok) throw new AccountError(typeof data?.error === 'string' ? data.error : ct('Erro de conexão. Tente de novo.'), r.status);
   return data as Record<string, unknown>;
 }
 const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid, founder: !!d.founder, founderNo: d.founderNo != null ? Number(d.founderNo) : null, admin: !!d.admin });
+
+// Só um 401 prova que o token morreu. Qualquer outra falha (0 = rede, 429,
+// 5xx, 4xx inesperado) é "não sei agora": mantém o token e o cache.
+export function meFailureKind(status: number): 'unauthorized' | 'offline' {
+  return status === 401 ? 'unauthorized' : 'offline';
+}
+
+// Último Account confirmado pelo servidor. Serve de verdade provisória quando
+// o /me não responde (e evita o flash de "grátis" no boot do pagante).
+export function readCachedAccount(): Account | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Record<string, unknown>;
+    return d && typeof d === 'object' && typeof d.email === 'string' ? toAcct(d) : null;
+  } catch { return null; }
+}
+function writeCachedAccount(a: Account): void { try { localStorage.setItem(CACHE_KEY, JSON.stringify(a)); } catch { /* cache é best-effort */ } }
+function clearCachedAccount(): void { try { localStorage.removeItem(CACHE_KEY); } catch { /* sem storage */ } }
+
+// Resultado do /me já classificado. 'offline' carrega o Account em cache (ou
+// null se este aparelho nunca viu um /me bom desta conta).
+export type MeOutcome =
+  | { kind: 'online'; account: Account }
+  | { kind: 'anon' }
+  | { kind: 'offline'; account: Account | null };
+
+export async function fetchMeOutcome(): Promise<MeOutcome> {
+  const token = getToken(); if (!token) return { kind: 'anon' };
+  try {
+    const account = toAcct(await post({ action: 'me', token }, ME_TIMEOUT_MS));
+    writeCachedAccount(account);
+    return { kind: 'online', account };
+  } catch (e) {
+    const status = e instanceof AccountError ? e.status : 0;
+    if (meFailureKind(status) === 'unauthorized') {
+      clearToken();
+      clearCachedAccount();
+      return { kind: 'anon' };
+    }
+    return { kind: 'offline', account: readCachedAccount() };
+  }
+}
+
+// ── Store única da conta ─────────────────────────────────────────────────────
+// status: 'checking' (tem token, /me em voo), 'online' (confirmado agora),
+// 'offline' (tem token mas o servidor não respondeu: vale o cache) e 'anon'
+// (sem token). `ready` = já dá pra decidir demo/paywall (tudo menos checking).
+export type AccountStatus = 'checking' | 'online' | 'offline' | 'anon';
+interface AccountStoreState { account: Account | null; status: AccountStatus; ready: boolean }
+
+function initialAccountState(): AccountStoreState {
+  if (!getToken()) return { account: null, status: 'anon', ready: true };
+  return { account: readCachedAccount(), status: 'checking', ready: false };
+}
+
+export const useAccountStore = create<AccountStoreState>(() => initialAccountState());
+
+function applyOutcome(o: MeOutcome): Account | null {
+  if (o.kind === 'online') { useAccountStore.setState({ account: o.account, status: 'online', ready: true }); return o.account; }
+  if (o.kind === 'anon') { useAccountStore.setState({ account: null, status: 'anon', ready: true }); return null; }
+  useAccountStore.setState({ account: o.account, status: 'offline', ready: true });
+  return o.account;
+}
+
+// Um /me por vez no app inteiro: chamadas concorrentes (6 telas montando, o
+// polling do Pix, o refresh pós-pagamento) dividem a mesma promise.
+let meInFlight: Promise<Account | null> | null = null;
+export function refreshAccount(): Promise<Account | null> {
+  if (!meInFlight) {
+    meInFlight = fetchMeOutcome().then(applyOutcome).finally(() => { meInFlight = null; });
+  }
+  return meInFlight;
+}
+
+// Mantém a assinatura antiga (Account | null). Em rede/5xx devolve o Account em
+// cache e NÃO apaga o token: o polling do Pix sobrevive à queda de rede.
+export function fetchMe(): Promise<Account | null> { return refreshAccount(); }
+
+export function setAccount(a: Account | null): void {
+  if (a) { writeCachedAccount(a); useAccountStore.setState({ account: a, status: 'online', ready: true }); }
+  else useAccountStore.setState({ account: null, status: getToken() ? 'offline' : 'anon', ready: true });
+}
+
+export function logoutAccount(): void {
+  clearToken();
+  clearCachedAccount();
+  useAccountStore.setState({ account: null, status: 'anon', ready: true });
+}
+
+let bootLoaded = false;
+let reconnectInstalled = false;
+function ensureAccountLoaded(): void {
+  if (!bootLoaded) { bootLoaded = true; void refreshAccount(); }
+  if (reconnectInstalled || typeof window === 'undefined') return;
+  reconnectInstalled = true;
+  // voltou a rede com a conta em modo offline: confirma de novo com o servidor
+  window.addEventListener('online', () => { if (useAccountStore.getState().status === 'offline') void refreshAccount(); });
+}
 
 // Conta admin troca o token pela chave do CRM (ADMIN_PASSWORD). Devolve null se
 // não for admin (ou offline). O AdminGate usa isso pra destravar sem senha digitada.
@@ -28,7 +157,8 @@ export async function fetchAdminKey(): Promise<string | null> {
 
 export async function signup(email: string, password: string, nick: string): Promise<Account> {
   const d = await post({ action: 'signup', email, password, nick });
-  setToken(String(d.token)); return toAcct(d);
+  setToken(String(d.token));
+  const a = toAcct(d); setAccount(a); return a;
 }
 // Reset de senha em 2 passos: pede o código por e-mail e confirma com a nova
 // senha. As duas lançam Error com mensagem amigável do servidor.
@@ -41,11 +171,8 @@ export async function confirmPasswordReset(email: string, code: string, password
 
 export async function login(email: string, password: string): Promise<Account> {
   const d = await post({ action: 'login', email, password });
-  setToken(String(d.token)); return toAcct(d);
-}
-export async function fetchMe(): Promise<Account | null> {
-  const token = getToken(); if (!token) return null;
-  try { return toAcct(await post({ action: 'me', token })); } catch { clearToken(); return null; }
+  setToken(String(d.token));
+  const a = toAcct(d); setAccount(a); return a;
 }
 export async function claim(cs: string): Promise<boolean> {
   const token = getToken(); if (!token) return false;
@@ -186,22 +313,15 @@ export async function deleteAccount(password: string): Promise<void> {
   const token = getToken();
   if (!token) throw new Error(ct('Entre novamente na conta para excluí-la.'));
   await post({ action: 'delete', token, password });
-  clearToken();
+  logoutAccount();
 }
 
+// Hook fino sobre a store: todas as telas leem o MESMO estado. O primeiro
+// mount dispara o /me do boot (uma vez só, deduplicado).
 export function useAccount() {
-  const [account, setAccount] = useState<Account | null>(null);
-  const [ready, setReady] = useState(false);
-  const refresh = useCallback(async () => { setAccount(await fetchMe()); setReady(true); }, []);
-  useEffect(() => {
-    let active = true;
-    void fetchMe().then((next) => {
-      if (!active) return;
-      setAccount(next);
-      setReady(true);
-    });
-    return () => { active = false; };
-  }, []);
-  const logout = useCallback(() => { clearToken(); setAccount(null); }, []);
-  return { account, ready, setAccount, refresh, logout };
+  const account = useAccountStore((s) => s.account);
+  const ready = useAccountStore((s) => s.ready);
+  const status = useAccountStore((s) => s.status);
+  useEffect(() => { ensureAccountLoaded(); }, []);
+  return { account, ready, status, setAccount, refresh: refreshAccount, logout: logoutAccount };
 }
