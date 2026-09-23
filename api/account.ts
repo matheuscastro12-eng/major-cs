@@ -6,7 +6,7 @@
 // - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
-import { respondMissingSecret, signAccountToken, verifyAccountToken } from '../server/auth.js';
+import { ADMIN_SESSION_TTL_SEC, respondMissingSecret, signAccountToken, signAdminSession, verifyAccountToken } from '../server/auth.js';
 import {
   accountReference,
   checkoutBelongsToAccount,
@@ -400,18 +400,19 @@ export default async function handler(
     return;
   }
 
-  // adminKey: se a conta do token for admin (is_admin), devolve a chave do CRM
-  // (ADMIN_PASSWORD) pro cliente autenticar nos endpoints de admin já existentes.
-  // É a ponte que faz o acesso ao CRM vir da CONTA, não mais de senha/rota secreta.
+  // adminSession: conta com is_admin troca o token de conta por uma SESSÃO de
+  // admin curta (12h, server/auth.ts), que os endpoints de admin aceitam no
+  // lugar da senha. Substitui a antiga action adminKey, que devolvia a própria
+  // ADMIN_PASSWORD ao browser (O0-16/SEGU-07): vazou o localStorage, vazou a
+  // chave mestra. Agora vaza, no máximo, uma sessão que expira e que morre na
+  // hora se a conta perder o is_admin (conferido no banco a cada request).
   // Não-admin recebe 403 (o painel nem aparece pra ele no cliente).
-  if (action === 'adminKey') {
+  if (action === 'adminSession') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
     const r = await sql`SELECT is_admin FROM rtm_accounts WHERE email=${em}`;
     if (!r.length || !r[0].is_admin) { res.status(403).json({ error: 'not admin' }); return; }
-    const key = cleanEnv(process.env.ADMIN_PASSWORD);
-    if (!key) { res.status(500).json({ error: 'ADMIN_PASSWORD não configurada' }); return; }
-    res.status(200).json({ key });
+    res.status(200).json({ session: signAdminSession(em), expiresIn: ADMIN_SESSION_TTL_SEC });
     return;
   }
 

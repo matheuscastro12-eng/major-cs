@@ -19,11 +19,12 @@ async function post(body: Record<string, unknown>): Promise<Record<string, unkno
 }
 const toAcct = (d: Record<string, unknown>): Account => ({ email: String(d.email ?? ''), nick: String(d.nick ?? ''), paid: !!d.paid, founder: !!d.founder, founderNo: d.founderNo != null ? Number(d.founderNo) : null, admin: !!d.admin });
 
-// Conta admin troca o token pela chave do CRM (ADMIN_PASSWORD). Devolve null se
-// não for admin (ou offline). O AdminGate usa isso pra destravar sem senha digitada.
+// Conta admin troca o token por uma SESSÃO de admin curta (12h) — nunca mais pela
+// ADMIN_PASSWORD (O0-16). Devolve null se não for admin (ou offline). O AdminGate
+// usa isso pra destravar sem senha digitada; a sessão vai em body.password.
 export async function fetchAdminKey(): Promise<string | null> {
   const token = getToken(); if (!token) return null;
-  try { const d = await post({ action: 'adminKey', token }); return typeof d.key === 'string' ? d.key : null; } catch { return null; }
+  try { const d = await post({ action: 'adminSession', token }); return typeof d.session === 'string' ? d.session : null; } catch { return null; }
 }
 
 export async function signup(email: string, password: string, nick: string): Promise<Account> {

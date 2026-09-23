@@ -4,6 +4,9 @@
 // o cliente checa o status (action 'check'). Também aceita o código direto
 // (BETA_CODE) como atalho de liberação (compatibilidade).
 import { neon } from '@neondatabase/serverless';
+import { requireAdmin } from '../server/admin-auth.js';
+import { internalError, parseJsonBody } from '../server/http.js';
+import type { RateSql } from '../server/rate-limit.js';
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
@@ -15,7 +18,7 @@ interface Res {
 }
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   res.setHeader('Cache-Control', 'no-store');
@@ -23,7 +26,9 @@ export default async function handler(
     res.status(405).json({ error: 'method not allowed' });
     return;
   }
-  const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
+  const parsed = parseJsonBody(req.body);
+  if (!parsed) { res.status(400).json({ error: 'JSON inválido' }); return; }
+  const body = parsed as {
     action?: string;
     nick?: string;
     code?: string;
@@ -62,7 +67,8 @@ export default async function handler(
     betaTableReady = true;
   };
 
-  const adminOk = () => (String(body.password ?? '').trim() === clean(process.env.ADMIN_PASSWORD));
+  // admin: sessão da conta ou senha mestra, tempo constante + rate limit (O0-16).
+  const adminOk = () => requireAdmin(sql as unknown as RateSql, parsed, req, res);
 
   try {
     await ensure();
@@ -91,7 +97,7 @@ export default async function handler(
 
     // ----- admin (senha) -----
     if (action === 'list') {
-      if (!adminOk()) { res.status(401).json({ ok: false }); return; }
+      if (!(await adminOk())) return;
       const rows = await sql`
         SELECT nick, status, created_at, updated_at FROM beta_requests
         ORDER BY (status = 'pending') DESC, updated_at DESC LIMIT 500`;
@@ -100,7 +106,7 @@ export default async function handler(
     }
 
     if (action === 'decide') {
-      if (!adminOk()) { res.status(401).json({ ok: false }); return; }
+      if (!(await adminOk())) return;
       const decision = body.decision === 'approve' ? 'approved' : body.decision === 'reject' ? 'rejected' : null;
       if (!key || !decision) { res.status(400).json({ error: 'dados inválidos' }); return; }
       await sql`
@@ -111,6 +117,6 @@ export default async function handler(
 
     res.status(400).json({ error: 'ação inválida' });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    internalError(res, e, 'beta');
   }
 }

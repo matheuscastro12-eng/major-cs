@@ -50,6 +50,16 @@
     "server/rate-limit.mock.ts",
     "server/rate-limit.test.ts",
     "server/neon-http.mock.ts",
-    "server/account-security.test.ts"
+    "server/account-security.test.ts",
+    "server/admin-auth.ts",
+    "server/http.ts",
+    "api/admin-login.ts",
+    "api/beta.ts",
+    "api/bo3-edits.ts",
+    "api/donors.ts",
+    "api/error.ts",
+    "api/metrics.ts",
+    "api/teams.ts",
+    "server/admin-auth.test.ts"
   ]
 }

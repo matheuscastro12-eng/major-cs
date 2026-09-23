@@ -1,8 +1,12 @@
 // Função serverless (Vercel) que serve e grava o dataset no banco Neon.
 // GET  -> lista pública de times (fonte primária do app).
 // POST -> admin autenticado salva a base inteira (vale pra todos os usuários
-//         e para qualquer build/campanha nova). Protegido por ADMIN_PASSWORD.
+//         e para qualquer build/campanha nova). Admin: sessão da conta ou
+//         ADMIN_PASSWORD (server/admin-auth.ts).
 import { neon } from '@neondatabase/serverless';
+import { requireAdmin } from '../server/admin-auth.js';
+import { internalError, parseJsonBody } from '../server/http.js';
+import type { RateSql } from '../server/rate-limit.js';
 
 interface Res {
   status: (code: number) => { json: (body: unknown) => void };
@@ -64,7 +68,7 @@ const num = (v: unknown, def = 0) => {
 };
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[] | undefined> },
+  req: { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[] | undefined>; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -107,7 +111,7 @@ export default async function handler(
       const rows = (await sql`SELECT data FROM teams ORDER BY id`) as { data: unknown }[];
       res.status(200).json(rows.map((r) => r.data));
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      internalError(res, e, 'teams_get');
     }
     return;
   }
@@ -115,17 +119,14 @@ export default async function handler(
   // ---- gravação pelo admin ----
   if (req.method === 'POST') {
     res.setHeader('Cache-Control', 'no-store');
-    const expected = clean(process.env.ADMIN_PASSWORD);
-    const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
-      password?: string;
+    const parsed = parseJsonBody(req.body);
+    if (!parsed) { res.status(400).json({ ok: false, error: 'JSON inválido' }); return; }
+    if (!(await requireAdmin(sql as unknown as RateSql, parsed, req, res, { ok: false, error: 'senha inválida' }))) return;
+    const body = parsed as {
       teams?: unknown;
       deleteIds?: unknown;
       rev?: unknown;
     };
-    if (!expected || (body?.password ?? '').toString().trim() !== expected) {
-      res.status(401).json({ ok: false, error: 'senha inválida' });
-      return;
-    }
     if (!validTeams(body?.teams)) {
       res.status(400).json({ ok: false, error: 'base inválida (mín. 16 times, 5+ jogadores cada)' });
       return;
@@ -177,7 +178,7 @@ export default async function handler(
       }
       res.status(200).json({ ok: true, teams: teams.length, version });
     } catch (e) {
-      res.status(500).json({ ok: false, error: String(e) });
+      internalError(res, e, 'teams_post', { ok: false });
     }
     return;
   }

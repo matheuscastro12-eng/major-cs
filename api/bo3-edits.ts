@@ -1,8 +1,12 @@
 // Edições GLOBAIS do dataset de CS2 (carreira): o admin edita no CRM e vale pra
 // TODOS os jogadores. Guardado numa linha única (id=1) no Neon. GET é sem cache
 // (no-store) de propósito: a alteração do admin aparece pra todo mundo na hora,
-// sem cache de CDN sobrepondo. POST é protegido por ADMIN_PASSWORD.
-import { neon } from '@neondatabase/serverless';
+// sem cache de CDN sobrepondo. POST é admin (sessão da conta ou ADMIN_PASSWORD,
+// server/admin-auth.ts).
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
+import { requireAdmin } from '../server/admin-auth.js';
+import { internalError, parseJsonBody } from '../server/http.js';
+import type { RateSql } from '../server/rate-limit.js';
 
 interface Res {
   status: (code: number) => { json: (body: unknown) => void; end: () => void };
@@ -14,7 +18,7 @@ const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 // cria a tabela 1x por instância, não em TODA carga de Carreira (o GET roda a cada
 // abertura do carreira). Corta 1 round-trip ao Neon por request. Idempotente.
 let schemaReady = false;
-async function ensureSchema(sql: ReturnType<typeof neon>): Promise<void> {
+async function ensureSchema(sql: NeonQueryFunction<false, false>): Promise<void> {
   if (schemaReady) return;
   await sql`CREATE TABLE IF NOT EXISTS bo3_edits (id int PRIMARY KEY, data jsonb NOT NULL, updated_at timestamptz DEFAULT now())`;
   schemaReady = true;
@@ -47,22 +51,19 @@ export default async function handler(
       if (inm && (Array.isArray(inm) ? inm.includes(etag) : inm === etag)) { res.status(304).end(); return; }
       res.status(200).json({ edits: data });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      internalError(res, e, 'bo3_edits_get');
     }
     return;
   }
 
   if (req.method === 'POST') {
     res.setHeader('Cache-Control', 'no-store');
-    const expected = clean(process.env.ADMIN_PASSWORD);
-    const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
-      password?: string;
+    const parsed = parseJsonBody(req.body);
+    if (!parsed) { res.status(400).json({ ok: false, error: 'JSON inválido' }); return; }
+    if (!(await requireAdmin(sql as unknown as RateSql, parsed, req, res))) return;
+    const body = parsed as {
       edits?: { players?: Record<string, unknown>; teams?: Record<string, unknown> };
     };
-    if (!expected || (body.password ?? '').toString().trim() !== expected) {
-      res.status(401).json({ ok: false });
-      return;
-    }
     const incoming = {
       players: (body.edits?.players && typeof body.edits.players === 'object' ? body.edits.players : {}) as Record<string, Record<string, unknown>>,
       teams: (body.edits?.teams && typeof body.edits.teams === 'object' ? body.edits.teams : {}) as Record<string, Record<string, unknown>>,
@@ -92,7 +93,7 @@ export default async function handler(
       // e revalida via ETag no próximo GET). Corta Fast Origin Transfer do POST.
       res.status(200).json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      internalError(res, e, 'bo3_edits_post');
     }
     return;
   }

@@ -21,6 +21,8 @@ import {
 } from '../server/weekend-league.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 import { bumpCommunityContrib, communityGoalSchemaQueries } from '../server/communityGoal.js'; // [URG-5]
+import { requireAdmin } from '../server/admin-auth.js';
+import type { RateSql } from '../server/rate-limit.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -77,11 +79,10 @@ export default async function handler(
   // adminBoard = ranking completo com e-mails; settle = FECHAR E PREMIAR o top 10
   // por colocação (idempotente — op_id wl:<windowId> por e-mail no ledger).
   if (action === 'adminBoard' || action === 'settle') {
-    const adminPass = clean(process.env.ADMIN_PASSWORD);
-    if (!adminPass || String(body.password ?? '').trim() !== adminPass) { res.status(401).json({ error: 'admin' }); return; }
     const adbUrl = clean(process.env.DATABASE_URL);
     if (!adbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
     const asql = neon(adbUrl) as unknown as SqlTag;
+    if (!(await requireAdmin(asql as unknown as RateSql, body, req, res, { error: 'admin' }))) return; // O0-16
     if (!schemaReady) {
       for (const q of [...ultEconomySchemaQueries(asql), ...wlSchemaQueries(asql)]) await q;
       schemaReady = true;

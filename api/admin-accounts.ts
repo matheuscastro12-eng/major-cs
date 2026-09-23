@@ -5,6 +5,8 @@
 import { neon } from '@neondatabase/serverless';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { accountReference, cleanEnv, findPaidCheckoutForEmail, normalizeEmail, stripeClient } from '../server/payments.js';
+import { requireAdmin } from '../server/admin-auth.js';
+import type { RateSql } from '../server/rate-limit.js';
 
 // mesmo formato "salt:hash" (scrypt) do api/account.ts, pro login validar igual.
 function hashPw(pw: string): string {
@@ -30,7 +32,7 @@ function isoDay(v: unknown): string {
 }
 
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   res.setHeader('Cache-Control', 'no-store');
@@ -41,11 +43,10 @@ export default async function handler(
   let body: Record<string, unknown> = {};
   try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {}); } catch { /* vazio */ }
 
-  // auth admin (mesma senha do CRM de times)
-  const adminPass = cleanEnv(process.env.ADMIN_PASSWORD);
-  if (!adminPass || String(body.password ?? '').trim() !== adminPass) { res.status(401).json({ ok: false }); return; }
-
+  // auth admin: sessão da conta admin ou senha mestra, tempo constante + rate
+  // limit por IP (server/admin-auth.ts, O0-16).
   const sql = neon(dbUrl);
+  if (!(await requireAdmin(sql as unknown as RateSql, body, req, res))) return;
   await sql.transaction([
     sql`CREATE TABLE IF NOT EXISTS rtm_accounts (email TEXT PRIMARY KEY, nick TEXT, pass_hash TEXT NOT NULL, paid BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now())`,
     sql`ALTER TABLE rtm_accounts ADD COLUMN IF NOT EXISTS stripe_ref TEXT`,
