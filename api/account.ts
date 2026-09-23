@@ -14,14 +14,14 @@ import {
   checkoutUrl,
   cleanEnv,
   findPaidCheckoutForEmail,
-  parsePassTier,
   passTier,
   PASS_PRICE_CENTS,
   renumberFounders,
   retrieveCheckout,
   stripeClient,
 } from '../server/payments.js';
-import { restorableCoins } from '../server/coin-restore.js';
+import { claimPaidOrders } from '../server/paid-credit.js';
+import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 import { mailConfigured, sendMail } from '../server/mail.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -30,6 +30,16 @@ const TTL = 60 * 60 * 24 * 180; // 180 dias
 // Edição Fundador: selo numerado vitalício pros primeiros que pagam (teto configurável).
 const FOUNDER_LIMIT = Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
 let accountSchemaPromise: Promise<void> | null = null;
+// [O0-46] coinsClaim/passClaim gravam no ledger do Ultimate — DDL da economia
+// (idempotente) 1× por instância, só quando um claim roda.
+let ultSchemaPromise: Promise<void> | null = null;
+function ensureUltSchema(sql: SqlTag): Promise<void> {
+  if (!ultSchemaPromise) {
+    ultSchemaPromise = (async () => { for (const q of ultEconomySchemaQueries(sql)) await q; })()
+      .catch((e) => { ultSchemaPromise = null; throw e; });
+  }
+  return ultSchemaPromise;
+}
 let founderAuditAt = 0;
 // Cache em memória da contagem pública de Fundadores (prova social). Serve de
 // rate-limit natural: por instância, no máximo 1 query/min mesmo sob rajada;
@@ -544,56 +554,42 @@ export default async function handler(
     return;
   }
 
-  // coinsClaim: coleta todos os pedidos pagos e ainda não creditados desta conta.
-  // Atômico (UPDATE ... RETURNING): duas abas não creditam o mesmo pedido duas vezes.
-  // Pedidos de PASSE (tier "pass-s<N>", coins=0) ficam de fora — quem os coleta é
-  // o passClaim; se o coinsClaim os marcasse claimed, o desbloqueio do premium
-  // se perderia (o cliente só veria "0 coins").
+  // coinsClaim: coleta os pedidos pagos e ainda não creditados desta conta.
+  // [O0-46] O SERVIDOR credita cada pedido no ledger do Ultimate (opId
+  // `coins:<correlationID>`, idempotente) ANTES de marcar 'claimed' — ver
+  // server/paid-credit.ts. O cliente não soma nada sozinho: absorve os
+  // vouchers que o save ainda não viu. Pedidos de PASSE (tier "pass-s<N>")
+  // ficam de fora — quem os coleta é o passClaim.
   if (action === 'coinsClaim') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' AND tier NOT LIKE 'pass-s%' RETURNING correlation_id, coins`;
-    const coins = rows.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
+    const esql = sql as unknown as SqlTag;
+    await ensureUltSchema(esql);
+    const r = await claimPaidOrders(esql, em, 'coins');
+    const coins = r.claimed.reduce((acc, o) => acc + o.coins, 0);
     // [U02] orders: o cliente deduplica o evento purchase_fulfilled por pedido (nunca por UI)
-    res.status(200).json({ coins, orders: rows.map((r) => ({ orderId: String(r.correlation_id), coins: Number(r.coins) || 0 })) });
+    res.status(200).json({ coins, orders: r.claimed.map((o) => ({ orderId: o.orderId, coins: o.coins })), vouchers: r.vouchers, credits: r.credits });
     return;
   }
 
-  // coinsSummary: quanto esta conta já comprou de coins (pedidos claimed) e
-  // quanto ainda pode ser RE-EMITIDO (1× por coin) pra quem perdeu o save local.
-  // Pedidos 'paid' ainda não claimed ficam de fora — o coinsClaim normal cobre.
+  // coinsSummary: quanto esta conta já comprou de coins (pedidos claimed).
+  // [O0-04] restorable é sempre 0: o "Recuperar compras" foi desligado — um
+  // cliente antigo em cache que ainda lê este campo não mostra mais o card.
   if (action === 'coinsSummary') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const [orders, restores] = await Promise.all([
-      sql`SELECT coins FROM rtm_coin_orders WHERE email=${em} AND status='claimed'`,
-      sql`SELECT coins FROM rtm_coin_restores WHERE email=${em}`,
-    ]);
+    const orders = await sql`SELECT coins FROM rtm_coin_orders WHERE email=${em} AND status='claimed'`;
     const purchased = orders.reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
-    const restorable = restorableCoins(orders.map((r) => Number(r.coins) || 0), restores.map((r) => Number(r.coins) || 0));
-    res.status(200).json({ purchased, restorable });
+    res.status(200).json({ purchased, restorable: 0 });
     return;
   }
 
-  // coinsRestore: re-emite os coins comprados que ainda não foram restaurados —
-  // 1× por coin, pra sempre. Atômico: o advisory lock transacional (por e-mail)
-  // serializa requests simultâneos e o INSERT ... SELECT calcula o saldo restante
-  // (claimed − já restaurado) no PRÓPRIO statement; o segundo request só roda
-  // depois do commit do primeiro, enxerga a linha nova e insere nada (retorna 0).
+  // coinsRestore: DESLIGADO [O0-04]. Re-emitia SUM(claimed) − SUM(restores)
+  // sem olhar o save — cada compra rendia o dobro com um clique (ECON-03).
+  // Com o O0-46 a compra já está no ledger do servidor e o cliente absorve os
+  // vouchers que faltarem no save; não há mais o que "recuperar" à mão.
   if (action === 'coinsRestore') {
-    const em = verifyToken(String(body.token ?? ''));
-    if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const [, rows] = await sql.transaction([
-      sql`SELECT pg_advisory_xact_lock(hashtext('rtm_coin_restore'), hashtext(${em}))`,
-      sql`INSERT INTO rtm_coin_restores (email, coins)
-          SELECT ${em}, s.remaining FROM (
-            SELECT (COALESCE((SELECT SUM(coins) FROM rtm_coin_orders WHERE email=${em} AND status='claimed'), 0)
-                  - COALESCE((SELECT SUM(coins) FROM rtm_coin_restores WHERE email=${em}), 0))::int AS remaining
-          ) s WHERE s.remaining > 0
-          RETURNING coins`,
-    ]);
-    const coins = (rows ?? []).reduce((acc, r) => acc + (Number(r.coins) || 0), 0);
-    res.status(200).json({ coins });
+    res.status(410).json({ error: 'Recuperar compras foi desativado: suas compras agora ficam guardadas no servidor.', coins: 0 });
     return;
   }
 
@@ -705,17 +701,20 @@ export default async function handler(
     return;
   }
 
-  // passClaim: coleta os pedidos de PASSE pagos e ainda não claimados. Atômico
-  // e idempotente (UPDATE ... RETURNING) igual ao coinsClaim; devolve os pedidos
-  // (orderId + temporada) pro cliente ligar o premium no save.
+  // passClaim: coleta os pedidos de PASSE pagos e ainda não claimados.
+  // [O0-46] credita no ledger (opId `pass:<season>`, delta 0 — registra o
+  // desbloqueio) antes de marcar 'claimed'; devolve os pedidos (orderId +
+  // temporada) e os vouchers pro cliente ligar o premium no save.
   if (action === 'passClaim') {
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Faça login.' }); return; }
-    const rows = await sql`UPDATE rtm_coin_orders SET status='claimed', claimed_at=now() WHERE email=${em} AND status='paid' AND tier LIKE 'pass-s%' RETURNING correlation_id, tier`;
-    const orders = rows
-      .map((r) => ({ orderId: String(r.correlation_id), season: parsePassTier(String(r.tier)) ?? 0 }))
+    const esql = sql as unknown as SqlTag;
+    await ensureUltSchema(esql);
+    const r = await claimPaidOrders(esql, em, 'pass');
+    const orders = r.claimed
+      .map((o) => ({ orderId: o.orderId, season: o.season ?? 0 }))
       .filter((o) => o.season > 0);
-    res.status(200).json({ orders });
+    res.status(200).json({ orders, vouchers: r.vouchers, credits: r.credits });
     return;
   }
 
