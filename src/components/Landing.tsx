@@ -710,14 +710,14 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
       <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
       {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
       {duelInvite && (
-        <div style={{ background: 'color-mix(in srgb, #4382b6 14%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
+        <div style={{ background: 'var(--c-accent-soft)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
           ⚔️ {ct('Você foi convidado pra um DUELO no Ultimate')} — {ct('sala')} <b style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{duelInvite}</b>. {ct('A sala expira em algumas horas.')}{' '}
           <button type="button" onClick={onPlay} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>{ct('Entrar e aceitar')} →</button>
         </div>
       )}
       {/* [URG-2] evento de fim de semana: discreto, acima da dobra, mesmo deslogado */}
       {wknd && (
-        <div style={{ background: 'color-mix(in srgb, #f472b6 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '8px 22px', textAlign: 'center', fontSize: '13.5px', lineHeight: 1.5 }}>
+        <div style={{ background: 'var(--c-surface-2)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '8px 22px', textAlign: 'center', fontSize: '13.5px', lineHeight: 1.5 }}>
           🎁 {wknd.open
             ? <>{ct('Evento até domingo')}: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>} · {ct('só neste fim de semana')} · {ct('termina em')} <b>{formatCountdown(wkndRemain)}</b></>
             : <>{ct('Próximo evento em')} <b>{formatCountdown(wkndRemain)}</b>: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>}</>}{' '}
@@ -725,7 +725,7 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
         </div>
       )}
       {ghost && (
-        <div style={{ background: 'color-mix(in srgb, var(--rtm-gold) 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
+        <div style={{ background: 'var(--c-accent-soft)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
           🥊 <b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')} — {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite — a Série do Dia é da conta vitalícia (R$20, uma vez).')}{' '}
           <button type="button" onClick={() => openAcct('signup', 'landing-ghost')} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Aceitar o desafio')}</button>
         </div>

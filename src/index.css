@@ -1,89 +1,12 @@
 /* ============================================================
-   MAJOR - design system inspirado no hltv.org (tema escuro)
+   MAJOR - estilos de tela legados (nasceu inspirado no hltv.org).
+   Base global (body, links, foco, scrollbar, headings) em
+   src/styles/base.css; primitivos novos em src/styles/primitives.css.
    ============================================================ */
 
-:root {
-  /* superfícies */
-  --bg: #181d23;
-  --bg-deep: #12161b;
-  --panel: #242b34;
-  --panel-2: #2a323d;
-  --panel-3: #323b48;
-  --header: #1d232b;
-  --row-a: #2c3440;
-  --row-b: #262e38;
-  --border: #3a4452;
-  --border-soft: #303945;
-
-  /* texto */
-  --text: #dfe5ec;
-  --text-strong: #ffffff;
-  --dim: #8b96a3;
-  --muted: #97a3b2; /* rótulos/labels (antes indefinido — labels da carreira ficavam lavadas) */
-  --faint: #5e6975;
-
-  /* marca / estado */
-  --blue: #4382b6;
-  --blue-bright: #61a8dd;
-  --link: #87b9e0;
-  --green: #5cb85c;
-  --green-bright: #6fd06f;
-  --red: #e25a5a;
-  --red-bright: #f06c6c;
-  --gold: #d8a943;
-  --gold-2: #e8c170; /* brilho do ouro p/ destaques */
-  --gold-soft: #b08a3e;
-  --gold-glow: rgba(216, 169, 67, 0.16);
-  /* estado unificado (substitui os verdes/vermelhos ad-hoc da carreira) */
-  --pos: #5fd08a;
-  --pos-soft: rgba(95, 208, 138, 0.14);
-  --neg: #e58a8a;
-  --neg-soft: rgba(229, 138, 138, 0.14);
-
-  --radius: 5px;
-  /* escala de raio (cards da carreira) */
-  --r-sm: 8px;
-  --r: 12px;
-  --r-lg: 16px;
-  /* elevação reutilizável */
-  --elev-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 4px 14px rgba(0, 0, 0, 0.25);
-  --elev-2: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 10px 30px rgba(0, 0, 0, 0.38);
-  --font: 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-cond: 'Oswald', 'Bahnschrift', 'Arial Narrow', 'Segoe UI', sans-serif;
-  --mono: Consolas, 'Roboto Mono', monospace;
-
-  /* ============================================================
-     TOKENS DO DESIGN SYSTEM (--rtm-*) — espelham exatamente o
-     "Road to Major — Design System". Mesmos valores dos tokens
-     acima; existem com este NOME pra que o JSX do design kit seja
-     portado literalmente (o design usa var(--rtm-X)). Não remover.
-     ============================================================ */
-  --rtm-bg-deep: #12161b; --rtm-bg: #181d23; --rtm-header: #1d232b;
-  --rtm-panel: #242b34; --rtm-panel-2: #2a323d; --rtm-panel-3: #323b48;
-  --rtm-row-a: #2c3440; --rtm-row-b: #262e38;
-  --rtm-border: #3a4452; --rtm-border-soft: #303945;
-  --rtm-text: #dfe5ec; --rtm-text-strong: #ffffff; --rtm-dim: #8b96a3; --rtm-faint: #5e6975;
-  --rtm-blue: #4382b6; --rtm-blue-bright: #61a8dd; --rtm-link: #87b9e0;
-  --rtm-gold: #d8a943; --rtm-gold-soft: #b08a3e; --rtm-gold-glow: #f3cf6b;
-  --rtm-green: #5cb85c; --rtm-green-bright: #6fd06f;
-  --rtm-red: #e25a5a; --rtm-red-bright: #f06c6c;
-  --rtm-role-awp: #d8a943; --rtm-role-igl: #c792ea; --rtm-role-entry: #f06c6c;
-  --rtm-role-support: #6fd06f; --rtm-role-lurker: #6fc3df;
-  --rtm-font: var(--font); --rtm-font-cond: var(--font-cond);
-  --rtm-mono: ui-monospace, Consolas, 'SFMono-Regular', Menlo, monospace;
-  --rtm-radius: 5px; --rtm-radius-sm: 3px; --rtm-radius-pill: 999px;
-  --rtm-shadow-panel: 0 1px 6px rgba(0, 0, 0, 0.3);
-  --rtm-shadow-card-hover: 0 8px 22px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(97, 168, 221, 0.25);
-  --rtm-shadow-banner: 0 8px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --rtm-shadow-header: 0 4px 18px rgba(0, 0, 0, 0.45);
-  --rtm-shadow-btn: 0 2px 6px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  --rtm-accent-inset: inset 3px 0 0 var(--rtm-blue);
-  --rtm-grad-btn: linear-gradient(180deg, #5290c4 0%, #4382b6 100%);
-  --rtm-grad-btn-hover: linear-gradient(180deg, #67a7da 0%, #61a8dd 100%);
-  --rtm-grad-header: linear-gradient(180deg, #313e4d 0%, #2a3541 100%);
-  --rtm-grad-panel-head: linear-gradient(180deg, #222933 0%, #1d232b 100%);
-  --rtm-ease: cubic-bezier(0.22, 0.61, 0.36, 1); --rtm-dur-fast: 0.12s; --rtm-dur: 0.32s;
-}
+/* Os tokens de design moram em src/styles/tokens.css (fonte única) e os
+   nomes antigos deste arquivo (--bg, --panel-2, --rtm-* etc.) são aliases em
+   src/styles/tokens-legacy.css. Não declare cor aqui. */
 
 * {
   box-sizing: border-box;
@@ -100,18 +23,7 @@ body {
   max-width: 100%;
 }
 
-body {
-  background:
-    radial-gradient(1400px 600px at 50% -160px, rgba(67, 130, 182, 0.16) 0%, transparent 60%),
-    radial-gradient(900px 400px at 85% 10%, rgba(216, 169, 67, 0.05) 0%, transparent 55%),
-    linear-gradient(180deg, #1c222b 0%, var(--bg) 320px);
-  background-color: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 14px;
-  line-height: 1.45;
-  min-height: 100vh;
-}
+/* body: ver src/styles/base.css */
 
 #root {
   width: 100%;
@@ -3250,10 +3162,7 @@ table.crm-players input.num {
   gap: 10px;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--bg-deep); }
-::-webkit-scrollbar-thumb { background: var(--panel-3); border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border); }
+/* scrollbars: ver src/styles/base.css */
 
 /* ---------- OVR / coach / insights / stats do campeonato ---------- */
 .ovr-badge {

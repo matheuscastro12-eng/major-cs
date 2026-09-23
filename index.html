@@ -5,7 +5,8 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#2d3844" />
+    <!-- theme-color = --c-surface-0 (src/styles/tokens.css) -->
+    <meta name="theme-color" content="#090d13" />
     <!-- PWA: instalável na home do celular. iOS ignora o manifest pra isso e
          precisa das metas apple-* abaixo. -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -14,12 +15,29 @@
     <meta name="apple-mobile-web-app-title" content="RtMajor" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Road to Major · simulador de CS de todas as eras</title>
+    <!-- Fontes do design system (três papéis): Oswald = display/placar, Inter =
+         UI, JetBrains Mono = números tabulares. display=swap mostra o texto na
+         fonte de sistema na hora; a folha entra sem bloquear a renderização
+         (preload + media=print trocado no onload). Nenhum @import no CSS. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;600;700;800&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap"
     />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap"
+      />
+    </noscript>
     <meta name="description" content="Road to Major: monte o time dos sonhos com lendas do CS 1.6, Source, CS:GO e CS2 e vença um Major completo em MD3." />
     <meta property="og:title" content="Road to Major" />
     <meta property="og:description" content="Monte o time dos sonhos com lendas de todas as eras do Counter-Strike e vença o Major." />

@@ -1,77 +1,20 @@
 /* ROAD TO PRO — "THE DESK". Identidade visual PRÓPRIA (broadcast/HUD esports),
-   totalmente desacoplada do dashboard da Carreira. Root .rtp com tokens --rtp-*
-   próprios (sempre-dark). Os aliases --em-* no fim do bloco fazem as regras
-   estruturais legadas herdarem a identidade nova sem reescrever cada referência. */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+   A identidade "The Desk" virou o design system do app inteiro ("Broadcast
+   Desk", src/styles/tokens.css). Os nomes --rtp-* e os aliases --em-* usados
+   aqui são mapeados para os tokens semânticos em tokens-legacy.css. */
 
 .rtp {
-  /* superfícies — estúdio azul-petróleo escuro */
-  --rtp-void: #070b11;
-  --rtp-stage: #0c121b;
-  --rtp-deck: #121a26;
-  --rtp-deck-2: #18222f;
-  --rtp-well: #0e151e;
-  --rtp-line: #243140;
-  --rtp-line-hot: #36495f;
-  /* tinta */
-  --rtp-ink: #eef3fa;
-  --rtp-ink-dim: #8a99ac;
-  --rtp-ink-faint: #566578;
-  /* lados CS */
-  --rtp-ct: #4ea1ff; --rtp-ct-deep: #1c4f8a; --rtp-ct-glow: rgba(78,161,255,.40);
-  --rtp-t: #f0a531; --rtp-t-deep: #9a5e11; --rtp-t-glow: rgba(240,165,49,.38);
-  /* sinal broadcast + marca */
-  --rtp-live: #ff2d4b; --rtp-live-glow: #ff5066;
-  --rtp-signal: #27e0b0; --rtp-signal-glow: rgba(39,224,176,.45);
-  /* semântico / outcomes */
-  --rtp-win: #1fd17a; --rtp-loss: #ff4d4d; --rtp-warn: #ffc14d;
-  --rtp-clutch: #b98cff; --rtp-frag: #ffd34d;
-  /* rampa do gauge de odds */
-  --rtp-odds-hi: #1fd17a; --rtp-odds-mid: #ffc14d; --rtp-odds-lo: #ff4d4d;
-  /* tipografia */
-  --rtp-display: 'Oswald', 'Bahnschrift Condensed', sans-serif;
-  --rtp-body: 'Inter', -apple-system, system-ui, sans-serif;
-  --rtp-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
-  --rtp-radius: 10px;
-
-  /* escala (P0): espaçamento, raios, elevação, motion + tokens semânticos que
-     os sistemas novos (Setup/Major/Tabs) referenciam. */
-  --rtp-s1: 4px; --rtp-s2: 8px; --rtp-s3: 12px; --rtp-s4: 16px; --rtp-s5: 22px; --rtp-s6: 32px;
-  --rtp-r-sm: 6px; --rtp-r: 10px; --rtp-r-lg: 14px;
-  --rtp-e1: 0 1px 2px rgba(0,0,0,.35);
-  --rtp-e2: 0 6px 18px rgba(0,0,0,.40);
-  --rtp-e3: 0 14px 40px rgba(0,0,0,.50);
-  --rtp-accent: var(--rtp-signal);
-  --rtp-surface: var(--rtp-well);
-  --rtp-bad: var(--rtp-live);
-  --rtp-gold: #d9b84a;
-  --rtp-dur: .16s;
-  --rtp-ease: cubic-bezier(.2,.7,.2,1);
-
-  /* aliases de compat: regras legadas (--em-*) herdam a identidade nova */
-  --em-bg: var(--rtp-stage);
-  --em-panel: var(--rtp-deck);
-  --em-panel-2: var(--rtp-deck-2);
-  --em-border: var(--rtp-line);
-  --em-border-strong: var(--rtp-line-hot);
-  --em-text: var(--rtp-ink);
-  --em-muted: var(--rtp-ink-dim);
-  --em-gold: var(--rtp-signal);
-  --em-red: var(--rtp-loss); --em-red-hover: var(--rtp-loss);
-  --em-green: var(--rtp-win);
-
+  /* tokens --rtp-* e aliases --em-*: src/styles/tokens-legacy.css */
   color: var(--rtp-ink);
   font-family: var(--rtp-body);
   background: var(--rtp-void);
 }
 
 /* Full-bleed: sem max-width/padding do .page (o RtpShell controla o respiro).
-   ATENÇÃO: os tokens --rtp-* vivem DENTRO de .rtp — fora dele (body/main) o
-   var() resolvia pra NADA e o fundo ficava transparente → a "barra branca" no
-   fim das abas curtas. Valores literais aqui (mesmos do token). */
-main.page.page-rtp { max-width: none; width: 100%; margin: 0; padding: 0; background: #070b11; }
-body:has(main.page-rtp) { background: #070b11; background-image: none; }
-html:has(main.page-rtp) { background: #070b11; }
+   Os tokens agora são globais (tokens.css), então body/main resolvem o fundo
+   sem valor literal — a antiga "barra branca" no fim das abas curtas some. */
+main.page.page-rtp { max-width: none; width: 100%; margin: 0; padding: 0; background: var(--c-surface-0); }
+body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none; }
 
 /* Ícones SVG inline (RtpIcon) alinham com o texto ao redor. Flex/positioned
    SVGs (ovrring, board, gauges) ignoram vertical-align — regra é segura. */

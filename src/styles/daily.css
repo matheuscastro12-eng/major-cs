@@ -6,17 +6,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 .rtm-daily {
-  --dl-t: #f0a531;            /* lado T (amarelo) — acento principal */
-  --dl-ct: #4ea1ff;           /* lado CT (azul) */
-  --dl-win: #2fbf71;
-  --dl-loss: #ff4d4d;
-  --dl-ink: #eef3fa;
-  --dl-dim: #8a99ac;
-  --dl-line: #243140;
-  --dl-panel: #10161f;
-  --dl-well: #0b1017;
-  --dl-cond: 'Oswald', 'Bahnschrift Condensed', sans-serif;
-  --dl-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* tokens --dl-*: src/styles/tokens-legacy.css */
   max-width: 560px; margin: 0 auto; padding: 18px 14px 40px;
   display: flex; flex-direction: column; gap: 16px;
   color: var(--dl-ink);

@@ -14,11 +14,13 @@ function read(): CareerTheme {
   return 'dark';
 }
 
-// Aplica o tema no <body> pra que tokens --em-* e overrides scoped em
-// .career-dash valham em TODO o app (incluindo modais com position: fixed
-// que renderizam fora do tree do componente).
+// Aplica o tema no <body> pra que overrides scoped em .career-dash valham em
+// TODO o app (incluindo modais com position: fixed que renderizam fora do tree
+// do componente). Os tokens semânticos (src/styles/tokens.css) leem o tema de
+// data-theme no <html>: é lá que as camadas antigas são resolvidas.
 function applyBodyClass(theme: CareerTheme): void {
   if (typeof document === 'undefined') return;
+  document.documentElement.dataset.theme = theme;
   const body = document.body;
   if (!body) return;
   body.classList.add('career-dash');

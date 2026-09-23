@@ -1,0 +1,215 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   MAJOR//CS — TOKENS "BROADCAST DESK" (fonte ÚNICA de tokens semânticos)
+   ────────────────────────────────────────────────────────────────────────────
+   O app é uma transmissão de CS: placar, lower third, faixa AO VIVO, lados CT
+   (azul) e T (âmbar). Este arquivo é o ÚNICO lugar com hexadecimal de cor.
+   Tudo o mais (CSS de tela, primitivos, JSX) consome var(--c-*), var(--sp-*),
+   var(--fs-*) etc. As camadas legadas (--rtm-*, --em-*, --rtp-*, --ut-*, --dl-*
+   e os aliases sem prefixo) apontam pra cá em tokens-legacy.css.
+
+   Regras de cor (docs/design-system.md tem a versão longa):
+   - Superfícies grafite-azulado em 4 degraus: 0 = fundo, 1 = painel, 2 = card,
+     3 = elevado (hover, input, cabeçalho de tabela).
+   - --c-accent é o SINAL da ação primária. Varia por modo via [data-mode].
+   - --c-achievement (dourado) é SÓ conquista: título, carta rara, Fundador.
+     Nunca botão comum.
+   - --c-win / --c-loss só para resultado. --c-ct / --c-t só para lado.
+   - Todo texto (ink, ink-dim, ink-faint) tem contraste ≥ 4,5:1 sobre os 4
+     degraus — conferido por scripts/test-design-tokens.mts.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Superfícies (grafite-azulado, do mais fundo ao mais alto) ── */
+  --c-surface-0: #090d13;
+  --c-surface-1: #101722;
+  --c-surface-2: #17202d;
+  --c-surface-3: #1f2b3a;
+  /* véu de modal/sheet e brilho de hover sobre qualquer superfície */
+  --c-scrim: rgba(3, 6, 10, 0.72);
+  --c-hover: rgba(238, 243, 250, 0.05);
+  --c-press: rgba(238, 243, 250, 0.09);
+
+  /* ── Linhas ── */
+  --c-line: #243140;
+  --c-line-strong: #34465b;
+
+  /* ── Tinta (texto) — todas ≥ 4,5:1 sobre surface-0..3 ── */
+  --c-ink: #eef3fa;
+  --c-ink-dim: #a9b6c7;
+  --c-ink-faint: #8a99ad;
+  /* texto sobre preenchimentos claros (acento, dourado, vitória…) */
+  --c-on-accent: #07110d;
+  --c-on-achievement: #1a1205;
+  --c-on-strong: #ffffff;
+
+  /* ── Acentos por modo (o [data-mode] escolhe qual vira --c-accent) ── */
+  --mode-base: #2fe0b4;      /* sinal broadcast (hub, landing, Major rápido) */
+  --mode-rtp: #2fe0b4;       /* Road to Pro — a identidade "The Desk" que virou o sistema */
+  --mode-carreira: #a58bff;  /* Carreira — mesa de gestão */
+  --mode-ultimate: #ff6b9d;  /* Ultimate — pack e palco das cartas */
+  --mode-diario: #b8e65a;    /* Diário — o jogo da manhã */
+  --mode-online: #4dd4f0;    /* Online — duelos e ranking */
+
+  --c-accent: var(--mode-base);
+  /* pra onde o acento "forte" (hover) puxa: branco no escuro, preto no claro */
+  --mix-strong: #ffffff;
+
+  /* ── Conquista (dourado) ── */
+  --c-achievement: #e8b94a;
+  --c-achievement-strong: #f6d27a;
+
+  /* ── Resultado ── */
+  --c-win: #2fd583;
+  --c-loss: #ff6464;
+  --c-draw: var(--c-ink-dim);
+  --c-warn: #ffb547;
+  --c-epic: #b98cff;         /* momento/raridade épica: clutch, ícone */
+
+  /* ── Lados do CS ── */
+  --c-ct: #5aa8ff;
+  --c-t: #f0a531;
+
+  /* ── Transmissão ── */
+  --c-live: #ff4a62;         /* ponto e texto de AO VIVO */
+  --c-live-fill: #d61f3c;    /* faixa AO VIVO (texto branco por cima) */
+
+  /* ── Tipografia: três papéis ── */
+  --font-display: 'Oswald', 'Bahnschrift Condensed', 'Arial Narrow', sans-serif;
+  --font-ui: 'Inter', -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-num: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  /* escala de 6 degraus, piso de 11px (UX-09) + display pros momentos */
+  --fs-1: 0.6875rem;  /* 11px — legenda, caps com tracking */
+  --fs-2: 0.75rem;    /* 12px — metadado, rótulo */
+  --fs-3: 0.875rem;   /* 14px — corpo (densidade "Desk") */
+  --fs-4: 1rem;       /* 16px — corpo confortável, input no mobile */
+  --fs-5: 1.25rem;    /* 20px — título de painel/seção */
+  --fs-6: 1.75rem;    /* 28px — título de tela, placar */
+  --fs-display: clamp(2.25rem, 1.4rem + 3.6vw, 4rem); /* "Broadcast": sala, reveal, final */
+
+  --lh-tight: 1.1;
+  --lh-snug: 1.3;
+  --lh-body: 1.5;
+  --tracking-caps: 0.08em;
+  --tracking-display: 0.02em;
+
+  /* ── Espaço (escala de 4) ── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* ── Raios ── */
+  --rad-1: 4px;
+  --rad-2: 6px;
+  --rad-3: 10px;
+  --rad-4: 14px;
+  --rad-pill: 999px;
+  /* o "chanfro" de scorebug: corte diagonal em placar, lower third e tag */
+  --notch: 8px;
+
+  /* ── Sombras (elevação) ── */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, 0.42);
+  --shadow-3: 0 16px 44px rgba(0, 0, 0, 0.55);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  /* ── Motion ── */
+  --dur-1: 120ms;   /* hover, foco */
+  --dur-2: 200ms;   /* troca de estado, abas */
+  --dur-3: 320ms;   /* entrada de sheet/modal */
+  --dur-4: 600ms;   /* momento "broadcast" (reveal, placar) */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-snap: cubic-bezier(0.3, 1.4, 0.5, 1);
+
+  /* ── Camadas ── */
+  --z-sticky: 30;
+  --z-overlay: 90;
+  --z-sheet: 100;
+  --z-toast: 120;
+
+  /* ── Alvo de toque ── */
+  --tap: 44px;
+}
+
+/* ── Acento por modo ─────────────────────────────────────────────────────────
+   Pode ficar no <html> (o App marca o modo da tela) ou em qualquer bloco local
+   (ex.: o card de um modo na Home). tokens-legacy.css redeclara os aliases em
+   todo [data-mode], então o acento local também chega nas camadas antigas. */
+[data-mode='rtp'] { --c-accent: var(--mode-rtp); }
+[data-mode='carreira'] { --c-accent: var(--mode-carreira); }
+[data-mode='ultimate'] { --c-accent: var(--mode-ultimate); }
+[data-mode='diario'] { --c-accent: var(--mode-diario); }
+[data-mode='online'] { --c-accent: var(--mode-online); }
+
+/* ── Derivados do acento (recalculados onde o acento muda) ── */
+:root,
+[data-mode],
+[data-theme] {
+  --c-accent-strong: color-mix(in srgb, var(--c-accent) 82%, var(--mix-strong));
+  --c-accent-deep: color-mix(in srgb, var(--c-accent) 72%, var(--c-surface-0));
+  --c-accent-soft: color-mix(in srgb, var(--c-accent) 14%, transparent);
+  --c-accent-line: color-mix(in srgb, var(--c-accent) 45%, transparent);
+  --c-achievement-soft: color-mix(in srgb, var(--c-achievement) 14%, transparent);
+  --c-win-soft: color-mix(in srgb, var(--c-win) 14%, transparent);
+  --c-loss-soft: color-mix(in srgb, var(--c-loss) 14%, transparent);
+  --c-warn-soft: color-mix(in srgb, var(--c-warn) 14%, transparent);
+  --c-ct-soft: color-mix(in srgb, var(--c-ct) 16%, transparent);
+  --c-t-soft: color-mix(in srgb, var(--c-t) 16%, transparent);
+  --focus-ring: 0 0 0 2px var(--c-surface-0), 0 0 0 4px var(--c-accent);
+}
+
+/* ── Tema claro (opção do jogador para o app inteiro, nunca imposta por modo) ──
+   O toggle da Carreira marca data-theme="light" no <html> (career-theme.ts).
+   Também vale num bloco local (a prévia do /design). */
+[data-theme='light'] {
+  color-scheme: light;
+  --c-surface-0: #e9edf2;
+  --c-surface-1: #ffffff;
+  --c-surface-2: #f6f8fa;
+  --c-surface-3: #eef1f5;
+  --c-scrim: rgba(20, 27, 38, 0.5);
+  --c-hover: rgba(20, 27, 38, 0.05);
+  --c-press: rgba(20, 27, 38, 0.09);
+  --c-line: #d5dbe3;
+  --c-line-strong: #b9c2ce;
+  --c-ink: #141b26;
+  --c-ink-dim: #435064;
+  --c-ink-faint: #525f74;
+  --c-on-accent: #ffffff;
+  --c-on-achievement: #ffffff;
+  --mix-strong: #000000;
+  --mode-base: #0a7358;
+  --mode-rtp: #0a7358;
+  --mode-carreira: #5b42d6;
+  --mode-ultimate: #b3245a;
+  --mode-diario: #466a0a;
+  --mode-online: #0a6886;
+  --c-achievement: #855f00;
+  --c-achievement-strong: #6b4c00;
+  --c-win: #0f7542;
+  --c-loss: #bf2a2a;
+  --c-warn: #8f5a00;
+  --c-epic: #6c3fd1;
+  --c-ct: #1d5fbd;
+  --c-t: #8f5700;
+  --c-live: #c21a35;
+  --c-live-fill: #c21a35;
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.08);
+  --shadow-2: 0 6px 18px rgba(16, 24, 40, 0.12);
+  --shadow-3: 0 16px 44px rgba(16, 24, 40, 0.18);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* bloco claro local sem modo próprio: o acento base é resolvido de novo aqui
+   (senão herdaria o acento já calculado no tema escuro do <html>) */
+[data-theme='light']:not([data-mode]) { --c-accent: var(--mode-base); }

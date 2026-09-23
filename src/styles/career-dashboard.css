@@ -3,20 +3,7 @@
    ============================================================ */
 
 .career-dash {
-  --em-bg: #121212;
-  --em-panel: #1a1a1a;
-  --em-panel-2: #222;
-  --em-border: rgba(255, 255, 255, 0.08);
-  --em-border-strong: rgba(255, 255, 255, 0.14);
-  --em-text: #f0f0f0;
-  --em-muted: #8a8a8a;
-  --em-red: #c0392b;
-  --em-red-hover: #e74c3c;
-  --em-green: #2ecc71;
-  --em-gold: #d4a017;
-  --dash-win: #2ecc71;
-  --dash-loss: #e74c3c;
-
+  /* tokens: src/styles/tokens.css; os nomes antigos (--em-, --dash-) são aliases em tokens-legacy.css */
   min-height: 100vh;
   min-height: 100dvh;
   width: 100%;
@@ -58,85 +45,11 @@ main.page.page-career {
 }
 
 body:has(main.page-career) {
-  background: #121212;
+  background: var(--c-surface-0);
   background-image: none;
 }
 
-body:has(main.page-career .career-dash--light) {
-  background: #e8e8e8;
-}
-
-/* ---- Tema claro ---- */
-.career-dash--light {
-  --em-bg: #e8e8e8;
-  --em-panel: #ffffff;
-  --em-panel-2: #f3f3f3;
-  --em-border: rgba(0, 0, 0, 0.1);
-  --em-border-strong: rgba(0, 0, 0, 0.16);
-  --em-text: #1a1a1a;
-  --em-muted: #666666;
-  --em-red: #b83227;
-  --em-red-hover: #d44336;
-  --em-green: #1e9e55;
-  --em-gold: #b8860b;
-
-  /* Sobrescreve variáveis CSS globais (sem prefixo e --rtm-*)
-     para que TODOS os componentes dentro da carreira usem cores claras.
-     Sem isso, elementos como .pcard, .gsl-group, .pb-opt, .news-item etc.
-     permanecem escuros pois usam var(--panel-2), var(--bg-deep) etc. */
-
-  /* globais herdadas sem prefixo */
-  --bg: #e8e8e8;
-  --bg-deep: #f5f5f7;
-  --panel: #ffffff;
-  --panel-2: #ffffff;
-  --panel-3: #f0f0f2;
-  --border: rgba(0, 0, 0, 0.12);
-  --border-soft: rgba(0, 0, 0, 0.08);
-  --row-a: #fafafa;
-  --row-b: #f4f4f6;
-  --text: #1a1a1a;
-  --text-strong: #000000;
-  --muted: #666666;
-  --dim: #888888;
-  --faint: #bbbbbb;
-  --link: #2a6fa8;
-  --pos: #1e9e55;
-  --gold: #b8860b;
-  --gold-glow: rgba(184, 134, 11, 0.12);
-  --gold-soft: #a07808;
-  --green-bright: #18a050;
-  --red-bright: #c0392b;
-  --blue: #2a6fa8;
-  --blue-bright: #3a86c8;
-
-  /* --rtm-* tokens */
-  --rtm-bg: #e8e8e8;
-  --rtm-bg-deep: #f5f5f7;
-  --rtm-header: #ffffff;
-  --rtm-panel: #ffffff;
-  --rtm-panel-2: #f3f3f3;
-  --rtm-panel-3: #ebebeb;
-  --rtm-row-a: #fafafa;
-  --rtm-row-b: #f4f4f6;
-  --rtm-border: rgba(0, 0, 0, 0.12);
-  --rtm-border-soft: rgba(0, 0, 0, 0.08);
-  --rtm-text: #1a1a1a;
-  --rtm-text-strong: #000000;
-  --rtm-dim: #666666;
-  --rtm-faint: #aaaaaa;
-  --rtm-gold: #b8860b;
-  --rtm-gold-soft: #a07808;
-  --rtm-gold-glow: #c9a030;
-  --rtm-blue: #2a6fa8;
-  --rtm-blue-bright: #3a86c8;
-  --rtm-link: #2a6fa8;
-  --rtm-green: #1e9e55;
-  --rtm-green-bright: #18a050;
-  --rtm-red: #c0392b;
-  --rtm-red-bright: #e74c3c;
-  --rtm-shadow-panel: 0 1px 6px rgba(0, 0, 0, 0.12);
-}
+/* ---- Tema claro: os tokens claros vivem em tokens.css (:root[data-theme="light"]) ---- */
 
 /* Elementos que usam background hardcoded ou cores escuras específicas */
 .career-dash--light .gsl-group,
@@ -5087,117 +5000,8 @@ body.career-dash .section-label {
   margin: 18px 0 8px;
 }
 
-/* ============================================================
-   REBIND GLOBAL: redefine todos os tokens legados (do tema antigo,
-   azul-acinzentado) dentro do body.career-dash pros equivalentes
-   --em-* neutros. Como body.career-dash agora envolve TODO o app
-   (Fase 0), isso re-skina automaticamente as ~273 regras de
-   index.css que ainda usam --panel-2, --border, --blue, --rtm-blue
-   etc. sem precisar tocar regra a regra.
-   ============================================================ */
-body.career-dash {
-  /* ---- Superfícies (cinza neutro em vez de azulado) ---- */
-  --bg: var(--em-bg, #121212);
-  --bg-deep: #0e0e0e;
-  --panel: var(--em-panel);
-  --panel-2: var(--em-panel-2);
-  --panel-3: #2a2a2a;
-  --header: var(--em-panel-2);
-  --row-a: var(--em-panel);
-  --row-b: var(--em-panel-2);
-
-  /* ---- Bordas (sem azul-cinza) ---- */
-  --border: var(--em-border-strong);
-  --border-soft: var(--em-border);
-
-  /* ---- Texto ---- */
-  --text: var(--em-text);
-  --text-strong: var(--em-text);
-  --muted: var(--em-muted);
-  --dim: var(--em-muted);
-  --faint: color-mix(in srgb, var(--em-muted) 60%, transparent);
-  --link: var(--em-gold);
-
-  /* ---- BLUE -> GOLD (o acento azul vira o dourado em-*) ---- */
-  --blue: var(--em-gold);
-  --blue-bright: var(--em-gold);
-
-  /* ---- Ouro/vermelho/verde alinhados com em-* ---- */
-  --gold: var(--em-gold);
-  --gold-2: #b8860b;
-  --gold-soft: color-mix(in srgb, var(--em-gold) 70%, transparent);
-  --gold-glow: color-mix(in srgb, var(--em-gold) 25%, transparent);
-  --red: #c0392b;
-  --red-bright: #e2574c;
-  --green: #1f9d5a;
-  --green-bright: #29c47a;
-  --pos: #29c47a;
-  --pos-soft: color-mix(in srgb, #29c47a 16%, transparent);
-  --neg: #e2574c;
-  --neg-soft: color-mix(in srgb, #e2574c 16%, transparent);
-
-  /* ---- Radius/elev ---- */
-  --r: 6px;
-  --r-sm: 5px;
-  --r-lg: 8px;
-  --radius: 6px;
-  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --elev-2: 0 6px 18px rgba(0, 0, 0, 0.45);
-
-  /* ---- Família --rtm-* (todos rebindados) ---- */
-  --rtm-bg: var(--em-bg, #121212);
-  --rtm-bg-deep: #0e0e0e;
-  --rtm-panel: var(--em-panel);
-  --rtm-panel-2: var(--em-panel-2);
-  --rtm-panel-3: #2a2a2a;
-  --rtm-header: var(--em-panel-2);
-  --rtm-row-a: var(--em-panel);
-  --rtm-row-b: var(--em-panel-2);
-  --rtm-border: var(--em-border-strong);
-  --rtm-border-soft: var(--em-border);
-  --rtm-text: var(--em-text);
-  --rtm-text-strong: var(--em-text);
-  --rtm-dim: var(--em-muted);
-  --rtm-faint: color-mix(in srgb, var(--em-muted) 60%, transparent);
-  --rtm-link: var(--em-gold);
-  --rtm-blue: var(--em-gold);
-  --rtm-blue-bright: var(--em-gold);
-  --rtm-gold: var(--em-gold);
-  --rtm-gold-soft: color-mix(in srgb, var(--em-gold) 70%, transparent);
-  --rtm-gold-bright: var(--em-gold);
-  --rtm-gold-glow: color-mix(in srgb, var(--em-gold) 25%, transparent);
-  --rtm-green: #1f9d5a;
-  --rtm-green-bright: #29c47a;
-  --rtm-red: #c0392b;
-  --rtm-red-bright: #e2574c;
-  --rtm-radius: 6px;
-  --rtm-accent-inset: var(--em-gold);
-  --rtm-role-awp: var(--em-gold);
-  --rtm-role-support: #29c47a;
-
-  /* Gradientes legados → cor sólida em-* (gradient com tons azuis some) */
-  --rtm-grad-btn: var(--em-gold);
-  --rtm-grad-btn-hover: var(--em-gold);
-  --rtm-grad-header: var(--em-panel-2);
-  --rtm-grad-panel-head: var(--em-panel-2);
-
-  /* Sombras: sem brilho azul */
-  --rtm-shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --rtm-shadow-card-hover: 0 8px 22px rgba(0, 0, 0, 0.42);
-  --rtm-shadow-banner: 0 6px 22px rgba(0, 0, 0, 0.4);
-  --rtm-shadow-header: 0 1px 0 var(--em-border);
-  --rtm-shadow-btn: none;
-}
-
-/* Light mode: ajusta tons quando .career-dash--light está ativo */
-body.career-dash.career-dash--light {
-  --bg-deep: #f4f4f4;
-  --panel-3: #e8e8e8;
-  --gold-glow: color-mix(in srgb, var(--em-gold) 18%, transparent);
-  --rtm-bg-deep: #f4f4f4;
-  --rtm-panel-3: #e8e8e8;
-  --rtm-gold-glow: color-mix(in srgb, var(--em-gold) 18%, transparent);
-}
+/* REBIND GLOBAL (tokens legados → em-*) aposentado: todas as camadas antigas
+   agora apontam para os tokens semânticos em src/styles/tokens-legacy.css. */
 
 /* ============================================================
    Cartinhas (FutCard + .ut-card) — re-skin no padrão em-*
