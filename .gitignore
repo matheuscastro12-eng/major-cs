@@ -38,3 +38,9 @@ sim/*.mjs
 # pastas-fonte de icones de arma (uso os copiados em src/assets/weapons)
 /svg_normal/
 /svg_outline/
+
+# lixo que não deve voltar pra raiz (O1-40): assets servidos vivem em public/,
+# PDFs de marketing ficam fora do repo (Drive)
+/logos/
+/*.png
+*.pdf
