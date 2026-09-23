@@ -25,8 +25,8 @@ import {
   type Moment, type MomentOption, type MomentOutcome, type OddsBreakdown,
 } from './moments';
 import {
-  buildBeatPlan, ctxForBeat, initialLiveScore, bridgeToBeat, mergeMapClose,
-  resolveMapFromPlay, mapPlayOf,
+  buildBeatPlan, ctxForBeat, initialLiveScore, bridgeToBeat, closeMapFromLive,
+  mapPlayOf, HALF_ROUNDS, WIN_ROUNDS,
   type BeatSpec, type LiveScore, type Interlude, type RoundCtx,
 } from './roundModel';
 import { MINIGAMES, type MiniGameDef } from './minigames';
@@ -172,6 +172,13 @@ function initClutch(b: BeatSpec): ClutchState {
 
 export function currentBeat(s: RoomState): BeatSpec { return s.beats[s.idx]; }
 export function isLastBeat(s: RoomState): boolean { return s.idx >= s.beats.length - 1; }
+// quantos beats restam NO MAPA do beat `idx` (contando ele) — 1 = último do mapa.
+export function beatsLeftInMap(beats: BeatSpec[], idx: number): number {
+  let n = 0;
+  for (let i = idx; i < beats.length && beats[i].mapIndex === beats[idx].mapIndex; i++) n++;
+  return Math.max(1, n);
+}
+export function isLastOfMap(s: RoomState): boolean { return beatsLeftInMap(s.beats, s.idx) === 1; }
 export function inClutchOf(s: RoomState): boolean { return currentBeat(s).kind === 'clutch' && !!s.clutch; }
 
 // momento/contexto correntes: no clutch, é a etapa atual (1vX) com a bomba/vivos.
@@ -314,14 +321,19 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
   let live = s.live;
   let momentum = s.momentum;
   if (scored) {
-    // v17 (bug do 15-8): o +1 do beat respeita o MESMO teto da ponte — um lado
-    // só chega a 12 (match point) se o outro estiver ≤11; 13 é exclusivo do
-    // FECHAMENTO do mapa.
+    // O0-30: a rodada do beat SEMPRE conta. No último beat do mapa ela decide:
+    // 12-x vencido FECHA 13-x; 11-12 vencido abre 12-12 (prorrogação, resolvida
+    // pela jogada no advance). Antes o +1 era descartado quando levaria a 13 ou
+    // a 12-12, e um roll cego fechava o mapa — "venci o match point e perdi
+    // 11-13" (ENGI-15). Nos beats que NÃO são os últimos do mapa o teto da ponte
+    // (capBeforeBeat) garante entrada ≤11, então o +1 nunca fecha o mapa cedo;
+    // a guarda abaixo só protege contra um plano fora do contrato.
     const [you, them] = live.mapScore;
     const next: [number, number] = youWonRound ? [you + 1, them] : [you, them + 1];
     const grew = youWonRound ? next[0] : next[1];
     const other = youWonRound ? next[1] : next[0];
-    if (!(grew > 12 || (grew === 12 && other >= 12))) live = { ...live, mapScore: next };
+    const overflow = grew >= WIN_ROUNDS || (grew === HALF_ROUNDS && other >= HALF_ROUNDS);
+    if (isLastOfMap(s) || !overflow) live = { ...live, mapScore: next };
     momentum = clamp(momentum * 0.55 + outcome.value * 0.45, 0, 1);
   }
 
@@ -350,6 +362,14 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
     ...(execPerf != null ? { execPerf } : {}),
   };
   return { state: { ...s, phase: 'resolved', pending: beat, live, momentum, log: [...(s.log ?? []), event] }, beat };
+}
+
+// linha do fechamento na prorrogação (o placar 12-12 do beat virou OT jogada).
+function overtimeLine(won: boolean, score: [number, number], overtimes: number): string {
+  const ots = overtimes > 1 ? `${overtimes} prorrogações` : 'prorrogação';
+  return won
+    ? `12–12 e ${ots}: vocês fecharam ${score[0]}–${score[1]}.`
+    : `12–12 e ${ots}: eles levaram ${score[1]}–${score[0]}.`;
 }
 
 // AVANÇA após a resolução: continua o clutch, ou finaliza o beat (fecha mapa /
@@ -396,16 +416,16 @@ export function advance(s: RoomState): RoomState {
   }
   const acc = [...s.outcomes, beatOutcome];
 
-  // A JOGADA decide o mapa: fecho cada mapa pela SUA média de beats NELE, com a
-  // MESMA régua/seed do card (resolveMapFromPlay) → o placar vivo == resultado.
+  // O PLACAR VIVO decide o mapa (O0-30): se o último beat fechou (13-x), é
+  // esse; senão os rounds que faltam são jogados a partir do placar vivo com a
+  // chance por round da SUA jogada no mapa (closeMapFromLive) — 12-12 vira
+  // prorrogação distribuída. Nunca encolhe o que o jogador viu.
   const edge = s.cfg.heroOvr - s.cfg.oppStrength;
   const need = Math.ceil(s.cfg.bestOf / 2);
   const mapsIds = s.cfg.mapsIds;
   const allPlay = acc.length ? acc.reduce((a, o) => a + o.value, 0) / acc.length : 0.5;
-  // v17: fechamento FUNDIDO com o placar vivo (nunca encolhe o que o jogador
-  // viu; vencedor segue 100% da jogada).
   const closeMap = (mi: number, play: number, liveMap: [number, number] = [0, 0]) =>
-    mergeMapClose(resolveMapFromPlay(play, edge, s.cfg.matchSeed, mi), liveMap);
+    closeMapFromLive(play, edge, s.cfg.matchSeed, mi, liveMap);
   const mapIdAt = (mi: number): MapId => mapsIds[Math.min(mi, Math.max(0, mapsIds.length - 1))] ?? 'mirage';
 
   if (isLastBeat(s)) {
@@ -414,6 +434,7 @@ export function advance(s: RoomState): RoomState {
     const closed = [...s.closedMaps];
     let sy = s.live.seriesScore[0], st = s.live.seriesScore[1];
     const cm = closeMap(beat.mapIndex, mapPlayOf(acc, s.beats, beat.mapIndex, allPlay), s.live.mapScore);
+    const otLine = cm.overtimes > 0 ? [overtimeLine(cm.won, cm.score, cm.overtimes)] : [];
     closed.push({ map: mapIdAt(beat.mapIndex), score: cm.score, won: cm.won });
     if (cm.won) sy++; else st++;
     let mi = beat.mapIndex + 1;
@@ -429,6 +450,7 @@ export function advance(s: RoomState): RoomState {
       outcomes: acc,
       closedMaps: closed,
       live: { mapScore: cm.score, seriesScore: [sy, st], mapIndex: beat.mapIndex },
+      interlude: otLine.length ? { bridged: [0, 0], lines: otLine, mapClosed: null } : s.interlude,
       final: { outcomes: acc, liveMaps: closed },
     };
   }
@@ -437,13 +459,14 @@ export function advance(s: RoomState): RoomState {
 
   // TRANSIÇÃO DE MAPA: fecha o mapa que acabou pela sua jogada nele.
   if (nb.mapIndex > beat.mapIndex) {
-    const { won, score } = closeMap(beat.mapIndex, mapPlayOf(acc, s.beats, beat.mapIndex, allPlay), s.live.mapScore);
+    const { won, score, overtimes } = closeMap(beat.mapIndex, mapPlayOf(acc, s.beats, beat.mapIndex, allPlay), s.live.mapScore);
     const newSeries: [number, number] = won
       ? [s.live.seriesScore[0] + 1, s.live.seriesScore[1]]
       : [s.live.seriesScore[0], s.live.seriesScore[1] + 1];
+    const otTag = overtimes > 0 ? (overtimes > 1 ? ` após ${overtimes} prorrogações` : ' na prorrogação') : '';
     const closeLine = won
-      ? `Vocês fecharam o mapa ${score[0]}–${score[1]} — série ${newSeries[0]}–${newSeries[1]}.`
-      : `Eles levaram o mapa ${score[1]}–${score[0]} — série ${newSeries[0]}–${newSeries[1]}.`;
+      ? `Vocês fecharam o mapa ${score[0]}–${score[1]}${otTag} — série ${newSeries[0]}–${newSeries[1]}.`
+      : `Eles levaram o mapa ${score[1]}–${score[0]}${otTag} — série ${newSeries[0]}–${newSeries[1]}.`;
     const closed = [...s.closedMaps, { map: mapIdAt(beat.mapIndex), score, won }];
 
     if (newSeries[0] >= need || newSeries[1] >= need) {
@@ -462,8 +485,7 @@ export function advance(s: RoomState): RoomState {
 
     // série segue: abre o próximo mapa (bridge só a ABERTURA, sem novo fechamento).
     const openLive: LiveScore = { mapScore: [0, 0], seriesScore: newSeries, mapIndex: nb.mapIndex };
-    const nbLastOfMap = s.idx + 2 >= s.beats.length || s.beats[s.idx + 2].mapIndex !== nb.mapIndex;
-    const bridge = bridgeToBeat(openLive, nb, null, s.momentum, edge, s.cfg.matchSeed, mapsIds, nbLastOfMap);
+    const bridge = bridgeToBeat(openLive, nb, null, s.momentum, edge, s.cfg.matchSeed, mapsIds, beatsLeftInMap(s.beats, s.idx + 1));
     return {
       ...s,
       phase: 'decide',
@@ -486,7 +508,7 @@ export function advance(s: RoomState): RoomState {
   const youWon = inClutch
     ? beatOutcome.result === 'success'
     : locked.outcome.result === 'success' || locked.outcome.result === 'partial';
-  const bridge = bridgeToBeat(s.live, nb, youWon, s.momentum, edge, s.cfg.matchSeed, mapsIds, false);
+  const bridge = bridgeToBeat(s.live, nb, youWon, s.momentum, edge, s.cfg.matchSeed, mapsIds, beatsLeftInMap(s.beats, s.idx + 1));
   return {
     ...s,
     phase: 'decide',

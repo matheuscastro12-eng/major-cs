@@ -40,8 +40,9 @@ export interface BeatSpec {
   kind: BeatKind;
   mapIndex: number;
   map: MapId;
-  round: number;
-  side: Side;
+  round: number;             // ALVO da ponte (o round exibido sai do placar)
+  side: Side;                // seu lado NO round alvo (derivado do half)
+  startSide: Side;           // seu lado no 1º half DESTE mapa (o ctx deriva o lado do round vivo)
   yourBuy: BuyTier;
   theirBuy: BuyTier;
   alive: [number, number];
@@ -65,11 +66,42 @@ const KICKER: Record<BeatKind, string> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Plano de beats (6-7 pivotais ao longo da BO3)
+// Regras de formato do CS2 (MR12): 12 rounds por half, 13 fecha o mapa, 12-12
+// abre prorrogação MR3 (blocos de 6, primeiro a +4; 3-3 abre outra).
+
+export const HALF_ROUNDS = 12;
+export const WIN_ROUNDS = 13;
+const OT_HALF = 3;
+
+const flip = (s: Side): Side => (s === 'CT' ? 'T' : 'CT');
+
+// Lado de quem começou o mapa em `start` no round `round` (1-based). Regulamento:
+// troca no intervalo (round 13). Prorrogação (CS2/Valve): o 1º half da OT segue
+// no lado do 2º half do tempo normal, troca no intervalo da OT, e a OT seguinte
+// começa sem trocar de novo (fica no lado em que terminou).
+export function sideAtRound(start: Side, round: number): Side {
+  if (round <= HALF_ROUNDS) return start;
+  const second = flip(start);
+  if (round <= HALF_ROUNDS * 2) return second;
+  const h = Math.floor((round - HALF_ROUNDS * 2 - 1) / OT_HALF);   // half da OT (0-based, todas as OTs)
+  return Math.floor((h + 1) / 2) % 2 === 0 ? second : start;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Plano de beats (7 pivotais) — o roteiro depende do FORMATO:
+//   • MD1 (Série do Dia, circuito inicial): os 7 beats no MESMO mapa, em rounds
+//     estritamente crescentes (1 · 4-6 · 8-10 · 12 · 14-16 · 17-19 · 20-22 · MP).
+//   • MD3/MD5: mapa 1 abre (pistol/abertura/economia), mapa 2 é o miolo (meio +
+//     bomba), mapa 3 é o decider (clutch + map point); o 4º/5º do MD5 são
+//     virtuais (fecham pela jogada agregada).
+// Antes (ENGI-02) o roteiro era único: no MD1 tudo empilhava no mapa 0 com
+// rounds 1, 15, 10, 7, 15, 21, 24 (andando pra trás), o "FIM DO HALF" caía no
+// round 15 (regra do MR15) e o lado trocava a cada round (i % 2).
 
 export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): BeatSpec[] {
   const rng = makeRng((matchSeed ^ 0xbea75) >>> 0);
   const m = maps.length ? maps : (['mirage', 'inferno', 'nuke'] as MapId[]);
+  const bo1 = m.length === 1;
   const roleMoments = generateMoments(role); // [pistol, duel, clutch, mapPoint]
   const duel = roleMoments[1];
   const clutch = roleMoments[2];
@@ -77,7 +109,6 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
   const pistol = roleMoments[0];
 
   const buy = (): BuyTier => pick(rng, ['eco', 'force', 'full', 'full', 'full'] as BuyTier[]);
-  const side = (i: number): Side => (i % 2 === 0 ? 'T' : 'CT');
 
   // IGL chama o mid-round em vez do duelo de rifle (a jogada passa pelo time todo).
   const isIGL = role === 'IGL';
@@ -94,18 +125,37 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
   const midKind: BeatKind = isIGL ? 'igl' : hashStr(`v-mid:${matchSeed}`) % 3 === 2 ? 'timeout' : 'duel';
   const midMoment = midKind === 'igl' ? generateIGL() : midKind === 'timeout' ? generateTimeout(role) : duel;
   const bombKind = hashStr(`v-bomb:${matchSeed}`) % 2 === 0 ? ('retake' as const) : ('postPlant' as const);
-  // arco: pistol → abertura → economia → meio → bomba → clutch → map point
+  // arco: pistol → abertura → economia → meio → bomba → clutch → map point.
+  // Só o T planta: a bomba é sempre plantedBy 'T' (retake = você CT; pós-plant =
+  // você T; clutch com bomba = depende do half).
+  const h = (k: string, n: number) => hashStr(`${k}:${matchSeed}`) % n;
+  const mid = bo1 ? 0 : 1;
+  const late = bo1 ? 0 : m.length > 2 ? 2 : 1;
   const blueprint: Array<{ kind: BeatKind; moment: Moment; mapIndex: number; round: number; bombSide?: Side }> = [
     { kind: 'pistol', moment: pistol, mapIndex: 0, round: 1 },
     openKind === 'lastHalf'
-      ? { kind: 'lastHalf', moment: generateLastRoundHalf(role), mapIndex: 0, round: 15 }
-      : { kind: 'entry', moment: generateEntry(role), mapIndex: 0, round: 4 + (hashStr(`r1:${matchSeed}`) % 3) },
-    { kind: ecoKind, moment: ecoMoment, mapIndex: 0, round: 8 + (hashStr(`r2:${matchSeed}`) % 3) },
-    { kind: midKind, moment: midMoment, mapIndex: 1, round: 6 + (hashStr(`r3:${matchSeed}`) % 4) },
-    { kind: bombKind, moment: bombKind === 'postPlant' ? generatePostPlant() : generateRetake(), mapIndex: 1, round: 13 + (hashStr(`r4:${matchSeed}`) % 4), bombSide: 'T' },
-    { kind: 'clutch', moment: clutch, mapIndex: m.length > 2 ? 2 : 1, round: 18 + (hashStr(`r5:${matchSeed}`) % 4), bombSide: 'CT' },
-    { kind: 'mapPoint', moment: mapPoint, mapIndex: m.length > 2 ? 2 : 1, round: 24 + (hashStr(`r6:${matchSeed}`) % 4) },
+      ? { kind: 'lastHalf', moment: generateLastRoundHalf(role), mapIndex: 0, round: HALF_ROUNDS }
+      : { kind: 'entry', moment: generateEntry(role), mapIndex: 0, round: 4 + h('r1', 3) },
+    { kind: ecoKind, moment: ecoMoment, mapIndex: 0, round: 8 + h('r2', 3) },
+    { kind: midKind, moment: midMoment, mapIndex: mid, round: bo1 ? 14 + h('r3', 3) : 6 + h('r3', 4) },
+    { kind: bombKind, moment: bombKind === 'postPlant' ? generatePostPlant() : generateRetake(), mapIndex: mid, round: bo1 ? 17 + h('r4', 3) : 13 + h('r4', 4), bombSide: 'T' },
+    { kind: 'clutch', moment: clutch, mapIndex: late, round: bo1 ? 20 + h('r5', 3) : 18 + h('r5', 4), bombSide: 'T' },
+    // alvo 24 = a ponte roda até ALGUÉM chegar a 12 (o map point nasce do placar).
+    { kind: 'mapPoint', moment: mapPoint, mapIndex: late, round: HALF_ROUNDS * 2 },
   ];
+  // cronologia: dentro de cada mapa, rounds estritamente crescentes (o "FIM DO
+  // HALF" no 12 vem depois da economia do 8-10). Sort estável por (mapa, round).
+  const ordered = blueprint
+    .map((b, i) => ({ b, i }))
+    .sort((x, y) => x.b.mapIndex - y.b.mapIndex || x.b.round - y.b.round || x.i - y.i)
+    .map((x) => x.b);
+
+  // Lado inicial por mapa: pelo seed; no mapa do beat de bomba, o lado que casa
+  // com a situação no round alvo (retake = CT, pós-plant = T — ambos no 2º half).
+  const startSides: Side[] = m.map((_, mi) => (h(`side${mi}`, 2) === 0 ? 'T' : 'CT'));
+  const bombNeeds: Side = bombKind === 'retake' ? 'CT' : 'T';
+  const bombRound = blueprint[4].round;
+  startSides[mid] = sideAtRound('T', bombRound) === bombNeeds ? 'T' : 'CT';
 
   // MOMENTOS-CHAVE com execução (minigame): pistol, abertura, clutch e map
   // point sempre; no meio da série, OU o round de gun/call OU o round de bomba
@@ -132,7 +182,7 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
     return undefined;
   };
 
-  return blueprint.map((b, i): BeatSpec => {
+  return ordered.map((b, i): BeatSpec => {
     const yourBuy: BuyTier =
       b.kind === 'pistol' || b.kind === 'saveCall' ? 'eco'
         : b.kind === 'economy' || b.kind === 'forcedEco' ? 'force'
@@ -147,9 +197,11 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
     const bomb = b.bombSide
       ? { site: (hashStr(`s:${i}:${matchSeed}`) % 2 === 0 ? 'A' : 'B') as 'A' | 'B', plantedBy: b.bombSide, defuseSecs: 5 + (hashStr(`d:${i}:${matchSeed}`) % 25) }
       : null;
+    const mi = Math.min(b.mapIndex, m.length - 1);
+    const startSide = startSides[mi];
     return {
-      kind: b.kind, mapIndex: Math.min(b.mapIndex, m.length - 1), map: m[Math.min(b.mapIndex, m.length - 1)],
-      round: b.round, side: side(b.round), yourBuy, theirBuy, alive, bomb, moment: b.moment,
+      kind: b.kind, mapIndex: mi, map: m[mi],
+      round: b.round, side: sideAtRound(startSide, b.round), startSide, yourBuy, theirBuy, alive, bomb, moment: b.moment,
       spotlight: spotFor(b.kind),
     };
   });
@@ -159,7 +211,7 @@ export function buildBeatPlan(role: Role, maps: MapId[], matchSeed: number): Bea
 // exibido deriva do PLACAR REAL do mapa (rounds jogados + 1) — sempre coerente.
 export function ctxForBeat(beat: BeatSpec, score: [number, number], isLast: boolean): RoundCtx {
   // O round É o placar somado + 1 — nunca desmente o scorebug (beat.round vira
-  // só o ALVO da ponte entre beats).
+  // só o ALVO da ponte entre beats). O lado também sai do round vivo (half).
   const round = score[0] + score[1] + 1;
   let kicker = `ROUND ${round} · ${KICKER[beat.kind]}`;
   if (isLast || score[0] === 12 || score[1] === 12) {
@@ -168,16 +220,15 @@ export function ctxForBeat(beat: BeatSpec, score: [number, number], isLast: bool
     else if (isLast) kicker = 'ROUND DECISIVO';
   }
   return {
-    mapIndex: beat.mapIndex, map: beat.map, round, side: beat.side,
+    mapIndex: beat.mapIndex, map: beat.map, round, side: sideAtRound(beat.startSide ?? beat.side, round),
     score, yourBuy: beat.yourBuy, theirBuy: beat.theirBuy, alive: beat.alive, bomb: beat.bomb, kicker,
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PONTE ENTRE BEATS (v15): os rounds entre os momentos-chave ACONTECEM — o
-// placar avança de forma plausível (viés de momentum/força/último beat) e mapas
-// fecham na transição da BO3. Determinístico pelo matchSeed. É dramatização
-// honesta: o resultado OFICIAL da série continua vindo do sim (finishMatch).
+// placar avança de forma plausível (viés de momentum/força/último beat).
+// Determinístico pelo matchSeed. O fechamento do mapa é da Sala (closeMapFromLive).
 
 export interface LiveScore {
   mapScore: [number, number];       // rounds no mapa atual (você, eles)
@@ -194,68 +245,56 @@ export function initialLiveScore(): LiveScore {
   return { mapScore: [0, 0], seriesScore: [0, 0], mapIndex: 0 };
 }
 
+// Teto de rounds de cada lado ANTES de um beat com `beatsLeft` beats restantes
+// no mapa (contando ele): 13 − beatsLeft, no máximo 12. Por indução nenhum beat
+// que NÃO é o último do mapa fecha o mapa (entra com ≤11, sai com ≤12), e o
+// último entra com no máximo 12 — o match point legítimo. 12-12 nunca nasce na
+// ponte (só a jogada do último beat abre a prorrogação).
+export const capBeforeBeat = (beatsLeft: number): number => Math.min(WIN_ROUNDS - 1, WIN_ROUNDS - Math.max(1, beatsLeft));
+
 export function bridgeToBeat(
   live: LiveScore, to: BeatSpec, prevWon: boolean | null,
+  // `maps` ficou por compatibilidade: o fechamento de mapa saiu da ponte (é da Sala).
   momentum: number, edge: number, matchSeed: number, maps: MapId[],
-  toIsLastOfMap = false,
+  beatsLeftInMap = 1,
 ): { live: LiveScore; interlude: Interlude | null } {
   const rng = makeRng((matchSeed ^ hashStr(`bridge:${to.kind}:${to.mapIndex}:${to.round}`)) >>> 0);
-  // edge*0.018 casa com resolveMapFromPlay (iter10 subiu o peso da força de 0.012
-  // pra 0.018): antes a ponte usava 0.006, então o placar CORRIDO entre beats
-  // pendia a seu favor contra um adversário forte que o FECHAMENTO do mapa depois
-  // virava em derrota ("tava ganhando de 12 e no fim perdi"). Alinhado, o placar
-  // vivo tende na mesma direção do resultado.
+  // Chance por round da MESMA régua do fechamento (roundPOf), com o momentum
+  // como proxy da jogada até aqui + um empurrão do último beat. Antes era
+  // edge*0.018 POR ROUND (a régua de MAPA aplicada a cada round): enquanto um
+  // roll cego decidia o mapa isso não aparecia, mas com o placar vivo mandando
+  // um rival 10 pontos mais forte ganharia ~68% dos rounds da ponte.
   const pWin = Math.max(0.25, Math.min(0.75,
-    0.5 + (momentum - 0.5) * 0.26 + (prevWon == null ? 0 : prevWon ? 0.05 : -0.05) + edge * 0.018));
+    roundPOf(momentum, edge) + (prevWon == null ? 0 : prevWon ? 0.03 : -0.03)));
 
-  let mapScore: [number, number] = [...live.mapScore];
-  let seriesScore: [number, number] = [...live.seriesScore];
-  let mapIndex = live.mapIndex;
+  const mapScore: [number, number] = [...live.mapScore];
   const lines: string[] = [];
-  let mapClosed: Interlude['mapClosed'] = null;
 
-  // Transição de mapa: fecha o atual. Na BO3 a dramaturgia garante o DECIDER —
-  // se alguém já tem 1 mapa, o outro leva este (senão os beats do mapa 3 não
-  // existiriam). No 1º fechamento, quem está na frente (e embalado) leva.
-  if (to.mapIndex > mapIndex) {
-    let won: boolean;
-    if (seriesScore[0] > seriesScore[1]) won = false;
-    else if (seriesScore[1] > seriesScore[0]) won = true;
-    else won = rng() < Math.max(0.2, Math.min(0.8, 0.5 + (mapScore[0] - mapScore[1]) * 0.07 + (momentum - 0.5) * 0.2));
-    const loserCur = won ? mapScore[1] : mapScore[0];
-    const loserFinal = Math.max(loserCur, Math.min(11, 5 + Math.floor(rng() * 7)));
-    const final: [number, number] = won ? [13, loserFinal] : [loserFinal, 13];
-    seriesScore = won ? [seriesScore[0] + 1, seriesScore[1]] : [seriesScore[0], seriesScore[1] + 1];
-    mapClosed = { map: maps[Math.min(mapIndex, maps.length - 1)], won, score: final };
-    lines.push(won
-      ? `Vocês fecharam o mapa ${final[0]}–${final[1]} — série ${seriesScore[0]}–${seriesScore[1]}.`
-      : `Eles levaram o mapa ${final[1]}–${final[0]} — série ${seriesScore[0]}–${seriesScore[1]}.`);
-    mapIndex = to.mapIndex;
-    mapScore = [0, 0];
-  }
-
-  // Rounds intermediários até a véspera do beat. Alvo ≤ 23 rounds jogados (12-11
-  // = MATCH POINT legítimo; nunca 12-12 fantasma). Beat que NÃO é o último do
-  // mapa não pode NASCER com o líder em 12 (vencer o beat fecharia o mapa cedo
-  // demais) — cap 11; vitória leva a 12 e o match point fica pro beat final.
-  // v17 (bug do 15-8): SÓ UM lado pode sentar em 12 (match point), e só no
-  // último beat do mapa; o outro trava em ≤11. Sem isso o placar corrido podia
-  // pintar 12-12 e, somado ao +1 do próprio beat na Sala, estourar 13/14/15 sem
-  // o mapa fechar ("só acaba quando o juiz quiser").
+  // Rounds intermediários até a véspera do beat (round alvo − 1), sob o teto do
+  // capBeforeBeat. O ÚLTIMO beat do mapa (map point) para assim que alguém chega
+  // a 12: o match point nasce do placar, com o perdedor distribuído (12-5…12-11)
+  // em vez de sempre 12-11. Quando o lado sorteado está no teto, a ponte PARA —
+  // antes (ENGI-02) o round ia pro OUTRO lado, e quem acabara de perder o beat
+  // "emendava" rounds contra um adversário travado em 12. Exceção: o beat de fim
+  // de half precisa nascer EXATAMENTE no round 12 (o momento diz "Round 12").
+  const cap = capBeforeBeat(beatsLeftInMap);
+  const lastOfMap = beatsLeftInMap <= 1;
+  const exact = to.kind === 'lastHalf';
   const canInc = (side: number, other: number): boolean =>
-    side + 1 <= 11 || (side + 1 === 12 && toIsLastOfMap && other <= 11);
-  const played = mapScore[0] + mapScore[1];
-  const target = Math.min(to.round - 1, 23);
-  const n = Math.max(0, target - played);
+    side + 1 <= cap && !(side + 1 >= HALF_ROUNDS && other >= HALF_ROUNDS);
+  const target = Math.min(to.round - 1, HALF_ROUNDS * 2 - 1);
   let dy = 0, dt = 0;
-  for (let i = 0; i < n; i++) {
+  while (mapScore[0] + dy + mapScore[1] + dt < target) {
+    const a = mapScore[0] + dy, b = mapScore[1] + dt;
+    if (lastOfMap && (a >= HALF_ROUNDS || b >= HALF_ROUNDS)) break;
     const you = rng() < pWin;
-    if (you && canInc(mapScore[0] + dy, mapScore[1] + dt)) dy++;
-    else if (!you && canInc(mapScore[1] + dt, mapScore[0] + dy)) dt++;
-    else if (canInc(mapScore[0] + dy, mapScore[1] + dt)) dy++;
-    else if (canInc(mapScore[1] + dt, mapScore[0] + dy)) dt++;
+    if (you && canInc(a, b)) dy++;
+    else if (!you && canInc(b, a)) dt++;
+    else if (exact && canInc(a, b)) dy++;
+    else if (exact && canInc(b, a)) dt++;
+    else break;
   }
-  mapScore = [mapScore[0] + dy, mapScore[1] + dt];
+  const out: [number, number] = [mapScore[0] + dy, mapScore[1] + dt];
   if (dy + dt > 0) {
     lines.push(dy > dt
       ? `No embalo, vocês emendaram os rounds seguintes: ${dy}–${dt} no período.`
@@ -264,52 +303,135 @@ export function bridgeToBeat(
         : `Troca de rounds equilibrada (${dy}–${dt}) até o próximo momento decisivo.`);
   }
 
-  const interlude = (dy + dt > 0 || mapClosed) ? { bridged: [dy, dt] as [number, number], lines, mapClosed } : null;
-  return { live: { mapScore, seriesScore, mapIndex }, interlude };
+  const interlude = dy + dt > 0 ? { bridged: [dy, dt] as [number, number], lines, mapClosed: null } : null;
+  return { live: { mapScore: out, seriesScore: live.seriesScore, mapIndex: live.mapIndex }, interlude };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RESULTADO NATURAL DA SÉRIE (v16b): cada MAPA é decidido pela SUA jogada naquele
-// mapa (a média dos beats daquele mapa), com a força do adversário deslocando. A
-// série PARA quando alguém fecha (need mapas) → placar NATURAL: 2-0 (varreu), 2-1
-// (foi ao decider), 0-2, 1-2 — e 3-0/3-1/3-2 no BO5. É a FONTE DA VERDADE: a Sala
-// revela isto (fecha mapa a mapa, para quando decide) e o card oficial usa o mesmo
-// → nunca divergem. Puro/determinístico. `edge` = ovr do herói − força do adversário.
-// Resultado de UM mapa a partir da SUA jogada NAQUELE mapa. Seed POR-MAPA (mi) →
-// a Sala pode fechar cada mapa independente e bater EXATAMENTE com o card (ambos
-// chamam esta função com o mesmo mapPlay/edge/seed). `mapPlay` 0..1 = média dos
-// beats do mapa. mult 0.65 (jogada domina) + edge*0.018 (v10: força desloca ~1.5×
-// mais — antes 0.012 quase não pesava; agora subir de tier é sentido de verdade).
+// FECHAMENTO DO MAPA (O0-30): o placar VIVO manda. A jogada decide o mapa em
+// dois lugares, nesta ordem:
+//   1. no último beat do mapa, na Sala: vencer em 12-x FECHA 13-x; perder com
+//      eles em 12 perde 12-13… (x-13); vencer em 11-12 abre 12-12 (prorrogação).
+//   2. quando o último beat não decide, os rounds que faltam são JOGADOS a
+//      partir do placar vivo (playOutMap), round a round, com a chance por round
+//      derivada da jogada no mapa + força (roundPOf). 12-12 → prorrogação MR3
+//      distribuída (16-12, 16-13, 16-14, 19-x…), nunca um 16-14 fixo.
+// Antes (ENGI-01/15) um roll cego por mapa decidia o vencedor e o placar vivo só
+// era "fundido" depois: vencer o match point e perder o mapa 11-13 acontecia em
+// ~1 de cada 3 Séries do Dia, e 1/3 dos mapas fechava 16-14.
+
+// Chance de vencer o MAPA a partir de 0-0 (a régua histórica da jogada): mult
+// 0.65 (jogada domina) + edge*0.018 (força desloca). `mapPlay` 0..1 = média dos
+// beats do mapa; `edge` = ovr do herói − força do adversário.
+export function mapWinPOf(mapPlay: number, edge: number): number {
+  return Math.max(0.1, Math.min(0.9, 0.5 + (mapPlay - 0.5) * 0.65 + edge * 0.018));
+}
+
+// P(vencer a prorrogação) com chance por round q: bloco de 6, primeiro a 4;
+// 3-3 abre outro bloco idêntico → W / (W + L).
+function otWinP(q: number): number {
+  const r = 1 - q;
+  const w = q ** 4 * (1 + 4 * r + 10 * r * r);
+  const l = r ** 4 * (1 + 4 * q + 10 * q * q);
+  return w / (w + l);
+}
+
+// P(vencer o mapa) a partir do placar [a, b] com chance por round q (exato:
+// regulamento até 13 + prorrogação). DP iterativa 13×13 — barata o bastante
+// pra rodar dentro da busca do roundPOf.
+export function mapWinPFrom(score: [number, number], q: number): number {
+  const [a0, b0] = score;
+  if (a0 >= WIN_ROUNDS && a0 - b0 >= 2) return 1;
+  if (b0 >= WIN_ROUNDS && b0 - a0 >= 2) return 0;
+  if (a0 >= HALF_ROUNDS && b0 >= HALF_ROUNDS) return otWinP(q);
+  const W = WIN_ROUNDS + 1;
+  const f = new Float64Array(W * W);   // f[a*W + b], a/b = rounds já vencidos
+  for (let a = WIN_ROUNDS; a >= 0; a--) {
+    for (let b = WIN_ROUNDS; b >= 0; b--) {
+      let v: number;
+      if (a === WIN_ROUNDS) v = b === WIN_ROUNDS ? 0 : 1;
+      else if (b === WIN_ROUNDS) v = 0;
+      else if (a === HALF_ROUNDS && b === HALF_ROUNDS) v = otWinP(q);
+      else v = q * f[(a + 1) * W + b] + (1 - q) * f[a * W + b + 1];
+      f[a * W + b] = v;
+    }
+  }
+  return f[Math.min(a0, HALF_ROUNDS) * W + Math.min(b0, HALF_ROUNDS)];
+}
+
+// Chance por ROUND que reproduz a chance de mapa da jogada (mapWinPOf) a partir
+// de 0-0 — busca binária no mapWinPFrom (monótono em q). Assim a jogada pesa o
+// mesmo que antes no mapa inteiro, mas o placar vivo passa a contar. Memo por
+// alvo (função pura; o domínio é pequeno — clamp 0.1..0.9).
+const ROUND_P_MEMO = new Map<number, number>();
+export function roundPOf(mapPlay: number, edge: number): number {
+  const target = mapWinPOf(mapPlay, edge);
+  const key = Math.round(target * 1e6);
+  const hit = ROUND_P_MEMO.get(key);
+  if (hit != null) return hit;
+  let lo = 0.2, hi = 0.8;
+  for (let i = 0; i < 30; i++) {
+    const midQ = (lo + hi) / 2;
+    if (mapWinPFrom([0, 0], midQ) < target) lo = midQ; else hi = midQ;
+  }
+  const q = (lo + hi) / 2;
+  if (ROUND_P_MEMO.size > 50_000) ROUND_P_MEMO.clear();
+  ROUND_P_MEMO.set(key, q);
+  return q;
+}
+
+export interface MapClose { won: boolean; score: [number, number]; overtimes: number }
+
+// Placar final é válido no CS2? 13-x (x≤11) ou prorrogação (16+3k)-(W−4..W−2).
+export function isValidMapScore(score: [number, number]): boolean {
+  const w = Math.max(score[0], score[1]), l = Math.min(score[0], score[1]);
+  if (w === WIN_ROUNDS) return l <= HALF_ROUNDS - 1;
+  if (w < WIN_ROUNDS + OT_HALF || (w - (WIN_ROUNDS + OT_HALF)) % OT_HALF !== 0) return false;
+  return l >= w - 4 && l <= w - 2;
+}
+
+// O mapa já está decidido no placar vivo (alguém fechou 13-x ou a OT)?
+export function mapDecided(score: [number, number]): boolean {
+  return isValidMapScore(score);
+}
+
+// Joga os rounds que faltam a partir do placar vivo, round a round. Nunca
+// encolhe o que a Sala mostrou (só soma). Guarda de morte súbita após 8 OTs.
+export function playOutMap(from: [number, number], q: number, rng: Rng): MapClose {
+  let [a, b] = from;
+  const step = () => { if (rng() < q) a++; else b++; };
+  if (mapDecided([a, b])) return { won: a > b, score: [a, b], overtimes: Math.max(0, Math.ceil((Math.max(a, b) - WIN_ROUNDS) / OT_HALF)) };
+  while (a < WIN_ROUNDS && b < WIN_ROUNDS && !(a >= HALF_ROUNDS && b >= HALF_ROUNDS)) step();
+  if (a === WIN_ROUNDS || b === WIN_ROUNDS) return { won: a > b, score: [a, b], overtimes: 0 };
+  // prorrogação: o placar entra empatado (12-12, 15-15…); cada bloco é o 1º a +4.
+  let overtimes = 0;
+  for (;;) {
+    overtimes++;
+    const tgt = Math.min(a, b) + 4;
+    while (a < tgt && b < tgt && !(a === tgt - 1 && b === tgt - 1)) step();
+    if (a === tgt || b === tgt) break;
+    if (overtimes >= 8) { step(); break; }
+  }
+  return { won: a > b, score: [a, b], overtimes };
+}
+
+// Fecha UM mapa a partir do placar vivo: decidido pela Sala → é esse; senão os
+// rounds restantes são jogados com a chance por round da jogada. Seed POR-MAPA
+// (mi) → o mesmo mapa fecha igual na Sala e em qualquer releitura.
+export function closeMapFromLive(
+  mapPlay: number, edge: number, matchSeed: number, mi: number, live: [number, number],
+): MapClose {
+  const rng = makeRng((matchSeed ^ 0x5e21e5 ^ ((mi + 1) * 0x9e3779b1)) >>> 0);
+  return playOutMap(live, roundPOf(mapPlay, edge), rng);
+}
+
+// Mapa sem placar vivo (série pulada, 4º/5º mapa virtual do MD5): jogado de 0-0
+// com a MESMA régua — P(vitória) = mapWinPOf(mapPlay, edge) por construção.
 export function resolveMapFromPlay(
   mapPlay: number, edge: number, matchSeed: number, mi: number,
 ): { won: boolean; score: [number, number] } {
-  const rng = makeRng((matchSeed ^ 0x5e21e5 ^ ((mi + 1) * 0x9e3779b1)) >>> 0);
-  const p = Math.max(0.1, Math.min(0.9, 0.5 + (mapPlay - 0.5) * 0.65 + edge * 0.018));
-  const won = rng() < p;
-  const margin = Math.abs(mapPlay - 0.5) * 12 + Math.abs(edge) * 0.15;
-  const loser = Math.max(3, Math.min(11, Math.round(11 - margin + (rng() * 4 - 2))));
-  return { won, score: won ? [13, loser] : [loser, 13] };
-}
-
-// v17: FUNDE o fechamento computado com o placar VIVO que o jogador assistiu.
-// Regra: quem VENCE continua vindo da jogada (resolveMapFromPlay — RP/prêmio
-// intocados), mas o placar final NUNCA encolhe o que a Sala mostrou: o lado
-// perdedor fecha com max(computado, vivo) capado em 11. Ex.: vivo 11-7 seu e o
-// fechamento diz derrota → "11-13" (run de 6-0 deles), jamais "9-13" com os
-// SEUS rounds diminuindo (bug reportado por jogador em 2026-07-05).
-export function mergeMapClose(
-  computed: { won: boolean; score: [number, number] },
-  liveMap: [number, number],
-): { won: boolean; score: [number, number] } {
-  const liveLoser = computed.won ? liveMap[1] : liveMap[0];
-  const computedLoser = computed.won ? computed.score[1] : computed.score[0];
-  const loser = Math.max(computedLoser, liveLoser);
-  // perdedor em 12 no vivo (match point que a jogada não confirmou): 13-12 não
-  // existe na regulamentação — o fechamento honesto é PRORROGAÇÃO, 16-14.
-  if (loser >= 12) {
-    return { won: computed.won, score: computed.won ? [16, 14] : [14, 16] };
-  }
-  return { won: computed.won, score: computed.won ? [13, loser] : [loser, 13] };
+  const { won, score } = closeMapFromLive(mapPlay, edge, matchSeed, mi, [0, 0]);
+  return { won, score };
 }
 
 // média dos `value` dos beats de um mapa (helper compartilhado Sala ↔ card).
@@ -318,6 +440,9 @@ export function mapPlayOf(outcomes: MomentOutcome[], beats: BeatSpec[], mapIndex
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : fallback;
 }
 
+// PLACAR NATURAL de uma série SEM placar vivo (skip): cada mapa pela jogada
+// daquele mapa, a série para quando alguém fecha (need). Uma série JOGADA na
+// Sala tem a verdade nos liveMaps (o placar vivo pesa), não aqui.
 export function resolveRoomSeries(
   role: Role, outcomes: MomentOutcome[], edge: number,
   matchSeed: number, maps: MapId[], bestOf: 1 | 3 | 5,
