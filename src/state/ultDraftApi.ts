@@ -18,7 +18,7 @@ export async function fetchUltDraftBoard(day?: number): Promise<UltDraftBoard | 
 
 // Coleta prêmios de PÓDIO pendentes (dias fechados da última semana). O
 // servidor grava o claim (PK day+email — idempotente) e o CALLER aplica as
-// coins no save (addCredits) — mesmo padrão do claimPaidCoins.
+// coins no save (addCredits) — só local desde o O0-02 (ver O0-09).
 export interface UltDraftPrize { day: number; rank: number; coins: number }
 export async function claimUltDraftPrizes(): Promise<UltDraftPrize[]> {
   const token = getToken();

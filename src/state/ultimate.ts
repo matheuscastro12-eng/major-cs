@@ -16,6 +16,8 @@ import { writeWithQuotaRescue } from './storageQuota';
 // roll autoritativo com op_id crash-safe; fallback local se a rede falhar.
 import { bootUltimateShadow, markFlipDrift, mirrorUltimateChange, openPackOnServer } from './ultimateShadow';
 import { scheduledPromo, scheduledSbcById } from './liveops';
+import { mktLegacySeenTags, mktSeenHas } from './ultimateMarket'; // [O0-37] "já vi" legado (localStorage por aparelho)
+import type { PaidVoucher } from './account'; // [O0-46]
 import { CS2_REAL_2026 } from '../data/bo3';
 import { makeRng } from '../engine/rng';
 import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/cards';
@@ -64,6 +66,8 @@ import {
   markWeeklyBonusClaimed as _markWeeklyBonusClaimed,
   grantPassXp as _grantPassXp,
   setPassPremium as _setPassPremium,
+  hasSrvSeen as _hasSrvSeen,
+  markSrvSeen as _markSrvSeen,
   passSeasonId,
   type MatchRecord,
   applyMatchResult as _applyMatchResult,
@@ -101,7 +105,9 @@ function load(): UltimateState {
   try { raw = localStorage.getItem(KEY); } catch { return defaultUltimateState(); }
   if (!raw) return defaultUltimateState();
   try {
-    return migrateUltimate(JSON.parse(raw));
+    // [O0-37] semeia o "já vi" do mercado que morava solto no localStorage
+    // deste aparelho: vai pro save (sincronizado) na próxima gravação.
+    return _markSrvSeen(migrateUltimate(JSON.parse(raw)), mktLegacySeenTags());
   } catch (e) {
     // principal ilegível: preserva pra diagnóstico e tenta o backup de um passo
     // (o save guarda coins comprados com dinheiro real — não pode evaporar).
@@ -336,11 +342,16 @@ interface UltimateStore {
   // JÁ está no ledger quando estas rodam — espelhar duplicaria tudo (mesma
   // supressão do openPackCloud, que não chama mirrorUltimateChange).
   marketListCard: (ownedId: string) => void;               // listou: carta sai da coleção local (custódia)
-  marketCardSold: (credits: number) => void;               // venda vista no mktMine: credita proceeds 1×
-  marketCardReturned: (cardId: string, cardKey: string) => void; // cancelou/expirou: carta volta
+  // [O0-37] 1× POR CONTA (não por aparelho): a marca 'sold:<id>'/'back:<id>'
+  // vive no save (srvSeen, sincronizado). Devolvem false se já foi processada.
+  marketCardSold: (listingId: number, credits: number) => boolean;               // venda vista no mktMine: credita proceeds 1×
+  marketCardReturned: (listingId: number, cardId: string, cardKey: string) => boolean; // cancelou/expirou: carta volta 1×
   marketBuyApply: (cardId: string, cardKey: string, price: number) => void; // comprou: debita + adiciona
   // Passe de Temporada (fase A — engine/estado; a tela vem na fase B)
-  unlockPremiumPaid: (orderId: string, orderSeason: number) => { ok: boolean; already?: boolean };
+  // [O0-46] absorve no save os créditos PAGOS que o servidor já gravou no
+  // ledger (coins:<corr> → coins; pass:<season> → premium). Cada voucher 1×
+  // (srvSeen). freshOrderIds = pedidos recém-claimados (borda do rollover).
+  absorbPaidVouchers: (vouchers: PaidVoucher[], freshOrderIds?: string[]) => { credited: number; passUnlocked: boolean };
   claimPassLevel: (level: number, track: PassTrack, preferRole?: string | null) => { ok: boolean; reason?: 'unknown' | 'unreached' | 'locked' | 'claimed'; reward?: PassReward; grantedCard?: UltCard; packCards?: UltCard[] };
   // [W2] LEGADO: concede o card do pro aposentado UMA vez por carreira (idempotente
   // pela chave em objectivesClaimed — sobrevive a venda/SBC do card). Sem moeda.
@@ -456,10 +467,10 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     // O roll do SERVIDOR substitui o local INTEIRO: as cópias entram com o
     // uuid gerado lá (mesmo id em rtm_ult_cards) — a reconciliação do boot
     // compara por id, então os dois lados batem 1:1.
-    // Débito LOCAL do custo (não o saldo absoluto do servidor): política 3b é
-    // local-vence — se o saldo do servidor divergir do esperado, quem corrige
-    // é a reconciliação do boot (servidor → local), nunca o contrário. Assim
-    // um ledger atrasado não "evapora" credits do jogador.
+    // Débito LOCAL do custo (não o saldo absoluto do servidor): até o O1-01 o
+    // save carrega prêmios que só existem no cliente (O0-02), então adotar o
+    // saldo do servidor aqui "evaporaria" esses credits. A divergência fica
+    // registrada (só log) pela leitura do boot.
     const spent = _spendCredits(prev, pack.cost);
     if (!spent.ok) {
       // corrida raríssima (gasto concorrente entre o check e a resposta): o
@@ -485,7 +496,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     s = _grantPassXp(s, 'pack', dateKey(new Date()));
     if (r.credits !== prev.profile.credits - pack.cost) {
       // saldo do servidor ≠ esperado → o ledger ainda não convergiu com o
-      // local; informativo — a reconciliação do próximo boot resolve.
+      // local; informativo (esperado enquanto houver prêmio só local — O0-02).
       markFlipDrift(`packOpen saldo server=${r.credits} esperado=${prev.profile.credits - pack.cost}`);
     }
     persist(s);
@@ -539,7 +550,9 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
     set((st) => {
       const s = _addCredits(st.state, n);
       persist(s);
-      // crédito direto (compra de coins paga/restaurada etc.) → 'grant'
+      // [O0-02] 'grant' não sai mais do cliente (o espelho filtra): crédito
+      // direto fica só no save até o O1-01. Compra paga NÃO passa por aqui —
+      // vem do servidor via absorbPaidVouchers.
       mirrorUltimateChange(st.state, s, 'grant', { src: 'credit' });
       return { state: s };
     }),
@@ -1009,19 +1022,26 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // SEM mirror: o mktList já gravou a perna 'escrow' (remove) no ledger.
       return { state: s };
     }),
-  marketCardSold: (credits) =>
-    set((st) => {
-      const n = Math.max(0, Math.trunc(credits));
-      if (!n) return {};
-      const s = _addCredits(st.state, n);
-      persist(s);
-      // SEM mirror: o 'trade' do servidor já creditou os proceeds no ledger.
-      return { state: s };
-    }),
-  marketCardReturned: (cardId, cardKey) =>
-    set((st) => {
-      if (st.state.inventory.some((o) => o.id === cardId)) return {}; // já voltou (outra aba/poll)
-      let s = _grantCard(st.state, cardKey, 'market', { id: cardId });
+  marketCardSold: (listingId, credits) => {
+    const st = get().state;
+    const tag = `sold:${listingId}`;
+    // [O0-37] já creditada NESTA conta (save sincronizado) ou neste aparelho (legado)
+    if (_hasSrvSeen(st, tag) || mktSeenHas(tag)) return false;
+    const n = Math.max(0, Math.trunc(credits));
+    const s = _markSrvSeen(n ? _addCredits(st, n) : st, [tag]);
+    persist(s);
+    set({ state: s });
+    // SEM mirror: o 'trade' do servidor já creditou os proceeds no ledger.
+    return true;
+  },
+  marketCardReturned: (listingId, cardId, cardKey) => {
+    const st = get().state;
+    const tag = `back:${listingId}`;
+    if (_hasSrvSeen(st, tag) || mktSeenHas(tag)) return false;
+    let s = _markSrvSeen(st, [tag]);
+    // já voltou (outra aba/poll): só anota a marca
+    if (!s.inventory.some((o) => o.id === cardId)) {
+      s = _grantCard(s, cardKey, 'market', { id: cardId });
       const meta = takeEscrowMeta(cardId);
       if (meta && (meta.boost || meta.style || meta.ed)) {
         s = {
@@ -1031,10 +1051,12 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
             : o)),
         };
       }
-      persist(s);
-      // SEM mirror: a devolução já tem perna 'escrow' (add) no ledger.
-      return { state: s };
-    }),
+    }
+    persist(s);
+    set({ state: s });
+    // SEM mirror: a devolução já tem perna 'escrow' (add) no ledger.
+    return true;
+  },
   marketBuyApply: (cardId, cardKey, price) =>
     set((st) => {
       let s = st.state;
@@ -1043,7 +1065,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       if (s.inventory.some((o) => o.id === cardId)) return {};
       s = _grantCard(s, cardKey, 'market', { id: cardId });
       // débito LOCAL do preço (não o saldo absoluto do servidor) — política
-      // local-vence do 3b: divergência é resolvida pela reconciliação do boot.
+      // do save até o O1-01 (O0-02): divergência com o servidor fica só no log.
       const p = Math.max(0, Math.trunc(price));
       // bazaarBuys herdado do bazar de IA (removido): agora conta compras no
       // Mercado entre managers — mantém a missão semanal "Olho no mercado"
@@ -1053,31 +1075,42 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       // SEM mirror: o 'trade' do servidor já debitou + moveu a carta no ledger.
       return { state: s };
     }),
-  unlockPremiumPaid: (orderId, orderSeason) => {
-    // Passe Premium PAGO (R$ 30,00 Pix/Stripe): o pedido "pass-s<N>" já foi
-    // pago (webhook) e claimado (passClaim) no servidor — aqui só liga o flag.
-    // premiumVia:'coins' = dinheiro real (renomear pra 'paid' exigiria migrar o
-    // save/codec; o significado está documentado em seasonPass.ts). A compra
-    // legada por credits (v1) permanece válida — nada retroativo.
+  absorbPaidVouchers: (vouchers, freshOrderIds = []) => {
+    // [O0-46] O servidor JÁ creditou (coinsClaim/passClaim gravam coins:<corr>
+    // e pass:<season> no ledger). Aqui só entra no save o que ele ainda não
+    // viu — nunca addCredits + grant, nunca espelho (seria crédito em dobro).
     const prev = get().state;
     const seasonNow = passSeasonId(prev.profile);
-    const pass = ensurePass(prev.profile.pass, seasonNow);
-    if (pass.premium) return { ok: true, already: true };
-    let s = _setPassPremium({ ...prev, profile: { ...prev.profile, pass } }, 'coins');
-    // [U09] benefício IMEDIATO e permanente: moldura Premium (cosmético) equipada se não houver outra
-    s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, ['pass-premium']), equippedFrame: s.profile.equippedFrame ?? 'pass-premium' } };
+    const fresh = new Set(freshOrderIds);
+    let s = prev;
+    let credited = 0;
+    let passUnlocked = false;
+    for (const v of vouchers) {
+      if (!v.opId || _hasSrvSeen(s, v.opId)) continue;
+      if (v.kind === 'coins') {
+        const n = Math.max(0, Math.trunc(v.credits));
+        if (n) { s = _addCredits(s, n); credited += n; }
+      } else {
+        // Passe Premium PAGO (R$ 30,00): vale pra temporada CORRENTE. Pedido
+        // recém-claimado de outra temporada (compra na borda do rollover)
+        // também honra a corrente — mesma regra de antes. Voucher de temporada
+        // passada absorvido depois (aparelho novo) só é anotado, não liga nada.
+        // premiumVia:'coins' = dinheiro real (renomear pra 'paid' exigiria
+        // migrar o save/codec; o significado está documentado em seasonPass.ts).
+        const pass = ensurePass(s.profile.pass, seasonNow);
+        if (!pass.premium && (v.season === seasonNow || fresh.has(v.orderId))) {
+          s = _setPassPremium({ ...s, profile: { ...s.profile, pass } }, 'coins');
+          // [U09] benefício IMEDIATO e permanente: moldura Premium (cosmético) equipada se não houver outra
+          s = { ...s, profile: { ...s.profile, frames: mergeFrames(s.profile.frames, ['pass-premium']), equippedFrame: s.profile.equippedFrame ?? 'pass-premium' } };
+          passUnlocked = true;
+        }
+      }
+      s = _markSrvSeen(s, [v.opId]);
+    }
+    if (s === prev) return { credited: 0, passUnlocked: false };
     persist(s);
     set({ state: s });
-    // creditsDelta = 0 — o 'grant' registra o desbloqueio no ledger-sombra.
-    // Comprado na borda do rollover (orderSeason ≠ temporada atual): honramos a
-    // temporada CORRENTE e anotamos a divergência no meta.
-    mirrorUltimateChange(prev, s, 'grant', {
-      src: 'pass-premium-paid',
-      orderId,
-      orderSeason,
-      ...(orderSeason !== seasonNow ? { honoredSeason: seasonNow } : {}),
-    });
-    return { ok: true };
+    return { credited, passUnlocked };
   },
   claimPassLevel: (level, track, preferRole = null) => {
     const st = get().state;
