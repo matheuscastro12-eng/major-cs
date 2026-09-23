@@ -1,7 +1,11 @@
 // Modo online: lobbies com código, draft sincronizado por polling.
 // A simulação é determinística no cliente (mesmo seed = mesmo resultado),
-// então o servidor guarda o estado do lobby, os picks e a barreira coletiva de
-// cada etapa do Major (todos prontos antes de avançar).
+// então o servidor guarda o estado do lobby e os snapshots de squad.
+//
+// [O0-45] Só o duelo do Ultimate (mode 'ultimate') segue vivo. O Online legado
+// (Major em grupo 'party', duelo 'duel' com veto de mapas) saiu: `create` recusa
+// esses modos e as ações dele respondem 410. O código do cliente legado
+// (OnlineScreen) não está no bundle e sai no O1-12.
 import { neon } from '@neondatabase/serverless';
 import { eventEligibility, type EventRule } from '../src/engine/ultimate/events.js'; // [U12]
 import { serverCatalogIndex } from '../server/ultimate-pack.js';
@@ -17,95 +21,22 @@ const RULESETS = new Set(['open', 'current', 'legends', 'brworld', 'era', 'ovrca
 const TACTICS = new Set(['balanced', 'aggressive', 'tactical', 'controlled']);
 const MAPS = new Set(['mirage', 'inferno', 'nuke', 'ancient', 'anubis', 'dust2', 'train']);
 const PLAYBACK_SPEEDS = new Set([0.5, 1, 2, 4, 8]);
-const VETO_ACTIONS = ['ban', 'ban', 'pick', 'pick', 'ban', 'ban'] as const;
-type MajorVetoAction = 'ban' | 'pick' | 'decider';
 
-interface MajorVetoState {
-  steps: { team: 0 | 1 | -1; action: MajorVetoAction; map: string }[];
-  remaining: string[];
-  bestOf: 1 | 3 | 5;
-  participants: [string | null, string | null];
-  maps?: { map: string; pickedBy: 0 | 1 | -1 }[];
-}
+// [O0-45] ações do Online legado (veto do duelo, Major em grupo, resultado
+// declarado pelo cliente). Respondem 410 em vez de sumir no "ação inválida": o
+// cliente velho em cache recebe um erro explícito. `nextSeason` fica fora da
+// lista porque a revanche do duelo do Ultimate usa ela (ver o handler).
+export const LEGACY_GONE_ACTIONS = new Set(['vetoAction', 'majorVetoAction', 'reportResult', 'startStage', 'advanceStage', 'readyStage']);
+export const LEGACY_GONE_MSG = 'Este modo online foi desativado. Jogue o duelo do Ultimate.';
 
-function majorVetoOrder(bestOf: 1 | 3 | 5): { team: 0 | 1 | -1; action: MajorVetoAction }[] {
-  if (bestOf === 5) return [
-    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
-    { team: 0, action: 'pick' }, { team: 1, action: 'pick' },
-    { team: 0, action: 'pick' }, { team: 1, action: 'pick' },
-    { team: -1, action: 'decider' },
-  ];
-  if (bestOf === 1) return [
-    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
-    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
-    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
-    { team: -1, action: 'decider' },
-  ];
-  return [
-    { team: 0, action: 'ban' }, { team: 1, action: 'ban' },
-    { team: 0, action: 'pick' }, { team: 1, action: 'pick' },
-    { team: 1, action: 'ban' }, { team: 0, action: 'ban' },
-    { team: -1, action: 'decider' },
-  ];
+// [O0-45] fila ranqueada (e fila de evento) DESLIGADA por padrão: o squad ainda
+// vem do cliente (OVR e química declarados), então o RP e o prêmio de evento
+// são forjáveis. Religa com RANKED_QUEUE_ENABLED=true depois do O0-05.
+export function rankedQueueEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  const v = clean(env.RANKED_QUEUE_ENABLED)?.toLowerCase();
+  return v === 'true' || v === '1';
 }
-
-function advanceMajorVeto(state: MajorVetoState, map: string): MajorVetoState {
-  const order = majorVetoOrder(state.bestOf);
-  const step = order[state.steps.length];
-  if (!step || step.action === 'decider' || !state.remaining.includes(map)) return state;
-  const remaining = state.remaining.filter((candidate) => candidate !== map);
-  const steps = [...state.steps, { ...step, map }];
-  if (steps.length === order.length - 1) {
-    const completedSteps = [...steps, { team: -1 as const, action: 'decider' as const, map: remaining[0] }];
-    return {
-      ...state,
-      steps: completedSteps,
-      remaining: [],
-      maps: completedSteps
-        .filter((entry) => entry.action === 'pick' || entry.action === 'decider')
-        .map((entry) => ({ map: entry.map, pickedBy: entry.action === 'decider' ? -1 : entry.team as 0 | 1 })),
-    };
-  }
-  return { ...state, steps, remaining };
-}
-
-interface VetoState {
-  step: number;
-  remaining: string[];
-  bans: { map: string; by: string }[];
-  picks: { map: string; by: string }[];
-  turn?: string;
-  deadline?: number;
-  maps?: string[];
-}
-
-function initialVeto(participants: string[]): VetoState {
-  return { step: 0, remaining: [...MAPS], bans: [], picks: [], turn: participants[0], deadline: Date.now() + 20_000 };
-}
-
-function advanceVeto(veto: VetoState, map: string, participants: string[]): VetoState {
-  if (!veto.remaining.includes(map) || participants.length < 2) return veto;
-  const action = VETO_ACTIONS[veto.step];
-  if (!action) return veto;
-  const by = veto.turn ?? participants[veto.step % 2];
-  const remaining = veto.remaining.filter((candidate) => candidate !== map);
-  const next: VetoState = {
-    ...veto,
-    step: veto.step + 1,
-    remaining,
-    bans: action === 'ban' ? [...veto.bans, { map, by }] : veto.bans,
-    picks: action === 'pick' ? [...veto.picks, { map, by }] : veto.picks,
-  };
-  if (next.step >= VETO_ACTIONS.length) {
-    next.turn = undefined;
-    next.deadline = undefined;
-    next.maps = [...next.picks.map((pick) => pick.map), ...remaining];
-  } else {
-    next.turn = participants[next.step % 2];
-    next.deadline = Date.now() + 20_000;
-  }
-  return next;
-}
+export const RANKED_QUEUE_OFF_MSG = 'A fila ranqueada está em manutenção. Jogue um amistoso por código enquanto isso.';
 
 function genCode(): string {
   let c = '';
@@ -229,24 +160,17 @@ async function migrateHostIfStale(sql: ReturnType<typeof neon>, code: string): P
 // Reavalia a barreira do draft depois de pick, kick ou saída voluntária. Sem
 // isso, quando o único jogador ainda não pronto saía, os restantes ficavam
 // presos em "drafting" para sempre.
-async function finishDraftIfReady(sql: ReturnType<typeof neon>, code: string, mode: string): Promise<void> {
+async function finishDraftIfReady(sql: ReturnType<typeof neon>, code: string): Promise<void> {
   const actives = await sql`
     SELECT nick, done FROM lobby_players
     WHERE code = ${code} AND COALESCE(spectator, false) = false
     ORDER BY joined_at ASC`;
   if (actives.length === 0 || !actives.every((player) => player.done === true)) return;
-  // duel E ultimate são 1v1: com <2 ativos a sala NÃO pode virar 'done' (senão
-  // um leave no drafting deixava o restante preso numa partida de 1 jogador).
-  if (mode === 'ultimate' && actives.length < 2) return;
-  if (mode === 'duel') {
-    if (actives.length < 2) return;
-    const participants = actives.map((player) => String(player.nick));
-    await sql`
-      UPDATE lobbies
-      SET status = 'veto', veto_state = ${JSON.stringify(initialVeto(participants))}::jsonb, updated_at = now()
-      WHERE code = ${code} AND status = 'drafting'`;
-    return;
-  }
+  // ultimate é 1v1: com <2 ativos a sala NÃO pode virar 'done' (senão um leave
+  // no drafting deixava o restante preso numa partida de 1 jogador). [O0-45] o
+  // ramo do 'duel' (drafting → veto de mapas) saiu junto com o modo, e o Major
+  // em grupo ('party', única sala com mais de 2) também.
+  if (actives.length < 2) return;
   await sql`
     UPDATE lobbies SET status = 'done', run_roster = (
       SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -404,7 +328,7 @@ export default async function handler(
                (SELECT COUNT(*) FROM lobby_players p WHERE p.code = l.code AND COALESCE(p.spectator, false) = false) AS players,
                (SELECT mmr FROM rtm_ranking rr WHERE lower(rr.nick) = lower(l.host) ORDER BY mmr DESC LIMIT 1) AS host_mmr
         FROM lobbies l
-        WHERE l.is_public = true AND l.status = 'waiting'
+        WHERE l.is_public = true AND l.status = 'waiting' AND l.mode = 'ultimate'
               AND COALESCE(l.last_ping, l.created_at) > now() - interval '180 seconds'
         ORDER BY l.created_at DESC LIMIT 30`;
       const rooms = rows
@@ -451,7 +375,7 @@ export default async function handler(
             await sql`UPDATE lobbies SET status = 'waiting', updated_at = now() WHERE code = ${code} AND status = 'drafting'`;
             lobby[0].status = 'waiting';
           } else {
-            await finishDraftIfReady(sql, code, String(lobby[0].mode));
+            await finishDraftIfReady(sql, code);
           }
         }
       }
@@ -460,17 +384,7 @@ export default async function handler(
                COALESCE(strategy, '{}'::jsonb) AS strategy, COALESCE(lineup, '{}'::jsonb) AS lineup, COALESCE(rollouts, '[]'::jsonb) AS rollouts,
                COALESCE(spectator, false) AS spectator, squad FROM lobby_players
         WHERE code = ${code} ORDER BY joined_at ASC`;
-      if (lobby[0].status === 'veto') {
-        const participants = players.filter((player) => !player.spectator).map((player) => String(player.nick));
-        const veto = lobby[0].veto as VetoState;
-        if (veto.deadline && veto.deadline <= Date.now() && veto.remaining?.length) {
-          const advanced = advanceVeto(veto, veto.remaining[0], participants);
-          const nextStatus = advanced.maps ? 'done' : 'veto';
-          await sql`UPDATE lobbies SET veto_state = ${JSON.stringify(advanced)}::jsonb, status = ${nextStatus}, updated_at = now() WHERE code = ${code}`;
-          lobby[0].veto = advanced;
-          lobby[0].status = nextStatus;
-        }
-      }
+      // [O0-45] o GET não muta mais o veto do duelo legado (ONLI-09): o modo saiu.
       const stateForEtag = {
         lobby: { ...lobby[0], seed: Number(lobby[0].seed), run_seed: Number(lobby[0].run_seed), stage: Number(lobby[0].stage), stage_started_at: Number(lobby[0].stage_started_at), playback_speed: Number(lobby[0].playback_speed) },
         players: players.map((p) => ({ ...p, ready_stage: Number(p.ready_stage) })),
@@ -500,7 +414,9 @@ export default async function handler(
     return;
   }
 
-  const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
+  let parsed: unknown = req.body;
+  try { if (typeof req.body === 'string') parsed = JSON.parse(req.body); } catch { res.status(400).json({ error: 'corpo inválido' }); return; }
+  const body = (parsed ?? {}) as {
     action?: string;
     code?: string;
     nick?: string;
@@ -534,6 +450,9 @@ export default async function handler(
   const nick = String(body.nick ?? '').trim().slice(0, 20);
   const code = String(body.code ?? '').toUpperCase().slice(0, 5);
 
+  // [O0-45] Online legado: 410 Gone (antes do rate-limit — não custa nada).
+  if (LEGACY_GONE_ACTIONS.has(action)) { res.status(410).json({ error: LEGACY_GONE_MSG, gone: true }); return; }
+
   // rate-limit: protege o Neon de flood casual. ping é frequente (heartbeat),
   // então tem teto próprio; create é caro, teto estrito.
   const ip = clientIp(req.headers);
@@ -551,7 +470,10 @@ export default async function handler(
         res.status(400).json({ error: 'nick obrigatório' });
         return;
       }
-      const mode = body.mode === 'party' ? 'party' : body.mode === 'ultimate' ? 'ultimate' : 'duel';
+      // [O0-45] só o duelo do Ultimate nasce aqui. 'party' (Major em grupo) e
+      // 'duel' (1v1 com veto) eram do Online legado — o default antigo era 'duel'.
+      if (body.mode !== 'ultimate') { res.status(410).json({ error: LEGACY_GONE_MSG, gone: true }); return; }
+      const mode = 'ultimate';
       const pool = body.pool === 'br' ? 'br' : 'world';
       const ruleset = RULESETS.has(String(body.ruleset)) ? String(body.ruleset) : 'open';
       // [U12] sala privada de EVENTO: exige evento ativo; a regra é validada no pick
@@ -559,7 +481,9 @@ export default async function handler(
       if (evId && !(await activeEventById(sql, evId))) { res.status(400).json({ error: 'evento indisponível' }); return; }
       const name = (typeof body.name === 'string' ? body.name : '').trim().slice(0, 40) || null;
       const isPublic = body.isPublic === true;
-      const ranked = body.ranked === true;
+      // [O0-45] sala criada pelo cliente NUNCA é ranqueada (ONLI-03/SEGU-03): a
+      // ranqueada só nasce pareada pelo servidor (fila). `body.ranked` é ignorado.
+      const ranked = false;
       const draftRollouts = Math.max(0, Math.min(5, body.draftRollouts == null ? 2 : Number(body.draftRollouts) || 0));
       const seed = Math.floor(Math.random() * 2147483647);
       // fecha salas inativas: ninguém com a aba aberta há mais de 2min (sem
@@ -584,6 +508,13 @@ export default async function handler(
     }
 
     // ── FILA RANQUEADA (Ultimate PvP): entra → pareia por elo → sala automática ──
+    // [O0-45] fila desligada por flag: entrar e manter o ticket respondem 503
+    // (o cliente mostra o `error`). Sair da fila segue funcionando.
+    if ((action === 'queueJoin' || action === 'queuePoll') && !rankedQueueEnabled()) {
+      res.status(503).json({ ok: false, disabled: true, error: RANKED_QUEUE_OFF_MSG });
+      return;
+    }
+
     if (action === 'queueJoin') {
       if (!nick) { res.status(400).json({ error: 'nick obrigatório' }); return; }
       const elo = Math.max(0, Math.min(5000, Math.round(Number(body.elo) || 1000)));
@@ -736,7 +667,7 @@ export default async function handler(
       // se estava no draft, reavalia a barreira: remover um AFK que não terminou
       // pode liberar o avanço dos que já estão prontos (não trava mais).
       if (lobby[0].status === 'drafting') {
-        await finishDraftIfReady(sql, code, String(lobby[0].mode));
+        await finishDraftIfReady(sql, code);
       }
       res.status(200).json({ ok: true });
       return;
@@ -760,7 +691,7 @@ export default async function handler(
     if (action === 'leave') {
       // saída limpa: remove o jogador e migra o host se quem saiu era o host
       if (!code || !nick) { res.status(200).json({ ok: false }); return; }
-      const room = await sql`SELECT mode, status FROM lobbies WHERE code = ${code}`;
+      const room = await sql`SELECT status FROM lobbies WHERE code = ${code}`;
       const wasHost = await sql`SELECT 1 FROM lobbies WHERE code = ${code} AND lower(host) = ${nick.toLowerCase()}`;
       await sql`DELETE FROM lobby_players WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()}`;
       if (wasHost.length > 0) {
@@ -772,7 +703,7 @@ export default async function handler(
         else await sql`DELETE FROM lobbies WHERE code = ${code}`; // ninguém sobrou
       }
       if (room[0]?.status === 'drafting') {
-        await finishDraftIfReady(sql, code, String(room[0].mode));
+        await finishDraftIfReady(sql, code);
       }
       res.status(200).json({ ok: true });
       return;
@@ -796,246 +727,28 @@ export default async function handler(
       return;
     }
 
-    if (action === 'vetoAction') {
-      const map = String(body.map ?? '');
-      const lobby = await sql`SELECT status, COALESCE(veto_state, '{}'::jsonb) AS veto FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0 || lobby[0].status !== 'veto') {
-        res.status(409).json({ error: 'o veto não está em andamento' });
-        return;
-      }
-      const participantsRows = await sql`SELECT nick FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false ORDER BY joined_at ASC`;
-      const participants = participantsRows.map((player) => String(player.nick));
-      const veto = lobby[0].veto as VetoState;
-      if (String(veto.turn).toLowerCase() !== nick.toLowerCase()) {
-        res.status(403).json({ error: 'aguarde sua vez' });
-        return;
-      }
-      if (!MAPS.has(map) || !veto.remaining.includes(map)) {
-        res.status(400).json({ error: 'mapa indisponível' });
-        return;
-      }
-      const advanced = advanceVeto(veto, map, participants);
-      const nextStatus = advanced.maps ? 'done' : 'veto';
-      await sql`UPDATE lobbies SET veto_state = ${JSON.stringify(advanced)}::jsonb, status = ${nextStatus}, updated_at = now() WHERE code = ${code}`;
-      res.status(200).json({ ok: true, veto: advanced, status: nextStatus });
-      return;
-    }
-
     if (action === 'nextSeason') {
-      // host reinicia a sala numa nova temporada: novo sorteio (transferências),
-      // todos draftam de novo e disputam outro Major. Mantém os mesmos jogadores.
+      // REVANCHE do duelo do Ultimate: o host reabre a MESMA sala com run_seed
+      // novo e os mesmos squads (status continua 'done', os dois clientes
+      // simulam a série nova). [O0-45] a "próxima temporada" do Online legado
+      // (redraft, Major em grupo, veto do duelo) saiu: fora disso é 410.
       const lobby = await sql`SELECT host, status, mode FROM lobbies WHERE code = ${code}`;
+      if (lobby.length > 0 && (lobby[0].mode !== 'ultimate' || body.keepRoster !== true)) {
+        res.status(410).json({ error: LEGACY_GONE_MSG, gone: true });
+        return;
+      }
       if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
-        res.status(403).json({ error: 'só o host inicia a próxima temporada' });
+        res.status(403).json({ error: 'só o host pede revanche' });
         return;
       }
       if (lobby[0].status !== 'done') {
-        res.status(409).json({ error: 'a temporada ainda não acabou' });
+        res.status(409).json({ error: 'a partida ainda não acabou' });
         return;
       }
       const newSeed = Math.floor(Math.random() * 2147483647);
-      const keepRoster = body.keepRoster === true;
-      if (keepRoster) {
-        const participantRows = await sql`SELECT nick FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false ORDER BY joined_at ASC`;
-        const participants = participantRows.map((player) => String(player.nick));
-        const duelVeto = lobby[0].mode === 'duel' ? initialVeto(participants) : {};
-        const nextStatus = lobby[0].mode === 'duel' ? 'veto' : 'done';
-        await sql`UPDATE lobbies SET status = ${nextStatus}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, stage_started_at = 0, veto_state = ${JSON.stringify(duelVeto)}::jsonb, major_vetos = '{}'::jsonb, stage_results = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
-        // novo Major mantendo elencos: re-congela o snapshot (mesmos jogadores, run_seed novo)
-        if (lobby[0].mode === 'party') {
-          await sql`UPDATE lobbies SET run_roster = (
-            SELECT COALESCE(jsonb_agg(jsonb_build_object(
-              'nick', nick, 'picks', COALESCE(picks, '[]'::jsonb), 'coach_pick', COALESCE(coach_pick, ''),
-              'strategy', COALESCE(strategy, '{}'::jsonb), 'lineup', COALESCE(lineup, '{}'::jsonb), 'rollouts', COALESCE(rollouts, '[]'::jsonb)
-            ) ORDER BY joined_at ASC), '[]'::jsonb)
-            FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false
-          ) WHERE code = ${code}`;
-        }
-        await sql`UPDATE lobby_players SET ready_stage = -1 WHERE code = ${code}`;
-      } else {
-        await sql`UPDATE lobbies SET status = 'drafting', seed = ${newSeed}, run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, stage_started_at = 0, veto_state = '{}'::jsonb, major_vetos = '{}'::jsonb, run_roster = NULL, stage_results = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
-        await sql`UPDATE lobby_players SET picks = '[]'::jsonb, coach_pick = '', strategy = '{}'::jsonb, lineup = '{}'::jsonb, rollouts = '[]'::jsonb, done = false, ready_stage = -1 WHERE code = ${code}`;
-      }
-      res.status(200).json({ ok: true, seed: newSeed, keepRoster });
-      return;
-    }
-
-    if (action === 'readyStage') {
-      const requestedStage = Math.max(0, Math.min(40, Number(body.stage) || 0));
-      const lobby = await sql`
-        SELECT status, mode, COALESCE(stage, 0) AS stage
-        FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0) {
-        res.status(404).json({ error: 'lobby não encontrado' });
-        return;
-      }
-      const currentStage = Number(lobby[0].stage);
-      if (lobby[0].status !== 'done' || lobby[0].mode !== 'party') {
-        res.status(409).json({ error: 'o Major em grupo não está em andamento' });
-        return;
-      }
-      if (requestedStage !== currentStage) {
-        res.status(409).json({ error: 'etapa desatualizada', stage: currentStage });
-        return;
-      }
-      const updated = await sql`
-        UPDATE lobby_players SET ready_stage = ${currentStage}
-        WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()} AND COALESCE(spectator, false) = false
-        RETURNING id`;
-      if (updated.length === 0) {
-        res.status(404).json({ error: 'jogador não está neste lobby' });
-        return;
-      }
-      res.status(200).json({ ok: true, stage: currentStage, advanced: false });
-      return;
-    }
-
-    if (action === 'majorVetoAction') {
-      const map = String(body.map ?? '');
-      const matchKey = String(body.matchKey ?? '').slice(0, 180);
-      const bestOf = ([1, 3, 5].includes(Number(body.bestOf)) ? Number(body.bestOf) : 3) as 1 | 3 | 5;
-      const requestedParticipants = Array.isArray(body.participants)
-        ? body.participants.slice(0, 2).map((value) => typeof value === 'string' && value.trim() ? value.trim().slice(0, 20) : null) as [string | null, string | null]
-        : [null, null] as [null, null];
-      const lobby = await sql`SELECT status, mode, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0) {
-        res.status(404).json({ error: 'lobby não encontrado' });
-        return;
-      }
-      if (lobby[0].status !== 'done' || lobby[0].mode !== 'party') {
-        res.status(409).json({ error: 'o veto do Major não está disponível' });
-        return;
-      }
-      if (Number(lobby[0].stage_started_at) > 0) {
-        res.status(409).json({ error: 'a rodada já começou' });
-        return;
-      }
-      const stage = Number(lobby[0].stage);
-      if (!matchKey.startsWith(`${stage}:`) || !MAPS.has(map)) {
-        res.status(400).json({ error: 'ação de veto inválida' });
-        return;
-      }
-      const lobbyPlayers = await sql`SELECT nick FROM lobby_players WHERE code = ${code} AND COALESCE(spectator, false) = false`;
-      const canonicalPlayer = lobbyPlayers.find((player) => String(player.nick).toLowerCase() === nick.toLowerCase());
-      const pairingKey = matchKey.slice(`${stage}:`.length);
-      const requesterTeamId = `online_${String(canonicalPlayer?.nick ?? nick)}`;
-      const ownsMatch = pairingKey.startsWith(`${requesterTeamId}|`) || pairingKey.endsWith(`|${requesterTeamId}`);
-      if (!canonicalPlayer || !ownsMatch) {
-        res.status(403).json({ error: 'este confronto não pertence ao jogador' });
-        return;
-      }
-      const validPlayers = new Set(lobbyPlayers.map((player) => String(player.nick).toLowerCase()));
-      if (!validPlayers.has(nick.toLowerCase()) || !requestedParticipants.some((participant) => participant?.toLowerCase() === nick.toLowerCase())) {
-        res.status(403).json({ error: 'somente jogadores podem vetar mapas' });
-        return;
-      }
-      const allVetos = lobby[0].major_vetos as Record<string, MajorVetoState>;
-      const current = allVetos[matchKey] ?? { steps: [], remaining: [...MAPS], bestOf, participants: requestedParticipants };
-      const step = majorVetoOrder(current.bestOf)[current.steps.length];
-      if (!step || step.team === -1 || current.maps) {
-        res.status(409).json({ error: 'o veto já terminou' });
-        return;
-      }
-      const expectedPlayer = current.participants[step.team];
-      const isHumanTurn = expectedPlayer !== null;
-      const requesterIsParticipant = current.participants.some((participant) => participant?.toLowerCase() === nick.toLowerCase());
-      if ((isHumanTurn && expectedPlayer!.toLowerCase() !== nick.toLowerCase()) || (!isHumanTurn && !requesterIsParticipant)) {
-        res.status(403).json({ error: 'aguarde sua vez no veto' });
-        return;
-      }
-      const advanced = advanceMajorVeto(current, map);
-      const entry = JSON.stringify({ [matchKey]: advanced });
-      await sql`UPDATE lobbies SET major_vetos = COALESCE(major_vetos, '{}'::jsonb) || ${entry}::jsonb, updated_at = now() WHERE code = ${code}`;
-      res.status(200).json({ ok: true, stage, veto: advanced });
-      return;
-    }
-
-    if (action === 'startStage') {
-      const requiredVetoKeys = Array.isArray(body.requiredVetoKeys)
-        ? body.requiredVetoKeys.filter((value): value is string => typeof value === 'string').slice(0, 8)
-        : [];
-      const lobby = await sql`SELECT host, status, mode, COALESCE(stage_started_at, 0) AS stage_started_at, COALESCE(major_vetos, '{}'::jsonb) AS major_vetos FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
-        res.status(403).json({ error: 'somente o host inicia a rodada' });
-        return;
-      }
-      if (lobby[0].status !== 'done' || lobby[0].mode !== 'party') {
-        res.status(409).json({ error: 'o Major em grupo não está em andamento' });
-        return;
-      }
-      // vetos pendentes NÃO travam a rodada: a simulação faz auto-veto determinístico
-      // dos confrontos sem veto manual (online.ts). Antes, um veto que não fechava
-      // (modal fechado na vez da IA, jogador que não vetou) congelava a sala inteira.
-      void requiredVetoKeys;
-      const startedAt = Number(lobby[0].stage_started_at) || Date.now() + 3_000;
-      await sql`UPDATE lobbies SET stage_started_at = ${startedAt}, updated_at = now() WHERE code = ${code}`;
-      res.status(200).json({ ok: true, startedAt });
-      return;
-    }
-
-    if (action === 'reportResult') {
-      // o dono da partida reporta SÓ o desfecho (vencedor + placar de mapas).
-      // first-write-wins: o primeiro report daquele confronto vira a verdade.
-      const matchKey = typeof body.matchKey === 'string' ? body.matchKey : '';
-      const winner = Number(body.winner);
-      const ms = Array.isArray(body.mapScore) ? body.mapScore.map((n) => Math.max(0, Math.min(9, Number(n) || 0))) : null;
-      const lobby = await sql`SELECT status, mode, COALESCE(stage, 0) AS stage FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0 || lobby[0].status !== 'done' || lobby[0].mode !== 'party') {
-        res.status(409).json({ error: 'o Major em grupo não está em andamento' });
-        return;
-      }
-      const stage = Number(lobby[0].stage);
-      const pairingKey = matchKey.startsWith(`${stage}:`) ? matchKey.slice(`${stage}:`.length) : '';
-      const member = await sql`
-        SELECT nick FROM lobby_players
-        WHERE code = ${code} AND lower(nick) = ${nick.toLowerCase()} AND COALESCE(spectator, false) = false`;
-      const requesterTeamId = `online_${String(member[0]?.nick ?? nick)}`;
-      const ownsMatch = pairingKey.startsWith(`${requesterTeamId}|`) || pairingKey.endsWith(`|${requesterTeamId}`);
-      if (
-        !pairingKey || !ownsMatch || member.length === 0 ||
-        (winner !== 0 && winner !== 1) || !ms || ms.length !== 2 ||
-        ms.some((score) => score > 3) || ms[winner] <= ms[winner === 0 ? 1 : 0]
-      ) {
-        res.status(400).json({ error: 'resultado inválido' });
-        return;
-      }
-      const entry = JSON.stringify({ [matchKey]: { winner, mapScore: ms } });
-      await sql`UPDATE lobbies SET stage_results = COALESCE(stage_results, '{}'::jsonb) || ${entry}::jsonb, updated_at = now()
-        WHERE code = ${code} AND NOT (COALESCE(stage_results, '{}'::jsonb) ? ${matchKey})`;
-      res.status(200).json({ ok: true });
-      return;
-    }
-
-    if (action === 'advanceStage') {
-      const lobby = await sql`SELECT host, status, mode, COALESCE(stage, 0) AS stage, COALESCE(stage_started_at, 0) AS stage_started_at FROM lobbies WHERE code = ${code}`;
-      if (lobby.length === 0 || String(lobby[0].host).toLowerCase() !== nick.toLowerCase()) {
-        res.status(403).json({ error: 'somente o host avança a rodada' });
-        return;
-      }
-      const currentStage = Number(lobby[0].stage);
-      if (lobby[0].status !== 'done' || lobby[0].mode !== 'party' || Number(lobby[0].stage_started_at) === 0) {
-        res.status(409).json({ error: 'a rodada ainda não começou' });
-        return;
-      }
-      // só bloqueia por quem está PRESENTE (heartbeat recente); jogador que caiu
-      // não trava a sala. force = host avança na marra (estado é determinístico).
-      if (body.force !== true) {
-        const pending = await sql`
-          SELECT COUNT(*) AS n FROM lobby_players
-          WHERE code = ${code} AND COALESCE(spectator, false) = false
-            AND COALESCE(ready_stage, -1) < ${currentStage}
-            AND COALESCE(last_seen, joined_at) > now() - interval '150 seconds'`;
-        if (Number(pending[0].n) > 0) {
-          res.status(409).json({ error: 'ainda há jogadores assistindo suas partidas' });
-          return;
-        }
-      }
-      const advanced = await sql`
-        UPDATE lobbies SET stage = ${currentStage + 1}, stage_started_at = 0, updated_at = now()
-        WHERE code = ${code} AND COALESCE(stage, 0) = ${currentStage}
-        RETURNING stage`;
-      const nextStage = advanced.length ? Number(advanced[0].stage) : currentStage;
-      res.status(200).json({ ok: true, stage: nextStage, advanced: nextStage > currentStage });
+      await sql`UPDATE lobbies SET status = 'done', run_seed = ${newSeed}, season = COALESCE(season, 1) + 1, stage = 0, stage_started_at = 0, veto_state = '{}'::jsonb, major_vetos = '{}'::jsonb, stage_results = '{}'::jsonb, updated_at = now() WHERE code = ${code}`;
+      await sql`UPDATE lobby_players SET ready_stage = -1 WHERE code = ${code}`;
+      res.status(200).json({ ok: true, seed: newSeed, keepRoster: true });
       return;
     }
 
@@ -1122,10 +835,7 @@ export default async function handler(
         res.status(404).json({ error: 'jogador não está neste lobby' });
         return;
       }
-      if (done) {
-        const room = await sql`SELECT mode FROM lobbies WHERE code = ${code}`;
-        if (room.length) await finishDraftIfReady(sql, code, String(room[0].mode));
-      }
+      if (done) await finishDraftIfReady(sql, code);
       res.status(200).json({ ok: true });
       return;
     }

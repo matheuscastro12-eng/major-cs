@@ -42,6 +42,8 @@ const K_WIN = 25, K_LOSS = 20, K_PLACE = 40;
 // [W1] pódio semanal da Série do Dia só premia com campo mínimo (espelha
 // WEEK_PRIZE_MIN_FIELD em src/engine/rtp/weeklyTitles.ts).
 const WEEK_PRIZE_MIN_FIELD = 5;
+// [O0-45] modos cujo report ranqueado é aceito (1v1, pareamento zero-soma).
+export const RANKED_REPORT_MODES = ['ultimate', 'duel'];
 
 // temporada = mês. Número 1-indexado a partir de jan/2026 (Temporada 6 = jun/2026).
 function seasonNow() {
@@ -124,10 +126,9 @@ function dailyDayNow(): number {
   return Math.max(1, days + 1);
 }
 
-export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[] | undefined> },
-  res: Res,
-) {
+type Req = { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[] | undefined> };
+
+export default async function handler(req: Req, res: Res) {
   // GET é permitido só pros públicos (ladder/champions) pra o s-maxage valer no
   // edge (a Vercel NÃO cacheia POST). me/report seguem POST (autenticados).
   if (req.method !== 'POST' && req.method !== 'GET') { res.status(405).json({ error: 'method' }); return; }
@@ -640,7 +641,7 @@ export default async function handler(
     // código = cliente antigo → não pontua (resposta 200 pra não poluir o
     // console; o cliente ignora o corpo).
     if (!code) { res.status(200).json({ applied: false, legacy: true, delta: 0, me: await myRow(), ...seasonInfo }); return; }
-    // partida precisa existir, ser RANQUEADA (qualquer modo online) e o
+    // partida precisa existir, ser RANQUEADA (modo 1v1, ver abaixo) e o
     // reporter precisa ter jogado nela (participante não-espectador). O nick
     // DENTRO do lobby pode diferir do nick do ladder (o Ultimate joga com
     // sufixo anti-colisão, ex. 'Manager#AB12') — vem em body.lobbyNick; o
@@ -649,6 +650,10 @@ export default async function handler(
     const lb = await sql`SELECT ranked, mode, created_at FROM lobbies WHERE code=${code}`;
     if (!lb.length) { res.status(404).json({ error: 'partida não encontrada' }); return; }
     if (!lb[0].ranked) { res.status(400).json({ error: 'partida não é ranqueada' }); return; }
+    // [O0-45] só modos 1v1 com pareamento zero-soma pontuam. O ramo que aplicava
+    // o `won` declarado direto (Major em grupo 'party', sem contraparte) era o
+    // farm de +150 MMR/min (ONLI-03/SEGU-03) e saiu junto com o modo.
+    if (!RANKED_REPORT_MODES.includes(String(lb[0].mode))) { res.status(400).json({ error: 'modo não ranqueado' }); return; }
     const inLobby = await sql`SELECT 1 FROM lobby_players WHERE code=${code} AND lower(nick)=lower(${lobbyNick}) AND COALESCE(spectator, false) = false`;
     if (!inLobby.length) { res.status(403).json({ error: 'você não jogou essa partida' }); return; }
     // 1 report por jogador por partida (PK code+email) — refresh não duplica.
@@ -658,30 +663,7 @@ export default async function handler(
     // evento) conta 1 partida pra semana e pra conta. Nunca falha o report.
     await bumpCommunityContrib(sql as unknown as SqlTag, Date.now(), email);
 
-    // pareamento zero-soma vale pros modos 1v1 (duelo do Ultimate e Ranked 1v1
-    // 'duel' do online). Nos modos ranqueados NÃO-zero-soma (Major/gauntlet)
-    // os dois humanos podem vencer legitimamente (placement) — aplica direto,
-    // protegido pelo dedupe por partida + checagem de participante acima.
-    const ZERO_SUM_MODES = ['ultimate', 'duel'];
-    if (!ZERO_SUM_MODES.includes(String(lb[0].mode))) {
-      const solo = await applyRanked(email, won);
-      await sql`UPDATE rtm_match_reports SET status='applied' WHERE code=${code} AND email=${email}`;
-      if (!solo) { res.status(200).json({ applied: false, delta: 0, me: await myRow(), ...seasonInfo }); return; }
-      await notifyOvertakes(email, solo); // [URG-3]
-      const db = divFor(solo.before, solo.gamesBefore);
-      const da = divFor(solo.after, solo.gamesAfter);
-      res.status(200).json({
-        applied: true, delta: solo.delta, before: solo.before, after: solo.after,
-        division: da, divisionBefore: db,
-        promoted: da !== db && solo.after > solo.before,
-        demoted: da !== db && solo.after < solo.before,
-        placing: solo.gamesAfter < PLACEMENT_GAMES, placementLeft: Math.max(0, PLACEMENT_GAMES - solo.gamesAfter),
-        placedNow: solo.gamesBefore < PLACEMENT_GAMES && solo.gamesAfter >= PLACEMENT_GAMES,
-        me: await myRow(),
-      });
-      return;
-    }
-
+    // pareamento zero-soma: o MMR só entra quando os dois lados batem (ou pela carência).
     const other = await sql`SELECT email, nick, won, status FROM rtm_match_reports WHERE code=${code} AND email<>${email} LIMIT 1`;
     const outcome = decidePair(
       won,
