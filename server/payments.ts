@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import Stripe from 'stripe';
+import { appSecret } from './auth.js';
 
 const DEFAULT_PAYMENT_LINK = 'https://buy.stripe.com/4gM3cv4zGa2Vfcx5jQ1RC01';
 export const DEFAULT_PRICE_ID = 'price_1Tkp7NEHvCNyCbcUcYzHFZvK';
@@ -37,14 +38,11 @@ export async function renumberFounders(sql: SqlTag, limit = founderLimit()): Pro
            OR a.is_founder IS DISTINCT FROM (o.rn <= ${limit}))`;
 }
 
-export function appSecret(): string {
-  return cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
-}
-
 export function normalizeEmail(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().slice(0, 200);
 }
 
+// assinado com o segredo de server/auth.ts (falha fechada: sem APP_SECRET, lança).
 export function accountReference(email: string): string {
   const digest = createHmac('sha256', appSecret()).update(normalizeEmail(email)).digest('hex');
   return `acct_${digest}`;

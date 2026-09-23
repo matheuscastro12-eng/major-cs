@@ -5,7 +5,7 @@
 // do cloud-save). packOpen (fase 2) rola o pack NO SERVIDOR com as mesmas odds
 // do engine do cliente — seed auditável no ledger, replay idempotente.
 import { neon } from '@neondatabase/serverless';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
 import {
   applyUltTransaction,
   getUltState,
@@ -34,7 +34,6 @@ import { loadMktCardLookup, loadPackModule } from '../server/ultimate-catalog-la
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
-const APP_SECRET = () => clean(process.env.APP_SECRET) || `fallback:${clean(process.env.DATABASE_URL) ?? 'dev'}`;
 
 const rlBuckets = new Map<string, { count: number; resetAt: number }>();
 let schemaReady = false;
@@ -57,23 +56,15 @@ function clientIp(headers?: Record<string, string | string[] | undefined>): stri
   return value.split(',')[0].trim() || 'unknown';
 }
 
-function verifyToken(token: string): string | null {
-  const [b64, sig] = (token ?? '').split('.');
-  if (!b64 || !sig) return null;
-  const body = Buffer.from(b64, 'base64url').toString();
-  const expect = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
-  const sb = Buffer.from(sig); const eb = Buffer.from(expect);
-  if (sb.length !== eb.length || !timingSafeEqual(sb, eb)) return null;
-  const [email, exp] = body.split('|');
-  if (!email || Number(exp) < Math.floor(Date.now() / 1000)) return null;
-  return email;
-}
+// token de conta: server/auth.ts (falha fechada sem APP_SECRET).
+const verifyToken = verifyAccountToken;
 
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
+  if (respondMissingSecret(res)) return; // falha fechada (SEGU-10)
   const ip = clientIp(req.headers);
   if (rateLimited(`ip:${ip}`, 180)) {
     res.setHeader('Retry-After', '60');

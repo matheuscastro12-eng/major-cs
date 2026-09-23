@@ -5,7 +5,8 @@
 // - checkout: cria a URL do Payment Link ligada à conta autenticada.
 // - claim: confirma a sessão do Stripe no retorno; o webhook é a fonte principal.
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import { scryptSync, randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
+import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { respondMissingSecret, signAccountToken, verifyAccountToken } from '../server/auth.js';
 import {
   accountReference,
   checkoutBelongsToAccount,
@@ -25,8 +26,6 @@ import { restorableCoins } from '../server/coin-restore.js';
 import { mailConfigured, sendMail } from '../server/mail.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
-const APP_SECRET = () => cleanEnv(process.env.APP_SECRET) || `fallback:${cleanEnv(process.env.DATABASE_URL) || 'dev'}`;
-const TTL = 60 * 60 * 24 * 180; // 180 dias
 // Edição Fundador: selo numerado vitalício pros primeiros que pagam (teto configurável).
 const FOUNDER_LIMIT = Number(cleanEnv(process.env.FOUNDER_LIMIT) || '500') || 500;
 let accountSchemaPromise: Promise<void> | null = null;
@@ -102,11 +101,9 @@ function verifyPw(pw: string, stored: string): boolean {
   const orig = Buffer.from(h, 'hex');
   return calc.length === orig.length && timingSafeEqual(calc, orig);
 }
-function sign(email: string): string {
-  const body = `${email}|${Math.floor(Date.now() / 1000) + TTL}`;
-  const sig = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
-  return `${Buffer.from(body).toString('base64url')}.${sig}`;
-}
+// token de conta (HMAC com APP_SECRET, 180 dias) — implementação em server/auth.ts.
+const sign = signAccountToken;
+const verifyToken = verifyAccountToken;
 // Tiers de coins do Ultimate (Pix via Woovi). Valor cresce por real gasto pra
 // recompensar o tier maior: R$10 → 30k, R$15 → 50k (+11%), R$30 → 120k (+33%).
 const COIN_TIERS: Record<string, { cents: number; coins: number; label: string }> = {
@@ -114,18 +111,6 @@ const COIN_TIERS: Record<string, { cents: number; coins: number; label: string }
   p15: { cents: 1500, coins: 50000, label: 'Pacote Elite' },
   p30: { cents: 3000, coins: 120000, label: 'Pacote Lendário' },
 };
-
-function verifyToken(token: string): string | null {
-  const [b64, sig] = (token ?? '').split('.');
-  if (!b64 || !sig) return null;
-  const body = Buffer.from(b64, 'base64url').toString();
-  const expect = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
-  const sb = Buffer.from(sig); const eb = Buffer.from(expect);
-  if (sb.length !== eb.length || !timingSafeEqual(sb, eb)) return null;
-  const [email, exp] = body.split('|');
-  if (!email || Number(exp) < Math.floor(Date.now() / 1000)) return null;
-  return email;
-}
 
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string },
@@ -152,6 +137,8 @@ export default async function handler(
 
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
   res.setHeader('Cache-Control', 'no-store');
+  // falha fechada: sem APP_SECRET nenhum token é assinado nem aceito (SEGU-10).
+  if (respondMissingSecret(res)) return;
   const dbUrl = cleanEnv(process.env.DATABASE_URL);
   if (!dbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
   const sql = neon(dbUrl);
