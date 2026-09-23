@@ -73,6 +73,8 @@ const LiveopsCRM = lazyWithReload(() => import('./components/LiveopsCRM').then((
 const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
 const HallScreen = lazyWithReload(() => import('./components/HallScreen').then((m) => ({ default: m.HallScreen })));
 const LabScreen = lazyWithReload(() => import('./components/LabScreen').then((m) => ({ default: m.LabScreen })));
+// style guide do design system "Broadcast Desk" (/design) — fora do bundle das telas
+const DesignScreen = lazyWithReload(() => import('./pages/DesignScreen').then((m) => ({ default: m.DesignScreen })));
 const UltimateSquadScreen = lazyWithReload(() => import('./components/ultimate/UltimateSquadScreen').then((m) => ({ default: m.UltimateSquadScreen })));
 const RoadToPro = lazyWithReload(() => import('./components/rtp/RoadToPro').then((m) => ({ default: m.RoadToPro })));
 
@@ -155,7 +157,8 @@ type Screen =
   | 'liveopsCRM'
   | 'privacy'
   | 'terms'
-  | 'refund';
+  | 'refund'
+  | 'design';
 
 const SCREEN_PATH: Record<Screen, string> = {
   landing: '/',
@@ -186,6 +189,18 @@ const SCREEN_PATH: Record<Screen, string> = {
   privacy: '/privacidade',
   terms: '/termos',
   refund: '/reembolso',
+  design: '/design',
+};
+
+// Modo de cada tela → acento do design system (tokens.css: [data-mode]). Telas
+// fora da lista (hub, landing, Major rápido) ficam com o acento base.
+const SCREEN_MODE: Partial<Record<Screen, 'carreira' | 'rtp' | 'ultimate' | 'diario' | 'online'>> = {
+  career: 'carreira',
+  careerSaves: 'carreira',
+  rtp: 'rtp',
+  ultimate: 'ultimate',
+  daily: 'diario',
+  online: 'online',
 };
 
 const PATH_SCREEN: Record<string, Screen> = Object.fromEntries(
@@ -572,11 +587,19 @@ export default function App() {
     popNavigationRef.current = false;
   }, [screen, bannerPreview]);
 
+  // acento do modo no <html>: vale também pra modais portados ao body
+  useEffect(() => {
+    const mode = SCREEN_MODE[screen];
+    if (mode) document.documentElement.dataset.mode = mode;
+    else delete document.documentElement.dataset.mode;
+  }, [screen]);
+
   // título da aba acompanha a tela (cara mais profissional, abas distinguíveis)
   useEffect(() => {
     const TITLES: Partial<Record<Screen, string>> = {
       draft: 'Draft', hub: 'Campeonato', veto: 'Veto de mapas', match: 'Partida ao vivo',
       final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama',
+      design: 'Design system',
       stats: 'Estatísticas', admin: 'Admin',
       privacy: 'Privacidade', terms: 'Termos', refund: 'Reembolso',
     };
@@ -909,6 +932,16 @@ export default function App() {
       setCheckoutErrToast(ct('Não deu pra abrir o pagamento agora. Tente de novo.'));
     }
   };
+
+  // style guide: aberto a qualquer um (sem manager), pro QA visual e pra
+  // conferir tokens e primitivos num lugar só
+  if (screen === 'design') {
+    return (
+      <Suspense fallback={<Loader text="…" />}>
+        <DesignScreen onBack={() => setScreen(manager ? 'home' : 'landing')} />
+      </Suspense>
+    );
+  }
 
   if (screen === 'landing') {
     return (
