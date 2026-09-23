@@ -16,6 +16,7 @@ import { applyUltTransaction, type SqlTag } from '../server/ultimate-economy.js'
 import { weekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { detectOvertakes, OVERTAKE_TOP } from '../server/rivalNotify.js'; // [URG-3]
 import { dayKey as spDayKey, mergeStreak, recordDailyPlay, type StreakState } from '../src/engine/daily/streak.js'; // [URG-4]
+import { internalError } from '../server/internalError.js'; // [O0-43]
 import { bumpCommunityContrib, communityGoalClaim, communityGoalSchemaQueries, communityGoalStatus } from '../server/communityGoal.js'; // [URG-5]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
@@ -128,7 +129,18 @@ function dailyDayNow(): number {
 
 type Req = { method?: string; body?: Record<string, unknown> | string; query?: Record<string, string | string[] | undefined> };
 
+// [O0-43] nenhuma exceção sai crua: antes, erro do Neon virava 500 da própria
+// Vercel (sem corpo útil e, no log, só como info). Agora loga com id de
+// correlação e responde a mensagem genérica.
 export default async function handler(req: Req, res: Res) {
+  try {
+    await handle(req, res);
+  } catch (e) {
+    internalError(res, 'ranking', e);
+  }
+}
+
+async function handle(req: Req, res: Res) {
   // GET é permitido só pros públicos (ladder/champions) pra o s-maxage valer no
   // edge (a Vercel NÃO cacheia POST). me/report seguem POST (autenticados).
   if (req.method !== 'POST' && req.method !== 'GET') { res.status(405).json({ error: 'method' }); return; }

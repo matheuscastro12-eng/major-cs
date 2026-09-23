@@ -12,6 +12,7 @@ import { serverCatalogIndex } from '../server/ultimate-pack.js';
 import { activeWeekendEventDef } from '../server/weekendEvent.js'; // [URG-2]
 import { rarityInfo } from '../src/engine/ultimate/rarities.js';
 import { createHash } from 'node:crypto';
+import { internalError } from '../server/internalError.js'; // [O0-43]
 
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
 
@@ -276,6 +277,11 @@ async function tryMatchUltimate(sql: ReturnType<typeof neon>, meNick: string, my
   return null;
 }
 
+// [O0-21] bucket do ticket como veio do banco (linha antiga sem a coluna = 'open')
+export function ticketBucket(raw: unknown): string {
+  return typeof raw === 'string' && raw ? raw : 'open';
+}
+
 // desfaz um ticket saindo da fila; se ele JÁ tinha par (matched_code), derruba a
 // sala se ainda estiver em 'drafting' — o rival vê 'gone' e volta pra fila, em
 // vez de ficar preso numa sala pela metade.
@@ -336,7 +342,7 @@ export default async function handler(
         .filter((r) => r.players < r.max);
       res.status(200).json({ rooms });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      internalError(res, 'lobby:list', e);
     }
     return;
   }
@@ -404,7 +410,7 @@ export default async function handler(
       }
       res.status(200).json({ ...stateForEtag, serverNow: Date.now() });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      internalError(res, 'lobby:get', e);
     }
     return;
   }
@@ -543,7 +549,7 @@ export default async function handler(
 
     if (action === 'queuePoll') {
       if (!nick) { res.status(400).json({ error: 'nick obrigatório' }); return; }
-      const mine = await sql`UPDATE mm_queue SET last_seen = now() WHERE nick = ${nick} RETURNING elo, enqueued_at, matched_code`;
+      const mine = await sql`UPDATE mm_queue SET last_seen = now() WHERE nick = ${nick} RETURNING elo, enqueued_at, matched_code, bucket`;
       if (mine.length === 0) { res.status(200).json({ ok: true, queued: false }); return; }
       const ticket = mine[0];
       if (ticket.matched_code) {
@@ -557,7 +563,10 @@ export default async function handler(
       // pareia a CADA poll (query indexada e barata). A antiga alternância (polls
       // pares) cortava queries sob carga mas DOBRAVA o tempo de match numa fila
       // fina de lançamento — aqui achar partida > economizar query.
-      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo, String((await sql`SELECT bucket FROM mm_queue WHERE nick = ${nick}`)[0]?.bucket ?? 'open')) || 1000, enqueuedMs);
+      // [O0-21] o bucket vem no RETURNING do heartbeat (sem SELECT extra por
+      // poll). Antes ele ia como 2º argumento de Number() e era descartado: a
+      // fila de evento pareava no bucket 'open' da ranqueada.
+      const matchedCode = await tryMatchUltimate(sql, nick, Number(ticket.elo) || 1000, enqueuedMs, ticketBucket(ticket.bucket));
       if (matchedCode) { res.status(200).json({ ok: true, matched: true, code: matchedCode }); return; }
       const open = await sql`SELECT COUNT(*)::int AS n FROM mm_queue WHERE matched_code IS NULL AND last_seen > now() - interval '30 seconds'`;
       res.status(200).json({ ok: true, queued: true, waiting: Number(open[0]?.n ?? 1), waitedMs, window: mmWindow(waitedMs) });
@@ -842,6 +851,6 @@ export default async function handler(
 
     res.status(400).json({ error: 'ação inválida' });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    internalError(res, 'lobby:post', e);
   }
 }

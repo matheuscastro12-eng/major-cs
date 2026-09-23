@@ -30,6 +30,8 @@
     "server/communityGoal.test.ts",
     "server/esmImportGraph.ts",
     "server/esm-imports.test.ts",
+    "server/internalError.ts",
+    "server/neon-http.mock.ts",
     "server/liveops.test.ts",
     "server/payments.ts",
     "server/payments.test.ts",
