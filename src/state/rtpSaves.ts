@@ -232,6 +232,9 @@ export function saveRtp(save: RoadToProSave): boolean {
   const w = writeWithQuotaRescue(KEY, data);
   if (!w.ok) {
     captureError(w.error ?? new Error('quota'), 'rtp-persist');
+    // [O0-26] falhou o LOCAL: o pagante ainda fica protegido pela nuvem (o
+    // hub mostra o saveError). Antes o return vinha antes do push.
+    if (getToken()) cloudOnLocalSave(CLOUD_SLOT, KEY, () => data);
     return false;
   }
   if (w.rescued) captureError(new Error(`quota rescue: ${w.freed} artefato(s) descartado(s) pra salvar ${KEY}`), 'rtp-quota-rescue');
