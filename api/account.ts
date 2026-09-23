@@ -24,6 +24,7 @@ import {
 } from '../server/payments.js';
 import { restorableCoins } from '../server/coin-restore.js';
 import { mailConfigured, sendMail } from '../server/mail.js';
+import { clientIp, rateLimitHit, respondLimited, type RateRule, type RateSql } from '../server/rate-limit.js';
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 // Edição Fundador: selo numerado vitalício pros primeiros que pagam (teto configurável).
@@ -112,8 +113,23 @@ const COIN_TIERS: Record<string, { cents: number; coins: number; label: string }
   p30: { cents: 3000, coins: 120000, label: 'Pacote Lendário' },
 };
 
+// Rate limit por IP e por e-mail (O0-35/SEGU-09), no Postgres (compartilhado
+// entre instâncias — ver server/rate-limit.ts). Janelas generosas pro jogador
+// normal; o alvo é força bruta de senha (scrypt sem freio), credential stuffing,
+// flood de cadastro e o 'me' que chamava o Stripe em toda request.
+const RATE = {
+  signup: { ip: [10, 3600], email: [5, 3600] },
+  login: { ip: [30, 900], email: [10, 900] },
+  me: { ip: [120, 60] },
+  resetRequest: { ip: [10, 3600], email: [5, 3600] },
+  resetConfirm: { ip: [30, 3600], email: [10, 3600] },
+} as const;
+// reconciliação com o Stripe (list de 100 sessões com expand) no máx. 1x a cada
+// 2 min por e-mail: o 'me' de um cadastro pendente não vira flood na API do Stripe.
+const STRIPE_RECON_WINDOW_SEC = 120;
+
 export default async function handler(
-  req: { method?: string; body?: Record<string, unknown> | string },
+  req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: Res,
 ) {
   // GET público: contagem agregada de Fundadores (prova social honesta). Sem
@@ -155,6 +171,15 @@ export default async function handler(
   const email = String(body.email ?? '').trim().toLowerCase().slice(0, 200);
   const password = String(body.password ?? '');
   const nick = String(body.nick ?? '').trim().slice(0, 40);
+  const ip = clientIp(req.headers);
+  const rsql = sql as unknown as RateSql;
+  // 429 quando QUALQUER regra (IP ou e-mail) da ação estourou. Devolve true se respondeu.
+  const limited = async (name: keyof typeof RATE, em = email): Promise<boolean> => {
+    const cfg = RATE[name] as { ip: readonly [number, number]; email?: readonly [number, number] };
+    const rules: RateRule[] = [{ key: `${name}:ip:${ip}`, limit: cfg.ip[0], windowSec: cfg.ip[1] }];
+    if (cfg.email && em) rules.push({ key: `${name}:email:${em}`, limit: cfg.email[0], windowSec: cfg.email[1] });
+    return respondLimited(res, await rateLimitHit(rsql, rules));
+  };
 
   if (action === 'export' || action === 'delete') {
     const em = verifyToken(String(body.token ?? ''));
@@ -240,7 +265,7 @@ export default async function handler(
     if (knownPaid) return true;
     const p = await sql`SELECT 1 FROM rtm_paid_emails WHERE email=${em}`;
     if (p.length) { await markPaid(em); return true; }
-    if (reconcileStripe) {
+    if (reconcileStripe && !(await rateLimitHit(rsql, [{ key: `stripe-recon:${em}`, limit: 1, windowSec: STRIPE_RECON_WINDOW_SEC }])).limited) {
       try {
         const session = await findPaidCheckoutForEmail(stripeClient(), em);
         if (session) { await markPaid(em, session.id); return true; }
@@ -252,6 +277,7 @@ export default async function handler(
   };
 
   if (action === 'signup') {
+    if (await limited('signup')) return;
     if (!/\S+@\S+\.\S+/.test(email) || password.length < 6) { res.status(400).json({ error: 'E-mail inválido ou senha com menos de 6 caracteres.' }); return; }
     const exists = await sql`SELECT 1 FROM rtm_accounts WHERE email=${email}`;
     if (exists.length) { res.status(409).json({ error: 'Já existe uma conta com esse e-mail. Faça login.' }); return; }
@@ -275,6 +301,7 @@ export default async function handler(
   }
 
   if (action === 'login') {
+    if (await limited('login')) return;
     const r = await sql`SELECT nick, pass_hash, paid FROM rtm_accounts WHERE email=${email}`;
     if (!r.length || !verifyPw(password, String(r[0].pass_hash))) { res.status(401).json({ error: 'E-mail ou senha incorretos.' }); return; }
     await ensureReference(email);
@@ -291,6 +318,7 @@ export default async function handler(
   // envio está configurado — não vaza se o e-mail tem conta (anti-enumeração).
   // Nenhum provedor configurado: 503 honesto.
   if (action === 'resetRequest') {
+    if (await limited('resetRequest')) return;
     if (!/\S+@\S+\.\S+/.test(email)) { res.status(400).json({ error: 'E-mail inválido.' }); return; }
     if (!mailConfigured()) {
       res.status(503).json({ error: 'Recuperação de senha temporariamente indisponível. Fale com a gente no suporte.' });
@@ -327,6 +355,7 @@ export default async function handler(
   // resetConfirm: valida o código e troca a senha (conta ativa E/OU cadastro
   // pendente). Código é de uso único; 5 erros queimam o código.
   if (action === 'resetConfirm') {
+    if (await limited('resetConfirm')) return;
     const code = String(body.code ?? '').trim();
     if (!/^\d{6}$/.test(code)) { res.status(400).json({ error: 'Código inválido — são 6 dígitos.' }); return; }
     if (password.length < 6) { res.status(400).json({ error: 'A nova senha precisa de pelo menos 6 caracteres.' }); return; }
@@ -355,6 +384,7 @@ export default async function handler(
   }
 
   if (action === 'me') {
+    if (await limited('me')) return;
     const em = verifyToken(String(body.token ?? ''));
     if (!em) { res.status(401).json({ error: 'Sessão inválida.' }); return; }
     let r = await sql`SELECT nick, paid FROM rtm_accounts WHERE email=${em}`;
