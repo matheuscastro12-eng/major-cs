@@ -386,6 +386,21 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   const pwMismatch = mode === 'signup' && pw2.length > 0 && pw !== pw2;
   const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6
     && (mode === 'login' || (accepted && pw === pw2));
+  // funil: paywall_view (~4.700 sids/28d, somando todas as superfícies) vira só
+  // 54 signup_start — 1,1%, a queda mais brusca do funil inteiro, e ao contrário
+  // de Pix/RtP/Ultimate (cada um com vários degraus instrumentados) não existe
+  // NENHUM evento dentro deste modal: signup_start só dispara no clique de
+  // submit já válido. Os dois botões de pagamento usam o MESMO disabled={!valid},
+  // e o único motivo de bloqueio sem nenhum feedback na tela é a caixa de aceite
+  // dos Termos — senha curta e e-mail inválido são óbvios pelo próprio campo, e
+  // senha divergente já mostra erro (pwMismatch acima). Quem preenche tudo certo
+  // e esquece de marcar a caixa vê os botões travados sem entender por quê.
+  // Hint honesto (só aponta o campo, sem pressão) + evento novo (paywall_view,
+  // src próprio) pra medir, na próxima iteração, quanto isso pesa de verdade.
+  const readyExceptTerms = mode === 'signup' && /\S+@\S+\.\S+/.test(email) && pw.length >= 6 && pw === pw2 && !accepted;
+  useEffect(() => {
+    if (readyExceptTerms) trackPaywallView('signup-terms-hint');
+  }, [readyExceptTerms]);
   const go = async () => {
     if (!valid || busy) return;
     setBusy(true); setErr('');
@@ -559,6 +574,14 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
           <span>{ct('Li e aceito os')} <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer">{ct('Termos')}</a> {ct('e a')} <a href={LEGAL_PATHS.refund} target="_blank" rel="noreferrer">{ct('Política de Reembolso')}</a>{ct(', consultei a')} <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer">{ct('Privacidade')}</a> {ct('e confirmo ser maior de 18 anos ou responsável legal pela compra.')}</span>
         </label>
+      )}
+      {/* funil: único bloqueio do submit sem nenhum feedback visível (ver
+          comentário em readyExceptTerms acima) — hint honesto, só aparece
+          quando falta mesmo só isso. */}
+      {readyExceptTerms && (
+        <p style={{ color: 'var(--em-gold, #e8c170)', fontSize: '0.74rem', margin: '8px 0 0', textAlign: 'center', fontWeight: 600 }}>
+          {ct('Falta só marcar a caixa acima pra continuar.')}
+        </p>
       )}
       {err && <p style={{ color: '#e2574c', fontSize: '0.8rem', margin: '12px 0 0' }}>{err}</p>}
       {/* funil: dado real (checkout_open x rtm_paid_emails, por método) mostra o Pix
