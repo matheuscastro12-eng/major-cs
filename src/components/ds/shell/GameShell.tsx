@@ -78,7 +78,10 @@ export function GameShell(props: GameShellProps) {
   const [paletteOpen, setPaletteOpen] = usePaletteOpen();
   const [moreOpen, setMoreOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [pendingOpen, setPendingOpen] = useState(false);
+  // O CONTINUAR existe duas vezes (topbar e barra fixa do celular) e cada um
+  // tem o próprio popover de pendências. O atalho de espaço abre o que está
+  // visível: cada NextButton registra aqui um "abrir se eu estiver na tela".
+  const pendingOpeners = useRef(new Set<() => boolean>());
 
   const items = useMemo(() => nav.flatMap((g) => g.items.map((it) => ({ ...it, group: g }))), [nav]);
   const activeItem = items.find((it) => it.id === active);
@@ -102,7 +105,7 @@ export function GameShell(props: GameShellProps) {
           const onControl = el && el !== document.body && el.closest('button, a, input, select, textarea, [role="button"], [role="tab"], [tabindex]');
           if (!n || n.disabled || !n.onGo || onControl || document.body.style.overflow === 'hidden') return;
           e.preventDefault();
-          goNext(n, () => setPendingOpen(true));
+          goNext(n, () => openVisible(pendingOpeners.current));
         },
       }),
       registerShortcut({ key: 'arrowleft', alt: true, group: 'Geral', label: 'Voltar', onPress: () => histRef.current?.back?.() }),
@@ -247,7 +250,7 @@ export function GameShell(props: GameShellProps) {
               )}
             </div>
           )}
-          {next && <NextButton next={next} pendingOpen={pendingOpen} setPendingOpen={setPendingOpen} />}
+          {next && <NextButton next={next} openers={pendingOpeners.current} />}
         </header>
 
         {tabs && tabs.length > 0 && (
@@ -294,7 +297,7 @@ export function GameShell(props: GameShellProps) {
       )}
       {next?.onGo && variant !== 'immersive' && (
         <div className="gs-mnext">
-          <NextButton next={next} pendingOpen={pendingOpen} setPendingOpen={setPendingOpen} compact />
+          <NextButton next={next} openers={pendingOpeners.current} compact />
         </div>
       )}
 
@@ -470,23 +473,44 @@ function goNext(n: ShellNext, openPending: () => void) {
   n.onGo?.();
 }
 
-function NextButton({ next, pendingOpen, setPendingOpen, compact = false }: {
+function openVisible(openers: Set<() => boolean>) {
+  for (const open of openers) if (open()) return;
+}
+
+function NextButton({ next, openers, compact = false }: {
   next: ShellNext;
-  pendingOpen: boolean;
-  setPendingOpen: (v: boolean) => void;
+  /** registro do "abrir as pendências se este botão estiver na tela" (atalho de espaço) */
+  openers: Set<() => boolean>;
   compact?: boolean;
 }) {
+  // estado próprio: topbar e barra do celular montam cada uma o seu popover.
+  // Com o estado dividido, o popover escondido (display:none) tratava o
+  // pointerdown no item do visível como "clique fora" e fechava tudo antes
+  // do click chegar (BUG-01).
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = () => {
+      const el = rootRef.current;
+      if (!el || el.getClientRects().length === 0) return false;
+      setOpen(true);
+      return true;
+    };
+    openers.add(opener);
+    return () => { openers.delete(opener); };
+  }, [openers]);
   const pending = next.pending ?? [];
   const blocking = pending.filter((p) => p.blocking);
   const Icon = next.icon ?? ChevronsRight;
   const disabled = next.disabled || (!next.onGo && blocking.length === 0);
+  const head = blocking.length > 0 ? 'Resolva antes de avançar' : 'Antes de continuar, dê uma olhada';
   return (
-    <div className={cx('gs-next', compact && 'gs-next--compact', blocking.length > 0 && 'gs-next--blocked')}>
+    <div ref={rootRef} className={cx('gs-next', compact && 'gs-next--compact', blocking.length > 0 && 'gs-next--blocked')}>
       <button
         type="button"
         className="gs-next__go"
         disabled={disabled}
-        onClick={() => goNext(next, () => setPendingOpen(!pendingOpen))}
+        onClick={() => goNext(next, () => setOpen((v) => !v))}
       >
         <span className="gs-next__text">
           <span className="gs-next__verb">{next.label ?? 'Continuar'}</span>
@@ -504,22 +528,20 @@ function NextButton({ next, pendingOpen, setPendingOpen, compact = false }: {
           className="gs-next__pend"
           aria-label={`${pending.length} pendência(s)`}
           aria-haspopup="menu"
-          aria-expanded={pendingOpen}
-          onClick={() => setPendingOpen(!pendingOpen)}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
         >
           {pending.length}
           <ChevronDown size={12} aria-hidden />
         </button>
       )}
-      {pendingOpen && pending.length > 0 && (
-        <Popover onClose={() => setPendingOpen(false)} className="gs-pending">
-          <p className="gs-pending__head">
-            {blocking.length > 0 ? 'Resolva antes de avançar' : 'Antes de continuar, dê uma olhada'}
-          </p>
+      {open && pending.length > 0 && (
+        <Popover onClose={() => setOpen(false)} className="gs-pending" label={head}>
+          <p className="gs-pending__head" aria-hidden>{head}</p>
           {pending.map((p) => {
             const PIcon = p.icon ?? (p.tone === 'loss' ? CircleAlert : p.tone === 'warn' ? TriangleAlert : Info);
             return (
-              <button key={p.id} type="button" role="menuitem" className="gs-pending__item" data-tone={p.tone ?? 'info'} onClick={() => { setPendingOpen(false); p.onGo(); }}>
+              <button key={p.id} type="button" role="menuitem" className="gs-pending__item" data-tone={p.tone ?? 'info'} onClick={() => { setOpen(false); p.onGo(); }}>
                 <PIcon size={16} aria-hidden />
                 <span>{p.label}</span>
                 {p.blocking && <span className="gs-pending__lock">bloqueia</span>}
@@ -528,7 +550,7 @@ function NextButton({ next, pendingOpen, setPendingOpen, compact = false }: {
             );
           })}
           {blocking.length === 0 && next.onGo && (
-            <button type="button" className="gs-pending__go" onClick={() => { setPendingOpen(false); next.onGo?.(); }}>
+            <button type="button" role="menuitem" className="gs-pending__go" onClick={() => { setOpen(false); next.onGo?.(); }}>
               {next.label ?? 'Continuar'} {next.detail ? `· ${next.detail}` : ''} <ChevronsRight size={14} aria-hidden />
             </button>
           )}
@@ -538,22 +560,48 @@ function NextButton({ next, pendingOpen, setPendingOpen, compact = false }: {
   );
 }
 
-// ── popover simples (fecha em clique fora e Esc) ────────────────────────────
-function Popover({ onClose, className, children }: { onClose: () => void; className?: string; children: ReactNode }) {
+// ── popover de menu ──────────────────────────────────────────────────────────
+// Fecha em clique fora (fora do popover E do bloco do botão que o abriu), Esc
+// e Tab. Ao abrir, o foco vai pro 1º item; ↑/↓/Home/End andam entre os itens;
+// Esc/Tab devolvem o foco ao botão que abriu.
+const MENU_FOCUSABLE = '[role="menuitem"]:not(:disabled), button:not(:disabled), select:not(:disabled), a[href]';
+function Popover({ onClose, className, label, children }: { onClose: () => void; className?: string; label?: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; });
   useEffect(() => {
+    const pop = ref.current;
+    const anchor = pop?.parentElement ?? null;
+    const trigger = (anchor?.querySelector<HTMLElement>('[aria-haspopup]')) ?? null;
+    const items = () => (pop ? [...pop.querySelectorAll<HTMLElement>(MENU_FOCUSABLE)] : []);
+    items()[0]?.focus({ preventScroll: true });
+    const closeAndReturn = () => { closeRef.current(); trigger?.focus({ preventScroll: true }); };
     const onDown = (e: PointerEvent) => {
-      const parent = ref.current?.parentElement;
-      if (parent && e.target instanceof Node && !parent.contains(e.target)) closeRef.current();
+      if (!(e.target instanceof Node)) return;
+      if (pop?.contains(e.target) || anchor?.contains(e.target)) return;
+      closeRef.current();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeAndReturn(); return; }
+      if (!pop || !(document.activeElement instanceof Node) || !pop.contains(document.activeElement)) return;
+      if (e.key === 'Tab') { e.preventDefault(); closeAndReturn(); return; }
+      const list = items();
+      if (!list.length) return;
+      const i = list.indexOf(document.activeElement as HTMLElement);
+      const to = e.key === 'ArrowDown' ? (i + 1) % list.length
+        : e.key === 'ArrowUp' ? (i - 1 + list.length) % list.length
+          : e.key === 'Home' ? 0
+            : e.key === 'End' ? list.length - 1
+              : -1;
+      if (to < 0) return;
+      e.preventDefault();
+      list[to].focus();
+    };
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
   }, []);
-  return <div ref={ref} className={cx('gs-pop', className)} role="menu">{children}</div>;
+  return <div ref={ref} className={cx('gs-pop', className)} role="menu" aria-label={label}>{children}</div>;
 }
 
 // ── menu completo (gaveta no celular) ───────────────────────────────────────
