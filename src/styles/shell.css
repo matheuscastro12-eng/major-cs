@@ -107,6 +107,27 @@
 }
 .gs-tip small { color: var(--c-ink-dim); font-size: var(--fs-1); font-weight: 500; }
 
+/* ════ PULAR PARA O CONTEÚDO ════════════════════════════════════════════
+   Fora da tela até receber foco (1º Tab); aí aparece no topo, sobre tudo. */
+.gs-skip {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: var(--z-toast);
+  padding: 10px 16px;
+  border-radius: var(--rad-2);
+  background: var(--c-brand);
+  color: var(--c-on-brand);
+  font-family: var(--font-ui);
+  font-size: var(--fs-3);
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 16px));
+}
+.gs-skip:focus,
+.gs-skip:focus-visible { transform: none; outline: none; box-shadow: var(--focus-ring); }
+.gs-content:focus { outline: none; }
+
 /* ════ TRILHO DE MODOS ════════════════════════════════════════════════════ */
 .gs-rail {
   position: sticky;

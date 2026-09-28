@@ -167,6 +167,21 @@ export function GameShell(props: GameShellProps) {
       data-mode={MODE_DATA[mode]}
       style={clubStyle}
     >
+      {/* 1º Tab da página: pula trilho, sidebar e topbar (~30 paradas) direto
+          pro conteúdo. Foca o <main> sem mexer no hash da URL (o App usa a URL
+          como router). */}
+      <a
+        className="gs-skip"
+        href="#gs-content"
+        onClick={(e) => {
+          e.preventDefault();
+          const main = document.getElementById('gs-content');
+          main?.focus({ preventScroll: true });
+          main?.scrollIntoView({ block: 'start' });
+        }}
+      >
+        Pular para o conteúdo
+      </a>
       {variant === 'full' && (
         <ModeRail mode={mode} density={density} theme={theme} onDensity={toggleDensity} onTheme={toggleTheme} />
       )}
@@ -284,7 +299,7 @@ export function GameShell(props: GameShellProps) {
           </div>
         )}
 
-        <main className="gs-content" id="gs-content">
+        <main className="gs-content" id="gs-content" tabIndex={-1}>
           {children}
         </main>
       </div>
