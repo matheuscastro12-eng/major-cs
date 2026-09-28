@@ -96,7 +96,7 @@ export function FinanceTab({ save, findSigning, update }: Props) {
     <DashCard
       title={`${ct('Finanças')} · ${save.org?.name ?? ''}`}
       actions={diff !== 'normal' ? (
-        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 10px', borderRadius: 12, border: `1px solid ${diff === 'hard' ? '#e8c170' : '#e58a8a'}`, color: diff === 'hard' ? '#e8c170' : '#e58a8a' }}>
+        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 10px', borderRadius: 12, border: `1px solid ${diff === 'hard' ? '#e8c170' : 'var(--c-loss)'}`, color: diff === 'hard' ? '#e8c170' : 'var(--c-loss)' }}>
           🎚️ {ct(DIFFICULTY_LABELS[diff])}
         </span>
       ) : undefined}

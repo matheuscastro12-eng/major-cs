@@ -244,7 +244,7 @@ function FacilityCard({
               lineHeight: 1.4,
             }}
           >
-            <div style={{ fontSize: '0.66rem', color: '#5ed88a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2, fontWeight: 700 }}>
+            <div style={{ fontSize: '0.66rem', color: 'var(--c-win)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2, fontWeight: 700 }}>
               Próximo nv ({level + 1})
             </div>
             {meta.benefitByLevel(level + 1)}
@@ -279,8 +279,8 @@ function FacilityCard({
 
 function HudPill({ label, value, tone }: { label: string; value: string; tone: 'green' | 'red' | 'neutral' }) {
   const colors: Record<string, { fg: string; bg: string; border: string }> = {
-    green: { fg: '#5ed88a', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)', border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
-    red: { fg: '#e58a8a', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
+    green: { fg: 'var(--c-win)', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)', border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
+    red: { fg: 'var(--c-loss)', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];

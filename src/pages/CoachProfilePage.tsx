@@ -50,8 +50,8 @@ export function CoachProfilePage({ stints, activeCoachNick, scars, split, onClos
         <div
           style={{
             display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px',
-            background: `linear-gradient(135deg, ${repColor}1f 0%, transparent 70%)`,
-            border: `1px solid ${repColor}66`, borderRadius: 8,
+            background: `linear-gradient(135deg, color-mix(in srgb, ${repColor} 12%, transparent) 0%, transparent 70%)`,
+            border: `1px solid color-mix(in srgb, ${repColor} 40%, transparent)`, borderRadius: 8,
           }}
         >
           <div style={{ textAlign: 'center' }}>
@@ -71,9 +71,9 @@ export function CoachProfilePage({ stints, activeCoachNick, scars, split, onClos
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
         <Kpi label="Troféus" value={summary.totalTrophies} icon="trophy" accent="#e8c170" />
         <Kpi label="Passagens" value={summary.totalStints} icon="building" />
-        <Kpi label="Vitórias" value={summary.totalWins} icon="check" accent="#5ed88a" />
-        <Kpi label="Derrotas" value={summary.totalLosses} icon="x" accent="#e58a8a" />
-        <Kpi label="Win rate" value={`${Math.round(summary.winRate * 100)}%`} icon="chart" accent={summary.winRate >= 0.5 ? '#5ed88a' : '#e58a8a'} />
+        <Kpi label="Vitórias" value={summary.totalWins} icon="check" accent="var(--c-win)" />
+        <Kpi label="Derrotas" value={summary.totalLosses} icon="x" accent="var(--c-loss)" />
+        <Kpi label="Win rate" value={`${Math.round(summary.winRate * 100)}%`} icon="chart" accent={summary.winRate >= 0.5 ? 'var(--c-win)' : 'var(--c-loss)'} />
       </div>
 
       {/* [W4] Cicatrizes — traits adquiridos, com tooltip de origem/efeito/prazo */}
@@ -116,7 +116,7 @@ export function CoachProfilePage({ stints, activeCoachNick, scars, split, onClos
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.92rem', fontWeight: 800, color: 'var(--em-text)' }}>
                       {s.orgName}
-                      <span style={{ padding: '1px 6px', background: `${tierColor}22`, color: tierColor, border: `1px solid ${tierColor}66`, borderRadius: 3, fontSize: '0.6rem', fontWeight: 800 }}>
+                      <span style={{ padding: '1px 6px', background: `color-mix(in srgb, ${tierColor} 13%, transparent)`, color: tierColor, border: `1px solid color-mix(in srgb, ${tierColor} 40%, transparent)`, borderRadius: 3, fontSize: '0.6rem', fontWeight: 800 }}>
                         TIER {s.tier}
                       </span>
                       {active && <span style={{ fontSize: '0.6rem', color: 'var(--em-gold)', fontWeight: 800, letterSpacing: '0.5px' }}>● ATIVO</span>}

@@ -134,9 +134,9 @@ export function FiredModal({ data, onClose, onRestart, onJobHunt }: Props) {
 
 function Stat({ label, value, tone = 'neutral' }: { label: string; value: number; tone?: 'green' | 'gold' | 'red' | 'neutral' }) {
   const colors: Record<string, string> = {
-    green: '#5ed88a',
+    green: 'var(--c-win)',
     gold: '#e8c170',
-    red: '#e58a8a',
+    red: 'var(--c-loss)',
     neutral: 'var(--em-text)',
   };
   return (

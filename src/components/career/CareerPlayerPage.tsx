@@ -365,7 +365,7 @@ export function CareerPlayerPage({
             style={{
               background: 'color-mix(in srgb, var(--c-loss) 14%, transparent)',
               border: '1px solid color-mix(in srgb, var(--c-loss) 55%, transparent)',
-              color: '#e58a8a',
+              color: 'var(--c-loss)',
               fontWeight: 700,
               cursor: 'default',
             }}

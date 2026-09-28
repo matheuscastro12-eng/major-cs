@@ -253,7 +253,7 @@ export function Home({
 
               {onDaily && (
                 <button className="rtm-modecard" data-tone="blue" data-mode="diario" onClick={onDaily}>
-                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/inferno.jpg)' }} />
+                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/inferno.webp)' }} />
                   <span className="rtm-modecard-scrim" />
                   <span className="rtm-modecard-bar" />
                   <span className="rtm-modecard-body">
@@ -293,6 +293,7 @@ export function Home({
                 <button
                   className="rtm-modecard"
                   data-tone="gold"
+                  data-mode="ultimate"
                   data-locked={ultimateLocked ? '' : undefined}
                   onClick={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())}
                 >
@@ -693,7 +694,7 @@ function DropItem({
   accent?: 'gold' | 'red';
   onClick: () => void;
 }) {
-  const fg = accent === 'gold' ? 'var(--em-gold)' : accent === 'red' ? '#e58a8a' : '#fff';
+  const fg = accent === 'gold' ? 'var(--em-gold)' : accent === 'red' ? 'var(--c-loss)' : '#fff';
   return (
     <button
       type="button"

@@ -494,10 +494,10 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
   const enemyBuy = buys[oppIdx]; // leitura: compra provável do inimigo no round
   // leitura de eco do inimigo em texto (freezetime read estilo CS)
   const enemyRead =
-    enemyBuy === 'eco' ? { txt: ct('Inimigo em ECO — force compensa'), tone: '#5ed88a' }
+    enemyBuy === 'eco' ? { txt: ct('Inimigo em ECO — force compensa'), tone: 'var(--c-win)' }
     : enemyBuy === 'force' ? { txt: ct('Inimigo em FORCE BUY — cuidado com agressão'), tone: '#e8c170' }
     : enemyBuy === 'pistol' ? { txt: ct('Round pistola — economia zerada'), tone: '#9fb4c8' }
-    : { txt: ct('Inimigo em FULL BUY — round equilibrado'), tone: '#e58a8a' };
+    : { txt: ct('Inimigo em FULL BUY — round equilibrado'), tone: 'var(--c-loss)' };
   // momentum atual: quem está embalado e o tamanho da sequência (medidor visual)
   const mom = finished ? { team: -1 as 0 | 1 | -1, len: 0 } : sim.momentum();
   // impacto de CADA chamada (rush/retake/force/save) sobre a chance do round,
@@ -829,7 +829,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                   {Math.abs(probDelta) >= 0.005 && (
                     <span style={{
                       fontSize: '0.74rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace',
-                      color: probDelta > 0 ? '#5ed88a' : '#e58a8a', minWidth: 52, textAlign: 'right',
+                      color: probDelta > 0 ? 'var(--c-win)' : 'var(--c-loss)', minWidth: 52, textAlign: 'right',
                     }}>
                       {probDelta > 0 ? '▲ +' : '▼ '}{Math.round(probDelta * 100)}%
                     </span>
@@ -865,7 +865,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 {callRecord.made > 0 && (
                   <span style={{ marginLeft: 8, fontSize: '0.7rem', color: 'var(--em-muted, #8a99ab)' }}>
                     · {ct('calls')}:{' '}
-                    <b style={{ color: callRecord.won * 2 >= callRecord.made ? '#5ed88a' : '#e8c170' }}>
+                    <b style={{ color: callRecord.won * 2 >= callRecord.made ? 'var(--c-win)' : '#e8c170' }}>
                       {callRecord.won}/{callRecord.made} ✓
                     </b>
                   </span>
@@ -907,7 +907,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                           )}
                           {m.cost === 'limited' && <span className="chamada-pp">{ct('aposta alta')}</span>}
                           {Math.abs(d) >= 0.003 && (
-                            <span className="chamada-delta" style={{ color: d > 0 ? '#5ed88a' : '#e58a8a' }}>
+                            <span className="chamada-delta" style={{ color: d > 0 ? 'var(--c-win)' : 'var(--c-loss)' }}>
                               {d > 0 ? '+' : ''}{Math.round(d * 100)}%
                             </span>
                           )}
@@ -935,7 +935,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                       <span style={{
                         marginLeft: 5, fontSize: '0.66rem', fontWeight: 800,
                         fontFamily: '"JetBrains Mono", monospace',
-                        color: d > 0 ? '#5ed88a' : '#e58a8a',
+                        color: d > 0 ? 'var(--c-win)' : 'var(--c-loss)',
                       }}>
                         {d > 0 ? '+' : ''}{Math.round(d * 100)}%
                       </span>
@@ -960,7 +960,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 </button>
               ))}
               {lastSiteInfo && (
-                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: lastSiteInfo.correct === false ? '#e58a8a' : lastSiteInfo.correct ? '#5ed88a' : 'var(--em-muted, #8a99ab)' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: lastSiteInfo.correct === false ? 'var(--c-loss)' : lastSiteInfo.correct ? 'var(--c-win)' : 'var(--em-muted, #8a99ab)' }}>
                   {lastSiteInfo.wasCt
                     ? (lastSiteInfo.correct
                       ? `${ct('eles foram')} ${lastSiteInfo.tSite} — ${ct('leitura certa!')}`
@@ -1098,7 +1098,7 @@ function MomentumMeter({ team, len, teams, userIdx }: {
   team: 0 | 1; len: number; teams: [TTeam, TTeam]; userIdx: 0 | 1;
 }) {
   const mine = team === userIdx;
-  const accent = mine ? '#5ed88a' : '#e58a8a';
+  const accent = mine ? 'var(--c-win)' : 'var(--c-loss)';
   const grad = mine ? 'linear-gradient(90deg,#3a8f5a,#5ed88a)' : 'linear-gradient(90deg,#8f5a3a,#e58a8a)';
   const fillPct = Math.min(48, len * 9); // cada lado ocupa no máx. metade da barra
   const fires = '🔥'.repeat(Math.min(3, len - 1));
@@ -1180,7 +1180,7 @@ function DecisionImpactCard({ lastCall, t }: {
     : lastCall.odds >= 0.62 ? ct('Você era favorito e tropeçou.')
       : lastCall.odds < 0.4 ? ct('Aposta difícil — não pegou.')
       : ct('Não foi dessa vez.');
-  const accent = won ? '#5ed88a' : '#e58a8a';
+  const accent = won ? 'var(--c-win)' : 'var(--c-loss)';
   return (
     <div
       className="fade-in"
@@ -1357,7 +1357,7 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
             {ct('Ligue o')} <b>🎯 {ct('Tático')}</b> {ct('no topo da próxima partida pra comandar round a round: postura, timeouts e chamadas mudam o resultado de verdade.')}
           </div>
           {bestRun >= 3 && (
-            <div style={{ marginTop: 10, fontSize: '0.82rem' }}>🔥 {ct('Maior sequência da série')}: <b style={{ color: '#5ed88a' }}>{bestRun} {ct('rounds seguidos')}</b></div>
+            <div style={{ marginTop: 10, fontSize: '0.82rem' }}>🔥 {ct('Maior sequência da série')}: <b style={{ color: 'var(--c-win)' }}>{bestRun} {ct('rounds seguidos')}</b></div>
           )}
         </div>
       </div>
@@ -1366,7 +1366,7 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
 
   const won = decisions.filter((d) => d.won).length;
   const rate = won / made;
-  const rateColor = rate >= 0.6 ? '#5ed88a' : rate >= 0.4 ? '#e8c170' : '#e58a8a';
+  const rateColor = rate >= 0.6 ? 'var(--c-win)' : rate >= 0.4 ? '#e8c170' : 'var(--c-loss)';
   const bestCall = decisions.filter((d) => d.won).sort((a, b) => a.odds - b.odds)[0]; // maior upset chamado
   const worstCall = decisions.filter((d) => !d.won).sort((a, b) => b.odds - a.odds)[0]; // favorito que tropeçou
   const perMap = series.maps.map((m, i) => {
@@ -1386,7 +1386,7 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
           <span style={{ fontSize: '2rem', fontWeight: 900, color: rateColor, fontFamily: '"JetBrains Mono", monospace', lineHeight: 1 }}>{won}/{made}</span>
           <span style={{ fontSize: '0.9rem', fontWeight: 700, color: rateColor }}>{Math.round(rate * 100)}% {ct('das calls deram certo')}</span>
           <span className="spacer" />
-          {bestRun >= 3 && <span style={{ fontSize: '0.82rem' }}>🔥 {ct('maior sequência')}: <b style={{ color: '#5ed88a' }}>{bestRun}</b></span>}
+          {bestRun >= 3 && <span style={{ fontSize: '0.82rem' }}>🔥 {ct('maior sequência')}: <b style={{ color: 'var(--c-win)' }}>{bestRun}</b></span>}
         </div>
         <div style={{ fontSize: '0.82rem', fontStyle: 'italic', color: 'var(--em-text,#d6deea)', marginBottom: 12 }}>{verdict}</div>
 
@@ -1394,13 +1394,13 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
           {bestCall && bestCall.odds < 0.55 && (
             <div style={{ padding: '8px 12px', borderRadius: 6, background: 'color-mix(in srgb, var(--c-win) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-win) 30%, transparent)' }}>
               <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>{ct('Melhor aposta')}</div>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, marginTop: 2 }}>{icon(bestCall.call)} R{bestCall.round} · {ct('tinha')} {Math.round(bestCall.odds * 100)}% → <span style={{ color: '#5ed88a' }}>{ct('PEGOU')}</span></div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, marginTop: 2 }}>{icon(bestCall.call)} R{bestCall.round} · {ct('tinha')} {Math.round(bestCall.odds * 100)}% → <span style={{ color: 'var(--c-win)' }}>{ct('PEGOU')}</span></div>
             </div>
           )}
           {worstCall && worstCall.odds >= 0.5 && (
             <div style={{ padding: '8px 12px', borderRadius: 6, background: 'color-mix(in srgb, var(--c-loss) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-loss) 30%, transparent)' }}>
               <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-muted,#8a99ab)' }}>{ct('Tropeço')}</div>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, marginTop: 2 }}>{icon(worstCall.call)} R{worstCall.round} · {ct('era favorito')} ({Math.round(worstCall.odds * 100)}%) → <span style={{ color: '#e58a8a' }}>{ct('perdeu')}</span></div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, marginTop: 2 }}>{icon(worstCall.call)} R{worstCall.round} · {ct('era favorito')} ({Math.round(worstCall.odds * 100)}%) → <span style={{ color: 'var(--c-loss)' }}>{ct('perdeu')}</span></div>
             </div>
           )}
         </div>
@@ -1408,7 +1408,7 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {perMap.map((r) => {
             const mr = r.won / r.made;
-            const c = mr >= 0.6 ? '#5ed88a' : mr >= 0.4 ? '#e8c170' : '#e58a8a';
+            const c = mr >= 0.6 ? 'var(--c-win)' : mr >= 0.4 ? '#e8c170' : 'var(--c-loss)';
             return (
               <div key={r.i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.8rem' }}>
                 <span style={{ minWidth: 90, fontWeight: 700 }}>{MAP_LABELS[r.map]}</span>

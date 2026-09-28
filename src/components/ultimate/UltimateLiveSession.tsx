@@ -85,7 +85,7 @@ export function UltimateLiveSession({ session, onSession, onFinish }: {
       </div>
       <div className="ut-live__stage" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, fontFamily: '"JetBrains Mono", monospace', fontSize: '2.2rem', fontWeight: 900 }}>
-          <span style={{ color: '#2563eb' }}>{view.score[0]}</span><span style={{ opacity: .4 }}>–</span><span style={{ color: '#d97706' }}>{view.score[1]}</span>
+          <span style={{ color: 'var(--c-ct)' }}>{view.score[0]}</span><span style={{ opacity: .4 }}>–</span><span style={{ color: 'var(--c-t)' }}>{view.score[1]}</span>
         </div>
         <div style={{ textAlign: 'center', fontSize: '0.78rem', color: 'var(--ut-muted)' }}>
           {view.done ? ct('Fim de mapa') : <>{ct('Round')} {view.round + 1}{pWin != null && <> · {ct('leitura pré-round')}: <b>{Math.round(pWin * 100)}%</b> {ct('de vencer')}</>}{boostActive && <> · <b style={{ color: 'var(--c-accent)' }}>⏸ {ct('timeout em vigor')}</b></>}</>}
@@ -104,9 +104,9 @@ export function UltimateLiveSession({ session, onSession, onFinish }: {
           {lastRound >= 0 && <div style={{ color: 'var(--ut-muted)', textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.64rem' }}>R{lastRound + 1} · {log[lastRound] === 0 ? session.teams[0].name : session.teams[1].name} {ct('venceu')}</div>}
           {lastKills.slice(0, 7).map((k, i) => (
             <div key={i} style={{ display: 'flex', gap: 8 }}>
-              <span style={{ color: k.killerTeam === 0 ? '#2563eb' : '#d97706', fontWeight: 700 }}>{nickOf(k.killerId)}</span>
+              <span style={{ color: k.killerTeam === 0 ? 'var(--c-ct)' : 'var(--c-t)', fontWeight: 700 }}>{nickOf(k.killerId)}</span>
               <span style={{ opacity: .6 }}>{k.weapon}{k.headshot ? ' hs' : ''}{k.opening ? ' · abertura' : ''}{k.trade ? ' · troca' : ''}</span>
-              <span style={{ color: k.victimTeam === 0 ? '#2563eb' : '#d97706' }}>{nickOf(k.victimId)}</span>
+              <span style={{ color: k.victimTeam === 0 ? 'var(--c-ct)' : 'var(--c-t)' }}>{nickOf(k.victimId)}</span>
             </div>
           ))}
         </div>

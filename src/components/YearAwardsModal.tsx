@@ -22,7 +22,7 @@ const KIND_ACCENT: Record<AwardKind, string> = {
   rookie: '#6fd0c1',       // turquesa (frescor)
   mostImproved: '#9b6fe8', // roxo
   coachOfYear: '#e8a93b',  // âmbar
-  breakout: '#5ed88a',     // verde (surpresa)
+  breakout: 'var(--c-win)',     // verde (surpresa)
   teamOfSeason: '#6f9ce8', // azul (time)
 };
 
@@ -101,7 +101,7 @@ export function YearAwardsModal({ awards, onClose }: Props) {
             justifyContent: 'center',
             gap: 14,
             padding: '20px 10px',
-            background: `radial-gradient(ellipse at center, ${accent}22 0%, transparent 70%)`,
+            background: `radial-gradient(ellipse at center, color-mix(in srgb, ${accent} 13%, transparent) 0%, transparent 70%)`,
             borderRadius: 6,
             animation: 'em-award-fadein .55s ease both',
           }}
@@ -131,7 +131,7 @@ export function YearAwardsModal({ awards, onClose }: Props) {
                     gap: 10,
                     padding: '7px 12px',
                     borderRadius: 6,
-                    background: slot.mine ? `${accent}22` : 'var(--em-panel-2)',
+                    background: slot.mine ? `color-mix(in srgb, ${accent} 13%, transparent)` : 'var(--em-panel-2)',
                     border: `1px solid ${slot.mine ? accent : 'var(--em-border)'}`,
                   }}
                 >
@@ -161,7 +161,7 @@ export function YearAwardsModal({ awards, onClose }: Props) {
                   color: accent,
                   background: 'var(--em-panel-2)',
                   border: `3px solid ${accent}`,
-                  boxShadow: `0 0 30px ${accent}66`,
+                  boxShadow: `0 0 30px color-mix(in srgb, ${accent} 40%, transparent)`,
                 }}
               >
                 {winner.kind === 'coachOfYear' ? 'C' : winner.kind === 'rookie' ? 'R' : winner.kind === 'mostImproved' ? '↑' : winner.kind === 'breakout' ? '!' : '★'}

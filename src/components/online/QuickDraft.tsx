@@ -20,7 +20,7 @@ export function QuickDraft({ pool, count, title, subtitle, accent, onDone, onBac
 }) {
   const top = pool.slice(0, 24);
   const [picked, setPicked] = useState<PoolPlayer[]>([]);
-  const tone = accent || '#29c47a';
+  const tone = accent || 'var(--c-win)';
 
   const toggle = (p: PoolPlayer) => {
     if (picked.find((x) => x.nick === p.nick)) { setPicked(picked.filter((x) => x.nick !== p.nick)); return; }

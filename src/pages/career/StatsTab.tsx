@@ -84,7 +84,7 @@ export function StatsTab({ save, seasonStats, mySquadOids, openPlayerProfile, re
 
   const maxAdr = Math.max(1, ...topAdr.map((s) => s.adr));
   const maxRole = Math.max(1, ...roleDist.map((r) => r.n));
-  const ratingColor = (r: number) => (r >= 1.1 ? '#5ed88a' : r >= 0.95 ? '#5ea8d8' : '#e8a93b');
+  const ratingColor = (r: number) => (r >= 1.1 ? 'var(--c-win)' : r >= 0.95 ? '#5ea8d8' : '#e8a93b');
 
   if (seasonStats.length === 0) {
     return (

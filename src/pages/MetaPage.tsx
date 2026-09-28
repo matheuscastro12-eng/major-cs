@@ -303,7 +303,7 @@ function roleColor(role: string): string {
     AWP: '#5fa4e8',
     IGL: '#9b6fe8',
     Entry: '#e8a93b',
-    Support: '#5ed88a',
+    Support: 'var(--c-win)',
     Lurker: '#c0392b',
     Rifler: '#a0a0a0',
   };

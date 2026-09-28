@@ -203,7 +203,7 @@ function DeltaRow({ deltas }: { deltas: Deltas }) {
           }}
         >
           <span style={{ color: 'var(--em-muted)' }}>{it.label}</span>
-          <b style={{ color: it.tone === 'pos' ? '#5ed88a' : it.tone === 'neg' ? '#e58a8a' : 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>
+          <b style={{ color: it.tone === 'pos' ? 'var(--c-win)' : it.tone === 'neg' ? 'var(--c-loss)' : 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>
             {it.value}
           </b>
         </span>

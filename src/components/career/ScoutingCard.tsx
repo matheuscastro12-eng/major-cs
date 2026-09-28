@@ -43,7 +43,7 @@ export function ScoutingCard({ hiredScoutId, scoutReports, budget, onHire, onFir
         <div style={hiredMetaStyle}>
           <span><b>Tier {hired.tier}</b></span>
           <span>· {REGION_LABEL[hired.region] ?? hired.region}</span>
-          <span style={{ color: '#e58a8a' }}>· ${hired.salaryPerSplit.toLocaleString('pt-BR')}/split</span>
+          <span style={{ color: 'var(--c-loss)' }}>· ${hired.salaryPerSplit.toLocaleString('pt-BR')}/split</span>
           <span style={{ color: 'var(--em-muted)' }}>· precisão {Math.round(hired.accuracy * 100)}%</span>
         </div>
       )}
@@ -59,7 +59,7 @@ export function ScoutingCard({ hiredScoutId, scoutReports, budget, onHire, onFir
                   <span style={{ color: 'var(--em-muted)', fontSize: '0.74rem' }}>
                     Tier {s.tier} · {REGION_LABEL[s.region] ?? s.region} · precisão {Math.round(s.accuracy * 100)}%
                   </span>
-                  <span style={{ color: '#e58a8a', fontSize: '0.76rem', fontFamily: '"JetBrains Mono", monospace' }}>
+                  <span style={{ color: 'var(--c-loss)', fontSize: '0.76rem', fontFamily: '"JetBrains Mono", monospace' }}>
                     ${s.salaryPerSplit.toLocaleString('pt-BR')}/split
                   </span>
                 </div>
@@ -208,7 +208,7 @@ const promiseChipStyle = (color: string): React.CSSProperties => ({
   justifyContent: 'center',
   width: 28,
   height: 28,
-  background: `${color}22`,
+  background: `color-mix(in srgb, ${color} 13%, transparent)`,
   border: `1px solid ${color}`,
   borderRadius: 4,
   color,

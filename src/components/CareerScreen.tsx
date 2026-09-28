@@ -961,7 +961,7 @@ function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {(['normal', 'hard', 'legend'] as Difficulty[]).map((d) => {
           const on = value === d;
-          const tone = d === 'normal' ? '#5ed88a' : d === 'hard' ? '#e8c170' : '#e58a8a';
+          const tone = d === 'normal' ? 'var(--c-win)' : d === 'hard' ? '#e8c170' : 'var(--c-loss)';
           return (
             <button
               key={d}
@@ -971,7 +971,7 @@ function DifficultyPicker({ value, onChange }: { value: Difficulty; onChange: (d
                 flex: '1 1 180px', textAlign: 'left', cursor: 'pointer', padding: '8px 12px',
                 borderRadius: 8, fontFamily: 'inherit',
                 border: `1px solid ${on ? tone : 'var(--em-border,#2a3340)'}`,
-                background: on ? `${tone}1f` : 'transparent',
+                background: on ? `color-mix(in srgb, ${tone} 12%, transparent)` : 'transparent',
                 boxShadow: on ? `0 0 0 1px ${tone}` : 'none',
               }}
             >
@@ -7478,7 +7478,7 @@ function TeamDetail({ team, league, form, onClose }: { team: TTeam; league?: Lea
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* hero do time */}
           <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--rtm-border)', boxShadow: 'var(--rtm-shadow-banner)' }}>
-            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, ${team.colors[0]}33, rgba(13,17,22,.92))` }} />
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(110deg, color-mix(in srgb, ${team.colors[0]} 20%, transparent), rgba(13,17,22,.92))` }} />
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '18px', padding: '20px 22px', flexWrap: 'wrap' }}>
               <TeamBadge tag={team.tag} colors={team.colors} logoUrl={team.logoUrl} size={64} />
               <div style={{ flex: 1, minWidth: 180 }}>
@@ -8073,7 +8073,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             style={{
               padding: '6px 12px',
               background: 'color-mix(in srgb, var(--c-win) 12%, transparent)',
-              color: '#5ed88a',
+              color: 'var(--c-win)',
               border: '1px solid color-mix(in srgb, var(--c-win) 45%, transparent)',
               borderRadius: 4,
               fontFamily: 'inherit',
@@ -8090,7 +8090,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             style={{
               padding: '6px 12px',
               background: 'color-mix(in srgb, var(--c-loss) 10%, transparent)',
-              color: '#e58a8a',
+              color: 'var(--c-loss)',
               border: '1px solid color-mix(in srgb, var(--c-loss) 45%, transparent)',
               borderRadius: 4,
               fontFamily: 'inherit',
@@ -8114,7 +8114,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             const v = decided[r.playerId];
             const isKeep = v === 'keep';
             const isDrop = v === 'drop';
-            const accent = isKeep ? '#5ed88a' : isDrop ? '#e58a8a' : 'var(--em-border)';
+            const accent = isKeep ? 'var(--c-win)' : isDrop ? 'var(--c-loss)' : 'var(--em-border)';
             return (
               <div
                 key={r.playerId}
@@ -8148,9 +8148,9 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
                     onClick={() => set(r.playerId, 'keep')}
                     style={{
                       padding: '7px 14px',
-                      background: isKeep ? '#5ed88a' : 'transparent',
-                      color: isKeep ? '#0a1a0c' : '#5ed88a',
-                      border: `1px solid ${isKeep ? '#5ed88a' : 'color-mix(in srgb, var(--c-win) 45%, transparent)'}`,
+                      background: isKeep ? 'var(--c-win)' : 'transparent',
+                      color: isKeep ? '#0a1a0c' : 'var(--c-win)',
+                      border: `1px solid ${isKeep ? 'var(--c-win)' : 'color-mix(in srgb, var(--c-win) 45%, transparent)'}`,
                       borderRadius: 4,
                       fontFamily: 'inherit',
                       fontSize: '0.78rem',
@@ -8167,7 +8167,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
                     style={{
                       padding: '7px 14px',
                       background: isDrop ? '#c0392b' : 'transparent',
-                      color: isDrop ? '#fff' : '#e58a8a',
+                      color: isDrop ? '#fff' : 'var(--c-loss)',
                       border: `1px solid ${isDrop ? '#c0392b' : 'color-mix(in srgb, var(--c-loss) 45%, transparent)'}`,
                       borderRadius: 4,
                       fontFamily: 'inherit',
@@ -8210,7 +8210,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {ct('Custo renovações')}
             </span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? '#e58a8a' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
               {formatMoney(cost)}
             </b>
           </div>
@@ -8219,7 +8219,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {ct('Caixa')}
             </span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '1.05rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: 'var(--c-win)', fontSize: '1.05rem', fontWeight: 900 }}>
               {formatMoney(budget)}
             </b>
           </div>
@@ -8229,7 +8229,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             </span>
           )}
           {overBudget && (
-            <span style={{ color: '#e58a8a', fontSize: '0.78rem', marginLeft: 8 }}>
+            <span style={{ color: 'var(--c-loss)', fontSize: '0.78rem', marginLeft: 8 }}>
               ⚠ {ct('Estourou')} {formatMoney(cost - budget)}
             </span>
           )}
@@ -8343,7 +8343,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
           <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
             {ct('Valor da proposta')}
           </div>
-          <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
+          <b style={{ fontFamily: '"JetBrains Mono", monospace', color: 'var(--c-win)', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
             {formatMoney(offer.fee)}
           </b>
         </div>
@@ -8362,7 +8362,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
           lineHeight: 1.55,
         }}
       >
-        <b>{offer.orgName}</b> {ct('(org de elite) ofereceu')} <b style={{ color: '#5ed88a' }}>{formatMoney(offer.fee)}</b> {ct('pelo seu')} <b>{offer.nick}</b>.
+        <b>{offer.orgName}</b> {ct('(org de elite) ofereceu')} <b style={{ color: 'var(--c-win)' }}>{formatMoney(offer.fee)}</b> {ct('pelo seu')} <b>{offer.nick}</b>.
         {' '}
         {ct('Vender enche o caixa, mas você fica com 4 e precisa repor no mercado. Segurar mantém a')} <b>{orgName}</b> {ct('forte.')}
       </div>
@@ -8767,7 +8767,7 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
                 {ct(e.blurb)}
               </div>
               <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8 }}>
-                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: '#5ed88a', fontWeight: 800 }}>
+                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
                   💰 {formatMoney(e.budget)}
                 </span>
                 <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>{ct('Assumir')} →</span>
@@ -8910,7 +8910,7 @@ function TeamPickCard({
 
       {/* Footer: budget + CTA */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 2 }}>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.88rem', color: '#5ed88a', fontWeight: 800 }}>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.88rem', color: 'var(--c-win)', fontWeight: 800 }}>
           💰 {formatMoney(budget)}
         </span>
         <span style={{ fontSize: '0.72rem', color: 'var(--em-gold)', fontWeight: 700 }}>
@@ -9092,7 +9092,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
 
                     {/* Footer: budget + CTA */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 'auto' }}>
-                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: '#5ed88a', fontWeight: 800 }}>
+                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
                         💰 {formatMoney(budget)}
                       </span>
                       <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>
@@ -9302,7 +9302,7 @@ function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNull
                     </button>
                   )}
                 </div>
-                {logoErr && <div style={{ marginTop: 4, fontSize: '0.74rem', color: '#e58a8a' }}>{logoErr}</div>}
+                {logoErr && <div style={{ marginTop: 4, fontSize: '0.74rem', color: 'var(--c-loss)' }}>{logoErr}</div>}
                 {customLogo && <div style={{ marginTop: 4, fontSize: '0.72rem', color: 'var(--em-muted)' }}>{ct('Logo enviada — redimensionada pra 128px.')}</div>}
               </FoundField>
             ) : (
@@ -9511,7 +9511,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           <NegoFigure label={ct('Valor mercado')} value={formatMoney(mkt)} />
           <NegoFigure label={ct('Pedida do clube')} value={formatMoney(ask)} accent="#e8c170" />
-          <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="#e58a8a" />
+          <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="var(--c-loss)" />
         </div>
 
         {/* #37/#38: avisos de contexto — cláusula segura o preço, infeliz derruba */}
@@ -9565,7 +9565,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
             </div>
             {swapValue > 0 && (
               <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--em-muted)' }}>
-                {ct('Valor da troca:')} <b style={{ color: '#5ed88a', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b>
+                {ct('Valor da troca:')} <b style={{ color: 'var(--c-win)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b>
               </div>
             )}
           </div>
@@ -9599,16 +9599,16 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
           />
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, fontSize: '0.86rem', flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--em-muted)' }}>{ct('Dinheiro:')}</span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? '#e58a8a' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
               {formatMoney(offer)}
             </b>
             {swapValue > 0 && (
               <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem' }}>
-                + troca <b style={{ color: '#5ed88a', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(effectiveOffer)}</b>
+                + troca <b style={{ color: 'var(--c-win)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(effectiveOffer)}</b>
               </span>
             )}
             {overBudget && (
-              <span style={{ color: '#e58a8a', fontSize: '0.76rem', fontWeight: 700 }}>· {ct('sem caixa')}</span>
+              <span style={{ color: 'var(--c-loss)', fontSize: '0.76rem', fontWeight: 700 }}>· {ct('sem caixa')}</span>
             )}
           </div>
         </div>
@@ -9628,9 +9628,9 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
                 'color-mix(in srgb, var(--c-loss) 45%, transparent)'
               }`,
               borderLeft: `3px solid ${
-                reply.kind === 'accept' ? '#5ed88a' :
+                reply.kind === 'accept' ? 'var(--c-win)' :
                 reply.kind === 'counter' ? '#e8c170' :
-                '#e58a8a'
+                'var(--c-loss)'
               }`,
               borderRadius: 4,
               fontSize: '0.84rem',
@@ -10238,7 +10238,7 @@ function MarketScreen({
                     color: 'var(--em-text)',
                   }}
                 >
-                  <b style={{ color: isUp ? '#5ed88a' : isDown ? '#e58a8a' : 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                  <b style={{ color: isUp ? 'var(--c-win)' : isDown ? 'var(--c-loss)' : 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
                     {isUp ? '▲' : isDown ? '▼' : '▬'} {e.nick}
                   </b>
                   <i style={{ color: 'var(--em-muted)', fontSize: '0.72rem', fontStyle: 'normal' }}>
@@ -10639,10 +10639,10 @@ function MarketScreen({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.82rem', color: 'var(--em-muted)' }}>
           {squad.length < 5 && <span>⚠ {ct('Faltam')} <b style={{ color: 'var(--em-text)' }}>{5 - squad.length}</b> {ct('jogador(es)')}</span>}
-          {squad.length === 5 && unresolvedCount > 0 && <span style={{ color: '#e58a8a' }}>⚠ {unresolvedCount} {ct('jogador(es) com vaga vazia — remova e escolha outro')}</span>}
+          {squad.length === 5 && unresolvedCount > 0 && <span style={{ color: 'var(--c-loss)' }}>⚠ {unresolvedCount} {ct('jogador(es) com vaga vazia — remova e escolha outro')}</span>}
           {squad.length === 5 && !coachId && <span>⚠ {ct('Escolha um coach')}</span>}
-          {budgetLeft < 0 && <span style={{ color: '#e58a8a' }}>⚠ {ct('Orçamento estourado')}</span>}
-          {ready && <span style={{ color: '#5ed88a', fontWeight: 700 }}>✓ {ct('Pronto pra fechar')}</span>}
+          {budgetLeft < 0 && <span style={{ color: 'var(--c-loss)' }}>⚠ {ct('Orçamento estourado')}</span>}
+          {ready && <span style={{ color: 'var(--c-win)', fontWeight: 700 }}>✓ {ct('Pronto pra fechar')}</span>}
         </div>
         <button
           type="button"
@@ -10691,8 +10691,8 @@ function MarketScreen({
 
 function HudPill({ label, value, tone, mono }: { label: string; value: string; tone: 'green' | 'red' | 'neutral'; mono?: boolean }) {
   const colors: Record<string, { fg: string; bg: string; border: string }> = {
-    green:   { fg: '#5ed88a', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
-    red:     { fg: '#e58a8a', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
+    green:   { fg: 'var(--c-win)', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
+    red:     { fg: 'var(--c-loss)', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];
@@ -10736,7 +10736,7 @@ function SquadRow({
   disabledHint?: string;
   onClick: () => void;
 }) {
-  const accent = tone === 'promote' ? '#5ed88a' : '#e8a93b';
+  const accent = tone === 'promote' ? 'var(--c-win)' : '#e8a93b';
   return (
     <button
       type="button"

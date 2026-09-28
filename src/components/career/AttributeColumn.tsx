@@ -24,9 +24,9 @@ export function AttributeColumn({ attributes }: Props) {
       </header>
 
       <div style={gridStyle}>
-        <ColumnBlock title="Mecânica" color="#e25a5a" keys={MECHANICAL_KEYS} attrs={attributes} />
+        <ColumnBlock title="Mecânica" color="var(--c-loss)" keys={MECHANICAL_KEYS} attrs={attributes} />
         <ColumnBlock title="Mental" color="#5fa4e8" keys={MENTAL_KEYS} attrs={attributes} />
-        <ColumnBlock title="Físico" color="#5ed88a" keys={PHYSICAL_KEYS} attrs={attributes} />
+        <ColumnBlock title="Físico" color="var(--c-win)" keys={PHYSICAL_KEYS} attrs={attributes} />
       </div>
     </section>
   );
@@ -127,7 +127,7 @@ const columnHeaderStyle = (color: string): React.CSSProperties => ({
   textTransform: 'uppercase',
   color,
   paddingBottom: 4,
-  borderBottom: `1px solid ${color}44`,
+  borderBottom: `1px solid color-mix(in srgb, ${color} 27%, transparent)`,
 });
 
 const rowStyle: React.CSSProperties = {

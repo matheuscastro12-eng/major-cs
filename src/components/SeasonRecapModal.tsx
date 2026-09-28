@@ -61,7 +61,7 @@ const OUTCOME_ACCENT: Record<SeasonRecapData['outcome'], { fg: string; label: st
   champion: { fg: '#e8c170', label: '🏆 CAMPEÃO' },
   top4: { fg: '#9bd35c', label: '🥇 TOP 4' },
   mid: { fg: '#5fa4e8', label: '⏺ MEIO DA TABELA' },
-  bottom: { fg: '#e58a8a', label: '⏬ ZONA DE BAIXO' },
+  bottom: { fg: 'var(--c-loss)', label: '⏬ ZONA DE BAIXO' },
 };
 
 export function SeasonRecapModal({ data, onClose }: Props) {
@@ -107,8 +107,8 @@ export function SeasonRecapModal({ data, onClose }: Props) {
         <div
           style={{
             padding: '14px 28px',
-            background: `linear-gradient(180deg, ${outcomeData.fg}24 0%, transparent 100%)`,
-            border: `2px solid ${outcomeData.fg}80`,
+            background: `linear-gradient(180deg, color-mix(in srgb, ${outcomeData.fg} 14%, transparent) 0%, transparent 100%)`,
+            border: `2px solid color-mix(in srgb, ${outcomeData.fg} 50%, transparent)`,
             borderRadius: 8,
             textAlign: 'center',
           }}
@@ -182,7 +182,7 @@ export function SeasonRecapModal({ data, onClose }: Props) {
           <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Saldo do split
           </div>
-          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.6rem', fontWeight: 900, color: data.finance.net >= 0 ? '#5ed88a' : '#e58a8a', marginTop: 4 }}>
+          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.6rem', fontWeight: 900, color: data.finance.net >= 0 ? 'var(--c-win)' : 'var(--c-loss)', marginTop: 4 }}>
             {data.finance.net >= 0 ? '+' : ''}{fmt(data.finance.net)}
           </div>
           <div style={{ fontSize: '0.76rem', color: 'var(--em-muted)', marginTop: 6 }}>
@@ -259,7 +259,7 @@ export function SeasonRecapModal({ data, onClose }: Props) {
 
 function FinanceRow({ label, value, positive }: { label: string; value: number; positive?: boolean }) {
   const isPositive = positive ?? value >= 0;
-  const fg = isPositive ? '#5ed88a' : '#e58a8a';
+  const fg = isPositive ? 'var(--c-win)' : 'var(--c-loss)';
   return (
     <div
       style={{

@@ -125,7 +125,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
             </div>
             <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '6px', background: 'rgba(18,22,27,.6)', border: '1px solid var(--em-border)' }}>
               <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>{ct('Temporada')}</div>
-              <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '18px', color: '#29c47a' }}>{stats.w}W · {stats.l}L</div>
+              <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '18px', color: 'var(--c-win)' }}>{stats.w}W · {stats.l}L</div>
             </div>
           </div>
         </div>
@@ -170,11 +170,11 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
     const won = outcome.won;
     return (
       <div style={{ maxWidth: '560px', margin: '50px auto 0', textAlign: 'center' }}>
-        <div style={{ fontFamily: 'inherit', fontSize: '64px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '4px', color: won ? '#29c47a' : '#e2574c', textShadow: `0 0 40px ${won ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : 'color-mix(in srgb, var(--c-loss) 40%, transparent)'}` }}>{won ? ct('Vitória') : ct('Derrota')}</div>
+        <div style={{ fontFamily: 'inherit', fontSize: '64px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '4px', color: won ? 'var(--c-win)' : '#e2574c', textShadow: `0 0 40px ${won ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : 'color-mix(in srgb, var(--c-loss) 40%, transparent)'}` }}>{won ? ct('Vitória') : ct('Derrota')}</div>
         <div style={{ fontSize: '15px', color: 'var(--em-muted)', marginTop: '4px' }}>vs {rival ? rival.nick : 'rival'}</div>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', margin: '24px auto 0', padding: '16px 28px', borderRadius: '10px', background: 'var(--em-panel)', border: '1px solid var(--em-border)' }}>
           <div><div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--em-muted)', fontWeight: 700, letterSpacing: '.6px' }}>MMR</div><div style={{ fontFamily: 'inherit', fontSize: '28px', fontWeight: 800, color: 'var(--em-text)' }}>{stats.mmr}</div></div>
-          <div style={{ fontFamily: 'inherit', fontSize: '20px', fontWeight: 800, color: won ? '#29c47a' : '#e2574c' }}>{outcome.delta >= 0 ? '+' : ''}{outcome.delta}</div>
+          <div style={{ fontFamily: 'inherit', fontSize: '20px', fontWeight: 800, color: won ? 'var(--c-win)' : '#e2574c' }}>{outcome.delta >= 0 ? '+' : ''}{outcome.delta}</div>
         </div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '26px' }}>
           <Button variant="primary" onClick={beginSearch}>{ct('Jogar de novo')}</Button>
@@ -201,7 +201,7 @@ export function Ranked1v1({ manager, pool, stats, setStats, onReport, onHub, onE
           <span style={{ width: '38px', height: '38px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', fontWeight: 800, color: '#06121d', background: 'linear-gradient(160deg, var(--em-gold), var(--em-gold))' }}>{rival ? rival.nick.slice(0, 2).toUpperCase() : '??'}</span>
         </span>
       </div>
-      <div style={{ textAlign: 'center', marginBottom: '12px', fontFamily: 'inherit', fontSize: '15px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: pickN >= ORDER.length ? '#29c47a' : myTurn ? 'var(--em-gold)' : 'var(--em-gold)' }}>
+      <div style={{ textAlign: 'center', marginBottom: '12px', fontFamily: 'inherit', fontSize: '15px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: pickN >= ORDER.length ? 'var(--c-win)' : myTurn ? 'var(--em-gold)' : 'var(--em-gold)' }}>
         {pickN >= ORDER.length ? ct('Draft completo — resolvendo…') : myTurn ? `● ${ct('Sua escolha')}` : `${rival ? rival.nick : 'rival'} ${ct('está escolhendo…')}`}
       </div>
       <div className="rtm-pcards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', opacity: myTurn ? 1 : 0.75 }}>

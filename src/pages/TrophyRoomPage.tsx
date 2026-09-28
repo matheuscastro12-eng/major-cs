@@ -166,7 +166,7 @@ export function TrophyRoomPage({ history, orgName, currentSplit, onClose }: Prop
 
 function TrophyCard({ t }: { t: TrophyEntry }) {
   const isMajor = t.kind === 'major';
-  const accent = isMajor ? '#e8c170' : '#5ed88a';
+  const accent = isMajor ? '#e8c170' : 'var(--c-win)';
   return (
     <div
       style={{
@@ -174,8 +174,8 @@ function TrophyCard({ t }: { t: TrophyEntry }) {
         flexDirection: 'column',
         gap: 8,
         padding: 14,
-        background: `linear-gradient(160deg, ${accent}1a 0%, var(--em-panel) 70%)`,
-        border: `1px solid ${accent}66`,
+        background: `linear-gradient(160deg, color-mix(in srgb, ${accent} 10%, transparent) 0%, var(--em-panel) 70%)`,
+        border: `1px solid color-mix(in srgb, ${accent} 40%, transparent)`,
         borderRadius: 8,
       }}
     >
@@ -199,7 +199,7 @@ function TrophyCard({ t }: { t: TrophyEntry }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid var(--em-border)', paddingTop: 8, fontSize: '0.74rem' }}>
         <span style={{ color: 'var(--em-muted)' }}>Split {t.split}</span>
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a' }}>{fmtMoney(t.prize)}</b>
+        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: 'var(--c-win)' }}>{fmtMoney(t.prize)}</b>
       </div>
     </div>
   );
@@ -220,7 +220,7 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 }
 
 function Counter({ label, value, tone, icon }: { label: string; value: number | string; tone: 'gold' | 'green' | 'neutral'; icon: 'trophy' | 'medal' | 'coin' }) {
-  const colors: Record<string, string> = { gold: '#e8c170', green: '#5ed88a', neutral: 'var(--em-text)' };
+  const colors: Record<string, string> = { gold: '#e8c170', green: 'var(--c-win)', neutral: 'var(--em-text)' };
   return (
     <div
       style={{

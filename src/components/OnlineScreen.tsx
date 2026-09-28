@@ -1037,8 +1037,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   return (
                     <div key={r.code} className="ut-room-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', opacity: full ? 0.7 : 1 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: full ? 'var(--rtm-faint)' : 'var(--c-win)', boxShadow: full ? 'none' : '0 0 7px var(--c-win)' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--c-win)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}</div>
@@ -1082,7 +1082,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
               </div>
               <div style={{ textAlign: 'center', padding: '10px 18px', borderRadius: '6px', background: 'rgba(18,22,27,.6)', border: '1px solid var(--em-border)' }}>
                 <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>{ct('Temporada')}</div>
-                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: '#29c47a' }}>{myRank ? `${myRank.wins}W · ${myRank.losses}L` : '0W · 0L'}</div>
+                <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 800, fontSize: '18px', color: 'var(--c-win)' }}>{myRank ? `${myRank.wins}W · ${myRank.losses}L` : '0W · 0L'}</div>
               </div>
             </div>
           </div>
@@ -1133,8 +1133,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 {duelRooms.map((r) => (
                   <div key={r.code} className="ut-room-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 7px #29c47a' }} />
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{ct('Aguardando')}</span>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 7px var(--c-win)' }} />
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--c-win)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{ct('Aguardando')}</span>
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '16px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}</div>
@@ -1179,7 +1179,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--em-muted)' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 8px #29c47a' }} />
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 8px var(--c-win)' }} />
                 <b style={{ color: 'var(--em-text)' }}>{openCount} {ct('salas abertas')}</b> {ct('agora')} · {visibleRooms.length} {ct('no total')}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -1204,8 +1204,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 return (
                   <div key={r.code} className="ut-room-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--em-panel)', border: '1px solid var(--em-border)', opacity: full ? 0.7 : 1 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '96px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : 'var(--c-win)', boxShadow: full ? 'none' : '0 0 7px var(--c-win)' }} />
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--c-win)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--em-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--em-gold)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</div>
@@ -1471,8 +1471,8 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     return (
                     <div key={r.code} className="ut-room-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '10px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', opacity: full ? 0.75 : 1 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '94px' }}>
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : '#29c47a', boxShadow: full ? 'none' : '0 0 7px #29c47a' }} />
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : '#29c47a', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: full ? 'var(--rtm-faint)' : 'var(--c-win)', boxShadow: full ? 'none' : '0 0 7px var(--c-win)' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: full ? 'var(--rtm-faint)' : 'var(--c-win)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{full ? ct('Cheia') : ct('Aguardando')}</span>
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--rtm-font-cond)', fontWeight: 700, fontSize: '17px', color: 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name?.trim() || `${ct('Sala de')} ${r.host}`}{r.ranked && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.5px', color: 'var(--em-gold)', background: 'rgba(216,169,67,.16)', border: '1px solid var(--em-gold)', padding: '1px 6px', borderRadius: '4px' }}>{ct('RANQUEADA')}</span>}</div>
@@ -1577,7 +1577,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 }}
               >🔗 {tr('online.copyLink')}</Button>
             </div>
-            {shareStatus && <div style={{ fontSize: '12px', color: '#29c47a', marginTop: 6 }}>{shareStatus}</div>}
+            {shareStatus && <div style={{ fontSize: '12px', color: 'var(--c-win)', marginTop: 6 }}>{shareStatus}</div>}
             <div style={{ fontSize: '12px', color: 'var(--em-muted)', margin: '12px auto 0', maxWidth: 420, lineHeight: 1.5 }}>
               {tr(state.lobby.pool === 'br' ? 'online.poolBrLong' : 'online.poolWorldLong')} · {state.lobby.draft_rollouts ?? 2} rerolls por rodada · {tr('online.clickCodeToCopy')}
             </div>
@@ -1745,7 +1745,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '24px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-gold)', textShadow: '0 0 28px rgba(216,169,67,.35)' }}>{duel.nicks[duel.series.winner]} {ct('venceu')}</b>
                   <span style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '18px', fontWeight: 800, color: 'var(--em-text)', fontVariantNumeric: 'tabular-nums' }}>{duel.series.mapScore[0]} : {duel.series.mapScore[1]} · MD3</span>
                   <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${duel.nicks[duel.series.winner]} ${ct('venceu')} ${duel.nicks[duel.series.winner === 0 ? 1 : 0]} ${ct('por')} ${duel.series.mapScore[0]}:${duel.series.mapScore[1]}. ${ct('Monte seu time em roadtomajor.com.br/online')}`)}>{ct('Compartilhar resultado')}</Button>
-                  {shareStatus && <small style={{ fontSize: '11px', color: '#29c47a' }}>{shareStatus}</small>}
+                  {shareStatus && <small style={{ fontSize: '11px', color: 'var(--c-win)' }}>{shareStatus}</small>}
                 </div>
                 {isHost ? (
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: 14 }}>
@@ -2225,7 +2225,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                 <b style={{ fontFamily: 'var(--rtm-font-cond)', fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--em-gold)' }}>{champNick ?? champ?.name} {ct('campeão')}</b>
                 <span style={{ fontSize: '12px', color: 'var(--em-muted)' }}>Major Ultimate Team · {ct('Temporada')} {state.lobby.season ?? 1}</span>
                 <Button variant="gold" size="sm" style={{ marginTop: 4 }} onClick={() => shareResult(`Road to Major Ultimate Team: ${champNick ?? champ?.name} ${ct('foi campeão do Major. Teste com seus amigos em roadtomajor.com.br/online')}`)}>{ct('Compartilhar resultado')}</Button>
-                {shareStatus && <small style={{ fontSize: '11px', color: '#29c47a' }}>{shareStatus}</small>}
+                {shareStatus && <small style={{ fontSize: '11px', color: 'var(--c-win)' }}>{shareStatus}</small>}
               </div>
               {/* continuar a sala: nova temporada com novo draft (transferências) */}
               <div style={{ marginTop: 16 }}>
@@ -2367,7 +2367,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <p style={{ color: 'var(--em-muted)', fontSize: '14px', margin: '0 0 14px' }}>{ct('Você entrará automaticamente no veto e poderá acompanhar todas as partidas.')}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
               {activePlayers.map((player) => (
-                <span key={player.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: player.done ? '#29c47a' : 'var(--em-muted)', background: player.done ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${player.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>
+                <span key={player.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: player.done ? 'var(--c-win)' : 'var(--em-muted)', background: player.done ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${player.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>{player.done ? '✓' : '·'} {player.nick} · {player.picks?.length ?? 0}/5</span>
               ))}
             </div>
           </div>
@@ -2404,7 +2404,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
             <p style={{ textAlign: 'center', color: 'var(--em-muted)', fontSize: '14px', marginTop: 0 }}>{tr('online.waitingOthers')}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
               {activePlayers.map((p) => (
-                <span key={p.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: p.done ? '#29c47a' : 'var(--em-muted)', background: p.done ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${p.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>
+                <span key={p.nick} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, padding: '6px 12px', borderRadius: 'var(--rtm-radius-pill)', color: p.done ? 'var(--c-win)' : 'var(--em-muted)', background: p.done ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'var(--em-panel-2)', border: `1px solid ${p.done ? 'var(--rtm-green)' : 'var(--em-border)'}` }}>
                   {p.done ? '✔' : '·'} {p.nick}
                 </span>
               ))}
@@ -2590,7 +2590,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                     {KEY.map((k) => {
                       const ok = present.has(k.role);
                       return (
-                        <span key={k.role} style={{ fontSize: '11px', fontWeight: 700, color: ok ? '#29c47a' : 'var(--rtm-faint)' }}>
+                        <span key={k.role} style={{ fontSize: '11px', fontWeight: 700, color: ok ? 'var(--c-win)' : 'var(--rtm-faint)' }}>
                           {ok ? '✓' : '✗'} {k.label}
                         </span>
                       );
@@ -2620,7 +2620,7 @@ export function OnlineScreen({ onBack, initialCode, account, casualOnly = false,
                   <b style={{ flex: 1, minWidth: 0, fontFamily: 'var(--rtm-font-cond)', fontSize: '14px', color: mine ? 'var(--em-gold)' : 'var(--em-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {p.nick === state.lobby.host ? '★ ' : ''}{p.nick}{mine ? ` (${tr('common.you')})` : ''}
                   </b>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: ready ? '#29c47a' : 'var(--em-muted)' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: ready ? 'var(--c-win)' : 'var(--em-muted)' }}>
                     {ready ? tr('online.ready') : `${livePicks.length}/5 ${tr('online.picks')}`}
                   </span>
                   {isHost && !mine && p.nick !== state.lobby.host && !ready && (

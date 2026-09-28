@@ -486,7 +486,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <FounderCounter style={{ marginTop: '8px' }} />
         </div>
       )}
-      {info && mode !== 'signup' && <p style={{ color: '#5ed88a', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
+      {info && mode !== 'signup' && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
       {mode !== 'reset' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
@@ -581,7 +581,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
       {pix && (
         <div style={{ marginTop: '14px', background: 'color-mix(in srgb, var(--c-win) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-win) 35%, transparent)', borderRadius: '6px', padding: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#5ed88a', boxShadow: '0 0 8px #5ed88a', animation: 'pulse 1.4s infinite' }} />
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 8px var(--c-win)', animation: 'pulse 1.4s infinite' }} />
             <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
           </div>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
