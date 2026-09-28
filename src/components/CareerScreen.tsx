@@ -7665,15 +7665,16 @@ export interface SeasonStat { id: string; nick: string; teamTag: string; country
 function seasonPlayerStats(l: League): SeasonStat[] {
   const meta = new Map<string, { nick: string; teamTag: string; country: string; role: string }>();
   for (const t of l.teams) for (const p of t.players) meta.set(p.id, { nick: p.nick, teamTag: t.tag, country: p.country, role: p.role });
-  const agg = new Map<string, { k: number; d: number; a: number; dmg: number; kast: number; r: number }>();
+  const agg = new Map<string, { k: number; d: number; a: number; dmg: number; kast: number; r: number; maps: number }>();
   for (const round of l.rounds) {
     for (const m of round) {
       if (!m.result) continue;
       for (const map of m.result.maps) {
         for (const [id, st] of Object.entries(map.stats)) {
-          const cur = agg.get(id) ?? { k: 0, d: 0, a: 0, dmg: 0, kast: 0, r: 0 };
+          const cur = agg.get(id) ?? { k: 0, d: 0, a: 0, dmg: 0, kast: 0, r: 0, maps: 0 };
           cur.k += st.both.kills; cur.d += st.both.deaths; cur.a += st.both.assists;
           cur.dmg += st.both.dmg; cur.kast += st.both.kastRounds; cur.r += st.both.rounds;
+          cur.maps += 1; // mesmo critério do accumulateCareerStats: 1 por mapa jogado
           agg.set(id, cur);
         }
       }
@@ -7688,7 +7689,7 @@ function seasonPlayerStats(l: League): SeasonStat[] {
     const rating = Math.max(0, 0.0073 * kast * 100 + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adr + 0.1587);
     const md = meta.get(id);
     if (!md) continue;
-    out.push({ id, nick: md.nick, teamTag: md.teamTag, country: md.country, role: md.role, rating, kd: s.d ? s.k / s.d : s.k, adr, maps: 0 });
+    out.push({ id, nick: md.nick, teamTag: md.teamTag, country: md.country, role: md.role, rating, kd: s.d ? s.k / s.d : s.k, adr, maps: s.maps });
   }
   return out.sort((a, b) => b.rating - a.rating);
 }
