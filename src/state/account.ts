@@ -95,7 +95,7 @@ export async function beginCoinsPix(tier: CoinTierId): Promise<CoinCharge> {
 }
 // Compra de coins com CARTÃO (Stripe) — pra quem não tem Pix (gringos). Cria uma
 // Checkout Session no servidor e devolve a URL; o app redireciona pra lá. Na volta
-// (/ultimate?coins=ok) o webhook já marcou o pedido pago e claimPaidCoins credita.
+// (/ultimate?coins=ok) o webhook já marcou o pedido pago e o claim (paidClaim.ts) credita.
 export async function beginCoinsCheckout(tier: CoinTierId): Promise<string> {
   const token = getToken(); if (!token) throw new Error(ct('Faça login antes de comprar coins.'));
   let origin = ''; try { origin = window.location.origin; } catch { /* sem window */ }
@@ -104,18 +104,48 @@ export async function beginCoinsCheckout(tier: CoinTierId): Promise<string> {
   return d.url;
 }
 
-// Coleta pedidos pagos e ainda não creditados (idempotente no servidor).
-// Retorna o total de coins a creditar agora (0 se nada novo).
-export async function claimPaidCoins(): Promise<number> {
-  const token = getToken(); if (!token) return 0;
+// [O0-46] Crédito pago que o SERVIDOR já gravou no ledger do Ultimate
+// (opId coins:<corr> | pass:<season>). O save absorve cada voucher 1× (srvSeen).
+export interface PaidVoucher { opId: string; kind: 'coins' | 'pass'; credits: number; season?: number; orderId: string }
+
+function parseVouchers(raw: unknown): PaidVoucher[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PaidVoucher[] = [];
+  for (const v of raw) {
+    if (!v || typeof v !== 'object') continue;
+    const o = v as Record<string, unknown>;
+    const opId = typeof o.opId === 'string' ? o.opId : '';
+    const kind = o.kind === 'coins' || o.kind === 'pass' ? o.kind : null;
+    if (!opId || !kind) continue;
+    const season = Number(o.season);
+    out.push({
+      opId, kind,
+      credits: Math.max(0, Math.trunc(Number(o.credits) || 0)),
+      ...(Number.isInteger(season) && season > 0 ? { season } : {}),
+      orderId: typeof o.orderId === 'string' ? o.orderId : '',
+    });
+  }
+  return out;
+}
+
+// Coleta pedidos pagos (idempotente no servidor, que JÁ credita no ledger).
+// Devolve os pedidos recém-claimados + TODOS os vouchers de coins da conta —
+// quem soma no save é o serviço único (src/state/paidClaim.ts), só com os
+// vouchers que o save ainda não viu. null = offline/deslogado (nada perdido:
+// o próximo claim devolve os mesmos vouchers).
+export interface PaidCoinsClaim { orders: { orderId: string; coins: number }[]; vouchers: PaidVoucher[] }
+export async function claimPaidCoins(): Promise<PaidCoinsClaim | null> {
+  const token = getToken(); if (!token) return null;
   try {
     const d = await post({ action: 'coinsClaim', token });
     // [U02] purchase_fulfilled só aqui: o servidor acabou de marcar o pedido como
     // 'claimed' (confirmação autoritativa, 1x por pedido). Sem valor pago, sem e-mail.
-    const orders = Array.isArray(d.orders) ? (d.orders as { orderId?: unknown }[]) : [];
-    for (const o of orders) if (o.orderId) trackUltFunnel('purchase_fulfilled', { product_kind: 'coins', orderId: String(o.orderId) });
-    return Number(d.coins) || 0;
-  } catch { return 0; }
+    const orders = (Array.isArray(d.orders) ? (d.orders as { orderId?: unknown; coins?: unknown }[]) : [])
+      .map((o) => ({ orderId: String(o.orderId ?? ''), coins: Number(o.coins) || 0 }))
+      .filter((o) => o.orderId);
+    for (const o of orders) trackUltFunnel('purchase_fulfilled', { product_kind: 'coins', orderId: o.orderId });
+    return { orders, vouchers: parseVouchers(d.vouchers) };
+  } catch { return null; }
 }
 
 // ── Passe Premium do Ultimate (R$ 30,00 · dinheiro real) ────────────────────
@@ -146,10 +176,13 @@ export async function beginPassCheckout(season: number): Promise<string | null> 
   if (typeof d.url !== 'string' || !d.url) throw new Error(ct('Checkout indisponível. Tente de novo.'));
   return d.url;
 }
-// Coleta pedidos de passe pagos e ainda não claimados (idempotente no servidor).
+// Coleta pedidos de passe pagos e ainda não claimados (idempotente no servidor,
+// que JÁ grava pass:<season> no ledger). Devolve os pedidos recém-claimados +
+// os vouchers da conta; o premium é ligado pelo serviço único (paidClaim.ts).
 export interface PaidPassOrder { orderId: string; season: number }
-export async function claimPaidPassOrders(): Promise<PaidPassOrder[]> {
-  const token = getToken(); if (!token) return [];
+export interface PaidPassClaim { orders: PaidPassOrder[]; vouchers: PaidVoucher[] }
+export async function claimPaidPassOrders(): Promise<PaidPassClaim | null> {
+  const token = getToken(); if (!token) return null;
   try {
     const d = await post({ action: 'passClaim', token });
     const arr = Array.isArray(d.orders) ? (d.orders as { orderId?: unknown; season?: unknown }[]) : [];
@@ -157,27 +190,12 @@ export async function claimPaidPassOrders(): Promise<PaidPassOrder[]> {
       .map((o) => ({ orderId: String(o.orderId ?? ''), season: Number(o.season) || 0 }))
       .filter((o) => o.orderId && o.season > 0);
     for (const o of orders) trackUltFunnel('purchase_fulfilled', { product_kind: 'pass', orderId: o.orderId }); // [U02] confirmação do servidor
-    return orders;
-  } catch { return []; }
-}
-
-// Resumo das compras de coins da conta: purchased = total já comprado (pedidos
-// creditados) e restorable = quanto ainda pode ser re-emitido (1× por coin) pra
-// quem perdeu o save local. null se deslogado/offline.
-export async function fetchCoinsSummary(): Promise<{ purchased: number; restorable: number } | null> {
-  const token = getToken(); if (!token) return null;
-  try {
-    const d = await post({ action: 'coinsSummary', token });
-    return { purchased: Number(d.purchased) || 0, restorable: Number(d.restorable) || 0 };
+    return { orders, vouchers: parseVouchers(d.vouchers) };
   } catch { return null; }
 }
 
-// Re-emite os coins comprados que ainda não foram restaurados (o servidor limita
-// a 1× por coin comprado, pra sempre). Retorna quantos coins creditar agora.
-export async function restorePurchasedCoins(): Promise<number> {
-  const token = getToken(); if (!token) return 0;
-  try { const d = await post({ action: 'coinsRestore', token }); return Number(d.coins) || 0; } catch { return 0; }
-}
+// [O0-04] "Recuperar compras" (coinsSummary/coinsRestore) saiu: com o O0-46 a
+// compra já mora no ledger do servidor e os vouchers voltam em todo claim.
 
 export async function exportAccountData(): Promise<Record<string, unknown>> {
   const token = getToken();

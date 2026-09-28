@@ -51,7 +51,7 @@ import { isSpecial, rarityInfo } from '../../engine/ultimate/rarities';
 // mercado P2P (fase B): rede em ultimateMarket.ts; mutações locais (sem espelho)
 // nas actions marketListCard/marketCardSold/marketCardReturned/marketBuyApply.
 import {
-  mktBrowse, mktBuy, mktCancel, mktList, mktMine, mktMarkSeen, mktSeenHas,
+  mktBrowse, mktBuy, mktCancel, mktList, mktMine,
   mktPriceBounds, mktSellerProceeds, mktDeviation, mktSalesFor, mktRecentSales,
   MKT_LISTING_TTL_H, MKT_MAX_ACTIVE_LISTINGS,
   type MktBrowseItem, type MktMineItem, type MktCardSales, type MktRecentSale,
@@ -78,7 +78,9 @@ import type { PlaybackSpeed } from '../../state/online';
 import { MAP_LABELS, type SeriesResult, type TTeam } from '../../types';
 import { ct } from '../../state/career-i18n';
 import { setCheckoutSrc, track, trackPaywallView, trackUltFunnel } from '../../state/track';
-import { useAccount, beginCoinsPix, beginCoinsCheckout, claimPaidCoins, fetchCoinsSummary, restorePurchasedCoins, beginPassPix, beginPassCheckout, claimPaidPassOrders, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
+import { useAccount, beginCoinsPix, beginCoinsCheckout, beginPassPix, beginPassCheckout, type CoinCharge, type CoinTierId, type PassCharge } from '../../state/account';
+import { collectPaidCoins, collectPaidPass } from '../../state/paidClaim'; // [O0-25] coleta única, crédito fora do ciclo de vida da tela
+import { ultFrozenNotice } from '../../state/ultimateShadow'; // [O0-02]
 import { getLadder, fetchMyRank, reportResult, type RankRow, type MyRank, type OvertakenBy } from '../../state/ranking';
 import { wlMirrorReport, fetchWlStatus, wlWindowNow, type WlStatus } from '../../state/weekendLeague';
 import { WeekendLeague } from '../online/WeekendLeague';
@@ -403,7 +405,7 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId; ev?: string; ed?: EditionBadge }
 
 export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
-  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, claimCommunityGoal, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
+  const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, claimCommunityGoal, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
   const index = ultimateIndex();
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>(TAB_FROM_URL ?? 'hub');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
@@ -653,8 +655,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     flash(ct('Confirmando o pagamento do cartão…'), 3000);
     let tries = 0;
     const tick = () => {
-      void claimPaidCoins().then((n) => {
-        if (n > 0) { addCredits(n); flash(`🪙 +${fmt(n)} coins creditados — obrigado pelo apoio!`, 3600); window.clearInterval(timer); }
+      void collectPaidCoins().then((n) => {
+        if (n > 0) { flash(`🪙 +${fmt(n)} coins creditados — obrigado pelo apoio!`, 3600); window.clearInterval(timer); }
       });
       if (++tries >= 10) window.clearInterval(timer); // ~30s de janela
     };
@@ -662,7 +664,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     tick();
     try { const u = new URL(window.location.href); u.searchParams.delete('coins'); window.history.replaceState({}, '', u.pathname + u.search + u.hash); } catch { /* sem history */ }
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account]);
   // [U08] RETOMADA da intenção: voltou logado com intenção viva → reabre a aba e o produto.
   // Nunca cobra sozinho: coins abrem o modal do Pix (o usuário ainda confirma); passe só abre a aba.
@@ -685,44 +686,23 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   }, [account]);
   // credita pedidos pagos fora do fluxo do modal: no mount e ao visitar a Loja
   // (cobre quem pagou pelo copia-e-cola depois de fechar o QR, ou em outra aba).
-  // De carona, busca o resumo de compras (fetchCoinsSummary) pro card "Recuperar
-  // compras" — depois do claim, pra contar pedidos recém-creditados como comprados.
-  const [restoreInfo, setRestoreInfo] = useState<{ purchased: number; restorable: number } | null>(null);
-  const [restoreBusy, setRestoreBusy] = useState(false);
+  // [O0-25] o crédito acontece na store (collectPaidCoins) mesmo se a tela
+  // desmontar ou a aba mudar no meio do request — `on` só controla o toast.
   useEffect(() => {
     if (!account || (tab !== 'hub' && tab !== 'store')) return;
     let on = true;
-    void claimPaidCoins()
-      .then((n) => { if (on && n > 0) { addCredits(n); flash(`🪙 +${fmt(n)} coins creditados — pagamento confirmado!`, 3600); } })
-      .then(() => fetchCoinsSummary())
-      .then((s) => { if (on) setRestoreInfo(s); });
+    void collectPaidCoins().then((n) => { if (on && n > 0) flash(`🪙 +${fmt(n)} coins creditados — pagamento confirmado!`, 3600); });
     return () => { on = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, tab]);
-  // recuperação de coins comprados (perdeu o save local): resumo vem do efeito
-  // acima; o clique re-emite no servidor (1× por coin) e credita no save atual.
-  const doRestore = () => {
-    if (restoreBusy) return;
-    setRestoreBusy(true);
-    void restorePurchasedCoins()
-      .then((n) => {
-        if (n > 0) { addCredits(n); flash(`🛟 +${fmt(n)} coins recuperados no seu save!`, 3600); }
-        else flash(ct('Nada a recuperar agora — suas compras já foram restauradas.'), 3000);
-        return fetchCoinsSummary();
-      })
-      .then((s) => setRestoreInfo(s))
-      .finally(() => setRestoreBusy(false));
-  };
   // …e a cada 4s enquanto o QR está na tela (o webhook marca pago em segundos).
   useEffect(() => {
     if (!coinModal?.charge) return;
     const t = window.setInterval(() => {
-      void claimPaidCoins().then((n) => {
-        if (n > 0) { addCredits(n); setCoinModal(null); flash(`🪙 +${fmt(n)} coins creditados — obrigado pelo apoio!`, 3600); }
+      void collectPaidCoins().then((n) => {
+        if (n > 0) { setCoinModal(null); flash(`🪙 +${fmt(n)} coins creditados — obrigado pelo apoio!`, 3600); }
       });
     }, 4000);
     return () => window.clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coinModal?.charge]);
 
   // live-ops: conteúdo agendado pelo CRM (promo/SBC/aviso). Snapshot do cache
@@ -737,6 +717,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     return () => { on = false; un(); };
   }, []);
   const liveNotices = activeNotices(liveops).filter((n) => !isNoticeDismissed(n.id));
+  const frozenNotice = ultFrozenNotice(); // [O0-02] carteira congelada pelo admin (lida no boot do espelho)
   const liveSbcs = scheduledSbcs(liveops);
 
   // garante um squad ativo ao abrir a aba Squad
@@ -1035,13 +1016,11 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // Mesma UX da compra de coins: modal com QR Pix + botão de cartão; o webhook
   // marca o pedido pago e o polling (claimPaidPassOrders) liga o premium.
   const [passModal, setPassModal] = useState<{ charge: PassCharge | null; error?: string } | null>(null);
-  // coleta pedidos de passe pagos no servidor (idempotente) e liga o premium.
-  // Season guard: comprado na borda do rollover vale pra temporada CORRENTE
-  // (unlockPremiumPaid anota a divergência no meta do espelho).
-  const tryClaimPass = () => claimPaidPassOrders().then((orders) => {
-    if (!orders.length) return false;
-    const o = orders[0];
-    unlockPremiumPaid(o.orderId, o.season);
+  // coleta pedidos de passe pagos no servidor (idempotente; o servidor grava
+  // pass:<season> no ledger) e liga o premium pelo serviço único [O0-25/O0-46].
+  // Season guard: comprado na borda do rollover vale pra temporada CORRENTE.
+  const tryClaimPass = () => collectPaidPass().then((unlocked) => {
+    if (!unlocked) return false;
     setPassModal(null);
     flash(`👑 ${ct('Passe Premium desbloqueado! Recompensas premium até o seu nível já estão liberadas.')}`, 3600);
     return true;
@@ -1288,20 +1267,17 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     );
   };
 
-  // vendas/retornos vistos no mktMine são processados EXATAMENTE UMA VEZ:
-  // ids marcados em localStorage (rtm-ult-mkt-seen-v1) — F5/poll não re-credita.
+  // vendas/retornos vistos no mktMine são processados EXATAMENTE UMA VEZ POR
+  // CONTA [O0-37]: a marca 'sold:<id>'/'back:<id>' vai no save (sincronizado) —
+  // F5, poll, outro aparelho ou storage limpo não re-creditam.
   const processMine = (rows: MktMineItem[]) => {
     let soldN = 0; let credited = 0; let backN = 0;
     for (const l of rows) {
-      if (l.status === 'sold' && !mktSeenHas(`sold:${l.id}`)) {
+      if (l.status === 'sold') {
         const p = mktSellerProceeds(l.price);
-        marketCardSold(p);
-        mktMarkSeen(`sold:${l.id}`);
-        soldN++; credited += p;
-      } else if ((l.status === 'expired' || l.status === 'cancelled') && !mktSeenHas(`back:${l.id}`)) {
-        marketCardReturned(l.cardId, l.cardKey);
-        mktMarkSeen(`back:${l.id}`);
-        backN++;
+        if (marketCardSold(l.id, p)) { soldN++; credited += p; }
+      } else if (l.status === 'expired' || l.status === 'cancelled') {
+        if (marketCardReturned(l.id, l.cardId, l.cardKey)) backN++;
       }
     }
     if (soldN) flash(`💰 ${soldN === 1 ? ct('Carta vendida no Mercado!') : `${soldN} ${ct('cartas vendidas no Mercado!')}`} +${fmt(credited)} 🪙 (${ct('taxa de 5% já descontada')})`, 3600);
@@ -1468,10 +1444,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     try {
       const r = await mktCancel(l.id);
       if (r.ok) {
-        if (!mktSeenHas(`back:${l.id}`)) {
-          marketCardReturned(l.cardId, l.cardKey); // sem espelho: 'escrow' add já no ledger
-          mktMarkSeen(`back:${l.id}`);
-        }
+        marketCardReturned(l.id, l.cardId, l.cardKey); // sem espelho: 'escrow' add já no ledger; 1× por conta
         setMktMineRows((rows) => rows.map((x) => (x.id === l.id ? { ...x, status: 'cancelled' as const } : x)));
         flash(`↩️ ${ct('Listagem cancelada — a carta voltou pra sua coleção.')}`, 2800);
       } else if (r.error === 'not_active' || r.error === 'not_found') {
@@ -1751,8 +1724,9 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     void fetchUltDraftBoard().then((b) => { if (!dead) setDraftBoard(b); });
     return () => { dead = true; };
   }, [tab, state.profile.draft.active]);
-  // pódio de dias FECHADOS: coleta o prêmio pendente e credita no save (mesmo
-  // padrão do claimPaidCoins — o servidor só marca o claim; o save é a verdade).
+  // pódio de dias FECHADOS: coleta o prêmio pendente e credita no save (o
+  // servidor só marca o claim). [O0-02] com a tx fechada estas coins ficam só
+  // no save — o prêmio com prova e crédito no servidor é o O0-09.
   useEffect(() => {
     if (!account) return;
     let on = true;
@@ -2219,6 +2193,15 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       {/* ===== PAGE ===== */}
       <div className="ut-page">
         {/* avisos agendados (live-ops) — dispensáveis por id, some pra sempre */}
+        {frozenNotice && (
+          <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', marginBottom: 12, borderRadius: 12, background: 'rgba(247,118,142,0.12)', border: '1px solid rgba(247,118,142,0.45)' }}>
+            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2, color: '#f7768e' }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 900, fontSize: '0.85rem' }}>{ct('Carteira em revisão')}</div>
+              <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{frozenNotice}</div>
+            </div>
+          </div>
+        )}
         {liveNotices.map((n) => (
           <div key={n.id} role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', marginBottom: 12, borderRadius: 12, background: 'rgba(122,162,247,0.12)', border: '1px solid rgba(122,162,247,0.4)' }}>
             <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2, color: '#7aa2f7' }} />
@@ -3031,23 +3014,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
             {/* fase 3b: selinho discreto quando o último pack foi rolado no servidor */}
             {packFromCloud && <span style={{ marginLeft: 8, whiteSpace: 'nowrap', opacity: 0.85 }}>☁️ {ct('economia sincronizada')}</span>}
           </p>
-          {/* recuperação de coins comprados: só pra quem PERDEU o save local
-              (navegador limpo / aparelho novo). O servidor re-emite cada coin
-              comprado no máximo 1× — clicar sem ter perdido nada não duplica. */}
-          {account && restoreInfo && restoreInfo.restorable > 0 && (
-            <div className="ut-coinshop" style={{ marginBottom: 12 }}>
-              <div className="ut-coinshop__head">
-                <span className="ut-coinshop__title">🛟 {ct('Recuperar compras')}</span>
-                <span className="ut-coinshop__sub">{ct('Só pra quem perdeu o save (navegador limpo / aparelho novo)')}</span>
-              </div>
-              <p className="muted small" style={{ margin: '6px 0 8px' }}>
-                {ct('Detectamos')} {fmt(restoreInfo.restorable)} {ct('coins de compras suas que não estão neste save. Se você perdeu seu save local, dá pra trazê-los de volta — cada coin comprado só pode ser recuperado uma vez, então não use se seus coins já estão aí.')}
-              </p>
-              <button className="ut-btn ut-btn--gold" onClick={doRestore} disabled={restoreBusy}>
-                <Coins size={15} /> {restoreBusy ? ct('Recuperando…') : `${ct('Recuperar')} ${fmt(restoreInfo.restorable)} coins`}
-              </button>
-            </div>
-          )}
           {/* coins com dinheiro real (Pix) — acelera, não substitui: os mesmos
               packs continuam compráveis só jogando */}
           <div className="ut-coinshop">
@@ -4190,7 +4156,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         <Modal
           open
           // ao fechar, tenta creditar uma última vez — pagou e fechou junto
-          onClose={() => { setCoinModal(null); void claimPaidCoins().then((n) => { if (n > 0) { addCredits(n); flash(`🪙 +${fmt(n)} coins creditados — pagamento confirmado!`, 3600); } }); }}
+          onClose={() => { setCoinModal(null); void collectPaidCoins().then((n) => { if (n > 0) flash(`🪙 +${fmt(n)} coins creditados — pagamento confirmado!`, 3600); }); }}
           title={`${ct('Pacote')} ${coinModal.pack.name} · ${fmt(coinModal.pack.coins)} coins · ${coinModal.pack.price}`}
           size="md">
           {coinModal.error ? (

@@ -1,10 +1,12 @@
 // Testes do "Major da Semana" (weekend league): matemática da janela em
 // America/Sao_Paulo (-03:00 fixo), registro idempotente, reports pareados
-// (conflito não conta pra ninguém), cap de 10 partidas e claim por faixa de
-// vitórias pago pelo ledger idempotente (op_id wl:<windowId>).
+// (conflito não conta pra ninguém), cap de partidas e prêmio por colocação
+// pago pelo settle no ledger idempotente (op_id wl:<windowId>). [O0-08] o
+// claim legado por faixa saiu (testes dele removidos junto).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeDb, type PendingQuery } from './ultimate-economy.mock.js';
+import { applyUltTransaction } from './ultimate-economy.js';
 import {
   weekendWindowFor,
   parseWindowId,
@@ -14,7 +16,6 @@ import {
   wlSchemaQueries,
   wlRegister,
   wlReport,
-  wlClaim,
   wlStatus,
   wlSettle,
   WL_PLACEMENT_PRIZES,
@@ -272,66 +273,6 @@ test('report: cap de 60 partidas — report além do cap rejeitado; lado capado 
   assert.equal(db.entry('d@x', WID)?.losses, 1); // lado com espaço conta
 });
 
-// ------------------------------------------------------------------- claim
-
-test('claim: antes de fechar só com run completo; paga a faixa pelo ledger', async () => {
-  const db = new WlFakeDb();
-  await setupPair(db);
-  const a = db.entry('a@x', WID)!;
-  a.wins = 3; a.losses = 2;
-  const early = await wlClaim(db.sql, 'a@x', WID, WED_MORNING);
-  assert.deepEqual(early, { ok: false, error: 'window_still_open' });
-  a.wins = 6; a.losses = 54; // run completo ainda na janela (60)
-  const r = await wlClaim(db.sql, 'a@x', WID, WED_MORNING);
-  assert.ok(r.ok);
-  if (r.ok) {
-    assert.equal(r.replayed, false);
-    assert.equal(r.tier.credits, 13500); // 6 vitórias → faixa 5+
-    assert.equal(r.tier.card, 'rareGold');
-    assert.equal(r.credits, 13500);
-  }
-  assert.equal(db.wallets.get('a@x'), 13500);
-  const led = db.ledger.find((l) => l.email === 'a@x' && l.opId === `wl:${WID}`);
-  assert.ok(led);
-  assert.equal(led?.kind, 'reward');
-});
-
-test('claim: depois do fechamento com qualquer nº de partidas; 0 vitórias sem prêmio', async () => {
-  const db = new WlFakeDb();
-  await setupPair(db);
-  const a = db.entry('a@x', WID)!;
-  a.wins = 1; a.losses = 2;
-  const r = await wlClaim(db.sql, 'a@x', WID, SUN_START);
-  assert.ok(r.ok);
-  if (r.ok) assert.equal(r.tier.credits, 3000);
-  const b = db.entry('b@x', WID)!;
-  b.wins = 0; b.losses = 4;
-  const zero = await wlClaim(db.sql, 'b@x', WID, SUN_START);
-  assert.deepEqual(zero, { ok: false, error: 'no_reward' });
-});
-
-test('claim: idempotente — claimed_at barra e op_id wl:<windowId> não paga em dobro', async () => {
-  const db = new WlFakeDb();
-  await setupPair(db);
-  const a = db.entry('a@x', WID)!;
-  a.wins = 9; a.losses = 1;
-  const r1 = await wlClaim(db.sql, 'a@x', WID, SUN_START);
-  assert.ok(r1.ok && r1.credits === 37500);
-  const r2 = await wlClaim(db.sql, 'a@x', WID, SUN_START);
-  assert.deepEqual(r2, { ok: false, error: 'already_claimed' });
-  // crash-heal: mesmo se claimed_at se perdesse, o replay do op não re-paga
-  a.claimedAt = null;
-  const r3 = await wlClaim(db.sql, 'a@x', WID, SUN_START);
-  assert.ok(r3.ok);
-  if (r3.ok) assert.equal(r3.replayed, true);
-  assert.equal(db.wallets.get('a@x'), 37500); // pagou UMA vez
-  assert.equal(a.claimedAt != null, true); // marcador restaurado
-  const bad = await wlClaim(db.sql, 'a@x', 'wl-2026-07-07', SUN_START); // terça
-  assert.deepEqual(bad, { ok: false, error: 'bad_window' });
-  const noreg = await wlClaim(db.sql, 'z@x', WID, SUN_START);
-  assert.deepEqual(noreg, { ok: false, error: 'not_registered' });
-});
-
 // ------------------------------------------------------------------ status
 
 test('status: janela + minha entry + standings top por vitórias', async () => {
@@ -396,6 +337,27 @@ test('settle: paga o top pela colocação, idempotente, respeita janela aberta',
   assert.equal(db.wallets.get('b@x'), 70000);
   assert.equal(WL_PLACEMENT_PRIZES[0], 70000);
   assert.equal(WL_PLACEMENT_PRIZES.length, 10);
+});
+
+test('settle: op_id já pago com outro valor (claim legado) → priorPrize no relatório', async () => {
+  const db = new WlFakeDb();
+  await setupPair(db);
+  const a = db.entry('a@x', WID)!; a.wins = 9; a.losses = 1;
+  const b = db.entry('b@x', WID)!; b.wins = 2; b.losses = 8;
+  // janela antiga: o claim legado (faixa de 9 vitórias) já tinha pago 37.5k no mesmo op_id
+  await applyUltTransaction(db.sql, 'a@x', { opId: `wl:${WID}`, kind: 'reward', creditsDelta: 37500, cards: [], meta: { source: 'weekend-league' } });
+  const r = await wlSettle(db.sql, WID, SUN_START, false);
+  assert.ok(r.ok);
+  if (r.ok) {
+    const pa = r.paid.find((p) => p.email === 'a@x')!;
+    assert.equal(pa.prize, 70000);
+    assert.equal(pa.replayed, true);
+    assert.equal(pa.priorPrize, 37500); // o CRM mostra que o valor pago difere
+    const pb = r.paid.find((p) => p.email === 'b@x')!;
+    assert.equal(pb.replayed, false);
+    assert.equal(pb.priorPrize, undefined);
+  }
+  assert.equal(db.wallets.get('a@x'), 37500); // não duplicou
 });
 
 test('schema: DDL idempotente roda no fake sem erro', async () => {

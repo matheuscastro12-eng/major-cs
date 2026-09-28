@@ -24,6 +24,16 @@ export type UltTxKind = (typeof ULT_TX_KINDS)[number];
 // senão qualquer um forjaria créditos "de venda".
 export const ULT_TX_SERVER_ONLY_KINDS: readonly UltTxKind[] = ['escrow', 'trade'];
 
+// [O0-02] Allowlist do que o CLIENTE pode gravar pela rota `tx`: só SAÍDAS
+// (sinks). 'grant'/'reward'/'admin' viraram server-only — antes qualquer conta
+// logada cunhava coins e cartas com um POST (SEGU-01/ECON-01/ENGA-M01).
+//   - spend/pack/sbc: creditsDelta ≤ 0 e só op:'remove';
+//   - quicksell: o valor NUNCA vem do cliente — o servidor recalcula pelo
+//     card_key que ELE tem em rtm_ult_cards (applyClientUltTx).
+// Crédito positivo só nasce em fluxo do servidor (coinsClaim/passClaim,
+// packOpen, mercado, WL settle, eventClaim…), cada um com opId determinístico.
+export const ULT_TX_CLIENT_KINDS: readonly UltTxKind[] = ['spend', 'pack', 'sbc', 'quicksell'];
+
 export const ULT_TX_MAX_CARDS = 200;
 export const ULT_TX_MAX_OP_ID = 64;
 
@@ -44,7 +54,15 @@ export interface UltTx {
 
 export type UltTxResult =
   | { ok: true; replayed: boolean; credits: number }
-  | { ok: false; error: 'insufficient_credits'; credits: number };
+  | { ok: false; error: 'insufficient_credits'; credits: number }
+  // precondição `requireOwned` falhou: alguma carta exigida já não está na
+  // coleção (ex.: dois quicksell concorrentes da mesma cópia) — nada aplicado.
+  | { ok: false; error: 'not_owner'; credits: number };
+
+// Cópia que a tx EXIGE possuir no momento do apply (checado sob o lock, no
+// mesmo statement que debita/credita). Usado pelo quicksell server-side: o
+// crédito só sai se a carta que o gerou sai junto.
+export interface UltOwnedCard { cardId: string; cardKey: string }
 
 export interface UltLedgerEntry {
   id: number;
@@ -134,6 +152,11 @@ export function ultEconomySchemaQueries(sql: SqlTag): SqlQuery[] {
       UNIQUE (email, op_id)
     )`,
     sql`CREATE INDEX IF NOT EXISTS rtm_ult_ledger_email_idx ON rtm_ult_ledger (email, id DESC)`,
+    // [O0-02] congelamento de carteira suspeita (varredura manual do ledger —
+    // docs/super-atualizacao/varredura-ledger.sql). NULL = ativa. Congelada
+    // bloqueia mktList/mktBuy/packOpen; o jogador vê a mensagem padrão e tem 7
+    // dias pra contestar. Setado/limpo SÓ à mão pelo admin (nunca pelo código).
+    sql`ALTER TABLE rtm_ult_wallet ADD COLUMN IF NOT EXISTS frozen_at TIMESTAMPTZ`,
   ];
 }
 
@@ -148,10 +171,20 @@ export function ultEconomySchemaQueries(sql: SqlTag): SqlQuery[] {
 //     wallet = upsert do saldo novo (só se ins aconteceu)
 //     add/del= aplica as cartas (só se ins aconteceu)
 // - replay: nada muda, devolve o saldo corrente com replayed=true;
-// - saldo insuficiente: nada muda, devolve erro.
-export async function applyUltTransaction(sql: SqlTag, email: string, tx: UltTx): Promise<UltTxResult> {
+// - saldo insuficiente: nada muda, devolve erro;
+// - opts.requireOwned: o insert só acontece se TODAS essas cópias (card_id +
+//   card_key) existirem na coleção agora — senão 'not_owner' e nada muda.
+export async function applyUltTransaction(
+  sql: SqlTag,
+  email: string,
+  tx: UltTx,
+  opts?: { requireOwned?: UltOwnedCard[] },
+): Promise<UltTxResult> {
   const cardsJson = JSON.stringify(tx.cards);
   const metaJson = JSON.stringify(tx.meta ?? {});
+  const owned = opts?.requireOwned ?? [];
+  const ownedJson = JSON.stringify(owned.map((c) => ({ cardId: c.cardId, cardKey: c.cardKey })));
+  const ownedN = owned.length;
   const [, rows] = await sql.transaction([
     sql`SELECT pg_advisory_xact_lock(hashtext('rtm_ult_economy'), hashtext(${email}))`,
     sql`WITH prior AS (
@@ -163,6 +196,8 @@ export async function applyUltTransaction(sql: SqlTag, email: string, tx: UltTx)
           SELECT ${email}, ${tx.opId}, ${tx.kind}, ${tx.creditsDelta}, ${cardsJson}::jsonb, ${metaJson}::jsonb
           WHERE NOT EXISTS (SELECT 1 FROM prior)
             AND (SELECT credits FROM bal) + ${tx.creditsDelta} >= 0
+            AND (SELECT count(*) FROM rtm_ult_cards WHERE email=${email}
+                   AND (card_id, card_key) IN (SELECT o->>'cardId', o->>'cardKey' FROM jsonb_array_elements(${ownedJson}::jsonb) o)) = ${ownedN}::int
           ON CONFLICT (email, op_id) DO NOTHING
           RETURNING id
         ), wallet AS (
@@ -190,13 +225,104 @@ export async function applyUltTransaction(sql: SqlTag, email: string, tx: UltTx)
           (SELECT id FROM prior) AS prior_id,
           (SELECT id FROM ins) AS inserted_id,
           (SELECT credits FROM wallet) AS new_credits,
-          (SELECT credits FROM bal) AS old_credits`,
+          (SELECT credits FROM bal) AS old_credits,
+          (SELECT count(*) FROM rtm_ult_cards WHERE email=${email}
+             AND (card_id, card_key) IN (SELECT o->>'cardId', o->>'cardKey' FROM jsonb_array_elements(${ownedJson}::jsonb) o)) = ${ownedN}::int AS owned_ok`,
   ]);
   const r = rows?.[0] ?? {};
   const oldCredits = Number(r.old_credits ?? 0);
   if (r.inserted_id != null) return { ok: true, replayed: false, credits: Number(r.new_credits ?? 0) };
   if (r.prior_id != null) return { ok: true, replayed: true, credits: oldCredits };
+  if (r.owned_ok === false) return { ok: false, error: 'not_owner', credits: oldCredits };
   return { ok: false, error: 'insufficient_credits', credits: oldCredits };
+}
+
+// ------------------------------------------------------- tx vinda do cliente
+
+// Regra de forma do O0-02 (sem banco): kind na allowlist do cliente, nenhuma
+// carta entrando, nenhum crédito positivo fora do quicksell.
+export function checkClientUltTx(tx: UltTx): { ok: true } | { ok: false; error: string } {
+  if (!ULT_TX_CLIENT_KINDS.includes(tx.kind)) return { ok: false, error: 'kind reservado ao servidor' };
+  if (tx.cards.some((c) => c.op === 'add')) return { ok: false, error: 'cartas só entram pelo servidor' };
+  if (tx.kind === 'quicksell') {
+    if (tx.creditsDelta < 0) return { ok: false, error: 'quicksell não debita' };
+    if (!tx.cards.length) return { ok: false, error: 'quicksell sem carta' };
+  } else if (tx.creditsDelta > 0) {
+    return { ok: false, error: 'crédito positivo só pelo servidor' };
+  }
+  return { ok: true };
+}
+
+// valor de quick-sell de UMA cópia pelo catálogo do servidor (null = carta
+// fora do catálogo → vale 0, igual ao cliente quando o índice não acha).
+export type UltQuicksellValuer = (cardKey: string, isDuplicate: boolean) => number | null;
+
+export interface UltClientTxResponse { status: number; body: Record<string, unknown> }
+
+// Corpo da action 'tx' da rota (api/ultimate-economy.ts), extraído pra ser
+// testável com o FakeDb. Nunca confia no cliente:
+//   - forma (validateUltTx) + allowlist do O0-02 (checkClientUltTx);
+//   - quicksell: o creditsDelta do cliente é DESCARTADO. O servidor soma o
+//     valor das cópias removidas que ELE conhece (card_key de rtm_ult_cards;
+//     duplicata = 2+ cópias da mesma carta na coleção do servidor, contadas em
+//     ordem, igual ao sellMany do cliente) e aplica com requireOwned — o
+//     crédito só sai se a carta sai no mesmo statement. Cópia que o servidor
+//     não conhece (prêmio só local) sai por 0.
+//   - catálogo indisponível no runtime → 503 (a fila-sombra re-tenta com o
+//     MESMO op_id; nunca credita "no escuro").
+export async function applyClientUltTx(
+  sql: SqlTag,
+  email: string,
+  raw: unknown,
+  loadValuer: () => Promise<UltQuicksellValuer | null>,
+): Promise<UltClientTxResponse> {
+  const parsed = validateUltTx(raw);
+  if (!parsed.ok) return { status: 400, body: { error: parsed.error } };
+  const shape = checkClientUltTx(parsed.tx);
+  if (!shape.ok) return { status: 400, body: { error: shape.error } };
+  let tx = parsed.tx;
+  const requireOwned: UltOwnedCard[] = [];
+  if (tx.kind === 'quicksell') {
+    const valuer = await loadValuer();
+    if (!valuer) return { status: 503, body: { error: 'catalog_unavailable' } };
+    const rows = await sql`SELECT card_id, card_key FROM rtm_ult_cards WHERE email=${email}`;
+    const keyOf = new Map<string, string>();
+    const copies = new Map<string, number>();
+    for (const r of rows) {
+      const id = String(r.card_id ?? '');
+      const key = String(r.card_key ?? '');
+      keyOf.set(id, key);
+      copies.set(key, (copies.get(key) ?? 0) + 1);
+    }
+    let value = 0;
+    for (const c of tx.cards) {
+      const key = keyOf.get(c.cardId);
+      if (key == null) continue; // cópia só local: sai por 0 no servidor
+      const n = copies.get(key) ?? 0;
+      value += Math.max(0, Math.trunc(valuer(key, n >= 2) ?? 0));
+      copies.set(key, n - 1);
+      requireOwned.push({ cardId: c.cardId, cardKey: key });
+    }
+    tx = { ...tx, creditsDelta: value, meta: { ...(tx.meta ?? {}), clientDelta: parsed.tx.creditsDelta, valuedBy: 'server' } };
+  }
+  const result = await applyUltTransaction(sql, email, tx, { requireOwned });
+  if (!result.ok) return { status: 409, body: { error: result.error, credits: result.credits } };
+  return { status: 200, body: { ok: true, replayed: result.replayed, credits: result.credits } };
+}
+
+// ------------------------------------------------------------- congelamento
+
+// [O0-02] Mensagem padrão ao jogador com carteira congelada (7 dias pra
+// contestar). O contato vem de SUPPORT_EMAIL (decisão do dono).
+export function ultFrozenMessage(supportEmail?: string): string {
+  const contact = supportEmail ? `pelo e-mail ${supportEmail}` : 'pelo e-mail de suporte';
+  return `Sua carteira do Ultimate está em revisão por movimentação fora do padrão. Mercado e abertura de packs ficam pausados. Se acha que é engano, fale com a gente ${contact} em até 7 dias.`;
+}
+
+// true se a carteira foi congelada pelo admin (frozen_at preenchido).
+export async function isUltWalletFrozen(sql: SqlTag, email: string): Promise<boolean> {
+  const rows = await sql`SELECT frozen_at FROM rtm_ult_wallet WHERE email=${email}`;
+  return rows.length > 0 && rows[0].frozen_at != null;
 }
 
 // ----------------------------------------------------------------- estado

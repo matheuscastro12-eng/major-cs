@@ -17,7 +17,6 @@ export interface WlRewardTier { minWins: number; credits: number; card?: string;
 // [O0-22] prêmio de colocação da última janela fechada, pago pelo fecho automático e ainda não coletado no save
 export interface WlLastSettle { windowId: string; rank: number; prize: number; at: string; }
 export interface WlStatus { window: WlWindow; entry: WlEntry | null; standings: WlStanding[]; rewardTiers: WlRewardTier[]; lastSettle?: WlLastSettle | null; }
-export interface WlClaimOutcome { replayed: boolean; tier: WlRewardTier; wins: number; credits: number; }
 
 export const WL_MAX_MATCHES = 60;
 
@@ -96,11 +95,6 @@ export async function wlRegister(win: WlWindow): Promise<WlEntry> {
   const d = await post({ action: 'register', windowId: win.id });
   rememberRegistration(win);
   return d.entry as WlEntry;
-}
-
-export async function wlClaim(windowId: string): Promise<WlClaimOutcome> {
-  const d = await post({ action: 'claim', windowId });
-  return { replayed: !!d.replayed, tier: d.tier as WlRewardTier, wins: Number(d.wins ?? 0), credits: Number(d.credits ?? 0) };
 }
 
 // [O0-22] coleta o prêmio de colocação no save. replayed=true ⇒ já coletado
