@@ -289,7 +289,7 @@ button.ds-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--c
 }
 
 /* barra de progresso fina (mapas, rotina, chance) */
-.ds-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--c-surface-3); overflow: hidden; min-width: 40px; }
+.ds-bar { display: block; flex: 1; height: 6px; border-radius: 3px; background: var(--c-surface-3); overflow: hidden; min-width: 40px; }
 .ds-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--bar, var(--c-accent)); transition: width var(--dur-4) var(--ease-out); }
 .ds-bar--gold > i { background: linear-gradient(90deg, var(--c-brand-deep), var(--c-brand-strong)); }
 .ds-bar--lg { height: 10px; border-radius: 5px; }

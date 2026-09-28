@@ -108,7 +108,6 @@ export function CommandPalette({ open, onClose, base, search, placeholder }: {
                     role="option"
                     aria-selected={idx === selected}
                     data-idx={idx}
-                    data-peek={it.peek}
                     className="gs-palette__item"
                     onMouseEnter={() => setSel(idx)}
                     onClick={() => run(it)}

@@ -5,7 +5,7 @@
 // Como funciona: um único listener delegado no document acha o [data-peek]
 // mais próximo e pergunta aos resolvedores registrados (cada modo registra o
 // seu com usePeekResolver) quem sabe montar o cartão daquele ref.
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Crosshair } from 'lucide-react';
 import { ALL_ATTRS, ATTR_LABEL, playerAttributes, type AttrKey, type PlayerForAttrs } from '../../../engine/attributes';
@@ -168,19 +168,29 @@ export function PeekLayer() {
     };
   }, []);
 
-  if (!open) return null;
+  return open ? <PeekPortal open={open} overCard={overCard} onLeave={() => { setOpen(null); current.current = null; }} onEnter={() => window.clearTimeout(hideT.current)} /> : null;
+}
+
+function PeekPortal({ open, overCard, onLeave, onEnter }: { open: Open; overCard: { current: boolean }; onLeave: () => void; onEnter: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState<number | null>(null);
+  // mede o cartão e mantém dentro da tela (acima do nome se couber, senão abaixo)
+  useLayoutEffect(() => {
+    const h = ref.current?.offsetHeight ?? 0;
+    const want = open.below ? open.y : open.y - h;
+    setTop(Math.max(8, Math.min(window.innerHeight - h - 8, want)));
+  }, [open]);
   const d = open.data;
-  const style: CSSProperties = open.below
-    ? { left: open.x, top: open.y }
-    : { left: open.x, top: open.y, transform: 'translateY(-100%)' };
+  const style: CSSProperties = { left: open.x, top: top ?? open.y, visibility: top == null ? 'hidden' : 'visible' };
   return createPortal(
     <div
+      ref={ref}
       className="gs-peek"
       style={style}
       role="dialog"
       aria-label={d.nick}
-      onPointerEnter={() => { overCard.current = true; window.clearTimeout(hideT.current); }}
-      onPointerLeave={() => { overCard.current = false; setOpen(null); current.current = null; }}
+      onPointerEnter={() => { overCard.current = true; onEnter(); }}
+      onPointerLeave={() => { overCard.current = false; onLeave(); }}
     >
       <PeekCard data={d} />
     </div>,

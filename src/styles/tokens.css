@@ -76,12 +76,16 @@
 
   /* ── Acentos por modo (o [data-mode] escolhe qual vira --c-accent) ── */
   --mode-base: #e8b64a;      /* Início e landing: o dourado da marca */
-  --mode-major: #4dd4f0;     /* Major rápido: draft, chave e partida avulsa */
-  --mode-rtp: #2fe0b4;       /* Road to Pro — a identidade "The Desk" que virou o sistema */
-  --mode-carreira: #a58bff;  /* Carreira — mesa de gestão */
-  --mode-ultimate: #ff6b9d;  /* Ultimate — pack e palco das cartas */
-  --mode-diario: #b8e65a;    /* Diário — o jogo da manhã */
-  --mode-online: #4dd4f0;    /* Online — duelos e ranking */
+  /* A "nova interface" aprovada pinta TODOS os modos com o dourado da marca:
+     a identidade de cada modo aparece pelo ícone, pelo cartão do modo e pelo
+     conteúdo, não por uma cor de acento diferente. Os tokens por modo seguem
+     existindo (e apontam pro dourado) pra quem precisar diferenciar depois. */
+  --mode-major: var(--mode-base);
+  --mode-rtp: var(--mode-base);
+  --mode-carreira: var(--mode-base);
+  --mode-ultimate: var(--mode-base);
+  --mode-diario: var(--mode-base);
+  --mode-online: var(--mode-base);
 
   --c-accent: var(--mode-base);
   /* pra onde o acento "forte" (hover) puxa: branco no escuro, preto no claro */
@@ -269,12 +273,6 @@
   --c-brand-deep: #5e4300;
   --c-on-brand: #ffffff;
   --mode-base: #805c00;
-  --mode-major: #0a6886;
-  --mode-rtp: #0a7358;
-  --mode-carreira: #5b42d6;
-  --mode-ultimate: #b3245a;
-  --mode-diario: #466a0a;
-  --mode-online: #0a6886;
   --c-achievement: #855f00;
   --c-achievement-strong: #6b4c00;
   --c-win: #0f7542;

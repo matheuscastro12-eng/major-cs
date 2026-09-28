@@ -1,0 +1,63 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   SKIN — a "nova interface" aplicada às telas legadas dentro do shell (.gs).
+   Carregado por último: os cartões e cabeçalhos antigos de cada modo
+   (.dash-card da Carreira, .rtp-card do Road to Pro, .ut-* do Ultimate,
+   .panel do Major rápido, .rtm-daily do Diário) passam a ter a forma do painel
+   da nova interface (marinho, cabeçalho em gradiente, título Barlow Condensed
+   em caixa-alta). Só tokens.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* o tema da carreira marca .career-dash no <body> e o CSS antigo põe
+   overflow-x: hidden nele: vira contêiner de rolagem e mata o sticky da
+   sidebar/topbar. clip corta o vazamento sem criar contêiner. */
+body.career-dash { overflow: visible; overflow-x: clip; }
+
+/* carreira embutida no shell: o shell cuida do fundo, da fonte e do respiro */
+.gs .career-in-shell { min-height: 0; max-width: 100%; background: transparent; font-family: var(--font-ui); overflow-x: visible; }
+.gs .career-in-shell > .em-body { padding: 0; overflow-x: visible; }
+
+/* ── cartões legados → painel da nova interface ── */
+.gs .dash-card,
+.gs .em-card {
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
+  border-radius: var(--rad-3);
+}
+.gs .dash-card-head {
+  min-height: 38px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, var(--c-surface-2), var(--c-panel-head));
+  border-bottom: 1px solid var(--c-line);
+  color: var(--c-ink-faint);
+}
+.gs .dash-card-head b {
+  font-family: var(--font-title);
+  font-size: var(--fs-4);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--c-ink);
+}
+.gs .dash-card-head .dash-card-ic { display: inline-flex; color: var(--c-brand); }
+
+/* ── botões legados: a ação principal é o dourado da marca ── */
+.gs .em-btn-primary,
+.gs .btn.gold,
+.gs .btn.primary {
+  background: linear-gradient(180deg, var(--c-brand-strong), var(--c-brand-deep));
+  border-color: transparent;
+  color: var(--c-on-brand);
+  font-family: var(--font-display);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 0 18px -4px var(--gs-gold-glow);
+}
+.gs .em-btn-primary:hover,
+.gs .btn.gold:hover,
+.gs .btn.primary:hover { filter: brightness(1.06); }
+.gs .em-btn-ghost {
+  background: color-mix(in srgb, var(--c-ink) 7%, transparent);
+  border-color: var(--c-line-strong);
+  color: var(--c-ink);
+}
+.gs .em-card-label { color: var(--c-brand); letter-spacing: 0.14em; font-weight: 800; }

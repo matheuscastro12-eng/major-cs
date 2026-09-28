@@ -16,6 +16,9 @@ import './styles/primitives.css'
 // shell universal (trilho + sidebar + topbar + CONTINUAR + paleta + peek)
 import './styles/shell.css'
 import './styles/home.css'
+import './styles/screens.css'
+// por último: a nova interface por cima das telas legadas dentro do shell
+import './styles/skin.css'
 import App from './App.tsx'
 import { installErrorLogging } from './state/errlog'
 import { installPwa } from './state/pwa'

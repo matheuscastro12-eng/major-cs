@@ -38,7 +38,11 @@ import { formStatus } from '../../engine/career/form';
 import { activeStint as activeCoachStint } from '../../engine/coachCareer';
 import { playerOrgId } from '../../state/career-player-route';
 import { ct } from '../../state/career-i18n';
-import { playerOvr } from '../../engine/ratings';
+import { playerOvr, playerWage, formatMoney } from '../../engine/ratings';
+import { averageStarterChemistry } from '../../engine/chemistry';
+import { ElencoPanel, type ElencoRow } from './ElencoPanel';
+import { Panel, Bar } from '../../components/ds/index';
+import { Sparkles, Target, Wallet } from 'lucide-react';
 import { MAP_POOL, MAP_LABELS, PLAYBOOK_LABELS, PLAYBOOK_DESC, type MapId, type Playbook, type Player, type Role } from '../../types';
 
 interface SquadTabSave {
@@ -70,7 +74,11 @@ interface SquadTabSave {
   [key: string]: unknown;
 }
 
+export type SquadSection = 'sq' | 'dy' | 'pl' | 'tr' | 'st' | 'sc';
+
 interface Props {
+  /** seção da sidebar estilo FM (Elenco, Dinâmica, Plano de jogo, Treinos, Comissão, Olheiros) */
+  section?: SquadSection;
   save: SquadTabSave;
   findSigning: (s: Signing) => { player: Player } | null;
   update: (patch: Record<string, unknown>) => void;
@@ -87,6 +95,7 @@ interface Props {
 }
 
 export function SquadTab({
+  section = 'sq',
   save,
   findSigning,
   update,
@@ -127,44 +136,67 @@ export function SquadTab({
   };
   const fam = save.playbookXp ?? 0;
 
-  return (
-    <div className="em-tab em-squad">
-      <DashCard
-        title={ct('Cinco titular')}
-        actions={
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            {/* T9.1: comparar todos os titulares de uma vez */}
-            {rows.length >= 2 && (
-              <button
-                type="button"
-                onClick={() => openCompare(rows.slice(0, 4))}
-                title={ct('Comparar os 4 primeiros titulares lado a lado')}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '0.74rem',
-                  fontFamily: 'inherit',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  background: 'transparent',
-                  color: 'var(--em-text)',
-                  border: '1px solid var(--em-border)',
-                  borderRadius: 3,
-                }}
-              >
-                ⇄ {ct('Comparar')}
-              </button>
-            )}
-            <span className="em-ovr-badge">
-              {rows.length ? Math.round(rows.reduce((a, p) => a + playerOvr(p), 0) / rows.length) : 0} OVR
-            </span>
-          </span>
-        }
-      >
-        <div className="em-fut-row">
-          {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => openPlayerProfile(p)} />)}
-        </div>
-      </DashCard>
+  // ── linhas da tabela do Elenco (FM) ──
+  const elencoRows: ElencoRow[] = rows.map((p) => {
+    const rid = `user__${p.id}`;
+    const st = seasonStats.find((x) => x.id === rid);
+    const until = (save.contracts as Record<string, number> | undefined)?.[p.id];
+    const mor = save.morale?.[p.id] ?? MORALE_DEFAULT;
+    return {
+      p, oid: p.id,
+      age: effectiveAge(p, save.split, save.youthAge, save.youthDebut),
+      morale: mor, moraleLabel: moraleInfo(mor).label,
+      fatigue: save.fatigue?.[p.id] ?? 0,
+      contractLeft: until != null ? until - save.split + 1 : null,
+      rating: st?.rating, maps: st?.maps, kd: st?.kd, adr: st?.adr,
+      recent: save.recentRatings?.[p.id],
+    };
+  });
+  const chemAvg = rows.length >= 2 ? Math.round(averageStarterChemistry({ pairChem: save.pairChem }, rows.map((p) => playerOrgId(p.id)))) : 0;
+  const chemLabel = chemAvg >= 80 ? ct('Excelente') : chemAvg >= 60 ? ct('Boa') : chemAvg >= 40 ? ct('Regular') : ct('Fraca');
+  const payroll = rows.reduce((sum, p) => sum + playerWage(p), 0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapsSorted = [...MAP_POOL].map((m) => ({ m, lvl: mapLevel(save as any, m) })).sort((x, y) => y.lvl - x.lvl);
 
+  return (
+    <div className={`em-tab em-squad em-squad--${section}`}>
+      {section === 'sq' && (
+        <>
+          <ElencoPanel rows={elencoRows} onOpen={openPlayerProfile} />
+          <div className="squad-trio">
+            <Panel icon={<Sparkles size={16} />} title={ct('Química')}>
+              <div className="squad-big">
+                <span className="ds-big" style={{ color: chemAvg >= 60 ? 'var(--c-win)' : chemAvg >= 40 ? 'var(--c-warn)' : 'var(--c-loss)' }}>{chemAvg}</span>
+                <span className="ds-dim">{chemLabel} · {ct('média entre os titulares')}</span>
+              </div>
+              <Bar value={chemAvg} tone={chemAvg >= 60 ? 'var(--c-win)' : chemAvg >= 40 ? 'var(--c-warn)' : 'var(--c-loss)'} lg label={`${ct('Química')} ${chemAvg}`} />
+            </Panel>
+            <Panel icon={<Target size={16} />} title={ct('Mapas')} flush>
+              {[mapsSorted[0], mapsSorted[1], mapsSorted[mapsSorted.length - 1]].filter(Boolean).map((x, i) => (
+                <div key={x.m} className="ds-row">
+                  <b style={{ width: 80 }}>{MAP_LABELS[x.m]}</b>
+                  <span style={{ color: i === 0 && x.lvl > 0 ? 'var(--c-win)' : i === 2 && x.lvl < 0 ? 'var(--c-loss)' : 'var(--c-ink-dim)', fontWeight: 600 }}>
+                    {i === 0 && x.lvl > 0 ? ct('Mapa forte') : i === 2 && x.lvl < 0 ? ct('Evitar no veto') : ct('Sólido')}
+                  </span>
+                  <span className="ds-dim" style={{ marginLeft: 'auto' }}>{x.lvl > 0 ? '+' : ''}{x.lvl.toFixed(1)}</span>
+                </div>
+              ))}
+            </Panel>
+            <Panel icon={<Wallet size={16} />} title={ct('Folha salarial')}>
+              <div className="squad-big">
+                <span className="ds-big">{formatMoney(payroll)}</span>
+                <span className="ds-dim">/ split · {ct('caixa')} {formatMoney(save.budget)}</span>
+              </div>
+            </Panel>
+          </div>
+          <DashCard title={`${ct('Melhores do')} ${save.circuit?.name ?? ct('circuito')}`}>
+            <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
+          </DashCard>
+        </>
+      )}
+
+      {section === 'dy' && (
+        <>
       {/* T3.4: matriz de química do elenco */}
       {rows.length >= 2 && (
         <ChemistryMatrix
@@ -174,53 +206,6 @@ export function SquadTab({
         />
       )}
 
-      {/* T3.11: carreira do coach */}
-      <CoachStintsCard
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        stints={(save.coachStints ?? []) as any}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        coachNick={activeCoachStint((save.coachStints ?? []) as any)?.coachNick}
-        scars={save.scars}
-        split={save.split}
-      />
-
-      {/* T3.8 → #6: scrim contra adversário real (escolha o sparring) */}
-      <ScrimCard
-        scrimsThisSplit={save.scrimsThisSplit ?? 0}
-        budget={save.budget}
-        opponents={scrimOpponents}
-        report={scrimReport}
-        onScrim={doScrimVs}
-      />
-
-      {/* #35: bootcamp do time — o intensivo pré-campanha */}
-      {onBootcamp && (
-        <DashCard title={ct('Bootcamp do time')}>
-          <p className="muted small" style={{ margin: '0 0 10px' }}>
-            {ct('Duas semanas de imersão: +5 de moral pra todo o elenco e 30 de fadiga aliviada. Uma vez por split — chegue inteiro no momento decisivo.')}
-          </p>
-          <button
-            className="btn gold"
-            disabled={bootcampUsed || (save.budget ?? 0) < 60_000}
-            onClick={onBootcamp}
-            title={bootcampUsed ? ct('Bootcamp já usado neste split.') : undefined}
-          >
-            🏕️ {bootcampUsed ? ct('Bootcamp concluído neste split') : `${ct('Fazer bootcamp')} · R$ 60 mil`}
-          </button>
-        </DashCard>
-      )}
-
-      {/* T3.12: scouting */}
-      <ScoutingCard
-        hiredScoutId={save.hiredScoutId ?? null}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        scoutReports={(save.scoutReports ?? []) as any}
-        budget={save.budget}
-        onHire={hireScout}
-        onFire={fireScout}
-      />
-
-      <div className="em-squad-grid">
         <DashCard title={ct('Gestão do elenco')}>
           {(!hasAwp || !hasIgl) && (
             <div className="role-warn">
@@ -320,7 +305,47 @@ export function SquadTab({
           </p>
         </DashCard>
 
-        <div className="em-col">
+        </>
+      )}
+
+      {section === 'pl' && (
+        <>
+      <DashCard
+        title={ct('Cinco titular')}
+        actions={
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {/* T9.1: comparar todos os titulares de uma vez */}
+            {rows.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => openCompare(rows.slice(0, 4))}
+                title={ct('Comparar os 4 primeiros titulares lado a lado')}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '0.74rem',
+                  fontFamily: 'inherit',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  color: 'var(--em-text)',
+                  border: '1px solid var(--em-border)',
+                  borderRadius: 3,
+                }}
+              >
+                ⇄ {ct('Comparar')}
+              </button>
+            )}
+            <span className="em-ovr-badge">
+              {rows.length ? Math.round(rows.reduce((a, p) => a + playerOvr(p), 0) / rows.length) : 0} OVR
+            </span>
+          </span>
+        }
+      >
+        <div className="em-fut-row">
+          {rows.map((p) => <FutCard key={p.id} player={p} onClick={() => openPlayerProfile(p)} />)}
+        </div>
+      </DashCard>
+
           <DashCard title={ct('Playbook tático')}>
             <div className="pb-fam">
               <span className="muted small">{ct('Entrosamento')}</span>
@@ -347,6 +372,37 @@ export function SquadTab({
               {ct('. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.')}
             </p>
           </DashCard>
+
+        </>
+      )}
+
+      {section === 'tr' && (
+        <>
+      {/* T3.8 → #6: scrim contra adversário real (escolha o sparring) */}
+      <ScrimCard
+        scrimsThisSplit={save.scrimsThisSplit ?? 0}
+        budget={save.budget}
+        opponents={scrimOpponents}
+        report={scrimReport}
+        onScrim={doScrimVs}
+      />
+
+      {/* #35: bootcamp do time — o intensivo pré-campanha */}
+      {onBootcamp && (
+        <DashCard title={ct('Bootcamp do time')}>
+          <p className="muted small" style={{ margin: '0 0 10px' }}>
+            {ct('Duas semanas de imersão: +5 de moral pra todo o elenco e 30 de fadiga aliviada. Uma vez por split — chegue inteiro no momento decisivo.')}
+          </p>
+          <button
+            className="btn gold"
+            disabled={bootcampUsed || (save.budget ?? 0) < 60_000}
+            onClick={onBootcamp}
+            title={bootcampUsed ? ct('Bootcamp já usado neste split.') : undefined}
+          >
+            🏕️ {bootcampUsed ? ct('Bootcamp concluído neste split') : `${ct('Fazer bootcamp')} · R$ 60 mil`}
+          </button>
+        </DashCard>
+      )}
 
           <DashCard
             title={
@@ -398,11 +454,38 @@ export function SquadTab({
             </p>
           </DashCard>
 
-          <DashCard title={`${ct('Melhores do')} ${save.circuit?.name ?? ct('circuito')}`}>
-            <BestPlayers stats={seasonStats.slice(0, 8)} mine={mySquadIds} ranked />
-          </DashCard>
-        </div>
-      </div>
+        </>
+      )}
+
+      {section === 'st' && (
+        <>
+      {/* T3.11: carreira do coach */}
+      <CoachStintsCard
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        stints={(save.coachStints ?? []) as any}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        coachNick={activeCoachStint((save.coachStints ?? []) as any)?.coachNick}
+        scars={save.scars}
+        split={save.split}
+      />
+
+        </>
+      )}
+
+      {section === 'sc' && (
+        <>
+      {/* T3.12: scouting */}
+      <ScoutingCard
+        hiredScoutId={save.hiredScoutId ?? null}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        scoutReports={(save.scoutReports ?? []) as any}
+        budget={save.budget}
+        onHire={hireScout}
+        onFire={fireScout}
+      />
+
+        </>
+      )}
     </div>
   );
 }

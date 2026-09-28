@@ -70,8 +70,12 @@ import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 // FutCard: usado pela SquadTab; import movido pra page.
 import { DashCard } from './career/DashCard';
 import { CareerShell, CareerDashFrame } from './career/CareerShell';
+import { AnalystReportCard } from './AnalystReportCard';
+import { generateAnalystReport } from '../engine/analystReport';
+import type { SquadSection } from '../pages/career/SquadTab';
 import type { PaletteItem, ShellNavGroup, ShellNext, ShellPending, ShellTab, ShellTool } from './ds/shell/types';
 import { scoreMatch } from './ds/shell/CommandPalette';
+import { usePeekResolver, peekFromPlayer, type PeekData } from './ds/shell/PlayerPeek';
 import {
   ArrowLeftRight, Binoculars, BookOpen, Building2, CalendarCheck, CalendarDays, ChartColumn, ChartNoAxesColumn,
   CircleHelp, Crosshair, DoorOpen, FileSignature, Globe, GraduationCap, House, Inbox, Layers, ListOrdered, LogOut,
@@ -2524,6 +2528,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // subseções da sidebar estilo FM que vivem dentro de uma aba (Elenco, Finanças)
   const [squadSec, setSquadSec] = useState<string>('sq');
   const [finSec, setFinSec] = useState<string>('fi');
+  // peek de jogador (hover card): refs "career:<id>" resolvidos pelo hub da
+  // liga (a função é preenchida lá embaixo, quando a liga existe)
+  const peekFnRef = useRef<(id: string) => PeekData | null>(() => null);
+  usePeekResolver((ref) => (ref.startsWith('career:') ? peekFnRef.current(ref.slice(7)) : null));
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
   const [showOnb, setShowOnb] = useState(() => { try { return !localStorage.getItem('rtm-onboarded-v1'); } catch { return false; } });
@@ -6315,6 +6323,24 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     resilient: { label: ct('Resiliente'), desc: ct('Recupera-se melhor da pressão e acumula menos fadiga.') },
   };
 
+  peekFnRef.current = (id: string) => {
+    const p = resolvePlayerById(id);
+    if (!p) return null;
+    const oid = playerOrgId(p.id);
+    const mine = save.squad.some((sg) => sg.playerId === oid);
+    const recent = save.recentRatings?.[oid] ?? [];
+    const lt = save.league?.teams.find((t) => t.players.some((pl) => (pl.sourcePlayerId ?? pl.id) === oid || pl.id === oid));
+    return peekFromPlayer({ ...p, role: (save.roles?.[oid] ?? p.role) as Role }, {
+      ovr: playerOvr(p),
+      age: mine ? effectiveAge(p, save.split, save.youthAge, save.youthDebut) : p.age,
+      team: mine ? save.org?.tag : lt?.tag,
+      rating: recent.length ? (recent.reduce((a, b) => a + b, 0) / recent.length).toFixed(2) : undefined,
+      extra: mine ? [{ label: ct('Moral'), value: String(save.morale?.[oid] ?? MORALE_DEFAULT) }] : undefined,
+      onOpen: () => openPlayerProfile(p),
+      openLabel: ct('Abrir perfil'),
+    });
+  };
+
   // ── ferramentas da topbar (⋯) e lançadores da sidebar ──
   const openLogoBuilderTool = (save.org ? () => {
         // T7.2: abre o LogoBuilder pré-povoado com cores e tag da org atual.
@@ -6955,6 +6981,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         // CareerSave é interface fechada (sem index signature); FinanceTab usa
         // shape broad — cast via unknown pra reconciliar.
         <FinanceTab
+          section={finSec === 'ct' ? 'contracts' : 'money'}
           save={save as unknown as Parameters<typeof FinanceTab>[0]['save']}
           findSigning={findSigning}
           update={update as unknown as Parameters<typeof FinanceTab>[0]['update']}
@@ -6962,8 +6989,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       )}
 
       {/* T1.4: aba Squad extraída em src/pages/career/SquadTab.tsx */}
-      {hubTab === 'squad' && (
+      {hubTab === 'squad' && squadSec === 'an' && opp && (() => {
+        const me = resolveTeamById('user');
+        return me ? <AnalystReportCard report={generateAnalystReport(opp, me)} oppName={opp.name} oppTag={opp.tag} /> : null;
+      })()}
+      {hubTab === 'squad' && squadSec !== 'an' && (
         <SquadTab
+          section={squadSec as SquadSection}
           save={save as unknown as Parameters<typeof SquadTab>[0]['save']}
           findSigning={findSigning}
           update={update as unknown as Parameters<typeof SquadTab>[0]['update']}

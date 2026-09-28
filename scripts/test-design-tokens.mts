@@ -153,7 +153,7 @@ test('todo token semântico usado existe em tokens.css', () => {
 test('arquivos do design system não têm hexadecimal nem fontSize inline', () => {
   const DS = [
     'src/styles/tokens-legacy.css', 'src/styles/primitives.css', 'src/styles/base.css', 'src/styles/design-screen.css',
-    'src/styles/shell.css', 'src/styles/home.css',
+    'src/styles/shell.css', 'src/styles/home.css', 'src/styles/skin.css', 'src/styles/screens.css',
     ...walk('src/components/ds', ['.tsx', '.ts']), 'src/pages/DesignScreen.tsx',
   ];
   const offenders: string[] = [];

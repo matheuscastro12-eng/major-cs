@@ -49,12 +49,14 @@ interface ResolvedSigning {
 }
 
 interface Props {
+  /** money = caixa, patrocínio e infraestrutura; contracts = contratos do elenco */
+  section?: 'money' | 'contracts';
   save: FinanceTabSave;
   findSigning: (s: Signing) => ResolvedSigning | null;
   update: (patch: Record<string, unknown>) => void;
 }
 
-export function FinanceTab({ save, findSigning, update }: Props) {
+export function FinanceTab({ section = 'money', save, findSigning, update }: Props) {
   const picks = save.squad
     .map((s) => ({ sig: s, f: findSigning(s) }))
     .filter((x) => x.f) as { sig: Signing; f: ResolvedSigning }[];
@@ -94,13 +96,14 @@ export function FinanceTab({ save, findSigning, update }: Props) {
 
   return (
     <DashCard
-      title={`${ct('Finanças')} · ${save.org?.name ?? ''}`}
+      title={section === 'contracts' ? `${ct('Contratos do elenco')} · ${save.org?.name ?? ''}` : `${ct('Finanças')} · ${save.org?.name ?? ''}`}
       actions={diff !== 'normal' ? (
         <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 10px', borderRadius: 12, border: `1px solid ${diff === 'hard' ? '#e8c170' : 'var(--c-loss)'}`, color: diff === 'hard' ? '#e8c170' : 'var(--c-loss)' }}>
           🎚️ {ct(DIFFICULTY_LABELS[diff])}
         </span>
       ) : undefined}
     >
+      {section === 'money' && (<>
       <div className="fin-cards">
         <div className="fin-card"><span className="fin-k">{ct('Caixa')}</span><b>{formatMoney(save.budget)}</b></div>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -145,6 +148,8 @@ export function FinanceTab({ save, findSigning, update }: Props) {
         })}
       </div>
 
+      </>)}
+      {section === 'contracts' && (<>
       <div className="muted small section-label">{ct('Contratos do elenco')}</div>
       <div className="fin-table-wrap">
         <table className="stats fin-contracts">
@@ -200,6 +205,7 @@ export function FinanceTab({ save, findSigning, update }: Props) {
         {ct('ou o jogador sai')} <b>{ct('de graça')}</b>{' '}
         {ct('no próximo split.')}
       </p>
+      </>)}
     </DashCard>
   );
 }

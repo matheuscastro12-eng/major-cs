@@ -1,0 +1,24 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   TELAS NOVAS DA "NOVA INTERFACE" (Carreira: Elenco FM, Caixa de entrada com
+   painel de leitura; RtP, Ultimate, Diário e Draft no shell). Só tokens.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Elenco (tabela FM) ── */
+.elenco-panel .ds-panel__actions { flex-wrap: wrap; justify-content: flex-end; }
+.elenco-who {
+  display: inline-flex; align-items: center; gap: 12px; padding: 0; border: 0; background: none;
+  color: var(--c-ink); font: inherit; text-align: left; cursor: pointer;
+}
+.elenco-who__txt { display: flex; flex-direction: column; line-height: 1.2; }
+.elenco-who__txt b { font-size: var(--fs-4); font-weight: 700; }
+.elenco-who__txt small { font-size: var(--fs-2); color: var(--c-ink-faint); }
+.elenco-who:hover b { color: var(--c-brand-strong); text-decoration: underline; text-decoration-color: var(--c-brand); }
+.elenco-who:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 6px; }
+.elenco-pick { width: 16px; height: 16px; accent-color: var(--c-brand); cursor: pointer; }
+.elenco-warn { color: var(--c-warn); font-weight: 700; }
+.elenco-hint { margin: 0; padding: 10px 14px; color: var(--c-ink-faint); font-size: var(--fs-2); border-top: 1px solid var(--c-line-soft); }
+.em-squad--sq .ds-table .ds-attr { font-size: var(--fs-5); }
+.squad-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 14px 0; }
+@media (max-width: 1023px) { .squad-trio { grid-template-columns: minmax(0, 1fr); } }
+.squad-big { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.squad-big .ds-big { font-size: var(--fs-display); }
