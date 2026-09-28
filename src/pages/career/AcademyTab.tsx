@@ -411,7 +411,8 @@ export function AcademyTab({
       : slot === 'semi1' ? next.semis[1]
       : next.final;
     if (!m) return;
-    m.result = autoPlayoffResult(m.a, m.b);
+    // rng semeado pelo save + confronto: o placar do auto-sim é reproduzível
+    m.result = autoPlayoffResult(m.a, m.b, makeRng(hashStr(`acapo:${save.org?.tag ?? 'org'}:${po.split}:${slot}:${m.a.id}:${m.b.id}`)));
     if (slot === 'final' && next.final?.result) {
       next.champion = next.final.result.winnerId === next.final.a.id ? next.final.a : next.final.b;
     }

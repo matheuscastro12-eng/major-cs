@@ -20,7 +20,7 @@ import { scheduledPromo, scheduledSbcById } from './liveops';
 import { mktLegacySeenTags, mktSeenHas } from './ultimateMarket'; // [O0-37] "já vi" legado (localStorage por aparelho)
 import type { PaidVoucher } from './account'; // [O0-46]
 import { CS2_REAL_2026 } from '../data/bo3';
-import { makeRng } from '../engine/rng';
+import { makeRng, randomSeed } from '../engine/rng';
 import { appendSpecials, catalogIndex, type UltCard } from '../engine/ultimate/cards';
 import { buildFullCatalog } from '../engine/ultimate/catalog';
 import { COLLECTIONS, collectionKey, evaluateCollections, mergeFrames, normalizeClub } from '../engine/ultimate/cosmetics'; // [U10]
@@ -717,7 +717,7 @@ export const useUltimate = create<UltimateStore>((set, get) => ({
       return (sq?.slots ?? []).map((sl) => { const o = prev.inventory.find((x) => x.id === sl.ownedId); return o ? idx.get(o.cardKey) : undefined; }).filter((c): c is UltCard => !!c);
     }
     const roles = formationSlotRoles(formationId);
-    const cards = pickStarterCards(ultimateCatalog(), roles, 76);
+    const cards = pickStarterCards(ultimateCatalog(), roles, 76, makeRng(randomSeed()));
     let s = _ensureSquad(prev, formationId, roles);
     cards.forEach((c, i) => {
       const id = `starter_${i}_${Math.random().toString(36).slice(2, 9)}`;

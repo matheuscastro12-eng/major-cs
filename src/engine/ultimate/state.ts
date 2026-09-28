@@ -374,6 +374,7 @@ function uid(): string {
     if (c?.randomUUID) return c.randomUUID();
   } catch { /* sem crypto */ }
   _uidCounter += 1;
+  // eslint-disable-next-line no-restricted-properties -- fallback de id sem crypto; o id não entra em nenhuma simulação
   return `u_${_uidCounter.toString(36)}_${Math.floor(Math.random() * 1e9).toString(36)}`;
 }
 
@@ -406,6 +407,7 @@ export function grantCard(
     cardKey,
     serial,
     acquiredVia: via,
+    // eslint-disable-next-line no-restricted-properties -- carimbo de aquisição (metadado de exibição); tests e servidor passam `at`
     acquiredAt: opts?.at ?? Date.now(),
     locked: null,
     ...(opts?.ev ? { ev: opts.ev } : {}),

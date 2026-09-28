@@ -24,7 +24,7 @@
     { "source": "/road-to-pro", "destination": "/" },
     { "source": "/diario", "destination": "/" },
     { "source": "/carreira", "destination": "/" },
-    { "source": "/carreira/saves", "destination": "/" },
+    { "source": "/carreira/:path*", "destination": "/" },
     { "source": "/hall", "destination": "/" },
     { "source": "/banners", "destination": "/" },
     { "source": "/jogo/:path*", "destination": "/" },
