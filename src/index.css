@@ -5658,8 +5658,7 @@ button.world-champ:focus-visible, button.world-runner:focus-visible { outline: 2
 }
 
 /* ===== conquistas ===== */
-.ach-modal { width: min(560px, 100%); }
-.ach-grid { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+.ach-grid { display: flex; flex-direction: column; gap: 6px; }
 .ach-item {
   display: flex; align-items: center; gap: 12px; padding: 9px 11px;
   border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,0.02); opacity: 0.55;
