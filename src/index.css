@@ -4039,6 +4039,12 @@ table.crm-players input.num {
      deixam de ficar espremidos/fora da tela */
   .panel-head { flex-wrap: wrap; gap: 8px; }
   .panel-head .spacer { flex-basis: 100%; height: 0; }
+  /* cabeçalho de modal (boas-vindas etc.): título e ✕ na mesma linha — a
+     quebra acima é para os controles da partida, e jogava o ✕ sozinho numa
+     linha embaixo do título */
+  .modal .panel-head { flex-wrap: nowrap; }
+  .modal .panel-head .spacer { flex-basis: auto; height: auto; }
+  .modal .panel-head .icon-btn { flex-shrink: 0; }
   .seg { flex-wrap: wrap; }
   .killfeed2 { width: 100%; }
   .kf2-row .nick { max-width: 90px; }
