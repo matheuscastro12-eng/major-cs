@@ -441,6 +441,9 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 }
 .rtp .rtp-vs-tag {
   font-family: var(--font-display); font-weight: 800; font-size: 2rem;
+  color: var(--rtp-ink, var(--c-ink));
+  padding-bottom: 2px;
+  box-shadow: inset 0 -4px 0 var(--team, var(--rtp-gold));
 }
 .rtp .rtp-vs-x { color: var(--em-muted); font-weight: 700; font-size: 0.9rem; }
 .rtp .rtp-vs-name {
