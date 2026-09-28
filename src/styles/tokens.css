@@ -22,33 +22,61 @@
   color-scheme: dark;
 
   /* ── Superfícies (grafite-azulado, do mais fundo ao mais alto) ── */
-  /* grafite neutro da mesa de gestão (interface universal, estilo FM) */
-  --c-surface-0: #0b0f14;
-  --c-surface-1: #121820;
-  --c-surface-2: #19202a;
-  --c-surface-3: #222b36;
-  /* o "chão" do shell: trilho de modos e sidebar ficam um degrau abaixo do fundo */
-  --c-shell: #080b0f;
+  /* azul-marinho profundo, a identidade do Road to Major (a "nova interface"
+     aprovada: fundo marinho, painéis marinho-claro, dourado da estrela).
+     Cada degrau sobe em luz. */
+  --c-surface-0: #070d19;
+  --c-surface-1: #0e1829;
+  --c-surface-2: #13213a;
+  --c-surface-3: #1c2c47;
+  /* sidebar do shell: gradiente marinho do topo (glow) pro pé (shell) */
+  --c-shell: #08101f;
+  --c-shell-glow: #0c1830;
+  /* trilho de modos (o degrau mais fundo do shell) */
+  --c-rail: #060c18;
+  /* cabeçalho de painel: gradiente do topo pro pé */
+  --c-panel-head: #101c31;
+  /* topbar grafite (neutra, deixa o escudo do clube e o dourado brilharem) */
+  --c-topbar: #15161a;
+  --c-topbar-mid: #1e2026;
+  --c-topbar-ink: #b9c1cc;
+  /* escudo da marca (BrandMark): azul do escudo e a luz dos chevrons */
+  --c-crest-top: #3a78ad;
+  --c-crest-bottom: #1b2530;
+  --c-crest-line: #61a8dd;
+  --c-crest-light: #9fd0f0;
   /* véu de modal/sheet e brilho de hover sobre qualquer superfície */
   --c-scrim: rgba(3, 6, 10, 0.72);
   --c-hover: rgba(238, 243, 250, 0.05);
   --c-press: rgba(238, 243, 250, 0.09);
 
   /* ── Linhas ── */
-  --c-line: #252e3a;
-  --c-line-strong: #36424f;
+  --c-line: #1c2c47;
+  /* divisória de linha de tabela/lista (mais sutil que a borda de painel) */
+  --c-line-soft: #16243b;
+  --c-line-strong: #243757;
 
   /* ── Tinta (texto) — todas ≥ 4,5:1 sobre surface-0..3 ── */
-  --c-ink: #e9eef4;
-  --c-ink-dim: #a9b4c1;
-  --c-ink-faint: #8c98a6;
+  --c-ink: #eaf0f8;
+  --c-ink-dim: #b7c4d8;
+  --c-ink-faint: #8fa2bf;
   /* texto sobre preenchimentos claros (acento, dourado, vitória…) */
   --c-on-accent: #07110d;
   --c-on-achievement: #1a1205;
   --c-on-strong: #ffffff;
 
+  /* ── Marca: o dourado da estrela do escudo ──
+     Cor da MARCA (lockup, item ativo do menu, CONTINUAR, escudo). Mesma
+     família do dourado de conquista, que continua reservado pra conquista
+     dentro do conteúdo. */
+  --c-brand: #e8b64a;
+  --c-brand-strong: #f3cf6b;
+  --c-brand-deep: #d9a43a;
+  --c-on-brand: #1a1205;
+
   /* ── Acentos por modo (o [data-mode] escolhe qual vira --c-accent) ── */
-  --mode-base: #2fe0b4;      /* sinal broadcast (hub, landing, Major rápido) */
+  --mode-base: #e8b64a;      /* Início e landing: o dourado da marca */
+  --mode-major: #4dd4f0;     /* Major rápido: draft, chave e partida avulsa */
   --mode-rtp: #2fe0b4;       /* Road to Pro — a identidade "The Desk" que virou o sistema */
   --mode-carreira: #a58bff;  /* Carreira — mesa de gestão */
   --mode-ultimate: #ff6b9d;  /* Ultimate — pack e palco das cartas */
@@ -86,11 +114,21 @@
   --c-attr-2: #e0955e;
   --c-attr-1: #f08c8c;
 
-  /* ── Tipografia: duas famílias, três papéis ──
-     Barlow Condensed = display (títulos, placar, cabeçalho de painel);
-     Barlow = interface; números usam a mesma Barlow com dígitos tabulares
+  /* ── Funções do CS (chip e anel do avatar no elenco) ── */
+  --c-role-rifler: #61a8dd;
+  --c-role-entry: #ff9a7a;
+  --c-role-awp: #5ed88a;
+  --c-role-igl: #e8b64a;
+  --c-role-support: #c69cff;
+  --c-role-lurker: #a9b7cb;
+
+  /* ── Tipografia (a "nova interface"): três famílias ──
+     Oswald = display (nome do clube, CONTINUAR, números grandes, placar);
+     Barlow Condensed = títulos de painel, grupos e cabeçalho de tabela;
+     Barlow = interface; números usam a Barlow com dígitos tabulares
      (a regra font-variant-numeric está no base.css). */
-  --font-display: 'Barlow Condensed', 'Bahnschrift Condensed', 'Arial Narrow', sans-serif;
+  --font-display: 'Oswald', 'Bahnschrift Condensed', 'Arial Narrow', sans-serif;
+  --font-title: 'Barlow Condensed', 'Bahnschrift Condensed', 'Arial Narrow', sans-serif;
   --font-ui: 'Barlow', -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
   --font-num: 'Barlow', -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
 
@@ -155,9 +193,9 @@
   --tap: 44px;
 
   /* ── Shell universal (trilho de modos + sidebar + topbar) ── */
-  --shell-rail: 64px;
-  --shell-side: 228px;
-  --shell-top: 56px;
+  --shell-rail: 74px;
+  --shell-side: 216px;
+  --shell-top: 62px;
   --shell-sub: 40px;
   --shell-tabbar: 60px;
   /* densidade (compacto/confortável) — [data-density] no <html> */
@@ -179,6 +217,7 @@
 [data-mode='ultimate'] { --c-accent: var(--mode-ultimate); }
 [data-mode='diario'] { --c-accent: var(--mode-diario); }
 [data-mode='online'] { --c-accent: var(--mode-online); }
+[data-mode='major'] { --c-accent: var(--mode-major); }
 
 /* ── Derivados do acento (recalculados onde o acento muda) ── */
 :root,
@@ -207,6 +246,13 @@
   --c-surface-2: #f6f8fa;
   --c-surface-3: #eef1f5;
   --c-shell: #e5e9ee;
+  --c-shell-glow: #eaeef3;
+  --c-rail: #e9edf2;
+  --c-panel-head: #eef2f7;
+  --c-line-soft: #e3e8ee;
+  --c-topbar: #f4f6f9;
+  --c-topbar-mid: #ffffff;
+  --c-topbar-ink: #435064;
   --c-scrim: rgba(20, 27, 38, 0.5);
   --c-hover: rgba(20, 27, 38, 0.05);
   --c-press: rgba(20, 27, 38, 0.09);
@@ -218,7 +264,12 @@
   --c-on-accent: #ffffff;
   --c-on-achievement: #ffffff;
   --mix-strong: #000000;
-  --mode-base: #0a7358;
+  --c-brand: #805c00;
+  --c-brand-strong: #6b4c00;
+  --c-brand-deep: #5e4300;
+  --c-on-brand: #ffffff;
+  --mode-base: #805c00;
+  --mode-major: #0a6886;
   --mode-rtp: #0a7358;
   --mode-carreira: #5b42d6;
   --mode-ultimate: #b3245a;
@@ -234,6 +285,12 @@
   --c-t: #8f5700;
   --c-live: #c21a35;
   --c-live-fill: #c21a35;
+  --c-role-rifler: #1d5fbd;
+  --c-role-entry: #b0431c;
+  --c-role-awp: #11743d;
+  --c-role-igl: #805c00;
+  --c-role-support: #6c3fd1;
+  --c-role-lurker: #435064;
   --c-attr-5: #11743d;
   --c-attr-4: #4b6d0c;
   --c-attr-3: #7a6300;

@@ -14,9 +14,14 @@ export {
   DashCard, AppShell, AppFrame, appDashClass, useAppTheme, Modal, ToastProvider, useToast,
   Card, CardButton, Tag, Badge, LiveBadge, Tabs, TabPanel, Table, Stat, Alert, EmptyState, Sheet,
   InfoTip, Skeleton, ProgressBar, Scoreboard, LowerThird, LiveRegion, announce, cx,
+  GameShell, ShellProvider, useShellGlobal, useDensity, setDensity, openPalette, PeekLayer, PeekCard,
+  usePeekResolver, peekFromPlayer, CommandPalette, MODE_DATA, AttrValue, AttrLegend, attrBand,
+  Segmented, Ovr, Bar, RoleChip, Chip, Avatar, roleColor,
 } from './ds/index';
 export type {
   ModalSize, ToastVariant, ToastItem, TagTone, TabItem, Column, AlertTone, ScoreTeam, ScoreStatus,
+  GameShellProps, PeekData, ModeId, ShellMode, ShellCommand, ShellUser, ShellGlobal, ShellNavItem, ShellNavGroup,
+  ShellIdentity, ShellPending, ShellNext, ShellTab, ShellCrumb, ShellTool, PaletteItem, BadgeTone,
 } from './ds/index';
 
 type LegacyVariant = ButtonVariant | 'gold';

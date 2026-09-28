@@ -1,15 +1,34 @@
-import { useEffect, useState } from 'react';
+// Início (Portal) — a porta de entrada do Road to Major no shell universal.
+// Estilo FM: painéis com o que está em andamento em cada modo (carreira, Road
+// to Pro, Major rápido, Diário), os modos de jogo, a conta e as novidades.
+// O CONTINUAR da topbar leva à coisa mais relevante agora (streak em risco,
+// campeonato em andamento, carreira salva…).
+//
+// Funil (mantido do menu antigo, mesmos src de telemetria): card do Road to
+// Pro com DEMO GRÁTIS + atalho "pular a demo" (home-rtp / home-rtp-direto),
+// pill de Fundador pra conta grátis (home-pill), CTA de conta pro convidado
+// (acct-chip-guest), aviso de streak em risco (streak_at_risk_seen).
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  CalendarDays, ChevronRight, Crosshair, Flame, Heart, Layers, LayoutDashboard, Newspaper, Play,
+  Shuffle, Sparkles, Star, Swords, Trophy, TriangleAlert, UserRound, Crown, Globe, Lock, Medal,
+} from 'lucide-react';
 import { type Difficulty, type TournamentPool } from '../types';
 import { setCheckoutSrc, trackPaywallView, trackUltFunnel } from '../state/track';
 import { loadStreakState } from '../state/dailyStreak'; // [URG-4]
 import { streakStatus } from '../engine/daily/streak'; // [URG-4]
+import { DAILY_GAMES, dateKeyOf, dayNumberOf } from '../engine/daily/lines';
+import { dailyDayStatus } from '../state/daily';
 import { useLang } from '../state/i18n';
 import { getManager } from '../state/manager';
 import { ct } from '../state/career-i18n';
+import { readSlot, getActiveSlot } from '../state/careerSaves';
+import { PATCHES } from '../data/patchNotes';
 import { BrandMark } from './brand';
-import { PlayStaticBackground } from './PlayStaticBackground';
 import { FounderCounter } from './FounderCounter';
 import { useFounders } from '../state/founders';
+import { TeamBadge } from './ui';
+import { GameShell, Panel, Button, Segmented, type ShellNavGroup, type ShellNext, type ShellPending } from './ds/index';
 import type { Account } from '../state/account';
 
 interface Props {
@@ -26,706 +45,364 @@ interface Props {
   onRoadToPro?: () => void;
   /** Abre o DIÁRIO (minigames diários — grátis, sem conta) */
   onDaily?: () => void;
-  /** Trava o Road to Pro (exclusivo de conta vitalícia). Card continua visível
-   *  (isca de conversão), mas o clique leva ao checkout via onCreateAccount. */
+  /** Road to Pro sem vitalícia = demo (card continua visível, com atalho de compra) */
   premiumLocked?: boolean;
   /** Trava o card do Ultimate. Ultimate abriu pra todos → passado como false. */
   ultimateLocked?: boolean;
   onLeaderboard?: () => void;
   onCareer?: () => void;
-  /** Conta atual (null = não logado, undefined = carregando) */
   account?: Account | null;
-  /** Carregamento da conta concluído */
   accountReady?: boolean;
-  /** Abre a tela de perfil/setup */
   onAccount?: () => void;
-  /** Abre a landing/checkout pra criar conta vitalícia (convidado, sem conta) */
   onCreateAccount?: () => void;
-  /** Vai direto pro pagamento (conta grátis já logada, sem passar pelo formulário
-   *  de cadastro — usa a sessão já existente, igual ao onUpgrade do Ultimate). */
   onUpgrade?: () => void;
-  /** Logout (só faz sentido se account != null) */
   onLogout?: () => void;
-  /** Abre o painel admin (só passado/visível quando account.admin) */
   onAdmin?: () => void;
+  /** seções do Início (sidebar do shell) */
+  shellNav: ShellNavGroup[];
+  onShellNav: (id: string) => void;
+  /** pedido de visão vindo do shell (o modo Draft abre o setup do Major) */
+  viewReq?: { view: 'menu' | 'draft'; n: number };
+  onOpenRanking?: () => void;
 }
 
 const DIFFICULTIES: Difficulty[] = ['normal', 'hard', 'legend'];
 
-const UI = {
-  pt: { quickMatch: 'Partida rápida', quickMatchSub: 'Monte o time dos sonhos e dispute um Major completo: fase suíça, playoffs, veto e scoreboard estilo HLTV.', region: 'Cenário', gameMode: 'Modo de jogo', difficulty: 'Dificuldade', play: 'Começar', achievements: 'Conquistas' },
-  en: { quickMatch: 'Quick match', quickMatchSub: 'Build a dream team and play a full Major: Swiss stage, playoffs, map veto and an HLTV-style scoreboard.', region: 'Scene', gameMode: 'Game mode', difficulty: 'Difficulty', play: 'Start', achievements: 'Achievements' },
-  es: { quickMatch: 'Partida rápida', quickMatchSub: 'Arma el equipo de tus sueños y disputa un Major completo: fase suiza, playoffs, veto y scoreboard estilo HLTV.', region: 'Escenario', gameMode: 'Modo de juego', difficulty: 'Dificultad', play: 'Empezar', achievements: 'Logros' },
-};
+/** resumo leve do save do Road to Pro (sem importar o motor do modo) */
+function rtpBrief(): { nick?: string; ovr?: number; team?: string; week?: number } | null {
+  try {
+    const raw = localStorage.getItem('rtm-rtp-v1');
+    if (!raw) return null;
+    const s = JSON.parse(raw) as { player?: { nick?: string; ovr?: number }; team?: { teamName?: string }; world?: { week?: number } };
+    return { nick: s.player?.nick, ovr: s.player?.ovr, team: s.team?.teamName, week: s.world?.week };
+  } catch { return null; }
+}
 
-export function Home({
-  onStart,
-  onDonate,
-  teamCount,
-  onUltimate,
-  onRoadToPro,
-  onDaily,
-  premiumLocked,
-  ultimateLocked,
-  onCareer,
-  account,
-  accountReady,
-  onAccount,
-  onCreateAccount,
-  onUpgrade,
-  onLogout,
-  onAdmin,
-}: Props) {
-  const { t, lang } = useLang();
-  const L = UI[(lang as 'pt' | 'en' | 'es')] ?? UI.pt;
-  const [view, setView] = useState<'menu' | 'draft'>('menu');
-  const [acctOpen, setAcctOpen] = useState(false);
-  const managerNick = getManager()?.nick;
-  const hasBeta = true;
+export function Home(props: Props) {
+  const {
+    onStart, onDonate, teamCount, onUltimate, onRoadToPro, onDaily, premiumLocked, ultimateLocked, onCareer,
+    account, accountReady, onAccount, onCreateAccount, onUpgrade, onLogout, onAdmin, savedCampaign, onResume,
+    onDiscardCampaign, shellNav, onShellNav, viewReq, onAchievements, onOpenRanking,
+  } = props;
+  const { t } = useLang();
+  const [view, setView] = useState<'menu' | 'draft'>(viewReq?.view ?? 'menu');
+  // o shell pede a visão (trilho "Draft" → setup; "Início" → portal)
+  const [lastReq, setLastReq] = useState(viewReq?.n ?? 0);
+  if (viewReq && viewReq.n !== lastReq) { setLastReq(viewReq.n); setView(viewReq.view); }
+  const manager = getManager();
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [name, setName] = useState('');
 
-  // funil: superfícies de venda da vitalícia visíveis no menu (1x/sessão/src)
+  // funil: superfícies de venda da vitalícia visíveis no portal (1x/sessão/src)
   useEffect(() => {
     if (view !== 'menu') return;
-    if (premiumLocked && onRoadToPro) trackPaywallView('home-rtp');       // card RtP com cadeado
-    if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
-    if (accountReady && account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
+    if (premiumLocked && onRoadToPro) trackPaywallView('home-rtp');
+    if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');
+    if (accountReady && account && !account.paid) trackPaywallView('home-pill');
+    if (accountReady && !account) trackPaywallView('acct-chip-guest');
   }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account]);
 
-  // [URG-4] streak do Diário no card: "🔥 N dias" e, se ainda não jogou hoje,
-  // o aviso vermelho de perda (funil: streak_at_risk_seen, 1x/sessão)
+  // [URG-4] streak do Diário: "N dias" e, se ainda não jogou hoje, o aviso de perda
   const [dStreak] = useState(() => streakStatus(loadStreakState(), Date.now()));
   useEffect(() => {
     if (view === 'menu' && onDaily && dStreak.atRisk) trackUltFunnel('streak_at_risk_seen', { days: dStreak.current, hoursLeft: dStreak.hoursLeft });
   }, [view, onDaily, dStreak]);
+  const dateKey = dateKeyOf(new Date());
+  const dayNo = dayNumberOf(dateKey);
+  const dayStatus = useMemo(() => dailyDayStatus(DAILY_GAMES.map((g) => g.id), dateKey), [dateKey]);
 
-  // prova social real: contador de Fundadores (null = sem dado → não mostra nada)
   const founders = useFounders();
   const founderSoldOut = !!founders && founders.founders >= founders.limit;
+  const career = useMemo(() => readSlot(getActiveSlot()), []);
+  const rtp = useMemo(() => rtpBrief(), []);
 
   const start = () => onStart(mode, name.trim() || 'DREAM FIVE', pool, difficulty);
-  const DIFF_ICON: Record<Difficulty, string> = { normal: '🟢', hard: '🟠', legend: '🔴' };
 
-  return (
-    <div className="play-hub fade-in">
-      <PlayStaticBackground />
+  // ── CONTINUAR: a coisa mais relevante agora ──
+  const pending: ShellPending[] = [];
+  if (dStreak.atRisk && onDaily) pending.push({ id: 'streak', label: `${ct('Sua sequência de')} ${dStreak.current} ${ct('dias acaba em')} ${dStreak.hoursLeft}h`, tone: 'warn', icon: Flame, onGo: onDaily });
+  if (accountReady && !account) pending.push({ id: 'acct', label: ct('Jogando sem conta: o progresso fica só neste navegador'), tone: 'info', icon: Lock, onGo: () => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); } });
+  let next: ShellNext | undefined;
+  if (dStreak.atRisk && onDaily) next = { label: ct('Continuar'), detail: `${ct('Diário')} #${dayNo} · ${ct('salve a sequência')}`, onGo: onDaily, pending };
+  else if (savedCampaign && onResume) next = { label: ct('Continuar'), detail: `${savedCampaign.name}`, onGo: onResume, pending };
+  else if (career.exists && career.org && onCareer) next = { label: ct('Continuar'), detail: `${career.org} · Split ${career.split ?? 1}`, onGo: onCareer, pending };
+  else if (onDaily && dayStatus.done < DAILY_GAMES.length) next = { label: ct('Jogar'), detail: `${ct('Diário')} #${dayNo}`, onGo: onDaily, icon: Play, pending };
+  else next = { label: ct('Jogar'), detail: ct('Novo Major'), onGo: () => setView('draft'), icon: Play, pending };
 
-      {/* Account chip — top-right, sempre visível. Gerencia conta facilmente. */}
-      <div
-        style={{
-          position: 'fixed',
-          // 76 = abaixo do header do /jogar (~60px) — em top:16 o pill ficava POR
-          // CIMA dos botões CONTA/HALL no topo da página (visto no passe visual).
-          top: 76,
-          right: 16,
-          zIndex: 50,
-        }}
-      >
-        <AccountChip
-          account={account}
-          ready={accountReady ?? false}
-          open={acctOpen}
-          onToggle={() => setAcctOpen((v) => !v)}
-          onClose={() => setAcctOpen(false)}
-          onAccount={onAccount}
-          onCreate={onCreateAccount}
-          onUpgrade={onUpgrade}
-          onLogout={onLogout}
-          onAdmin={onAdmin}
-        />
-      </div>
-
-      <div className="play-hub-content">
-        {view === 'menu' ? (
-          <div className="hero landing">
-            <BrandMark size={96} className="hero-mark" />
-            <h1>ROAD TO <span>MAJOR</span></h1>
-            <p>{t('hero.tagline')}</p>
-
-            {/* Pill de ativação inline: free user logado vê a oportunidade de virar
-               Fundador sem precisar abrir modal. Sticky no Home, clica e cai no fluxo.
-               Cosmético/conveniência — zero pay-to-win. */}
-            {/* funil: dado real mostra 0 checkout_open/28d nesta pill mesmo com
-                impressões reais — porque onCreateAccount abre o formulário de
-                CADASTRO, e quem clica aqui já tem conta (condição acima exige
-                account != null). Cadastro com o mesmo e-mail falha silenciosamente
-                e a pessoa (maior intenção do funil: já é usuária, clicou pra
-                pagar) trava num formulário sem saída óbvia. Vai direto pro
-                pagamento com a sessão que já existe, sem pedir e-mail/senha de novo. */}
-            {accountReady && account && !account.paid && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => { setCheckoutSrc('home-pill'); onUpgrade?.(); }}
-                  className="rtm-supporter-pill"
-                  title={ct('Apoie o projeto · selo de Fundador + cloud sync + 5 carreiras')}
-                >
-                  <span className="rtm-supporter-pill-badge">★</span>
-                  <span className="rtm-supporter-pill-text">
-                    {founderSoldOut ? (
-                      /* Edição Fundador esgotada (dado real): copy da vitalícia comum */
-                      <><b>{ct('Conta vitalícia')}</b> {ct('· cloud sync, 5 carreiras e ranking real')}</>
-                    ) : (
-                      <><b>{ct('Vire Fundador')}</b> {ct('· selo #001–#500, cloud sync e 5 carreiras')}</>
-                    )}
-                  </span>
-                  <span className="rtm-supporter-pill-cta">R$20 →</span>
-                </button>
-                {/* contador REAL de Fundadores (fetch falhou? não renderiza nada) */}
-                <div style={{ marginTop: 8 }}>
-                  <FounderCounter />
-                </div>
-              </>
-            )}
-
-            <div className="rtm-modemenu">
-              <button className="rtm-modecard" data-tone="gold" data-mode="carreira" onClick={() => (hasBeta ? onCareer?.() : onDonate())}>
-                <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/nuke.jpg)' }} />
-                <span className="rtm-modecard-scrim" />
-                <span className="rtm-modecard-bar" />
-                <span className="rtm-modecard-body">
-                  <span className="rtm-modecard-kicker">{ct('Destaque')}</span>
-                  <span className="rtm-modecard-title">{ct('Carreira')}</span>
-                  <span className="rtm-modecard-desc">{ct('Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.')}</span>
-                  <span className="rtm-modecard-foot">
-                    <span className="rtm-modecard-meta">{ct('1 jogador · campanha')}</span>
-                    <span className="rtm-modecard-go">{hasBeta ? ct('Entrar') : ct('Acessar')} →</span>
-                  </span>
-                </span>
-              </button>
-
-              {onRoadToPro && (
-                <div
-                  className="rtm-modecard"
-                  data-tone="purple"
-                  data-mode="rtp"
-                  data-locked={premiumLocked ? '' : undefined}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onRoadToPro()}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRoadToPro(); } }}
-                >
-                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/train.jpg)' }} />
-                  <span className="rtm-modecard-scrim" />
-                  <span className="rtm-modecard-bar" />
-                  {premiumLocked && <span className="rtm-modecard-lock" style={{ background: 'var(--c-accent-soft)', borderColor: 'var(--c-accent-line)', color: 'var(--c-accent)' }}>🧪 {ct('DEMO GRÁTIS')}</span>}
-                  <span className="rtm-modecard-body">
-                    <span className="rtm-modecard-kicker">{ct('Novo')}</span>
-                    <span className="rtm-modecard-title">Road to Pro</span>
-                    <span className="rtm-modecard-desc">{ct('Você não treina o time — você É o jogador. Viva a carreira de astro do CS: treine, gerencie sua vida e brilhe nos momentos decisivos.')}</span>
-                    {premiumLocked && (
-                      <span className="rtm-modecard-benefits">
-                        ✓ {ct('Road to Pro completo · Major da Semana · saves na nuvem em 5 slots')}
-                        <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
-                        {/* prova social real no card de maior tráfego do funil (iter41) */}
-                        <FounderCounter style={{ display: 'block', marginTop: 6, fontSize: '11px' }} />
-                        {/* funil: este é o card com mais paywall_view do jogo inteiro
-                            (dado real: 2619 sids/28d) e o pior checkout_open (12 sids,
-                            0,46% — contra 3,8% do card Ultimate ao lado). O motivo:
-                            o CTA inteiro leva pra demo, sem nenhuma saída pra quem já
-                            quer comprar. Quem tem intenção alta só encontra o checkout
-                            depois de jogar a demo e bater no gate (rtp-demo-gate
-                            converte 9%, mas poucos chegam lá). Este botão dá o atalho
-                            direto, sem tirar a demo de quem quer testar primeiro. */}
-                        <button
-                          type="button"
-                          className="rtm-modecard-skip"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCheckoutSrc('home-rtp-direto');
-                            if (accountReady && account) onUpgrade?.(); else onCreateAccount?.();
-                          }}
-                        >
-                          {ct('Já quero virar Fundador · pular a demo')} →
-                        </button>
-                      </span>
-                    )}
-                    <span className="rtm-modecard-foot">
-                      <span className="rtm-modecard-meta">{premiumLocked ? ct('Exclusivo · conta vitalícia') : ct('1 jogador · você é o atleta')}</span>
-                      <span className="rtm-modecard-go">{premiumLocked ? <>🧪 {ct('Jogar a demo grátis')} →</> : <>{ct('Jogar')} →</>}</span>
-                    </span>
-                  </span>
-                </div>
-              )}
-
-              {onDaily && (
-                <button className="rtm-modecard" data-tone="blue" data-mode="diario" onClick={onDaily}>
-                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/inferno.webp)' }} />
-                  <span className="rtm-modecard-scrim" />
-                  <span className="rtm-modecard-bar" />
-                  <span className="rtm-modecard-body">
-                    <span className="rtm-modecard-kicker">
-                      {ct('Novo · todo dia')}
-                      {dStreak.current >= 1 && <span className="rtm-modecard-streak">🔥 {dStreak.current} {dStreak.current === 1 ? ct('dia') : ct('dias')}</span>}
-                    </span>
-                    <span className="rtm-modecard-title">{ct('Diário')}</span>
-                    {dStreak.atRisk && (
-                      <span className="rtm-modecard-streak risk">⚠️ {ct('você perde')} {dStreak.current} {ct('dias em')} {dStreak.hoursLeft}h</span>
-                    )}
-                    <span className="rtm-modecard-desc">{ct('Lines Históricas: uma escalação icônica por dia — você lembra os 5? Grátis, sem conta, e o desafio é o mesmo pra todo mundo.')}</span>
-                    <span className="rtm-modecard-foot">
-                      <span className="rtm-modecard-meta">{ct('1 jogador · 2 min')}</span>
-                      <span className="rtm-modecard-go">{ct('Jogar o de hoje')} →</span>
-                    </span>
-                  </span>
-                </button>
-              )}
-
-              <button className="rtm-modecard" data-tone="blue" onClick={() => setView('draft')}>
-                <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/mirage.jpg)' }} />
-                <span className="rtm-modecard-scrim" />
-                <span className="rtm-modecard-bar" />
-                <span className="rtm-modecard-body">
-                  <span className="rtm-modecard-kicker">{ct('Partida rápida')}</span>
-                  <span className="rtm-modecard-title">Draft</span>
-                  <span className="rtm-modecard-desc">{ct('Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.')}</span>
-                  <span className="rtm-modecard-foot">
-                    <span className="rtm-modecard-meta">{ct('1 jogador · ~15 min')}</span>
-                    <span className="rtm-modecard-go">{ct('Montar')} →</span>
-                  </span>
-                </span>
-              </button>
-
-              {onUltimate && (
-                <button
-                  className="rtm-modecard"
-                  data-tone="gold"
-                  data-mode="ultimate"
-                  data-locked={ultimateLocked ? '' : undefined}
-                  onClick={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())}
-                >
-                  <span className="rtm-modecard-art" style={{ backgroundImage: 'url(/maps/ancient.jpg)' }} />
-                  <span className="rtm-modecard-scrim" />
-                  <span className="rtm-modecard-bar" />
-                  {ultimateLocked && <span className="rtm-modecard-lock">🔒 {ct('Vitalícia')}</span>}
-                  <span className="rtm-modecard-body">
-                    <span className="rtm-modecard-kicker">{ct('Competitivo · Online')}</span>
-                    <span className="rtm-modecard-title">Ultimate Squad</span>
-                    <span className="rtm-modecard-desc">{ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')}</span>
-                    {ultimateLocked && (
-                      <span className="rtm-modecard-benefits">
-                        ✓ {ct('Ultimate com mercado entre managers · ranqueada no ladder real · Major da Semana')}
-                        <em>R$ 20 · {ct('pagamento único, acesso vitalício — sem mensalidade')}</em>
-                        {/* prova social real no card de maior tráfego do funil (iter41) */}
-                        <FounderCounter style={{ display: 'block', marginTop: 6, fontSize: '11px' }} />
-                      </span>
-                    )}
-                    <span className="rtm-modecard-foot">
-                      <span className="rtm-modecard-meta">{ultimateLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')}</span>
-                      <span className="rtm-modecard-go">{ultimateLocked ? <>🔒 {ct('Desbloquear · R$20')}</> : <>{ct('Jogar')} →</>}</span>
-                    </span>
-                  </span>
-                </button>
-              )}
-            </div>
-
-            {managerNick && (
-              <div className="rtm-signed">
-                {ct('Logado como')} <b>{managerNick}</b> · {teamCount} {ct('times · 5 eras · scoreboards estilo HLTV')}
-              </div>
-            )}
-          </div>
-        ) : (
-          <section className="setup-panel draft-screen">
-            <div className="sp-head">
-              <button className="btn ghost small" onClick={() => setView('menu')} style={{ alignSelf: 'flex-start', marginBottom: 6 }}>← {ct('Menu')}</button>
-              <span className="sp-title">{L.quickMatch} · Draft</span>
-              <span className="sp-sub">{L.quickMatchSub}</span>
-            </div>
-
-            <div className="sp-section">
-              <span className="sp-label">{L.region}</span>
-              <div className="pool-cards">
-                <button className={`pool-card world${pool === 'world' ? ' sel' : ''}`} onClick={() => setPool('world')}>
-                  <h3>{t('home.poolWorld')}</h3>
-                  <p>{t('home.poolWorldDesc')}</p>
-                </button>
-                <button className={`pool-card br${pool === 'br' ? ' sel' : ''}`} onClick={() => setPool('br')}>
-                  <h3>{t('home.poolBr')}</h3>
-                  <p>{t('home.poolBrDesc')}</p>
-                </button>
-              </div>
-            </div>
-
-            <div className="sp-section">
-              <span className="sp-label">{L.gameMode}</span>
-              <div className="mode-cards">
-                <button className={`mode-card${mode === 'classic' ? ' sel' : ''}`} onClick={() => setMode('classic')}>
-                  <h3>{t('home.modeClassic')}</h3>
-                  <p>{t('home.modeClassicDesc')}</p>
-                </button>
-                <button className={`mode-card${mode === 'almanac' ? ' sel' : ''}`} onClick={() => setMode('almanac')}>
-                  <h3>{t('home.modeAlmanac')}</h3>
-                  <p>{t('home.modeAlmanacDesc')}</p>
-                </button>
-              </div>
-            </div>
-
-            <div className="sp-section">
-              <span className="sp-label">{L.difficulty}</span>
-              <div className="diff-cards">
-                {DIFFICULTIES.map((d) => (
-                  <button key={d} className={`diff-card ${d}${difficulty === d ? ' sel' : ''}`} onClick={() => setDifficulty(d)}>
-                    <h4>{DIFF_ICON[d]} {t(`diff.${d}`)}</h4>
-                    <p>{t(`diff.${d}Desc`)}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="name-input">
-              <input
-                placeholder={t('home.namePlaceholder')}
-                value={name}
-                maxLength={24}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && start()}
-              />
-              <button className="btn big gold" onClick={start}>▶ {t('home.start')}</button>
-            </div>
-          </section>
-        )}
-      </div>
-
-      <p className="play-hub-credit">
-        bg · <a href="https://fragcoord.xyz/s/bp27qjk1" target="_blank" rel="noopener noreferrer">Anneal</a> @Xor
-      </p>
-    </div>
+  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  const meta = (
+    <span className="gs-when">
+      <b>{today.charAt(0).toUpperCase() + today.slice(1)}</b>
+      <small>{ct('Diário')} #{dayNo}</small>
+    </span>
   );
-}
 
-// ─── AccountChip ────────────────────────────────────────────────────────────
-// Pill no canto superior direito do Home. Estado:
-//   - account == null && !ready  → "Carregando…"
-//   - account == null && ready   → "Entrar" (não logado)
-//   - account != null            → email/nick + ★ se paid; click abre dropdown
-//
-// Dropdown:
-//   - Conta vitalícia? mostra "Meu perfil" + "Sair"
-//   - Conta grátis?    mostra "Meu perfil" + "✨ Upgrade vitalício" + "Sair"
-//   - Não logado?      mostra "Criar conta vitalícia"
-
-function AccountChip({
-  account,
-  ready,
-  open,
-  onToggle,
-  onClose,
-  onAccount,
-  onCreate,
-  onUpgrade,
-  onLogout,
-  onAdmin,
-}: {
-  account?: Account | null;
-  ready: boolean;
-  open: boolean;
-  onToggle: () => void;
-  onClose: () => void;
-  onAccount?: () => void;
-  onCreate?: () => void;
-  onUpgrade?: () => void;
-  onLogout?: () => void;
-  onAdmin?: () => void;
-}) {
-  // funil: dropdown aberto por conta grátis mostra o item "Upgrade vitalício"
-  useEffect(() => {
-    if (open && account && !account.paid) trackPaywallView('acct-chip');
-  }, [open, account]);
-  // funil: botão "Criar conta" do header é visto por TODA sessão não logada
-  // (maior exposição do jogo), mas nunca tinha view nem valor explicado — só
-  // clique. src próprio (acct-chip-guest) pra não misturar com o item do
-  // dropdown de conta grátis logada acima.
-  useEffect(() => {
-    if (ready && !account) trackPaywallView('acct-chip-guest');
-  }, [ready, account]);
-  const founders = useFounders();
-  const foundersLeft = founders ? Math.max(0, founders.limit - founders.founders) : null;
-  // Loading state
-  if (!ready) {
+  if (view === 'draft') {
+    const diffLabel: Record<Difficulty, string> = { normal: t('diff.normal'), hard: t('diff.hard'), legend: t('diff.legend') };
     return (
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
-          background: 'rgba(0,0,0,0.45)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 999,
-          fontSize: '0.78rem',
-          color: 'rgba(255,255,255,0.55)',
-          fontFamily: 'inherit',
-          backdropFilter: 'blur(8px)',
-        }}
+      <GameShell
+        mode="major"
+        variant="full"
+        identity={{ title: ct('Novo Major'), subtitle: ct('Draft · Major rápido') }}
+        nav={[{ id: 'novo', label: ct('Torneio'), items: [
+          { id: 'setup', label: ct('Montar o Major'), icon: Layers },
+          ...(savedCampaign ? [{ id: 'resume', label: ct('Retomar campeonato'), icon: Play, alert: true }] : []),
+        ] }, { id: 'hist', label: ct('Histórico'), items: [{ id: 'hall', label: ct('Hall da Fama'), icon: Star }] }]}
+        active="setup"
+        onNav={(id) => { if (id === 'resume') onResume?.(); else if (id === 'hall') onShellNav('hall'); }}
+        title={ct('Montar o Major')}
+        meta={meta}
+        next={{ label: ct('Começar'), detail: `${pool === 'br' ? t('home.poolBr') : t('home.poolWorld')} · ${diffLabel[difficulty]}`, icon: Play, onGo: start }}
       >
-        ⏳ Carregando…
-      </span>
+        <div className="home-setup">
+          <Panel icon={<Shuffle size={16} />} title={ct('Partida rápida · Draft')}>
+            <p className="home-lead">{ct('Monte o time dos sonhos e dispute um Major completo: fase suíça, playoffs, veto e scoreboard estilo HLTV.')}</p>
+            <div className="home-field">
+              <span className="ds-kicker">{ct('Cenário')}</span>
+              <Segmented label={ct('Cenário')} value={pool} onChange={setPool} items={[{ value: 'world', label: t('home.poolWorld') }, { value: 'br', label: t('home.poolBr') }]} />
+              <small className="ds-dim">{pool === 'world' ? t('home.poolWorldDesc') : t('home.poolBrDesc')}</small>
+            </div>
+            <div className="home-field">
+              <span className="ds-kicker">{ct('Modo de jogo')}</span>
+              <Segmented label={ct('Modo de jogo')} value={mode} onChange={setMode} items={[{ value: 'classic', label: t('home.modeClassic') }, { value: 'almanac', label: t('home.modeAlmanac') }]} />
+              <small className="ds-dim">{mode === 'classic' ? t('home.modeClassicDesc') : t('home.modeAlmanacDesc')}</small>
+            </div>
+            <div className="home-field">
+              <span className="ds-kicker">{ct('Dificuldade')}</span>
+              <Segmented label={ct('Dificuldade')} value={difficulty} onChange={setDifficulty} items={DIFFICULTIES.map((d) => ({ value: d, label: diffLabel[d] }))} />
+              <small className="ds-dim">{t(`diff.${difficulty}Desc`)}</small>
+            </div>
+            <div className="home-field">
+              <label className="ds-kicker" htmlFor="home-team-name">{ct('Nome do time')}</label>
+              <div className="home-name">
+                <input id="home-team-name" className="home-input" placeholder={t('home.namePlaceholder')} value={name} maxLength={24} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && start()} />
+                <Button variant="primary" onClick={start}><Play size={16} aria-hidden /> {t('home.start')}</Button>
+              </div>
+            </div>
+          </Panel>
+          <Panel icon={<Trophy size={16} />} title={ct('Como funciona')}>
+            <ol className="home-steps">
+              <li><b>{ct('Draft')}</b><span>{ct('5 picks entre lendas de todas as eras, com 2 rerolls, e um técnico.')}</span></li>
+              <li><b>{ct('Fase suíça')}</b><span>{ct('3 vitórias classificam, 3 derrotas eliminam. Pick’em das outras séries.')}</span></li>
+              <li><b>{ct('Playoffs')}</b><span>{ct('Veto de mapas e partida ao vivo com timeouts táticos, em MD3.')}</span></li>
+              <li><b>{ct('Temporadas')}</b><span>{ct('Campeão ou não, a janela de transferências abre a próxima.')}</span></li>
+            </ol>
+            <p className="ds-dim">{teamCount} {ct('times · 5 eras · scoreboards estilo HLTV')}</p>
+          </Panel>
+        </div>
+      </GameShell>
     );
   }
 
-  // Não logado
-  if (!account) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-        <button
-          type="button"
-          onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreate?.(); }}
-          title={
-            foundersLeft != null && foundersLeft > 0
-              ? `Conta vitalícia por R$20, pagamento único · restam ${foundersLeft} vagas de Fundador`
-              : 'Conta vitalícia por R$20, pagamento único'
-          }
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            background: 'var(--em-gold)',
-            color: '#1a1205',
-            border: 'none',
-            borderRadius: 999,
-            fontFamily: 'inherit',
-            fontSize: '0.82rem',
-            fontWeight: 800,
-            cursor: 'pointer',
-            boxShadow: '0 4px 14px rgba(232,193,112,0.35)',
-            letterSpacing: '0.3px',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {/* funil: este botão (src acct-chip-guest) é visto por TODA sessão não
-              logada — maior volume do funil (917 paywall_view/28d) — mas convertia
-              0,22% em checkout_open, bem abaixo de upsell-card (2,26%), home-ultimate
-              (1,99%) e landing (1,21%). O valor (R$20, vitalícia) só existia no
-              atributo title, que não aparece em toque/mobile. Deixa o preço visível
-              no próprio texto, igual o resto do app já faz (rtm-supporter-pill,
-              modecard do Road to Pro). */}
-          ★ Criar conta · R$20
+  const latest = PATCHES.slice(0, 2).flatMap((p) => p.items.slice(0, 3).map((it) => ({ ...it, date: p.date })));
+  const dailyLeft = DAILY_GAMES.length - dayStatus.done;
+
+  return (
+    <GameShell
+      mode="inicio"
+      identity={{ title: manager?.nick ?? 'Road to Major', subtitle: manager?.org ?? ct('Simulador de CS de todas as eras'), badge: <BrandMark size={32} /> }}
+      nav={shellNav}
+      active="home"
+      onNav={onShellNav}
+      title={ct('Portal')}
+      crumbs={[]}
+      meta={meta}
+      next={next}
+      bell={{ label: ct('Novidades'), count: 0, onClick: () => onShellNav('news') }}
+      sideWidget={savedCampaign ? (
+        <button type="button" className="gs-widget" onClick={onResume}>
+          <span className="gs-widget__kicker"><Swords size={13} aria-hidden /> {ct('Campeonato em andamento')}</span>
+          <span className="gs-widget__main">{savedCampaign.name}</span>
+          <span className="gs-widget__sub">{savedCampaign.phase}</span>
         </button>
-        {/* funil (28d, iteração seguinte): mesmo com o preço no texto, o botão
-            segue convertendo pior que o resto do funil (2399 paywall_view →
-            13 signup_start, 0,54%) — é a maior audiência do jogo (metade de
-            todo visitante não logado) e a que menos converte. A vaga de
-            Fundador real está quase esgotada (482/500, restam 18) e esse dado
-            real só existia no atributo title, invisível em toque/mobile — a
-            mesma classe de problema que o preço tinha antes de sair do title.
-            FounderCounter já é usado em 4 outras superfícies (dado real do
-            servidor, nunca inventado); só faltava aqui, que é a de maior
-            exposição. */}
-        <FounderCounter style={{ fontSize: '10px' }} />
-        {/* funil (iteração seguinte): "pagamento único · sem mensalidade" já
-            aparece no corpo dos cards RtP/Ultimate (rtm-modecard, 3,7-8,3% de
-            conversão) mas nunca saiu do atributo title deste chip — mesma
-            classe de bug do preço, ainda sem correção aqui. Ninguém desconhecido
-            do jogo vê "R$20" isolado sem saber se é assinatura; a reassurance
-            de pagamento único existe no app inteiro, só não chegava na
-            superfície de maior audiência. */}
-        <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.2px', color: 'var(--em-muted, rgba(255,255,255,0.6))' }}>
-          {ct('pagamento único · sem mensalidade')}
-        </span>
-      </div>
-    );
-  }
+      ) : onDaily ? (
+        <button type="button" className="gs-widget" onClick={onDaily}>
+          <span className="gs-widget__kicker"><CalendarDays size={13} aria-hidden /> {ct('Diário de hoje')}</span>
+          <span className="gs-widget__main">#{dayNo} <span className="gs-widget__vs">·</span> {dayStatus.done}/{DAILY_GAMES.length}</span>
+          <span className="gs-widget__sub">{dailyLeft > 0 ? `${dailyLeft} ${ct('desafios esperando')}` : ct('Completo · volte amanhã')}</span>
+        </button>
+      ) : undefined}
+    >
+      <div className="home-grid">
+        {/* ── coluna 1: continuar ── */}
+        <div className="gs-stack">
+          <Panel icon={<Play size={16} />} title={ct('Continue de onde parou')} flush>
+            {career.exists && onCareer && (
+              <ResumeRow
+                icon={career.tag && career.colors ? <TeamBadge tag={career.tag} colors={career.colors} logoUrl={career.logo} size={40} /> : <Trophy size={20} />}
+                kicker={ct('Carreira')}
+                title={career.org ?? ct('Carreira salva')}
+                sub={`Split ${career.split ?? 1} · ${career.titles ?? 0} ${ct('títulos')}${career.budget != null ? ` · $ ${Math.round(career.budget / 1000)} mil` : ''}`}
+                onGo={onCareer}
+              />
+            )}
+            {rtp?.nick && onRoadToPro && (
+              <ResumeRow icon={<Crosshair size={20} />} kicker="Road to Pro" title={rtp.nick} sub={`${rtp.team ?? ''}${rtp.ovr ? ` · OVR ${rtp.ovr}` : ''}${rtp.week ? ` · ${ct('semana')} ${rtp.week}` : ''}`} onGo={onRoadToPro} />
+            )}
+            {savedCampaign && onResume && (
+              <ResumeRow icon={<Swords size={20} />} kicker={ct('Major rápido')} title={savedCampaign.name} sub={savedCampaign.phase} onGo={onResume} extra={onDiscardCampaign && (
+                <button type="button" className="home-discard" onClick={(e) => { e.stopPropagation(); onDiscardCampaign(); }}>{ct('Descartar')}</button>
+              )} />
+            )}
+            {!career.exists && !rtp?.nick && !savedCampaign && (
+              <div className="home-empty">
+                <Sparkles size={22} aria-hidden />
+                <p>{ct('Nada em andamento ainda. Escolha um modo ao lado — a Carreira é o coração do jogo.')}</p>
+                {onCareer && <Button variant="primary" onClick={onCareer}><Trophy size={16} aria-hidden /> {ct('Começar a Carreira')}</Button>}
+              </div>
+            )}
+          </Panel>
 
-  // Logado
-  const isPaid = account.paid;
-  const isFounder = account.founder;
+          {onDaily && (
+            <Panel icon={<CalendarDays size={16} />} title={`${ct('Diário')} #${dayNo}`} actions={dStreak.current >= 1 ? <span className="home-streak"><Flame size={14} aria-hidden /> {dStreak.current} {dStreak.current === 1 ? ct('dia') : ct('dias')}</span> : undefined} flush>
+              {dStreak.atRisk && (
+                <div className="ds-row home-risk"><TriangleAlert size={16} aria-hidden /> {ct('você perde')} {dStreak.current} {ct('dias em')} {dStreak.hoursLeft}h — {ct('jogue qualquer um dos 4 pra manter.')}</div>
+              )}
+              {DAILY_GAMES.map((g) => {
+                const p = dayStatus.perGame[g.id];
+                return (
+                  <button key={g.id} type="button" className="ds-row home-daily" onClick={onDaily}>
+                    <span className="home-daily__state" data-s={p?.done ? (p.won ? 'won' : 'lost') : 'new'} aria-hidden />
+                    <b>{g.title}</b>
+                    <span className="ds-dim">{p?.done ? (p.won ? ct('completo') : ct('foi por pouco')) : ct('novo')}</span>
+                    <ChevronRight size={15} aria-hidden className="home-chev" />
+                  </button>
+                );
+              })}
+            </Panel>
+          )}
+        </div>
+
+        {/* ── coluna 2: modos ── */}
+        <Panel icon={<LayoutDashboard size={16} />} title={ct('Modos de jogo')} flush className="home-modes">
+          {onCareer && (
+            <ModeRow mode="carreira" icon={<Trophy size={20} />} title={ct('Carreira')} kicker={ct('Destaque')} desc={ct('Funde sua org, contrate, gerencie transferências e brigue pelo título numa temporada inteira.')} meta={ct('1 jogador · campanha')} cta={ct('Entrar')} onGo={onCareer} />
+          )}
+          {onRoadToPro && (
+            <ModeRow
+              mode="rtp" icon={<Crosshair size={20} />} title="Road to Pro" kicker={premiumLocked ? ct('Demo grátis') : ct('Novo')}
+              desc={ct('Você não treina o time — você É o jogador. Viva a carreira de astro do CS: treine, gerencie sua vida e brilhe nos momentos decisivos.')}
+              meta={premiumLocked ? `R$ 20 · ${ct('pagamento único, acesso vitalício — sem mensalidade')}` : ct('1 jogador · você é o atleta')}
+              cta={premiumLocked ? ct('Jogar a demo grátis') : ct('Jogar')}
+              onGo={onRoadToPro}
+              extra={premiumLocked ? (
+                <span className="home-mode__extra">
+                  <FounderCounter style={{ fontSize: '11px' }} />
+                  <button type="button" className="home-skip" onClick={(e) => { e.stopPropagation(); setCheckoutSrc('home-rtp-direto'); if (accountReady && account) onUpgrade?.(); else onCreateAccount?.(); }}>
+                    {ct('Já quero virar Fundador · pular a demo')} →
+                  </button>
+                </span>
+              ) : undefined}
+            />
+          )}
+          {onUltimate && (
+            <ModeRow mode="ultimate" icon={<Star size={20} />} title="Ultimate" kicker={ct('Competitivo · Online')} desc={ct('Abra pacotes, colecione os jogadores reais de 2026 e dispute a ranqueada online contra outros managers.')} meta={ultimateLocked ? ct('Exclusivo · conta vitalícia') : ct('Online · ranqueada')} cta={ultimateLocked ? ct('Desbloquear · R$20') : ct('Jogar')} onGo={() => (ultimateLocked ? (setCheckoutSrc('home-ultimate'), onCreateAccount?.()) : onUltimate())} />
+          )}
+          <ModeRow mode="major" icon={<Layers size={20} />} title="Draft" kicker={ct('Partida rápida')} desc={ct('Monte um cinco com lendas de cada era e dispute um Major avulso. Rápido e rejogável.')} meta={ct('1 jogador · ~15 min')} cta={ct('Montar')} onGo={() => setView('draft')} />
+          {onDaily && (
+            <ModeRow mode="diario" icon={<CalendarDays size={20} />} title={ct('Diário')} kicker={ct('Todo dia')} desc={ct('Quatro desafios por dia — o mesmo pra todo mundo. Grátis, sem conta.')} meta={ct('1 jogador · 2 min')} cta={ct('Jogar o de hoje')} onGo={onDaily} />
+          )}
+          {onUltimate && !ultimateLocked && (
+            <ModeRow mode="online" icon={<Globe size={20} />} title="Online" kicker={ct('Ranqueada')} desc={ct('Ranqueada contra outros managers, duelo privado com amigos e o Major da Semana.')} meta={ct('Com o seu squad do Ultimate')} cta={ct('Competir')} onGo={onUltimate} />
+          )}
+        </Panel>
+
+        {/* ── coluna 3: conta + novidades ── */}
+        <div className="gs-stack">
+          <Panel icon={<UserRound size={16} />} title={ct('Sua conta')}>
+            {!accountReady ? (
+              <p className="ds-dim">{ct('Carregando…')}</p>
+            ) : !account ? (
+              <div className="home-acct">
+                <p>{ct('Você está jogando sem conta. Crie a sua pra salvar na nuvem e jogar no PC e no celular.')}</p>
+                <Button variant="primary" block onClick={() => { setCheckoutSrc('acct-chip-guest'); onCreateAccount?.(); }}><Crown size={16} aria-hidden /> {ct('Criar conta')} · R$20</Button>
+                <small className="ds-dim">{ct('pagamento único · sem mensalidade')}</small>
+                <FounderCounter style={{ fontSize: '11px' }} />
+                {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Já tenho conta · entrar')}</button>}
+              </div>
+            ) : (
+              <div className="home-acct">
+                <div className="home-acct__who">
+                  <span className="ds-avatar" style={{ '--av': '40px', '--ring': 'var(--c-brand)' } as React.CSSProperties} aria-hidden>{(account.nick || account.email).slice(0, 1).toUpperCase()}</span>
+                  <span>
+                    <b>{account.nick || account.email}</b>
+                    <small className="ds-dim">{account.founder ? `${ct('Fundador')}${account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''}` : account.paid ? ct('Conta vitalícia') : ct('Conta grátis')}</small>
+                  </span>
+                </div>
+                {!account.paid && (
+                  <>
+                    <Button variant="primary" block onClick={() => { setCheckoutSrc('home-pill'); onUpgrade?.(); }}>
+                      <Crown size={16} aria-hidden /> {founderSoldOut ? ct('Conta vitalícia') : ct('Vire Fundador')} · R$20
+                    </Button>
+                    <small className="ds-dim">{founderSoldOut ? ct('cloud sync, 5 carreiras e ranking real') : ct('selo #001–#500, cloud sync e 5 carreiras')}</small>
+                    <FounderCounter style={{ fontSize: '11px' }} />
+                  </>
+                )}
+                <div className="home-acct__links">
+                  {onAccount && <button type="button" className="home-link" onClick={onAccount}>{ct('Meu perfil')}</button>}
+                  {onAchievements && <button type="button" className="home-link" onClick={onAchievements}><Medal size={14} aria-hidden /> {ct('Conquistas')}</button>}
+                  {onOpenRanking && <button type="button" className="home-link" onClick={onOpenRanking}>{ct('Ranking')}</button>}
+                  {onAdmin && <button type="button" className="home-link" onClick={onAdmin}>{ct('Painel admin')}</button>}
+                  {onLogout && <button type="button" className="home-link home-link--danger" onClick={onLogout}>{ct('Sair')}</button>}
+                </div>
+              </div>
+            )}
+          </Panel>
+
+          <Panel icon={<Newspaper size={16} />} title={ct('Novidades')} actions={<button type="button" className="home-link" onClick={() => onShellNav('news')}>{ct('Ver tudo')}</button>} flush>
+            {latest.map((it, i) => (
+              <div key={i} className="ds-row home-news">
+                <span className="home-news__tag" data-kind={it.kind}>{it.kind === 'feature' ? ct('Novo') : it.kind === 'fix' ? 'Fix' : ct('Ajuste')}</span>
+                <span className="home-news__txt"><b>{it.area}</b> {it.text}</span>
+              </div>
+            ))}
+          </Panel>
+
+          <Panel icon={<Heart size={16} />} title={ct('Apoie o projeto')}>
+            <p className="ds-dim home-small">{ct('O Road to Major é independente. Cada apoio vira servidor, times novos e modos novos.')}</p>
+            <Button variant="secondary" onClick={onDonate}><Heart size={16} aria-hidden /> {ct('Apoiar')}</Button>
+          </Panel>
+        </div>
+      </div>
+    </GameShell>
+  );
+}
+
+function ResumeRow({ icon, kicker, title, sub, onGo, extra }: { icon: ReactNode; kicker: string; title: string; sub: string; onGo: () => void; extra?: ReactNode }) {
   return (
-    <div style={{ position: 'relative' }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        title={
-          isFounder
-            ? `Fundador${account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''} · apoiador desde o lançamento`
-            : isPaid
-            ? 'Conta vitalícia · gerenciar perfil, saves e conta'
-            : 'Conta grátis · ver perfil ou fazer upgrade'
-        }
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '6px 14px 6px 8px',
-          background: 'rgba(0,0,0,0.55)',
-          border: `1px solid ${isPaid ? 'var(--em-gold)' : 'rgba(255,255,255,0.18)'}`,
-          borderRadius: 999,
-          fontFamily: 'inherit',
-          fontSize: '0.84rem',
-          fontWeight: 700,
-          color: '#fff',
-          cursor: 'pointer',
-          backdropFilter: 'blur(8px)',
-          boxShadow: isPaid ? '0 4px 14px rgba(232,193,112,0.2)' : '0 4px 14px rgba(0,0,0,0.4)',
-        }}
-      >
-        {isPaid && (
-          <span
-            style={{
-              width: 22,
-              height: 22,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'var(--em-gold)',
-              color: '#1a1205',
-              borderRadius: '50%',
-              fontSize: '0.74rem',
-              fontWeight: 900,
-            }}
-          >
-            ★
-          </span>
-        )}
-        <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {account.nick || account.email}
+    <div className="home-resume">
+      <button type="button" className="home-resume__main" onClick={onGo}>
+        <span className="home-resume__ic">{icon}</span>
+        <span className="home-resume__txt">
+          <span className="ds-kicker">{kicker}</span>
+          <b>{title}</b>
+          <small>{sub}</small>
         </span>
-        {isFounder && (
-          <span
-            style={{
-              padding: '1px 6px',
-              fontSize: '0.6rem',
-              fontWeight: 900,
-              letterSpacing: '0.5px',
-              color: 'var(--em-gold)',
-              background: 'rgba(232,193,112,0.18)',
-              border: '1px solid rgba(232,193,112,0.45)',
-              borderRadius: 3,
-            }}
-          >
-            FUNDADOR{account.founderNo != null ? ` #${String(account.founderNo).padStart(3, '0')}` : ''}
-          </span>
-        )}
-        <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
+        <Play size={18} aria-hidden className="home-resume__go" />
       </button>
-      {open && (
-        <>
-          {/* Backdrop pra fechar ao clicar fora */}
-          <div
-            onClick={onClose}
-            style={{ position: 'fixed', inset: 0, zIndex: 49 }}
-          />
-          <div
-            role="menu"
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + 6px)',
-              right: 0,
-              minWidth: 220,
-              padding: 6,
-              background: 'rgba(18, 22, 30, 0.96)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 6,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(12px)',
-              zIndex: 50,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 2,
-            }}
-          >
-            {/* Header info */}
-            <div style={{ padding: '8px 10px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
-              <div style={{ fontSize: '0.66rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
-                Status
-              </div>
-              <div style={{ fontSize: '0.84rem', fontWeight: 800, color: isPaid ? 'var(--em-gold)' : '#fff', marginTop: 2 }}>
-                {isFounder ? '👑 Fundador' : isPaid ? '★ Conta vitalícia' : 'Conta grátis'}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.55)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {account.email}
-              </div>
-            </div>
-            <DropItem
-              label="Meu perfil"
-              hint="Editar nick, ver carreiras, etc."
-              icon="👤"
-              onClick={() => { onClose(); onAccount?.(); }}
-            />
-            {account.admin && onAdmin && (
-              <DropItem
-                label="Painel admin"
-                hint="Times, contas pagas e financeiro"
-                icon="⚙"
-                accent="gold"
-                onClick={() => { onClose(); onAdmin(); }}
-              />
-            )}
-            {!isPaid && (
-              // funil: mesmo problema da pill (ver comentário acima) — quem abre
-              // este item já tem conta, então vai direto pro pagamento em vez do
-              // formulário de cadastro (que falharia com o e-mail já em uso).
-              <DropItem
-                label="✨ Upgrade vitalício"
-                hint="Até 5 saves + sincronização nuvem"
-                icon=""
-                accent="gold"
-                onClick={() => { setCheckoutSrc('acct-chip'); onClose(); onUpgrade?.(); }}
-              />
-            )}
-            <DropItem
-              label="Sair"
-              hint="Volta pro modo grátis"
-              icon="↪"
-              accent="red"
-              onClick={() => { onClose(); onLogout?.(); }}
-            />
-          </div>
-        </>
-      )}
+      {extra}
     </div>
   );
 }
 
-function DropItem({
-  label,
-  hint,
-  icon,
-  accent,
-  onClick,
-}: {
-  label: string;
-  hint?: string;
-  icon?: string;
-  accent?: 'gold' | 'red';
-  onClick: () => void;
+function ModeRow({ mode, icon, title, kicker, desc, meta, cta, onGo, extra }: {
+  mode: string; icon: ReactNode; title: string; kicker: string; desc: string; meta: string; cta: string; onGo: () => void; extra?: ReactNode;
 }) {
-  const fg = accent === 'gold' ? 'var(--em-gold)' : accent === 'red' ? 'var(--c-loss)' : '#fff';
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        padding: '8px 10px',
-        background: 'transparent',
-        border: 'none',
-        borderRadius: 4,
-        cursor: 'pointer',
-        textAlign: 'left',
-        fontFamily: 'inherit',
-        color: fg,
-        fontSize: '0.82rem',
-        fontWeight: 700,
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-    >
-      {icon && <span style={{ width: 18, textAlign: 'center', flexShrink: 0 }}>{icon}</span>}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div>{label}</div>
-        {hint && (
-          <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.45)', fontWeight: 500, marginTop: 1 }}>
-            {hint}
-          </div>
-        )}
-      </div>
-    </button>
+    <div className="home-mode" data-mode={mode === 'inicio' ? undefined : mode}>
+      <button type="button" className="home-mode__main" onClick={onGo}>
+        <span className="home-mode__ic">{icon}</span>
+        <span className="home-mode__txt">
+          <span className="home-mode__kicker">{kicker}</span>
+          <b>{title}</b>
+          <span className="home-mode__desc">{desc}</span>
+          <small>{meta}</small>
+        </span>
+        <span className="home-mode__cta">{cta} <ChevronRight size={14} aria-hidden /></span>
+      </button>
+      {extra}
+    </div>
   );
 }

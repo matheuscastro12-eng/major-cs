@@ -73,9 +73,21 @@ function PatchEntry({ patch }: { patch: PatchNote }) {
   );
 }
 
+// abre as Novidades de qualquer lugar (item da sidebar do Início, paleta ⌘K).
+// Com o shell universal na tela, o botão flutuante some (CSS em shell.css) e a
+// entrada passa a ser o item "Novidades" do menu.
+const openers = new Set<() => void>();
+export function openPatchNotes(): void { openers.forEach((fn) => fn()); }
+export function hasNewPatch(): boolean { return hasUnseenPatch(); }
+
 export function PatchNotesHost() {
   const [open, setOpen] = useState(false);
   const [hasNew, setHasNew] = useState(() => hasUnseenPatch());
+  useEffect(() => {
+    const fn = () => setOpen(true);
+    openers.add(fn);
+    return () => { openers.delete(fn); };
+  }, []);
 
   // Auto-abre uma vez na primeira mount de quem ainda não viu o patch atual.
   // Atrasamos 600ms pra não competir com Landing/login na 1ª impressão.

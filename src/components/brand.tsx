@@ -1,8 +1,8 @@
 // Emblema do Road to Major — identidade visual própria (sem depender do favicon).
 // Conceito: escudo de Major com mira de CS + estrela de campeão e o "caminho"
-// (chevron) subindo até o topo. Cores do design system "Broadcast Desk"
-// (UX-13): escudo em grafite, contorno e caminho no acento do modo e a
-// estrela em dourado de conquista. Os tokens entram via style (var() não
+// (chevron) subindo até o topo. Cores fixas da marca (tokens --c-crest-*):
+// escudo azul, contorno e caminho em azul-céu e a estrela dourada — o mesmo
+// lockup em todo modo (não varia com o acento). Os tokens entram via style (var() não
 // funciona em atributo de apresentação do SVG).
 
 export function BrandMark({ size = 32, className = '' }: { size?: number; className?: string }) {
@@ -18,12 +18,12 @@ export function BrandMark({ size = 32, className = '' }: { size?: number; classN
     >
       <defs>
         <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" style={{ stopColor: 'var(--c-surface-3)' }} />
-          <stop offset="1" style={{ stopColor: 'var(--c-surface-0)' }} />
+          <stop offset="0" style={{ stopColor: 'var(--c-crest-top)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--c-crest-bottom)' }} />
         </linearGradient>
         <linearGradient id={`${id}-star`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" style={{ stopColor: 'var(--c-achievement-strong)' }} />
-          <stop offset="1" style={{ stopColor: 'var(--c-achievement)' }} />
+          <stop offset="0" style={{ stopColor: 'var(--c-brand-strong)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--c-brand-deep)' }} />
         </linearGradient>
       </defs>
 
@@ -31,13 +31,13 @@ export function BrandMark({ size = 32, className = '' }: { size?: number; classN
       <path
         d="M32 3 L57 12 V32 C57 47 46 56 32 61 C18 56 7 47 7 32 V12 Z"
         fill={`url(#${id}-bg)`}
-        style={{ stroke: 'var(--c-accent)' }}
+        style={{ stroke: 'var(--c-crest-line)' }}
         strokeWidth="2.5"
       />
 
       {/* caminho (chevrons subindo) */}
-      <path d="M21 45 L32 38 L43 45" fill="none" style={{ stroke: 'var(--c-accent)' }} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-      <path d="M22 37 L32 31 L42 37" fill="none" style={{ stroke: 'var(--c-accent-strong)' }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.65" />
+      <path d="M21 45 L32 38 L43 45" fill="none" style={{ stroke: 'var(--c-crest-line)' }} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+      <path d="M22 37 L32 31 L42 37" fill="none" style={{ stroke: 'var(--c-crest-light)' }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.65" />
 
       {/* mira de CS ao redor da estrela */}
       <circle cx="32" cy="22" r="11" fill="none" style={{ stroke: 'var(--c-ink)' }} strokeWidth="1.6" opacity="0.55" />

@@ -70,6 +70,14 @@ import { Flag, OvrBadge, PlayerAvatar, TeamBadge } from './ui';
 // FutCard: usado pela SquadTab; import movido pra page.
 import { DashCard } from './career/DashCard';
 import { CareerShell, CareerDashFrame } from './career/CareerShell';
+import type { PaletteItem, ShellNavGroup, ShellNext, ShellPending, ShellTab, ShellTool } from './ds/shell/types';
+import { scoreMatch } from './ds/shell/CommandPalette';
+import {
+  ArrowLeftRight, Binoculars, BookOpen, Building2, CalendarCheck, CalendarDays, ChartColumn, ChartNoAxesColumn,
+  CircleHelp, Crosshair, DoorOpen, FileSignature, Globe, GraduationCap, House, Inbox, Layers, ListOrdered, LogOut,
+  Medal, Network, PenLine, RotateCcw, ScrollText, Search, Shield, ShieldHalf, Sparkles, Star, Swords, Target,
+  Trophy, UserRound, Users, Wallet,
+} from 'lucide-react';
 import { CareerPlayerPage } from './career/CareerPlayerPage';
 import { CareerTeamPage } from './career/CareerTeamPage';
 // PlayerLink: usado pela SquadTab; import movido pra page.
@@ -2513,6 +2521,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     setSave((s) => { const n = { ...s, majorT: t, ...patch }; persist(n); return n; });
   };
   const [hubTab, setHubTab] = useState<HubTab>(() => (loadSave().majorT ? 'major' : 'overview'));
+  // subseções da sidebar estilo FM que vivem dentro de uma aba (Elenco, Finanças)
+  const [squadSec, setSquadSec] = useState<string>('sq');
+  const [finSec, setFinSec] = useState<string>('fi');
   const [selTeam, setSelTeam] = useState<TTeam | null>(null);
   const [showCeremony, setShowCeremony] = useState(false); // cerimônia Top 20 HLTV (fim de temporada)
   const [showOnb, setShowOnb] = useState(() => { try { return !localStorage.getItem('rtm-onboarded-v1'); } catch { return false; } });
@@ -6207,29 +6218,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const expiringCount = expiringContracts.length;
 
   const unread = save.unread ?? 0;
-  // navegação em 2 níveis: grupos no topo + sub-abas do grupo ativo. Reduz a
-  // confusão de 15 abas planas pra ~5 grupos com 1-5 itens cada.
-  const TAB_LABEL: Record<HubTab, string> = {
-    overview: ct('Visão geral'), major: 'Major', calendar: ct('Calendário'), results: ct('Resultados'),
-    standings: ct('Classificação'), bracket: ct('Chave'), squad: ct('Elenco'), academy: ct('Academia'),
-    market: ct('Negociações'), finance: ct('Finanças'), vrs: ct('Ranking VRS'), top20: 'Top 20 HLTV',
-    world: ct('Cena mundial'), inbox: ct('Notícias DRAFT5'), history: ct('História da org'),
-    stats: ct('Geral'),
-  };
-  const HUB_GROUPS: { id: string; label: string; tabs: HubTab[] }[] = [
-    { id: 'dashboard', label: 'Dashboard', tabs: ['overview', 'inbox'] },
-    { id: 'team', label: ct('Meu time'), tabs: ['squad', 'academy'] },
-    { id: 'ingame', label: ct('Em jogo'), tabs: [...(majorActive ? ['major' as HubTab] : []), 'bracket', 'results', 'standings'] },
-    { id: 'transfers', label: ct('Transferências'), tabs: ['market', 'finance'] },
-    { id: 'news', label: 'DRAFT5', tabs: ['inbox'] },
-    { id: 'stats', label: ct('Estatísticas'), tabs: ['stats', 'vrs', 'top20', 'world', 'history'] },
-  ];
-  const tabAlert = (id: HubTab) => (id === 'finance' && expiringCount > 0) || (id === 'inbox' && unread > 0);
-  const tabLabelFull = (id: HubTab) =>
-    id === 'inbox' && unread > 0 ? `${ct('Notícias DRAFT5')} (${unread})`
-    : id === 'finance' && expiringCount > 0 ? `${ct('Finanças')} (${expiringCount})`
-    : TAB_LABEL[id];
-  const activeGroup = HUB_GROUPS.find((g) => g.tabs.includes(hubTab)) ?? HUB_GROUPS[0];
 
   const vrsByRegion = vrsByRegionMemo;
   const vrsAll = vrsAllMemo;
@@ -6257,7 +6245,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   };
 
   const userVrs = vrsAll.find((t) => t.isUser)?.vrs ?? save.vrs ?? 0;
-  const dateLabel = `Split ${save.split} · ${save.circuit?.name?.split(' ').slice(0, 2).join(' ') ?? '2026'}`;
 
   const resolvePlayerById = (id: string): Player | null => {
     const baseId = playerOrgId(id);
@@ -6328,42 +6315,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     resilient: { label: ct('Resiliente'), desc: ct('Recupera-se melhor da pressão e acumula menos fadiga.') },
   };
 
-  return (
-    <>
-    <CareerShell
-      groups={HUB_GROUPS}
-      activeGroupId={activeGroup.id}
-      activeTab={hubTab}
-      tabLabel={(id) => tabLabelFull(id as HubTab)}
-      tabAlert={(id) => tabAlert(id as HubTab)}
-      onGroupChange={(_gid, tab) => { setHubTab(tab as HubTab); setSelSeries(null); }}
-      onTabChange={(id) => {
-        setHubTab(id as HubTab);
-        setSelSeries(null);
-        if (id === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 });
-      }}
-      orgTag={save.org?.tag ?? ''}
-      orgColors={save.org?.colors ?? ['#101820', '#3a3a3a']}
-      orgLogo={save.org?.logo}
-      onExit={onExit}
-      onReset={resetCareer}
-      onContinue={myMatch ? playMine : undefined}
-      dateLabel={dateLabel}
-      showOnboarding={() => setShowOnb(true)}
-      onSearch={() => setHubTab('squad')}
-      onBeforeNav={closeCareerOverlays}
-      onHistoryBack={careerHistoryBack}
-      onHistoryForward={careerHistoryForward}
-      canGoBack={canNavBack}
-      budgetLabel={formatMoney(save.budget)}
-      unreadCount={save.unread ?? 0}
-      onOpenInbox={() => {
-        setHubTab('inbox');
-        setSelSeries(null);
-        if ((save.unread ?? 0) > 0) update({ unread: 0 });
-      }}
-      onHowToPlay={openHowToPlay}
-      onOpenLogoBuilder={save.org ? () => {
+  // ── ferramentas da topbar (⋯) e lançadores da sidebar ──
+  const openLogoBuilderTool = (save.org ? () => {
         // T7.2: abre o LogoBuilder pré-povoado com cores e tag da org atual.
         // Ao salvar, persiste no save.org.logo (data URL SVG).
         const orgNow = save.org!;
@@ -6377,8 +6330,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             update({ org: { ...orgNow, logo: dataUrl } });
           },
         });
-      } : undefined}
-      onOpenLockerRoom={(() => {
+      } : undefined);
+  const openLockerRoomTool = ((() => {
         // T10.2: só plugamos o handler se de fato existe próxima partida não-jogada
         // do user no split atual. Sem ela, o botão nem aparece (CareerShell omite
         // o ícone quando o prop é undefined).
@@ -6418,8 +6371,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             mapName: mapPickFav,
           });
         };
-      })()}
-      onOpenInfrastructure={() => {
+      })());
+  const openInfrastructureTool = (() => {
         // T10.1: abre modal de infraestrutura. Handler `onUpgrade` debita custo
         // e aplica o nível. Reusa engine `facilityUpgradeCost` + `normalizeFacilities`.
         const openWithCurrent = () => {
@@ -6447,8 +6400,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           });
         };
         openWithCurrent();
-      }}
-      onOpenMeta={() => {
+      });
+  const openMetaTool = (() => {
         // T9.2: monta agregados on-demand. top20 já é memo do CareerScreen;
         // worldScene roda em cima de oppEra; mapPicks deriva do league.rounds.
         const scene = worldScene(oppEra, save.split);
@@ -6474,16 +6427,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           userTrophies: { circuits: orgAg.circuitTitles, majors: orgAg.majorTitles },
           currentSplit: save.split,
         });
-      }}
-      onOpenTrophies={() => {
+      });
+  const openTrophiesTool = (() => {
         // Brasval gap: Sala de Troféus — lê save.history (pure-read, sem migração).
         openTrophyRoom({
           history: save.history as unknown as Parameters<typeof openTrophyRoom>[0]['history'],
           orgName: save.org?.name ?? 'Sua org',
           currentSplit: save.split,
         });
-      }}
-      onOpenCoach={() => {
+      });
+  const openCoachTool = (() => {
         // Brasval gap: Perfil de carreira do treinador — lê save.coachStints.
         const active = activeCoachStint(save.coachStints ?? []);
         openCoachProfile({
@@ -6491,8 +6444,150 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           activeCoachNick: active?.coachNick,
           scars: save.scars, split: save.split, // [W4]
         });
+      });
+
+  // ── navegação estilo FM: seção da sidebar ↔ aba interna (hubTab + subseção) ──
+  const SQUAD_SECS = ['sq', 'dy', 'pl', 'tr', 'st', 'an', 'sc'];
+  const activeSection: string =
+    hubTab === 'squad' ? squadSec
+      : hubTab === 'finance' ? finSec
+        : ({ overview: 'ov', inbox: 'in', calendar: 'ag', stats: 'dh', market: 'tf', academy: 'ac', history: 'hi', major: 'mj', standings: 'cl', bracket: 'cl', results: 'cl', vrs: 'vr', top20: 'vr', world: 'vr' } as Record<HubTab, string>)[hubTab] ?? 'ov';
+  const goSection = (id: string) => {
+    closeCareerOverlays();
+    setSelSeries(null);
+    if (id === 'x-inf') { openInfrastructureTool(); return; }
+    if (id === 'x-lr') { openLockerRoomTool?.(); return; }
+    if (id === 'x-tr') { openTrophiesTool(); return; }
+    if (SQUAD_SECS.includes(id)) { setSquadSec(id); setHubTab('squad'); return; }
+    if (id === 'fi' || id === 'ct') { setFinSec(id); setHubTab('finance'); return; }
+    const map: Record<string, HubTab> = { ov: 'overview', in: 'inbox', ag: 'calendar', dh: 'stats', tf: 'market', ac: 'academy', hi: 'history', mj: 'major', cl: 'standings', vr: 'vrs' };
+    const tab = map[id];
+    if (!tab) return;
+    setHubTab(tab);
+    if (tab === 'inbox' && (save.unread ?? 0) > 0) update({ unread: 0 });
+  };
+  const NAV: ShellNavGroup[] = [
+    { id: 'principal', label: ct('Principal'), items: [
+      { id: 'ov', label: ct('Início'), icon: House },
+      { id: 'in', label: ct('Caixa de entrada'), icon: Inbox, badge: unread || undefined },
+      { id: 'ag', label: ct('Agenda'), icon: CalendarDays },
+    ] },
+    { id: 'time', label: ct('Time'), items: [
+      { id: 'sq', label: ct('Elenco'), icon: Users },
+      { id: 'dy', label: ct('Dinâmica'), icon: Sparkles },
+      { id: 'pl', label: ct('Plano de jogo'), icon: Target },
+      { id: 'tr', label: ct('Treinos e scrims'), icon: Crosshair },
+      { id: 'st', label: ct('Comissão técnica'), icon: ShieldHalf },
+    ] },
+    { id: 'dados', label: ct('Dados'), items: [
+      { id: 'dh', label: ct('Central de dados'), icon: ChartNoAxesColumn },
+      { id: 'an', label: ct('Relatório do analista'), icon: Binoculars, disabled: !opp },
+      { id: 'sc', label: ct('Olheiros'), icon: Search },
+    ] },
+    { id: 'mercado', label: ct('Mercado'), items: [
+      { id: 'tf', label: ct('Transferências'), icon: ArrowLeftRight },
+      { id: 'ct', label: ct('Contratos'), icon: FileSignature, badge: expiringCount || undefined, badgeTone: 'warn' },
+      { id: 'ac', label: ct('Academia'), icon: GraduationCap },
+    ] },
+    { id: 'clube', label: ct('Clube'), items: [
+      { id: 'fi', label: ct('Finanças'), icon: Wallet },
+      { id: 'x-inf', label: ct('Instalações'), icon: Building2 },
+      ...(openLockerRoomTool ? [{ id: 'x-lr', label: ct('Vestiário'), icon: DoorOpen }] : []),
+      { id: 'x-tr', label: ct('Sala de troféus'), icon: Trophy },
+      { id: 'hi', label: ct('História da org'), icon: ScrollText },
+    ] },
+    { id: 'comp', label: ct('Competições'), items: [
+      { id: 'mj', label: 'Major', icon: Trophy, disabled: !majorT, alert: majorActive },
+      { id: 'cl', label: ct('Classificação e chave'), icon: Layers },
+      { id: 'vr', label: ct('Ranking VRS'), icon: ChartNoAxesColumn },
+    ] },
+  ];
+  const activeGroupNav = NAV.find((g) => g.items.some((it) => it.id === activeSection));
+  const shellTabs: ShellTab[] = activeSection === 'cl'
+    ? [{ id: 't:standings', label: ct('Classificação'), icon: ListOrdered }, { id: 't:bracket', label: ct('Chave'), icon: Network }, { id: 't:results', label: ct('Resultados'), icon: CalendarCheck }]
+    : activeSection === 'vr'
+      ? [{ id: 't:vrs', label: 'VRS', icon: ChartNoAxesColumn }, { id: 't:top20', label: 'Top 20 HLTV', icon: Star }, { id: 't:world', label: ct('Cena mundial'), icon: Globe }]
+      : (activeGroupNav?.items ?? []).filter((it) => !it.id.startsWith('x-') && !it.disabled).map((it) => ({ id: it.id, label: it.label, icon: it.icon, badge: it.badge }));
+  const shellActiveTab = activeSection === 'cl' || activeSection === 'vr' ? `t:${hubTab}` : activeSection;
+  const onShellTab = (id: string) => {
+    if (id.startsWith('t:')) { setSelSeries(null); setHubTab(id.slice(2) as HubTab); }
+    else goSection(id);
+  };
+  const shellPending: ShellPending[] = [
+    ...(unread > 0 ? [{ id: 'inbox', label: `${unread} ${ct('mensagem(ns) nova(s) na caixa')}`, icon: Inbox, tone: 'info' as const, onGo: () => goSection('in') }] : []),
+    ...(expiringCount > 0 ? [{ id: 'contracts', label: `${expiringCount} ${ct('contrato(s) vencendo')}`, icon: FileSignature, tone: 'warn' as const, onGo: () => goSection('ct') }] : []),
+  ];
+  const shellNext: ShellNext = myMatch && opp
+    ? { label: ct('Continuar'), detail: `${ct('Partida vs')} ${opp.tag || opp.name} · MD${myMatch.bo ?? LEAGUE_BO}`, onGo: playMine, pending: shellPending }
+    : majorActive
+      ? { label: ct('Continuar'), detail: ct('Major em andamento'), onGo: () => goSection('mj'), pending: shellPending }
+      : { label: ct('Continuar'), detail: ct('Sem partida agendada'), disabled: true, pending: shellPending };
+  const careerSearch = (q: string): PaletteItem[] => {
+    const out: PaletteItem[] = [];
+    const seen = new Set<string>();
+    const pushP = (p: Player, team: string) => {
+      if (seen.has(p.id) || out.length > 10) return;
+      if (!scoreMatch(q, p.nick) && !scoreMatch(q, p.name ?? '')) return;
+      seen.add(p.id);
+      out.push({ id: `p-${p.id}`, label: p.nick, sub: `${p.role} · ${team} · OVR ${playerOvr(p)}`, group: ct('Jogadores'), icon: UserRound, peek: `career:${p.id}`, run: () => openPlayerProfile(p) });
+    };
+    for (const sig of save.squad) { const f = findSigning(sig); if (f) pushP(f.player, save.org?.tag ?? ct('Seu time')); }
+    for (const t of league.teams) {
+      if (scoreMatch(q, t.name) || scoreMatch(q, t.tag)) out.push({ id: `t-${t.id}`, label: t.name, sub: `${t.tag} · ${ct('Time')}`, group: ct('Times'), icon: Shield, run: () => openTeamProfile(t.id) });
+      for (const pl of t.players) pushP({ id: pl.sourcePlayerId ?? pl.id, nick: pl.nick, name: pl.name, country: pl.country, role: pl.role, role2: pl.role2, aim: pl.aim, clutch: pl.clutch, consistency: pl.consistency, awp: pl.awp, igl: pl.igl }, t.tag);
+    }
+    return out.slice(0, 12);
+  };
+  const careerTools: ShellTool[] = [
+    { id: 'howto', label: ct('Como jogar'), icon: BookOpen, onClick: openHowToPlay },
+    { id: 'tour', label: ct('Tutorial'), icon: CircleHelp, onClick: () => setShowOnb(true) },
+    { id: 'meta', label: ct('Meta da temporada'), icon: ChartColumn, onClick: openMetaTool },
+    { id: 'coach', label: ct('Perfil do treinador'), icon: Medal, onClick: openCoachTool },
+    ...(openLogoBuilderTool ? [{ id: 'logo', label: ct('Editar logo'), icon: PenLine, onClick: openLogoBuilderTool }] : []),
+    { id: 'reset', label: ct('Recomeçar carreira'), icon: RotateCcw, onClick: resetCareer },
+    { id: 'exit', label: ct('Sair da carreira'), icon: LogOut, onClick: onExit },
+  ];
+
+  return (
+    <>
+    <CareerShell
+      identity={{
+        title: save.org?.name ?? ct('Carreira'),
+        subtitle: `${save.org?.tag ?? ''} · Split ${save.split}`,
+        badge: save.org ? <TeamBadge tag={save.org.tag} colors={save.org.colors} size={40} logoUrl={save.org.logo} /> : undefined,
+        colors: save.org?.colors,
       }}
-      formStreak={formStreak}
+      nav={NAV}
+      active={activeSection}
+      onNav={goSection}
+      tabs={shellTabs}
+      activeTab={shellActiveTab}
+      onTab={onShellTab}
+      mobileNav={['ov', 'in', 'sq', 'cl']}
+      next={shellNext}
+      history={{ back: careerHistoryBack, forward: careerHistoryForward, canBack: canNavBack }}
+      search={careerSearch}
+      searchPlaceholder={ct('Buscar jogador, time…')}
+      tools={careerTools}
+      bell={{ label: ct('Caixa de entrada'), count: unread, onClick: () => goSection('in') }}
+      meta={(
+        <>
+          {formStreak.length > 0 && (
+            <span className="gs-form" aria-label={`${ct('Forma')}: ${formStreak.slice(-5).join(' ')}`}>
+              {formStreak.slice(-5).map((r, i) => <i key={i} data-r={r}>{r === 'W' ? 'V' : 'D'}</i>)}
+            </span>
+          )}
+          <span className="gs-chip"><Wallet size={15} aria-hidden /> {formatMoney(save.budget)}</span>
+          <span className="gs-when"><b>Split {save.split}</b><small>{save.circuit?.name?.split(' ').slice(0, 2).join(' ') ?? '2026'}</small></span>
+        </>
+      )}
+      sideWidget={myMatch && opp ? (
+        <button type="button" className="gs-widget" onClick={playMine}>
+          <span className="gs-widget__kicker"><Swords size={13} aria-hidden /> {ct('Próximo jogo')}</span>
+          <span className="gs-widget__main">{save.org?.tag ?? ct('Você')} <span className="gs-widget__vs">vs</span> {opp.tag || opp.name}</span>
+          <span className="gs-widget__sub">{league.name.split(' · ')[0]} · MD{myMatch.bo ?? LEAGUE_BO}</span>
+        </button>
+      ) : undefined}
     >
       {playerRouteId && (() => {
         const p = resolvePlayerById(playerRouteId);

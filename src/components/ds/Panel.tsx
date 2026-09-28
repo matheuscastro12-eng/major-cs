@@ -13,14 +13,17 @@ export interface PanelProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   flush?: boolean;
   /** nível do heading do título (padrão h2) */
   headingLevel?: 2 | 3 | 4;
+  /** ícone dourado do cabeçalho (lucide, 16px) */
+  icon?: ReactNode;
 }
 
-export function Panel({ title, actions, tone = 'default', flush = false, headingLevel = 2, className, children, ...rest }: PanelProps) {
+export function Panel({ title, actions, tone = 'default', flush = false, headingLevel = 2, icon, className, children, ...rest }: PanelProps) {
   const H = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
   return (
     <section className={cx('ds-panel', tone !== 'default' && `ds-panel--${tone}`, flush && 'ds-panel--flush', className)} {...rest}>
       {(title != null || actions != null) && (
         <header className="ds-panel__head">
+          {icon != null && <span className="ds-panel__icon" aria-hidden>{icon}</span>}
           {title != null && <H className="ds-panel__title">{title}</H>}
           {actions != null && <div className="ds-panel__actions">{actions}</div>}
         </header>

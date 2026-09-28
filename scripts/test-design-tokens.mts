@@ -55,15 +55,16 @@ function contrast(vars: Record<string, string>, fg: string, bg: string): number 
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
-const SURFACES = ['--c-surface-0', '--c-surface-1', '--c-surface-2', '--c-surface-3', '--c-shell'];
+const SURFACES = ['--c-surface-0', '--c-surface-1', '--c-surface-2', '--c-surface-3', '--c-shell', '--c-shell-glow', '--c-panel-head', '--c-rail'];
 // tudo que aparece como TEXTO sobre superfície (tags, links, deltas, placar)
 const TEXT_ON_SURFACE = [
   '--c-ink', '--c-ink-dim', '--c-ink-faint',
-  '--mode-base', '--mode-rtp', '--mode-carreira', '--mode-ultimate', '--mode-diario', '--mode-online',
-  '--c-achievement', '--c-win', '--c-loss', '--c-warn', '--c-epic', '--c-ct', '--c-t', '--c-live',
+  '--mode-base', '--mode-rtp', '--mode-carreira', '--mode-ultimate', '--mode-diario', '--mode-online', '--mode-major',
+  '--c-brand', '--c-achievement', '--c-win', '--c-loss', '--c-warn', '--c-epic', '--c-ct', '--c-t', '--c-live',
   '--c-attr-1', '--c-attr-2', '--c-attr-3', '--c-attr-4', '--c-attr-5',
+  '--c-role-rifler', '--c-role-entry', '--c-role-awp', '--c-role-igl', '--c-role-support', '--c-role-lurker',
 ];
-const MODES = ['--mode-base', '--mode-rtp', '--mode-carreira', '--mode-ultimate', '--mode-diario', '--mode-online'];
+const MODES = ['--mode-base', '--mode-rtp', '--mode-carreira', '--mode-ultimate', '--mode-diario', '--mode-online', '--mode-major'];
 
 for (const [theme, vars] of [['escuro', DARK], ['claro', LIGHT]] as const) {
   test(`contraste ≥ 4,5:1 de todo texto sobre as 4 superfícies (tema ${theme})`, () => {
@@ -83,7 +84,7 @@ for (const [theme, vars] of [['escuro', DARK], ['claro', LIGHT]] as const) {
       const c = contrast(vars, '--c-on-accent', m);
       if (c < 4.5) fails.push(`--c-on-accent sobre ${m}: ${c.toFixed(2)}:1`);
     }
-    for (const [fg, bg] of [['--c-on-achievement', '--c-achievement'], ['--c-on-strong', '--c-live-fill'], ['--c-on-accent', '--c-loss']]) {
+    for (const [fg, bg] of [['--c-on-achievement', '--c-achievement'], ['--c-on-brand', '--c-brand'], ['--c-on-brand', '--c-brand-deep'], ['--c-on-brand', '--c-brand-strong'], ['--c-ink', '--c-topbar'], ['--c-topbar-ink', '--c-topbar'], ['--c-topbar-ink', '--c-topbar-mid'], ['--c-on-strong', '--c-live-fill'], ['--c-on-accent', '--c-loss']]) {
       const c = contrast(vars, fg, bg);
       if (c < 4.5) fails.push(`${fg} sobre ${bg}: ${c.toFixed(2)}:1`);
     }
@@ -152,7 +153,7 @@ test('todo token semântico usado existe em tokens.css', () => {
 test('arquivos do design system não têm hexadecimal nem fontSize inline', () => {
   const DS = [
     'src/styles/tokens-legacy.css', 'src/styles/primitives.css', 'src/styles/base.css', 'src/styles/design-screen.css',
-    'src/styles/shell.css',
+    'src/styles/shell.css', 'src/styles/home.css',
     ...walk('src/components/ds', ['.tsx', '.ts']), 'src/pages/DesignScreen.tsx',
   ];
   const offenders: string[] = [];

@@ -147,32 +147,37 @@
 }
 
 /* ── Panel / Card ────────────────────────────────────────────────────────── */
+/* o painel da "nova interface": marinho, cabeçalho em gradiente, ícone dourado
+   e título Barlow Condensed em caixa-alta */
 .ds-panel {
+  display: flex;
+  flex-direction: column;
   background: var(--c-surface-1);
   border: 1px solid var(--c-line);
   border-radius: var(--rad-3);
   color: var(--c-ink);
   overflow: hidden;
-  box-shadow: var(--shadow-inset);
+  min-width: 0;
 }
 .ds-panel__head {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  min-height: 44px;
-  padding: var(--sp-2) var(--sp-4);
+  gap: var(--sp-2);
+  min-height: 38px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--c-line);
-  background: var(--c-surface-2);
+  background: linear-gradient(180deg, var(--c-surface-2), var(--c-panel-head));
+  flex-shrink: 0;
 }
-/* título "Desk": caps condensado com a luz de tally (o traço do acento) */
+.ds-panel__icon { display: inline-flex; color: var(--c-brand); flex-shrink: 0; }
 .ds-panel__title {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-3);
-  font-weight: 600;
+  font-family: var(--font-title);
+  font-size: var(--fs-4);
+  font-weight: 700;
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--c-ink);
@@ -180,20 +185,119 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ds-panel__title::before {
-  content: '';
-  flex-shrink: 0;
-  width: 3px;
-  height: 0.95em;
-  border-radius: 1px;
-  background: var(--c-line-strong);
-}
-.ds-panel--accent .ds-panel__title::before { background: var(--c-accent); }
+.ds-panel--accent { border-color: var(--c-accent-line); }
+.ds-panel--accent .ds-panel__icon { color: var(--c-accent); }
 .ds-panel--achievement { border-color: color-mix(in srgb, var(--c-achievement) 40%, var(--c-line)); }
-.ds-panel--achievement .ds-panel__title::before { background: var(--c-achievement); }
+.ds-panel--achievement .ds-panel__icon { color: var(--c-achievement); }
 .ds-panel__actions { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); }
-.ds-panel__body { padding: var(--sp-4); }
+.ds-panel__body { padding: var(--pad-panel, var(--sp-4)); flex: 1; min-height: 0; }
 .ds-panel--flush .ds-panel__body { padding: 0; }
+
+/* linha de lista estilo FM (dentro de painel flush) */
+.ds-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-h, 34px);
+  padding: 0 14px;
+  border-bottom: 1px solid var(--c-line-soft);
+}
+.ds-row:last-child { border-bottom: 0; }
+button.ds-row { width: 100%; border-left: 0; border-right: 0; border-top: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+button.ds-row:hover { background: var(--c-hover); }
+button.ds-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--c-brand); }
+.ds-row.is-me { background: linear-gradient(90deg, color-mix(in srgb, var(--c-brand) 22%, transparent), color-mix(in srgb, var(--c-brand) 4%, transparent)); box-shadow: inset 3px 0 0 var(--c-brand); }
+
+/* selo de OVR dourado */
+.ds-ovr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--c-brand-strong), var(--c-brand-deep));
+  color: var(--c-on-brand);
+  font-family: var(--font-display);
+  font-size: var(--fs-5);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ds-ovr--sm { min-width: 32px; height: 24px; font-size: var(--fs-3); border-radius: 5px; }
+
+/* segmented / toggle group (pílulas: Geral · Atributos · Contratos) */
+.ds-seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.ds-seg__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--c-line-strong);
+  color: var(--c-ink-faint);
+  font-family: var(--font-ui);
+  font-size: var(--fs-2);
+  font-weight: 700;
+  cursor: pointer;
+  transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.ds-seg__btn:hover { color: var(--c-ink); box-shadow: inset 0 0 0 1px var(--c-ink-faint); }
+.ds-seg__btn[aria-pressed='true'],
+.ds-seg__btn[aria-checked='true'] {
+  background: color-mix(in srgb, var(--c-brand) 18%, transparent);
+  color: var(--c-brand-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-brand) 50%, transparent);
+}
+.ds-seg__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ds-seg__count { padding: 0 5px; border-radius: 8px; background: var(--c-brand); color: var(--c-on-brand); font-size: var(--fs-1); }
+@media (pointer: coarse) { .ds-seg__btn { min-height: 36px; } }
+
+/* chip de função/estado (Rifler, AWP, IGL…) */
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--chip, var(--c-accent)) 14%, transparent);
+  color: var(--chip, var(--c-accent));
+  font-size: var(--fs-2);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* avatar com anel da função */
+.ds-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--av, 44px);
+  height: var(--av, 44px);
+  border-radius: 50%;
+  background: var(--c-line-soft);
+  box-shadow: 0 0 0 2px var(--ring, var(--c-line-strong));
+  color: var(--c-ink);
+  font-family: var(--font-display);
+  font-size: var(--fs-5);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* barra de progresso fina (mapas, rotina, chance) */
+.ds-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--c-surface-3); overflow: hidden; min-width: 40px; }
+.ds-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--bar, var(--c-accent)); transition: width var(--dur-4) var(--ease-out); }
+.ds-bar--gold > i { background: linear-gradient(90deg, var(--c-brand-deep), var(--c-brand-strong)); }
+.ds-bar--lg { height: 10px; border-radius: 5px; }
+
+/* número grande (Oswald) */
+.ds-big { font-family: var(--font-display); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; font-size: var(--fs-display); }
+.ds-big--md { font-size: var(--fs-6); }
+.ds-kicker { font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c-ink-faint); }
 
 .ds-card {
   display: block;
@@ -342,37 +446,56 @@
 
 /* ── Table densa (FM) ────────────────────────────────────────────────────── */
 .ds-table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--c-line);
-  border-radius: var(--rad-2);
+  overflow: auto;
+  max-width: 100%;
   background: var(--c-surface-1);
 }
+.ds-table-wrap--boxed { border: 1px solid var(--c-line); border-radius: var(--rad-3); }
 .ds-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--fs-2);
+  font-size: var(--fs-3);
   font-variant-numeric: tabular-nums;
 }
 .ds-table th {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: var(--sp-2) var(--sp-3);
-  background: var(--c-surface-2);
+  height: 34px;
+  padding: 0 14px;
+  background: var(--c-shell);
   border-bottom: 1px solid var(--c-line);
   color: var(--c-ink-faint);
   font-size: var(--fs-1);
-  font-weight: 700;
-  letter-spacing: var(--tracking-caps);
+  font-weight: 800;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
 }
+.ds-table th.is-num { text-align: right; }
+.ds-table th button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.ds-table th button:hover { color: var(--c-ink); }
+.ds-table th button:focus-visible { outline: none; color: var(--c-ink); text-decoration: underline; }
+.ds-table th[aria-sort='ascending'],
+.ds-table th[aria-sort='descending'] { color: var(--c-brand); }
 .ds-table td {
-  height: 34px;
-  padding: 0 var(--sp-3);
-  border-bottom: 1px solid var(--c-line);
+  height: var(--row-h, 34px);
+  padding: 0 14px;
+  border-bottom: 1px solid var(--c-line-soft);
   color: var(--c-ink);
   white-space: nowrap;
 }
@@ -380,12 +503,14 @@
 .ds-table tbody tr { transition: background-color var(--dur-1) var(--ease-out); }
 .ds-table tbody tr:hover { background: var(--c-hover); }
 .ds-table--zebra tbody tr:nth-child(even) { background: color-mix(in srgb, var(--c-surface-2) 55%, transparent); }
+.ds-table--tall td { height: 64px; }
 .ds-table .is-num { text-align: right; font-family: var(--font-num); }
 .ds-table .is-dim { color: var(--c-ink-dim); }
-.ds-table tr.is-me { background: var(--c-accent-soft); }
-.ds-table tr.is-me td:first-child { box-shadow: inset 3px 0 0 var(--c-accent); }
+.ds-table tr.is-me { background: linear-gradient(90deg, color-mix(in srgb, var(--c-brand) 22%, transparent), color-mix(in srgb, var(--c-brand) 4%, transparent)); }
+.ds-table tr.is-me td:first-child { box-shadow: inset 3px 0 0 var(--c-brand); }
+.ds-table tr[data-selected] { background: color-mix(in srgb, var(--c-brand) 10%, transparent); }
 .ds-table tr[data-clickable] { cursor: pointer; }
-.ds-table tr[data-clickable]:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.ds-table tr[data-clickable]:focus-visible { outline: 2px solid var(--c-brand); outline-offset: -2px; }
 
 /* ── Stat (número tabular + rótulo) ──────────────────────────────────────── */
 .ds-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

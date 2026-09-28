@@ -410,10 +410,16 @@ function DuelChips({ card, styleId, light }: { card: UltCard; styleId?: StyleId;
 // agrupa o inventário por cardKey → carta + contagem de cópias (+ owned ids).
 interface ClubRow { card: UltCard; count: number; ownedIds: string[]; evo: number; style?: StyleId; ev?: string; ed?: EditionBadge }
 
-export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void }) {
+export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, onUpgrade, tabRequest }: { onBack: () => void; guest?: boolean; onCreateAccount?: () => void; onUpgrade?: () => void; tabRequest?: { tab: string; n: number } | null }) {
   const { state, openPackCloud, sell, sellMany, ensureSquad, placeInSquad, setFormation, recordMatch, claimDaily, syncTitles, equipTitle, claimStarter, submitSbc, tickSeason, claimObjective, evolveCard, claimSeasonReward, claimSeasonMilestone, gauntletStart, gauntletRecord, draftStart, draftPick, draftRecord, syncMissions, claimMission, syncWeekly, claimWeekly, claimWeeklyBonus, addCredits, claimCommunityGoal, unlockPremiumPaid, claimPassLevel, applyStyle, marketListCard, marketCardSold, marketCardReturned, marketBuyApply, setTarget, setClub, equipFrame, claimCollection, grantEventCard } = useUltimate();
   const index = ultimateIndex();
-  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>(TAB_FROM_URL ?? 'hub');
+  const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>((tabRequest?.tab as 'hub' | undefined) ?? TAB_FROM_URL ?? 'hub');
+  // shell: o trilho pede uma aba (Online → Ranqueada; Ultimate → Hub)
+  const [tabReqSeen, setTabReqSeen] = useState(tabRequest?.n ?? 0);
+  if (tabRequest && tabRequest.n !== tabReqSeen) {
+    setTabReqSeen(tabRequest.n);
+    setTab(tabRequest.tab as typeof tab);
+  }
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
