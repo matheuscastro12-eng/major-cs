@@ -4,6 +4,8 @@
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Modal } from '../ds';
+import { GameShell, type GameShellProps } from '../ds/shell/GameShell';
+import type { ShellNavGroup } from '../ds/shell/types';
 import { Flag, PlayerAvatar } from '../ui';
 import { syncUltimateFromCloud, ultimateCatalog, ultimateIndex, ultimatePromo, ultimatePromoPack, ultimateTotw, useUltimate } from '../../state/ultimate';
 import { loadStreakState } from '../../state/dailyStreak'; // [URG-4]
@@ -85,8 +87,8 @@ import { WeekendLeague } from '../online/WeekendLeague';
 import { UtPanel, UtEmpty } from './UtPanel';
 import { FounderCounter } from '../FounderCounter';
 import {
-  LayoutGrid, Users, Layers, Shirt, FlaskConical, Store, ArrowLeftRight, Package,
-  Swords, ListOrdered, ChevronDown, Coins, Trophy, Zap, Menu, CalendarDays, Lock,
+  LayoutGrid, Layers, Shirt, FlaskConical, ArrowLeftRight, Package, Crosshair,
+  Swords, ListOrdered, Coins, Trophy, Zap, CalendarDays, Lock,
   Check, Gift, Star, Gem, Crown, Wallet, TrendingUp, Medal, Flame, AlertCircle,
   Tag, ArrowLeft, Sparkles, Plus, X, Target, Globe, Ticket,
 } from 'lucide-react';
@@ -416,9 +418,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const [tab, setTab] = useState<'hub' | 'store' | 'mercado' | 'club' | 'squad' | 'ranked' | 'duelo' | 'draft' | 'sbc' | 'ranking' | 'passe' | 'major-semana'>((tabRequest?.tab as 'hub' | undefined) ?? TAB_FROM_URL ?? 'hub');
   // shell: o trilho pede uma aba (Online → Ranqueada; Ultimate → Hub)
   const [tabReqSeen, setTabReqSeen] = useState(tabRequest?.n ?? 0);
+  // Online (trilho) = a parte competitiva do Ultimate com a sidebar própria
+  const [onlineMode, setOnlineMode] = useState(tabRequest?.tab === 'ranked');
   if (tabRequest && tabRequest.n !== tabReqSeen) {
     setTabReqSeen(tabRequest.n);
     setTab(tabRequest.tab as typeof tab);
+    setOnlineMode(tabRequest.tab === 'ranked');
   }
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
@@ -1938,7 +1943,8 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   // primeira vez: onboarding (escolhe esquema → 5 cartas iniciais → onboarded=true).
   if (!state.profile.onboarded) {
     return (
-      <div className="ut-root">
+      <GameShell mode="ultimate" variant="focus" identity={{ title: 'Ultimate', subtitle: ct('Monte sua coleção') }} title={ct('Primeiro squad')} crumbs={[]} history={{ back: onBack }}>
+      <div className="ut-root ut-in-shell">
         <div className="ut-onboard__hero">
           <div className="ut-onboard__herobox">
             <div className="ut-onboard__lockup">
@@ -1967,6 +1973,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           <div style={{ textAlign: 'center' }}><button onClick={onBack} className="ut-btn ut-btn--ghost">← {ct('Voltar')}</button></div>
         </div>
       </div>
+      </GameShell>
     );
   }
 
@@ -2102,8 +2109,96 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     );
   }
 
+  // ── shell universal: Ultimate (clube, jogar, loja) e Online (competir) ──
+  const ONLINE_TABS: string[] = ['ranked', 'major-semana', 'duelo', 'ranking', 'draft'];
+  const inOnline = onlineMode && ONLINE_TABS.includes(tab);
+  const utNav: ShellNavGroup[] = inOnline ? [
+    { id: 'competir', label: ct('Competir'), items: [
+      { id: 'ranked', label: ct('Ranqueada'), icon: Swords },
+      { id: 'major-semana', label: ct('Major da Semana'), icon: Trophy, alert: wlWindowNow().open },
+      { id: 'draft', label: ct('Draft'), icon: Layers, alert: state.profile.draft.active },
+      { id: 'duelo', label: ct('Duelo privado'), icon: Crosshair },
+    ] },
+    { id: 'rank', label: 'Ranking', items: [
+      { id: 'ranking', label: ct('Ladder'), icon: ListOrdered },
+    ] },
+  ] : [
+    { id: 'principal', label: ct('Principal'), items: [
+      { id: 'hub', label: 'Hub', icon: LayoutGrid },
+      { id: 'sbc', label: ct('Desafios'), icon: FlaskConical },
+    ] },
+    { id: 'clube', label: ct('Meu clube'), items: [
+      { id: 'squad', label: 'Squad', icon: Shirt },
+      { id: 'club', label: ct('Coleção'), icon: Layers, badge: totalCards || undefined, badgeTone: 'muted' },
+    ] },
+    { id: 'jogar', label: ct('Jogar'), items: [
+      { id: 'ranked', label: ct('Ranqueada'), icon: Swords },
+      { id: 'draft', label: ct('Draft'), icon: Layers, alert: state.profile.draft.active },
+      { id: 'major-semana', label: ct('Major da Semana'), icon: Trophy, alert: wlWindowNow().open },
+      { id: 'duelo', label: ct('Duelo privado'), icon: Crosshair },
+    ] },
+    { id: 'loja', label: ct('Loja'), items: [
+      { id: 'mercado', label: ct('Mercado'), icon: ArrowLeftRight },
+      { id: 'passe', label: ct('Passe'), icon: Ticket, badge: passClaimableCount || undefined },
+      { id: 'store', label: ct('Pacotes'), icon: Package },
+      { id: 'ranking', label: ct('Ranking'), icon: ListOrdered },
+    ] },
+  ];
+  const utNavGroup = utNav.find((g) => g.items.some((it) => it.id === tab));
+  const shellProps: Omit<GameShellProps, 'children'> = {
+    mode: inOnline ? 'online' : 'ultimate',
+    identity: {
+      title: state.profile.club?.name || displayName,
+      subtitle: inOnline
+        ? `${div.def.name} · ${state.profile.elo} RP`
+        : `Season ${state.profile.season?.n ?? 1} — ${SEASON_NAMES[((state.profile.season?.n ?? 1) - 1) % SEASON_NAMES.length]}`,
+    },
+    nav: utNav,
+    active: tab,
+    onNav: (id) => go(id as typeof tab),
+    tabs: (utNavGroup?.items ?? []).map((it) => ({ id: it.id, label: it.label, icon: it.icon, badge: it.badge, alert: it.alert })),
+    activeTab: tab,
+    onTab: (id) => go(id as typeof tab),
+    mobileNav: inOnline ? ['ranked', 'major-semana', 'draft', 'ranking'] : ['hub', 'squad', 'ranked', 'store'],
+    history: { back: onBack },
+    meta: (
+      <>
+        <span className="gs-chip" title={`${fmt(credits)} coins`}><Coins size={15} aria-hidden /> {fmtChip(credits)}</span>
+        <span className="gs-chip" title={`${div.def.name} · ${state.profile.elo} RP`}><Trophy size={15} aria-hidden /> {state.profile.elo}</span>
+      </>
+    ),
+    bell: { label: ct('Recompensa diária'), count: daily.canClaim ? 1 : 0, onClick: () => setDailyOpen(true) },
+    tools: [
+      { id: 'daily', label: ct('Recompensa diária'), icon: Gift, onClick: () => setDailyOpen(true) },
+      { id: 'titles', label: equippedLabel ? `${ct('Títulos')} · ${equippedLabel}` : ct('Títulos'), icon: Tag, onClick: () => setTitlesOpen(true) },
+      { id: 'back', label: ct('Voltar ao início'), icon: ArrowLeft, onClick: onBack },
+    ],
+    next: {
+      label: ct('Jogar'),
+      detail: squadComplete ? `${ct('Ranqueada')} · ${div.def.name}` : ct('Complete o squad'),
+      icon: Zap,
+      onGo: onJogar,
+      pending: [
+        ...(daily.canClaim ? [{ id: 'daily', label: ct('Recompensa diária disponível'), icon: Gift, tone: 'info' as const, onGo: () => setDailyOpen(true) }] : []),
+        ...(passClaimableCount > 0 ? [{ id: 'pass', label: `${passClaimableCount} ${ct('recompensa(s) do Passe')}`, icon: Ticket, tone: 'info' as const, onGo: () => go('passe') }] : []),
+        ...(!squadComplete ? [{ id: 'squad', label: ct('Squad incompleto: escale 5 cartas'), icon: Shirt, tone: 'warn' as const, blocking: true, onGo: () => go('squad') }] : []),
+      ],
+    },
+    sideWidget: (() => {
+      const s2 = state.profile.season;
+      return (
+        <div className="gs-widget">
+          <span className="gs-widget__kicker"><Trophy size={13} aria-hidden /> {ct('Temporada')}</span>
+          <span className="gs-widget__main">Season {s2?.n ?? 1}</span>
+          <span className="gs-widget__sub">{s2 ? `${ct('Termina em')} ${new Date(s2.endsAt).toLocaleDateString('pt-BR')}` : SEASON_NAMES[0]}</span>
+        </div>
+      );
+    })(),
+  };
+
   return (
-    <div className="ut-root">
+    <GameShell {...shellProps}>
+    <div className="ut-root ut-in-shell">
       <style>{`
         .ult-foil { overflow: hidden; }
         .ult-foil::before { content: ''; position: absolute; top: -20%; bottom: -20%; left: -80%; width: 120%; background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.32) 50%, transparent 65%); animation: ult-shimmer 3.2s linear infinite; mix-blend-mode: screen; will-change: transform; }
@@ -2112,71 +2207,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         @keyframes ult-pop { from { opacity:0; transform: translateY(14px) scale(.82) rotateY(35deg); } to { opacity:1; transform:none; } }
       `}</style>
 
-      {/* ===== TOP NAV (full-width) ===== */}
-      <nav className="ut-topbar">
-        <div className="ut-topbar__inner">
-          <div className="ut-brand">
-            <span className="ut-brand__logo">ROAD TO <span className="ut-brand__slash">MAJOR</span></span>
-            <span className="ut-brand__mode"><Sparkles size={13} /> ULTIMATE</span>
-          </div>
-          <div className="ut-nav">
-            <button className={`ut-nav__item${tab === 'hub' ? ' is-active' : ''}`} onClick={() => go('hub')}><LayoutGrid size={16} /> {ct('Hub')}</button>
-            <div className="ut-nav__group">
-              <button className={`ut-nav__item${['club', 'squad', 'sbc'].includes(tab) ? ' is-active' : ''}`} onClick={(e) => { e.stopPropagation(); setNavMenu((m) => m === 'clube' ? null : 'clube'); }}><Users size={16} /> {ct('Meu Clube')} <ChevronDown size={14} /></button>
-              {navMenu === 'clube' && (
-                <div className="ut-menu" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => go('club')}><Layers size={16} /> {ct('Coleção')} <span className="ut-menu__count">{totalCards}</span></button>
-                  <button onClick={() => go('squad')}><Shirt size={16} /> {ct('Squad')}</button>
-                  <button onClick={() => go('sbc')}><FlaskConical size={16} /> {ct('Desafios')}</button>
-                </div>
-              )}
-            </div>
-            <div className="ut-nav__group">
-              <button className={`ut-nav__item${['store', 'mercado'].includes(tab) ? ' is-active' : ''}`} onClick={(e) => { e.stopPropagation(); setNavMenu((m) => m === 'mercado' ? null : 'mercado'); }}><Store size={16} /> {ct('Mercado')} <ChevronDown size={14} /></button>
-              {navMenu === 'mercado' && (
-                <div className="ut-menu" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => go('store')}><Package size={16} /> {ct('Loja de pacotes')}</button>
-                  <button onClick={() => go('mercado')}><ArrowLeftRight size={16} /> {ct('Mercado de jogadores')}</button>
-                </div>
-              )}
-            </div>
-            <button className={`ut-nav__item${tab === 'ranked' ? ' is-active' : ''}`} onClick={() => go('ranked')}><Swords size={16} /> {ct('Ranqueada')}</button>
-            <button className={`ut-nav__item${tab === 'draft' ? ' is-active' : ''}`} onClick={() => go('draft')}><Layers size={16} /> {ct('Draft')}{state.profile.draft.active && <span className="ut-nav__badge" style={{ background: 'var(--c-win)' }}>●</span>}</button>
-            <button className={`ut-nav__item${tab === 'major-semana' ? ' is-active' : ''}`} onClick={() => go('major-semana')}><Trophy size={16} /> {ct('Major da Semana')}{wlWindowNow().open && <span className="ut-nav__badge" style={{ background: 'var(--c-win)' }}>●</span>}</button>
-            <button className={`ut-nav__item${tab === 'passe' ? ' is-active' : ''}`} onClick={() => go('passe')}><Ticket size={16} /> {ct('Passe')}{passClaimableCount > 0 && <span className="ut-nav__badge">{passClaimableCount}</span>}</button>
-            <button className={`ut-nav__item${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo Privado')}</button>
-            <button className={`ut-nav__item${tab === 'ranking' ? ' is-active' : ''}`} onClick={() => go('ranking')}><ListOrdered size={16} /> {ct('Ranking')}</button>
-            {/* itens DIRETOS: visíveis só em telas estreitas — os dropdowns ficavam
-                recortados dentro do scroller da nav (<=1160px) e sumiam no clique */}
-            <button className={`ut-nav__item ut-nav__item--direct${tab === 'club' ? ' is-active' : ''}`} onClick={() => go('club')}><Layers size={16} /> {ct('Coleção')}</button>
-            <button className={`ut-nav__item ut-nav__item--direct${tab === 'squad' ? ' is-active' : ''}`} onClick={() => go('squad')}><Shirt size={16} /> {ct('Squad')}</button>
-            <button className={`ut-nav__item ut-nav__item--direct${tab === 'sbc' ? ' is-active' : ''}`} onClick={() => go('sbc')}><FlaskConical size={16} /> {ct('Desafios')}</button>
-            <button className={`ut-nav__item ut-nav__item--direct${tab === 'store' ? ' is-active' : ''}`} onClick={() => go('store')}><Package size={16} /> {ct('Loja')}</button>
-            <button className={`ut-nav__item ut-nav__item--direct${tab === 'mercado' ? ' is-active' : ''}`} onClick={() => go('mercado')}><ArrowLeftRight size={16} /> {ct('Mercado')}</button>
-            <button className={`ut-nav__item ut-nav__item--direct${tab === 'duelo' ? ' is-active' : ''}`} onClick={() => go('duelo')}><Globe size={16} /> {ct('Duelo')}</button>
-          </div>
-          <span style={{ flex: 1 }} />
-          <div className="ut-res">
-            {/* tooltips: o chip abrevia (1.2M) e o RP vem sem rótulo — o hover dá o contexto exato */}
-            <span className="ut-res__chip ut-res__chip--coin" title={`${fmt(credits)} coins`}><Coins size={15} /> {fmtChip(credits)}</span>
-            <span className="ut-res__chip" title={`${totalCards} ${ct('cartas na coleção')}`}><Layers size={15} /> {totalCards}</span>
-            <span className="ut-res__chip ut-res__chip--rp" title={`${div.def.name} · ${state.profile.elo} RP`}><Trophy size={15} /> {state.profile.elo}</span>
-          </div>
-          <button className="ut-jogar" onClick={onJogar} title={squadComplete ? ct('Jogar ranqueada') : ct('Montar squad')}><Zap size={16} /> <span>{ct('JOGAR')}</span></button>
-          <div className="ut-nav__group">
-            <button className="ut-ham" onClick={(e) => { e.stopPropagation(); setNavMenu((m) => m === 'more' ? null : 'more'); }} title={ct('Menu')} aria-label={ct('Menu')}>
-              <Menu size={18} />{daily.canClaim && <span className="dot" />}
-            </button>
-            {navMenu === 'more' && (
-              <div className="ut-menu ut-ham__menu" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => { setDailyOpen(true); setNavMenu(null); }}><Gift size={16} /> {ct('Recompensa diária')}{daily.canClaim ? ' •' : ''}</button>
-                <button onClick={() => { setTitlesOpen(true); setNavMenu(null); }}><Tag size={16} /> {ct('Títulos')}{equippedLabel ? ` · ${equippedLabel}` : ''}</button>
-                <button onClick={() => { onBack(); setNavMenu(null); }}><ArrowLeft size={16} /> {ct('Voltar ao Road to Major')}</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
 
       {/* ===== AVISO DE CONVIDADO ===== */}
       {/* Jogador sem conta: joga aqui e agora, mas o progresso do Ultimate fica só
@@ -2214,21 +2244,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         </div>
       )}
 
-      {/* ===== SEASON STRIP ===== */}
-      {(() => {
-        const s = state.profile.season;
-        const ends = s ? new Date(s.endsAt).toLocaleDateString('pt-BR') : null;
-        return (
-          <div className="ut-season">
-            <div className="ut-season__inner">
-              <span className="ut-season__tag"><Zap size={12} /> {ct('TEMPORADA')}</span>
-              <span className="ut-season__name">Season {state.profile.season?.n ?? 1} — {SEASON_NAMES[((state.profile.season?.n ?? 1) - 1) % SEASON_NAMES.length]}</span>
-              {ends && <span className="ut-season__meta">· {ct('Termina em')} {ends}</span>}
-              <span className="ut-season__user">{ct('logado como')} <b>{displayName}</b></span>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ===== PAGE ===== */}
       <div className="ut-page">
@@ -4462,6 +4477,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
       )}
       </div>{/* /.ut-page */}
     </div>
+    </GameShell>
   );
 }
 

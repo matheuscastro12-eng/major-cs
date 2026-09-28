@@ -71,3 +71,9 @@ body.career-dash { overflow: visible; overflow-x: clip; }
 .gs .rtp .dash-card-head b { font-family: var(--font-title); letter-spacing: var(--tracking-caps); color: var(--c-ink); }
 .gs-chip--win { color: var(--c-win); }
 .gs-chip--win svg { color: var(--c-win); }
+
+/* ── Ultimate / Online dentro do shell ── */
+.gs .ut-in-shell { min-height: 0; background: transparent; font-family: var(--font-ui); }
+.gs .ut-in-shell .ut-page { max-width: none; margin: 0; padding: 0; gap: 14px; }
+.gs .ut-root .dash-card { border-radius: var(--rad-3); box-shadow: none; background: var(--c-surface-1); border-color: var(--c-line); }
+.gs .ut-root .dash-card-head { border-bottom-color: var(--c-line); }
