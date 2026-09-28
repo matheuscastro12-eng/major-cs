@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { type Difficulty, type TournamentPool } from '../types';
 import { setCheckoutSrc, trackPaywallView, trackUltFunnel } from '../state/track';
+import { useSectionHistory } from '../state/app-history';
 import { loadStreakState } from '../state/dailyStreak'; // [URG-4]
 import { streakStatus } from '../engine/daily/streak'; // [URG-4]
 import { DAILY_GAMES, dateKeyOf, dayNumberOf } from '../engine/daily/lines';
@@ -89,6 +90,8 @@ export function Home(props: Props) {
   // o shell pede a visão (trilho "Draft" → setup; "Início" → portal)
   const [lastReq, setLastReq] = useState(viewReq?.n ?? 0);
   if (viewReq && viewReq.n !== lastReq) { setLastReq(viewReq.n); setView(viewReq.view); }
+  // Voltar/Avançar (shell, Alt+←/→ e navegador): Portal ↔ Montar o Major
+  useSectionHistory('inicio', view, (v) => { if (v === 'menu' || v === 'draft') setView(v); }, (path) => path === '/jogar');
   const manager = getManager();
   const [mode, setMode] = useState<'classic' | 'almanac'>('classic');
   const [pool, setPool] = useState<TournamentPool>('world');

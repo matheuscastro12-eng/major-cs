@@ -105,6 +105,7 @@ import { shareUltimateResult } from './shareCard';
 import { lobbyApi, type UltimatePvpSquad } from '../../state/online';
 import { divisionFor, DIV_TIERS, DIV_TIER_COLOR, DIV_TIER_LABEL, divisionChange, type DivisionChange } from '../../engine/ultimate/divisions';
 import { squadDuelBonus, styleById, traitById, traitsFor, STYLES, STYLE_COST, SQUAD_DUEL_CAP, type StyleId } from '../../engine/ultimate/traits';
+import { useSectionHistory } from '../../state/app-history';
 import '../../styles/ultimate.css';
 
 // [URG-3] deep link do e-mail "rival te passou": /ultimate?tab=ranqueada abre a
@@ -425,6 +426,14 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     setTab(tabRequest.tab as typeof tab);
     setOnlineMode(tabRequest.tab === 'ranked');
   }
+  // Voltar/Avançar (shell, Alt+←/→ e navegador) passam pelas abas (e por
+  // Ultimate × Online, que dividem a URL /ultimate)
+  useSectionHistory('ultimate', `${onlineMode ? 'online' : 'ultimate'}:${tab}`, (v) => {
+    const [m, t] = v.split(':');
+    if (!t) return;
+    setOnlineMode(m === 'online');
+    setTab(t as typeof tab);
+  }, (path) => path === '/ultimate');
   const [wlStatus, setWlStatus] = useState<WlStatus | null>(null);
   const [reveal, setReveal] = useState<UltCard[] | null>(null);
   const [revealIdx, setRevealIdx] = useState(0); // walkout: carta atual sendo revelada
@@ -2160,7 +2169,6 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
     activeTab: tab,
     onTab: (id) => go(id as typeof tab),
     mobileNav: inOnline ? ['ranked', 'major-semana', 'draft', 'ranking'] : ['hub', 'squad', 'ranked', 'store'],
-    history: { back: onBack },
     meta: (
       <>
         <span className="gs-chip" title={`${fmt(credits)} coins`}><Coins size={15} aria-hidden /> {fmtChip(credits)}</span>

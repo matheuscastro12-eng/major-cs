@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ct } from '../../state/career-i18n';
+import { useSectionHistory } from '../../state/app-history';
 import { RtpShell } from './RtpShell';
 import { circuitOpponent } from '../../engine/rtp/circuit';
 import { Avatar } from '../ds/Bits';
@@ -17,6 +18,7 @@ import { eraOf } from '../../engine/rtp/era';
 import type { RoadToProSave, EraStamp } from '../../engine/rtp/types';
 
 type RtpTabId = 'overview' | 'training' | 'league' | 'team' | 'market' | 'profile';
+const RTP_TABS: RtpTabId[] = ['overview', 'training', 'league', 'team', 'market', 'profile'];
 const money = (v: number) => `R$ ${v.toLocaleString('pt-BR')}`;
 
 // Hub do Road to Pro — dispatcher de abas (estilo dashboard da carreira). Cada
@@ -38,6 +40,8 @@ export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch,
   const { life, world, team } = save;
   const [tab, setTab] = useState<RtpTabId>('overview');
   const [eraView, setEraView] = useState<EraStamp | null>(null);   // [W6] carimbo aberto pra leitura
+  // Voltar/Avançar (shell, Alt+←/→ e navegador) passam pelas abas do hub
+  useSectionHistory('rtp', tab, (v) => { if (RTP_TABS.includes(v as RtpTabId)) setTab(v as RtpTabId); }, (path) => path === '/road-to-pro');
   const pendingEvent = save.inbox.find((e) => !e.resolved);
   const era = eraOf(save);
 
@@ -78,7 +82,6 @@ export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch,
       activeTab={tab}
       onTab={(id) => setTab(id as RtpTabId)}
       mobileNav={['overview', 'training', 'league', 'profile']}
-      history={{ back: onExit }}
       meta={(
         <>
           <span className="gs-chip gs-chip--win"><Wallet size={15} aria-hidden /> {money(life.money)}</span>

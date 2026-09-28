@@ -127,6 +127,7 @@ import { ManagerProfile } from './components/ManagerProfile';
 import { Leaderboard } from './components/Leaderboard';
 import { beginCheckout, claim as claimAccount, useAccount } from './state/account';
 import { parseCareerPlayerId, isCareerPlayerPath, careerPlayerPath } from './state/career-player-route';
+import { initAppHistory, pushAppEntry, replaceAppEntry } from './state/app-history';
 import { parseCareerTeamId, careerTeamPath, isCareerTeamPath } from './state/career-team-route';
 import { getActiveSlot, setActiveSlot, slotKey, cloudSlot } from './state/careerSaves';
 import { useManager } from './state/manager';
@@ -219,6 +220,8 @@ const TRANSIENT_SCREENS = new Set<Screen>([
 const ROUTE_SESSION_ID = `${Date.now()}-${Math.random()}`;
 // telas de ferramenta interna (sem o shell do jogo): continuam no container .page
 const ADMIN_SCREENS = new Set<Screen>(['admin', 'lab', 'careerCRM', 'revenueCRM', 'liveopsCRM']);
+// telas fora do jogo: o histórico do shell (Voltar/Avançar) não volta pra elas
+const OUTSIDE_GAME = new Set<Screen>(['landing', 'setup', 'privacy', 'terms', 'refund', 'design', ...ADMIN_SCREENS]);
 
 const normalizePath = (path: string) => {
   const normalized = path.toLowerCase().replace(/\/+$/, '');
@@ -312,6 +315,8 @@ try {
 // o 2º mount não reabrir.
 // [U11] captura ?duelo=CODE uma vez, no carregamento (limpa a URL)
 captureDuelInviteFromUrl();
+// posição da entrada de chegada na pilha do jogo (Voltar/Avançar do shell)
+initAppHistory();
 const WANTS_SIGNUP = (() => {
   try {
     return new URLSearchParams(window.location.search).get('criar') !== null
@@ -384,7 +389,7 @@ export default function App() {
       if (cs) { const ok = await claimAccount(cs); if (ok) { setPaidToast(true); await refreshAccount(); if (hasIntent()) setScreen('ultimate'); } } // [U08] retorno do checkout com intenção viva
       const url = new URL(window.location.href);
       url.searchParams.delete('conta'); url.searchParams.delete('cs');
-      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     })();
   }, [refreshAccount]);
   const [achToast, setAchToast] = useState<AchDef[]>([]); // conquistas recém-desbloqueadas
@@ -417,6 +422,7 @@ export default function App() {
   const rngRef = useRef(makeRng(randomSeed()));
   const routeReadyRef = useRef(false);
   const popNavigationRef = useRef(false);
+  const prevScreenRef = useRef(screen);
   const rng = useCallback(() => rngRef.current(), []);
   const { t, lang } = useLang();
   setCareerLang(lang); // idioma global: ct() traduz em QUALQUER tela (não só na carreira)
@@ -512,7 +518,7 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete('criar');
     if (url.hash.toLowerCase() === '#criar') url.hash = '';
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
   }, []);
   useEffect(() => {
     setCloudEnabled(!!account?.paid);
@@ -588,11 +594,16 @@ export default function App() {
     }
     const target = `${targetPath}${window.location.search}`;
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const prev = prevScreenRef.current;
+    prevScreenRef.current = screen;
     if (current !== target) {
+      // entradas pela pilha do app (state/app-history): o Voltar do shell
+      // anda por elas. Quem chega de fora do jogo (landing, termos, criar
+      // manager, admin) começa uma pilha nova: o Voltar não leva de volta pra lá.
       if (!routeReadyRef.current || popNavigationRef.current) {
-        window.history.replaceState({ screen, routeSession: ROUTE_SESSION_ID }, '', target);
+        replaceAppEntry({ ...(window.history.state ?? {}), screen, routeSession: ROUTE_SESSION_ID }, target);
       } else {
-        window.history.pushState({ screen, routeSession: ROUTE_SESSION_ID }, '', target);
+        pushAppEntry({ screen, routeSession: ROUTE_SESSION_ID }, target, { reset: OUTSIDE_GAME.has(prev) });
       }
     }
     routeReadyRef.current = true;
@@ -1066,7 +1077,6 @@ export default function App() {
         onNav={onNav}
         title={opts.title}
         next={next}
-        history={{ back: () => window.history.back(), forward: () => window.history.forward() }}
       >
         {children}
       </GameShell>

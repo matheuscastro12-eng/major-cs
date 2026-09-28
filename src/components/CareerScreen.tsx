@@ -87,16 +87,17 @@ import { CareerTeamPage } from './career/CareerTeamPage';
 // PlayerLink: usado pela SquadTab; import movido pra page.
 import { playerOrgId, playerRuntimeId } from '../state/career-player-route';
 import {
-  canCareerGoBack,
   careerHistoryBack,
-  careerHistoryForward,
   initCareerNav,
+  isCareerPlayerPath,
+  isCareerTeamPath,
   navigateCareerHub,
   navigateCareerPlayer,
   navigateCareerTeam,
   parseCareerPlayerId,
   parseCareerTeamId,
 } from '../state/career-nav';
+import { useSectionHistory } from '../state/app-history';
 // buildDashboardTasks + CareerOverview + RecentMatchRow: usados pela OverviewTab; imports movidos pra page.
 import { CareerIcon, type CareerIconName } from './career/CareerIcon';
 import { CareerConfirmProvider, useCareerConfirm } from './career/ConfirmModal';
@@ -2539,7 +2540,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const [promoting, setPromoting] = useState<string | null>(null); // prospecto escolhendo quem sai do elenco
   const [playerRouteId, setPlayerRouteId] = useState<string | null>(() => parseCareerPlayerId());
   const [teamRouteId, setTeamRouteId] = useState<string | null>(() => parseCareerTeamId());
-  const [canNavBack, setCanNavBack] = useState(() => canCareerGoBack());
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [newsCat, setNewsCat] = useState<NewsCat | 'all'>('all'); // filtro da Inbox
   const [vrsMode, setVrsMode] = useState<'regiao' | 'geral'>('geral'); // ranking VRS: por região ou geral
@@ -2859,7 +2859,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const syncRoutes = () => {
       setPlayerRouteId(parseCareerPlayerId());
       setTeamRouteId(parseCareerTeamId());
-      setCanNavBack(canCareerGoBack());
     };
     window.addEventListener('popstate', syncRoutes);
     syncRoutes();
@@ -2871,7 +2870,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       navigateCareerHub();
       setPlayerRouteId(null);
       setTeamRouteId(null);
-      setCanNavBack(canCareerGoBack());
     }
   };
 
@@ -2884,7 +2882,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const routeId = isOwn ? playerRuntimeId(p.id) : baseId;
     navigateCareerPlayer(routeId);
     setPlayerRouteId(routeId);
-    setCanNavBack(canCareerGoBack());
   };
 
   const closePlayerProfile = () => {
@@ -2894,7 +2891,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const openTeamProfile = (teamId: string) => {
     navigateCareerTeam(teamId);
     setTeamRouteId(teamId);
-    setCanNavBack(canCareerGoBack());
   };
 
   const closeTeamProfile = () => {
@@ -4700,6 +4696,21 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     upsellWorld1Ref.current = true;
     window.dispatchEvent(new CustomEvent('rtm:upsell', { detail: { trigger: 'world-1' } }));
   }, [myVrsRankEarly]);
+  // Voltar/Avançar (shell, Alt+←/→ e navegador) passam pelas seções: cada
+  // troca de seção/aba é uma entrada do histórico do app (state/app-history).
+  // Hook: fica antes dos early returns, como os de cima.
+  useSectionHistory(
+    'carreira',
+    hubTab === 'squad' ? `squad:${squadSec}` : hubTab === 'finance' ? `finance:${finSec}` : hubTab,
+    (v) => {
+      const [tab, sub] = v.split(':') as [HubTab, string | undefined];
+      setSelSeries(null);
+      if (tab === 'squad' && sub) setSquadSec(sub);
+      if (tab === 'finance' && sub) setFinSec(sub);
+      setHubTab(tab);
+    },
+    (path) => path === '/carreira' || isCareerPlayerPath(path) || isCareerTeamPath(path),
+  );
 
   // overlay de simulação rápida (mini partida acelerada), sobrepõe qualquer tela
   if (quickSim) {
@@ -6593,7 +6604,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       onTab={onShellTab}
       mobileNav={['ov', 'in', 'sq', 'cl']}
       next={shellNext}
-      history={{ back: careerHistoryBack, forward: careerHistoryForward, canBack: canNavBack }}
       search={careerSearch}
       searchPlaceholder={ct('Buscar jogador, time…')}
       tools={careerTools}

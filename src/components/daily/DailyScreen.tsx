@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ct } from '../../state/career-i18n';
 import { track } from '../../state/track';
+import { useSectionHistory } from '../../state/app-history';
 import {
   DAILY_GAMES, dateKeyOf, dayNumberOf, lineOfDay, slotOrderOf,
   applyGuess, freshProgress, giveUp, shareTextOf, MAX_ERRORS,
@@ -47,8 +48,12 @@ const ROLE_LABEL: Record<string, string> = {
   IGL: 'IGL', AWP: 'AWP', Rifler: 'Rifle', Entry: 'Entry', Support: 'Suporte', Lurker: 'Lurker', Coach: 'Coach',
 };
 
+const DAILY_VIEWS = ['hub', 'lines', 'whois', 'impostor', 'classic'] as const;
+
 export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGoUltimate?: () => void }) {
   const [view, setView] = useState<'hub' | 'lines' | 'whois' | 'impostor' | 'classic'>('hub');
+  // Voltar/Avançar (shell, Alt+←/→ e navegador) passam pelos desafios do dia
+  useSectionHistory('diario', view, (v) => { if (DAILY_VIEWS.includes(v as typeof view)) setView(v as typeof view); }, (path) => path === '/diario');
   const dateKey = dateKeyOf(new Date());
   const day = dayNumberOf(dateKey);
   const streak = loadDailyStreak(view === 'hub' ? 'lines' : view);
@@ -184,7 +189,6 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
       onNav={(id) => setView(id as DView)}
       title={view === 'hub' ? ct('Hoje') : DAILY_GAMES.find((g) => g.id === view)?.title}
       crumbs={[{ label: ct('Um desafio novo por dia, igual pra todo mundo') }]}
-      history={{ back: () => (view === 'hub' ? onExit() : setView('hub')) }}
       meta={dStatus.current >= 1 ? <span className="gs-chip"><Flame size={15} aria-hidden /> {dStatus.current} {dStatus.current === 1 ? ct('dia') : ct('dias')}</span> : undefined}
       next={shellNext}
       mobileNav={['hub', 'lines', 'whois', 'impostor']}

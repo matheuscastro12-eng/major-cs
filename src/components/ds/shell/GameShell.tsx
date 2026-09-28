@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { BrandMark } from '../../brand';
 import { registerShortcut } from '../../../hooks/useKeyboardShortcuts';
+import { useAppHistory } from '../../../state/app-history';
 import { useAppTheme } from '../../../state/career-theme';
 import { LangSwitcher } from '../../social';
 import { cx } from '../cx';
@@ -51,7 +52,11 @@ export interface GameShellProps {
   /** sino da topbar (caixa de entrada, novidades) */
   bell?: { count?: number; label: string; onClick: () => void };
   next?: ShellNext;
-  history?: { back?: () => void; forward?: () => void; canBack?: boolean };
+  /** Voltar/Avançar da topbar e Alt+←/→. Padrão: o histórico do app
+   *  (state/app-history), que passa pelas seções dos modos sem sair do jogo.
+   *  Só telas de fluxo (criar, primeiro squad…) passam o próprio "voltar"
+   *  (sair do fluxo). */
+  history?: { back?: () => void; forward?: () => void; canBack?: boolean; canForward?: boolean };
   search?: (q: string) => PaletteItem[];
   searchPlaceholder?: string;
   commands?: ShellCommand[];
@@ -73,6 +78,10 @@ export function GameShell(props: GameShellProps) {
     className, children,
   } = props;
   const global = useShellGlobal();
+  const appHistory = useAppHistory();
+  const hist = history ?? appHistory;
+  const canBack = !!hist.back && hist.canBack !== false;
+  const canForward = !!hist.forward && hist.canForward !== false;
   const [theme, , toggleTheme] = useAppTheme();
   const [density, toggleDensity] = useDensity();
   const [paletteOpen, setPaletteOpen] = usePaletteOpen();
@@ -91,8 +100,8 @@ export function GameShell(props: GameShellProps) {
 
   // ── atalhos: ⌘K / "/" abrem a paleta, espaço = continuar, Alt+←/→ histórico
   const nextRef = useRef(next);
-  const histRef = useRef(history);
-  useEffect(() => { nextRef.current = next; histRef.current = history; });
+  const histRef = useRef({ hist, canBack, canForward, on: variant !== 'immersive' });
+  useEffect(() => { nextRef.current = next; histRef.current = { hist, canBack, canForward, on: variant !== 'immersive' }; });
   useEffect(() => {
     const offs = [
       registerShortcut({ key: 'k', ctrl: true, group: 'Geral', label: 'Buscar jogador, time, tela ou ação', skipWhenTyping: false, onPress: (e) => { e.preventDefault(); openPalette(); } }),
@@ -108,8 +117,11 @@ export function GameShell(props: GameShellProps) {
           goNext(n, () => openVisible(pendingOpeners.current));
         },
       }),
-      registerShortcut({ key: 'arrowleft', alt: true, group: 'Geral', label: 'Voltar', onPress: () => histRef.current?.back?.() }),
-      registerShortcut({ key: 'arrowright', alt: true, group: 'Geral', label: 'Avançar', onPress: () => histRef.current?.forward?.() }),
+      // mesmas regras dos botões: sem entrada anterior/seguinte no jogo, nada
+      // acontece (o atalho nunca tira o jogador do app); na partida ao vivo
+      // (imersivo, sem os botões) fica desligado
+      registerShortcut({ key: 'arrowleft', alt: true, group: 'Geral', label: 'Voltar', onPress: (e) => { const h = histRef.current; e.preventDefault(); if (h.on && h.canBack) h.hist.back?.(); } }),
+      registerShortcut({ key: 'arrowright', alt: true, group: 'Geral', label: 'Avançar', onPress: (e) => { const h = histRef.current; e.preventDefault(); if (h.on && h.canForward) h.hist.forward?.(); } }),
     ];
     return () => offs.forEach((off) => off());
   }, []);
@@ -190,12 +202,12 @@ export function GameShell(props: GameShellProps) {
               <BrandMark size={30} />
             </button>
           )}
-          {history && variant !== 'immersive' && (
+          {variant !== 'immersive' && (
             <span className="gs-top__hist">
-              <button type="button" className="gs-iconbtn" onClick={history.back} disabled={!history.back || history.canBack === false} aria-label="Voltar">
+              <button type="button" className="gs-iconbtn" onClick={hist.back} disabled={!canBack} aria-label="Voltar" title="Voltar (Alt+←)">
                 <ChevronLeft size={18} aria-hidden />
               </button>
-              <button type="button" className="gs-iconbtn" onClick={history.forward} disabled={!history.forward} aria-label="Avançar">
+              <button type="button" className="gs-iconbtn" onClick={hist.forward} disabled={!canForward} aria-label="Avançar" title="Avançar (Alt+→)">
                 <ChevronRight size={18} aria-hidden />
               </button>
             </span>
