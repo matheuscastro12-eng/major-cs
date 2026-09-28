@@ -143,6 +143,7 @@
   --fs-4: 1rem;       /* 16px — corpo confortável, input no mobile */
   --fs-5: 1.25rem;    /* 20px — título de painel/seção */
   --fs-6: 1.75rem;    /* 28px — título de tela, placar */
+  --fs-7: 2.5rem;     /* 40px — número grande de painel, título de leitura */
   --fs-display: clamp(2.25rem, 1.4rem + 3.6vw, 4rem); /* "Broadcast": sala, reveal, final */
 
   --lh-tight: 1.1;

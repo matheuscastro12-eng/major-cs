@@ -295,7 +295,7 @@ button.ds-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--c
 .ds-bar--lg { height: 10px; border-radius: 5px; }
 
 /* número grande (Oswald) */
-.ds-big { font-family: var(--font-display); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; font-size: var(--fs-display); }
+.ds-big { font-family: var(--font-display); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; font-size: var(--fs-7); }
 .ds-big--md { font-size: var(--fs-6); }
 .ds-kicker { font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c-ink-faint); }
 

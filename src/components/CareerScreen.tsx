@@ -6870,6 +6870,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           unread={save.unread ?? 0}
           onMarkAllRead={() => update({ unread: 0 })}
           orgName={save.org?.name}
+          onAction={(sec) => goSection(sec)}
         />
       )}
 

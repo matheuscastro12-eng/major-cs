@@ -105,7 +105,12 @@ export function PeekLayer() {
     const onOver = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse') return;
       const el = target(e);
-      if (!el) return;
+      if (!el) {
+        // o nome sumiu da tela (navegou) ou o mouse saiu por cima de outra coisa
+        const inCard = e.target instanceof Element && e.target.closest('.gs-peek');
+        if (current.current && !inCard) { window.clearTimeout(showT.current); scheduleHide(); }
+        return;
+      }
       if (el === current.current) { window.clearTimeout(hideT.current); return; }
       clear();
       current.current = el;
@@ -139,9 +144,11 @@ export function PeekLayer() {
       }, 450);
     };
     const onUp = () => window.clearTimeout(pressT);
-    // o clique que termina um long-press não deve navegar
+    // o clique que termina um long-press não deve navegar; qualquer outro
+    // clique fora do cartão fecha (ex.: abriu o perfil pelo nome)
     const onClick = (e: MouseEvent) => {
-      if (pressed) { e.preventDefault(); e.stopPropagation(); pressed = false; }
+      if (pressed) { e.preventDefault(); e.stopPropagation(); pressed = false; return; }
+      if (!(e.target instanceof Element && e.target.closest('.gs-peek'))) { window.clearTimeout(showT.current); setOpen(null); current.current = null; }
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); };
     const onScroll = () => { if (!overCard.current) setOpen(null); };
