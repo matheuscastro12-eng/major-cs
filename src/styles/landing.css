@@ -205,8 +205,12 @@
   position: absolute;
   inset: 0;
   z-index: -2;
-  background: url('/maps/mirage.jpg') center 30% / cover no-repeat;
   opacity: 0.14;
+}
+/* a foto do mapa só entra onde sobra tela: no celular ela viraria o LCP
+   (imagem descoberta tarde, depois do CSS) sem acrescentar quase nada */
+@media (min-width: 960px) {
+  .lp-hero::before { background: url('/maps/mirage.jpg') center 30% / cover no-repeat; }
 }
 .lp-hero::after {
   content: '';

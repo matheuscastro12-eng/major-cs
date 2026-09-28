@@ -775,7 +775,9 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
   const duelInvite = loadDuelInvite(); // [U11]
   // [URG-2] evento de fim de semana: lê o live-ops público (o servidor mescla o automático) e
   // recalcula a cada minuto pro contador; sem rede cai no cálculo local do mesmo engine.
-  const [wknd, setWknd] = useState<WeekendEventView | null>(null);
+  // Começa já com o cálculo local (o mesmo engine): a faixa entra no primeiro
+  // render e não empurra o hero quando a resposta do servidor chega (CLS).
+  const [wknd, setWknd] = useState<WeekendEventView | null>(() => weekendEventView());
   useEffect(() => {
     let on = true;
     const compute = () => { if (on) setWknd(weekendEventView()); };
