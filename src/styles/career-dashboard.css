@@ -4941,10 +4941,19 @@ body.career-dash .career-facility-card button.btn.gold {
   border-radius: 5px;
 }
 
-/* Tabela de contratos */
+/* Tabela de contratos. Rola na horizontal dentro do card quando não cabe
+   (celular); `hidden` cortava as colunas depois de Contrato sem rolagem. */
 body.career-dash .fin-table-wrap {
   border-radius: 6px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Ranking VRS (geral e por região): mesma regra, a tabela rola dentro do card. */
+.career-dash .vrs-table-wrap,
+.career-dash .vrs-region {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 body.career-dash table.stats.fin-contracts {
   width: 100%;
