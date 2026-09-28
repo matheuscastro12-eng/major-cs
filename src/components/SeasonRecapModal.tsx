@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, Button } from './ds';
 import { Flag, PlayerAvatar } from './ui';
+import { formatMoney as fmt } from '../engine/ratings';
 
 export interface MvpInfo {
   nick: string;
@@ -49,13 +50,6 @@ interface Props {
   data: SeasonRecapData | null;
   onClose: () => void;
 }
-
-const fmt = (n: number) => {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 2)}M`;
-  if (abs >= 1_000) return `$${Math.round(n / 1_000)}k`;
-  return `$${n}`;
-};
 
 const OUTCOME_ACCENT: Record<SeasonRecapData['outcome'], { fg: string; label: string }> = {
   champion: { fg: '#e8c170', label: '🏆 CAMPEÃO' },

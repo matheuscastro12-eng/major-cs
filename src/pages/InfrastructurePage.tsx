@@ -20,13 +20,7 @@ import {
   type Facilities,
   type FacilityKey,
 } from '../engine/career/facilities';
-// formatMoney local (mesmo padrão dos outros modais T11)
-function formatMoney(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
-  if (abs >= 1_000) return `$${Math.round(n / 1_000)}K`;
-  return `$${n}`;
-}
+import { formatMoney } from '../engine/ratings';
 
 interface FacilityMeta {
   key: FacilityKey;
@@ -92,7 +86,7 @@ export function InfrastructurePage({ facilities, budget, onUpgrade, onClose }: P
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <HudPill label="Caixa" value={formatMoney(budget)} tone="green" />
-          <HudPill label="Upkeep / split" value={`-${formatMoney(upkeep)}`} tone={upkeep > 0 ? 'red' : 'neutral'} />
+          <HudPill label="Upkeep / split" value={formatMoney(-upkeep)} tone={upkeep > 0 ? 'red' : 'neutral'} />
         </div>
       </header>
 

@@ -21,6 +21,7 @@ import {
   type TeamEventDef,
   type TeamEventChoice,
 } from '../engine/teamEvents';
+import { formatMoney } from '../engine/ratings';
 
 interface Props {
   eventId: string;
@@ -210,11 +211,4 @@ function DeltaRow({ deltas }: { deltas: Deltas }) {
       ))}
     </div>
   );
-}
-
-function formatMoney(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `$${(n / 1_000).toFixed(1)}k`;
-  return `$${n}`;
 }
