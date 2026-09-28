@@ -1,5 +1,7 @@
 // Telemetria do jogo: eventos anônimos (visita, partida iniciada/concluída etc).
 import { neon } from '@neondatabase/serverless';
+import { parseJsonBody } from '../server/http.js';
+import { clientIp, memoryRateHit, respondLimited } from '../server/rate-limit.js';
 
 const ALLOWED_TYPES = new Set([
   'visit',
@@ -49,6 +51,13 @@ const RETENTION_MS = 10 * 60_000;
 let lastEventsRetentionAt = 0;
 const EVENTS_RETENTION_MS = 12 * 60 * 60_000;
 
+// [O0-36] teto por IP contra script de flood (o funil de conversão que embasa
+// decisão de negócio saía envenenado). TODO: em memória POR INSTÂNCIA de
+// propósito — um UPSERT no Postgres por evento dobraria as escritas da
+// telemetria. A barreira compartilhada é a regra de rate limit do Vercel
+// Firewall pra /api/track (configurar no painel; ver notas do PR).
+const TRACK_LIMIT_PER_MIN = 120;
+
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
   res: {
@@ -66,7 +75,10 @@ export default async function handler(
     res.status(500).json({ error: 'no db' });
     return;
   }
-  const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
+  if (respondLimited(res, memoryRateHit({ key: `track:ip:${clientIp(req.headers)}`, limit: TRACK_LIMIT_PER_MIN, windowSec: 60 }), 'muitos eventos')) return;
+  const parsed = parseJsonBody(req.body);
+  if (!parsed) { res.status(400).json({ error: 'JSON inválido' }); return; }
+  const body = parsed as {
     type?: string;
     sid?: string;
     data?: Record<string, unknown>;

@@ -6,7 +6,9 @@
 // idempotente, op_id wl:<windowId>). Lógica pura em server/weekend-league.ts.
 // Ações (POST body.action): status | register | report | claim. Só conta PAGA.
 import { neon } from '@neondatabase/serverless';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
+import { requireAdmin } from '../server/admin-auth.js';
+import type { RateSql } from '../server/rate-limit.js';
 import {
   wlSchemaQueries,
   wlStatus,
@@ -24,7 +26,6 @@ import { bumpCommunityContrib, communityGoalSchemaQueries } from '../server/comm
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
-const APP_SECRET = () => clean(process.env.APP_SECRET) || `fallback:${clean(process.env.DATABASE_URL) ?? 'dev'}`;
 
 const rlBuckets = new Map<string, { count: number; resetAt: number }>();
 let schemaReady = false;
@@ -47,17 +48,8 @@ function clientIp(headers?: Record<string, string | string[] | undefined>): stri
   return value.split(',')[0].trim() || 'unknown';
 }
 
-function verifyToken(token: string): string | null {
-  const [b64, sig] = (token ?? '').split('.');
-  if (!b64 || !sig) return null;
-  const body = Buffer.from(b64, 'base64url').toString();
-  const expect = createHmac('sha256', APP_SECRET()).update(body).digest('base64url');
-  const sb = Buffer.from(sig); const eb = Buffer.from(expect);
-  if (sb.length !== eb.length || !timingSafeEqual(sb, eb)) return null;
-  const [email, exp] = body.split('|');
-  if (!email || Number(exp) < Math.floor(Date.now() / 1000)) return null;
-  return email;
-}
+// token de conta: server/auth.ts (falha fechada sem APP_SECRET).
+const verifyToken = verifyAccountToken;
 
 const WINDOW_ID_RE = /^wl-\d{4}-\d{2}-\d{2}$/;
 // limites por conta/minuto: report é o hot path da run; claim/register são raros.
@@ -68,6 +60,7 @@ export default async function handler(
   res: Res,
 ) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method' }); return; }
+  if (respondMissingSecret(res)) return; // falha fechada (SEGU-10)
   const ip = clientIp(req.headers);
   if (rateLimited(`ip:${ip}`, 180)) {
     res.setHeader('Retry-After', '60');
@@ -86,11 +79,10 @@ export default async function handler(
   // adminBoard = ranking completo com e-mails; settle = FECHAR E PREMIAR o top 10
   // por colocação (idempotente — op_id wl:<windowId> por e-mail no ledger).
   if (action === 'adminBoard' || action === 'settle') {
-    const adminPass = clean(process.env.ADMIN_PASSWORD);
-    if (!adminPass || String(body.password ?? '').trim() !== adminPass) { res.status(401).json({ error: 'admin' }); return; }
     const adbUrl = clean(process.env.DATABASE_URL);
     if (!adbUrl) { res.status(500).json({ error: 'DATABASE_URL não configurada' }); return; }
     const asql = neon(adbUrl) as unknown as SqlTag;
+    if (!(await requireAdmin(asql as unknown as RateSql, body, req, res, { error: 'admin' }))) return; // O0-16
     if (!schemaReady) {
       for (const q of [...ultEconomySchemaQueries(asql), ...wlSchemaQueries(asql)]) await q;
       schemaReady = true;

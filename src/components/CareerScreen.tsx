@@ -102,7 +102,7 @@ import { getActiveSlot } from '../state/careerSaves';
 import { useGame, type Hydrator } from '../state/gameStore';
 import type { VersionedSave } from '../state/saveMigrations';
 import bo3Ages from '../data/bo3-ages.json';
-import { useAccount } from '../state/account';
+import { getToken, useAccount } from '../state/account';
 import { CustomRosterBuilder } from './CustomRosterBuilder';
 const STARTING_BUDGET = 2_000_000; // começo realmente humilde: não dá pra montar um elenco de elite (str ~88) e dominar o Tier 3 de cara
 const CIRCUIT_AI_BOOST = 1.5; // leve vantagem do circuito (mantem forcas perto do Major)
@@ -2911,6 +2911,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
     const user = tournament.teams.find((team) => team.id === 'user');
     if (!user) return;
+    // [O0-36] o Hall exige conta: sem login, não registra (e não mostra erro).
+    const token = getToken();
+    if (!token) return;
     const champion = tournament.championId
       ? tournament.teams.find((team) => team.id === tournament.championId)?.name
       : majorResult.champion ? save.org.name : ct('Campanha encerrada');
@@ -2921,6 +2924,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        token,
         player: getManager()?.nick || save.org.tag,
         teamName: save.org.name,
         pool: 'world',

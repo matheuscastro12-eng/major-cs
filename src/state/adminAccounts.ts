@@ -43,6 +43,7 @@ export interface FinanceData {
   coins: {
     paidOrders: number; coinsSold: number; revenueCents: number; pendingOrders: number; buyers: number;
     byMethod: CoinMethodRow[]; byTier: CoinTierRow[]; recent: CoinOrderRow[]; trend: CoinTrendPoint[];
+    attention?: CoinOrderRow[]; // pagos que não creditaram (passe em dobro / valor divergente) — reembolsar
   };
 }
 export async function getFinance(password: string): Promise<FinanceData | null> {
