@@ -15,7 +15,7 @@
 //     CONTINUAR fixo.
 // A paleta de comandos e os atalhos moram aqui; o peek de jogador é global
 // (PeekLayer, montado uma vez no App).
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   Bell, ChevronLeft, ChevronRight, ChevronsRight, ChevronDown, Ellipsis, Info, CircleAlert, Keyboard,
   LayoutGrid, Menu, Moon, Rows2, Rows3, Search, Sun, TriangleAlert, X,
@@ -240,7 +240,7 @@ export function GameShell(props: GameShellProps) {
                 <Ellipsis size={18} aria-hidden />
               </button>
               {toolsOpen && (
-                <Popover onClose={() => setToolsOpen(false)} className="gs-menu">
+                <Popover onClose={() => setToolsOpen(false)} className="gs-menu" label="Mais ações">
                   {tools.map((t) => (
                     <button key={t.id} type="button" role="menuitem" className="gs-menu__item" onClick={() => { setToolsOpen(false); t.onClick(); }}>
                       <t.icon size={16} aria-hidden /> {t.label}
@@ -380,7 +380,7 @@ function ModeRail({ mode, density, theme, onDensity, onTheme }: { mode: ModeId; 
           <span className="gs-mode__label">Você</span>
         </button>
         {prefsOpen && (
-          <Popover onClose={() => setPrefsOpen(false)} className="gs-menu gs-menu--rail">
+          <Popover onClose={() => setPrefsOpen(false)} className="gs-menu gs-menu--rail" placement="right-end" label="Conta, preferências e atalhos">
             {g.user && (
               <button type="button" role="menuitem" className="gs-menu__user" onClick={() => { setPrefsOpen(false); g.user?.onOpen?.(); }}>
                 <span className="gs-user__avatar" aria-hidden>{g.user.nick.slice(0, 1).toUpperCase()}</span>
@@ -536,7 +536,7 @@ function NextButton({ next, openers, compact = false }: {
         </button>
       )}
       {open && pending.length > 0 && (
-        <Popover onClose={() => setOpen(false)} className="gs-pending" label={head}>
+        <Popover onClose={() => setOpen(false)} className="gs-pending" label={head} placement={compact ? 'top-stretch' : 'bottom-end'}>
           <p className="gs-pending__head" aria-hidden>{head}</p>
           {pending.map((p) => {
             const PIcon = p.icon ?? (p.tone === 'loss' ? CircleAlert : p.tone === 'warn' ? TriangleAlert : Info);
@@ -561,14 +561,70 @@ function NextButton({ next, openers, compact = false }: {
 }
 
 // ── popover de menu ──────────────────────────────────────────────────────────
-// Fecha em clique fora (fora do popover E do bloco do botão que o abriu), Esc
-// e Tab. Ao abrir, o foco vai pro 1º item; ↑/↓/Home/End andam entre os itens;
-// Esc/Tab devolvem o foco ao botão que abriu.
+// Posição fixa calculada a partir do bloco do botão que o abriu (o elemento
+// pai), com colisão nas bordas da viewport: vira para o outro lado quando não
+// cabe e, no limite, encosta na margem e rola por dentro. Fecha em clique fora
+// (fora do popover E do bloco do botão), Esc e Tab. Ao abrir, o foco vai pro
+// 1º item; ↑/↓/Home/End andam entre os itens; Esc/Tab devolvem o foco ao botão.
+type PopPlacement =
+  /** abaixo do botão, alinhado à direita (topbar) */
+  | 'bottom-end'
+  /** à direita do botão, crescendo para cima a partir da base dele (trilho) */
+  | 'right-end'
+  /** acima do botão, com a largura dele (CONTINUAR fixo do celular) */
+  | 'top-stretch';
 const MENU_FOCUSABLE = '[role="menuitem"]:not(:disabled), button:not(:disabled), select:not(:disabled), a[href]';
-function Popover({ onClose, className, label, children }: { onClose: () => void; className?: string; label?: string; children: ReactNode }) {
+const POP_MARGIN = 8;
+const POP_GAP = 8;
+function placePopover(pop: HTMLElement, anchor: HTMLElement, placement: PopPlacement) {
+  const a = anchor.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth;
+  const vh = window.innerHeight;
+  pop.style.maxHeight = `${vh - POP_MARGIN * 2}px`;
+  pop.style.maxWidth = `${vw - POP_MARGIN * 2}px`;
+  if (placement === 'top-stretch') pop.style.width = `${Math.min(a.width, vw - POP_MARGIN * 2)}px`;
+  const w = pop.offsetWidth;
+  const h = pop.offsetHeight;
+  let left: number;
+  let top: number;
+  if (placement === 'right-end') {
+    left = a.right + POP_GAP;
+    if (left + w > vw - POP_MARGIN && a.left - POP_GAP - w >= POP_MARGIN) left = a.left - POP_GAP - w;
+    top = a.bottom - h;
+  } else if (placement === 'top-stretch') {
+    left = a.left;
+    top = a.top - POP_GAP - h;
+    if (top < POP_MARGIN && a.bottom + POP_GAP + h <= vh - POP_MARGIN) top = a.bottom + POP_GAP;
+  } else {
+    left = a.right - w;
+    top = a.bottom + POP_GAP;
+    if (top + h > vh - POP_MARGIN && a.top - POP_GAP - h >= POP_MARGIN) top = a.top - POP_GAP - h;
+  }
+  left = Math.max(POP_MARGIN, Math.min(left, vw - POP_MARGIN - w));
+  top = Math.max(POP_MARGIN, Math.min(top, vh - POP_MARGIN - h));
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${Math.round(top)}px`;
+}
+function Popover({ onClose, className, label, placement = 'bottom-end', children }: {
+  onClose: () => void; className?: string; label?: string; placement?: PopPlacement; children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; });
+  // posição: antes da pintura e de novo quando a janela, a rolagem ou o
+  // próprio popover (tema, idioma) mudam de tamanho
+  useLayoutEffect(() => {
+    const pop = ref.current;
+    const anchor = pop?.parentElement;
+    if (!pop || !anchor) return;
+    const place = () => placePopover(pop, anchor, placement);
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null;
+    ro?.observe(pop);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); ro?.disconnect(); };
+  }, [placement]);
   useEffect(() => {
     const pop = ref.current;
     const anchor = pop?.parentElement ?? null;

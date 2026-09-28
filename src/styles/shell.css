@@ -202,7 +202,7 @@
 .gs-tip--side { left: calc(100% + 10px); top: 50%; transform: translate(-4px, -50%); }
 .gs-mode:hover .gs-tip--side,
 .gs-mode:focus-visible .gs-tip--side { opacity: 1; transform: translate(0, -50%); }
-.gs-menu--rail { top: auto; bottom: 0; right: auto; left: calc(100% + 10px); min-width: 260px; }
+.gs-menu--rail { min-width: 260px; }
 .gs-menu__user {
   display: flex;
   align-items: center;
@@ -632,11 +632,15 @@ button.gs-widget:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .gs-chip small { color: var(--c-topbar-ink); font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .gs-tools { position: relative; }
+/* posição fixa calculada no Popover (GameShell) a partir do botão que o abriu,
+   com colisão nas bordas; a altura máxima é a da viewport e o resto rola */
 .gs-pop {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
   z-index: var(--z-overlay);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   min-width: 240px;
   padding: 6px;
   border: 1px solid var(--c-line-strong);
@@ -1141,7 +1145,6 @@ button.gs-widget:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .gs-mnext .gs-next { width: 100%; }
   .gs-mnext .gs-next__go { flex: 1; justify-content: space-between; height: 50px; }
   .gs-mnext .gs-next__detail { max-width: 60vw; }
-  .gs-mnext .gs-pop { top: auto; bottom: calc(100% + 8px); left: 0; right: 0; }
 }
 
 /* ── menu completo (gaveta) ── */
