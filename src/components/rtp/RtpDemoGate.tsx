@@ -21,13 +21,16 @@ import type { RoadToProSave } from '../../engine/rtp/types';
 import { FounderCounter } from '../FounderCounter';
 import { RtpCliffOfferCard } from './RtpDemoCliff';
 import { goUpgradeFromCliff, useNow } from './demoCliffUi';
+import { RtpFrame } from './RtpFrame';
 
 export { DEMO_WEEKS }; // semanas jogáveis na demo (a trava fecha na 4ª) — vive no engine (demoCliff.ts)
 
-export function RtpDemoGate({ save, onUpgrade, onExit, onUpdate }: {
+export function RtpDemoGate({ save, onUpgrade, onExit, onBack, onUpdate }: {
   save: RoadToProSave;
   onUpgrade: () => void;
   onExit: () => void;
+  /** Voltar da topbar: aberta pela Série do Dia, volta pro hub; senão sai */
+  onBack?: () => void;
   onUpdate?: (next: RoadToProSave) => void;   // grava openedAt/expiração do cliffhanger
 }) {
   const now = useNow();
@@ -60,8 +63,11 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onUpdate }: {
 
   const p = save.player;
   const goUpgrade = () => { if (cliff) goUpgradeFromCliff(onUpgrade); else { setCheckoutSrc('rtp-demo'); onUpgrade(); } };
+  // no shell (RtpFrame): trilho, topbar e Voltar, como as outras telas de
+  // fluxo do RtP; antes ocupava a tela inteira, sem saída além do botão
   return (
-    <div className="rtp rtp-screen rtp-demogate" data-fx="on">
+    <RtpFrame onExit={onBack ?? onExit} kicker={ct('Fim da demo')}>
+    <div className="rtp-demogate">
       <div className="rtp-demogate-box">
         {cliff ? (
           <>
@@ -118,5 +124,6 @@ export function RtpDemoGate({ save, onUpgrade, onExit, onUpdate }: {
         <span className="rtp-demogate-keep">💾 {ct('Seu save fica guardado neste navegador — o')} {p.nick} {ct('espera você voltar.')}</span>
       </div>
     </div>
+    </RtpFrame>
   );
 }

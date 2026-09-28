@@ -2053,6 +2053,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 
 /* ── DEMO GATE (fim da degustação) */
 .rtp-demogate { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+.rtp-in-shell .rtp-demogate { min-height: 0; padding: 8px 0 24px; }
 .rtp-demogate-box {
   display: flex; flex-direction: column; gap: 14px; max-width: 560px; width: 100%;
   padding: 26px 28px; border: 1px solid var(--rtp-line); border-top: 3px solid var(--rtp-gold);
