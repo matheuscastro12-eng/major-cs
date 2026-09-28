@@ -5,12 +5,14 @@
 // como funciona, FAQ, CTA final e o modal de conta (checkout real: Pix/Stripe).
 // Estilos em src/styles/landing.css (só tokens).
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowRight, CalendarDays, Check, ChevronDown, Crosshair, Eye, Gauge, Gift, Globe, Layers, Play, Swords, Target, Trophy, Star } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronDown, Crosshair, Eye, Gauge, Gift, Globe, Layers, Play, Swords, Target, Trophy, Star } from 'lucide-react';
 import { setCheckoutSrc, trackCheckoutAbandon, trackCheckoutOpen, trackPaywallView, trackSignup } from '../state/track';
 import { BrandMark } from './brand';
 import { FounderCounter } from './FounderCounter';
 import { Button, Modal } from './ds';
 import { AnnouncementTweet, TwitterLink } from './social';
+import { openPatchNotes } from './PatchNotesModal';
+import { PATCHES } from '../data/patchNotes';
 import { LegalLinks } from './Legal';
 import { LEGAL_PATHS } from '../legal';
 import { login, signup, beginPix, fetchMe, requestPasswordReset, confirmPasswordReset, type PixCharge } from '../state/account';
@@ -160,11 +162,14 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
   );
 }
 
-// fatos que já estavam na landing (e no código): nada inventado sobre o negócio
+// fatos conferidos no código, nada inventado sobre o negócio:
+// 6 modos = ModeId do shell (ds/shell/types.ts, fora o Início); 4 versões =
+// GAME_ORDER (data/teams.ts); 16 times = usuário + 15 do pool (engine/swiss.ts);
+// HLTV e Liquipedia = fonte do dataset (README, área admin).
 function Facts() {
   const FACTS: [string, string, boolean?][] = [
     ['6', 'modos de jogo'],
-    ['5', 'eras do CS'],
+    ['4', 'versões do CS, do 1.6 ao CS2'],
     ['16', 'times por Major'],
     ['HLTV + Liquipedia', 'fonte dos dados', true],
   ];
@@ -317,7 +322,7 @@ function Faq() {
     ['O Ultimate é o modo online?', 'Sim. No Ultimate você monta seu elenco dos jogadores reais de 2026 e enfrenta outros managers na fila ranqueada, subindo de divisão. É de graça: a conta só entra pra salvar na nuvem e comprar coins.'],
     ['Se eu não criar conta, perco o progresso?', 'O progresso fica salvo no localStorage do navegador. Se você limpar o cache ou trocar de aparelho, ele some. Com conta isso não acontece.'],
     ['Como pago os R$20?', 'Cartão pelo Stripe ou Pix pelo Woovi. É um pagamento único pelos recursos persistentes, válido enquanto o Road to Major continuar em operação, conforme os Termos.'],
-    ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, cobrindo as cinco eras do Counter-Strike.'],
+    ['De onde vêm os jogadores e times?', 'Os elencos e dados são curados a partir de HLTV e Liquipedia, do CS 1.6 ao CS2.'],
   ];
   const [open, setOpen] = useState(0);
   return (
@@ -737,24 +742,74 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
   );
 }
 
-// novidades: o tweet de anúncio do @castroomath como prova social. O widget do X
-// é pesado, então só carrega quando a seção chega perto da tela.
-function TweetBand() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [near, setNear] = useState(false);
+// Novidades: o tweet de anúncio do @castroomath como prova social, mas sem
+// depender dele. O cartão com as últimas notas do jogo (patchNotes) aparece na
+// hora; o widget do X só é carregado quando a seção entra na tela e só troca o
+// cartão se renderizar em até 3,5s. Bloqueador, rede lenta ou falha: fica o
+// cartão, nunca um buraco.
+const X_PROFILE = 'https://x.com/castroomath';
+
+function NewsCard() {
+  const patch = PATCHES[0];
+  if (!patch) return null;
+  return (
+    <article className="lp-newscard" aria-labelledby="lp-newscard-title">
+      <div className="lp-newscard__head">
+        <h3 id="lp-newscard-title">{patch.title}</h3>
+        <span>{patch.date}</span>
+      </div>
+      <ul className="lp-newscard__list">
+        {patch.items.slice(0, 3).map((it) => (
+          <li key={it.text}><b>{it.area}</b> {it.text}</li>
+        ))}
+      </ul>
+      <div className="lp-newscard__foot">
+        <button type="button" className="lp-textlink" onClick={openPatchNotes}>{ct('Ver todas as novidades')}</button>
+        <a className="lp-xbtn" href={X_PROFILE} target="_blank" rel="noreferrer">{ct('Siga @castroomath no X')} <ArrowUpRight size={16} aria-hidden /></a>
+      </div>
+    </article>
+  );
+}
+
+function NewsBand() {
+  const slot = useRef<HTMLDivElement>(null);
+  const embed = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'ready' | 'fallback'>('idle');
   useEffect(() => {
-    const el = ref.current;
-    if (!el || near) return;
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setNear(true); io.disconnect(); } }, { rootMargin: '600px 0px' });
+    const el = slot.current;
+    if (!el || phase !== 'idle') return;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setPhase('loading'); io.disconnect(); } }, { rootMargin: '200px 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [near]);
+  }, [phase]);
+  useEffect(() => {
+    if (phase !== 'loading') return;
+    const started = Date.now();
+    const t = window.setInterval(() => {
+      const frame = embed.current?.querySelector('iframe');
+      const rendered = !!frame && frame.getBoundingClientRect().height > 120 && getComputedStyle(frame).visibility !== 'hidden';
+      // só troca se a seção não estiver acima da tela: crescer ali empurraria o
+      // que a pessoa está lendo (ex.: pulou pro FAQ pela nav)
+      const safe = (slot.current?.getBoundingClientRect().top ?? -1) >= 0;
+      if (rendered && safe) { setPhase('ready'); window.clearInterval(t); }
+      else if (Date.now() - started > 3500) { setPhase('fallback'); window.clearInterval(t); }
+    }, 250);
+    return () => window.clearInterval(t);
+  }, [phase]);
+  const embedOn = phase === 'loading' || phase === 'ready';
   return (
     <section id="novidades" className="lp-section" aria-labelledby="lp-news-title">
       <div className="lp-wrap lp-news">
-        <SectionHead id="lp-news-title" center title={ct('Novidades direto do X')} sub={ct('Updates, bastidores e o anúncio oficial do Road to Major.')} />
-        <div ref={ref} className="lp-news__embed lp-reveal">{near && <AnnouncementTweet />}</div>
-        <TwitterLink />
+        <SectionHead id="lp-news-title" center title={ct('Novidades')} sub={ct('O que mudou no jogo por último. Bastidores e avisos saem primeiro no X.')} />
+        <div ref={slot} className="lp-news__slot lp-reveal" data-phase={phase}>
+          {phase !== 'ready' && <NewsCard />}
+          {embedOn && (
+            <div ref={embed} className="lp-news__embed" data-ready={phase === 'ready'} inert={phase !== 'ready'}>
+              <AnnouncementTweet />
+            </div>
+          )}
+        </div>
+        {phase === 'ready' && <TwitterLink />}
       </div>
     </section>
   );
@@ -828,7 +883,7 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
         <RtpSpotlight />
         <Pricing onAccount={() => openAcct('signup', 'landing-pricing')} onPlay={onPlay} />
         <How />
-        <TweetBand />
+        <NewsBand />
         <Faq />
         <FinalCta onAccount={() => openAcct('signup', 'landing-final')} onPlay={onPlay} />
       </main>

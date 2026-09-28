@@ -455,10 +455,77 @@
 .lp-spot__media figcaption { margin-top: var(--sp-3); font-size: var(--fs-2); color: var(--c-ink-faint); text-align: center; }
 .lp-screen--gold { border-color: var(--c-accent-line); box-shadow: var(--shadow-3), 0 0 0 1px var(--c-accent-soft); }
 
-/* ── novidades (X) ── */
-.lp-news { display: grid; gap: var(--sp-6); justify-items: center; text-align: center; }
-.lp-news__embed { width: 100%; max-width: 560px; min-height: 120px; }
+/* ── novidades: cartão das notas do jogo; o embed do X só troca se renderizar ── */
+.lp-news { display: grid; gap: var(--sp-6); justify-items: center; }
+.lp-news .lp-head { margin-bottom: 0; }
+.lp-news__slot { position: relative; width: 100%; max-width: 560px; }
+.lp-news__embed { width: 100%; }
+/* carregando: o widget monta invisível e fora do fluxo; o cartão segura o lugar */
+.lp-news__embed[data-ready='false'] {
+  position: absolute;
+  inset: 0 0 auto;
+  opacity: 0;
+  pointer-events: none;
+}
 .lp-news .announce-tweet { margin: 0; }
+/* o documento do tweet é color-scheme claro: casar o esquema tira o fundo branco
+   opaco que aparecia nos cantos arredondados do cartão do X */
+.lp-news__embed iframe { color-scheme: normal; border-radius: var(--rad-4); }
+.lp-newscard {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border: 1px solid var(--c-line);
+  border-radius: var(--rad-4);
+  background: var(--c-surface-1);
+  box-shadow: var(--shadow-inset);
+}
+.lp-newscard__head { display: grid; gap: var(--sp-1); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--c-line-soft); }
+.lp-newscard__head h3 {
+  font-family: var(--font-title);
+  font-size: var(--fs-5);
+  font-weight: 700;
+  line-height: var(--lh-snug);
+  color: var(--c-ink);
+  text-wrap: balance;
+}
+.lp-newscard__head span { font-size: var(--fs-2); color: var(--c-ink-faint); }
+.lp-newscard__list { display: grid; gap: var(--sp-3); }
+.lp-newscard__list li {
+  position: relative;
+  padding-inline-start: var(--sp-4);
+  font-size: var(--fs-3);
+  color: var(--c-ink-dim);
+  text-wrap: pretty;
+}
+.lp-newscard__list li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--c-brand);
+}
+.lp-newscard__list b { color: var(--c-ink); font-weight: 700; margin-inline-end: var(--sp-1); }
+.lp-newscard__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-4); }
+.lp-xbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--tap);
+  padding-inline: var(--sp-4);
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--rad-pill);
+  background: var(--c-surface-2);
+  color: var(--c-ink);
+  font-size: var(--fs-3);
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+.lp-xbtn:hover { color: var(--c-ink); border-color: var(--c-accent-line); background: var(--c-surface-3); }
 
 /* ── conta (planos) ── */
 .lp-plans { display: grid; gap: var(--sp-5); max-width: 920px; margin-inline: auto; }
