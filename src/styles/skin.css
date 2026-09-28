@@ -116,3 +116,8 @@ body.career-dash { overflow: visible; overflow-x: clip; }
 
 /* Major rápido: o CONTINUAR do shell já é o "jogar minha partida" */
 .gs .hub-fab { display: none; }
+
+/* aviso de convidado do Ultimate: o CTA quebra linha no celular em vez de vazar */
+.gs .ut-guest-warn > span:last-child { flex-shrink: 1 !important; min-width: 0; max-width: 100%; }
+.gs .ut-guest-warn button { white-space: normal; text-align: center; max-width: 100%; }
+@media (max-width: 640px) { .gs .ut-guest-warn > span:last-child { width: 100%; align-items: stretch !important; } }

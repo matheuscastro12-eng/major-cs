@@ -1,4 +1,4 @@
-# Design system "Broadcast Desk"
+# Design system "Broadcast Desk" · nova interface do Road to Major
 
 O Road to Major é uma transmissão de CS. Placar, lower third, faixa AO VIVO e os
 lados CT (azul) e T (âmbar) são a gramática de todos os modos. Este documento
@@ -210,3 +210,39 @@ primitivos. Código novo importa de `components/ds`.
 9. **Duas marchas, uma paleta:** "Broadcast" (grande, `--fs-display`, Oswald,
    motion `--dur-4`) só em momentos; "Desk" (denso, `--fs-3`, tabela) na gestão.
 10. Antes de commitar: `npx tsx --test scripts/test-design-tokens.mts`.
+
+
+---
+
+## 6. Shell universal (a "nova interface", set/2026)
+
+Uma interface só para o jogo inteiro (`src/components/ds/shell/`, estilos em
+`src/styles/shell.css`). Referência visual aprovada: fundo marinho, dourado da
+marca, Football Manager como referência de UX.
+
+| Peça | O que é |
+|---|---|
+| `GameShell` | Trilho de modos (74px) + sidebar do modo (216px) + topbar + subnav + conteúdo. Props: `mode`, `identity` (título, subtítulo, escudo, cores do clube), `nav` (grupos estilo FM), `active`/`onNav`, `tabs`/`activeTab`/`onTab`, `next` (CONTINUAR), `meta`, `bell`, `tools`, `search`, `sideWidget`, `variant` (`full` · `focus` sem sidebar · `immersive` só a barra, sem saídas). |
+| Trilho de modos | Carreira, Road to Pro, Ultimate, Draft, Diário, Online; escudo no topo leva ao Início; Avisos e "Você" (conta, densidade, tema, atalhos, idioma) no pé. O App entrega a lista via `ShellProvider`. |
+| Sidebar do modo | "ROAD TO MAJOR", cartão do modo, grupos com título em caixa-alta, divisória, recolhíveis (lembra por modo) com contador quando fechados, item ativo em pílula dourada, badge dourado, widget de próximo evento no pé. |
+| CONTINUAR | Botão dourado com o verbo (CONTINUAR/JOGAR/COMEÇAR) e o que vem a seguir ("Partida vs SHIN · MD1"). `pending` lista pendências; as `blocking` levam até elas em vez de avançar. Atalho: espaço. |
+| Paleta de comandos | ⌘K / Ctrl+K / "/": seções, abas, modos, comandos globais e a busca do modo (jogadores, times). |
+| Peek de jogador | Qualquer elemento com `data-peek="<ref>"` abre o cartão rápido (OVR, função, 6 atributos 1–20, forma) no hover ou segurando o dedo. Cada modo registra o resolvedor com `usePeekResolver` (`peekFromPlayer` monta a partir de um `Player`). |
+| Densidade | Compacta/confortável em `[data-density]` no `<html>` (`--row-h`, `--pad-panel`). |
+| Celular (< 1024px) | Topo compacto com menu (gaveta com modos e seções), tab bar de 4 seções + Menu e CONTINUAR fixo acima dela. |
+
+Primitivos novos: `Panel` com `icon` (ícone dourado no cabeçalho), `Table` com
+ordenação (`sort`), visões de colunas (`views` + `view`), `tall` e `selected`,
+`Segmented` (pílulas: Geral · Atributos · Contratos · Desempenho), `Ovr` (selo
+dourado), `Bar`, `RoleChip`/`Chip`, `Avatar` com anel da função, `AttrValue`
+(1–20 pintado por faixa, tokens `--c-attr-1..5`).
+
+Cores: `--c-brand` (dourado da estrela) é a marca e o acento de TODOS os modos
+na nova interface; `--c-achievement` continua sendo conquista. `--c-topbar*`,
+`--c-rail`, `--c-shell*`, `--c-panel-head`, `--c-line-soft`, `--c-crest-*` e
+`--c-role-*` nasceram com o shell. Tipografia: Oswald (display), Barlow
+Condensed (`--font-title`, títulos de painel), Barlow (UI e números tabulares).
+
+`src/styles/skin.css` aplica a forma do painel novo às telas legadas dentro do
+shell (`.dash-card`, `.rtp`, `.ut-root`, `.rtm-daily`) e corrige o sticky
+(`body.career-dash` com `overflow-x: clip`).

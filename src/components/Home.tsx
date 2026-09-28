@@ -206,6 +206,7 @@ export function Home(props: Props) {
       nav={shellNav}
       active="home"
       onNav={onShellNav}
+      mobileNav={['home', 'news', 'achievements', 'leaderboard']}
       title={ct('Portal')}
       crumbs={[]}
       meta={meta}
@@ -249,7 +250,7 @@ export function Home(props: Props) {
             {!career.exists && !rtp?.nick && !savedCampaign && (
               <div className="home-empty">
                 <Sparkles size={22} aria-hidden />
-                <p>{ct('Nada em andamento ainda. Escolha um modo ao lado — a Carreira é o coração do jogo.')}</p>
+                <p>{ct('Nada em andamento ainda. Escolha um modo — a Carreira é o coração do jogo.')}</p>
                 {onCareer && <Button variant="primary" onClick={onCareer}><Trophy size={16} aria-hidden /> {ct('Começar a Carreira')}</Button>}
               </div>
             )}
