@@ -1238,10 +1238,6 @@ button.gs-widget:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .gs-chipbtn svg { color: var(--c-brand); }
 @media (pointer: coarse) { .gs-chipbtn { min-height: var(--tap); } }
 
-/* com o shell na tela, as Novidades moram no menu (o botão flutuante sairia
-   por cima da sidebar) */
-body:has(.gs) .patch-notes-trigger { display: none !important; }
-
 /* ════ ATRIBUTO 1–20 (AttrValue) ══════════════════════════════════════════ */
 .ds-attr {
   display: inline-flex;
