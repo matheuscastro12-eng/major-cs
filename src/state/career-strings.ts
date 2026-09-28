@@ -1434,7 +1434,7 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Snake draft 1v1 contra outro manager. Suba no ladder ranqueado por MMR.": { en: "1v1 snake draft against another manager. Climb the ranked MMR ladder.", es: "Snake draft 1v1 contra otro manager. Sube en el ladder por MMR." },
   "1v1 · ranqueada": { en: "1v1 · ranked", es: "1v1 · clasificatoria" },
   "Logado como": { en: "Signed in as", es: "Conectado como" },
-  "times · 5 eras · scoreboards estilo HLTV": { en: "teams · 5 eras · HLTV-style scoreboards", es: "equipos · 5 eras · scoreboards estilo HLTV" },
+  "times · do 1.6 ao CS2 · scoreboards estilo HLTV": { en: "teams · from 1.6 to CS2 · HLTV-style scoreboards", es: "equipos · del 1.6 al CS2 · scoreboards estilo HLTV" },
 
   "Recomeçar": { en: "Restart", es: "Reiniciar" },
 

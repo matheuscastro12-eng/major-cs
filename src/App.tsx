@@ -1248,7 +1248,7 @@ export default function App() {
 
       {/* "Não consegui salvar" + avisos da nuvem (413 / restore sem espaço) */}
       <SaveHealthBanner />
-            <div className={ADMIN_SCREENS.has(screen) ? 'page' : 'app-stage'}>
+      <div className={ADMIN_SCREENS.has(screen) ? 'page' : 'app-stage'}>
       <Suspense fallback={<Loader text="…" />}>
       {bannerPreview && screen === 'home' && (
         <>
