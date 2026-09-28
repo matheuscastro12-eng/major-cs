@@ -358,7 +358,7 @@ function FinalCta({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => 
           <h2 className="lp-h2" id="lp-final-title">{ct('O título não é dado, é conquistado')}</h2>
           <p className="lp-lead">{ct('Comece de graça agora. Quando quiser guardar tudo na nuvem, é só criar a sua conta.')}</p>
           <div className="lp-final__cta">
-            <Button size="big" onClick={onPlay}>{ct('Jogar agora')} <Play size={18} aria-hidden /></Button>
+            <Button size="big" onClick={onPlay}>{ct('Jogar agora, de graça')} <Play size={18} aria-hidden /></Button>
             {/* funil: CTA final da página, com o preço no texto do botão (a seção de
                 planos já ficou pra trás na rolagem). src landing-final. */}
             <Button size="big" variant="gold" onClick={onAccount}>{ct('Criar conta')} · R$20</Button>
@@ -752,7 +752,7 @@ function TweetBand() {
   return (
     <section id="novidades" className="lp-section" aria-labelledby="lp-news-title">
       <div className="lp-wrap lp-news">
-        <SectionHead id="lp-news-title" center kicker={ct('Acompanhe o projeto')} title={ct('Novidades direto do X')} sub={ct('Updates, bastidores e o anúncio oficial do Road to Major.')} />
+        <SectionHead id="lp-news-title" center title={ct('Novidades direto do X')} sub={ct('Updates, bastidores e o anúncio oficial do Road to Major.')} />
         <div ref={ref} className="lp-news__embed lp-reveal">{near && <AnnouncementTweet />}</div>
         <TwitterLink />
       </div>
@@ -793,7 +793,7 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
         <div className="lp-notices">
           {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
           {duelInvite && (
-            <div className="lp-notice" role="status">
+            <div className="lp-notice">
               <Swords size={16} aria-hidden />
               <span>{ct('Você foi convidado pra um DUELO no Ultimate')}, {ct('sala')} <b className="lp-notice__code">{duelInvite}</b>. {ct('A sala expira em algumas horas.')}</span>
               <button type="button" className="lp-notice__go" onClick={onPlay}>{ct('Entrar e aceitar')} <ArrowRight size={14} aria-hidden /></button>
