@@ -61,3 +61,13 @@ body.career-dash { overflow: visible; overflow-x: clip; }
   color: var(--c-ink);
 }
 .gs .em-card-label { color: var(--c-brand); letter-spacing: 0.14em; font-weight: 800; }
+
+/* ── Road to Pro dentro do shell ── */
+.gs .rtp-in-shell { background: transparent; min-height: 0; font-family: var(--font-ui); }
+.gs .rtp-in-shell .rtp-body { max-width: none; margin: 0; padding: 0; }
+.gs--focus .rtp-in-shell .rtp-body { max-width: 1240px; margin: 0 auto; }
+.gs .rtp .dash-card { background: var(--c-surface-1); border: 1px solid var(--c-line); border-radius: var(--rad-3); }
+.gs .rtp .dash-card-head { background: linear-gradient(180deg, var(--c-surface-2), var(--c-panel-head)); border-bottom: 1px solid var(--c-line); }
+.gs .rtp .dash-card-head b { font-family: var(--font-title); letter-spacing: var(--tracking-caps); color: var(--c-ink); }
+.gs-chip--win { color: var(--c-win); }
+.gs-chip--win svg { color: var(--c-win); }
