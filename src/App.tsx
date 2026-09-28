@@ -958,7 +958,7 @@ export default function App() {
     { id: 'carreira', label: ct('Carreira'), short: ct('Carreira'), icon: Trophy, onSelect: openCareerMode },
     ...(RTP_ENABLED ? [{ id: 'rtp' as const, label: 'Road to Pro', short: 'Road to Pro', icon: Crosshair, hint: account?.paid ? undefined : ct('Demo grátis'), onSelect: () => setScreen('rtp') }] : []),
     ...(ULTIMATE_ENABLED ? [{ id: 'ultimate' as const, label: 'Ultimate', short: 'Ultimate', icon: Star, onSelect: () => openUltimateMode('hub') }] : []),
-    { id: 'major', label: ct('Draft · Major rápido'), short: 'Draft', icon: Layers, hint: tournament || savedSession?.tournament ? ct('Campeonato em andamento') : undefined, onSelect: openDraftMode },
+    { id: 'major', label: 'Draft', short: 'Draft', icon: Layers, hint: tournament || savedSession?.tournament ? ct('Campeonato em andamento') : undefined, onSelect: openDraftMode },
     { id: 'diario', label: ct('Diário'), short: ct('Diário'), icon: CalendarDays, onSelect: () => setScreen('daily') },
     ...(ULTIMATE_ENABLED ? [{ id: 'online' as const, label: 'Online', short: 'Online', icon: Swords, hint: ct('Ranqueada, duelo e Major da Semana'), onSelect: () => openUltimateMode('ranked') }] : []),
   ];

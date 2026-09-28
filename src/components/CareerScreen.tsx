@@ -6125,6 +6125,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       );
     }
     return (
+      <CareerDashFrame title={`${matchCtx.teams[0].tag} × ${matchCtx.teams[1].tag} · ${matchCtx.phaseLabel}`} onExit={onExit} immersive>
       <MatchScreen
         teams={matchCtx.teams}
         maps={matchCtx.maps!}
@@ -6139,6 +6140,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         // Update funcional (roda DEPOIS do commitDecided no mesmo lote) — não perde o resultado travado.
         onCalls={(calls) => setSave((s) => { const next = { ...s, identity: closeMatchIdentity(s.identity, calls) }; persist(next); return next; })}
       />
+      </CareerDashFrame>
     );
   }
 

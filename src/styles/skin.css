@@ -113,3 +113,6 @@ body.career-dash { overflow: visible; overflow-x: clip; }
   box-shadow: 0 0 24px -4px color-mix(in srgb, var(--c-brand) 45%, transparent);
 }
 .daily-crest { color: var(--c-brand-strong); }
+
+/* Major rápido: o CONTINUAR do shell já é o "jogar minha partida" */
+.gs .hub-fab { display: none; }

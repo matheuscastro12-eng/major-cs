@@ -849,8 +849,7 @@ button.gs-widget:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* imersivo: só a barra (partida ao vivo, veto, reveal) */
 .gs--immersive { --gs-top-h: 52px; }
-.gs--immersive .gs-searchpill,
-.gs--immersive .gs-crumbs__mode { display: none; }
+.gs--immersive .gs-searchpill { display: none; }
 .gs--immersive .gs-content { padding: 0; }
 
 /* ════ PAINÉIS E GRADE (conteúdo das telas) ═══════════════════════════════ */

@@ -22,12 +22,12 @@ export function CareerShell({ children, ...rest }: CareerShellProps) {
 
 /** Telas de fluxo da Carreira (fundar/assumir org, mercado inicial, escolher
  *  campeonato): shell sem sidebar, só a topbar com o escudo da marca. */
-export function CareerDashFrame({ title, onExit, children }: { title?: string; onExit: () => void; children: ReactNode }) {
+export function CareerDashFrame({ title, onExit, children, immersive = false }: { title?: string; onExit: () => void; children: ReactNode; immersive?: boolean }) {
   const [theme] = useCareerTheme();
   return (
     <GameShell
       mode="carreira"
-      variant="focus"
+      variant={immersive ? 'immersive' : 'focus'}
       identity={{ title: ct('Carreira'), subtitle: title }}
       title={title}
       crumbs={[]}

@@ -1,3 +1,4 @@
+import { Binoculars } from 'lucide-react';
 // AnalystReportCard — T3.13. Mostra o relatório do analista sobre o adversário
 // antes da partida. Recebe o report + nome dos times.
 //
@@ -32,7 +33,7 @@ export function AnalystReportCard({ report, oppName, oppTag }: Props) {
   return (
     <section style={cardStyle}>
       <header style={headerStyle}>
-        <span style={iconStyle}>📊</span>
+        <span style={iconStyle}><Binoculars size={20} aria-hidden /></span>
         <div style={{ flex: 1 }}>
           <div style={titleStyle}>Relatório do analista</div>
           <div style={subtitleStyle}>
