@@ -164,6 +164,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
   };
 
   type DView = 'hub' | 'lines' | 'whois' | 'impostor' | 'classic';
+  const GAME_SHORT: Record<string, string> = { lines: 'Lines', whois: ct('Quem é?'), impostor: ct('Impostor'), classic: ct('Clássico') };
   const GAME_ICON: Record<string, LucideIcon> = { lines: Users, whois: Search, impostor: Binoculars, classic: Trophy };
   const hubStatus = dailyDayStatus(gameIds, dateKey);
   const nextGame = DAILY_GAMES.find((g) => !hubStatus.perGame[g.id]?.done);
@@ -172,7 +173,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
       { id: 'hub', label: ct('Visão do dia'), icon: CalendarDays },
       ...DAILY_GAMES.map((g) => {
         const p = hubStatus.perGame[g.id];
-        return { id: g.id, label: g.title, icon: GAME_ICON[g.id] ?? Puzzle, badge: p?.done ? undefined : '!', badgeTone: 'brand' as const };
+        return { id: g.id, label: g.title, short: GAME_SHORT[g.id], icon: GAME_ICON[g.id] ?? Puzzle, badge: p?.done ? undefined : '!', badgeTone: 'brand' as const };
       }),
     ] },
   ];

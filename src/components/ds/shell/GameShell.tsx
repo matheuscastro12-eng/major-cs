@@ -310,9 +310,9 @@ export function GameShell(props: GameShellProps) {
           {mobileItems.map((it) => {
             const Icon = it.icon ?? LayoutGrid;
             return (
-              <button key={it.id} type="button" className="gs-tabbar__item" aria-current={it.id === active ? 'page' : undefined} onClick={() => onNav?.(it.id)}>
+              <button key={it.id} type="button" className="gs-tabbar__item" aria-current={it.id === active ? 'page' : undefined} aria-label={it.short && it.short !== it.label ? it.label : undefined} onClick={() => onNav?.(it.id)}>
                 <span className="gs-tabbar__icon"><Icon size={20} aria-hidden />{(it.badge || it.alert) ? <span className="gs-dot" aria-hidden /> : null}</span>
-                <span className="gs-tabbar__label">{it.label}</span>
+                <span className="gs-tabbar__label">{it.short ?? it.label}</span>
               </button>
             );
           })}

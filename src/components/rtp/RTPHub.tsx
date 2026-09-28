@@ -57,7 +57,7 @@ export function RTPHub({ save, onExit, onReset, onUpdate, onRetire, onPlayMatch,
     ] },
     { id: 'jogador', label: ct('Jogador'), items: [
       { id: 'training', label: ct('Treino'), icon: Crosshair, badge: world.actionsLeft > 0 ? world.actionsLeft : undefined },
-      { id: 'profile', label: ct('Perfil e atributos'), icon: Target, badge: perks > 0 ? perks : undefined },
+      { id: 'profile', label: ct('Perfil e atributos'), short: ct('Perfil'), icon: Target, badge: perks > 0 ? perks : undefined },
     ] },
     { id: 'carreira', label: ct('Carreira'), items: [
       { id: 'league', label: ct('Liga'), icon: Trophy },

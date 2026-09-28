@@ -2124,7 +2124,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const utNav: ShellNavGroup[] = inOnline ? [
     { id: 'competir', label: ct('Competir'), items: [
       { id: 'ranked', label: ct('Ranqueada'), icon: Swords },
-      { id: 'major-semana', label: ct('Major da Semana'), icon: Trophy, alert: wlWindowNow().open },
+      { id: 'major-semana', label: ct('Major da Semana'), short: 'Major', icon: Trophy, alert: wlWindowNow().open },
       { id: 'draft', label: ct('Draft'), icon: Layers, alert: state.profile.draft.active },
       { id: 'duelo', label: ct('Duelo privado'), icon: Crosshair },
     ] },

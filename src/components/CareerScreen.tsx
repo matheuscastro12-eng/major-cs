@@ -6508,7 +6508,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const NAV: ShellNavGroup[] = [
     { id: 'principal', label: ct('Principal'), items: [
       { id: 'ov', label: ct('Início'), icon: House },
-      { id: 'in', label: ct('Caixa de entrada'), icon: Inbox, badge: unread || undefined },
+      { id: 'in', label: ct('Caixa de entrada'), short: ct('Caixa'), icon: Inbox, badge: unread || undefined },
       { id: 'ag', label: ct('Agenda'), icon: CalendarDays },
     ] },
     { id: 'time', label: ct('Time'), items: [
@@ -6537,7 +6537,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     ] },
     { id: 'comp', label: ct('Competições'), items: [
       { id: 'mj', label: 'Major', icon: Trophy, disabled: !majorT, alert: majorActive },
-      { id: 'cl', label: ct('Classificação e chave'), icon: Layers },
+      { id: 'cl', label: ct('Classificação e chave'), short: ct('Tabela'), icon: Layers },
       { id: 'vr', label: ct('Ranking VRS'), icon: ChartNoAxesColumn },
     ] },
   ];

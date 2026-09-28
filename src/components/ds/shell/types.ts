@@ -67,6 +67,8 @@ export type BadgeTone = 'accent' | 'brand' | 'warn' | 'loss' | 'win' | 'muted';
 export interface ShellNavItem {
   id: string;
   label: string;
+  /** rótulo curto da tab bar do celular (5 colunas de ~78px em 390px) */
+  short?: string;
   icon?: LucideIcon;
   badge?: number | string;
   badgeTone?: BadgeTone;
