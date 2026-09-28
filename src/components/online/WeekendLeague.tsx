@@ -5,7 +5,7 @@
 // (wlMirrorReport) e só conta quando os dois lados batem — aqui é leitura.
 import { useCallback, useEffect, useState } from 'react';
 import { Panel, Button } from '../ds';
-import type { Account } from '../../state/account';
+import { useAccountStore, type Account } from '../../state/account';
 import {
   fetchWlStatus, wlRegister, WL_MAX_MATCHES,
   type WlStatus,
@@ -51,12 +51,14 @@ export function WeekendLeague({ account, onHub, onPlay, onCreateAccount }: { acc
 
   // funil: conta grátis jogando o Major da Semana vê o convite de vitalícia
   // (tela ficou 100% grátis pra todos — mas nunca tinha CTA nem instrumentação)
-  useEffect(() => { if (account && !account.paid) trackPaywallView('wl-free'); }, [account]);
+  // [O0-11] só depois do /me: antes disso o pagante ainda parece grátis
+  const accountReady = useAccountStore((s) => s.ready);
+  useEffect(() => { if (accountReady && account && !account.paid) trackPaywallView('wl-free'); }, [accountReady, account]);
   // funil: visitante SEM conta (ex.: guest do Ultimate) chega aqui direto pelo
   // convite abaixo — mas nunca tinha instrumentação nem src próprio, então essa
   // ponta do funil ficava invisível (0 paywall_view/checkout_open registrados,
   // mesmo com tráfego real vindo do modo convidado). Mede como 'wl-guest'.
-  useEffect(() => { if (!account) trackPaywallView('wl-guest'); }, [account]);
+  useEffect(() => { if (accountReady && !account) trackPaywallView('wl-guest'); }, [accountReady, account]);
 
   // relógio do countdown (30s de passo é suficiente pra "fecha em Xh Ymin")
   useEffect(() => {

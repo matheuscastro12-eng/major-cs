@@ -121,6 +121,11 @@ import { beginCheckout, claim as claimAccount, useAccount } from './state/accoun
 import { parseCareerPlayerId, isCareerPlayerPath, careerPlayerPath } from './state/career-player-route';
 import { parseCareerTeamId, careerTeamPath, isCareerTeamPath } from './state/career-team-route';
 import { getActiveSlot, setActiveSlot, slotKey, cloudSlot } from './state/careerSaves';
+import { useGame } from './state/gameStore';
+import { writeWithQuotaRescue } from './state/storageQuota';
+import { registerSaveRetry, reportLocalSave } from './state/saveHealth';
+import { ModeErrorBoundary } from './components/ModeErrorBoundary';
+import { SaveHealthBanner } from './components/SaveHealthBanner';
 import { useManager } from './state/manager';
 import { setCloudEnabled, syncSlot } from './state/cloud';
 import { setCheckoutSrc, track, trackCheckoutError, trackCheckoutOpen, trackPaywallView, trackVisit } from './state/track';
@@ -437,13 +442,16 @@ export default function App() {
   };
 
   // ---------- persistência de campanha ----------
+  // [O0-26/FRON-17] com resgate de cota; se nem assim couber, o banner global
+  // avisa ("Não consegui salvar") em vez de a campanha morrer no F5 em silêncio.
   useEffect(() => {
-    if (!tournament) return;
-    try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ draft, tournament, pickem, career }));
-    } catch {
-      /* storage cheio - campanha segue só em memória */
-    }
+    if (!tournament) { reportLocalSave('draft', null); return; } // campanha encerrada: sem aviso pendurado
+    const write = () => {
+      const w = writeWithQuotaRescue(SESSION_KEY, JSON.stringify({ draft, tournament, pickem, career }));
+      reportLocalSave('draft', w.ok ? null : (w.error instanceof Error ? w.error.message : 'quota'));
+    };
+    write();
+    registerSaveRetry('draft', write);
   }, [draft, tournament, pickem, career]);
 
   // sessionStamp invalida o memo quando o save é apagado sem mudar de tela
@@ -487,21 +495,31 @@ export default function App() {
     if (url.hash.toLowerCase() === '#criar') url.hash = '';
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }, []);
+  // [O0-28] pagante espera o syncSlot antes de montar a carreira (F5 direto em
+  // /carreira num aparelho novo abria a fundação e o restore chegava depois).
+  // Teto de 10s: sem resposta, monta com o local e o remount abaixo cobre o resto.
+  // careerSynced nasce false: o 1º render do pagante já mostra o loader (sem
+  // montar a carreira por um frame e desmontar quando o effect começa o sync).
+  const [careerSynced, setCareerSynced] = useState(false);
+  const careerEpoch = useGame((s) => s.epoch);
   useEffect(() => {
     setCloudEnabled(!!account?.paid);
     if (!account?.paid) return;
     let alive = true;
+    const cap = window.setTimeout(() => { if (alive) setCareerSynced(true); }, 10_000);
     void syncSlot(cloudSlot(getActiveSlot()), slotKey(getActiveSlot())).then((r) => {
-      if (alive && r === 'restored') {
+      if (!alive) return;
+      if (r === 'restored') {
         setCloudToast(ct('☁ Save da carreira carregado da nuvem'));
         setSessionStamp((s) => s + 1);
-        // BUG FIX (caça-bugs): syncSlot só grava no localStorage; o gameStore em
-        // memória continua com o save velho e o próximo autosave SOBRESCREVE o da
-        // nuvem. Avisa a carreira (se montada) pra re-hidratar do disco já atualizado.
-        window.dispatchEvent(new Event('rtm:cloud-restored'));
       }
-    });
-    return () => { alive = false; };
+      // syncSlot só mexe no disco. O gameStore em memória continuava com o save
+      // velho (e o próximo autosave sobrescrevia a nuvem); na lápide, o save
+      // apagado ressuscitava. Relê do disco e bumpa o epoch: a carreira REMONTA
+      // (stage/majorT/hubTab recalculados do save novo, não só o save).
+      if (r === 'restored' || r === 'deleted') useGame.getState().reloadFromDisk();
+    }).finally(() => { window.clearTimeout(cap); if (alive) setCareerSynced(true); });
+    return () => { alive = false; window.clearTimeout(cap); };
   }, [account?.paid]);
   useEffect(() => {
     if (!cloudToast) return;
@@ -1077,6 +1095,8 @@ export default function App() {
       )}
       {showOnboarding && screen === 'home' && <Onboarding onClose={() => setShowOnboarding(false)} />}
 
+      {/* "Não consegui salvar" + avisos da nuvem (413 / restore sem espaço) */}
+      <SaveHealthBanner />
       <main className={screen === 'career' ? 'page page-career' : screen === 'rtp' ? 'page page-rtp' : screen === 'home' ? 'page page-play' : screen === 'ultimate' ? 'page page-ultimate' : 'page'}>
       <Suspense fallback={<Loader text="…" />}>
       {bannerPreview && screen === 'home' && (
@@ -1185,21 +1205,23 @@ export default function App() {
           convidado, o guard de rota manda pra landing. Os perks pagos (coins,
           ladder persistente, save na nuvem) ficam no entitlement, não no acesso. */}
       {ULTIMATE_ENABLED && (account || utGuest) && screen === 'ultimate' && (
-        <UltimateSquadScreen
-          onBack={() => setScreen('home')}
-          guest={!account}
-          /* funil: o botão do mkt-lock (Mercado P2P) foi adicionado em 27/07 pra
-             sair de 0% de conversão, mas continuava mandando pra landing inteira
-             — 87 paywall_view/28d e 0 checkout_open, mesmo depois do botão existir.
-             Convidado vai direto pro cadastro; conta grátis vai direto pro checkout
-             (mesmo atalho do onUpgrade abaixo). */
-          onCreateAccount={() => {
-            setCheckoutSrc('ultimate-guest');
-            if (account) startCheckout();
-            else { setAuthMode('signup'); setAuthOpen(true); }
-          }}
-          onUpgrade={() => startCheckout()}
-        />
+        <ModeErrorBoundary mode="ultimate" onExit={() => setScreen('home')}>
+          <UltimateSquadScreen
+            onBack={() => setScreen('home')}
+            guest={!account}
+            /* funil: o botão do mkt-lock (Mercado P2P) foi adicionado em 27/07 pra
+               sair de 0% de conversão, mas continuava mandando pra landing inteira
+               — 87 paywall_view/28d e 0 checkout_open, mesmo depois do botão existir.
+               Convidado vai direto pro cadastro; conta grátis vai direto pro checkout
+               (mesmo atalho do onUpgrade abaixo). */
+            onCreateAccount={() => {
+              setCheckoutSrc('ultimate-guest');
+              if (account) startCheckout();
+              else { setAuthMode('signup'); setAuthOpen(true); }
+            }}
+            onUpgrade={() => startCheckout()}
+          />
+        </ModeErrorBoundary>
       )}
 
       {/* Road to Pro — modo "viva a vida de um jogador" (save separado rtm-rtp-v1) */}
@@ -1211,9 +1233,14 @@ export default function App() {
           sumiu (0-1/dia desde 25/08, contra 3-6/dia antes) — quem bate na trava
           cai na landing cheia e precisa achar OUTRO CTA pra abrir o pagamento.
           goToCheckout pula esse passo, igual toda outra trava já faz. */}
-      {RTP_ENABLED && screen === 'rtp' && <RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={goToCheckout} />}
+      {/* [O0-11] demo só depois do /me: com a conta ainda carregando, o RtP
+          montava com demo=true, injetava o cliffhanger no save do pagante e
+          disparava a trava + paywall_view. Espera accountReady. */}
+      {RTP_ENABLED && screen === 'rtp' && (accountReady
+        ? <ModeErrorBoundary mode="rtp" onExit={() => setScreen('home')}><RoadToPro onExit={() => setScreen('home')} demo={!account?.paid} onUpgrade={goToCheckout} /></ModeErrorBoundary>
+        : <Loader text="…" />)}
       {/* DIÁRIO — grátis, sem conta: porta de entrada e motivo de volta (loop Wordle) */}
-      {screen === 'daily' && <DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} />}
+      {screen === 'daily' && <ModeErrorBoundary mode="daily" onExit={() => setScreen('home')}><DailyScreen onExit={() => setScreen('home')} onGoUltimate={() => setScreen('ultimate')} /></ModeErrorBoundary>}
 
       {/* gerência de saves: só conta vitalícia (até 5 carreiras) */}
       {screen === 'careerSaves' && (
@@ -1224,10 +1251,17 @@ export default function App() {
         />
       )}
       {/* carreira aberta de graça pra todos (o R$20 vale por save na nuvem + ranking) */}
+      {/* key={careerEpoch}: o save trocou por fora (nuvem, lápide, outra aba) →
+          remonta a carreira inteira [O0-28/O1-35]. Pagante (ou conta ainda
+          carregando) espera o sync da nuvem antes de montar. */}
       {screen === 'career' && (
-        <>
-          <CareerScreen dataset={dataset} founder={!!account?.founder} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
-        </>
+        !accountReady || (account?.paid && !careerSynced)
+          ? <Loader text="☁ …" />
+          : (
+            <ModeErrorBoundary mode="career" onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')}>
+              <CareerScreen key={careerEpoch} dataset={dataset} founder={!!account?.founder} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
+            </ModeErrorBoundary>
+          )
       )}
       {screen === 'careerCRM' && (
         <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>

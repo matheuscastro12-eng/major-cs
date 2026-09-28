@@ -97,6 +97,10 @@ export default async function handler(
       data = decodeCloudSavePayload(String(body.data ?? ''), body.encoding, body.originalBytes);
     } catch (error) {
       const message = error instanceof CloudSavePayloadError ? error.message : 'save inválido';
+      // [O0-14] o 413 cobre tamanho, JSON/UTF-8 inválido e payload corrompido:
+      // registra o motivo e os tamanhos (sem o save) pra medir antes de assumir
+      // a causa. Os runtime logs dão a distribuição de originalBytes.
+      console.warn('[cloud-save 413]', JSON.stringify({ slot: String(body.slot ?? '').slice(0, 40), message, encoding: body.encoding ?? null, originalBytes: Number(body.originalBytes) || null, wireChars: String(body.data ?? '').length }));
       res.status(413).json({ error: message });
       return;
     }
