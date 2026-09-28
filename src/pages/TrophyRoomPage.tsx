@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react';
 import { CareerIcon } from '../components/career/CareerIcon';
+import { formatMoney as fmtMoney } from '../engine/ratings';
 
 interface TrophyEntry {
   kind: 'major' | 'circuit';
@@ -42,13 +43,6 @@ const MAJOR_NAMES = [
   'PGL Major', 'BLAST.tv Major', 'IEM Major', 'ESL One Major', 'Perfect World Major',
 ];
 const majorName = (split: number) => MAJOR_NAMES[(split - 1) % MAJOR_NAMES.length];
-
-const fmtMoney = (n: number) => {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 2)}M`;
-  if (abs >= 1_000) return `$${Math.round(n / 1_000)}k`;
-  return `$${n}`;
-};
 
 const PLACEMENT_LABEL: Record<string, string> = {
   champion: '1º · Campeão',

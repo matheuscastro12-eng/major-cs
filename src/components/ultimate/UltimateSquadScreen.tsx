@@ -3333,79 +3333,105 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
         </UtPanel>
       )}
 
-      {tab === 'squad' && (
-        <UtPanel label={ct('Montar squad')} icon={<Shirt size={15} className="ut-panel__lead" />} accent="green">
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-            {FORMATIONS.map((f) => (
-              <button key={f.id} onClick={() => setFormation(f.id)} title={f.desc} style={tabBtn(form.id === f.id)}>{f.name}</button>
-            ))}
-          </div>
-          <div className="ut-sqstats">
-            <div className="ut-sqstat ut-sqstat--chem">
-              <div className="ut-sqstat__row">
-                <span className="ut-sqstat__k">{ct('Química')}</span>
-                <span className="ut-sqstat__tag" style={{ color: inkOnSurface(cl.color), borderColor: `color-mix(in srgb, ${cl.color} 40%, transparent)`, background: `color-mix(in srgb, ${cl.color} 8%, transparent)` }}>{cl.label}</span>
-              </div>
-              <div className="ut-sqstat__row">
-                <b style={{ color: inkOnSurface(cl.color) }}>{chem.total}<span>/15</span></b>
-              </div>
-              <div className="ut-sqstat__bar"><div style={{ width: `${(chem.total / 15) * 100}%`, background: inkOnSurface(cl.color) }} /></div>
+      {tab === 'squad' && (() => {
+        // coluna da direita (referência ult-squad.png): números do squad,
+        // desafios de coleção e Major da Semana ao lado do campo
+        const idx = ultimateIndex();
+        const cols = evaluateCollections(state.inventory.map((o) => idx.get(o.cardKey)).filter((c): c is UltCard => !!c), state.profile.objectivesClaimed);
+        const wlWin = wlWindowNow();
+        return (
+        <div className="ut-sqlayout">
+          <UtPanel className="ut-sqlayout__main" label={ct('Montar squad')} icon={<Shirt size={15} className="ut-panel__lead" />} accent="green" right={<span>{ct('Toque numa carta para trocar')}</span>}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {FORMATIONS.map((f) => (
+                <button key={f.id} onClick={() => setFormation(f.id)} title={f.desc} style={tabBtn(form.id === f.id)}>{f.name}</button>
+              ))}
             </div>
-            <div className="ut-sqstat">
-              <span className="ut-sqstat__k">{ct('Multiplicador')}</span>
-              <b className="ut-sqstat__big" style={{ color: chem.multiplier >= 1 ? 'var(--c-win)' : 'var(--c-loss)' }}>{chem.multiplier.toFixed(2)}×</b>
-            </div>
-            <div className="ut-sqstat">
-              <span className="ut-sqstat__k">{ct('OVR médio')}</span>
-              <b className="ut-sqstat__big">{avgOvr || '—'}</b>
-            </div>
-            <div className="ut-sqstat" title={`${ct('Estilos aplicados + traits das cartas escaladas')} · ${ct('máx')} +${SQUAD_DUEL_CAP} (${duel.multiplier.toFixed(3)}× ${ct('de força')})`}>
-              <span className="ut-sqstat__k">{ct('Duelo')}</span>
-              <b className="ut-sqstat__big" style={{ color: duel.total > 0 ? 'var(--c-win)' : undefined }}>+{duel.total.toFixed(1)}</b>
-            </div>
-          </div>
-          <div style={{ position: 'relative', width: '100%', maxWidth: 520, margin: '0 auto', aspectRatio: '4 / 5', background: 'radial-gradient(ellipse at 50% 32%, rgba(201,166,60,0.14), transparent 58%), linear-gradient(180deg, #1c2029 0%, #14161c 100%)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, boxShadow: 'inset 0 0 44px rgba(0,0,0,0.35)' }}>
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-              {chem.edges.map((e, i) => {
-                const a = form.slots[e.a], b = form.slots[e.b];
-                const stroke = e.score >= 1.5 ? 'var(--c-win)' : e.score >= 0.5 ? '#ecc75f' : e.score > 0 ? '#f04438' : 'rgba(255,255,255,0.09)';
-                return <line key={i} x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100} stroke={stroke} strokeWidth={e.score >= 1.5 ? 0.9 : 0.6} strokeDasharray={e.score > 0 && e.score < 0.5 ? '2 2' : undefined} />;
-              })}
-            </svg>
-            {form.slots.map((fs) => {
-              const sc = slotCard(fs.slot);
-              return (
-                <div key={fs.slot} style={{ position: 'absolute', left: `${fs.x * 100}%`, top: `${fs.y * 100}%`, transform: 'translate(-50%,-50%)' }}>
-                  {sc ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                      <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
-                        <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={narrow ? 84 : 112} ev={sc.owned.ev} ed={editionOf(sc.owned)} />
+            <div className="ut-sqpitch" style={{ position: 'relative', width: '100%', margin: '0 auto', aspectRatio: narrow ? '4 / 5' : '5 / 4', background: 'radial-gradient(ellipse at 50% 32%, rgba(201,166,60,0.14), transparent 58%), linear-gradient(180deg, #1c2029 0%, #14161c 100%)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, boxShadow: 'inset 0 0 44px rgba(0,0,0,0.35)' }}>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+                {chem.edges.map((e, i) => {
+                  const a = form.slots[e.a], b = form.slots[e.b];
+                  const stroke = e.score >= 1.5 ? 'var(--c-win)' : e.score >= 0.5 ? '#ecc75f' : e.score > 0 ? '#f04438' : 'rgba(255,255,255,0.09)';
+                  return <line key={i} x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100} stroke={stroke} strokeWidth={e.score >= 1.5 ? 0.9 : 0.6} strokeDasharray={e.score > 0 && e.score < 0.5 ? '2 2' : undefined} />;
+                })}
+              </svg>
+              {form.slots.map((fs) => {
+                const sc = slotCard(fs.slot);
+                return (
+                  <div key={fs.slot} style={{ position: 'absolute', left: `${fs.x * 100}%`, top: `${fs.y * 100}%`, transform: 'translate(-50%,-50%)' }}>
+                    {sc ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                        <button onClick={() => setPickSlot(fs.slot)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }} title={ct('Trocar')}>
+                          <PitchTile card={sc.card} evo={sc.owned.boost ?? 0} size={narrow ? 84 : 112} ev={sc.owned.ev} ed={editionOf(sc.owned)} />
+                        </button>
+                        <DuelChips card={sc.card} styleId={sc.owned.style} />
+                      </div>
+                    ) : (
+                      <button onClick={() => setPickSlot(fs.slot)} style={emptySlot}>
+                        <Plus size={22} strokeWidth={2.4} />
+                        <span style={{ fontSize: '0.6rem', fontWeight: 800 }}>{fs.role}</span>
                       </button>
-                      <DuelChips card={sc.card} styleId={sc.owned.style} />
-                    </div>
-                  ) : (
-                    <button onClick={() => setPickSlot(fs.slot)} style={emptySlot}>
-                      <Plus size={22} strokeWidth={2.4} />
-                      <span style={{ fontSize: '0.6rem', fontWeight: 800 }}>{fs.role}</span>
-                    </button>
-                  )}
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* fecha o loop montar → jogar sem caçar a aba na nav; incompleto mostra
+                o progresso dos slots em vez de deixar o usuário sem próxima ação */}
+            <div style={{ textAlign: 'center', marginTop: 14 }}>
+              {squadComplete
+                ? <button className="ut-jogar" style={{ padding: '12px 26px' }} onClick={() => { setRankedMode('rivals'); go('ranked'); }}><Zap size={16} /> {ct('JOGAR RANQUEADA')}</button>
+                : <span className="muted small">{placed.length}/5 {ct('escalados — toque num slot vazio pra completar o squad.')}</span>}
+            </div>
+            <p className="muted small" style={{ textAlign: 'center', marginTop: 10 }}>
+              {ct('Mesma org (+1), mesma região (+0.5) e mesmo país (+0.5) entre jogadores conectados dão química. Encaixe as funções pra somar mais.')}
+              {' '}{ct('Traits (derivadas da carta) e Estilos de Química (Loja) somam o bônus de Duelo — até +3% de força.')}
+            </p>
+          </UtPanel>
+          <aside className="ut-sqlayout__side">
+            <div className="ut-sqstats">
+              <div className="ut-sqstat ut-sqstat--chem">
+                <div className="ut-sqstat__row">
+                  <span className="ut-sqstat__k">{ct('Química')}</span>
+                  <span className="ut-sqstat__tag" style={{ color: inkOnSurface(cl.color), borderColor: `color-mix(in srgb, ${cl.color} 40%, transparent)`, background: `color-mix(in srgb, ${cl.color} 8%, transparent)` }}>{cl.label}</span>
                 </div>
-              );
-            })}
-          </div>
-          {/* fecha o loop montar → jogar sem caçar a aba na nav; incompleto mostra
-              o progresso dos slots em vez de deixar o usuário sem próxima ação */}
-          <div style={{ textAlign: 'center', marginTop: 14 }}>
-            {squadComplete
-              ? <button className="ut-jogar" style={{ padding: '12px 26px' }} onClick={() => { setRankedMode('rivals'); go('ranked'); }}><Zap size={16} /> {ct('JOGAR RANQUEADA')}</button>
-              : <span className="muted small">{placed.length}/5 {ct('escalados — toque num slot vazio pra completar o squad.')}</span>}
-          </div>
-          <p className="muted small" style={{ textAlign: 'center', marginTop: 10 }}>
-            {ct('Mesma org (+1), mesma região (+0.5) e mesmo país (+0.5) entre jogadores conectados dão química. Encaixe as funções pra somar mais.')}
-            {' '}{ct('Traits (derivadas da carta) e Estilos de Química (Loja) somam o bônus de Duelo — até +3% de força.')}
-          </p>
-        </UtPanel>
-      )}
+                <div className="ut-sqstat__row">
+                  <b style={{ color: inkOnSurface(cl.color) }}>{chem.total}<span>/15</span></b>
+                </div>
+                <div className="ut-sqstat__bar"><div style={{ width: `${(chem.total / 15) * 100}%`, background: inkOnSurface(cl.color) }} /></div>
+              </div>
+              <div className="ut-sqstat">
+                <span className="ut-sqstat__k">{ct('Multiplicador')}</span>
+                <b className="ut-sqstat__big" style={{ color: chem.multiplier >= 1 ? 'var(--c-win)' : 'var(--c-loss)' }}>{chem.multiplier.toFixed(2)}×</b>
+              </div>
+              <div className="ut-sqstat">
+                <span className="ut-sqstat__k">{ct('OVR médio')}</span>
+                <b className="ut-sqstat__big">{avgOvr || '—'}</b>
+              </div>
+              <div className="ut-sqstat" title={`${ct('Estilos aplicados + traits das cartas escaladas')} · ${ct('máx')} +${SQUAD_DUEL_CAP} (${duel.multiplier.toFixed(3)}× ${ct('de força')})`}>
+                <span className="ut-sqstat__k">{ct('Duelo')}</span>
+                <b className="ut-sqstat__big" style={{ color: duel.total > 0 ? 'var(--c-win)' : undefined }}>+{duel.total.toFixed(1)}</b>
+              </div>
+            </div>
+            <UtPanel label={ct('Desafios de coleção')} icon={<Target size={15} className="ut-panel__lead" />} accent="amber" right={<button type="button" className="ut-sqlink" onClick={() => go('hub')}>{ct('Ver no Hub')}</button>}>
+              <ul className="ut-sqcols">
+                {cols.map((p) => (
+                  <li key={p.def.id} title={p.def.desc}>
+                    <div className="ut-sqcols__row"><b>{p.def.name}</b><span>{p.claimed ? '✔' : `${p.have}/${p.def.need}`}</span></div>
+                    <div className="ut-sqcols__bar"><div style={{ width: `${Math.round((p.have / p.def.need) * 100)}%`, background: p.claimed ? 'var(--c-achievement)' : 'var(--c-accent)' }} /></div>
+                  </li>
+                ))}
+              </ul>
+            </UtPanel>
+            <button type="button" className={`ut-sqmajor${wlWin.open ? ' is-live' : ''}`} onClick={() => go('major-semana')}>
+              <span className="ut-sqmajor__k"><Trophy size={14} aria-hidden /> {wlWin.open ? ct('Major da Semana · AO VIVO') : ct('Major da Semana')}</span>
+              <b className="ut-sqmajor__t">{wlWin.open ? ct('Torneio da semana rolando agora') : ct('Abre quarta')}</b>
+              <span className="ut-sqmajor__d">{ct('Ranqueada quarta→sábado · vitórias viram coins · 70.000 pro campeão')}</span>
+            </button>
+          </aside>
+        </div>
+        );
+      })()}
 
       {tab === 'ranked' && (() => {
         const peakTierIdx = DIV_TIERS.indexOf(divisionFor(state.profile.peakElo).def.tier);

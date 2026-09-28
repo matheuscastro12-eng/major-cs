@@ -39,7 +39,7 @@ import { activeStint as activeCoachStint } from '../../engine/coachCareer';
 import { playerOrgId } from '../../state/career-player-route';
 import { ct } from '../../state/career-i18n';
 import { playerOvr, playerWage, formatMoney } from '../../engine/ratings';
-import { averageStarterChemistry } from '../../engine/chemistry';
+import { teamChemistry } from '../../engine/chemistry';
 import { ElencoPanel, type ElencoRow } from './ElencoPanel';
 import { Panel, Bar } from '../../components/ds/index';
 import { Sparkles, Target, Wallet } from 'lucide-react';
@@ -152,7 +152,7 @@ export function SquadTab({
       recent: save.recentRatings?.[p.id],
     };
   });
-  const chemAvg = rows.length >= 2 ? Math.round(averageStarterChemistry({ pairChem: save.pairChem }, rows.map((p) => playerOrgId(p.id)))) : 0;
+  const chemAvg = teamChemistry({ pairChem: save.pairChem }, rows.map((p) => playerOrgId(p.id)));
   const chemLabel = chemAvg >= 80 ? ct('Excelente') : chemAvg >= 60 ? ct('Boa') : chemAvg >= 40 ? ct('Regular') : ct('Fraca');
   const payroll = rows.reduce((sum, p) => sum + playerWage(p), 0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

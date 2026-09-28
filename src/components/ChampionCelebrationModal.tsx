@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, Button } from './ds';
 import { CareerIcon } from './career/CareerIcon';
+import { formatMoney } from '../engine/ratings';
 
 export interface ChampionCelebrationData {
   /** Nome do torneio: 'Major Mundial', 'BLAST Premier Brasília', etc. */
@@ -124,10 +125,4 @@ export function ChampionCelebrationModal({ data, onClose }: Props) {
       </div>
     </Modal>
   );
-}
-
-function formatMoney(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
-  return `$${n}`;
 }

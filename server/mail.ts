@@ -18,7 +18,7 @@ export async function sendMail(msg: MailMessage): Promise<boolean> {
   const gmailUser = env('GMAIL_USER');
   const gmailPass = env('GMAIL_APP_PASSWORD');
   if (resendKey) {
-    const from = env('RESET_EMAIL_FROM') || 'MAJOR//CS <nao-responda@roadtomajor.com.br>';
+    const from = env('RESET_EMAIL_FROM') || 'Road to Major <nao-responda@roadtomajor.com.br>';
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { authorization: `Bearer ${resendKey}`, 'content-type': 'application/json' },
@@ -31,7 +31,7 @@ export async function sendMail(msg: MailMessage): Promise<boolean> {
     try {
       const { createTransport } = await import('nodemailer');
       const transport = createTransport({ service: 'gmail', auth: { user: gmailUser, pass: gmailPass } });
-      await transport.sendMail({ from: `MAJOR//CS <${gmailUser}>`, to: msg.to, subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}) });
+      await transport.sendMail({ from: `Road to Major <${gmailUser}>`, to: msg.to, subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}) });
       return true;
     } catch { return false; }
   }
