@@ -63,6 +63,10 @@
     "server/liveops.ts",
     "server/communityGoal.ts",
     "server/communityGoal.test.ts",
+    "server/esmImportGraph.ts",
+    "server/esm-imports.test.ts",
+    "server/internalError.ts",
+    "server/neon-http.mock.ts",
     "server/liveops.test.ts",
     "server/payments.ts",
     "server/payments.test.ts",
@@ -77,6 +81,7 @@
     "server/ultimate-pack.ts",
     "server/ultimate-pack.test.ts",
     "server/weekend-league.ts",
-    "server/weekend-league.test.ts"
+    "server/weekend-league.test.ts",
+    "server/wlSettleCron.ts"
   ]
 }

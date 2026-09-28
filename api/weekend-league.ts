@@ -4,7 +4,7 @@
 // da ranqueada — resultado só conta quando os dois lados batem) e recompensa
 // por faixa de vitórias paga pela economia server-authoritative (ledger
 // idempotente, op_id wl:<windowId>). Lógica pura em server/weekend-league.ts.
-// Ações (POST body.action): status | register | report | claim. Só conta PAGA.
+// Ações (POST body.action): status | register | report | claim | settleAck [O0-22]. Só conta PAGA.
 import { neon } from '@neondatabase/serverless';
 import { respondMissingSecret, verifyAccountToken } from '../server/auth.js';
 import { requireAdmin } from '../server/admin-auth.js';
@@ -23,6 +23,7 @@ import {
 } from '../server/weekend-league.js';
 import { ultEconomySchemaQueries, type SqlTag } from '../server/ultimate-economy.js';
 import { bumpCommunityContrib, communityGoalSchemaQueries } from '../server/communityGoal.js'; // [URG-5]
+import { wlLastSettleFor, wlSettleAck } from '../server/wlSettleCron.js'; // [O0-22]
 
 interface Res { status: (code: number) => { json: (b: unknown) => void }; setHeader: (k: string, v: string) => void; }
 const clean = (v?: string) => v?.replace(new RegExp('^\\uFEFF'), '').trim();
@@ -53,7 +54,7 @@ const verifyToken = verifyAccountToken;
 
 const WINDOW_ID_RE = /^wl-\d{4}-\d{2}-\d{2}$/;
 // limites por conta/minuto: report é o hot path da run; claim/register são raros.
-const ACTION_LIMITS: Record<string, number> = { status: 60, register: 10, report: 30, claim: 10 };
+const ACTION_LIMITS: Record<string, number> = { status: 60, register: 10, report: 30, claim: 10, settleAck: 10 };
 
 export default async function handler(
   req: { method?: string; body?: Record<string, unknown> | string; headers?: Record<string, string | string[] | undefined> },
@@ -123,7 +124,19 @@ export default async function handler(
   const now = new Date();
 
   if (action === 'status') {
-    res.status(200).json(await wlStatus(sql, email, now));
+    // [O0-22] + colocação/prêmio da última janela fechada (banner no Hub)
+    res.status(200).json({ ...(await wlStatus(sql, email, now)), lastSettle: await wlLastSettleFor(sql, email, now) });
+    return;
+  }
+
+  // [O0-22] coleta do prêmio de colocação no save (banner do Hub). Idempotente
+  // pelo ledger: replayed=true ⇒ já coletado, o cliente não credita de novo.
+  if (action === 'settleAck') {
+    const windowId = String(body.windowId ?? '').trim();
+    if (!WINDOW_ID_RE.test(windowId)) { res.status(400).json({ error: 'windowId inválido' }); return; }
+    const r = await wlSettleAck(sql, email, windowId, now);
+    if (!r.ok) { res.status(r.error === 'bad_window' ? 400 : 404).json({ error: r.error }); return; }
+    res.status(200).json(r);
     return;
   }
 
