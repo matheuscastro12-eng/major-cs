@@ -77,3 +77,39 @@ body.career-dash { overflow: visible; overflow-x: clip; }
 .gs .ut-in-shell .ut-page { max-width: none; margin: 0; padding: 0; gap: 14px; }
 .gs .ut-root .dash-card { border-radius: var(--rad-3); box-shadow: none; background: var(--c-surface-1); border-color: var(--c-line); }
 .gs .ut-root .dash-card-head { border-bottom-color: var(--c-line); }
+
+/* ── Diário dentro do shell: o cabeçalho próprio vira topbar/sidebar ── */
+.gs .rtm-daily-in-shell { max-width: 960px; margin: 0; padding: 0; gap: 14px; }
+.gs .rtm-daily-in-shell > .rtm-daily-head { display: none; }
+.gs .rtm-daily-card {
+  gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--rad-3);
+  background: var(--c-surface-1);
+  transition: border-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+.gs .rtm-daily-card:hover { border-color: color-mix(in srgb, var(--c-brand) 55%, transparent); background: var(--c-surface-2); }
+.gs .rtm-daily-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.gs .rtm-daily-card[data-done] { border-left: 3px solid var(--c-win); opacity: 1; }
+.gs .rtm-daily-card-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; flex-shrink: 0;
+  border-radius: 12px; background: var(--c-surface-3); color: var(--c-brand-strong);
+}
+.gs .rtm-daily-card-body b { font-family: var(--font-display); font-size: var(--fs-5); letter-spacing: 0.02em; color: var(--c-ink); }
+.gs .rtm-daily-card-body span { font-size: var(--fs-3); color: var(--c-ink-dim); }
+.gs .rtm-daily-card-body em { font-family: var(--font-ui); font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.06em; color: var(--c-brand); }
+.gs .rtm-daily-card-go { font-family: var(--font-ui); color: var(--c-ink-faint); }
+.gs .rtm-daily-marathon {
+  padding: 22px 24px; border: 1px solid color-mix(in srgb, var(--c-brand) 35%, var(--c-line)); border-left-width: 1px; border-radius: var(--rad-3);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c-brand) 14%, var(--c-surface-1)), var(--c-surface-1) 60%);
+}
+.gs .rtm-daily-marathon b { font-family: var(--font-display); font-size: var(--fs-5); letter-spacing: 0.02em; color: var(--c-brand-strong); }
+.gs .rtm-daily-marathon span { font-size: var(--fs-3); color: var(--c-ink-dim); }
+.gs .rtm-daily-marathon button {
+  align-self: flex-start; margin-top: 8px; min-height: 44px; padding: 0 22px; border: 0; border-radius: 8px;
+  background: linear-gradient(180deg, var(--c-brand-strong), var(--c-brand-deep)); color: var(--c-on-brand);
+  font-family: var(--font-display); font-size: var(--fs-4); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer;
+  box-shadow: 0 0 24px -4px color-mix(in srgb, var(--c-brand) 45%, transparent);
+}
+.daily-crest { color: var(--c-brand-strong); }

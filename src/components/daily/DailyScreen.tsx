@@ -34,6 +34,9 @@ import { nextMilestone, pendingMilestones, streakStatus, STREAK_MILESTONES, type
 import { evaluateDailyBadges } from '../../engine/daily/badges';
 import { MARATHON_ORDER, marathonGrade, marathonShareText, fmtDuration } from '../../engine/daily/marathon';
 import '../../styles/daily.css';
+import { GameShell } from '../ds/shell/GameShell';
+import type { ShellNavGroup } from '../ds/shell/types';
+import { Binoculars, CalendarDays, Flag, Flame, Play, Puzzle, Search, TriangleAlert, Trophy, Users, Zap, type LucideIcon } from 'lucide-react';
 
 // ISO alpha-2 → emoji de bandeira (regional indicators)
 function flagOf(cc: string): string {
@@ -155,8 +158,45 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
     try { await navigator.clipboard.writeText(text); setMarCopied(true); setTimeout(() => setMarCopied(false), 1800); } catch { /* sem clipboard */ }
   };
 
+  type DView = 'hub' | 'lines' | 'whois' | 'impostor' | 'classic';
+  const GAME_ICON: Record<string, LucideIcon> = { lines: Users, whois: Search, impostor: Binoculars, classic: Trophy };
+  const hubStatus = dailyDayStatus(gameIds, dateKey);
+  const nextGame = DAILY_GAMES.find((g) => !hubStatus.perGame[g.id]?.done);
+  const dailyNav: ShellNavGroup[] = [
+    { id: 'hoje', label: ct('Hoje'), items: [
+      { id: 'hub', label: ct('Visão do dia'), icon: CalendarDays },
+      ...DAILY_GAMES.map((g) => {
+        const p = hubStatus.perGame[g.id];
+        return { id: g.id, label: g.title, icon: GAME_ICON[g.id] ?? Puzzle, badge: p?.done ? undefined : '!', badgeTone: 'brand' as const };
+      }),
+    ] },
+  ];
+  const shellNext = nextGame
+    ? { label: ct('Jogar'), detail: nextGame.title, icon: Play, onGo: () => setView(nextGame.id as DView) }
+    : { label: ct('Jogar'), detail: ct('Dia completo · volte amanhã'), disabled: true };
+
   return (
-    <div className="rtm-daily">
+    <GameShell
+      mode="diario"
+      identity={{ title: `${ct('Diário')} #${day}`, subtitle: `${ct('Hoje')} · ${hubStatus.done}/${DAILY_GAMES.length} ${ct('desafios')}`, badge: <span className="gs-crest__txt daily-crest">#{day}</span> }}
+      nav={dailyNav}
+      active={view}
+      onNav={(id) => setView(id as DView)}
+      title={view === 'hub' ? ct('Hoje') : DAILY_GAMES.find((g) => g.id === view)?.title}
+      crumbs={[{ label: ct('Um desafio novo por dia, igual pra todo mundo') }]}
+      history={{ back: () => (view === 'hub' ? onExit() : setView('hub')) }}
+      meta={dStatus.current >= 1 ? <span className="gs-chip"><Flame size={15} aria-hidden /> {dStatus.current} {dStatus.current === 1 ? ct('dia') : ct('dias')}</span> : undefined}
+      next={shellNext}
+      mobileNav={['hub', 'lines', 'whois', 'impostor']}
+      sideWidget={(
+        <div className="gs-widget">
+          <span className="gs-widget__kicker"><CalendarDays size={13} aria-hidden /> {ct('Amanhã')}</span>
+          <span className="gs-widget__main">{ct('Diário')} #{day + 1}</span>
+          <span className="gs-widget__sub">{ct('Novos desafios à meia-noite')}</span>
+        </div>
+      )}
+    >
+    <div className="rtm-daily rtm-daily-in-shell">
       <header className="rtm-daily-head">
         <button type="button" className="rtm-daily-back" onClick={() => (view === 'hub' ? onExit() : setView('hub'))}>←</button>
         <div className="rtm-daily-title">
@@ -180,7 +220,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
       </header>
       {toast && <div className="rtm-daily-toast" role="status">{toast}</div>}
       {dStatus.atRisk && view === 'hub' && (
-        <div className="rtm-daily-risk">⚠️ {ct('Você perde')} {dStatus.current} {ct('dias em')} {dStatus.hoursLeft}h — {ct('jogue qualquer um dos 4 pra manter.')}</div>
+        <div className="rtm-daily-risk"><TriangleAlert size={15} aria-hidden /> {ct('Você perde')} {dStatus.current} {ct('dias em')} {dStatus.hoursLeft}h — {ct('jogue qualquer um dos 4 pra manter.')}</div>
       )}
 
       {view === 'hub' && (
@@ -190,7 +230,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
             const status = p?.done ? (p.won ? ct('completo · volte amanhã') : ct('foi por pouco · volte amanhã')) : p ? ct('em andamento') : ct('novo desafio disponível');
             return (
               <button key={g.id} type="button" className="rtm-daily-card" data-done={p?.done ? '' : undefined} onClick={() => setView(g.id as 'lines' | 'whois' | 'impostor' | 'classic')}>
-                <span className="rtm-daily-card-icon">{g.icon}</span>
+                <span className="rtm-daily-card-icon">{(() => { const I = GAME_ICON[g.id] ?? Puzzle; return <I size={24} aria-hidden />; })()}</span>
                 <span className="rtm-daily-card-body">
                   <b>{g.title}</b>
                   <span>{g.blurb}</span>
@@ -217,7 +257,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
               const grade = marathonGrade(wins, secs);
               return (
                 <div className={`rtm-daily-marathon done g${grade}`}>
-                  <b>🏁 {ct('MARATONA')} · {ct('NOTA')} {grade}</b>
+                  <b><Flag size={16} aria-hidden /> {ct('MARATONA')} · {ct('NOTA')} {grade}</b>
                   <span>{wins}/4 {ct('em')} {fmtDuration(secs)}</span>
                   <button type="button" onClick={() => { void shareMarathon(); }}>
                     {marCopied ? ct('Copiado! 😉') : ct('Compartilhar a nota')}
@@ -230,7 +270,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
               const nextDef = DAILY_GAMES.find((g) => g.id === marathonNext);
               return nextDef ? (
                 <div className="rtm-daily-marathon">
-                  <b>🏁 {ct('MARATONA EM ANDAMENTO')}</b>
+                  <b><Flag size={16} aria-hidden /> {ct('MARATONA EM ANDAMENTO')}</b>
                   <span>{ct('Próximo')}: {nextDef.icon} {nextDef.title}</span>
                   <button type="button" onClick={() => setView(nextDef.id as 'lines' | 'whois' | 'impostor' | 'classic')}>
                     {ct('CONTINUAR')} →
@@ -242,7 +282,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
             if (dayStatus.done === 0) {
               return (
                 <div className="rtm-daily-marathon">
-                  <b>🏁 {ct('MODO MARATONA')}</b>
+                  <b><Flag size={16} aria-hidden /> {ct('MODO MARATONA')}</b>
                   <span>{ct('Os 4 desafios em sequência, contra o relógio — uma NOTA única no fim (4/4 em menos de 5min = S). Uma por dia.')}</span>
                   <button type="button" onClick={startMarathon}>{ct('COMEÇAR MARATONA')} →</button>
                 </div>
@@ -340,7 +380,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
               if (!nicks) return null;
               return (
                 <div className="rtm-daily-totw">
-                  <b>⚡ {ct('TIME DA SEMANA no ULTIMATE')}</b>
+                  <b><Zap size={15} aria-hidden /> {ct('TIME DA SEMANA no ULTIMATE')}</b>
                   <span className="rtm-daily-totw-names">{nicks}</span>
                   <span className="rtm-daily-totw-sub">{ct('7 in-forms novos toda segunda — colecione cartas no Ultimate Squad.')}</span>
                   {onGoUltimate && (
@@ -361,6 +401,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
       {view === 'impostor' && <ImpostorGame dateKey={dateKey} onDone={onGameDone} streakDays={dStatus.current} />}
       {view === 'classic' && <ClassicGame dateKey={dateKey} onDone={onGameDone} streakDays={dStatus.current} />}
     </div>
+    </GameShell>
   );
 }
 
@@ -490,7 +531,7 @@ function LinesGame({ dateKey, streakNow, onDone, streakDays }: { dateKey: string
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
-          <span className="rtm-daily-streak-kept">🔥 {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
+          <span className="rtm-daily-streak-kept"><Flame size={14} aria-hidden /> {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próxima line à meia-noite.')}</span>
         </div>
       )}
@@ -603,7 +644,7 @@ function WhoisGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone: (
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
-          <span className="rtm-daily-streak-kept">🔥 {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
+          <span className="rtm-daily-streak-kept"><Flame size={14} aria-hidden /> {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo pro à meia-noite.')}</span>
         </div>
       )}
@@ -687,7 +728,7 @@ function ImpostorGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
-          <span className="rtm-daily-streak-kept">🔥 {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
+          <span className="rtm-daily-streak-kept"><Flame size={14} aria-hidden /> {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo impostor à meia-noite.')}</span>
         </div>
       )}
@@ -773,7 +814,7 @@ function ClassicGame({ dateKey, onDone, streakDays }: { dateKey: string; onDone:
           <button type="button" className="rtm-lines-share" onClick={doShare}>
             {copied ? ct('Copiado! Cola no grupo 😉') : ct('Compartilhar resultado')}
           </button>
-          <span className="rtm-daily-streak-kept">🔥 {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
+          <span className="rtm-daily-streak-kept"><Flame size={14} aria-hidden /> {ct('streak mantida')}: {streakDays} {streakDays === 1 ? ct('dia') : ct('dias')}</span>
           <span className="rtm-lines-tomorrow">{ct('Próximo clássico à meia-noite.')}</span>
         </div>
       )}
