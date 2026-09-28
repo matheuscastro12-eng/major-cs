@@ -3,6 +3,7 @@ import { captureDuelInviteFromUrl, hasDuelInvite } from './state/duelInvite';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { AdminGate } from './components/AdminGate';
 import { DonateModal } from './components/Donate';
+import { BrandMark } from './components/brand';
 import { AdBanner } from './components/AdBanner';
 import { Draft } from './components/Draft';
 import { GameShell, PeekLayer, ShellProvider, type ShellCommand, type ShellGlobal, type ShellMode, type ShellNavGroup } from './components/ds';
@@ -1103,7 +1104,7 @@ export default function App() {
 
   if (screen === 'profile' && manager) {
     return withShell(
-      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org }} title={ct('Perfil')} crumbs={[{ label: ct('Você') }]} variant="full" nav={homeNav('profile')} active="profile" onNav={onHomeNav}>
+      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Perfil')} crumbs={[{ label: ct('Você') }]} variant="full" nav={homeNav('profile')} active="profile" onNav={onHomeNav}>
         <ManagerProfile
           manager={manager}
           account={account}
@@ -1124,7 +1125,7 @@ export default function App() {
 
   if (screen === 'leaderboard') {
     return withShell(
-      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org }} title={ct('Ranking')} crumbs={[{ label: ct('Você') }]} nav={homeNav('leaderboard')} active="leaderboard" onNav={onHomeNav}>
+      <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Ranking')} crumbs={[{ label: ct('Você') }]} nav={homeNav('leaderboard')} active="leaderboard" onNav={onHomeNav}>
         <Leaderboard account={account} onBack={() => setScreen('home')} onUpgrade={() => { setCheckoutSrc('leaderboard'); goToCheckout(); }} />
       </GameShell>,
     );
@@ -1420,7 +1421,7 @@ export default function App() {
       )}
 
       {screen === 'hall' && manager && (
-        <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org }} title={ct('Hall da Fama')} crumbs={[{ label: ct('Você') }]} nav={homeNav('hall')} active="hall" onNav={onHomeNav}>
+        <GameShell mode="inicio" identity={{ title: manager.nick, subtitle: manager.org, badge: <BrandMark size={32} /> }} title={ct('Hall da Fama')} crumbs={[{ label: ct('Você') }]} nav={homeNav('hall')} active="hall" onNav={onHomeNav}>
           <HallScreen onBack={() => setScreen(tournament ? (tournament.phase === 'done' ? 'final' : 'hub') : 'home')} />
         </GameShell>
       )}

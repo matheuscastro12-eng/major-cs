@@ -182,12 +182,12 @@ export function GameShell(props: GameShellProps) {
             <button type="button" className="gs-iconbtn gs-top__menu" onClick={() => setMoreOpen(true)} aria-label="Abrir menu">
               <Menu size={20} aria-hidden />
             </button>
-          ) : (
+          ) : variant === 'immersive' ? null : (
             <button type="button" className="gs-iconbtn gs-top__home" onClick={() => global.modes.find((m) => m.id === 'inicio')?.onSelect()} aria-label="Road to Major · Início">
               <BrandMark size={30} />
             </button>
           )}
-          {history && (
+          {history && variant !== 'immersive' && (
             <span className="gs-top__hist">
               <button type="button" className="gs-iconbtn" onClick={history.back} disabled={!history.back || history.canBack === false} aria-label="Voltar">
                 <ChevronLeft size={18} aria-hidden />
