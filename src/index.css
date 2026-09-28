@@ -4548,19 +4548,6 @@ table.crm-players input.num {
   }
 }
 
-/* ===== Landing page (marketing) ===== */
-.lp-root { background: var(--rtm-bg); }
-.lp-wrap { max-width: 1180px; margin: 0 auto; }
-.rtm-reveal { opacity: 1; }
-.rtm-reveal.anim { opacity: 0; transform: translateY(20px); }
-.rtm-reveal.anim.in { opacity: 1; transform: none; transition: opacity .6s var(--rtm-ease), transform .6s var(--rtm-ease); }
-@media (max-width: 880px) {
-  .l-grid3 { grid-template-columns: 1fr !important; }
-  .l-grid2 { grid-template-columns: 1fr !important; }
-  .l-hero-h1 { font-size: 52px !important; }
-  .l-nav-links { display: none !important; }
-}
-
 /* ===== Menu de modos do design (MainMenu): 3 cards cinematográficos ===== */
 .rtm-modemenu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 1080px; margin: 26px auto 6px; width: 100%; }
 .rtm-modecard {
@@ -5951,13 +5938,6 @@ tr.fin-expiring { background: color-mix(in srgb, var(--c-accent) 10%, transparen
 .legal-links { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .legal-links a { font-size: 12px; font-weight: 700; }
 .legal-page-links { width: min(920px, 100%); margin: 18px auto 0; justify-content: center; }
-.landing-legal-footer {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
-  margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rtm-border-soft);
-  color: var(--rtm-faint); font-size: 12.5px;
-}
-.landing-legal-footer > span:nth-child(2) { flex: 1 1 380px; text-align: center; }
-.landing-footer-brand { display: inline-flex; align-items: center; gap: 8px; }
 .checkout-legal-accept {
   display: flex; align-items: flex-start; gap: 9px; margin-top: 16px; padding: 11px 12px;
   border: 1px solid var(--rtm-border-soft); border-radius: 8px; background: var(--rtm-bg-deep);
@@ -6017,8 +5997,6 @@ tr.fin-expiring { background: color-mix(in srgb, var(--c-accent) 10%, transparen
 body.has-ad-footer { padding-bottom: 126px; }
 
 @media (max-width: 640px) {
-  .landing-legal-footer { justify-content: center; text-align: center; }
-  .landing-legal-footer > span:nth-child(2) { text-align: center; }
   .legal-document { padding: 24px 18px; }
 }
 
