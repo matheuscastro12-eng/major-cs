@@ -21,21 +21,24 @@ import { makeRng } from '../rng';
 import type { MapId, Role } from '../../types';
 import type { AttrKey } from '../attributes';
 import {
-  resolveMoment, explainOdds, clutchStepMoment,
-  type Moment, type MomentOption, type MomentOutcome, type OddsBreakdown,
+  resolveMoment, explainOdds, clutchStepMoment, counterDeltaOf, POSTURE_LABEL, EVEN_POSTURE,
+  type Moment, type MomentOption, type MomentOutcome, type OddsBreakdown, type OppPosture, type PostureWeights,
 } from './moments';
 import {
-  buildBeatPlan, ctxForBeat, initialLiveScore, bridgeToBeat, mergeMapClose,
-  resolveMapFromPlay, mapPlayOf,
+  buildBeatPlan, ctxForBeat, initialLiveScore, bridgeToBeat, closeMapFromLive,
+  mapPlayOf, HALF_ROUNDS, WIN_ROUNDS,
   type BeatSpec, type LiveScore, type Interlude, type RoundCtx,
 } from './roundModel';
 import { MINIGAMES, type MiniGameDef } from './minigames';
-import { planStyleBias, gamePlanDef, type GamePlan } from './meta';
+import { planStyleBias, gamePlanDef, postureLeanOf, type GamePlan } from './meta';
 import {
   buildUserTeam, simulateSeriesForPlay, assembleProResult, execBoostOvr,
   type MatchPrep, type ProMatchResult,
 } from './matchSim';
-import { summarizeMoments } from './moments';
+import { summarizeMoments, impactPerBeat, IMPACT_REF } from './moments';
+
+// OVR por ponto de impacto por beat acima/abaixo do neutro (O1-44).
+const IMPACT_OVR = 40;
 import { resolveRoomSeries } from './roundModel';
 import type { TTeam, SeriesResult } from '../../types';
 import type { RoadToProSave } from './types';
@@ -71,6 +74,7 @@ export interface RoomConfig {
   grudge?: number;
   confidence?: number;
   heroNick?: string;            // [W3] quem executa (actor do DecisionEvent)
+  oppLean?: PostureWeights;     // O1-44: tendência de postura do adversário
 }
 
 // O dado COMPLETO de uma resolução (o que a UI anima: needle, stinger, feed).
@@ -83,6 +87,7 @@ export interface ResolvedBeat {
   clutchFinal: boolean;         // clutch: este passo fechou (ou perdeu) o 1vX
   newAlive: number;             // clutch: inimigos vivos após o passo
   execPerf: number | null;      // performance no minigame (null = beat sem execução)
+  posture: OppPosture;          // O1-44: como o adversário jogou o beat (revelado no resultado)
   scored: boolean;              // este passo pontuou a rodada no placar vivo
   youWonRound: boolean;         // (quando scored) a rodada foi sua
 }
@@ -134,6 +139,7 @@ export function createRoom(save: RoadToProSave, prep: MatchPrep): RoomState {
     grudge: prep.grudge,
     confidence: prep.confidence,
     heroNick: save.player.nick,
+    oppLean: postureLeanOf(prep.opp.players ?? []),
   };
   const beats = buildBeatPlan(cfg.role, cfg.mapsIds, cfg.matchSeed);
   return {
@@ -172,6 +178,13 @@ function initClutch(b: BeatSpec): ClutchState {
 
 export function currentBeat(s: RoomState): BeatSpec { return s.beats[s.idx]; }
 export function isLastBeat(s: RoomState): boolean { return s.idx >= s.beats.length - 1; }
+// quantos beats restam NO MAPA do beat `idx` (contando ele) — 1 = último do mapa.
+export function beatsLeftInMap(beats: BeatSpec[], idx: number): number {
+  let n = 0;
+  for (let i = idx; i < beats.length && beats[i].mapIndex === beats[idx].mapIndex; i++) n++;
+  return Math.max(1, n);
+}
+export function isLastOfMap(s: RoomState): boolean { return beatsLeftInMap(s.beats, s.idx) === 1; }
 export function inClutchOf(s: RoomState): boolean { return currentBeat(s).kind === 'clutch' && !!s.clutch; }
 
 // momento/contexto correntes: no clutch, é a etapa atual (1vX) com a bomba/vivos.
@@ -212,6 +225,30 @@ export function winProbOf(s: RoomState): number {
     + (s.live.seriesScore[0] - s.live.seriesScore[1]) * 14
     + (s.momentum - 0.5) * 30 + (s.cfg.heroOvr - s.cfg.oppStrength) * 0.8;
   return clamp(50 + edge, 5, 95);
+}
+
+// POSTURA do adversário no beat/passo corrente (O1-44): sorteio semeado pela
+// série com os pesos da tendência (o dado já está lançado; a Leitura só o
+// revela). Chave própria (não consome o roll do beat).
+export function postureAt(s: RoomState, idx = s.idx, step = s.clutch?.step ?? 0): OppPosture {
+  const lean = s.cfg.oppLean ?? EVEN_POSTURE;
+  const u = makeRng((s.cfg.matchSeed ^ Math.imul(idx + 1, 0x2c1b3c6d) ^ Math.imul(step + 1, 0x297a2d39) ^ 0x7057) >>> 0)();
+  const tot = lean.aggro + lean.safe + lean.smart || 1;
+  if (u < lean.aggro / tot) return 'aggro';
+  if (u < (lean.aggro + lean.safe) / tot) return 'safe';
+  return 'smart';
+}
+// a postura que o jogador CONHECE agora: só com a Leitura ativa.
+export function currentPosture(s: RoomState): OppPosture | null {
+  return s.readUsed ? postureAt(s) : null;
+}
+// confronto do estilo da opção com a postura (lida) ou com a tendência (esperado).
+export function counterFor(s: RoomState, opt: MomentOption): { delta: number; label: string } {
+  const known = currentPosture(s);
+  return {
+    delta: counterDeltaOf(opt.style, known, s.cfg.oppLean ?? EVEN_POSTURE),
+    label: known ? `Leitura: ${POSTURE_LABEL[known]}` : 'Tendência deles',
+  };
 }
 
 // mesma banda do resolveMoment: [thr, thr+banda) = PARCIAL (meio-termo com
@@ -267,13 +304,14 @@ export function roomOdds(s: RoomState, opt: MomentOption, execPerf: number | nul
     const d = Math.round(execBoostOf(execPerf) * 3.1);   // ≈ % por ponto de attr
     if (d !== 0) factors.push({ label: 'Execução', delta: d, good: d > 0 });
   }
-  return explainOdds(opt, effWith(s, opt, execPerf), s.cfg.oppStrength, factors);
+  return explainOdds(opt, effWith(s, opt, execPerf), s.cfg.oppStrength, factors, counterFor(s, opt));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Transições
 
-// Leitura tática: revela a tendência e soma +2 no atributo da decisão atual.
+// Leitura tática: revela a POSTURA do adversário no beat (as odds passam a usar
+// o confronto exato — O1-44) e soma +2 no atributo da decisão atual.
 export function useRead(s: RoomState): RoomState {
   if (s.reads <= 0 || s.readUsed || s.phase !== 'decide') return s;
   return { ...s, reads: s.reads - 1, readUsed: true };
@@ -294,7 +332,7 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
   // execPerf viaja NO outcome: summarizeMoments agrega e o finish converte em
   // boost real de rating (jogou bem os minigames → rating bom; mal → ruim).
   const outcome: MomentOutcome = {
-    ...resolveMoment(moment, opt, effWith(s, opt, execPerf), s.cfg.oppStrength, makeRng(seed)),
+    ...resolveMoment(moment, opt, effWith(s, opt, execPerf), s.cfg.oppStrength, makeRng(seed), counterFor(s, opt).delta),
     ...(execPerf != null ? { execPerf } : {}),
   };
 
@@ -314,14 +352,19 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
   let live = s.live;
   let momentum = s.momentum;
   if (scored) {
-    // v17 (bug do 15-8): o +1 do beat respeita o MESMO teto da ponte — um lado
-    // só chega a 12 (match point) se o outro estiver ≤11; 13 é exclusivo do
-    // FECHAMENTO do mapa.
+    // O0-30: a rodada do beat SEMPRE conta. No último beat do mapa ela decide:
+    // 12-x vencido FECHA 13-x; 11-12 vencido abre 12-12 (prorrogação, resolvida
+    // pela jogada no advance). Antes o +1 era descartado quando levaria a 13 ou
+    // a 12-12, e um roll cego fechava o mapa — "venci o match point e perdi
+    // 11-13" (ENGI-15). Nos beats que NÃO são os últimos do mapa o teto da ponte
+    // (capBeforeBeat) garante entrada ≤11, então o +1 nunca fecha o mapa cedo;
+    // a guarda abaixo só protege contra um plano fora do contrato.
     const [you, them] = live.mapScore;
     const next: [number, number] = youWonRound ? [you + 1, them] : [you, them + 1];
     const grew = youWonRound ? next[0] : next[1];
     const other = youWonRound ? next[1] : next[0];
-    if (!(grew > 12 || (grew === 12 && other >= 12))) live = { ...live, mapScore: next };
+    const overflow = grew >= WIN_ROUNDS || (grew === HALF_ROUNDS && other >= HALF_ROUNDS);
+    if (isLastOfMap(s) || !overflow) live = { ...live, mapScore: next };
     momentum = clamp(momentum * 0.55 + outcome.value * 0.45, 0, 1);
   }
 
@@ -330,6 +373,7 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
     odds: roomOdds(s, opt, execPerf),
     baseTotal: roomOdds(s, opt).total,
     roll, outcome, clutchFinal, newAlive, execPerf, scored, youWonRound,
+    posture: postureAt(s),
   };
   // [W3] evidência: o que foi decidido, a % NA TELA e o que o dado deu. `won`
   // é o veredito literal do roll contra a % mostrada (partial fica em `result`).
@@ -342,6 +386,7 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
     label: inClutch ? `${opt.label} · 1v${s.clutch!.alive}` : opt.label,
     actor: s.cfg.heroNick,
     pWin: beat.odds.total,
+    pRolled: beat.odds.total,       // Sala: % mostrado = % rolado, por construção
     pBase: beat.baseTotal,
     alternatives: moment.options.filter((o) => o.id !== opt.id).map((o) => roomOdds(s, o).total),
     won: outcome.result === 'success',
@@ -350,6 +395,14 @@ export function lockIn(s: RoomState, optId: string, execPerf: number | null = nu
     ...(execPerf != null ? { execPerf } : {}),
   };
   return { state: { ...s, phase: 'resolved', pending: beat, live, momentum, log: [...(s.log ?? []), event] }, beat };
+}
+
+// linha do fechamento na prorrogação (o placar 12-12 do beat virou OT jogada).
+function overtimeLine(won: boolean, score: [number, number], overtimes: number): string {
+  const ots = overtimes > 1 ? `${overtimes} prorrogações` : 'prorrogação';
+  return won
+    ? `12–12 e ${ots}: vocês fecharam ${score[0]}–${score[1]}.`
+    : `12–12 e ${ots}: eles levaram ${score[1]}–${score[0]}.`;
 }
 
 // AVANÇA após a resolução: continua o clutch, ou finaliza o beat (fecha mapa /
@@ -396,16 +449,16 @@ export function advance(s: RoomState): RoomState {
   }
   const acc = [...s.outcomes, beatOutcome];
 
-  // A JOGADA decide o mapa: fecho cada mapa pela SUA média de beats NELE, com a
-  // MESMA régua/seed do card (resolveMapFromPlay) → o placar vivo == resultado.
+  // O PLACAR VIVO decide o mapa (O0-30): se o último beat fechou (13-x), é
+  // esse; senão os rounds que faltam são jogados a partir do placar vivo com a
+  // chance por round da SUA jogada no mapa (closeMapFromLive) — 12-12 vira
+  // prorrogação distribuída. Nunca encolhe o que o jogador viu.
   const edge = s.cfg.heroOvr - s.cfg.oppStrength;
   const need = Math.ceil(s.cfg.bestOf / 2);
   const mapsIds = s.cfg.mapsIds;
   const allPlay = acc.length ? acc.reduce((a, o) => a + o.value, 0) / acc.length : 0.5;
-  // v17: fechamento FUNDIDO com o placar vivo (nunca encolhe o que o jogador
-  // viu; vencedor segue 100% da jogada).
   const closeMap = (mi: number, play: number, liveMap: [number, number] = [0, 0]) =>
-    mergeMapClose(resolveMapFromPlay(play, edge, s.cfg.matchSeed, mi), liveMap);
+    closeMapFromLive(play, edge, s.cfg.matchSeed, mi, liveMap);
   const mapIdAt = (mi: number): MapId => mapsIds[Math.min(mi, Math.max(0, mapsIds.length - 1))] ?? 'mirage';
 
   if (isLastBeat(s)) {
@@ -414,6 +467,7 @@ export function advance(s: RoomState): RoomState {
     const closed = [...s.closedMaps];
     let sy = s.live.seriesScore[0], st = s.live.seriesScore[1];
     const cm = closeMap(beat.mapIndex, mapPlayOf(acc, s.beats, beat.mapIndex, allPlay), s.live.mapScore);
+    const otLine = cm.overtimes > 0 ? [overtimeLine(cm.won, cm.score, cm.overtimes)] : [];
     closed.push({ map: mapIdAt(beat.mapIndex), score: cm.score, won: cm.won });
     if (cm.won) sy++; else st++;
     let mi = beat.mapIndex + 1;
@@ -429,6 +483,7 @@ export function advance(s: RoomState): RoomState {
       outcomes: acc,
       closedMaps: closed,
       live: { mapScore: cm.score, seriesScore: [sy, st], mapIndex: beat.mapIndex },
+      interlude: otLine.length ? { bridged: [0, 0], lines: otLine, mapClosed: null } : s.interlude,
       final: { outcomes: acc, liveMaps: closed },
     };
   }
@@ -437,13 +492,14 @@ export function advance(s: RoomState): RoomState {
 
   // TRANSIÇÃO DE MAPA: fecha o mapa que acabou pela sua jogada nele.
   if (nb.mapIndex > beat.mapIndex) {
-    const { won, score } = closeMap(beat.mapIndex, mapPlayOf(acc, s.beats, beat.mapIndex, allPlay), s.live.mapScore);
+    const { won, score, overtimes } = closeMap(beat.mapIndex, mapPlayOf(acc, s.beats, beat.mapIndex, allPlay), s.live.mapScore);
     const newSeries: [number, number] = won
       ? [s.live.seriesScore[0] + 1, s.live.seriesScore[1]]
       : [s.live.seriesScore[0], s.live.seriesScore[1] + 1];
+    const otTag = overtimes > 0 ? (overtimes > 1 ? ` após ${overtimes} prorrogações` : ' na prorrogação') : '';
     const closeLine = won
-      ? `Vocês fecharam o mapa ${score[0]}–${score[1]} — série ${newSeries[0]}–${newSeries[1]}.`
-      : `Eles levaram o mapa ${score[1]}–${score[0]} — série ${newSeries[0]}–${newSeries[1]}.`;
+      ? `Vocês fecharam o mapa ${score[0]}–${score[1]}${otTag} — série ${newSeries[0]}–${newSeries[1]}.`
+      : `Eles levaram o mapa ${score[1]}–${score[0]}${otTag} — série ${newSeries[0]}–${newSeries[1]}.`;
     const closed = [...s.closedMaps, { map: mapIdAt(beat.mapIndex), score, won }];
 
     if (newSeries[0] >= need || newSeries[1] >= need) {
@@ -462,8 +518,7 @@ export function advance(s: RoomState): RoomState {
 
     // série segue: abre o próximo mapa (bridge só a ABERTURA, sem novo fechamento).
     const openLive: LiveScore = { mapScore: [0, 0], seriesScore: newSeries, mapIndex: nb.mapIndex };
-    const nbLastOfMap = s.idx + 2 >= s.beats.length || s.beats[s.idx + 2].mapIndex !== nb.mapIndex;
-    const bridge = bridgeToBeat(openLive, nb, null, s.momentum, edge, s.cfg.matchSeed, mapsIds, nbLastOfMap);
+    const bridge = bridgeToBeat(openLive, nb, null, s.momentum, edge, s.cfg.matchSeed, mapsIds, beatsLeftInMap(s.beats, s.idx + 1));
     return {
       ...s,
       phase: 'decide',
@@ -486,7 +541,7 @@ export function advance(s: RoomState): RoomState {
   const youWon = inClutch
     ? beatOutcome.result === 'success'
     : locked.outcome.result === 'success' || locked.outcome.result === 'partial';
-  const bridge = bridgeToBeat(s.live, nb, youWon, s.momentum, edge, s.cfg.matchSeed, mapsIds, false);
+  const bridge = bridgeToBeat(s.live, nb, youWon, s.momentum, edge, s.cfg.matchSeed, mapsIds, beatsLeftInMap(s.beats, s.idx + 1));
   return {
     ...s,
     phase: 'decide',
@@ -516,7 +571,11 @@ export function finishSeries(
   const summary = summarizeMoments(final.outcomes);
   // Decisões (±9) + EXECUÇÃO nos minigames (±4.5/−1.5) movem o herói no sim de
   // verdade — jogou bem os momentos-chave, o rating sobe; jogou mal, cai.
-  const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg);
+  // + IMPACTO (O1-44, ±4): os frags/aberturas que o estilo rendeu contam no
+  // rating — antes os frags extras do agressivo sumiam e o seguro dominava
+  // vitória E rating.
+  const impact = clamp((impactPerBeat(summary, final.outcomes.length) - IMPACT_REF) * IMPACT_OVR, -6, 6);
+  const momentBoost = (summary.score - 0.5) * 18 + execBoostOvr(summary.execAvg) + impact;
   const userTeam = buildUserTeam(save, prep.effAttrs, momentBoost, 'user');
   const oppTeam: TTeam = { ...oppStored, wins: 0, losses: 0, roundDiff: 0, status: 'alive', noEdge: true };
   const maps = final.liveMaps && final.liveMaps.length
@@ -541,7 +600,9 @@ export function skipRest(s: RoomState): RoomState {
     const opt = b.moment.options.find((o) => o.style === 'smart') ?? b.moment.options[0];
     const seed = (s.cfg.matchSeed ^ ((i + 1) * 0x9e3779b1)) >>> 0;
     const eff = clamp(s.cfg.effAttrs[opt.attr] + planBiasOf(s, opt) + (s.cfg.grudge ?? 0), 1, 20);
-    acc.push(resolveMoment(b.moment, opt, eff, s.cfg.oppStrength, makeRng(seed)));
+    // no automático não há Leitura: o confronto é o esperado pela tendência.
+    const counter = counterDeltaOf(opt.style, null, s.cfg.oppLean ?? EVEN_POSTURE);
+    acc.push(resolveMoment(b.moment, opt, eff, s.cfg.oppStrength, makeRng(seed), counter));
   }
   return { ...s, phase: 'done', pending: null, outcomes: acc, final: { outcomes: acc } };
 }

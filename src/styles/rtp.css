@@ -900,6 +900,8 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-seg.k-skill.pos { color: var(--rtp-win); border-color: color-mix(in srgb, var(--rtp-win) 35%, transparent); }
 .rtp .rtp-seg.k-style.pos { color: var(--rtp-signal); } .rtp .rtp-seg.k-style.neg { color: var(--rtp-warn); }
 .rtp .rtp-seg.k-opp { color: var(--rtp-loss); }
+/* O1-44: confronto com a postura do adversário (lida ou esperada) */
+.rtp .rtp-seg.k-read.pos { color: var(--rtp-clutch); } .rtp .rtp-seg.k-read.neg { color: var(--rtp-warn); }
 .rtp .rtp-seg.k-cond.pos { color: var(--rtp-win); } .rtp .rtp-seg.k-cond.neg { color: var(--rtp-loss); }
 
 .rtp .rtp-lockin {
@@ -1083,6 +1085,7 @@ html:has(main.page-rtp) { background: #070b11; }
 .rtp .rtp-read-btn { cursor: pointer; transition: transform .14s var(--rtp-ease), box-shadow .14s; }
 .rtp .rtp-read-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 0 16px color-mix(in srgb, var(--rtp-clutch) 32%, transparent); }
 .rtp .rtp-read-btn:disabled { opacity: .45; cursor: not-allowed; }
+.rtp .rtp-read-lean { font-family: var(--rtp-mono); font-size: .68rem; color: var(--rtp-ink-dim); align-self: center; }
 .rtp .rtp-read-active { border-color: var(--rtp-clutch); text-transform: none; animation: rtp-pop .3s var(--rtp-ease); }
 
 /* glow ambiente de momentum */
