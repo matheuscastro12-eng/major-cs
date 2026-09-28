@@ -1282,3 +1282,20 @@ body:has(.gs) .patch-notes-trigger { display: none !important; }
   .gs-content, .gs-pop, .gs-palette, .gs-peek, .gs-more, .gs-navitem[aria-current='page']::after { animation: none; }
   .gs-next__go::after { display: none; }
 }
+
+/* ════ ALVOS DE TOQUE (celular / ponteiro grosso) ═════════════════════════
+   Mínimo de 44 px (--tap) nos controles do shell. Vem no fim do arquivo para
+   vencer os tamanhos compactos do bloco do celular (ex.: busca 34×34). */
+@media (max-width: 1023px), (pointer: coarse) {
+  .gs-top .gs-iconbtn,
+  .gs-top .gs-searchpill,
+  .gs-top .gs-bell { width: var(--tap); min-width: var(--tap); height: var(--tap); min-height: var(--tap); flex-shrink: 0; }
+  .gs--focus .gs-top__home,
+  .gs--immersive .gs-top__home { width: var(--tap); height: var(--tap); }
+  .gs-tab { min-height: var(--tap); }
+  .gs-next__pend { min-width: var(--tap); }
+  /* Ultimate/Online no shell: abas de modo (Rivals/Amistoso/Gauntlet) e botões */
+  .gs .ut-in-shell .ut-tabs button,
+  .gs .ut-in-shell .ut-btn,
+  .gs .ut-in-shell .ut-outbtn { min-height: var(--tap); }
+}

@@ -116,3 +116,11 @@
 .home-steps li::before { content: counter(st); grid-row: span 2; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--c-brand) 18%, transparent); color: var(--c-brand-strong); font-weight: 800; font-size: var(--fs-2); }
 .home-steps b { font-family: var(--font-title); text-transform: uppercase; letter-spacing: 0.06em; }
 .home-steps span { color: var(--c-ink-dim); font-size: var(--fs-2); }
+
+/* alvos de toque no celular: linhas do Diário e links de texto com 44 px de
+   área clicável (o padding vertical compensado não muda o layout) */
+@media (max-width: 1023px), (pointer: coarse) {
+  .home-daily { min-height: var(--tap); }
+  .home-link,
+  .home-skip { display: inline-flex; align-items: center; min-height: var(--tap); margin-block: -12px; }
+}
