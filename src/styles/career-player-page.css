@@ -1146,3 +1146,102 @@
 .pp-focus-btn em { font-style: normal; margin-left: 5px; color: var(--em-green); font-size: 0.68rem; }
 .pp-focus-reco { display: block; font-size: 0.58rem; letter-spacing: 0.5px; color: var(--em-gold); text-transform: uppercase; margin-top: 2px; }
 .pp-focus-hint { margin: 8px 0 0; font-size: 0.7rem; color: var(--em-muted); line-height: 1.4; }
+
+/* ════ Perfil no padrão do shell (referência car-perfil) ═════════════════════
+   Cabeçalho: avatar, nome, ficha e OVR / Forma / Valor. Aba Perfil: atributos
+   1–20 em 3 colunas (Mecânica, Mental, Físico). Só tokens do design system. */
+.gs .pp-page { max-width: none; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+/* no shell as abas estão na subnav: o corpo não é mais a "folha" das abas */
+.gs .pp-body { padding: 0; background: none; border: 0; border-radius: 0; min-height: 0; }
+.pp-fm-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-5) var(--sp-6);
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
+  border-radius: var(--rad-3);
+  color: var(--c-ink);
+}
+.pp-fm-head .pp-back { position: static; flex-shrink: 0; }
+.pp-fm-avatar {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--c-brand);
+  overflow: hidden;
+  background: var(--c-surface-2);
+}
+.pp-fm-avatar > * { border-radius: 50%; }
+.pp-fm-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pp-fm-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+.pp-fm-name h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-7);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.pp-fm-real { color: var(--c-ink-dim); font-size: var(--fs-5); }
+.pp-fm-meta { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; color: var(--c-ink-dim); font-size: var(--fs-3); }
+.pp-fm-role { color: var(--c-brand-strong); font-weight: 800; }
+.pp-fm-cc, .pp-fm-team { display: inline-flex; align-items: center; gap: 6px; }
+.pp-fm-kpis { margin: 0; display: flex; gap: var(--sp-6); flex-shrink: 0; }
+.pp-fm-kpi { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 64px; }
+.pp-fm-kpi dt { color: var(--c-ink-faint); font-size: var(--fs-2); font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.pp-fm-kpi dd { margin: 0; font-family: var(--font-display); font-size: var(--fs-7); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.pp-fm-kpi--ovr dd { color: var(--c-brand-strong); }
+
+.pp-fm-scale { color: var(--c-ink-faint); font-size: var(--fs-2); }
+.pp-fm-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-6); padding: var(--sp-2) 0; }
+.pp-fm-col ul { margin: 0; padding: 0; list-style: none; }
+.pp-fm-col__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--c-line);
+  color: var(--c-ink);
+  font-family: var(--font-title, var(--font-display));
+  font-size: var(--fs-3);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.pp-fm-col__head svg { color: var(--c-brand); }
+.pp-fm-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 28px;
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+  border-bottom: 1px solid var(--c-line-soft, var(--c-line));
+  font-size: var(--fs-3);
+}
+.pp-fm-row__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-fm-row__bar { height: 6px; border-radius: 3px; background: var(--c-surface-2); overflow: hidden; }
+.pp-fm-row__bar i { display: block; height: 100%; border-radius: inherit; background: var(--c-attr-3); }
+.pp-fm-row__bar[data-band='5'] i { background: var(--c-attr-5); }
+.pp-fm-row__bar[data-band='4'] i { background: var(--c-attr-4); }
+.pp-fm-row__bar[data-band='2'] i { background: var(--c-attr-2); }
+.pp-fm-row__bar[data-band='1'] i { background: var(--c-attr-1); }
+
+@media (max-width: 1100px) {
+  .pp-fm-attrs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .pp-fm-head { flex-wrap: wrap; gap: var(--sp-4); padding: var(--sp-4); }
+  .pp-fm-id { flex: 1 1 180px; }
+  .pp-fm-name h1 { font-size: var(--fs-6); }
+  .pp-fm-kpis { width: 100%; justify-content: space-around; gap: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--c-line); }
+  .pp-fm-kpi dd { font-size: var(--fs-6); }
+  .pp-fm-attrs { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+}

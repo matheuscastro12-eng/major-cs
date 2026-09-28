@@ -82,7 +82,7 @@ import {
   Medal, Network, PenLine, RotateCcw, ScrollText, Search, Shield, ShieldHalf, Sparkles, Star, Swords, Target,
   Trophy, UserRound, Users, Wallet,
 } from 'lucide-react';
-import { CareerPlayerPage } from './career/CareerPlayerPage';
+import { CareerPlayerPage, PLAYER_TABS, type PlayerTab } from './career/CareerPlayerPage';
 import { CareerTeamPage } from './career/CareerTeamPage';
 // PlayerLink: usado pela SquadTab; import movido pra page.
 import { playerOrgId, playerRuntimeId } from '../state/career-player-route';
@@ -2540,6 +2540,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const [promoting, setPromoting] = useState<string | null>(null); // prospecto escolhendo quem sai do elenco
   const [playerRouteId, setPlayerRouteId] = useState<string | null>(() => parseCareerPlayerId());
   const [teamRouteId, setTeamRouteId] = useState<string | null>(() => parseCareerTeamId());
+  // aba do perfil de jogador (subnav do shell); volta pra "Perfil" a cada jogador
+  const [ppTabFor, setPpTabFor] = useState<{ id: string | null; tab: PlayerTab }>({ id: null, tab: 'profile' });
+  const ppTab: PlayerTab = ppTabFor.id === playerRouteId ? ppTabFor.tab : 'profile';
   const [t20Mode, setT20Mode] = useState<'season' | 'career'>('season'); // Top 20: temporada ou carreira
   const [newsCat, setNewsCat] = useState<NewsCat | 'all'>('all'); // filtro da Inbox
   const [vrsMode, setVrsMode] = useState<'regiao' | 'geral'>('geral'); // ranking VRS: por região ou geral
@@ -6577,6 +6580,23 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     }
     return out.slice(0, 12);
   };
+  // Perfil de jogador/time aberto: a sidebar, o breadcrumb e a subnav refletem
+  // o perfil, não a seção de onde se veio. Jogador do elenco → Time › Elenco;
+  // da academia → Mercado › Academia; de outro time → Mercado › Transferências.
+  // Time → Competições › Classificação e chave.
+  const routePlayer = playerRouteId ? resolvePlayerById(playerRouteId) : null;
+  const routeTeam = !playerRouteId && teamRouteId ? resolveTeamById(teamRouteId) : null;
+  const routeSection: string | null = (() => {
+    if (routePlayer) {
+      const oid = playerOrgId(routePlayer.id);
+      if (save.academy?.some((a) => a.id === oid) || save.academyTeam?.some((a) => a.id === oid)) return 'ac';
+      const own = save.squad.some((sig) => { const f = findSigning(sig); return !!f && (f.player.id === oid || sig.playerId === oid); }) || !!save.youth?.[oid];
+      return own ? 'sq' : 'tf';
+    }
+    return routeTeam ? 'cl' : null;
+  })();
+  const routeNav = routeSection ? NAV.flatMap((g) => g.items.map((it) => ({ it, g }))).find((x) => x.it.id === routeSection) : undefined;
+  const routeCrumbs = routeNav ? [{ label: routeNav.g.label }, { label: routeNav.it.label, onGo: () => goSection(routeNav.it.id) }] : undefined;
   const careerTools: ShellTool[] = [
     { id: 'howto', label: ct('Como jogar'), icon: BookOpen, onClick: openHowToPlay },
     { id: 'tour', label: ct('Tutorial'), icon: CircleHelp, onClick: () => setShowOnb(true) },
@@ -6597,11 +6617,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         colors: save.org?.colors,
       }}
       nav={NAV}
-      active={activeSection}
+      active={routeSection ?? activeSection}
+      crumbs={routeCrumbs}
+      title={routePlayer?.nick ?? routeTeam?.name}
       onNav={goSection}
-      tabs={shellTabs}
-      activeTab={shellActiveTab}
-      onTab={onShellTab}
+      tabs={routePlayer ? PLAYER_TABS.map((t) => ({ id: t.id, label: ct(t.label), icon: t.icon })) : routeTeam ? undefined : shellTabs}
+      activeTab={routePlayer ? ppTab : shellActiveTab}
+      onTab={routePlayer ? (id) => setPpTabFor({ id: playerRouteId, tab: id as PlayerTab }) : onShellTab}
       mobileNav={['ov', 'in', 'sq', 'cl']}
       next={shellNext}
       search={careerSearch}
@@ -6822,6 +6844,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               igl: p.igl,
               role: (save.roles?.[oid] ?? p.role) as Role,
             })}
+            tab={ppTab}
+            onTab={(t) => setPpTabFor({ id: playerRouteId, tab: t })}
           />
         );
       })()}
