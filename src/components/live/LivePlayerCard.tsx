@@ -101,7 +101,7 @@ export function LivePlayerCard({ agent, team, state, align, isUser = false }: Pr
               }}
             />
           </div>
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.74rem', fontWeight: 700, minWidth: 26, textAlign: 'right' }}>
+          <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.74rem', fontWeight: 700, minWidth: 26, textAlign: 'right' }}>
             {hp}
           </span>
         </div>
@@ -113,14 +113,14 @@ export function LivePlayerCard({ agent, team, state, align, isUser = false }: Pr
 
         {/* KDA + money */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.66rem' }}>
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', color: 'rgba(255,255,255,0.8)' }}>
+          <span style={{ fontFamily: 'var(--font-num)', color: 'rgba(255,255,255,0.8)' }}>
             <b style={{ color: '#5ed85e' }}>{k}</b>
             <span style={{ color: 'rgba(255,255,255,0.3)' }}> · </span>
             <span>{a}</span>
             <span style={{ color: 'rgba(255,255,255,0.3)' }}> · </span>
             <b style={{ color: '#ff8a8a' }}>{d}</b>
           </span>
-          <span style={{ color: '#bfd14d', fontFamily: '"JetBrains Mono", monospace', fontWeight: 700 }}>
+          <span style={{ color: '#bfd14d', fontFamily: 'var(--font-num)', fontWeight: 700 }}>
             ${money}
           </span>
         </div>

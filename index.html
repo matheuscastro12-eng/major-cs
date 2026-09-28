@@ -6,7 +6,7 @@
     <link rel="apple-touch-icon" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- theme-color = --c-surface-0 (src/styles/tokens.css) -->
-    <meta name="theme-color" content="#090d13" />
+    <meta name="theme-color" content="#0b0f14" />
     <!-- PWA: instalável na home do celular. iOS ignora o manifest pra isso e
          precisa das metas apple-* abaixo. -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -15,8 +15,8 @@
     <meta name="apple-mobile-web-app-title" content="RtMajor" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Road to Major · simulador de CS de todas as eras</title>
-    <!-- Fontes do design system (três papéis): Oswald = display/placar, Inter =
-         UI, JetBrains Mono = números tabulares. display=swap mostra o texto na
+    <!-- Fontes do design system: Barlow Condensed = display/placar/cabeçalho,
+         Barlow = UI e números (tabulares). display=swap mostra o texto na
          fonte de sistema na hora; a folha entra sem bloquear a renderização
          (preload + media=print trocado no onload). Nenhum @import no CSS. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -24,18 +24,18 @@
     <link
       rel="preload"
       as="style"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=Barlow+Condensed:wght@500;600;700;800&display=swap"
     />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=Barlow+Condensed:wght@500;600;700;800&display=swap"
       media="print"
       onload="this.media='all'"
     />
     <noscript>
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=Barlow+Condensed:wght@500;600;700;800&display=swap"
       />
     </noscript>
     <meta name="description" content="Road to Major: monte o time dos sonhos com lendas do CS 1.6, Source, CS:GO e CS2 e vença um Major completo em MD3." />

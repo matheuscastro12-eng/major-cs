@@ -103,7 +103,7 @@ export function PlayerAvatar({ nick, size = 52, coach = false }: { nick: string;
           fontWeight: 800,
           letterSpacing: '0.04em',
           textShadow: '0 1px 2px rgba(0,0,0,0.35)',
-          fontFamily: '"JetBrains Mono", monospace',
+          fontFamily: 'var(--font-num)',
         }}
       >
         {initials}

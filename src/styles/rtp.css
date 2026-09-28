@@ -128,7 +128,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 /* ── Criação ──────────────────────────────────────────────────────────────── */
 .rtp .rtp-create-head { margin-bottom: 18px; }
 .rtp .rtp-create-head h1 {
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-weight: 800;
   font-size: 1.9rem;
   letter-spacing: 0.5px;
@@ -261,7 +261,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
   margin-bottom: 12px;
 }
 .rtp .rtp-preview-ovr b {
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 2.6rem;
   line-height: 1;
   color: var(--em-gold);
@@ -284,7 +284,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
   border: none;
   background: var(--em-gold);
   color: #1a1205;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-weight: 800;
   font-size: 1rem;
   letter-spacing: 0.5px;
@@ -298,7 +298,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 /* ── Hub ──────────────────────────────────────────────────────────────────── */
 
 .rtp .rtp-hero-nick {
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-weight: 800;
   font-size: 1.5rem;
   line-height: 1.05;
@@ -339,7 +339,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
   border-radius: 6px;
   background: var(--em-panel-2);
   border: 1px solid var(--em-border);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-num);
   font-weight: 700;
   font-size: 0.82rem;
 }
@@ -440,11 +440,11 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
   margin: 18px 0 12px; text-align: center;
 }
 .rtp .rtp-vs-tag {
-  font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 800; font-size: 2rem;
+  font-family: var(--font-display); font-weight: 800; font-size: 2rem;
 }
 .rtp .rtp-vs-x { color: var(--em-muted); font-weight: 700; font-size: 0.9rem; }
 .rtp .rtp-vs-name {
-  font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 700; font-size: 1.3rem;
+  font-family: var(--font-display); font-weight: 700; font-size: 1.3rem;
 }
 .rtp .rtp-match-maps { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
 .rtp .rtp-map-chip {
@@ -473,14 +473,14 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 .rtp .rtp-dot.on { background: var(--em-gold); }
 .rtp .rtp-moment-kicker { text-align: center; color: var(--em-muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.6px; }
 .rtp .rtp-moment-title {
-  text-align: center; font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 800;
+  text-align: center; font-family: var(--font-display); font-weight: 800;
   font-size: 1.7rem; margin: 4px 0 8px;
 }
 .rtp .rtp-moment-sit { text-align: center; color: var(--em-muted); margin: 0 0 18px; line-height: 1.5; }
 .rtp .rtp-moment-opts { display: flex; flex-direction: column; gap: 10px; }
 
 .rtp .rtp-outcome-badge {
-  display: inline-block; font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 800;
+  display: inline-block; font-family: var(--font-display); font-weight: 800;
   font-size: 1.6rem; letter-spacing: 1px; margin-bottom: 8px;
 }
 .rtp .r-success .rtp-outcome-badge { color: var(--rtp-win); }
@@ -496,8 +496,8 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 }
 .rtp .rtp-result-banner.win { background: linear-gradient(135deg, color-mix(in srgb, var(--rtp-win) 18%, var(--em-panel)), var(--em-panel)); border-color: color-mix(in srgb, var(--rtp-win) 40%, transparent); }
 .rtp .rtp-result-banner.loss { background: linear-gradient(135deg, color-mix(in srgb, var(--rtp-loss) 16%, var(--em-panel)), var(--em-panel)); border-color: color-mix(in srgb, var(--rtp-loss) 36%, transparent); }
-.rtp .rtp-result-verdict { font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 800; font-size: 1.4rem; letter-spacing: 1px; }
-.rtp .rtp-result-score { font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 800; font-size: 2.8rem; line-height: 1; margin: 4px 0; }
+.rtp .rtp-result-verdict { font-family: var(--font-display); font-weight: 800; font-size: 1.4rem; letter-spacing: 1px; }
+.rtp .rtp-result-score { font-family: var(--font-display); font-weight: 800; font-size: 2.8rem; line-height: 1; margin: 4px 0; }
 .rtp .rtp-result-maps { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
 .rtp .rtp-result-map { font-size: 0.74rem; padding: 2px 8px; border-radius: 4px; background: var(--em-panel-2); }
 .rtp .rtp-result-map.w { color: var(--rtp-win); }
@@ -509,7 +509,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
   padding: 14px 16px; border-radius: 10px; margin-bottom: 14px;
   background: var(--em-panel); border: 1px solid var(--em-border);
 }
-.rtp .rtp-hero-line-rating { font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 800; font-size: 2.4rem; line-height: 1; }
+.rtp .rtp-hero-line-rating { font-family: var(--font-display); font-weight: 800; font-size: 2.4rem; line-height: 1; }
 .rtp .rtp-hero-line-meta { font-size: 0.92rem; }
 
 .rtp .rtp-scoreboard { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -532,7 +532,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 .rtp .rtp-nextmatch-btn {
   padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer;
   background: var(--em-gold); color: #1a1205; font-weight: 800;
-  font-family: var(--font-cond, 'Oswald', sans-serif); letter-spacing: 0.5px; text-transform: uppercase;
+  font-family: var(--font-display); letter-spacing: 0.5px; text-transform: uppercase;
   white-space: nowrap;
 }
 .rtp .rtp-nextmatch-btn:hover { filter: brightness(1.08); }
@@ -590,7 +590,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
 .rtp .rtp-ct-badge {
   width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 800; font-size: 0.9rem; color: #fff;
+  font-family: var(--font-display); font-weight: 800; font-size: 0.9rem; color: #fff;
 }
 /* logo dentro do badge do contrato/oferta: encaixa sem distorcer (bug). */
 .rtp .rtp-ct-badge img { width: 100%; height: 100%; object-fit: contain; padding: 6px; background: rgba(0,0,0,.22); }
@@ -606,7 +606,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
   display: flex; flex-direction: column; gap: 10px;
 }
 .rtp .rtp-offer-head { display: flex; align-items: center; gap: 10px; }
-.rtp .rtp-offer-org b { display: block; font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 700; font-size: 1.1rem; }
+.rtp .rtp-offer-org b { display: block; font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; }
 .rtp .rtp-offer-org span { color: var(--em-muted); font-size: 0.78rem; }
 .rtp .rtp-offer-up { color: var(--em-gold); font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
 .rtp .rtp-offer-note { color: var(--em-muted); font-size: 0.82rem; font-style: italic; margin: 0; line-height: 1.4; }
@@ -646,7 +646,7 @@ body:has(main.page-rtp) { background: var(--c-surface-0); background-image: none
   display: inline-flex; align-items: center; gap: 5px;
 }
 .rtp-modal-title {
-  font-family: var(--font-cond, 'Oswald', sans-serif); font-weight: 800;
+  font-family: var(--font-display); font-weight: 800;
   font-size: 1.5rem; margin: 0 0 10px;
 }
 .rtp-modal-body { color: var(--em-muted, #8a8a8a); line-height: 1.55; margin: 0 0 16px; }

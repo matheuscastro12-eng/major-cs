@@ -1,6 +1,6 @@
 # Design system "Broadcast Desk"
 
-O MAJOR//CS é uma transmissão de CS. Placar, lower third, faixa AO VIVO e os
+O Road to Major é uma transmissão de CS. Placar, lower third, faixa AO VIVO e os
 lados CT (azul) e T (âmbar) são a gramática de todos os modos. Este documento
 diz o que usar e quando. A vitrine viva está em **`/design`**
 (`src/pages/DesignScreen.tsx`): tokens com contraste medido, escala e todos os

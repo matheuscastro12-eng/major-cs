@@ -29,13 +29,13 @@ export function drawShareCard(t: Tournament, user: TTeam, placementLabel: string
   const isChampion = t.championId === 'user';
 
   // logo do jogo
-  ctx.font = '700 34px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 34px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
-  ctx.fillText('MAJOR', 40, 64);
+  ctx.fillText('ROAD TO', 40, 64);
   ctx.fillStyle = '#61a8dd';
-  ctx.fillText('//CS', 158, 64);
-  ctx.font = '500 16px Inter, Arial, sans-serif';
+  ctx.fillText('MAJOR', 40 + ctx.measureText('ROAD TO ').width, 64);
+  ctx.font = '500 16px Barlow, Arial, sans-serif';
   ctx.fillStyle = '#8b96a3';
   ctx.fillText(t.name, 40, 90);
 
@@ -44,26 +44,26 @@ export function drawShareCard(t: Tournament, user: TTeam, placementLabel: string
   ctx.font = '120px serif';
   ctx.fillText(isChampion ? '🏆' : '🥀', W / 2, 230);
 
-  ctx.font = '700 56px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 56px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = isChampion ? '#d8a943' : '#f06c6c';
   ctx.fillText(isChampion ? 'CAMPEÃO DO MAJOR' : placementLabel.toUpperCase(), W / 2, 310);
 
-  ctx.font = '700 36px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 36px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.fillText(user.name.toUpperCase(), W / 2, 360);
 
   // elenco
-  ctx.font = '600 22px Inter, Arial, sans-serif';
+  ctx.font = '600 22px Barlow, Arial, sans-serif';
   ctx.fillStyle = '#dfe5ec';
   ctx.fillText(user.players.map((p) => p.nick).join(' · '), W / 2, 410);
 
-  ctx.font = '500 18px Inter, Arial, sans-serif';
+  ctx.font = '500 18px Barlow, Arial, sans-serif';
   ctx.fillStyle = '#8b96a3';
   const coachLine = `coach ${user.coach.nick}` + (mvpNick ? `  ·  MVP do torneio: ${mvpNick}` : '');
   ctx.fillText(coachLine, W / 2, 444);
 
   // rodapé
-  ctx.font = '600 17px Inter, Arial, sans-serif';
+  ctx.font = '600 17px Barlow, Arial, sans-serif';
   ctx.fillStyle = '#61a8dd';
   ctx.fillText('roadtomajor.com.br · monte o seu time dos sonhos', W / 2, 510);
 

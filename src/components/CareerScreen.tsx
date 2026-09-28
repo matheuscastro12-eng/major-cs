@@ -4828,7 +4828,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     </div>
                     {!rejected && (
                       <>
-                        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: o.chance >= 0.55 ? 'var(--em-green)' : o.chance >= 0.3 ? 'var(--em-gold)' : 'var(--em-red)' }}>
+                        <b style={{ fontFamily: 'var(--font-num)', color: o.chance >= 0.55 ? 'var(--em-green)' : o.chance >= 0.3 ? 'var(--em-gold)' : 'var(--em-red)' }}>
                           {Math.round(o.chance * 100)}%
                         </b>
                         <Button variant="primary" size="sm" onClick={() => tryApply(o)}>{ct('Candidatar-se')}</Button>
@@ -8137,7 +8137,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
                     <Flag cc={r.country} /> {r.nick}
                     <span className={`role-pill ${r.role}`}>{r.role}</span>
                   </div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 3, fontSize: '0.74rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 3, fontSize: '0.74rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
                     <span>OVR <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{r.ovr}</b></span>
                     <span>{ct('salário')} <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{formatMoney(r.wage)}</b></span>
                   </div>
@@ -8210,7 +8210,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {ct('Custo renovações')}
             </span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: 'var(--font-num)', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
               {formatMoney(cost)}
             </b>
           </div>
@@ -8219,7 +8219,7 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
             <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {ct('Caixa')}
             </span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: 'var(--c-win)', fontSize: '1.05rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '1.05rem', fontWeight: 900 }}>
               {formatMoney(budget)}
             </b>
           </div>
@@ -8324,7 +8324,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
             <div style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--em-text)' }}>
               {offer.nick}
             </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+            <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
               OVR <b style={{ color: 'var(--em-gold)', fontWeight: 900 }}>{offer.ovr}</b>
             </div>
           </div>
@@ -8343,7 +8343,7 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
           <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
             {ct('Valor da proposta')}
           </div>
-          <b style={{ fontFamily: '"JetBrains Mono", monospace', color: 'var(--c-win)', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
+          <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '1.5rem', fontWeight: 900, marginTop: 2 }}>
             {formatMoney(offer.fee)}
           </b>
         </div>
@@ -8767,7 +8767,7 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
                 {ct(e.blurb)}
               </div>
               <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8 }}>
-                <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
+                <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
                   💰 {formatMoney(e.budget)}
                 </span>
                 <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>{ct('Assumir')} →</span>
@@ -8875,7 +8875,7 @@ function TeamPickCard({
         </div>
         <div style={{ textAlign: 'right', lineHeight: 1.1 }}>
           <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>OVR</div>
-          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.1rem', color: 'var(--em-gold)', fontWeight: 900 }}>
+          <div style={{ fontFamily: 'var(--font-num)', fontSize: '1.1rem', color: 'var(--em-gold)', fontWeight: 900 }}>
             {ovr}
           </div>
         </div>
@@ -8895,7 +8895,7 @@ function TeamPickCard({
                 color: 'var(--em-text)',
                 border: '1px solid var(--em-border)',
                 borderRadius: 8,
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'var(--font-num)',
                 fontSize: '0.62rem',
                 fontWeight: 800,
                 padding: '0 4px',
@@ -8910,7 +8910,7 @@ function TeamPickCard({
 
       {/* Footer: budget + CTA */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 2 }}>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.88rem', color: 'var(--c-win)', fontWeight: 800 }}>
+        <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.88rem', color: 'var(--c-win)', fontWeight: 800 }}>
           💰 {formatMoney(budget)}
         </span>
         <span style={{ fontSize: '0.72rem', color: 'var(--em-gold)', fontWeight: 700 }}>
@@ -9050,7 +9050,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
                           <span style={{ ...tierBadgeStyle(tier), padding: '1px 6px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.5px' }}>
                             TIER {tier}
                           </span>
-                          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.74rem', color: 'var(--em-muted)' }}>
+                          <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.74rem', color: 'var(--em-muted)' }}>
                             OVR {ovr}
                           </span>
                         </div>
@@ -9092,7 +9092,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
 
                     {/* Footer: budget + CTA */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--em-border)', paddingTop: 8, marginTop: 'auto' }}>
-                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
+                      <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.9rem', color: 'var(--c-win)', fontWeight: 800 }}>
                         💰 {formatMoney(budget)}
                       </span>
                       <span style={{ fontSize: '0.74rem', color: 'var(--em-gold)', fontWeight: 700 }}>
@@ -9340,7 +9340,7 @@ function FoundOrg({ onFound, onExit, founder = false }: { onFound: (org: NonNull
             <div style={{ fontSize: '1rem', fontWeight: 900, color: '#fff', textAlign: 'center' }}>
               {name || ct('Sua Organização')}
             </div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '1px', color: c2, fontFamily: '"JetBrains Mono", monospace' }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '1px', color: c2, fontFamily: 'var(--font-num)' }}>
               {(tag || 'ORG').toUpperCase()}
             </div>
           </div>
@@ -9502,7 +9502,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
               <span className={`role-pill ${player.role}`}>{player.role}</span>
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--em-muted)', marginTop: 2 }}>
-              {ct('Negociando com')} <b style={{ color: 'var(--em-text)' }}>{from.team}</b> · OVR <b style={{ color: 'var(--em-gold)', fontFamily: '"JetBrains Mono", monospace' }}>{playerOvr(player)}</b>
+              {ct('Negociando com')} <b style={{ color: 'var(--em-text)' }}>{from.team}</b> · OVR <b style={{ color: 'var(--em-gold)', fontFamily: 'var(--font-num)' }}>{playerOvr(player)}</b>
             </div>
           </div>
         </header>
@@ -9556,7 +9556,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
                     }}
                   >
                     <Flag cc={p.country} /> {p.nick}
-                    <span style={{ color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem' }}>
+                    <span style={{ color: 'var(--em-muted)', fontFamily: 'var(--font-num)', fontSize: '0.7rem' }}>
                       {formatMoney(playerValue(p))}
                     </span>
                   </button>
@@ -9565,7 +9565,7 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
             </div>
             {swapValue > 0 && (
               <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--em-muted)' }}>
-                {ct('Valor da troca:')} <b style={{ color: 'var(--c-win)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b>
+                {ct('Valor da troca:')} <b style={{ color: 'var(--c-win)', fontFamily: 'var(--font-num)' }}>{formatMoney(swapValue)}</b>
               </div>
             )}
           </div>
@@ -9599,12 +9599,12 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
           />
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, fontSize: '0.86rem', flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--em-muted)' }}>{ct('Dinheiro:')}</span>
-            <b style={{ fontFamily: '"JetBrains Mono", monospace', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
+            <b style={{ fontFamily: 'var(--font-num)', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.1rem', fontWeight: 900 }}>
               {formatMoney(offer)}
             </b>
             {swapValue > 0 && (
               <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem' }}>
-                + troca <b style={{ color: 'var(--c-win)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(effectiveOffer)}</b>
+                + troca <b style={{ color: 'var(--c-win)', fontFamily: 'var(--font-num)' }}>{formatMoney(swapValue)}</b> = oferta total <b style={{ color: 'var(--em-text)', fontFamily: 'var(--font-num)' }}>{formatMoney(effectiveOffer)}</b>
               </span>
             )}
             {overBudget && (
@@ -9714,7 +9714,7 @@ function NegoFigure({ label, value, accent }: { label: string; value: string; ac
       <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
         {label}
       </div>
-      <b style={{ fontFamily: '"JetBrains Mono", monospace', color: accent ?? 'var(--em-text)', fontSize: '0.96rem', fontWeight: 800 }}>
+      <b style={{ fontFamily: 'var(--font-num)', color: accent ?? 'var(--em-text)', fontSize: '0.96rem', fontWeight: 800 }}>
         {value}
       </b>
     </div>
@@ -10238,7 +10238,7 @@ function MarketScreen({
                     color: 'var(--em-text)',
                   }}
                 >
-                  <b style={{ color: isUp ? 'var(--c-win)' : isDown ? 'var(--c-loss)' : 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                  <b style={{ color: isUp ? 'var(--c-win)' : isDown ? 'var(--c-loss)' : 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
                     {isUp ? '▲' : isDown ? '▼' : '▬'} {e.nick}
                   </b>
                   <i style={{ color: 'var(--em-muted)', fontSize: '0.72rem', fontStyle: 'normal' }}>
@@ -10712,7 +10712,7 @@ function HudPill({ label, value, tone, mono }: { label: string; value: string; t
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: mono ? '"JetBrains Mono", monospace' : 'inherit' }}>
+      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: mono ? 'var(--font-num)' : 'inherit' }}>
         {value}
       </b>
     </div>
@@ -10765,7 +10765,7 @@ function SquadRow({
       <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.86rem', fontWeight: 700 }}>
           <Flag cc={player.country} /> {player.nick}
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem', color: accent, fontWeight: 800 }}>
+          <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.78rem', color: accent, fontWeight: 800 }}>
             {playerOvr(player)}
           </span>
         </div>
@@ -10774,7 +10774,7 @@ function SquadRow({
         </div>
       </div>
       <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem', color: 'var(--em-text)', fontWeight: 700 }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.78rem', color: 'var(--em-text)', fontWeight: 700 }}>
           {rightLabel}
         </div>
         {rightHint && (
@@ -10836,10 +10836,10 @@ function CoachRow({
         </div>
       </div>
       <div style={{ textAlign: 'right', minWidth: 60, lineHeight: 1.15 }}>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.92rem', color: selected ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.92rem', color: selected ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>
           {rating}
         </div>
-        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem', color: 'var(--em-muted)' }}>
+        <div style={{ fontFamily: 'var(--font-num)', fontSize: '0.7rem', color: 'var(--em-muted)' }}>
           {formatMoney(fee)}
         </div>
       </div>

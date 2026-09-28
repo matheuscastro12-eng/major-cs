@@ -149,7 +149,7 @@ function Stat({ label, value, tone = 'neutral' }: { label: string; value: number
         borderRadius: 4,
       }}
     >
-      <div style={{ fontSize: '1.4rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: colors[tone] }}>
+      <div style={{ fontSize: '1.4rem', fontWeight: 900, fontFamily: 'var(--font-num)', color: colors[tone] }}>
         {value}
       </div>
       <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2 }}>

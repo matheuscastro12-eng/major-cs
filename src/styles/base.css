@@ -18,6 +18,9 @@ body {
   font-family: var(--font-ui);
   font-size: var(--fs-3);
   line-height: var(--lh-body);
+  /* Barlow com dígitos tabulares no app inteiro: número compara em coluna
+     (rating, dinheiro, placar) sem precisar de fonte mono */
+  font-variant-numeric: tabular-nums;
   min-height: 100vh;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
@@ -25,7 +28,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* ── Headings na escala: display (Oswald) só nos dois níveis de cima ── */
+/* ── Headings na escala: display (Barlow Condensed) só nos dois níveis de cima ── */
 :where(h1, h2, h3, h4, h5, h6) {
   margin: 0 0 var(--sp-3);
   color: var(--c-ink);
@@ -65,7 +68,7 @@ body {
 
 /* ── Números: tabulares onde o jogo mostra número (placar, OVR, dinheiro) ── */
 :where(table, time, output, data, kbd, samp) { font-variant-numeric: tabular-nums; }
-:where(code, kbd, samp, pre) { font-family: var(--font-num); }
+:where(code, kbd, samp, pre) { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; }
 
 /* ── Foco visível: anel só no foco por teclado, igual em todo o app ── */
 :where(:focus-visible) {

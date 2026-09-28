@@ -106,7 +106,7 @@ export function ChampionCelebrationModal({ data, onClose }: Props) {
           }}
         >
           <CareerIcon name="coin" size={16} />
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.2rem', fontWeight: 800, color: accent }}>
+          <span style={{ fontFamily: 'var(--font-num)', fontSize: '1.2rem', fontWeight: 800, color: accent }}>
             {formatMoney(data.prize)}
           </span>
           <span style={{ fontSize: '0.78rem', color: 'var(--em-muted)' }}>em prêmio</span>

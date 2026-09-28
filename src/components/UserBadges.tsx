@@ -66,7 +66,7 @@ export function UserBadges({ badges, size = 'md' }: Props) {
               <CareerIcon name={b.icon} size={iconSize} />
             </span>
             <span style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.1 }}>
-              <b style={{ color: colors.fg, fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, fontSize: fontValue }}>
+              <b style={{ color: colors.fg, fontFamily: 'var(--font-num)', fontWeight: 800, fontSize: fontValue }}>
                 {b.value}
               </b>
               <span style={{ color: 'var(--em-muted)', fontSize: fontLabel, textTransform: 'uppercase', letterSpacing: '0.5px' }}>

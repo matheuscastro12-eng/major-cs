@@ -48,7 +48,7 @@ function StatBar({ label, sub, value, pct, accent, onClick }: {
       <div style={{ flex: 1, height: 9, borderRadius: 5, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${Math.max(2, Math.min(100, pct))}%`, background: accent ?? 'linear-gradient(90deg,#3a6f8f,#5ea8d8)', borderRadius: 5, transition: 'width .3s ease' }} />
       </div>
-      <span style={{ flex: '0 0 auto', minWidth: 42, textAlign: 'right', fontSize: '0.8rem', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace' }}>{value}</span>
+      <span style={{ flex: '0 0 auto', minWidth: 42, textAlign: 'right', fontSize: '0.8rem', fontWeight: 800, fontFamily: 'var(--font-num)' }}>{value}</span>
     </div>
   );
 }
@@ -128,7 +128,7 @@ export function StatsTab({ save, seasonStats, mySquadOids, openPlayerProfile, re
                 <StatBar
                   key={s.id}
                   onClick={() => openById(s.id)}
-                  label={<><span style={{ color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{i + 1}</span> <Flag cc={s.country} /> {s.nick}</>}
+                  label={<><span style={{ color: 'var(--em-muted,#8a99ab)', fontFamily: 'var(--font-num)' }}>{i + 1}</span> <Flag cc={s.country} /> {s.nick}</>}
                   sub={s.teamTag}
                   value={s.rating.toFixed(2)}
                   pct={(s.rating / Math.max(1.2, topRating[0].rating)) * 100}
@@ -145,7 +145,7 @@ export function StatsTab({ save, seasonStats, mySquadOids, openPlayerProfile, re
                 <StatBar
                   key={s.id}
                   onClick={() => openById(s.id)}
-                  label={<><span style={{ color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{i + 1}</span> <Flag cc={s.country} /> {s.nick}</>}
+                  label={<><span style={{ color: 'var(--em-muted,#8a99ab)', fontFamily: 'var(--font-num)' }}>{i + 1}</span> <Flag cc={s.country} /> {s.nick}</>}
                   sub={s.teamTag}
                   value={Math.round(s.adr).toString()}
                   pct={(s.adr / maxAdr) * 100}
@@ -222,7 +222,7 @@ export function StatsTab({ save, seasonStats, mySquadOids, openPlayerProfile, re
                         background: mine ? 'rgba(232,193,112,0.08)' : undefined,
                       }}
                     >
-                      <td style={{ textAlign: 'left', padding: '5px 6px', color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{i + 1}</td>
+                      <td style={{ textAlign: 'left', padding: '5px 6px', color: 'var(--em-muted,#8a99ab)', fontFamily: 'var(--font-num)' }}>{i + 1}</td>
                       <td style={{ textAlign: 'left', padding: '5px 6px' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           <PlayerAvatar nick={s.nick} size={20} />
@@ -231,9 +231,9 @@ export function StatsTab({ save, seasonStats, mySquadOids, openPlayerProfile, re
                         </span>
                       </td>
                       <td style={{ textAlign: 'left', padding: '5px 6px', color: 'var(--em-muted,#8a99ab)' }}>{s.role}</td>
-                      <td style={{ padding: '5px 6px', fontFamily: '"JetBrains Mono", monospace' }}>{s.kd.toFixed(2)}</td>
-                      <td style={{ padding: '5px 6px', fontFamily: '"JetBrains Mono", monospace' }}>{Math.round(s.adr)}</td>
-                      <td style={{ padding: '5px 6px', fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, color: ratingColor(s.rating) }}>{s.rating.toFixed(2)}</td>
+                      <td style={{ padding: '5px 6px', fontFamily: 'var(--font-num)' }}>{s.kd.toFixed(2)}</td>
+                      <td style={{ padding: '5px 6px', fontFamily: 'var(--font-num)' }}>{Math.round(s.adr)}</td>
+                      <td style={{ padding: '5px 6px', fontFamily: 'var(--font-num)', fontWeight: 800, color: ratingColor(s.rating) }}>{s.rating.toFixed(2)}</td>
                     </tr>
                   );
                 })}

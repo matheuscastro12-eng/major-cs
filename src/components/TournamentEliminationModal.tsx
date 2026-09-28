@@ -69,7 +69,7 @@ export function TournamentEliminationModal({ data, onClose }: Props) {
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8, marginTop: 6 }}>
             <span
               style={{
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'var(--font-num)',
                 fontSize: '2.2rem',
                 fontWeight: 800,
                 color: accent,
@@ -94,7 +94,7 @@ export function TournamentEliminationModal({ data, onClose }: Props) {
             }}
           >
             <CareerIcon name="coin" size={13} />
-            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.88rem', fontWeight: 700, color: 'var(--em-text)' }}>
+            <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.88rem', fontWeight: 700, color: 'var(--em-text)' }}>
               {formatMoney(data.prize)}
             </span>
             <span style={{ fontSize: '0.74rem', color: 'var(--em-muted)' }}>de prêmio</span>

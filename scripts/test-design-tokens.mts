@@ -55,12 +55,13 @@ function contrast(vars: Record<string, string>, fg: string, bg: string): number 
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
-const SURFACES = ['--c-surface-0', '--c-surface-1', '--c-surface-2', '--c-surface-3'];
+const SURFACES = ['--c-surface-0', '--c-surface-1', '--c-surface-2', '--c-surface-3', '--c-shell'];
 // tudo que aparece como TEXTO sobre superfície (tags, links, deltas, placar)
 const TEXT_ON_SURFACE = [
   '--c-ink', '--c-ink-dim', '--c-ink-faint',
   '--mode-base', '--mode-rtp', '--mode-carreira', '--mode-ultimate', '--mode-diario', '--mode-online',
   '--c-achievement', '--c-win', '--c-loss', '--c-warn', '--c-epic', '--c-ct', '--c-t', '--c-live',
+  '--c-attr-1', '--c-attr-2', '--c-attr-3', '--c-attr-4', '--c-attr-5',
 ];
 const MODES = ['--mode-base', '--mode-rtp', '--mode-carreira', '--mode-ultimate', '--mode-diario', '--mode-online'];
 
@@ -151,6 +152,7 @@ test('todo token semântico usado existe em tokens.css', () => {
 test('arquivos do design system não têm hexadecimal nem fontSize inline', () => {
   const DS = [
     'src/styles/tokens-legacy.css', 'src/styles/primitives.css', 'src/styles/base.css', 'src/styles/design-screen.css',
+    'src/styles/shell.css',
     ...walk('src/components/ds', ['.tsx', '.ts']), 'src/pages/DesignScreen.tsx',
   ];
   const offenders: string[] = [];

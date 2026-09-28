@@ -629,7 +629,7 @@ export function AcademyTab({
                       >
                         ✏️
                       </span>
-                      <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>{ovr}</b>
+                      <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>{ovr}</b>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: 'var(--em-muted)' }}>
                       <span className={`role-pill ${p.role}`}>{p.role}</span>
@@ -802,7 +802,7 @@ export function AcademyTab({
                           borderTop: '1px solid var(--em-border)',
                         }}
                       >
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', color: i === 0 ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>{i + 1}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', color: i === 0 ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>{i + 1}</td>
                         <td style={{ ...td, textAlign: 'left' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                             {r.isUser ? (
@@ -827,12 +827,12 @@ export function AcademyTab({
                             </span>
                           </span>
                         </td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{r.w}</td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{r.l}</td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', color: r.diff > 0 ? 'var(--c-win)' : r.diff < 0 ? 'var(--c-loss)' : 'var(--em-muted)' }}>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)' }}>{r.w}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)' }}>{r.l}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', color: r.diff > 0 ? 'var(--c-win)' : r.diff < 0 ? 'var(--c-loss)' : 'var(--em-muted)' }}>
                           {r.diff > 0 ? '+' : ''}{r.diff}
                         </td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', fontWeight: 800 }}>{r.pts}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', fontWeight: 800 }}>{r.pts}</td>
                       </tr>
                     );
                   })}
@@ -879,7 +879,7 @@ export function AcademyTab({
                         ▸
                       </span>
                     )}
-                    <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: m.won ? 'var(--c-win)' : 'var(--c-loss)' }}>
+                    <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', fontWeight: 800, color: m.won ? 'var(--c-win)' : 'var(--c-loss)' }}>
                       {m.userScore}–{m.oppScore}
                     </span>
                   </div>
@@ -1098,7 +1098,7 @@ export function AcademyTab({
                       <span style={{ color: 'var(--em-muted)' }}>
                         {ct('Próx split')}
                       </span>
-                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, color: focused ? 'var(--c-win)' : 'var(--em-text)' }}>
+                      <span style={{ fontFamily: 'var(--font-num)', fontWeight: 800, color: focused ? 'var(--c-win)' : 'var(--em-text)' }}>
                         +{expEvo.toFixed(1)} OVR
                       </span>
                       <span style={{ color: 'var(--em-muted)' }}>
@@ -1128,7 +1128,7 @@ export function AcademyTab({
                         <span style={{ color: 'var(--em-muted)', fontWeight: 600 }}>{ct('quer comprar')}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: 'var(--c-win)', fontSize: '0.86rem' }}>
+                        <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '0.86rem' }}>
                           {formatMoney(offer.fee)}
                         </b>
                         <button
@@ -1607,7 +1607,7 @@ function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner
         {seed.name}
       </span>
       {typeof score === 'number' && (
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', color: accent, fontWeight: 800 }}>
+        <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', color: accent, fontWeight: 800 }}>
           {score}
         </b>
       )}
@@ -1639,7 +1639,7 @@ function HudPill({ label, value, tone }: { label: string; value: string; tone: '
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <b style={{ color: c.fg, fontSize: '0.84rem', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace' }}>
+      <b style={{ color: c.fg, fontSize: '0.84rem', fontWeight: 800, fontFamily: 'var(--font-num)' }}>
         {value}
       </b>
     </div>
@@ -1712,7 +1712,7 @@ function EvoLine({ icon, label, value, hint, accent }: { icon: string; label: st
         <span style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
           {label}
         </span>
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.84rem', color: accent ?? 'var(--em-text)', fontWeight: 800 }}>
+        <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.84rem', color: accent ?? 'var(--em-text)', fontWeight: 800 }}>
           {value}
         </b>
         {hint && (

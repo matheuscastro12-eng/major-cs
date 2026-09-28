@@ -389,7 +389,7 @@ export function CareerShell({
                   border: '1px solid var(--em-border)',
                   borderRadius: 3,
                   color: 'var(--em-text)',
-                  fontFamily: '"JetBrains Mono", monospace',
+                  fontFamily: 'var(--font-num)',
                   fontSize: '0.78rem',
                   fontWeight: 700,
                 }}

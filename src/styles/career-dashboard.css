@@ -25,7 +25,7 @@
 .career-dash .em-section-label,
 .career-dash .em-fin-balance span,
 .career-dash .em-fin-stat span {
-  font-family: var(--font-cond, 'Oswald', 'Bahnschrift', sans-serif);
+  font-family: var(--font-display);
 }
 
 .career-dash .dash-card-head b {
@@ -937,7 +937,7 @@ body:has(main.page-career) {
 .em-confirm-kicker {
   display: block;
   margin-bottom: 6px;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 1.2px;
@@ -948,7 +948,7 @@ body:has(main.page-career) {
 .em-confirm-title {
   margin: 0 0 12px;
   padding-right: 36px;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 700;
   color: inherit;
@@ -987,7 +987,7 @@ body:has(main.page-career) {
   min-height: 38px;
   padding: 0 18px;
   border-radius: 6px;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -1245,7 +1245,7 @@ body:has(main.page-career) {
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--em-muted);
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
 }
 
 .em-fin-big {
@@ -1541,7 +1541,7 @@ body:has(main.page-career) {
 }
 
 .em-rank-you-label {
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 1.2px;

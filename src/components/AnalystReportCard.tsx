@@ -87,7 +87,7 @@ function PlayerChip({ label, value, sub, tone }: { label: string; value: string;
         {label}
       </span>
       <span style={{ color: 'var(--em-text)', fontWeight: 700, fontSize: '0.96rem' }}>{value}</span>
-      <span style={{ color, fontSize: '0.74rem', fontFamily: '"JetBrains Mono", monospace' }}>{sub}</span>
+      <span style={{ color, fontSize: '0.74rem', fontFamily: 'var(--font-num)' }}>{sub}</span>
     </div>
   );
 }

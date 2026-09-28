@@ -324,7 +324,7 @@ const barFill: React.CSSProperties = {
 };
 
 const chipVal: React.CSSProperties = {
-  fontFamily: '"JetBrains Mono", monospace',
+  fontFamily: 'var(--font-num)',
   fontWeight: 800,
   color: 'var(--em-text)',
   fontSize: '0.84rem',

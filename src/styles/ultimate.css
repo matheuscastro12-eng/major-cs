@@ -1,5 +1,5 @@
 /* ============================================================
-   Ultimate Squad — tema com IDENTIDADE PRÓPRIA (MAJOR//CS), inspirado
+   Ultimate Squad — tema com IDENTIDADE PRÓPRIA (Road to Major), inspirado
    no BUT mas NÃO idêntico: header ESCURO tático + OURO (o Brasval é
    claro + verde), conteúdo claro, cards com acento OURO no topo, ícones
    de linha (lucide), empty-states ricos, tiles diários grandes.
@@ -813,7 +813,7 @@ body:has(.ut-live) {
   background: linear-gradient(180deg, var(--ut-gold-1), var(--ut-gold-2)); color: var(--ut-gold-ink, var(--c-on-accent));
   font-size: 0.6rem; font-weight: 900; letter-spacing: 0.1em; padding: 3px 9px; border-radius: 999px;
 }
-.ut-coinpack__coins { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 1.05rem; color: var(--ut-gold-1); }
+.ut-coinpack__coins { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-num); font-weight: 800; font-size: 1.05rem; color: var(--ut-gold-1); }
 .ut-coinpack__name { font-size: 0.74rem; font-weight: 700; color: rgba(255, 255, 255, 0.85); }
 .ut-coinpack__bonus { font-size: 0.66rem; font-weight: 800; color: var(--c-win); letter-spacing: 0.04em; }
 .ut-coinpack__bonus.is-base { color: rgba(255, 255, 255, 0.4); font-weight: 600; }

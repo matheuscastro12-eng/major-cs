@@ -114,7 +114,7 @@ function StatCell({ label, value, accent }: { label: string; value: string; acce
     >
       <span
         style={{
-          fontFamily: '"JetBrains Mono", monospace',
+          fontFamily: 'var(--font-num)',
           fontSize: '1.3rem',
           fontWeight: 800,
           color: accent,

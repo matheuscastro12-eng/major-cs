@@ -1187,7 +1187,7 @@ tr.qualify-row { background: color-mix(in srgb, var(--c-win) 8%, transparent); }
 .chamada-icon { font-size: 14px; }
 .chamada-label { font-size: 12.5px; font-weight: 800; flex: 1; line-height: 1.2; }
 .chamada-prob {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-num);
   font-size: 12px;
   font-weight: 900;
   color: var(--gold, #e6b34d);
@@ -1205,7 +1205,7 @@ tr.qualify-row { background: color-mix(in srgb, var(--c-win) 8%, transparent); }
   border-radius: 4px;
   padding: 0 4px;
 }
-.chamada-delta { font-family: "JetBrains Mono", monospace; font-weight: 800; }
+.chamada-delta { font-family: var(--font-num); font-weight: 800; }
 .chamada-desc { font-size: 10.5px; color: var(--muted); line-height: 1.35; }
 
 /* ── O GOLPE: animação de resolução do turno ──────────────────────────────────
@@ -1247,10 +1247,10 @@ tr.qualify-row { background: color-mix(in srgb, var(--c-win) 8%, transparent); }
 .golpe-sub { font-size: 0.7rem; color: var(--em-muted, #8a99ab); font-weight: 700; }
 .golpe-eff.super { color: var(--c-win); }
 .golpe-eff.weak { color: var(--c-loss); }
-.golpe-odds { font-family: "JetBrains Mono", monospace; }
+.golpe-odds { font-family: var(--font-num); }
 .golpe-verdict {
   flex: 0 0 auto;
-  font-family: var(--rtp-mono, "JetBrains Mono"), monospace;
+  font-family: var(--font-num);
   font-size: 0.82rem;
   font-weight: 900;
   letter-spacing: 1px;
@@ -6472,7 +6472,7 @@ button.t20-row {
   background:#222a33; color:#9aa4b2; font-size:13px; cursor:pointer; }
 .upsell-x:hover{ color:#fff; background:#2c343d; }
 .upsell-kicker{ font-size:11px; letter-spacing:1.6px; text-transform:uppercase; font-weight:800; color:var(--gold); }
-.upsell-title{ font-family:'Oswald','Arial Narrow',sans-serif; font-weight:700; color:#fff; font-size:22px; line-height:1.15; margin:8px 0 14px; max-width:340px; }
+.upsell-title{ font-family:var(--font-display); font-weight:700; color:#fff; font-size:22px; line-height:1.15; margin:8px 0 14px; max-width:340px; }
 .upsell-list{ list-style:none; display:flex; flex-direction:column; gap:9px; margin:0 0 18px; padding:0; }
 .upsell-list li{ font-size:13px; color:#c7ced7; line-height:1.4; padding-left:22px; position:relative; }
 .upsell-list li::before{ content:'★'; position:absolute; left:0; color:var(--gold); font-size:12px; }

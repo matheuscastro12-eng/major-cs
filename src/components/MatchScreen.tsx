@@ -820,7 +820,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                     <span style={{
                       position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '0.7rem', fontWeight: 900, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.6)',
-                      fontFamily: '"JetBrains Mono", monospace',
+                      fontFamily: 'var(--font-num)',
                     }}>
                       {Math.round(decisionProb * 100)}%
                     </span>
@@ -828,7 +828,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                   {/* delta da decisão */}
                   {Math.abs(probDelta) >= 0.005 && (
                     <span style={{
-                      fontSize: '0.74rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace',
+                      fontSize: '0.74rem', fontWeight: 900, fontFamily: 'var(--font-num)',
                       color: probDelta > 0 ? 'var(--c-win)' : 'var(--c-loss)', minWidth: 52, textAlign: 'right',
                     }}>
                       {probDelta > 0 ? '▲ +' : '▼ '}{Math.round(probDelta * 100)}%
@@ -837,7 +837,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                 </div>
                 {/* leitura do inimigo (freezetime read) */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.72rem' }}>
-                  <span style={{ padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: enemyRead.tone, fontWeight: 700, fontFamily: '"JetBrains Mono", monospace' }}>
+                  <span style={{ padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: enemyRead.tone, fontWeight: 700, fontFamily: 'var(--font-num)' }}>
                     📡 {BUY_LABEL[enemyBuy]}
                   </span>
                   <span style={{ color: enemyRead.tone, fontStyle: 'italic' }}>{enemyRead.txt}</span>
@@ -934,7 +934,7 @@ export function MatchScreen({ teams, maps, userIdx, rng, phaseLabel, bestOf = 3,
                     {d != null && Math.abs(d) >= 0.003 && (
                       <span style={{
                         marginLeft: 5, fontSize: '0.66rem', fontWeight: 800,
-                        fontFamily: '"JetBrains Mono", monospace',
+                        fontFamily: 'var(--font-num)',
                         color: d > 0 ? 'var(--c-win)' : 'var(--c-loss)',
                       }}>
                         {d > 0 ? '+' : ''}{Math.round(d * 100)}%
@@ -1105,7 +1105,7 @@ function MomentumMeter({ team, len, teams, userIdx }: {
   return (
     <div className="center" style={{ marginTop: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 360, margin: '0 auto' }}>
-        <span style={{ fontSize: '0.66rem', fontWeight: 800, opacity: team === 0 ? 1 : 0.4, fontFamily: '"JetBrains Mono", monospace' }}>{teams[0].tag}</span>
+        <span style={{ fontSize: '0.66rem', fontWeight: 800, opacity: team === 0 ? 1 : 0.4, fontFamily: 'var(--font-num)' }}>{teams[0].tag}</span>
         <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.06)', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, background: 'rgba(255,255,255,0.18)' }} />
           <div style={{
@@ -1114,7 +1114,7 @@ function MomentumMeter({ team, len, teams, userIdx }: {
             width: `${fillPct}%`, background: grad, transition: 'width .3s ease',
           }} />
         </div>
-        <span style={{ fontSize: '0.66rem', fontWeight: 800, opacity: team === 1 ? 1 : 0.4, fontFamily: '"JetBrains Mono", monospace' }}>{teams[1].tag}</span>
+        <span style={{ fontSize: '0.66rem', fontWeight: 800, opacity: team === 1 ? 1 : 0.4, fontFamily: 'var(--font-num)' }}>{teams[1].tag}</span>
       </div>
       <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.5px', color: accent, marginTop: 2 }}>
         {fires} {ct('EMBALO')} {teams[team].tag} · {len} {ct('rounds seguidos')}
@@ -1203,7 +1203,7 @@ function DecisionImpactCard({ lastCall, t }: {
               {st.icon} {t(st.labelKey)}
             </span>
           )}
-          <span style={{ fontSize: '0.7rem', color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--em-muted,#8a99ab)', fontFamily: 'var(--font-num)' }}>
             ({ct('tinha')} {pct}%)
           </span>
         </div>
@@ -1383,7 +1383,7 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
       <div className="panel-head">🎯 {ct('Resumo tático')} — {ct('suas decisões')}</div>
       <div className="panel-body">
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-          <span style={{ fontSize: '2rem', fontWeight: 900, color: rateColor, fontFamily: '"JetBrains Mono", monospace', lineHeight: 1 }}>{won}/{made}</span>
+          <span style={{ fontSize: '2rem', fontWeight: 900, color: rateColor, fontFamily: 'var(--font-num)', lineHeight: 1 }}>{won}/{made}</span>
           <span style={{ fontSize: '0.9rem', fontWeight: 700, color: rateColor }}>{Math.round(rate * 100)}% {ct('das calls deram certo')}</span>
           <span className="spacer" />
           {bestRun >= 3 && <span style={{ fontSize: '0.82rem' }}>🔥 {ct('maior sequência')}: <b style={{ color: 'var(--c-win)' }}>{bestRun}</b></span>}
@@ -1412,9 +1412,9 @@ function DecisionRecapPanel({ decisions, series, maps, userIdx }: {
             return (
               <div key={r.i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.8rem' }}>
                 <span style={{ minWidth: 90, fontWeight: 700 }}>{MAP_LABELS[r.map]}</span>
-                <span style={{ color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{r.score[0]}:{r.score[1]}</span>
+                <span style={{ color: 'var(--em-muted,#8a99ab)', fontFamily: 'var(--font-num)' }}>{r.score[0]}:{r.score[1]}</span>
                 <span className="spacer" />
-                <span style={{ color: c, fontWeight: 800, fontFamily: '"JetBrains Mono", monospace' }}>{r.won}/{r.made} ✓</span>
+                <span style={{ color: c, fontWeight: 800, fontFamily: 'var(--font-num)' }}>{r.won}/{r.made} ✓</span>
               </div>
             );
           })}

@@ -170,5 +170,5 @@ export function shareTextOf(dateKey: string, line: HistoricLine, p: LinesProgres
     ? `Lembrei a line ${line.team} ${line.year} — ${grid}${errors ? ` ${errors}` : ''}`
     : `A line ${line.team} ${line.year} me pegou — ${grid} ${errors}`;
   const tail = streak >= 2 ? ` · 🔥 ${streak} dias seguidos` : '';
-  return `LINES HISTÓRICAS #${day} · MAJOR//CS\n${head}${tail}\nroadtomajor.com.br/diario`;
+  return `LINES HISTÓRICAS #${day} · ROAD TO MAJOR\n${head}${tail}\nroadtomajor.com.br/diario`;
 }

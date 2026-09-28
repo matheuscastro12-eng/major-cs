@@ -143,7 +143,7 @@ export function SeasonRecapModal({ data, onClose }: Props) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <span style={{ padding: '4px 14px', background: 'rgba(232,193,112,0.16)', border: '1px solid rgba(232,193,112,0.5)', borderRadius: 4, fontFamily: '"JetBrains Mono", monospace', color: 'var(--em-gold)', fontWeight: 900, fontSize: '1.4rem' }}>
+          <span style={{ padding: '4px 14px', background: 'rgba(232,193,112,0.16)', border: '1px solid rgba(232,193,112,0.5)', borderRadius: 4, fontFamily: 'var(--font-num)', color: 'var(--em-gold)', fontWeight: 900, fontSize: '1.4rem' }}>
             {data.mvp!.ovr}
           </span>
           <span className={`role-pill ${data.mvp!.role}`} style={{ alignSelf: 'center' }}>{data.mvp!.role}</span>
@@ -182,11 +182,11 @@ export function SeasonRecapModal({ data, onClose }: Props) {
           <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Saldo do split
           </div>
-          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.6rem', fontWeight: 900, color: data.finance.net >= 0 ? 'var(--c-win)' : 'var(--c-loss)', marginTop: 4 }}>
+          <div style={{ fontFamily: 'var(--font-num)', fontSize: '1.6rem', fontWeight: 900, color: data.finance.net >= 0 ? 'var(--c-win)' : 'var(--c-loss)', marginTop: 4 }}>
             {data.finance.net >= 0 ? '+' : ''}{fmt(data.finance.net)}
           </div>
           <div style={{ fontSize: '0.76rem', color: 'var(--em-muted)', marginTop: 6 }}>
-            Caixa atual: <b style={{ color: 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>{fmt(data.finance.cashAfter)}</b>
+            Caixa atual: <b style={{ color: 'var(--em-text)', fontFamily: 'var(--font-num)' }}>{fmt(data.finance.cashAfter)}</b>
           </div>
         </div>
       </div>
@@ -275,7 +275,7 @@ function FinanceRow({ label, value, positive }: { label: string; value: number; 
       <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
         {label}
       </span>
-      <b style={{ fontFamily: '"JetBrains Mono", monospace', color: fg, fontSize: '1.05rem', fontWeight: 800 }}>
+      <b style={{ fontFamily: 'var(--font-num)', color: fg, fontSize: '1.05rem', fontWeight: 800 }}>
         {value >= 0 ? '+' : ''}{fmt(value)}
       </b>
     </div>

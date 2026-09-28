@@ -193,7 +193,7 @@ function FacilityCard({
             }}
           />
         ))}
-        <span style={{ fontSize: '0.78rem', fontFamily: '"JetBrains Mono", monospace', color: 'var(--em-text)', fontWeight: 700, marginLeft: 6 }}>
+        <span style={{ fontSize: '0.78rem', fontFamily: 'var(--font-num)', color: 'var(--em-text)', fontWeight: 700, marginLeft: 6 }}>
           {level}/{FACILITY_MAX_LEVEL}
         </span>
       </div>
@@ -269,7 +269,7 @@ function FacilityCard({
             }}
           >
             <span>Investir</span>
-            <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(cost)}</span>
+            <span style={{ fontFamily: 'var(--font-num)' }}>{formatMoney(cost)}</span>
           </button>
         </div>
       )}
@@ -299,7 +299,7 @@ function HudPill({ label, value, tone }: { label: string; value: string; tone: '
       <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <b style={{ fontFamily: '"JetBrains Mono", monospace', color: c.fg, fontSize: '0.92rem', fontWeight: 800 }}>{value}</b>
+      <b style={{ fontFamily: 'var(--font-num)', color: c.fg, fontSize: '0.92rem', fontWeight: 800 }}>{value}</b>
     </div>
   );
 }

@@ -117,5 +117,5 @@ export function shareTextOfClassic(dateKey: string, round: ClassicRound, p: Clas
       : `Cravei o placar de ${round.event} ${grid}`
     : `${round.event} me pegou ${grid}`;
   const tail = streak >= 2 ? ` · 🔥 ${streak} dias seguidos` : '';
-  return `PLACAR DO CLÁSSICO #${day} · MAJOR//CS\n${head}${tail}\nroadtomajor.com.br/diario`;
+  return `PLACAR DO CLÁSSICO #${day} · ROAD TO MAJOR\n${head}${tail}\nroadtomajor.com.br/diario`;
 }

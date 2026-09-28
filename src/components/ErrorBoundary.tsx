@@ -69,7 +69,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
       return (
         <div style={{ maxWidth: 460, margin: '14vh auto', padding: 24, textAlign: 'center', fontFamily: 'Inter, system-ui, sans-serif', color: '#dfe5ec' }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>🛠️</div>
-          <h2 style={{ fontFamily: 'Oswald, sans-serif', marginBottom: 8 }}>{tr('title')}</h2>
+          <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: 8 }}>{tr('title')}</h2>
           <p style={{ color: '#97a3b2', marginBottom: 16 }}>{tr('body')}</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button

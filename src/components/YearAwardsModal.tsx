@@ -139,7 +139,7 @@ export function YearAwardsModal({ awards, onClose }: Props) {
                   <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--em-text)', flex: 1 }}>
                     {slot.nick}{slot.mine ? ' ⭐' : ''}
                   </span>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: accent, fontFamily: '"JetBrains Mono", monospace' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: accent, fontFamily: 'var(--font-num)' }}>
                     {slot.rating.toFixed(2)}
                   </span>
                 </div>

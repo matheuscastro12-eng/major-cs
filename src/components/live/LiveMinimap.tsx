@@ -194,7 +194,7 @@ function drawAgent(ctx: CanvasRenderingContext2D, a: Agent): void {
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.fillRect(a.pos.x - 24, a.pos.y - 26, 48, 12);
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 10px Inter, system-ui, sans-serif';
+  ctx.font = 'bold 10px Barlow, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(a.nick.toUpperCase(), a.pos.x, a.pos.y - 17);
 }
@@ -208,7 +208,7 @@ function drawSite(ctx: CanvasRenderingContext2D, zone: { cx: number; cy: number;
   ctx.fillRect(x, y, zone.w, zone.h);
   ctx.strokeRect(x, y, zone.w, zone.h);
   ctx.fillStyle = hexA(accent, 0.7);
-  ctx.font = 'bold 32px Inter, system-ui, sans-serif';
+  ctx.font = 'bold 32px Barlow, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, zone.cx, zone.cy);

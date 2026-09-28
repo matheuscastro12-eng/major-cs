@@ -174,7 +174,7 @@ function SlotHudPill({ used, total }: { used: number; total: number }) {
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {ct('Slots')}
       </span>
-      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace' }}>
+      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: 'var(--font-num)' }}>
         {used}/{total}
       </b>
     </div>
@@ -314,7 +314,7 @@ function SlotRow({
             gap: 10,
             fontSize: '0.78rem',
             color: 'var(--em-muted)',
-            fontFamily: '"JetBrains Mono", monospace',
+            fontFamily: 'var(--font-num)',
             flexWrap: 'wrap',
           }}
         >

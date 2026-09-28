@@ -59,7 +59,7 @@ export function ScoutingCard({ hiredScoutId, scoutReports, budget, onHire, onFir
                   <span style={{ color: 'var(--em-muted)', fontSize: '0.74rem' }}>
                     Tier {s.tier} · {REGION_LABEL[s.region] ?? s.region} · precisão {Math.round(s.accuracy * 100)}%
                   </span>
-                  <span style={{ color: 'var(--c-loss)', fontSize: '0.76rem', fontFamily: '"JetBrains Mono", monospace' }}>
+                  <span style={{ color: 'var(--c-loss)', fontSize: '0.76rem', fontFamily: 'var(--font-num)' }}>
                     ${s.salaryPerSplit.toLocaleString('pt-BR')}/split
                   </span>
                 </div>
@@ -107,7 +107,7 @@ function ReportRow({ report }: { report: ScoutReport }) {
       </div>
       <span style={ovrChipStyle}>
         <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', fontWeight: 700, letterSpacing: '0.4px' }}>OVR ESTIM.</span>
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1rem', color: 'var(--em-text)' }}>
+        <b style={{ fontFamily: 'var(--font-num)', fontSize: '1rem', color: 'var(--em-text)' }}>
           {report.reportedOvr}
         </b>
       </span>
@@ -214,7 +214,7 @@ const promiseChipStyle = (color: string): React.CSSProperties => ({
   color,
   fontWeight: 800,
   fontSize: '0.92rem',
-  fontFamily: '"JetBrains Mono", monospace',
+  fontFamily: 'var(--font-num)',
 });
 
 const ovrChipStyle: React.CSSProperties = {

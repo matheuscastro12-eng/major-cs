@@ -55,7 +55,7 @@ export function CoachProfilePage({ stints, activeCoachNick, scars, split, onClos
           }}
         >
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '2rem', fontWeight: 900, color: repColor, lineHeight: 1 }}>
+            <div style={{ fontFamily: 'var(--font-num)', fontSize: '2rem', fontWeight: 900, color: repColor, lineHeight: 1 }}>
               {summary.reputation}
             </div>
             <div style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reputação</div>
@@ -121,7 +121,7 @@ export function CoachProfilePage({ stints, activeCoachNick, scars, split, onClos
                       </span>
                       {active && <span style={{ fontSize: '0.6rem', color: 'var(--em-gold)', fontWeight: 800, letterSpacing: '0.5px' }}>● ATIVO</span>}
                     </div>
-                    <div style={{ marginTop: 3, fontSize: '0.72rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+                    <div style={{ marginTop: 3, fontSize: '0.72rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
                       Split {s.startSplit}{s.endSplit != null ? `–${s.endSplit}` : '+'} · {s.wins}V {s.losses}D ({wr}%)
                       {s.trophies.length > 0 && <span style={{ color: '#e8c170' }}> · 🏆 {s.trophies.length}</span>}
                     </div>
@@ -162,7 +162,7 @@ function Kpi({ label, value, icon, accent }: { label: string; value: number | st
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', background: 'var(--em-panel-2)', border: '1px solid var(--em-border)', borderRadius: 6 }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: accent ?? 'var(--em-muted)' }}>
         <CareerIcon name={icon} size={13} />
-        <b style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: accent ?? 'var(--em-text)' }}>{value}</b>
+        <b style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: 'var(--font-num)', color: accent ?? 'var(--em-text)' }}>{value}</b>
       </span>
       <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
     </div>

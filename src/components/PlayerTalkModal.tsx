@@ -188,7 +188,7 @@ function MoraleDeltaChip({ delta, tone }: { delta: number; tone: 'positive' | 'n
       width: 'fit-content',
     }}>
       <span style={{ color: 'var(--em-muted)' }}>Moral do jogador</span>
-      <b style={{ color, fontFamily: '"JetBrains Mono", monospace' }}>
+      <b style={{ color, fontFamily: 'var(--font-num)' }}>
         {delta > 0 ? '+' : ''}{delta}
       </b>
     </span>

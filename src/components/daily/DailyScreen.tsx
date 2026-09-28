@@ -109,7 +109,7 @@ export function DailyScreen({ onExit, onGoUltimate }: { onExit: () => void; onGo
     const perfect = dayStatus.perfect
       ? `\n✨ DIA PERFEITO${perfectStreak.streak >= 2 ? ` · 🔥 ${perfectStreak.streak} dias perfeitos seguidos` : ''}`
       : '';
-    const text = `DIÁRIO #${day} · MAJOR//CS\n${cells} — ${dayStatus.won}/${dayStatus.total}${perfect}\nroadtomajor.com.br/diario`;
+    const text = `DIÁRIO #${day} · ROAD TO MAJOR\n${cells} — ${dayStatus.won}/${dayStatus.total}${perfect}\nroadtomajor.com.br/diario`;
     track('daily_share', { game: 'day', day, won: dayStatus.perfect });
     try { if (navigator.share) { await navigator.share({ text }); return; } } catch { /* cai pro clipboard */ }
     try { await navigator.clipboard.writeText(text); setDayCopied(true); setTimeout(() => setDayCopied(false), 1800); } catch { /* sem clipboard */ }

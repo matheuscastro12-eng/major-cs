@@ -281,7 +281,7 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
         <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', padding: `${px}px ${px}px ${Math.round(size * 0.05)}px` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, minWidth: Math.round(size * 0.26), padding: `${Math.round(size * 0.028)}px 2px`, borderRadius: 8, background: s.plate }}>
-              <span style={{ fontSize: `${(size / 140) * 1.78}rem`, fontWeight: 900, color: s.ink, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '-0.5px' }}>{card.ovr}</span>
+              <span style={{ fontSize: `${(size / 140) * 1.78}rem`, fontWeight: 900, color: s.ink, fontFamily: 'var(--font-num)', letterSpacing: '-0.5px' }}>{card.ovr}</span>
               <span style={{ fontSize: `${(size / 140) * 0.56}rem`, fontWeight: 800, color: s.ink, opacity: 0.9, marginTop: 1 }}>{ROLE_CODE[card.role] ?? card.role}</span>
               <span style={{ marginTop: 3 }}><Flag cc={card.country} /></span>
             </div>
@@ -297,7 +297,7 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
                 {STAT_ROWS.map((row, ri) => (
                   <div key={ri} style={{ display: 'flex', justifyContent: 'space-around' }}>
                     {row.map(([k, label]) => (
-                      <span key={label} style={{ fontSize: `${(size / 140) * 0.6}rem`, fontFamily: '"JetBrains Mono", monospace' }}>
+                      <span key={label} style={{ fontSize: `${(size / 140) * 0.6}rem`, fontFamily: 'var(--font-num)' }}>
                         <b style={{ color: s.ink, fontWeight: 900 }}>{card.stats[k]}</b> <span style={{ color: s.sub, fontWeight: 700 }}>{label}</span>
                       </span>
                     ))}
@@ -312,7 +312,7 @@ const UltCardView = memo(function UltCardView({ card, size = 132, count, qs, evo
           </div>
         </div>
         {!compact && (
-          <span style={{ position: 'absolute', bottom: 3, right: 6, zIndex: 1, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, color: s.mark, fontFamily: 'var(--ut-font-cond)', letterSpacing: '0.3px', pointerEvents: 'none' }}>M<span style={{ color: s.markSlash }}>//</span>CS</span>
+          <span style={{ position: 'absolute', bottom: 3, right: 6, zIndex: 1, fontSize: `${(size / 140) * 0.5}rem`, fontWeight: 900, color: s.mark, fontFamily: 'var(--ut-font-cond)', letterSpacing: '0.3px', pointerEvents: 'none' }}>R<span style={{ color: s.markSlash }}>t</span>M</span>
         )}
       </div>
       {qs != null && (
@@ -333,7 +333,7 @@ const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112, ev, ed = 
   const k = size / 112;
   const stat = (v: number, label: string) => (
     <span key={label} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
-      <b style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 900, fontSize: `${k * 0.74}rem`, color: '#fff' }}>{v}</b>
+      <b style={{ fontFamily: 'var(--font-num)', fontWeight: 900, fontSize: `${k * 0.74}rem`, color: '#fff' }}>{v}</b>
       <span style={{ fontSize: `${k * 0.44}rem`, fontWeight: 800, color: 'rgba(255,255,255,0.5)', marginTop: 1, letterSpacing: '0.3px' }}>{label}</span>
     </span>
   );
@@ -342,7 +342,7 @@ const PitchTile = memo(function PitchTile({ card, evo = 0, size = 112, ev, ed = 
       <div style={{ height: 3, background: c }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: `${k * 7}px ${k * 8}px ${k * 4}px` }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1, gap: 2 }}>
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 900, fontSize: `${k * 1.4}rem`, color: c, letterSpacing: '-0.5px' }}>{card.ovr}</span>
+          <span style={{ fontFamily: 'var(--font-num)', fontWeight: 900, fontSize: `${k * 1.4}rem`, color: c, letterSpacing: '-0.5px' }}>{card.ovr}</span>
           <span style={{ fontSize: `${k * 0.5}rem`, fontWeight: 800, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.4px' }}>{ROLE_CODE[card.role] ?? card.role}</span>
           <span style={{ marginTop: 1 }}><Flag cc={card.country} /></span>
         </div>
@@ -3002,7 +3002,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 2 }}><MedalIcon size={24} color={medalColor} /></div>
                       <PlayerAvatar nick={p.nick} size={40} />
                       <div style={{ fontWeight: 900, fontSize: '0.82rem', marginTop: 4 }}>{p.nick}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', fontFamily: '"JetBrains Mono", monospace' }}>{p.mmr} RP</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--em-muted,#8a99ab)', fontFamily: 'var(--font-num)' }}>{p.mmr} RP</div>
                     </div>
                   );
                 })}
@@ -3878,7 +3878,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
                 }}>📋 {ct('Compartilhar')}</Button>
               </div>
             )}
-            <div className={result.won ? 'ut-score-pop' : 'ut-score-shake'} style={{ fontSize: '2rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: result.won ? 'var(--c-win)' : 'var(--c-loss)' }}>{result.score}</div>
+            <div className={result.won ? 'ut-score-pop' : 'ut-score-shake'} style={{ fontSize: '2rem', fontWeight: 900, fontFamily: 'var(--font-num)', color: result.won ? 'var(--c-win)' : 'var(--c-loss)' }}>{result.score}</div>
             {result.mapName && <div style={{ fontFamily: 'var(--ut-font-cond)', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--ut-muted)', marginTop: -6 }}>{result.mapName}</div>}
             {result.roundLog.length > 0 && (
               <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 320 }}>
@@ -4156,7 +4156,7 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
           footer={<Button variant="primary" onClick={() => setSeasonRoll(null)}>{ct('Continuar')}</Button>}>
           <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0' }}>
             <p className="muted small" style={{ margin: 0 }}>{ct('A temporada virou. Seu RP foi suavizado pra manter a disputa acirrada e você levou um bônus de fim de temporada.')}</p>
-            <div style={{ fontSize: '0.95rem', fontWeight: 900 }}>{ct('Novo RP')}: <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{seasonRoll.newElo}</span></div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 900 }}>{ct('Novo RP')}: <span style={{ fontFamily: 'var(--font-num)' }}>{seasonRoll.newElo}</span></div>
             {seasonRoll.credits > 0 && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-accent)', fontWeight: 900 }}><Coins size={15} /> +{fmt(seasonRoll.credits)}</div>}
             {/* [URG-1] a perda visível e a saída: cartas que viraram Legado + edição nova na Loja */}
             {seasonRoll.legacyCount > 0 && (

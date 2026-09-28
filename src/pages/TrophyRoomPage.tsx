@@ -199,7 +199,7 @@ function TrophyCard({ t }: { t: TrophyEntry }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid var(--em-border)', paddingTop: 8, fontSize: '0.74rem' }}>
         <span style={{ color: 'var(--em-muted)' }}>Split {t.split}</span>
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: 'var(--c-win)' }}>{fmtMoney(t.prize)}</b>
+        <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)' }}>{fmtMoney(t.prize)}</b>
       </div>
     </div>
   );
@@ -230,7 +230,7 @@ function Counter({ label, value, tone, icon }: { label: string; value: number | 
     >
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: colors[tone] }}>
         <CareerIcon name={icon} size={14} />
-        <b style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace' }}>{value}</b>
+        <b style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: 'var(--font-num)' }}>{value}</b>
       </span>
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
     </div>

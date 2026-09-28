@@ -63,7 +63,7 @@ function AttrRow({ label, value }: { label: string; value: number }) {
       <span style={barWrapStyle}>
         <span style={{ width: `${(value / 20) * 100}%`, height: '100%', background: color, transition: 'width .2s' }} />
       </span>
-      <b style={{ color, fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', minWidth: 22, textAlign: 'right' }}>
+      <b style={{ color, fontFamily: 'var(--font-num)', fontSize: '0.86rem', minWidth: 22, textAlign: 'right' }}>
         {value}
       </b>
     </div>

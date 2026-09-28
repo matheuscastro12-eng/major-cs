@@ -95,7 +95,7 @@ export function CareerTimeline({ history, extras }: { history: SplitRecord[]; ex
                     style={chipStyle(TONE_COLOR[m.tone], m.tone === 'gold', openSplit === m.split)}
                   >
                     {m.tone === 'gold' && <IconTrophy size={12} />}
-                    <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>S{m.split}</span>
+                    <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>S{m.split}</span>
                     {m.text}
                     {m.major && (
                       <b style={{ color: m.majorGold ? 'var(--em-gold)' : 'var(--em-text)', fontSize: '0.7rem' }}>
@@ -152,12 +152,12 @@ function SplitDetail({ record, extras, onClose }: { record: SplitRecord; extras?
     <div style={detailStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
         <b style={{ fontSize: '0.84rem', color: 'var(--em-text)' }}>
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', color: 'var(--em-muted)', marginRight: 6 }}>S{s}</span>
+          <span style={{ fontFamily: 'var(--font-num)', color: 'var(--em-muted)', marginRight: 6 }}>S{s}</span>
           {placement}{majorLine ? ` · ${majorLine}` : ''}
         </b>
         <button type="button" onClick={onClose} style={closeStyle} aria-label={ct('Fechar')}>×</button>
       </div>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: '0.72rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: '0.72rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
         <span>{record.wins}V {record.losses}D</span>
         <span>RD {record.roundDiff > 0 ? '+' : ''}{record.roundDiff}</span>
         <span>VRS +{record.vrs}</span>

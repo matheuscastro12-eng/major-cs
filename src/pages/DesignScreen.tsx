@@ -139,7 +139,7 @@ export function DesignScreen({ onBack }: { onBack: () => void }) {
     >
       <header className="dsg-bar">
         <Button variant="ghost" size="sm" icon={<ArrowLeft size={16} aria-hidden />} onClick={onBack}>Voltar</Button>
-        <span className="dsg-bar__brand">MAJOR<span className="dsg-bar__slash">//</span>CS</span>
+        <span className="dsg-bar__brand">ROAD TO <span className="dsg-bar__slash">MAJOR</span></span>
         <Tag tone="accent">Broadcast Desk</Tag>
         <span className="dsg-bar__spacer" />
         <Button
@@ -239,7 +239,7 @@ export function DesignScreen({ onBack }: { onBack: () => void }) {
           </div>
         </Section>
 
-        <Section id="tipo" title="Tipografia" lead="Três papéis. Oswald para display e placar, Inter para interface, JetBrains Mono tabular para números. Seis degraus, piso de 11px.">
+        <Section id="tipo" title="Tipografia" lead="Duas famílias, três papéis. Barlow Condensed para display, placar e cabeçalho de painel; Barlow para interface; números em Barlow com dígitos tabulares. Seis degraus, piso de 11px.">
           <div className="dsg-type">
             {([
               ['--fs-display', 'Display', 'Campeão do Major', 'dsg-type__display'],
@@ -257,8 +257,8 @@ export function DesignScreen({ onBack }: { onBack: () => void }) {
             ))}
           </div>
           <div className="dsg-fonts">
-            <Card><p className="dsg-font dsg-font--display">Oswald 600</p><p className="ds-dim">Display, placar, títulos de painel, abas.</p></Card>
-            <Card><p className="dsg-font dsg-font--ui">Inter 400 / 600 / 700</p><p className="ds-dim">Interface, corpo, botões.</p></Card>
+            <Card><p className="dsg-font dsg-font--display">Barlow Condensed 700</p><p className="ds-dim">Display, placar, títulos de painel, abas.</p></Card>
+            <Card><p className="dsg-font dsg-font--ui">Barlow 400 / 600 / 700</p><p className="ds-dim">Interface, corpo, botões.</p></Card>
             <Card><p className="dsg-font dsg-font--num">1.31 · R$ 2.400.000</p><p className="ds-dim">Números tabulares: OVR, rating, dinheiro.</p></Card>
           </div>
         </Section>
