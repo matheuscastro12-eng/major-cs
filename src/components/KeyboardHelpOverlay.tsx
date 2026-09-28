@@ -28,7 +28,11 @@ function formatCombo(s: {
   if (s.ctrl) parts.push(navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl');
   if (s.alt) parts.push(navigator.platform.toLowerCase().includes('mac') ? '⌥' : 'Alt');
   if (s.shift) parts.push('⇧');
-  const k = s.key.length === 1 ? s.key.toUpperCase() : s.key.charAt(0).toUpperCase() + s.key.slice(1);
+  const NAMES: Record<string, string> = {
+    ' ': 'Espaço', arrowleft: '←', arrowright: '→', arrowup: '↑', arrowdown: '↓', escape: 'Esc', enter: 'Enter',
+  };
+  const named = NAMES[s.key.toLowerCase()];
+  const k = named ?? (s.key.length === 1 ? s.key.toUpperCase() : s.key.charAt(0).toUpperCase() + s.key.slice(1));
   parts.push(k);
   return parts.join('+');
 }
@@ -74,8 +78,16 @@ export function KeyboardHelpHost() {
   type Item = (typeof shortcuts)[number];
   const groups = useMemo<[string, Item[]][]>(() => {
     const map = new Map<string, Item[]>();
-    // pula o `?` em si pra não poluir a lista com 2 entradas iguais
-    const visible = shortcuts.filter((s) => s.key !== '?');
+    // pula o `?` em si pra não poluir a lista com 2 entradas iguais, e a mesma
+    // combinação registrada por mais de uma tela aparece uma vez só
+    const seen = new Set<string>();
+    const visible = shortcuts.filter((s) => {
+      if (s.key === '?') return false;
+      const k = `${formatCombo(s)}|${s.label}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
     for (const s of visible) {
       const g = s.group ?? 'Geral';
       const list = map.get(g);
