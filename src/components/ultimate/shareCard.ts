@@ -46,30 +46,30 @@ export function drawUltimateShareCard(d: UltShareData): string {
   ctx.strokeRect(10, 10, W - 20, H - 20);
 
   // lockup
-  ctx.font = '700 34px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 34px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
   ctx.fillText('ROAD TO MAJOR', 40, 64);
   ctx.fillStyle = '#ecc75f';
-  ctx.font = '700 22px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 22px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillText(d.clubName ? `✦ ULTIMATE · ${d.clubName.slice(0, 24)}` : '✦ ULTIMATE', 40, 94);
-  ctx.font = '500 16px Inter, Arial, sans-serif';
+  ctx.font = '500 16px Barlow, Arial, sans-serif';
   ctx.fillStyle = '#8b8577';
   ctx.textAlign = 'right';
   ctx.fillText(`${MODE_LABEL[d.mode]}${d.mapName ? ` · ${d.mapName}` : ''}`, W - 40, 64);
 
   // resultado
   ctx.textAlign = 'center';
-  ctx.font = '700 60px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 60px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = d.won ? '#ecc75f' : '#f06c6c';
   ctx.fillText(d.won ? 'VITÓRIA' : 'DERROTA', W / 2, 190);
 
-  ctx.font = '800 96px "JetBrains Mono", monospace';
+  ctx.font = '800 96px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.fillText(d.score, W / 2, 295);
 
   if (d.oppName) {
-    ctx.font = '600 22px Inter, Arial, sans-serif';
+    ctx.font = '600 22px Barlow, Arial, sans-serif';
     ctx.fillStyle = '#c9c2b2';
     ctx.fillText(`vs ${d.oppName}`, W / 2, 335);
   }
@@ -80,26 +80,26 @@ export function drawUltimateShareCard(d: UltShareData): string {
   if (d.star && d.star.nick !== d.mvp?.nick) parts.push(`Craque: ${d.star.traitIcon} ${d.star.nick} · ${d.star.traitName}`);
   else if (d.star) parts.push(`${d.star.traitIcon} ${d.star.traitName}`);
   if (parts.length) {
-    ctx.font = '700 24px Inter, Arial, sans-serif';
+    ctx.font = '700 24px Barlow, Arial, sans-serif';
     ctx.fillStyle = '#ecc75f';
     ctx.fillText(parts.join('   ·   '), W / 2, 390);
   }
 
   // chamada final do caster
   if (d.casterLine) {
-    ctx.font = 'italic 500 20px Inter, Arial, sans-serif';
+    ctx.font = 'italic 500 20px Barlow, Arial, sans-serif';
     ctx.fillStyle = '#a9a394';
     ctx.fillText(`“${d.casterLine}”`, W / 2, 435, W - 120);
   }
 
   if (d.divName) {
-    ctx.font = '600 17px Inter, Arial, sans-serif';
+    ctx.font = '600 17px Barlow, Arial, sans-serif';
     ctx.fillStyle = '#8b8577';
     ctx.fillText(d.divName, W / 2, 472);
   }
 
   // rodapé
-  ctx.font = '600 17px Inter, Arial, sans-serif';
+  ctx.font = '600 17px Barlow, Arial, sans-serif';
   ctx.fillStyle = '#ecc75f';
   ctx.fillText('roadtomajor.com.br · monte seu Ultimate Squad', W / 2, 512);
 

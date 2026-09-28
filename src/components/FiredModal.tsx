@@ -42,8 +42,8 @@ export function FiredModal({ data, onClose, onRestart, onJobHunt }: Props) {
           style={{
             margin: '-22px -22px 0',
             padding: '36px 32px 26px',
-            background: 'linear-gradient(180deg, rgba(192, 57, 43, 0.22) 0%, rgba(192, 57, 43, 0.04) 100%)',
-            borderBottom: '2px solid rgba(192, 57, 43, 0.5)',
+            background: 'linear-gradient(180deg, color-mix(in srgb, var(--c-loss) 22%, transparent) 0%, color-mix(in srgb, var(--c-loss) 4%, transparent) 100%)',
+            borderBottom: '2px solid color-mix(in srgb, var(--c-loss) 50%, transparent)',
             textAlign: 'center',
           }}
         >
@@ -134,9 +134,9 @@ export function FiredModal({ data, onClose, onRestart, onJobHunt }: Props) {
 
 function Stat({ label, value, tone = 'neutral' }: { label: string; value: number; tone?: 'green' | 'gold' | 'red' | 'neutral' }) {
   const colors: Record<string, string> = {
-    green: '#5ed88a',
+    green: 'var(--c-win)',
     gold: '#e8c170',
-    red: '#e58a8a',
+    red: 'var(--c-loss)',
     neutral: 'var(--em-text)',
   };
   return (
@@ -149,7 +149,7 @@ function Stat({ label, value, tone = 'neutral' }: { label: string; value: number
         borderRadius: 4,
       }}
     >
-      <div style={{ fontSize: '1.4rem', fontWeight: 900, fontFamily: '"JetBrains Mono", monospace', color: colors[tone] }}>
+      <div style={{ fontSize: '1.4rem', fontWeight: 900, fontFamily: 'var(--font-num)', color: colors[tone] }}>
         {value}
       </div>
       <div style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2 }}>

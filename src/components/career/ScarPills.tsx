@@ -42,7 +42,7 @@ export function ScarPills({ scars, split, showExpired = false, compact = false }
           >
             <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
             {s.name}
-            <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', fontFamily: '"JetBrains Mono", monospace' }}>
+            <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
               S{s.since}{s.expires != null ? `→${s.expires}` : ''}
             </span>
           </span>

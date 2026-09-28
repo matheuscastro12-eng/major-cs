@@ -3,20 +3,7 @@
    ============================================================ */
 
 .career-dash {
-  --em-bg: #121212;
-  --em-panel: #1a1a1a;
-  --em-panel-2: #222;
-  --em-border: rgba(255, 255, 255, 0.08);
-  --em-border-strong: rgba(255, 255, 255, 0.14);
-  --em-text: #f0f0f0;
-  --em-muted: #8a8a8a;
-  --em-red: #c0392b;
-  --em-red-hover: #e74c3c;
-  --em-green: #2ecc71;
-  --em-gold: #d4a017;
-  --dash-win: #2ecc71;
-  --dash-loss: #e74c3c;
-
+  /* tokens: src/styles/tokens.css; os nomes antigos (--em-, --dash-) são aliases em tokens-legacy.css */
   min-height: 100vh;
   min-height: 100dvh;
   width: 100%;
@@ -38,7 +25,7 @@
 .career-dash .em-section-label,
 .career-dash .em-fin-balance span,
 .career-dash .em-fin-stat span {
-  font-family: var(--font-cond, 'Oswald', 'Bahnschrift', sans-serif);
+  font-family: var(--font-display);
 }
 
 .career-dash .dash-card-head b {
@@ -58,85 +45,11 @@ main.page.page-career {
 }
 
 body:has(main.page-career) {
-  background: #121212;
+  background: var(--c-surface-0);
   background-image: none;
 }
 
-body:has(main.page-career .career-dash--light) {
-  background: #e8e8e8;
-}
-
-/* ---- Tema claro ---- */
-.career-dash--light {
-  --em-bg: #e8e8e8;
-  --em-panel: #ffffff;
-  --em-panel-2: #f3f3f3;
-  --em-border: rgba(0, 0, 0, 0.1);
-  --em-border-strong: rgba(0, 0, 0, 0.16);
-  --em-text: #1a1a1a;
-  --em-muted: #666666;
-  --em-red: #b83227;
-  --em-red-hover: #d44336;
-  --em-green: #1e9e55;
-  --em-gold: #b8860b;
-
-  /* Sobrescreve variáveis CSS globais (sem prefixo e --rtm-*)
-     para que TODOS os componentes dentro da carreira usem cores claras.
-     Sem isso, elementos como .pcard, .gsl-group, .pb-opt, .news-item etc.
-     permanecem escuros pois usam var(--panel-2), var(--bg-deep) etc. */
-
-  /* globais herdadas sem prefixo */
-  --bg: #e8e8e8;
-  --bg-deep: #f5f5f7;
-  --panel: #ffffff;
-  --panel-2: #ffffff;
-  --panel-3: #f0f0f2;
-  --border: rgba(0, 0, 0, 0.12);
-  --border-soft: rgba(0, 0, 0, 0.08);
-  --row-a: #fafafa;
-  --row-b: #f4f4f6;
-  --text: #1a1a1a;
-  --text-strong: #000000;
-  --muted: #666666;
-  --dim: #888888;
-  --faint: #bbbbbb;
-  --link: #2a6fa8;
-  --pos: #1e9e55;
-  --gold: #b8860b;
-  --gold-glow: rgba(184, 134, 11, 0.12);
-  --gold-soft: #a07808;
-  --green-bright: #18a050;
-  --red-bright: #c0392b;
-  --blue: #2a6fa8;
-  --blue-bright: #3a86c8;
-
-  /* --rtm-* tokens */
-  --rtm-bg: #e8e8e8;
-  --rtm-bg-deep: #f5f5f7;
-  --rtm-header: #ffffff;
-  --rtm-panel: #ffffff;
-  --rtm-panel-2: #f3f3f3;
-  --rtm-panel-3: #ebebeb;
-  --rtm-row-a: #fafafa;
-  --rtm-row-b: #f4f4f6;
-  --rtm-border: rgba(0, 0, 0, 0.12);
-  --rtm-border-soft: rgba(0, 0, 0, 0.08);
-  --rtm-text: #1a1a1a;
-  --rtm-text-strong: #000000;
-  --rtm-dim: #666666;
-  --rtm-faint: #aaaaaa;
-  --rtm-gold: #b8860b;
-  --rtm-gold-soft: #a07808;
-  --rtm-gold-glow: #c9a030;
-  --rtm-blue: #2a6fa8;
-  --rtm-blue-bright: #3a86c8;
-  --rtm-link: #2a6fa8;
-  --rtm-green: #1e9e55;
-  --rtm-green-bright: #18a050;
-  --rtm-red: #c0392b;
-  --rtm-red-bright: #e74c3c;
-  --rtm-shadow-panel: 0 1px 6px rgba(0, 0, 0, 0.12);
-}
+/* ---- Tema claro: os tokens claros vivem em tokens.css (:root[data-theme="light"]) ---- */
 
 /* Elementos que usam background hardcoded ou cores escuras específicas */
 .career-dash--light .gsl-group,
@@ -253,12 +166,12 @@ body:has(main.page-career .career-dash--light) {
   color: rgba(255, 255, 255, 0.80);
 }
 .career-dash--light .em-nextup .gp-chip:hover {
-  border-color: rgba(216, 169, 67, 0.70);
+  border-color: color-mix(in srgb, var(--c-accent) 70%, transparent);
   color: #fff;
 }
 .career-dash--light .em-nextup .gp-chip.on {
-  background: rgba(216, 169, 67, 0.22);
-  border-color: rgba(216, 169, 67, 0.80);
+  background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--c-accent) 80%, transparent);
   color: #ffd956;
 }
 /* muted/text dentro do nextup ficam brancos sobre a foto */
@@ -288,8 +201,8 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .career-dash--light .lang-btn.on {
-  background: rgba(192, 57, 43, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(192, 57, 43, 0.35);
+  background: color-mix(in srgb, var(--c-loss) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-loss) 35%, transparent);
   color: var(--em-red);
 }
 
@@ -336,9 +249,9 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .career-dash .lang-switch-compact .lang-btn.on {
-  background: rgba(192, 57, 43, 0.18);
+  background: color-mix(in srgb, var(--c-loss) 18%, transparent);
   color: var(--em-red);
-  box-shadow: inset 0 0 0 1px rgba(192, 57, 43, 0.35);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-loss) 35%, transparent);
 }
 
 .career-dash .lang-flag-svg {
@@ -482,7 +395,7 @@ body:has(main.page-career .career-dash--light) {
 
 .em-nav-drop-item.on {
   color: var(--em-text);
-  background: rgba(192, 57, 43, 0.12);
+  background: color-mix(in srgb, var(--c-loss) 12%, transparent);
   border-left: 3px solid var(--em-red);
   padding-left: 15px;
 }
@@ -498,7 +411,7 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .career-dash--light .em-nav-drop-item.on {
-  background: rgba(192, 57, 43, 0.08);
+  background: color-mix(in srgb, var(--c-loss) 8%, transparent);
 }
 
 .em-main-nav::-webkit-scrollbar { display: none; }
@@ -868,8 +781,8 @@ body:has(main.page-career .career-dash--light) {
   width: fit-content;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(192, 57, 43, 0.15);
-  border: 1px solid rgba(192, 57, 43, 0.35);
+  background: color-mix(in srgb, var(--c-loss) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-loss) 35%, transparent);
   color: #ffb1b1;
   font-size: 0.72rem;
   font-weight: 700;
@@ -962,14 +875,14 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .em-confirm-modal.danger {
-  border-color: rgba(192, 57, 43, 0.5);
+  border-color: color-mix(in srgb, var(--c-loss) 50%, transparent);
   box-shadow:
-    0 0 0 1px rgba(192, 57, 43, 0.2),
+    0 0 0 1px color-mix(in srgb, var(--c-loss) 20%, transparent),
     0 24px 80px rgba(0, 0, 0, 0.65);
 }
 
 .em-confirm-modal.danger.light {
-  border-color: rgba(192, 57, 43, 0.35);
+  border-color: color-mix(in srgb, var(--c-loss) 35%, transparent);
 }
 
 .em-confirm-close {
@@ -1013,18 +926,18 @@ body:has(main.page-career .career-dash--light) {
   height: 48px;
   margin-bottom: 14px;
   border-radius: 50%;
-  background: rgba(192, 57, 43, 0.15);
+  background: color-mix(in srgb, var(--c-loss) 15%, transparent);
   color: #e74c3c;
 }
 
 .em-confirm-icon-wrap.danger {
-  border: 1px solid rgba(192, 57, 43, 0.35);
+  border: 1px solid color-mix(in srgb, var(--c-loss) 35%, transparent);
 }
 
 .em-confirm-kicker {
   display: block;
   margin-bottom: 6px;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 1.2px;
@@ -1035,7 +948,7 @@ body:has(main.page-career .career-dash--light) {
 .em-confirm-title {
   margin: 0 0 12px;
   padding-right: 36px;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 700;
   color: inherit;
@@ -1074,7 +987,7 @@ body:has(main.page-career .career-dash--light) {
   min-height: 38px;
   padding: 0 18px;
   border-radius: 6px;
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -1332,7 +1245,7 @@ body:has(main.page-career .career-dash--light) {
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--em-muted);
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
 }
 
 .em-fin-big {
@@ -1540,7 +1453,7 @@ body:has(main.page-career .career-dash--light) {
 
 .em-cal-week.on {
   border-color: var(--em-red);
-  background: rgba(192, 57, 43, 0.12);
+  background: color-mix(in srgb, var(--c-loss) 12%, transparent);
 }
 
 .em-cal-week-h {
@@ -1617,7 +1530,7 @@ body:has(main.page-career .career-dash--light) {
 
 .em-rank-you {
   border-bottom: 1px solid var(--em-border);
-  background: rgba(192, 57, 43, 0.1);
+  background: color-mix(in srgb, var(--c-loss) 10%, transparent);
 }
 
 .em-rank-you-head {
@@ -1628,7 +1541,7 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .em-rank-you-label {
-  font-family: var(--font-cond, 'Oswald', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 1.2px;
@@ -1637,7 +1550,7 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .career-dash--light .em-rank-you {
-  background: rgba(192, 57, 43, 0.06);
+  background: color-mix(in srgb, var(--c-loss) 6%, transparent);
 }
 
 .em-rank-you .em-rank-row.me {
@@ -1659,7 +1572,7 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .em-rank-row.me {
-  background: rgba(192, 57, 43, 0.2);
+  background: color-mix(in srgb, var(--c-loss) 20%, transparent);
   border-left: 3px solid var(--em-red);
 }
 
@@ -1730,8 +1643,8 @@ body:has(main.page-career .career-dash--light) {
   font-weight: 800;
 }
 
-.em-form-chip.win { background: rgba(46, 204, 113, 0.2); color: var(--em-green); }
-.em-form-chip.loss { background: rgba(231, 76, 60, 0.2); color: var(--em-red); }
+.em-form-chip.win { background: color-mix(in srgb, var(--c-win) 20%, transparent); color: var(--em-green); }
+.em-form-chip.loss { background: color-mix(in srgb, var(--c-loss) 20%, transparent); color: var(--em-red); }
 
 .em-form-stats {
   display: flex;
@@ -1833,7 +1746,7 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .career-dash .gp-chip.on {
-  background: rgba(192, 57, 43, 0.15);
+  background: color-mix(in srgb, var(--c-loss) 15%, transparent);
   border-color: var(--em-red);
   color: var(--em-text);
 }
@@ -1904,8 +1817,8 @@ body:has(main.page-career .career-dash--light) {
 }
 
 .career-dash .cal-major-banner.now {
-  border-color: rgba(192, 57, 43, 0.4);
-  background: rgba(192, 57, 43, 0.08);
+  border-color: color-mix(in srgb, var(--c-loss) 40%, transparent);
+  background: color-mix(in srgb, var(--c-loss) 8%, transparent);
 }
 
 .career-dash .mt-name {
@@ -2384,7 +2297,7 @@ body:has(main.page-career .career-dash--light) {
   align-items: center;
   gap: 7px;
 }
-.career-dash .aca-league td.pos { color: #29c47a; }
+.career-dash .aca-league td.pos { color: var(--c-win); }
 .career-dash .aca-league td.neg { color: #e2574c; }
 .career-dash .aca-league-matches {
   display: flex;
@@ -2402,7 +2315,7 @@ body:has(main.page-career .career-dash--light) {
   border-left: 3px solid var(--em-border-strong);
   font-size: 0.82rem;
 }
-.career-dash .aca-match.won { border-left-color: #29c47a; }
+.career-dash .aca-match.won { border-left-color: var(--c-win); }
 .career-dash .aca-match.lost { border-left-color: #e2574c; }
 .career-dash .aca-match-opp {
   display: inline-flex;
@@ -2453,7 +2366,7 @@ body:has(main.page-career .career-dash--light) {
   letter-spacing: 0.6px;
   color: var(--em-muted);
 }
-.career-dash .gsl-br-sub.adv { color: #29c47a; }
+.career-dash .gsl-br-sub.adv { color: var(--c-win); }
 .career-dash .gsl-br-sub.elim { color: #e2574c; }
 .career-dash .gsl-br-seed {
   font-family: inherit;
@@ -2532,8 +2445,8 @@ body:has(main.page-career .career-dash--light) {
   padding: 9px 10px;
 }
 .career-dash .hb-resultbox.adv {
-  border-color: color-mix(in srgb, #29c47a 40%, var(--em-border));
-  background: color-mix(in srgb, #29c47a 10%, var(--em-panel-2));
+  border-color: color-mix(in srgb, var(--c-win) 40%, var(--em-border));
+  background: color-mix(in srgb, var(--c-win) 10%, var(--em-panel-2));
 }
 .career-dash .hb-resultbox.elim {
   border-color: color-mix(in srgb, #e2574c 38%, var(--em-border));
@@ -2545,7 +2458,7 @@ body:has(main.page-career .career-dash--light) {
   letter-spacing: 0.5px;
   font-weight: 700;
 }
-.career-dash .hb-resultbox.adv .hb-resultbox-title { color: #29c47a; }
+.career-dash .hb-resultbox.adv .hb-resultbox-title { color: var(--c-win); }
 .career-dash .hb-resultbox.elim .hb-resultbox-title { color: #e2574c; }
 
 /* Token de time dentro da resultbox (NAVI, LGC, ...) */
@@ -2588,10 +2501,10 @@ body:has(main.page-career .career-dash--light) {
   border-left: 3px solid var(--em-border);
   font-size: 0.82rem;
 }
-.career-dash .gsl-st-row.adv { border-left-color: #29c47a; }
+.career-dash .gsl-st-row.adv { border-left-color: var(--c-win); }
 .career-dash .gsl-st-row.me { box-shadow: inset 0 0 0 1px var(--em-gold); }
 .career-dash .gsl-pl { font-family: inherit; color: var(--em-muted); }
-.career-dash .gsl-q { color: #29c47a; font-weight: 700; }
+.career-dash .gsl-q { color: var(--c-win); font-weight: 700; }
 .career-dash .gsl-stage-label { color: var(--em-muted); }
 
 /* ============================================================
@@ -2656,8 +2569,8 @@ body:has(main.page-career .career-dash--light) {
   color: var(--em-text);
 }
 .career-dash .tier-banner.up {
-  border-left: 3px solid #29c47a;
-  background: color-mix(in srgb, #29c47a 10%, var(--em-panel-2));
+  border-left: 3px solid var(--c-win);
+  background: color-mix(in srgb, var(--c-win) 10%, var(--em-panel-2));
 }
 .career-dash .tier-banner.down {
   border-left: 3px solid #e2574c;
@@ -2685,7 +2598,7 @@ body:has(main.page-career .career-dash--light) {
   color: var(--em-muted);
   font-size: 0.8rem;
 }
-.career-dash .career-hall-status.saved { color: #29c47a; }
+.career-dash .career-hall-status.saved { color: var(--c-win); }
 .career-dash .career-hall-status.error { color: var(--em-gold); }
 
 .career-dash .se-awards {
@@ -3022,9 +2935,9 @@ body.career-dash .em-badge--gold {
   color: var(--em-gold);
 }
 body.career-dash .em-badge--green {
-  background: color-mix(in srgb, #29c47a 15%, var(--em-panel-2));
-  border-color: color-mix(in srgb, #29c47a 50%, var(--em-border));
-  color: #29c47a;
+  background: color-mix(in srgb, var(--c-win) 15%, var(--em-panel-2));
+  border-color: color-mix(in srgb, var(--c-win) 50%, var(--em-border));
+  color: var(--c-win);
 }
 body.career-dash .em-badge--red {
   background: color-mix(in srgb, #e2574c 14%, var(--em-panel-2));
@@ -3064,7 +2977,7 @@ body.career-dash .em-table tbody tr.mine {
 body.career-dash .em-table tbody tr.mine td { font-weight: 700; }
 body.career-dash .em-table.zebra tbody tr:nth-child(odd) { background: color-mix(in srgb, var(--em-panel-2) 60%, transparent); }
 body.career-dash .em-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-body.career-dash .em-table .pos { color: #29c47a; }
+body.career-dash .em-table .pos { color: var(--c-win); }
 body.career-dash .em-table .neg { color: #e2574c; }
 
 /* ---- Modal (Modal.tsx) ---- */
@@ -3170,7 +3083,7 @@ body.career-dash .em-toast {
   gap: 10px;
   animation: em-toast-in 0.22s ease;
 }
-body.career-dash .em-toast--success { border-left-color: #29c47a; }
+body.career-dash .em-toast--success { border-left-color: var(--c-win); }
 body.career-dash .em-toast--error { border-left-color: #e2574c; }
 body.career-dash .em-toast--info { border-left-color: var(--em-gold); }
 body.career-dash .em-toast-msg { flex: 1; }
@@ -3258,7 +3171,7 @@ body.career-dash .matchline .score {
   font-family: inherit; font-size: 0.95rem; font-weight: 700; letter-spacing: 0;
   color: var(--em-text); min-width: 52px;
 }
-body.career-dash .matchline .score .w { color: #29c47a; }
+body.career-dash .matchline .score .w { color: var(--c-win); }
 body.career-dash .matchline .score .l { color: var(--em-muted); }
 body.career-dash .matchline .score.muted { color: var(--em-muted); font-weight: 500; }
 
@@ -3283,7 +3196,7 @@ body.career-dash .role-needs {
   border-left: 3px solid var(--em-gold);
   color: var(--em-text);
 }
-body.career-dash .role-needs-ok { color: #29c47a; }
+body.career-dash .role-needs-ok { color: var(--c-win); }
 body.career-dash .role-needs-hint { color: var(--em-muted); }
 body.career-dash .player-cards,
 body.career-dash .draft-source { background: transparent; }
@@ -3305,7 +3218,7 @@ body.career-dash .pb-chip {
   font-size: 0.74rem;
   font-weight: 700;
 }
-body.career-dash .pb-chip.pick { border-color: #29c47a; color: #29c47a; }
+body.career-dash .pb-chip.pick { border-color: var(--c-win); color: var(--c-win); }
 body.career-dash .pb-chip.ban { border-color: #e2574c; color: #e2574c; }
 body.career-dash .pb-analysis {
   background: var(--em-panel);
@@ -3375,7 +3288,7 @@ body.career-dash .map-pill {
   font-weight: 600;
   font-size: 0.78rem;
 }
-body.career-dash .map-pill.win { border-color: #29c47a; color: #29c47a; }
+body.career-dash .map-pill.win { border-color: var(--c-win); color: var(--c-win); }
 body.career-dash .map-pill.loss { border-color: #e2574c; color: #e2574c; }
 body.career-dash .map-pills { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -3392,7 +3305,7 @@ body.career-dash .finale .label,
 body.career-dash .finale .sub { color: var(--em-muted); }
 body.career-dash .finale .gold-text { color: var(--em-gold); font-weight: 700; }
 body.career-dash .finale .neg { color: #e2574c; }
-body.career-dash .finale .pos { color: #29c47a; }
+body.career-dash .finale .pos { color: var(--c-win); }
 body.career-dash .mvp-card {
   background: color-mix(in srgb, var(--em-gold) 10%, var(--em-panel-2));
   border: 1px solid var(--em-gold);
@@ -3438,9 +3351,9 @@ body.career-dash .em-result-draw {
   border: 1px solid var(--em-border);
 }
 body.career-dash .em-result-win {
-  color: #29c47a;
-  border-color: color-mix(in srgb, #29c47a 45%, var(--em-border));
-  background: color-mix(in srgb, #29c47a 12%, var(--em-panel-2));
+  color: var(--c-win);
+  border-color: color-mix(in srgb, var(--c-win) 45%, var(--em-border));
+  background: color-mix(in srgb, var(--c-win) 12%, var(--em-panel-2));
 }
 body.career-dash .em-result-loss {
   color: #e2574c;
@@ -3977,10 +3890,10 @@ body.career-dash .em-status {
 body.career-dash .em-status b { color: var(--em-text); font-weight: 700; }
 body.career-dash .em-status-sub { color: var(--em-muted); font-size: 0.78rem; }
 body.career-dash .em-status-turn.pick {
-  border-color: #29c47a;
-  background: color-mix(in srgb, #29c47a 14%, var(--em-panel));
+  border-color: var(--c-win);
+  background: color-mix(in srgb, var(--c-win) 14%, var(--em-panel));
 }
-body.career-dash .em-status-turn.pick b { color: #29c47a; }
+body.career-dash .em-status-turn.pick b { color: var(--c-win); }
 body.career-dash .em-status-turn.ban {
   border-color: #e2574c;
   background: color-mix(in srgb, #e2574c 14%, var(--em-panel));
@@ -4044,7 +3957,7 @@ body.career-dash .em-veto-step {
 }
 body.career-dash .em-veto-step.is-done { opacity: 1; }
 body.career-dash .em-veto-step.is-done.ban { border-color: color-mix(in srgb, #e2574c 50%, var(--em-border)); }
-body.career-dash .em-veto-step.is-done.pick { border-color: color-mix(in srgb, #29c47a 50%, var(--em-border)); }
+body.career-dash .em-veto-step.is-done.pick { border-color: color-mix(in srgb, var(--c-win) 50%, var(--em-border)); }
 body.career-dash .em-veto-step.is-done.decider { border-color: var(--em-gold); }
 body.career-dash .em-veto-step.is-current {
   opacity: 1;
@@ -4065,7 +3978,7 @@ body.career-dash .em-veto-step-act {
   color: var(--em-muted);
 }
 body.career-dash .em-veto-step.is-done.ban .em-veto-step-act { color: #e2574c; }
-body.career-dash .em-veto-step.is-done.pick .em-veto-step-act { color: #29c47a; }
+body.career-dash .em-veto-step.is-done.pick .em-veto-step-act { color: var(--c-win); }
 body.career-dash .em-veto-step.is-done.decider .em-veto-step-act { color: var(--em-gold); }
 
 body.career-dash .em-veto-banner {
@@ -4109,12 +4022,12 @@ body.career-dash .em-mapcard.is-selectable:hover {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.36);
 }
 body.career-dash .em-veto-maps.mode-ban .em-mapcard.is-selectable:hover { border-color: #e2574c; }
-body.career-dash .em-veto-maps.mode-pick .em-mapcard.is-selectable:hover { border-color: #29c47a; }
+body.career-dash .em-veto-maps.mode-pick .em-mapcard.is-selectable:hover { border-color: var(--c-win); }
 
 body.career-dash .em-mapcard.is-dead { cursor: default; }
 body.career-dash .em-mapcard.is-dead .em-mapcard-img { filter: grayscale(0.85) brightness(0.5); }
 body.career-dash .em-mapcard.is-banned { border-color: color-mix(in srgb, #e2574c 50%, var(--em-border)); }
-body.career-dash .em-mapcard.is-picked { border-color: color-mix(in srgb, #29c47a 50%, var(--em-border)); }
+body.career-dash .em-mapcard.is-picked { border-color: color-mix(in srgb, var(--c-win) 50%, var(--em-border)); }
 body.career-dash .em-mapcard.is-decider { border-color: var(--em-gold); }
 
 @keyframes em-mapcard-in {
@@ -4167,7 +4080,7 @@ body.career-dash .em-mapcard-tend {
   border: 1px solid var(--em-border);
   color: var(--em-text);
 }
-body.career-dash .em-mapcard-tend.tend-pick { color: #29c47a; border-color: color-mix(in srgb, #29c47a 45%, var(--em-border)); }
+body.career-dash .em-mapcard-tend.tend-pick { color: var(--c-win); border-color: color-mix(in srgb, var(--c-win) 45%, var(--em-border)); }
 body.career-dash .em-mapcard-tend.tend-ban { color: #e2574c; border-color: color-mix(in srgb, #e2574c 45%, var(--em-border)); }
 body.career-dash .em-mapcard-tend.tend-even { color: var(--em-muted); }
 
@@ -4194,7 +4107,7 @@ body.career-dash .em-mapcard-stamp.stamp-banned {
   background: #e2574c; color: #fff;
 }
 body.career-dash .em-mapcard-stamp.stamp-picked {
-  background: #29c47a; color: #0a1a10;
+  background: var(--c-win); color: #0a1a10;
 }
 body.career-dash .em-mapcard-stamp.stamp-decider {
   background: var(--em-gold); color: #1a1205;
@@ -4247,7 +4160,7 @@ body.career-dash .em-veto-log-row {
   to { opacity: 1; transform: translateX(0); }
 }
 body.career-dash .em-veto-log-row.act-ban { border-left-color: #e2574c; }
-body.career-dash .em-veto-log-row.act-pick { border-left-color: #29c47a; }
+body.career-dash .em-veto-log-row.act-pick { border-left-color: var(--c-win); }
 body.career-dash .em-veto-log-row.act-decider { border-left-color: var(--em-gold); }
 body.career-dash .em-veto-log-row.is-user .em-veto-log-tag { color: var(--em-gold); }
 body.career-dash .em-veto-log-step { color: var(--em-muted); font-weight: 700; font-size: 0.74rem; text-align: center; }
@@ -4398,7 +4311,7 @@ body.career-dash .em-veto-edge-bar i {
   border-radius: 999px;
   transition: width 0.3s;
 }
-body.career-dash .em-veto-edge-bar i.pos { background: #29c47a; }
+body.career-dash .em-veto-edge-bar i.pos { background: var(--c-win); }
 body.career-dash .em-veto-edge-bar i.neg {
   background: #e2574c;
   transform: translateX(-100%);
@@ -4423,7 +4336,7 @@ body.career-dash .em-veto-edge-verdict {
   background: var(--em-panel-2);
   border: 1px solid var(--em-border);
 }
-body.career-dash .em-veto-edge-verdict.v-pick { color: #29c47a; border-color: color-mix(in srgb, #29c47a 45%, var(--em-border)); }
+body.career-dash .em-veto-edge-verdict.v-pick { color: var(--c-win); border-color: color-mix(in srgb, var(--c-win) 45%, var(--em-border)); }
 body.career-dash .em-veto-edge-verdict.v-ban { color: #e2574c; border-color: color-mix(in srgb, #e2574c 45%, var(--em-border)); }
 body.career-dash .em-veto-edge-verdict.v-even { color: var(--em-muted); }
 body.career-dash .em-veto-edge-verdict span { color: inherit; font-weight: 600; opacity: 0.85; }
@@ -4449,10 +4362,10 @@ body.career-dash .em-veto-list-left {
   color: var(--em-muted);
 }
 body.career-dash .em-veto-list-val { font-weight: 700; font-size: 0.78rem; }
-body.career-dash .em-veto-list-val.val-hot { color: #29c47a; }
+body.career-dash .em-veto-list-val.val-hot { color: var(--c-win); }
 body.career-dash .em-veto-list-val.val-cold { color: #e2574c; }
 body.career-dash .em-veto-list-val.val-stable { color: var(--em-muted); }
-body.career-dash .em-trend-hot { color: #29c47a; }
+body.career-dash .em-trend-hot { color: var(--c-win); }
 body.career-dash .em-trend-cold { color: #e2574c; }
 body.career-dash .em-trend-stable { color: var(--em-muted); }
 
@@ -4543,7 +4456,7 @@ body.career-dash .em-draft-step {
   min-width: 64px;
   transition: opacity 0.18s, border-color 0.18s, background 0.18s;
 }
-body.career-dash .em-draft-step.is-done { opacity: 1; border-color: color-mix(in srgb, #29c47a 50%, var(--em-border)); }
+body.career-dash .em-draft-step.is-done { opacity: 1; border-color: color-mix(in srgb, var(--c-win) 50%, var(--em-border)); }
 body.career-dash .em-draft-step.is-current {
   opacity: 1;
   background: var(--em-panel-2);
@@ -4562,7 +4475,7 @@ body.career-dash .em-draft-step-act {
   letter-spacing: 0.5px;
   color: var(--em-muted);
 }
-body.career-dash .em-draft-step.is-done .em-draft-step-act { color: #29c47a; }
+body.career-dash .em-draft-step.is-done .em-draft-step-act { color: var(--c-win); }
 body.career-dash .em-draft-step.is-current .em-draft-step-act { color: var(--em-gold); }
 
 /* Body */
@@ -4622,8 +4535,8 @@ body.career-dash .em-draft-needs {
   margin-bottom: 14px;
 }
 body.career-dash .em-draft-needs.is-ok {
-  border-left-color: #29c47a;
-  color: #29c47a;
+  border-left-color: var(--c-win);
+  color: var(--c-win);
   font-weight: 700;
 }
 body.career-dash .em-draft-needs-title {
@@ -4897,7 +4810,7 @@ body.career-dash .em-draft-slot.is-next {
   font-weight: 700;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--em-gold) 22%, transparent);
 }
-body.career-dash .em-draft-slot.is-filled { border-color: color-mix(in srgb, #29c47a 32%, var(--em-border)); }
+body.career-dash .em-draft-slot.is-filled { border-color: color-mix(in srgb, var(--c-win) 32%, var(--em-border)); }
 body.career-dash .em-draft-slot-num {
   width: 22px;
   height: 22px;
@@ -4981,7 +4894,7 @@ body.career-dash .fin-card b {
   line-height: 1.1;
   color: var(--em-text);
 }
-body.career-dash .fin-card b.pos { color: #29c47a; }
+body.career-dash .fin-card b.pos { color: var(--c-win); }
 body.career-dash .fin-card b.neg { color: #e2574c; }
 
 /* Infraestrutura & Staff */
@@ -5028,10 +4941,19 @@ body.career-dash .career-facility-card button.btn.gold {
   border-radius: 5px;
 }
 
-/* Tabela de contratos */
+/* Tabela de contratos. Rola na horizontal dentro do card quando não cabe
+   (celular); `hidden` cortava as colunas depois de Contrato sem rolagem. */
 body.career-dash .fin-table-wrap {
   border-radius: 6px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Ranking VRS (geral e por região): mesma regra, a tabela rola dentro do card. */
+.career-dash .vrs-table-wrap,
+.career-dash .vrs-region {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 body.career-dash table.stats.fin-contracts {
   width: 100%;
@@ -5062,7 +4984,7 @@ body.career-dash table.stats.fin-contracts tbody tr.fin-expiring {
   background: color-mix(in srgb, var(--em-gold) 10%, transparent);
 }
 body.career-dash table.stats.fin-contracts tbody td.neg { color: #e2574c; }
-body.career-dash table.stats.fin-contracts tbody td.pos { color: #29c47a; }
+body.career-dash table.stats.fin-contracts tbody td.pos { color: var(--c-win); }
 body.career-dash .pot-badge {
   display: inline-grid;
   place-items: center;
@@ -5073,7 +4995,7 @@ body.career-dash .pot-badge {
   font-weight: 800;
 }
 body.career-dash .pot-badge.pot-S { background: var(--em-gold); color: #1a1205; }
-body.career-dash .pot-badge.pot-A { background: color-mix(in srgb, #29c47a 26%, var(--em-panel-2)); color: #29c47a; border: 1px solid color-mix(in srgb, #29c47a 50%, var(--em-border)); }
+body.career-dash .pot-badge.pot-A { background: color-mix(in srgb, var(--c-win) 26%, var(--em-panel-2)); color: var(--c-win); border: 1px solid color-mix(in srgb, var(--c-win) 50%, var(--em-border)); }
 body.career-dash .pot-badge.pot-B { background: var(--em-panel-2); color: var(--em-text); border: 1px solid var(--em-border-strong); }
 body.career-dash .pot-badge.pot-C { background: var(--em-panel); color: var(--em-muted); border: 1px solid var(--em-border); }
 
@@ -5087,117 +5009,8 @@ body.career-dash .section-label {
   margin: 18px 0 8px;
 }
 
-/* ============================================================
-   REBIND GLOBAL: redefine todos os tokens legados (do tema antigo,
-   azul-acinzentado) dentro do body.career-dash pros equivalentes
-   --em-* neutros. Como body.career-dash agora envolve TODO o app
-   (Fase 0), isso re-skina automaticamente as ~273 regras de
-   index.css que ainda usam --panel-2, --border, --blue, --rtm-blue
-   etc. sem precisar tocar regra a regra.
-   ============================================================ */
-body.career-dash {
-  /* ---- Superfícies (cinza neutro em vez de azulado) ---- */
-  --bg: var(--em-bg, #121212);
-  --bg-deep: #0e0e0e;
-  --panel: var(--em-panel);
-  --panel-2: var(--em-panel-2);
-  --panel-3: #2a2a2a;
-  --header: var(--em-panel-2);
-  --row-a: var(--em-panel);
-  --row-b: var(--em-panel-2);
-
-  /* ---- Bordas (sem azul-cinza) ---- */
-  --border: var(--em-border-strong);
-  --border-soft: var(--em-border);
-
-  /* ---- Texto ---- */
-  --text: var(--em-text);
-  --text-strong: var(--em-text);
-  --muted: var(--em-muted);
-  --dim: var(--em-muted);
-  --faint: color-mix(in srgb, var(--em-muted) 60%, transparent);
-  --link: var(--em-gold);
-
-  /* ---- BLUE -> GOLD (o acento azul vira o dourado em-*) ---- */
-  --blue: var(--em-gold);
-  --blue-bright: var(--em-gold);
-
-  /* ---- Ouro/vermelho/verde alinhados com em-* ---- */
-  --gold: var(--em-gold);
-  --gold-2: #b8860b;
-  --gold-soft: color-mix(in srgb, var(--em-gold) 70%, transparent);
-  --gold-glow: color-mix(in srgb, var(--em-gold) 25%, transparent);
-  --red: #c0392b;
-  --red-bright: #e2574c;
-  --green: #1f9d5a;
-  --green-bright: #29c47a;
-  --pos: #29c47a;
-  --pos-soft: color-mix(in srgb, #29c47a 16%, transparent);
-  --neg: #e2574c;
-  --neg-soft: color-mix(in srgb, #e2574c 16%, transparent);
-
-  /* ---- Radius/elev ---- */
-  --r: 6px;
-  --r-sm: 5px;
-  --r-lg: 8px;
-  --radius: 6px;
-  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --elev-2: 0 6px 18px rgba(0, 0, 0, 0.45);
-
-  /* ---- Família --rtm-* (todos rebindados) ---- */
-  --rtm-bg: var(--em-bg, #121212);
-  --rtm-bg-deep: #0e0e0e;
-  --rtm-panel: var(--em-panel);
-  --rtm-panel-2: var(--em-panel-2);
-  --rtm-panel-3: #2a2a2a;
-  --rtm-header: var(--em-panel-2);
-  --rtm-row-a: var(--em-panel);
-  --rtm-row-b: var(--em-panel-2);
-  --rtm-border: var(--em-border-strong);
-  --rtm-border-soft: var(--em-border);
-  --rtm-text: var(--em-text);
-  --rtm-text-strong: var(--em-text);
-  --rtm-dim: var(--em-muted);
-  --rtm-faint: color-mix(in srgb, var(--em-muted) 60%, transparent);
-  --rtm-link: var(--em-gold);
-  --rtm-blue: var(--em-gold);
-  --rtm-blue-bright: var(--em-gold);
-  --rtm-gold: var(--em-gold);
-  --rtm-gold-soft: color-mix(in srgb, var(--em-gold) 70%, transparent);
-  --rtm-gold-bright: var(--em-gold);
-  --rtm-gold-glow: color-mix(in srgb, var(--em-gold) 25%, transparent);
-  --rtm-green: #1f9d5a;
-  --rtm-green-bright: #29c47a;
-  --rtm-red: #c0392b;
-  --rtm-red-bright: #e2574c;
-  --rtm-radius: 6px;
-  --rtm-accent-inset: var(--em-gold);
-  --rtm-role-awp: var(--em-gold);
-  --rtm-role-support: #29c47a;
-
-  /* Gradientes legados → cor sólida em-* (gradient com tons azuis some) */
-  --rtm-grad-btn: var(--em-gold);
-  --rtm-grad-btn-hover: var(--em-gold);
-  --rtm-grad-header: var(--em-panel-2);
-  --rtm-grad-panel-head: var(--em-panel-2);
-
-  /* Sombras: sem brilho azul */
-  --rtm-shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --rtm-shadow-card-hover: 0 8px 22px rgba(0, 0, 0, 0.42);
-  --rtm-shadow-banner: 0 6px 22px rgba(0, 0, 0, 0.4);
-  --rtm-shadow-header: 0 1px 0 var(--em-border);
-  --rtm-shadow-btn: none;
-}
-
-/* Light mode: ajusta tons quando .career-dash--light está ativo */
-body.career-dash.career-dash--light {
-  --bg-deep: #f4f4f4;
-  --panel-3: #e8e8e8;
-  --gold-glow: color-mix(in srgb, var(--em-gold) 18%, transparent);
-  --rtm-bg-deep: #f4f4f4;
-  --rtm-panel-3: #e8e8e8;
-  --rtm-gold-glow: color-mix(in srgb, var(--em-gold) 18%, transparent);
-}
+/* REBIND GLOBAL (tokens legados → em-*) aposentado: todas as camadas antigas
+   agora apontam para os tokens semânticos em src/styles/tokens-legacy.css. */
 
 /* ============================================================
    Cartinhas (FutCard + .ut-card) — re-skin no padrão em-*
@@ -5258,7 +5071,7 @@ body.career-dash .ut-card-pick {
 body.career-dash .ut-card-rating { font-weight: 800; }
 body.career-dash .ut-card-tier { font-weight: 700; opacity: 0.78; letter-spacing: 0.6px; }
 body.career-dash .ut-card-name { font-weight: 800; letter-spacing: 0.3px; }
-body.career-dash .ut-card-era.current { color: #29c47a; border-color: color-mix(in srgb, #29c47a 35%, transparent); }
+body.career-dash .ut-card-era.current { color: var(--c-win); border-color: color-mix(in srgb, var(--c-win) 35%, transparent); }
 body.career-dash .ut-card-stats { border-top-color: rgba(255, 255, 255, 0.1); border-bottom-color: rgba(255, 255, 255, 0.1); }
 
 /* ut-pack-reveal (pack opening) — manter glow dourado, mas em-* ring */

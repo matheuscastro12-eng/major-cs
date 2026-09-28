@@ -85,7 +85,7 @@ function CommunityGoalBar({ onPlay }: { onPlay: () => void }) {
   if (!week) return null;
   const done = week.reached;
   return (
-    <button type="button" onClick={onPlay} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '8px 14px', border: 'none', borderBottom: '1px solid rgba(97,168,221,.25)', background: done ? 'rgba(41,196,122,.12)' : 'rgba(97,168,221,.1)', color: 'var(--rtm-text-strong)', fontSize: '13px', cursor: 'pointer', flexWrap: 'wrap' }}>
+    <button type="button" onClick={onPlay} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '8px 14px', border: 'none', borderBottom: '1px solid color-mix(in srgb, var(--c-accent) 25%, transparent)', background: done ? 'color-mix(in srgb, var(--c-win) 12%, transparent)' : 'color-mix(in srgb, var(--c-accent) 10%, transparent)', color: 'var(--rtm-text-strong)', fontSize: '13px', cursor: 'pointer', flexWrap: 'wrap' }}>
       <span>🌍 <b>{ct('Meta da comunidade')}:</b> {week.total.toLocaleString('pt-BR')}/{week.target.toLocaleString('pt-BR')} {ct('partidas esta semana')}{done ? ` · ✅ ${ct('batida!')}` : ''}</span>
       <span style={{ flex: '0 0 auto', width: '120px', height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
         <span style={{ display: 'block', width: `${week.pct}%`, height: '100%', background: done ? 'var(--rtm-green-bright)' : '#61a8dd' }} />
@@ -99,13 +99,13 @@ function Hero({ onAccount, onPlay }: { onAccount: () => void; onPlay: () => void
   return (
     <section id="topo" style={{ position: 'relative', overflow: 'hidden', marginTop: '-66px', paddingTop: '66px' }}>
       <img src={M + 'mirage.jpg'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(900px 500px at 50% 0, rgba(67,130,182,.25), transparent 70%), linear-gradient(180deg, rgba(13,17,22,.7) 0%, rgba(24,29,35,.96) 78%, var(--rtm-bg) 100%)' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(900px 500px at 50% 0, color-mix(in srgb, var(--c-accent) 25%, transparent), transparent 70%), linear-gradient(180deg, rgba(13,17,22,.7) 0%, rgba(24,29,35,.96) 78%, var(--rtm-bg) 100%)' }} />
       <div style={{ position: 'relative' }}><CommunityGoalBar onPlay={onPlay} /></div>
       <div className="lp-wrap" style={{ position: 'relative', textAlign: 'center', padding: '56px 22px 44px' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '999px', background: 'rgba(216,169,67,.12)', border: '1px solid var(--rtm-gold-soft)', color: 'var(--rtm-gold)', fontSize: '12px', fontWeight: 700, letterSpacing: '.5px' }}>
           <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--rtm-green-bright)' }} /> {ct('Beta aberto, joga de graça no navegador')}
         </span>
-        <h1 className="l-hero-h1" style={{ fontFamily: 'var(--font-cond)', fontSize: '74px', fontWeight: 700, letterSpacing: '4px', margin: '18px 0 0', textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 0.98, textShadow: '0 0 40px rgba(97,168,221,.35)' }}>
+        <h1 className="l-hero-h1" style={{ fontFamily: 'var(--font-cond)', fontSize: '74px', fontWeight: 700, letterSpacing: '4px', margin: '18px 0 0', textTransform: 'uppercase', color: 'var(--rtm-text-strong)', lineHeight: 0.98, textShadow: '0 0 40px color-mix(in srgb, var(--c-accent) 35%, transparent)' }}>
           {ct('Monte o time dos sonhos')}<br /><span style={{ color: 'var(--em-gold)' }}>{ct('de todas as eras do CS')}</span>
         </h1>
         <p style={{ color: 'var(--rtm-dim)', fontSize: '17px', maxWidth: '620px', margin: '18px auto 0', lineHeight: 1.55 }}>
@@ -486,7 +486,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
           <FounderCounter style={{ marginTop: '8px' }} />
         </div>
       )}
-      {info && mode !== 'signup' && <p style={{ color: '#5ed88a', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
+      {info && mode !== 'signup' && <p style={{ color: 'var(--c-win)', fontSize: '0.8rem', margin: '0 0 12px' }}>{info}</p>}
       {mode !== 'reset' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {mode === 'signup' && <div><label style={lbl}>{ct('Nick de manager')}</label><input style={input} value={nick} onChange={(e) => setNick(e.target.value)} placeholder="br4z1l_zera" maxLength={24} /></div>}
@@ -579,9 +579,9 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
         <Button variant="gold" disabled={!valid || busy} style={{ width: '100%', marginTop: '20px' }} onClick={go}>{busy ? ct('Aguarde…') : ct('Entrar')}</Button>
       ) : null}
       {pix && (
-        <div style={{ marginTop: '14px', background: 'rgba(94,216,138,.08)', border: '1px solid rgba(94,216,138,.35)', borderRadius: '6px', padding: '14px' }}>
+        <div style={{ marginTop: '14px', background: 'color-mix(in srgb, var(--c-win) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--c-win) 35%, transparent)', borderRadius: '6px', padding: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#5ed88a', boxShadow: '0 0 8px #5ed88a', animation: 'pulse 1.4s infinite' }} />
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 8px var(--c-win)', animation: 'pulse 1.4s infinite' }} />
             <b style={{ fontSize: '0.82rem', color: 'var(--em-text)', letterSpacing: '.5px', textTransform: 'uppercase', fontWeight: 800 }}>{ct('Pague o Pix e o acesso libera sozinho')}</b>
           </div>
           <p style={{ fontSize: '0.72rem', color: 'var(--em-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
@@ -602,7 +602,7 @@ export function AccountModal({ onClose, onCheckout, onPlay, initialMode = 'signu
               <textarea readOnly value={pix.charge.brCode} rows={3} onClick={(e) => (e.target as HTMLTextAreaElement).select()}
                 style={{ ...input, fontFamily: 'monospace', fontSize: '0.72rem', resize: 'none', wordBreak: 'break-all' }} />
               <button type="button" onClick={copyBr}
-                style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'rgba(94,216,138,.2)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                style={{ width: '100%', marginTop: '8px', padding: '9px', borderRadius: '6px', cursor: 'pointer', background: copied ? 'color-mix(in srgb, var(--c-win) 20%, transparent)' : 'var(--em-panel-2)', border: '1px solid var(--em-border)', color: 'var(--em-text)', fontWeight: 700, fontSize: '0.78rem', fontFamily: 'inherit' }}>
                 {copied ? ct('Copiado!') : ct('Copiar código Pix')}
               </button>
             </>
@@ -710,14 +710,14 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
       <Nav onAccount={() => openAcct('signup', 'landing-nav')} onLogin={() => openAcct('login')} onPlay={onPlay} />
       {/* [U11] convite de duelo pendente: explica e dá o caminho (conta ou convidado) */}
       {duelInvite && (
-        <div style={{ background: 'color-mix(in srgb, #4382b6 14%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
+        <div style={{ background: 'var(--c-accent-soft)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
           ⚔️ {ct('Você foi convidado pra um DUELO no Ultimate')} — {ct('sala')} <b style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{duelInvite}</b>. {ct('A sala expira em algumas horas.')}{' '}
           <button type="button" onClick={onPlay} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>{ct('Entrar e aceitar')} →</button>
         </div>
       )}
       {/* [URG-2] evento de fim de semana: discreto, acima da dobra, mesmo deslogado */}
       {wknd && (
-        <div style={{ background: 'color-mix(in srgb, #f472b6 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '8px 22px', textAlign: 'center', fontSize: '13.5px', lineHeight: 1.5 }}>
+        <div style={{ background: 'var(--c-surface-2)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '8px 22px', textAlign: 'center', fontSize: '13.5px', lineHeight: 1.5 }}>
           🎁 {wknd.open
             ? <>{ct('Evento até domingo')}: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>} · {ct('só neste fim de semana')} · {ct('termina em')} <b>{formatCountdown(wkndRemain)}</b></>
             : <>{ct('Próximo evento em')} <b>{formatCountdown(wkndRemain)}</b>: <b>{wknd.name}</b>{wkndCard && <> · {ct('carta exclusiva')} <b>{wkndCard.nick}</b> ({wkndCard.ovr})</>}</>}{' '}
@@ -725,7 +725,7 @@ export function Landing({ onPlay, onCheckout, openSignup }: { onPlay: () => void
         </div>
       )}
       {ghost && (
-        <div style={{ background: 'color-mix(in srgb, var(--rtm-gold) 12%, #181d23)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
+        <div style={{ background: 'var(--c-accent-soft)', borderBottom: '1px solid var(--rtm-border-soft)', padding: '10px 22px', textAlign: 'center', fontSize: '14px', lineHeight: 1.5 }}>
           🥊 <b>{ghost.nick}</b> {ct('te desafiou na SÉRIE DO DIA')} — {ct('rating')} <b>{ghost.rating.toFixed(2)}</b> {ct('na mesma série que você jogaria')}. {ct('O desafio expira à meia-noite — a Série do Dia é da conta vitalícia (R$20, uma vez).')}{' '}
           <button type="button" onClick={() => openAcct('signup', 'landing-ghost')} style={{ background: 'none', border: 'none', color: 'var(--rtm-gold)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>{ct('Aceitar o desafio')}</button>
         </div>

@@ -56,20 +56,20 @@ export function drawCareerShareCard(d: CareerShareData): string {
   ctx.strokeRect(10, 10, W - 20, H - 20);
 
   // lockup
-  ctx.font = '700 34px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 34px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
   ctx.fillText('ROAD TO MAJOR', 40, 64);
   ctx.fillStyle = GOLD;
-  ctx.font = '700 22px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '700 22px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillText('MODO CARREIRA', 40, 94);
 
   // org
   ctx.textAlign = 'right';
-  ctx.font = '800 30px Oswald, Arial Narrow, sans-serif';
+  ctx.font = '800 30px "Barlow Condensed", "Arial Narrow", sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.fillText(`${d.tag ? `[${d.tag.toUpperCase()}] ` : ''}${d.orgName}`, W - 40, 70);
-  ctx.font = '500 16px Inter, Arial, sans-serif';
+  ctx.font = '500 16px Barlow, Arial, sans-serif';
   ctx.fillStyle = '#8b93a3';
   ctx.fillText('minha carreira em 1 print', W - 40, 96);
 
@@ -85,17 +85,17 @@ export function drawCareerShareCard(d: CareerShareData): string {
   stats.forEach(([v, label, color], i) => {
     const cx = 40 + colW * i + colW / 2;
     ctx.textAlign = 'center';
-    ctx.font = '800 44px Oswald, Arial Narrow, sans-serif';
+    ctx.font = '800 44px "Barlow Condensed", "Arial Narrow", sans-serif';
     ctx.fillStyle = color;
     ctx.fillText(v, cx, 190, colW - 16);
-    ctx.font = '600 14px Inter, Arial, sans-serif';
+    ctx.font = '600 14px Barlow, Arial, sans-serif';
     ctx.fillStyle = '#8b93a3';
     ctx.fillText(label, cx, 218, colW - 10);
   });
 
   // a FITA DA CARREIRA — um quadrado por split, 20 por linha
   ctx.textAlign = 'left';
-  ctx.font = '600 15px Inter, Arial, sans-serif';
+  ctx.font = '600 15px Barlow, Arial, sans-serif';
   ctx.fillStyle = '#8b93a3';
   ctx.fillText('A FITA DA CARREIRA — um quadrado por split', 40, 268);
   const PER_ROW = 20;
@@ -113,7 +113,7 @@ export function drawCareerShareCard(d: CareerShareData): string {
     ctx.roundRect(x, y, CELL, CELL, 6);
     ctx.fill();
     if (s.major) {
-      ctx.font = '700 18px Inter, Arial, sans-serif';
+      ctx.font = '700 18px Barlow, Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = s.major === 'won' ? '#141821' : 'rgba(20,24,33,0.75)';
       ctx.fillText(s.major === 'won' ? '★' : '☆', x + CELL / 2, y + CELL / 2 + 6);
@@ -127,7 +127,7 @@ export function drawCareerShareCard(d: CareerShareData): string {
   let lx = 40;
   for (const [color, label] of legend) {
     if (color === '★') {
-      ctx.font = '700 16px Inter, Arial, sans-serif';
+      ctx.font = '700 16px Barlow, Arial, sans-serif';
       ctx.fillStyle = GOLD;
       ctx.fillText('★', lx, legendY + 12);
       lx += 20;
@@ -138,7 +138,7 @@ export function drawCareerShareCard(d: CareerShareData): string {
       ctx.fill();
       lx += 22;
     }
-    ctx.font = '500 14px Inter, Arial, sans-serif';
+    ctx.font = '500 14px Barlow, Arial, sans-serif';
     ctx.fillStyle = '#8b93a3';
     ctx.fillText(label, lx, legendY + 12);
     lx += ctx.measureText(label).width + 26;
@@ -146,7 +146,7 @@ export function drawCareerShareCard(d: CareerShareData): string {
 
   // rodapé
   ctx.textAlign = 'center';
-  ctx.font = '600 17px Inter, Arial, sans-serif';
+  ctx.font = '600 17px Barlow, Arial, sans-serif';
   ctx.fillStyle = GOLD;
   ctx.fillText('roadtomajor.com.br · construa a SUA história', W / 2, H - 38);
 
@@ -157,7 +157,7 @@ export function drawCareerShareCard(d: CareerShareData): string {
 export async function shareCareerCard(d: CareerShareData): Promise<'shared' | 'saved'> {
   const url = drawCareerShareCard(d);
   const text = [
-    `Minha carreira no MAJOR//CS: ${d.splits} splits, ${d.titles} títulos, ${d.majorsWon} Major${d.majorsWon === 1 ? '' : 's'} 🏆`,
+    `Minha carreira no Road to Major: ${d.splits} splits, ${d.titles} títulos, ${d.majorsWon} Major${d.majorsWon === 1 ? '' : 's'} 🏆`,
     `Melhor campanha: ${d.bestLabel} · Prêmios: ${d.prizeLabel}`,
     'Construa a sua: https://roadtomajor.com.br',
   ].join('\n');

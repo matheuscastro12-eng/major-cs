@@ -2,11 +2,12 @@
 // .claude/plans/faca-um-planejamento-para-piped-quilt.md.
 //
 // Comportamento:
-//   - PatchNotesHost monta o modal + o botão flutuante.
+//   - PatchNotesHost monta o modal (sem botão flutuante: a pílula fixa no
+//     canto flutuava sobre telas fora do shell — trava da demo, resultado da
+//     partida, landing. A entrada é o "Avisos" do trilho, o item "Novidades"
+//     do Início e a paleta ⌘K, todos via openPatchNotes()).
 //   - Na primeira abertura por user que ainda não viu o CURRENT_PATCH_ID,
 //     o modal abre automaticamente UMA VEZ (controlado por localStorage).
-//   - O botão flutuante (canto inferior esquerdo) reabre o modal a qualquer
-//     momento; exibe um ponto laranja se há patch novo.
 //   - Fechar o modal marca o patch atual como visto.
 //
 // Pra adicionar patch novo: editar src/data/patchNotes.ts (ver doc lá).
@@ -73,9 +74,20 @@ function PatchEntry({ patch }: { patch: PatchNote }) {
   );
 }
 
+// abre as Novidades de qualquer lugar (item da sidebar do Início, paleta ⌘K).
+// Com o shell universal na tela, o botão flutuante some (CSS em shell.css) e a
+// entrada passa a ser o item "Novidades" do menu.
+const openers = new Set<() => void>();
+export function openPatchNotes(): void { openers.forEach((fn) => fn()); }
+export function hasNewPatch(): boolean { return hasUnseenPatch(); }
+
 export function PatchNotesHost() {
   const [open, setOpen] = useState(false);
-  const [hasNew, setHasNew] = useState(() => hasUnseenPatch());
+  useEffect(() => {
+    const fn = () => setOpen(true);
+    openers.add(fn);
+    return () => { openers.delete(fn); };
+  }, []);
 
   // Auto-abre uma vez na primeira mount de quem ainda não viu o patch atual.
   // Atrasamos 600ms pra não competir com Landing/login na 1ª impressão.
@@ -89,60 +101,16 @@ export function PatchNotesHost() {
     setOpen(false);
     if (CURRENT_PATCH_ID) {
       markPatchSeen(CURRENT_PATCH_ID);
-      setHasNew(false);
     }
   };
 
   return (
-    <>
-      {/* Botão flutuante canto inferior esquerdo */}
-      <button
-        type="button"
-        className="patch-notes-trigger"
-        onClick={() => setOpen(true)}
-        title="Novidades"
-        style={{
-          position: 'fixed',
-          left: 14,
-          bottom: 14,
-          zIndex: 90,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 14px',
-          background: 'var(--em-panel)',
-          border: '1px solid var(--em-border)',
-          borderRadius: 999,
-          color: 'var(--em-text)',
-          fontFamily: 'inherit',
-          fontSize: '0.78rem',
-          fontWeight: 600,
-          cursor: 'pointer',
-          boxShadow: '0 4px 14px rgba(0,0,0,.35)',
-        }}
-      >
-        Novidades
-        {hasNew && (
-          <span
-            aria-label="patch novo"
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: 'var(--em-gold)',
-              boxShadow: '0 0 0 2px var(--em-panel)',
-            }}
-          />
-        )}
-      </button>
-
-      <Modal open={open} onClose={close} title="Novidades" size="md">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 22, maxHeight: '60vh', overflowY: 'auto', padding: '2px 4px' }}>
-          {PATCHES.map((p) => (
-            <PatchEntry key={p.id} patch={p} />
-          ))}
-        </div>
-      </Modal>
-    </>
+    <Modal open={open} onClose={close} title="Novidades" size="md">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 22, maxHeight: '60vh', overflowY: 'auto', padding: '2px 4px' }}>
+        {PATCHES.map((p) => (
+          <PatchEntry key={p.id} patch={p} />
+        ))}
+      </div>
+    </Modal>
   );
 }

@@ -1,12 +1,24 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+// tokens primeiro: fonte única do design system "Broadcast Desk" (docs/design-system.md)
+import './styles/tokens.css'
+import './styles/tokens-legacy.css'
+import './styles/base.css'
 import './index.css'
 import './styles/career-dashboard.css'
 import './styles/career-player-page.css'
 import './styles/career-team-page.css'
 import './styles/play-hub.css'
 import './styles/rtp.css'
+// primitivos por último: .ds-* ganha empate de especificidade com o CSS legado
+import './styles/primitives.css'
+// shell universal (trilho + sidebar + topbar + CONTINUAR + paleta + peek)
+import './styles/shell.css'
+import './styles/home.css'
+import './styles/screens.css'
+// por último: a nova interface por cima das telas legadas dentro do shell
+import './styles/skin.css'
 import App from './App.tsx'
 import { installErrorLogging } from './state/errlog'
 import { installPwa } from './state/pwa'

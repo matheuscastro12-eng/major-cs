@@ -20,13 +20,7 @@ import {
   type Facilities,
   type FacilityKey,
 } from '../engine/career/facilities';
-// formatMoney local (mesmo padrão dos outros modais T11)
-function formatMoney(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
-  if (abs >= 1_000) return `$${Math.round(n / 1_000)}K`;
-  return `$${n}`;
-}
+import { formatMoney } from '../engine/ratings';
 
 interface FacilityMeta {
   key: FacilityKey;
@@ -92,7 +86,7 @@ export function InfrastructurePage({ facilities, budget, onUpgrade, onClose }: P
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <HudPill label="Caixa" value={formatMoney(budget)} tone="green" />
-          <HudPill label="Upkeep / split" value={`-${formatMoney(upkeep)}`} tone={upkeep > 0 ? 'red' : 'neutral'} />
+          <HudPill label="Upkeep / split" value={formatMoney(-upkeep)} tone={upkeep > 0 ? 'red' : 'neutral'} />
         </div>
       </header>
 
@@ -193,7 +187,7 @@ function FacilityCard({
             }}
           />
         ))}
-        <span style={{ fontSize: '0.78rem', fontFamily: '"JetBrains Mono", monospace', color: 'var(--em-text)', fontWeight: 700, marginLeft: 6 }}>
+        <span style={{ fontSize: '0.78rem', fontFamily: 'var(--font-num)', color: 'var(--em-text)', fontWeight: 700, marginLeft: 6 }}>
           {level}/{FACILITY_MAX_LEVEL}
         </span>
       </div>
@@ -236,15 +230,15 @@ function FacilityCard({
           <div
             style={{
               padding: '8px 10px',
-              background: 'rgba(94, 216, 138, 0.08)',
-              border: '1px solid rgba(94, 216, 138, 0.25)',
+              background: 'color-mix(in srgb, var(--c-win) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--c-win) 25%, transparent)',
               borderRadius: 4,
               fontSize: '0.76rem',
               color: 'var(--em-text)',
               lineHeight: 1.4,
             }}
           >
-            <div style={{ fontSize: '0.66rem', color: '#5ed88a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2, fontWeight: 700 }}>
+            <div style={{ fontSize: '0.66rem', color: 'var(--c-win)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2, fontWeight: 700 }}>
               Próximo nv ({level + 1})
             </div>
             {meta.benefitByLevel(level + 1)}
@@ -269,7 +263,7 @@ function FacilityCard({
             }}
           >
             <span>Investir</span>
-            <span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{formatMoney(cost)}</span>
+            <span style={{ fontFamily: 'var(--font-num)' }}>{formatMoney(cost)}</span>
           </button>
         </div>
       )}
@@ -279,8 +273,8 @@ function FacilityCard({
 
 function HudPill({ label, value, tone }: { label: string; value: string; tone: 'green' | 'red' | 'neutral' }) {
   const colors: Record<string, { fg: string; bg: string; border: string }> = {
-    green: { fg: '#5ed88a', bg: 'rgba(94, 216, 138, 0.12)', border: 'rgba(94, 216, 138, 0.4)' },
-    red: { fg: '#e58a8a', bg: 'rgba(229, 138, 138, 0.12)', border: 'rgba(229, 138, 138, 0.4)' },
+    green: { fg: 'var(--c-win)', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)', border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
+    red: { fg: 'var(--c-loss)', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];
@@ -299,7 +293,7 @@ function HudPill({ label, value, tone }: { label: string; value: string; tone: '
       <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <b style={{ fontFamily: '"JetBrains Mono", monospace', color: c.fg, fontSize: '0.92rem', fontWeight: 800 }}>{value}</b>
+      <b style={{ fontFamily: 'var(--font-num)', color: c.fg, fontSize: '0.92rem', fontWeight: 800 }}>{value}</b>
     </div>
   );
 }

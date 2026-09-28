@@ -31,7 +31,7 @@ const GRADE_FLAIR: Record<MarathonGrade, string> = {
 
 export function marathonShareText(day: number, wins: number, seconds: number, grade: MarathonGrade): string {
   return [
-    `MARATONA DO DIÁRIO #${day} · MAJOR//CS`,
+    `MARATONA DO DIÁRIO #${day} · ROAD TO MAJOR`,
     `${wins}/4 em ${fmtDuration(seconds)} — ${GRADE_FLAIR[grade]}`,
     'Os 4 desafios do dia, em sequência, contra o relógio. Encara?',
     'roadtomajor.com.br/diario',

@@ -90,7 +90,7 @@ function SubRoleRow({
       </span>
       <span
         style={{
-          fontFamily: '"JetBrains Mono", monospace',
+          fontFamily: 'var(--font-num)',
           fontSize: '0.76rem',
           color: 'var(--em-muted)',
           minWidth: 30,

@@ -27,6 +27,7 @@
     { "source": "/carreira/:path*", "destination": "/" },
     { "source": "/hall", "destination": "/" },
     { "source": "/banners", "destination": "/" },
+    { "source": "/design", "destination": "/" },
     { "source": "/jogo/:path*", "destination": "/" },
     { "source": "/admin", "destination": "/" },
     { "source": "/admin/:path*", "destination": "/" }

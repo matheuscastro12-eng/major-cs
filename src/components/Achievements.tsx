@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLang } from '../state/i18n';
+import { Modal } from './ds';
 import { ACHIEVEMENTS, unlockedIds, type AchDef, type Lang } from '../state/achievements';
 
 const TITLE: Record<Lang, string> = { pt: 'Conquistas', en: 'Achievements', es: 'Logros' };
@@ -16,31 +17,26 @@ export function AchievementsModal({ onClose }: { onClose: () => void }) {
   const L = lg(lang);
   const have = unlockedIds();
   const got = ACHIEVEMENTS.filter((a) => have.has(a.id)).length;
+  // modal do design system: cabeçalho padrão, Esc fecha, foco preso e
+  // devolvido (o cabeçalho antigo usava .td-head, que só tem estilo dentro de
+  // .team-detail, e não havia Esc)
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card ach-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="td-head">
-          <div className="td-name">🏅 {TITLE[L]}</div>
-          <span className="muted small">{got}/{ACHIEVEMENTS.length}</span>
-          <span className="spacer" />
-          <button className="btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="ach-grid">
-          {ACHIEVEMENTS.map((a) => {
-            const on = have.has(a.id);
-            return (
-              <div key={a.id} className={`ach-item${on ? ' on' : ''}`}>
-                <span className="ach-icon">{on ? a.icon : '🔒'}</span>
-                <div>
-                  <div className="ach-title">{a.t[L].title}</div>
-                  <div className="ach-desc muted small">{a.t[L].desc}</div>
-                </div>
+    <Modal open onClose={onClose} title={`🏅 ${TITLE[L]} · ${got}/${ACHIEVEMENTS.length}`} size="md">
+      <div className="ach-grid">
+        {ACHIEVEMENTS.map((a) => {
+          const on = have.has(a.id);
+          return (
+            <div key={a.id} className={`ach-item${on ? ' on' : ''}`}>
+              <span className="ach-icon">{on ? a.icon : '🔒'}</span>
+              <div>
+                <div className="ach-title">{a.t[L].title}</div>
+                <div className="ach-desc muted small">{a.t[L].desc}</div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </Modal>
   );
 }
 

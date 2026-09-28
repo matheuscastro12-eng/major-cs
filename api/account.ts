@@ -355,7 +355,7 @@ export default async function handler(
     const sendResetEmail = (code: string): Promise<boolean> => sendMail({
       to: email,
       subject: `Seu código pra trocar a senha: ${code}`,
-      text: `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no MAJOR//CS.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`,
+      text: `Alguém (esperamos que você) pediu pra trocar a senha da sua conta no Road to Major.\n\nSeu código: ${code}\n\nEle vale por 30 minutos. Se não foi você, ignore este e-mail — sua senha continua a mesma.`,
     });
     // só gera/envia se o e-mail EXISTE (conta ativa ou cadastro pendente) — mas a
     // resposta é idêntica nos dois casos.

@@ -98,7 +98,7 @@ export function StreakBadge({ results, size = 'md' }: Props) {
         fontWeight: 700,
       }}
     >
-      <span style={{ color: last === 'W' ? '#5ed88a' : '#e58a8a' }}>{count}{last}</span>
+      <span style={{ color: last === 'W' ? 'var(--c-win)' : 'var(--c-loss)' }}>{count}{last}</span>
     </span>
   );
 }

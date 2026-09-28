@@ -630,7 +630,7 @@ export function AcademyTab({
                       >
                         ✏️
                       </span>
-                      <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>{ovr}</b>
+                      <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', fontWeight: 800, color: 'var(--em-gold)' }}>{ovr}</b>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: 'var(--em-muted)' }}>
                       <span className={`role-pill ${p.role}`}>{p.role}</span>
@@ -771,7 +771,7 @@ export function AcademyTab({
                 </button>
               </span>
             ) : (
-              <span style={{ fontSize: '0.72rem', color: '#5ed88a', fontWeight: 700 }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--c-win)', fontWeight: 700 }}>
                 ✓ {ct('Todos jogados')}
               </span>
             )
@@ -803,7 +803,7 @@ export function AcademyTab({
                           borderTop: '1px solid var(--em-border)',
                         }}
                       >
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', color: i === 0 ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>{i + 1}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', color: i === 0 ? 'var(--em-gold)' : 'var(--em-text)', fontWeight: 800 }}>{i + 1}</td>
                         <td style={{ ...td, textAlign: 'left' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                             {r.isUser ? (
@@ -828,12 +828,12 @@ export function AcademyTab({
                             </span>
                           </span>
                         </td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{r.w}</td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace' }}>{r.l}</td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', color: r.diff > 0 ? '#5ed88a' : r.diff < 0 ? '#e58a8a' : 'var(--em-muted)' }}>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)' }}>{r.w}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)' }}>{r.l}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', color: r.diff > 0 ? 'var(--c-win)' : r.diff < 0 ? 'var(--c-loss)' : 'var(--em-muted)' }}>
                           {r.diff > 0 ? '+' : ''}{r.diff}
                         </td>
-                        <td style={{ ...td, fontFamily: '"JetBrains Mono", monospace', fontWeight: 800 }}>{r.pts}</td>
+                        <td style={{ ...td, fontFamily: 'var(--font-num)', fontWeight: 800 }}>{r.pts}</td>
                       </tr>
                     );
                   })}
@@ -859,7 +859,7 @@ export function AcademyTab({
                       gap: 8,
                       padding: '7px 10px',
                       background: 'var(--em-panel-2)',
-                      border: `1px solid ${m.won ? 'rgba(94,216,138,0.4)' : 'rgba(229,138,138,0.35)'}`,
+                      border: `1px solid ${m.won ? 'color-mix(in srgb, var(--c-win) 40%, transparent)' : 'color-mix(in srgb, var(--c-loss) 35%, transparent)'}`,
                       borderLeftWidth: 3,
                       borderRadius: 4,
                     }}
@@ -880,7 +880,7 @@ export function AcademyTab({
                         ▸
                       </span>
                     )}
-                    <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', fontWeight: 800, color: m.won ? '#5ed88a' : '#e58a8a' }}>
+                    <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', fontWeight: 800, color: m.won ? 'var(--c-win)' : 'var(--c-loss)' }}>
                       {m.userScore}–{m.oppScore}
                     </span>
                   </div>
@@ -1089,8 +1089,8 @@ export function AcademyTab({
                         alignItems: 'center',
                         gap: 6,
                         padding: '5px 8px',
-                        background: focused ? 'rgba(94,216,138,0.10)' : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${focused ? 'rgba(94,216,138,0.35)' : 'var(--em-border)'}`,
+                        background: focused ? 'color-mix(in srgb, var(--c-win) 10%, transparent)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${focused ? 'color-mix(in srgb, var(--c-win) 35%, transparent)' : 'var(--em-border)'}`,
                         borderRadius: 3,
                         fontSize: '0.68rem',
                       }}
@@ -1099,7 +1099,7 @@ export function AcademyTab({
                       <span style={{ color: 'var(--em-muted)' }}>
                         {ct('Próx split')}
                       </span>
-                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, color: focused ? '#5ed88a' : 'var(--em-text)' }}>
+                      <span style={{ fontFamily: 'var(--font-num)', fontWeight: 800, color: focused ? 'var(--c-win)' : 'var(--em-text)' }}>
                         +{expEvo.toFixed(1)} OVR
                       </span>
                       <span style={{ color: 'var(--em-muted)' }}>
@@ -1129,7 +1129,7 @@ export function AcademyTab({
                         <span style={{ color: 'var(--em-muted)', fontWeight: 600 }}>{ct('quer comprar')}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                        <b style={{ fontFamily: '"JetBrains Mono", monospace', color: '#5ed88a', fontSize: '0.86rem' }}>
+                        <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '0.86rem' }}>
                           {formatMoney(offer.fee)}
                         </b>
                         <button
@@ -1465,7 +1465,7 @@ function PlayoffCard({
                 {po.champion.name}
               </b>
               {po.champion.isUser && (
-                <span style={{ fontSize: '0.7rem', color: '#5ed88a', fontWeight: 800, letterSpacing: '0.5px' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--c-win)', fontWeight: 800, letterSpacing: '0.5px' }}>
                   ★ {ct('Você venceu o split!')}
                 </span>
               )}
@@ -1587,7 +1587,7 @@ function PlayoffMatchRow({
 }
 
 function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner: boolean; score?: number }) {
-  const accent = winner ? '#5ed88a' : seed.isUser ? '#e8c170' : 'var(--em-text)';
+  const accent = winner ? 'var(--c-win)' : seed.isUser ? '#e8c170' : 'var(--em-text)';
   const club = ACADEMY_CLUBS.find((c) => c.id === seed.id);
   const parentLogo = club ? academyParentLogoUrl(club) : undefined;
   return (
@@ -1608,7 +1608,7 @@ function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner
         {seed.name}
       </span>
       {typeof score === 'number' && (
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.86rem', color: accent, fontWeight: 800 }}>
+        <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.86rem', color: accent, fontWeight: 800 }}>
           {score}
         </b>
       )}
@@ -1620,7 +1620,7 @@ function PlayoffSide({ seed, winner, score }: { seed: AcademyPlayoffSeed; winner
 function HudPill({ label, value, tone }: { label: string; value: string; tone: 'gold' | 'green' | 'neutral' }) {
   const colors: Record<typeof tone, { fg: string; bg: string; border: string }> = {
     gold:    { fg: '#e8c170', bg: 'rgba(232,193,112,0.14)', border: 'rgba(232,193,112,0.45)' },
-    green:   { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
+    green:   { fg: 'var(--c-win)', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
     neutral: { fg: 'var(--em-text)', bg: 'var(--em-panel-2)', border: 'var(--em-border)' },
   };
   const c = colors[tone];
@@ -1640,7 +1640,7 @@ function HudPill({ label, value, tone }: { label: string; value: string; tone: '
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <b style={{ color: c.fg, fontSize: '0.84rem', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace' }}>
+      <b style={{ color: c.fg, fontSize: '0.84rem', fontWeight: 800, fontFamily: 'var(--font-num)' }}>
         {value}
       </b>
     </div>
@@ -1686,7 +1686,7 @@ function EvoExplainer({ trainingLv }: { trainingLv: number }) {
           label={ct('Em foco (★)')}
           value="+1 OVR"
           hint={ct('1 prospect por vez')}
-          accent="#5ed88a"
+          accent="var(--c-win)"
         />
         <EvoLine
           icon="🏋️"
@@ -1699,7 +1699,7 @@ function EvoExplainer({ trainingLv }: { trainingLv: number }) {
         />
       </div>
       <div style={{ fontSize: '0.7rem', color: 'var(--em-muted)', borderTop: '1px solid rgba(95,164,232,0.18)', paddingTop: 6, marginTop: 2 }}>
-        <b style={{ color: 'var(--em-text)' }}>{ct('Máximo possível')}</b>: {ct('foco + treino max')} = <b style={{ color: '#5ed88a' }}>+{focusedMax.toFixed(1)} OVR/split</b> · {ct('cresce até o')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('individual e para.')} {ct('Envelhecem 1 ano a cada 3 splits.')}
+        <b style={{ color: 'var(--em-text)' }}>{ct('Máximo possível')}</b>: {ct('foco + treino max')} = <b style={{ color: 'var(--c-win)' }}>+{focusedMax.toFixed(1)} OVR/split</b> · {ct('cresce até o')} <b style={{ color: 'var(--em-gold)' }}>{ct('potencial')}</b> {ct('individual e para.')} {ct('Envelhecem 1 ano a cada 3 splits.')}
       </div>
     </div>
   );
@@ -1713,7 +1713,7 @@ function EvoLine({ icon, label, value, hint, accent }: { icon: string; label: st
         <span style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
           {label}
         </span>
-        <b style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.84rem', color: accent ?? 'var(--em-text)', fontWeight: 800 }}>
+        <b style={{ fontFamily: 'var(--font-num)', fontSize: '0.84rem', color: accent ?? 'var(--em-text)', fontWeight: 800 }}>
           {value}
         </b>
         {hint && (

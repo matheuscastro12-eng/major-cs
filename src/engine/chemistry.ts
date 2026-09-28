@@ -53,6 +53,15 @@ export function averageStarterChemistry(state: ChemistryState, starterIds: strin
   return count > 0 ? total / count : DEFAULT_PAIR;
 }
 
+/**
+ * Química do time exibida na UI (dashboard e Elenco): média dos pares entre os
+ * titulares, arredondada. Fonte única: o mesmo pairChem que sobe nas partidas e
+ * nos scrims. Com menos de 2 jogadores não há par, então devolve 0.
+ */
+export function teamChemistry(state: ChemistryState, playerIds: string[]): number {
+  return playerIds.length >= 2 ? Math.round(averageStarterChemistry(state, playerIds)) : 0;
+}
+
 /** Modifier multiplicativo na força do time. Avg 50 = 1.0 (neutro);
  *  avg 100 = 1.05; avg 0 = 0.95. Curva linear simples. */
 export function chemistryMatchModifier(avgChem: number): number {

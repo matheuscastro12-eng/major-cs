@@ -207,7 +207,7 @@ export function RoadToPro({ onExit, demo = false, onUpgrade }: { onExit: () => v
   // DEMO: a trava fecha quando a degustação acaba (ou quando o convidado
   // tenta abrir a Série do Dia — exclusiva da vitalícia).
   if (demo && (save.world.week > DEMO_WEEKS || dailyOpen)) {
-    return <RtpDemoGate save={save} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} />;
+    return <RtpDemoGate save={save} onUpdate={handleUpdate} onUpgrade={() => { setDailyOpen(false); onUpgrade?.(); }} onExit={() => { setDailyOpen(false); onExit(); }} onBack={save.world.week > DEMO_WEEKS ? undefined : () => setDailyOpen(false)} />;
   }
   // SÉRIE DO DIA: desafio global diário — fixture próprio, não toca no seu save.
   if (dailyOpen) {

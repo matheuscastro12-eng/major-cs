@@ -246,7 +246,7 @@ function Row({
             </div>
             <b
               style={{
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'var(--font-num)',
                 color: isBest ? 'var(--em-gold)' : 'var(--em-text)',
                 minWidth: 22,
                 textAlign: 'right',

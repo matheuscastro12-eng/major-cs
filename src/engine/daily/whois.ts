@@ -120,5 +120,5 @@ export function shareTextOfWhois(dateKey: string, p: WhoisProgress, streak: numb
     ? `Cravei em ${p.guesses.length}/${WHOIS_MAX}`
     : `O pro misterioso me escapou (${WHOIS_MAX} chutes)`;
   const tail = streak >= 2 ? ` · 🔥 ${streak} dias seguidos` : '';
-  return `QUEM É O PRO? #${day} · MAJOR//CS\n${head}${tail}\n${rows}\nroadtomajor.com.br/diario`;
+  return `QUEM É O PRO? #${day} · ROAD TO MAJOR\n${head}${tail}\n${rows}\nroadtomajor.com.br/diario`;
 }

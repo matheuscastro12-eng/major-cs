@@ -105,7 +105,7 @@ export function RTPMatch({ save, onDone, onExit, mode = 'league' }: {
   }
 
   return (
-    <RtpFrame onExit={guardedExit} kicker={mode === 'major' ? ct('MAJOR') : undefined}>
+    <RtpFrame onExit={guardedExit} kicker={mode === 'major' ? ct('MAJOR') : ct('Partida')} immersive>
       {phase === 'intro' && (
         <RtpPrematch
           save={save}

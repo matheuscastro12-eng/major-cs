@@ -303,7 +303,7 @@ function roleColor(role: string): string {
     AWP: '#5fa4e8',
     IGL: '#9b6fe8',
     Entry: '#e8a93b',
-    Support: '#5ed88a',
+    Support: 'var(--c-win)',
     Lurker: '#c0392b',
     Rifler: '#a0a0a0',
   };
@@ -324,7 +324,7 @@ const barFill: React.CSSProperties = {
 };
 
 const chipVal: React.CSSProperties = {
-  fontFamily: '"JetBrains Mono", monospace',
+  fontFamily: 'var(--font-num)',
   fontWeight: 800,
   color: 'var(--em-text)',
   fontSize: '0.84rem',
@@ -340,7 +340,7 @@ const chipLabel: React.CSSProperties = {
 function statChip(tone: 'gold' | 'green'): React.CSSProperties {
   const colors: Record<'gold' | 'green', { bg: string; border: string }> = {
     gold: { bg: 'rgba(232, 193, 112, 0.14)', border: 'rgba(232, 193, 112, 0.5)' },
-    green: { bg: 'rgba(94, 216, 138, 0.14)', border: 'rgba(94, 216, 138, 0.45)' },
+    green: { bg: 'color-mix(in srgb, var(--c-win) 14%, transparent)', border: 'color-mix(in srgb, var(--c-win) 45%, transparent)' },
   };
   return {
     display: 'inline-flex',

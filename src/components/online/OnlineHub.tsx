@@ -40,7 +40,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
   const MODES = [
     { id: '1v1' as const, icon: '⚔', tone: 'var(--em-gold)', badge: '', name: 'Ranked 1v1', players: '2 jogadores', ranked: 'MMR e elo', pitch: 'Duelo de draft contra um rival do seu nível.', how: ['O matchmaking acha um rival perto do seu MMR', 'Vocês sorteiam 5 lendas em draft alternado (snake)', 'Jogam uma melhor de 3 com veto de mapa', 'Vitória sobe seu MMR, derrota desce'] },
     { id: 'major' as const, icon: '🏆', tone: 'var(--em-gold)', badge: '', name: 'Ranked Major', players: '2 a 8 managers', ranked: 'Pontos de temporada', pitch: 'Vários managers no mesmo Major. Quem chega mais longe pontua.', how: ['De 2 a 8 managers entram na mesma chave', 'Cada um monta o seu time de 5', 'Todos disputam a campanha: suíça, quartas, semi, final', 'A colocação final vira pontos: campeão 100, vice 70, semi 45...'] },
-    { id: 'gauntlet' as const, icon: '🔥', tone: '#29c47a', badge: '', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
+    { id: 'gauntlet' as const, icon: '🔥', tone: 'var(--c-win)', badge: '', name: 'Gauntlet', players: 'Solo vs fila', ranked: 'Maior sequência', pitch: 'Um time só contra uma fila de rivais cada vez mais fortes.', how: ['Você monta um único time', 'Enfrenta rivais em sequência, sem trocar ninguém', 'Cada vitória deixa o próximo rival mais forte', 'Sua pontuação é a maior sequência de vitórias. Perdeu, acabou'] },
     { id: 'weekend' as const, icon: '🏟️', tone: 'var(--em-gold)', badge: 'QUA-SÁB', name: 'Major da Semana', players: 'Liga da semana', ranked: 'Créditos e cartas', pitch: 'Weekend League: até 10 ranqueadas de quarta a sábado valendo recompensas.', how: ['Inscreva-se na janela (quarta 00h → sábado 23h59)', 'Jogue até 10 Ranked 1v1 — cada duelo confirmado conta', 'Quanto mais vitórias, maior a faixa de recompensa', 'Resgate créditos (3k a 37,5k) e cartas ao fim do run'] },
   ];
 
@@ -57,7 +57,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       const pl = majorPlace(stats.majorPts >= 100 ? 'champion' : 'semi');
       return [{ nick: me.nick, country: me.country, val: stats.majorPts, you: true, sub: ct('Melhor:') + ' ' + ct(pl.label), subColor: pl.color, fmt: stats.majorPts + ' ' + ct('pts') }];
     }
-    return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: ct('Sequência recorde'), subColor: '#29c47a', fmt: stats.bestStreak + ' ' + ct('seguidas') }];
+    return [{ nick: me.nick, country: me.country, val: stats.bestStreak, you: true, sub: ct('Sequência recorde'), subColor: 'var(--c-win)', fmt: stats.bestStreak + ' ' + ct('seguidas') }];
   }
   const LB_NOTE: Record<'1v1' | 'major' | 'gauntlet', string> = {
     '1v1': 'Ranking real por MMR (contas com ranking salvo). Ganhar sobe, perder desce.',
@@ -74,16 +74,16 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       {/* banner do jogador */}
       <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px', border: '1px solid var(--em-border-strong)', boxShadow: 'var(--rtm-shadow-banner)' }}>
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/dust2.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.24 }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(111,208,111,.14), rgba(13,17,22,.92) 60%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, color-mix(in srgb, var(--c-win) 14%, transparent), rgba(13,17,22,.92) 60%)' }} />
         <div className="hub-banner-body" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '20px', padding: '22px 26px', flexWrap: 'wrap' }}>
           <span style={{ width: '70px', height: '70px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', fontWeight: 800, fontSize: '24px', color: '#fff', background: `linear-gradient(160deg, ${me.accent || 'var(--em-gold)'}, #20303f)`, boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.12)', flexShrink: 0 }}>{me.nick.slice(0, 2).toUpperCase()}</span>
           <div style={{ flex: 1, minWidth: '180px' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: '#29c47a', fontWeight: 800 }}>{ct('Modo online')}</div>
+            <div style={{ fontSize: '11px', letterSpacing: '1.4px', textTransform: 'uppercase', color: 'var(--c-win)', fontWeight: 800 }}>{ct('Modo online')}</div>
             <h1 style={{ margin: '2px 0', fontFamily: 'inherit', fontSize: '30px', fontWeight: 800, color: 'var(--em-text)' }}>{me.nick}</h1>
             <div style={{ fontSize: '13px', color: 'var(--em-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}><Flag cc={me.country} /> <b style={{ color: rk.color }}>{ct(rk.name)}</b> · {stats.mmr} MMR</div>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {([['1v1', stats.w + 'W ' + stats.l + 'L', '#29c47a'], ['Major', stats.majorPts + ' pts', 'var(--em-gold)'], ['Gauntlet', stats.bestStreak + ' rec', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
+            {([['1v1', stats.w + 'W ' + stats.l + 'L', 'var(--c-win)'], ['Major', stats.majorPts + ' pts', 'var(--em-gold)'], ['Gauntlet', stats.bestStreak + ' rec', 'var(--em-gold)']] as [string, string, string][]).map(([k, v, c]) => (
               <div key={k} style={{ textAlign: 'center', padding: '8px 14px', borderRadius: '6px', background: 'rgba(18,22,27,.55)', border: '1px solid var(--em-border)' }}>
                 <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--em-muted)', fontWeight: 700 }}>{k}</div>
                 <div style={{ fontFamily: 'inherit', fontWeight: 800, fontSize: '17px', color: c }}>{v}</div>
@@ -101,14 +101,14 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
       </div>
 
       {/* Major da Semana — banner ao vivo (destaque quando a janela abre) */}
-      <button type="button" onClick={() => onPlay('weekend')} aria-label={ct('Abrir Major da Semana')} style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', position: 'relative', overflow: 'hidden', borderRadius: '12px', border: `1px solid ${wlWin.open ? '#29c47a' : 'var(--em-gold)'}`, background: 'transparent', padding: 0 }}>
+      <button type="button" onClick={() => onPlay('weekend')} aria-label={ct('Abrir Major da Semana')} style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', position: 'relative', overflow: 'hidden', borderRadius: '12px', border: `1px solid ${wlWin.open ? 'var(--c-win)' : 'var(--em-gold)'}`, background: 'transparent', padding: 0 }}>
         <span style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/maps/mirage.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.18 }} />
         <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(216,169,67,.18), rgba(13,17,22,.93) 62%)' }} />
         <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px', padding: '15px 22px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '28px', width: '52px', height: '52px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(216,169,67,.14)', border: '1px solid rgba(216,169,67,.4)', flexShrink: 0 }}>🏟️</span>
           <span style={{ flex: 1, minWidth: '200px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 800, color: wlWin.open ? '#29c47a' : 'var(--em-gold)' }}>
-              {wlWin.open && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#29c47a', boxShadow: '0 0 6px 1px rgba(41,196,122,.7)' }} />}
+            <span style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 800, color: wlWin.open ? 'var(--c-win)' : 'var(--em-gold)' }}>
+              {wlWin.open && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--c-win)', boxShadow: '0 0 6px 1px color-mix(in srgb, var(--c-win) 70%, transparent)' }} />}
               {wlWin.open ? ct('Ao vivo agora') : ct('Próxima janela')}
             </span>
             <span style={{ display: 'block', margin: '2px 0', fontFamily: 'inherit', fontSize: '22px', fontWeight: 800, color: 'var(--em-text)' }}>{ct('Major da Semana')}</span>
@@ -118,7 +118,7 @@ export function OnlineHub({ manager, stats, account, onPlay, onCasual, onExit }:
                 : `${ct('Abre quarta · em')} ${wlLeft(Date.parse(wlWin.startsAt) - now)}`}
             </span>
           </span>
-          <span style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontFamily: 'inherit', fontWeight: 800, fontSize: '14px', color: '#06121d', background: wlWin.open ? '#29c47a' : 'var(--em-gold)', whiteSpace: 'nowrap' }}>{wlWin.open ? ct('Entrar') : ct('Ver')} →</span>
+          <span style={{ flexShrink: 0, padding: '10px 20px', borderRadius: '8px', fontFamily: 'inherit', fontWeight: 800, fontSize: '14px', color: '#06121d', background: wlWin.open ? 'var(--c-win)' : 'var(--em-gold)', whiteSpace: 'nowrap' }}>{wlWin.open ? ct('Entrar') : ct('Ver')} →</span>
         </span>
       </button>
 

@@ -8,6 +8,7 @@
 import { Modal, Button } from './ds';
 import { CareerIcon } from './career/CareerIcon';
 import type { PlacementCode } from '../engine/swiss';
+import { formatMoney } from '../engine/ratings';
 
 export interface TournamentEliminationData {
   tournamentName: string;
@@ -69,7 +70,7 @@ export function TournamentEliminationModal({ data, onClose }: Props) {
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8, marginTop: 6 }}>
             <span
               style={{
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'var(--font-num)',
                 fontSize: '2.2rem',
                 fontWeight: 800,
                 color: accent,
@@ -94,7 +95,7 @@ export function TournamentEliminationModal({ data, onClose }: Props) {
             }}
           >
             <CareerIcon name="coin" size={13} />
-            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.88rem', fontWeight: 700, color: 'var(--em-text)' }}>
+            <span style={{ fontFamily: 'var(--font-num)', fontSize: '0.88rem', fontWeight: 700, color: 'var(--em-text)' }}>
               {formatMoney(data.prize)}
             </span>
             <span style={{ fontSize: '0.74rem', color: 'var(--em-muted)' }}>de prêmio</span>
@@ -117,10 +118,4 @@ export function TournamentEliminationModal({ data, onClose }: Props) {
       </div>
     </Modal>
   );
-}
-
-function formatMoney(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
-  return `$${n}`;
 }

@@ -218,7 +218,7 @@ function SlotCard({ slot, index, onChange }: { slot: SlotDraft; index: number; o
         <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800, color: 'var(--em-muted)' }}>
           {ct('Jogador')} {index + 1}
         </span>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1rem', fontWeight: 900, color: 'var(--em-gold)' }}>
+        <span style={{ fontFamily: 'var(--font-num)', fontSize: '1rem', fontWeight: 900, color: 'var(--em-gold)' }}>
           OVR {derivedOvr}
         </span>
       </div>

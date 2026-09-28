@@ -21,6 +21,7 @@ import {
   type TeamEventDef,
   type TeamEventChoice,
 } from '../engine/teamEvents';
+import { formatMoney } from '../engine/ratings';
 
 interface Props {
   eventId: string;
@@ -196,25 +197,18 @@ function DeltaRow({ deltas }: { deltas: Deltas }) {
             gap: 6,
             padding: '4px 10px',
             background: 'var(--em-panel-2)',
-            border: `1px solid ${it.tone === 'pos' ? 'rgba(94,216,138,0.45)' : it.tone === 'neg' ? 'rgba(229,138,138,0.45)' : 'var(--em-border)'}`,
+            border: `1px solid ${it.tone === 'pos' ? 'color-mix(in srgb, var(--c-win) 45%, transparent)' : it.tone === 'neg' ? 'color-mix(in srgb, var(--c-loss) 45%, transparent)' : 'var(--em-border)'}`,
             borderRadius: 3,
             fontSize: '0.78rem',
             color: 'var(--em-text)',
           }}
         >
           <span style={{ color: 'var(--em-muted)' }}>{it.label}</span>
-          <b style={{ color: it.tone === 'pos' ? '#5ed88a' : it.tone === 'neg' ? '#e58a8a' : 'var(--em-text)', fontFamily: '"JetBrains Mono", monospace' }}>
+          <b style={{ color: it.tone === 'pos' ? 'var(--c-win)' : it.tone === 'neg' ? 'var(--c-loss)' : 'var(--em-text)', fontFamily: 'var(--font-num)' }}>
             {it.value}
           </b>
         </span>
       ))}
     </div>
   );
-}
-
-function formatMoney(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `$${(n / 1_000).toFixed(1)}k`;
-  return `$${n}`;
 }

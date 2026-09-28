@@ -5,17 +5,17 @@ import type { FormStatus } from '../../engine/career/form';
 import { legendStatus } from '../../engine/legend';
 import { rollProSetup } from '../../engine/proSetup';
 import { playerOrgId } from '../../state/career-player-route';
-import { FutCard } from '../FutCard';
 import { Flag, PlayerAvatar, TeamBadge } from '../ui';
 import { CareerIcon, type CareerIconName } from './CareerIcon';
-import { IconChevronLeft } from './DashIcons';
-import { AttributeColumn } from './AttributeColumn';
+import { Brain, ChartNoAxesColumn, ChevronLeft, Crosshair, Gauge, IdCard, Trophy, UserRound, Zap, type LucideIcon } from 'lucide-react';
+import { Panel as DsPanel, AttrValue, attrBand } from '../ds/index';
+import { ATTR_LABEL, MECHANICAL_KEYS, MENTAL_KEYS, PHYSICAL_KEYS, type AttrKey } from '../../engine/attributes';
 import { deriveEventLine, type SeasonEventLine } from '../../engine/career/seasonStats';
 import { HAPPINESS_FACTOR_LABEL, type HappinessBreakdown } from '../../engine/career/happiness';
 import { physicalStatus, satisfactionStatus, disciplineStatus, reputationStatus } from '../../engine/career/playerStatus';
 import { SubRoleStars } from './SubRoleStars';
 
-type PlayerTab = 'card' | 'overview' | 'personal' | 'performance' | 'career';
+export type PlayerTab = 'profile' | 'overview' | 'personal' | 'performance' | 'career';
 
 type CareerDerived = {
   rating: number;
@@ -27,8 +27,18 @@ type CareerDerived = {
   splits: number;
 };
 
+/** abas do perfil. No shell elas viram a subnav (PLAYER_TABS, ícones lucide);
+ *  a nav interna (TABS) só aparece quando a página não é controlada. */
+export const PLAYER_TABS: { id: PlayerTab; label: string; icon: LucideIcon }[] = [
+  { id: 'profile', label: 'Perfil', icon: UserRound },
+  { id: 'overview', label: 'Visão geral', icon: Gauge },
+  { id: 'personal', label: 'Dados pessoais', icon: IdCard },
+  { id: 'performance', label: 'Desempenho', icon: ChartNoAxesColumn },
+  { id: 'career', label: 'Carreira', icon: Trophy },
+];
+
 const TABS: { id: PlayerTab; label: string; icon: CareerIconName }[] = [
-  { id: 'card', label: 'Cartão', icon: 'document' },
+  { id: 'profile', label: 'Perfil', icon: 'document' },
   { id: 'overview', label: 'Visão geral', icon: 'brain' },
   { id: 'personal', label: 'Dados pessoais', icon: 'pin' },
   { id: 'performance', label: 'Desempenho', icon: 'chart-bar' },
@@ -51,35 +61,6 @@ function statJitter(nick: string, salt: string, base: number): number {
   const s = `${nick}:${salt}`;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 255;
   return fmScale(base + (h % 7) - 3);
-}
-
-function AttrRadar({ attrs }: { attrs: { label: string; value: number }[] }) {
-  const n = attrs.length;
-  const cx = 130, cy = 108, R = 78;
-  const norm = (v: number) => Math.max(0.08, Math.min(1, v / 20));
-  const pt = (i: number, r: number): [number, number] => {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
-    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
-  };
-  const grid = [0.25, 0.5, 0.75, 1].map((f) => attrs.map((_, i) => pt(i, R * f).join(',')).join(' '));
-  const shape = attrs.map((d, i) => pt(i, R * norm(d.value)).join(',')).join(' ');
-  return (
-    <svg viewBox="0 0 260 220" className="pp-radar" role="img" aria-label={ct('Perfil de atributos')}>
-      <g stroke="rgba(255,255,255,0.08)" fill="none" strokeWidth="0.8">
-        {grid.map((g, i) => <polygon key={i} points={g} />)}
-        {attrs.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} />; })}
-      </g>
-      <polygon points={shape} fill="rgba(192,57,43,0.18)" stroke="var(--em-red)" strokeWidth="2" />
-      {attrs.map((d, i) => {
-        const [lx, ly] = pt(i, R + 18);
-        return (
-          <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" className="pp-radar-label">
-            {d.label}
-          </text>
-        );
-      })}
-    </svg>
-  );
 }
 
 function StatCol({ title, accent, score, items }: {
@@ -121,20 +102,6 @@ function Panel({ title, icon, children, action }: {
       {children}
     </section>
   );
-}
-
-function profileDimensions(player: Player) {
-  const mech = (player.aim + player.consistency) / 2;
-  const mental = (player.igl + player.clutch) / 2;
-  const physical = (player.aim + player.clutch + player.consistency) / 3 - 2;
-  return [
-    { label: ct('Mecânica'), value: fmScale(mech) },
-    { label: ct('Mental'), value: fmScale(mental) },
-    { label: ct('Físico'), value: fmScale(physical) },
-    { label: ct('Mira'), value: fmScale(player.aim) },
-    { label: ct('Utilidade'), value: fmScale(player.consistency * 0.55 + player.igl * 0.45) },
-    { label: ct('Clutch'), value: fmScale(player.clutch) },
-  ];
 }
 
 function attrGroups(player: Player) {
@@ -183,6 +150,38 @@ function attrGroups(player: Player) {
       ],
     },
   };
+}
+
+// ── Perfil (FM): atributos 1–20 em 3 colunas ────────────────────────────────
+const ATTR_COLS: { title: string; icon: LucideIcon; keys: AttrKey[] }[] = [
+  { title: 'Mecânica', icon: Crosshair, keys: MECHANICAL_KEYS },
+  { title: 'Mental', icon: Brain, keys: MENTAL_KEYS },
+  { title: 'Físico', icon: Zap, keys: PHYSICAL_KEYS },
+];
+function ProfileAttributes({ attributes }: { attributes: Record<string, number> }) {
+  return (
+    <DsPanel icon={<ChartNoAxesColumn size={16} />} title={ct('Atributos')} actions={<span className="pp-fm-scale">{ct('Escala 1–20')}</span>}>
+      <div className="pp-fm-attrs">
+        {ATTR_COLS.map((col) => (
+          <section key={col.title} className="pp-fm-col" aria-label={ct(col.title)}>
+            <h3 className="pp-fm-col__head"><col.icon size={15} aria-hidden /> {ct(col.title)}</h3>
+            <ul>
+              {col.keys.map((k) => {
+                const v = Math.max(1, Math.min(20, Math.round(attributes[k] ?? 1)));
+                return (
+                  <li key={k} className="pp-fm-row">
+                    <span className="pp-fm-row__label">{ct(ATTR_LABEL[k])}</span>
+                    <span className="pp-fm-row__bar" data-band={attrBand(v)} aria-hidden><i style={{ width: `${(v / 20) * 100}%` }} /></span>
+                    <AttrValue value={v} />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </DsPanel>
+  );
 }
 
 const NOTES_KEY = 'rtm-player-notes-v1';
@@ -239,6 +238,8 @@ export function CareerPlayerPage({
   onEditAge,
   retired = false,
   attributes,
+  tab: tabProp,
+  onTab,
 }: {
   player: Player;
   orgName: string;
@@ -310,8 +311,13 @@ export function CareerPlayerPage({
   /** T3.1 — 28 atributos FM-style. Se passado, renderiza section. */
   attributes?: Record<string, number>;
   onBack: () => void;
+  /** aba controlada pelo shell (subnav); sem isso a página usa a nav interna */
+  tab?: PlayerTab;
+  onTab?: (tab: PlayerTab) => void;
 }) {
-  const [tab, setTab] = useState<PlayerTab>('card');
+  const [tabState, setTabState] = useState<PlayerTab>('profile');
+  const tab = tabProp ?? tabState;
+  const setTab = (t: PlayerTab) => { if (onTab) onTab(t); else setTabState(t); };
   // edição de idade (Vitalícia, só jogador criado): null = fechado
   const [ageDraft, setAgeDraft] = useState<number | null>(null);
   const oid = playerOrgId(player.id);
@@ -329,25 +335,13 @@ export function CareerPlayerPage({
     try { localStorage.setItem(notesKey, v); setNotesSaved(true); } catch { /* ok */ }
   }, [notesKey]);
 
-  const dims = useMemo(() => profileDimensions(player), [player]);
   const groups = useMemo(() => attrGroups(player), [player]);
   // #49: aura de lenda geracional por pico de carreira (null = jogador comum)
   const legend = legendStatus(ovr, peakOvr);
   // #52: ficha técnica determinística por nick (flavor da cena)
   const setup = useMemo(() => rollProSetup(player.nick), [player.nick]);
-  const roleTag = (player.role || 'PRO').toUpperCase().slice(0, 4);
   const role2Tag = player.role2 ? player.role2.toUpperCase().slice(0, 4) : null;
 
-  const statTiles = [
-    { label: ct('Jogos'), value: String(seasonGames || career?.maps || 0) },
-    { label: ct('Vitórias'), value: String(seasonWins) },
-    { label: 'Rating', value: career ? career.rating.toFixed(2) : cur?.rating?.toFixed(2) ?? '0.00' },
-    { label: 'K/D', value: career ? career.kd.toFixed(2) : cur?.kd?.toFixed(2) ?? '—' },
-    { label: 'ADR', value: career ? String(Math.round(career.adr)) : cur?.adr ? String(Math.round(cur.adr)) : '0' },
-    { label: 'MVPs', value: '0' },
-    { label: ct('Títulos'), value: String(titles) },
-    { label: ct('Pico OVR'), value: String(peakOvr) },
-  ];
 
   const fitness = Math.max(0, 100 - fatigue);
   const satisfaction = morale;
@@ -363,9 +357,9 @@ export function CareerPlayerPage({
           <span
             className="pp-coach-tag"
             style={{
-              background: 'rgba(229, 138, 138, 0.14)',
-              border: '1px solid rgba(229, 138, 138, 0.55)',
-              color: '#e58a8a',
+              background: 'color-mix(in srgb, var(--c-loss) 14%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--c-loss) 55%, transparent)',
+              color: 'var(--c-loss)',
               fontWeight: 700,
               cursor: 'default',
             }}
@@ -404,110 +398,70 @@ export function CareerPlayerPage({
 
   return (
     <div className="pp-page">
-      {/* ===== HEADER ===== */}
-      <header className="pp-hero">
-        <button type="button" className="pp-back" onClick={onBack} aria-label={ct('Voltar')}>
-          <IconChevronLeft size={18} />
-        </button>
-
-        <div className="pp-hero-body">
-          <div className="pp-hero-left">
-            <div className="pp-photo">
-              <PlayerAvatar nick={player.nick} size={96} />
-            </div>
-            <div className="pp-identity">
-              <div className="pp-name-row">
-                <h1>{player.nick}</h1>
-                <Flag cc={player.country} />
-                <span className={`pp-role ${player.role}`}>{roleTag}</span>
-                {role2Tag && <span className="pp-role alt">{role2Tag}</span>}
-                {legend && (
-                  <span className={`pp-legend t-${legend.tier}${legend.legacy ? ' legacy' : ''}`} title={legend.desc}>
-                    {ct(legend.label)}
-                  </span>
-                )}
-              </div>
-              <p className="pp-realname">{player.name}</p>
-              <p className="pp-meta">
-                {age} {ct('anos')} · Pot. {potTier} · {phaseLabel}
-              </p>
-              {orgName && (
-                <p className="pp-team">
-                  {orgTag && orgColors && (
-                    <TeamBadge tag={orgTag} colors={orgColors} size={18} logoUrl={orgLogo} />
-                  )}
-                  {orgName}{orgTag ? ` (${orgTag})` : ''}
-                </p>
-              )}
-            </div>
+      {/* ===== CABEÇALHO (FM): avatar, nome, ficha; OVR, forma e valor ===== */}
+      <header className="pp-fm-head">
+        {!onTab && (
+          <button type="button" className="pp-back" onClick={onBack} aria-label={ct('Voltar')}>
+            <ChevronLeft size={18} aria-hidden />
+          </button>
+        )}
+        <div className="pp-fm-avatar"><PlayerAvatar nick={player.nick} size={92} /></div>
+        <div className="pp-fm-id">
+          <div className="pp-fm-name">
+            <h1>{player.nick}</h1>
+            {player.name && <span className="pp-fm-real">{player.name}</span>}
+            {legend && (
+              <span className={`pp-legend t-${legend.tier}${legend.legacy ? ' legacy' : ''}`} title={legend.desc}>
+                {ct(legend.label)}
+              </span>
+            )}
           </div>
-
-          <div className="pp-hero-right">
-            <div className="pp-finance">
-              <div><span>{ct('Valor')}</span><b>{valueLabel}</b></div>
-              <div><span>{ct('Salário')}</span><b className="neg">{wageLabel}{ct('/split')}</b></div>
-              <div><span>{ct('Contrato')}</span><b>{contractLeft}</b></div>
-            </div>
-            <div className="pp-badges">
-              <div className="pp-badge ovr" title="OVR"><b>{ovr}</b></div>
-              <div className={`pp-badge pot pot-${potTier.toLowerCase()}`} title={ct('Potencial')}><b>{potTier}</b></div>
-            </div>
-          </div>
+          <p className="pp-fm-meta">
+            <b className={`pp-fm-role ${player.role}`}>{player.role}{role2Tag ? ` / ${player.role2}` : ''}</b>
+            <span>{age} {ct('anos')}</span>
+            <span className="pp-fm-cc"><Flag cc={player.country} /> {player.country?.toUpperCase()}</span>
+            {orgName && (
+              <span className="pp-fm-team">
+                {orgTag && orgColors && <TeamBadge tag={orgTag} colors={orgColors} size={18} logoUrl={orgLogo} />}
+                {orgName}
+              </span>
+            )}
+            <span>{ct('Contrato')}: {contractLeft}</span>
+            <span>Pot. {potTier} · {phaseLabel}</span>
+          </p>
         </div>
+        <dl className="pp-fm-kpis">
+          <div className="pp-fm-kpi pp-fm-kpi--ovr"><dt>OVR</dt><dd>{ovr}</dd></div>
+          <div className="pp-fm-kpi" title={form?.label}>
+            <dt>{ct('Forma')}</dt>
+            <dd style={form?.avg != null ? { color: form.color } : undefined}>
+              {form?.avg != null ? form.avg.toFixed(2).replace('.', ',') : cur?.rating ? cur.rating.toFixed(2).replace('.', ',') : '—'}
+            </dd>
+          </div>
+          <div className="pp-fm-kpi"><dt>{ct('Valor')}</dt><dd>{valueLabel}</dd></div>
+        </dl>
       </header>
 
-      {/* ===== TABS ===== */}
-      <nav className="pp-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={tab === t.id ? 'on' : ''}
-            onClick={() => setTab(t.id)}
-          >
-            <CareerIcon name={t.icon} size={14} />
-            <span className="pp-tab-label">{ct(t.label)}</span>
-          </button>
-        ))}
-      </nav>
+      {/* ===== TABS (fora do shell) ===== */}
+      {!onTab && (
+        <nav className="pp-tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={tab === t.id ? 'on' : ''}
+              onClick={() => setTab(t.id)}
+            >
+              <CareerIcon name={t.icon} size={14} />
+              <span className="pp-tab-label">{ct(t.label)}</span>
+            </button>
+          ))}
+        </nav>
+      )}
 
       {/* ===== TAB CONTENT ===== */}
       <div className="pp-body">
-        {tab === 'card' && (
-          <div className="pp-card-tab">
-            <aside className="pp-card-aside">
-              <FutCard player={player} size="lg" />
-              <div className="pp-pot-reveal">
-                <span>{ct('Potencial revelado')}</span>
-                <b className={`pot-${potTier.toLowerCase()}`}>{potTier}</b>
-              </div>
-            </aside>
-            <div className="pp-card-main">
-              <Panel title="Perfil de atributos">
-                <div className="pp-attr-block">
-                  <AttrRadar attrs={dims} />
-                  <div className="pp-attr-grid">
-                    {dims.map((d) => (
-                      <div key={d.label} className="pp-attr-cell">
-                        <span>{d.label}</span>
-                        <b>{d.value.toFixed(1)}</b>
-                      </div>
-                    ))}
-                  </div>
-                  <span className="pp-scale-hint">{ct('Escala 0–20')}</span>
-                </div>
-              </Panel>
-              <div className="pp-stat-grid">
-                {statTiles.map((s) => (
-                  <div key={s.label} className="pp-stat-box">
-                    <span>{s.label}</span>
-                    <b>{s.value}</b>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {tab === 'profile' && attributes && <ProfileAttributes attributes={attributes} />}
 
         {tab === 'overview' && (
           <div className="pp-overview-tab">
@@ -893,13 +847,6 @@ export function CareerPlayerPage({
           </div>
         )}
       </div>
-
-      {/* T3.1: 28 atributos FM-style (mostrado quando prop attributes é passada) */}
-      {attributes && (
-        <div style={{ marginTop: 14 }}>
-          <AttributeColumn attributes={attributes as Parameters<typeof AttributeColumn>[0]['attributes']} />
-        </div>
-      )}
 
       {/* T3.3: sub-roles derivadas (entry/lurker/awper/etc) */}
       <div style={{ marginTop: 14 }}>

@@ -153,9 +153,9 @@ function SlotHudPill({ used, total }: { used: number; total: number }) {
   const tone: 'green' | 'gold' | 'red' =
     pct < 0.6 ? 'green' : pct < 0.9 ? 'gold' : 'red';
   const colors: Record<typeof tone, { fg: string; bg: string; border: string }> = {
-    green: { fg: '#5ed88a', bg: 'rgba(94,216,138,0.12)',  border: 'rgba(94,216,138,0.4)' },
+    green: { fg: 'var(--c-win)', bg: 'color-mix(in srgb, var(--c-win) 12%, transparent)',  border: 'color-mix(in srgb, var(--c-win) 40%, transparent)' },
     gold:  { fg: '#e8c170', bg: 'rgba(232,193,112,0.14)', border: 'rgba(232,193,112,0.45)' },
-    red:   { fg: '#e58a8a', bg: 'rgba(229,138,138,0.12)', border: 'rgba(229,138,138,0.4)' },
+    red:   { fg: 'var(--c-loss)', bg: 'color-mix(in srgb, var(--c-loss) 12%, transparent)', border: 'color-mix(in srgb, var(--c-loss) 40%, transparent)' },
   };
   const c = colors[tone];
   return (
@@ -174,7 +174,7 @@ function SlotHudPill({ used, total }: { used: number; total: number }) {
       <span style={{ fontSize: '0.6rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {ct('Slots')}
       </span>
-      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace' }}>
+      <b style={{ color: c.fg, fontSize: '0.94rem', fontWeight: 800, fontFamily: 'var(--font-num)' }}>
         {used}/{total}
       </b>
     </div>
@@ -276,7 +276,7 @@ function SlotRow({
         gap: 14,
         padding: '14px 16px',
         background: 'var(--em-panel-2)',
-        border: `1px solid ${confirming ? '#e58a8a' : 'var(--em-border)'}`,
+        border: `1px solid ${confirming ? 'var(--c-loss)' : 'var(--em-border)'}`,
         borderRadius: 6,
         transition: 'border-color .15s',
       }}
@@ -314,21 +314,21 @@ function SlotRow({
             gap: 10,
             fontSize: '0.78rem',
             color: 'var(--em-muted)',
-            fontFamily: '"JetBrains Mono", monospace',
+            fontFamily: 'var(--font-num)',
             flexWrap: 'wrap',
           }}
         >
           <SlotMeta label={ct('Slot')} value={slot.slot} />
           <SlotMeta label={ct('Split')} value={slot.split ?? 1} />
           {slot.tier != null && <SlotMeta label={ct('Tier')} value={`T${slot.tier}`} accent={slot.tier === 1 ? '#e8c170' : slot.tier === 2 ? '#9b6fe8' : '#5fa4e8'} />}
-          <SlotMeta label={ct('Títulos')} value={slot.titles ?? 0} accent={(slot.titles ?? 0) > 0 ? '#5ed88a' : undefined} />
-          <SlotMeta label={ct('Caixa')} value={money(slot.budget)} accent={(slot.budget ?? 0) > 0 ? '#5ed88a' : '#e58a8a'} />
+          <SlotMeta label={ct('Títulos')} value={slot.titles ?? 0} accent={(slot.titles ?? 0) > 0 ? 'var(--c-win)' : undefined} />
+          <SlotMeta label={ct('Caixa')} value={money(slot.budget)} accent={(slot.budget ?? 0) > 0 ? 'var(--c-win)' : 'var(--c-loss)'} />
         </div>
       </div>
 
       {confirming ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: '0.78rem', color: '#e58a8a', fontWeight: 700 }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--c-loss)', fontWeight: 700 }}>
             {ct('Apagar?')}
           </span>
           <button
@@ -404,7 +404,7 @@ function SlotRow({
               cursor: busyLocked ? 'not-allowed' : 'pointer',
               opacity: busyLocked ? 0.55 : 1,
             }}
-            onMouseEnter={(e) => { if (!busyLocked) { (e.currentTarget as HTMLElement).style.borderColor = '#e58a8a'; (e.currentTarget as HTMLElement).style.color = '#e58a8a'; } }}
+            onMouseEnter={(e) => { if (!busyLocked) { (e.currentTarget as HTMLElement).style.borderColor = 'var(--c-loss)'; (e.currentTarget as HTMLElement).style.color = 'var(--c-loss)'; } }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--em-border)'; (e.currentTarget as HTMLElement).style.color = 'var(--em-muted)'; }}
           >
             🗑 {ct('Apagar')}
