@@ -20,7 +20,14 @@ import { MatchScreen } from './MatchScreen';
 import { bestSeriesMoment } from '../engine/narration';
 import { tournamentMvpNick, tournamentTeamRecords } from '../engine/hall';
 import { applyRivalryFocus, recordRivalry, rivalryScore } from '../engine/career/rivalries';
-import { applyFatigueForm, careerPlayerId, recoverFatigue, updateMatchFatigue } from '../engine/career/fatigue';
+import { careerPlayerId, updateMatchFatigue } from '../engine/career/fatigue';
+// [fase 2 · treino] treino semanal, condição (fitness/ritmo/lesão) e scrim com vazamento
+import {
+  gestaoOf, fatigueView, conditionWithFatigue, runTrainingWeek, applyRealScrim, closeTrainingSplit, recoverCondition,
+  trainingGrowthMul, leakAgainst, defaultTrainingState, vodPrepPoints, INJURY_LABEL, LEGACY_FOCUS_ATTR, ROLE_FOCUS_ATTRS,
+} from '../engine/gestao/treino';
+import { applyConditionToTeam, substituteInjured, isInjured, type StandIn } from '../engine/gestao/condicao';
+import { ATTR_LABEL, type AttrKey } from '../engine/attributes';
 import { formStatus, recordSeriesRatings } from '../engine/career/form';
 import { APPROVAL_DELTAS, applyBoardDelta, boardFiredDetail, type BoardLogEntry } from '../engine/career/boardApproval';
 import { evaluatePromise, appendPromiseOutcome, type BoardPromise, type PromiseOutcome } from '../engine/career/promises';
@@ -34,7 +41,7 @@ import { unhappyDiscountFor } from '../engine/career/unhappyMarket';
 import { buyoutFloorOf } from '../engine/career/buyout';
 import { openStint, closeStint, stintsOf, type StintsMap } from '../engine/career/stints';
 import { applyBootcamp, canBootcamp, BOOTCAMP_COST } from '../engine/career/bootcamp';
-import { applyFocusBias, suggestFocus, TRAINING_FOCUS_LABEL, CORE_STATS, type CoreStat } from '../engine/career/training';
+import { suggestFocus, type CoreStat } from '../engine/career/training';
 import {
   judgePlayerPromises, hasOpenPromise, PLAYER_PROMISE_LABEL, PROMISE_MADE, PROMISE_KEPT, PROMISE_BROKEN,
   PROMISE_DEADLINE_SPLITS, tallyPlayerPromises, type PlayerPromise, type PlayerPromiseKind,
@@ -49,7 +56,9 @@ import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI'
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
-import { closeMatchIdentity, type TeamIdentity } from '../engine/career/teamIdentity';
+import { closeMatchIdentity, scoutingOf, type TeamIdentity } from '../engine/career/teamIdentity';
+import { aiTactics, matchTacticsFor, tacticsAfterMatch, antiStratReveal, autoAntiStratReadiness } from '../engine/gestao/tatica';
+import { GamePlanScreen } from '../pages/career/GamePlanScreen';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries, type MarketSort } from '../engine/career/market';
 import {
@@ -135,10 +144,12 @@ const GAME_PLANS: { id: GamePlan; icon: CareerIconName; label: string; desc: str
   { id: 'mapfocus', icon: 'map', label: ct('Foco no mapa forte'), desc: ct('Puxa o veto pro seu melhor mapa e joga mais forte nele.') },
   { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Pressão nas aberturas: teto alto, mais arriscado.') },
 ];
-// aplica o buff do plano no time do usuário antes da partida
-function applyGamePlanBuff(t: TTeam, plan: GamePlan): TTeam {
+// aplica o buff do plano no time do usuário antes da partida. [fase 2] Com
+// preparação de anti-strat contra o adversário (Plano de jogo), o "Anti-strat"
+// não soma o bônus genérico: ele foca a preparação (ver matchTacticsFor).
+function applyGamePlanBuff(t: TTeam, plan: GamePlan, genericAntiStrat = true): TTeam {
   if (plan === 'aggressive') return { ...t, strength: t.strength + 2.5 };
-  if (plan === 'antistrat') return { ...t, strength: t.strength + 2 };
+  if (plan === 'antistrat') return genericAntiStrat ? { ...t, strength: t.strength + 2 } : t;
   if (plan === 'mapfocus') {
     const prefs: Record<string, number> = { ...t.mapPrefs };
     const best = Object.entries(prefs).sort((a, b) => b[1] - a[1])[0];
@@ -543,7 +554,14 @@ import { AcademyTab } from '../pages/career/AcademyTab';
 import { MajorTab } from '../pages/career/MajorTab';
 import { FinanceTab } from '../pages/career/FinanceTab';
 import { SquadTab } from '../pages/career/SquadTab';
+import { TrainingTab } from '../pages/career/TrainingTab';
 import { OverviewTab } from '../pages/career/OverviewTab';
+// [fase 2 · frente STAFF] comissão técnica
+import { StaffTab } from '../pages/career/StaffTab';
+import { migrateGestao } from '../engine/gestao/gestaoMigration';
+import type { GestaoState } from '../engine/gestao/model';
+import { staffEffects, staffSplitTick, syncHeadCoach, scaleStep } from '../engine/gestao/staff';
+import { aiStaffEdgeFor } from '../engine/gestao/staffData';
 
 // ----- prestígio + fãs da org (estilo Brasval) -----
 // Derivados de conquistas (sem campo novo no save: não quebram saves e sobem ao
@@ -1309,6 +1327,7 @@ interface CareerSave {
   scarEvents?: ScarEvent[]; // [W4] eventos pontuais que o fechamento não reconstrói (dispensa de estrela infeliz)
   identity?: TeamIdentity; // [W5] identidade tática emergente (histograma decaído das suas chamadas)
   promiseLog?: PromiseOutcome[]; // [W4] promessas à diretoria já julgadas (append-only, teto 24) — fita e cicatrizes leem
+  gestao?: GestaoState; // [realismo FM fase 2] treino semanal, tática por mapa, comissão técnica e condição (save v28)
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -1426,21 +1445,25 @@ const emptySave = (): CareerSave => ({
 // ----- treino de mapa: domínio por mapa, com TETO (impossível ser bom em tudo) -----
 export const MAP_TRAIN_MAX = 2.6; // teto de domínio de um mapa
 export const MAP_TRAIN_MIN = -1.6; // piso (mapa abandonado vira fraqueza leve, não catástrofe)
-const MAP_TRAIN_GAIN = 1.3; // ganho no mapa em foco por split
 const MAP_TRAIN_DECAY = 0.3; // todo mapa decai por split (o não-treinado escorrega devagar)
 export const MAP_FOCUS_MAX = 3; // até 3 mapas em treino por split
 // nível de domínio de um mapa (0 = neutro se nunca treinado)
 export const mapLevel = (s: CareerSave, m: MapId) => s.mapTraining?.[m] ?? 0;
 // lista de mapas em foco (compat: aceita formato antigo de mapa único)
+// [fase 2 · treino] os mapas priorizados vivem no treino semanal (gestao.training.mapFocus)
 export const mapFocusList = (s: CareerSave): MapId[] =>
-  Array.isArray(s.mapFocus) ? s.mapFocus : s.mapFocus ? [s.mapFocus as unknown as MapId] : [];
+  s.gestao?.training?.mapFocus
+    ?? (Array.isArray(s.mapFocus) ? s.mapFocus : s.mapFocus ? [s.mapFocus as unknown as MapId] : []);
+// [fase 2 · integração] os mapas priorizados do treino semanal viraram
+// FAMILIARIDADE do plano (gestao.tactics, que pesa no motor). O domínio antigo
+// (mapTraining → mapPrefs) não cresce mais — senão priorizar um mapa contava
+// duas vezes — e o que um save antigo já tinha se desfaz aos poucos, split a split.
 function applyMapTraining(s: CareerSave): Partial<Record<MapId, number>> {
   const out: Partial<Record<MapId, number>> = {};
-  const focus = mapFocusList(s);
   for (const m of MAP_POOL) {
-    let v = (s.mapTraining?.[m] ?? 0) - MAP_TRAIN_DECAY; // decai todo split
-    if (focus.includes(m)) v += MAP_TRAIN_GAIN + MAP_TRAIN_DECAY; // foco: sobe (anula a decaída + ganha)
-    out[m] = Math.max(MAP_TRAIN_MIN, Math.min(MAP_TRAIN_MAX, Math.round(v * 10) / 10));
+    const v = s.mapTraining?.[m] ?? 0;
+    const next = v > 0 ? Math.max(0, v - MAP_TRAIN_DECAY) : Math.min(0, v + MAP_TRAIN_DECAY);
+    out[m] = Math.max(MAP_TRAIN_MIN, Math.min(MAP_TRAIN_MAX, Math.round(next * 10) / 10));
   }
   return out;
 }
@@ -1466,12 +1489,15 @@ function nextMorale(
   prev: Record<string, number>,
   squad: { oid: string; form: number; expiring: boolean }[],
   ctx: { champion: boolean; objMet: boolean },
+  // [fase 2 · STAFF] staffEffects().moraleRecovery: psicólogo/técnico aceleram a
+  // volta de quem está abaixo da média (1 = como antes)
+  recovery = 1,
 ): Record<string, number> {
   const out: Record<string, number> = {};
   for (const s of squad) {
     const prevM = prev[s.oid] ?? MORALE_DEFAULT;
     let m = prevM;
-    m += (MORALE_DEFAULT - m) * 0.25; // reversão à média mais firme (não trava em baixa)
+    m += (MORALE_DEFAULT - m) * 0.25 * (m < MORALE_DEFAULT ? recovery : 1); // reversão à média mais firme (não trava em baixa)
     // forma só puxa pra CIMA: fase quente motiva, mas fase fria não realimenta a
     // queda de moral (senão vira má fase eterna num time que perde sempre).
     m += Math.max(0, (s.form ?? 1) - 1) * 55;
@@ -1485,6 +1511,22 @@ function nextMorale(
   return out;
 }
 // acrescenta manchetes (mais recentes primeiro, teto de 40) e conta as não lidas
+// [fase 2 · STAFF] manchetes da virada de split: quem da comissão saiu (contrato
+// vencido) e a renovação automática do técnico principal.
+function staffTickNews(t: ReturnType<typeof staffSplitTick>, split: number): NewsItem[] {
+  return [
+    ...t.left.map((m): NewsItem => ({
+      id: `${split}:staff-out:${m.id}`, split, icon: '📋', tone: 'bad', cat: 'board',
+      title: `${m.nick ?? m.name} ${ct('deixou a comissão técnica')}`,
+      body: ct('O contrato venceu e não foi renovado. A vaga está aberta em Time › Comissão técnica.'),
+    })),
+    ...t.renewed.map((m): NewsItem => ({
+      id: `${split}:staff-renew:${m.id}`, split, icon: '📋', tone: 'info', cat: 'board',
+      title: `${m.nick ?? m.name} ${ct('renovou como técnico principal')}`,
+      body: `${ct('Contrato estendido por 2 splits, com reajuste. Novo salário:')} ${formatMoney(m.wage)}.`,
+    })),
+  ];
+}
 function pushNews(save: CareerSave, items: NewsItem[]): Pick<CareerSave, 'news' | 'unread'> {
   if (items.length === 0) return { news: save.news ?? [], unread: save.unread ?? 0 };
   const news = [...items, ...(save.news ?? [])].slice(0, 40);
@@ -2614,6 +2656,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       return next;
     });
   };
+  // [fase 2] altera o bloco `gestao` lendo o estado VIVO (cliques rápidos não se perdem)
+  const updateGestao = (fn: (g: GestaoState) => GestaoState) => {
+    setSave((s) => {
+      const next = { ...s, gestao: fn(gestaoOf(s)) };
+      persist(next);
+      return next;
+    });
+  };
 
   // T3.10: detecção de year-end awards. Roda quando split passa de múltiplo
   // de 4 (5, 9, 13...) e ainda não temos award detectado pra esse ano.
@@ -2774,8 +2824,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const doBootcamp = () => {
     if (!canBootcamp(save.budget, save.split, save.bootcampSplit)) return;
     const ids = save.squad.map((sg) => sg.playerId);
-    const r = applyBootcamp(ids, save.morale, save.fatigue, MORALE_DEFAULT);
-    update({ budget: save.budget - BOOTCAMP_COST, morale: r.morale, fatigue: r.fatigue, bootcampSplit: save.split });
+    const r = applyBootcamp(ids, save.morale, fatigueView(save, ids), MORALE_DEFAULT);
+    const g = gestaoOf(save);
+    update({ budget: save.budget - BOOTCAMP_COST, morale: r.morale, gestao: { ...g, condition: conditionWithFatigue(g.condition, r.fatigue) }, bootcampSplit: save.split });
   };
   const hireScout = (scoutId: string) => {
     const def = scoutById(scoutId);
@@ -2808,7 +2859,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       scrimsThisSplit: save.scrimsThisSplit ?? 0,
       starterIds,
       pairChem: save.pairChem,
-      fatigue: save.fatigue,
+      fatigue: fatigueView(save, starterIds),
     };
     const check = canScrimNow(stateArg);
     if (!check.ok) {
@@ -2816,11 +2867,23 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       return;
     }
     const { report, patch } = runScrimVs(stateArg, me, teamSeasonToTTeam(oppSeason), rngRef.current);
+    // [fase 2 · treino] scrim de verdade: ritmo sobe, desgasta um pouco, rende
+    // familiaridade no mapa jogado e — contra time do SEU circuito — pode vazar.
+    const g = gestaoOf(save);
+    const inCircuit = !!save.league?.teams.some((t) => t.id === oppId);
+    const sc = applyRealScrim(g, starterIds, {
+      oppId, map: report.map, oppInCircuit: inCircuit, seed: `${save.split}:${save.scrimsThisSplit ?? 0}:${oppId}`, staff: staffEffects(g.staff),
+    });
     update({
       budget: save.budget + patch.budgetDelta,
       scrimsThisSplit: patch.scrimsThisSplitNext,
       pairChem: patch.pairChem,
-      fatigue: patch.fatigue,
+      gestao: { ...g, training: sc.training, condition: sc.condition, tactics: sc.tactics },
+      ...(sc.leaked ? pushNews(save, [{
+        id: `${save.split}:leak:${oppId}:${save.scrimsThisSplit ?? 0}`, split: save.split, icon: '👀', tone: 'bad', cat: 'scout',
+        title: `${ct('Scrim vazou:')} ${report.oppTag} ${ct('leu seus defaults')}`,
+        body: ct('O sparring é do seu circuito e saiu da scrim com anotações sobre o seu time. Eles chegam com anti-strat contra o seu plano de jogo nas próximas semanas.'),
+      }]) : {}),
     });
     setScrimReport(report);
     (report.won ? toast.success : toast.error)(
@@ -2981,7 +3044,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // partida (o snapshot da liga/major não sabe das trocas feitas no meio do
   // split). Times da IA passam direto.
   const roleOf = (oid: string): Role | undefined => save.roles?.[oid];
-  const syncUser = (team: TTeam): TTeam => {
+  const syncUser = (team: TTeam, oppId?: string): TTeam => {
     if (!team.isUser) return team;
     // herda o entrosamento da org assumida (ver buildTeam) — senão o resync
     // reestampava o 78 do draft e desfazia o fix no meio do split.
@@ -2989,14 +3052,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const t = resyncUserRoles(team, roleOf, org?.teamwork, org ? orgRefSynergy(org) : 0);
     // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
     // meio do split — o snapshot da liga não saberia sozinho)
+    // [fase 2] tática por mapa (Plano de jogo) vai junto com o time pra partida
+    const mt = matchTacticsFor(save.gestao?.tactics, save.gamePlan, oppId, autoAntiStratReadiness(scoutingOf(team)));
     const synced: TTeam = {
       ...t,
       mapPrefs: { ...t.mapPrefs, ...(save.mapTraining ?? {}) },
       playbook: save.playbook,
       playbookFam: Math.max(0, Math.min(1, (save.playbookXp ?? 0) / 100)),
+      tactics: mt.tactics,
     };
     // PLANO DE JOGO da partida: buff real escolhido pelo usuário antes de jogar
-    return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined'), normalizeFacilities(save.facilities).analyst);
+    return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined', mt.genericAntiStrat), normalizeFacilities(save.facilities).analyst);
   };
   const prepareTeams = (rawA: TTeam | undefined, rawB: TTeam | undefined): [TTeam, TTeam] | null => {
     // `leagueTeam(l, id)` mente sobre o tipo (non-null assertion) e devolve
@@ -3004,8 +3070,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // saves antigos (criados antes do fix do seedGroups) onde o match referencia
     // um time que sumiu do grupo. Bug 'isUser' undefined no Continue.
     if (!rawA || !rawB) return null;
-    let a = applyFatigueForm(syncUser(rawA), save.fatigue, save.restingPlayers);
-    let b = applyFatigueForm(syncUser(rawB), save.fatigue, save.restingPlayers);
+    // [fase 2] condição (fitness/ritmo) no duelo, lesionado fora do cinco (entra o
+    // jovem da base) e a tática por mapa. A IA joga com tática coerente
+    // (técnico/IGL/playbook) e estuda você pelo scouting — e mais ainda se te viu
+    // em scrim (vazamento do treino vira prontidão de anti-strat DELA).
+    const g = gestaoOf(save);
+    const injured = new Set(save.squad.map((sg) => sg.playerId).filter((id) => isInjured(g.condition[id])));
+    const standIns: StandIn[] = [...(save.academyTeam ?? []), ...(save.academy ?? [])];
+    const prep = (raw: TTeam, other: TTeam): TTeam => {
+      if (!raw.isUser) {
+        const leak = other.isUser ? leakAgainst(g.training, raw.id) : 0;
+        return { ...raw, tactics: aiTactics(raw, { id: other.id, scouting: scoutingOf(raw), leak }) };
+      }
+      return substituteInjured(applyConditionToTeam(syncUser(raw, other.id), g.condition, save.restingPlayers), injured, standIns).team;
+    };
+    let a = prep(rawA, rawB);
+    let b = prep(rawB, rawA);
     if (a.isUser) a = applyRivalryFocus(a, rivalryScore(save.rivalries, b.id));
     if (b.isUser) b = applyRivalryFocus(b, rivalryScore(save.rivalries, a.id));
     return [a, b];
@@ -3016,8 +3096,57 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const rivalry = recordRivalry(current.rivalries, opponent.id, series);
       const userTeam = teams[userIdx];
       const psychologist = normalizeFacilities(current.facilities).psychologist;
-      const load = updateMatchFatigue(current.fatigue, userTeam.players, series.maps.length, current.restingPlayers, current.morale, psychologist);
+      const g0 = gestaoOf(current);
+      const squadIds = current.squad.map((sg) => sg.playerId);
+      const load = updateMatchFatigue(fatigueView(current, squadIds), userTeam.players.filter((p) => squadIds.includes(careerPlayerId(p.id))), series.maps.length, current.restingPlayers, current.morale, psychologist);
+      // [fase 2 · treino] a série fecha a SEMANA: treino da agenda, condição,
+      // lesões, familiaridade dos mapas priorizados e vazamento das scrims.
+      const played: Record<string, number> = {};
+      for (const p of userTeam.players) { const id = careerPlayerId(p.id); if (squadIds.includes(id)) played[id] = series.maps.length; }
+      const weekPlayers = current.squad.map((sg) => {
+        const f = findSigning(sg);
+        return { id: sg.playerId, nick: f?.player.nick ?? sg.playerId, proneness: f ? attrsOf(f.player).h.injuryProneness : undefined };
+      });
+      // [fase 2 · tática] fim de série: mapas jogados ganham familiaridade, os
+      // outros decaem (só aqui — o treino não decai) e a preparação de anti-strat
+      // contra este adversário foi usada. Depois a semana de treino soma a
+      // familiaridade dos mapas priorizados e o VOD prepara o próximo alvo.
+      const tactics0 = tacticsAfterMatch(g0.tactics, series.maps.map((m) => m.map), opponent.id, staffEffects(g0.staff).familiarityGain);
+      const wk = runTrainingWeek({
+        training: g0.training,
+        condition: conditionWithFatigue(g0.condition, load.fatigue),
+        tactics: tactics0,
+        players: weekPlayers,
+        maps: played,
+        staff: staffEffects(g0.staff),
+        split: current.split,
+        leakTargets: (current.league?.teams ?? []).map((t) => t.id).filter((id) => id !== 'user'),
+      });
+      const gestao: GestaoState = { ...g0, training: wk.training, condition: wk.condition, tactics: wk.tactics };
       const items: NewsItem[] = [];
+      for (const inj of wk.report.injuries) {
+        const w = Math.ceil(inj.weeks);
+        items.push({
+          id: `${current.split}:inj:${inj.playerId}:${wk.report.weekNo}`, split: current.split, icon: '🩹', tone: 'bad', cat: 'board',
+          title: `${inj.nick} ${ct('lesionado')}: ${ct(INJURY_LABEL[inj.kind])}`,
+          body: `${ct('Departamento médico: fora por cerca de')} ${w} ${w > 1 ? ct('semanas') : ct('semana')}. ${inj.kind === 'burnout' ? ct('A carga acumulada estourou — alivie a intensidade e ponha folgas na agenda.') : ct('Um jovem da base entra no lugar dele enquanto isso.')}`,
+        });
+      }
+      for (const rec of wk.report.recovered) {
+        items.push({
+          id: `${current.split}:healed:${rec.playerId}:${wk.report.weekNo}`, split: current.split, icon: '✅', tone: 'good', cat: 'board',
+          title: `${rec.nick} ${ct('liberado pelo departamento médico')}`,
+          body: ct('Volta ao time, mas sem ritmo de jogo: a sharpness sobe de novo com partidas, tática e scrim.'),
+        });
+      }
+      if (wk.report.leak) {
+        const lt = current.league?.teams.find((t) => t.id === wk.report.leak!.teamId);
+        items.push({
+          id: `${current.split}:leakw:${wk.report.weekNo}`, split: current.split, icon: '👀', tone: 'bad', cat: 'scout',
+          title: `${ct('Scrim vazou:')} ${lt?.tag ?? ct('um rival')} ${ct('leu seus defaults')}`,
+          body: ct('Alguém da scrim da semana repassou suas execuções. Esse time chega com anti-strat contra o seu plano de jogo nas próximas semanas.'),
+        });
+      }
       const highlight = bestSeriesMoment(series, teams, userIdx);
       const userWon = series.winner === userIdx;
       const mapGap = Math.abs(series.mapScore[0] - series.mapScore[1]);
@@ -3097,7 +3226,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         userWon ? APPROVAL_DELTAS.matchWin : APPROVAL_DELTAS.matchLoss,
         `${userWon ? ct('Vitória') : ct('Derrota')} ${series.mapScore[userIdx]}-${series.mapScore[oppI]} vs ${opponent.tag} · ${shortLabel}`,
       );
-      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, ...pushNews(current, items) };
+      const next = { ...current, rivalries: rivalry.rivalries, fatigue: {}, gestao, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, ...pushNews(current, items) };
       persist(next);
       return next;
     });
@@ -3558,6 +3687,23 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     };
   };
 
+  // [fase 2 · STAFF] técnico do save ⇄ headCoach da comissão técnica. Cobre o
+  // save migrado (o técnico de time real só se resolve com a base, que não entra
+  // na migração), a carreira nova (nasce sem o bloco gestao) e a troca de técnico
+  // no mercado. Idempotente: só grava quando algo muda.
+  useEffect(() => {
+    if (!save.org || !save.coachFromId) return;
+    const id = save.coachFromId;
+    const coach = id === '__custom__' && save.customCoach
+      ? save.customCoach
+      : currentEra.find((t) => t.id === id)?.coach ?? CS2_REAL_2026.find((t) => t.id === id)?.coach ?? ROOKIE_COACH;
+    const gestao = save.gestao ?? (migrateGestao(save as unknown as Record<string, unknown>).gestao as GestaoState);
+    const synced = syncHeadCoach(gestao.staff, coach, id, save.split);
+    if (!synced && save.gestao) return;
+    update({ gestao: { ...gestao, staff: synced ?? gestao.staff } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.org, save.coachFromId, save.customCoach?.nick, currentEra]);
+
   // #6: sparrings elegíveis pro scrim (banda de força + disponibilidade
   // determinística por split/uso). Depende de buildTeam — fica declarado aqui.
   const scrimOpponents = useMemo(() => {
@@ -3583,7 +3729,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const aiBoost = CIRCUIT_AI_BOOST + Math.min(2.5, (s.split - 1) * 0.35 * tierScale);
     const ai = circuit.teams.filter((t) => t.id !== 'user').slice(0, 15).map((t) => {
       const tt = teamSeasonToTTeam(t);
-      tt.strength += aiBoost;
+      tt.strength += aiBoost + aiStaffEdgeFor(t); // [fase 2 · STAFF] comissão da IA (|δ| ≤ 0,5)
       return tt;
     });
     // PAD: garante que [user, ...ai] tenha 16 times (= 4 grupos de 4 perfeitos
@@ -3601,7 +3747,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         .slice(0, 15 - ai.length)
         .map((t) => {
           const tt = teamSeasonToTTeam(t);
-          tt.strength += aiBoost;
+          tt.strength += aiBoost + aiStaffEdgeFor(t); // [fase 2 · STAFF]
           return tt;
         });
       ai.push(...filler);
@@ -3705,12 +3851,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       // rodagem: mapas jogados neste split (sem histórico → rodagem normal)
       const lines = s.seasonStats?.[`user__${sig.playerId}`];
       const mapsPlayed = lines ? lines.filter((l) => l.split === s.split).reduce((a, l) => a + l.maps, 0) : undefined;
-      const focusAttr = s.trainingFocusAttr?.[sig.playerId] ?? null;
+      // [fase 2 · treino] o treino semanal do split vira multiplicador POR
+      // ATRIBUTO (agenda × intensidade × foco individual × comissão; padrão = 1)
+      const tr = gestaoOf(s).training;
       const r = evolveAttrs({ ...current, pa: Math.max(current.ca, caFromOvr(pot)) }, {
         playerId: sig.playerId, split: s.split, age, role: f.player.role,
         mapsPlayed, growthMul,
         focusPlayer: s.trainingFocus === sig.playerId,
-        focusGroup: focusAttr,
+        trainMul: trainingGrowthMul(tr.progress?.[sig.playerId], tr.weeks),
       });
       const d = r.ovrAfter - r.ovrBefore;
       // atributos evoluídos guardados como VARIAÇÃO sobre a base (edições da base
@@ -3718,10 +3866,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       attrEvo[sig.playerId] = attrDelta(r.attrs.a, attrsOf(f.basePlayer).a);
       // evo segue gravado (OVR atual − OVR base): mercado, prêmios e telas leem
       evo[sig.playerId] = r.ovrAfter - playerOvr(f.basePlayer);
-      // #22: FOCO DE TREINO — marca o viés do atributo trabalhado (dica da UI)
-      if (focusAttr && d > 0 && !r.atCeiling) {
-        evoAttrBias[sig.playerId] = applyFocusBias(evoAttrBias[sig.playerId], focusAttr);
-      }
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age), ...(breakthrough ? { breakthrough } : {}) });
     }
     return { evo, lastEvo, dynamicPotBonus, evoAttrBias, attrEvo };
@@ -3750,7 +3894,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       split: s.split,
       contractUntil: (pid) => s.contracts?.[pid] ?? null,
       squadIds: s.squad.map((x) => x.playerId),
-      fatigue: (pid) => s.fatigue?.[pid] ?? 0,
+      fatigue: (pid) => fatigueView(s, [pid])[pid] ?? 0,
     });
     const morale = { ...moraleIn };
     const coachBond = { ...bondIn };
@@ -3854,6 +3998,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       let d = r < 35 ? 3 : r < 75 ? 2 : 1;
       if (s.academyFocus === a.id) d += 1; // treino focado acelera
       d += developmentBonus(a.id, s.split, normalizeFacilities(s.facilities).training);
+      // [fase 2 · STAFF] formação de jovens da comissão (youthDevelopment): 1 = como antes
+      d = scaleStep(d, staffEffects(s.gestao?.staff).youthGrowth, `acastaff:${a.id}:${s.split}`);
       d = Math.min(d, a.potential - ovr); // não ultrapassa o potencial
       const clamp = (v: number) => Math.max(40, Math.min(99, v));
       return {
@@ -4403,7 +4549,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // 17-32 = Stage 1. Os stages antes do seu são AUTO-SIMULADOS.
     const aiSorted = oppEra
       .filter((t) => t.id !== 'user' && t.id !== s.takeoverId)
-      .map((t) => ({ tt: teamSeasonToTTeam(t), vrs: aiTeamVrs(t, s.split) }))
+      .map((t) => { const tt = teamSeasonToTTeam(t); tt.strength += aiStaffEdgeFor(t); return { tt, vrs: aiTeamVrs(t, s.split) }; }) // [fase 2 · STAFF] comissão da IA
       .sort((a, b) => b.vrs - a.vrs);
     const userVrs = userBaseVrsFor(user.teamwork, s.takeoverId ? currentEra.find((t) => t.id === s.takeoverId) : undefined) + s.vrs + userLegacyVrs(s);
     const userRank = aiSorted.filter((x) => x.vrs > userVrs).length + 1; // posição mundial
@@ -4835,6 +4981,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           fired: false,
           morale: {},
           fatigue: {},
+          gestao: { ...gestaoOf(save), training: defaultTrainingState(), condition: {} },
           restingPlayers: [],
           contracts: {},
           pendingOffer: null,
@@ -5331,7 +5478,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   const until = save.contracts?.[sg.playerId];
                   return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                 });
-                const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }), normalizeFacilities(save.facilities).psychologist);
+                const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }, staffEffects(save.gestao?.staff).moraleRecovery), normalizeFacilities(save.facilities).psychologist);
                 // #16: campanha de Major como fator de resultados (1º=1.0 … fundo=0.45)
                 const majResults01 = mr.champion ? 1 : typeof mr.placement === 'number' ? (mr.placement <= 4 ? 0.8 : mr.placement <= 8 ? 0.6 : 0.45) : 0.6;
                 const hap = tickHappiness(save, majResults01, morale0);
@@ -5396,11 +5543,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 // T3.12: scouting tick — salário + relatórios
                 const scoutingPatchMajor = applyScoutingSplitTick(save, oppEra, rngRef.current);
                 const scoutSalaryMajor = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+                // [fase 2 · STAFF] folha da comissão + contratos que vencem
+                const staffTickMajor = staffSplitTick(save.gestao?.staff, save.split);
                 // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                 const { marketNews: majorMarketNews, ...majorWindowPatch } = applyTransferWindow(save);
                 const next = {
                   ...save,
-                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
+                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor - staffTickMajor.payroll + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
+                  ...(save.gestao ? { gestao: { ...save.gestao, staff: staffTickMajor.staff } } : {}),
                   vrs: applyCareerVrsDecay(save.vrs, mr.vrs), // Major também é um evento do ranking rolante
                   titles: save.titles + (mr.champion ? 1 : 0),
                   split: save.split + 1,
@@ -5448,12 +5598,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   splitStart: snapshotSplitStart(save, save.split + 1, save.budget),
                   // FIM DE TEMPORADA (pós-Major): pré-temporada longa, quase zera a
                   // fadiga — é o reset que evita a espiral de burnout em carreira longa.
-                  fatigue: recoverFatigue(save.fatigue, 70, normalizeFacilities(save.facilities).psychologist * 4),
+                  fatigue: {},
+                  gestao: (() => { const g = gestaoOf(save); return { ...g, training: closeTrainingSplit(g.training), condition: recoverCondition(g.condition, 70, normalizeFacilities(save.facilities).psychologist * 4) }; })(),
                   restingPlayers: [],
                   peakOvr,
                   mapTraining: applyMapTraining(save),
                   playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...sc.news, ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
+                  ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...pj.news, ...sc.news, ...staffTickNews(staffTickMajor, save.split), ...majorMarketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', mr.champion)]),
                 };
                 const fin = consummateDeals(next);
                 persist(fin);
@@ -5840,7 +5991,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                       }),
                       ...bankStats(save, { placement: finalPos, champion: isChampion }),
                       // folga curta entre etapas: compensa ~um campeonato jogado
-                      fatigue: recoverFatigue(save.fatigue, 16, normalizeFacilities(save.facilities).psychologist * 2),
+                      fatigue: {},
+                      gestao: (() => { const g = gestaoOf(save); return { ...g, condition: recoverCondition(g.condition, 16, normalizeFacilities(save.facilities).psychologist * 2) }; })(),
                       restingPlayers: [],
                     };
                     persist(nextEv);
@@ -5861,7 +6013,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     const until = save.contracts?.[sg.playerId];
                     return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                   });
-                  const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }), normalizeFacilities(save.facilities).psychologist);
+                  const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }, staffEffects(save.gestao?.staff).moraleRecovery), normalizeFacilities(save.facilities).psychologist);
                   // #16: campanha do split como fator de resultados (winrate da liga)
                   const splitResults01 = me.wins + me.losses > 0 ? me.wins / (me.wins + me.losses) : 0.5;
                   const hap = tickHappiness(save, splitResults01, morale0);
@@ -5923,6 +6075,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   // T3.12: scouting tick — salário + relatórios
                   const scoutingPatch = applyScoutingSplitTick(save, oppEra, rngRef.current);
                   const scoutSalary = save.hiredScoutId ? (scoutById(save.hiredScoutId)?.salaryPerSplit ?? 0) : 0;
+                  // [fase 2 · STAFF] folha da comissão + contratos que vencem
+                  const staffTick = staffSplitTick(save.gestao?.staff, save.split);
                   // #23: tick do mercado da IA no fechamento (manchetes vão pro pushNews)
                   const { marketNews, ...windowPatch } = applyTransferWindow(save);
                   // #15: jogadores LISTADOS à venda — a IA dá o lance no fechamento.
@@ -5953,7 +6107,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   }));
                   // #8: fechar o split no vermelho (receitas não cobriram a folha)
                   // também corrói a confiança — a diretoria vê o caixa, não só a tabela.
-                  const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
+                  const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary - staffTick.payroll + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
                   const boardCash = rawBudget < 0
                     ? applyBoardDelta(boardPatch.board, boardPatch.boardLog, save.split, APPROVAL_DELTAS.splitCashCrunch, ct('Caixa zerado: receitas do split não cobriram a folha'))
                     : null;
@@ -5962,6 +6116,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     // piso em 0: estourar a folha esvazia o caixa, mas nunca trava
                     // a carreira com saldo negativo (impossível montar 5)
                     budget: Math.max(0, rawBudget),
+                    ...(save.gestao ? { gestao: { ...save.gestao, staff: staffTick.staff } } : {}),
                     vrs: applyCareerVrsDecay(save.vrs, vrsGain), // VRS rolante (decai e soma o ganho do evento)
                     titles: save.titles + (isChampion ? 1 : 0),
                     split: save.split + 1,
@@ -5999,12 +6154,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     playerPromises: pj.playerPromises,
                     splitStart: snapshotSplitStart(save, save.split + 1, Math.max(0, rawBudget)),
                     // offseason de split (não-Major): descanso de verdade entre splits
-                    fatigue: recoverFatigue(save.fatigue, 40, normalizeFacilities(save.facilities).psychologist * 3),
+                    fatigue: {},
+                    gestao: (() => { const g = gestaoOf(save); return { ...g, training: closeTrainingSplit(g.training), condition: recoverCondition(g.condition, 40, normalizeFacilities(save.facilities).psychologist * 3) }; })(),
                     restingPlayers: [],
                     peakOvr,
                     mapTraining: applyMapTraining(save),
                     playbookXp: Math.min(100, (save.playbookXp ?? 0) + PLAYBOOK_FAM_GAIN),
-                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...sc.news, ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
+                    ...pushNews(save, [...items, ...sponsorExpiryWarnings(save, save.split + 1), ...listedNews, ...pj.news, ...sc.news, ...staffTickNews(staffTick, save.split), ...marketNews, ...worldNews(oppEra, save.split, save.region ?? 'americas'), ...socialNews(oppEra, save.split, save.org?.name ?? 'Sua org', isChampion)]),
                     // #15: vendas de jogadores LISTADOS entram no trilho da janela
                     pendingSales: [...(save.pendingSales ?? []), ...listedSales],
                     listedPrices: listedPricesLeft,
@@ -6737,7 +6893,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             morale={save.morale?.[oid] ?? MORALE_DEFAULT}
             moraleLabel={mi.label}
             moraleIcon={mi.icon}
-            fatigue={save.fatigue?.[oid] ?? 0}
+            fatigue={fatigueView(save, [oid])[oid] ?? 0}
+            {...(() => {
+              // [fase 2 · treino] ritmo de jogo e lesão (condição do save)
+              const c = gestaoOf(save).condition[oid];
+              return c ? { sharpness: Math.round(c.sharpness), injuryNote: isInjured(c) ? `${ct(INJURY_LABEL[c.injury!.kind])} · ${Math.ceil(c.injury!.weeksLeft)} ${ct('sem.')}` : null } : {};
+            })()}
             valueLabel={formatMoney(playerValue({ ...p, ovr }))}
             wageLabel={formatMoney(playerWage(p))}
             contractLeft={contractLeft}
@@ -6780,20 +6941,38 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     return next;
                   });
                 },
-                // #22: foco de treino por atributo (com sugestão do staff)
-                focusAttr: save.trainingFocusAttr?.[oid] ?? null,
-                focusSuggested: suggestFocus(p, save.evoAttrBias?.[oid]),
-                focusOptions: CORE_STATS.map((k) => ({ id: k, label: TRAINING_FOCUS_LABEL[k], biased: save.evoAttrBias?.[oid]?.[k] ?? 0 })),
-                onFocusAttr: (attr: string | null) => {
-                  setSave((s) => {
-                    const trainingFocusAttr = { ...(s.trainingFocusAttr ?? {}) };
-                    if (attr == null) delete trainingFocusAttr[oid];
-                    else trainingFocusAttr[oid] = attr as CoreStat;
-                    const next = { ...s, trainingFocusAttr };
-                    persist(next);
-                    return next;
-                  });
-                },
+                // [fase 2 · treino] FOCO INDIVIDUAL (atributo ou função) — o mesmo
+                // da tela Treinos e scrims; substitui o foco antigo de 5 atributos
+                ...(() => {
+                  const cur = gestaoOf(save).training.focus[oid];
+                  const roleAttrs = ROLE_FOCUS_ATTRS[p.role] ?? [];
+                  const suggested = LEGACY_FOCUS_ATTR[suggestFocus(p)];
+                  const attrs: AttrKey[] = [...roleAttrs];
+                  if (suggested && !attrs.includes(suggested)) attrs.push(suggested);
+                  if (cur?.kind === 'attr' && !attrs.includes(cur.attr)) attrs.push(cur.attr);
+                  return {
+                    focusAttr: cur ? (cur.kind === 'attr' ? `attr:${cur.attr}` : `role:${cur.role}`) : null,
+                    focusSuggested: suggested ? `attr:${suggested}` : undefined,
+                    focusOptions: [
+                      { id: `role:${p.role}`, label: `${ct('Função')}: ${p.role}`, biased: 0 },
+                      ...attrs.map((k) => ({ id: `attr:${k}`, label: ATTR_LABEL[k], biased: 0 })),
+                    ],
+                    onFocusAttr: (id: string | null) => {
+                      setSave((s) => {
+                        const g = gestaoOf(s);
+                        const focus = { ...g.training.focus };
+                        if (id == null) delete focus[oid];
+                        else {
+                          const [kind, v] = id.split(':');
+                          focus[oid] = kind === 'role' ? { kind: 'role', role: v as Role } : { kind: 'attr', attr: v as AttrKey };
+                        }
+                        const next = { ...s, gestao: { ...g, training: { ...g.training, focus } } };
+                        persist(next);
+                        return next;
+                      });
+                    },
+                  };
+                })(),
               };
             })() : (() => {
               // #41: OBSERVATÓRIO — scouting progressivo pra jogador de FORA do elenco
@@ -6870,6 +7049,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 ? 'full'
                 : (watchOf(save.watchlist, oid)?.revealLevel ?? 0) >= 2 ? 'scouted' : 'rumor',
               oid,
+              staffEffects(save.gestao?.staff).scoutAccuracy, // [fase 2 · STAFF] olheiros estreitam a faixa
             )}
             tab={ppTab}
             onTab={(t) => setPpTabFor({ id: playerRouteId, tab: t })}
@@ -6941,7 +7121,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       {/* T1.4: aba Overview extraída em src/pages/career/OverviewTab.tsx */}
       {hubTab === 'overview' && (
         <OverviewTab
-          save={save as unknown as Parameters<typeof OverviewTab>[0]['save']}
+          save={{ ...save, fatigue: fatigueView(save, save.squad.map((sg) => sg.playerId)) } as unknown as Parameters<typeof OverviewTab>[0]['save']}
           league={league}
           opp={opp}
           myMatch={myMatch}
@@ -7057,22 +7237,56 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const me = resolveTeamById('user');
         return me ? <AnalystReportCard report={generateAnalystReport(opp, me)} oppName={opp.name} oppTag={opp.tag} /> : null;
       })()}
-      {hubTab === 'squad' && squadSec !== 'an' && (
-        <SquadTab
-          section={squadSec as SquadSection}
-          save={save as unknown as Parameters<typeof SquadTab>[0]['save']}
-          findSigning={findSigning}
-          update={update as unknown as Parameters<typeof SquadTab>[0]['update']}
+      {/* [fase 2 · STAFF] Time › Comissão técnica */}
+      {hubTab === 'squad' && squadSec === 'st' && (
+        <StaffTab
+          save={save as unknown as Parameters<typeof StaffTab>[0]['save']}
+          sponsorIncome={effSponsorIncome(save)}
+          update={update as unknown as Parameters<typeof StaffTab>[0]['update']}
+        />
+      )}
+      {/* [fase 2 · treino] Treinos e scrims: agenda, intensidade, foco individual, condição, scrim */}
+      {hubTab === 'squad' && squadSec === 'tr' && (
+        <TrainingTab
+          budget={save.budget}
+          players={save.squad.map((sg) => findSigning(sg)?.player).filter((p): p is Player => !!p).map((p) => ({ ...p, id: playerOrgId(p.id) }))}
+          gestao={gestaoOf(save)}
+          updateGestao={updateGestao}
           openPlayerProfile={openPlayerProfile}
+          nextOpp={opp ? { id: opp.id, tag: opp.tag } : null}
+          teamTag={(id) => league?.teams.find((t) => t.id === id)?.tag ?? oppEra.find((t) => t.id === id)?.tag}
+          scrimsThisSplit={save.scrimsThisSplit ?? 0}
+          scrimOpponents={scrimOpponents}
+          scrimReport={scrimReport}
           doScrimVs={doScrimVs}
           onBootcamp={doBootcamp}
           bootcampUsed={save.bootcampSplit === save.split}
-          scrimOpponents={scrimOpponents}
-          scrimReport={scrimReport}
+        />
+      )}
+      {hubTab === 'squad' && squadSec !== 'an' && squadSec !== 'tr' && squadSec !== 'st' && (
+        <SquadTab
+          section={squadSec as SquadSection}
+          save={{ ...save, fatigue: fatigueView(save, save.squad.map((sg) => sg.playerId)) } as unknown as Parameters<typeof SquadTab>[0]['save']}
+          findSigning={findSigning}
+          update={update as unknown as Parameters<typeof SquadTab>[0]['update']}
+          openPlayerProfile={openPlayerProfile}
+          condition={gestaoOf(save).condition}
           hireScout={hireScout}
           fireScout={fireScout}
           seasonStats={seasonStats}
           mySquadIds={mySquadIds}
+          gamePlan={squadSec === 'pl' ? (
+            <GamePlanScreen
+              tactics={gestaoOf(save).tactics}
+              onChange={(tactics) => updateGestao((g) => ({ ...g, tactics }))}
+              players={save.squad.map((sig) => findSigning(sig)?.player).filter((p): p is Player => !!p).slice(0, 5)}
+              opp={opp}
+              reveal={antiStratReveal(staffEffects(save.gestao?.staff).antiStratRead, normalizeFacilities(save.facilities).analyst)}
+              gamePlan={save.gamePlan}
+              onOpenPlayer={openPlayerProfile}
+              vodPoints={vodPrepPoints(gestaoOf(save).training)}
+            />
+          ) : undefined}
         />
       )}
 

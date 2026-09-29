@@ -11,18 +11,11 @@ import { PlayerLink } from '../../components/career/PlayerLink';
 import { openCompare } from '../../components/CompareHost';
 import { ChemistryMatrix } from '../../components/career/ChemistryMatrix';
 import { CoachStintsCard } from '../../components/career/CoachStintsCard';
-import { ScrimCard } from '../../components/career/ScrimCard';
-import type { ScrimMatchReport, ScrimOpponentOption } from '../../engine/scrim';
 import { ScoutingCard } from '../../components/career/ScoutingCard';
 import {
   ROLE_OPTS,
-  MAP_FOCUS_MAX,
-  MAP_TRAIN_MAX,
-  MAP_TRAIN_MIN,
   PLAYBOOK_SWITCH_TO,
   MORALE_DEFAULT,
-  mapLevel,
-  mapFocusList,
   moraleInfo,
   PHASE_LABEL,
   playerPhase,
@@ -33,6 +26,8 @@ import {
   type SeasonStat,
 } from '../../components/CareerScreen';
 import type { YouthDebut } from '../../engine/career/playerAge';
+import type { PlayerCondition, TacticsState } from '../../engine/gestao/model';
+import { mapTacticOf } from '../../engine/gestao/tatica';
 import { fatigueBand } from '../../engine/career/fatigue';
 import { formStatus } from '../../engine/career/form';
 import { activeStint as activeCoachStint } from '../../engine/coachCareer';
@@ -43,6 +38,7 @@ import { teamChemistry } from '../../engine/chemistry';
 import { ElencoPanel, type ElencoRow } from './ElencoPanel';
 import { Panel, Bar } from '../../components/ds/index';
 import { Sparkles, Target, Wallet } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { MAP_POOL, MAP_LABELS, PLAYBOOK_LABELS, PLAYBOOK_DESC, type MapId, type Playbook, type Player, type Role } from '../../types';
 
 interface SquadTabSave {
@@ -83,15 +79,14 @@ interface Props {
   findSigning: (s: Signing) => { player: Player } | null;
   update: (patch: Record<string, unknown>) => void;
   openPlayerProfile: (p: Player) => void;
-  doScrimVs: (oppId: string) => void;
-  onBootcamp?: () => void;   // #35: intensivo pago (1x/split)
-  bootcampUsed?: boolean;
-  scrimOpponents: ScrimOpponentOption[];
-  scrimReport: ScrimMatchReport | null;
+  /** [fase 2 · treino] condição por jogador (barra de condição no Elenco) */
+  condition?: Record<string, PlayerCondition>;
   hireScout: (id: string) => void;
   fireScout: () => void;
   seasonStats: SeasonStat[];
   mySquadIds: Set<string>;
+  /** [fase 2] tela "Plano de jogo" (tática por mapa) — renderizada na seção 'pl' */
+  gamePlan?: ReactNode;
 }
 
 export function SquadTab({
@@ -100,15 +95,12 @@ export function SquadTab({
   findSigning,
   update,
   openPlayerProfile,
-  doScrimVs,
-  onBootcamp,
-  bootcampUsed = false,
-  scrimOpponents,
-  scrimReport,
+  condition,
   hireScout,
   fireScout,
   seasonStats,
   mySquadIds,
+  gamePlan,
 }: Props) {
   const rows = save.squad.map((sig) => findSigning(sig)?.player).filter(Boolean) as Player[];
   const hasAwp = rows.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
@@ -118,15 +110,6 @@ export function SquadTab({
     update({ roles: { ...(save.roles ?? {}), [pid]: role } });
   const setFocus = (pid: string) =>
     update({ trainingFocus: save.trainingFocus === pid ? null : pid });
-  const setMapFocus = (m: MapId) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cur = mapFocusList(save as any);
-    if (cur.includes(m)) {
-      update({ mapFocus: cur.filter((x) => x !== m) });
-    } else if (cur.length < MAP_FOCUS_MAX) {
-      update({ mapFocus: [...cur, m] });
-    }
-  };
   const setPlaybook = (pb: Playbook) => {
     if (pb === save.playbook) return;
     const mem = { ...(save.playbookMem ?? {}) };
@@ -147,6 +130,7 @@ export function SquadTab({
       age: effectiveAge(p, save.split, save.youthAge, save.youthDebut),
       morale: mor, moraleLabel: moraleInfo(mor).label,
       fatigue: save.fatigue?.[p.id] ?? 0,
+      cond: condition?.[p.id] ?? null,
       contractLeft: until != null ? until - save.split + 1 : null,
       rating: st?.rating, maps: st?.maps, kd: st?.kd, adr: st?.adr,
       recent: save.recentRatings?.[p.id],
@@ -155,8 +139,9 @@ export function SquadTab({
   const chemAvg = teamChemistry({ pairChem: save.pairChem }, rows.map((p) => playerOrgId(p.id)));
   const chemLabel = chemAvg >= 80 ? ct('Excelente') : chemAvg >= 60 ? ct('Boa') : chemAvg >= 40 ? ct('Regular') : ct('Fraca');
   const payroll = rows.reduce((sum, p) => sum + playerWage(p), 0);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapsSorted = [...MAP_POOL].map((m) => ({ m, lvl: mapLevel(save as any, m) })).sort((x, y) => y.lvl - x.lvl);
+  // [fase 2] domínio do mapa = familiaridade do plano (Plano de jogo)
+  const tacticsNow = (save.gestao as { tactics?: TacticsState } | undefined)?.tactics;
+  const mapsSorted = [...MAP_POOL].map((m) => ({ m, fam: mapTacticOf(tacticsNow, m).familiarity })).sort((x, y) => y.fam - x.fam);
 
   return (
     <div className={`em-tab em-squad em-squad--${section}`}>
@@ -171,16 +156,19 @@ export function SquadTab({
               </div>
               <Bar value={chemAvg} tone={chemAvg >= 60 ? 'var(--c-win)' : chemAvg >= 40 ? 'var(--c-warn)' : 'var(--c-loss)'} lg label={`${ct('Química')} ${chemAvg}`} />
             </Panel>
-            <Panel icon={<Target size={16} />} title={ct('Mapas')} flush>
-              {[mapsSorted[0], mapsSorted[1], mapsSorted[mapsSorted.length - 1]].filter(Boolean).map((x, i) => (
-                <div key={x.m} className="ds-row">
-                  <b style={{ width: 80 }}>{MAP_LABELS[x.m]}</b>
-                  <span style={{ color: i === 0 && x.lvl > 0 ? 'var(--c-win)' : i === 2 && x.lvl < 0 ? 'var(--c-loss)' : 'var(--c-ink-dim)', fontWeight: 600 }}>
-                    {i === 0 && x.lvl > 0 ? ct('Mapa forte') : i === 2 && x.lvl < 0 ? ct('Evitar no veto') : ct('Sólido')}
-                  </span>
-                  <span className="ds-dim" style={{ marginLeft: 'auto' }}>{x.lvl > 0 ? '+' : ''}{x.lvl.toFixed(1)}</span>
-                </div>
-              ))}
+            <Panel icon={<Target size={16} />} title={ct('Mapas · familiaridade')} flush>
+              {[mapsSorted[0], mapsSorted[1], mapsSorted[mapsSorted.length - 1]].filter(Boolean).map((x, i) => {
+                const strong = i === 0 && x.fam >= 60, weak = i === 2 && x.fam < 40;
+                return (
+                  <div key={x.m} className="ds-row">
+                    <b style={{ width: 80 }}>{MAP_LABELS[x.m]}</b>
+                    <span style={{ color: strong ? 'var(--c-win)' : weak ? 'var(--c-loss)' : 'var(--c-ink-dim)', fontWeight: 600 }}>
+                      {strong ? ct('Mapa forte') : weak ? ct('Evitar no veto') : ct('Sólido')}
+                    </span>
+                    <span className="ds-dim" style={{ marginLeft: 'auto' }}>{Math.round(x.fam)}</span>
+                  </div>
+                );
+              })}
             </Panel>
             <Panel icon={<Wallet size={16} />} title={ct('Folha salarial')}>
               <div className="squad-big">
@@ -308,7 +296,9 @@ export function SquadTab({
         </>
       )}
 
-      {section === 'pl' && (
+      {section === 'pl' && gamePlan}
+
+      {section === 'pl' && !gamePlan && (
         <>
       <DashCard
         title={ct('Cinco titular')}
@@ -346,6 +336,11 @@ export function SquadTab({
         </div>
       </DashCard>
 
+        </>
+      )}
+
+      {section === 'pl' && (
+        <>
           <DashCard title={ct('Playbook tático')}>
             <div className="pb-fam">
               <span className="muted small">{ct('Entrosamento')}</span>
@@ -370,87 +365,6 @@ export function SquadTab({
               O entrosamento sobe a cada split mantendo o esquema;{' '}
               <b>trocar volta pra {PLAYBOOK_SWITCH_TO}%</b>
               {ct('. Quanto maior, mais o esquema pesa na partida — pro bem e pro mal, conforme o contexto.')}
-            </p>
-          </DashCard>
-
-        </>
-      )}
-
-      {section === 'tr' && (
-        <>
-      {/* T3.8 → #6: scrim contra adversário real (escolha o sparring) */}
-      <ScrimCard
-        scrimsThisSplit={save.scrimsThisSplit ?? 0}
-        budget={save.budget}
-        opponents={scrimOpponents}
-        report={scrimReport}
-        onScrim={doScrimVs}
-      />
-
-      {/* #35: bootcamp do time — o intensivo pré-campanha */}
-      {onBootcamp && (
-        <DashCard title={ct('Bootcamp do time')}>
-          <p className="muted small" style={{ margin: '0 0 10px' }}>
-            {ct('Duas semanas de imersão: +5 de moral pra todo o elenco e 30 de fadiga aliviada. Uma vez por split — chegue inteiro no momento decisivo.')}
-          </p>
-          <button
-            className="btn gold"
-            disabled={bootcampUsed || (save.budget ?? 0) < 60_000}
-            onClick={onBootcamp}
-            title={bootcampUsed ? ct('Bootcamp já usado neste split.') : undefined}
-          >
-            🏕️ {bootcampUsed ? ct('Bootcamp concluído neste split') : `${ct('Fazer bootcamp')} · R$ 60 mil`}
-          </button>
-        </DashCard>
-      )}
-
-          <DashCard
-            title={
-              <>
-                {ct('Treino de mapa')}{' '}
-                <span className="muted small" style={{ fontWeight: 400 }}>
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  ({mapFocusList(save as any).length}/{MAP_FOCUS_MAX} em foco)
-                </span>
-              </>
-            }
-          >
-            <div className="map-train">
-              {MAP_POOL.map((m) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const lvl = mapLevel(save as any, m);
-                const pct = Math.round(((lvl - MAP_TRAIN_MIN) / (MAP_TRAIN_MAX - MAP_TRAIN_MIN)) * 100);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const foc = mapFocusList(save as any).includes(m);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const full = !foc && mapFocusList(save as any).length >= MAP_FOCUS_MAX;
-                const cls = lvl >= 1 ? 'good' : lvl <= -1 ? 'bad' : 'warn';
-                return (
-                  <button
-                    key={m}
-                    className={`mt-row${foc ? ' on' : ''}`}
-                    onClick={() => setMapFocus(m)}
-                    disabled={full}
-                    title={
-                      foc
-                        ? 'Em treino neste split (clique pra tirar)'
-                        : full
-                        ? `${ct('Máximo de')} ${MAP_FOCUS_MAX} ${ct('mapas em treino')}`
-                        : 'Treinar este mapa neste split'
-                    }
-                  >
-                    <span className="mt-name">
-                      {foc && <CareerIcon name="focus" size={12} />} {MAP_LABELS[m]}
-                    </span>
-                    <span className="mt-bar"><i className={cls} style={{ width: `${pct}%` }} /></span>
-                    <span className={`mt-lvl ${cls}`}>{lvl > 0 ? '+' : ''}{lvl.toFixed(1)}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="muted small" style={{ margin: '8px 0 0' }}>
-              {ct('Treine até')} <b>{MAP_FOCUS_MAX} mapas</b>{' '}
-              {ct('por split; os outros decaem um pouco. É de propósito: ninguém é forte em todos, mas dá pra montar um pool sólido.')}
             </p>
           </DashCard>
 

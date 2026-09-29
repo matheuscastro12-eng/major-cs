@@ -18,8 +18,9 @@
 // save v1, devolve v2; MIGRATIONS[2] roda em save v2, devolve v3; etc.
 
 import { migrateCareerAttrs } from './careerAttrsMigration';
+import { migrateGestao } from '../engine/gestao/gestaoMigration';
 
-export const SAVE_VERSION = 27;
+export const SAVE_VERSION = 28;
 
 // Save é tipado como objeto genérico aqui pra evitar dependência circular com
 // CareerSave (definido inline em CareerScreen.tsx hoje). Quando o tipo migrar
@@ -265,6 +266,9 @@ const MIGRATIONS: Record<number, Migration> = {
   // extraOnTeam) e converte a evolução escalar (`evo` + viés do foco) em
   // evolução POR ATRIBUTO (`attrEvo`) — mesmos 5 números, mesmo OVR.
   26: (save) => ({ ...migrateCareerAttrs(save), _v: 27 }),
+  // v27 → v28 (realismo FM fase 2): bloco `gestao` — treino semanal, tática por
+  // mapa, comissão técnica e condição por jogador, com os padrões de cada frente.
+  27: (save) => ({ ...migrateGestao(save), _v: 28 }),
 };
 
 // Versão atual de um save. Save legado (sem `_v`) é tratado como v1.
