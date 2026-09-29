@@ -8,7 +8,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Crosshair } from 'lucide-react';
-import { ALL_ATTRS, ATTR_LABEL, playerAttributes, type AttrKey, type PlayerForAttrs } from '../../../engine/attributes';
+import { ALL_ATTRS, ATTR_LABEL, type AttrKey, type PlayerForAttrs } from '../../../engine/attributes';
+import { attrsOf, type PlayerAttrs } from '../../../engine/attrs/model';
+import type { Role } from '../../../types';
 import { AttrValue, attrBand } from '../Attr';
 
 export interface PeekData {
@@ -63,8 +65,9 @@ const ROLE_KEYS: Record<string, AttrKey[]> = {
 };
 
 /** Monta o cartão a partir de um Player do jogo (atributos derivados 1–20). */
-export function peekFromPlayer(p: PlayerForAttrs & { nick: string; name?: string; country?: string; role?: string; role2?: string }, extra: Partial<PeekData> = {}): PeekData {
-  const a = playerAttributes(p);
+export function peekFromPlayer(p: PlayerForAttrs & { nick: string; name?: string; country?: string; role?: string; role2?: string; attrs?: PlayerAttrs | null; sourcePlayerId?: string }, extra: Partial<PeekData> = {}): PeekData {
+  // [realismo FM] atributos pela porta única (próprios → base registrada → derivação)
+  const a = attrsOf({ ...p, role2: p.role2 as Role | undefined }).a;
   const keys = ROLE_KEYS[p.role ?? ''] ?? ALL_ATTRS.slice(0, 6);
   return {
     nick: p.nick,

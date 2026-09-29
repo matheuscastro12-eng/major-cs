@@ -98,13 +98,21 @@ com backfill (nada é removido).
 
 | Save | Constante | Arquivo | Chave no localStorage |
 |---|---|---|---|
-| Carreira | `SAVE_VERSION = 26` | `src/state/saveMigrations.ts` | `rtm-career-v1` (+ slots `__s2..s5`) |
-| Road to Pro | `RTP_SAVE_VERSION = 16` | `src/engine/rtp/createSave.ts` | `rtm-rtp-v1` |
+| Carreira | `SAVE_VERSION = 27` | `src/state/saveMigrations.ts` | `rtm-career-v1` (+ slots `__s2..s5`) |
+| Road to Pro | `RTP_SAVE_VERSION = 17` | `src/engine/rtp/createSave.ts` | `rtm-rtp-v1` |
 | Ultimate | `ULTIMATE_VERSION = 1` | `src/engine/ultimate/state.ts` | `rtm-ultimate-v1` |
+| Draft (campanha) | `DRAFT_SESSION_VERSION = 2` | `src/state/draftSession.ts` | `major-session-v3` |
 
 Migração nova na Carreira: `SAVE_VERSION += 1` em `saveMigrations.ts`, registre
 a função `vN → vN+1`, cubra em `scripts/test-save-migration.mts` e atualize a
 tabela acima.
+
+Realismo FM (atributos como fonte da verdade): Carreira v27 grava `attrs` nos
+jogadores guardados e a evolução por atributo (`attrEvo`); RtP v17 grava os
+ocultos do herói e os `attrs` dos colegas; a campanha do Draft v2 grava os
+`attrs` do seu time. O Ultimate guarda só a chave de cada carta (os atributos
+saem do catálogo via `cardAttrs`); uma chave base cuja faixa de OVR mude
+resolve para a carta base atual (`engine/ultimate/cardIndex.ts`).
 
 ---
 

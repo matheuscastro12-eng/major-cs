@@ -287,10 +287,14 @@ const STYLE_MOD: Record<MomentStyle, { chance: number; winFrags: number; winOpen
   // embalo), mas falha custa morte e quase nada no placar
   aggro: { chance: -0.02, winFrags: 2, winOpen: 1, failDeath: 1, winValue: 1.1, failValue: 0.05 },
   // safe: alta taxa de sucesso, impacto modesto, raramente morre (a falha
-  // ainda preserva a arma/o round seguinte)
-  safe: { chance: +0.015, winFrags: 1, winOpen: 0, failDeath: 0, winValue: 0.95, failValue: 0.15 },
+  // ainda preserva a arma/o round seguinte). [realismo FM] com a cena real de
+  // set/2026 os adversários pendem pro "setup" (smart 0,42 da tendência) e o
+  // seguro passou a dominar o agressivo no Monte Carlo de 600 séries (+6pp e
+  // rating maior): bônus do seguro +0,015 → +0,005 e do inteligente 0 → −0,005.
+  // Subir o agressivo empurrava a prorrogação da Série do Dia acima de 20%.
+  safe: { chance: 0.005, winFrags: 1, winOpen: 0, failDeath: 0, winValue: 0.95, failValue: 0.15 },
   // smart: equilibrado, recompensa leitura (o acerto pega o 1º abate da jogada)
-  smart: { chance: 0, winFrags: 1, winOpen: 1, failDeath: 0, winValue: 1, failValue: 0.1 },
+  smart: { chance: -0.005, winFrags: 1, winOpen: 1, failDeath: 0, winValue: 1, failValue: 0.1 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

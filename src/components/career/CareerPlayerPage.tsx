@@ -10,6 +10,7 @@ import { CareerIcon, type CareerIconName } from './CareerIcon';
 import { Brain, ChartNoAxesColumn, ChevronLeft, Crosshair, Gauge, IdCard, Trophy, UserRound, Zap, type LucideIcon } from 'lucide-react';
 import { Panel as DsPanel, AttrValue, attrBand } from '../ds/index';
 import { ATTR_LABEL, MECHANICAL_KEYS, MENTAL_KEYS, PHYSICAL_KEYS, type AttrKey } from '../../engine/attributes';
+import { CaPaStars } from './CaPaStars';
 import { deriveEventLine, type SeasonEventLine } from '../../engine/career/seasonStats';
 import { HAPPINESS_FACTOR_LABEL, type HappinessBreakdown } from '../../engine/career/happiness';
 import { physicalStatus, satisfactionStatus, disciplineStatus, reputationStatus } from '../../engine/career/playerStatus';
@@ -238,6 +239,8 @@ export function CareerPlayerPage({
   onEditAge,
   retired = false,
   attributes,
+  ca,
+  paRange,
   tab: tabProp,
   onTab,
 }: {
@@ -310,6 +313,9 @@ export function CareerPlayerPage({
   retired?: boolean;
   /** T3.1 — 28 atributos FM-style. Se passado, renderiza section. */
   attributes?: Record<string, number>;
+  /** [realismo FM] habilidade atual (1–200) e faixa do potencial do relatório de olheiro */
+  ca?: number;
+  paRange?: [number, number];
   onBack: () => void;
   /** aba controlada pelo shell (subnav); sem isso a página usa a nav interna */
   tab?: PlayerTab;
@@ -429,6 +435,7 @@ export function CareerPlayerPage({
             <span>{ct('Contrato')}: {contractLeft}</span>
             <span>Pot. {potTier} · {phaseLabel}</span>
           </p>
+          {ca != null && paRange && <CaPaStars ca={ca} paRange={paRange} />}
         </div>
         <dl className="pp-fm-kpis">
           <div className="pp-fm-kpi pp-fm-kpi--ovr"><dt>OVR</dt><dd>{ovr}</dd></div>

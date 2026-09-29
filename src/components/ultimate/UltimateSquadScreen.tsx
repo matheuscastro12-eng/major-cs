@@ -63,7 +63,7 @@ import { DRAFT_ENTRY, DRAFT_OPTIONS, DRAFT_REWARDS, DRAFT_ROLES, DRAFT_TARGET, d
 import { chemLabel, computeChemistry, roleFitsSlot, type ChemNode } from '../../engine/ultimate/chemistry';
 import { activeSquad, EVO_MAX, EVO_COSTS, GAUNTLET_TARGET, passSeasonId, type MatchOutcome, type OwnedCard } from '../../engine/ultimate/state';
 import { claimableLevels, ensurePass, levelForXp, passLevels, passTitleLabel, passTitleSlug, totalXpForLevel, xpForLevel, PASS_MAX_LEVEL, type PassReward, type PassTrack } from '../../engine/ultimate/seasonPass';
-import { estimateCardValue, type UltCard } from '../../engine/ultimate/cards';
+import { cardMatchPlayer, estimateCardValue, type UltCard } from '../../engine/ultimate/cards';
 import { computeNextDaily, dateKey, DAILY_TABLE } from '../../engine/ultimate/daily';
 import { dayNumberOf } from '../../engine/daily/lines';
 import { claimUltDraftPrizes, fetchUltDraftBoard, reportUltDraft, type UltDraftBoard } from '../../state/ultDraftApi';
@@ -1521,7 +1521,12 @@ export function UltimateSquadScreen({ onBack, guest = false, onCreateAccount, on
   const playMatch = (mode: MatchMode = 'rivals', gauntletWins = 0) => {
     noteMatchStart(mode); // [U02]
     if (!squadComplete) return;
-    const five = squadPool as PoolPlayer[];
+    // [realismo FM] cada jogador entra com os atributos da CARTA escalada (carta
+    // especial joga como a carta; evolução segue no multiplicador de força).
+    const five = (squadPool as PoolPlayer[]).map((p, i) => {
+      const sc = slotCard(form.slots[i].slot);
+      return sc ? { ...p, player: cardMatchPlayer(p.player, sc.card) } : p;
+    });
     // [U03] composição ÚNICA da força (química × evolução × estilos) + abordagem → playbook do motor
     const userTeam = prepareUltimateTeam({ name: ct('Seu Squad'), picks: five, idPrefix: 'ut-user', mult: { chem: chem.multiplier, evoBoost: evoBoostTotal, duelTotal: duel.total, duelMult: duel.multiplier }, approach });
     // rivals: rival escala pela divisão (elo); amistoso: justo pelo OVR; gauntlet:

@@ -1,3 +1,4 @@
+import type { PlayerAttrs } from './engine/attrs/model';
 export type Game = 'CS 1.6' | 'CS:Source' | 'CS:GO' | 'CS2';
 
 export type Role = 'AWP' | 'IGL' | 'Rifler' | 'Entry' | 'Support' | 'Lurker';
@@ -38,6 +39,7 @@ export interface Player {
   consistency: number;
   awp: number;
   igl: number;
+  attrs?: PlayerAttrs | null; // [realismo FM] atributos próprios (fonte da verdade); sem eles, attrsOf() deriva dos 5 acima
 }
 
 export type CoachStyle = 'tactical' | 'aggressive' | 'discipline';
@@ -79,6 +81,10 @@ export interface TeamSeason {
   // true = aguardando aprovação do admin no CRM; fica oculto para os jogadores
   // até ser liberado. Times sem o campo já são considerados aprovados.
   pending?: boolean;
+  // true = time que acabou (ou o virtual `__retired__`): fica no arquivo para
+  // saves que guardam o id, mas não é disputável (fora do mundo da carreira,
+  // do Road to Pro e do online). Ver docs/elencos-set-2026.md.
+  defunct?: boolean;
   players: Player[];
 }
 
@@ -111,6 +117,7 @@ export interface TPlayer {
   consistency: number;
   awp: number;
   igl: number;
+  attrs?: PlayerAttrs | null; // [realismo FM] ver engine/attrs/model.ts
   skill: number; // derived overall
   ovr: number; // overall exibido (50-99)
   form?: number; // fase no torneio (0.9 frio … 1.1 em chamas), atualizada a cada série

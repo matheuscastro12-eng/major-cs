@@ -1,0 +1,109 @@
+{
+ "bo3_18452": {
+  "v": 1,
+  "a": {
+   "aim": 20,
+   "aimMovement": 19,
+   "tap": 19,
+   "spray": 17,
+   "awp": 19,
+   "headshot": 20,
+   "crosshair": 20,
+   "preAim": 19,
+   "offAngles": 18,
+   "gameSense": 13,
+   "decisions": 13,
+   "anticipation": 20,
+   "composure": 20,
+   "concentration": 20,
+   "positioning": 20,
+   "clutch": 18,
+   "teamwork": 15,
+   "communication": 13,
+   "leadership": 14,
+   "adaptability": 18,
+   "vision": 13,
+   "reflexes": 19,
+   "reaction": 20,
+   "stamina": 19,
+   "discipline": 20,
+   "coordination": 18,
+   "apm": 17,
+   "consistency": 18
+  },
+  "h": {
+   "bigMatch": 20,
+   "temperament": 20,
+   "consistencyHidden": 19,
+   "professionalism": 12,
+   "ambition": 16,
+   "loyalty": 15,
+   "injuryProneness": 7,
+   "versatility": 6
+  },
+  "ca": 190,
+  "pa": 197,
+  "src": {
+   "fixture": true,
+   "note": "derivado (sem mudança)"
+  }
+ },
+ "bo3_17515": {
+  "v": 1,
+  "a": {
+   "aim": 13,
+   "aimMovement": 14,
+   "tap": 14,
+   "spray": 14,
+   "awp": 11,
+   "headshot": 15,
+   "crosshair": 17,
+   "preAim": 17,
+   "offAngles": 14,
+   "gameSense": 19,
+   "decisions": 16,
+   "anticipation": 16,
+   "composure": 18,
+   "concentration": 16,
+   "positioning": 15,
+   "clutch": 15,
+   "teamwork": 16,
+   "communication": 20,
+   "leadership": 20,
+   "adaptability": 17,
+   "vision": 18,
+   "reflexes": 14,
+   "reaction": 10,
+   "stamina": 15,
+   "discipline": 17,
+   "coordination": 15,
+   "apm": 16,
+   "consistency": 16
+  },
+  "h": {
+   "bigMatch": 19,
+   "temperament": 17,
+   "consistencyHidden": 16,
+   "professionalism": 15,
+   "ambition": 14,
+   "loyalty": 8,
+   "injuryProneness": 8,
+   "versatility": 12
+  },
+  "ca": 120,
+  "pa": 120,
+  "src": {
+   "fixture": true,
+   "note": "mira real mais baixa, liderança 20"
+  }
+ },
+ "bo3_invalido": {
+  "v": 1,
+  "a": {
+   "aim": 30
+  },
+  "h": {},
+  "ca": 10,
+  "pa": 5
+ }
+}

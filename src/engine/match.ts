@@ -1,34 +1,24 @@
-import type { KillEvent, MapId, MapResult, Playbook, Playstyle, PlayerLine, PlayerMapStats, SeriesResult, TPlayer, TTeam } from '../types';
-import { derivePlaystyle, MAP_POOL } from '../types';
+import type { KillEvent, MapId, MapResult, PlayerLine, PlayerMapStats, SeriesResult, TPlayer, TTeam } from '../types';
+import { MAP_POOL } from '../types';
 import type { Rng } from './rng';
 import { weightedIndex } from './rng';
 import { ct } from '../state/career-i18n';
+import {
+  playstyleOf, sigmoid, envNum, emptyLine, emptyStats, iglLean, stanceFitDelta, decideBuy, buyCost,
+  playbookLean, withFullRoster, OT_START_MONEY, type BuyTier, type EcoState, type Stance,
+} from './matchShared';
+// Motor v2 (duelos) e a flag MATCH_ENGINE que escolhe entre v1 e v2.
+import { createMapSimV2 } from './match2/engine';
+import { resolveEngine, type MatchEngine } from './match2/flag';
+
+// API pública estável: os consumidores continuam importando de engine/match.
+export {
+  playbookLean, withFullRoster, RosterError, LINEUP_SIZE, OT_START_MONEY,
+  type BuyTier, type PlaybookCtx, type Stance,
+} from './matchShared';
+export { getMatchEngine, setMatchEngine, type MatchEngine } from './match2/flag';
 // [W5] identidade tática: desvio de prob. opt-in (só quando o caller passa `identity`)
 import { econOf, identityRoundDelta, type IdentityAction, type IdentityMod } from './career/teamIdentity';
-
-const playstyleOf = (p: TPlayer): Playstyle => p.playstyle ?? derivePlaystyle(p.role);
-
-// ---------------- camada tática: estilo de jogo x postura ----------------
-// A postura escolhida ao vivo VALORIZA os jogadores cujo estilo combina e
-// penaliza quem não combina. Agressivo rende no T com jogadores agressivos;
-// cauteloso rende no CT com jogadores passivos. "default" é o meio-termo seguro.
-
-// quanto a postura soma/subtrai na força efetiva do time, considerando o lado
-// e quantos jogadores combinam com a tática
-function stanceFitDelta(team: TTeam, side: 'ct' | 't', mode: Stance): number {
-  if (mode === 'default') return 0;
-  let d = mode === 'aggressive' ? (side === 't' ? 1.4 : -1.2) : side === 'ct' ? 1.4 : -1.0;
-  const favored: Playstyle = mode === 'aggressive' ? 'aggressive' : 'passive';
-  const against: Playstyle = mode === 'aggressive' ? 'passive' : 'aggressive';
-  for (const p of team.players) {
-    const ps = playstyleOf(p);
-    if (ps === favored) d += 0.55;
-    else if (ps === against) d -= 0.45;
-  }
-  // postura alinhada ao estilo do IGL rende mais (o time já treina assim)
-  if (iglStyleOf(team).style === favored) d += 0.8;
-  return d;
-}
 
 // multiplicador no peso de FRAGS do jogador conforme estilo, lado e postura
 function killStyleMult(p: TPlayer, side: 'ct' | 't', mode: Stance | undefined): number {
@@ -49,44 +39,12 @@ function deathStyleMult(p: TPlayer): number {
   return 1;
 }
 
-// estilo do IGL (jogador de maior igl) dá ao time uma tendência natural de lado:
-// IGL agressivo puxa o T, IGL passivo segura o CT. Quanto melhor o IGL, mais forte.
-function iglStyleOf(team: TTeam): { style: Playstyle; rating: number } {
-  let igl = team.players[0];
-  for (const p of team.players) if (p.igl > igl.igl) igl = p;
-  return { style: playstyleOf(igl), rating: igl.igl };
-}
-function iglLean(team: TTeam, side: 'ct' | 't'): number {
-  const { style, rating } = iglStyleOf(team);
-  const pow = Math.max(0, (rating - 78) / 22); // 0..~1
-  if (style === 'aggressive') return side === 't' ? 0.5 + pow * 0.9 : -0.3;
-  if (style === 'passive') return side === 'ct' ? 0.5 + pow * 0.9 : -0.3;
-  return 0;
-}
-
-function emptyLine(): PlayerLine {
-  return { kills: 0, deaths: 0, assists: 0, dmg: 0, kastRounds: 0, rounds: 0, openKills: 0, clutchWins: 0, hsKills: 0, mkRounds: 0, tradedDeaths: 0 };
-}
-
-function emptyStats(): PlayerMapStats {
-  return { both: emptyLine(), t: emptyLine(), ct: emptyLine() };
-}
-
-const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
-
 // ---- balanceamento da curva força→vitória ----
 // ROUND_DIV: quanto MAIOR, mais rasa a curva (mais paridade/upsets). Calibrado por
 // simulação pra que gaps pequenos não sejam quase-determinísticos como antes.
 // MAP_SWING: cada mapa sorteia uma "forma do dia" por time (±), gerando upsets
 // realistas (um top pode ter um mapa ruim). Em produção usa os defaults; o
 // harness de simulação pode sobrescrever via env pra calibrar.
-const envNum = (k: string, def: number): number => {
-  // lê de process.env via globalThis (sem exigir os types do node); no browser
-  // process é indefinido e cai no default.
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-  const v = env?.[k];
-  return v != null && v !== '' ? Number(v) : def;
-};
 // defaults calibrados por simulação (sim/balance.ts): curva mais rasa + forma do
 // dia por mapa. Antes (div 15, sem swing) um gap de +4 já dava 85% de BO3 e o
 // melhor do field ganhava ~50% dos torneios — virava quase determinístico. Com
@@ -156,42 +114,12 @@ function formBoost(team: TTeam): number {
   return (avg - 1) * 20;
 }
 
-// ---------------- economia ----------------
-// Dinheiro médio por jogador, decidido pelo IGL/coach a cada round:
-// full buy (>=4500), force (>=2600) ou eco. Eco joga de MAC-10/pistola
-// e sofre penalidade de força - mas o upset existe.
-
-export type BuyTier = 'pistol' | 'eco' | 'force' | 'full';
-
 const BUY_PENALTY: Record<BuyTier, number> = {
   pistol: 0,
   full: 0,
   force: -2.6,
   eco: -7,
 };
-
-// caixa de cada half da prorrogação no CS2 (mp_overtime_startmoney).
-export const OT_START_MONEY = 12500;
-
-interface EcoState {
-  money: number;
-  lossStreak: number;
-}
-
-function decideBuy(eco: EcoState, isPistol: boolean, aggressiveCoach: boolean): BuyTier {
-  if (isPistol) return 'pistol';
-  const forceThreshold = aggressiveCoach ? 2300 : 2600; // coach agressivo força mais
-  if (eco.money >= 4500) return 'full';
-  if (eco.money >= forceThreshold) return 'force';
-  return 'eco';
-}
-
-function buyCost(tier: BuyTier): number {
-  if (tier === 'full') return 4100;
-  if (tier === 'force') return 2300;
-  if (tier === 'eco') return 500;
-  return 700;
-}
 
 function weaponFor(p: TPlayer, rng: Rng, tier: BuyTier, side: 'ct' | 't'): string {
   // 1º round de cada half: pistol puro. CT = USP-S, T = Glock-18 (Deagle/Tec-9 raro).
@@ -230,35 +158,6 @@ function weaponFor(p: TPlayer, rng: Rng, tier: BuyTier, side: 'ct' | 't'): strin
   const main = side === 't' ? 'ak47' : 'm4';
   const off = side === 't' ? 'm4' : 'ak47';
   return rng() < 0.9 ? main : off;
-}
-
-// Efeito do PLAYBOOK por round: cada esquema é forte em certos contextos e fraco
-// em outros (estratégia: escolher e treinar o certo, e ler o adversário/mapa).
-// Retorna o delta de força ANTES de escalar pelo entrosamento, e o rótulo do
-// fator dominante do round — reusado na UI pra "demonstrar" o efeito ao vivo.
-export interface PlaybookCtx { side: 'ct' | 't'; isPistol: boolean; secondHalf: boolean; lostLast: boolean; pickedOwnMap: boolean; eco: boolean; }
-export function playbookLean(pb: Playbook, ctx: PlaybookCtx): { delta: number; label: string } {
-  let net = 0, best = 0, label = '';
-  const add = (v: number, l: string) => { net += v; if (Math.abs(v) > Math.abs(best)) { best = v; label = l; } };
-  if (pb === 'aggressive') {
-    if (ctx.side === 't') add(1.4, ct('pressão no ataque')); else add(-1.1, ct('pressão exposta no CT'));
-    if (ctx.isPistol) add(1.3, ct('pistol agressivo'));
-    if (ctx.eco && !ctx.isPistol) add(0.9, ct('force agressivo'));
-    if (ctx.lostLast && !ctx.isPistol) add(-0.8, ct('atrás no placar'));
-  } else if (pb === 'tactical') {
-    if (ctx.secondHalf) add(1.3, ct('ajuste de 2º half'));
-    if (ctx.pickedOwnMap) add(1.0, ct('domínio do mapa'));
-    if (ctx.side === 'ct') add(0.6, ct('defesa estruturada'));
-    if (ctx.isPistol) add(-1.1, ct('pistol sem ritmo'));
-  } else if (pb === 'fast') {
-    if (ctx.side === 't') add(1.7, ct('execução rápida')); else add(-1.4, ct('CT vulnerável'));
-    if (ctx.eco) add(0.8, ct('rush de eco'));
-  } else {
-    if (ctx.side === 'ct') add(1.5, ct('controle no CT')); else add(-1.0, ct('ataque lento'));
-    if (ctx.secondHalf) add(0.7, ct('round longo dominado'));
-    if (ctx.isPistol) add(-1.0, ct('pistol arriscado'));
-  }
-  return { delta: net, label: label || ct('neutro') };
 }
 
 function effStrength(
@@ -306,9 +205,6 @@ function effStrength(
 
 // ---------------- simulação incremental ----------------
 
-// postura tática escolhida ao vivo pelo jogador: muda o perfil de risco do round
-export type Stance = 'aggressive' | 'default' | 'cautious';
-
 // chamada tática de UM round: rush (all-in no T), retake (segura o CT),
 // force buy (compra mesmo sem grana) e save (economiza). Impacta força e economia.
 export type RoundCall = 'rush' | 'retake' | 'force' | 'save';
@@ -328,7 +224,15 @@ export interface StepMods {
 // [W5] opções da simulação (todas opcionais — sem elas o mapa é bit-a-bit o de sempre)
 export interface MapSimOpts {
   identity?: IdentityMod[]; // identidade tática de cada time + quanto o outro lê
+  // ── realismo FM (motor v2; o v1 ignora) ──
+  engine?: MatchEngine;     // trava o motor (sessão persistida replaya no motor em que nasceu)
+  mapIndex?: number;        // 0-based na série: fadiga (stamina) a partir do 2º mapa
+  bigMatch?: boolean;       // jogo grande (final, playoff de Major): pesa o oculto bigMatch
+  duelMods?: Record<string, number>; // modificador de duelo por jogador (pontos de atributo) — RtP: a decisão da Sala
 }
+
+// opções de uma série inteira: as de mapa, menos o índice (a série numera)
+export type SeriesOpts = Omit<MapSimOpts, 'mapIndex'>;
 
 // #20 — TÁTICA POR SITE: o lado T escolhe (em segredo) o site do ataque; o CT
 // pode apostar num stack. Acertar o stack vale muito; errar deixa o site fraco.
@@ -366,58 +270,17 @@ export interface MapSim {
   result: () => MapResult; // disponível quando done()
 }
 
-// ---------------- elenco (O1-48) ----------------
-// O motor modela SEMPRE 5 contra 5 (mortes, savers, dano e pickVictims contam
-// 5). Antes (ENGI-09) um time com 4 jogadores derrubava a partida com "Cannot
-// read properties of undefined" e só a UI protegia, em pontos espalhados. Agora
-// a entrada normaliza: corta o excedente, completa com o banco e, faltando
-// ainda, com reservas genéricos derivados do próprio elenco (um degrau abaixo
-// da média). Sem NENHUM jogador não há de quem derivar: erro tipado.
-
-export class RosterError extends Error {
-  readonly code = 'roster_incompleto' as const;
-  readonly teamId: string;
-  readonly count: number;
-  constructor(teamId: string, count: number) {
-    super(`roster_incompleto: ${teamId} tem ${count} jogador(es)`);
-    this.name = 'RosterError';
-    this.teamId = teamId;
-    this.count = count;
-  }
-}
-
-export const LINEUP_SIZE = 5;
-const RESERVE_DROP = 6;   // reserva genérico: 6 pontos abaixo da média do elenco
-
-export function withFullRoster(team: TTeam): TTeam {
-  const players = team.players.slice(0, LINEUP_SIZE);
-  if (players.length === LINEUP_SIZE && team.players.length === LINEUP_SIZE) return team;
-  for (const p of team.bench ?? []) {
-    if (players.length >= LINEUP_SIZE) break;
-    if (!players.some((q) => q.id === p.id)) players.push(p);
-  }
-  if (!players.length) throw new RosterError(team.id, 0);
-  const avg = (k: 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl' | 'skill' | 'ovr') =>
-    Math.max(1, Math.round(players.reduce((acc, p) => acc + p[k], 0) / players.length) - RESERVE_DROP);
-  const base = players[0];
-  for (let i = 0; players.length < LINEUP_SIZE; i++) {
-    players.push({
-      id: `${team.id}-reserva-${i + 1}`,
-      sourcePlayerId: `${team.id}-reserva-${i + 1}`,
-      nick: `reserva${i + 1}`,
-      name: `Reserva ${i + 1}`,
-      country: team.country,
-      role: 'Rifler',
-      playstyle: base.playstyle,
-      aim: avg('aim'), clutch: avg('clutch'), consistency: avg('consistency'),
-      awp: avg('awp'), igl: avg('igl'), skill: avg('skill'), ovr: avg('ovr'),
-      form: 1,
-    });
-  }
-  return { ...team, players };
-}
-
+// Porta ÚNICA: despacha para o motor escolhido pela flag MATCH_ENGINE (v2 por
+// padrão; `opts.engine` força um deles).
 export function createMapSim(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, pickedBy: 0 | 1 | -1, opts?: MapSimOpts): MapSim {
+  return resolveEngine(opts?.engine) === 'v2'
+    ? createMapSimV2(rng, a0, b0, map, pickedBy, opts)
+    : createMapSimV1(rng, a0, b0, map, pickedBy, opts);
+}
+
+// MOTOR v1 (legado): round decidido no nível do time, kills distribuídas depois.
+// Mantido intacto para comparação e reversão (MATCH_ENGINE=v1).
+export function createMapSimV1(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, pickedBy: 0 | 1 | -1, opts?: MapSimOpts): MapSim {
   const a = withFullRoster(a0);
   const b = withFullRoster(b0);
   const stats: Record<string, PlayerMapStats> = {};
@@ -860,8 +723,8 @@ export function createMapSim(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, pickedB
   };
 }
 
-export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 0 | 1 | -1): MapResult {
-  const sim = createMapSim(rng, a, b, map, pickedBy);
+export function simulateMap(rng: Rng, a: TTeam, b: TTeam, map: MapId, pickedBy: 0 | 1 | -1, opts?: MapSimOpts): MapResult {
+  const sim = createMapSim(rng, a, b, map, pickedBy, opts);
   while (!sim.step()) {
     /* roda até o fim */
   }
@@ -874,6 +737,7 @@ export function simulateSeries(
   b: TTeam,
   maps: { map: MapId; pickedBy: 0 | 1 | -1 }[],
   bestOf: 1 | 3 | 5 = 3,
+  opts?: SeriesOpts,
 ): SeriesResult {
   const need = Math.ceil(bestOf / 2); // BO1 -> 1, BO3 -> 2, BO5 -> 3
   // O1-48 (ENGI-13): série com menos mapas que o formato (pool curto, veto de
@@ -910,9 +774,11 @@ export function simulateSeries(
       currentB = applyOnlineSubstitution(currentB);
     }
     const hasOnlineTimeout = currentA.onlinePlan?.timeoutMap === mapIndex || currentB.onlinePlan?.timeoutMap === mapIndex;
+    // série longa cansa (mapIndex) e final é jogo grande (MD5) — só o v2 lê.
+    const mapOpts: MapSimOpts = { ...opts, mapIndex, bigMatch: opts?.bigMatch ?? bestOf === 5 };
     let r: MapResult;
     if (hasOnlineTimeout) {
-      const sim = createMapSim(rng, currentA, currentB, m.map, m.pickedBy);
+      const sim = createMapSim(rng, currentA, currentB, m.map, m.pickedBy, mapOpts);
       while (!sim.done()) {
         const round = sim.round();
         const boostTeam = currentA.onlinePlan?.timeoutMap === mapIndex && round === 7
@@ -924,7 +790,7 @@ export function simulateSeries(
       }
       r = sim.result();
     } else {
-      r = simulateMap(rng, currentA, currentB, m.map, m.pickedBy);
+      r = simulateMap(rng, currentA, currentB, m.map, m.pickedBy, mapOpts);
     }
     results.push(r);
     if (r.winner === 0) winsA++;

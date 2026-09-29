@@ -4,6 +4,7 @@ import { derivePlaystyle, MAP_POOL } from '../types';
 import { hashStr } from '../state/hash';
 import { ct } from '../state/career-i18n';
 import earningsData from '../data/bo3-earnings.json';
+import { legacyOf, ovrFromLegacy, type LegacyStats, type PlayerAttrs } from './attrs/model';
 
 // premiação real de carreira (Liquipedia) → PRÊMIO MODESTO no valor de mercado:
 // astro consagrado custa um pouco mais, mas o OVR continua mandando (teto +15%).
@@ -22,25 +23,31 @@ function earningsPremium(nick?: string): number {
 // entrosamento que torna o título mais difícil (egos, falta de rotina).
 export const DREAM_TEAM_MALUS = 4.5;
 
-export function playerSkill(p: Pick<Player, 'aim' | 'clutch' | 'consistency'>): number {
-  return p.aim * 0.6 + p.consistency * 0.25 + p.clutch * 0.15;
+// [realismo FM] os 5 números lidos pelos ATRIBUTOS quando o jogador os tem
+// (legacyOf confere e reajusta se algum código antigo mexeu só nos números).
+type WithLegacy = Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'> & { attrs?: PlayerAttrs | null };
+const legacy = (p: WithLegacy): LegacyStats => legacyOf(p);
+
+export function playerSkill(p: Pick<Player, 'aim' | 'clutch' | 'consistency'> & { attrs?: PlayerAttrs | null; awp?: number; igl?: number }): number {
+  const l = p.attrs && typeof p.awp === 'number' && typeof p.igl === 'number' ? legacy(p as WithLegacy) : p;
+  return l.aim * 0.6 + l.consistency * 0.25 + l.clutch * 0.15;
 }
 
-export function playerOvr(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'>): number {
-  const spec = Math.max(p.awp, p.igl, p.aim);
-  return Math.round(p.aim * 0.45 + p.consistency * 0.18 + p.clutch * 0.12 + spec * 0.25);
+export function playerOvr(p: WithLegacy): number {
+  return ovrFromLegacy(legacy(p));
 }
 
 // valor de mercado do jogador (R$), estilo Brasfoot: cresce rápido com o
 // overall e tem prêmio para AWPer/IGL de elite; forma quente valoriza um pouco.
-export function playerValue(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'> & { ovr?: number; form?: number; nick?: string }): number {
-  const ovr = typeof p.ovr === 'number' ? p.ovr : playerOvr(p);
+export function playerValue(p: WithLegacy & { ovr?: number; form?: number; nick?: string }): number {
+  const l = legacy(p);
+  const ovr = typeof p.ovr === 'number' ? p.ovr : ovrFromLegacy(l);
   // curva íngreme: medianos custam pouco e só craques disparam de preço.
   // ovr 73 ~ R$240k · 80 ~ R$820k · 85 ~ R$1,5M · 90 ~ R$2,5M · 96 ~ R$4M
   const base = Math.max(0, ovr - 62);
   let v = Math.pow(base, 2.5) * 600;
-  if (p.awp >= 88) v *= 1.18; // sniper de elite valoriza
-  if (p.igl >= 88) v *= 1.1; // IGL de elite valoriza
+  if (l.awp >= 88) v *= 1.18; // sniper de elite valoriza
+  if (l.igl >= 88) v *= 1.1; // IGL de elite valoriza
   v *= earningsPremium(p.nick); // legado de carreira (premiação real): prêmio modesto
   if (p.form) v *= p.form; // 0.9..1.1
   return Math.max(30000, Math.round(v / 10000) * 10000);
@@ -57,17 +64,19 @@ export function playerTraits(p: {
   consistency: number;
   awp: number;
   igl: number;
+  attrs?: PlayerAttrs | null;
 }): Trait[] {
   const ps = p.playstyle ?? derivePlaystyle(p.role);
+  const l = legacy(p);
   const out: Trait[] = [];
-  if (p.awp >= 88) out.push('sniper');
-  if (p.igl >= 85) out.push('caller');
-  if (p.aim >= 90) out.push('aim');
-  if (p.clutch >= 88) out.push('clutch');
-  if (p.consistency >= 88) out.push('consistency');
+  if (l.awp >= 88) out.push('sniper');
+  if (l.igl >= 85) out.push('caller');
+  if (l.aim >= 90) out.push('aim');
+  if (l.clutch >= 88) out.push('clutch');
+  if (l.consistency >= 88) out.push('consistency');
   if (ps === 'aggressive' || p.role === 'Entry') out.push('entry');
   if (p.role === 'Lurker') out.push('lurker');
-  if (ps === 'passive' && p.consistency >= 84) out.push('anchor');
+  if (ps === 'passive' && l.consistency >= 84) out.push('anchor');
   return out.slice(0, 3);
 }
 
@@ -84,7 +93,7 @@ export function iglProfile(players: { nick: string; role: Role; playstyle?: Play
 
 // salário do jogador por split (folha do modo carreira). ~6% do valor de
 // mercado: um craque de R$2,5M custa ~R$150k por split de salário.
-export function playerWage(p: Pick<Player, 'aim' | 'clutch' | 'consistency' | 'awp' | 'igl'> & { ovr?: number }): number {
+export function playerWage(p: WithLegacy & { ovr?: number }): number {
   return Math.max(20000, Math.round((playerValue(p) * 0.06) / 5000) * 5000);
 }
 

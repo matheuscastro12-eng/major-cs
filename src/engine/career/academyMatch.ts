@@ -12,14 +12,15 @@ import type { AcademyClub } from './academyLeague';
 import { clubStrength } from './academyLeague';
 import { derivePlaystyle, MAP_POOL, type MapId, type Playstyle, type Role, type TPlayer, type TTeam } from '../../types';
 import { hashStr } from '../../state/hash';
+import { legacyOf, ovrFromLegacy } from '../attrs/model';
 import type { Rng } from '../rng';
 import type { AcademyEntry } from '../../components/CareerScreen';
 
 // Stats internas (skill/ovr/teamwork) batem com playerOvr() do ratings.ts:
 // ovr = aim*0.45 + consistency*0.18 + clutch*0.12 + max(awp,igl,aim)*0.25
+// [realismo FM] mesma fórmula, lida pela ponte dos atributos (ovrFromLegacy).
 function ovrFromAttrs(p: { aim: number; consistency: number; clutch: number; awp: number; igl: number }): number {
-  const spec = Math.max(p.awp, p.igl, p.aim);
-  return Math.round(p.aim * 0.45 + p.consistency * 0.18 + p.clutch * 0.12 + spec * 0.25);
+  return ovrFromLegacy(legacyOf(p));
 }
 
 // mapPrefs determinísticas: cada mapa recebe um leve viés -3..+3 (igual ao
