@@ -130,6 +130,11 @@ import { careerMatchSeed } from '../engine/career/matchSeed';
 import { macroRegionOf, macroRegionPlurality, MACRO_REGION_LABELS, MACRO_REGION_ORDER, type MacroRegion } from '../data/regions';
 import { CS2_REAL_2026 } from '../data/bo3';
 import { applyBo3Edits, applyBo3PlayerEdit, fetchBo3Edits, loadBo3Edits, mergeBo3Edits, saveBo3Edits, type Bo3Edits } from '../state/bo3-edits';
+import { applyCustomDatabase, applyCustomPlayer, resolveCareerDatabase, withCareerDatabase } from '../engine/mundo/editor';
+import type { MundoState } from '../engine/mundo/model';
+import { migrateMundo } from '../engine/mundo/mundoMigration';
+import { loadCustomDbs } from '../state/customDb';
+import { CareerDatabaseChoice } from './editor/CareerDatabaseChoice';
 import { isAdminUnlocked } from './AdminGate';
 import { useLang } from '../state/i18n';
 import { ct, setCareerLang } from '../state/career-i18n';
@@ -1295,6 +1300,7 @@ interface CareerSave {
   identity?: TeamIdentity; // [W5] identidade tática emergente (histograma decaído das suas chamadas)
   promiseLog?: PromiseOutcome[]; // [W4] promessas à diretoria já julgadas (append-only, teto 24) — fita e cicatrizes leem
   gestao?: GestaoState; // [realismo FM fase 2] treino semanal, tática por mapa, comissão técnica e condição (save v28)
+  mundo?: MundoState; // [realismo FM fase 4] circuito, juventude e a base de dados usada (save v30)
 }
 
 // manchete da caixa de entrada (imprensa/diretoria) — dá vida à carreira
@@ -1659,10 +1665,10 @@ export function potentialTier(potOvr: number): PotTier {
 // (debut=1, sem teto extra). Assim o contratado entra no MESMO OVR que aparecia no
 // mercado — antes aiAttrDrift clampava ±10 e driftFrom ±12, causando "contrata 86
 // chega 84" pra jogadores no extremo da escala.
-function signingDrift(player: Player, split: number, youthDebut?: Record<string, YouthDebut>): number {
+function signingDrift(player: Player, split: number, youthDebut?: Record<string, YouthDebut>, base: TeamSeason[] = CS2_REAL_2026): number {
   const r = parseRegenPlayerId(player.id);
   if (r) {
-    const orig = CS2_REAL_2026.find((t) => t.id === r.teamId)?.players[r.slot];
+    const orig = base.find((t) => t.id === r.teamId)?.players[r.slot];
     return driftFrom(player.id, playerOvr(player), r.ageAtDebut, r.debut, split, orig ? playerOvr(orig) + 2 : undefined);
   }
   // prospecto promovido / custom com idade editada: o relógio de drift começa na
@@ -2338,6 +2344,7 @@ interface Props {
   dataset: TeamSeason[];
   onExit: () => void;
   founder?: boolean; // conta Fundador: pode subir logo própria ao fundar a org
+  onOpenEditor?: () => void; // [fase 4] editor de base (escolha da base na criação)
 }
 
 export function CareerScreen(props: Props) {
@@ -2348,7 +2355,7 @@ export function CareerScreen(props: Props) {
   );
 }
 
-function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
+function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: Props) {
   const { lang } = useLang();
   setCareerLang(lang); // idioma a nivel de modulo: ct() funciona em todos os subcomponentes
   const { account } = useAccount();
@@ -3204,6 +3211,37 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // Restore da nuvem / lápide / outra aba: o App relê o store do disco e REMONTA
   // esta tela (key={epoch} do gameStore). Antes só o save era re-hidratado e
   // stage/majorT/hubTab ficavam do save velho e eram gravados de volta [O0-28].
+  // [fase 4 · editor] BASE DA CARREIRA: a oficial (dados + edições do admin) ou a
+  // customizada por cima dela, CONGELADA no save na criação (mundo.database).
+  // Sem base customizada, rawBase/editedBase são exatamente os de antes.
+  const [storedDbs] = useState(() => loadCustomDbs(CS2_REAL_2026));
+  const careerDb = useMemo(
+    () => resolveCareerDatabase(save.mundo, CS2_REAL_2026, storedDbs.map((x) => x.db)),
+    [save.mundo, storedDbs],
+  );
+  const rawBase = useMemo(() => applyCustomDatabase(CS2_REAL_2026, careerDb.db), [careerDb.db]);
+  const editedBase = useMemo(() => applyCustomDatabase(applyBo3Edits(CS2_REAL_2026, bo3Edits), careerDb.db), [bo3Edits, careerDb.db]);
+  const movableIds = useMemo<ReadonlySet<string>>(
+    () => (careerDb.db ? new Set(rawBase.flatMap((t) => t.players.map((p) => p.id))) : BASE_PLAYER_IDS),
+    [careerDb.db, rawBase],
+  );
+  // save sem a cópia da base (só o id): congela a do aparelho a partir de agora
+  useEffect(() => {
+    if (careerDb.status !== 'storage' || !careerDb.db) return;
+    const db = careerDb.db;
+    setSave((s) => {
+      const next = { ...s, mundo: withCareerDatabase(s.mundo ?? (migrateMundo({}).mundo as MundoState), db) };
+      persist(next);
+      return next;
+    });
+  }, [careerDb, setSave]);
+  // base customizada sumiu/ficou inválida: a Carreira segue na oficial e avisa uma vez
+  const dbWarnedRef = useRef(false);
+  useEffect(() => {
+    if (dbWarnedRef.current || !save.org || (careerDb.status !== 'missing' && careerDb.status !== 'invalid')) return;
+    dbWarnedRef.current = true;
+    toast.info(`${ct('A base de dados desta carreira não está disponível:')} ${careerDb.name ?? careerDb.id ?? ''}. ${ct('A carreira continua na base oficial.')}`);
+  }, [careerDb, save.org, toast]);
   const currentEra = useMemo(
     // aplica as transferências já realizadas (save.moves) por cima da base, e o
     // ENVELHECIMENTO da IA por split (pulando seus jogadores, que evoluem pelo evo).
@@ -3212,7 +3250,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // pipeline inteiro mora em engine/career/aiWorld.ts (buildAiWorld), o mesmo
     // que o mercado da IA e a medição de equilíbrio usam.
     () => buildAiWorld({
-      base: applyBo3Edits(CS2_REAL_2026, bo3Edits),
+      base: editedBase,
       moves: save.moves,
       split: save.split,
       skip: new Set(save.squad.map((s) => s.playerId)),
@@ -3221,7 +3259,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       aiDrift: save.aiDrift,
       arrivals: save.clube?.market.arrivals,
     }),
-    [save.moves, save.extraOnTeam, save.aiDrift, save.takeoverId, bo3Edits, save.split, save.squad, save.clube?.market.arrivals],
+    [save.moves, save.extraOnTeam, save.aiDrift, save.takeoverId, editedBase, save.split, save.squad, save.clube?.market.arrivals],
   );
   // pool de ADVERSÁRIOS: tira o time que você assumiu E remove qualquer jogador
   // que está no SEU elenco do time de origem (sem duplicar ninguém), repondo com
@@ -3353,7 +3391,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       // não pode voltar pro mercado com o OVR antigo, alto. Aplica o evo sobre a
       // BASE (mesma conta do findSigning) pra mostrar o OVR ATUAL, caído.
       const evoMap = save.evo ?? {};
-      const baseById = new Map<string, Player>(CS2_REAL_2026.flatMap((t) => t.players.map((p) => [p.id, p] as const)));
+      const baseById = new Map<string, Player>(rawBase.flatMap((t) => t.players.map((p) => [p.id, p] as const)));
       const clampA = (v: number) => Math.max(40, Math.min(99, v));
       const withDecline = (p: Player): Player => {
         const d = evoMap[p.id];
@@ -3364,7 +3402,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const fromTeams = currentEra.flatMap((t) => t.players.map((p) => { const pl = withDecline(p); return { player: pl, from: t, price: playerValue(pl) }; }));
       // pool VIVO: com o mercado da IA (gap #23), FAs contratados pela IA somem
       // daqui (aparecem no clube via fromTeams) e deslocados liberados entram.
-      const freeAgents = currentFreeAgents(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves)
+      const freeAgents = currentFreeAgents(editedBase, save.moves)
         .filter((p) => !squadIds.has(p.id)) // some do mercado quando já contratado
         // FREE agents são free — em CS real você assina sem taxa de transferência,
         // só salário. User Guilherme reportou: '"free agents" é considerado um
@@ -3388,7 +3426,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       }
       return [...byId.values()].sort((a, b) => a.price - b.price);
     },
-    [currentEra, save.squad, save.evo, save.moves, bo3Edits],
+    [currentEra, save.squad, save.evo, save.moves, editedBase, rawBase],
   );
 
   const findSigning = (s: Signing): ResolvedSigning | null => {
@@ -3404,18 +3442,18 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!from) {
       if (s.fromId === FREE_AGENTS_FROM.id) from = FREE_AGENTS_FROM;
       else if (s.fromId === ACADEMY_FROM.id) from = ACADEMY_FROM;
-      else from = CS2_REAL_2026.find((t) => t.id === s.fromId);
+      else from = rawBase.find((t) => t.id === s.fromId);
     }
-    let player = CS2_REAL_2026.find((t) => t.id === s.fromId)?.players.find((p) => p.id === s.playerId);
+    let player = rawBase.find((t) => t.id === s.fromId)?.players.find((p) => p.id === s.playerId);
     if (!player) {
-      for (const t of CS2_REAL_2026) {
+      for (const t of rawBase) {
         const p = t.players.find((pp) => pp.id === s.playerId);
         if (p) { from = from ?? currentEra.find((ct) => ct.id === t.id) ?? t; player = p; break; }
       }
     }
     // 4) free agent (pro sem time): resolve da lista de free agents
     if (!player) {
-      const fa = FREE_AGENT_PLAYERS.find((p) => p.id === s.playerId);
+      const fa = (careerDb.db ? rawBase.find((t) => t.id === '__free__')?.players ?? [] : FREE_AGENT_PLAYERS).find((p) => p.id === s.playerId);
       if (fa) { from = FREE_AGENTS_FROM; player = fa; }
     }
     // 4b) rookie GRÁTIS (custo 0): vem do backfill determinístico do free agent.
@@ -3445,7 +3483,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // reconstruí-los, mesmo quando a geração atual da IA já trocou aquele atleta.
     if (!player) {
       const generated = parseRegenPlayerId(s.playerId);
-      const origin = generated && CS2_REAL_2026.find((t) => t.id === generated.teamId);
+      const origin = generated && rawBase.find((t) => t.id === generated.teamId);
       const original = generated && origin?.players[generated.slot];
       if (generated && origin && original) {
         player = regenYouth(origin, generated.slot, generated.generation, generated.debut, generated.ageAtDebut, original);
@@ -3458,7 +3496,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const academy = parseAcademyPlayerId(s.playerId);
       const origin = academy?.teamId === FREE_AGENTS_FROM.id
         ? FREE_AGENTS_FROM
-        : academy && (currentEra.find((t) => t.id === academy.teamId) ?? CS2_REAL_2026.find((t) => t.id === academy.teamId));
+        : academy && (currentEra.find((t) => t.id === academy.teamId) ?? rawBase.find((t) => t.id === academy.teamId));
       if (academy && origin) {
         player = backfillPlayers(origin, academy.index + 1)[academy.index];
         from = origin;
@@ -3469,7 +3507,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // resolver no seu eu vivo (atualizado) em vez de ser perdido / virar vaga.
     if (!player && s.playerSnapshot?.nick) {
       const nk = s.playerSnapshot.nick.toLowerCase();
-      for (const t of CS2_REAL_2026) {
+      for (const t of rawBase) {
         const p = t.players.find((pp) => pp.nick.toLowerCase() === nk);
         if (p) { from = currentEra.find((ct) => ct.id === t.id) ?? t; player = p; break; }
       }
@@ -3509,12 +3547,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // Bug do "vendi saffe 79, mercado mostra 84 — me senti tapeado": signingDrift
     // e o evo ficam calculados em cima da MESMA base que o `currentEra` enxerga.
     player = applyBo3PlayerEdit(player, bo3Edits);
+    // [fase 4 · editor] a base customizada vence as edições do admin
+    player = applyCustomPlayer(player, careerDb.db);
     const basePlayer = player;
     // [realismo FM] evolução POR ATRIBUTO: atributos da base + variação acumulada;
     // os 5 números (e o OVR, valor, salário) saem dos atributos evoluídos.
     const attrD = activeAttrDelta(save.attrEvo, save.evo, player.id);
     if (attrD) return { player: withAttrs(basePlayer, applyAttrDelta(attrsOf(basePlayer), attrD)), from, basePlayer };
-    const d = save.evo?.[player.id] ?? signingDrift(player, save.split, save.youthDebut);
+    const d = save.evo?.[player.id] ?? signingDrift(player, save.split, save.youthDebut, rawBase);
     // #22: viés do FOCO DE TREINO — o atributo trabalhado abre distância do resto.
     const bias = save.evoAttrBias?.[player.id];
     if (!d && !bias) return { player, from, basePlayer };
@@ -3653,7 +3693,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // '__custom__' = coach criado no Custom Roster Builder (Vitalícia)
     const coach = s.coachFromId === '__custom__' && s.customCoach
       ? s.customCoach
-      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? CS2_REAL_2026.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
+      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? rawBase.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
     // TAKEOVER herda o entrosamento real da org (o 78 do buildUserTeam é a
     // premissa do draft). Sem isso, assumir a Yawara (teamwork 60) já a
     // promovia no ranking sem jogar nada — o teamwork é a semente do VRS.
@@ -3675,7 +3715,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const id = save.coachFromId;
     const coach = id === '__custom__' && save.customCoach
       ? save.customCoach
-      : currentEra.find((t) => t.id === id)?.coach ?? CS2_REAL_2026.find((t) => t.id === id)?.coach ?? ROOKIE_COACH;
+      : currentEra.find((t) => t.id === id)?.coach ?? rawBase.find((t) => t.id === id)?.coach ?? ROOKIE_COACH;
     const gestao = save.gestao ?? (migrateGestao(save as unknown as Record<string, unknown>).gestao as GestaoState);
     const synced = syncHeadCoach(gestao.staff, coach, id, save.split);
     if (!synced && save.gestao) return;
@@ -4252,14 +4292,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const skip = new Set(squadIds);
     return tickMarketWindow({
       teams,
-      freeAgents: agedFreeAgents(applyBo3Edits(CS2_REAL_2026, bo3Edits), s.moves, s.split, skip).filter((p) => !protectedIds.has(p.id)),
+      freeAgents: agedFreeAgents(editedBase, s.moves, s.split, skip).filter((p) => !protectedIds.has(p.id)),
       split: kind === 'offseason' ? s.split + 1 : s.split,
       kind,
       formOf: (id) => forms[id] ?? 50,
       vrsOf: (id) => { const t = byId.get(id); return t ? aiTeamVrs(t, s.split) : 0; },
       ageOf: (p) => aiAgeOf(p, s.split),
       baseOvrOf,
-      movableIds: BASE_PLAYER_IDS,
+      movableIds,
       protectedIds,
       budgets: kind === 'mid' && Object.keys(m.budgets).length ? m.budgets : undefined,
       loans: m.loans.filter((l) => l.kind === 'ai'),
@@ -4358,7 +4398,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const resolved = findSigning(sig);
         squad = squad.filter((x) => x.playerId !== l.playerId);
         budget += l.fee ?? 0;
-        if (BASE_PLAYER_IDS.has(l.playerId)) moves[l.playerId] = l.toTeamId;
+        if (movableIds.has(l.playerId)) moves[l.playerId] = l.toTeamId;
         else if (resolved) extraOnTeam[l.toTeamId] = [...(extraOnTeam[l.toTeamId] ?? []).filter((e) => e.player.id !== l.playerId), { player: resolved.player, arrival: s.split }];
         loans.push({ ...l, state: 'active', startSplit: s.split, untilSplit: until, signing: (resolved ? signingWithSnapshot(sig, resolved) : sig) as unknown as Record<string, unknown> });
         news.push({ id: `${s.split}:loanout:${l.playerId}`, split: s.split, icon: '↗️', tone: 'info', cat: 'transfer', title: `${l.nick} ${ct('emprestado à')} ${nameOf(l.toTeamId)}`, body: `${ct('Joga por lá até o fim do Split')} ${until} ${ct('e volta ao elenco. Taxa recebida:')} ${formatMoney(l.fee ?? 0)}.` });
@@ -4419,7 +4459,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // checa se o id existe na base real (pra decidir se applyMoves cobre,
     // ou se precisa ir pro extraOnTeam). Roda 1x antes do loop.
     const baseHasPlayer = (pid: string): boolean => {
-      for (const t of CS2_REAL_2026) {
+      for (const t of rawBase) {
         if (t.players.some((p) => p.id === pid)) return true;
       }
       return false;
@@ -4989,7 +5029,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const careerTop20Memo = useMemo(() => {
     const cs = save.careerStats ?? {};
     const byId = new Map<string, Player>();
-    for (const t of CS2_REAL_2026) for (const p of t.players) byId.set(p.id, p);
+    for (const t of rawBase) for (const p of t.players) byId.set(p.id, p);
     for (const t of currentEra) for (const p of t.players) byId.set(p.id, p); // inclui transferidos/custom
     const teamById = new Map<string, TeamSeason>();
     for (const t of currentEra) for (const p of t.players) teamById.set(p.id, t);
@@ -5009,7 +5049,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       });
     }
     return rows.sort((a, b) => b.rating - a.rating).slice(0, 20);
-  }, [save.careerStats, save.roles, save.org, currentEra]);
+  }, [save.careerStats, save.roles, save.org, currentEra, rawBase]);
   // feed do mercado da IA. No resumo do split (seasonEnd) é a PROJEÇÃO exata da
   // janela de pré-temporada que o fechamento vai aplicar (mesmo tick, mesmas
   // entradas); no resto da carreira é o que aconteceu na última janela.
@@ -5040,11 +5080,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const form = forms[t.id] ?? 50;
       return {
         id: t.id, team: t.team, tag: t.tag, tier: aiTierOf(t), country: t.country, strategy, budget: snap.budgets[t.id] ?? 0, form,
-        squadOvr: squadOvr(t.players), needs: clubNeeds(t, { split: save.split, form, strategy, ageOf, baseOvrOf, movable: (p) => BASE_PLAYER_IDS.has(p.id) }),
+        squadOvr: squadOvr(t.players), needs: clubNeeds(t, { split: save.split, form, strategy, ageOf, baseOvrOf, movable: (p) => movableIds.has(p.id) }),
       };
     });
     return { rows, byId: new Map(rows.map((r) => [r.id, r])), strategies: snap.strategies, budgets: snap.budgets };
-  }, [hubTab, oppEra, save]);
+  }, [hubTab, oppEra, save, movableIds]);
 
   // [fase 3 · mercado] save que ainda não passou por nenhuma janela (migrado da
   // v28 ou carreira nova): abre o mercado com caixa/estratégia dos rivais e as
@@ -5350,6 +5390,20 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         </CareerDashFrame>
       );
     }
+    // [fase 4 · editor] a base do mundo é escolhida aqui, antes de fundar/assumir
+    // (a carreira começada não troca de base)
+    const dbSlot = (
+      <CareerDatabaseChoice
+        databases={storedDbs}
+        selectedId={save.mundo?.databaseId ?? null}
+        status={careerDb.status}
+        onSelect={(db) => {
+          if (save.org) return;
+          update({ mundo: withCareerDatabase(save.mundo ?? (migrateMundo({}).mundo as MundoState), db) });
+        }}
+        onOpenEditor={onOpenEditor}
+      />
+    );
     const startFromOrg = (s: OrgStart) => {
       // dificuldade remodela o caixa INICIAL (hard/legend começam mais pobres)
       const startBudget = Math.round(s.budget * DIFFICULTY_ECON[careerDifficulty].startBudgetMul);
@@ -5392,7 +5446,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       />;
     }
     if (orgChoice === 'scenario') {
-      return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} difficulty={careerDifficulty} onDifficulty={setCareerDifficulty} />;
+      return <ScenarioPicker current={currentEra} onBack={() => setOrgChoice('select')} onStart={startFromOrg} difficulty={careerDifficulty} onDifficulty={setCareerDifficulty} dbSlot={dbSlot} />;
     }
     return (
       <CareerDashFrame onExit={onExit} title={ct('Assumir organização')}>
@@ -5409,6 +5463,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           onStart={startFromOrg}
           difficulty={careerDifficulty}
           onDifficulty={setCareerDifficulty}
+          dbSlot={dbSlot}
         />
       </CareerDashFrame>
     );
@@ -7608,8 +7663,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           });
         const exclude = new Set([...squadIds, ...loanIds]);
         const standIns: StandInRow[] = standInCandidates({
-          teams: oppEra.filter((t) => t.id !== save.takeoverId), freeAgents: agedFreeAgents(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves, save.split, squadIds),
-          strategies: clubs.strategies, exclude, movable: (pl) => BASE_PLAYER_IDS.has(pl.id),
+          teams: oppEra.filter((t) => t.id !== save.takeoverId), freeAgents: agedFreeAgents(editedBase, save.moves, save.split, squadIds),
+          strategies: clubs.strategies, exclude, movable: (pl) => movableIds.has(pl.id),
         }).slice(0, 60).map((c) => ({
           player: c.player, ovr: playerOvr(c.player), age: aiAgeOf(c.player, save.split), teamId: c.team?.id ?? FREE_TEAM_ID,
           teamName: c.team?.team ?? ct('Mercado livre'), teamTag: c.team?.tag ?? 'FA', fee: loanFee(c.player, 'in'), bench: !!c.team && c.team.players.indexOf(c.player) >= 5,
@@ -9283,7 +9338,8 @@ function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
 // escolha da org: assumir QUALQUER time real do dataset (com elenco e contexto)
 // ou uma org sem line pra montar do zero. Substitui o "inventar do nada".
 // Tela redesenhada no padrão em-* (DashCard, filtros, grid 3-col).
-function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid, onExit, difficulty, onDifficulty }: {
+function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid, onExit, difficulty, onDifficulty, dbSlot }: {
+  dbSlot?: React.ReactNode;
   teams: TeamSeason[];
   onStart: (s: OrgStart) => void;
   onFictional: () => void;
@@ -9399,6 +9455,7 @@ function OrgSelect({ teams, onStart, onFictional, onScenarios, onCustom, isPaid,
         </button>
       </header>
 
+      {dbSlot}
       <DifficultyPicker value={difficulty} onChange={onDifficulty} />
 
       {/* CTAs secundários: Desafios + Fundar */}
@@ -9793,7 +9850,8 @@ function TeamPickCard({
 }
 
 // ----- DESAFIOS: assumir uma org real com contexto + metas (estilo Draft) -----
-function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: {
+function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty, dbSlot }: {
+  dbSlot?: React.ReactNode;
   current: TeamSeason[];
   onBack: () => void;
   onStart: (s: OrgStart) => void;
@@ -9861,6 +9919,7 @@ function ScenarioPicker({ current, onBack, onStart, difficulty, onDifficulty }: 
         </button>
       </header>
 
+      {dbSlot}
       <DifficultyPicker value={difficulty} onChange={onDifficulty} />
 
       {SCENARIO_CAT_ORDER.map((cat) => {

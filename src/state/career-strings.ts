@@ -1,6 +1,9 @@
 // Dicionario de traducao do modo carreira (chave = string PT normalizada -> EN/ES).
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
+import { EDITOR_STR } from './career-strings-editor';
+
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
+  ...EDITOR_STR, // [fase 4 · editor de base] (as entradas abaixo, se repetidas, valem)
   // [fase 3 · frente MERCADO] Transferências, janelas, propostas, empréstimos e IA de mercado
   "Proposta de elite": { en: "Elite offer", es: "Oferta de élite" },
   "Elenco cheio (7): venda, empreste ou inclua alguém na troca antes de fechar.": { en: "Roster full (7): sell, loan out or include someone in the swap before closing.", es: "Plantilla llena (7): vende, cede o incluye a alguien en el intercambio antes de cerrar." },

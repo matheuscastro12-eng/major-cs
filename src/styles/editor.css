@@ -1,0 +1,135 @@
+/* [fase 4 · frente EDITOR] Editor de base estilo FM (jogadores, times, bases)
+   e a escolha da base na criação da Carreira. Só tokens (var(--c-*), --sp-*,
+   --fs-*, --rad-*); primitivos em primitives.css. */
+
+.edb { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.edb .ds-panel { min-width: 0; }
+.edb-note { margin: 0 0 var(--sp-3); color: var(--c-ink-dim); font-size: var(--fs-3); line-height: var(--lh-body); max-width: 72ch; }
+.edb-note--end { margin: var(--sp-3) 0 0; }
+.edb-dim { color: var(--c-ink-faint); font-size: var(--fs-2); }
+
+/* ── campos ─────────────────────────────────────────────────────────────── */
+.edb-input, .edb-select {
+  height: 38px; padding: 0 var(--sp-3); min-width: 0;
+  border: 1px solid var(--c-line-strong); border-radius: var(--rad-2);
+  background: var(--c-surface-0); color: var(--c-ink);
+  font-family: var(--font-ui); font-size: var(--fs-3);
+}
+.edb-select { padding-right: var(--sp-2); }
+.edb-input:focus-visible, .edb-select:focus-visible, .edb-num:focus-visible, .edb-text:focus-visible {
+  outline: 2px solid var(--c-brand); outline-offset: 1px; border-color: var(--c-brand);
+}
+.edb-input[aria-invalid='true'], .edb-num[aria-invalid='true'] { border-color: var(--c-loss); }
+.edb-text {
+  width: 100%; min-height: 120px; padding: var(--sp-2) var(--sp-3); resize: vertical;
+  border: 1px solid var(--c-line-strong); border-radius: var(--rad-2);
+  background: var(--c-surface-0); color: var(--c-ink); font-family: var(--font-num); font-size: var(--fs-2);
+}
+.edb-color { width: 44px; height: 38px; padding: 2px; border: 1px solid var(--c-line-strong); border-radius: var(--rad-2); background: var(--c-surface-0); cursor: pointer; }
+.edb-field { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.edb-field > span { font-size: var(--fs-1); font-weight: 800; letter-spacing: var(--tracking-caps, 0.12em); text-transform: uppercase; color: var(--c-ink-faint); }
+.edb-field__row { display: flex; gap: var(--sp-2); align-items: center; }
+.edb-err { color: var(--c-loss); font-size: var(--fs-2); }
+@media (pointer: coarse) {
+  .edb-input, .edb-select, .edb-num, .edb-color { height: var(--tap); font-size: var(--fs-4); }
+}
+@media (max-width: 720px) {
+  .edb-input, .edb-select, .edb-num { font-size: var(--fs-4); }
+}
+
+/* ── barra de busca e filtros ───────────────────────────────────────────── */
+.edb-toolbar { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--c-line-soft); }
+.edb-toolbar .edb-input { flex: 1 1 220px; }
+.edb-toolbar .edb-select { flex: 0 1 180px; }
+.edb-toolbar__end { margin-left: auto; display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; }
+@media (max-width: 720px) {
+  .edb-toolbar .edb-select { flex: 1 1 calc(50% - var(--sp-2)); }
+  .edb-toolbar__end { margin-left: 0; width: 100%; }
+  .edb-toolbar__end .ds-btn { flex: 1; }
+}
+.edb-count { padding: var(--sp-2) var(--sp-4); color: var(--c-ink-faint); font-size: var(--fs-2); border-bottom: 1px solid var(--c-line-soft); }
+.edb-more { display: flex; justify-content: center; padding: var(--sp-3); }
+
+/* ── lista (quem é, status) ─────────────────────────────────────────────── */
+.edb-who { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.edb-who__txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.edb-who__txt b { font-size: var(--fs-3); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 22ch; }
+.edb-who__txt small { font-size: var(--fs-2); color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 26ch; display: inline-flex; gap: 4px; align-items: center; }
+.edb-who__txt small .flag { width: 16px; height: auto; }
+.edb-swatch { display: inline-flex; width: 28px; height: 28px; border-radius: var(--rad-1); border: 1px solid var(--c-line); flex: none; overflow: hidden; }
+.edb-swatch i { flex: 1; }
+
+/* ── bases ──────────────────────────────────────────────────────────────── */
+.edb-bases { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-3); }
+.edb-base { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--c-line); border-radius: var(--rad-3); background: var(--c-surface-2); min-width: 0; }
+.edb-base[data-active='true'] { border-color: var(--c-brand); box-shadow: inset 3px 0 0 var(--c-brand); }
+.edb-base__head { display: flex; align-items: center; gap: var(--sp-2); justify-content: space-between; min-width: 0; }
+.edb-base__head b { font-family: var(--font-title); font-size: var(--fs-4); text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edb-base__meta { color: var(--c-ink-dim); font-size: var(--fs-2); }
+.edb-base__actions { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-1); }
+.edb-new { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.edb-new .edb-input { flex: 1 1 220px; }
+.edb-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.edb-issue { display: flex; gap: var(--sp-2); align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--c-line-soft); font-size: var(--fs-3); }
+.edb-issue:last-child { border-bottom: 0; }
+.edb-issue[data-level='error'] > b { color: var(--c-loss); }
+.edb-issue[data-level='warning'] > b { color: var(--c-warn); }
+.edb-issue button { background: none; border: 0; padding: 0; color: var(--c-brand); font: inherit; cursor: pointer; text-decoration: underline; }
+.edb-issue small { color: var(--c-ink-faint); font-family: var(--font-num); overflow-wrap: anywhere; }
+.edb-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); align-items: start; }
+@media (max-width: 1100px) { .edb-grid2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── ficha (sheet) ──────────────────────────────────────────────────────── */
+.edb-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
+.edb-form .edb-field--wide { grid-column: span 2; }
+@media (max-width: 720px) {
+  .edb-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.edb-sec { margin: var(--sp-4) 0 var(--sp-2); font-family: var(--font-title); font-size: var(--fs-3); text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-ink-dim); display: flex; align-items: center; gap: var(--sp-2); }
+.edb-sec::after { content: ''; flex: 1; height: 1px; background: var(--c-line-soft); }
+.edb-capa { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: center; padding: var(--sp-3); border: 1px solid var(--c-line); border-radius: var(--rad-3); background: var(--c-surface-2); }
+.edb-capa .ds-stat { min-width: 64px; }
+.edb-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
+.edb-attrs--hidden { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--sp-4); }
+@media (max-width: 900px) { .edb-attrs { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); } }
+.edb-group h4 { margin: 0 0 var(--sp-1); font-size: var(--fs-2); text-transform: uppercase; letter-spacing: 0.1em; color: var(--c-ink-faint); }
+.edb-attr { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 3px 0; border-bottom: 1px solid var(--c-line-soft); }
+.edb-attr label { font-size: var(--fs-3); color: var(--c-ink-dim); flex: 1; min-width: 0; }
+.edb-num {
+  width: 56px; height: 32px; padding: 0 6px; text-align: center;
+  border: 1px solid var(--c-line-strong); border-radius: var(--rad-2);
+  background: var(--c-surface-0); color: var(--c-ink); font-family: var(--font-num); font-size: var(--fs-3); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.edb-num[data-band='5'] { color: var(--c-attr-5); }
+.edb-num[data-band='4'] { color: var(--c-attr-4); }
+.edb-num[data-band='3'] { color: var(--c-attr-3); }
+.edb-num[data-band='2'] { color: var(--c-attr-2); }
+.edb-num[data-band='1'] { color: var(--c-attr-1); }
+.edb-num--wide { width: 72px; }
+
+/* elenco na ficha do time */
+.edb-roster { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.edb-roster li { display: flex; align-items: center; gap: var(--sp-2); padding: 6px 0; border-bottom: 1px solid var(--c-line-soft); min-width: 0; }
+.edb-roster li > .edb-who { flex: 1; }
+.edb-roster__n { width: 22px; text-align: right; font-family: var(--font-num); color: var(--c-ink-faint); font-size: var(--fs-2); }
+.edb-roster li[data-starter='true'] .edb-roster__n { color: var(--c-brand); font-weight: 800; }
+.edb-pick { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-2); }
+.edb-pick__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: 260px; overflow: auto; border: 1px solid var(--c-line); border-radius: var(--rad-2); }
+.edb-pick__list li { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-2); border-bottom: 1px solid var(--c-line-soft); }
+.edb-pick__list li:last-child { border-bottom: 0; }
+.edb-pick__list li > .edb-who { flex: 1; }
+.edb-foot { display: flex; flex-wrap: wrap; gap: var(--sp-2); width: 100%; align-items: center; }
+.edb-foot__spacer { flex: 1; }
+@media (max-width: 720px) {
+  .edb-foot .ds-btn { flex: 1 1 auto; }
+  .edb-foot__spacer { display: none; }
+}
+
+/* ── escolha da base na criação da Carreira ─────────────────────────────── */
+.edb-choice__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-2); }
+.edb-choice__card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); text-align: left; min-width: 0; }
+.edb-choice__card b { font-family: var(--font-title); font-size: var(--fs-4); text-transform: uppercase; letter-spacing: 0.04em; display: inline-flex; gap: var(--sp-2); align-items: center; }
+.edb-choice__card small { color: var(--c-ink-dim); font-size: var(--fs-2); line-height: var(--lh-body); }
+.edb-choice__card:disabled { opacity: 0.5; cursor: not-allowed; }
+.edb-grow { flex: 1 1 auto; }
