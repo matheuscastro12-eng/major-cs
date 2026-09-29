@@ -56,12 +56,20 @@ export interface Metrics {
 
 const ratio = (a: number, b: number) => (b ? a / b : NaN);
 
+// times DISPUTÁVEIS da base (sem extintos nem os virtuais __free__/__retired__)
 export function realTeams(): TTeam[] {
-  return CS2_REAL_2026.map(teamSeasonToTTeam).filter((t) => t.players.length === 5);
+  return CS2_REAL_2026.filter((t) => !t.defunct && !t.id.startsWith('__')).map(teamSeasonToTTeam).filter((t) => t.players.length === 5);
+}
+
+// Os alvos reais vêm de uma amostra TIER S (docs/calibration-targets.json →
+// sample); o harness joga entre os TIER_S_TEAMS mais fortes da base.
+export const TIER_S_TEAMS = 40;
+export function tierSTeams(): TTeam[] {
+  return realTeams().sort((a, b) => b.strength - a.strength).slice(0, TIER_S_TEAMS);
 }
 
 export function runCalibration(nMaps = 4000, seed = 20260929): Metrics {
-  const teams = realTeams();
+  const teams = tierSTeams();
   const rng = makeRng(seed);
   const ctW: Record<string, [number, number]> = {};
   let pistolWon = 0, pistolConv = 0;
@@ -97,11 +105,13 @@ export function runCalibration(nMaps = 4000, seed = 20260929): Metrics {
         pistolWon++;
         if (tr[r + 1].winner === x.winner) pistolConv++;
       }
+      // eco/force × full pelo NÍVEL DE EQUIPAMENTO do round (como o bo3.gg mede o
+      // alvo: economy_level -1/0 contra 2), não pela faixa de caixa
       if (x.round !== 0 && x.round !== 12) {
         for (const [ti, oi] of [[0, 1], [1, 0]] as const) {
-          if (x.buys[oi] !== 'full') continue;
-          if (x.buys[ti] === 'eco') { ecoN++; if (x.winner === ti) ecoW++; }
-          if (x.buys[ti] === 'force') { forceN++; if (x.winner === ti) forceW++; }
+          if (x.econ[oi] !== 2) continue;
+          if (x.econ[ti] === -1) { ecoN++; if (x.winner === ti) ecoW++; }
+          if (x.econ[ti] === 0) { forceN++; if (x.winner === ti) forceW++; }
         }
       }
       if (x.openingTeam >= 0) { openN++; if (x.winner === x.openingTeam) openW++; }

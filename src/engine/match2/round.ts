@@ -44,7 +44,7 @@ export const DUEL = {
   POST_T: 0.26,        // pós-plant: o T segura o C4, o CT precisa ir
   // equipamento (logit relativo ao rifle)
   E_SMG: -0.6,
-  E_ECO: -2.3,         // eco seco (pistola, sem colete)
+  E_ECO: -2.2,         // eco seco (pistola, sem colete)
   E_HALF: -1.35,       // meia-compra (colete + pistola melhor) — o eco do 2º round
   E_AWP_HOLD: 0.22,    // AWP segurando ângulo (CT, ou T no pós-plant)
   E_AWP_PEEK: -0.02,   // AWP tendo que ir no duelo
@@ -52,7 +52,7 @@ export const DUEL = {
   TRADE_BASE: 0.22,
   TRADE_SKILL: 0.05,   // por ponto de trade médio acima de 12
   K_TRADE: 0.06,
-  NUM_ADV: 0.15,       // por jogador a mais vivo: crossfire, troca armada, utilitária sobrando
+  NUM_ADV: 0.2,       // por jogador a mais vivo: crossfire, troca armada, utilitária sobrando
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

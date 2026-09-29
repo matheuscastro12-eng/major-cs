@@ -84,7 +84,7 @@ const SITE_RIGHT = 0.3;
 const SITE_WRONG = 0.18;
 
 // engajamento por função: quem aparece em cada fase do round
-const W_OPEN_T: Record<string, number> = { Entry: 1.9, Rifler: 1.3, AWP: 1.0, Lurker: 0.7, Support: 0.75, IGL: 0.9 };
+const W_OPEN_T: Record<string, number> = { Entry: 1.3, Rifler: 1.3, AWP: 1.0, Lurker: 0.7, Support: 0.75, IGL: 0.9 };
 const W_OPEN_CT: Record<string, number> = { AWP: 1.1, Entry: 1.4, Rifler: 1.2, Lurker: 1.0, Support: 0.9, IGL: 0.9 };
 const W_OPEN_CT_AWP = 2.6;   // AWPer DE AWP segura a abertura
 const W_MID: Record<string, number> = { Entry: 1.25, Rifler: 1.2, AWP: 1.15, Lurker: 1.0, Support: 0.95, IGL: 1.0 };
@@ -131,6 +131,8 @@ function weaponLabel(cls: WeaponClass, side: 'ct' | 't', rng: Rng): string {
   if (r < 0.06) return 'deagle';
   return rng() < 0.9 ? (side === 't' ? 'ak47' : 'm4') : side === 't' ? 'm4' : 'ak47';
 }
+const UTIL_DMG_P = 0.5;   // chance de a utilitária de um jogador tirar vida de alguém no round
+const CHIP_P = 0.55;      // chance de quem perde o duelo tirar vida antes de cair
 const HS_BASE: Record<WeaponClass, number> = { rifle: 0.47, awp: 0.1, pistol: 0.52, eco: 0.5, half: 0.5, smg: 0.38 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,11 +142,22 @@ export interface RoundTrace {
   round: number;
   aSide: 'ct' | 't';
   buys: [BuyTier, BuyTier];
+  // nível de equipamento como o bo3.gg mede (economy_level): pela arma que a
+  // maioria do time leva — -1 eco seco · 0 force (colete+pistola/SMG) · 2 full
+  econ: [EconLevel, EconLevel];
   winner: 0 | 1;
   openingTeam: 0 | 1 | -1;
   clutch: [{ vs: number } | null, { vs: number } | null]; // por time (0/1)
   end: RoundPlay['end'];
   planted: boolean;
+}
+
+export type EconLevel = -1 | 0 | 2;
+function econLevel(classes: WeaponClass[], pistolRound: boolean): EconLevel {
+  if (pistolRound) return 0;
+  let eco = 0, full = 0;
+  for (const c of classes) { if (c === 'eco') eco++; else if (c === 'rifle' || c === 'awp') full++; }
+  return full >= 3 ? 2 : eco >= 3 ? -1 : 0;
 }
 
 export type MapSimV2 = MapSim & { trace: () => RoundTrace[] };
@@ -304,8 +317,10 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       const carried = carry[ti][k];
       if (tier === 'full') return k === tc[ti].awper ? 'awp' : carried === 'awp' ? 'awp' : 'rifle';
       if (carried) return carried;
-      // eco com caixa pra colete (CS2: o 2º round de quem perdeu o pistol) = meia-compra
-      return tier === 'force' ? 'smg' : eco[ti].money >= HALF_BUY_MONEY ? 'half' : 'eco';
+      // eco: save seco para comprar cheio no round seguinte. Exceção do CS2: o 2º
+      // round de quem perdeu o pistol, com caixa pra colete, vira meia-compra.
+      const afterPistol = round === 1 || round === 13;
+      return tier === 'force' ? 'smg' : afterPistol && eco[ti].money >= HALF_BUY_MONEY ? 'half' : 'eco';
     });
 
   const sideSpec = (ti: 0 | 1, side: 'ct' | 't', classes: WeaponClass[], tier: BuyTier, mode: Stance | undefined, saveCall: boolean, secondHalf: boolean): SideSpec => {
@@ -506,8 +521,10 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     const winner: 0 | 1 = toTeam(play.winner);
     applyRound(play, toTeam, [aSide, bSide], classes, winner);
 
+    const pistolRound = buys[0] === 'pistol';
     traceLog.push({
       round, aSide, buys, winner,
+      econ: [econLevel(classes[0], pistolRound), econLevel(classes[1], pistolRound)],
       openingTeam: play.duels.length ? toTeam(play.duels[0].winSide) : -1,
       clutch: [0, 1].map((ti) => {
         const side = ti === tIdx ? 0 : 1;
@@ -590,7 +607,9 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     for (const ti of [0, 1] as const) {
       const oi = ti === 0 ? 1 : 0;
       for (let k = 0; k < 5; k++) {
-        if (rng() < 0.62 * clamp(tc[ti].prof[k].util / 14, 0.7, 1.2)) {
+        // AWPer joga menos utilitária (segura a AWP); o resto pela coordenação/visão
+        const awpMult = classes[ti][k] === 'awp' ? 0.5 : 1;
+        if (rng() < UTIL_DMG_P * awpMult * clamp(tc[ti].prof[k].util / 14, 0.85, 1.1)) {
           const v = Math.floor(rng() * 5);
           const d = Math.min(hp[oi][v] - 1, 8 + Math.floor(rng() * 34));
           if (d > 0) { hp[oi][v] -= d; dmg[ti][k] += d; }
@@ -626,8 +645,10 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     };
     for (const d of play.duels) {
       const wt = toTeam(d.winSide), lt = toTeam(d.loseSide);
-      // quem perdeu o duelo às vezes acerta antes de cair
-      if (rng() < 0.65) {
+      // quem perdeu o duelo às vezes acerta antes de cair — a AWP não: errou é 0,
+      // acertou é abate (o dano de AWP vem quase todo dos abates)
+      const loserAwp = classes[lt][d.lose] === 'awp';
+      if (rng() < (loserAwp ? 0.08 : CHIP_P)) {
         const chip = Math.min(hp[wt][d.win] - 1, 15 + Math.floor(rng() * 70));
         if (chip > 0) { hp[wt][d.win] -= chip; dmg[lt][d.lose] += chip; }
       }
