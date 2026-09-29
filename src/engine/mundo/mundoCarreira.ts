@@ -204,12 +204,34 @@ export function worldHeadlines(results: WorldEventResult[], split: number, tagOf
 }
 
 // ─── Semeadura: o mundo nasce com passado ───────────────────────────────────
-export interface UserRecordSeed { t: number; name: string; tier: 1 | 2 | 3; place: number; lan?: boolean; prize?: number }
+export interface UserRecordSeed {
+  t: number; name: string; tier: 1 | 2 | 3; place: number; lan?: boolean; prize?: number;
+  /** o Major deste split (save migrado): split do Major e a sua colocação real nele */
+  major?: { split: number; place: number };
+}
+
+/**
+ * Enxerta `teamId` num resultado na colocação `place` EMPURRANDO quem estava
+ * dali pra baixo: as vagas de colocação do evento (1, 2, 3, 3, 5…) ficam as
+ * mesmas, cada time a partir da sua desce uma vaga e o último sai (o field não
+ * cresce). Um só campeão: quem venceu na simulação vira vice. Puro.
+ */
+export function graftPlacement(placements: readonly QPlacement[], teamId: string, place: number): QPlacement[] {
+  const rest = [...placements].filter((p) => p.teamId !== teamId).sort((a, b) => a.place - b.place);
+  const slots = [...placements].map((p) => p.place).sort((a, b) => a - b);
+  if (!slots.length) return [{ teamId, place }];
+  let k = slots.findIndex((x) => x >= place);
+  if (k < 0) k = slots.length - 1; // pior que todos: fica na última vaga
+  const order = [...rest.slice(0, k), { teamId, place: slots[k] }, ...rest.slice(k)].slice(0, slots.length);
+  return order.map((p, i) => ({ teamId: p.teamId, place: slots[i] }));
+}
+
 /**
  * Pré-história do mundo (as 6 etapas antes de `now`, com o Major que caiu nelas)
  * pelo modelo calibrado. `takeoverId` (time real que você assumiu) vira 'user'
  * nos resultados — você herda a posição da org. `userRecords` (save migrado)
- * põe os seus resultados reais das últimas etapas nos eventos da época.
+ * põe os seus resultados reais das últimas etapas nos eventos da época (e a sua
+ * colocação real no Major da janela).
  */
 export function seedWorld(opts: {
   pool: TeamSeason[];
@@ -237,15 +259,13 @@ export function seedWorld(opts: {
     results = results.map((r) => ({ ...r, placements: r.placements.map((p) => (p.teamId === opts.takeoverId ? { ...p, teamId: USER_ID } : p)) }));
   }
   // resultados reais do save migrado: você entra no evento de mesmo nome da época
-  // (ou no do tier) no lugar do pior time; sem evento compatível, vira um evento só seu
+  // (ou no do tier) NA SUA COLOCAÇÃO, empurrando quem estava dali pra baixo (um
+  // só campeão); sem evento compatível, vira um evento só seu
   for (const rec of opts.userRecords ?? []) {
     const cands = results.filter((r) => r.t === rec.t && r.kind === 'gsl');
     const target = cands.find((r) => r.name === rec.name) ?? cands.find((r) => r.tier === rec.tier);
     if (target && !target.placements.some((p) => p.teamId === USER_ID)) {
-      const worst = [...target.placements].sort((a, b) => b.place - a.place)[0];
-      target.placements = target.placements.filter((p) => p !== worst).map((p) => p);
-      target.placements.push({ teamId: USER_ID, place: rec.place });
-      target.placements.sort((a, b) => a.place - b.place);
+      target.placements = graftPlacement(target.placements, USER_ID, rec.place);
     } else if (!target) {
       const { split } = splitEtapaOf(rec.t);
       results.push({
@@ -253,16 +273,33 @@ export function seedWorld(opts: {
         t: rec.t, field: 16, placements: [{ teamId: USER_ID, place: rec.place }],
       });
     }
+    // o Major que você jogou de verdade: a sua colocação real no Major da janela
+    const mj = rec.major && results.find((r) => r.kind === 'major' && r.split === rec.major!.split);
+    if (mj && !mj.placements.some((p) => p.teamId === USER_ID)) {
+      mj.placements = graftPlacement(mj.placements, USER_ID, rec.major!.place);
+    }
   }
   results = pruneResults(results, now - 1);
-  return { results, vrs: publishVrs(computeVrs(results, now - 1)), vrsAt: now - 1 };
+  // o Major da janela acontece meia etapa depois da última etapa (majorTime): se
+  // ele já passou, o ranking semeado é publicado depois dele (senão o campeão só
+  // contava no primeiro fechamento de etapa)
+  const at = Math.max(now - 1, ...results.map((r) => r.t ?? -Infinity).filter((t) => t < now));
+  return { results, vrs: publishVrs(computeVrs(results, at)), vrsAt: at };
 }
+
+/** Colocação no Major (PlacementCode da Carreira) → colocação no resultado do mundo. */
+export const MAJOR_PLACE: Record<string, number> = { champion: 1, runnerup: 2, semi: 3, quarters: 5, playoffs: 9, swiss: 17 };
 
 /**
  * Converte o histórico da Carreira (SplitRecord: um por etapa jogada) nos seus
- * resultados das últimas etapas antes de `now` (mais recente = now − 1).
+ * resultados das últimas etapas antes de `now` (mais recente = now − 1). A etapa
+ * que fechou com o Major carrega a sua colocação real nele.
  */
-export function userRecordsFromHistory(history: { circuit: string; position: number; major?: unknown }[], now: number, tierOf: (name: string) => 1 | 2 | 3): UserRecordSeed[] {
+export function userRecordsFromHistory(
+  history: { split?: number; circuit: string; position: number; major?: { placement?: string } | null }[],
+  now: number,
+  tierOf: (name: string) => 1 | 2 | 3,
+): UserRecordSeed[] {
   const out: UserRecordSeed[] = [];
   const recent = history.slice(-VRS_WINDOW).reverse();
   recent.forEach((h, i) => {
@@ -270,7 +307,10 @@ export function userRecordsFromHistory(history: { circuit: string; position: num
     const host = eventHost(h.circuit, tier);
     const pos = Math.max(1, Math.round(h.position || 9));
     const place = pos === 1 ? 1 : pos === 2 ? 2 : pos <= 4 ? 3 : pos <= 8 ? 5 : pos <= 12 ? 9 : 13;
-    out.push({ t: now - 1 - i, name: h.circuit, tier, place, lan: host.lan });
+    const t = now - 1 - i;
+    const mPlace = h.major?.placement ? MAJOR_PLACE[h.major.placement] : undefined;
+    const mSplit = h.split ?? splitEtapaOf(t).split;
+    out.push({ t, name: h.circuit, tier, place, lan: host.lan, ...(mPlace ? { major: { split: mSplit, place: mPlace } } : {}) });
   });
   return out;
 }

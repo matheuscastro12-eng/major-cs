@@ -172,6 +172,11 @@ export function driftFrom(pid: string, baseOvr: number, a0: number, debut: numbe
   return Math.round(Math.max(-12, Math.min(12, cur - baseOvr)));
 }
 
+/** Faixa do OVR de estreia do jovem que assume uma vaga (ele cresce depois, pelo
+ *  relógio da vaga): teto 80; piso 66, o nível do jovem de reposição da base. */
+export const REGEN_DEBUT_CAP = 80;
+export const REGEN_DEBUT_FLOOR = 66;
+const NO_SKIP: Set<string> = new Set();
 // jovem da base que assume a vaga de um titular aposentado. OVR de estreia abaixo
 // do nível do time (cru, com espaço pra crescer). Determinístico por time/vaga/geração.
 export function regenYouth(team: TeamSeason, slot: number, gen: number, debut: number, a0: number, orig: Player): Player {
@@ -182,11 +187,18 @@ export function regenYouth(team: TeamSeason, slot: number, gen: number, debut: n
   // polonês aleatório. orig.country > país do time (cobre imports do elenco).
   const ident = prospectIdentity(seed, region, orig.country || team.country);
   const h = hashStr(seed);
-  // herda o PERFIL do titular que saiu (mesma função/estilo) e entra um pouco abaixo:
-  // quanto mais forte a vaga, menor o gap — o time mantém a firepower ao renovar.
+  // herda o PERFIL do titular original da vaga (mesma função/estilo), mas o NÍVEL
+  // de estreia sai de quem está SAINDO agora — o veterano já em declínio (ou o
+  // regen anterior), não o OVR do dataset — e tem teto de estreia: a vaga de uma
+  // estrela não gera outra estrela pronta aos 17 (antes o substituto do ZywOo
+  // estreava com ~89 e devolvia o time ao topo). Determinístico: quem sai é
+  // refeito pelo mesmo relógio da vaga (aiSlotPlayer um split antes da estreia).
   const anchor = playerOvr(orig);
-  const gap = (anchor >= 90 ? 4 : anchor >= 86 ? 5 : anchor >= 82 ? 6 : 8) + (h % 2);
-  const at = (v: number) => Math.max(40, Math.min(95, v - gap));
+  const leaving = debut > 1 ? playerOvr(aiSlotPlayer(orig, team, slot, debut - 1, NO_SKIP)) : anchor;
+  const gap = (leaving >= 90 ? 4 : leaving >= 86 ? 5 : leaving >= 82 ? 6 : 8) + (h % 2);
+  const target = Math.max(REGEN_DEBUT_FLOOR, Math.min(REGEN_DEBUT_CAP, leaving - gap));
+  const shift = anchor - target;
+  const at = (v: number) => Math.max(40, Math.min(95, v - shift));
   return {
     id: `${team.id}~rg${slot}.${gen}.${debut}.${a0}`,
     nick: ident.nick, name: ident.name, country: ident.country, role: orig.role,
