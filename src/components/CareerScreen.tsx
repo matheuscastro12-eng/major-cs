@@ -576,7 +576,7 @@ import { TrainingTab } from '../pages/career/TrainingTab';
 import { OverviewTab } from '../pages/career/OverviewTab';
 // [fase 2 · frente STAFF] comissão técnica
 import { StaffTab } from '../pages/career/StaffTab';
-import type { ClubStrategy, MarketLoan, MarketState } from '../engine/clube/model';
+import type { ClubStrategy, IncomingOffer, MarketLoan, MarketState } from '../engine/clube/model';
 import { tickMarketWindow, clubsSnapshot, clubNeeds, aiTierOf, squadOvr, type ClubNeed, type WindowKind } from '../engine/clube/mercadoIA';
 import {
   marketOf, userLoans, expireOffers, generateIncomingOffers, applyWorldTick, withOffers, pushRumors, chainRumors, needRumors,
@@ -1208,7 +1208,6 @@ interface CareerSave {
   tier: number; // tier atual da organização (1 = elite). Começa em 3.
   tierChange?: 'up' | 'down' | null; // resultado da última temporada (promoção/rebaixamento)
   takeoverId?: string | null; // id do time real que o jogador assumiu (excluído dos adversários)
-  pendingOffer?: PoachOffer | null; // proposta de uma org maior por um jogador seu
   pendingDeals?: PendingDeal[]; // acordos fechados DURANTE a temporada; entram em vigor na janela (próximo split)
   renewals?: Renewal[]; // contratos vencendo: forçam a tela de renovação na abertura da janela
   pendingSales?: { playerId: string; nick: string; fee: number; toTag: string; toId: string }[]; // propostas aceitas por jogadores SEUS: o jogador sai (e entra a grana) na janela. toId = id do clube COMPRADOR (pro applyMoves / extraOnTeam)
@@ -1320,7 +1319,9 @@ export const CONTRACT_TERM = CONTRACT_TERM_DEFAULT; // splits de contrato ao ass
 export const ROLE_OPTS: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
 
 // proposta de uma org de elite (tier 1) por um jogador do seu elenco
-interface PoachOffer { orgId: string; orgName: string; orgTag: string; playerId: string; nick: string; ovr: number; fee: number }
+// [integração] a proposta de elite de fim de split é um IncomingOffer (reason 'elite')
+// em clube.market.incoming; as telas leem estes 4 campos
+interface EliteOfferView { orgName: string; nick: string; ovr: number; fee: number }
 
 // meta da diretoria por split (FM/Brasval): cumprir sobe a confiança e dá bônus;
 // falhar derruba a confiança — no fundo do poço você é demitido.
@@ -1517,7 +1518,7 @@ function splitNews(ctx: {
   split: number; org: string; champion: boolean; circuit: string;
   objMet: boolean; objText?: string;
   tierChange: 'up' | 'down' | null; tierName?: string;
-  releases: string[]; offer: PoachOffer | null;
+  releases: string[]; offer: EliteOfferView | null;
   risers: string[]; sliders: string[]; unhappy: string[];
   breakthroughs?: { nick: string; from: string; to: string }[]; // #17: furos de teto do split
   major?: { placement: number | string; champion: boolean } | null;
@@ -2234,6 +2235,20 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
   const baseClube = clubeOk ? merged.clube! : (migrateClube({ contracts: legacyContracts ?? {} }).clube as ClubeState);
   merged.clube = materializeContracts({ clube: baseClube, contracts: legacyContracts }, []) ?? baseClube;
   delete (merged as { contracts?: unknown }).contracts;
+  // [integração] proposta de elite do caminho antigo (save.pendingOffer) vira um
+  // IncomingOffer 'elite' no mercado — mesma decisão antes do mercado de pré-temporada
+  const legacyOffer = record.pendingOffer as { orgId?: string; orgName?: string; orgTag?: string; playerId?: string; nick?: string; ovr?: number; fee?: number } | null | undefined;
+  if (legacyOffer && legacyOffer.playerId && legacyOffer.orgId && Number.isFinite(legacyOffer.fee)) {
+    const m = marketOf(merged);
+    const id = `elite:${merged.split}:${legacyOffer.playerId}`;
+    if (!m.incoming.some((o) => o.id === id)) {
+      merged.clube = { ...merged.clube!, market: withOffers(m, [{
+        id, playerId: legacyOffer.playerId, fromTeamId: legacyOffer.orgId, fee: legacyOffer.fee!, split: merged.split, expiresSplit: merged.split, status: 'open',
+        nick: legacyOffer.nick, ovr: legacyOffer.ovr, fromTag: legacyOffer.orgTag, fromName: legacyOffer.orgName, reason: 'elite', strategy: 'starBuyer',
+      }]) };
+    }
+  }
+  delete (merged as { pendingOffer?: unknown }).pendingOffer;
   return merged;
 };
 
@@ -4232,12 +4247,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       ...m.loans.filter((l) => l.kind === 'out' || l.kind === 'in').map((l) => l.playerId),
     ]);
     const clube = clubeOf(s);
-    const contracts = clube.contracts;
     const leaving = new Set(leaveRequests(s as unknown as Record<string, unknown>, s.squad.map((x) => x.playerId)));
     return s.squad.map((sig): SquadEntry | null => {
       const f = findSigning(sig);
       if (!f) return null;
-      const wage = contracts[sig.playerId]?.wage || playerWage(f.player);
+      const wage = contractWageOf(s, sig.playerId, () => playerWage(f.player)); // [integração] salário do contrato (H)
       return {
         player: { ...f.player, id: sig.playerId }, wage,
         clause: releaseClauseOf(s as unknown as Record<string, unknown>, sig.playerId),
@@ -4497,7 +4511,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // assédio do topo: uma org de ELITE (tier 1) pode fazer proposta pelo seu
   // melhor jogador entre temporadas. Só acontece se você ainda não é tier 1
   // (do contrário você JÁ é o topo). Determinístico por split+jogador.
-  const makeOffer = (s: CareerSave, newTier: number): PoachOffer | null => {
+  const makeOffer = (s: CareerSave, newTier: number): IncomingOffer | null => {
     if (newTier <= 1) return null;
     // exclui quem já está saindo numa venda/troca deste split — senão o assédio
     // paga fee POR CIMA da venda já consumada (dinheiro duplicado pelo mesmo
@@ -4522,7 +4536,15 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const org = elite[h % elite.length];
     // [fase 3] quem vive no banco vale menos (até −15%)
     const fee = Math.round(playerValue(best) * benchValueFactor(dressingOf(s), best.id) * (1.4 + (h % 35) / 100)); // 1.4x a 1.75x
-    return { orgId: org.id, orgName: org.team, orgTag: org.tag, playerId: best.id, nick: best.nick, ovr: playerOvr(best), fee };
+    // [integração] entra no fluxo único de propostas (clube.market.incoming) com o
+    // motivo "proposta de elite": decide-se antes do mercado de pré-temporada
+    // (como antes) e, se ficar aberta, em Mercado › Transferências.
+    const wage = contractWageOf(s, best.id, () => playerWage(best));
+    return {
+      id: `elite:${s.split + 1}:${best.id}`, playerId: best.id, fromTeamId: org.id, fee,
+      wageOffered: Math.round((wage * 1.35) / 5000) * 5000, split: s.split + 1, expiresSplit: s.split + 1, status: 'open',
+      nick: best.nick, ovr: playerOvr(best), role: best.role, fromTag: org.tag, fromName: org.team, reason: 'elite', strategy: 'starBuyer',
+    };
   };
 
   // clubForm: usado pela OverviewTab; helper movido pra page.
@@ -5185,8 +5207,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           fatigue: {},
           gestao: { ...gestaoOf(save), training: defaultTrainingState(), condition: {} },
           restingPlayers: [],
-          clube: { ...(save.clube ?? (migrateClube({}).clube as ClubeState)), contracts: {}, negotiations: [] }, // [fase 3] clube novo: sem contratos herdados
-          pendingOffer: null,
+          // [fase 3] clube novo: sem contratos herdados nem propostas/empréstimos do elenco antigo
+          clube: { ...(save.clube ?? (migrateClube({}).clube as ClubeState)), contracts: {}, negotiations: [], market: { ...marketOf(save), incoming: [], loans: marketOf(save).loans.filter((l) => l.kind === 'ai') } },
           pendingDeals: [],
           renewals: [],
           pendingSales: [],
@@ -5413,45 +5435,41 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     }
     // proposta de uma org grande pendente: resolve ANTES do mercado (assim o
     // mercado já abre com o elenco certo e você repõe quem saiu)
-    if (save.pendingOffer) {
-      const off = save.pendingOffer;
+    // [integração] proposta de ELITE pendente (IncomingOffer 'elite' do split):
+    // resolve ANTES do mercado, como antes — assim o mercado já abre com o elenco
+    // certo e você repõe quem saiu. Mesma venda imediata do caminho antigo.
+    const eliteOpen = marketOf(save).incoming.find((o) => o.reason === 'elite' && o.status === 'open' && o.split === save.split);
+    if (eliteOpen) {
+      const off = eliteOpen;
+      const mk = marketOf(save);
       return (
         <OfferScreen
-          offer={off}
+          offer={{ orgName: off.fromName ?? '', nick: off.nick ?? '', ovr: off.ovr ?? 0, fee: off.fee }}
           orgName={save.org?.name ?? 'sua org'}
           onAccept={() => {
-            // GUARD defensivo: se o alvo do assédio JÁ saiu do elenco (venda in-season
-            // consumada na virada), aceitar não pode creditar fee de novo nem mover o
-            // jogador pro clube errado — só limpa a proposta órfã.
+            const accepted = acceptOffer(mk, off.id).market;
+            // GUARD defensivo: se o alvo JÁ saiu do elenco (venda consumada na virada),
+            // aceitar não credita fee de novo nem move o jogador — só fecha a proposta.
             if (!save.squad.some((s) => s.playerId === off.playerId)) {
-              const cleared = { ...save, pendingOffer: null };
+              const cleared = { ...save, ...withMarket(save, accepted) };
               persist(cleared);
               setSave(cleared);
               return;
             }
-            // vende: sai do elenco e entra a grana. Você fica com 4 e repõe no
-            // mercado (a org compradora leva o jogador "de cena"; não forçamos
-            // ele num 6º slot do roster dela pra não quebrar o time).
+            // vende: sai do elenco e entra a grana. Você repõe no mercado.
             const morale = { ...(save.morale ?? {}) };
             delete morale[off.playerId];
             const peakOvr = { ...(save.peakOvr ?? {}) };
             delete peakOvr[off.playerId];
-            // zera a evolução acumulada: se voltar a contratá-lo, ele entra no OVR
-            // de mercado (base), não com o declínio antigo grudado
             const evo = { ...(save.evo ?? {}) };
             delete evo[off.playerId];
-            // BUG FIX (caça-bugs): registrar o MOVE pro clube comprador e tirar o
-            // contrato. Antes só removia do squad → o jogador real reaparecia no
-            // time original no próximo render (currentEra) como se a venda nunca
-            // tivesse acontecido. off.orgId é o id do clube assediante (makeOffer).
             const moves = { ...(save.moves ?? {}) };
-            moves[off.playerId] = off.orgId;
-            const clube = withoutContracts(save, [off.playerId]); // [fase 3]
+            moves[off.playerId] = off.fromTeamId;
+            const clube = { ...withoutContracts(save, [off.playerId]), market: accepted };
             const next: CareerSave = {
               ...save,
               squad: save.squad.filter((s) => s.playerId !== off.playerId),
               budget: save.budget + off.fee,
-              pendingOffer: null,
               moves,
               clube,
               morale,
@@ -5462,7 +5480,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             setSave(next);
           }}
           onRefuse={() => {
-            const next = { ...save, pendingOffer: null };
+            // recusar quem queria ir custa moral (mesma regra das outras propostas)
+            const wage = contractWageOf(save, off.playerId, () => Math.round((off.wageOffered ?? 0) / 1.35));
+            const willingness = playerWillingness({ wage, wageOffered: off.wageOffered, buyerTier: 1, userTier: save.tier ?? 3, wantsLeave: wantsToLeave(save, off.playerId) });
+            const r = rejectOffer(mk, off.id, { wantsLeave: wantsToLeave(save, off.playerId), willingness });
+            const morale = { ...(save.morale ?? {}) };
+            if (r.moraleDelta < 0) morale[off.playerId] = Math.max(0, (morale[off.playerId] ?? MORALE_DEFAULT) + r.moraleDelta);
+            const next = { ...save, morale, ...withMarket(save, r.market) };
             persist(next);
             setSave(next);
           }}
@@ -5798,7 +5822,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   }),
                   ...evo,
                   ...majorWindowPatch,
-                  pendingOffer: null, // vindo do Major (tier 1): ninguém te assedia "pra cima"
                   board: majBoard,
                   boardLog: majBd.boardLog,
                   lastObjective: majObj ? { text: majObj.text, met: true, delta: majBoard - save.board } : null,
@@ -6260,7 +6283,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     split: save.split, org: save.org?.name ?? 'Sua org', champion: isChampion,
                     circuit: save.circuit?.name ?? ct('circuito'), objMet, objText: obj?.text,
                     tierChange: tierResult.tierChange, tierName: TIER_NAMES[tierResult.tier],
-                    releases: [], offer,
+                    releases: [], offer: offer ? { orgName: offer.fromName ?? '', nick: offer.nick ?? '', ovr: offer.ovr ?? 0, fee: offer.fee } : null,
                     risers: (evo.lastEvo ?? []).filter((e) => e.delta >= 2).map((e) => e.nick),
                     sliders: (evo.lastEvo ?? []).filter((e) => e.delta <= -2).map((e) => e.nick),
                     breakthroughs: (evo.lastEvo ?? []).filter((e) => e.breakthrough).map((e) => ({ nick: e.nick, ...e.breakthrough! })),
@@ -6379,7 +6402,6 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     ...(boardCash ? { board: boardCash.board, boardLog: boardCash.boardLog } : {}),
                     tier: tierResult.tier,
                     tierChange: tierResult.tierChange,
-                    pendingOffer: offer,
                     renewals,
                     morale,
                     satisfaction: hap.satisfaction,
@@ -6399,7 +6421,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                     pendingSales: [...(windowPatch.pendingSales ?? save.pendingSales ?? []), ...listedSales], // + cláusulas pagas na janela
                     listedPrices: listedPricesLeft,
                   };
-                  const fin = applyLoanWindow(consummateDeals(next), 'offseason'); // [fase 3] vendas/acordos + empréstimos da janela
+                  // [integração] proposta de elite entra no fluxo único de propostas
+                  const withElite: CareerSave = offer ? { ...next, ...withMarket(next, withOffers(marketOf(next), [offer])) } : next;
+                  const fin = applyLoanWindow(consummateDeals(withElite), 'offseason'); // [fase 3] vendas/acordos + empréstimos da janela
                   persist(fin);
                   setSave(fin);
                   // FRENTE 1 — recap cinematográfico só no FIM do split (não em etapas
@@ -7630,7 +7654,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 feed={feedMemo}
                 focusQuery={negoFocus}
                 ownerStrategyOf={(id) => clubs.strategies[id]}
-                onAddDeal={(d) => update({ pendingDeals: [...(save.pendingDeals ?? []), d] })}
+                onAddDeal={(d) => {
+                  // [integração] elenco de no máximo 7: o acordo que passaria do limite
+                  // na janela nem entra (a janela também recusa, sem cobrar nada)
+                  const leaving = new Set([...(save.pendingSales ?? []).map((x) => x.playerId), ...(save.pendingDeals ?? []).flatMap((x) => x.outPlayerIds), ...d.outPlayerIds]);
+                  const after = save.squad.filter((x) => !leaving.has(x.playerId)).length + (save.pendingDeals ?? []).length + 1;
+                  if (after > SQUAD_MAX) { toast.error(ct('Elenco cheio (7): venda, empreste ou inclua alguém na troca antes de fechar.')); return; }
+                  update({ pendingDeals: [...(save.pendingDeals ?? []), d] });
+                }}
                 onCancelDeal={(id) => update({ pendingDeals: (save.pendingDeals ?? []).filter((x) => x.id !== id) })}
                 onAcceptOffer={(o) => update({ pendingSales: [...(save.pendingSales ?? []), o] })}
                 onRejectOffer={(pid) => update({ rejectedOffers: [...(save.rejectedOffers ?? []), pid] })}
@@ -9066,7 +9097,7 @@ function RenewalScreen({ renewals, budget, payrollBase, profileFor, blockedFor, 
 }
 
 function OfferScreen({ offer, orgName, onAccept, onRefuse }: {
-  offer: PoachOffer;
+  offer: EliteOfferView;
   orgName: string;
   onAccept: () => void;
   onRefuse: () => void;

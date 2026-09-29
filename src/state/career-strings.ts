@@ -2,6 +2,8 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   // [fase 3 · frente MERCADO] Transferências, janelas, propostas, empréstimos e IA de mercado
+  "Proposta de elite": { en: "Elite offer", es: "Oferta de élite" },
+  "Elenco cheio (7): venda, empreste ou inclua alguém na troca antes de fechar.": { en: "Roster full (7): sell, loan out or include someone in the swap before closing.", es: "Plantilla llena (7): vende, cede o incluye a alguien en el intercambio antes de cerrar." },
   "vai para a": { en: "goes to", es: "va a" },
   "na troca.": { en: "in the swap.", es: "en el intercambio." },
   "Troca": { en: "Swap", es: "Intercambio" },

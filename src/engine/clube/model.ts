@@ -70,7 +70,7 @@ export interface Negotiation {
 export type ClubStrategy = 'starBuyer' | 'youth' | 'national' | 'balanced' | 'moneyball' | 'survival';
 
 // [fase 3 · mercado] por que o clube foi ao mercado (necessidade por função)
-export type NeedReason = 'hole' | 'sold' | 'old' | 'slump' | 'upgrade';
+export type NeedReason = 'hole' | 'sold' | 'old' | 'slump' | 'upgrade' | 'elite'; // elite = proposta de org de elite no fim do split
 
 export interface IncomingOffer {
   id: string;

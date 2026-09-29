@@ -111,10 +111,19 @@ export function autoStatus(players: Pick<VPlayer, 'id' | 'ovr' | 'age'>[]): Reco
 }
 
 /** Status efetivo: o atribuído por você, senão o automático. */
+// [integração] quem está entre os 5 titulares da escalação tem piso de
+// "titular" no status AUTOMÁTICO (o OVR não rebaixa quem joga pra "rotação").
+// Status atribuído à mão continua valendo como está.
 export function statusesOf(dr: DressingRoomState, players: Pick<VPlayer, 'id' | 'ovr' | 'age'>[]): Record<string, SquadStatus> {
   const auto = autoStatus(players);
+  const starters = new Set(resolveLineup(players.map((p) => p.id), dr.lineup).starters);
   const out: Record<string, SquadStatus> = {};
-  for (const p of players) out[p.id] = dr.status[p.id] ?? auto[p.id] ?? 'starter';
+  for (const p of players) {
+    const manual = dr.status[p.id];
+    if (manual) { out[p.id] = manual; continue; }
+    const a = auto[p.id] ?? 'starter';
+    out[p.id] = starters.has(p.id) && STATUS_RANK[a] > STATUS_RANK.starter ? 'starter' : a;
+  }
   return out;
 }
 
@@ -515,7 +524,7 @@ export function resolveTeamMeeting(i: MeetingInput): MeetingResult {
         : (avgMorale < 50 || i.conflicts > 0 ? 'good' : avgMorale >= 75 ? 'bad' : 'ok');
   const base = i.kind === 'praise' ? { good: 5, ok: 2, bad: -2 }[fit]
     : i.kind === 'demand' ? { good: 4, ok: 1, bad: -4 }[fit]
-      : { good: 4, ok: 1, bad: 0 }[fit];
+      : { good: 2.5, ok: 1, bad: 0 }[fit]; // [integração] acalmar: ~+4 de média no melhor cenário (era +7)
   const leader = i.hierarchy.find((h) => h.tier === 'leader') ?? null;
   const lp = leader ? i.players.find((p) => p.id === leader.id) : undefined;
   const leaderMorale = leader ? i.morale[leader.id] ?? 70 : 70;
@@ -536,12 +545,16 @@ export function resolveTeamMeeting(i: MeetingInput): MeetingResult {
       if (p.fm === 'ambitious' || p.age <= YOUNG_AGE) d += 1;
       if (m >= 80) d = Math.min(d, 1); // complacência: quem já está no alto quase não sobe
     } else {
-      if (p.fm === 'temperamental') d += 2;
+      if (p.fm === 'temperamental') d += 1;
       if (p.fm === 'resolute') d = Math.round(d * 0.5);
     }
-    if (d > 0) d = d * mot * (leaderBacks ? 1.5 : leaderAgainst ? 0.5 : 1);
+    // acalmar pesa menos com o líder (×1,3) e tem teto de ±6 por jogador: é uma
+    // ação por split, não pode valer mais que um título
+    const backMul = i.kind === 'calm' ? 1.3 : 1.5;
+    if (d > 0) d = d * mot * (leaderBacks ? backMul : leaderAgainst ? 0.5 : 1);
     else if (d < 0 && leaderAgainst) d *= 1.3;
-    deltas[p.id] = Math.max(-8, Math.min(8, Math.round(d)));
+    const cap = i.kind === 'calm' ? 6 : 8;
+    deltas[p.id] = Math.max(-cap, Math.min(cap, Math.round(d)));
   }
   const vals = Object.values(deltas);
   const mean = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : 0;

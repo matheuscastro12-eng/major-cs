@@ -49,6 +49,7 @@ export const STRATEGY_HINT: Record<ClubStrategy, string> = {
 };
 export const NEED_LABEL: Record<NeedReason, string> = {
   hole: 'Falta a função', sold: 'Repor quem saiu', old: 'Veterano em queda', slump: 'Titular em má fase', upgrade: 'Subir o nível',
+  elite: 'Proposta de elite',
 };
 
 // ─── janela e roster lock ───────────────────────────────────────────────────
