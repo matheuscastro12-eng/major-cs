@@ -23,6 +23,7 @@ import type { UltCard } from '../src/engine/ultimate/cards.js';
 import { packById, rollPack, type PackDef } from '../src/engine/ultimate/packs.js';
 import { monthIndex } from '../src/engine/ultimate/promos.js';
 import { weeklyPackPool } from '../src/engine/ultimate/packPool.js';
+import { CardIndex } from '../src/engine/ultimate/cardIndex.js';
 import { ULT_CATALOG_MONTHS, ULT_SNAPSHOT_FIRST_MONTH, ULT_SNAPSHOT_LAST_MONTH, type SnapCard } from './ultimate-catalog.snapshot.js';
 import { applyUltTransaction, type SqlTag, type UltCardOp, type UltTx } from './ultimate-economy.js';
 
@@ -50,7 +51,7 @@ export function buildServerCatalog(now: Date = new Date()): SnapCard[] {
   const mi = monthIndex(now);
   if (!_catalog || _month !== mi) {
     _catalog = snapshotMonth(mi);
-    _index = new Map(_catalog.map((c) => [c.key, c]));
+    _index = new CardIndex(_catalog); // [realismo FM] apelido de raridade base (cardIndex.ts)
     _month = mi;
   }
   return _catalog;

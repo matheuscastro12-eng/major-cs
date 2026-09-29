@@ -14,7 +14,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRtpSave } from '../src/engine/rtp/createSave.ts';
+import { createRtpSave, RTP_SAVE_VERSION } from '../src/engine/rtp/createSave.ts';
 import {
   HOUSING_TIERS, housingDef, buyHousing, buyFamilyHome, invest, redeem,
   investRate, investYield, investWeekTick, lifestyleWeeklyMods,
@@ -210,7 +210,7 @@ test('migração v15→v16: backfill do lifestyle em save antigo', () => {
     store.set('rtm-rtp-v1', JSON.stringify(legacy));
     const loaded = loadRtp();
     assert.ok(loaded);
-    assert.equal(loaded._v, 16);
+    assert.equal(loaded._v, RTP_SAVE_VERSION); // a cadeia segue até a versão atual (v17: ocultos)
     assert.deepEqual(loaded.lifestyle, STARTER_LIFESTYLE());
     // round-trip: salvar de novo preserva
     assert.ok(saveRtp(loaded));

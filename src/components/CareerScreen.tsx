@@ -47,7 +47,7 @@ import { computeAllTeamForms, formOf, teamFormBand } from '../engine/career/team
 import { decideOffer, squadStrength, type DecideOfferCtx, type NegoReply } from '../engine/career/decideOffer';
 import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI';
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
-import { personalityChemBonus, personalityDevelopmentBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
+import { personalityChemBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
 import { closeMatchIdentity, type TeamIdentity } from '../engine/career/teamIdentity';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
@@ -408,7 +408,8 @@ function signingWithSnapshot(signing: Signing, resolved: ResolvedSigning): Signi
   const { from, basePlayer } = resolved;
   return {
     ...signing,
-    playerSnapshot: { ...basePlayer },
+    // [realismo FM] o snapshot guarda os atributos da base (fonte da verdade)
+    playerSnapshot: withAttrs(basePlayer),
     fromSnapshot: {
       id: from.id,
       team: from.team,
@@ -496,10 +497,13 @@ import {
   appendTrophy as appendCoachTrophy,
   type CoachStint,
 } from '../engine/coachCareer';
-import { tickAging, type AgingState } from '../engine/aging';
+import { retirementTick, evolveAttrs, type RetirementCandidate } from '../engine/attrs/progression';
+import { attrsOf, caFromOvr, withAttrs } from '../engine/attrs/model';
+import { activeAttrDelta, applyAttrDelta, attrDelta, normalizeAttrEvo, type AttrEvoMap } from '../engine/career/attrEvo';
+import { FACILITY_MAX_LEVEL } from '../engine/career/facilities';
 import { canScrimNow, runScrimVs, listScrimOpponents, type ScrimMatchReport } from '../engine/scrim';
 import { listJobOffers, applyForJob, rejectionReason, offerPitch, type JobOffer } from '../engine/career/jobHunt';
-import { playerAttributes } from '../engine/attributes';
+import { paRange } from '../engine/attrs/stars';
 import {
   generateScoutReports,
   scoutById,
@@ -641,20 +645,20 @@ function applyScoutingSplitTick(
 // Não muta o save. O `findSigning`/`effectiveAge` resolvem o player como
 // fonte de verdade dos dados (idade dinâmica via split count).
 function applyAgingTick(save: CareerSave, findSigning: (sig: Signing) => ResolvedSigning | null): Partial<CareerSave> {
-  const players: AgingState['players'] = [];
+  const players: RetirementCandidate[] = [];
   for (const sig of save.squad) {
     const f = findSigning(sig);
     if (!f) continue;
     const p = f.player;
     const age = effectiveAge(p, save.split, save.youthAge, save.youthDebut);
     if (age <= 0) continue;
-    players.push({ id: sig.playerId, nick: p.nick, ovr: playerOvr(p), age, role: p.role });
+    players.push({ id: sig.playerId, nick: p.nick, ovr: playerOvr(p), age });
   }
   if (players.length === 0) return {};
-  const result = tickAging({ split: save.split, retired: save.retired ?? [], players, applyDecline: false });
-  if (result.newRetirees.length === 0) return {};
-  const retired = [...(save.retired ?? []), ...result.newRetirees.map((r) => r.id)];
-  const lastRetirees = result.newRetirees.map((r) => ({ id: r.id, nick: r.nick, age: r.age }));
+  const newRetirees = retirementTick(players, save.retired ?? []);
+  if (newRetirees.length === 0) return {};
+  const retired = [...(save.retired ?? []), ...newRetirees.map((r) => r.id)];
+  const lastRetirees = newRetirees.map((r) => ({ id: r.id, nick: r.nick, age: r.age }));
 
   return { retired, lastRetirees };
 }
@@ -921,10 +925,10 @@ export function buildUserAcademyTeam(orgCountry: string, orgTag: string, split: 
 // não pode ficar nos dois lugares. O time perde o titular e promove um jovem da
 // base (OVR baixo, determinístico) pra manter 5 — o time fica realmente mais fraco.
 // O jovem tem nick/nome reais (não mais "TAG.jr1") pra parecer um prospecto de fato.
-function backfillPlayers(team: TeamSeason, n: number): Player[] {
+function backfillPlayers(team: TeamSeason, n: number, start = 0): Player[] {
   const region = macroRegionOf(team.country) ?? 'europe';
   const out: Player[] = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = start; i < start + n; i++) {
     const h = hashStr(`fill:${team.id}:${i}`);
     const base = 64 + (h % 9); // 64-72
     const ident = prospectIdentity(`fill:${team.id}:${i}`, region);
@@ -1254,6 +1258,10 @@ interface CareerSave {
   bootcampSplit?: number; // #35: último split em que o bootcamp foi usado (1x por split)
   splitStart?: { split: number; cash: number; ovr: Record<string, number> } | null; // #39: snapshot do INÍCIO do split (review de fechamento)
   evoAttrBias?: Record<string, Partial<Record<CoreStat, number>>>; // #22: viés acumulado do foco (+1/split, cap +4)
+  // [realismo FM] evolução POR ATRIBUTO do elenco: variação acumulada de cada um
+  // dos 28 atributos sobre a base (vale enquanto `evo` tiver a chave do jogador —
+  // ver engine/career/attrEvo.ts). Substitui o evo escalar + viés no findSigning.
+  attrEvo?: AttrEvoMap;
   satisfaction?: Record<string, number>; // #16: satisfação composta SUAVIZADA (5 fatores, tick no fechamento)
   careerStatsThru?: number; // último split já contabilizado (evita contar 2x no F5)
   careerStatsEvent?: string; // último evento contabilizado, no formato split:event
@@ -1386,6 +1394,7 @@ const emptySave = (): CareerSave => ({
   listedPrices: {},
   trainingFocusAttr: {},
   evoAttrBias: {},
+  attrEvo: {},
   playerPromises: {},
   watchlist: [],
   stints: {},
@@ -2161,7 +2170,8 @@ function applyMoves(teams: TeamSeason[], moves: Record<string, string> | undefin
   if (!moves || Object.keys(moves).length === 0) return teams;
   const all: { p: Player; orig: string }[] = [];
   for (const t of teams) for (const p of t.players) all.push({ p, orig: t.id });
-  const valid = new Set(teams.map((t) => t.id));
+  // time extinto (defunct) não recebe ninguém: o jogador volta ao time da base
+  const valid = new Set(teams.filter((t) => !t.defunct).map((t) => t.id));
   const teamOf = (pid: string, orig: string) => {
     const m = moves[pid];
     return m && valid.has(m) ? m : orig;
@@ -2269,7 +2279,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     'lastTalkAt', 'pairChem', 'extraOnTeam', 'academyPlayed', 'rivalries',
     'fatigue', 'facilities', 'mapStats', 'aiDrift', 'careerStatsYearStart',
     'recentRatings',
-    'stints',
+    'stints', 'attrEvo',
   ].forEach(defaultInvalidRecord);
   [
     'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
@@ -2285,6 +2295,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
   const s = record as unknown as CareerSave;
   const merged = { ...emptySave(), ...s, ...hydrateCareerDepth(record) };
   merged.split = Math.max(1, Math.floor(merged.split));
+  merged.attrEvo = normalizeAttrEvo(merged.attrEvo);
   merged.eventInSplit = Math.max(1, Math.min(EVENTS_PER_SPLIT, Math.floor(merged.eventInSplit ?? 1)));
   merged.tier = Math.max(1, Math.min(3, Math.floor(merged.tier)));
   merged.board = Math.max(0, Math.min(100, merged.board));
@@ -3125,7 +3136,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     () => {
       const skip = new Set(save.squad.map((s) => s.playerId));
       return applyAiAging(applyMoves(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves), save.split, skip)
-        .filter((t) => t.id !== '__free__')
+        .filter((t) => t.id !== '__free__' && (!t.defunct || t.id === save.takeoverId))
         // times com <5 jogadores (Legacy/Galorys/RED Canids no dataset atual) somem
         // do circuito porque a UI/engine assume 5 titulares. Antes a gente filtrava
         // (= 'legacy sumiu'); agora completa o line com prospects sintéticos do
@@ -3167,7 +3178,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         if (squadIds.size === 0) return t;
         const kept = t.players.filter((p) => !squadIds.has(p.id));
         if (kept.length === t.players.length) return t;
-        const fill = backfillPlayers(t, t.players.length - kept.length);
+        // continua a numeração dos jovens que o currentEra já pôs (senão o
+        // `${t.id}__aca0` aparece duas vezes no mesmo time)
+        const acaUsed = t.players.filter((p) => p.id.startsWith(`${t.id}__aca`)).length;
+        const fill = backfillPlayers(t, t.players.length - kept.length, acaUsed);
         return { ...t, players: [...kept, ...fill] };
       });
   }, [currentEra, save.takeoverId, save.squad]);
@@ -3440,6 +3454,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // e o evo ficam calculados em cima da MESMA base que o `currentEra` enxerga.
     player = applyBo3PlayerEdit(player, bo3Edits);
     const basePlayer = player;
+    // [realismo FM] evolução POR ATRIBUTO: atributos da base + variação acumulada;
+    // os 5 números (e o OVR, valor, salário) saem dos atributos evoluídos.
+    const attrD = activeAttrDelta(save.attrEvo, save.evo, player.id);
+    if (attrD) return { player: withAttrs(basePlayer, applyAttrDelta(attrsOf(basePlayer), attrD)), from, basePlayer };
     const d = save.evo?.[player.id] ?? signingDrift(player, save.split, save.youthDebut);
     // #22: viés do FOCO DE TREINO — o atributo trabalhado abre distância do resto.
     const bias = save.evoAttrBias?.[player.id];
@@ -3527,7 +3545,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // '__custom__' = coach criado no Custom Roster Builder (Vitalícia)
     const coach = s.coachFromId === '__custom__' && s.customCoach
       ? s.customCoach
-      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
+      : currentEra.find((t) => t.id === s.coachFromId)?.coach ?? CS2_REAL_2026.find((t) => t.id === s.coachFromId)?.coach ?? ROOKIE_COACH;
     // TAKEOVER herda o entrosamento real da org (o 78 do buildUserTeam é a
     // premissa do draft). Sem isso, assumir a Yawara (teamwork 60) já a
     // promovia no ranking sem jogar nada — o teamwork é a semente do VRS.
@@ -3635,29 +3653,32 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.squad, save.evo, save.difficulty]);
 
-  // evolução da janela: cada jogador do elenco sobe/cai conforme a fase da
-  // carreira (em ascensão / no auge / em declínio). Roda ao fechar o split.
-  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo' | 'dynamicPotBonus' | 'evoAttrBias'> => {
+  // evolução da janela: cada jogador do elenco evolui ATRIBUTO A ATRIBUTO
+  // (engine/attrs/progression.ts): a idade pesa por classe (reflexo cai cedo,
+  // leitura de jogo cresce até ~30), o treino (foco no jogador, foco no grupo,
+  // estrutura do CT), a rodagem no split e o profissionalismo (oculto) aceleram,
+  // e o teto é o PA (potencial da idade + furos de teto por performance).
+  // Valor e salário acompanham os atributos. Roda ao fechar o split.
+  const evolveSquad = (s: CareerSave): Pick<CareerSave, 'evo' | 'lastEvo' | 'dynamicPotBonus' | 'evoAttrBias' | 'attrEvo'> => {
     // só jogadores do elenco ATUAL carregam evolução: quem foi vendido volta
     // aos atributos base (evita recomprar barato um jogador ainda evoluído)
     const evo: Record<string, number> = {};
+    const attrEvo: AttrEvoMap = {};
     const lastEvo: CareerSave['lastEvo'] = [];
     const dynamicPotBonus: Record<string, number> = { ...(s.dynamicPotBonus ?? {}) };
     const evoAttrBias: CareerSave['evoAttrBias'] = { ...(s.evoAttrBias ?? {}) };
+    const trainingLevel = normalizeFacilities(s.facilities).training;
     for (const sig of s.squad) {
       const f = findSigning(sig);
       if (!f) continue;
-      // recém-contratado sem evo herda o drift da IA (mesmo OVR do mercado).
-      // Usa o BASE (não-envelhecido) + o drift acumulado; f.player já vem driftado,
-      // então somar prev de novo contava o envelhecimento em dobro.
-      const prev = s.evo?.[sig.playerId] ?? signingDrift(f.basePlayer, s.split, s.youthDebut);
-      const ovr = playerOvr(f.basePlayer) + prev; // OVR efetivo atual (base + evolução)
+      // f.player já é o jogador ATUAL: base + evolução por atributo (ou, antes da
+      // 1ª virada no sistema novo, base + evo escalar/drift herdado do mercado).
+      const current = attrsOf(f.player);
+      const ovr = playerOvr(f.player);
       const age = effectiveAge(f.basePlayer, s.split, s.youthAge, s.youthDebut);
-      // teto é calculado pela idade de ESTREIA (igual aiAttrDrift faz pra IA). Usar a
+      // teto é calculado pela idade de ESTREIA (igual driftFrom faz pra IA). Usar a
       // idade CORRENTE encolhia o teto a cada virada de bloco etário (21→22, 22→23...)
-      // e travava o jogador "no teto" pra sempre. IMPORTANTE: baseAge NÃO conhece
-      // regen/youthDebut (cai no fallback 25-29), o que dava room≈0 e travava regens
-      // e prospectos contratados no OVR de mercado — potBaseAge resolve a idade de
+      // e travava o jogador "no teto" pra sempre. potBaseAge resolve a idade de
       // estreia correta pra cada tipo (regen id / youthDebut / dataset).
       const baseAgeForPot = potBaseAge(f.basePlayer, s.youthAge, s.youthDebut);
       const potBase = playerPotentialOvr(f.basePlayer, baseAgeForPot);
@@ -3676,31 +3697,34 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const breakthrough = gained > 0
         ? { from: potentialTier(Math.min(99, potBase + bonus0)), to: potentialTier(pot) }
         : undefined;
-      const atCeiling = ovr >= pot;
-      let d = evoDelta(sig.playerId, s.split, age, atCeiling);
-      // foco de treino: o jogador escolhido desenvolve mais rápido. Jovem/auge
-      // ganha +1 (não ultrapassa o potencial); veterano treina pra perder menos.
-      const focused = s.trainingFocus === sig.playerId;
-      if (focused) {
-        if (!atCeiling) d += 1;
-        else if (d < 0) d += 1; // mitiga o declínio do veterano
-      }
-      if (!atCeiling && d > 0) d += developmentBonus(sig.playerId, s.split, normalizeFacilities(s.facilities).training);
-      if (!atCeiling && d > 0) d += personalityDevelopmentBonus(sig.playerId, s.split, age);
-      // CONVITE: encarar um tier acima acelera os jovens (rodagem contra os grandes)
-      if (s.inviteAccepted && !atCeiling && d > 0 && age <= 22) d += 2;
-      if (d > 0) d = Math.min(d, Math.max(0, pot - ovr));
-      const total = prev + d;
-      if (total !== 0) evo[sig.playerId] = total;
-      // #22: FOCO DE TREINO — split de desenvolvimento com foco definido acumula
-      // +1 no atributo escolhido (cap no engine). Veterano em declínio não especializa.
-      const focusAttr = s.trainingFocusAttr?.[sig.playerId];
-      if (focusAttr && d > 0 && !atCeiling) {
+      // multiplicadores de crescimento: estrutura de treino do CT, prodígio e o
+      // CONVITE (encarar um tier acima acelera os jovens — rodagem contra os grandes)
+      let growthMul = 1 + 0.35 * (trainingLevel / FACILITY_MAX_LEVEL);
+      if (playerPersonality(sig.playerId) === 'prodigy' && age <= 23) growthMul *= 1.2;
+      if (s.inviteAccepted && age <= 22) growthMul *= 1.5;
+      // rodagem: mapas jogados neste split (sem histórico → rodagem normal)
+      const lines = s.seasonStats?.[`user__${sig.playerId}`];
+      const mapsPlayed = lines ? lines.filter((l) => l.split === s.split).reduce((a, l) => a + l.maps, 0) : undefined;
+      const focusAttr = s.trainingFocusAttr?.[sig.playerId] ?? null;
+      const r = evolveAttrs({ ...current, pa: Math.max(current.ca, caFromOvr(pot)) }, {
+        playerId: sig.playerId, split: s.split, age, role: f.player.role,
+        mapsPlayed, growthMul,
+        focusPlayer: s.trainingFocus === sig.playerId,
+        focusGroup: focusAttr,
+      });
+      const d = r.ovrAfter - r.ovrBefore;
+      // atributos evoluídos guardados como VARIAÇÃO sobre a base (edições da base
+      // e a base real de atributos continuam chegando ao jogador do elenco)
+      attrEvo[sig.playerId] = attrDelta(r.attrs.a, attrsOf(f.basePlayer).a);
+      // evo segue gravado (OVR atual − OVR base): mercado, prêmios e telas leem
+      evo[sig.playerId] = r.ovrAfter - playerOvr(f.basePlayer);
+      // #22: FOCO DE TREINO — marca o viés do atributo trabalhado (dica da UI)
+      if (focusAttr && d > 0 && !r.atCeiling) {
         evoAttrBias[sig.playerId] = applyFocusBias(evoAttrBias[sig.playerId], focusAttr);
       }
       lastEvo.push({ nick: f.player.nick, delta: d, phase: playerPhase(sig.playerId, age), ...(breakthrough ? { breakthrough } : {}) });
     }
-    return { evo, lastEvo, dynamicPotBonus, evoAttrBias };
+    return { evo, lastEvo, dynamicPotBonus, evoAttrBias, attrEvo };
   };
 
 
@@ -6299,6 +6323,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               consistency: p.consistency,
               awp: p.awp,
               igl: p.igl,
+              attrs: p.attrs, // [realismo FM] mantém os atributos (evolução do elenco)
             };
           }
         }
@@ -6835,15 +6860,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 : undefined
             }
             retired={(save.retired ?? []).includes(oid)}
-            attributes={playerAttributes({
-              id: oid,
-              aim: p.aim,
-              clutch: p.clutch,
-              consistency: p.consistency,
-              awp: p.awp,
-              igl: p.igl,
-              role: (save.roles?.[oid] ?? p.role) as Role,
-            })}
+            // [realismo FM] os atributos são a fonte da verdade (base + evolução)
+            attributes={attrsOf({ ...p, id: oid, role: (save.roles?.[oid] ?? p.role) as Role }).a}
+            ca={caFromOvr(ovr)}
+            paRange={paRange(
+              Math.max(caFromOvr(ovr), caFromOvr(pot)),
+              caFromOvr(ovr),
+              isAcademyEntry || save.squad.some((sg) => sg.playerId === oid) || (watchOf(save.watchlist, oid)?.revealLevel ?? 0) >= 4
+                ? 'full'
+                : (watchOf(save.watchlist, oid)?.revealLevel ?? 0) >= 2 ? 'scouted' : 'rumor',
+              oid,
+            )}
             tab={ppTab}
             onTab={(t) => setPpTabFor({ id: playerRouteId, tab: t })}
           />

@@ -13,6 +13,7 @@
 import type { Role, Playstyle, TPlayer, Tournament } from '../../types';
 import type { League as CareerLeagueGSL } from '../league';
 import type { AttrKey } from '../attributes';
+import type { HiddenKey } from '../attrs/model';
 import type { PlayerPersonality } from '../career/personality';
 import type { MacroRegion } from '../../data/regions';
 import type { RtpIconName } from './icons';
@@ -38,6 +39,9 @@ export interface ProPlayer {
   form: number;               // 0.85..1.15 — fase recente
   ovr: number;                // cache derivado de attrs+role
   progression: PlayerProgression; // RTP v8 — nível/XP, perks e traits (identidade RPG)
+  // [realismo FM] atributos OCULTOS (pressão, temperamento, profissionalismo…):
+  // nunca aparecem como número; gravados no save (v17) pra serem estáveis.
+  hidden?: Record<HiddenKey, number>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

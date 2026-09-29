@@ -78,12 +78,14 @@ test('postura: determinística, a Leitura revela e o % mostrado é o limiar do r
 });
 
 // Dominância "com folga": A domina B quando não perde em nada e ganha em algo
-// por mais que o ruído do Monte Carlo (200 séries: ~±3pp de vitória). O bug
+// por mais que o ruído do Monte Carlo (600 séries: ~±2pp de vitória). O bug
 // antigo era de 20pp e 0,09 de rating — muito acima da folga.
 const MARGIN = { win: 0.04, rating: 0.02 };
 
 test('monte carlo: nenhum estilo domina outro; ler e contra-atacar rende mais', () => {
-  const r = runStyleMc(200, 0.7);
+  // 600 séries: com 200 o sorteio dos adversários do Diário (que muda a cada
+  // atualização de elenco) deixava o ruído do Monte Carlo no limite da folga
+  const r = runStyleMc(600, 0.7);
   const fmt = (k: string, v: StratStats) => `${k} ${(v.win * 100).toFixed(1)}%/${v.rating.toFixed(3)}`;
   const table = Object.entries(r).map(([k, v]) => fmt(k, v)).join('  ');
   for (const a of STYLES) {

@@ -1245,3 +1245,22 @@
   .pp-fm-kpi dd { font-size: var(--fs-6); }
   .pp-fm-attrs { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
 }
+
+/* [realismo FM] CA/PA em estrelas (relatório de olheiro). Cheia = garantido;
+   faixa translúcida = incerteza do potencial; vazia = linha. */
+.capa { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; margin-top: var(--sp-2); }
+.capa-item { display: inline-flex; align-items: center; gap: 8px; }
+.capa-label { color: var(--c-ink-faint); font-size: var(--fs-2); font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.capa-stars { display: inline-flex; gap: 1px; font-size: var(--fs-4); line-height: 1; }
+.capa-star {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    var(--c-brand) 0 var(--solid),
+    color-mix(in srgb, var(--c-brand) 38%, transparent) var(--solid) var(--range),
+    var(--c-line-strong) var(--range) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.capa-range { color: var(--c-ink-dim); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }

@@ -1,3 +1,4 @@
+import { DRAFT_SESSION_VERSION, migrateDraftSession, type DraftSession } from './state/draftSession';
 import { hasIntent } from './state/purchaseIntent';
 import { captureDuelInviteFromUrl, hasDuelInvite } from './state/duelInvite';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
@@ -480,7 +481,7 @@ export default function App() {
   useEffect(() => {
     if (!tournament) { reportLocalSave('draft', null); return; } // campanha encerrada: sem aviso pendurado
     const write = () => {
-      const w = writeWithQuotaRescue(SESSION_KEY, JSON.stringify({ draft, tournament, pickem, career }));
+      const w = writeWithQuotaRescue(SESSION_KEY, JSON.stringify({ _v: DRAFT_SESSION_VERSION, draft, tournament, pickem, career }));
       reportLocalSave('draft', w.ok ? null : (w.error instanceof Error ? w.error.message : 'quota'));
     };
     write();
@@ -494,12 +495,9 @@ export default function App() {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return null;
-      const s = JSON.parse(raw) as {
-        draft: DraftState | null;
-        tournament: Tournament | null;
-        pickem?: PickemState;
-        career?: CareerState;
-      };
+      const parsed = JSON.parse(raw) as DraftSession<PickemState, CareerState>;
+      // [realismo FM] sessão v2: o seu time guarda os atributos (idempotente)
+      const s = parsed?.tournament ? migrateDraftSession(parsed) : null;
       return s?.tournament ? s : null;
     } catch {
       return null;

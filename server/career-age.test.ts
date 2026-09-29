@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { tickAging } from '../src/engine/aging.js';
+import { retirementTick } from '../src/engine/attrs/progression.js';
 import {
   academyAgeAfterSplit,
   ageFromCareerStart,
@@ -39,16 +39,13 @@ test('promoted academy player keeps debut age instead of being rebased to split 
   assert.equal(ageFromCareerStart(legacyYouthBaseAgeAtPromotion(18, 34), 34), 18);
 });
 
-test('aging tick can run retirement checks without applying a second OVR decline', () => {
-  const result = tickAging({
-    split: 12,
-    applyDecline: false,
-    players: [
-      { id: 'vet', nick: 'Vet', age: 34, ovr: 68, role: 'Rifler' },
-      { id: 'star', nick: 'Star', age: 34, ovr: 90, role: 'AWP' },
-    ],
-  });
+test('retirement tick (progression.ts, successor of aging.ts) keeps the retirement rules', () => {
+  const newRetirees = retirementTick([
+    { id: 'vet', nick: 'Vet', age: 34, ovr: 68 },
+    { id: 'star', nick: 'Star', age: 34, ovr: 90 },
+    { id: 'old', nick: 'Old', age: 35, ovr: 75 },
+    { id: 'young', nick: 'Young', age: 29, ovr: 60 },
+  ], ['old']);
 
-  assert.deepEqual(result.ovrDeltas, {});
-  assert.deepEqual(result.newRetirees, [{ id: 'vet', nick: 'Vet', age: 34 }]);
+  assert.deepEqual(newRetirees, [{ id: 'vet', nick: 'Vet', age: 34 }]);
 });

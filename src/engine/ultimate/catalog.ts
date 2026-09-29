@@ -6,8 +6,9 @@
 import type { TeamSeason } from '../../types';
 import { appendSpecials, buildCatalog, type SpecialSpec, type UltCard } from './cards';
 import { iconCards } from './icons';
-import { promoSpecsThrough } from './promos';
-import { totwSpecsThroughMonth } from './totw';
+import { promoSpecsThrough, PROMO_BOOST } from './promos';
+import { totwSpecsThroughMonth, TOTW_BOOST } from './totw';
+import { LEGACY_SPECIALS } from './legacySpecials';
 
 export const TOTS_SIZE = 11;
 export const TOTS_BOOST = 2;
@@ -35,5 +36,20 @@ export function majorSpecs(dataset: TeamSeason[]): SpecialSpec[] {
 export function buildFullCatalog(dataset: TeamSeason[], mi: number): { base: UltCard[]; catalog: UltCard[] } {
   const base = buildCatalog(dataset);
   const specials = [...totsSpecs(base), ...majorSpecs(dataset), ...promoSpecsThrough(base, mi), ...totwSpecsThroughMonth(base, mi)];
-  return { base, catalog: [...appendSpecials(dataset, base, specials), ...iconCards()] };
+  return { base, catalog: [...appendSpecials(dataset, base, [...specials, ...legacySpecialsFor(specials, mi)]), ...iconCards()] };
+}
+
+// Especiais que JÁ existiam em produção naquele mês e que o ranking atual não
+// escolheria mais (a base real de atributos mexe no OVR): voltam com o boost da
+// raridade — carta da coleção nunca some do catálogo.
+const LEGACY_BOOST = { tots: TOTS_BOOST, major: MAJOR_BOOST, promo: PROMO_BOOST, totw: TOTW_BOOST } as const;
+export function legacySpecialsFor(specials: SpecialSpec[], mi: number): SpecialSpec[] {
+  const have = new Set(specials.map((s) => `${s.playerId}:${s.rarity}`));
+  const out: SpecialSpec[] = [];
+  for (const [playerId, rarity, first] of LEGACY_SPECIALS) {
+    if (first > mi || have.has(`${playerId}:${rarity}`)) continue;
+    have.add(`${playerId}:${rarity}`);
+    out.push({ playerId, rarity, ovrBoost: LEGACY_BOOST[rarity] });
+  }
+  return out;
 }

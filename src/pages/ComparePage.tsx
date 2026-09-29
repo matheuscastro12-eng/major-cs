@@ -17,9 +17,9 @@ import {
   MENTAL_KEYS,
   PHYSICAL_KEYS,
   attrColor,
-  playerAttributes,
   type AttrKey,
 } from '../engine/attributes';
+import { attrsOf } from '../engine/attrs/model';
 import { playerOvr } from '../engine/ratings';
 import {
   subRoleStars,
@@ -38,7 +38,7 @@ export function ComparePage({ players, onClose }: Props) {
 
   // Computa atributos de cada player UMA vez
   const allAttrs = useMemo(
-    () => visible.map((p) => ({ player: p, attrs: playerAttributes(p) })),
+    () => visible.map((p) => ({ player: p, attrs: attrsOf(p).a })), // [realismo FM] fonte da verdade
     [visible],
   );
 
