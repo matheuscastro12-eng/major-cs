@@ -2882,7 +2882,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       ...(sc.leaked ? pushNews(save, [{
         id: `${save.split}:leak:${oppId}:${save.scrimsThisSplit ?? 0}`, split: save.split, icon: '👀', tone: 'bad', cat: 'scout',
         title: `${ct('Scrim vazou:')} ${report.oppTag} ${ct('leu seus defaults')}`,
-        body: ct('O sparring é do seu circuito e saiu da scrim com anotações sobre o seu time. Contra eles, a preparação rende menos nas próximas semanas.'),
+        body: ct('O sparring é do seu circuito e saiu da scrim com anotações sobre o seu time. Eles chegam com anti-strat contra o seu plano de jogo nas próximas semanas.'),
       }]) : {}),
     });
     setScrimReport(report);
