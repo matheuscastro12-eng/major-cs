@@ -11,7 +11,9 @@ import {
 } from '../src/engine/mundo/juventude.ts';
 import { EMPTY_MUNDO, ensureYearIntake, withNewgens, retireeStaffSources, mundoOf } from '../src/engine/mundo/juventudeMundo.ts';
 import { legacyFromAttrs, ovrFromLegacy } from '../src/engine/attrs/model.ts';
-import { evoDelta, aiRetireAge, buildAiWorld, aiAgeOf } from '../src/engine/career/aiWorld.ts';
+import { evoDelta, aiRetireAge, buildAiWorld, aiAgeOf, aiSlotPlayer, regenYouth, REGEN_DEBUT_CAP, REGEN_DEBUT_FLOOR } from '../src/engine/career/aiWorld.ts';
+import { parseRegenPlayerId } from '../src/engine/career/signings.ts';
+import { playerOvr } from '../src/engine/ratings.ts';
 import { migrateMundo } from '../src/engine/mundo/mundoMigration.ts';
 import { CS2_REAL_2026 } from '../src/data/bo3.ts';
 import { simulateMundo } from './measure-mundo-10-splits.mts';
@@ -132,6 +134,37 @@ test('curva da IA: jovem sobe, pico ~22–26 estável, declínio depois dos 28',
   let star = 0, low = 0;
   for (let i = 0; i < 500; i++) { star += aiRetireAge(`r${i}`, 88); low += aiRetireAge(`r${i}`, 70); }
   assert.ok(star / 500 > low / 500 + 2);
+});
+
+test('substituto da vaga: estreia pelo OVR ATUAL de quem sai, com teto, e se refaz pelo id', () => {
+  const NONE = new Set<string>();
+  let checked = 0, stars = 0;
+  for (const team of CS2_REAL_2026.filter((t) => t.players.length >= 5).slice(0, 60)) {
+    team.players.slice(0, 5).forEach((orig, slot) => {
+      // acha a 1ª troca da vaga (split em que o titular vira regen)
+      let prev = aiSlotPlayer(orig, team, slot, 1, NONE);
+      for (let split = 2; split <= 30; split++) {
+        const cur = aiSlotPlayer(orig, team, slot, split, NONE);
+        const rg = parseRegenPlayerId(cur.id);
+        if (rg && rg.debut === split && cur.id !== prev.id) {
+          const leaving = playerOvr(prev);
+          const debutOvr = playerOvr(cur);
+          assert.ok(debutOvr <= REGEN_DEBUT_CAP + 1, `${cur.id}: estreia ${debutOvr} acima do teto`);
+          assert.ok(debutOvr >= REGEN_DEBUT_FLOOR - 1, `${cur.id}: estreia ${debutOvr} abaixo do piso`);
+          assert.ok(debutOvr < leaving || debutOvr <= REGEN_DEBUT_FLOOR + 1, `${cur.id}: estreia ${debutOvr} ≥ quem saiu (${leaving})`);
+          // identidade por índice: o id refaz exatamente o mesmo jogador (Carreira: contratar um regen)
+          const again = regenYouth(team, rg.slot, rg.generation, rg.debut, rg.ageAtDebut, orig);
+          assert.deepEqual(again, cur, `${cur.id}: regen não se refaz pelo id`);
+          if (playerOvr(orig) >= 88) stars++;
+          checked++;
+          break;
+        }
+        prev = cur;
+      }
+    });
+  }
+  assert.ok(checked > 40, `vagas renovadas medidas: ${checked}`);
+  assert.ok(stars > 0, 'alguma vaga de estrela renovada');
 });
 
 test('MUNDO EQUILIBRADO: top 20 estável (±1) em 10 splits, renovação de nomes, sem colapso, save enxuto', () => {

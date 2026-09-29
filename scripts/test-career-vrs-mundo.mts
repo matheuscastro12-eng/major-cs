@@ -45,9 +45,13 @@ test('o azarão NÃO vira #1: time do fundo da força nunca lidera', () => {
 test('recência: parar de jogar derruba — resultado velho perde peso até sumir', () => {
   const lead = order()[0];
   const now = W.mundo.vrsAt!;
-  const later = computeVrs(W.mundo.results, now + 3).entries[lead]?.points ?? 0;
+  // os pontos são relativos ao líder (normalização): se o MUNDO INTEIRO para, o
+  // líder segue líder — o que cai é o valor absoluto do que ele ganhou (bounty e
+  // rede, já com o peso da idade)
+  const abs = (t: number) => { const e = computeVrs(W.mundo.results, t).entries[lead]; return e ? e.raw.prize + e.raw.network : 0; };
+  const later = abs(now + 3);
   const muchLater = computeVrs(W.mundo.results, now + 9).entries[lead]?.points ?? 0;
-  assert.ok(later < W.mundo.vrs[lead].points, 'sem jogar, os pontos caem');
+  assert.ok(later < abs(now), 'sem jogar, o valor dos resultados cai');
   assert.equal(muchLater, 0, 'fora da janela o resultado não conta');
 });
 
