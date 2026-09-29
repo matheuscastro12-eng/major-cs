@@ -25,6 +25,9 @@ import {
 import { retiredStaffSources } from '../../engine/gestao/staffData';
 import { retireeStaffSources } from '../../engine/mundo/juventudeMundo';
 import type { MundoJuv } from '../../engine/mundo/juventude';
+import type { CustomDatabase } from '../../engine/mundo/model';
+import { applyCustomDatabase, resolveCareerDatabase } from '../../engine/mundo/editor';
+import { CS2_REAL_2026 } from '../../data/bo3';
 import { formatMoney } from '../../engine/ratings';
 import { ct } from '../../state/career-i18n';
 import '../../styles/staff.css';
@@ -131,10 +134,14 @@ export function StaffTab({ save, sponsorIncome, update }: Props) {
   const cap = staffWageCap({ tier: save.tier, board: save.board, sponsorIncome });
   const expiring = members.filter((m) => staffContractLeft(m, split) <= 1 && m.role !== 'headCoach');
 
+  // [fase 4 · editor] base da Carreira (a customizada congelada no save, se houver)
+  const dbSnap = (save.mundo as { database?: CustomDatabase | null } | undefined)?.database ?? null;
+  const dbId = (save.mundo as { databaseId?: string | null } | undefined)?.databaseId ?? null;
+  const careerBase = useMemo(() => applyCustomDatabase(CS2_REAL_2026, resolveCareerDatabase({ databaseId: dbId, database: dbSnap }, CS2_REAL_2026).db), [dbId, dbSnap]);
   const market = useMemo(
     // [fase 4 · juventude] quem se aposentou no mundo e virou comissão entra no pool
-    () => staffMarket({ split, region: save.region, tier: save.tier, retired: [...retiredStaffSources(), ...retireeStaffSources(save.mundo as MundoJuv | undefined)], exclude: members.map((m) => m.id) }),
-    [split, save.region, save.tier, members, save.mundo],
+    () => staffMarket({ split, region: save.region, tier: save.tier, retired: [...retiredStaffSources(), ...retireeStaffSources(save.mundo as MundoJuv | undefined, careerBase)], exclude: members.map((m) => m.id) }),
+    [split, save.region, save.tier, members, save.mundo, careerBase],
   );
   const shownMarket = market
     .filter((c) => roleFilter === 'all' || c.role === roleFilter)

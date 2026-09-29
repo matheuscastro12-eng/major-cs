@@ -52,11 +52,15 @@ export function withNewgens(base: TeamSeason[], mundo: MundoJuv | null | undefin
   return found ? out : base;
 }
 
-/** Ids que o mercado da IA pode mover: jogadores da base + jovens do mundo. */
-export function movableIdsWith(mundo: MundoJuv | null | undefined): ReadonlySet<string> {
+/**
+ * Ids que o mercado da IA pode mover: jogadores da base + jovens do mundo.
+ * `base` = os movíveis da base da Carreira (com base customizada do editor, os
+ * jogadores dela; padrão: a base oficial).
+ */
+export function movableIdsWith(mundo: MundoJuv | null | undefined, base: ReadonlySet<string> = BASE_PLAYER_IDS): ReadonlySet<string> {
   const ids = Object.keys(mundo?.newgens ?? {});
-  if (ids.length === 0) return BASE_PLAYER_IDS;
-  return new Set([...BASE_PLAYER_IDS, ...ids]);
+  if (ids.length === 0) return base;
+  return new Set([...base, ...ids]);
 }
 
 /**
@@ -143,9 +147,10 @@ export function worldRetirements(a: Omit<AiWorldArgs, 'split'> & { split: number
 }
 
 /** Aposentados que viraram comissão → candidatos do mercado de staff. */
-export function retireeStaffSources(mundo: MundoJuv | null | undefined): RetiredSource[] {
+// `base` = base da Carreira (com a customizada do editor); padrão: a oficial.
+export function retireeStaffSources(mundo: MundoJuv | null | undefined, base: TeamSeason[] = CS2_REAL_2026): RetiredSource[] {
   const byId = new Map<string, Player>();
-  for (const t of CS2_REAL_2026) for (const p of t.players) byId.set(p.id, p);
+  for (const t of base) for (const p of t.players) byId.set(p.id, p);
   return (mundo?.retirees ?? []).filter((r) => r.staffRole).map((r) => {
     const p = byId.get(r.id);
     const a = attrsOf(p ?? { id: r.id, nick: r.nick, name: r.nick, country: r.country, role: r.role, aim: r.ovr, awp: r.ovr - 10, igl: r.ovr - 8, clutch: r.ovr - 2, consistency: r.ovr - 1, age: r.age }).a;
@@ -158,7 +163,7 @@ export interface JuventudeTickArgs {
   mundo: MundoJuv;
   /** split que FECHA */
   split: number;
-  /** base do mundo (CS2_REAL_2026 com as edições do admin), SEM os jovens */
+  /** base da Carreira (oficial + edições do admin + base customizada), SEM os jovens */
   base: TeamSeason[];
   moves?: Record<string, string>;
   arrivals?: Record<string, number>;

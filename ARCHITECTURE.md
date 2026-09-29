@@ -110,6 +110,11 @@ tabela acima.
 Realismo FM fase 4 (o mundo): Carreira v30 grava o bloco `mundo` (calendário do circuito,
 resultados das outras cenas, VRS, jovens gerados e a base usada) — contrato em
 `src/engine/mundo/model.ts`. A base customizada do editor vive fora do save.
+Editor de base (frente L): as bases customizadas ficam em `rtm-db-custom-v1`
+(`src/state/customDb.ts`, até 5 bases de até 256 KB, lidas sempre validadas);
+a Carreira nova grava `mundo.databaseId` e uma cópia congelada em `mundo.database`
+(`src/engine/mundo/editor.ts` → `resolveCareerDatabase`). Tela: `/editor`
+(`src/components/editor/`).
 
 Realismo FM fase 3 (pessoas e mercado): Carreira v29 grava o bloco `clube` (vestiário com
 status/banco/escalação, contratos completos, negociações em rodadas e mercado da IA) —

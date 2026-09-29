@@ -67,3 +67,51 @@ O que já existe e esta fase APROFUNDA E UNIFICA (não duplique — evolua): `da
 - Tamanho no save: bloco de jovens 13,6 KB no ano 1, **41,6 KB após 10 splits** (164 jovens vivos, 36 contratados), 92 KB após 30 splits (349 vivos, 207 contratados; teto de 150 jovens sem clube). Save real de teste: 72 KB (split 1) / 118 KB (split 10).
 - Calibração (`test-engine-calibration`) verde; neutralidade (`measure-neutralidade.mts 150`): 29,4% → 29,9% (+0,4 ± 0,8 pp).
 - Efeito na dificuldade: a IA não infla mais ≈ +4 de OVR no top 20 ao longo da Carreira — splits avançados ficam um pouco menos duros que antes (era o bug). Jovens do SEU elenco com OVR alto também sobem menos (mesma régua de potencial da IA); prospectos (OVR ≤ 70) mantêm o espaço inteiro.
+
+### Frente L (editor), branch `fase4/editor`
+- `CustomDatabase.playerEdits`: `Record<string, CustomPlayerEdit>` (era `Partial<Player>`). `CustomPlayerEdit` =
+  `nick`, `name`, `country`, `role`, `role2` (`null` remove), `age`, `attrs` (PlayerAttrs completos). Os 5 números
+  legados nunca são editados direto: saem dos atributos (`withAttrs`), CA sempre recalculado com `caFromAttrs`.
+- `CustomDatabase.teamEdits`: `Record<string, CustomTeamEdit>` (era `Partial<TeamSeason>`). `CustomTeamEdit` =
+  `team`, `tag`, `country` (define a região via `macroRegionOf`), `colors`, `teamwork`, `coach`, `roster` (ids, na
+  ordem: 5 primeiros titulares). O elenco dos times NOVOS também mora em `teamEdits[id].roster`; em `addedTeams`
+  o `players` fica vazio. Quem sai de um elenco sem destino vira free agent (`__free__`).
+- `CustomDatabase.updatedAt?` (opcional). Ids novos: `cdb_*` (base), `cdb_p_*` (jogador), `cdb_t_*` (time).
+- `MundoState.database?: CustomDatabase | null` (opcional): cópia CONGELADA da base escolhida na criação da
+  Carreira. `mundo.databaseId` continua sendo a fonte de qual base foi usada.
+- `CareerSave.mundo?: MundoState` declarado em `CareerScreen.tsx` (as outras frentes leem daí).
+- Para as outras frentes: a base da Carreira agora é `rawBase`/`editedBase` no `CareerScreen` (oficial ⇒ os
+  mesmos objetos de antes). Quem precisar da lista de times/jogadores da base dentro da Carreira deve usar essas,
+  não `CS2_REAL_2026` direto (senão times/jogadores novos da base customizada não aparecem). Jogador movível pelo
+  mercado da IA = `movableIds` (era `BASE_PLAYER_IDS`).
+
+## Frente L (editor): o que ficou
+- Motor puro em `src/engine/mundo/editor.ts`: `validateDatabase` (faixas 1–20, PA 1–200, idade 15–45, CA
+  recalculado, PA ≥ CA, ids únicos e no formato, elenco editado/novo com 5–10, ninguém em dois elencos, limites
+  de quantidade), `applyCustomDatabase`/`applyCustomPlayer`, `import/exportDatabaseJson`, helpers de edição
+  (`movePlayer`, `setRoster`, `addPlayer`, `addTeam`…), `resolveCareerDatabase`.
+- Limites: importação ≤ 1 MB (recusada antes do parse), base ≤ 256 KB serializada, 5 bases no aparelho, 300
+  jogadores novos, 48 times novos, 2.000 edições de jogador, 400 de time. Chaves `__proto__`/`constructor` são
+  descartadas; lookups por `Map`.
+- Storage: `rtm-db-custom-v1` (`src/state/customDb.ts`), sempre em try/catch; cota cheia avisa e sugere exportar.
+- **Base que some (decisão)**: a Carreira congela a base no save (`mundo.database`), como o FM carrega a base no
+  início — editar/apagar a base depois não muda a Carreira. Se a cópia faltar ou não validar, usa a do storage
+  com o mesmo id (e congela a partir dali); sem nenhuma, segue na OFICIAL e avisa uma vez (toast). Custo: até
+  256 KB a mais no save de quem usa base customizada (0 para quem usa a oficial).
+- Ordem das camadas: dados (bo3-2026 + atributos da fase 1) → edições do admin (`bo3_edits`) → base customizada.
+  No `findSigning`, a customizada é reaplicada depois de `applyBo3PlayerEdit` para vencer o admin.
+- Telas: `/editor` (menu inicial: seção "Projeto" e card "Editor de base"; paleta ⌘K; "Abrir editor" na
+  fundação da Carreira). A escolha da base fica no topo dos Desafios e do "Assumir organização" e só vale antes
+  de fundar/assumir.
+- Testes: `scripts/test-mundo-editor.mts`.
+
+### Integração K × L (`fase4/integracao`)
+- Base do mundo da Carreira = `worldBaseFor(save, editedBase)`: oficial + edições do admin + base customizada
+  (congelada) + jovens gerados sem clube no `__free__`. `worldBaseFor` passou a receber a base (não mais as
+  edições do admin). `buildAiWorld`, `currentFreeAgents`, `agedFreeAgents` (mercado da IA e stand-ins) e o
+  `tickJuventude` usam essa composição.
+- Movíveis do mercado: `movableIdsWith(mundo, baseMovable)` — `juventudeMundo.movableIdsWith` ganhou o 2º
+  parâmetro opcional (movíveis da base da Carreira; padrão `BASE_PLAYER_IDS`).
+- `signingDrift(player, split, youthDebut, base)`: jovem gerado → 0; regen procura a origem na base da Carreira.
+- `MundoState` tem os campos da K (`seed`, `newgenAttrs`, `retirees`) e o `database` da L.
+- Teste: `scripts/test-mundo-integracao.mts` (base customizada + jovens juntos na Carreira).

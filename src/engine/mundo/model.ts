@@ -13,7 +13,8 @@
 // Carreira só guarda qual base usou (`mundo.databaseId`).
 
 import type { MacroRegion } from '../../data/regions';
-import type { Player, TeamSeason } from '../../types';
+import type { Coach, Player, Role, TeamSeason } from '../../types';
+import type { PlayerAttrs } from '../attrs/model';
 
 // ─── Circuito ──────────────────────────────────────────────────────────────
 export type EventKind = 'league' | 'swiss' | 'gsl' | 'playoffs' | 'qualifier' | 'rmr' | 'major';
@@ -82,17 +83,45 @@ export interface MundoState {
   seed?: string;                          // semente estável das levas desta Carreira
   newgenAttrs?: Record<string, string>;   // atributos empacotados de cada jovem (ver juventude.ts#packAttrs)
   retirees?: WorldRetiree[];              // aposentados recentes do mundo (últimos 60)
+  // [frente EDITOR] cópia congelada da base customizada no momento em que a
+  // Carreira foi criada (como o FM: a base é carregada no início e editar/apagar
+  // a base depois não muda a Carreira). Ausente/ inválida → ver editor.ts.
+  database?: CustomDatabase | null;
 }
 
 // ─── Editor de base de dados (fora do save) ────────────────────────────────
+// Edição de um jogador da base (oficial ou adicionado). Os 5 números legados
+// nunca são editados direto: saem dos atributos (`attrs` completos, CA
+// recalculado por caFromAttrs). `role2: null` remove a função secundária.
+export interface CustomPlayerEdit {
+  nick?: string;
+  name?: string;
+  country?: string;          // ISO-3166 alpha-2 minúsculo
+  role?: Role;
+  role2?: Role | null;
+  age?: number;              // 15–45
+  attrs?: PlayerAttrs;       // 28 visíveis + 8 ocultos (1–20), CA/PA (1–200)
+}
+// Edição de um time. `country` define a região (macroRegionOf). `roster` é o
+// elenco por ids, na ordem (5 primeiros = titulares); ausente = o oficial.
+export interface CustomTeamEdit {
+  team?: string;
+  tag?: string;
+  country?: string;
+  colors?: [string, string];
+  teamwork?: number;         // entrosamento 40–95
+  coach?: Coach;
+  roster?: string[];
+}
 export interface CustomDatabase {
   v: 1;
   id: string;
   name: string;
   createdAt: string;
+  updatedAt?: string;
   basedOn: 'official';
-  playerEdits: Record<string, Partial<Player>>;  // por playerId (inclui `attrs` completos se editados)
-  teamEdits: Record<string, Partial<TeamSeason>>; // por teamId (nome, cores, elenco por ids, técnico…)
-  addedPlayers: Player[];
-  addedTeams: TeamSeason[];
+  playerEdits: Record<string, CustomPlayerEdit>;  // por playerId (inclui `attrs` completos se editados)
+  teamEdits: Record<string, CustomTeamEdit>;      // por teamId (nome, cores, elenco por ids, técnico…)
+  addedPlayers: Player[];                          // ids `cdb_p_*`, sempre com `attrs`
+  addedTeams: TeamSeason[];                        // ids `cdb_t_*`; `players` vazio: o elenco vive em teamEdits[id].roster
 }
