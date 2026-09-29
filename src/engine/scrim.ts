@@ -155,9 +155,20 @@ export function runScrim(state: ScrimState, rng: Rng): ScrimResult {
 // devolvendo um relatório de treino real (placar, MVP, rating por titular).
 // Vencer — especialmente sparring mais forte — rende mais química.
 
-/** Banda de força pro sparring (±). Fora dela o time nem aparece na lista. */
+/** Banda de força pro sparring (±). Dentro dela a scrim rende química cheia. */
 export const SCRIM_STRENGTH_BAND = 7;
 const SCRIM_LIST_MAX = 6;
+/**
+ * Mínimo de sparrings listados. Com menos que isso na banda (time bem acima do
+ * topo do mundo, ou bem abaixo do fundo), completa com os MAIS PRÓXIMOS fora
+ * dela — a lista nunca fica vazia com elenco completo. Antes o filtro era
+ * absoluto e um time forte ficava sem ninguém depois de alguns splits (o topo
+ * da IA envelhece, o seu time treina).
+ */
+const SCRIM_LIST_MIN = 3;
+/** Química fora da banda: −8% por ponto além dela, com piso de 35%. */
+const OFF_BAND_CHEM_STEP = 0.08;
+const OFF_BAND_CHEM_FLOOR = 0.35;
 
 export type ScrimAvail = 'available' | 'busy' | 'declined';
 
@@ -171,23 +182,41 @@ export interface ScrimOpponentOption {
   /** Delta de força vs seu time (positivo = sparring mais forte). */
   diff: number;
   avail: ScrimAvail;
+  /** Fora da banda de força: entrou só pra lista não ficar vazia e rende menos química. */
+  offBand: boolean;
 }
 
 /**
- * Lista sparrings elegíveis: os mais próximos em força dentro da banda, com
+ * Multiplicador de química pela distância de força: 1 dentro da banda; fora
+ * dela cai 8% por ponto além da banda, com piso de 35% (treinar contra quem
+ * está muito longe ensina pouco — e não vira farm de química).
+ */
+export function scrimChemFactor(myStrength: number, oppStrength: number): number {
+  const beyond = Math.abs(oppStrength - myStrength) - SCRIM_STRENGTH_BAND;
+  if (beyond <= 0) return 1;
+  return Math.max(OFF_BAND_CHEM_FLOOR, 1 - beyond * OFF_BAND_CHEM_STEP);
+}
+
+/**
+ * Lista sparrings elegíveis: os mais próximos em força (até 6 dentro da banda;
+ * no mínimo 3, completando com os mais próximos fora dela), com
  * disponibilidade DETERMINÍSTICA por split+uso (mesma semana → mesma lista;
  * jogar uma scrim reabre o sorteio). Garante ≥2 disponíveis quando há opções.
+ * `excludeIds`: times que não podem ser sparring (o time que você assumiu).
  */
 export function listScrimOpponents(
   myStrength: number,
   world: Pick<TTeam, 'id' | 'name' | 'tag' | 'colors' | 'logoUrl' | 'strength'>[],
   split: number,
   scrimsUsed: number,
+  excludeIds: readonly (string | null | undefined)[] = [],
 ): ScrimOpponentOption[] {
-  const band = world
-    .filter((t) => Math.abs(t.strength - myStrength) <= SCRIM_STRENGTH_BAND)
-    .sort((a, b) => Math.abs(a.strength - myStrength) - Math.abs(b.strength - myStrength))
-    .slice(0, SCRIM_LIST_MAX);
+  const excluded = new Set(excludeIds.filter((id): id is string => !!id));
+  const byDist = world
+    .filter((t) => !excluded.has(t.id))
+    .sort((a, b) => Math.abs(a.strength - myStrength) - Math.abs(b.strength - myStrength));
+  const inBand = byDist.filter((t) => Math.abs(t.strength - myStrength) <= SCRIM_STRENGTH_BAND).length;
+  const band = byDist.slice(0, Math.min(SCRIM_LIST_MAX, Math.max(SCRIM_LIST_MIN, inBand)));
   const opts = band.map((t): ScrimOpponentOption => {
     const roll = hashStr(`scrim:${t.id}:${split}:${scrimsUsed}`) % 10;
     const avail: ScrimAvail = roll <= 6 ? 'available' : roll <= 8 ? 'busy' : 'declined';
@@ -196,6 +225,7 @@ export function listScrimOpponents(
       strength: Math.round(t.strength),
       diff: Math.round(t.strength - myStrength),
       avail,
+      offBand: Math.abs(t.strength - myStrength) > SCRIM_STRENGTH_BAND,
     };
   });
   // fail-safe: sorteio azarado não pode travar o botão — força os 2 mais
@@ -250,8 +280,9 @@ export function runScrimVs(
 
   // química escala com o resultado: vencer rende mais; bater sparring MAIS
   // FORTE rende o máximo (a scrim difícil é a que mais ensina).
+  // Fora da banda de força (sparring de fallback) rende menos: scrimChemFactor.
   const harder = opp.strength >= me.strength + 2;
-  const chemGain = Math.round((CHEM_GAIN_PER_PAIR * (won ? (harder ? 1.6 : 1.3) : 0.8)) * 10) / 10;
+  const chemGain = Math.round((CHEM_GAIN_PER_PAIR * (won ? (harder ? 1.6 : 1.3) : 0.8) * scrimChemFactor(me.strength, opp.strength)) * 10) / 10;
   const newChem = { ...(state.pairChem ?? {}) };
   for (let i = 0; i < state.starterIds.length; i++) {
     for (let j = i + 1; j < state.starterIds.length; j++) {
