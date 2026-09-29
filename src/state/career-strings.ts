@@ -3814,4 +3814,13 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Papel": { en: "Role", es: "Rol" },
   "mais tempo de jogo": { en: "more playing time", es: "más minutos de juego" },
   "Dinâmica": { en: "Dynamics", es: "Dinámica" },
+  // [saídas] venda rápida vira venda real / fim de contrato vai pro mercado livre
+  'Estão no mercado livre.': { en: 'They are now free agents.', es: 'Ahora son agentes libres.' },
+  'foi vendido para': { en: 'was sold to', es: 'fue vendido a' },
+  'Venda fechada na janela por': { en: 'Sale closed in the window for', es: 'Venta cerrada en la ventana por' },
+  'Ele joga pela': { en: 'He plays for', es: 'Juega para' },
+  'a partir de agora.': { en: 'from now on.', es: 'a partir de ahora.' },
+  'vender (85%)': { en: 'sell (85%)', es: 'vender (85%)' },
+  'remover': { en: 'remove', es: 'quitar' },
+  '5 titulares + até 2 reservas no banco. Clique num jogador do elenco pra vendê-lo a um clube interessado (85% do valor); contratação desta janela sai com reembolso integral.': { en: '5 starters + up to 2 subs on the bench. Click a squad player to sell him to an interested club (85% of value); signings from this window are fully refunded.', es: '5 titulares + hasta 2 suplentes en el banquillo. Haz clic en un jugador de la plantilla para venderlo a un club interesado (85% del valor); los fichajes de esta ventana tienen reembolso completo.' },
 };
