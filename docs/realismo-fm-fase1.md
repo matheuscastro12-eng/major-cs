@@ -127,5 +127,19 @@ código antigo são reconciliados por `attrsOf`.
   (`bo3.gg 6m (N rounds)`, `bo3.gg 12m ...` ou `legado (sem estatística pública)`).
 - (frente A) Fórmulas e fontes: `docs/realismo-fm-dados.md`. Elencos de setembro/2026: `docs/elencos-set-2026.md`.
 
+### Integração (`motor/integracao`)
+- Escala do jogo: os atributos da frente A são da escala da CENA (tier 1–3); o contrato da B tira os 5
+  números dos atributos. `data/playerAttrs.ts` agora leva cada entrada `bo3.gg`/`estimativa` à escala do
+  jogo com a regressão curado × atributos crus (por número legado; awp e igl por grupo de função) e fecha
+  com `fitAttrsToLegacy` (`fitGameScale`, `toGameScale`, `gameScale`). Entradas `legado` já nascem na
+  escala do jogo. Sem isso o OVR médio caía de 75 para 43.
+- `player-attrs-2026.json` regenerado pelo pipeline da A com o model integrado (reprodutível); o CA do
+  arquivo fica na régua da cena e o carregador o recalcula.
+- Ultimate: `engine/ultimate/legacySpecials.ts` congela as 151 especiais do catálogo de produção
+  (a46d0cc) com o mês em que nasceram; `buildFullCatalog` as devolve quando o ranking de OVR atual não as
+  escolhe (`legacySpecialsFor`). `cardMatchPlayer` põe a carta escalada no duelo.
+- Motor v2 calibrado contra os alvos reais; o harness mede eco/force pelo nível de equipamento
+  (`RoundTrace.econ`, como o `economy_level` do bo3.gg) e joga entre os 40 times mais fortes.
+
 ## Frente A: andamento
 - 2026-09-29: coleta concluída — 1.236 jogadores do bo3.gg com estatística/cadastro (de 1.236 previstos), 700 mapas tier S na amostra de calibração. Atributos, elencos de setembro/2026 e alvos de calibração gerados e commitados. Falta só rodar os portões finais.
