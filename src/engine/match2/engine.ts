@@ -142,7 +142,7 @@ export interface RoundTrace {
   planted: boolean;
 }
 
-export type MapSimV2 = MapSim & { trace: () => RoundTrace[]; roundSpecP: () => number | null };
+export type MapSimV2 = MapSim & { trace: () => RoundTrace[] };
 
 interface TeamCtx {
   team: TTeam;
@@ -692,7 +692,6 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
       stats,
     }),
     trace: () => traceLog,
-    roundSpecP: () => (lastEffect ? pAOf(lastEffect) : null),
   };
 }
 
