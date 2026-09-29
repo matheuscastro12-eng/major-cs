@@ -356,13 +356,17 @@ export interface PruneArgs {
   pinned?: (id: string) => boolean;
 }
 export type PruneReason = 'quit' | 'retired';
+/** Máximo de jovens SEM clube guardados no save (o resto "largou o competitivo"). */
+export const FREE_NEWGEN_CAP = 150;
 /**
  * Quem sai do mundo: sem clube e velho para "estourar" (≥ 20 e OVR < 72, ou
  * ≥ 22), sem clube e sem futuro depois do 1º ano (PA < 105) — largou o competitivo;
- * e quem tem clube, envelheceu e caiu (≥ 32 e OVR < 72) — aposentou.
+ * e quem tem clube, envelheceu e caiu (≥ 32 e OVR < 72) — aposentou. Acima de
+ * `FREE_NEWGEN_CAP` jovens sem clube, sai quem tem o menor PA.
  */
 export function pruneNewgens<T extends MundoJuv>(m: T, a: PruneArgs): { mundo: T; removed: { id: string; reason: PruneReason }[] } {
   const removed: { id: string; reason: PruneReason }[] = [];
+  const freeLeft: { id: string; pa: number }[] = [];
   for (const id of Object.keys(m.newgens ?? {})) {
     if (a.pinned?.(id)) continue;
     const st = a.statusOf(id);
@@ -376,6 +380,12 @@ export function pruneNewgens<T extends MundoJuv>(m: T, a: PruneArgs): { mundo: T
     const retire = st !== 'free' && age >= 32 && ovr < 72;
     if (quit) removed.push({ id, reason: 'quit' });
     else if (retire) removed.push({ id, reason: 'retired' });
+    else if (st === 'free') freeLeft.push({ id, pa: p.attrs.pa });
+  }
+  // teto do mercado livre de jovens: passou dele, sai quem tem menos futuro
+  if (freeLeft.length > FREE_NEWGEN_CAP) {
+    freeLeft.sort((x, y) => x.pa - y.pa || (x.id < y.id ? -1 : 1));
+    for (const f of freeLeft.slice(0, freeLeft.length - FREE_NEWGEN_CAP)) removed.push({ id: f.id, reason: 'quit' });
   }
   return { mundo: dropNewgens(m, removed.map((r) => r.id)), removed };
 }

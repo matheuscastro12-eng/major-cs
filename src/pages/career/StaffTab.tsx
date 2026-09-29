@@ -23,6 +23,8 @@ import {
   staffMarket, hireStaff, fireStaff, renewStaff, coachFromStaff,
 } from '../../engine/gestao/staff';
 import { retiredStaffSources } from '../../engine/gestao/staffData';
+import { retireeStaffSources } from '../../engine/mundo/juventudeMundo';
+import type { MundoJuv } from '../../engine/mundo/juventude';
 import { formatMoney } from '../../engine/ratings';
 import { ct } from '../../state/career-i18n';
 import '../../styles/staff.css';
@@ -130,8 +132,9 @@ export function StaffTab({ save, sponsorIncome, update }: Props) {
   const expiring = members.filter((m) => staffContractLeft(m, split) <= 1 && m.role !== 'headCoach');
 
   const market = useMemo(
-    () => staffMarket({ split, region: save.region, tier: save.tier, retired: retiredStaffSources(), exclude: members.map((m) => m.id) }),
-    [split, save.region, save.tier, members],
+    // [fase 4 · juventude] quem se aposentou no mundo e virou comissão entra no pool
+    () => staffMarket({ split, region: save.region, tier: save.tier, retired: [...retiredStaffSources(), ...retireeStaffSources(save.mundo as MundoJuv | undefined)], exclude: members.map((m) => m.id) }),
+    [split, save.region, save.tier, members, save.mundo],
   );
   const shownMarket = market
     .filter((c) => roleFilter === 'all' || c.role === roleFilter)

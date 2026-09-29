@@ -62,7 +62,7 @@ function resultsSave(world: TeamSeason[], split: number, aiDrift: Record<string,
 }
 const top5Ids = (t: TeamSeason) => [...t.players].sort((a, b) => playerOvr(b) - playerOvr(a)).slice(0, 5).map((p) => p.id);
 
-export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { rows: MundoSplit[]; mundo: MundoJuv } {
+export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { rows: MundoSplit[]; mundo: MundoJuv; moves: Record<string, string> } {
   const youth = opts.youth !== false;
   let moves: Record<string, string> = {};
   let aiDrift: Record<string, number> = {};
@@ -130,7 +130,7 @@ export function simulateMundo(splits = 10, opts: { youth?: boolean } = {}): { ro
       lastRetirees = r.retirees.length;
     }
   }
-  return { rows, mundo };
+  return { rows, mundo, moves };
 }
 
 const f1 = (v: number) => v.toFixed(1);

@@ -12,7 +12,7 @@
 //     nova abre a tela Juventude com a geração do ano).
 import type { Player, TeamSeason } from '../../types';
 import { CS2_REAL_2026 } from '../../data/bo3';
-import { macroRegionOf, type MacroRegion } from '../../data/regions';
+import { type MacroRegion } from '../../data/regions';
 import { ACADEMY_CLUBS } from '../career/academyLeague';
 import { BASE_PLAYER_IDS, agedFreeAgents, aiAgeOf, buildAiWorld, type AiWorldArgs } from '../career/aiWorld';
 import { FREE_TEAM_ID } from '../career/transferAI';
@@ -23,7 +23,7 @@ import type { RetiredSource } from '../gestao/staff';
 import type { MundoState, WorldRetiree } from './model';
 import {
   applyIntake, careerYearOf, evolveNewgens, firstSplitOfYear, generateIntake, hasIntake, isNewgenId,
-  newgenList, newgenOrigin, newgenPlayer, pruneNewgens, youthSeedFor,
+  newgenList, newgenOrigin, pruneNewgens, youthSeedFor,
   type AcademySource, type MundoJuv, type NewgenStatus,
 } from './juventude';
 
@@ -173,12 +173,17 @@ export interface JuventudeTickArgs {
   /** multiplicador de evolução dos jovens do SEU clube vindos da sua base (comissão) */
   youthGrowth?: number;
 }
+/** Manchete da juventude (dados crus; a Carreira monta o texto traduzido). */
 export interface JuventudeNews {
-  kind: 'retire' | 'intake' | 'breakout' | 'quit';
+  kind: 'retire' | 'intake' | 'breakout';
   split: number;
-  title: string;
-  body: string;
   playerId?: string;
+  nick?: string;
+  age?: number;
+  ovr?: number;
+  staffRole?: WorldRetiree['staffRole'];
+  teamId?: string;
+  count?: number;
 }
 export interface JuventudeTickResult {
   mundo: MundoJuv;
@@ -204,11 +209,7 @@ export function tickJuventude(a: JuventudeTickArgs): JuventudeTickResult {
   // 1) aposentadorias do mundo (IA) — manchetes e pool da comissão
   const retirees = worldRetirements({ ...args, split: a.split, world0, world1, free0, free1 });
   for (const r of retirees.filter((x) => x.ovr >= 78).slice(0, 4)) {
-    news.push({
-      kind: 'retire', split: a.split + 1, playerId: r.id,
-      title: `${r.nick} anuncia a aposentadoria`,
-      body: r.staffRole ? `Aos ${r.age} anos, pendura o mouse e entra no mercado como ${r.staffRole === 'headCoach' ? 'técnico' : r.staffRole === 'analyst' ? 'analista' : 'auxiliar técnico'}.` : `Aos ${r.age} anos, encerra a carreira.`,
-    });
+    news.push({ kind: 'retire', split: a.split + 1, playerId: r.id, nick: r.nick, age: r.age, ovr: r.ovr, staffRole: r.staffRole, teamId: r.teamId });
   }
 
   // 2) evolução dos jovens pelo que jogaram no split
@@ -221,7 +222,7 @@ export function tickJuventude(a: JuventudeTickArgs): JuventudeTickResult {
   for (const p of newgenList(mundo)) {
     const b = before.get(p.id) ?? 0, now = playerOvr(p);
     if (b < 80 && now >= 80 && news.filter((n) => n.kind === 'breakout').length < 3) {
-      news.push({ kind: 'breakout', split: a.split + 1, playerId: p.id, title: `${p.nick} desponta como promessa`, body: `O jovem de ${aiAgeOf(p, a.split + 1)} anos chegou a ${now} de OVR.` });
+      news.push({ kind: 'breakout', split: a.split + 1, playerId: p.id, nick: p.nick, age: aiAgeOf(p, a.split + 1), ovr: now });
     }
   }
 
@@ -239,7 +240,7 @@ export function tickJuventude(a: JuventudeTickArgs): JuventudeTickResult {
     const n0 = Object.keys(mundo.newgens).length;
     mundo = ensureYearIntake(mundo, { split: a.split + 1, save: a.save, world: world1, user: a.user });
     const n = Object.keys(mundo.newgens).length - n0;
-    if (n > 0) news.push({ kind: 'intake', split: a.split + 1, title: `Nova geração: ${n} jovens surgem na cena`, body: 'Os olheiros já circulam os relatórios da leva do ano. Veja em Mercado › Juventude.' });
+    if (n > 0) news.push({ kind: 'intake', split: a.split + 1, count: n });
   }
   return { mundo, retirees, news, removed: pr.removed.map((r) => r.id) };
 }
@@ -259,4 +260,5 @@ export function newgenClubOf(moves: Record<string, string> | undefined, id: stri
   return t && t !== FREE_TEAM_ID ? t : null;
 }
 
-export { newgenPlayer, macroRegionOf };
+/** Id do prospecto da academia quando você leva um jovem da sua geração. */
+export const academyIdForNewgen = (id: string) => `prospect__${id.replace(/[^a-z0-9]/gi, '')}`;
