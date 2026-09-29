@@ -88,6 +88,19 @@ compara byte a byte). Chaves base de carta que mudarem de faixa são apelidadas
 para a carta base atual (`engine/ultimate/cardIndex.ts`, cliente e servidor).
 
 Para a frente C: `attrsOf(tplayer)` já resolve TPlayers de torneio pela base
-registrada (`sourcePlayerId`); o herói do RtP (`proToTPlayer`) e o elenco da
-Carreira (`findSigning`) chegam com `attrs` próprios; cartas do Ultimate têm
-`cardAttrs(card)`. Números mexidos por código antigo são reconciliados por `attrsOf`.
+registrada (`sourcePlayerId`); o elenco da Carreira (`findSigning`) chega com
+`attrs` próprios (evoluídos); cartas do Ultimate têm `cardAttrs(card)` (só o
+boost de carta especial entra nos atributos; a evolução de cópia e a edição da
+temporada NÃO — sem contagem dupla com o bônus de força). Números mexidos por
+código antigo são reconciliados por `attrsOf`.
+- Herói do RtP: `proToTPlayer` NÃO leva `attrs` (os 28 do RtP ficam ~20 OVR abaixo
+  da escala do mundo e o buildUserTeam alinha mira/consistência). Para o v2 ler o
+  perfil real, use `heroEngineAttrs(player)` (OVR legado = OVR exibido; núcleo a
+  ≤ 1 ponto de colegas de mesmo OVR — `scripts/test-rtp-migration.mts`) no lugar
+  do alinhamento +13/+14, e os 5 números = `legacyFromAttrs` dele.
+- Distribuição dos atributos de chamada (média por função, derivação antiga →
+  nova; composto `igl` do motor v2): IGL 15,5 → 16,0; AWP 11,6 → 10,2; Rifler
+  11,1 → 9,7; Entry 11,2 → 9,8; Support 10,9 → 9,4; Lurker 11,2 → 9,6. A
+  derivação antiga inflava game sense/decisões de quem não é IGL (misturava
+  clutch); a nova amarra o grupo ao número legado de IGL. Recalibrar a carga de
+  chamada na junção se o caller de times sem IGL de função pesar.
