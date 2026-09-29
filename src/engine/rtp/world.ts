@@ -6,6 +6,7 @@
 //
 // Escada: academy → access → challenger → elite (→ Major, futuro).
 
+import { legacyOf, ovrFromLegacy } from '../attrs/model';
 import { CS2_REAL_2026 } from '../../data/bo3';
 import { ACADEMY_CLUBS, academyParentLogoUrl } from '../career/academyLeague';
 import { buildAcademyOpponentTeam } from '../career/academyMatch';
@@ -41,9 +42,9 @@ function realTier(teamwork: number): Tier {
   return 'access';
 }
 
-function ovrOf(p: Pick<Player, 'aim' | 'consistency' | 'clutch' | 'awp' | 'igl'>): number {
-  const spec = Math.max(p.awp, p.igl, p.aim);
-  return Math.round(p.aim * 0.45 + p.consistency * 0.18 + p.clutch * 0.12 + spec * 0.25);
+// [realismo FM] OVR pelos atributos (a mesma fórmula do jogo, via ponte legada)
+function ovrOf(p: Pick<Player, 'aim' | 'consistency' | 'clutch' | 'awp' | 'igl' | 'attrs'>): number {
+  return ovrFromLegacy(legacyOf(p));
 }
 
 function realToTPlayer(p: Player, runtimeId: string): TPlayer {
