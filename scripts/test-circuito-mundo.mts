@@ -117,14 +117,16 @@ test('etapa em segundo plano: determinística, pula o SEU evento, e é rápida (
   assert.ok(all.every((r) => r.t === etapaTime(2, 1) && r.prizePool! > 0 && r.placements.length === r.field));
   // desempenho: etapa inteira (8 eventos) + publicar o VRS, e o Major completo
   let m: MundoState = { v: 1, calendar: [], results: [], vrs: {}, newgens: {}, intake: [], databaseId: null };
-  const t0 = performance.now();
+  // tempo de CPU (não de relógio): máquina/CI carregados não derrubam o teste
+  const cpuMs = (u: NodeJS.CpuUsage) => (u.user + u.system) / 1000;
+  const t0 = process.cpuUsage();
   for (let split = 1; split <= 6; split++) {
     for (let e = 1; e <= 3; e++) m = closeWorld(m, simulateEtapaWorld(buildEtapaEvents(pool, split, e, m.vrs), split, e, sOf), etapaTime(split, e)).mundo;
   }
-  const perEtapa = (performance.now() - t0) / 18;
-  const t1 = performance.now();
+  const perEtapa = cpuMs(process.cpuUsage(t0)) / 18;
+  const t1 = process.cpuUsage();
   for (let i = 0; i < 10; i++) completeMajor(majorFieldFromVrs(m.vrs, pool, null), sOf, `perf${i}`);
-  const perMajor = (performance.now() - t1) / 10;
+  const perMajor = cpuMs(process.cpuUsage(t1)) / 10;
   console.log(`  etapa em segundo plano + VRS: ${perEtapa.toFixed(2)} ms · Major completo: ${perMajor.toFixed(2)} ms`);
   assert.ok(perEtapa < 25, `etapa lenta: ${perEtapa} ms`);
   assert.ok(perMajor < 25, `Major lento: ${perMajor} ms`);
