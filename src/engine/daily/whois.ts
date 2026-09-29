@@ -29,6 +29,7 @@ export interface WhoisEntry {
 export function whoisPool(dataset: TeamSeason[]): WhoisEntry[] {
   const out: WhoisEntry[] = [];
   for (const t of dataset) {
+    if (t.defunct) continue; // aposentados / times extintos não viram "pro do dia"
     for (const p of t.players) {
       const ovr = playerOvr(p);
       if (ovr < WHOIS_MIN_OVR) continue;

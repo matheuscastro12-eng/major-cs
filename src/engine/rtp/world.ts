@@ -85,6 +85,7 @@ function academyToWorld(clubId: string, season: number): WorldTeam | null {
 const REAL_BY_RT: Map<string, WorldTeam[]> = (() => {
   const m = new Map<string, WorldTeam[]>();
   for (const t of CS2_REAL_2026) {
+    if (t.defunct) continue; // time extinto / aposentados: fora das ligas
     const w = realTeamToWorld(t);
     const k = `${w.region}:${w.tier}`;
     (m.get(k) ?? m.set(k, []).get(k)!).push(w);

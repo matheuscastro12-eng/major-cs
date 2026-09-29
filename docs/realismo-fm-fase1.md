@@ -114,3 +114,18 @@ código antigo são reconciliados por `attrsOf`.
 - `simulateSeriesForPlay(..., target, opts?)` e `heroSeriesOpts/heroDuelMod` (RtP).
 - Economia, playbook, postura, IGL e elenco 5v5 saíram de match.ts para `src/engine/matchShared.ts` (re-exportados; v1 bit a bit igual).
 - Formato de `docs/calibration-targets.json` definido pela frente C (valores provisórios); a frente A troca os números mantendo o formato: `targets.<chave> = { value, tol, unit, def, source, provisional, estimate?, by? }`.
+
+### Frente A (dados), branch `motor/dados`
+- (frente A, 2026-09-28) Assinaturas de `src/engine/attrs/model.ts` intactas. Acréscimo em `src/types.ts`:
+  `TeamSeason.defunct?: boolean` — time que acabou (ou o virtual `__retired__`, onde ficam aposentados,
+  inativos e quem virou técnico). O id continua no `bo3-2026.json` para saves que o guardam, mas o time
+  sai do mundo da carreira (`currentEra`, exceto o time que o usuário assumiu), do Road to Pro
+  (`REAL_BY_RT`), do online (`onlineDataset`) e do "pro do dia"; `applyMoves` não usa time extinto como
+  destino. O Ultimate continua vendo os jogadores de `__retired__` (cartas já compradas não somem).
+- (frente A) `src/data/player-attrs-2026.json` cobre TODO jogador do `bo3-2026.json` (inclusive
+  `__free__` e `__retired__`): `{ [playerId]: PlayerAttrs & { src } }`. `src` diz a origem
+  (`bo3.gg 6m (N rounds)`, `bo3.gg 12m ...` ou `legado (sem estatística pública)`).
+- (frente A) Fórmulas e fontes: `docs/realismo-fm-dados.md`. Elencos de setembro/2026: `docs/elencos-set-2026.md`.
+
+## Frente A: andamento
+- 2026-09-29: coleta concluída — 1.236 jogadores do bo3.gg com estatística/cadastro (de 1.236 previstos), 700 mapas tier S na amostra de calibração. Atributos, elencos de setembro/2026 e alvos de calibração gerados e commitados. Falta só rodar os portões finais.

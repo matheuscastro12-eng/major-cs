@@ -81,6 +81,10 @@ export interface TeamSeason {
   // true = aguardando aprovação do admin no CRM; fica oculto para os jogadores
   // até ser liberado. Times sem o campo já são considerados aprovados.
   pending?: boolean;
+  // true = time que acabou (ou o virtual `__retired__`): fica no arquivo para
+  // saves que guardam o id, mas não é disputável (fora do mundo da carreira,
+  // do Road to Pro e do online). Ver docs/elencos-set-2026.md.
+  defunct?: boolean;
   players: Player[];
 }
 
