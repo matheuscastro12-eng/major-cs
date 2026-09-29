@@ -257,6 +257,8 @@ export interface Tournament {
   // Major em STAGES: um Swiss isolado que para ao definir os 8 classificados
   // (phase 'done', sem playoffs) — o stage seguinte carrega esses 8 + 8 seeds.
   stageOnly?: boolean;
+  // [fase 4 · circuito] evento LAN/Major: peso do oculto bigMatch no motor v2 (0 = online)
+  pressure?: number;
 }
 
 export interface DraftRound {
