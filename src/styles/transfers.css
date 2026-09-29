@@ -86,7 +86,8 @@
 .mk-form label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-2); color: var(--c-ink-dim); }
 .mk-form__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-3); }
 .mk-standins li { display: flex; align-items: center; gap: var(--sp-3); padding: 7px 0; border-bottom: 1px solid var(--c-line-soft); }
-.mk-standins li .mk-who { flex: 1; }
+.mk-standins li .mk-who { flex: 1; min-width: 0; }
+.mk-standins .mk-who__txt small { white-space: normal; }
 .mk-more { display: flex; justify-content: center; padding: var(--sp-3); }
 .mk-nego { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
 .mk-views button { white-space: nowrap; }

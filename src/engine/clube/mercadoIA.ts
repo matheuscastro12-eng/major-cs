@@ -238,7 +238,7 @@ export interface WorldTickArgs {
   protectedIds?: ReadonlySet<string>; // SEU elenco: só por proposta com consentimento
   budgets?: Record<string, number>; // janela curta: sobra da janela do split
   loans?: MarketLoan[];             // stand-ins da IA ativos (voltam no fim do split)
-  arrivals?: Record<string, number>;// quem chegou neste split não é revendido na mesma temporada de janela
+  arrivals?: Record<string, number>;// quem chegou na janela anterior (ou nesta) não é revendido
   maxMoves?: number;
 }
 
@@ -386,7 +386,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
       let swap = false;
       if (fromId !== FREE_TEAM_ID) {
         if (sold.has(fromId)) return;
-        if ((a.arrivals?.[p.id] ?? -1) >= split) return; // acabou de chegar: não vira moeda de troca
+        if ((a.arrivals?.[p.id] ?? -99) >= split - 1) return; // chegou na janela passada ou nesta: não vira moeda de troca
         const seller = view(fromId);
         const sBest = [...starters(seller)].sort((x, y) => ovrOf(y) - ovrOf(x) || byId(x, y))[0];
         if (sBest?.id === p.id && forms[fromId] >= 55 && strategies[fromId] !== 'survival') return; // núcleo em alta não sai

@@ -5,7 +5,7 @@
 // caixa, estratégia e necessidades; a lista de alvos com a estratégia do clube
 // dono; empréstimos e stand-ins; e a negociação (acordos para a próxima janela).
 import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeftRight, Handshake, Inbox, Lock, Megaphone, Radar, Repeat, Search, Shield, UserMinus, UserPlus, Users } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Handshake, Inbox, Lock, Megaphone, Radar, Repeat, Search, Shield, UserMinus, UserPlus, Users } from 'lucide-react';
 import {
   Panel, Table, Segmented, Button, Stat, Tag, Alert, EmptyState, Ovr, RoleChip, useToast, type Column, type TagTone,
 } from '../../components/ds/index';
@@ -152,7 +152,7 @@ export function TransfersTab(p: Props) {
               value={v} onChange={(e) => setAsk((a) => ({ ...a, [o.offer.id]: e.target.value.replace(/[^0-9]/g, '') }))}
               onKeyDown={(e) => { if (e.key === 'Enter' && v) doCounter(o, Number(v) * 1000); }}
             />
-            <Button size="sm" disabled={!v} onClick={() => doCounter(o, Number(v) * 1000)}>{ct('Contrapropor')}</Button>
+            <Button size="sm" iconOnly icon={<ArrowRight size={14} aria-hidden />} aria-label={ct('Contrapropor')} title={ct('Contrapropor')} disabled={!v} onClick={() => doCounter(o, Number(v) * 1000)} />
           </span>
         )}
       </div>
@@ -425,7 +425,7 @@ export function TransfersTab(p: Props) {
             {locked ? <div className="mk-pad"><Alert tone="warn">{ct('Roster lock: sem stand-in até o fim do Major.')}</Alert></div>
               : p.squadSize >= p.squadMax ? <div className="mk-pad"><Alert tone="info">{ct('Elenco cheio (7): libere uma vaga antes de trazer um stand-in.')}</Alert></div>
                 : !p.standInOpen ? <div className="mk-pad"><Alert tone="info">{ct('A janela curta deste split já passou. Stand-in acertado agora entra na janela curta do próximo split.')}</Alert></div> : null}
-            <ul className="mk-standins">
+            {!locked && p.squadSize < p.squadMax && <ul className="mk-standins">
               {standIns.map((s) => (
                 <li key={s.player.id}>
                   <span className="mk-who"><Ovr value={s.ovr} size="sm" /><span className="mk-who__txt"><b><Flag cc={s.player.country} /> {s.player.nick}</b><small>{s.player.role} · {s.age} {ct('anos')} · {s.teamName}{s.bench ? ` · ${ct('reserva')}` : ''}</small></span></span>
@@ -433,7 +433,7 @@ export function TransfersTab(p: Props) {
                   <Button size="sm" disabled={locked || p.squadSize >= p.squadMax || p.loans.some((l) => l.loan.playerId === s.player.id)} onClick={() => { p.onStandIn(s); toast.success(`${ct('Stand-in acertado:')} ${s.player.nick}`); }}>{ct('Acertar')}</Button>
                 </li>
               ))}
-            </ul>
+            </ul>}
           </Panel>
           <Panel icon={<Handshake size={16} />} title={ct('Seus empréstimos')} flush className="mk-span2">
             <Table<LoanRow> columns={loanCols} rows={p.loans} rowKey={(l) => l.loan.playerId} caption={ct('Empréstimos')} empty={ct('Nenhum empréstimo.')} className="mk-table" />
