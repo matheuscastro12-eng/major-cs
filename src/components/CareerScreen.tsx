@@ -49,7 +49,12 @@ import { tickAIMarketActivity, FREE_TEAM_ID } from '../engine/career/transferAI'
 import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCost, facilityUpkeep, normalizeFacilities, stabilizeMorale } from '../engine/career/facilities';
 import { personalityChemBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, type PlayerPersonality } from '../engine/career/personality';
 import { hydrateCareerDepth } from '../engine/career/save';
-import { closeMatchIdentity, type TeamIdentity } from '../engine/career/teamIdentity';
+import { closeMatchIdentity, scoutingOf, type TeamIdentity } from '../engine/career/teamIdentity';
+import { aiTactics, matchTacticsFor, tacticsAfterMatch, antiStratReveal } from '../engine/gestao/tatica';
+import { staffEffects } from '../engine/gestao/staff';
+import { migrateGestao } from '../engine/gestao/gestaoMigration';
+import type { GestaoState } from '../engine/gestao/model';
+import { GamePlanScreen } from '../pages/career/GamePlanScreen';
 import { parseAcademyPlayerId, parseRegenPlayerId, partitionResolvable } from '../engine/career/signings';
 import { isPlayerCommittedForExit, matchesNegotiationFilters, sortMarketEntries, type MarketSort } from '../engine/career/market';
 import {
@@ -135,10 +140,12 @@ const GAME_PLANS: { id: GamePlan; icon: CareerIconName; label: string; desc: str
   { id: 'mapfocus', icon: 'map', label: ct('Foco no mapa forte'), desc: ct('Puxa o veto pro seu melhor mapa e joga mais forte nele.') },
   { id: 'aggressive', icon: 'swords', label: ct('Agressivo'), desc: ct('Pressão nas aberturas: teto alto, mais arriscado.') },
 ];
-// aplica o buff do plano no time do usuário antes da partida
-function applyGamePlanBuff(t: TTeam, plan: GamePlan): TTeam {
+// aplica o buff do plano no time do usuário antes da partida. [fase 2] Com
+// preparação de anti-strat contra o adversário (Plano de jogo), o "Anti-strat"
+// não soma o bônus genérico: ele foca a preparação (ver matchTacticsFor).
+function applyGamePlanBuff(t: TTeam, plan: GamePlan, genericAntiStrat = true): TTeam {
   if (plan === 'aggressive') return { ...t, strength: t.strength + 2.5 };
-  if (plan === 'antistrat') return { ...t, strength: t.strength + 2 };
+  if (plan === 'antistrat') return genericAntiStrat ? { ...t, strength: t.strength + 2 } : t;
   if (plan === 'mapfocus') {
     const prefs: Record<string, number> = { ...t.mapPrefs };
     const best = Object.entries(prefs).sort((a, b) => b[1] - a[1])[0];
@@ -1280,6 +1287,7 @@ interface CareerSave {
   playbookXp?: number; // entrosamento no esquema (0-100); cai ao trocar de esquema
   playbookMem?: Partial<Record<Playbook, number>>; // entrosamento guardado por esquema (restaura ao voltar)
   gamePlan?: GamePlan; // plano de jogo pré-partida (buff real na simulação)
+  gestao?: GestaoState; // [realismo FM fase 2] treino, tática por mapa, comissão técnica (save v28)
   academy?: AcademyEntry[]; // prospectos em formação na academia
   academyTeam?: AcademyEntry[]; // time academy (5 jovens, um por função) que disputa a Liga Academy
   academyFocus?: string | null; // id do prospecto em foco de treino (cresce mais rápido)
@@ -2981,7 +2989,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // partida (o snapshot da liga/major não sabe das trocas feitas no meio do
   // split). Times da IA passam direto.
   const roleOf = (oid: string): Role | undefined => save.roles?.[oid];
-  const syncUser = (team: TTeam): TTeam => {
+  const syncUser = (team: TTeam, oppId?: string): TTeam => {
     if (!team.isUser) return team;
     // herda o entrosamento da org assumida (ver buildTeam) — senão o resync
     // reestampava o 78 do draft e desfazia o fix no meio do split.
@@ -2989,14 +2997,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const t = resyncUserRoles(team, roleOf, org?.teamwork, org ? orgRefSynergy(org) : 0);
     // aplica também o domínio de mapa e o playbook atuais (valem se mudarem no
     // meio do split — o snapshot da liga não saberia sozinho)
+    // [fase 2] tática por mapa (Plano de jogo) vai junto com o time pra partida
+    const mt = matchTacticsFor(save.gestao?.tactics, save.gamePlan, oppId);
     const synced: TTeam = {
       ...t,
       mapPrefs: { ...t.mapPrefs, ...(save.mapTraining ?? {}) },
       playbook: save.playbook,
       playbookFam: Math.max(0, Math.min(1, (save.playbookXp ?? 0) / 100)),
+      tactics: mt.tactics,
     };
     // PLANO DE JOGO da partida: buff real escolhido pelo usuário antes de jogar
-    return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined'), normalizeFacilities(save.facilities).analyst);
+    return applyAnalystPrep(applyGamePlanBuff(synced, save.gamePlan ?? 'disciplined', mt.genericAntiStrat), normalizeFacilities(save.facilities).analyst);
   };
   const prepareTeams = (rawA: TTeam | undefined, rawB: TTeam | undefined): [TTeam, TTeam] | null => {
     // `leagueTeam(l, id)` mente sobre o tipo (non-null assertion) e devolve
@@ -3004,8 +3015,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // saves antigos (criados antes do fix do seedGroups) onde o match referencia
     // um time que sumiu do grupo. Bug 'isUser' undefined no Continue.
     if (!rawA || !rawB) return null;
-    let a = applyFatigueForm(syncUser(rawA), save.fatigue, save.restingPlayers);
-    let b = applyFatigueForm(syncUser(rawB), save.fatigue, save.restingPlayers);
+    let a = applyFatigueForm(syncUser(rawA, rawB.id), save.fatigue, save.restingPlayers);
+    let b = applyFatigueForm(syncUser(rawB, rawA.id), save.fatigue, save.restingPlayers);
+    // [fase 2] adversário da IA joga com tática coerente (técnico/IGL/playbook) e
+    // estuda você na medida do scouting dele
+    if (!a.isUser) a = { ...a, tactics: aiTactics(a, { id: b.id, scouting: scoutingOf(a) }) };
+    if (!b.isUser) b = { ...b, tactics: aiTactics(b, { id: a.id, scouting: scoutingOf(b) }) };
     if (a.isUser) a = applyRivalryFocus(a, rivalryScore(save.rivalries, b.id));
     if (b.isUser) b = applyRivalryFocus(b, rivalryScore(save.rivalries, a.id));
     return [a, b];
@@ -3097,7 +3112,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         userWon ? APPROVAL_DELTAS.matchWin : APPROVAL_DELTAS.matchLoss,
         `${userWon ? ct('Vitória') : ct('Derrota')} ${series.mapScore[userIdx]}-${series.mapScore[oppI]} vs ${opponent.tag} · ${shortLabel}`,
       );
-      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, ...pushNews(current, items) };
+      // [fase 2] tática por mapa: mapas jogados ganham familiaridade, os outros
+      // decaem; a preparação de anti-strat contra este adversário foi usada
+      const gestao0 = current.gestao ?? migrateGestao({ squad: current.squad }).gestao!;
+      const gestao: GestaoState = {
+        ...gestao0,
+        tactics: tacticsAfterMatch(gestao0.tactics, series.maps.map((m) => m.map), opponent.id, staffEffects(gestao0.staff).familiarityGain),
+      };
+      const next = { ...current, rivalries: rivalry.rivalries, fatigue: load.fatigue, restingPlayers: [], mapStats, recentRatings, board: bd.board, boardLog: bd.boardLog, gestao, ...pushNews(current, items) };
       persist(next);
       return next;
     });
@@ -7073,6 +7095,22 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           fireScout={fireScout}
           seasonStats={seasonStats}
           mySquadIds={mySquadIds}
+          gamePlan={squadSec === 'pl' ? (
+            <GamePlanScreen
+              tactics={save.gestao?.tactics ?? migrateGestao({ squad: save.squad }).gestao!.tactics}
+              onChange={(tactics) => setSave((s) => {
+                const g = s.gestao ?? migrateGestao({ squad: s.squad }).gestao!;
+                const next = { ...s, gestao: { ...g, tactics } };
+                persist(next);
+                return next;
+              })}
+              players={save.squad.map((sig) => findSigning(sig)?.player).filter((p): p is Player => !!p).slice(0, 5)}
+              opp={opp}
+              reveal={antiStratReveal(staffEffects(save.gestao?.staff).antiStratRead, normalizeFacilities(save.facilities).analyst)}
+              gamePlan={save.gamePlan}
+              onOpenPlayer={openPlayerProfile}
+            />
+          ) : undefined}
         />
       )}
 

@@ -43,6 +43,7 @@ import { teamChemistry } from '../../engine/chemistry';
 import { ElencoPanel, type ElencoRow } from './ElencoPanel';
 import { Panel, Bar } from '../../components/ds/index';
 import { Sparkles, Target, Wallet } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { MAP_POOL, MAP_LABELS, PLAYBOOK_LABELS, PLAYBOOK_DESC, type MapId, type Playbook, type Player, type Role } from '../../types';
 
 interface SquadTabSave {
@@ -92,6 +93,8 @@ interface Props {
   fireScout: () => void;
   seasonStats: SeasonStat[];
   mySquadIds: Set<string>;
+  /** [fase 2] tela "Plano de jogo" (tática por mapa) — renderizada na seção 'pl' */
+  gamePlan?: ReactNode;
 }
 
 export function SquadTab({
@@ -109,6 +112,7 @@ export function SquadTab({
   fireScout,
   seasonStats,
   mySquadIds,
+  gamePlan,
 }: Props) {
   const rows = save.squad.map((sig) => findSigning(sig)?.player).filter(Boolean) as Player[];
   const hasAwp = rows.some((p) => p.role === 'AWP' || p.role2 === 'AWP');
@@ -308,7 +312,9 @@ export function SquadTab({
         </>
       )}
 
-      {section === 'pl' && (
+      {section === 'pl' && gamePlan}
+
+      {section === 'pl' && !gamePlan && (
         <>
       <DashCard
         title={ct('Cinco titular')}
@@ -346,6 +352,11 @@ export function SquadTab({
         </div>
       </DashCard>
 
+        </>
+      )}
+
+      {section === 'pl' && (
+        <>
           <DashCard title={ct('Playbook tático')}>
             <div className="pb-fam">
               <span className="muted small">{ct('Entrosamento')}</span>

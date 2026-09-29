@@ -712,3 +712,29 @@ export function planEdge(mine: TeamPlan, theirs: TeamPlan): PlanEdge {
   const rpsCT = -RPS_LOGIT * rpsValue(theirs, mine);
   return { fam, rpsT, rpsCT, totalT: fam + rpsT, totalCT: fam + rpsCT };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Carreira: a tática que vai para a partida
+
+/**
+ * Tática do usuário para a série contra `oppId`, e se o bônus GENÉRICO do plano
+ * de jogo "Anti-strat" (GamePlan, +2 de força) ainda vale. Sem contagem dupla:
+ * com preparação de anti-strat contra ESTE adversário, o plano "Anti-strat"
+ * troca o bônus genérico pelo foco na preparação (leitura ×ANTI_PLAN_FOCUS).
+ */
+export function matchTacticsFor(
+  tactics: TacticsState | null | undefined,
+  gamePlan: string | null | undefined,
+  oppId: string | null | undefined,
+): { tactics: TacticsState; genericAntiStrat: boolean } {
+  const t = tactics ?? defaultTactics();
+  const prepared = hasAntiStratVs(t, oppId);
+  if (gamePlan !== 'antistrat') return { tactics: t, genericAntiStrat: false };
+  if (!prepared || !oppId) return { tactics: t, genericAntiStrat: true };
+  return { tactics: focusAntiStrat(t, oppId), genericAntiStrat: false };
+}
+
+/** Fim de série na Carreira: familiaridade (jogados sobem, resto decai) e a preparação usada. */
+export function tacticsAfterMatch(tactics: TacticsState | null | undefined, mapsPlayed: MapId[], opponentTeamId: string, famGainMult = 1): TacticsState {
+  return consumeAntiStrat(tacticsAfterSeries(tactics ?? defaultTactics(), mapsPlayed, famGainMult), opponentTeamId);
+}

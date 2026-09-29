@@ -1,0 +1,122 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   PLANO DE JOGO (Carreira › Time) — tática por mapa. Só tokens (docs/design-system.md).
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.tac { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.tac-lede { margin: 0 0 var(--sp-3); color: var(--c-ink-dim); font-size: var(--fs-3); max-width: 80ch; }
+.tac-dim { color: var(--c-ink-faint); }
+.tac-num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.tac-hint { margin: var(--sp-3) 0 0; color: var(--c-ink-dim); font-size: var(--fs-2); line-height: var(--lh-body); }
+.tac-hint--top { margin: 0 0 var(--sp-3); }
+
+/* ── seletor de mapa ── */
+.tac-maplist { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--sp-2); }
+.tac-map {
+  display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: var(--sp-1) var(--sp-2);
+  min-height: var(--tap); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--c-line); border-radius: var(--rad-2);
+  background: var(--c-surface-2); color: var(--c-ink); text-align: left; cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+.tac-map:hover { border-color: var(--c-line-strong); }
+.tac-map:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tac-map[data-on] { border-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-accent); background: color-mix(in srgb, var(--c-accent) 10%, var(--c-surface-2)); }
+.tac-map__name { font-family: var(--font-display); font-size: var(--fs-4); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.tac-map__fam { font-family: var(--font-num); font-size: var(--fs-3); font-weight: 700; }
+.tac-map .ds-bar { grid-column: 1 / -1; }
+.tac-map__tag { grid-column: 1 / -1; font-size: var(--fs-1); color: var(--c-accent); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+
+/* ── grade principal ── */
+.tac-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.tac-col { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+
+/* ── quadro de papéis ── */
+.tac-board { list-style: none; margin: 0; padding: 0; }
+.tac-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(150px, auto); align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--c-line-soft);
+}
+.tac-who { display: inline-flex; align-items: center; gap: var(--sp-3); min-width: 0; padding: 0; border: 0; background: none; color: var(--c-ink); text-align: left; cursor: pointer; }
+.tac-who:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--rad-2); }
+.tac-who__txt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.tac-who__txt b { font-size: var(--fs-4); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tac-select {
+  width: 100%; min-height: 36px; padding: 0 var(--sp-3); border: 1px solid var(--c-line-strong); border-radius: var(--rad-2);
+  background: var(--c-surface-3); color: var(--c-ink); font-size: var(--fs-3); font-weight: 600; cursor: pointer;
+}
+.tac-select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tac-fit { display: inline-flex; align-items: center; gap: var(--sp-2); justify-self: end; }
+.tac-board__foot { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4) var(--sp-4); }
+.tac-board__foot .tac-hint { margin: 0; }
+.tac-legend summary { cursor: pointer; color: var(--c-accent); font-size: var(--fs-2); font-weight: 600; }
+.tac-legend dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-4); margin: var(--sp-2) 0 0; }
+.tac-legend dt { font-weight: 700; font-size: var(--fs-2); }
+.tac-legend dd { margin: 0; color: var(--c-ink-dim); font-size: var(--fs-2); }
+
+/* ── cartões de setup/execução ── */
+.tac-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--sp-2); }
+.tac-card { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-3); }
+.tac-card:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.tac-card__top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); }
+.tac-card__top b { font-size: var(--fs-3); }
+.tac-card__desc { color: var(--c-ink-dim); font-size: var(--fs-2); line-height: var(--lh-snug); }
+.tac-cost { flex-shrink: 0; color: var(--c-ink-faint); font-size: var(--fs-1); font-family: var(--font-num); }
+.tac-mu { display: flex; flex-direction: column; gap: 2px; margin-top: var(--sp-1); font-size: var(--fs-2); color: var(--c-ink-dim); }
+.tac-mu__k { font-size: var(--fs-1); font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.tac-mu__k--win { color: var(--c-win); }
+.tac-mu__k--loss { color: var(--c-loss); }
+
+/* ── instruções ── */
+.tac-instr { display: flex; flex-direction: column; }
+.tac-instr__row {
+  display: grid; grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2fr); align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--c-line-soft);
+}
+.tac-instr__name { display: inline-flex; align-items: center; gap: var(--sp-2); font-weight: 600; font-size: var(--fs-3); }
+
+/* ── familiaridade ── */
+.tac-fam { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-4); align-items: center; }
+.tac-fam__side { display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-2); }
+.tac-facts { margin: var(--sp-3) 0 0; padding-left: var(--sp-5); color: var(--c-ink-dim); font-size: var(--fs-2); line-height: var(--lh-body); }
+
+/* ── adversário ── */
+.tac-opp { display: flex; flex-direction: column; gap: var(--sp-3); }
+.tac-opp__head { display: flex; align-items: center; gap: var(--sp-2); }
+.tac-opp__facts { display: flex; flex-direction: column; margin: 0; }
+.tac-opp__facts > div { display: flex; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--c-line-soft); }
+.tac-opp__facts dt { color: var(--c-ink-dim); font-size: var(--fs-2); }
+.tac-opp__facts dd { margin: 0; text-align: right; font-size: var(--fs-3); font-weight: 600; }
+.tac-anti { display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-2); }
+.tac-anti .ds-btn { align-self: flex-start; }
+.tac-sug { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--c-line); border-radius: var(--rad-3); background: var(--c-surface-2); }
+.tac-sug__title { font-size: var(--fs-1); font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--c-ink-faint); }
+.tac-sug__row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-3); }
+
+/* ── impacto ── */
+.tac-impact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.tac-impact__cell { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--c-line); border-radius: var(--rad-3); background: var(--c-surface-2); }
+.tac-impact__cell[data-side='ct'] { border-top: 2px solid var(--c-ct); }
+.tac-impact__cell[data-side='t'] { border-top: 2px solid var(--c-t); }
+.tac-impact__label { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-2); color: var(--c-ink-dim); }
+.tac-impact__total { font-size: var(--fs-6); font-weight: 700; }
+.tac-impact ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-2); color: var(--c-ink-dim); }
+.tac-impact li { display: flex; justify-content: space-between; gap: var(--sp-2); }
+.tac [data-tone='win'] { color: var(--c-win); }
+.tac [data-tone='loss'] { color: var(--c-loss); }
+
+/* ── responsivo ── */
+@media (max-width: 1180px) {
+  .tac-grid { grid-template-columns: minmax(0, 1fr); }
+  .tac-maplist { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .tac-maplist { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: var(--sp-1); }
+  .tac-map { flex: 0 0 132px; scroll-snap-align: start; }
+  .tac-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+  .tac-who { grid-row: span 2; }
+  .tac-fit { grid-column: 2; justify-self: start; }
+  .tac-cards { grid-template-columns: minmax(0, 1fr); }
+  .tac-instr__row { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+  .tac-legend dl { grid-template-columns: minmax(0, 1fr); }
+  .tac-select { font-size: var(--fs-4); }
+  .tac-sug__row { flex-direction: column; align-items: flex-start; }
+}
