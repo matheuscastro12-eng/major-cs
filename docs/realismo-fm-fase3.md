@@ -45,4 +45,21 @@ O que já existe e esta fase APROFUNDA E UNIFICA (não duplique — substitua/ev
 - Telas em 1440×900 e 390×844 (Playwright em `/private/tmp/claude-501/-Users-matheuscastro-orca-major-cs/3774674b-38bb-4228-8c79-6903e36bc699/scratchpad/video/cap/node_modules`, `chromium.launch({ channel: 'chrome' })`, porta própria) em `.../scratchpad/fase3-shots/<frente>-*`; confira você mesmo. Textos novos com en/es em `career-strings.ts`.
 
 ## Mudanças de contrato
-(nenhuma ainda)
+
+### Frente I (mercado) — `fase3/mercado`
+- `clube/model.ts` (só campos opcionais, nenhuma versão nova):
+  - `MarketState` ganha `strategies`, `arrivals` (playerId → split em que chegou ao clube da IA; entra entre os 5), `windows` (resumo das últimas 12 janelas), `lastWindow` e **`window?: TransferWindow`** (`open`, `rosterLocked`, `label`), regravado a cada virada de etapa/split e na abertura do mercado. A frente G lê `clube.market.window?.rosterLocked`.
+  - `IncomingOffer` ganha `nick`, `ovr`, `role`, `fromTag`, `fromName`, `reason` (`NeedReason`), `strategy`, `askedFee` e `playerRefused`. `status: 'countered'` = o clube respondeu à SUA contraproposta com a oferta final (em `fee`).
+  - `loans` passa a ser `MarketLoan[]` (mesmos 3 campos obrigatórios + `fromTeamId`, `nick`, `fee`, `splits`, `state: 'agreed' | 'active'`, `kind: 'out' | 'in' | 'ai'`, `startSplit`, `signing`).
+  - tipos novos: `NeedReason`, `MarketLoan`, `MarketWindowLog`.
+- Pontes com G e H em `clube/mercadoPontes.ts` — STUBS com a assinatura combinada: `releaseClauseOf(save, playerId)` (H; lê `clube.contracts[id].releaseClause`), `wantsToLeave(save, playerId)`, `leaveRequests(save, squadIds)`, `benchValueFactor(dressing, playerId)` e `SQUAD_MAX = 7` (G). Na integração: `export { releaseClauseOf } from './contratos'` e `export { wantsToLeave, leaveRequests, benchValueFactor, SQUAD_MAX } from './vestiario'`.
+- `CareerSave` (CareerScreen) ganha `clube?: ClubeState` (as outras frentes provavelmente adicionam a mesma linha: conflito trivial).
+- Mundo da IA extraído do CareerScreen para `engine/career/aiWorld.ts` (movimento puro, conferido linha a linha) + `buildAiWorld` (o `currentEra` agora chama ele) e `nextAiDrift` (o drift do fechamento). Quem chega pelo mercado (`market.arrivals`) vai pra frente do elenco da IA; sem chegadas, a ordem é a de sempre.
+- Janelas: pré-temporada no fechamento do split (o antigo `applyTransferWindow`, agora com o novo motor) e janela CURTA na virada etapa 1 → 2 (IA + propostas + `consummateDeals` + empréstimos). Roster lock no split de Major da etapa 3 ao fim do Major. Vendido na janela curta com elenco < 5 cai no mercado (stage `market`) antes da etapa 2.
+- `incomingOffers` (propostas ad hoc por hash) saiu: as propostas vêm de `clube.market.incoming`, geradas pelas necessidades dos clubes. `pendingSales` continua sendo o trilho da venda (cláusula paga + jogador disposto já entra nele).
+- Recusar proposta de quem quer sair: −15 de moral (−8 se ele adorou a proposta) em `save.morale` — a felicidade unificada da frente G deve ler daí (ou trocar por uma API dela).
+- Salário atual do seu jogador nas propostas: `clube.contracts[id].wage` (H), com `playerWage` como reserva.
+- `prepareTeams`: jogador do elenco além dos 5 (stand-in emprestado, reserva) cobre lesão antes do jovem da base — a frente G pode trocar pela escalação/banco dela.
+- Stand-in do usuário respeita `SQUAD_MAX`; empréstimo de saída exige mais de 5 no elenco.
+
+
