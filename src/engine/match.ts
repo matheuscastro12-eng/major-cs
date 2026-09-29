@@ -230,6 +230,7 @@ export interface MapSimOpts {
   engine?: MatchEngine;     // trava o motor (sessão persistida replaya no motor em que nasceu)
   mapIndex?: number;        // 0-based na série: fadiga (stamina) a partir do 2º mapa
   bigMatch?: boolean;       // jogo grande (final, playoff de Major): pesa o oculto bigMatch
+  pressure?: number;        // [fase 4 · circuito] 0–1: peso do oculto bigMatch fora de jogo grande (LAN 0,35; Major 0,5; online 0). bigMatch vence (=1).
   duelMods?: Record<string, number>; // modificador de duelo por jogador (pontos de atributo) — RtP: a decisão da Sala
   manualTimeouts?: 0 | 1;   // [fase 2 · tática] time que chama timeout à mão (partida interativa): sem timeout automático da tática
 }

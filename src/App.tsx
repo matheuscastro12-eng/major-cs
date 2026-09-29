@@ -11,7 +11,7 @@ import { GameShell, PeekLayer, ShellProvider, type ShellCommand, type ShellGloba
 import { TeamBadge } from './components/ui';
 import {
   CalendarDays, Star, ChartColumn, CircleUser, Crosshair, Heart, House, Landmark, Layers, ListOrdered, LogIn,
-  Medal, Network, Swords, Trophy, Plus, Shuffle, Play, FastForward, CalendarRange,   LayoutDashboard, Newspaper, BookOpen, ArrowLeftRight,
+  Medal, Network, Swords, Trophy, Plus, Shuffle, Play, FastForward, CalendarRange,   LayoutDashboard, Newspaper, BookOpen, ArrowLeftRight, PencilRuler,
 } from 'lucide-react';
 import { openPatchNotes, hasNewPatch } from './components/PatchNotesModal';
 import { openHowToPlay } from './components/HowToPlayHost';
@@ -76,6 +76,8 @@ const Admin = lazyWithReload(() => import('./components/Admin').then((m) => ({ d
 const CareerScreen = lazyWithReload(() => import('./components/CareerScreen').then((m) => ({ default: m.CareerScreen })));
 const CareerSaves = lazyWithReload(() => import('./components/CareerSaves').then((m) => ({ default: m.CareerSaves })));
 const CareerCRM = lazyWithReload(() => import('./components/CareerCRM').then((m) => ({ default: m.CareerCRM })));
+// [fase 4] editor de base (carrega a base oficial: chunk próprio, como a Carreira)
+const DatabaseEditor = lazyWithReload(() => import('./components/editor/DatabaseEditor').then((m) => ({ default: m.DatabaseEditor })));
 const RevenueCRM = lazyWithReload(() => import('./components/RevenueCRM').then((m) => ({ default: m.RevenueCRM })));
 const LiveopsCRM = lazyWithReload(() => import('./components/LiveopsCRM').then((m) => ({ default: m.LiveopsCRM })));
 const FinalScreen = lazyWithReload(() => import('./components/FinalScreen').then((m) => ({ default: m.FinalScreen })));
@@ -165,6 +167,7 @@ type Screen =
   | 'daily'
   | 'career'
   | 'careerSaves'
+  | 'editor'
   | 'careerCRM'
   | 'revenueCRM'
   | 'liveopsCRM'
@@ -185,6 +188,7 @@ const SCREEN_PATH: Record<Screen, string> = {
   daily: '/diario',
   career: '/carreira',
   careerSaves: '/carreira/saves',
+  editor: '/editor',
   hall: '/hall',
   draft: '/jogo/draft',
   hub: '/jogo/major',
@@ -210,6 +214,7 @@ const SCREEN_PATH: Record<Screen, string> = {
 const SCREEN_MODE: Partial<Record<Screen, 'carreira' | 'rtp' | 'ultimate' | 'diario' | 'online'>> = {
   career: 'carreira',
   careerSaves: 'carreira',
+  editor: 'carreira',
   rtp: 'rtp',
   ultimate: 'ultimate',
   daily: 'diario',
@@ -637,7 +642,7 @@ export default function App() {
   useEffect(() => {
     const TITLES: Partial<Record<Screen, string>> = {
       draft: 'Draft', hub: 'Campeonato', veto: 'Veto de mapas', match: 'Partida ao vivo',
-      final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama',
+      final: 'Resultado', online: 'Online', career: 'Modo Carreira', hall: 'Hall da Fama', editor: 'Editor de base',
       design: 'Design system',
       stats: 'Estatísticas', admin: 'Admin',
       privacy: 'Privacidade', terms: 'Termos', refund: 'Reembolso',
@@ -961,6 +966,9 @@ export default function App() {
   };
 
   // ── shell universal: trilho de modos, usuário e comandos globais ──────────
+  // [fase 4] editor de base: de onde veio decide o "voltar" (Início ou a criação da Carreira)
+  const [editorFrom, setEditorFrom] = useState<'home' | 'career'>('home');
+  const openEditor = (from: 'home' | 'career') => { setEditorFrom(from); setScreen('editor'); };
   const openCareerMode = () => {
     // mesmo caminho do card da Home: espera a conta pra decidir (vitalícia → saves)
     if (!accountReady) return;
@@ -992,6 +1000,7 @@ export default function App() {
   ];
   const shellCommands: ShellCommand[] = [
     { id: 'new-major', label: ct('Novo Major (draft)'), group: ct('Ações'), icon: Plus, keywords: 'draft major rapido', run: newMajor },
+    { id: 'editor', label: ct('Editor de base'), group: ct('Ações'), icon: PencilRuler, keywords: 'editor base database jogadores times fm', run: () => openEditor('home') },
     { id: 'achievements', label: ct('Conquistas'), group: ct('Você'), icon: Medal, run: () => setAchOpen(true) },
     { id: 'hall', label: ct('Hall da Fama'), group: ct('Você'), icon: Landmark, run: () => setScreen('hall') },
     { id: 'ranking', label: ct('Ranking'), group: ct('Você'), icon: ListOrdered, run: () => setScreen('leaderboard') },
@@ -1029,6 +1038,7 @@ export default function App() {
       { id: 'hall', label: ct('Hall da Fama'), icon: Landmark },
     ] },
     { id: 'projeto', label: ct('Projeto'), icon: Heart, items: [
+      { id: 'editor', label: ct('Editor de base'), icon: PencilRuler },
       { id: 'howto', label: ct('Como jogar'), icon: BookOpen },
       { id: 'donate', label: ct('Apoiar o projeto'), icon: Heart },
     ] },
@@ -1039,6 +1049,7 @@ export default function App() {
     else if (id === 'howto') openHowToPlay();
     else if (id === 'donate') { track('donate_click', { from: 'menu' }); setDonateOpen(true); }
     else if (id === 'profile') openAccount();
+    else if (id === 'editor') openEditor('home');
     else setScreen(id as Screen);
   };
   const withShell = (node: React.ReactNode) => (
@@ -1281,6 +1292,7 @@ export default function App() {
           premiumLocked={!account?.paid}
           ultimateLocked={false}
           onLeaderboard={() => setScreen('leaderboard')}
+          onEditor={() => openEditor('home')}
           onCareer={() => {
             // Aguarda account terminar de carregar antes de decidir o caminho —
             // antes podia cair no else se o usuário clicava muito rápido
@@ -1415,9 +1427,15 @@ export default function App() {
           ? <Loader text="☁ …" />
           : (
             <ModeErrorBoundary mode="career" onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')}>
-              <CareerScreen key={careerEpoch} dataset={dataset} founder={!!account?.founder} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} />
+              <CareerScreen key={careerEpoch} dataset={dataset} founder={!!account?.founder} onExit={() => setScreen(account?.paid ? 'careerSaves' : 'home')} onOpenEditor={() => openEditor('career')} />
             </ModeErrorBoundary>
           )
+      )}
+      {screen === 'editor' && (
+        <DatabaseEditor
+          onExit={() => setScreen('home')}
+          onPlayCareer={editorFrom === 'career' ? () => setScreen('career') : openCareerMode}
+        />
       )}
       {screen === 'careerCRM' && (
         <AdminGate account={account} ready={accountReady} onExit={() => setScreen('home')}>

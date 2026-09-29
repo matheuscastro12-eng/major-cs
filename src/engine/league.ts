@@ -24,6 +24,8 @@ export interface League {
     groups: string[][]; // ids em ordem de seed por grupo (A, B, C, D…)
     place: Record<string, number>; // id -> colocação no grupo (1 a 4), preenchido ao resolver
   };
+  // [fase 4 · circuito] evento LAN: peso do oculto bigMatch no motor v2 (ausente/0 = online)
+  pressure?: number;
 }
 
 // tabela round-robin pelo método do círculo (sem rng: a ordem dos times define).
