@@ -85,6 +85,12 @@ export function transferWindowOf(a: { split: number; eventInSplit: number; inMaj
   };
 }
 
+// grava o status da janela no mercado (a frente G lê `rosterLocked`)
+export function withWindowStatus(m: MarketState, a: { split: number; eventInSplit: number; inMajor: boolean; majorSplit: boolean }): MarketState {
+  const w = transferWindowOf(a);
+  return { ...m, window: { open: w.open, rosterLocked: w.rosterLocked, label: w.label } };
+}
+
 // ─── propostas pelos seus jogadores ─────────────────────────────────────────
 export interface SquadEntry {
   player: Player;       // id do jogador = playerId do seu elenco
@@ -92,6 +98,7 @@ export interface SquadEntry {
   clause: number | null;// cláusula de rescisão (frente H)
   wantsLeave: boolean;  // quer sair (frente G)
   committed: boolean;   // já está saindo (venda/troca/empréstimo acertados)
+  valueFactor?: number; // frente G: 0,85–1 (no banco vale menos pra IA)
 }
 export type Willingness = 'eager' | 'open' | 'reluctant';
 export const WILLING_LABEL: Record<Willingness, string> = { eager: 'Quer ir', open: 'Aberto a ouvir', reluctant: 'Quer ficar' };
@@ -154,7 +161,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
     let chance = clamp(12 + (ovr - 72) * 4, 0, 65);
     if (e.wantsLeave) chance += 15;
     if (a.kind === 'mid') chance = Math.round(chance / 2);
-    const value = playerValue(e.player);
+    const value = playerValue(e.player) * (e.valueFactor ?? 1);
     let best: Cand | null = null;
     let dreamer: TeamSeason | null = null;
     for (const t of a.teams) {
@@ -170,7 +177,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
       const fee = round10k(value * (1 + bump + (strategy === 'starBuyer' ? 0.1 : 0) + (need.priority >= 80 ? 0.1 : 0)));
       const budget = a.budgets[t.id] ?? 0;
       if (fee + playerWage(e.player) > budget) { if (!dreamer || aiTierOf(t) < aiTierOf(dreamer)) dreamer = t; continue; }
-      const score = need.priority + (strategy === 'starBuyer' ? 20 : 0) + (4 - aiTierOf(t)) * 5 + (h % 10);
+      const score = need.priority + (strategy === 'starBuyer' ? 20 : 0) + (4 - aiTierOf(t)) * 5 + (h % 10) + (e.wantsLeave ? 25 : 0);
       if (!best || score > best.score) best = { e, team: t, need, fee, score };
     }
     const roll = h % 100;
@@ -351,7 +358,9 @@ export function moveHeadline(mv: WorldMove, split: number, soldBy?: (playerId: s
 
 export function windowNews(tick: Pick<WorldTickResult, 'log' | 'chains' | 'standIns'>, split: number, kind: WindowKind, offersCount: number): MarketNews[] {
   const byPlayer = new Map(tick.log.map((m) => [m.playerId, m] as [string, WorldMove]));
-  const top = [...tick.log].sort((a, b) => b.ovr - a.ovr || (a.playerId < b.playerId ? -1 : 1)).slice(0, kind === 'mid' ? 2 : 3);
+  // manchete: negócio com taxa e cadeia rende mais notícia que contratação livre
+  const weight = (m: WorldMove) => m.ovr + (m.kind === 'transfer' ? 12 : 0) + (m.chainOf ? 4 : 0) + m.fee / 250_000;
+  const top = [...tick.log].sort((a, b) => weight(b) - weight(a) || (a.playerId < b.playerId ? -1 : 1)).slice(0, kind === 'mid' ? 2 : 3);
   const out = top.map((mv) => moveHeadline(mv, split, (pid) => byPlayer.get(pid)));
   if (tick.log.length > 0 || offersCount > 0) {
     const fees = tick.log.reduce((a, m) => a + m.fee, 0);
@@ -388,9 +397,12 @@ export function chainRumors(log: WorldMove[], split: number, max = 3): MarketRum
   });
 }
 
+// rumor repetido (mesmo texto ainda na lista) não entra de novo
 export function pushRumors(m: MarketState, rumors: MarketRumor[]): MarketState {
-  if (!rumors.length) return m;
-  return { ...m, rumors: [...rumors, ...m.rumors].slice(0, 30) };
+  const seen = new Set(m.rumors.map((r) => r.text));
+  const fresh = rumors.filter((r) => (seen.has(r.text) ? false : (seen.add(r.text), true)));
+  if (!fresh.length) return m;
+  return { ...m, rumors: [...fresh, ...m.rumors].slice(0, 30) };
 }
 
 export function logWindow(m: MarketState, entry: MarketWindowLog): MarketState {

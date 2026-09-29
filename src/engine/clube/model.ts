@@ -133,6 +133,9 @@ export interface MarketState {
   arrivals?: Record<string, number>;         // playerId → split em que chegou ao clube da IA (entra entre os 5)
   windows?: MarketWindowLog[];               // janelas mais recentes primeiro (teto 12)
   lastWindow?: { split: number; event: number; kind: MarketWindowLog['kind'] } | null;
+  // [fase 3 · mercado] status da janela no momento do calendário (atualizado a cada
+  // virada de etapa/split; roster lock antes do Major). A frente G lê `rosterLocked`.
+  window?: TransferWindow;
 }
 
 // ─── Bloco gravado no save da Carreira (v29) ───────────────────────────────

@@ -561,14 +561,17 @@ import { TrainingTab } from '../pages/career/TrainingTab';
 import { OverviewTab } from '../pages/career/OverviewTab';
 // [fase 2 · frente STAFF] comissão técnica
 import { StaffTab } from '../pages/career/StaffTab';
-import type { ClubeState, MarketLoan, MarketState } from '../engine/clube/model';
+import type { ClubeState, ClubStrategy, MarketLoan, MarketState } from '../engine/clube/model';
 import { migrateClube } from '../engine/clube/clubeMigration';
-import { tickMarketWindow, type WindowKind } from '../engine/clube/mercadoIA';
+import { tickMarketWindow, clubsSnapshot, clubNeeds, aiTierOf, squadOvr, type ClubNeed, type WindowKind } from '../engine/clube/mercadoIA';
 import {
   marketOf, userLoans, expireOffers, generateIncomingOffers, applyWorldTick, withOffers, pushRumors, chainRumors, needRumors,
-  logWindow, windowItems, windowNews, NEED_LABEL, type SquadEntry,
+  logWindow, windowItems, windowNews, NEED_LABEL, transferWindowOf, acceptOffer, rejectOffer, counterOffer, playerWillingness,
+  agreeLoan, cancelLoan, loanFee, standInCandidates, STRATEGY_HINT, STRATEGY_LABEL, withWindowStatus, type SquadEntry,
 } from '../engine/clube/mercado';
-import { releaseClauseOf, wantsToLeave } from '../engine/clube/mercadoPontes';
+import { releaseClauseOf, wantsToLeave, leaveRequests, benchValueFactor, SQUAD_MAX } from '../engine/clube/mercadoPontes';
+import { TransfersTab, type View as TransfersView, type RivalRow, type OfferRow, type TargetRow, type StandInRow } from '../pages/career/TransfersTab';
+import { aiContractSplitsLeft } from '../engine/career/buyout';
 import { migrateGestao } from '../engine/gestao/gestaoMigration';
 import type { GestaoState } from '../engine/gestao/model';
 import { staffEffects, staffSplitTick, syncHeadCoach, scaleStep } from '../engine/gestao/staff';
@@ -2384,6 +2387,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // subseções da sidebar estilo FM que vivem dentro de uma aba (Elenco, Finanças)
   const [squadSec, setSquadSec] = useState<string>('sq');
   const [finSec, setFinSec] = useState<string>('fi');
+  const [tfView, setTfView] = useState<TransfersView>('geral'); // [fase 3] seção da tela Transferências
+  const [negoFocus, setNegoFocus] = useState<{ q: string; n: number } | null>(null); // "Negociar" a partir de um alvo
   // peek de jogador (hover card): refs "career:<id>" resolvidos pelo hub da
   // liga (a função é preenchida lá embaixo, quando a liga existe)
   const peekFnRef = useRef<(id: string) => PeekData | null>(() => null);
@@ -3964,16 +3969,19 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       ...(s.pendingDeals ?? []).flatMap((d) => d.outPlayerIds),
       ...m.loans.filter((l) => l.kind === 'out' || l.kind === 'in').map((l) => l.playerId),
     ]);
-    const contracts = clubeOf(s).contracts;
-    return s.squad.map((sig) => {
+    const clube = clubeOf(s);
+    const contracts = clube.contracts;
+    const leaving = new Set(leaveRequests(s as unknown as Record<string, unknown>, s.squad.map((x) => x.playerId)));
+    return s.squad.map((sig): SquadEntry | null => {
       const f = findSigning(sig);
       if (!f) return null;
       const wage = contracts[sig.playerId]?.wage || playerWage(f.player);
       return {
         player: { ...f.player, id: sig.playerId }, wage,
         clause: releaseClauseOf(s as unknown as Record<string, unknown>, sig.playerId),
-        wantsLeave: wantsToLeave(s as unknown as Record<string, unknown>, sig.playerId),
+        wantsLeave: leaving.has(sig.playerId) || wantsToLeave(s as unknown as Record<string, unknown>, sig.playerId),
         committed: committed.has(sig.playerId),
+        valueFactor: benchValueFactor(clube.dressing, sig.playerId),
       };
     }).filter((x): x is SquadEntry => !!x);
   };
@@ -3989,6 +3997,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     m = applyWorldTick(m, tick, offerSplit, kind === 'offseason' ? 1 : (s.eventInSplit ?? 1), kind);
     m = withOffers(m, off.offers);
     m = pushRumors(m, [...chainRumors(tick.log, offerSplit), ...needRumors(tick.needs, tick.teams, offerSplit), ...off.rumors]);
+    m = withWindowStatus(m, { split: offerSplit, eventInSplit: kind === 'offseason' ? 1 : 2, inMajor: false, majorSplit: isMajorSplit(offerSplit) });
     m = logWindow(m, { split: offerSplit, kind, moves: tick.log.length, chains: tick.chains, standIns: tick.standIns, offers: off.offers.length, items: windowItems(tick.log) });
     const openOffers = off.offers.filter((o) => o.status === 'open').length;
     const news: NewsItem[] = [...windowNews(tick, offerSplit, kind, openOffers)];
@@ -4051,8 +4060,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       } else if (l.state === 'agreed' && l.kind === 'in') {
         // stand-in entra na janela CURTA e fica até o fim do split (o fechamento o devolve)
         if (kind !== 'mid') { loans.push(l); continue; }
-        if (budget < (l.fee ?? 0) || squad.some((x) => x.playerId === l.playerId)) {
-          news.push({ id: `${s.split}:standinfail:${l.playerId}`, split: s.split, icon: '⚠️', tone: 'bad', cat: 'transfer', title: `${ct('Stand-in cancelado:')} ${l.nick ?? l.playerId}`, body: ct('Sem caixa para a taxa do empréstimo na janela.') });
+        if (budget < (l.fee ?? 0) || squad.some((x) => x.playerId === l.playerId) || squad.length >= SQUAD_MAX) {
+          news.push({ id: `${s.split}:standinfail:${l.playerId}`, split: s.split, icon: '⚠️', tone: 'bad', cat: 'transfer', title: `${ct('Stand-in cancelado:')} ${l.nick ?? l.playerId}`, body: squad.length >= SQUAD_MAX ? ct('Elenco cheio (7): libere uma vaga antes do stand-in.') : ct('Sem caixa para a taxa do empréstimo na janela.') });
           continue;
         }
         const base: Signing = { playerId: l.playerId, fromId: l.fromTeamId ?? FREE_TEAM_ID, fee: 0 };
@@ -4686,6 +4695,57 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- worldTick é puro sobre (save, oppEra, bo3Edits)
     [stage, save, oppEra, bo3Edits, lastWindowFeed],
   );
+  // [fase 3 · mercado] leitura dos clubes pra tela Transferências (caixa,
+  // estratégia e necessidades por função). Usa o que a última janela gravou;
+  // sem janela ainda (save antigo, carreira nova) calcula na hora.
+  const marketClubsMemo = useMemo(() => {
+    if (hubTab !== 'market' || !save.org) return null;
+    const teams = oppEra.filter((t) => t.id !== save.takeoverId);
+    const forms = computeAllTeamForms(save);
+    const m = marketOf(save);
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
+    const snap = stored
+      ? { budgets: m.budgets, strategies: m.strategies ?? {} }
+      : clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? aiTeamVrs(t, save.split) : 0; }, ageOf: (p) => aiAgeOf(p, save.split) });
+    const ageOf = (p: Player) => aiAgeOf(p, save.split);
+    const rows: RivalRow[] = teams.map((t) => {
+      const strategy = snap.strategies[t.id] ?? 'balanced';
+      const form = forms[t.id] ?? 50;
+      return {
+        id: t.id, team: t.team, tag: t.tag, tier: aiTierOf(t), country: t.country, strategy, budget: snap.budgets[t.id] ?? 0, form,
+        squadOvr: squadOvr(t.players), needs: clubNeeds(t, { split: save.split, form, strategy, ageOf, baseOvrOf, movable: (p) => BASE_PLAYER_IDS.has(p.id) }),
+      };
+    });
+    return { rows, byId: new Map(rows.map((r) => [r.id, r])), strategies: snap.strategies, budgets: snap.budgets };
+  }, [hubTab, oppEra, save]);
+
+  // [fase 3 · mercado] save que ainda não passou por nenhuma janela (migrado da
+  // v28 ou carreira nova): abre o mercado com caixa/estratégia dos rivais e as
+  // primeiras propostas — sem mexer no mundo (nenhum movimento da IA).
+  const marketNeedsBoot = !!save.org && save.squad.length >= 5 && !!save.league && !marketOf(save).lastWindow;
+  useEffect(() => {
+    if (!marketNeedsBoot) return;
+    const m = marketOf(save);
+    const teams = oppEra.filter((t) => t.id !== save.takeoverId);
+    const forms = computeAllTeamForms(save);
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    const ageOf = (p: Player) => aiAgeOf(p, save.split);
+    const snap = clubsSnapshot({ teams, split: save.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? aiTeamVrs(t, save.split) : 0; }, ageOf });
+    const win = transferWindowOf({ split: save.split, eventInSplit: save.eventInSplit ?? 1, inMajor: !!save.majorT && save.majorT.phase !== 'done', majorSplit: isMajorSplit(save.split) });
+    // na abertura ninguém paga cláusula: o mundo não força venda ao carregar o save
+    const squad = squadEntries(save).map((e) => ({ ...e, clause: null }));
+    const off = win.rosterLocked
+      ? { offers: [], rumors: [] }
+      : generateIncomingOffers({ split: save.split, kind: 'boot', squad, teams, budgets: snap.budgets, strategies: snap.strategies, formOf: (id) => forms[id] ?? 50, ageOf, userTier: save.tier ?? 3, existing: m.incoming, max: 2 });
+    let next: MarketState = { ...m, budgets: snap.budgets, strategies: snap.strategies, lastWindow: { split: save.split, event: save.eventInSplit ?? 1, kind: 'boot' }, window: { open: win.open, rosterLocked: win.rosterLocked, label: win.label } };
+    next = withOffers(next, off.offers);
+    const needs = teams.map((t) => clubNeeds(t, { split: save.split, form: forms[t.id] ?? 50, strategy: snap.strategies[t.id] ?? 'balanced', ageOf, baseOvrOf })[0]).filter((n): n is ClubNeed => !!n);
+    next = pushRumors(next, [...needRumors(needs, teams, save.split), ...off.rumors]);
+    update(withMarket(save, next));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save sem janela
+  }, [marketNeedsBoot]);
+
   const vrsByRegionMemo = useMemo(() => {
     // bandeira E região de cada time saem do CORE do elenco (o país do header da
     // base é furado). A org usa a região que escolheu competir (save.region).
@@ -5878,6 +5938,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                         body: ct('Elencos travados até o fim do Major: ninguém entra nem sai, a IA para de negociar e não chegam propostas. Acordos fechados agora valem na janela de pré-temporada.'),
                       }]) };
                     }
+                    // status da janela na nova etapa (roster lock no split de Major a partir da etapa 3)
+                    fin = { ...fin, ...withMarket(fin, withWindowStatus(marketOf(fin), { split: fin.split, eventInSplit: fin.eventInSplit ?? 1, inMajor: false, majorSplit: isMajorSplit(fin.split) })) };
                     persist(fin);
                     setSave(fin);
                     // vendeu/emprestou e ficou com menos de 5: completa o elenco antes da etapa
@@ -7038,25 +7100,132 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         />
       )}
 
-      {/* ===== MERCADO: janela FECHADA durante a temporada ===== */}
-      {hubTab === 'market' && (
-        <SeasonNegotiations
-          market={market}
-          squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
-          budget={save.budget}
-          clubFormOf={(id) => formOf(save, id)}
-          split={save.split}
-          pendingDeals={save.pendingDeals ?? []}
-          pendingSales={save.pendingSales ?? []}
-          offers={[]}
-          feed={feedMemo}
-          onAddDeal={(d) => update({ pendingDeals: [...(save.pendingDeals ?? []), d] })}
-          onCancelDeal={(id) => update({ pendingDeals: (save.pendingDeals ?? []).filter((x) => x.id !== id) })}
-          onAcceptOffer={(o) => update({ pendingSales: [...(save.pendingSales ?? []), o] })}
-          onRejectOffer={(pid) => update({ rejectedOffers: [...(save.rejectedOffers ?? []), pid] })}
-          onCancelSale={(pid) => update({ pendingSales: (save.pendingSales ?? []).filter((x) => x.playerId !== pid) })}
-        />
-      )}
+      {/* ===== MERCADO › TRANSFERÊNCIAS [fase 3]: janela, propostas, rivais, alvos, empréstimos e negociação ===== */}
+      {hubTab === 'market' && marketClubsMemo && (() => {
+        const m = marketOf(save);
+        const clubs = marketClubsMemo;
+        const win = transferWindowOf({ split: save.split, eventInSplit: save.eventInSplit ?? 1, inMajor: majorActive, majorSplit: isMajorSplit(save.split) });
+        const entries = squadEntries(save);
+        const entryOf = new Map(entries.map((e) => [e.player.id, e]));
+        const offers: OfferRow[] = m.incoming.map((o) => {
+          const e = entryOf.get(o.playerId);
+          const buyerTier = clubs.byId.get(o.fromTeamId)?.tier ?? 3;
+          const wage = e?.wage ?? Math.round((o.wageOffered ?? 0) / 1.2);
+          return {
+            offer: o, country: e?.player.country ?? '', age: e ? aiAgeOf(e.player, save.split) : 0, wage, value: e ? playerValue(e.player) : o.fee,
+            willingness: playerWillingness({ wage, wageOffered: o.wageOffered, buyerTier, userTier: save.tier ?? 3, wantsLeave: !!e?.wantsLeave }), buyerTier,
+          };
+        });
+        const loansMine = m.loans.filter((l) => l.kind === 'out' || l.kind === 'in');
+        const loanIds = new Set(loansMine.map((l) => l.playerId));
+        const teamName = (id?: string) => (id === FREE_TEAM_ID ? ct('mercado livre') : clubs.byId.get(id ?? '')?.team ?? id ?? '');
+        const squadIds = new Set(save.squad.map((sg) => sg.playerId));
+        const targets: TargetRow[] = market
+          .filter((x) => !squadIds.has(x.player.id) && x.from.id !== ACADEMY_FROM.id)
+          .map((x) => {
+            const free = x.from.id === FREE_AGENTS_FROM.id || x.from.id === FREE_TEAM_ID;
+            const strategy = free ? null : clubs.strategies[x.from.id] ?? null;
+            const left = aiContractSplitsLeft(x.player.id, save.split);
+            const owner = free ? null : clubs.byId.get(x.from.id);
+            const bestId = free ? null : [...x.from.players].sort((a, b) => playerOvr(b) - playerOvr(a))[0]?.id;
+            const sells: TargetRow['sells'] = free || strategy === 'survival' || left === 0 ? 'easy'
+              : (bestId === x.player.id && (owner?.form ?? 50) >= 55) || strategy === 'starBuyer' || left >= 2 ? 'hard' : 'normal';
+            return {
+              player: x.player, ovr: playerOvr(x.player), age: aiAgeOf(x.player, save.split), teamId: x.from.id,
+              teamName: free ? ct('Mercado livre') : x.from.team, teamTag: free ? 'FA' : x.from.tag, strategy,
+              asking: free ? 0 : askingPrice(x.player, x.from.teamwork), sells,
+            };
+          });
+        const exclude = new Set([...squadIds, ...loanIds]);
+        const standIns: StandInRow[] = standInCandidates({
+          teams: oppEra.filter((t) => t.id !== save.takeoverId), freeAgents: agedFreeAgents(applyBo3Edits(CS2_REAL_2026, bo3Edits), save.moves, save.split, squadIds),
+          strategies: clubs.strategies, exclude, movable: (pl) => BASE_PLAYER_IDS.has(pl.id),
+        }).slice(0, 60).map((c) => ({
+          player: c.player, ovr: playerOvr(c.player), age: aiAgeOf(c.player, save.split), teamId: c.team?.id ?? FREE_TEAM_ID,
+          teamName: c.team?.team ?? ct('Mercado livre'), teamTag: c.team?.tag ?? 'FA', fee: loanFee(c.player, 'in'), bench: !!c.team && c.team.players.indexOf(c.player) >= 5,
+        }));
+        const setMarket = (next: MarketState, extra?: Partial<CareerSave>) => update({ ...withMarket(save, next), ...extra });
+        return (
+          <TransfersTab
+            split={save.split}
+            budget={save.budget}
+            window={win}
+            market={m}
+            offers={offers}
+            pendingSales={save.pendingSales ?? []}
+            rivals={clubs.rows}
+            targets={targets}
+            squad={entries.filter((e) => !e.committed).map((e) => ({ id: e.player.id, nick: e.player.nick, role: e.player.role, ovr: playerOvr(e.player), country: e.player.country }))}
+            squadSize={save.squad.length}
+            standIns={standIns}
+            loans={loansMine.map((l) => ({ loan: l, partner: teamName(l.kind === 'out' ? l.toTeamId : l.fromTeamId) }))}
+            loanClubsFor={(role) => [...clubs.rows]
+              .sort((a, b) => Number(b.needs.some((n) => n.role === role)) - Number(a.needs.some((n) => n.role === role)) || b.budget - a.budget)
+              .slice(0, 20)}
+            loanFeeFor={(pid) => { const e = entryOf.get(pid); return e ? loanFee(e.player, 'out') : 0; }}
+            standInOpen={(save.eventInSplit ?? 1) === 1 && !win.rosterLocked}
+            squadMax={SQUAD_MAX}
+            onAccept={(id) => {
+              const r = acceptOffer(m, id);
+              if (r.sale) setMarket(r.market, { pendingSales: [...(save.pendingSales ?? []).filter((x) => x.playerId !== r.sale!.playerId), r.sale] });
+            }}
+            onReject={(id) => {
+              const o = offers.find((x) => x.offer.id === id);
+              if (!o) return;
+              const r = rejectOffer(m, id, { wantsLeave: !!entryOf.get(o.offer.playerId)?.wantsLeave, willingness: o.willingness });
+              if (!r.ok) return;
+              if (r.moraleDelta < 0) {
+                const morale = { ...(save.morale ?? {}) };
+                morale[o.offer.playerId] = Math.max(0, (morale[o.offer.playerId] ?? MORALE_DEFAULT) + r.moraleDelta);
+                const item: NewsItem = { id: `${save.split}:rej:${o.offer.playerId}`, split: save.split, icon: '😠', tone: 'bad', cat: 'transfer', title: `${o.offer.nick} ${ct('não gostou da recusa')}`, body: `${ct('Ele queria ouvir a')} ${o.offer.fromName}. ${ct('A moral caiu')} ${-r.moraleDelta} ${ct('pontos.')}` };
+                const withMorale: CareerSave = { ...save, morale };
+                update({ ...withMarket(save, r.market), morale, ...pushNews(withMorale, [item]) });
+              } else setMarket(r.market);
+            }}
+            onCounter={(id, ask) => {
+              const o = offers.find((x) => x.offer.id === id);
+              if (!o) return 'rejected';
+              const r = counterOffer(m, id, ask, { value: o.value, budget: clubs.budgets[o.offer.fromTeamId] ?? o.offer.fee });
+              setMarket(r.market, r.sale ? { pendingSales: [...(save.pendingSales ?? []).filter((x) => x.playerId !== r.sale!.playerId), r.sale] } : undefined);
+              return r.outcome;
+            }}
+            onCancelSale={(pid) => {
+              const incoming = m.incoming.map((o) => (o.playerId === pid && o.status === 'accepted' && !o.viaReleaseClause ? { ...o, status: 'open' as const } : o));
+              setMarket({ ...m, incoming }, { pendingSales: (save.pendingSales ?? []).filter((x) => x.playerId !== pid) });
+            }}
+            onLoanOut={(pid, toTeamId, splits) => {
+              const e = entryOf.get(pid);
+              if (!e) return;
+              setMarket(agreeLoan(m, { playerId: pid, nick: e.player.nick, kind: 'out', fromTeamId: 'user', toTeamId, splits, fee: loanFee(e.player, 'out'), split: save.split }));
+            }}
+            onStandIn={(row) => setMarket(agreeLoan(m, { playerId: row.player.id, nick: row.player.nick, kind: 'in', fromTeamId: row.teamId, toTeamId: 'user', splits: 1, fee: row.fee, split: save.split }))}
+            onCancelLoan={(pid) => setMarket(cancelLoan(m, pid))}
+            onNegotiate={(nick) => { setNegoFocus((f) => ({ q: nick, n: (f?.n ?? 0) + 1 })); setTfView('negociar'); }}
+            view={tfView}
+            onView={setTfView}
+            negotiate={(
+              <SeasonNegotiations
+                market={market}
+                squadPlayers={save.squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[]}
+                budget={save.budget}
+                clubFormOf={(id) => formOf(save, id)}
+                split={save.split}
+                pendingDeals={save.pendingDeals ?? []}
+                pendingSales={save.pendingSales ?? []}
+                offers={[]}
+                feed={feedMemo}
+                focusQuery={negoFocus}
+                ownerStrategyOf={(id) => clubs.strategies[id]}
+                onAddDeal={(d) => update({ pendingDeals: [...(save.pendingDeals ?? []), d] })}
+                onCancelDeal={(id) => update({ pendingDeals: (save.pendingDeals ?? []).filter((x) => x.id !== id) })}
+                onAcceptOffer={(o) => update({ pendingSales: [...(save.pendingSales ?? []), o] })}
+                onRejectOffer={(pid) => update({ rejectedOffers: [...(save.rejectedOffers ?? []), pid] })}
+                onCancelSale={(pid) => update({ pendingSales: (save.pendingSales ?? []).filter((x) => x.playerId !== pid) })}
+              />
+            )}
+          />
+        );
+      })()}
 
       {/* ===== RESULTADOS (todas as rodadas) ===== */}
       {/* T1.4: abas Results e Standings extraídas em src/pages/career/ */}
@@ -10059,7 +10228,9 @@ function ActionGold({ label, onClick, disabled }: { label: string; onClick: () =
 }
 
 // ---------- negociações durante a temporada (acordos pendentes p/ a janela) ----------
-function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf, split = 0 }: {
+function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf, split = 0, focusQuery, ownerStrategyOf }: {
+  focusQuery?: { q: string; n: number } | null; // [fase 3] 'Negociar' a partir da lista de alvos
+  ownerStrategyOf?: (teamId: string) => ClubStrategy | undefined; // [fase 3] estratégia do clube dono no card
   market: { player: Player; from: TeamSeason; price: number }[];
   squadPlayers: Player[];
   budget: number;
@@ -10085,6 +10256,8 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   // não mostrava tudo.
   const [negoLimit, setNegoLimit] = useState(60);
   useEffect(() => { setNegoLimit(60); }, [q, roleFilter, countryFilter, marketSort]);
+  // [fase 3] veio da lista de alvos: filtra pelo jogador escolhido
+  useEffect(() => { if (focusQuery) setQ(focusQuery.q); }, [focusQuery]);
   const marketRoles = ROLE_OPTS.filter((role) => market.some((item) => item.player.role === role));
   const marketCountries = [...new Set(market.map((m) => m.player.country).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
@@ -10243,6 +10416,9 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               )}
               {buyoutOf(m.player) > 0 && (
                 <div className="meta small" style={{ color: 'var(--em-muted)', fontWeight: 700 }}>🔒 {ct('cláusula')} {formatMoney(buyoutOf(m.player))}</div>
+              )}
+              {ownerStrategyOf && m.from.id !== FREE_TEAM_ID && ownerStrategyOf(m.from.id) && (
+                <div className="meta small muted" title={ct(STRATEGY_HINT[ownerStrategyOf(m.from.id)!])}>{ct('Dono')}: {ct(STRATEGY_LABEL[ownerStrategyOf(m.from.id)!])}</div>
               )}
             </button>
           ))}
