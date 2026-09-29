@@ -132,3 +132,11 @@
 .ci-field__team { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-2); border-radius: 6px; background: var(--c-surface-2); min-width: 0; font-size: var(--fs-2); }
 .ci-field__team b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; font-size: var(--fs-3); }
 .ci-cta { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; justify-content: center; padding: var(--sp-3) var(--sp-4) var(--sp-4); }
+
+/* composição do VRS no celular: some a coluna do peso (a idade) pra não estourar */
+.ci-vrs-rows { width: 100%; table-layout: auto; }
+.ci-vrs-rows td:first-child { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .career-dash table.stats.ci-vrs-rows { min-width: 0; }
+  .ci-vrs-rows td:nth-child(3) { display: none; }
+}

@@ -1637,7 +1637,9 @@ export function worldScene(teams: TeamSeason[], _split: number, mundo?: MundoSta
     arr.push(t);
     byRegion.set(r, arr);
   }
-  const recent = [...(mundo?.results ?? [])].filter((r) => r.kind !== 'qualifier').sort((a, b) => (b.t ?? 0) - (a.t ?? 0) || (a.tier ?? 3) - (b.tier ?? 3));
+  // o título mais recente e mais pesado: etapa mais nova primeiro, depois o maior prize pool
+  const recent = [...(mundo?.results ?? [])].filter((r) => r.kind !== 'qualifier')
+    .sort((a, b) => Math.floor(b.t ?? 0) - Math.floor(a.t ?? 0) || (b.prizePool ?? 0) - (a.prizePool ?? 0));
   const out: RegionScene[] = [];
   for (const reg of CAREER_REGION_ORDER) {
     const pool = (byRegion.get(reg) ?? []).slice().sort((a, b) => pts(b.id) - pts(a.id) || b.teamwork - a.teamwork);
@@ -2497,7 +2499,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const inMajor = !!majorT && majorT.phase !== 'done';
     const ev = inMajor
       ? { id: majorIdOf(save.split), lan: true, tier: 1, kind: 'major' as const, host: eventHost(MAJOR_NAME(save.split), 1).cc, name: MAJOR_NAME(save.split) }
-      : save.circuit ? { id: save.circuit.eventId ?? `legacy:${save.split}:${save.eventInSplit ?? 1}`, lan: !!save.circuit.lan, tier: save.circuit.tier, kind: 'gsl' as const, host: save.circuit.host ?? null, name: save.circuit.name } : null;
+      : save.circuit ? (() => {
+        // circuito de save antigo não carrega sede: a sede real sai do nome do evento
+        const h = eventHost(save.circuit.name, save.circuit.tier);
+        return { id: save.circuit.eventId ?? `legacy:${save.split}:${save.eventInSplit ?? 1}`, lan: save.circuit.lan ?? h.lan, tier: save.circuit.tier, kind: 'gsl' as const, host: save.circuit.host ?? h.cc, name: save.circuit.name };
+      })() : null;
     const plan = bootcampPlan(ev, save.region);
     const played = inMajor ? (save.majorHistory?.length ?? 0) + (majorT?.history.some((h) => h.pairing.a === USER_ID || h.pairing.b === USER_ID) ? 1 : 0) > 0
       : !!save.league?.rounds.some((r) => r.some((m) => !!m.result && (m.a === USER_ID || m.b === USER_ID)));
@@ -4667,6 +4673,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // Stage 1. Tudo LAN (pressão do Major no motor). O que você não joga (outros
   // RMRs, stages antes da sua entrada, o resto do Major se você cair) roda em
   // segundo plano e vira resultado do mundo no fim.
+  // o save guarda só o field (o ranking inteiro é derivável e pesa ~6 KB)
+  const slimPlan = (pl: MajorFieldPlan): MajorFieldPlan => ({ ...pl, ranked: [] });
   const majorTeamOf = (id: string, user: TTeam): TTeam | null => {
     if (id === USER_ID) return user;
     const t = oppEra.find((x) => x.id === id);
@@ -4714,7 +4722,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       setStage('hub');
       setMajorState(live, {
         majorStage: 0, majorUserStage: 0, majorSeed2: [], majorSeed3: [], majorPre: [], majorHistory: [],
-        majorPlan: plan, majorLog: [], majorRegion: route.region, ...visaPatch,
+        majorPlan: slimPlan(plan), majorLog: [], majorRegion: route.region, ...visaPatch,
       });
       return;
     }
@@ -4754,7 +4762,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       majorSeed3: userStage <= 2 ? s3band : [],
       majorPre: pre,
       majorHistory: [],
-      majorPlan: planR, majorLog: log, majorRegion: null, ...visaPatch,
+      majorPlan: slimPlan(planR), majorLog: log, majorRegion: null, ...visaPatch,
     });
   };
 
@@ -4830,7 +4838,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const T = (ids: string[]) => ids.map((id) => done.teams.find((x) => x.id === id) ?? majorTeamOf(id, user)).filter((x): x is TTeam => !!x);
       const next = createSwissStage(T([...planR.s1Invites, ...rmrQualifiedIds(planR)]), rngRef.current, `${MAJOR_NAME(save.split)} · Stage 1`);
       next.pressure = MAJOR_PRESSURE;
-      setMajorState(next, { majorStage: 1, majorHistory, majorPlan: planR, majorSeed2: T(planR.s2), majorSeed3: T(planR.s3) });
+      setMajorState(next, { majorStage: 1, majorHistory, majorPlan: slimPlan(planR), majorSeed2: T(planR.s2), majorSeed3: T(planR.s3) });
       setHubTab('major');
       setStage('hub');
       return;
@@ -6777,6 +6785,17 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const circuitFields: Record<string, { teams: string[]; invited: string[] }> = {};
   for (const c of circuits) if (c.eventId) circuitFields[c.eventId] = { teams: c.teams.map((t) => t.id), invited: c.invited ?? [] };
   if (myEventId) circuitFields[myEventId] = { teams: league.teams.map((t) => t.id), invited: circuitFields[myEventId]?.invited ?? [] };
+  // Major em curso: o field sai do plano (VRS 1–24 convidados + RMRs)
+  if (save.majorPlan && majorT) {
+    const pl = save.majorPlan;
+    const inv = [...pl.s3, ...pl.s2, ...pl.s1Invites];
+    const rmrQ = rmrQualifiedIds(pl);
+    circuitFields[majorIdOf(save.split)] = { teams: [...inv, ...rmrQ], invited: inv };
+    for (const reg of ['europe', 'americas', 'asia'] as const) {
+      const f = pl.rmr[reg];
+      if (f) circuitFields[`rmr:${save.split}:${reg}`] = { teams: f.field, invited: [] };
+    }
+  }
   const vrsTableNow = hubTab === 'vrs' || hubTab === 'circuito' ? computeVrs(mundoNow.results, mundoNow.vrsAt ?? etapaTime(save.split, save.eventInSplit ?? 1)) : null;
   const majorRouteInfo: MajorRouteInfo | null = hubTab !== 'calendar' ? null : (() => {
     const pool = oppEra.filter((x) => x.id !== USER_ID && x.players.length >= 5);
@@ -7987,7 +8006,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           fields={circuitFields}
           myEventId={myEventId}
           myLive={myLive}
-          selected={circuitoSel}
+          selected={circuitoSel ?? (majorT && majorT.phase !== 'done' ? (save.majorStage === 0 && save.majorRegion ? `rmr:${save.split}:${save.majorRegion}` : majorIdOf(save.split)) : null)}
           onSelect={setCircuitoSel}
           team={teamLite}
           onOpenTeam={openTeamProfile}

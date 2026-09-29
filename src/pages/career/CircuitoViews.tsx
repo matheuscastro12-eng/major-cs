@@ -122,7 +122,7 @@ export function CircuitPicker<T extends PickOption>({
   const invited = new Set(c?.invited ?? []);
   return (
     <div className="ci-pick">
-      <Panel icon={<CalendarDays size={16} />} title={`${ct('Split')} ${split} · ${ct('Etapa')} ${etapa} · ${ct('escolha o campeonato')}`}
+      <Panel icon={<CalendarDays size={16} />} title={`${ct('Split')} ${split} · ${ct('Etapa')} ${etapa}`}
         actions={<Button size="sm" variant="ghost" onClick={onBack}>{ct('← Mercado')}</Button>}>
         {relocate && (
           <Alert tone="info" title={ct('Core do elenco mudou de região')}>
@@ -131,7 +131,7 @@ export function CircuitPicker<T extends PickOption>({
           </Alert>
         )}
         <p className="ci-note">
-          {ct('Oito eventos acontecem ao mesmo tempo nesta etapa. Você joga o do seu tier, um abaixo, ou um acima: por convite (top do ranking VRS) ou pelo qualificatório (fechado no tier 1, aberto no tier 2). LAN pesa a pressão (oculto de jogo grande) e pede visto; online não.')}
+          <b>{ct('Escolha o campeonato.')}</b>{' '}{ct('Oito eventos acontecem ao mesmo tempo nesta etapa. Você joga o do seu tier, um abaixo, ou um acima: por convite (top do ranking VRS) ou pelo qualificatório (fechado no tier 1, aberto no tier 2). LAN pesa a pressão (oculto de jogo grande) e pede visto; online não.')}
           {' '}{ct('Você está em')} <b>#{worldRank < 999 ? worldRank : '—'}</b> {ct('no VRS')} · Tier {playerTier}.
         </p>
       </Panel>
@@ -315,16 +315,14 @@ export function CircuitoTab(p: CircuitoProps) {
     : [[1, '1º'], [2, '2º'], [3, '3–4º'], [5, '5–8º'], [9, '9–12º'], [13, '13–16º']] as const;
   return (
     <div className="em-tab ci-tab">
-      <Panel icon={<Award size={16} />} title={meta.name}
-        actions={(
-          <span className="ci-filters">
-            <select className="ci-select" aria-label={ct('Evento')} value={id} onChange={(e) => p.onSelect(e.target.value)}>
-              {!eventsForSelect.some((x) => x.id === id) && <option value={id}>{meta.name}</option>}
-              {eventsForSelect.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
-            </select>
-            <Button size="sm" variant="ghost" onClick={p.onOpenCalendar}>{ct('Calendário')}</Button>
-          </span>
-        )} flush>
+      <Panel icon={<Award size={16} />} title={meta.name} flush
+        actions={<Button size="sm" variant="ghost" onClick={p.onOpenCalendar}>{ct('Calendário')}</Button>}>
+        <div className="ci-pad ci-filters" style={{ paddingBottom: 0 }}>
+          <select className="ci-select" aria-label={ct('Evento')} value={id} onChange={(e) => p.onSelect(e.target.value)}>
+            {!eventsForSelect.some((x) => x.id === id) && <option value={id}>{meta.name}</option>}
+            {eventsForSelect.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+        </div>
         <div className="ci-facts">
           <div className="ci-fact"><small>{ct('Nível')}</small><b className="ci-tags"><TierTag tier={meta.tier} /> {ct(KIND_LABEL[meta.kind] ?? meta.kind)}</b></div>
           <div className="ci-fact"><small>{ct('Sede')}</small><b className="ci-tags"><LanTag lan={venue.lan} /> <Venue venue={venue.venue} cc={venue.cc} /></b></div>

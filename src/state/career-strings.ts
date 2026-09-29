@@ -4,6 +4,7 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   // [fase 4 · frente CIRCUITO] calendário, circuito, VRS, qualificatórios, RMR, LAN, visto e bootcamp
   "sem field nesta etapa": { en: "no field this stage", es: "sin field en esta etapa" },
   "não disputado": { en: "not held", es: "no disputado" },
+  "Escolha o campeonato.": { en: "Pick the tournament.", es: "Elige el campeonato." },
   "Bootcamp feito:": { en: "Bootcamp done:", es: "Bootcamp hecho:" },
   "Visto negado:": { en: "Visa denied:", es: "Visa denegada:" },
   "fora do": { en: "out of", es: "fuera del" },
@@ -72,7 +73,6 @@ export const CAREER_STR: Record<string, { en: string; es: string }> = {
   "Fora da sua divisão": { en: "Outside your division", es: "Fuera de tu división" },
   "Seu ranking VRS garantiu o convite": { en: "Your VRS ranking earned the invite", es: "Tu ranking VRS aseguró la invitación" },
   "Opcional: menos VRS e prêmio": { en: "Optional: less VRS and prize money", es: "Opcional: menos VRS y premio" },
-  "escolha o campeonato": { en: "pick the tournament", es: "elige el campeonato" },
   "Core do elenco mudou de região": { en: "The roster's core changed region", es: "El núcleo de la plantilla cambió de región" },
   "Agora é da": { en: "It's now from", es: "Ahora es de" },
   "Oito eventos acontecem ao mesmo tempo nesta etapa. Você joga o do seu tier, um abaixo, ou um acima: por convite (top do ranking VRS) ou pelo qualificatório (fechado no tier 1, aberto no tier 2). LAN pesa a pressão (oculto de jogo grande) e pede visto; online não.": { en: "Eight events run at the same time this stage. You play your tier's, one below, or one above: by invite (top of the VRS ranking) or through the qualifier (closed for tier 1, open for tier 2). LAN brings pressure (the hidden big-match attribute) and needs visas; online doesn't.", es: "Ocho eventos ocurren a la vez en esta etapa. Juegas el de tu tier, uno abajo, o uno arriba: por invitación (top del ranking VRS) o por el clasificatorio (cerrado en tier 1, abierto en tier 2). La LAN pesa la presión (oculto de partido grande) y pide visa; online no." },

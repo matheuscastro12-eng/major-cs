@@ -125,7 +125,7 @@ export function VrsTab({
                 <div className="ci-factor"><span>{ct('Rede de adversários')} ({Math.round(VRS_WEIGHTS.network * 100)}%)</span><Bar value={fe.factors!.network * 100} tone="var(--c-ct)" /><b>{Math.round(fe.factors!.network * 100)}</b></div>
                 <div className="ci-factor"><span>LAN ({Math.round(VRS_WEIGHTS.lan * 100)}%)</span><Bar value={fe.factors!.lan * 100} tone="var(--c-win)" /><b>{Math.round(fe.factors!.lan * 100)}</b></div>
               </div>
-              <table className="stats">
+              <table className="stats ci-vrs-rows">
                 <tbody>
                   {fe.rows.slice(0, 6).map((r) => (
                     <tr key={r.eventId} className={onOpenEvent ? 'clickable-row' : undefined} onClick={() => onOpenEvent?.(r.eventId)}>
