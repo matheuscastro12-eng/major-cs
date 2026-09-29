@@ -81,8 +81,15 @@ export interface TacticsState {
 // Modificadores que a tática entrega ao motor v2 por situação do round.
 export interface TacticDuelMods {
   teamLogit: number;                         // viés do time neste round (logit de duelo)
-  engageWeight?: Record<string, number>;     // playerId → peso de engajamento (quem duela)
+  engageWeight?: Record<string, number>;     // playerId → multiplicador do peso de engajamento na abertura (instrução × estilo)
   roleFit?: Record<string, number>;          // playerId → ajuste por jogar dentro/fora do papel (atributo equivalente)
+  // [fase 2 · tática] campos opcionais acrescentados (registrados em docs/realismo-fm-fase2.md):
+  mapRole?: Record<string, MapRole>;         // playerId → papel no mapa (tabela de engajamento por fase)
+  phaseLogit?: { open: number; mid: number; post: number }; // logit do time por fase do round
+  plantMult?: number;                        // só no T: ritmo/utilitária na execução (plant)
+  timeMult?: number;                         // só no T: chance de o tempo acabar
+  tradeMult?: number;                        // multiplicador de troca do time
+  saveMult?: number;                         // propensão a salvar no eco (política de eco)
 }
 
 // ─── Comissão técnica ──────────────────────────────────────────────────────

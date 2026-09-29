@@ -41,6 +41,7 @@ Princípio: **a simulação decide, a interface mostra** — e tudo visível com
 - Telas: capture 1440×900 e 390×844 (Playwright em `/private/tmp/claude-501/-Users-matheuscastro-orca-major-cs/3774674b-38bb-4228-8c79-6903e36bc699/scratchpad/video/cap/node_modules`, `chromium.launch({ channel: 'chrome' })`; dev server em porta livre própria) e confira você mesmo.
 
 ## Mudanças de contrato
+### Frente F (comissão técnica, `fase2/staff`)
 - **[F · staff] `defaultStaff(save?, coach?)`** (era `defaultStaff()`): recebe o save e, opcionalmente, o `Coach` já resolvido. `migrateGestao` passa o save. Sem técnico no save → comissão vazia (neutra). Técnico iniciante/personalizado se resolvem aqui; técnico de time real é resolvido pelo CareerScreen (a base bo3 não pode entrar na migração, que vai no bundle inicial) via `syncHeadCoach(staff, coach, coachFromId, split)`.
 - **[F · staff] `StaffMember` ganhou campos opcionais**: `since?` (split de entrada, idade exibida), `style?` (CoachStyle do técnico principal), `sourcePlayerId?` (ex-jogador aposentado). Save continua v28.
 - **[F · staff] `staffEffects(staff)`**: assinatura igual. `null`/lista vazia = neutro (todos 1, frações 0). Atributo 10 em tudo = 1.0 exato (frações `antiStratRead`/`scoutAccuracy` ≈ 0,43); cargo vago conta como atributo 7. Consumidores: treino (`training`, `injuryRisk/Recovery`), tática (`familiarityGain`, `antiStratRead`). A frente F já liga `moraleRecovery` (reversão da moral em `nextMorale`), `youthGrowth` (evolução da academia, `scaleStep`) e `scoutAccuracy` (5º parâmetro opcional de `paRange` em `engine/attrs/stars.ts`, 0 = largura antiga).
@@ -48,3 +49,46 @@ Princípio: **a simulação decide, a interface mostra** — e tudo visível com
 - **[F · staff] Economia**: a folha da comissão (`staffPayroll`) é debitada na virada de split (as duas viradas do CareerScreen) via `staffSplitTick`, que também resolve contratos (técnico principal renova sozinho). Teto da folha da comissão: `staffWageCap({ tier, board, sponsorIncome })`.
 - **[F · staff] IA**: `engine/gestao/staffData.ts` (só Carreira) gera a comissão de cada clube pelo tier (ranking de força da base) e soma `aiStaffEdgeFor(ts)` no `strength` dos times da IA em `startSplit` e `playMajor`. Delta relativo à comissão típica do tier: medido −0,28…+0,26 (média |·| < 0,05 por tier), teto ±0,5. Os times do harness de calibração não passam por aí.
 
+### Frente E (tática, `fase2/tatica`)
+- `TacticDuelMods` (model.ts) ganhou campos OPCIONAIS: `mapRole` (papel no mapa por jogador → tabela de engajamento), `phaseLogit` ({open, mid, post}), `plantMult`, `timeMult`, `tradeMult`, `saveMult`. `engageWeight` passou a ser o multiplicador da abertura (instrução de agressividade × estilo).
+- `TTeam.tactics?: TacticsState | null` (types.ts): é por aqui que a tática chega ao motor v2 (opt-in; o v1 ignora). A Carreira anexa em `prepareTeams` (usuário: `save.gestao.tactics`; IA: `aiTactics(team, { id: adversário, scouting })`).
+- `RoundSpec.phaseBias?: [abertura, meio, pós-plant]` e `RoundSpec.timeMult?` (match2/round.ts). Ausentes = motor bit a bit de antes.
+- `MapSimOpts.manualTimeouts?: 0 | 1`: o time que chama timeout à mão (MatchScreen passa o `userIdx`) não recebe timeout automático. `MapSimV2.autoTimeouts()` lista os automáticos.
+- Funções públicas de `gestao/tatica.ts` para as outras frentes:
+  - **treino**: `gainFamiliarity(tactics, map, points): TacticsState` (retorno decrescente perto de 100; negativo tira; cria o plano padrão do mapa se não houver) e `gainAntiStrat(tactics, opponentTeamId, points)` (sessão de VOD). O decaimento sem uso e o ganho por partida (+3 por mapa jogado, −1,5 por série nos outros, piso 20) já rodam no fim de cada série (`tacticsAfterMatch` em `recordCareerMatch`) — o treino NÃO precisa decair de novo. Se o treino quiser um decaimento semanal próprio, use `decayFamiliarity(tactics, mapasTreinados, amount)`.
+  - **staff**: `staffEffects().antiStratRead` entra em `antiStratReveal(read, nívelAnalista)` (quanto do plano adversário aparece na tela e a prontidão inicial ao preparar) e `staffEffects().familiarityGain` multiplica o ganho de familiaridade por partida.
+- `save.gestao` pode não existir em carreira nova criada já na v28 (a migração só roda em save antigo): a Carreira usa `save.gestao ?? migrateGestao({ squad }).gestao` e grava o bloco na primeira mudança.
+- `mapTraining` (treino de mapa antigo → `mapPrefs`) continua como está: é o conforto de DUELO no mapa. Familiaridade é o domínio do PLANO. Se a frente de treino trocar o "Treino de mapa" por familiaridade, remova o `mapTraining` para não contar duas vezes.
+
+### Efeitos medidos (frente E)
+`npx tsx scripts/measure-tactics.mts 4000` — espelho: o MESMO elenco (40 times tier S) contra um clone de si; só a tática muda; 4000 mapas por linha (±0,8 pp).
+
+| Confronto (A × B) | Vitória de mapa do A | Round do A |
+|---|---|---|
+| sanidade: sem tática × sem tática | 49,4% | 49,8% |
+| sanidade: tática da IA × tática da IA | 50,9% | 50,1% |
+| familiaridade 90 × 20 | **62,0%** | 53,2% |
+| familiaridade 80 × 50 | 56,0% | 51,4% |
+| familiaridade 50 × 20 | 55,9% | 51,4% |
+| papéis naturais × embaralhados | **66,8%** | 54,4% |
+| papéis naturais × AWP↔IGL trocados | 62,0% | 53,2% |
+| contra ideal (stackA/rush B) × previsível (stackA/rush A) | 63,4% | 53,6% |
+| repertório variado × previsível (sem leitura) | 52,1% | 50,4% |
+| anti-strat 100 × 0 (IA variada) | 54,7% | 51,0% |
+| anti-strat 50 × 0 | 52,7% | 50,5% |
+| anti-strat 100 × previsível | 58,7% | 52,2% |
+| **tática boa × ruim** (fam 85, papéis certos, variado × fam 25, embaralhado, previsível) | **75,7%** | 57,4% |
+| eco: sempre forçar × padrão | 49,9% | 49,9% |
+| eco: save total × padrão | 51,0% | 50,3% |
+| ritmo rápido × equilibrado | 51,0% | 50,2% |
+| ritmo lento × equilibrado | 50,4% | 49,9% |
+| agressiva × equilibrada | 50,6% | 49,9% |
+| passiva × equilibrada | 50,7% | 50,1% |
+| utilitária pesada × equilibrada | 49,3% | 49,7% |
+| timeout cedo × tarde | 51,2% | 50,1% |
+| plano padrão de quem nunca mexeu × tática da IA | 50,2% | 49,9% |
+
+Leitura: familiaridade, papéis e o confronto setup × execução movem a vitória de forma grande e plausível; as instruções são trocas (perto de neutras na média, dependem do encaixe com o elenco e o adversário); o plano padrão do usuário empata com a tática da IA (a dificuldade da Carreira não muda por causa da IA ter tática).
+
+### Calibração (frente E)
+`npx tsx scripts/calibrate-engine.mts 2500 20260929 --tactics` (os dois lados com `aiTactics` e anti-strat pelo scouting): TODOS os alvos dentro da tolerância, travado em `scripts/test-tactics.mts`. Sem tática, o motor é bit a bit o de antes (mesmos 54.158 rounds na seed do teste). Deslocamento médio com tática: CT% 52,0 → 51,3 (8000 mapas; o timeout automático quebra mais sequências do CT), clutch 1v1 igual à linha de base (49,5–49,8% em amostras grandes; o alvo 55,6 ± 7 já estava perto da borda antes da fase 2).

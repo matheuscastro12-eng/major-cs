@@ -20,6 +20,8 @@ import { teamSeasonToTTeam } from '../src/engine/ratings.ts';
 import { computeDisplay, simulateSeries, setMatchEngine, type MatchEngine } from '../src/engine/match.ts';
 import { createMapSimV2, type RoundTrace } from '../src/engine/match2/engine.ts';
 import { makeRng } from '../src/engine/rng.ts';
+import { aiTactics } from '../src/engine/gestao/tatica.ts';
+import { scoutingOf } from '../src/engine/career/teamIdentity.ts';
 import { MAP_POOL, type MapId, type PlayerLine, type Role, type TTeam } from '../src/types.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -68,8 +70,18 @@ export function tierSTeams(): TTeam[] {
   return realTeams().sort((a, b) => b.strength - a.strength).slice(0, TIER_S_TEAMS);
 }
 
-export function runCalibration(nMaps = 4000, seed = 20260929): Metrics {
+// Tática por mapa (fase 2): com `tactics`, os DOIS lados jogam com a tática
+// padrão da IA (aiTactics: papéis naturais, setup/execuções pelo estilo,
+// instruções pelo técnico/IGL, anti-strat pelo scouting de cada um).
+export interface CalibrationOpts { tactics?: boolean }
+
+export function withAiTactics(team: TTeam, opp: TTeam, base = aiTactics(team)): TTeam {
+  return { ...team, tactics: { ...base, antiStrat: { opponentTeamId: opp.id, readiness: Math.round(scoutingOf(team) * 50) } } };
+}
+
+export function runCalibration(nMaps = 4000, seed = 20260929, opts: CalibrationOpts = {}): Metrics {
   const teams = tierSTeams();
+  const tacBase = opts.tactics ? teams.map((t) => aiTactics(t)) : null;
   const rng = makeRng(seed);
   const ctW: Record<string, [number, number]> = {};
   let pistolWon = 0, pistolConv = 0;
@@ -89,7 +101,9 @@ export function runCalibration(nMaps = 4000, seed = 20260929): Metrics {
     if (j >= i) j++;
     const map = MAP_POOL[m % MAP_POOL.length] as MapId;
     const t0 = performance.now();
-    const sim = createMapSimV2(makeRng((seed ^ Math.imul(m + 1, 0x9e3779b1)) >>> 0), teams[i], teams[j], map, -1);
+    const A = tacBase ? withAiTactics(teams[i], teams[j], tacBase[i]) : teams[i];
+    const B = tacBase ? withAiTactics(teams[j], teams[i], tacBase[j]) : teams[j];
+    const sim = createMapSimV2(makeRng((seed ^ Math.imul(m + 1, 0x9e3779b1)) >>> 0), A, B, map, -1);
     while (!sim.step()) { /* joga o mapa */ }
     ms += performance.now() - t0;
     const tr: RoundTrace[] = sim.trace();
@@ -223,12 +237,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
   const n = Number(args[0] ?? 4000);
   const seed = Number(args[1] ?? 20260929);
-  const m = runCalibration(n, seed);
+  const m = runCalibration(n, seed, { tactics: process.argv.includes('--tactics') });
   const checks = compareTargets(m);
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ metrics: m, checks }, null, 2));
   } else {
-    console.log(`motor v2 — ${m.maps} mapas, ${m.rounds} rounds, ${m.msPerMap.toFixed(3)} ms/mapa`);
+    console.log(`motor v2${process.argv.includes('--tactics') ? ' + tática padrão da IA' : ''} — ${m.maps} mapas, ${m.rounds} rounds, ${m.msPerMap.toFixed(3)} ms/mapa`);
     console.log('alvo'.padEnd(26), 'alvo'.padEnd(16), 'obtido'.padEnd(10), 'ok');
     for (const c of checks) console.log(c.key.padEnd(26), fmtT(c).padEnd(16), fmt(c).padEnd(10), c.ok ? 'ok' : 'FORA', c.provisional ? '(provisório)' : '');
     console.log('rating absoluto por função:', Object.entries(m.ratingAbsByRole).map(([k, v]) => `${k} ${v.toFixed(3)}`).join('  '));
