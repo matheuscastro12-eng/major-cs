@@ -28,6 +28,7 @@ import {
 import type { YouthDebut } from '../../engine/career/playerAge';
 import type { PlayerCondition, TacticsState } from '../../engine/gestao/model';
 import { mapTacticOf } from '../../engine/gestao/tatica';
+import { defaultCondition } from '../../engine/gestao/treino';
 import { fatigueBand } from '../../engine/career/fatigue';
 import { formStatus } from '../../engine/career/form';
 import { activeStint as activeCoachStint } from '../../engine/coachCareer';
@@ -141,7 +142,7 @@ export function SquadTab({
       age: effectiveAge(p, save.split, save.youthAge, save.youthDebut),
       morale: mor, moraleLabel: moraleInfo(mor).label,
       fatigue: save.fatigue?.[p.id] ?? 0,
-      cond: condition?.[p.id] ?? null,
+      cond: condition?.[p.id] ?? defaultCondition(), // [integração] sem condição gravada: o padrão
       contractLeft: until != null ? until - save.split + 1 : null,
       wage: contractWageOf(save as { clube?: ClubeState }, p.id, () => playerWage(p)),
       rating: st?.rating, maps: st?.maps, kd: st?.kd, adr: st?.adr,

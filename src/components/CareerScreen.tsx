@@ -24,7 +24,7 @@ import { careerPlayerId, updateMatchFatigue } from '../engine/career/fatigue';
 // [fase 2 · treino] treino semanal, condição (fitness/ritmo/lesão) e scrim com vazamento
 import {
   gestaoOf, fatigueView, conditionWithFatigue, runTrainingWeek, applyRealScrim, closeTrainingSplit, recoverCondition,
-  trainingGrowthMul, leakAgainst, defaultTrainingState, vodPrepPoints, INJURY_LABEL, LEGACY_FOCUS_ATTR, ROLE_FOCUS_ATTRS,
+  trainingGrowthMul, leakAgainst, defaultTrainingState, withEntryCondition, defaultCondition, vodPrepPoints, INJURY_LABEL, LEGACY_FOCUS_ATTR, ROLE_FOCUS_ATTRS,
 } from '../engine/gestao/treino';
 import { applyConditionToTeam, substituteInjured, isInjured, type StandIn } from '../engine/gestao/condicao';
 import { ATTR_LABEL, type AttrKey } from '../engine/attributes';
@@ -4129,7 +4129,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     // [fase 3] base promovida assina o contrato padrão (salário de mercado, 3 splits)
     const clube = signContract(replaceOid ? { clube: withoutContracts(save, [replaceOid]) } : save, a.id, defaultTerms(playerWage(player), save.split));
     const academyFocus = save.academyFocus === prospectId ? null : save.academyFocus;
-    const next = { ...save, academy, youth, youthAge, youthDebut, squad, clube, academyFocus };
+    const next = withSquadCondition({ ...save, academy, youth, youthAge, youthDebut, squad, clube, academyFocus }); // [integração] condição na entrada
     persist(next);
     setSave(next);
     setPromoting(null);
@@ -4187,7 +4187,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (squad.length >= SQUAD_MAX && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
     squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
     const clube = signContract(replaceOid ? { clube: withoutContracts(save, [replaceOid]) } : save, a.id, defaultTerms(playerWage(player), save.split));
-    const next = { ...save, academyTeam: acaTeam, youth, youthAge, youthDebut, squad, clube };
+    const next = withSquadCondition({ ...save, academyTeam: acaTeam, youth, youthAge, youthDebut, squad, clube }); // [integração] condição na entrada
     persist(next);
     setSave(next);
   };
@@ -4233,6 +4233,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // tick (protectedIds): clube da IA só leva jogador seu por proposta
   // (clube.market.incoming) com o seu aceite — ou pagando a cláusula.
   const clubeOf = clubeOfSave;
+  // [integração] quem entra no elenco ganha a condição padrão (defaultCondition)
+  function withSquadCondition<T extends CareerSave>(s: T): T {
+    const condition = withEntryCondition(gestaoOf(s).condition, s.squad.map((x) => x.playerId));
+    return condition ? { ...s, gestao: { ...gestaoOf(s), condition } } : s;
+  }
   const withMarket = (s: CareerSave, m: MarketState): Pick<CareerSave, 'clube'> => ({ clube: { ...clubeOf(s), market: m } });
   const worldTick = (s: CareerSave, kind: WindowKind, opts: { maxMoves?: number } = {}) => {
     const m = marketOf(s);
@@ -4382,7 +4387,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         }
       } else loans.push(l);
     }
-    const next: CareerSave = { ...s, squad, budget, moves, extraOnTeam, ...withMarket(s, { ...m, loans }) };
+    const next: CareerSave = withSquadCondition({ ...s, squad, budget, moves, extraOnTeam, ...withMarket(s, { ...m, loans }) }); // [integração] stand-in chega com condição
     return news.length ? { ...next, ...pushNews(next, news) } : next;
   };
 
@@ -4499,7 +4504,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       budget -= dealFee + dealBonus;
       arrivals.push(d.inNick);
     }
-    let next: CareerSave = { ...s, squad, budget, clube, morale, peakOvr, evo, moves, extraOnTeam, stints, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
+    let next: CareerSave = withSquadCondition({ ...s, squad, budget, clube, morale, peakOvr, evo, moves, extraOnTeam, stints, pendingDeals: [], pendingSales: [], rejectedOffers: [] }); // [integração] reforço chega com condição
     const news: NewsItem[] = [];
     if (arrivals.length) news.push({ id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board', title: ct('Reforços confirmados na janela'), body: `${ct('Acordos fechados na temporada passada entraram em vigor:')} ${arrivals.join(', ')}.` });
     if (departures.length) news.push({ id: `${s.split}:sales`, split: s.split, icon: '💸', tone: 'info', cat: 'transfer', title: ct('Vendas confirmadas na janela'), body: `${ct('Saíram por proposta aceita:')} ${departures.join(', ')}.` });
@@ -5588,7 +5593,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             squadIds: stableSquad.map((x) => x.playerId),
             coachBond: save.coachBond, pairChem: save.pairChem, bondDefault: BOND_DEFAULT, chemDefault: 30, pairKey,
           });
-          const next = { ...save, foundingOpen: false, squad: cleanSquad, coachFromId, budget, sponsors, sponsorUntil, clube, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem };
+          const next = withSquadCondition({ ...save, foundingOpen: false, squad: cleanSquad, coachFromId, budget, sponsors, sponsorUntil, clube, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem }); // [integração] condição na entrada
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -6987,7 +6992,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const sg = s.squad.find((x) => x.playerId === vp.id);
       const f = sg ? findSigning(sg) : null;
       if (!f) continue;
-      const c = cond[vp.id];
+      const c = cond[vp.id] ?? defaultCondition(); // [integração] sem condição gravada: o padrão
       rows.push({
         id: vp.id, player: f.player, nick: vp.nick, role: (s.roles?.[vp.id] ?? f.player.role) as Role, country: vp.country, ovr: vp.ovr, age: vp.age,
         status: vc.statuses[vp.id] ?? 'starter', starter: lu.starters.includes(vp.id), injured: isInjured(c),
