@@ -475,14 +475,6 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
   const step = (boostTeam?: 0 | 1 | null, stance?: { team: 0 | 1; mode: Stance }, call?: Call, siteCall?: SiteCall): boolean => {
     if (finished) return true;
     peekCache = new Map();
-    const isPistol = round === 0 || round === 12;
-    if (isPistol) {
-      eco[0] = { money: 800, lossStreak: 0 };
-      eco[1] = { money: 800, lossStreak: 0 };
-      streakTeam = -1;
-      streakLen = 0;
-      for (const c of carry) c.fill(null);
-    }
     // #20 — leitura de site (informação oculta): 3 rolls sempre, como no v1
     const rSite = rng(); const rStackDo = rng(); const rStackSite = rng();
     const [aS0] = sideOf(round);
@@ -544,7 +536,17 @@ export function createMapSimV2(rng: Rng, a0: TTeam, b0: TTeam, map: MapId, picke
     else { streakTeam = winner; streakLen = 1; }
     round++;
 
-    if (round === 12) halfScore = `${scoreA}:${scoreB}`;
+    if (round === 12) {
+      halfScore = `${scoreA}:${scoreB}`;
+      // INTERVALO: caixa de pistol, embalo zerado, armas recolhidas. Feito no fim
+      // do round 12 (não no começo do 13) pra que a % mostrada antes do pistol
+      // do 2º half já veja o estado real — % mostrado = % rolado também aqui.
+      eco[0] = { money: 800, lossStreak: 0 };
+      eco[1] = { money: 800, lossStreak: 0 };
+      streakTeam = -1;
+      streakLen = 0;
+      for (const c of carry) c.fill(null);
+    }
     if (scoreA >= target || scoreB >= target) {
       finished = true;
     } else if (scoreA === 12 && scoreB === 12 && target === 13) {
