@@ -32,7 +32,7 @@ import {
 import { MINIGAMES, type MiniGameDef } from './minigames';
 import { planStyleBias, gamePlanDef, postureLeanOf, type GamePlan } from './meta';
 import {
-  buildUserTeam, simulateSeriesForPlay, assembleProResult, execBoostOvr,
+  buildUserTeam, simulateSeriesForPlay, assembleProResult, execBoostOvr, heroSeriesOpts,
   type MatchPrep, type ProMatchResult,
 } from './matchSim';
 import { summarizeMoments, impactPerBeat, IMPACT_REF } from './moments';
@@ -584,7 +584,8 @@ export function finishSeries(
         prep.matchSeed, prep.maps.map((m) => m.map), prep.bestOf).maps;
   const mapWins: [number, number] = [maps.filter((m) => m.won).length, maps.filter((m) => !m.won).length];
   const seriesWon = mapWins[0] > mapWins[1];
-  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins, seriesWon });
+  // v2: a jogada da Sala vira modificador do duelo do herói (heroSeriesOpts)
+  const series = simulateSeriesForPlay((prep.matchSeed ^ 0x1234567) >>> 0, userTeam, oppTeam, prep.maps, prep.bestOf, { mapWins, seriesWon }, heroSeriesOpts(momentBoost));
   const result = assembleProResult(userTeam, oppTeam, series, summary.score, summary.execAvg, maps);
   return { result, series };
 }

@@ -104,3 +104,13 @@ código antigo são reconciliados por `attrsOf`.
   derivação antiga inflava game sense/decisões de quem não é IGL (misturava
   clutch); a nova amarra o grupo ao número legado de IGL. Recalibrar a carga de
   chamada na junção se o caller de times sem IGL de função pesar.
+
+### Frente C (motor), branch `motor/partida`
+`src/engine/attrs/model.ts` não mudou. A frente C (motor) só ACRESCENTOU campos opcionais à API de partida (nada que existia mudou de forma):
+- `MapSimOpts` (engine/match.ts): `engine?: 'v1' | 'v2'`, `mapIndex?`, `bigMatch?`, `duelMods?: Record<playerId, pontos de atributo>`. O v1 ignora todos.
+- `simulateMap(..., opts?)` e `simulateSeries(..., bestOf, opts?: SeriesOpts)`: 6º parâmetro opcional; a série numera `mapIndex` e marca `bigMatch` na MD5.
+- `getMatchEngine()`/`setMatchEngine()` e `createMapSimV1` exportados de engine/match.ts; a flag lê `MATCH_ENGINE` (Node) e `VITE_MATCH_ENGINE` (build), padrão v2.
+- `MatchSession.engine?` (Ultimate): a sessão casual replaya no motor em que nasceu; sem o campo = v1.
+- `simulateSeriesForPlay(..., target, opts?)` e `heroSeriesOpts/heroDuelMod` (RtP).
+- Economia, playbook, postura, IGL e elenco 5v5 saíram de match.ts para `src/engine/matchShared.ts` (re-exportados; v1 bit a bit igual).
+- Formato de `docs/calibration-targets.json` definido pela frente C (valores provisórios); a frente A troca os números mantendo o formato: `targets.<chave> = { value, tol, unit, def, source, provisional, estimate?, by? }`.

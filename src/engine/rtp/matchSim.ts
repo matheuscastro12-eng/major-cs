@@ -9,7 +9,7 @@
 
 import { makeRng, type Rng } from '../rng';
 import { hashStr } from '../../state/hash';
-import { simulateSeries, computeDisplay, mergeLines } from '../match';
+import { simulateSeries, computeDisplay, mergeLines, getMatchEngine, type SeriesOpts } from '../match';
 import { MAP_POOL, type MapId, type TPlayer, type TTeam, type Coach, type Role, type PlayerLine, type SeriesResult } from '../../types';
 import { ALL_ATTRS, type AttrKey } from '../attributes';
 import { proToTPlayer } from './coreStats';
@@ -155,10 +155,29 @@ export interface MatchConsequence {
   headline?: string;              // RTP v14 — manchete que a partida gerou (debrief)
 }
 
+// MOTOR v2 (duelos): a jogada da Sala entra como MODIFICADOR DO DUELO do herói,
+// em pontos de atributo, em vez de virar mira fictícia. Mesma amortização da
+// penalidade do v1 (jogo ruim pesa 40%): um pro não some numa partida. Escala:
+// no v1 cada ponto de boost virava +1,1 de `aim` legado (0–100) ≈ +0,22 no
+// atributo 1–20 — o mesmo peso aqui, agora direto no duelo.
+export const HERO_DUEL_PER_OVR = 0.15;
+export function heroDuelMod(momentBoostOvr: number): number {
+  const b = momentBoostOvr >= 0 ? momentBoostOvr : momentBoostOvr * 0.4;
+  return b * HERO_DUEL_PER_OVR;
+}
+export const HERO_RUNTIME_ID = 'rtp-hero';
+// opções da série do herói para o motor (o v1 ignora duelMods)
+export function heroSeriesOpts(momentBoostOvr: number): SeriesOpts {
+  return { duelMods: { [HERO_RUNTIME_ID]: heroDuelMod(momentBoostOvr) } };
+}
+
 // Constrói o TTeam do usuário com o herói EFETIVO (atributos modulados + boost
 // dos momentos no OVR/skill) e os colegas.
 // teamId default 'rtp-user' (liga); o Major passa 'user' (contrato do swiss.ts).
+// No motor v2 o boost dos momentos NÃO entra na mira/consistência legadas (entra
+// no duelo, via heroSeriesOpts); o alinhamento ao OVR e o piso relativo ficam.
 export function buildUserTeam(save: RoadToProSave, effAttrs: Record<AttrKey, number>, momentBoostOvr: number, teamId = 'rtp-user'): TTeam {
+  const duelEngine = getMatchEngine() === 'v2';
   // O motor distribui frags por `aim` e mortes por `consistency`. O `aim`/`consistency`
   // derivados dos 28 (avg×5) ficam ~10 abaixo do que o OVR do herói implica, então
   // ele fragava de menos e MORRIA de mais (parecia "chutável"). Alinhamos os dois
@@ -167,7 +186,7 @@ export function buildUserTeam(save: RoadToProSave, effAttrs: Record<AttrKey, num
   // catastrófico (um profissional não some numa partida ruim). Piso protege o floor.
   const HERO_AIM_ALIGN = 13;
   const HERO_CONS_ALIGN = 14;
-  const heroBase = proToTPlayer({ ...save.player, attrs: effAttrs }, 'rtp-hero');
+  const heroBase = proToTPlayer({ ...save.player, attrs: effAttrs }, HERO_RUNTIME_ID);
 
   // Colegas ganham ids ÚNICOS ('rtp-mate-*'). CRÍTICO: os times de academia do
   // dataset compartilham o prefixo 'acaopp-p*', então sem re-id os seus colegas de
@@ -188,7 +207,7 @@ export function buildUserTeam(save: RoadToProSave, effAttrs: Record<AttrKey, num
   // MAS: a PENALIDADE é AMORTECIDA (metade do peso) e o herói tem PISO RELATIVO aos
   // colegas: mesmo num jogo horrível ele NUNCA fica muito abaixo do elenco (um pro
   // não faz 3-15 sob hipótese nenhuma; o pior dele é um jogo fraco, ~0.6 KPR).
-  const boostAim = momentBoostOvr >= 0 ? momentBoostOvr : momentBoostOvr * 0.4;
+  const boostAim = duelEngine ? 0 : momentBoostOvr >= 0 ? momentBoostOvr : momentBoostOvr * 0.4;
   const matesAvgAim = mates.reduce((a, p) => a + p.aim, 0) / mates.length;
   const matesAvgCons = mates.reduce((a, p) => a + p.consistency, 0) / mates.length;
   const hero: TPlayer = {
@@ -331,7 +350,7 @@ export function execBoostOvr(execAvg: number | null): number {
 // existir na prática. O boost só distorce stats no caso raro — cosmético.
 export function simulateSeriesForPlay(
   baseSeed: number, a: TTeam, b: TTeam, maps: { map: MapId; pickedBy: 0 | 1 | -1 }[],
-  bestOf: 1 | 3 | 5, target: { mapWins: [number, number]; seriesWon: boolean },
+  bestOf: 1 | 3 | 5, target: { mapWins: [number, number]; seriesWon: boolean }, opts?: SeriesOpts,
 ): SeriesResult {
   const nudge = (t: TTeam, delta: number): TTeam => (delta === 0 ? t : { ...t, strength: t.strength + delta });
   let winnerMatch: SeriesResult | null = null;
@@ -339,12 +358,12 @@ export function simulateSeriesForPlay(
     const ua = target.seriesWon ? nudge(a, boost) : a;
     const ub = target.seriesWon ? b : nudge(b, boost);
     for (let k = 0; k <= 160; k++) {
-      const s = simulateSeries(makeRng((baseSeed ^ (k * 0x9e3779b1) ^ (boost * 0x85ebca6b)) >>> 0), ua, ub, maps, bestOf);
+      const s = simulateSeries(makeRng((baseSeed ^ (k * 0x9e3779b1) ^ (boost * 0x85ebca6b)) >>> 0), ua, ub, maps, bestOf, opts);
       if (s.mapScore[0] === target.mapWins[0] && s.mapScore[1] === target.mapWins[1]) return s;
       if (!winnerMatch && (s.winner === 0) === target.seriesWon) winnerMatch = s;
     }
   }
-  return winnerMatch ?? simulateSeries(makeRng(baseSeed >>> 0), a, b, maps, bestOf);
+  return winnerMatch ?? simulateSeries(makeRng(baseSeed >>> 0), a, b, maps, bestOf, opts);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
