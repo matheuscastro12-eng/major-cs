@@ -90,3 +90,12 @@ O que já existe e esta fase APROFUNDA E UNIFICA (não duplique — substitua/ev
 - Stand-in do usuário respeita `SQUAD_MAX`; empréstimo de saída exige mais de 5 no elenco.
 
 
+
+### Integração (`fase3/integracao`)
+- Merges `contratos` → `vestiario` → `mercado`. `CareerSave.clube` e os imports do bloco `clube` uma vez só; `clubeOf` (I) = `clubeOfSave` (G).
+- `clube/mercadoPontes.ts` re-exporta as funções reais: `releaseClauseOf`, `contractWageOf` (H); `wantsToLeave`, `leaveRequests`, `benchValueFactor`, `SQUAD_MAX` (G). `contratos.ts` usa `expectedPlayTime` da G (a cópia `statusPlayTimeExpectation` saiu).
+- Lesão: cadeia única — banco da escalação → stand-in emprestado → reserva do elenco → jovem da base → reserva genérico. `substituteInjured(team, injured, base, bench)` aceita `bench` em faixas (`StandIn[][]`), ninguém em duas.
+- Elenco de 7: `consummateDeals` recusa acordo acima (manchete, sem cobrar); a negociação no hub nem deixa fechar.
+- Status automático: titular da escalação tem piso de "titular"; status atribuído à mão vale como está.
+- Reunião "acalmar": base 2,5 (era 4), líder ×1,3 (era ×1,5), temperamental +1 (era +2), teto ±6 (era ±8): melhor cenário ~+4 de média (era ~+7).
+- `pendingOffer`/`PoachOffer` saíram: a proposta de elite de fim de split é um `IncomingOffer` com `reason: 'elite'` (novo valor de `NeedReason`) em `clube.market.incoming`; decide-se antes do mercado de pré-temporada (venda imediata, como antes) ou em Transferências; save antigo com `pendingOffer` é convertido na hidratação.
