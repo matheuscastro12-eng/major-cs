@@ -2,6 +2,9 @@
 // ct('PT') faz o lookup; string sem entrada cai no PT (nunca quebra).
 export const CAREER_STR: Record<string, { en: string; es: string }> = {
   // [fase 3 · frente MERCADO] Transferências, janelas, propostas, empréstimos e IA de mercado
+  "vai para a": { en: "goes to", es: "va a" },
+  "na troca.": { en: "in the swap.", es: "en el intercambio." },
+  "Troca": { en: "Swap", es: "Intercambio" },
   "Roster lock do Major": { en: "Major roster lock", es: "Roster lock del Major" },
   "Elencos travados até o fim do Major. Nada entra nem sai; acordos fechados agora valem na janela de pré-temporada.": { en: "Rosters are locked until the Major ends. Nobody joins or leaves; deals agreed now take effect in the pre-season window.", es: "Plantillas bloqueadas hasta el final del Major. Nadie entra ni sale; los acuerdos cerrados ahora valen en la ventana de pretemporada." },
   "Janela aberta": { en: "Window open", es: "Ventana abierta" },

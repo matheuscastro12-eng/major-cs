@@ -222,6 +222,7 @@ export interface WorldMove {
   reason: NeedReason;
   strategy: ClubStrategy;
   chainOf?: string;       // playerId da venda que disparou esta reposição
+  swap?: boolean;         // troca: o deslocado do comprador foi pro vendedor no negócio
 }
 
 export interface WorldTickArgs {
@@ -237,6 +238,7 @@ export interface WorldTickArgs {
   protectedIds?: ReadonlySet<string>; // SEU elenco: só por proposta com consentimento
   budgets?: Record<string, number>; // janela curta: sobra da janela do split
   loans?: MarketLoan[];             // stand-ins da IA ativos (voltam no fim do split)
+  arrivals?: Record<string, number>;// quem chegou neste split não é revendido na mesma temporada de janela
   maxMoves?: number;
 }
 
@@ -371,7 +373,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
       : ref + 2;
     const out = need.outPlayerId ? buyer.players.find((p) => p.id === need.outPlayerId) : undefined;
 
-    type Cand = { p: Player; fromId: string; fee: number; cost: number; score: number };
+    type Cand = { p: Player; fromId: string; fee: number; cost: number; score: number; swap: boolean };
     let pick: Cand | null = null;
     const consider = (p: Player, fromId: string) => {
       if (used.has(p.id) || !movable(p) || !roleFits(p, need.role)) return;
@@ -381,15 +383,27 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
       const age = ageOf(p);
       if (need.reason === 'old' && out && age > ageOf(out) - 4) return;
       let fee = 0;
+      let swap = false;
       if (fromId !== FREE_TEAM_ID) {
         if (sold.has(fromId)) return;
+        if ((a.arrivals?.[p.id] ?? -1) >= split) return; // acabou de chegar: não vira moeda de troca
         const seller = view(fromId);
         const sBest = [...starters(seller)].sort((x, y) => ovrOf(y) - ovrOf(x) || byId(x, y))[0];
         if (sBest?.id === p.id && forms[fromId] >= 55 && strategies[fromId] !== 'survival') return; // núcleo em alta não sai
-        // clube só vende se consegue repor: tem banco, ou há no mercado livre um
-        // jogador da mesma função no nível do elenco (a cadeia fecha)
-        if (seller.players.length < 6 && !canReplace(fromId, p)) return;
+        // clube só vende se consegue repor: tem banco, há no mercado livre um
+        // jogador da mesma função no nível do elenco (a cadeia fecha) ou aceita
+        // quem perde a vaga no comprador como parte do negócio (TROCA + dinheiro)
         fee = sellerAsk(p, { team: seller, strategy: strategies[fromId], form: forms[fromId] }, split);
+        if (seller.players.length < 6 && !canReplace(fromId, p)) {
+          const sXi = starters(seller);
+          const sMean = sXi.reduce((acc, x) => acc + ovrOf(x), 0) / Math.max(1, sXi.length);
+          // troca só entre pares (ou do menor pro maior): o grande não usa troca pra
+          // arrancar a estrela de um clube menor — isso empilharia talento no topo
+          if (!out || need.reason === 'sold' || !movable(out) || used.has(out.id) || ovrOf(out) < sMean - 6) return;
+          if (aiTierOf(buyer) < aiTierOf(seller) || squadOvr(buyer.players) > squadOvr(seller.players) + 1) return;
+          swap = true;
+          fee = Math.max(0, round10k(fee - playerValue(out) * 0.6)); // o jogador que vai abate parte da taxa
+        }
       }
       const cost = fee + playerWage(p); // taxa + luvas (1 split de salário)
       if (cost > budget) return;
@@ -405,7 +419,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
         default: score -= costF * 15;
       }
       score += (hashStr(`pick:${buyerId}:${p.id}:${split}`) % 7) / 10;
-      if (!pick || score > pick.score) pick = { p, fromId, fee, cost, score };
+      if (!pick || score > pick.score) pick = { p, fromId, fee, cost, score, swap };
     };
     for (const p of free) consider(p, FREE_TEAM_ID);
     if (!freeOnly) {
@@ -442,7 +456,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
       continue;
     }
     // FECHA O NEGÓCIO
-    const { p, fromId, fee, cost } = chosen;
+    const { p, fromId, fee, cost, swap } = chosen;
     if ((need.depth ?? 0) === 0) started++;
     const fromTeam = fromId === FREE_TEAM_ID ? null : teamById.get(fromId)!;
     movePlayer(p, fromId, buyerId, true);
@@ -453,15 +467,18 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
     // quem perde a vaga vai pro mercado livre (reposição de vendido não desloca)
     let outMoved: Player | undefined;
     if (out && need.reason !== 'sold' && movable(out) && !used.has(out.id) && rosters.get(buyerId)!.some((x) => x.id === out.id)) {
-      movePlayer(out, buyerId, FREE_TEAM_ID, false);
+      // troca: quem perde a vaga vai pro clube vendedor (entra no lugar de quem saiu)
+      movePlayer(out, buyerId, swap && fromTeam ? fromId : FREE_TEAM_ID, swap);
+      if (swap && fromTeam) arrivals[out.id] = split;
       used.add(out.id);
       outMoved = out;
     }
     if (fromTeam) {
       sold.add(fromId);
       budgets[fromId] = (budgets[fromId] ?? 0) + fee;
-      // CADEIA: o vendedor vai atrás de um substituto (prioridade máxima)
-      {
+      // CADEIA: o vendedor vai atrás de um substituto (prioridade máxima) — na
+      // troca ele já recebeu um jogador e não precisa repor
+      if (!swap) {
         queue.unshift({ teamId: fromId, role: p.role, priority: 95, reason: 'sold', refOvr: ovrOf(p), depth: (need.depth ?? 0) + 1, soldPlayerId: p.id });
       }
     }
@@ -470,7 +487,7 @@ export function tickMarketWindow(a: WorldTickArgs): WorldTickResult {
       kind: fromTeam ? 'transfer' : 'free', playerId: p.id, nick: p.nick, country: p.country, role: need.role, ovr: ovrOf(p), age: ageOf(p),
       fee, fromId, fromTag: fromTeam?.tag ?? 'FA', fromName: fromTeam?.team ?? '', toId: buyerId, toTag: buyer.tag, toName: buyer.team,
       outPlayerId: outMoved?.id, outNick: outMoved?.nick, reason: need.reason, strategy,
-      chainOf: need.soldPlayerId,
+      chainOf: need.soldPlayerId, swap: swap || undefined,
     });
   }
   // necessidades não atendidas (com os elencos finais) — rumores e propostas

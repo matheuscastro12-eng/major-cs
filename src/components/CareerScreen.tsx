@@ -3939,8 +3939,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const worldTick = (s: CareerSave, kind: WindowKind, opts: { maxMoves?: number } = {}) => {
     const m = marketOf(s);
     const squadIds = new Set(s.squad.map((x) => x.playerId));
-    const loanedOut = userLoans(m).filter((l) => l.kind === 'out').map((l) => l.playerId);
-    const protectedIds = new Set([...squadIds, ...loanedOut]);
+    // seus empréstimos (emprestado por você ou stand-in acertado) também são
+    // intocáveis: a IA não contrata quem já tem acordo com o seu clube
+    const loanIds = userLoans(m).map((l) => l.playerId);
+    const protectedIds = new Set([...squadIds, ...loanIds]);
     const teams = oppEra.filter((t) => t.id !== s.takeoverId);
     const byId = new Map(teams.map((t) => [t.id, t]));
     const forms = computeAllTeamForms(s);
@@ -3958,6 +3960,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       protectedIds,
       budgets: kind === 'mid' && Object.keys(m.budgets).length ? m.budgets : undefined,
       loans: m.loans.filter((l) => l.kind === 'ai'),
+      arrivals: m.arrivals,
       maxMoves: opts.maxMoves,
     });
   };

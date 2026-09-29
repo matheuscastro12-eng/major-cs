@@ -351,7 +351,7 @@ export function moveHeadline(mv: WorldMove, split: number, soldBy?: (playerId: s
     id, split, icon: '🔁', tone: 'info', cat: 'transfer',
     title: `${mv.toName} ${ct('compra')} ${mv.nick} ${ct('da')} ${mv.fromName}`,
     body: `${ct('Negócio de')} ${formatMoney(mv.fee)} ${ct('pelo')} ${role} (OVR ${mv.ovr}, ${mv.age} ${ct('anos')}).`
-      + (mv.outNick ? ` ${mv.outNick} ${ct('perde a vaga.')}` : '')
+      + (mv.outNick ? (mv.swap ? ` ${mv.outNick} ${ct('vai para a')} ${mv.fromName} ${ct('na troca.')}` : ` ${mv.outNick} ${ct('perde a vaga.')}`) : '')
       + (chain ? ` ${ct('A')} ${mv.toName} ${ct('tinha acabado de vender')} ${chain.nick} ${ct('pra')} ${chain.toName} ${ct('e foi repor na hora.')}` : ''),
   };
 }
@@ -412,7 +412,7 @@ export function logWindow(m: MarketState, entry: MarketWindowLog): MarketState {
 export function windowItems(log: WorldMove[]): NonNullable<MarketWindowLog['items']> {
   return log.slice(0, 40).map((mv) => ({
     nick: mv.nick, cc: mv.country, from: mv.fromTag, to: mv.toTag, fee: mv.fee,
-    reason: NEED_LABEL[mv.reason], chain: !!mv.chainOf,
+    reason: mv.swap ? 'Troca' : NEED_LABEL[mv.reason], chain: !!mv.chainOf,
   }));
 }
 

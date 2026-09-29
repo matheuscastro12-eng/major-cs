@@ -150,6 +150,34 @@ test('stand-in na janela curta: buraco sem reposição vira empréstimo do merca
   assert.equal(off.loans.length, 0);
 });
 
+test('troca: sem banco nem reposição livre, o vendedor aceita quem perde a vaga — só entre pares', () => {
+  // comprador sem AWP (buraco urgente); vendedor par com AWP e sem banco; mercado livre vazio
+  const buyer = mkTeam('buy', 78, [mkPlayer('b1', 'Lurker', 80), mkPlayer('b2', 'IGL', 79), mkPlayer('b3', 'Entry', 80), mkPlayer('b4', 'Support', 79), mkPlayer('b5', 'Rifler', 76)]);
+  const seller = mkTeam('sel', 78, [mkPlayer('s1', 'AWP', 79), mkPlayer('s2', 'IGL', 79), mkPlayer('s3', 'Entry', 81), mkPlayer('s4', 'Support', 80), mkPlayer('s5', 'Rifler', 78)]);
+  const ids = new Set([...buyer.players, ...seller.players].map((p) => p.id));
+  const r = tickMarketWindow({ teams: [buyer, seller], freeAgents: [], split: 3, kind: 'offseason', formOf: (id) => (id === 'buy' ? 30 : 50), ageOf: () => 25, movableIds: ids, budgets: { buy: 5_000_000, sel: 0 } });
+  const mv = r.log.find((m) => m.toId === 'buy');
+  assert.ok(mv, 'o clube fraco comprou');
+  assert.ok(mv!.swap, 'foi troca');
+  assert.equal(r.moves[mv!.outPlayerId!], 'sel', 'quem perdeu a vaga foi pro vendedor');
+  assert.equal(r.teams.find((t) => t.id === 'sel')!.players.length, 5, 'vendedor segue com 5');
+  // o grande não usa troca pra arrancar jogador de clube menor
+  const big = mkTeam('big', 84, [mkPlayer('g1', 'Lurker', 84), mkPlayer('g2', 'IGL', 83), mkPlayer('g3', 'Entry', 84), mkPlayer('g4', 'Support', 83), mkPlayer('g5', 'Rifler', 80)]);
+  const small = mkTeam('small', 76, [mkPlayer('m1', 'AWP', 82), mkPlayer('m2', 'IGL', 76), mkPlayer('m3', 'Entry', 77), mkPlayer('m4', 'Support', 76), mkPlayer('m5', 'Rifler', 78)]);
+  const ids2 = new Set([...big.players, ...small.players].map((p) => p.id));
+  const r2 = tickMarketWindow({ teams: [big, small], freeAgents: [], split: 3, kind: 'offseason', formOf: (id) => (id === 'big' ? 30 : 50), ageOf: () => 25, movableIds: ids2, budgets: { big: 9_000_000, small: 0 } });
+  assert.ok(!r2.log.some((m) => m.swap), 'sem troca de cima pra baixo');
+});
+
+test('quem acabou de chegar não é revendido na mesma janela do split', () => {
+  const buyer = mkTeam('buy', 78, [mkPlayer('b1', 'Lurker', 80), mkPlayer('b2', 'IGL', 79), mkPlayer('b3', 'Entry', 80), mkPlayer('b4', 'Support', 79), mkPlayer('b5', 'Rifler', 76)]);
+  const seller = mkTeam('sel', 78, [mkPlayer('s5', 'AWP', 79), mkPlayer('s2', 'IGL', 79), mkPlayer('s3', 'Entry', 81), mkPlayer('s4', 'Support', 80), mkPlayer('s1', 'Rifler', 78), mkPlayer('s6', 'Lurker', 70)]);
+  const ids = new Set([...buyer.players, ...seller.players].map((p) => p.id));
+  const base = { teams: [buyer, seller], freeAgents: [], split: 3, kind: 'mid' as const, formOf: (id: string) => (id === 'buy' ? 30 : 50), ageOf: () => 25, movableIds: ids, budgets: { buy: 5_000_000, sel: 0 } };
+  assert.ok(tickMarketWindow(base).log.some((m) => m.playerId === 's5'), 'sem a trava, o AWP seria vendido');
+  assert.ok(!tickMarketWindow({ ...base, arrivals: { s5: 3 } }).log.some((m) => m.playerId === 's5'), 'chegou neste split: fica');
+});
+
 test('elenco de elite (top-5 ≥ 85) não empilha: só repõe', () => {
   const elite = mkTeam('elite', 90, [mkPlayer('e1', 'AWP', 88), mkPlayer('e2', 'IGL', 86), mkPlayer('e3', 'Entry', 87), mkPlayer('e4', 'Support', 85), mkPlayer('e5', 'Lurker', 80)]);
   const star = mkPlayer('star', 'Lurker', 88);

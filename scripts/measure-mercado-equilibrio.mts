@@ -113,7 +113,7 @@ export function simulateWorld(mode: 'before' | 'after', splits = 10): SplitMetri
       const mid = tickMarketWindow({
         teams: w0, freeAgents: agedFreeAgents(BASE, moves, s, NO_SKIP), split: s, kind: 'mid',
         formOf: (id) => midForms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s), baseOvrOf, movableIds: BASE_PLAYER_IDS,
-        budgets, loans,
+        budgets, loans, arrivals,
       });
       moves = { ...moves, ...mid.moves }; arrivals = { ...arrivals, ...mid.arrivals }; loans = mid.loans;
       windows.push({ kind: "mid", moves: mid.log.length, chains: mid.chains, standIns: mid.standIns, gaps: mid.chainGaps });
@@ -124,7 +124,7 @@ export function simulateWorld(mode: 'before' | 'after', splits = 10): SplitMetri
       const off = tickMarketWindow({
         teams: w1, freeAgents: agedFreeAgents(BASE, moves, s, NO_SKIP), split: s + 1, kind: 'offseason',
         formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s), baseOvrOf, movableIds: BASE_PLAYER_IDS,
-        loans,
+        loans, arrivals,
       });
       moves = { ...moves, ...off.moves }; arrivals = { ...arrivals, ...off.arrivals }; loans = off.loans; budgets = off.budgets;
       windows.push({ kind: "offseason", moves: off.log.length, chains: off.chains, standIns: off.standIns, gaps: off.chainGaps });
