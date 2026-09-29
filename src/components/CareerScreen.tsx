@@ -6319,6 +6319,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               consistency: p.consistency,
               awp: p.awp,
               igl: p.igl,
+              attrs: p.attrs, // [realismo FM] mantém os atributos (evolução do elenco)
             };
           }
         }

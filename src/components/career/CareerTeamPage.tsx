@@ -40,6 +40,7 @@ function tPlayerToPlayer(p: TPlayer): Player {
     consistency: p.consistency,
     awp: p.awp,
     igl: p.igl,
+    attrs: p.attrs, // [realismo FM] mantém os atributos
   };
 }
 

@@ -54,4 +54,40 @@ Assinaturas são contrato. Precisou mudar? Registre em "Mudanças de contrato" n
 - Ordem de integração prevista: A (dados) → B (atributos) → C (motor).
 
 ## Mudanças de contrato
-(nenhuma ainda)
+
+### Frente B (atributos), branch `motor/atributos`
+Assinaturas originais mantidas; mudanças compatíveis:
+- `AttrsSource` ganhou campos OPCIONAIS: `age?` (entra no PA e no perfil),
+  `role2?` (versatilidade) e `sourcePlayerId?` (TPlayer acha os atributos da base).
+- `legacyFromAttrs`: grupos passaram a ser DISJUNTOS e com pesos inteiros
+  (`LEGACY_GROUPS`: mira = aim, aimMovement, tap, spray, headshot, crosshair,
+  preAim; AWP = awp×4 + reaction; IGL = leadership, communication, gameSense,
+  decisions, vision; clutch = clutch×2 + composure, anticipation, offAngles;
+  consistência = consistency×2 + concentration, discipline, positioning). É o
+  agrupamento que o Road to Pro já usava, e permite a volta EXATA:
+  `legacyFromAttrs(deriveAttrs(p))` devolve os 5 números de `p` (1198/1198 da base).
+- `caFromAttrs(a, role)`: CA = OVR do jogo na escala FM (OVR 40 → 1, 99 → 200),
+  para estrelas e OVR contarem a mesma história (`caFromOvr`/`ovrFromCa`).
+- `attrsOf(p)`: ordem de resolução = atributos próprios → BASE REGISTRADA
+  (`registerAttrs`, preenchida por `data/playerAttrs.ts` por id/sourcePlayerId)
+  → derivação. Se os 5 números do objeto divergirem dos atributos (código
+  antigo mexeu só nos números: drift da IA, edição do admin), os atributos são
+  reajustados com o menor movimento (`refitAttrs`) — números e atributos nunca
+  divergem. Jogadores da base NÃO carregam `attrs` no objeto (saves enxutos).
+- Novos exports em `model.ts`: `legacyOf`, `withAttrs`, `refitAttrs`,
+  `fitAttrsToLegacy`, `ovrFromLegacy`, `ovrFromAttrs`, `caFromOvr`, `ovrFromCa`,
+  `potentialOvrFor`, `deriveHiddenAttrs`, `registerAttrs`, `registeredAttrs`,
+  `LEGACY_GROUPS`, `LEGACY_GROUP_OF`.
+
+Para a frente A: `data/playerAttrs.ts` carrega `src/data/player-attrs-2026.json`
+(Vite: `import.meta.glob`; Node: disco), valida cada entrada e, para quem tem
+atributos reais, REESCREVE os 5 números a partir deles. O impacto no OVR/preço
+se mede com `npx tsx scripts/measure-attrs-impact.mts src/data/player-attrs-2026.json`.
+Depois de integrar, rode `npm run gen:ult-catalog` (o snapshot do servidor
+compara byte a byte). Chaves base de carta que mudarem de faixa são apelidadas
+para a carta base atual (`engine/ultimate/cardIndex.ts`, cliente e servidor).
+
+Para a frente C: `attrsOf(tplayer)` já resolve TPlayers de torneio pela base
+registrada (`sourcePlayerId`); o herói do RtP (`proToTPlayer`) e o elenco da
+Carreira (`findSigning`) chegam com `attrs` próprios; cartas do Ultimate têm
+`cardAttrs(card)`. Números mexidos por código antigo são reconciliados por `attrsOf`.
