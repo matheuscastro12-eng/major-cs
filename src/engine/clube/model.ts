@@ -66,6 +66,9 @@ export interface Negotiation {
 // ─── Mercado da IA ─────────────────────────────────────────────────────────
 export type ClubStrategy = 'starBuyer' | 'youth' | 'national' | 'balanced' | 'moneyball' | 'survival';
 
+// [fase 3 · mercado] por que o clube foi ao mercado (necessidade por função)
+export type NeedReason = 'hole' | 'sold' | 'old' | 'slump' | 'upgrade';
+
 export interface IncomingOffer {
   id: string;
   playerId: string;          // jogador SEU
@@ -76,16 +79,60 @@ export interface IncomingOffer {
   split: number;
   expiresSplit: number;
   status: 'open' | 'accepted' | 'rejected' | 'countered' | 'expired';
+  // [fase 3 · mercado] campos opcionais de exibição e da contraproposta
+  nick?: string;
+  ovr?: number;
+  role?: Role;
+  fromTag?: string;
+  fromName?: string;
+  reason?: NeedReason;       // a necessidade do clube que gerou a proposta
+  strategy?: ClubStrategy;   // estratégia do clube comprador
+  askedFee?: number;         // sua contraproposta (status 'countered' = o clube respondeu com `fee`)
+  playerRefused?: boolean;   // cláusula paga, mas o jogador não quis ir (fica)
 }
 
 export interface TransferWindow { open: boolean; rosterLocked: boolean; label: string }
+
+// [fase 3 · mercado] empréstimo / stand-in. `toTeamId` recebe o jogador até o
+// fim de `untilSplit`; `fromTeamId` é o dono ('user' = seu clube, '__free__' =
+// stand-in tirado do mercado livre pela IA). `state: 'agreed'` = acertado, entra
+// na próxima janela; 'active' = valendo.
+export interface MarketLoan {
+  playerId: string;
+  toTeamId: string;
+  untilSplit: number;
+  fromTeamId?: string;
+  nick?: string;
+  fee?: number;              // taxa do empréstimo (paga por quem recebe)
+  splits?: number;           // duração em splits, contada a partir da ativação
+  state?: 'agreed' | 'active';
+  kind?: 'out' | 'in' | 'ai';// out = você empresta; in = stand-in que você trouxe; ai = stand-in da IA
+  startSplit?: number;
+  signing?: Record<string, unknown>; // snapshot da vaga (Signing) pra o jogador voltar ao seu elenco
+}
+
+// [fase 3 · mercado] resumo de uma janela (tela Transferências e medição)
+export interface MarketWindowLog {
+  split: number;
+  kind: 'offseason' | 'mid' | 'boot';
+  moves: number;             // movimentos de jogador entre clubes/mercado livre
+  chains: number;            // movimentos disparados por uma venda (clube que vende repõe)
+  standIns: number;
+  offers: number;            // propostas geradas pelos seus jogadores
+  items?: { nick: string; cc: string; from: string; to: string; fee: number; reason?: string; chain?: boolean }[];
+}
 
 export interface MarketState {
   v: 1;
   budgets: Record<string, number>;   // teamId → caixa de transferência da IA (recalculado por split)
   incoming: IncomingOffer[];         // propostas pelos seus jogadores
   rumors: { split: number; text: string; playerId?: string; teamId?: string }[];
-  loans: { playerId: string; toTeamId: string; untilSplit: number }[];
+  loans: MarketLoan[];
+  // [fase 3 · mercado] opcionais
+  strategies?: Record<string, ClubStrategy>; // teamId → estratégia no split
+  arrivals?: Record<string, number>;         // playerId → split em que chegou ao clube da IA (entra entre os 5)
+  windows?: MarketWindowLog[];               // janelas mais recentes primeiro (teto 12)
+  lastWindow?: { split: number; event: number; kind: MarketWindowLog['kind'] } | null;
 }
 
 // ─── Bloco gravado no save da Carreira (v29) ───────────────────────────────
