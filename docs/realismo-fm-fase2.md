@@ -104,3 +104,28 @@ Leitura: familiaridade, papéis e o confronto setup × execução movem a vitór
 - `CareerSave.gestao?: GestaoState` e `updateGestao` na Carreira; `gestaoOf(save)` (treino.ts) lê o bloco com padrões (carreira nova sem bloco).
 - Fadiga: `save.fatigue` deixou de ser gravado; a fonte é `gestao.condition[id].fitness` (fadiga = 100 − fitness, `fatigueView`). `applyFatigueForm`/`recoverFatigue` saíram (viraram `applyConditionToTeam`/`recoverCondition`).
 - `ScrimMatchReport.map` (scrim.ts); a scrim marcada não reduz mais fadiga (ritmo +6, condição −4, familiaridade no mapa, vazamento).
+
+## Integração (`fase2/integracao`)
+Merges na ordem staff → tática → treino. Encaixes entre as frentes:
+- **Treino → tática**: o treino chama `gainFamiliarity` de `tatica.ts` (o stub `gainFamiliarityLocal` saiu; mapa sem plano parte de 50, não de 0). O treino NÃO decai familiaridade: o decaimento roda uma vez só, no fim da série (`tacticsAfterMatch`), ANTES da semana de treino.
+- **VOD → anti-strat**: `vodPrepPoints(training)` (8 por sessão de VOD × ganho da intensidade) entra ao preparar (`prepareAntiStrat(…, vodPoints)`) e, na semana, soma no alvo já escolhido (`gainAntiStrat`).
+- **Vazamento de scrim**: `leakAgainst(training, oppId)` vira prontidão de anti-strat da IA que te viu (`aiTactics(team, { …, leak })`, até +50 com vazamento total), no lugar do −1,5 de força (`applyScrimLeak` não é mais chamado na partida).
+- **Analista automático**: sem preparação manual, o seu time estuda o adversário com a MESMA regra da IA (`autoAntiStratReadiness(scoutingOf(time))`); preparar no Plano de jogo vence o automático. O plano "Anti-strat" só perde o +2 genérico com preparação manual.
+- **mapTraining**: priorizar mapa virou familiaridade; o domínio antigo (`mapTraining` → `mapPrefs`) não cresce mais e se desfaz 0,3 por split. O painel "Mapas" do Elenco mostra a familiaridade.
+- **staffEffects**: `training[sessão]`, `injuryRisk`, `injuryRecovery` → treino; `familiarityGain` → cada fonte de familiaridade uma vez (semana de treino, scrim marcada, partida); `antiStratRead` → `antiStratReveal` (prontidão inicial e o que aparece do adversário); `moraleRecovery`, `youthGrowth`, `scoutAccuracy` → staff.
+- **Recuperação protegida (treino)**: abaixo de 40 de fitness a semana recupera +0,5 por ponto abaixo do piso. A faixa 40–100 segue igual à fadiga antiga; o calendário real (~4 séries por etapa) não queima mais o elenco de quem usa a agenda padrão (lesionados: 9% → 4% das vagas).
+- **Motor**: 1v1 com memória (`DUEL.ADV_1V1 = 0,4`): quem tinha mais vivos antes de o round virar 1v1 leva o viés no duelo final, na DP e na amostragem.
+
+### Neutralidade (quem nunca mexe) — `npx tsx scripts/measure-neutralidade.mts 150`
+Temporada modelo 3 splits × 3 etapas × 4 séries MD3, folgas de 16/40; antes = base 51ed95f (fadiga antiga, sem tática); depois = agenda padrão normal + tática padrão + IA com tática.
+
+| | Vitória em série | Δ |
+|---|---|---|
+| antes da fase 2 | 29,3% | — |
+| depois, sem os ajustes da integração | 24,1% | −4,5 pp (burnout: −3,8; IA te lendo: −2,1) |
+| **depois, integrado** | **29,2%** | **−0,1 ± 0,8 pp** |
+
+Travado em `scripts/test-fase2-integracao.mts` (±2 pp).
+
+### Calibração final (2500 mapas, seed do teste)
+Todos os alvos na tolerância com e sem a tática da IA. Clutch 1v1: 49,6% → **55,4%** (linha de base) / 54,1% (tática), alvo 55,6 ± 7; clutch 1v2 14,4% (16,8 ± 6); curva força→vitória v1/v2: +0 49,3/49,7 · +4 71,8/67,2 · +8 85,0/84,8 · +14 95,2/98,3.
