@@ -33,6 +33,10 @@ export interface ElencoRow {
   kd?: number;
   adr?: number;
   recent?: number[];
+  /** [fase 3 · vestiário] status no elenco (rótulo), titular/banco e o desconto de valor de quem vive no banco */
+  status?: string;
+  slot?: 'starter' | 'bench';
+  valueMul?: number;
 }
 
 type View = 'geral' | 'attrs' | 'contracts' | 'perf';
@@ -72,6 +76,11 @@ export function ElencoPanel({ rows, onOpen }: { rows: ElencoRow[]; onOpen: (p: P
       ),
     },
     { key: 'role', header: ct('Função'), sort: (r) => r.p.role, cell: (r) => <RoleChip role={r.p.role} /> },
+    {
+      key: 'slot', header: ct('Escalação'), views: ['geral', 'contracts', 'perf'], sort: (r) => (r.slot === 'bench' ? 1 : 0),
+      cell: (r) => (r.slot ? <Tag tone={r.slot === 'bench' ? 'neutral' : 'win'}>{r.slot === 'bench' ? ct('Banco') : ct('Titular')}</Tag> : '—'),
+    },
+    { key: 'status', header: ct('Status'), views: ['geral', 'contracts'], sort: (r) => r.status ?? '', cell: (r) => r.status ?? '—' },
     { key: 'age', header: ct('Idade'), num: true, sort: (r) => r.age, cell: (r) => r.age },
     { key: 'ovr', header: 'OVR', num: true, sort: (r) => playerOvr(r.p), cell: (r) => <Ovr value={playerOvr(r.p)} /> },
     attrCol('aim', ct('Mira'), ['geral', 'attrs']),
@@ -89,7 +98,7 @@ export function ElencoPanel({ rows, onOpen }: { rows: ElencoRow[]; onOpen: (p: P
       sort: (r) => formStatus(r.recent).avg ?? 0,
       cell: (r) => { const f = formStatus(r.recent); return <span style={{ color: f.color }}>{f.avg != null ? f.avg.toFixed(2).replace('.', ',') : '—'}</span>; },
     },
-    { key: 'value', header: ct('Valor'), num: true, views: ['geral', 'contracts'], sort: (r) => playerValue(r.p), cell: (r) => <b>{formatMoney(playerValue(r.p))}</b> },
+    { key: 'value', header: ct('Valor'), num: true, views: ['geral', 'contracts'], sort: (r) => playerValue(r.p) * (r.valueMul ?? 1), cell: (r) => <b title={r.valueMul != null && r.valueMul < 1 ? ct('Desvalorizado por falta de jogo') : undefined}>{formatMoney(Math.round(playerValue(r.p) * (r.valueMul ?? 1)))}</b> },
     { key: 'wage', header: ct('Salário/split'), num: true, views: ['contracts'], sort: (r) => r.wage ?? playerWage(r.p), cell: (r) => formatMoney(r.wage ?? playerWage(r.p)) },
     {
       key: 'contract', header: ct('Contrato'), num: true, views: ['contracts'], sort: (r) => r.contractLeft ?? 99,
@@ -113,7 +122,7 @@ export function ElencoPanel({ rows, onOpen }: { rows: ElencoRow[]; onOpen: (p: P
   return (
     <Panel
       icon={<Users size={16} />}
-      title={ct('Titulares')}
+      title={ct('Elenco')}
       flush
       className="elenco-panel"
       actions={(
@@ -144,7 +153,7 @@ export function ElencoPanel({ rows, onOpen }: { rows: ElencoRow[]; onOpen: (p: P
         view={view}
         tall
         defaultSort={{ key: 'ovr', dir: 'desc' }}
-        caption={ct('Elenco titular')}
+        caption={ct('Elenco')}
         selected={(r) => picked.includes(r.oid)}
         empty={ct('Sem jogadores no elenco.')}
       />

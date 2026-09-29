@@ -55,3 +55,21 @@ O que já existe e esta fase APROFUNDA E UNIFICA (não duplique — substitua/ev
 - `loyaltyBonus` é pago no fechamento do split em que o contrato termina, a quem continua no elenco (`loyaltyPayouts`).
 - Demissão/novo clube zera `clube.contracts` e `clube.negotiations` (o resto do bloco `clube` fica com as outras frentes).
 
+### Frente G · vestiário (`fase3/vestiario`)
+- `clube/model.ts` · `DressingRoomState` ganhou campos OPCIONAIS: `unrest?: Record<playerId, { level: 0|1|2|3; since }>` (1 incomodado · 2 pediu conversa · 3 pediu para sair) e `lastPlayTime?: Record<playerId, number>` (fração de mapas jogados no último split fechado). Cada conflito ganhou `mediatedAt?: number`.
+- `clube/vestiario.ts` (para as frentes H e I):
+  - `expectedPlayTime(status: SquadStatus): number` — fração de mapas que o status promete (estrela 0,95 · importante 0,85 · titular 0,7 · rotação 0,45 · reserva 0,2 · promessa 0,1).
+  - `wantsToLeave(save, playerId): boolean` — pedido de saída (incômodo nível 3 por banco, ou satisfação < 25 com moral < 35). `leaveRequests(save, squadIds): string[]`.
+  - `statusesOf(dressing, players)` — status efetivo (o atribuído, senão o automático por OVR); `STATUS_RANK`, `SQUAD_STATUSES`, `STATUS_LABEL`.
+  - `benchValueFactor(dressing, playerId): number` — 0,85–1: quem vive no banco vale menos (a IA de mercado multiplica o valor).
+  - `rosterLocked(save): boolean` — lê `clube.market.window?.rosterLocked` (a frente I grava `window?: TransferWindow` em `MarketState`); com lock, a escalação não muda.
+  - `dressingOf(save)`, `resolveLineup(squadIds, lineup)` (os 5 que jogam + banco; sem escalação = os 5 primeiros), `SQUAD_MAX = 7`.
+  - `promisesScore(list, split, statusPromise?, currentStatus?)` já lê `ContractTerms.statusPromise` (frente H): status prometido em contrato e não cumprido pesa na felicidade. `wageScore(contract.wage, marketWage)` entra na felicidade assim que a frente H gravar `clube.contracts[id].wage` > 0.
+- `gestao/condicao.ts` · `substituteInjured(team, injured, standIns, bench = [])`: 4º parâmetro opcional; o banco entra antes da base, com id `user__` e custo de entrosamento `BENCH_TEAMWORK_COST = 0,3` (sem banco, idêntico).
+- `chemistry.ts` · `tickPairChemAfterMatch(..., personalityBonus?, pairBonus?)`: 5º parâmetro opcional (grupo social).
+- `career/happiness.ts`: modelo único; fatores novos opcionais (`playTime`, `role`, `wage`, `promises`, `staff`, `social`, `ambition`); só com os 5 antigos o número é o de antes. `moraleForm(m)` saiu do CareerScreen para cá.
+- `career/personality.ts`: `derivePersonality(p)`, `fmPersonalityOf(h, leadership)`, `setPersonalitySource(fn)`, `personalityProfileOf(id)`, `FM_PERSONALITY_LABEL/DESC`; `playerPersonality(id)` continua com a mesma assinatura (sem fonte = hash).
+- `career/playerPromises.ts`: tipo `'playtime'` e `PromiseJudgeCtx.playTimeMet?`.
+- CareerScreen: `CareerSave.clube?: ClubeState` e `clubeOfSave(s)` (exportado).
+- Elenco de até 7: `consummateDeals` recusa acordo que passaria de 7 (manchete "elenco cheio"); a janela (MarketScreen) aceita 5–7.
+

@@ -35,7 +35,10 @@ export interface DressingRoomState {
   lineup: Lineup | null;                          // null = motor usa os 5 do elenco como hoje
   playTime: Record<string, { played: number; available: number }>; // mapas jogados × disponíveis no split
   meetings: { split: number; kind: 'praise' | 'demand' | 'calm'; outcome: number }[]; // reuniões de equipe
-  conflicts: { a: string; b: string; since: number; severity: number }[]; // atritos entre jogadores
+  conflicts: { a: string; b: string; since: number; severity: number; mediatedAt?: number }[]; // atritos entre jogadores
+  // [frente VESTIÁRIO · mudança de contrato] campos opcionais (defaultDressingRoom preenche):
+  unrest?: Record<string, { level: 0 | 1 | 2 | 3; since: number }>; // 1 incomodado · 2 pediu conversa · 3 pediu para sair
+  lastPlayTime?: Record<string, number>; // fração de mapas jogados no ÚLTIMO split fechado (0–1)
 }
 
 // ─── Contratos ─────────────────────────────────────────────────────────────
