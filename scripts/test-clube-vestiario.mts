@@ -28,6 +28,7 @@ import { judgePlayerPromises, type PlayerPromise } from '../src/engine/career/pl
 import { substituteInjured, STANDIN_TEAMWORK_COST, BENCH_TEAMWORK_COST, type StandIn } from '../src/engine/gestao/condicao.ts';
 import { migrateClube } from '../src/engine/clube/clubeMigration.ts';
 import { realTeams } from './calibrate-engine.mts';
+import { measureVestiario } from './measure-vestiario.mts';
 
 const vp = (id: string, o: Partial<VPlayer> = {}): VPlayer => ({
   id, nick: id, ovr: 75, age: 24, country: 'br', role: 'Rifler', leadership: 9, temperament: 11,
@@ -438,4 +439,13 @@ test('save: v29 grava o vestiário padrão (sem escalação, sem status) e dress
   assert.deepEqual(s.clube!.dressing.status, {});
   assert.deepEqual(dressingOf(s), s.clube!.dressing);
   assert.deepEqual(dressingOf({}), defaultDressingRoom());
+});
+
+test('neutralidade medida (scripts/measure-vestiario.mts): mesmo cinco, felicidade ±2, moral no motor monotônica', () => {
+  const r = measureVestiario(300);
+  assert.equal(r.sameFive.identical, r.sameFive.teams, 'sem escalação salva, o motor joga os mesmos 5 de antes');
+  for (const h of r.happiness) assert.ok(Math.abs(h.diff) <= 2, `tier ${h.tier}: satisfação ${h.before.toFixed(1)} → ${h.after.toFixed(1)}`);
+  const wins = r.morale.map((m) => m.win);
+  assert.ok(wins[0] < wins[2] && wins[2] < wins[4], 'moral baixa perde mais, moral alta ganha mais');
+  assert.ok(Math.abs(r.personality.deltaNew - r.personality.deltaOld) < 0.5, 'a personalidade derivada não muda a deriva média de moral');
 });

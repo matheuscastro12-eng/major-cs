@@ -35,7 +35,7 @@ import { evaluatePromise, appendPromiseOutcome, type BoardPromise, type PromiseO
 import { evaluateScars, scarsEarnedAt, scarEffects, applyScarsOnMarket, type CoachScar, type ScarEvent } from '../engine/career/scars';
 import { bankSeasonEvent, seasonLinesOf, type SeasonStats } from '../engine/career/seasonStats';
 import { tryBreakthrough } from '../engine/career/breakthrough';
-import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT } from '../engine/career/happiness';
+import { computeHappiness, tickSatisfaction, satisfactionMoraleDrift, stabilizeBond, BOND_DEFAULT, moraleForm } from '../engine/career/happiness';
 import { tickListedSales, LISTING_MAX_RATIO } from '../engine/career/listedSales';
 import { unhappyDiscountFor } from '../engine/career/unhappyMarket';
 import { buyoutFloorOf } from '../engine/career/buyout';
@@ -1507,7 +1507,7 @@ export function moraleInfo(v: number): { label: string; cls: 'good' | 'warn' | '
   return { label: ct('Revoltado'), cls: 'bad', icon: 'mood-1' };
 }
 // forma inicial do split derivada da moral (sutil): 100→+0.07, 40→-0.07
-const moraleForm = (m: number) => Math.max(0.93, Math.min(1.07, 1 + (m - MORALE_DEFAULT) / 430));
+// [fase 3] a forma pela moral mora em career/happiness.ts (medida em scripts/measure-vestiario.mts)
 // nova moral no fim do split: reversão à média + rendimento (forma) + resultado
 // coletivo (título/objetivo) + insegurança de contrato vencendo.
 function nextMorale(

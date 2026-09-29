@@ -143,3 +143,12 @@ export function stabilizeBond(bond: number, psychologistLevel: number): number {
 }
 
 export const BOND_DEFAULT = 50;
+
+// [fase 3 · vestiário] MORAL NO MOTOR (já existia na Carreira; agora exportada e
+// medida em scripts/measure-vestiario.mts): o jogador entra na série com a forma
+// puxada pela moral — 70 é neutro, 100 → ×1,07, 40 → ×0,93 (teto e piso ±7%).
+export const MORALE_NEUTRAL = 70;
+export function moraleForm(m: number): number {
+  return Math.max(0.93, Math.min(1.07, 1 + (m - MORALE_NEUTRAL) / 430));
+}
+
