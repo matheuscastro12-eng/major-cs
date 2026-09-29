@@ -269,7 +269,8 @@ function flavorFor(p: AttrsSource, age: number): Record<AttrKey, number> {
   return f;
 }
 
-function hiddenFor(p: AttrsSource, a: Record<AttrKey, number>, age: number, ovr: number): Record<HiddenKey, number> {
+/** Ocultos plausíveis a partir dos atributos visíveis, idade e OVR (ruído estável por id). */
+export function deriveHiddenAttrs(p: AttrsSource, a: Record<AttrKey, number>, age: number, ovr: number): Record<HiddenKey, number> {
   const n = (k: string, amp: number) => noise(`hidden:${p.id}:${k}`, amp);
   const h = {} as Record<HiddenKey, number>;
   h.bigMatch = a.clutch * 0.6 + a.composure * 0.4 + (age >= 25 ? 1 : 0) + n('bigMatch', 3);
@@ -294,7 +295,7 @@ export function deriveAttrs(p: AttrsSource): PlayerAttrs {
   const ovr = ovrFromLegacy(legacyFromA(a));
   const ca = caFromOvr(ovr);
   const pa = clamp(caFromOvr(potentialOvrFor(p.id, ovr, age)), ca, 200);
-  return { v: 1, a, h: hiddenFor(p, a, age, ovr), ca, pa };
+  return { v: 1, a, h: deriveHiddenAttrs(p, a, age, ovr), ca, pa };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
