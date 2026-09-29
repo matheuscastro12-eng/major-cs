@@ -108,6 +108,11 @@ export function Home(props: Props) {
     if (ultimateLocked && onUltimate) trackPaywallView('home-ultimate');   // card Ultimate com cadeado
     if (account && !account.paid) trackPaywallView('home-pill'); // pill "Vire Fundador"
     if (!account) trackPaywallView('acct-chip-guest'); // chip de conta do convidado no Início
+    // funil (iter): no mobile o home-grid empilha em 1 coluna e o painel "Sua
+    // conta" (acct-chip-guest) vira o ÚLTIMO bloco da página — o CTA real fica
+    // abaixo de "Continue de onde parou" e "Modos de jogo". src próprio pra
+    // medir esse banner do topo contra o painel de baixo (mesmo evento, novo src).
+    if (!account) trackPaywallView('home-guest-top');
   }, [view, premiumLocked, ultimateLocked, onRoadToPro, onUltimate, accountReady, account]);
 
   // [URG-4] streak do Diário: "N dias" e, se ainda não jogou hoje, o aviso de perda
@@ -232,6 +237,19 @@ export function Home(props: Props) {
         </button>
       ) : undefined}
     >
+      {accountReady && !account && (
+        // banner só existe visualmente no mobile (ver home.css): no desktop as 3
+        // colunas do home-grid já mostram "Sua conta" sem scroll, então duplicar
+        // aqui só criaria ruído. src próprio (home-guest-top) mede o efeito.
+        <div className="home-guest-top">
+          <Crown size={18} aria-hidden className="home-guest-top__ic" />
+          <span className="home-guest-top__txt">
+            <b>{ct('Crie sua conta')}</b>
+            <small>{ct('vitalícia por R$20 · cloud sync, 5 carreiras e ranking real')}</small>
+          </span>
+          <Button variant="primary" onClick={() => { setCheckoutSrc('home-guest-top'); onCreateAccount?.(); }}>{ct('Criar conta')}</Button>
+        </div>
+      )}
       <div className="home-grid">
         {/* ── coluna 1: continuar ── */}
         <div className="gs-stack">
