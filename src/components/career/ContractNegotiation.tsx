@@ -9,7 +9,7 @@ import { Modal, Button, ProgressBar, Segmented, Avatar, Ovr, RoleChip, Alert, Ta
 import { Flag } from '../ui';
 import {
   openPlayerNegotiation, playerNegotiationStep, currentDemand, offerIssues, rivalWage, termsFromOffer, offerFromDemand,
-  statusPlayTimeExpectation, issueText, SQUAD_STATUSES, STATUS_LABEL, CONTRACT_TERM_MIN, CONTRACT_TERM_MAX,
+  expectedPlayTime, issueText, SQUAD_STATUSES, STATUS_LABEL, CONTRACT_TERM_MIN, CONTRACT_TERM_MAX,
   type NegoProfile, type Offer, type PlayerReply, type Issue,
 } from '../../engine/clube/contratos';
 import type { ContractTerms, Negotiation, SquadStatus } from '../../engine/clube/model';
@@ -219,7 +219,7 @@ export function ContractNegotiationModal({
                   )}
                 </div>,
                 demand.maxClause != null ? `≤ ${formatMoney(demand.maxClause)}` : ct('indiferente'), demand.maxClause != null ? ok('clause') : null)}
-              {row(ct('Status no elenco'), offer.statusPromise ? `${ct('espera jogar')} ~${Math.round(statusPlayTimeExpectation(offer.statusPromise) * 100)}% ${ct('dos mapas')}` : null,
+              {row(ct('Status no elenco'), offer.statusPromise ? `${ct('espera jogar')} ~${Math.round(expectedPlayTime(offer.statusPromise) * 100)}% ${ct('dos mapas')}` : null,
                 <select className="cn-select" value={offer.statusPromise ?? ''} disabled={closed} aria-label={ct('Status prometido')}
                   onChange={(e) => set({ statusPromise: (e.target.value || null) as SquadStatus | null })}>
                   {statusItems.map((s) => <option key={s} value={s}>{ct(STATUS_LABEL[s])}</option>)}

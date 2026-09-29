@@ -7,7 +7,7 @@ import {
   defaultContracts, materializeContracts, contractPayroll, contractUntilOf, contractUntilMap, releaseClauseOf, contractWageOf,
   signContract, withoutContracts, keepContracts, loyaltyPayouts, defaultTerms,
   demandFor, willingToNegotiate, openPlayerNegotiation, playerNegotiationStep, offerFromDemand, offerValue, currentDemand,
-  agentOf, caliberTier, expectedStatus, statusPlayTimeExpectation, initialPatience, negoProfileFor,
+  agentOf, caliberTier, expectedStatus, expectedPlayTime, initialPatience, negoProfileFor,
   openClubNegotiation, clubNegotiationStep, decideRound, recordNegotiation, negotiationBlock, contractRows, expiryTimeline,
   WAGE_PENDING, type NegoProfile, type Offer,
 } from '../src/engine/clube/contratos.ts';
@@ -139,8 +139,8 @@ test('status esperado pelo lugar no elenco e expectativa de tempo de jogo', () =
   assert.equal(expectedStatus({ ovr: 75, age: 25, squadRank: 4 }), 'starter');
   assert.equal(expectedStatus({ ovr: 70, age: 19, squadRank: 4 }), 'prospect');
   assert.equal(expectedStatus({ ovr: 70, age: 25, squadRank: 6 }), 'backup');
-  assert.ok(statusPlayTimeExpectation('star') > statusPlayTimeExpectation('starter'));
-  assert.ok(statusPlayTimeExpectation('starter') > statusPlayTimeExpectation('backup'));
+  assert.ok(expectedPlayTime('star') > expectedPlayTime('starter'));
+  assert.ok(expectedPlayTime('starter') > expectedPlayTime('backup'));
 });
 
 // ─── disposição ────────────────────────────────────────────────────────────

@@ -61,12 +61,9 @@ export const STATUS_LABEL: Record<SquadStatus, string> = {
   star: 'Estrela', key: 'Importante', starter: 'Titular', rotation: 'Rotação', backup: 'Reserva', prospect: 'Promessa',
 };
 
-// Expectativa de tempo de jogo (fração dos mapas) por status. A frente G
-// (vestiário) é a dona desta régua; enquanto ela não expõe a sua, esta
-// função local tem a MESMA semântica (status mais alto = espera jogar mais).
-export function statusPlayTimeExpectation(status: SquadStatus): number {
-  return { star: 0.95, key: 0.85, starter: 0.7, rotation: 0.45, prospect: 0.25, backup: 0.2 }[status];
-}
+// Expectativa de tempo de jogo (fração dos mapas) por status: a régua é da
+// frente G (vestiário) — `expectedPlayTime` — usada aqui sem cópia local.
+export { expectedPlayTime } from './vestiario';
 
 /** Status que o jogador espera pelo lugar dele no elenco (0 = o melhor). */
 export function expectedStatus(p: { ovr: number; age: number; squadRank: number }): SquadStatus {

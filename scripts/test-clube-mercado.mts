@@ -311,16 +311,18 @@ test('empréstimo e stand-in: acertar, não duplicar, cancelar; stand-in só de 
   }
 });
 
-// ─── pontes com as frentes G/H (stubs) ─────────────────────────────────────
-test('pontes (stubs das frentes G e H) leem o que já existe no save', () => {
-  const s = migrateClube({ contracts: { a: 5 }, morale: { a: 20, b: 80 } }) as Record<string, unknown> & { clube: { contracts: Record<string, { releaseClause?: number | null; wage: number; until: number }> } };
+// ─── pontes com as frentes G/H (integração: funções reais) ─────────────────
+test('pontes: o mercado usa as funções reais de contratos (H) e vestiário (G)', () => {
+  const s = migrateClube({ contracts: { a: 5 }, morale: { a: 20, b: 80 }, satisfaction: { a: 10, b: 80 } }) as Record<string, unknown> & { clube: { contracts: Record<string, { releaseClause?: number | null; wage: number; until: number }> } };
   assert.equal(releaseClauseOf(s, 'a'), null, 'sem cláusula no contrato, nada é forçado');
   s.clube.contracts.a.releaseClause = 2_000_000;
   assert.equal(releaseClauseOf(s, 'a'), 2_000_000);
-  assert.equal(wantsToLeave(s, 'a'), true); assert.equal(wantsToLeave(s, 'b'), false);
+  assert.equal(wantsToLeave(s, 'a'), true, 'satisfação e moral no chão: pede pra sair');
+  assert.equal(wantsToLeave(s, 'b'), false);
   assert.deepEqual(leaveRequests(s, ['a', 'b']), ['a']);
-  assert.equal(benchValueFactor({ v: 1, status: {}, lineup: { starters: [], bench: ['x'] }, playTime: {}, meetings: [], conflicts: [] }, 'x'), 0.85);
-  assert.equal(benchValueFactor(null, 'x'), 1);
+  const dr = { v: 1 as const, status: {}, lineup: { starters: [], bench: ['x'] }, playTime: { x: { played: 0, available: 20 } }, meetings: [], conflicts: [] };
+  assert.ok(benchValueFactor(dr, 'x') < 1, 'quem vive no banco vale menos');
+  assert.ok(benchValueFactor(dr, 'x') >= 0.85);
   assert.equal(SQUAD_MAX, 7);
 });
 
