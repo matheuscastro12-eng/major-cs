@@ -645,7 +645,8 @@ export interface DatabaseSummary { playerEdits: number; teamEdits: number; added
 export function databaseSummary(db: CustomDatabase): DatabaseSummary {
   return {
     playerEdits: Object.keys(db.playerEdits).length,
-    teamEdits: Object.keys(db.teamEdits).length,
+    // o elenco de um time novo mora em teamEdits, mas ele conta como "time novo"
+    teamEdits: Object.keys(db.teamEdits).filter((id) => !db.addedTeams.some((t) => t.id === id)).length,
     addedPlayers: db.addedPlayers.length,
     addedTeams: db.addedTeams.length,
   };

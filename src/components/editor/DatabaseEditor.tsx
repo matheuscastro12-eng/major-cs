@@ -52,7 +52,7 @@ const writeActive = (id: string | null) => { try { if (id) localStorage.setItem(
 const salt = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 const nowIso = () => new Date().toISOString();
 const own = <T,>(rec: Record<string, T>, id: string): T | undefined => (Object.prototype.hasOwnProperty.call(rec, id) ? rec[id] : undefined);
-const kb = (n: number) => `${Math.max(1, Math.round(n / 1024))} KB`;
+const kb = (n: number) => `${Math.max(1, Math.round(n / 1000))} KB`;
 
 interface PlayerRow { p: Player; team: TeamSeason; status: 'official' | 'edited' | 'added'; ovr: number; ca: number; pa: number; age: number }
 interface TeamRow { t: TeamSeason; status: 'official' | 'edited' | 'added'; ovr: number; region: MacroRegion | null }
@@ -391,10 +391,10 @@ export function DatabaseEditor({ onExit, onPlayCareer }: { onExit: () => void; o
         </span>
       ),
     },
-    { key: 'team', header: ct('Time'), sort: (r) => r.team.team, cell: (r) => (r.team.id === FREE_TEAM_ID ? <span className="edb-dim">{ct('Sem time')}</span> : r.team.tag) },
-    { key: 'role', header: ct('Função'), sort: (r) => r.p.role, cell: (r) => <RoleChip role={r.p.role} /> },
-    { key: 'age', header: ct('Idade'), num: true, sort: (r) => r.age, cell: (r) => r.age },
     { key: 'ovr', header: 'OVR', num: true, sort: (r) => r.ovr, cell: (r) => <Ovr value={r.ovr} size="sm" /> },
+    { key: 'role', header: ct('Função'), sort: (r) => r.p.role, cell: (r) => <RoleChip role={r.p.role} /> },
+    { key: 'team', header: ct('Time'), sort: (r) => r.team.team, cell: (r) => (r.team.id === FREE_TEAM_ID ? <span className="edb-dim">{ct('Sem time')}</span> : r.team.tag) },
+    { key: 'age', header: ct('Idade'), num: true, sort: (r) => r.age, cell: (r) => r.age },
     { key: 'ca', header: ct('CA'), num: true, sort: (r) => r.ca, cell: (r) => r.ca },
     { key: 'pa', header: ct('PA'), num: true, sort: (r) => r.pa, cell: (r) => r.pa },
     { key: 'st', header: '', cell: (r) => statusTag(r.status) },
@@ -412,9 +412,9 @@ export function DatabaseEditor({ onExit, onPlayCareer }: { onExit: () => void; o
         </span>
       ),
     },
-    { key: 'tag', header: ct('Tag'), sort: (r) => r.t.tag, cell: (r) => r.t.tag },
-    { key: 'n', header: ct('Elenco'), num: true, sort: (r) => r.t.players.length, cell: (r) => r.t.players.length },
     { key: 'ovr', header: 'OVR', num: true, sort: (r) => r.ovr, cell: (r) => <Ovr value={r.ovr} size="sm" /> },
+    { key: 'n', header: ct('Elenco'), num: true, sort: (r) => r.t.players.length, cell: (r) => r.t.players.length },
+    { key: 'tag', header: ct('Tag'), sort: (r) => r.t.tag, cell: (r) => r.t.tag },
     { key: 'tw', header: ct('Entros.'), num: true, sort: (r) => r.t.teamwork, cell: (r) => r.t.teamwork },
     { key: 'coach', header: ct('Técnico'), sort: (r) => r.t.coach.nick, cell: (r) => r.t.coach.nick },
     { key: 'st', header: '', cell: (r) => statusTag(r.status) },

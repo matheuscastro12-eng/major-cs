@@ -40,4 +40,39 @@ O que já existe e esta fase APROFUNDA E UNIFICA (não duplique — evolua): `da
 - Telas em 1440×900 e 390×844 (Playwright em `/private/tmp/claude-501/-Users-matheuscastro-orca-major-cs/3774674b-38bb-4228-8c79-6903e36bc699/scratchpad/video/cap/node_modules`, `chromium.launch({ channel: 'chrome' })`, porta própria) em `/private/tmp/claude-501/-Users-matheuscastro-orca-major-cs/3774674b-38bb-4228-8c79-6903e36bc699/scratchpad/fase4-shots/<frente>-*`; confira você mesmo. Textos novos com en/es em `career-strings.ts`.
 
 ## Mudanças de contrato
-(nenhuma ainda)
+### Frente L (editor), branch `fase4/editor`
+- `CustomDatabase.playerEdits`: `Record<string, CustomPlayerEdit>` (era `Partial<Player>`). `CustomPlayerEdit` =
+  `nick`, `name`, `country`, `role`, `role2` (`null` remove), `age`, `attrs` (PlayerAttrs completos). Os 5 números
+  legados nunca são editados direto: saem dos atributos (`withAttrs`), CA sempre recalculado com `caFromAttrs`.
+- `CustomDatabase.teamEdits`: `Record<string, CustomTeamEdit>` (era `Partial<TeamSeason>`). `CustomTeamEdit` =
+  `team`, `tag`, `country` (define a região via `macroRegionOf`), `colors`, `teamwork`, `coach`, `roster` (ids, na
+  ordem: 5 primeiros titulares). O elenco dos times NOVOS também mora em `teamEdits[id].roster`; em `addedTeams`
+  o `players` fica vazio. Quem sai de um elenco sem destino vira free agent (`__free__`).
+- `CustomDatabase.updatedAt?` (opcional). Ids novos: `cdb_*` (base), `cdb_p_*` (jogador), `cdb_t_*` (time).
+- `MundoState.database?: CustomDatabase | null` (opcional): cópia CONGELADA da base escolhida na criação da
+  Carreira. `mundo.databaseId` continua sendo a fonte de qual base foi usada.
+- `CareerSave.mundo?: MundoState` declarado em `CareerScreen.tsx` (as outras frentes leem daí).
+- Para as outras frentes: a base da Carreira agora é `rawBase`/`editedBase` no `CareerScreen` (oficial ⇒ os
+  mesmos objetos de antes). Quem precisar da lista de times/jogadores da base dentro da Carreira deve usar essas,
+  não `CS2_REAL_2026` direto (senão times/jogadores novos da base customizada não aparecem). Jogador movível pelo
+  mercado da IA = `movableIds` (era `BASE_PLAYER_IDS`).
+
+## Frente L (editor): o que ficou
+- Motor puro em `src/engine/mundo/editor.ts`: `validateDatabase` (faixas 1–20, PA 1–200, idade 15–45, CA
+  recalculado, PA ≥ CA, ids únicos e no formato, elenco editado/novo com 5–10, ninguém em dois elencos, limites
+  de quantidade), `applyCustomDatabase`/`applyCustomPlayer`, `import/exportDatabaseJson`, helpers de edição
+  (`movePlayer`, `setRoster`, `addPlayer`, `addTeam`…), `resolveCareerDatabase`.
+- Limites: importação ≤ 1 MB (recusada antes do parse), base ≤ 256 KB serializada, 5 bases no aparelho, 300
+  jogadores novos, 48 times novos, 2.000 edições de jogador, 400 de time. Chaves `__proto__`/`constructor` são
+  descartadas; lookups por `Map`.
+- Storage: `rtm-db-custom-v1` (`src/state/customDb.ts`), sempre em try/catch; cota cheia avisa e sugere exportar.
+- **Base que some (decisão)**: a Carreira congela a base no save (`mundo.database`), como o FM carrega a base no
+  início — editar/apagar a base depois não muda a Carreira. Se a cópia faltar ou não validar, usa a do storage
+  com o mesmo id (e congela a partir dali); sem nenhuma, segue na OFICIAL e avisa uma vez (toast). Custo: até
+  256 KB a mais no save de quem usa base customizada (0 para quem usa a oficial).
+- Ordem das camadas: dados (bo3-2026 + atributos da fase 1) → edições do admin (`bo3_edits`) → base customizada.
+  No `findSigning`, a customizada é reaplicada depois de `applyBo3PlayerEdit` para vencer o admin.
+- Telas: `/editor` (menu inicial: seção "Projeto" e card "Editor de base"; paleta ⌘K; "Abrir editor" na
+  fundação da Carreira). A escolha da base fica no topo dos Desafios e do "Assumir organização" e só vale antes
+  de fundar/assumir.
+- Testes: `scripts/test-mundo-editor.mts`.
