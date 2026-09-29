@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "provisional": true,
-  "owner": "frente A (motor/dados) substitui estes valores pelos medidos no bo3.gg; formato definido pela frente C (motor/partida)",
-  "note": "PROVISÓRIO: valores públicos amplamente conhecidos de CS2 profissional (2024-2026, MR12), arredondados. Cada alvo tem value (central) e tol (tolerância absoluta aceita no teste). 'by' guarda alvos por mapa/função no mesmo formato. Onde o número é estimativa (sem série pública confiável), 'estimate': true e 'source' explica.",
+  "provisional": false,
+  "owner": "frente A (motor/dados): valores medidos no bo3.gg por scripts/fetch-bo3-stats.mts; formato definido pela frente C (motor/partida)",
+  "note": "Valores medidos numa amostra tier S do bo3.gg (ver `sample`). `n` = tamanho da amostra de cada alvo (rounds, pistols, tentativas ou jogadores). Tolerâncias são as da frente C. `estimate: true` só onde não há dado público confiável.",
   "schema": {
     "target": "{ value: number, tol: number, unit: 'fraction' | 'rating' | 'adr', def: string, source: string, provisional: boolean, estimate?: boolean, by?: Record<string, { value: number, tol: number }> }"
   },
@@ -10,133 +10,1086 @@
     "ctRoundWin": {
       "unit": "fraction",
       "def": "fração dos rounds vencidos pelo CT, por mapa (todos os rounds da regulamentação e da prorrogação)",
-      "source": "estatísticas de mapa HLTV/bo3.gg de CS2 profissional 2024-2025 (Nuke e Train CT-sided, Anubis T-sided, Dust2 equilibrado)",
-      "provisional": true,
-      "value": 0.52,
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); tournaments/<slug>/map_pool de cada torneio (todos os mapas do torneio). Mapas sem amostra (≥ 300 rounds) mantêm o valor provisório",
+      "provisional": false,
+      "value": 0.5221,
       "tol": 0.025,
       "by": {
-        "mirage": { "value": 0.525, "tol": 0.03 },
-        "inferno": { "value": 0.52, "tol": 0.03 },
-        "nuke": { "value": 0.555, "tol": 0.03 },
-        "ancient": { "value": 0.535, "tol": 0.03 },
-        "anubis": { "value": 0.47, "tol": 0.03 },
-        "dust2": { "value": 0.5, "tol": 0.03 },
-        "train": { "value": 0.545, "tol": 0.03 }
-      }
+        "ancient": {
+          "value": 0.5224,
+          "tol": 0.03,
+          "n": 26428
+        },
+        "anubis": {
+          "value": 0.4535,
+          "tol": 0.03,
+          "n": 13173
+        },
+        "cache": {
+          "value": 0.4922,
+          "tol": 0.03,
+          "n": 772
+        },
+        "dust2": {
+          "value": 0.5058,
+          "tol": 0.03,
+          "n": 24753
+        },
+        "inferno": {
+          "value": 0.5016,
+          "tol": 0.03,
+          "n": 33819
+        },
+        "mirage": {
+          "value": 0.5362,
+          "tol": 0.03,
+          "n": 34146
+        },
+        "nuke": {
+          "value": 0.5547,
+          "tol": 0.03,
+          "n": 32038
+        },
+        "overpass": {
+          "value": 0.5552,
+          "tol": 0.03,
+          "n": 17823
+        },
+        "train": {
+          "value": 0.5515,
+          "tol": 0.03,
+          "n": 5877
+        },
+        "vertigo": {
+          "value": 0.5019,
+          "tol": 0.03,
+          "n": 13824
+        }
+      },
+      "n": 202653
     },
     "pistolConversion": {
       "unit": "fraction",
       "def": "P(vencer o 2º round do half | venceu o pistol)",
-      "source": "conversão de pistol em CS2 profissional (~75-82%; menor que no CS:GO pela economia do CS2)",
-      "provisional": true,
-      "value": 0.78,
-      "tol": 0.07
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); rounds 1 e 13 (pistol) seguidos do 2 e 14",
+      "provisional": false,
+      "value": 0.7984,
+      "tol": 0.07,
+      "n": 1399
     },
     "ecoWin": {
       "unit": "fraction",
       "def": "taxa de vitória de um time em eco (sem pistol round) contra full buy",
-      "source": "vitória de eco contra compra completa em CS2 profissional (~8-12%)",
-      "provisional": true,
-      "value": 0.1,
-      "tol": 0.05
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); economy_level do bo3.gg: eco (-1) contra full buy (2), sem pistol",
+      "provisional": false,
+      "value": 0.0526,
+      "tol": 0.05,
+      "n": 1121
     },
     "forceWin": {
       "unit": "fraction",
       "def": "taxa de vitória de um force buy contra full buy",
-      "source": "force buy contra compra completa em CS2 profissional (~25-30%)",
-      "provisional": true,
-      "value": 0.27,
-      "tol": 0.07
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); economy_level do bo3.gg: force (0) contra full buy (2), sem pistol",
+      "provisional": false,
+      "value": 0.1954,
+      "tol": 0.07,
+      "n": 1684
     },
     "openingConversion": {
       "unit": "fraction",
       "def": "5v4: P(vencer o round | o time fez o primeiro abate). O 4v5 é o complemento (1 - value)",
-      "source": "HLTV: o time do opening kill vence ~70-74% dos rounds",
-      "provisional": true,
-      "value": 0.72,
-      "tol": 0.05
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); games/<id>?with=rounds: time com first_kills no round",
+      "provisional": false,
+      "value": 0.725,
+      "tol": 0.05,
+      "n": 15062
     },
     "clutch1v1": {
       "unit": "fraction",
       "def": "P(vencer o round | o time ficou com 1 vivo contra 1)",
-      "source": "clutch 1v1 em CS2 profissional (~48-52%)",
-      "provisional": true,
-      "value": 0.5,
-      "tol": 0.07
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); matches/<slug>/clutches_stats (vs_1)",
+      "provisional": false,
+      "value": 0.5558,
+      "tol": 0.07,
+      "n": 1990
     },
     "clutch1v2": {
       "unit": "fraction",
       "def": "P(vencer o round | o time ficou com 1 vivo contra 2)",
-      "source": "clutch 1v2 em CS2 profissional (~13-20%)",
-      "provisional": true,
-      "value": 0.17,
-      "tol": 0.06
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); matches/<slug>/clutches_stats (vs_2)",
+      "provisional": false,
+      "value": 0.1675,
+      "tol": 0.06,
+      "n": 3361
     },
     "ratingRelByRole": {
       "unit": "rating",
       "def": "rating médio da função ÷ rating médio geral (rating do jogo, engine/match.ts computeDisplay). Relativo porque o nível absoluto depende da fórmula de rating",
-      "source": "médias do rating 2.x por função na HLTV (AWPers e riflers estrela acima; suportes e IGLs abaixo)",
-      "provisional": true,
-      "estimate": true,
-      "value": 1.0,
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); games/<id>/players_stats; função = base curada do jogo (novatos: inferida pelos papéis por round do bo3.gg); rating do bo3.gg (escala própria), média da função ÷ média geral da amostra",
+      "provisional": false,
+      "value": 1,
       "tol": 0.05,
       "by": {
-        "AWP": { "value": 1.06, "tol": 0.05 },
-        "Entry": { "value": 0.99, "tol": 0.05 },
-        "Rifler": { "value": 1.03, "tol": 0.05 },
-        "Lurker": { "value": 1.01, "tol": 0.05 },
-        "Support": { "value": 0.95, "tol": 0.05 },
-        "IGL": { "value": 0.91, "tol": 0.06 }
-      }
+        "AWP": {
+          "value": 1.0383,
+          "tol": 0.05,
+          "n": 39
+        },
+        "Entry": {
+          "value": 1.034,
+          "tol": 0.05,
+          "n": 31
+        },
+        "Rifler": {
+          "value": 1.0126,
+          "tol": 0.05,
+          "n": 47
+        },
+        "Lurker": {
+          "value": 1.0097,
+          "tol": 0.05,
+          "n": 18
+        },
+        "Support": {
+          "value": 0.9649,
+          "tol": 0.05,
+          "n": 22
+        },
+        "IGL": {
+          "value": 0.9437,
+          "tol": 0.06,
+          "n": 33
+        }
+      },
+      "n": 262
     },
     "adr": {
       "unit": "adr",
       "def": "dano médio por round (geral e por função)",
-      "source": "ADR médio de profissionais de CS2 ~74-80; entries e riflers acima, IGLs abaixo",
-      "provisional": true,
-      "value": 77,
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); games/<id>/players_stats; função = base curada do jogo (novatos: inferida pelos papéis por round do bo3.gg)",
+      "provisional": false,
+      "value": 72.1591,
       "tol": 5,
       "by": {
-        "AWP": { "value": 76, "tol": 7 },
-        "Entry": { "value": 80, "tol": 7 },
-        "Rifler": { "value": 80, "tol": 7 },
-        "Lurker": { "value": 76, "tol": 7 },
-        "Support": { "value": 73, "tol": 7 },
-        "IGL": { "value": 68, "tol": 8 }
-      }
+        "AWP": {
+          "value": 70.8904,
+          "tol": 7,
+          "n": 39
+        },
+        "Entry": {
+          "value": 78.0464,
+          "tol": 7,
+          "n": 31
+        },
+        "Rifler": {
+          "value": 74.5309,
+          "tol": 7,
+          "n": 47
+        },
+        "Lurker": {
+          "value": 73.5445,
+          "tol": 7,
+          "n": 18
+        },
+        "Support": {
+          "value": 68.2607,
+          "tol": 7,
+          "n": 22
+        },
+        "IGL": {
+          "value": 67.9398,
+          "tol": 8,
+          "n": 33
+        }
+      },
+      "n": 151420
     },
     "kast": {
       "unit": "fraction",
       "def": "KAST médio (fração dos rounds com kill, assist, sobrevivência ou morte trocada)",
-      "source": "KAST médio de profissionais ~70-74%",
-      "provisional": true,
-      "value": 0.72,
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); games/<id>/players_stats; função = base curada do jogo (novatos: inferida pelos papéis por round do bo3.gg)",
+      "provisional": false,
+      "value": 0.7251,
       "tol": 0.035,
       "by": {
-        "AWP": { "value": 0.72, "tol": 0.05 },
-        "Entry": { "value": 0.69, "tol": 0.05 },
-        "Rifler": { "value": 0.72, "tol": 0.05 },
-        "Lurker": { "value": 0.72, "tol": 0.05 },
-        "Support": { "value": 0.73, "tol": 0.05 },
-        "IGL": { "value": 0.7, "tol": 0.05 }
-      }
+        "AWP": {
+          "value": 0.7399,
+          "tol": 0.05,
+          "n": 39
+        },
+        "Entry": {
+          "value": 0.7307,
+          "tol": 0.05,
+          "n": 31
+        },
+        "Rifler": {
+          "value": 0.7267,
+          "tol": 0.05,
+          "n": 47
+        },
+        "Lurker": {
+          "value": 0.7342,
+          "tol": 0.05,
+          "n": 18
+        },
+        "Support": {
+          "value": 0.7262,
+          "tol": 0.05,
+          "n": 22
+        },
+        "IGL": {
+          "value": 0.7102,
+          "tol": 0.05,
+          "n": 33
+        }
+      },
+      "n": 151420
     },
     "entryOpeningShare": {
       "unit": "fraction",
       "def": "fração dos opening kills do time feitos pelo Entry (times com Entry)",
-      "source": "estimativa a partir de opening kills por round de entries na HLTV (~0,15-0,18 OK/round contra ~0,5 do time)",
-      "provisional": true,
-      "estimate": true,
-      "value": 0.28,
-      "tol": 0.06
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); games/<id>/players_stats; função = base curada do jogo (novatos: inferida pelos papéis por round do bo3.gg); opening kills do Entry ÷ opening kills do time, por jogador",
+      "provisional": false,
+      "value": 0.2415,
+      "tol": 0.06,
+      "n": 31
     },
     "awpKillShare": {
       "unit": "fraction",
       "def": "fração dos abates do time feitos pelo AWPer (times com AWP de função)",
-      "source": "AWPers respondem por ~21-25% dos abates do time na HLTV",
-      "provisional": true,
-      "value": 0.23,
-      "tol": 0.04
+      "source": "bo3.gg, amostra tier S 2026-03-28→2026-09-28: 700 mapas de 324 partidas (136 torneios); games/<id>/players_stats; função = base curada do jogo (novatos: inferida pelos papéis por round do bo3.gg); abates do AWPer de função ÷ abates do time (a API não separa abates por arma: é o share do jogador, não só da AWP)",
+      "provisional": false,
+      "value": 0.2085,
+      "tol": 0.04,
+      "n": 39
     }
+  },
+  "collectedAt": "2026-09-29T00:52:58.705Z",
+  "window": {
+    "from": "2026-03-28",
+    "to": "2026-09-28"
+  },
+  "sample": {
+    "tier": "S",
+    "maps": 700,
+    "matches": 324,
+    "tournaments": [
+      {
+        "id": 5109,
+        "slug": "starladder-starseries-fall-2026",
+        "name": "StarLadder StarSeries Fall 2026",
+        "start": "2026-09-17"
+      },
+      {
+        "id": 4204,
+        "slug": "fissure-playground-3",
+        "name": "FISSURE Playground 3",
+        "start": "2026-09-07"
+      },
+      {
+        "id": 4215,
+        "slug": "blast-open-fall-2026",
+        "name": "BLAST Open Fall 2026",
+        "start": "2026-08-26"
+      },
+      {
+        "id": 4214,
+        "slug": "esports-world-cup-2026",
+        "name": "Esports World Cup 2026",
+        "start": "2026-08-12"
+      },
+      {
+        "id": 4211,
+        "slug": "blast-bounty-summer-2026",
+        "name": "BLAST Bounty Summer 2026",
+        "start": "2026-07-30"
+      },
+      {
+        "id": 4209,
+        "slug": "intel-extreme-masters-cologne-major-2026",
+        "name": "Intel Extreme Masters Cologne Major 2026",
+        "start": "2026-06-11"
+      },
+      {
+        "id": 5637,
+        "slug": "intel-extreme-masters-cologne-major-2026-stage-2",
+        "name": "Intel Extreme Masters Cologne Major 2026 Stage 2",
+        "start": "2026-06-06"
+      },
+      {
+        "id": 5641,
+        "slug": "intel-extreme-masters-cologne-major-2026-stage-1",
+        "name": "Intel Extreme Masters Cologne Major 2026 Stage 1",
+        "start": "2026-06-02"
+      },
+      {
+        "id": 4208,
+        "slug": "cs-asia-championships-2026",
+        "name": "CS Asia Championships 2026",
+        "start": "2026-05-20"
+      },
+      {
+        "id": 5108,
+        "slug": "intel-extreme-masters-atlanta-2026",
+        "name": "Intel Extreme Masters Atlanta 2026",
+        "start": "2026-05-11"
+      },
+      {
+        "id": 4207,
+        "slug": "pgl-astana-2026",
+        "name": "PGL Astana 2026",
+        "start": "2026-05-09"
+      },
+      {
+        "id": 4206,
+        "slug": "blast-rivals-spring-2026",
+        "name": "BLAST Rivals Spring 2026",
+        "start": "2026-04-29"
+      },
+      {
+        "id": 5107,
+        "slug": "intel-extreme-masters-brazil-2026",
+        "name": "Intel Extreme Masters Rio 2026",
+        "start": "2026-04-13"
+      },
+      {
+        "id": 4201,
+        "slug": "blast-open-spring-2026",
+        "name": "BLAST Open Spring 2026",
+        "start": "2026-03-18"
+      },
+      {
+        "id": 4550,
+        "slug": "esl-pro-league-season-23",
+        "name": "ESL Pro League Season 23",
+        "start": "2026-03-12"
+      },
+      {
+        "id": 5351,
+        "slug": "esl-pro-league-season-23-stage-2",
+        "name": "ESL Pro League Season 23 Stage 2",
+        "start": "2026-03-06"
+      },
+      {
+        "id": 4551,
+        "slug": "esl-pro-league-season-23-stage-1",
+        "name": "ESL Pro League Season 23 Stage 1",
+        "start": "2026-02-28"
+      },
+      {
+        "id": 4200,
+        "slug": "pgl-cluj-napoca-2026",
+        "name": "PGL Cluj-Napoca 2026",
+        "start": "2026-02-14"
+      },
+      {
+        "id": 5067,
+        "slug": "intel-extreme-masters-krakow-2026",
+        "name": "Intel Extreme Masters Kraków 2026",
+        "start": "2026-01-31"
+      },
+      {
+        "id": 5264,
+        "slug": "intel-extreme-masters-krakow-2026-stage-1",
+        "name": "Intel Extreme Masters Kraków 2026 Stage 1",
+        "start": "2026-01-28"
+      },
+      {
+        "id": 4199,
+        "slug": "blast-bounty-winter-2026",
+        "name": "BLAST Bounty Winter 2026",
+        "start": "2026-01-22"
+      },
+      {
+        "id": 3579,
+        "slug": "starladder-budapest-major-2025",
+        "name": "StarLadder Budapest Major 2025",
+        "start": "2025-12-04"
+      },
+      {
+        "id": 4863,
+        "slug": "starladder-budapest-major-2025-stage-2",
+        "name": "StarLadder Budapest Major 2025 Stage 2",
+        "start": "2025-11-29"
+      },
+      {
+        "id": 4473,
+        "slug": "starladder-budapest-major-2025-stage-1",
+        "name": "StarLadder Budapest Major 2025 Stage 1",
+        "start": "2025-11-24"
+      },
+      {
+        "id": 3578,
+        "slug": "blast-rivals-fall-2025",
+        "name": "BLAST Rivals Fall 2025",
+        "start": "2025-11-12"
+      },
+      {
+        "id": 3664,
+        "slug": "intel-extreme-masters-chengdu-2025",
+        "name": "Intel Extreme Masters Chengdu 2025",
+        "start": "2025-11-02"
+      },
+      {
+        "id": 4223,
+        "slug": "pgl-masters-bucharest-2025",
+        "name": "PGL Masters Bucharest 2025",
+        "start": "2025-10-25"
+      },
+      {
+        "id": 3575,
+        "slug": "thunderpick-world-championship-2025",
+        "name": "Thunderpick World Championship 2025",
+        "start": "2025-10-15"
+      },
+      {
+        "id": 3663,
+        "slug": "esl-pro-league-season-22",
+        "name": "ESL Pro League Season 22",
+        "start": "2025-10-03"
+      },
+      {
+        "id": 4603,
+        "slug": "esl-pro-league-season-22-stage-1",
+        "name": "ESL Pro League Season 22 Stage 1",
+        "start": "2025-09-27"
+      },
+      {
+        "id": 4016,
+        "slug": "fissure-playground-2",
+        "name": "FISSURE Playground 2",
+        "start": "2025-09-12"
+      },
+      {
+        "id": 3570,
+        "slug": "blast-open-fall-2025",
+        "name": "BLAST Open Fall 2025",
+        "start": "2025-09-05"
+      },
+      {
+        "id": 4599,
+        "slug": "blast-open-fall-2025-closed-qualifier",
+        "name": "BLAST Open Fall 2025: Closed Qualifier",
+        "start": "2025-08-26"
+      },
+      {
+        "id": 3833,
+        "slug": "esports-world-cup-2025",
+        "name": "Esports World Cup 2025",
+        "start": "2025-08-20"
+      },
+      {
+        "id": 3569,
+        "slug": "blast-bounty-fall-2025",
+        "name": "BLAST Bounty Fall 2025",
+        "start": "2025-08-14"
+      },
+      {
+        "id": 3662,
+        "slug": "intel-extreme-masters-cologne-2025",
+        "name": "Intel Extreme Masters Cologne 2025",
+        "start": "2025-07-26"
+      },
+      {
+        "id": 4627,
+        "slug": "intel-extreme-masters-cologne-2025-stage-1",
+        "name": "Intel Extreme Masters Cologne 2025 Stage 1",
+        "start": "2025-07-23"
+      },
+      {
+        "id": 4015,
+        "slug": "fissure-playground-1",
+        "name": "FISSURE Playground 1",
+        "start": "2025-07-15"
+      },
+      {
+        "id": 4524,
+        "slug": "blast-tv-austin-major-2025",
+        "name": "BLAST.tv Austin Major 2025",
+        "start": "2025-06-12"
+      },
+      {
+        "id": 4523,
+        "slug": "blast-tv-austin-major-2025-stage-2",
+        "name": "BLAST.tv Austin Major 2025 Stage 2",
+        "start": "2025-06-07"
+      },
+      {
+        "id": 3567,
+        "slug": "blast-tv-austin-major-2025-stage-1",
+        "name": "BLAST.tv Austin Major 2025 Stage 1",
+        "start": "2025-06-03"
+      },
+      {
+        "id": 3661,
+        "slug": "intel-extreme-masters-dallas-2025",
+        "name": "Intel Extreme Masters Dallas 2025",
+        "start": "2025-05-19"
+      },
+      {
+        "id": 3565,
+        "slug": "pgl-astana-2025",
+        "name": "PGL Astana 2025",
+        "start": "2025-05-10"
+      },
+      {
+        "id": 3564,
+        "slug": "blast-rivals-spring-2025",
+        "name": "BLAST Rivals Spring 2025",
+        "start": "2025-04-30"
+      },
+      {
+        "id": 3660,
+        "slug": "intel-extreme-masters-melbourne-2025",
+        "name": "Intel Extreme Masters Melbourne 2025",
+        "start": "2025-04-21"
+      },
+      {
+        "id": 3563,
+        "slug": "pgl-bucharest-2025",
+        "name": "PGL Bucharest 2025",
+        "start": "2025-04-06"
+      },
+      {
+        "id": 3562,
+        "slug": "blast-open-spring-2025",
+        "name": "BLAST Open Spring 2025",
+        "start": "2025-03-19"
+      },
+      {
+        "id": 3657,
+        "slug": "esl-pro-league-season-21",
+        "name": "ESL Pro League Season 21",
+        "start": "2025-03-07"
+      },
+      {
+        "id": 4107,
+        "slug": "esl-pro-league-season-21-play-in",
+        "name": "ESL Pro League Season 21 Play-in",
+        "start": "2025-03-01"
+      },
+      {
+        "id": 3561,
+        "slug": "pgl-cluj-napoca-2025",
+        "name": "PGL Cluj-Napoca 2025",
+        "start": "2025-02-14"
+      },
+      {
+        "id": 3659,
+        "slug": "intel-extreme-masters-katowice-2025",
+        "name": "Intel Extreme Masters Katowice 2025",
+        "start": "2025-02-01"
+      },
+      {
+        "id": 4056,
+        "slug": "intel-extreme-masters-katowice-2025-play-in",
+        "name": "Intel Extreme Masters Katowice 2025 Play-In",
+        "start": "2025-01-29"
+      },
+      {
+        "id": 3560,
+        "slug": "blast-bounty-spring-2025",
+        "name": "BLAST Bounty Spring 2025",
+        "start": "2025-01-23"
+      },
+      {
+        "id": 2004,
+        "slug": "perfect-world-shanghai-major-2024",
+        "name": "Perfect World Shanghai Major 2024",
+        "start": "2024-12-05"
+      },
+      {
+        "id": 3723,
+        "slug": "perfect-world-shanghai-major-2024-opening",
+        "name": "Perfect World Shanghai Major 2024 Opening",
+        "start": "2024-11-30"
+      },
+      {
+        "id": 2298,
+        "slug": "blast-premier-world-final-2024",
+        "name": "BLAST Premier: World Final 2024",
+        "start": "2024-10-30"
+      },
+      {
+        "id": 3617,
+        "slug": "thunderpick-world-championship-2024",
+        "name": "Thunderpick World Championship 2024",
+        "start": "2024-10-26"
+      },
+      {
+        "id": 2536,
+        "slug": "thunderpick-world-championship-2024-play-in",
+        "name": "Thunderpick World Championship 2024 Play-in",
+        "start": "2024-10-21"
+      },
+      {
+        "id": 2150,
+        "slug": "iem-rio-2024",
+        "name": "IEM Rio 2024",
+        "start": "2024-10-07"
+      },
+      {
+        "id": 2297,
+        "slug": "blast-premier-fall-final-2024",
+        "name": "BLAST Premier: Fall Final 2024",
+        "start": "2024-09-25"
+      },
+      {
+        "id": 2149,
+        "slug": "esl-pro-league-season-20",
+        "name": "ESL Pro League Season 20",
+        "start": "2024-09-03"
+      },
+      {
+        "id": 2957,
+        "slug": "betboom-dacha-belgrade-2024-2",
+        "name": "BetBoom Dacha Belgrade 2024 #2",
+        "start": "2024-08-25"
+      },
+      {
+        "id": 3002,
+        "slug": "betboom-dacha-belgrade-season-2-play-in",
+        "name": "BetBoom Dacha Belgrade 2024 #2 Play-in",
+        "start": "2024-08-24"
+      },
+      {
+        "id": 2148,
+        "slug": "iem-cologne-2024",
+        "name": "IEM Cologne 2024",
+        "start": "2024-08-10"
+      },
+      {
+        "id": 2963,
+        "slug": "iem-cologne-2024-play-in",
+        "name": "IEM Cologne 2024 Play-in",
+        "start": "2024-08-07"
+      },
+      {
+        "id": 2295,
+        "slug": "blast-premier-fall-groups-2024",
+        "name": "BLAST Premier: Fall Groups 2024",
+        "start": "2024-07-29"
+      },
+      {
+        "id": 2666,
+        "slug": "skyesports-masters-championship-24",
+        "name": "Skyesports Championship 2024",
+        "start": "2024-07-23"
+      },
+      {
+        "id": 2665,
+        "slug": "esports-world-cup-2024",
+        "name": "Esports World Cup 2024",
+        "start": "2024-07-17"
+      },
+      {
+        "id": 2211,
+        "slug": "blast-premier-spring-final-2024",
+        "name": "BLAST Premier: Spring Final 2024",
+        "start": "2024-06-12"
+      },
+      {
+        "id": 2205,
+        "slug": "yalla-compass-2024",
+        "name": "YaLLa Compass 2024",
+        "start": "2024-06-05"
+      },
+      {
+        "id": 2147,
+        "slug": "iem-dallas-2024",
+        "name": "IEM Dallas 2024",
+        "start": "2024-05-27"
+      },
+      {
+        "id": 2273,
+        "slug": "cct-global-finals",
+        "name": "CCT Global Finals 2024",
+        "start": "2024-05-16"
+      },
+      {
+        "id": 2671,
+        "slug": "betboom-dacha-belgrade-2024",
+        "name": "BetBoom Dacha Belgrade 2024",
+        "start": "2024-05-14"
+      },
+      {
+        "id": 2146,
+        "slug": "esl-pro-league-season-19",
+        "name": "ESL Pro League Season 19",
+        "start": "2024-04-23"
+      },
+      {
+        "id": 2145,
+        "slug": "iem-chengdu-2024",
+        "name": "IEM Chengdu 2024",
+        "start": "2024-04-08"
+      },
+      {
+        "id": 2003,
+        "slug": "pgl-major-copenhagen-2024",
+        "name": "PGL Major Copenhagen 2024",
+        "start": "2024-03-21"
+      },
+      {
+        "id": 2144,
+        "slug": "iem-katowice-2024",
+        "name": "IEM Katowice 2024",
+        "start": "2024-02-03"
+      },
+      {
+        "id": 2417,
+        "slug": "iem-katowice-2024-play-in",
+        "name": "IEM Katowice 2024 Play-in",
+        "start": "2024-01-31"
+      },
+      {
+        "id": 2293,
+        "slug": "blast-premier-spring-groups-2024",
+        "name": "BLAST Premier: Spring Groups 2024",
+        "start": "2024-01-22"
+      },
+      {
+        "id": 1737,
+        "slug": "blast-premier-world-final-2023",
+        "name": "BLAST Premier: World Final 2023",
+        "start": "2023-12-13"
+      },
+      {
+        "id": 2227,
+        "slug": "betboom-dacha",
+        "name": "BetBoom Dacha 2023",
+        "start": "2023-12-05"
+      },
+      {
+        "id": 1738,
+        "slug": "blast-premier-fall-final-2023",
+        "name": "BLAST Premier: Fall Final 2023",
+        "start": "2023-11-22"
+      },
+      {
+        "id": 2067,
+        "slug": "cs-go-asia-championships-2023",
+        "name": "CS2 Asia Championships 2023",
+        "start": "2023-11-08"
+      },
+      {
+        "id": 1890,
+        "slug": "thunderpick-world-championship-2023",
+        "name": "Thunderpick World Championship 2023",
+        "start": "2023-10-27"
+      },
+      {
+        "id": 1766,
+        "slug": "roobet-cup-2023",
+        "name": "Roobet Cup 2023",
+        "start": "2023-10-25"
+      },
+      {
+        "id": 1589,
+        "slug": "iem-sydney-2023",
+        "name": "IEM Sydney 2023",
+        "start": "2023-10-16"
+      },
+      {
+        "id": 1588,
+        "slug": "esl-pro-league-season-18",
+        "name": "ESL Pro League Season 18",
+        "start": "2023-08-30"
+      },
+      {
+        "id": 2042,
+        "slug": "gamers8-2023-1",
+        "name": "Gamers8 2023 Showmatch",
+        "start": "2023-08-20"
+      },
+      {
+        "id": 1764,
+        "slug": "gamers8-2023",
+        "name": "Gamers8 2023",
+        "start": "2023-08-14"
+      },
+      {
+        "id": 1583,
+        "slug": "iem-cologne-2023",
+        "name": "IEM Cologne 2023",
+        "start": "2023-07-29"
+      },
+      {
+        "id": 1945,
+        "slug": "iem-cologne-2023-play-in",
+        "name": "IEM Cologne 2023 Play-In",
+        "start": "2023-07-26"
+      },
+      {
+        "id": 1700,
+        "slug": "blast-premier-fall-groups-2023",
+        "name": "BLAST Premier: Fall Groups 2023",
+        "start": "2023-07-13"
+      },
+      {
+        "id": 1697,
+        "slug": "blast-premier-spring-final-2023",
+        "name": "BLAST Premier: Spring Final 2023",
+        "start": "2023-06-07"
+      },
+      {
+        "id": 1561,
+        "slug": "iem-dallas-2023",
+        "name": "IEM Dallas 2023",
+        "start": "2023-05-29"
+      },
+      {
+        "id": 1693,
+        "slug": "blast-tv-major-paris-2023",
+        "name": "BLAST.tv Major Paris 2023",
+        "start": "2023-05-13"
+      },
+      {
+        "id": 1610,
+        "slug": "blasttv-major-challengers-stage-2023",
+        "name": "BLAST.tv Major Paris: Challengers Stage 2023",
+        "start": "2023-05-08"
+      },
+      {
+        "id": 1599,
+        "slug": "iem-rio-2023",
+        "name": "IEM Rio 2023",
+        "start": "2023-04-17"
+      },
+      {
+        "id": 1545,
+        "slug": "iem-dallas-european-closed-qualifier-2023",
+        "name": "IEM Dallas: European Closed Qualifier 2023",
+        "start": "2023-03-31"
+      },
+      {
+        "id": 1504,
+        "slug": "esl-pro-league-season-17-2023",
+        "name": "ESL Pro League Season 17 2023",
+        "start": "2023-02-22"
+      },
+      {
+        "id": 1435,
+        "slug": "iem-katowice-2023",
+        "name": "IEM Katowice 2023",
+        "start": "2023-02-04"
+      },
+      {
+        "id": 1485,
+        "slug": "iem-katowice-2023-play-in",
+        "name": "IEM Katowice 2023 Play-In",
+        "start": "2023-02-01"
+      },
+      {
+        "id": 1400,
+        "slug": "blast-premier-groups-spring-2023",
+        "name": "BLAST Premier Groups Spring 2023",
+        "start": "2023-01-19"
+      },
+      {
+        "id": 1349,
+        "slug": "blast-premier",
+        "name": "BLAST Premier: World Final 2022",
+        "start": "2022-12-14"
+      },
+      {
+        "id": 1324,
+        "slug": "blast-premier-finals-fall-2022",
+        "name": "BLAST Premier Finals Fall 2022",
+        "start": "2022-11-23"
+      },
+      {
+        "id": 1168,
+        "slug": "iem-rio-challengers-2022",
+        "name": "IEM Rio Major 2022 Challengers",
+        "start": "2022-10-31"
+      },
+      {
+        "id": 710,
+        "slug": "iem-rio-2022",
+        "name": "IEM Rio Major 2022",
+        "start": "2022-10-31"
+      },
+      {
+        "id": 921,
+        "slug": "esl-pro-league-season-16-2022",
+        "name": "ESL Pro League Season 16 2022",
+        "start": "2022-08-31"
+      },
+      {
+        "id": 707,
+        "slug": "iem-cologne-2022",
+        "name": "IEM Cologne season XVII 2022",
+        "start": "2022-07-04"
+      },
+      {
+        "id": 743,
+        "slug": "iem-cologne-season-xvii-2022",
+        "name": "IEM Cologne season XVII 2022 Play-In",
+        "start": "2022-07-04"
+      },
+      {
+        "id": 696,
+        "slug": "blast-premier-finals-spring-2022",
+        "name": "BLAST Premier Finals Spring 2022",
+        "start": "2022-06-15"
+      },
+      {
+        "id": 669,
+        "slug": "iem-dallas-xvii-2022",
+        "name": "IEM Dallas XVII 2022",
+        "start": "2022-05-30"
+      },
+      {
+        "id": 629,
+        "slug": "pgl-major-antwerp-2022",
+        "name": "PGL Major Antwerp 2022",
+        "start": "2022-05-09"
+      },
+      {
+        "id": 649,
+        "slug": "pgl-major-antwerp-2022-challengers",
+        "name": "PGL Major Antwerp 2022 Challengers",
+        "start": "2022-05-09"
+      },
+      {
+        "id": 512,
+        "slug": "esl-pro-league-season-15-2022",
+        "name": "ESL Pro League Season 15 2022",
+        "start": "2022-03-09"
+      },
+      {
+        "id": 478,
+        "slug": "iem-katowice-xvi-2022",
+        "name": "IEM Katowice XVI 2022",
+        "start": "2022-02-14"
+      },
+      {
+        "id": 475,
+        "slug": "iem-katowice-xvi-2022-play-in",
+        "name": "IEM Katowice XVI 2022 Play-In",
+        "start": "2022-02-14"
+      },
+      {
+        "id": 470,
+        "slug": "blast-premier-groups-spring-2022",
+        "name": "BLAST Premier Groups Spring 2022",
+        "start": "2022-01-28"
+      },
+      {
+        "id": 404,
+        "slug": "blast-premier-world-final-2021",
+        "name": "BLAST Premier World Final 2021",
+        "start": "2021-12-14"
+      },
+      {
+        "id": 408,
+        "slug": "iem-xvi-winter-2021",
+        "name": "IEM XVI Winter 2021",
+        "start": "2021-12-02"
+      },
+      {
+        "id": 326,
+        "slug": "pgl-major-stockholm-2021",
+        "name": "PGL Major Stockholm 2021",
+        "start": "2021-10-25"
+      },
+      {
+        "id": 149,
+        "slug": "iem-cologne-season-xvi-2021",
+        "name": "IEM Cologne Season XVI 2021",
+        "start": "2021-07-06"
+      },
+      {
+        "id": 89,
+        "slug": "blast-premier-finals-spring-2021",
+        "name": "BLAST Premier Finals Spring 2021",
+        "start": "2021-06-15"
+      },
+      {
+        "id": 85,
+        "slug": "iem-season-xvi-summer-2021",
+        "name": "IEM Season XVI Summer 2021",
+        "start": "2021-06-03"
+      },
+      {
+        "id": 82,
+        "slug": "dreamhack-masters-spring-2021",
+        "name": "DreamHack Masters Spring 2021",
+        "start": "2021-04-29"
+      },
+      {
+        "id": 44,
+        "slug": "esl-pro-league-season-13-2021",
+        "name": "ESL Pro League season 13 2021",
+        "start": "2021-03-08"
+      },
+      {
+        "id": 43,
+        "slug": "iem-world-championship-xv-2021",
+        "name": "IEM World Championship XV 2021",
+        "start": "2021-02-18"
+      },
+      {
+        "id": 45,
+        "slug": "iem-world-championship-xv-2021-play-in",
+        "name": "IEM World Championship XV 2021 Play-In",
+        "start": "2021-02-16"
+      },
+      {
+        "id": 42,
+        "slug": "blast-premier-spring-2021",
+        "name": "BLAST Premier Spring 2021",
+        "start": "2021-02-04"
+      },
+      {
+        "id": 38,
+        "slug": "blast-premier-global-final-2020",
+        "name": "BLAST Premier Global Final 2020",
+        "start": "2021-01-19"
+      },
+      {
+        "id": 10,
+        "slug": "iem-global-challenge-xv-2020",
+        "name": "IEM Global Challenge XV 2020",
+        "start": "2020-12-15"
+      },
+      {
+        "id": 9,
+        "slug": "blast-premier-finals-fall-2020",
+        "name": "BLAST Premier Finals Fall 2020",
+        "start": "2020-12-08"
+      },
+      {
+        "id": 14,
+        "slug": "esl-pro-league-north-america-season-12-2020",
+        "name": "ESL Pro League North America season 12 2020",
+        "start": "2020-09-01"
+      },
+      {
+        "id": 13,
+        "slug": "esl-pro-league-europe-season-12-2020",
+        "name": "ESL Pro League Europe season 12 2020",
+        "start": "2020-09-01"
+      },
+      {
+        "id": 12,
+        "slug": "esl-one-cologne-online-north-america-2020",
+        "name": "ESL One Cologne Online: North America 2020",
+        "start": "2020-08-18"
+      },
+      {
+        "id": 11,
+        "slug": "esl-one-cologne-online-europe-2020",
+        "name": "ESL One Cologne Online: Europe 2020",
+        "start": "2020-08-18"
+      },
+      {
+        "id": 16,
+        "slug": "blast-premier-european-finals-spring-2020",
+        "name": "BLAST Premier European Finals Spring 2020",
+        "start": "2020-06-15"
+      }
+    ]
   }
 }

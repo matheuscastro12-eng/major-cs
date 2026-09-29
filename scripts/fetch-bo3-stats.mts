@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { get, getAll, url, stats as netStats, fetchedAt } from './lib/bo3-client.mts';
-import { roleShares, inferRole, type RoleRow, type RoleShares, type Role } from './lib/roles.mts';
+import { roleShares, inferRole, inferRoleFromStats, type RoleRow, type RoleShares, type Role } from './lib/roles.mts';
 
 export const WINDOW = { from: '2026-03-28', to: '2026-09-28' };   // 6 meses: estatística principal
 export const WINDOW12 = { from: '2025-09-28', to: '2026-09-28' }; // 12 meses: fallback de amostra pequena
@@ -30,6 +30,8 @@ export const BASE_REF = process.env.BASE_REF ?? 'a46d0cc';        // motor/base:
 const TARGET_PLAYERS = 1100;   // meta da base (1.000+ com folga)
 const MAX_SAMPLE_GAMES = 700;  // mapas tier S da amostra de calibração
 const OUT_STATS = 'src/data/player-stats-2026.json';
+// nome da base → nome no bo3.gg (erros de digitação/abreviação da planilha antiga)
+const TEAM_ALIAS: Record<string, string> = { 'SAW Youngters': 'SAW Youngsters', 'Red Canids AC': 'RED Canids Academy' };
 const OUT_CALIB = 'docs/calibration-targets.json';
 
 // ─── tipos mínimos das respostas ─────────────────────────────────────────────
@@ -125,8 +127,9 @@ async function main() {
     if (t.id === '__free__') continue;
     const m = /^bo3_team_(\d+)$/.exec(t.id);
     if (m) { baseTeamBo3.set(t.id, +m[1]); teamResolve[t.id] = { bo3: +m[1], how: 'id' }; continue; }
-    const res = await get<{ results: (ApiTeam & { discipline_id?: number })[] }>(url('/filters/teams', { search_text: t.team, 'page[limit]': 20 }));
-    const exact = (res?.results ?? []).filter((x) => norm(x.name) === norm(t.team) && (x.discipline_id ?? 1) === 1);
+    const name = TEAM_ALIAS[t.team] ?? t.team;
+    const res = await get<{ results: (ApiTeam & { discipline_id?: number })[] }>(url('/filters/teams', { search_text: name, 'page[limit]': 20 }));
+    const exact = (res?.results ?? []).filter((x) => norm(x.name) === norm(name) && (x.discipline_id ?? 1) === 1);
     let pick: number | null = null;
     if (exact.length === 1) pick = exact[0].id;
     else if (exact.length > 1) {
@@ -140,8 +143,26 @@ async function main() {
   }
 
   // 3) quem joga HOJE nos times da base (ativos, banco e técnicos)
+  let onBaseTeams = await playersBy('team_id', [...new Set(baseTeamBo3.values())]);
+  // 3b) org que ganhou entidade nova no bo3 (a antiga ficou com < 3 ativos): troca
+  // pela homônima com 5+ ativos, se houver exatamente uma. O id do jogo não muda.
+  for (const t of base) {
+    const cur = baseTeamBo3.get(t.id);
+    if (cur == null) continue;
+    const act = onBaseTeams.filter((p) => p.team_id === cur && p.status === 1 && !p.is_coach).length;
+    if (act >= 3) continue;
+    const name = TEAM_ALIAS[t.team] ?? t.team;
+    const res = await get<{ results: (ApiTeam & { discipline_id?: number })[] }>(url('/filters/teams', { search_text: name, 'page[limit]': 20 }));
+    const alts = (res?.results ?? []).filter((x) => x.id !== cur && norm(x.name) === norm(name) && (x.discipline_id ?? 1) === 1);
+    if (!alts.length) continue;
+    const ps = await playersBy('team_id', alts.map((x) => x.id));
+    const ok = alts.filter((x) => ps.filter((p) => p.team_id === x.id && p.status === 1 && !p.is_coach).length >= 5);
+    if (ok.length !== 1) continue;
+    baseTeamBo3.set(t.id, ok[0].id);
+    teamResolve[t.id] = { bo3: ok[0].id, how: `entidade nova no bo3 (antes ${cur}, com ${act} ativo(s))` };
+    onBaseTeams = [...onBaseTeams, ...ps.filter((p) => p.team_id === ok[0].id)];
+  }
   const baseTeamIds = [...new Set(baseTeamBo3.values())];
-  const onBaseTeams = await playersBy('team_id', baseTeamIds);
 
   // 4) jogadores da base → id do bo3
   const nickIdx = new Map<string, number[]>();
@@ -302,13 +323,15 @@ async function main() {
     const gid = gameIdOf.get(p.id) ?? `bo3_${p.id}`;
     const bp = baseById.get(gid)?.p;
     const extra = perPlayer.get(p.id)!;
-    const inferred = inferRole(extra.roles);
+    const s6 = S6.get(p.id), s12 = S12.get(p.id);
+    const useRow = s6 && s6.rounds_count >= 200 ? s6 : s12 ?? s6;
+    const inferred = inferRole(extra.roles) ?? (useRow ? inferRoleFromStats({
+      hsk: useRow.avg_headshot_kills_accuracy, fkpr: useRow.avg_first_kills, fdpr: useRow.avg_first_death, rounds: useRow.rounds_count,
+    }) : null);
     const apiRole = apiRoleOf(p.role);
     const role: Role = apiRole ?? bp?.role ?? inferred?.role ?? 'Rifler';
     const roleSrc = apiRole ? 'api' : bp ? 'base' : inferred ? 'inferido' : 'padrão';
     roleOf.set(gid, role);
-    const s6 = S6.get(p.id), s12 = S12.get(p.id);
-    const useRow = s6 && s6.rounds_count >= 200 ? s6 : s12 ?? s6;
     const t1 = ST1.get(p.id);
     outPlayers[gid] = {
       bo3: p.id, slug: p.slug, nick: p.nickname,
@@ -328,10 +351,10 @@ async function main() {
   }
   // jogadores da base sem casamento no bo3 (fictícios ou não achados): entram sem estatística
   for (const [gid, r] of Object.entries(playerResolve)) {
-    if (r.bo3 != null) continue;
+    if (outPlayers[gid]) continue; // sem casamento, ou casado mas sem cadastro devolvido pela API
     const bp = baseById.get(gid)!.p;
     roleOf.set(gid, bp.role);
-    outPlayers[gid] = { bo3: null, nick: bp.nick, name: bp.name, country: bp.country, age: bp.age ?? null, role: bp.role, roleSrc: 'base', unresolved: r.how, s: null };
+    outPlayers[gid] = { bo3: null, nick: bp.nick, name: bp.name, country: bp.country, age: bp.age ?? null, role: bp.role, roleSrc: 'base', unresolved: r.bo3 == null ? r.how : `bo3 ${r.bo3} sem cadastro na API`, s: null };
   }
   const outTeams: Record<string, unknown> = {};
   for (const tid of [...baseTeamIds, ...expTeams].sort((a, b) => a - b)) {

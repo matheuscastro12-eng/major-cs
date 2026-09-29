@@ -116,14 +116,18 @@ function metricsOf(p: StatPlayer, pop: { mean: Metrics }): Metrics | null {
   const cm = pop.mean.clutchRate ?? 0.12;
   out.clutchRate = att > 0 ? ((p.adv!.clutches / att) * att + cm * K.N0_CLUTCH) / (att + K.N0_CLUTCH) : cm;
   // forma: desvio do rating partida a partida (quanto MENOR, mais consistente)
-  const fsd = pop.mean.formSd ?? 0.6;
-  out.formSd = p.form ? (p.form.sd * p.form.n + fsd * K.N0_FORM) / (p.form.n + K.N0_FORM) : fsd;
+  // coeficiente de variação (desvio ÷ média): estrela com média alta não é punida por escala
+  const fsd = pop.mean.formSd ?? 0.12;
+  out.formSd = p.form ? ((p.form.sd / p.form.mean) * p.form.n + fsd * K.N0_FORM) / (p.form.n + K.N0_FORM) : fsd;
   const split = (a: [number, number] | null | undefined, b: [number, number] | null | undefined) => {
     if (!a || !b) return 0;
     const n2 = Math.min(a[0], b[0]);
     return ((a[1] - b[1]) * n2) / (n2 + K.N0_SPLIT);
   };
-  out.bigDelta = split(p.form?.top, p.form?.rest);
+  // jogo grande: rating contra top-20 relativo ao rating contra o resto (razão − 1)
+  const rel = (a: [number, number] | null | undefined, b: [number, number] | null | undefined) =>
+    a && b ? ([a[0], a[1] / b[1]] as [number, number]) : null;
+  out.bigDelta = split(rel(p.form?.top, p.form?.rest), p.form?.rest ? [p.form.rest[0], 1] : null);
   out.tiltDelta = split(p.form?.afterLoss, p.form?.afterWin);
   return out;
 }
@@ -161,7 +165,7 @@ export function buildAllAttrs(stats: StatsFile, legacyById: Map<string, Legacy>)
   const withClutch = popRaw.filter((p) => (p.adv?.clutchAtt ?? 0) >= 20);
   mean0.clutchRate = withClutch.reduce((s, p) => s + p.adv!.clutches / p.adv!.clutchAtt, 0) / Math.max(1, withClutch.length);
   const withForm = popRaw.filter((p) => p.form && p.form.n >= 5);
-  mean0.formSd = withForm.reduce((s, p) => s + p.form!.sd, 0) / Math.max(1, withForm.length);
+  mean0.formSd = withForm.reduce((s, p) => s + p.form!.sd / p.form!.mean, 0) / Math.max(1, withForm.length);
   const M = new Map<string, Metrics>();
   for (const id of ids) { const m = metricsOf(stats.players[id], { mean: mean0 }); if (m) M.set(id, m); }
   const popRows = ids.filter((id) => M.has(id) && stats.players[id].s!.rounds >= K.MIN_POP_ROUNDS && !stats.players[id].coach)
@@ -191,9 +195,8 @@ export function buildAllAttrs(stats: StatsFile, legacyById: Map<string, Legacy>)
     if (p.coach && !leg) continue; // técnico que nunca foi jogador da base
     const role: Role = leg?.role ?? p.role;
     const m = p.coach ? undefined : M.get(id); // jogador da base que virou técnico: fica com o legado
-    if (!m) {
+    if (!m && leg) {
       // sem estatística pública (aposentado, fictício, não achado): deriva dos 5 legados
-      if (!leg) continue;
       const d = deriveAttrs({ ...leg, role });
       const pa = clamp(d.ca + headroom(p.age ?? leg.age), d.ca, 200);
       out[id] = { ...d, pa, src: 'legado (sem estatística pública)' };
@@ -201,7 +204,8 @@ export function buildAllAttrs(stats: StatsFile, legacyById: Map<string, Legacy>)
     }
     const ts = tsOf(p);
     const z: Z = {};
-    for (const k of METRIC_KEYS) z[k] = zf[k](m, ts);
+    // novato sem amostra (< 20 rounds na janela): perfil neutro (z = 0) no nível do time — estimativa
+    for (const k of METRIC_KEYS) z[k] = m ? zf[k](m, ts) : 0;
     const age = p.age ?? leg?.age ?? 24;
     const prizeN = clamp(Math.log(1 + (p.prize ?? 0) / 20_000) / Math.log(1 + maxPrize / 20_000), 0, 1);
     const exp = 0.5 * clamp((age - 17) / 13, 0, 1) + 0.5 * prizeN; // experiência 0..1
@@ -220,7 +224,7 @@ export function buildAllAttrs(stats: StatsFile, legacyById: Map<string, Legacy>)
     // ajustes por idade (reflexo cai cedo; resistência cai depois dos 30)
     const ageFast = age <= 22 ? 1 : age <= 25 ? 0.4 : age <= 28 ? -0.3 : age <= 31 ? -0.9 : -1.5;
     const ageStam = age <= 27 ? 0.3 : age <= 31 ? 0 : -0.8;
-    const volZ = clamp((m.games - volMean) / volSd, -K.Z_CLIP, K.Z_CLIP);
+    const volZ = m ? clamp((m.games - volMean) / volSd, -K.Z_CLIP, K.Z_CLIP) : 0;
     const consZ = -z.formSd;
     const versZ = p.roles ? clamp((p.roles.entropy - 0.55) / 0.12, -K.Z_CLIP, K.Z_CLIP) : 0;
     const roleAdj: Partial<Record<AttrKey, number>> = {
@@ -261,7 +265,7 @@ export function buildAllAttrs(stats: StatsFile, legacyById: Map<string, Legacy>)
     for (const k of ALL_ATTRS) a[k] = B + S * sig[k] + (roleAdj[k] ?? 0);
     // AWP: titular é medido contra os outros AWPers; quem não é AWP fica baixo/médio
     if (primaryAwp) {
-      a.awp = B + 1.2 + S * (0.4 * zAwp.kpr(m, ts) + 0.3 * zAwp.openSucc(m, ts) + 0.3 * zAwp.rating(m, ts));
+      a.awp = B + 1.2 + (m ? S * (0.4 * zAwp.kpr(m, ts) + 0.3 * zAwp.openSucc(m, ts) + 0.3 * zAwp.rating(m, ts)) : 0);
     } else {
       a.awp = 2 + 7 * level + 6 * clamp(awpShare / K.AWP_PRIMARY, 0, 1);
     }
@@ -292,7 +296,7 @@ export function buildAllAttrs(stats: StatsFile, legacyById: Map<string, Legacy>)
     const ca = caFromAttrs(a, role);
     const hr = headroom(age) * (0.8 + 0.4 * phi(perfZ)) * (1 + noise(id, 'pa', 0.15));
     const pa = clamp(Math.round(ca + hr), ca, 200);
-    out[id] = { v: 1, a, h, ca, pa, src: `bo3.gg ${p.s!.win} (${p.s!.rounds} rounds)` };
+    out[id] = { v: 1, a, h, ca, pa, src: m ? `bo3.gg ${p.s!.win} (${p.s!.rounds} rounds)` : 'estimativa (sem amostra no bo3.gg: nível do time, perfil neutro)' };
   }
   return out;
 }

@@ -64,3 +64,16 @@ export function inferRole(s: RoleShares | null): { role: Role; why: string } | n
   if (s.ctAnchor >= 0.45 && s.tTrade >= 0.35) return { role: 'Support', why: `âncora ${(s.ctAnchor * 100).toFixed(0)}% CT e trader ${(s.tTrade * 100).toFixed(0)}% T` };
   return { role: 'Rifler', why: 'sem papel dominante' };
 }
+
+// Sem papéis por round (o bo3.gg não classifica jogos de divisões menores):
+// infere pela estatística agregada. A API não separa abates por arma, então o
+// sinal de AWP é a % de abates com headshot (AWPers ~36%, riflers ~55%, na
+// população com papel conhecido): < 42% → AWP. Entry: ≥ 0,22 duelos de
+// abertura por round (entries ~0,216, demais ~0,188).
+export function inferRoleFromStats(s: { hsk: number; fkpr: number; fdpr: number; rounds: number } | null | undefined): { role: Role; why: string } | null {
+  if (!s || s.rounds < 100) return null;
+  if (s.hsk < 0.42) return { role: 'AWP', why: `sem papéis no bo3; ${(s.hsk * 100).toFixed(0)}% dos abates de HS (perfil de AWP)` };
+  const open = s.fkpr + s.fdpr;
+  if (open >= 0.22) return { role: 'Entry', why: `sem papéis no bo3; ${open.toFixed(3)} duelos de abertura por round` };
+  return { role: 'Rifler', why: 'sem papéis no bo3; sem sinal de AWP/entry na estatística' };
+}

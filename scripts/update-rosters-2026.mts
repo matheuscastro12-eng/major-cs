@@ -106,6 +106,21 @@ export function updateRosters(base: Team[], stats: Stats, attrs: Record<string, 
     }
   }
 
+  // time da base com menos de 3 jogadores reais vinculados no bo3 = elenco desfeito:
+  // vira extinto e quem sobrou vai para free agents (listado como caso duvidoso)
+  const MIN_REAL = 3;
+  const extinct = new Set<string>();
+  for (const t of base) {
+    if (t.id === FREE) continue;
+    const real = [...dest.entries()].filter(([, d]) => d.team === t.id);
+    if (real.length >= MIN_REAL) continue;
+    extinct.add(t.id);
+    for (const [id] of real) {
+      dest.set(id, { team: FREE, bench: false, why: 'time desfeito' });
+      doubts.push(`${P[id].nick}: ainda vinculado a ${t.team} no bo3, mas o time só tem ${real.length} jogador(es) real(is) — time tratado como extinto e ele foi para free agents`);
+    }
+  }
+
   // sem casamento no bo3 (fictício "regen" ou não achado): fica no time antigo
   // só se ele não tiver 5 titulares reais; senão vai para free agents
   for (const id of [...baseIds].sort()) {
@@ -113,7 +128,8 @@ export function updateRosters(base: Team[], stats: Stats, attrs: Record<string, 
     const { p, team } = basePlayer.get(id)!;
     const why = P[id]?.unresolved ?? 'sem dado no bo3';
     const starters = [...dest.values()].filter((d) => d.team === team.id && !d.bench).length;
-    if (team.id === FREE || starters < 5) { dest.set(id, { team: team.id, bench: false, why }); continue; }
+    if (team.id === FREE || (!extinct.has(team.id) && starters < 5)) { dest.set(id, { team: team.id, bench: false, why }); continue; }
+    if (extinct.has(team.id)) { dest.set(id, { team: FREE, bench: false, why: `${why}; time desfeito` }); continue; }
     dest.set(id, { team: FREE, bench: false, why: `${why}; time já tem 5 titulares` });
     doubts.push(`${p.nick} (${team.team}): ${why} — sem dado no bo3 e o time já tem 5 titulares; foi para free agents`);
   }
@@ -130,13 +146,25 @@ export function updateRosters(base: Team[], stats: Stats, attrs: Record<string, 
     const sp = P[id]; const bp = basePlayer.get(id)?.p;
     const nick = bp?.nick ?? sp?.nick ?? id;
     const tr = sp?.tr?.[0];
-    const when = tr ? `${tr.action_date} (${TRANSFER_TYPE[tr.action_type] ?? tr.action_type}${tr.team_from_name ? `, de ${tr.team_from_name}` : ''}${tr.team_to_name ? ` → ${tr.team_to_name}` : ''})` : sp?.joined ? `entrou em ${sp.joined}` : 'sem data na API';
+    const fmt = (x: NonNullable<typeof tr>) => `${x.action_date} (${TRANSFER_TYPE[x.action_type] ?? x.action_type}${x.team_from_name ? `, de ${x.team_from_name}` : ''}${x.team_to_name ? ` → ${x.team_to_name}` : ''})`;
+    // no time atual: vale a movimentação que levou a ele, ou o joined_team_at do cadastro
+    const when = sp?.team != null
+      ? (tr && tr.team_to_id === sp.team ? fmt(tr) : sp.joined ? `no time atual desde ${sp.joined} (joined_team_at)` : tr ? fmt(tr) : 'sem data na API')
+      : tr ? fmt(tr) : 'sem data na API';
     return { nick, when, tr };
   };
+  // nick único no arquivo (o Ultimate deduplica cartas por nick): novato homônimo
+  // de alguém que já estava na base ganha o país no nick
+  const baseNicks = new Set([...basePlayer.values()].map(({ p }) => p.nick.toLowerCase()));
   const newPlayer = (id: string): Player => {
     const sp = P[id];
     const l = legacyOf(id);
-    const out: Player = { id, nick: sp.nick, name: sp.name, country: sp.country ?? '', role: sp.role, aim: l.aim, clutch: l.clutch, consistency: l.consistency, awp: l.awp, igl: l.igl };
+    let nick = sp.nick;
+    if (baseNicks.has(nick.toLowerCase())) {
+      nick = `${sp.nick} (${(sp.country ?? '??').toUpperCase()})`;
+      doubts.push(`${sp.nick} (${id}): homônimo de um jogador que já estava na base; no jogo virou "${nick}"`);
+    }
+    const out: Player = { id, nick, name: sp.name, country: sp.country ?? '', role: sp.role, aim: l.aim, clutch: l.clutch, consistency: l.consistency, awp: l.awp, igl: l.igl };
     if (sp.age != null) out.age = sp.age;
     return out;
   };
