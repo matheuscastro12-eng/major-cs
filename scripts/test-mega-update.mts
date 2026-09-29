@@ -10,6 +10,7 @@
 //   - jobHunt (#19): chance honesta nos limites, nunca oferece o clube que
 //     demitiu, sempre ≥2 opções viáveis, candidatura determinística
 
+import { MAP_POOL } from '../src/types.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { legendStatus, legendTier } from '../src/engine/legend.ts';
@@ -96,7 +97,9 @@ test('scrim: partida real MD1 com relatório coerente', () => {
   assert.ok(report.chemGain > 0);
   assert.ok(patch.budgetDelta < 0);
   assert.equal(patch.scrimsThisSplitNext, 1);
-  assert.ok(patch.fatigue[me.players[0].id] < 50); // recuperou fadiga
+  // [fase 2 · treino] scrim de verdade não descansa: condição/ritmo vêm do treino semanal
+  assert.equal(patch.fatigue[me.players[0].id], 50);
+  assert.ok(MAP_POOL.includes(report.map));
 });
 
 test('jobHunt: chance honesta, lista sã e candidatura determinística', () => {
