@@ -132,7 +132,9 @@ export interface OffersArgs {
   max?: number;
 }
 export type MarketRumor = MarketState['rumors'][number];
-export type SaleEntry = { playerId: string; nick: string; fee: number; toTag: string; toId: string };
+// outPlayerId = quem perde a vaga no comprador (a necessidade que gerou a compra):
+// na janela ele vai pro mercado livre, como nas compras da IA (mercadoIA)
+export type SaleEntry = { playerId: string; nick: string; fee: number; toTag: string; toId: string; outPlayerId?: string };
 export interface OffersResult {
   offers: IncomingOffer[];  // novas (abertas, aceitas por cláusula ou recusadas pelo jogador)
   sales: SaleEntry[];       // cláusula paga + jogador topou: vira venda na janela
@@ -217,7 +219,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
       playerId: p.id, fromTeamId: c.team.id, fee, wageOffered, viaReleaseClause,
       split: a.split, expiresSplit: a.split, status: 'open',
       nick: p.nick, ovr: playerOvr(p), role: p.role, fromTag: c.team.tag, fromName: c.team.team,
-      reason: c.need.reason, strategy,
+      reason: c.need.reason, strategy, outPlayerId: c.need.outPlayerId,
     };
     if (viaReleaseClause) {
       // a multa foi paga: o clube não decide mais, o JOGADOR decide
@@ -227,7 +229,7 @@ export function generateIncomingOffers(a: OffersArgs): OffersResult {
         o.playerRefused = true;
       } else {
         o.status = 'accepted';
-        sales.push({ playerId: p.id, nick: p.nick, fee, toTag: c.team.tag, toId: c.team.id });
+        sales.push({ playerId: p.id, nick: p.nick, fee, toTag: c.team.tag, toId: c.team.id, outPlayerId: c.need.outPlayerId });
       }
     }
     offers.push(o);
@@ -258,7 +260,7 @@ export function acceptOffer(m: MarketState, offerId: string): { market: MarketSt
   const incoming = m.incoming.map((x) => (x.id === offerId ? { ...x, status: 'accepted' as const } : x));
   return {
     market: { ...m, incoming },
-    sale: { playerId: o.playerId, nick: o.nick ?? o.playerId, fee: o.fee, toTag: o.fromTag ?? '', toId: o.fromTeamId },
+    sale: { playerId: o.playerId, nick: o.nick ?? o.playerId, fee: o.fee, toTag: o.fromTag ?? '', toId: o.fromTeamId, outPlayerId: o.outPlayerId },
   };
 }
 
@@ -285,7 +287,7 @@ export function counterOffer(m: MarketState, offerId: string, ask: number, ctx: 
   if (ask <= max) {
     const fee = Math.max(o.fee, round10k(ask));
     const market = { ...m, incoming: put({ status: 'accepted', fee, askedFee: ask }) };
-    return { market, outcome: 'accepted', fee, sale: { playerId: o.playerId, nick: o.nick ?? o.playerId, fee, toTag: o.fromTag ?? '', toId: o.fromTeamId } };
+    return { market, outcome: 'accepted', fee, sale: { playerId: o.playerId, nick: o.nick ?? o.playerId, fee, toTag: o.fromTag ?? '', toId: o.fromTeamId, outPlayerId: o.outPlayerId } };
   }
   if (ask <= max * 1.2) {
     return { market: { ...m, incoming: put({ status: 'countered', fee: max, askedFee: ask }) }, outcome: 'countered', fee: max, sale: null };

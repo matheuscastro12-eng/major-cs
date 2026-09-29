@@ -92,6 +92,7 @@ export interface IncomingOffer {
   strategy?: ClubStrategy;   // estratégia do clube comprador
   askedFee?: number;         // sua contraproposta (status 'countered' = o clube respondeu com `fee`)
   playerRefused?: boolean;   // cláusula paga, mas o jogador não quis ir (fica)
+  outPlayerId?: string;      // quem perde a vaga no comprador (vai pro mercado livre na janela)
 }
 
 export interface TransferWindow { open: boolean; rosterLocked: boolean; label: string }

@@ -12,6 +12,7 @@ import { CS2_REAL_2026 } from '../../data/bo3';
 import { FREE_TEAM_ID } from './transferAI';
 import { REAL_AGES, baseAge, effectiveAge, type YouthDebut } from './playerAge';
 import { isNewgenId } from '../mundo/juventude';
+import { RETIRED_TEAM_ID } from '../mundo/editor';
 
 export type PlayerPhase = 'rising' | 'prime' | 'declining';
 
@@ -233,11 +234,19 @@ export function applyMoves(teams: TeamSeason[], moves: Record<string, string> | 
   if (!moves || Object.keys(moves).length === 0) return teams;
   const all: { p: Player; orig: string }[] = [];
   for (const t of teams) for (const p of t.players) all.push({ p, orig: t.id });
-  // time extinto (defunct) não recebe ninguém: o jogador volta ao time da base
+  // time extinto (defunct) não recebe ninguém. O jogador que tinha ido pra ele
+  // (venda sua, movimento da IA) fica SEM CLUBE — o clube acabou, não é motivo
+  // pra voltar ao time da base (bug: a base set/2026 extinguiu 21 clubes e as
+  // vendas antigas pra eles "voltavam pro time de origem" cobrando taxa). A
+  // exceção é o time dos aposentados: move pra lá segue caindo na origem.
   const valid = new Set(teams.filter((t) => !t.defunct).map((t) => t.id));
+  const hasFree = valid.has(FREE_TEAM_ID);
+  const defunct = new Set(teams.filter((t) => t.defunct && t.id !== RETIRED_TEAM_ID).map((t) => t.id));
   const teamOf = (pid: string, orig: string) => {
     const m = moves[pid];
-    return m && valid.has(m) ? m : orig;
+    if (!m) return orig;
+    if (valid.has(m)) return m;
+    return hasFree && defunct.has(m) ? FREE_TEAM_ID : orig;
   };
   return teams.map((t) => ({ ...t, players: all.filter((ap) => teamOf(ap.p.id, ap.orig) === t.id).map((ap) => ap.p) }));
 }

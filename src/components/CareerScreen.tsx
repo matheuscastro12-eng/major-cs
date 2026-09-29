@@ -159,7 +159,7 @@ import { compactCareerSave } from '../state/careerSaveCompact';
 import type { VersionedSave } from '../state/saveMigrations';
 import {
   FILL_ROLES, REGION_CC, prospectIdentity, backfillPlayers, baseAge, playerPhase, driftFrom, regenYouth,
-  currentFreeAgents, BASE_PLAYER_IDS, buildAiWorld, nextAiDrift, agedFreeAgents, aiAgeOf, baseOvrOf, aiPotentialOvr, type PlayerPhase,
+  currentFreeAgents, BASE_PLAYER_IDS, buildAiWorld, applyMoves, nextAiDrift, agedFreeAgents, aiAgeOf, baseOvrOf, aiPotentialOvr, type PlayerPhase,
 } from '../engine/career/aiWorld';
 // [fase 4 · juventude] jovens gerados (newgens) no mundo da IA + tela Juventude
 import {
@@ -398,6 +398,7 @@ import { OverviewTab } from '../pages/career/OverviewTab';
 import { StaffTab } from '../pages/career/StaffTab';
 import type { ClubStrategy, IncomingOffer, MarketLoan, MarketState } from '../engine/clube/model';
 import { tickMarketWindow, clubsSnapshot, clubNeeds, aiTierOf, squadOvr, type ClubNeed, type WindowKind } from '../engine/clube/mercadoIA';
+import { quickSaleFee, sellToBuyer, releaseToFree, pickQuickSaleBuyer, settleSaleAtBuyer, displacedBy, endLoanOutMove, faReleaseRepair, FA_RELEASE_FIX, type BuyerCtx, type ExitBooks } from '../engine/clube/saidas';
 import {
   marketOf, userLoans, expireOffers, generateIncomingOffers, applyWorldTick, withOffers, pushRumors, chainRumors, needRumors,
   logWindow, windowItems, windowNews, NEED_LABEL, transferWindowOf, acceptOffer, rejectOffer, counterOffer, playerWillingness,
@@ -1040,7 +1041,7 @@ interface CareerSave {
   takeoverId?: string | null; // id do time real que o jogador assumiu (excluído dos adversários)
   pendingDeals?: PendingDeal[]; // acordos fechados DURANTE a temporada; entram em vigor na janela (próximo split)
   renewals?: Renewal[]; // contratos vencendo: forçam a tela de renovação na abertura da janela
-  pendingSales?: { playerId: string; nick: string; fee: number; toTag: string; toId: string }[]; // propostas aceitas por jogadores SEUS: o jogador sai (e entra a grana) na janela. toId = id do clube COMPRADOR (pro applyMoves / extraOnTeam)
+  pendingSales?: { playerId: string; nick: string; fee: number; toTag: string; toId: string; outPlayerId?: string }[]; // propostas aceitas por jogadores SEUS: o jogador sai (e entra a grana) na janela. toId = id do clube COMPRADOR (pro applyMoves / extraOnTeam)
   rejectedOffers?: string[]; // ids de jogadores cuja proposta você recusou neste split (some até a virada)
   // jogadores VENDIDOS que NÃO existem no CS2_REAL_2026 (academy, FA, youth
   // promovido). applyMoves só move ids da base — pros customizados a gente
@@ -1069,6 +1070,7 @@ interface CareerSave {
   playerPromises?: Record<string, PlayerPromise[]>; // #10: promessas SUAS a jogadores (das conversas), com prazo e cobrança
   watchlist?: WatchlistEntry[]; // #41: alvos acompanhados — o conhecimento (revealLevel) sobe a cada fechamento
   stints?: StintsMap; // #40: passagens pelo SEU clube (entrada/saída com OVR)
+  fixes?: Record<string, number>; // reparos únicos já aplicados neste save (id → split em que rodou)
   bootcampSplit?: number; // #35: último split em que o bootcamp foi usado (1x por split)
   splitStart?: { split: number; cash: number; ovr: Record<string, number> } | null; // #39: snapshot do INÍCIO do split (review de fechamento)
   evoAttrBias?: Record<string, Partial<Record<CoreStat, number>>>; // #22: viés acumulado do foco (+1/split, cap +4)
@@ -1936,7 +1938,7 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     'lastTalkAt', 'pairChem', 'extraOnTeam', 'academyPlayed', 'rivalries',
     'fatigue', 'facilities', 'mapStats', 'aiDrift', 'careerStatsYearStart',
     'recentRatings',
-    'stints', 'attrEvo',
+    'stints', 'attrEvo', 'fixes',
   ].forEach(defaultInvalidRecord);
   [
     'org', 'league', 'circuit', 'playoff', 'majorT', 'majorResult',
@@ -3357,6 +3359,33 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [save.squad]);
 
+  // [saídas] REPARO ÚNICO (fixes.faRelease202609): antes da correção, dispensar
+  // na janela e deixar o contrato vencer não gravavam destino — o jogador voltava
+  // pro time da base e recontratá-lo cobrava taxa (relato do Techno na MGZ). Quem
+  // já passou pelo seu elenco (rastros: química de dupla, vínculo com o técnico,
+  // evolução, passagens), está fora dele, sem move, sem venda/troca/empréstimo
+  // pendente e hoje aparece num clube vai pro mercado livre. Roda uma vez por
+  // save (a flag fica gravada); é idempotente de qualquer forma.
+  const faRepairDue = !!save.org && save.fixes?.[FA_RELEASE_FIX] == null;
+  useEffect(() => {
+    if (!faRepairDue) return;
+    setSave((s) => {
+      if (!s.org || s.fixes?.[FA_RELEASE_FIX] != null) return s;
+      const clubOf = new Map<string, string>();
+      for (const t of applyMoves(worldBase, s.moves)) for (const p of t.players) clubOf.set(p.id, t.id);
+      const r = faReleaseRepair({
+        moves: s.moves, squadIds: new Set(s.squad.map((x) => x.playerId)),
+        pendingSales: s.pendingSales, pendingDeals: s.pendingDeals, loans: marketOf(s).loans,
+        traces: { pairChem: s.pairChem, coachBond: s.coachBond, attrEvo: s.attrEvo, evo: s.evo, stints: s.stints },
+        movable: (id) => movableIds.has(id), clubOf: (id) => clubOf.get(id),
+      });
+      const next: CareerSave = { ...s, moves: r.repaired.length ? r.moves : s.moves, fixes: { ...(s.fixes ?? {}), [FA_RELEASE_FIX]: s.split } };
+      persist(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma vez por save (flag)
+  }, [faRepairDue]);
+
   // AUTO-CURA da LIGA: saves criados ANTES do fix do padding podem ter grupos
   // com menos de 4 times — o opening match referencia s[3] = undefined e o user
   // não consegue jogar nem avançar (bug reportado pelo Maicon na PGL Bucharest).
@@ -4443,6 +4472,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
         if (l.kind === 'out') {
           const sig = l.signing as unknown as Signing | undefined;
           if (sig && !squad.some((x) => x.playerId === l.playerId)) squad = [...squad, sig];
+          endLoanOutMove(moves, l.playerId); // [saídas] voltou: o move do empréstimo não vale mais
           if (extraOnTeam[l.toTeamId]) extraOnTeam[l.toTeamId] = extraOnTeam[l.toTeamId].filter((e) => e.player.id !== l.playerId);
           news.push({ id: `${s.split}:loanback:${l.playerId}`, split: s.split, icon: '↩️', tone: 'info', cat: 'transfer', title: `${l.nick} ${ct('volta do empréstimo')}`, body: `${ct('O empréstimo à')} ${nameOf(l.toTeamId)} ${ct('acabou: ele está de novo no seu elenco.')}` });
         } else {
@@ -4454,6 +4484,9 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     const next: CareerSave = withSquadCondition({ ...s, squad, budget, moves, extraOnTeam, ...withMarket(s, { ...m, loans }) }); // [integração] stand-in chega com condição
     return news.length ? { ...next, ...pushNews(next, news) } : next;
   };
+
+  // [saídas] o jogador está hoje no clube da IA `teamId` (mundo atual, sem o seu elenco)
+  const isAtClub = (teamId: string) => (pid: string) => oppEra.find((t) => t.id === teamId)?.players.some((p) => p.id === pid) ?? false;
 
   // janela aberta: consuma os acordos fechados durante a temporada (pendingDeals).
   // Roda sobre o save JÁ montado da virada (split novo, contratos vencidos, etc.).
@@ -4516,6 +4549,15 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
           extraOnTeam[sale.toId] = [...list, { player: resolved.player, arrival: s.split }];
         }
       }
+      // [saídas] chega no comprador como reforço do split (nas duas rotas) e quem
+      // perdeu a vaga lá vai pro mercado livre — senão o vendido mofava no banco
+      // e o comprador ainda ia atrás de outro pra mesma função
+      const settled = settleSaleAtBuyer({
+        moves, arrivals: clube.market.arrivals, playerId: sale.playerId, buyerId: sale.toId, split: s.split,
+        outPlayerId: sale.outPlayerId, movable: (id) => movableIds.has(id), isAtBuyer: isAtClub(sale.toId),
+      });
+      Object.assign(moves, settled.moves);
+      clube = { ...clube, market: { ...clube.market, arrivals: settled.arrivals } };
       departures.push(`${sale.nick} (${sale.toTag})`);
     }
     // ACORDOS DE COMPRA: tira a troca, traz o alvo e desconta o dinheiro
@@ -4576,6 +4618,71 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
     if (fullDeals.length) news.push({ id: `${s.split}:dealsFull`, split: s.split, icon: '⚠️', tone: 'bad', cat: 'board', title: ct('Acordos cancelados (elenco cheio)'), body: `${ct('O elenco já tem 7 jogadores (5 titulares + 2 no banco). Libere uma vaga para trazer:')} ${fullDeals.join(', ')}.` });
     if (news.length) next = { ...next, ...pushNews(next, news) };
     return next;
+  };
+
+  // [saídas] VENDA RÁPIDA na janela ("vender a 85%"): quem sai do elenco na tela
+  // de mercado vai REALMENTE pra um clube comprador (escolhido pela mesma régua
+  // do mercado da IA: necessidade por função, caixa e estratégia). Antes só saía
+  // do squad, sem move, e voltava pro time da base — recontratar cobrava taxa.
+  // Venda já acertada (proposta aceita esperando a janela) é honrada pelo valor
+  // e pelo clube dela. Stand-in emprestado não é seu: volta pro dono (sem venda).
+  const quickSaleBuyerCtx = (s: CareerSave): BuyerCtx => {
+    const teams = oppEra.filter((t) => t.id !== s.takeoverId);
+    const forms = computeAllTeamForms(s);
+    const m = marketOf(s);
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    const stored = Object.keys(m.budgets).length > 0 && Object.keys(m.strategies ?? {}).length > 0;
+    const snap = stored
+      ? { budgets: m.budgets, strategies: m.strategies ?? {} }
+      : clubsSnapshot({ teams, split: s.split, formOf: (id) => forms[id] ?? 50, vrsOf: (id) => { const t = byId.get(id); return t ? clubVrsScore(s, t) : 0; }, ageOf: (p) => aiAgeOf(p, s.split) });
+    return { teams, split: s.split, budgets: snap.budgets, strategies: snap.strategies, formOf: (id) => forms[id] ?? 50, ageOf: (p) => aiAgeOf(p, s.split), baseOvrOf };
+  };
+  const applyQuickSales = (s: CareerSave, leavingIds: string[]) => {
+    const m = marketOf(s);
+    const loanedIn = new Set(m.loans.filter((l) => l.kind === 'in').map((l) => l.playerId));
+    let books: ExitBooks<PendingDeal> = { moves: { ...(s.moves ?? {}) }, stints: s.stints ?? {}, pendingSales: s.pendingSales ?? [], pendingDeals: s.pendingDeals ?? [], incoming: m.incoming };
+    const extraOnTeam = { ...(s.extraOnTeam ?? {}) };
+    let arrivals = { ...(m.arrivals ?? {}) };
+    const sold: { playerId: string; nick: string; toName: string; toTag: string; fee: number }[] = [];
+    const ids = leavingIds.filter((id) => !loanedIn.has(id));
+    if (ids.length === 0) return null;
+    const ctx = quickSaleBuyerCtx(s);
+    const budgets = { ...ctx.budgets }; // caixa dos clubes (o comprador paga a taxa)
+    const taken = new Set<string>();
+    for (const pid of ids) {
+      const sig = s.squad.find((x) => x.playerId === pid);
+      const f = sig ? findSigning(sig) : null;
+      if (!f) continue;
+      const pending = books.pendingSales?.find((x) => x.playerId === pid);
+      const fee = quickSaleFee(pid, f.player, s.pendingSales);
+      const pick = pending ? null : pickQuickSaleBuyer({ ...f.player, id: pid }, fee, { ...ctx, budgets, taken });
+      const buyerId = pending?.toId ?? pick?.team.id ?? null;
+      const movable = movableIds.has(pid);
+      const endOvr = playerOvr(f.player);
+      if (!buyerId) {
+        books = releaseToFree(books, { playerId: pid, split: s.split, endOvr, movable });
+        continue;
+      }
+      books = sellToBuyer(books, { playerId: pid, buyerId, split: s.split, endOvr, movable });
+      // chega como reforço do split e quem perdeu a vaga no comprador vai pro mercado livre
+      const settled = settleSaleAtBuyer({
+        moves: books.moves, arrivals, playerId: pid, buyerId, split: s.split,
+        outPlayerId: pending ? pending.outPlayerId : pick?.outPlayerId, movable: (id) => movableIds.has(id), isAtBuyer: isAtClub(buyerId),
+      });
+      books = { ...books, moves: settled.moves };
+      arrivals = settled.arrivals;
+      if (!movable) {
+        // academia/youth/custom não existem na base: a cópia entra no comprador
+        const list = extraOnTeam[buyerId] ?? [];
+        if (!list.some((e) => e.player.id === pid)) extraOnTeam[buyerId] = [...list, { player: f.player, arrival: s.split }];
+      }
+      if (budgets[buyerId] != null) budgets[buyerId] = Math.max(0, budgets[buyerId] - fee);
+      taken.add(buyerId);
+      const team = ctx.teams.find((t) => t.id === buyerId);
+      sold.push({ playerId: pid, nick: f.player.nick, toName: team?.team ?? pending?.toTag ?? buyerId, toTag: team?.tag ?? pending?.toTag ?? '', fee });
+    }
+    // só grava o caixa se o mercado já tinha um (senão ele é recalculado na tela)
+    return { books, extraOnTeam, budgets: Object.keys(m.budgets).length ? budgets : m.budgets, arrivals, sold };
   };
 
   // contratos vencidos: o jogador cujo contrato acaba SAI de graça no próximo
@@ -5622,6 +5729,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
             const evo = { ...(save.evo ?? {}) };
             let budget = save.budget;
             let stintsAcc = { ...(save.stints ?? {}) }; // #40
+            let moves = { ...(save.moves ?? {}) };
             const released: string[] = [];
             for (const r of save.renewals ?? []) {
               const d = decisions[r.playerId];
@@ -5631,18 +5739,22 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
                 budget = Math.max(0, budget - (d.terms.signingBonus ?? 0));
               } else {
                 squad = squad.filter((x) => x.playerId !== r.playerId); // libera de graça
-                stintsAcc = closeStint(stintsAcc, r.playerId, save.split, r.ovr);
+                // sem renovação = mercado livre (sem receita). Sem o move ele
+                // voltava pro time da base e custava taxa pra recontratar.
+                const ex = releaseToFree({ moves, stints: stintsAcc }, { playerId: r.playerId, split: save.split, endOvr: r.ovr, movable: movableIds.has(r.playerId) });
+                moves = ex.moves;
+                stintsAcc = ex.stints ?? stintsAcc;
                 clube = withoutContracts({ clube }, [r.playerId]);
                 delete morale[r.playerId]; delete peakOvr[r.playerId]; delete evo[r.playerId];
                 released.push(r.nick);
               }
             }
-            let next: CareerSave = { ...save, squad, clube, morale, peakOvr, evo, budget, stints: stintsAcc, renewals: [] };
+            let next: CareerSave = { ...save, squad, clube, morale, peakOvr, evo, budget, stints: stintsAcc, moves, renewals: [] };
             if (released.length) {
               next = { ...next, ...pushNews(next, [{
                 id: `${save.split}:rel`, split: save.split, icon: '👋', tone: 'info', cat: 'transfer',
                 title: ct('Saídas por fim de contrato'),
-                body: `${ct('Sem renovação, saíram do elenco:')} ${released.join(', ')}.`,
+                body: `${ct('Sem renovação, saíram do elenco:')} ${released.join(', ')}. ${ct('Estão no mercado livre.')}`,
               }]) };
             }
             persist(next);
@@ -5683,12 +5795,22 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
             delete evo[off.playerId];
             const moves = { ...(save.moves ?? {}) };
             moves[off.playerId] = off.fromTeamId;
-            const clube = { ...withoutContracts(save, [off.playerId]), market: accepted };
+            // [saídas] chega no comprador como reforço e quem perde a vaga vai pro mercado livre
+            const eliteBuyer = oppEra.find((t) => t.id === off.fromTeamId);
+            const eliteSig = save.squad.find((s) => s.playerId === off.playerId);
+            const eliteRes = eliteSig ? findSigning(eliteSig) : null;
+            const settled = settleSaleAtBuyer({
+              moves, arrivals: accepted.arrivals, playerId: off.playerId, buyerId: off.fromTeamId, split: save.split,
+              outPlayerId: off.outPlayerId ?? (eliteBuyer && eliteRes ? displacedBy(eliteBuyer, { ...eliteRes.player, id: off.playerId }) : undefined),
+              movable: (id) => movableIds.has(id), isAtBuyer: isAtClub(off.fromTeamId),
+            });
+            const clube = { ...withoutContracts(save, [off.playerId]), market: { ...accepted, arrivals: settled.arrivals } };
             const next: CareerSave = {
               ...save,
               squad: save.squad.filter((s) => s.playerId !== off.playerId),
               budget: save.budget + off.fee,
-              moves,
+              moves: settled.moves,
+              stints: closeStint(save.stints, off.playerId, save.split, eliteRes ? playerOvr(eliteRes.player) : undefined),
               clube,
               morale,
               peakOvr,
@@ -5729,6 +5851,9 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
           // assina os termos negociados (sig.contract) ou o padrão; quem saiu
           // perde o contrato. As luvas dos novos já saíram do caixa (budget).
           const ids = new Set(stableSquad.map((x) => x.playerId));
+          // [saídas] quem saiu do elenco foi VENDIDO (85% ou a venda já acertada):
+          // vai pro clube comprador — o caixa já veio somado no `budget` da tela
+          const qs = applyQuickSales(save, save.squad.map((x) => x.playerId).filter((id) => !ids.has(id)));
           let clube = keepContracts(save, ids);
           for (const sig of stableSquad) {
             const cur = clube.contracts[sig.playerId];
@@ -5738,6 +5863,7 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
               clube = signContract({ clube }, sig.playerId, defaultTerms(f ? playerWage(f.player) : 20000, save.split));
             }
           }
+          if (qs) clube = { ...clube, market: { ...clube.market, incoming: qs.books.incoming ?? clube.market.incoming, budgets: qs.budgets, arrivals: qs.arrivals } };
           const cleanSquad = stableSquad.map((sig) => { if (!sig.contract) return sig; const rest = { ...sig }; delete rest.contract; return rest; });
           // poda chaves de quem saiu do elenco (não crescem pra sempre no save;
           // se voltar a contratar, começa com moral padrão de novo)
@@ -5780,7 +5906,16 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
             squadIds: stableSquad.map((x) => x.playerId),
             coachBond: save.coachBond, pairChem: save.pairChem, bondDefault: BOND_DEFAULT, chemDefault: 30, pairKey,
           });
-          const next = withSquadCondition({ ...save, foundingOpen: false, squad: cleanSquad, coachFromId, budget, sponsors, sponsorUntil, clube, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem }); // [integração] condição na entrada
+          const exits = qs ? { moves: qs.books.moves, stints: qs.books.stints, pendingSales: qs.books.pendingSales, pendingDeals: qs.books.pendingDeals, extraOnTeam: qs.extraOnTeam } : {};
+          let next = withSquadCondition({ ...save, ...exits, foundingOpen: false, squad: cleanSquad, coachFromId, budget, sponsors, sponsorUntil, clube, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem }); // [integração] condição na entrada
+          if (qs?.sold.length) {
+            next = { ...next, ...pushNews(next, qs.sold.map((x) => ({
+              id: `${save.split}:qsale:${x.playerId}`, split: save.split, icon: '💸', tone: 'info' as const, cat: 'transfer' as const,
+              title: `${x.nick} ${ct('foi vendido para')} ${x.toName}`,
+              body: `${ct('Venda fechada na janela por')} ${formatMoney(x.fee)}. ${ct('Ele joga pela')} ${x.toName} ${ct('a partir de agora.')}`,
+            }))) };
+            toast.success(qs.sold.map((x) => `${x.nick} → ${x.toTag || x.toName}`).join(' · '));
+          }
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -6594,7 +6729,10 @@ function CareerScreenInner({ onExit, founder = false, dataset, onOpenEditor }: P
                   const listedSales = listedHits.map((h) => {
                     const sig = save.squad.find((x) => x.playerId === h.playerId);
                     const f = sig ? findSigning(sig) : null;
-                    return { playerId: h.playerId, nick: f?.player.nick ?? h.playerId, fee: h.fee, toTag: h.buyer.tag, toId: h.buyer.id };
+                    // [saídas] quem perde a vaga no comprador (titular mais fraco da função)
+                    const buyerTeam = oppEra.find((t) => t.id === h.buyer.id);
+                    const outPlayerId = buyerTeam && f ? displacedBy(buyerTeam, { ...f.player, id: h.playerId }) : undefined;
+                    return { playerId: h.playerId, nick: f?.player.nick ?? h.playerId, fee: h.fee, toTag: h.buyer.tag, toId: h.buyer.id, outPlayerId };
                   });
                   const listedPricesLeft = { ...(save.listedPrices ?? {}) };
                   for (const h of listedHits) delete listedPricesLeft[h.playerId];
@@ -11262,7 +11400,8 @@ function MarketScreen({
     squad.map((s) => findSigning(s)?.player.nick.toLowerCase()).filter(Boolean) as string[],
   );
   // jogadores que JÁ eram seus (pagos no split anterior) não custam de novo;
-  // dispensar um deles é venda a 85% do valor de mercado
+  // tirar um deles é VENDA a um clube interessado por 85% do valor de mercado
+  // (ou pelo valor da venda já acertada, se houver uma esperando a janela)
   const owned = new Set(save.squad.map((s) => s.playerId));
   const spentPlayers = squad.reduce((acc, s) => {
     if (owned.has(s.playerId)) return acc;
@@ -11277,7 +11416,7 @@ function MarketScreen({
     .filter((s) => !squad.some((x) => x.playerId === s.playerId) && !loanedIn.has(s.playerId))
     .reduce((acc, s) => {
       const f = findSigning(s);
-      return acc + (f ? Math.round(playerValue(f.player) * 0.85) : 0);
+      return acc + (f ? quickSaleFee(s.playerId, f.player, save.pendingSales) : 0);
     }, 0);
   // [fase 3] a mesa de contrato olha o elenco DA TELA (com quem você já escolheu)
   // e a folha dele (contrato de quem já era seu, termos negociados de quem chega)
@@ -11476,7 +11615,7 @@ function MarketScreen({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <DashCard
             title={`${ct('Seu elenco')} (${squad.length}/${SQUAD_MAX})`}
-            info={ct('5 titulares + até 2 reservas no banco. Clique pra dispensar (vende a 85% se for jogador atual).')}
+            info={ct('5 titulares + até 2 reservas no banco. Clique num jogador do elenco pra vendê-lo a um clube interessado (85% do valor); contratação desta janela sai com reembolso integral.')}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {/* [fase 3 · vestiário] 5 vagas de titular + as vagas do banco (6º/7º) */}
@@ -11509,7 +11648,7 @@ function MarketScreen({
                     key={i}
                     player={f.player}
                     rightLabel={`${formatMoney(playerValue(f.player))}`}
-                    rightHint={ct('dispensar')}
+                    rightHint={owned.has(s.playerId) && !loanedIn.has(s.playerId) ? ct('vender (85%)') : ct('remover')}
                     tone="release"
                     onClick={() => setSquad(squad.filter((x) => x.playerId !== s!.playerId))}
                   />
