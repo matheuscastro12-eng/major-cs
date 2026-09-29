@@ -114,7 +114,7 @@ export function evolveAttrs(x: PlayerAttrs, ctx: EvolveContext): EvolveResult {
   const profGrowth = 0.6 + (prof / 20) * 0.8;   // 0.64..1.4
   const profDecline = 1.3 - (prof / 20) * 0.6;  // 1.27..0.7
   const effAge = ctx.age - longevityShift(ctx.playerId);
-  const maps = ctx.mapsPlayed ?? REF_MAPS * 0.75;
+  const maps = ctx.mapsPlayed ?? REF_MAPS; // sem histórico: titular regular
   const play = Math.min(1, Math.max(0, maps / REF_MAPS));
   const caBefore = caFromOvr(ovrBefore);
   const headroom = x.pa - caBefore;
@@ -125,8 +125,9 @@ export function evolveAttrs(x: PlayerAttrs, ctx: EvolveContext): EvolveResult {
   for (const k of ALL_ATTRS) {
     const cls = ATTR_CLASS[k];
     let g = classGrowth(cls, ctx.age) * profGrowth * (ctx.growthMul ?? 1);
-    // rodagem: jogar dá leitura de jogo; mecânica depende menos disso
-    g *= cls === 'mental' || cls === 'leadership' ? 0.6 + 0.6 * play : 0.85 + 0.3 * play;
+    // rodagem: jogar dá leitura de jogo; mecânica depende menos disso (titular
+    // regular = 1; banco inteiro: leitura ×0,4, mecânica ×0,7)
+    g *= cls === 'mental' || cls === 'leadership' ? 0.4 + 0.6 * play : 0.7 + 0.3 * play;
     if (ctx.focusPlayer) g *= 1.35;
     if (ctx.focusGroup) g *= LEGACY_GROUP_OF[k] === ctx.focusGroup ? 1.8 : 0.9;
     // teto: sem espaço, o crescimento só entra para repor declínio (via trim)
