@@ -87,7 +87,7 @@ export function ScrimCard({ scrimsThisSplit, budget, opponents, report, onScrim 
       <div style={bonusRowStyle}>
         <Bonus label="Custo" value={`-$${SCRIM_INFO.cost.toLocaleString('pt-BR')}`} tone="neg" />
         <Bonus label="Química" value={`até +${(SCRIM_INFO.chemGain * 1.6).toFixed(1)}/par`} tone="pos" />
-        <Bonus label="Fadiga" value={`-${SCRIM_INFO.fatigueReduction} pp`} tone="pos" />
+        <Bonus label="Ritmo · condição" value="+6 · -4" tone="pos" />
       </div>
 
       <div style={actionRowStyle}>

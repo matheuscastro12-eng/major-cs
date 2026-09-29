@@ -213,6 +213,7 @@ export interface ScrimMatchReport {
   myScore: number;
   oppScore: number;
   mapLabel: string;
+  map: MapId;              // [fase 2 · treino] mapa jogado (familiaridade)
   oppName: string;
   oppTag: string;
   mvp: string | null;      // nick do seu melhor rating
@@ -258,10 +259,9 @@ export function runScrimVs(
       newChem[k] = Math.min(MAX_PAIR_VALUE, (newChem[k] ?? 30) + chemGain);
     }
   }
+  // [fase 2 · treino] scrim de verdade não descansa ninguém: o desgaste e o
+  // ritmo ganho vêm do treino semanal (gestao/treino.ts#applyRealScrim).
   const newFatigue = { ...(state.fatigue ?? {}) };
-  for (const id of state.starterIds) {
-    newFatigue[id] = Math.max(0, (newFatigue[id] ?? 0) - FATIGUE_REDUCTION);
-  }
 
   const outcome = won
     ? (harder
@@ -277,6 +277,7 @@ export function runScrimVs(
       myScore: mapRes.score[0],
       oppScore: mapRes.score[1],
       mapLabel: MAP_LABELS[map] ?? map,
+      map,
       oppName: opp.name,
       oppTag: opp.tag,
       mvp,

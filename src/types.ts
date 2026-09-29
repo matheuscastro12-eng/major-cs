@@ -121,6 +121,9 @@ export interface TPlayer {
   skill: number; // derived overall
   ovr: number; // overall exibido (50-99)
   form?: number; // fase no torneio (0.9 frio … 1.1 em chamas), atualizada a cada série
+  // [realismo FM fase 2 · treino] condição do jogador NESTA partida (0–100):
+  // fitness (cansaço) e sharpness (ritmo de jogo). Ausente = neutro (IA, outros modos).
+  cond?: { fitness: number; sharpness: number };
   fromTeam?: string; // era label for drafted players
   originTeam?: string;
   originTeamId?: string;

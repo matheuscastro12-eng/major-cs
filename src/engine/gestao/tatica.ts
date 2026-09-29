@@ -570,11 +570,14 @@ export function antiStratReveal(antiStratRead: number, analystLevel = 0): number
   return clamp(0.35 + 0.1 * analystLevel + 0.55 * (Number.isFinite(antiStratRead) ? antiStratRead : 0), 0, 1);
 }
 
-/** Começa (ou mantém) a preparação contra `opponentTeamId`; trocar de alvo zera a anterior. */
-export function prepareAntiStrat(tactics: TacticsState, opponentTeamId: string, reveal: number): TacticsState {
+/**
+ * Começa (ou mantém) a preparação contra `opponentTeamId`; trocar de alvo zera a
+ * anterior. `vodPoints` = o VOD da agenda desta semana (`vodPrepPoints` do treino).
+ */
+export function prepareAntiStrat(tactics: TacticsState, opponentTeamId: string, reveal: number, vodPoints = 0): TacticsState {
   const cur = tactics.antiStrat;
   if (cur && cur.opponentTeamId === opponentTeamId) return tactics;
-  return { ...tactics, antiStrat: { opponentTeamId, readiness: Math.round(clamp(20 + 40 * reveal, 0, 100)) } };
+  return { ...tactics, antiStrat: { opponentTeamId, readiness: Math.round(clamp(20 + 40 * reveal + Math.max(0, vodPoints), 0, 100)) } };
 }
 
 /** Soma prontidão contra o adversário estudado (ex.: sessão de VOD da frente de treino). */
@@ -680,14 +683,16 @@ export function aiMapTactic(team: AiTeam, map: MapId): MapTactic {
  * (0–1, `scoutingOf` da identidade tática) × AI_PREP.
  */
 export const AI_PREP = 0.5;
-export function aiTactics(team: AiTeam, vs?: { id: string; scouting: number } | null): TacticsState {
+/** Vazamento de scrim (0–1, `leakAgainst` do treino): quem te viu em scrim ganha até +50 de prontidão contra você. */
+export const SCRIM_LEAK_READ = 50;
+export function aiTactics(team: AiTeam, vs?: { id: string; scouting: number; leak?: number } | null): TacticsState {
   const maps: Partial<Record<MapId, MapTactic>> = {};
   for (const m of MAP_POOL) maps[m] = aiMapTactic(team, m);
   return {
     v: 1,
     instr: aiInstructions(team),
     maps,
-    antiStrat: vs ? { opponentTeamId: vs.id, readiness: Math.round(clamp(vs.scouting, 0, 1) * AI_PREP * 100) } : null,
+    antiStrat: vs ? { opponentTeamId: vs.id, readiness: Math.round(clamp(clamp(vs.scouting, 0, 1) * AI_PREP * 100 + clamp(vs.leak ?? 0, 0, 1) * SCRIM_LEAK_READ, 0, 100)) } : null,
   };
 }
 

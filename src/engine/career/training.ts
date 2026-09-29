@@ -1,5 +1,10 @@
 // FOCO DE TREINO POR ATRIBUTO (#22 do gap Brasval). Puro, sem React.
 //
+// [fase 2 · treino] O foco de 5 atributos foi SUBSTITUÍDO pelo foco individual
+// do treino semanal (engine/gestao/treino.ts: um atributo dos 28 ou a função),
+// e a migração v28 converte o foco antigo. Daqui restam os 5 atributos-núcleo
+// (formato do save antigo) e a sugestão da maior lacuna, que a tela nova usa.
+//
 // O desenvolvimento era uma caixa-preta com 1 alavanca binária (trainingFocus
 // on/off). Agora cada jogador pode ter um FOCO: qual dos 5 atributos-núcleo ele
 // trabalha. A evolução geral (evo, flat nos 5) continua a mesma — o foco
@@ -20,8 +25,6 @@ export const TRAINING_FOCUS_LABEL: Record<CoreStat, string> = {
   aim: 'Mira', clutch: 'Clutch', consistency: 'Consistência', awp: 'AWP', igl: 'Leitura de jogo',
 };
 
-// teto do viés por atributo e total (o foco especializa, não quebra o balanço)
-export const FOCUS_BIAS_CAP = 4;
 
 // relevância de cada atributo por função (peso na sugestão) — a lacuna só
 // importa se o atributo importa pra role.
@@ -47,22 +50,4 @@ export function suggestFocus(p: Player, bias?: Partial<Record<CoreStat, number>>
     if (score > bestScore) { bestScore = score; best = k; }
   }
   return best;
-}
-
-// Aplica um split de desenvolvimento FOCADO: +1 no atributo escolhido, com cap
-// por atributo e cap total. Imutável.
-export function applyFocusBias(
-  bias: Partial<Record<CoreStat, number>> | undefined,
-  focus: CoreStat,
-): Partial<Record<CoreStat, number>> {
-  const cur = { ...(bias ?? {}) };
-  const total = CORE_STATS.reduce((s, k) => s + (cur[k] ?? 0), 0);
-  if ((cur[focus] ?? 0) >= FOCUS_BIAS_CAP || total >= FOCUS_BIAS_CAP + 2) return cur;
-  cur[focus] = (cur[focus] ?? 0) + 1;
-  return cur;
-}
-
-// Viés total (pra exibir "+N especializado" na UI).
-export function focusBiasTotal(bias: Partial<Record<CoreStat, number>> | undefined): number {
-  return CORE_STATS.reduce((s, k) => s + (bias?.[k] ?? 0), 0);
 }

@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { suggestFocus, applyFocusBias, focusBiasTotal, FOCUS_BIAS_CAP, CORE_STATS } from '../src/engine/career/training.ts';
+import { suggestFocus, CORE_STATS } from '../src/engine/career/training.ts';
 import type { Player } from '../src/types.ts';
 
 const mk = (over: Partial<Player>): Player => ({
@@ -22,18 +22,6 @@ test('suggestFocus: recomenda a lacuna RELEVANTE pra função', () => {
   assert.equal(suggestFocus(igl), 'consistency');
 });
 
-test('applyFocusBias: +1 por split, cap por atributo e total', () => {
-  let bias = applyFocusBias(undefined, 'aim');
-  assert.deepEqual(bias, { aim: 1 });
-  for (let i = 0; i < 10; i++) bias = applyFocusBias(bias, 'aim');
-  assert.equal(bias.aim, FOCUS_BIAS_CAP, 'cap por atributo');
-  // trocar o foco continua acumulando até o cap TOTAL
-  for (let i = 0; i < 10; i++) bias = applyFocusBias(bias, 'clutch');
-  assert.ok(focusBiasTotal(bias) <= FOCUS_BIAS_CAP + 2, `total ${focusBiasTotal(bias)}`);
-  // imutável
-  const before = { aim: 1 };
-  const after = applyFocusBias(before, 'aim');
-  assert.deepEqual(before, { aim: 1 });
-  assert.equal(after.aim, 2);
+test('núcleo: 5 atributos legados', () => {
   assert.equal(CORE_STATS.length, 5);
 });

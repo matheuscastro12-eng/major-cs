@@ -32,6 +32,8 @@ export interface GamePlanScreenProps {
   reveal: number;
   gamePlan?: string;
   onOpenPlayer?: (p: Player) => void;
+  /** prontidão extra do VOD da agenda da semana (`vodPrepPoints` do treino) */
+  vodPoints?: number;
 }
 
 type InstrKey = keyof TeamInstructions;
@@ -61,7 +63,7 @@ function execMatchups(e: TExecute): { strong: CtSetup[]; weak: CtSetup[] } {
   };
 }
 
-export function GamePlanScreen({ tactics, onChange, players, opp, reveal, gamePlan, onOpenPlayer }: GamePlanScreenProps) {
+export function GamePlanScreen({ tactics, onChange, players, opp, reveal, gamePlan, onOpenPlayer, vodPoints = 0 }: GamePlanScreenProps) {
   const [map, setMap] = useState<MapId>(MAP_POOL[0]);
   const [scope, setScope] = useState<'all' | 'map'>('all');
   const mt = mapTacticOf(tactics, map);
@@ -336,7 +338,7 @@ export function GamePlanScreen({ tactics, onChange, players, opp, reveal, gamePl
                 <div className="tac-anti">
                   <ProgressBar value={readiness} tone={readiness >= 60 ? 'win' : 'accent'} label={ct('Preparação de anti-strat')} valueText={`${readiness}/100`} />
                   {readiness === 0 ? (
-                    <Button variant="primary" onClick={() => onChange(prepareAntiStrat(tactics, opp.id, reveal))}>
+                    <Button variant="primary" onClick={() => onChange(prepareAntiStrat(tactics, opp.id, reveal, vodPoints))}>
                       {ct('Preparar anti-strat')}
                     </Button>
                   ) : (

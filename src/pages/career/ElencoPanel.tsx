@@ -4,8 +4,10 @@
 // coloridos por faixa. Nome do jogador tem peek (hover card) e abre o perfil.
 // Marcar 2 linhas e "Comparar" abre o comparador lado a lado.
 import { useState } from 'react';
-import { ArrowLeftRight, Users } from 'lucide-react';
-import { Panel, Table, Segmented, AttrValue, Ovr, RoleChip, Avatar, type Column } from '../../components/ds/index';
+import { ArrowLeftRight, Bandage, Users } from 'lucide-react';
+import { Panel, Table, Segmented, AttrValue, Ovr, RoleChip, Avatar, Tag, type Column } from '../../components/ds/index';
+import type { PlayerCondition } from '../../engine/gestao/model';
+import { ConditionBar } from './TrainingTab';
 import { openCompare } from '../../components/CompareHost';
 import type { AttrKey } from '../../engine/attributes';
 import { attrsOf } from '../../engine/attrs/model';
@@ -21,6 +23,8 @@ export interface ElencoRow {
   morale: number;
   moraleLabel: string;
   fatigue: number;
+  /** [fase 2 · treino] condição (fitness, ritmo, lesão) */
+  cond?: PlayerCondition | null;
   contractLeft: number | null;
   rating?: number;
   maps?: number;
@@ -90,7 +94,13 @@ export function ElencoPanel({ rows, onOpen }: { rows: ElencoRow[]; onOpen: (p: P
       cell: (r) => r.contractLeft == null ? '—' : <span className={r.contractLeft <= 1 ? 'elenco-warn' : undefined}>{r.contractLeft <= 0 ? ct('vencido') : `${r.contractLeft} split${r.contractLeft > 1 ? 's' : ''}`}</span>,
     },
     { key: 'morale', header: ct('Moral'), num: true, views: ['contracts', 'perf'], sort: (r) => r.morale, cell: (r) => <span title={r.moraleLabel}>{r.morale}</span> },
-    { key: 'fatigue', header: ct('Fadiga'), num: true, views: ['perf'], sort: (r) => r.fatigue, cell: (r) => r.fatigue },
+    {
+      key: 'cond', header: ct('Condição'), views: ['geral', 'perf'], sort: (r) => (r.cond?.injury ? -1 : r.cond?.fitness ?? 100 - r.fatigue),
+      cell: (r) => r.cond?.injury && r.cond.injury.weeksLeft > 0
+        ? <Tag tone="loss" icon={<Bandage size={12} aria-hidden />}>{Math.ceil(r.cond.injury.weeksLeft)} {ct('sem.')}</Tag>
+        : <ConditionBar compact fitness={r.cond?.fitness ?? 100 - r.fatigue} />,
+    },
+    { key: 'sharp', header: ct('Ritmo'), num: true, views: ['perf'], sort: (r) => r.cond?.sharpness ?? 70, cell: (r) => Math.round(r.cond?.sharpness ?? 70) },
     { key: 'rating', header: 'Rating', num: true, views: ['perf'], sort: (r) => r.rating ?? 0, cell: (r) => r.rating != null ? r.rating.toFixed(2) : '—' },
     { key: 'maps', header: ct('Mapas'), num: true, views: ['perf'], sort: (r) => r.maps ?? 0, cell: (r) => r.maps ?? 0 },
     { key: 'kd', header: 'K/D', num: true, views: ['perf'], sort: (r) => r.kd ?? 0, cell: (r) => r.kd != null ? r.kd.toFixed(2) : '—' },
