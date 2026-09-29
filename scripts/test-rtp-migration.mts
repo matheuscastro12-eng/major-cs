@@ -15,7 +15,9 @@ import { RTP_SAVE_VERSION } from '../src/engine/rtp/createSave.ts';
 import { createRtpSave } from '../src/engine/rtp/createSave.ts';
 import type { RoadToProSave } from '../src/engine/rtp/types.ts';
 import { legacyFromAttrs, HIDDEN_KEYS } from '../src/engine/attrs/model.ts';
-import { coreStatsFromAttrs, proToTPlayer } from '../src/engine/rtp/coreStats.ts';
+import { coreStatsFromAttrs, proToTPlayer, heroEngineAttrs, proAttrs, proOvr } from '../src/engine/rtp/coreStats.ts';
+import { attrsOf, ovrFromAttrs, LEGACY_GROUPS } from '../src/engine/attrs/model.ts';
+import { CS2_REAL_2026 } from '../src/data/bo3.ts';
 
 // localStorage mínimo em memória (o node não tem).
 const store = new Map<string, string>();
@@ -101,14 +103,55 @@ test('rtp v16 → v17: grava ocultos do herói e attrs dos colegas, idempotente'
   assert.deepEqual(again.team.teammates, m.team.teammates);
 });
 
-test('rtp: save novo já nasce com ocultos; o TPlayer do herói leva os atributos e os 5 números saem deles', () => {
+test('rtp: save novo já nasce com ocultos; os 5 números do herói saem dos atributos pela ponte', () => {
   const s = fresh();
   assert.ok(s.player.hidden);
   const tp = proToTPlayer(s.player);
-  assert.equal(tp.attrs?.v, 1);
-  assert.deepEqual(tp.attrs?.a, s.player.attrs);
+  assert.equal(tp.attrs, undefined, 'o TPlayer não leva os 28 crus (escala própria do RtP)');
   const core = coreStatsFromAttrs(s.player.attrs);
   assert.deepEqual({ aim: tp.aim, awp: tp.awp, igl: tp.igl, clutch: tp.clutch, consistency: tp.consistency }, core);
-  assert.deepEqual(legacyFromAttrs(tp.attrs!), core);
-  assert.ok(tp.attrs!.pa >= tp.attrs!.ca);
+});
+
+// Pedido da frente C: um herói de OVR X tem que ter atributos na MESMA FAIXA de
+// um colega de OVR X (o motor por duelos compara atributos diretamente).
+test('rtp: heroEngineAttrs põe o herói na escala do mundo (OVR X ≈ colega de OVR X)', () => {
+  const mates = CS2_REAL_2026.flatMap((t) => t.players);
+  // faixa de comparação: os grupos que formam o OVR de qualquer função (mira,
+  // clutch e consistência — AWP/IGL são especialidade e variam por função)
+  const CORE = Object.keys({ ...LEGACY_GROUPS.aim, ...LEGACY_GROUPS.clutch, ...LEGACY_GROUPS.consistency });
+  const meanAttr = (a: Record<string, number>) => CORE.reduce((x, k) => x + a[k], 0) / CORE.length;
+  const byOvr = new Map<number, number[]>();
+  for (const m of mates) {
+    const o = ovrFromAttrs(attrsOf(m));
+    byOvr.set(o, [...(byOvr.get(o) ?? []), meanAttr(attrsOf(m).a)]);
+  }
+  const roles = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'] as const;
+  let checked = 0;
+  for (let i = 0; i < 60; i++) {
+    const base = createRtpSave({
+      nick: `esc${i}`, country: 'br', role: roles[i % 6], personality: 'leader', archetype: 'allrounder', age: 17,
+      categoryPoints: { mechanical: i % 5, mental: (i >> 1) % 5, physical: (i >> 2) % 3 }, seed: 500 + i,
+    });
+    for (const grow of [0, 3, 6]) {
+      const attrs = Object.fromEntries(Object.entries(base.player.attrs).map(([k, v]) => [k, Math.min(20, v + grow)])) as typeof base.player.attrs;
+      const hero = { ...base.player, attrs, ovr: proOvr(attrs, base.player.role) };
+      const x = heroEngineAttrs(hero);
+      const o = ovrFromAttrs(x);
+      assert.ok(Math.abs(o - hero.ovr) <= 1, `OVR do motor ${o} × exibido ${hero.ovr}`);
+      assert.ok(x.pa >= x.ca && x.pa <= 200);
+      assert.deepEqual(x.h, proAttrs(hero).h, 'ocultos preservados');
+      const same = byOvr.get(o);
+      if (!same || same.length < 5) continue;
+      const mateMean = same.reduce((a, b) => a + b, 0) / same.length;
+      assert.ok(Math.abs(meanAttr(x.a) - mateMean) <= 1, `OVR ${o}: herói ${meanAttr(x.a).toFixed(2)} × colegas ${mateMean.toFixed(2)}`);
+      checked++;
+    }
+  }
+  assert.ok(checked >= 60, `comparações com colegas de mesmo OVR: ${checked}`);
+  // o perfil treinado continua: o atributo mais alto do herói segue entre os mais altos
+  const s = fresh();
+  const top = Object.entries(s.player.attrs).sort((a, b) => b[1] - a[1])[0][0] as keyof typeof s.player.attrs;
+  const x = heroEngineAttrs(s.player);
+  const rank = Object.values(x.a).filter((v) => v > x.a[top]).length;
+  assert.ok(rank <= 6, `atributo mais treinado (${top}) segue no topo (posição ${rank + 1})`);
 });

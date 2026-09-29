@@ -8,7 +8,7 @@
 import type { AttrKey } from '../attributes';
 import { computeOvrFromAttributes } from '../attributes';
 import {
-  caFromAttrs, deriveHiddenAttrs, legacyFromA, ovrFromLegacy, HIDDEN_KEYS,
+  caFromAttrs, caFromOvr, deriveHiddenAttrs, fitAttrsToLegacy, legacyFromA, ovrFromLegacy, HIDDEN_KEYS,
   type HiddenKey, type PlayerAttrs,
 } from '../attrs/model';
 import type { PlayerPersonality } from '../career/personality';
@@ -59,6 +59,27 @@ export function proAttrs(p: Pick<ProPlayer, 'id' | 'role' | 'role2' | 'attrs' | 
   return { v: 1, a: p.attrs, h: p.hidden ?? heroHidden(p), ca, pa };
 }
 
+// [realismo FM] Atributos do herói NA ESCALA DO MUNDO, para o motor por duelos.
+// Os 28 do RtP são treinados numa escala própria: o OVR exibido (cálculo dos 28,
+// `proOvr`) fica ~20 pontos acima do OVR legado dos mesmos atributos. Aqui o
+// perfil inteiro é deslocado para que o OVR legado bata com o OVR exibido — um
+// herói de OVR X fica com atributos na faixa de um colega de OVR X — mantendo
+// as ênfases (o que ele treinou mais continua acima), os ocultos e o espaço até
+// o teto (PA desloca junto).
+export function heroEngineAttrs(
+  p: Pick<ProPlayer, 'id' | 'role' | 'role2' | 'attrs' | 'potential' | 'age' | 'personality'> & { hidden?: Record<HiddenKey, number>; ovr?: number },
+): PlayerAttrs {
+  const x = proAttrs(p);
+  const raw = legacyFromA(x.a);
+  const shown = p.ovr ?? proOvr(p.attrs, p.role);
+  const k = shown - ovrFromLegacy(raw); // os pesos do OVR somam 1: +k em todos os números = +k no OVR
+  const up = (v: number) => Math.max(5, Math.min(99, v + k));
+  const flavor = Object.fromEntries(Object.entries(x.a).map(([key, v]) => [key, v + k / 5])) as Record<AttrKey, number>;
+  const a = fitAttrsToLegacy(flavor, { aim: up(raw.aim), awp: up(raw.awp), igl: up(raw.igl), clutch: up(raw.clutch), consistency: up(raw.consistency) });
+  const ca = caFromOvr(ovrFromLegacy(legacyFromA(a)));
+  return { v: 1, a, h: x.h, ca, pa: Math.min(200, Math.max(ca, x.pa + (ca - x.ca))) };
+}
+
 // OVR oficial do protagonista (cache em ProPlayer.ovr). Usa o cálculo dos 28.
 export function proOvr(attrs: Record<AttrKey, number>, role: Role): number {
   return computeOvrFromAttributes(attrs, role);
@@ -67,10 +88,12 @@ export function proOvr(attrs: Record<AttrKey, number>, role: Role): number {
 // Constrói o TPlayer runtime do protagonista pra dropar no simulateSeries (RTP3).
 // `form` vem do ProPlayer; `playstyle` cai pro default da role se ausente.
 export function proToTPlayer(p: ProPlayer, runtimeId = 'rtp-hero'): TPlayer {
-  // [realismo FM] o motor recebe os atributos do protagonista (fonte da verdade)
-  // e os 5 números saem deles pela ponte do contrato.
-  const attrs = proAttrs(p);
-  const core = coreStatsFromAttrs(attrs.a);
+  // [realismo FM] os 5 números saem dos 28 atributos pela ponte do contrato. O
+  // TPlayer NÃO leva `attrs`: os 28 do herói estão numa escala abaixo da do mundo
+  // (OVR dos 28 × OVR legado), e o buildUserTeam do RtP alinha mira/consistência
+  // ao OVR dele. Para o motor v2 ler o perfil real do herói na escala certa, use
+  // `heroEngineAttrs` (herói de OVR X com atributos na faixa de um colega de OVR X).
+  const core = coreStatsFromAttrs(p.attrs);
   const playstyle: Playstyle = p.playstyle ?? derivePlaystyle(p.role);
   const skill = core.aim * 0.6 + core.consistency * 0.25 + core.clutch * 0.15;
   return {
@@ -90,6 +113,5 @@ export function proToTPlayer(p: ProPlayer, runtimeId = 'rtp-hero'): TPlayer {
     skill,
     ovr: p.ovr,
     form: p.form,
-    attrs,
   };
 }
