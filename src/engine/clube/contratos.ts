@@ -212,6 +212,35 @@ export function materializeContracts(
   return changed ? { ...c, contracts } : null;
 }
 
+/**
+ * [integração] Rede de segurança: todo jogador do elenco tem contrato. Quem não
+ * tiver entrada em `clube.contracts` (save que pulou o mercado da fundação, ou
+ * qualquer caminho que esqueça de gravar) ganha o contrato PADRÃO — o mesmo da
+ * fundação (`defaultTerms`: 3 splits a partir do split atual, sem luvas,
+ * cláusula nem status). O salário é o de mercado (`wageOf`); sem ele fica
+ * WAGE_PENDING e `materializeContracts` grava o `playerWage` no primeiro render,
+ * igual à migração. Stand-in emprestado (`exclude`) não assina. Idempotente:
+ * devolve null quando todos já têm contrato.
+ */
+export function ensureSquadContracts(
+  save: WithClube,
+  squadIds: string[],
+  split: number,
+  opts: { wageOf?: (playerId: string) => number | undefined; exclude?: ReadonlySet<string> } = {},
+): ClubeState | null {
+  const c = baseClube(save);
+  let contracts: Record<string, ContractTerms> | null = null;
+  for (const id of squadIds) {
+    if (opts.exclude?.has(id) || c.contracts[id]) continue;
+    contracts ??= { ...c.contracts };
+    const w = opts.wageOf?.(id);
+    contracts[id] = w != null && w > WAGE_PENDING
+      ? defaultTerms(w, split)
+      : { wage: WAGE_PENDING, until: split + CONTRACT_TERM_DEFAULT - 1, signingBonus: 0, releaseClause: null, statusPromise: null, loyaltyBonus: 0 };
+  }
+  return contracts ? { ...c, contracts } : null;
+}
+
 /** Bônus de lealdade devidos a quem cumpre o contrato até o fim no split que fecha. */
 export function loyaltyPayouts(save: WithClube, closingSplit: number, squadIds: Iterable<string>): { playerId: string; amount: number }[] {
   const out: { playerId: string; amount: number }[] = [];

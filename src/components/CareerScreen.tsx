@@ -57,6 +57,7 @@ import { applyAnalystPrep, developmentBonus, EMPTY_FACILITIES, facilityUpgradeCo
 import { personalityChemBonus, personalityMoraleDelta, personalityOfferBonus, playerPersonality, setPersonalitySource, personalityProfileOf, FM_PERSONALITY_LABEL, FM_PERSONALITY_DESC, type PlayerPersonality } from '../engine/career/personality';
 // [fase 3 · vestiário] status no elenco, banco/escalação, hierarquia, grupos, reuniões e conflitos
 import { migrateClube } from '../engine/clube/clubeMigration';
+import { needsMarket } from '../engine/clube/fundacao';
 import type { ClubeState, ContractTerms, DressingRoomState, Negotiation, SquadStatus } from '../engine/clube/model';
 import {
   dressingOf, resolveLineup, recordPlayTime, closeSplitDressing, statusesOf, toVPlayer, hierarchy, influencePull, socialGroups,
@@ -592,7 +593,7 @@ import { staffEffects, staffSplitTick, syncHeadCoach, scaleStep } from '../engin
 import { aiStaffEdgeFor } from '../engine/gestao/staffData';
 // [fase 3 · CONTRATOS] contratos completos em clube.contracts (substitui o contracts antigo)
 import {
-  CONTRACT_TERM_DEFAULT, contractUntilOf, contractUntilMap, contractPayroll, contractWageOf, materializeContracts, signContract,
+  CONTRACT_TERM_DEFAULT, contractUntilOf, contractUntilMap, contractPayroll, contractWageOf, materializeContracts, ensureSquadContracts, signContract,
   withoutContracts, keepContracts, defaultTerms, loyaltyPayouts, negoProfileFor, recordNegotiation, negotiationBlock, contractOf,
   openClubNegotiation, clubNegotiationStep, decideRound, openPlayerNegotiation, termsFromOffer, offerFromDemand, type NegoProfile,
 } from '../engine/clube/contratos';
@@ -1227,6 +1228,7 @@ interface CareerSave {
   // [fase 3] vestiário, contratos completos (clube.contracts substitui o antigo
   // `contracts`: playerId → split final), negociações e mercado. Save v29.
   clube?: ClubeState;
+  foundingOpen?: boolean; // [integração] fundação sem o elenco confirmado no mercado: o F5 volta pro mercado
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
@@ -2235,6 +2237,13 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
   const baseClube = clubeOk ? merged.clube! : (migrateClube({ contracts: legacyContracts ?? {} }).clube as ClubeState);
   merged.clube = materializeContracts({ clube: baseClube, contracts: legacyContracts }, []) ?? baseClube;
   delete (merged as { contracts?: unknown }).contracts;
+  // [integração] rede de segurança: jogador do elenco sem contrato (save que pulou
+  // o mercado da fundação, caminho que esqueceu de gravar) ganha o contrato padrão
+  // da fundação; o salário (playerWage) é gravado no primeiro render, igual à migração
+  if (merged.org && merged.squad.length > 0 && !merged.foundingOpen) {
+    const loanedIn = new Set(marketOf(merged).loans.filter((l) => l.kind === 'in').map((l) => l.playerId));
+    merged.clube = ensureSquadContracts(merged, merged.squad.map((sig) => sig.playerId), merged.split, { exclude: loanedIn }) ?? merged.clube;
+  }
   // [integração] proposta de elite do caminho antigo (save.pendingOffer) vira um
   // IncomingOffer 'elite' no mercado — mesma decisão antes do mercado de pré-temporada
   const legacyOffer = record.pendingOffer as { orgId?: string; orgName?: string; orgTag?: string; playerId?: string; nick?: string; ovr?: number; fee?: number } | null | undefined;
@@ -2406,7 +2415,9 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const s = loadSave();
     if (!s.org) return 'found';
     // sem elenco fechado = janela de mercado/transferências
-    if (s.squad.length < 5 || !s.coachFromId) return 'market';
+    // [integração] fundação ainda não confirmada no mercado (F5 no meio): volta pro
+    // mercado, onde os contratos são assinados
+    if (needsMarket(s)) return 'market';
     // elenco pronto mas sem liga = escolha do campeonato (qual convite aceitar)
     if (!s.league) return 'circuit';
     if (s.majorResult) return 'major'; // Major encerrado: reidrata a tela de resultado (F5-safe)
@@ -3746,8 +3757,11 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       title: `Olheiros: ${toughest.name} ${ct('é o time a temer')}`,
       body: `O favorito do ${circuit.name} ${ct('é a')} ${toughest.name} ${ct('(força')} ${toughest.strength.toFixed(1)}), perigosa em ${MAP_LABELS[scoutMaps(toughest)[0].m]}${ct('. Pré-jogo: confira o relatório do adversário na Visão geral antes de cada partida.')}`,
     }] : [];
+    // [integração] início do split: todo jogador do elenco tem contrato (rede de
+    // segurança; o padrão da fundação, salário de mercado)
+    const withContracts = squadContractsPatch(s);
     const next = {
-      ...s, league, circuit: choice, tierChange: null, objective,
+      ...s, ...withContracts, league, circuit: choice, tierChange: null, objective,
       inviteAccepted: choice.tier < s.tier || s.inviteAccepted, // jogou acima do tier por convite
       ...pushNews(s, [startItem, ...scoutItem]),
     };
@@ -3762,6 +3776,16 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // gestão da dificuldade, sem mexer no salário base de cada jogador.
   // [fase 3] folha REAL: o salário vem do contrato (clube.contracts); sem
   // contrato/salário a materializar, cai no playerWage (a régua de antes).
+  // [integração] contrato padrão (salário de mercado) pra quem está no elenco sem
+  // contrato — stand-in emprestado fica de fora (não é seu)
+  const squadContractsPatch = (s: CareerSave): Pick<CareerSave, 'clube'> | Record<string, never> => {
+    const loanedIn = new Set(marketOf(s).loans.filter((l) => l.kind === 'in').map((l) => l.playerId));
+    const clube = ensureSquadContracts(s, s.squad.map((sig) => sig.playerId), s.split, {
+      exclude: loanedIn,
+      wageOf: (id) => { const sig = s.squad.find((x) => x.playerId === id); const f = sig ? findSigning(sig) : null; return f ? playerWage(f.player) : undefined; },
+    });
+    return clube ? { clube } : {};
+  };
   const squadWages = (s: CareerSave): { id: string; marketWage: number }[] =>
     s.squad.map((sig) => {
       const f = findSigning(sig);
@@ -5329,12 +5353,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         tier: s.tier, takeoverId: s.takeoverId, region: s.region,
         board: s.board ?? 60, scenario: s.scenario ?? null,
         difficulty: careerDifficulty,
+        foundingOpen: true, // [integração] o elenco ainda não passou pelo mercado (contratos)
       });
       setStage('market');
     };
     if (orgChoice === 'fictional') {
       return <FoundOrg founder={founder} onExit={() => setOrgChoice('select')} onFound={(org) => {
-        update({ org, takeoverId: null, scenario: null, difficulty: careerDifficulty });
+        update({ org, takeoverId: null, scenario: null, difficulty: careerDifficulty, foundingOpen: true });
         setStage('market');
       }} />;
     }
@@ -5355,6 +5380,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             takeoverId: null,
             scenario: null,
             difficulty: careerDifficulty,
+            foundingOpen: true,
           });
           setStage('market');
         }}
@@ -5562,7 +5588,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             squadIds: stableSquad.map((x) => x.playerId),
             coachBond: save.coachBond, pairChem: save.pairChem, bondDefault: BOND_DEFAULT, chemDefault: 30, pairKey,
           });
-          const next = { ...save, squad: cleanSquad, coachFromId, budget, sponsors, sponsorUntil, clube, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem };
+          const next = { ...save, foundingOpen: false, squad: cleanSquad, coachFromId, budget, sponsors, sponsorUntil, clube, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem };
           persist(next);
           setSave(next);
           setStage('circuit');
