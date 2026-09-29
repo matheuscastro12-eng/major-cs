@@ -30,6 +30,8 @@ import { rivalryLabel, rivalryScore } from '../../engine/career/rivalries';
 import { GSL_ROUND_LABELS } from '../../engine/gsl';
 import { leagueTeam, type League, type LeagueMatch } from '../../engine/league';
 import { formatMoney, playerOvr, playerWage } from '../../engine/ratings';
+import { contractUntilMap, contractWageOf } from '../../engine/clube/contratos';
+import type { ClubeState } from '../../engine/clube/model';
 import { teamChemistry } from '../../engine/chemistry';
 import { playerOrgId } from '../../state/career-player-route';
 import { MAP_LABELS } from '../../types';
@@ -48,7 +50,7 @@ interface OverviewTabSave {
   playbookXp?: number;
   pairChem?: Record<string, number>;
   rivalries?: Record<string, number>;
-  contracts?: Record<string, number>;
+  clube?: ClubeState; // [fase 3] contratos completos (folha real e vencimentos)
   youthAge?: Record<string, number>;
   youthDebut?: Record<string, YouthDebut>;
   gamePlan?: GamePlan;
@@ -118,7 +120,7 @@ export function OverviewTab({
   const venueMeta_ = eventMeta(save.circuit?.name ?? '', save.tier ?? 3);
   const wageTotal = save.squad.reduce((acc, sig) => {
     const f = findSigning(sig);
-    return acc + (f ? playerWage(f.player) : 0);
+    return acc + (f ? contractWageOf(save, sig.playerId, () => playerWage(f.player)) : 0);
   }, 0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tasks = buildDashboardTasks(save as any, squadPlayers, expiringCount);
@@ -180,7 +182,7 @@ export function OverviewTab({
       identity={save.identity}
       recentMatches={recentMatches.reverse().slice(0, 6)}
       oppRank={oppRank}
-      contracts={save.contracts ?? {}}
+      contracts={contractUntilMap(save)}
       moraleMap={save.morale ?? {}}
       potentialMap={potentialMap}
       ages={ages}

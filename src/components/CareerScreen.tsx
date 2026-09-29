@@ -396,6 +396,7 @@ export interface Signing {
   playerId: string;
   fromId: string;
   fee?: number; // valor negociado da transferência (se ausente, usa o de tabela)
+  contract?: ContractTerms; // [fase 3] termos negociados com o jogador (só enquanto o mercado está aberto; vira clube.contracts ao fechar o elenco)
   // Saves antigos guardavam apenas IDs. O snapshot evita que uma atualização da
   // base transforme um contratado em uma vaga invisível e bloqueie o mercado.
   playerSnapshot?: Player;
@@ -445,6 +446,7 @@ interface PendingDeal {
   fee: number;          // dinheiro que VOCÊ paga (líquido, já descontada a troca)
   outPlayerIds: string[]; // seus jogadores que SAEM na troca (ids)
   outNicks: string[];   // nicks dos que saem (cache)
+  contract?: ContractTerms; // [fase 3] termos negociados com o jogador (entram em clube.contracts na janela)
 }
 
 // ---------- negociação de transferência (mercado) ----------
@@ -521,7 +523,7 @@ import {
   type ProspectCandidate,
   type ScoutReport,
 } from '../engine/scouting';
-import { useToast, Modal, Button } from './ds';
+import { useToast, Modal, Button, ProgressBar } from './ds';
 import { confirm as confirmDialog } from './ConfirmDialog';
 // T8.1 — abrir tutorial HowToPlay (host global montado no main.tsx)
 import { openHowToPlay } from './HowToPlayHost';
@@ -553,6 +555,7 @@ import { WorldTab } from '../pages/career/WorldTab';
 import { AcademyTab } from '../pages/career/AcademyTab';
 import { MajorTab } from '../pages/career/MajorTab';
 import { FinanceTab } from '../pages/career/FinanceTab';
+import { ContractsTab } from '../pages/career/ContractsTab';
 import { SquadTab } from '../pages/career/SquadTab';
 import { TrainingTab } from '../pages/career/TrainingTab';
 import { OverviewTab } from '../pages/career/OverviewTab';
@@ -562,6 +565,15 @@ import { migrateGestao } from '../engine/gestao/gestaoMigration';
 import type { GestaoState } from '../engine/gestao/model';
 import { staffEffects, staffSplitTick, syncHeadCoach, scaleStep } from '../engine/gestao/staff';
 import { aiStaffEdgeFor } from '../engine/gestao/staffData';
+// [fase 3 · CONTRATOS] contratos completos em clube.contracts (substitui o contracts antigo)
+import { migrateClube } from '../engine/clube/clubeMigration';
+import type { ClubeState, ContractTerms, Negotiation } from '../engine/clube/model';
+import {
+  CONTRACT_TERM_DEFAULT, contractUntilOf, contractUntilMap, contractPayroll, contractWageOf, materializeContracts, signContract,
+  withoutContracts, keepContracts, defaultTerms, loyaltyPayouts, negoProfileFor, recordNegotiation, negotiationBlock, contractOf,
+  openClubNegotiation, clubNegotiationStep, decideRound, openPlayerNegotiation, termsFromOffer, offerFromDemand, type NegoProfile,
+} from '../engine/clube/contratos';
+import { ContractNegotiationModal, type ContractNegoSubject } from './career/ContractNegotiation';
 
 // ----- prestígio + fãs da org (estilo Brasval) -----
 // Derivados de conquistas (sem campo novo no save: não quebram saves e sobem ao
@@ -1261,7 +1273,9 @@ interface CareerSave {
   promise?: BoardPromise | null; // #10: promessa FORMAL firmada por você (aporte agora, julgamento no fim do split)
   lastPromise?: PromiseOutcome | null; // resultado da última promessa (dashboard/news citam)
   fired?: boolean; // demitido pela diretoria (confiança no chão)
-  contracts?: Record<string, number>; // playerId -> split em que o contrato termina (inclusive)
+  // [fase 3] vestiário, contratos completos (clube.contracts substitui o antigo
+  // `contracts`: playerId → split final), negociações e mercado. Save v29.
+  clube?: ClubeState;
   lastReleases?: string[]; // nicks que saíram por fim de contrato no split passado
   roles?: Record<string, Role>; // função escolhida pelo técnico (override do dado da base): playerId -> Role
   careerStats?: Record<string, CareerStatLine>; // stats acumuladas na carreira por id (cresce a cada split)
@@ -1348,7 +1362,7 @@ export const NEWS_CATS: { key: NewsCat | 'all'; label: string }[] = [
 // conforme o jogador evolui e joga); quem edita atributo é o admin no CRM.
 interface CareerStatLine { k: number; d: number; a: number; dmg: number; kast: number; rounds: number; maps: number; splits: number; }
 
-export const CONTRACT_TERM = 3; // splits de contrato ao assinar/renovar
+export const CONTRACT_TERM = CONTRACT_TERM_DEFAULT; // splits de contrato ao assinar/renovar (padrão)
 
 // funções que o técnico pode atribuir a um jogador (gerenciamento estilo Brasval)
 export const ROLE_OPTS: Role[] = ['AWP', 'IGL', 'Rifler', 'Entry', 'Support', 'Lurker'];
@@ -1422,6 +1436,7 @@ const emptySave = (): CareerSave => ({
   lastObjective: null,
   fired: false,
   morale: {},
+  clube: migrateClube({}).clube as ClubeState,
   news: [],
   unread: 0,
   peakOvr: {},
@@ -2385,6 +2400,14 @@ const hydrateCareerSave: Hydrator<CareerSave> = (parsed: VersionedSave): CareerS
     if (age != null) youthDebut[id] = youthDebutAtPromotion(age, merged.split);
   }
   merged.youthDebut = youthDebut;
+  // [fase 3 · CONTRATOS] o `contracts` antigo não é mais lido: o que ainda
+  // estiver nele (save de cliente antigo) entra em clube.contracts com salário
+  // a materializar, e o campo sai do save.
+  const legacyContracts = record.contracts && typeof record.contracts === 'object' ? record.contracts as Record<string, number> : null;
+  const clubeOk = merged.clube && typeof merged.clube === 'object' && merged.clube.contracts && typeof merged.clube.contracts === 'object';
+  const baseClube = clubeOk ? merged.clube! : (migrateClube({ contracts: legacyContracts ?? {} }).clube as ClubeState);
+  merged.clube = materializeContracts({ clube: baseClube, contracts: legacyContracts }, []) ?? baseClube;
+  delete (merged as { contracts?: unknown }).contracts;
   return merged;
 };
 
@@ -2652,6 +2675,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   const update = (patch: Partial<CareerSave>) => {
     setSave((s) => {
       const next = { ...s, ...patch };
+      persist(next);
+      return next;
+    });
+  };
+  // [fase 3] altera o bloco `clube` lendo o estado VIVO (cliques rápidos não se perdem)
+  const updateClube = (fn: (s: CareerSave) => ClubeState, extra?: (s: CareerSave) => Partial<CareerSave>) => {
+    setSave((s) => {
+      const next = { ...s, ...(extra?.(s) ?? {}), clube: fn(s) };
       persist(next);
       return next;
     });
@@ -3792,12 +3823,64 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   // folha salarial do split (soma dos salários do elenco contratado). Na
   // dificuldade hard/legend a folha pesa mais (encargos de operação) — eixo de
   // gestão da dificuldade, sem mexer no salário base de cada jogador.
+  // [fase 3] folha REAL: o salário vem do contrato (clube.contracts); sem
+  // contrato/salário a materializar, cai no playerWage (a régua de antes).
+  const squadWages = (s: CareerSave): { id: string; marketWage: number }[] =>
+    s.squad.map((sig) => {
+      const f = findSigning(sig);
+      return f ? { id: sig.playerId, marketWage: playerWage(f.player) } : null;
+    }).filter(Boolean) as { id: string; marketWage: number }[];
   const payroll = useMemo(() => {
-    const picks = save.squad.map(findSigning).filter(Boolean) as { player: Player }[];
-    const base = picks.reduce((acc, p) => acc + playerWage(p.player), 0);
+    const base = contractPayroll(save, squadWages(save));
     return Math.round(base * DIFFICULTY_ECON[careerDiff(save.difficulty)].salaryMul);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [save.squad, save.evo, save.difficulty]);
+  }, [save.squad, save.evo, save.difficulty, save.clube?.contracts]);
+  // [fase 3] perfil do jogador na mesa de negociação (contratação/renovação):
+  // CA, idade, ocultos, lugar no SEU elenco, tier do clube, contrato e status atuais.
+  const contractProfile = (s: CareerSave, player: Player, kind: NegoProfile['kind'], opts: { squadOvrs?: number[]; split?: number } = {}): NegoProfile => {
+    const squadOvrs = opts.squadOvrs ?? s.squad.filter((x) => x.playerId !== player.id).map((sig) => {
+      const f = findSigning(sig);
+      return f ? playerOvr(f.player) : null;
+    }).filter((v): v is number => v != null);
+    return negoProfileFor(player, {
+      age: effectiveAge(player, s.split, s.youthAge, s.youthDebut),
+      clubTier: s.tier,
+      squadOvrs,
+      kind,
+      split: opts.split ?? s.split,
+      current: kind === 'renewal' ? contractOf(s, player.id) ?? null : null,
+      currentStatus: s.clube?.dressing?.status?.[player.id] ?? null,
+      morale: s.morale?.[player.id] ?? MORALE_DEFAULT,
+    });
+  };
+  const renewalProfileFor = (r: Renewal): NegoProfile | null => {
+    const sig = save.squad.find((x) => x.playerId === r.playerId);
+    const f = sig ? findSigning(sig) : null;
+    return f ? contractProfile(save, { ...f.player, id: r.playerId }, 'renewal') : null;
+  };
+  // [fase 3] bônus de lealdade de quem cumpre o contrato até o fim no split
+  // que fecha (quem está saindo vendido/trocado não recebe).
+  const loyaltyDue = (s: CareerSave): number => {
+    const leaving = new Set([...(s.pendingDeals ?? []).flatMap((d) => d.outPlayerIds), ...(s.pendingSales ?? []).map((x) => x.playerId)]);
+    return loyaltyPayouts(s, s.split, s.squad.map((x) => x.playerId).filter((id) => !leaving.has(id))).reduce((a, x) => a + x.amount, 0);
+  };
+  // [fase 3] mesa de contrato para contratações (mercado da janela e da temporada)
+  const signingCtx = (contractSplit: number): ContractCtx => ({
+    profileFor: (player, squadOvrs) => contractProfile(save, player, 'signing', { split: contractSplit, squadOvrs }),
+    payrollNow: contractPayroll(save, squadWages(save)),
+    blockedFor: (pid, party) => negotiationBlock(save, pid, party, save.split),
+    onRecord: (n) => updateClube((s) => recordNegotiation(s, n)),
+    split: save.split,
+  });
+  const renewalBlockedFor = (pid: string): Negotiation | null => negotiationBlock(save, pid, 'player', save.split);
+  // [fase 3] save migrado: grava o salário real (playerWage do jogador ATUAL)
+  // nos contratos com salário a materializar — a folha fica idêntica à de antes.
+  useEffect(() => {
+    if (!save.org) return;
+    const clube = materializeContracts(save, squadWages(save));
+    if (clube) update({ clube });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.org, save.squad, save.clube?.contracts]);
 
   // evolução da janela: cada jogador do elenco evolui ATRIBUTO A ATRIBUTO
   // (engine/attrs/progression.ts): a idade pesa por classe (reflexo cai cedo,
@@ -3892,7 +3975,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
   ): { playerPromises: CareerSave['playerPromises']; morale: Record<string, number>; coachBond: Record<string, number>; news: NewsItem[]; hits: { nick: string; ovr: number; kept: boolean }[] } => {
     const { promises, outcomes } = judgePlayerPromises(s.playerPromises, {
       split: s.split,
-      contractUntil: (pid) => s.contracts?.[pid] ?? null,
+      contractUntil: (pid) => contractUntilOf(s, pid) ?? null,
       squadIds: s.squad.map((x) => x.playerId),
       fatigue: (pid) => fatigueView(s, [pid])[pid] ?? 0,
     });
@@ -3968,7 +4051,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const oid = sig.playerId;
       const bond = stabilizeBond(coachBond[oid] ?? BOND_DEFAULT, psych);
       coachBond[oid] = bond;
-      const until = s.contracts?.[oid];
+      const until = contractUntilOf(s, oid);
       const { overall } = computeHappiness({
         ratings: s.recentRatings?.[oid],
         results01,
@@ -4037,9 +4120,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     let squad = save.squad;
     if (squad.length >= 5 && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
     squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
-    const contracts = { ...(save.contracts ?? {}), [a.id]: save.split + CONTRACT_TERM - 1 };
+    // [fase 3] base promovida assina o contrato padrão (salário de mercado, 3 splits)
+    const clube = signContract(replaceOid ? { clube: withoutContracts(save, [replaceOid]) } : save, a.id, defaultTerms(playerWage(player), save.split));
     const academyFocus = save.academyFocus === prospectId ? null : save.academyFocus;
-    const next = { ...save, academy, youth, youthAge, youthDebut, squad, contracts, academyFocus };
+    const next = { ...save, academy, youth, youthAge, youthDebut, squad, clube, academyFocus };
     persist(next);
     setSave(next);
     setPromoting(null);
@@ -4096,8 +4180,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     let squad = save.squad;
     if (squad.length >= 5 && replaceOid) squad = squad.filter((sg) => sg.playerId !== replaceOid);
     squad = [...squad, { playerId: a.id, fromId: '__youth__' }];
-    const contracts = { ...(save.contracts ?? {}), [a.id]: save.split + CONTRACT_TERM - 1 };
-    const next = { ...save, academyTeam: acaTeam, youth, youthAge, youthDebut, squad, contracts };
+    const clube = signContract(replaceOid ? { clube: withoutContracts(save, [replaceOid]) } : save, a.id, defaultTerms(playerWage(player), save.split));
+    const next = { ...save, academyTeam: acaTeam, youth, youthAge, youthDebut, squad, clube };
     persist(next);
     setSave(next);
   };
@@ -4193,7 +4277,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     if (!dirty) return s;
     let squad = [...s.squad];
     let budget = s.budget;
-    const contracts = { ...(s.contracts ?? {}) };
+    let clube: ClubeState = s.clube ?? (migrateClube({}).clube as ClubeState); // [fase 3] contratos
     const morale = { ...(s.morale ?? {}) };
     const peakOvr = { ...(s.peakOvr ?? {}) };
     const evo = { ...(s.evo ?? {}) };
@@ -4224,7 +4308,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
       const resolved = findSigning(sig);
       squad = squad.filter((x) => x.playerId !== sale.playerId);
       stints = closeStint(stints, sale.playerId, s.split, resolved ? playerOvr(resolved.player) : undefined);
-      delete contracts[sale.playerId]; delete morale[sale.playerId]; delete peakOvr[sale.playerId]; delete evo[sale.playerId];
+      clube = withoutContracts({ clube }, [sale.playerId]);
+      delete morale[sale.playerId]; delete peakOvr[sale.playerId]; delete evo[sale.playerId];
       // BUG FIX (caça-bugs): fee não-finito (save antigo/parcial/cloud-merge)
       // tornava budget = NaN, que era persistido e no reload caía pra
       // STARTING_BUDGET — perda silenciosa e irreversível do caixa.
@@ -4247,7 +4332,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     for (const d of deals) {
       if (squad.some((x) => x.playerId === d.inPlayerId)) continue; // já está no elenco
       const dealFee = Number.isFinite(d.fee) ? d.fee : 0; // BUG FIX: fee não-finito → NaN no budget
-      if (budget < dealFee) {
+      const dealBonus = d.contract?.signingBonus ?? 0; // [fase 3] luvas negociadas com o jogador
+      if (budget < dealFee + dealBonus) {
         // sem caixa agora: acordo cai, mas o usuário precisa SABER (antes era silencioso
         // e o jogador "sumia" sem aviso). NÃO mexe no elenco: kye continua, n1ssim não vem.
         failedDeals.push(d.inNick);
@@ -4262,7 +4348,8 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const outResolved = outSig ? findSigning(outSig) : null;
         squad = squad.filter((x) => x.playerId !== out);
         stints = closeStint(stints, out, s.split, outResolved ? playerOvr(outResolved.player) : undefined);
-        delete contracts[out]; delete morale[out]; delete peakOvr[out]; delete evo[out];
+        clube = withoutContracts({ clube }, [out]);
+        delete morale[out]; delete peakOvr[out]; delete evo[out];
         if (baseHasPlayer(out)) {
           moves[out] = d.inFromId;
         } else if (outResolved?.player) {
@@ -4281,11 +4368,12 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         : { playerId: d.inPlayerId, fromId: d.inFromId, fee: d.fee };
       squad.push(newSig);
       stints = openStint(stints, d.inPlayerId, s.org?.name ?? 'Sua org', s.split, resolved ? playerOvr(resolved.player) : 0);
-      contracts[d.inPlayerId] = s.split + CONTRACT_TERM - 1;
-      budget -= dealFee;
+      // [fase 3] termos negociados com o jogador (acordo antigo sem termos: contrato padrão)
+      clube = signContract({ clube }, d.inPlayerId, d.contract ?? defaultTerms(resolved ? playerWage(resolved.player) : 20000, s.split));
+      budget -= dealFee + dealBonus;
       arrivals.push(d.inNick);
     }
-    let next: CareerSave = { ...s, squad, budget, contracts, morale, peakOvr, evo, moves, extraOnTeam, stints, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
+    let next: CareerSave = { ...s, squad, budget, clube, morale, peakOvr, evo, moves, extraOnTeam, stints, pendingDeals: [], pendingSales: [], rejectedOffers: [] };
     const news: NewsItem[] = [];
     if (arrivals.length) news.push({ id: `${s.split}:deals`, split: s.split, icon: '🤝', tone: 'good', cat: 'board', title: ct('Reforços confirmados na janela'), body: `${ct('Acordos fechados na temporada passada entraram em vigor:')} ${arrivals.join(', ')}.` });
     if (departures.length) news.push({ id: `${s.split}:sales`, split: s.split, icon: '💸', tone: 'info', cat: 'transfer', title: ct('Vendas confirmadas na janela'), body: `${ct('Saíram por proposta aceita:')} ${departures.join(', ')}.` });
@@ -4308,10 +4396,10 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     const out: Renewal[] = [];
     for (const sig of s.squad) {
       if (inDeal.has(sig.playerId)) continue;
-      const until = s.contracts?.[sig.playerId];
+      const until = contractUntilOf(s, sig.playerId);
       if (until !== undefined && until < newSplit) {
         const f = findSigning(sig);
-        if (f) out.push({ playerId: sig.playerId, nick: f.player.nick, ovr: playerOvr(f.player), wage: playerWage(f.player), country: f.player.country, role: f.player.role });
+        if (f) out.push({ playerId: sig.playerId, nick: f.player.nick, ovr: playerOvr(f.player), wage: contractWageOf(s, sig.playerId, () => playerWage(f.player)), country: f.player.country, role: f.player.role });
       }
     }
     return out;
@@ -4983,7 +5071,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           fatigue: {},
           gestao: { ...gestaoOf(save), training: defaultTrainingState(), condition: {} },
           restingPlayers: [],
-          contracts: {},
+          clube: { ...(save.clube ?? (migrateClube({}).clube as ClubeState)), contracts: {}, negotiations: [] }, // [fase 3] clube novo: sem contratos herdados
           pendingOffer: null,
           pendingDeals: [],
           renewals: [],
@@ -5168,10 +5256,13 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         <RenewalScreen
           renewals={save.renewals}
           budget={save.budget}
-          onConfirm={(renewIds) => {
-            const keep = new Set(renewIds);
+          payrollBase={contractPayroll(save, squadWages(save))}
+          profileFor={renewalProfileFor}
+          blockedFor={renewalBlockedFor}
+          onRecord={(n) => updateClube((s) => recordNegotiation(s, n))}
+          onConfirm={(decisions) => {
             let squad = [...save.squad];
-            const contracts = { ...(save.contracts ?? {}) };
+            let clube: ClubeState = save.clube ?? (migrateClube({}).clube as ClubeState);
             const morale = { ...(save.morale ?? {}) };
             const peakOvr = { ...(save.peakOvr ?? {}) };
             const evo = { ...(save.evo ?? {}) };
@@ -5179,17 +5270,20 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             let stintsAcc = { ...(save.stints ?? {}) }; // #40
             const released: string[] = [];
             for (const r of save.renewals ?? []) {
-              if (keep.has(r.playerId)) {
-                contracts[r.playerId] = save.split + CONTRACT_TERM - 1; // renova: estende e paga 1 salário
-                budget = Math.max(0, budget - r.wage);
+              const d = decisions[r.playerId];
+              if (d?.kind === 'keep') {
+                // [fase 3] renova nos termos negociados; as luvas saem do caixa agora
+                clube = signContract({ clube }, r.playerId, d.terms);
+                budget = Math.max(0, budget - (d.terms.signingBonus ?? 0));
               } else {
                 squad = squad.filter((x) => x.playerId !== r.playerId); // libera de graça
                 stintsAcc = closeStint(stintsAcc, r.playerId, save.split, r.ovr);
-                delete contracts[r.playerId]; delete morale[r.playerId]; delete peakOvr[r.playerId]; delete evo[r.playerId];
+                clube = withoutContracts({ clube }, [r.playerId]);
+                delete morale[r.playerId]; delete peakOvr[r.playerId]; delete evo[r.playerId];
                 released.push(r.nick);
               }
             }
-            let next: CareerSave = { ...save, squad, contracts, morale, peakOvr, evo, budget, stints: stintsAcc, renewals: [] };
+            let next: CareerSave = { ...save, squad, clube, morale, peakOvr, evo, budget, stints: stintsAcc, renewals: [] };
             if (released.length) {
               next = { ...next, ...pushNews(next, [{
                 id: `${save.split}:rel`, split: save.split, icon: '👋', tone: 'info', cat: 'transfer',
@@ -5238,15 +5332,14 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             // tivesse acontecido. off.orgId é o id do clube assediante (makeOffer).
             const moves = { ...(save.moves ?? {}) };
             moves[off.playerId] = off.orgId;
-            const contracts = { ...(save.contracts ?? {}) };
-            delete contracts[off.playerId];
+            const clube = withoutContracts(save, [off.playerId]); // [fase 3]
             const next: CareerSave = {
               ...save,
               squad: save.squad.filter((s) => s.playerId !== off.playerId),
               budget: save.budget + off.fee,
               pendingOffer: null,
               moves,
-              contracts,
+              clube,
               morale,
               peakOvr,
               evo,
@@ -5269,21 +5362,27 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         market={market}
         coaches={currentEra}
         findSigning={findSigning}
+        contract={signingCtx(save.split)}
         onExit={onExit}
         onConfirm={(squad, coachFromId, budget, sponsors, sponsorUntil) => {
           const stableSquad = squad.map((signing) => {
             const resolved = findSigning(signing);
             return resolved ? signingWithSnapshot(signing, resolved) : signing;
           });
-          // todo jogador do elenco fechado tem contrato; novos ganham CONTRACT_TERM
-          const contracts = { ...(save.contracts ?? {}) };
+          // [fase 3] todo jogador do elenco fechado tem contrato: quem chegou
+          // assina os termos negociados (sig.contract) ou o padrão; quem saiu
+          // perde o contrato. As luvas dos novos já saíram do caixa (budget).
           const ids = new Set(stableSquad.map((x) => x.playerId));
+          let clube = keepContracts(save, ids);
           for (const sig of stableSquad) {
-            if (!(sig.playerId in contracts) || contracts[sig.playerId] < save.split) {
-              contracts[sig.playerId] = save.split + CONTRACT_TERM - 1;
+            const cur = clube.contracts[sig.playerId];
+            if (sig.contract) clube = signContract({ clube }, sig.playerId, sig.contract);
+            else if (!cur || cur.until < save.split) {
+              const f = findSigning(sig);
+              clube = signContract({ clube }, sig.playerId, defaultTerms(f ? playerWage(f.player) : 20000, save.split));
             }
           }
-          for (const k of Object.keys(contracts)) if (!ids.has(k)) delete contracts[k];
+          const cleanSquad = stableSquad.map((sig) => { if (!sig.contract) return sig; const rest = { ...sig }; delete rest.contract; return rest; });
           // poda chaves de quem saiu do elenco (não crescem pra sempre no save;
           // se voltar a contratar, começa com moral padrão de novo)
           const morale = { ...(save.morale ?? {}) };
@@ -5325,7 +5424,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             squadIds: stableSquad.map((x) => x.playerId),
             coachBond: save.coachBond, pairChem: save.pairChem, bondDefault: BOND_DEFAULT, chemDefault: 30, pairKey,
           });
-          const next = { ...save, squad: stableSquad, coachFromId, budget, sponsors, sponsorUntil, contracts, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem };
+          const next = { ...save, squad: cleanSquad, coachFromId, budget, sponsors, sponsorUntil, clube, morale, peakOvr, evo, region, youth, youthAge, youthDebut, academy, academyFocus, scarEvents: scarMarket.scarEvents, coachBond: scarMarket.coachBond, pairChem: scarMarket.pairChem };
           persist(next);
           setSave(next);
           setStage('circuit');
@@ -5475,7 +5574,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 for (const p of uTeam?.players ?? []) nickByOid[p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id] = p.nick;
                 const squadInfo = save.squad.map((sg) => {
                   const rp = uTeam?.players.find((p) => p.id === `user__${sg.playerId}`);
-                  const until = save.contracts?.[sg.playerId];
+                  const until = contractUntilOf(save, sg.playerId);
                   return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                 });
                 const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: mr.champion, objMet: true }, staffEffects(save.gestao?.staff).moraleRecovery), normalizeFacilities(save.facilities).psychologist);
@@ -5549,7 +5648,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 const { marketNews: majorMarketNews, ...majorWindowPatch } = applyTransferWindow(save);
                 const next = {
                   ...save,
-                  budget: Math.max(0, save.budget + mr.prize - payroll - facilityUpkeep(save.facilities) - scoutSalaryMajor - staffTickMajor.payroll + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
+                  budget: Math.max(0, save.budget + mr.prize - payroll - loyaltyDue(save) - facilityUpkeep(save.facilities) - scoutSalaryMajor - staffTickMajor.payroll + effSponsorIncome(save) + majBonus + sponsorMajorBonus),
                   ...(save.gestao ? { gestao: { ...save.gestao, staff: staffTickMajor.staff } } : {}),
                   vrs: applyCareerVrsDecay(save.vrs, mr.vrs), // Major também é um evento do ranking rolante
                   titles: save.titles + (mr.champion ? 1 : 0),
@@ -6010,7 +6109,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   for (const p of me.players) nickByOid[p.id.startsWith('user__') ? p.id.slice('user__'.length) : p.id] = p.nick;
                   const squadInfo = save.squad.map((sg) => {
                     const rp = me.players.find((p) => p.id === `user__${sg.playerId}`);
-                    const until = save.contracts?.[sg.playerId];
+                    const until = contractUntilOf(save, sg.playerId);
                     return { oid: sg.playerId, form: rp?.form ?? 1, expiring: until != null && until - save.split <= 1 };
                   });
                   const morale0 = stabilizeMorale(nextMorale(save.morale ?? {}, squadInfo, { champion: isChampion, objMet }, staffEffects(save.gestao?.staff).moraleRecovery), normalizeFacilities(save.facilities).psychologist);
@@ -6107,7 +6206,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                   }));
                   // #8: fechar o split no vermelho (receitas não cobriram a folha)
                   // também corrói a confiança — a diretoria vê o caixa, não só a tabela.
-                  const rawBudget = save.budget + prize - payroll - facilityUpkeep(save.facilities) - scoutSalary - staffTick.payroll + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
+                  const rawBudget = save.budget + prize - payroll - loyaltyDue(save) - facilityUpkeep(save.facilities) - scoutSalary - staffTick.payroll + effSponsorIncome(save) + objBonus + sponsorCircuitBonus;
                   const boardCash = rawBudget < 0
                     ? applyBoardDelta(boardPatch.board, boardPatch.boardLog, save.split, APPROVAL_DELTAS.splitCashCrunch, ct('Caixa zerado: receitas do split não cobriram a folha'))
                     : null;
@@ -6416,7 +6515,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
     .filter((x) => x.f)
     .map((x) => ({
       nick: (x.f as { player: Player }).player.nick,
-      left: save.contracts?.[x.sig.playerId] != null ? save.contracts![x.sig.playerId] - save.split + 1 : 0,
+      left: contractUntilOf(save, x.sig.playerId) != null ? contractUntilOf(save, x.sig.playerId)! - save.split + 1 : 0,
     }))
     .filter((w) => w.left <= 1);
   const expiringCount = expiringContracts.length;
@@ -6859,7 +6958,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
         const ovr = playerOvr(p);
         const personality = playerPersonality(oid);
         const mi = moraleInfo(save.morale?.[oid] ?? MORALE_DEFAULT);
-        const contractUntil = save.contracts?.[oid];
+        const contractUntil = contractUntilOf(save, oid);
         const left = contractUntil != null ? contractUntil - save.split + 1 : null;
         const contractLeft = left == null ? '—' : left <= 0 ? ct('vencido') : `${left} split${left > 1 ? 's' : ''}`;
         const developmentProgress = Math.max(0, Math.min(100, Math.round((ovr - 40) / Math.max(1, pot - 40) * 100)));
@@ -6900,7 +6999,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               return c ? { sharpness: Math.round(c.sharpness), injuryNote: isInjured(c) ? `${ct(INJURY_LABEL[c.injury!.kind])} · ${Math.ceil(c.injury!.weeksLeft)} ${ct('sem.')}` : null } : {};
             })()}
             valueLabel={formatMoney(playerValue({ ...p, ovr }))}
-            wageLabel={formatMoney(playerWage(p))}
+            wageLabel={formatMoney(contractWageOf(save, oid, () => playerWage(p)))}
             contractLeft={contractLeft}
             evoTotal={save.evo?.[oid] ?? 0}
             developmentProgress={developmentProgress}
@@ -6917,7 +7016,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
               const bondNow = save.coachBond?.[oid] ?? BOND_DEFAULT;
               const ids = save.squad.map((x) => x.playerId);
               const chemPair = ids.length >= 2 ? averageStarterChemistry({ pairChem: save.pairChem }, ids) : 50;
-              const until = save.contracts?.[oid];
+              const until = contractUntilOf(save, oid);
               return {
                 stints: stintsOf(save.stints, oid),
                 happiness: computeHappiness({
@@ -7092,7 +7191,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
             wageLabel={isUserTeam ? formatMoney(payroll) : undefined}
             titles={isUserTeam ? (save.titles ?? 0) : 0}
             split={save.split}
-            contracts={save.contracts ?? {}}
+            contracts={contractUntilMap(save)}
             potentialMap={teamPotentialMap}
             ages={teamAges}
             identity={isUserTeam ? save.identity : undefined}
@@ -7162,6 +7261,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
           budget={save.budget}
           clubFormOf={(id) => formOf(save, id)}
           split={save.split}
+          contract={signingCtx(save.split + 1)}
           pendingDeals={save.pendingDeals ?? []}
           pendingSales={save.pendingSales ?? []}
           offers={incomingOffers}
@@ -7221,14 +7321,35 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
 
       {/* ===== ELENCO + RANKING DE JOGADORES ===== */}
       {/* T1.4: aba Finance extraída em src/pages/career/FinanceTab.tsx */}
-      {hubTab === 'finance' && (
+      {hubTab === 'finance' && finSec !== 'ct' && (
         // CareerSave é interface fechada (sem index signature); FinanceTab usa
         // shape broad — cast via unknown pra reconciliar.
         <FinanceTab
-          section={finSec === 'ct' ? 'contracts' : 'money'}
+          section="money"
           save={save as unknown as Parameters<typeof FinanceTab>[0]['save']}
           findSigning={findSigning}
           update={update as unknown as Parameters<typeof FinanceTab>[0]['update']}
+        />
+      )}
+      {/* [fase 3 · CONTRATOS] Mercado › Contratos: folha real, termos e renovação negociada */}
+      {hubTab === 'finance' && finSec === 'ct' && (
+        <ContractsTab
+          save={save as unknown as Parameters<typeof ContractsTab>[0]['save']}
+          findSigning={findSigning}
+          ageOf={(p) => effectiveAge(p, save.split, save.youthAge, save.youthDebut)}
+          sponsorIncome={effSponsorIncome(save)}
+          renewalProfileFor={(pid) => {
+            const sig = save.squad.find((x) => x.playerId === pid);
+            const f = sig ? findSigning(sig) : null;
+            return f ? contractProfile(save, { ...f.player, id: pid }, 'renewal') : null;
+          }}
+          blockedFor={renewalBlockedFor}
+          onRecord={(n) => updateClube((s) => recordNegotiation(s, n))}
+          onRenew={(pid, terms) => updateClube(
+            (s) => signContract(s, pid, terms),
+            (s) => ({ budget: Math.max(0, s.budget - (terms.signingBonus ?? 0)) }),
+          )}
+          onOpenPlayer={openPlayerProfile}
         />
       )}
 
@@ -7409,7 +7530,7 @@ function CareerScreenInner({ onExit, founder = false, dataset }: Props) {
                 kind,
                 madeAtSplit: s.split,
                 deadlineSplit: s.split + PROMISE_DEADLINE_SPLITS,
-                contractUntilAt: kind === 'extension' ? (s.contracts?.[oid] ?? null) : undefined,
+                contractUntilAt: kind === 'extension' ? (contractUntilOf(s, oid) ?? null) : undefined,
                 squadIdsAt: kind === 'signing' ? s.squad.map((x) => x.playerId) : undefined,
                 status: 'open',
               };
@@ -8430,87 +8551,67 @@ function buildLogoDataUrl(emblem: EmblemId, c1: string, c2: string, text: string
 // substituídos pelo InteractiveTour (tour com spotlight nos elementos reais).
 
 // tela OBRIGATÓRIA de renovação: aparece na janela quando há contratos vencendo.
-// O usuário decide quem fica (paga 1 salário) e quem sai. Sem perder jogador "do nada".
-function RenewalScreen({ renewals, budget, onConfirm }: {
+// [fase 3] Cada renovação é NEGOCIADA com o jogador (salário, duração, luvas,
+// cláusula, status, lealdade): "Negociar" abre a mesa; "Aceitar exigência"
+// fecha nos termos que ele pede; quem se recusa (rebaixado, insatisfeito,
+// negociação rompida) só pode ser liberado. Sem perder jogador "do nada".
+type RenewalDecision = { kind: 'keep'; terms: ContractTerms } | { kind: 'drop' };
+function RenewalScreen({ renewals, budget, payrollBase, profileFor, blockedFor, onRecord, onConfirm }: {
   renewals: Renewal[];
   budget: number;
-  onConfirm: (renewIds: string[]) => void;
+  /** folha base atual (sem encargos) — mostra a folha depois de cada renovação */
+  payrollBase: number;
+  profileFor: (r: Renewal) => NegoProfile | null;
+  blockedFor: (playerId: string) => Negotiation | null;
+  onRecord: (nego: Negotiation) => void;
+  onConfirm: (decisions: Record<string, RenewalDecision>) => void;
 }) {
-  // Redesenhada no padrão em-*: header banner + DashCard com rows limpas
-  // + sticky bottom com hud de cost/budget e CTA. API preservada.
-  const [decided, setDecided] = useState<Record<string, 'keep' | 'drop'>>({});
-  const set = (id: string, v: 'keep' | 'drop') => setDecided((d) => ({ ...d, [id]: v }));
-  const setAll = (v: 'keep' | 'drop') => setDecided(Object.fromEntries(renewals.map((r) => [r.playerId, v])));
-  const kept = renewals.filter((r) => decided[r.playerId] === 'keep');
-  const dropped = renewals.filter((r) => decided[r.playerId] === 'drop');
-  const cost = kept.reduce((a, r) => a + r.wage, 0);
+  const [decided, setDecided] = useState<Record<string, RenewalDecision>>({});
+  const [talking, setTalking] = useState<Renewal | null>(null);
+  const [blockedNow, setBlockedNow] = useState<Record<string, true>>({});
+  const set = (id: string, v: RenewalDecision) => setDecided((d) => ({ ...d, [id]: v }));
+  // quem aceita sequer conversar (e a exigência de abertura de quem aceita)
+  const info = useMemo(() => Object.fromEntries(renewals.map((r) => {
+    const p = profileFor(r);
+    const opened = p ? openPlayerNegotiation(p) : null;
+    const refused = !p ? ct('Jogador não encontrado.') : blockedFor(r.playerId) ? ct('Rompeu a negociação neste split.') : opened?.refused ?? null;
+    return [r.playerId, { p, demand: opened?.demand ?? null, refused }];
+  })), [renewals, profileFor, blockedFor]);
+  const refusedOf = (id: string) => (blockedNow[id] ? ct('Rompeu a negociação neste split.') : info[id]?.refused ?? null);
+  const acceptAll = () => setDecided((d) => {
+    const out = { ...d };
+    for (const r of renewals) {
+      if (out[r.playerId]) continue;
+      const it = info[r.playerId];
+      if (!refusedOf(r.playerId) && it?.demand && it.p) out[r.playerId] = { kind: 'keep', terms: termsFromOffer(offerFromDemand(it.demand, it.p.split), it.p.split) };
+    }
+    return out;
+  });
+  const dropAll = () => setDecided(Object.fromEntries(renewals.map((r) => [r.playerId, { kind: 'drop' } as RenewalDecision])));
+  const kept = renewals.filter((r) => decided[r.playerId]?.kind === 'keep');
+  const dropped = renewals.filter((r) => decided[r.playerId]?.kind === 'drop');
+  const cost = kept.reduce((a, r) => a + ((decided[r.playerId] as { terms: ContractTerms }).terms.signingBonus ?? 0), 0);
+  const wagesAfter = kept.reduce((a, r) => a + (decided[r.playerId] as { terms: ContractTerms }).terms.wage - r.wage, 0);
   const overBudget = cost > budget;
   const allDecided = renewals.every((r) => decided[r.playerId]);
+  const talkProfile = talking ? info[talking.playerId]?.p : null;
 
   return (
     <div className="em-renewals fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 20px 24px', maxWidth: 880, margin: '0 auto' }}>
-      {/* Header banner */}
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '14px 18px',
-          background: 'linear-gradient(135deg, rgba(232,193,112,0.12) 0%, transparent 60%)',
-          border: '1px solid var(--em-border)',
-          borderRadius: 6,
-        }}
-      >
+      <header className="ren-head">
         <div>
-          <div style={{ fontSize: '0.66rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 800 }}>
-            📝 {ct('Janela de renovação')}
-          </div>
-          <h2 style={{ margin: '2px 0 0', fontSize: '1.4rem', fontWeight: 900, color: 'var(--em-text)', letterSpacing: '-0.3px' }}>
-            {renewals.length} {ct('contratos venceram')}
-          </h2>
-          <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--em-muted)', maxWidth: 580, lineHeight: 1.45 }}>
-            {ct('Decida cada um:')} <b style={{ color: 'var(--em-text)' }}>{ct('Renovar')}</b> {ct('mantém no elenco e custa 1 salário · ')}<b style={{ color: 'var(--em-text)' }}>{ct('Liberar')}</b> {ct('libera o jogador agora (de graça).')}
+          <div className="ren-eyebrow">📝 {ct('Janela de renovação')}</div>
+          <h2 className="ren-title">{renewals.length} {ct('contratos venceram')}</h2>
+          <p className="ren-sub">
+            {ct('Negocie cada renovação com o jogador (salário, duração, luvas, cláusula e status) ou libere de graça. Quem foi rebaixado ou está insatisfeito pode se recusar a renovar.')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => setAll('keep')}
-            style={{
-              padding: '6px 12px',
-              background: 'color-mix(in srgb, var(--c-win) 12%, transparent)',
-              color: 'var(--c-win)',
-              border: '1px solid color-mix(in srgb, var(--c-win) 45%, transparent)',
-              borderRadius: 4,
-              fontFamily: 'inherit',
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            ✓ {ct('Renovar todos')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setAll('drop')}
-            style={{
-              padding: '6px 12px',
-              background: 'color-mix(in srgb, var(--c-loss) 10%, transparent)',
-              color: 'var(--c-loss)',
-              border: '1px solid color-mix(in srgb, var(--c-loss) 45%, transparent)',
-              borderRadius: 4,
-              fontFamily: 'inherit',
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            ✕ {ct('Liberar todos')}
-          </button>
+        <div className="ren-bulk">
+          <Button size="sm" onClick={acceptAll}>✓ {ct('Aceitar exigências')}</Button>
+          <Button size="sm" variant="ghost" onClick={dropAll}>✕ {ct('Liberar todos')}</Button>
         </div>
       </header>
 
-      {/* Lista de renovações */}
       <DashCard
         title={ct('Decisões')}
         info={`${kept.length} ${ct('renovar')} · ${dropped.length} ${ct('liberar')} · ${renewals.length - kept.length - dropped.length} ${ct('pendente')}`}
@@ -8518,73 +8619,33 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {renewals.map((r) => {
             const v = decided[r.playerId];
-            const isKeep = v === 'keep';
-            const isDrop = v === 'drop';
-            const accent = isKeep ? 'var(--c-win)' : isDrop ? 'var(--c-loss)' : 'var(--em-border)';
+            const refused = refusedOf(r.playerId);
+            const dem = info[r.playerId]?.demand;
+            const tone = v?.kind === 'keep' ? 'keep' : v?.kind === 'drop' ? 'drop' : refused ? 'refused' : 'open';
             return (
-              <div
-                key={r.playerId}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '10px 12px',
-                  background: 'var(--em-panel-2)',
-                  border: `1px solid ${accent}`,
-                  borderLeft: `3px solid ${accent}`,
-                  borderRadius: 4,
-                  opacity: isDrop ? 0.7 : 1,
-                  transition: 'border-color .15s, opacity .15s',
-                }}
-              >
+              <div key={r.playerId} className={`ren-row ren-row--${tone}`}>
                 <PlayerAvatar nick={r.nick} size={40} />
-                <div style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.92rem', fontWeight: 800, color: 'var(--em-text)' }}>
-                    <Flag cc={r.country} /> {r.nick}
-                    <span className={`role-pill ${r.role}`}>{r.role}</span>
-                  </div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 3, fontSize: '0.74rem', color: 'var(--em-muted)', fontFamily: 'var(--font-num)' }}>
-                    <span>OVR <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{r.ovr}</b></span>
-                    <span>{ct('salário')} <b style={{ color: 'var(--em-text)', fontWeight: 800 }}>{formatMoney(r.wage)}</b></span>
+                <div className="ren-row__who">
+                  <div className="ren-row__name"><Flag cc={r.country} /> {r.nick} <span className={`role-pill ${r.role}`}>{r.role}</span></div>
+                  <div className="ren-row__meta">
+                    <span>OVR <b>{r.ovr}</b></span>
+                    <span>{ct('ganha')} <b>{formatMoney(r.wage)}</b></span>
+                    {v?.kind === 'keep' ? (
+                      <span className="ren-ok">{ct('novo')} <b>{formatMoney(v.terms.wage)}</b> · {v.terms.until - (info[r.playerId]?.p?.split ?? v.terms.until) + 1} {ct('splits')}{(v.terms.signingBonus ?? 0) > 0 ? ` · ${ct('luvas')} ${formatMoney(v.terms.signingBonus!)}` : ''}</span>
+                    ) : refused ? (
+                      <span className="ren-bad">{refused}</span>
+                    ) : dem ? (
+                      <span>{ct('pede')} <b>{formatMoney(dem.terms.wage)}</b> · {dem.term} {ct('splits')}</span>
+                    ) : null}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => set(r.playerId, 'keep')}
-                    style={{
-                      padding: '7px 14px',
-                      background: isKeep ? 'var(--c-win)' : 'transparent',
-                      color: isKeep ? '#0a1a0c' : 'var(--c-win)',
-                      border: `1px solid ${isKeep ? 'var(--c-win)' : 'color-mix(in srgb, var(--c-win) 45%, transparent)'}`,
-                      borderRadius: 4,
-                      fontFamily: 'inherit',
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      minWidth: 90,
-                    }}
-                  >
-                    {isKeep ? `✓ ${ct('Renovar')}` : ct('Renovar')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => set(r.playerId, 'drop')}
-                    style={{
-                      padding: '7px 14px',
-                      background: isDrop ? '#c0392b' : 'transparent',
-                      color: isDrop ? '#fff' : 'var(--c-loss)',
-                      border: `1px solid ${isDrop ? '#c0392b' : 'color-mix(in srgb, var(--c-loss) 45%, transparent)'}`,
-                      borderRadius: 4,
-                      fontFamily: 'inherit',
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      minWidth: 90,
-                    }}
-                  >
-                    {isDrop ? `✕ ${ct('Liberar')}` : ct('Liberar')}
-                  </button>
+                <div className="ren-row__act">
+                  <Button size="sm" variant={v?.kind === 'keep' ? 'primary' : 'secondary'} disabled={!!refused} onClick={() => setTalking(r)}>
+                    {v?.kind === 'keep' ? `✓ ${ct('Renovado')}` : ct('Negociar')}
+                  </Button>
+                  <Button size="sm" variant={v?.kind === 'drop' ? 'danger' : 'ghost'} onClick={() => set(r.playerId, { kind: 'drop' })}>
+                    {v?.kind === 'drop' ? `✕ ${ct('Liberar')}` : ct('Liberar')}
+                  </Button>
                 </div>
               </div>
             );
@@ -8592,74 +8653,31 @@ function RenewalScreen({ renewals, budget, onConfirm }: {
         </div>
       </DashCard>
 
-      {/* Sticky bottom hud + CTA — `em-market-sticky-bottom` reaproveitada da
-         MarketScreen: respeita o banner G4 (sobe 126/92px quando has-ad-footer)
-         e ganha flex-wrap no mobile. */}
-      <div
-        className="em-market-sticky-bottom"
-        style={{
-          position: 'sticky',
-          padding: '12px 18px',
-          background: 'var(--em-panel)',
-          border: '1px solid var(--em-border)',
-          borderRadius: 6,
-          boxShadow: '0 -4px 16px rgba(0,0,0,0.25)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          zIndex: 20,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.84rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {ct('Custo renovações')}
-            </span>
-            <b style={{ fontFamily: 'var(--font-num)', color: overBudget ? 'var(--c-loss)' : 'var(--em-text)', fontSize: '1.05rem', fontWeight: 900 }}>
-              {formatMoney(cost)}
-            </b>
-          </div>
-          <span style={{ color: 'var(--em-muted)' }}>·</span>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontSize: '0.62rem', color: 'var(--em-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {ct('Caixa')}
-            </span>
-            <b style={{ fontFamily: 'var(--font-num)', color: 'var(--c-win)', fontSize: '1.05rem', fontWeight: 900 }}>
-              {formatMoney(budget)}
-            </b>
-          </div>
-          {!allDecided && (
-            <span style={{ color: 'var(--em-muted)', fontSize: '0.78rem', marginLeft: 8 }}>
-              ⚠ {ct('Faltam')} <b style={{ color: 'var(--em-text)' }}>{renewals.length - kept.length - dropped.length}</b> {ct('decisões')}
-            </span>
-          )}
-          {overBudget && (
-            <span style={{ color: 'var(--c-loss)', fontSize: '0.78rem', marginLeft: 8 }}>
-              ⚠ {ct('Estourou')} {formatMoney(cost - budget)}
-            </span>
-          )}
+      <div className="em-market-sticky-bottom ren-foot">
+        <div className="ren-foot__hud">
+          <div><span>{ct('Luvas das renovações')}</span><b className={overBudget ? 'ren-bad' : undefined}>{formatMoney(cost)}</b></div>
+          <div><span>{ct('Folha depois')}</span><b>{formatMoney(payrollBase + wagesAfter - dropped.reduce((a, r) => a + r.wage, 0))}</b></div>
+          <div><span>{ct('Caixa')}</span><b className="ren-ok">{formatMoney(budget)}</b></div>
+          {!allDecided && <span className="ren-dim">⚠ {ct('Faltam')} <b>{renewals.length - kept.length - dropped.length}</b> {ct('decisões')}</span>}
+          {overBudget && <span className="ren-bad">⚠ {ct('Estourou')} {formatMoney(cost - budget)}</span>}
         </div>
-        <button
-          type="button"
-          disabled={overBudget || !allDecided}
-          onClick={() => onConfirm(kept.map((r) => r.playerId))}
-          style={{
-            padding: '10px 22px',
-            background: (overBudget || !allDecided) ? 'var(--em-panel-2)' : 'var(--em-gold)',
-            color: (overBudget || !allDecided) ? 'var(--em-muted)' : '#1a1205',
-            border: (overBudget || !allDecided) ? '1px solid var(--em-border)' : 'none',
-            borderRadius: 4,
-            fontFamily: 'inherit',
-            fontWeight: 900,
-            fontSize: '0.9rem',
-            cursor: (overBudget || !allDecided) ? 'not-allowed' : 'pointer',
-            letterSpacing: '0.3px',
-          }}
-        >
+        <Button variant="primary" disabled={overBudget || !allDecided} onClick={() => onConfirm(decided)}>
           ✔ {ct('Confirmar e abrir o mercado')}
-        </button>
+        </Button>
       </div>
+
+      {talking && talkProfile && (
+        <ContractNegotiationModal
+          subject={{ id: talking.playerId, nick: talking.nick, country: talking.country, role: talking.role, ovr: talking.ovr, age: talkProfile.age, fromLabel: ct('Seu elenco') }}
+          profile={talkProfile}
+          budget={budget - cost + (decided[talking.playerId]?.kind === 'keep' ? ((decided[talking.playerId] as { terms: ContractTerms }).terms.signingBonus ?? 0) : 0)}
+          payrollNow={payrollBase - talking.wage}
+          blocked={blockedFor(talking.playerId)}
+          onClose={() => setTalking(null)}
+          onRecord={(n) => { onRecord(n); setBlockedNow((b) => ({ ...b, [talking.playerId]: true })); }}
+          onSigned={(terms) => { set(talking.playerId, { kind: 'keep', terms }); setTalking(null); }}
+        />
+      )}
     </div>
   );
 }
@@ -9844,8 +9862,11 @@ function ColorSwatch({ value, onChange, label }: { value: string; onChange: (v: 
 }
 
 // ---------- negociação de transferência (modal) ----------
-function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, onClose, onAgree }: {
+function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyDiscount = 0, buyoutFloor = 0, buyerStrength, freeAgents, split = 0, blocked, onRecord, onClose, onAgree }: {
   player: Player; from: TeamSeason; budget: number;
+  split?: number;           // [fase 3] split da conversa (rodadas e bloqueio)
+  blocked?: Negotiation | null; // [fase 3] o clube encerrou a conversa neste split
+  onRecord?: (nego: Negotiation) => void; // [fase 3] grava conversa encerrada (bloqueia até o próximo split)
   swapPool?: Player[]; // seus jogadores disponíveis pra incluir na troca (habilita swap)
   // contexto do decideOffer (gap #14) — todos opcionais/degradáveis
   sellerForm?: number;      // formOf(save, from.id)
@@ -9862,8 +9883,11 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
   const mkt = playerValue(player);
   const wage = playerWage(player);
   const [offer, setOffer] = useState(Math.round(ask * 0.85));
-  const [round, setRound] = useState(0);
+  // [fase 3] negociação com o clube dono em RODADAS: o decideOffer continua
+  // sendo a IA do vendedor; a rodada/paciência vivem em Negotiation{party:'club'}
+  const [nego, setNego] = useState<Negotiation>(() => openClubNegotiation({ playerId: player.id, split, asking: ask }));
   const [reply, setReply] = useState<NegoReply | null>(null);
+  const clubClosed = nego.status === 'rejected' || nego.status === 'expired';
   const [swapOut, setSwapOut] = useState<string[]>([]);
   const swapValue = swapOut.reduce((a, id) => {
     const p = swapPool?.find((x) => x.id === id);
@@ -9873,9 +9897,16 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
   const overBudget = offer > budget;
   const reset = () => setReply(null);
   const submit = () => {
-    if (overBudget) return;
-    setReply(clubReply(effectiveOffer, ask, player, from.teamwork, round, negoCtx));
-    setRound((r) => r + 1);
+    if (overBudget || nego.status !== 'open') return;
+    const r = clubReply(effectiveOffer, ask, player, from.teamwork, decideRound(nego), negoCtx);
+    const n = clubNegotiationStep(nego, effectiveOffer, r);
+    setReply(r.kind === 'counter' && n.status === 'expired'
+      ? { kind: 'reject', firm: true, msg: ct('Acabaram as rodadas: o clube encerrou a conversa neste split.') }
+      : r.kind === 'counter' && n.status === 'rejected'
+        ? { kind: 'reject', firm: true, msg: ct('O clube perdeu a paciência e encerrou a conversa neste split.') }
+        : r);
+    setNego(n);
+    if (n.status === 'rejected' || n.status === 'expired') onRecord?.(n);
   };
   const toggleSwap = (id: string) => {
     setSwapOut((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -9913,11 +9944,22 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
           </div>
         </header>
 
+        {/* [fase 3] etapa, rodada e paciência do clube */}
+        <div className="cn-step">{ct('Etapa 1 de 2 · acordo com o clube')}</div>
+        {blocked ? (
+          <div className="cn-reply cn-reply--walkout" role="status"><b>{ct('Conversa encerrada')}</b><span>{ct('O clube encerrou a conversa neste split. Tente de novo no próximo.')}</span></div>
+        ) : (
+          <div className="cn-clubbar">
+            <span className="cn-clubbar__round">{ct('Rodada')} <b>{Math.min(nego.round, nego.maxRounds)}/{nego.maxRounds}</b></span>
+            <ProgressBar value={nego.patience} tone={nego.patience > 55 ? 'win' : nego.patience > 25 ? 'warn' : 'loss'} label={ct('Paciência do clube')} valueText={`${nego.patience}/100`} />
+          </div>
+        )}
+
         {/* Figures: 3 cards inline */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           <NegoFigure label={ct('Valor mercado')} value={formatMoney(mkt)} />
-          <NegoFigure label={ct('Pedida do clube')} value={formatMoney(ask)} accent="#e8c170" />
-          <NegoFigure label={ct('Salário / split')} value={formatMoney(wage)} accent="var(--c-loss)" />
+          <NegoFigure label={ct('Pedida do clube')} value={formatMoney(nego.demand.fee ?? ask)} accent="#e8c170" />
+          <NegoFigure label={ct('Salário de mercado')} value={formatMoney(wage)} accent="var(--c-loss)" />
         </div>
 
         {/* #37/#38: avisos de contexto — cláusula segura o preço, infeliz derruba */}
@@ -10075,8 +10117,10 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
           >
             {ct('Desistir')}
           </button>
-          {reply?.kind === 'accept' ? (
-            <ActionGold label={ct('Fechar acordo')} onClick={() => onAgree(offer, swapOut)} />
+          {blocked || clubClosed ? (
+            <ActionGold label={ct('Sair')} onClick={onClose} />
+          ) : reply?.kind === 'accept' ? (
+            <ActionGold label={ct('Fechar com o clube e negociar o contrato')} onClick={() => onAgree(offer, swapOut)} />
           ) : reply?.kind === 'counter' ? (
             <>
               <button
@@ -10111,6 +10155,59 @@ function NegotiationModal({ player, from, budget, swapPool, sellerForm, unhappyD
         </div>
       </div>
     </Modal>
+  );
+}
+
+// [fase 3] transferência em duas etapas: primeiro o clube dono (rodadas sobre
+// o decideOffer), depois o contrato com o jogador/agente. Sem acordo com o
+// jogador, o acordo com o clube cai (FM: "recusou os termos pessoais").
+interface ContractCtx {
+  /** perfil do jogador na mesa (contratação); squadOvrs = OVR do elenco sem ele (padrão: o elenco do save) */
+  profileFor: (player: Player, squadOvrs?: number[]) => NegoProfile;
+  /** folha base atual (sem encargos) */
+  payrollNow: number;
+  /** conversa rompida neste split (clube ou jogador) */
+  blockedFor: (playerId: string, party: Negotiation['party']) => Negotiation | null;
+  onRecord: (nego: Negotiation) => void;
+  /** split da conversa (bloqueio): o atual, mesmo quando o contrato começa no próximo */
+  split: number;
+}
+function subjectOf(player: Player, age: number, fromLabel: string): ContractNegoSubject {
+  return { id: player.id, nick: player.nick, name: player.name, country: player.country, role: player.role, ovr: playerOvr(player), age, fromLabel };
+}
+function TransferNegotiation({ player, from, budget, contract, clubProps, onClose, onDone }: {
+  player: Player; from: TeamSeason; budget: number;
+  contract: ContractCtx;
+  clubProps: Omit<Parameters<typeof NegotiationModal>[0], 'player' | 'from' | 'budget' | 'onClose' | 'onAgree' | 'split' | 'blocked' | 'onRecord'>;
+  onClose: () => void;
+  onDone: (fee: number, outIds: string[], terms: ContractTerms) => void;
+}) {
+  const [club, setClub] = useState<{ fee: number; outIds: string[] } | null>(null);
+  const profile = useMemo(() => contract.profileFor(player), [contract, player]);
+  if (!club) {
+    return (
+      <NegotiationModal
+        {...clubProps}
+        player={player} from={from} budget={budget} split={contract.split}
+        blocked={contract.blockedFor(player.id, 'club')}
+        onRecord={contract.onRecord}
+        onClose={onClose}
+        onAgree={(fee, outIds) => setClub({ fee, outIds })}
+      />
+    );
+  }
+  return (
+    <ContractNegotiationModal
+      subject={subjectOf(player, profile.age, from.team)}
+      profile={profile}
+      budget={budget - club.fee}
+      payrollNow={contract.payrollNow}
+      blocked={contract.blockedFor(player.id, 'player')}
+      stepLabel={`${ct('Etapa 2 de 2 · contrato com o jogador')} · ${ct('taxa acertada')} ${formatMoney(club.fee)}`}
+      onRecord={(n) => contract.onRecord({ ...n, split: contract.split })}
+      onClose={onClose}
+      onSigned={(terms) => onDone(club.fee, club.outIds, terms)}
+    />
   );
 }
 
@@ -10175,8 +10272,9 @@ function ActionGold({ label, onClick, disabled }: { label: string; onClick: () =
 }
 
 // ---------- negociações durante a temporada (acordos pendentes p/ a janela) ----------
-function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf, split = 0 }: {
+function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendingSales, offers, onAddDeal, onCancelDeal, onAcceptOffer, onRejectOffer, onCancelSale, feed, clubFormOf, split = 0, contract }: {
   market: { player: Player; from: TeamSeason; price: number }[];
+  contract: ContractCtx; // [fase 3] mesa de contrato com o jogador (o contrato começa na janela)
   squadPlayers: Player[];
   budget: number;
   clubFormOf?: (teamId: string) => number; // forma REAL do clube (teamForm) pro decideOffer
@@ -10192,6 +10290,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   feed: TransferItem[];
 }) {
   const [target, setTarget] = useState<{ player: Player; from: TeamSeason } | null>(null);
+  const [faTarget, setFaTarget] = useState<{ player: Player; from: TeamSeason } | null>(null); // [fase 3] free agent: só o contrato
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>('');
   const [countryFilter, setCountryFilter] = useState('');
@@ -10204,7 +10303,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
   const marketRoles = ROLE_OPTS.filter((role) => market.some((item) => item.player.role === role));
   const marketCountries = [...new Set(market.map((m) => m.player.country).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
-  const committedCash = pendingDeals.reduce((a, d) => a + d.fee, 0);
+  const committedCash = pendingDeals.reduce((a, d) => a + d.fee + (d.contract?.signingBonus ?? 0), 0);
   const dealBudget = budget - committedCash;
   const targeted = new Set(pendingDeals.map((d) => d.inPlayerId));
   const squadIds = new Set(squadPlayers.map((p) => p.id));
@@ -10343,7 +10442,7 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               // (só salário), igual à fundação. Antes abria o modal de negociação e
               // cobrava `askingPrice`, divergindo do mercado da fundação onde FA = fee 0.
               m.from.id === '__free__'
-                ? onAddDeal({ id: m.player.id, inPlayerId: m.player.id, inFromId: m.from.id, inNick: m.player.nick, fee: 0, outPlayerIds: [], outNicks: [] })
+                ? setFaTarget({ player: m.player, from: m.from })
                 : setTarget({ player: m.player, from: m.from })
             }>
               <PlayerAvatar nick={m.player.nick} size={48} />
@@ -10378,18 +10477,21 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
         <div className="muted small section-label">{ct('Rumores da janela')}</div>
         <TransferFeed items={feed} compact />
       {target && (
-        <NegotiationModal
+        <TransferNegotiation
           player={target.player}
           from={target.from}
           budget={dealBudget}
-          swapPool={swapPool}
-          sellerForm={clubFormOf?.(target.from.id)}
-          unhappyDiscount={discountOf(target.player)}
-          buyoutFloor={buyoutOf(target.player)}
-          buyerStrength={squadPlayers.length > 0 ? squadStrength(squadPlayers) : undefined}
-          freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
+          contract={contract}
+          clubProps={{
+            swapPool,
+            sellerForm: clubFormOf?.(target.from.id),
+            unhappyDiscount: discountOf(target.player),
+            buyoutFloor: buyoutOf(target.player),
+            buyerStrength: squadPlayers.length > 0 ? squadStrength(squadPlayers) : undefined,
+            freeAgents: market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player),
+          }}
           onClose={() => setTarget(null)}
-          onAgree={(fee, outIds) => {
+          onDone={(fee, outIds, terms) => {
             onAddDeal({
               id: target.player.id,
               inPlayerId: target.player.id,
@@ -10398,11 +10500,30 @@ function SeasonNegotiations({ market, squadPlayers, budget, pendingDeals, pendin
               fee,
               outPlayerIds: outIds,
               outNicks: outIds.map((id) => squadPlayers.find((p) => p.id === id)?.nick ?? id),
+              contract: terms,
             });
             setTarget(null);
           }}
         />
       )}
+      {faTarget && (() => {
+        const prof = contract.profileFor(faTarget.player);
+        return (
+          <ContractNegotiationModal
+            subject={subjectOf(faTarget.player, prof.age, ct('Free agent'))}
+            profile={prof}
+            budget={dealBudget}
+            payrollNow={contract.payrollNow}
+            blocked={contract.blockedFor(faTarget.player.id, 'player')}
+            onRecord={(n) => contract.onRecord({ ...n, split: contract.split })}
+            onClose={() => setFaTarget(null)}
+            onSigned={(terms) => {
+              onAddDeal({ id: faTarget.player.id, inPlayerId: faTarget.player.id, inFromId: faTarget.from.id, inNick: faTarget.player.nick, fee: 0, outPlayerIds: [], outNicks: [], contract: terms });
+              setFaTarget(null);
+            }}
+          />
+        );
+      })()}
     </DashCard>
   );
 }
@@ -10413,6 +10534,7 @@ function MarketScreen({
   market,
   coaches,
   findSigning,
+  contract,
   onConfirm,
   onExit,
   embedded,
@@ -10421,6 +10543,7 @@ function MarketScreen({
   market: { player: Player; from: TeamSeason; price: number }[];
   coaches: TeamSeason[];
   findSigning: (s: Signing) => ResolvedSigning | null;
+  contract: ContractCtx; // [fase 3] mesa de contrato com o jogador
   onConfirm: (squad: Signing[], coachFromId: string, budget: number, sponsors: string[], sponsorUntil: Record<string, number>) => void;
   onExit: () => void;
   embedded?: boolean;
@@ -10429,6 +10552,7 @@ function MarketScreen({
   const [squad, setSquad] = useState<Signing[]>(initialSquad.resolved);
   const recoveredSlots = initialSquad.unresolved.length;
   const [nego, setNego] = useState<{ player: Player; from: TeamSeason } | null>(null);
+  const [faNego, setFaNego] = useState<{ player: Player; from: TeamSeason; price: number } | null>(null); // [fase 3] free agent: só o contrato
   // Limite de jogadores visíveis (paginação 'load more'). Antes era 60 fixo
   // com mensagem 'Refine filtros'. User reportou (Fundador #103) que o resto
   // ficava inalcançável mesmo filtrando. Agora botão carrega +60 por clique.
@@ -10483,7 +10607,8 @@ function MarketScreen({
     if (owned.has(s.playerId)) return acc;
     const f = findSigning(s);
     // usa o fee NEGOCIADO; se não houver (free agent / save antigo), o de tabela
-    return acc + (f ? (s.fee ?? playerValue(f.player)) : 0);
+    // [fase 3] + as luvas acertadas com o jogador
+    return acc + (f ? (s.fee ?? playerValue(f.player)) + (s.contract?.signingBonus ?? 0) : 0);
   }, 0);
   const soldPlayers = save.squad
     .filter((s) => !squad.some((x) => x.playerId === s.playerId))
@@ -10491,6 +10616,20 @@ function MarketScreen({
       const f = findSigning(s);
       return acc + (f ? Math.round(playerValue(f.player) * 0.85) : 0);
     }, 0);
+  // [fase 3] a mesa de contrato olha o elenco DA TELA (com quem você já escolheu)
+  // e a folha dele (contrato de quem já era seu, termos negociados de quem chega)
+  const localOvrs = squad.map((s) => { const f = findSigning(s); return f ? { id: s.playerId, ovr: playerOvr(f.player) } : null; })
+    .filter(Boolean) as { id: string; ovr: number }[];
+  const localPayroll = squad.reduce((acc, s) => {
+    const f = findSigning(s);
+    if (!f) return acc;
+    return acc + (s.contract?.wage ?? contractWageOf(save, s.playerId, () => playerWage(f.player)));
+  }, 0);
+  const mctx: ContractCtx = {
+    ...contract,
+    payrollNow: localPayroll,
+    profileFor: (pl) => contract.profileFor(pl, localOvrs.filter((x) => x.id !== pl.id).map((x) => x.ovr)),
+  };
   const coachTeam = coachId && coachId !== ROOKIE_ID ? coaches.find((t) => t.id === coachId) : null;
   const coachChanged = coachId !== save.coachFromId;
   const spentCoach = !coachChanged ? 0 : coachId === ROOKIE_ID ? coachFee(ROOKIE_COACH) : coachTeam ? coachFee(coachTeam.coach) : 0;
@@ -10859,7 +10998,7 @@ function MarketScreen({
                     disabled={!canPick}
                     onClick={() =>
                       isFA
-                        ? setSquad([...squad, signingWithSnapshot({ playerId: m.player.id, fromId: m.from.id, fee: m.price }, { player: m.player, from: m.from, basePlayer: m.player })])
+                        ? setFaNego({ player: m.player, from: m.from, price: m.price })
                         : setNego({ player: m.player, from: m.from })
                     }
                   >
@@ -11072,23 +11211,44 @@ function MarketScreen({
       </div>
 
       {nego && (
-        <NegotiationModal
+        <TransferNegotiation
           player={nego.player}
           from={nego.from}
           budget={budgetLeft}
-          sellerForm={formOf(save, nego.from.id)}
-          buyerStrength={(() => {
-            const mine = squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[];
-            return mine.length > 0 ? squadStrength(mine) : undefined;
-          })()}
-          freeAgents={market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player)}
+          contract={mctx}
+          clubProps={{
+            sellerForm: formOf(save, nego.from.id),
+            buyerStrength: (() => {
+              const mine = squad.map((s) => findSigning(s)?.player).filter(Boolean) as Player[];
+              return mine.length > 0 ? squadStrength(mine) : undefined;
+            })(),
+            freeAgents: market.filter((m) => m.from.id === FREE_TEAM_ID).map((m) => m.player),
+          }}
           onClose={() => setNego(null)}
-          onAgree={(fee) => {
-            setSquad([...squad, signingWithSnapshot({ playerId: nego.player.id, fromId: nego.from.id, fee }, { player: nego.player, from: nego.from, basePlayer: nego.player })]);
+          onDone={(fee, _outIds, terms) => {
+            setSquad([...squad, signingWithSnapshot({ playerId: nego.player.id, fromId: nego.from.id, fee, contract: terms }, { player: nego.player, from: nego.from, basePlayer: nego.player })]);
             setNego(null);
           }}
         />
       )}
+      {faNego && (() => {
+        const prof = mctx.profileFor(faNego.player);
+        return (
+          <ContractNegotiationModal
+            subject={subjectOf(faNego.player, prof.age, ct('Free agent'))}
+            profile={prof}
+            budget={budgetLeft - faNego.price}
+            payrollNow={mctx.payrollNow}
+            blocked={mctx.blockedFor(faNego.player.id, 'player')}
+            onRecord={mctx.onRecord}
+            onClose={() => setFaNego(null)}
+            onSigned={(terms) => {
+              setSquad([...squad, signingWithSnapshot({ playerId: faNego.player.id, fromId: faNego.from.id, fee: faNego.price, contract: terms }, { player: faNego.player, from: faNego.from, basePlayer: faNego.player })]);
+              setFaNego(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

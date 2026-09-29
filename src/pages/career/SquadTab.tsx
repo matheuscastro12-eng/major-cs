@@ -34,6 +34,8 @@ import { activeStint as activeCoachStint } from '../../engine/coachCareer';
 import { playerOrgId } from '../../state/career-player-route';
 import { ct } from '../../state/career-i18n';
 import { playerOvr, playerWage, formatMoney } from '../../engine/ratings';
+import { contractUntilOf, contractWageOf } from '../../engine/clube/contratos';
+import type { ClubeState } from '../../engine/clube/model';
 import { teamChemistry } from '../../engine/chemistry';
 import { ElencoPanel, type ElencoRow } from './ElencoPanel';
 import { Panel, Bar } from '../../components/ds/index';
@@ -123,7 +125,7 @@ export function SquadTab({
   const elencoRows: ElencoRow[] = rows.map((p) => {
     const rid = `user__${p.id}`;
     const st = seasonStats.find((x) => x.id === rid);
-    const until = (save.contracts as Record<string, number> | undefined)?.[p.id];
+    const until = contractUntilOf(save as { clube?: ClubeState }, p.id);
     const mor = save.morale?.[p.id] ?? MORALE_DEFAULT;
     return {
       p, oid: p.id,
@@ -132,13 +134,14 @@ export function SquadTab({
       fatigue: save.fatigue?.[p.id] ?? 0,
       cond: condition?.[p.id] ?? null,
       contractLeft: until != null ? until - save.split + 1 : null,
+      wage: contractWageOf(save as { clube?: ClubeState }, p.id, () => playerWage(p)),
       rating: st?.rating, maps: st?.maps, kd: st?.kd, adr: st?.adr,
       recent: save.recentRatings?.[p.id],
     };
   });
   const chemAvg = teamChemistry({ pairChem: save.pairChem }, rows.map((p) => playerOrgId(p.id)));
   const chemLabel = chemAvg >= 80 ? ct('Excelente') : chemAvg >= 60 ? ct('Boa') : chemAvg >= 40 ? ct('Regular') : ct('Fraca');
-  const payroll = rows.reduce((sum, p) => sum + playerWage(p), 0);
+  const payroll = rows.reduce((sum, p) => sum + contractWageOf(save as { clube?: ClubeState }, p.id, () => playerWage(p)), 0);
   // [fase 2] domínio do mapa = familiaridade do plano (Plano de jogo)
   const tacticsNow = (save.gestao as { tactics?: TacticsState } | undefined)?.tactics;
   const mapsSorted = [...MAP_POOL].map((m) => ({ m, fam: mapTacticOf(tacticsNow, m).familiarity })).sort((x, y) => y.fam - x.fam);
