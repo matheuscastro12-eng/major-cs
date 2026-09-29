@@ -79,6 +79,9 @@ export interface RoundSpec {
   sides: [SideSpec, SideSpec];  // [T, CT]
   bias: number;                 // logit a favor do T em TODO duelo (time, lado do mapa, leitura de site…)
   plantMult: number;            // execução do T (utilitária, IGL, rush, leitura de site)
+  // [fase 2 · tática] opcionais (ausentes = motor de antes, bit a bit):
+  phaseBias?: [number, number, number]; // logit a favor do T por fase: [abertura, meio, pós-plant]
+  timeMult?: number;                    // chance de o tempo acabar (ritmo do T)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,7 +127,9 @@ function duelTable(spec: RoundSpec, key: number, diff: number): Float64Array {
   const pl = key !== 8 && key >= 4;
   const tAlone = key !== 8 && (key & 2) !== 0;
   const cAlone = key !== 8 && (key & 1) !== 0;
-  const bias = spec.bias + (key === 8 ? DUEL.OPEN_T : 0) + (pl ? DUEL.POST_T : 0) + DUEL.NUM_ADV * diff;
+  const pb = spec.phaseBias;
+  const bias = spec.bias + (key === 8 ? DUEL.OPEN_T : 0) + (pl ? DUEL.POST_T : 0) + DUEL.NUM_ADV * diff
+    + (pb ? (key === 8 ? pb[0] : pl ? pb[2] : pb[1]) : 0);
   const out = new Float64Array(N * N);
   for (let i = 0; i < N; i++) {
     const pi = powerOf(T, i, key, tAlone);
@@ -179,6 +184,7 @@ const evIdx = (pl: number, nT: number, nC: number) => ((pl * 6 + nT) * 6 + nC) *
 function eventTable(spec: RoundSpec): Float64Array {
   const out = new Float64Array(2 * 6 * 6 * EV_STRIDE);
   const [T, C] = spec.sides;
+  const tm = spec.timeMult ?? 1;
   for (let nT = 1; nT <= 5; nT++) {
     for (let nC = 1; nC <= 5; nC++) {
       // sem bomba: o T precisa agir
@@ -186,7 +192,7 @@ function eventTable(spec: RoundSpec): Float64Array {
       if (nT === 1) tSave = nC >= 3 ? 0.2 : nC === 2 ? 0.05 : 0;
       else if (nT === 2) tSave = nC >= 4 ? 0.12 : nC === 3 ? 0.02 : 0;
       // o tempo só vence o T que está em desvantagem e sem conseguir entrar
-      const time = nT < nC ? 0.025 : nT === nC ? 0.006 : 0.002;
+      const time = (nT < nC ? 0.025 : nT === nC ? 0.006 : 0.002) * tm;
       const plant = Math.max(0.02, Math.min(0.5, (0.09 + 0.07 * (nT - nC)) * spec.plantMult));
       const o0 = evIdx(0, nT, nC);
       out[o0] = Math.min(0.9, tSave * T.saveMult);

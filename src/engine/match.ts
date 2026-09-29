@@ -229,6 +229,7 @@ export interface MapSimOpts {
   mapIndex?: number;        // 0-based na série: fadiga (stamina) a partir do 2º mapa
   bigMatch?: boolean;       // jogo grande (final, playoff de Major): pesa o oculto bigMatch
   duelMods?: Record<string, number>; // modificador de duelo por jogador (pontos de atributo) — RtP: a decisão da Sala
+  manualTimeouts?: 0 | 1;   // [fase 2 · tática] time que chama timeout à mão (partida interativa): sem timeout automático da tática
 }
 
 // opções de uma série inteira: as de mapa, menos o índice (a série numera)
