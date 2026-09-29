@@ -12,7 +12,8 @@ import { hashStr } from '../../state/hash';
 import { simulateSeries, computeDisplay, mergeLines, getMatchEngine, type SeriesOpts } from '../match';
 import { MAP_POOL, type MapId, type TPlayer, type TTeam, type Coach, type Role, type PlayerLine, type SeriesResult } from '../../types';
 import { ALL_ATTRS, type AttrKey } from '../attributes';
-import { proToTPlayer } from './coreStats';
+import { proToTPlayer, heroEngineAttrs } from './coreStats';
+import { legacyFromAttrs } from '../attrs/model';
 import type { Moment } from './moments';
 import { STARTER_SETUP } from './createSave';
 import { setupConditionMods } from './setup';
@@ -174,8 +175,11 @@ export function heroSeriesOpts(momentBoostOvr: number): SeriesOpts {
 // Constrói o TTeam do usuário com o herói EFETIVO (atributos modulados + boost
 // dos momentos no OVR/skill) e os colegas.
 // teamId default 'rtp-user' (liga); o Major passa 'user' (contrato do swiss.ts).
-// No motor v2 o boost dos momentos NÃO entra na mira/consistência legadas (entra
-// no duelo, via heroSeriesOpts); o alinhamento ao OVR e o piso relativo ficam.
+// No motor v2 o herói entra com o PERFIL REAL dos 28 na escala do mundo
+// (heroEngineAttrs: OVR legado = OVR efetivo, núcleo na faixa de um colega de
+// mesmo OVR) e os 5 números saem dele; o boost dos momentos NÃO entra nos
+// atributos (entra no duelo, via heroSeriesOpts). O alinhamento +13/+14 e o piso
+// de mira/consistência são do v1, que distribui frags por `aim`.
 export function buildUserTeam(save: RoadToProSave, effAttrs: Record<AttrKey, number>, momentBoostOvr: number, teamId = 'rtp-user'): TTeam {
   const duelEngine = getMatchEngine() === 'v2';
   // O motor distribui frags por `aim` e mortes por `consistency`. O `aim`/`consistency`
@@ -222,7 +226,9 @@ export function buildUserTeam(save: RoadToProSave, effAttrs: Record<AttrKey, num
     aim: clamp(heroBase.aim + HERO_AIM_ALIGN + boostAim * 1.1, Math.min(90, matesAvgAim - 4), 96),
     consistency: clamp(heroBase.consistency + HERO_CONS_ALIGN + boostAim * 0.7, Math.min(90, matesAvgCons - 2), 96),
   };
-  const players = [hero, ...mates];
+  // v2: perfil real do herói (condição e perks já estão em effAttrs; sem `ovr`,
+  // o deslocamento mira o OVR EFETIVO dos 28 modulados, não o exibido cru).
+  const players = [duelEngine ? duelHero(save, effAttrs, heroBase, momentBoostOvr) : hero, ...mates];
   const chemVals = Object.values(save.team.chem);
   const chemAvg = chemVals.length ? chemVals.reduce((a, b) => a + b, 0) / chemVals.length : 30;
   // Força do time COM O HERÓI COMO PESO (protagonista carrega): a média simples
@@ -242,6 +248,18 @@ export function buildUserTeam(save: RoadToProSave, effAttrs: Record<AttrKey, num
     // conforto de mapa do herói (RTP v9): vetar pros seus mapas fortes rende no sim.
     mapPrefs: heroMapComfort(save), coach: NEUTRAL_COACH,
     players, wins: 0, losses: 0, roundDiff: 0, status: 'alive',
+  };
+}
+
+function duelHero(save: RoadToProSave, effAttrs: Record<AttrKey, number>, heroBase: TPlayer, momentBoostOvr: number): TPlayer {
+  const attrs = heroEngineAttrs({ ...save.player, attrs: effAttrs, ovr: undefined });
+  const core = legacyFromAttrs(attrs);
+  return {
+    ...heroBase,
+    ...core,
+    attrs,
+    ovr: clamp(heroBase.ovr + momentBoostOvr, 40, 99),
+    skill: core.aim * 0.6 + core.consistency * 0.25 + core.clutch * 0.15 + momentBoostOvr * 0.8,
   };
 }
 
