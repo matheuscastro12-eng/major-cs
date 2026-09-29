@@ -113,6 +113,10 @@ export interface StaffMember {
   wage: number;                        // por split, na moeda da Carreira
   contractUntil: number;               // split
   sourceCoachId?: string;              // se veio de um técnico real da base
+  // [frente STAFF] campos opcionais (não sobem a versão do save):
+  since?: number;                      // split em que entrou no clube (idade exibida = age + anos desde então)
+  style?: 'tactical' | 'aggressive' | 'discipline'; // estilo do técnico principal (CoachStyle)
+  sourcePlayerId?: string;             // ex-jogador da base (aposentado) que virou membro da comissão
 }
 
 export interface StaffState { v: 1; members: StaffMember[] }
